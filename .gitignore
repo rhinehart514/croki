@@ -1,0 +1,14 @@
+# Swift / SPM
+.build/
+.swiftpm/
+*.xcodeproj/xcuserdata/
+DerivedData/
+
+# Node
+node_modules/
+dist/
+*.log
+
+# local state
+.venture/
+.DS_Store
