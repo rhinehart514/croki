@@ -12,3 +12,4 @@ dist/
 # local state
 .venture/
 .DS_Store
+*.gtm-ide-summary.txt

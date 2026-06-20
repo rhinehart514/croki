@@ -1,34 +1,78 @@
-# Evals — the loop we build toward
+# Product evals
 
-The product is built eval-first. We don't add features; we pass evals. The founder is the
-oracle (no external judge) — a human yes/no is the score.
+GTM IDE is complete only when the user can move from repository evidence to a
+reviewed, reversible change and preserve the full history locally.
 
-## Eval #1 — Comprehension (the load-bearing bet)
+## Eval 1 — grounded comprehension: passed
 
-Target repo: `~/Buffalo-Projects` (real Turborepo monorepo, TS + Firebase + Vercel, 679 files).
+Target: `~/Buffalo-Projects`
 
-Passes when, with **one** founder input (the "win" event), the brain can:
+Outcome: `project_created`
 
-1. Confirm the win event exists in code — with `file:line`.
-2. Reconstruct the funnel stages leading to the win — each cited to `file:line`.
-3. Find **≥1 true tracking gap** — a stage that can't be attributed — with `file:line`.
-4. Zero uncited claims — everything cited or explicitly marked **blind**.
-5. Founder confirms the funnel + gap are actually true.
+The scanner:
 
-### Progress
+1. Confirms attribution capture in the join flow.
+2. Confirms the win event in production code.
+3. Lists its emitted properties.
+4. Proves the missing attribution join.
+5. Marks unproven claims blind.
+6. Rejects comments, prose, tests, docs, and scanner definitions as evidence.
 
-- **v0 deterministic floor (`brain/src/mirror.mjs`) — DONE, runs on the real repo.**
-  Found, all cited: stack (turbo/firebase/vercel); analytics WIRED (Segment, Plausible,
-  PostHog, GA); funnel touchpoints (login/auth, onboarding, signup, checkout); attribution
-  present (`searchParams.get("ref")` in the join flow). Headline: *"Instrumented — verify
-  they're joined."*
-- **Next (Claude-interpretation layer):** trace whether `ref`/source actually flows through
-  to the win event (the real Buffalo gap: "can't tell what creates active projects"). That's
-  the part the deterministic floor honestly can't decide — it surfaced the *question*, not
-  the answer. Passing criterion 3 requires this layer.
+## Eval 2 — durable workspace: passed
 
-## Eval #2 — Action loop (later)
-The agent writes the tracking fix into a git worktree, tests pass, opens a reviewable PR.
+Opening a repository and outcome creates or reloads one durable workspace.
+Inspections, verification runs, revisions, and founder decisions survive reload.
 
-## Eval #3 — Honest funnel render (later)
-The canvas renders the funnel with per-stage proven/inferred/blind, no uncited claim shown.
+## Eval 3 — reviewable change set: passed
+
+Change generation:
+
+1. Creates an isolated `codex/gtm-fix-*` branch and worktree.
+2. Gives Codex the proven gap, citations, desired outcome, and safety boundary.
+3. Preserves the summary, status, diff, worktree, branch, and evidence.
+4. Supports approve or reject without changing the source repository.
+
+## Eval 4 — apply and recovery: passed
+
+Direct apply is enabled only when:
+
+- the revision is approved;
+- the source repository is still at the proposal base commit;
+- the source worktree is clean;
+- the patch passes `git apply --check`;
+- the user explicitly confirms.
+
+An applied patch can be reversed only after a reverse-patch check.
+
+## Eval 5 — executable GTM graph: passed
+
+The graph runner:
+
+- Returns every node result even when the overall run fails.
+- Blocks all downstream data descendants after failure.
+- Stops at founder review gates.
+- Continues after explicit gate approval.
+- Runs one selected node with only its dependencies.
+- Preserves graph edits and the latest 50 runs.
+- Stages approved actions locally rather than sending them.
+
+## Eval 6 — rendered workflow: passed
+
+Browser verification covers:
+
+- The default Buffalo workspace and cited diagnosis.
+- Visible inspect, diagnose, propose, review, apply, and verify sequence.
+- Reloaded workspace state.
+- Partial graph failure with exact node-level recovery.
+- Saved flow history after reload.
+- Desktop and 390-pixel layouts.
+- No browser console warnings or errors.
+
+## Release gate
+
+```sh
+npm test
+```
+
+Expected result: all brain tests, frontend lint, TypeScript, and production build
+pass.

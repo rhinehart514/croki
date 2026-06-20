@@ -1,0 +1,11 @@
+{
+  "name": "gtm-ide",
+  "private": true,
+  "version": "0.2.0",
+  "scripts": {
+    "build": "npm --prefix ui run build",
+    "lint": "npm --prefix ui run lint",
+    "test": "npm --prefix brain test && npm run lint && npm run build",
+    "start": "npm run build && node brain/src/server.mjs"
+  }
+}
