@@ -14,6 +14,40 @@ GTM IDE starts from your repo. It reads your product copy, extracts your ICP, ma
 
 ---
 
+## What makes it a GTM IDE (not just a diagram tool)
+
+An IDE is defined by its loop — write → run → see result → write again. Cursor without code execution is a text editor. GTM IDE without pipeline execution is a diagram tool.
+
+**The minimum runnable loop:**
+
+```
+open repo  →  context node reads it  →  source finds real people
+    →  generate drafts real messages  →  gate shows you the drafts
+    →  you approve  →  something observable happens
+    →  ledger records it  →  next run is smarter
+```
+
+Every step in that chain has to fire. The current build has the repo scan and the workspace proof loop working. The GTM flow loop — source → generate → gate → execute — does not run yet. That's what closes the gap.
+
+**What each step requires:**
+
+| Step | What's needed |
+|---|---|
+| Context reads repo | HTML/JSX copy scan → extracts ICP and product |
+| Source finds people | buffalo-projects MCP (live) or Exa API key |
+| Generate drafts | `ANTHROPIC_API_KEY` in env |
+| Gate shows real drafts | already built |
+| Something observable | local file write or draft log |
+| Ledger records it | append to `~/.gtm-ide/ledger/` |
+
+**The other thing that makes it feel like an IDE:**
+
+Instant feedback. You change the ICP → the filter scores update. You change the product context → the generate node shows a revised draft inline. The canvas responds to edits without requiring a full re-run. That's what Cursor feels like — the environment reacts to you.
+
+Without the loop, it's a wireframe. With the loop and instant feedback, it's an IDE.
+
+---
+
 ## What the product is not
 
 - Not a CRM replacement
