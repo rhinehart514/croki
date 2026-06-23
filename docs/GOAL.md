@@ -98,6 +98,30 @@ step, not the only vocabulary.
   the wall — every execute node must have a founder gate upstream of it on every path, or the
   composition is rejected.
 
+- **P8 — make agent creation a first-class domain process. ← landed.** Accepted opportunities
+  no longer jump straight into a graph. The host now compiles a durable `OutcomeProgram`,
+  creates `AgentCreationPolicy` records with contracts, evidence requirements, safety rules,
+  and evaluation signals, assembles `PersonalizationProfile` records from product truth,
+  founder taste, market memory, program context, and blind spots, then creates
+  `AgentInstance` records before writing the editable agent markdown artifact. Composed agent
+  nodes carry `programId`, `agentInstanceId`, `creationPolicyId`, and
+  `personalizationProfileId`, so workflow execution can trace every output back to the rules
+  that created the capability. Founder gate decisions and run failures are normalized into a
+  feedback ledger and update those creation policies, which makes feedback improve the next
+  agent's birth conditions rather than only the next prompt.
+
+- **P9 — make the domain executable. ← landed.** The DDD nouns now have command and event
+  paths. `domain-commands.mjs` exposes program verbs such as `CreateOutcomeProgram`,
+  `DefineMeasurementPlan`, `RunProgram`, `ReviseAgentPolicyFromFeedback`, and
+  `CreateNextAgentVersion`; `domain-events.mjs` records the durable history. `program-runtime.mjs`
+  is the caller-facing runner: it loads a program, enforces the measurement gate for scaled
+  execution, runs the underlying graph, pauses at founder gates, records feedback signals,
+  evaluates every agent instance after each run, creates append-only policy revisions, and mints
+  the next agent instance version when feedback materially changes a policy. The resident
+  operator now has program-first tools, with graph tools kept as lower-level repair tools. The
+  acceptance test proves founder outcome → program → policy/profile/agent → workflow → gate →
+  founder edit/rejection → feedback → policy v2 → agent instance v2.
+
 ## Done = proven
 
 Each phase ships with `npm test` green and the visible behavior checked. No phase claims

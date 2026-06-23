@@ -354,6 +354,23 @@ function computeLayout(graph: GTMGraph): Map<string, { x: number; y: number }> {
   return pos;
 }
 
+// ─── Mode lens ──────────────────────────────────────────────────────────────
+// The five program modes are not separate surfaces — they re-skin this one graph. A mode
+// emphasizes the nodes it is about and dims the rest, so the same canvas answers a different
+// question. Design and Run light everything (Run shows the whole trace); Simulation and Review
+// foreground the wall; Learning foregrounds what the feedback loop touches. Pure visual — a lens
+// never changes behavior or what runs.
+function lensClass(node: GTMNode, mode?: string): string {
+  if (!mode || mode === "design" || mode === "run") return "";
+  const agent = node.kind === "agent";
+  const focus =
+    mode === "simulation" ? node.category === "gate" || node.category === "execute" || agent :
+    mode === "review" ? node.category === "gate" :
+    mode === "learning" ? node.category === "measure" || agent :
+    true;
+  return focus ? "loop-node-lens-focus" : "loop-node-lens-dim";
+}
+
 // ─── Build React Flow graph ───────────────────────────────────────────────────
 
 function buildFlowGraph(
@@ -366,6 +383,9 @@ function buildFlowGraph(
   subsystemHealth: Record<string, { health: number; issue?: string }>,
   contractAudits: Record<string, GTMContractAudit>,
   onSelect: (id: string) => void,
+  mode?: string,
+  proposedNodeIds?: Set<string>,
+  proposedEdgeIds?: Set<string>,
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = graph.nodes.map((n) => {
     const sub = subsystemHealth[n.category];
@@ -375,6 +395,7 @@ function buildFlowGraph(
       position: n.position,
       draggable: true,
       selectable: false,
+      className: [lensClass(n, mode), proposedNodeIds?.has(n.id) ? "loop-node-proposed" : ""].filter(Boolean).join(" ") || undefined,
       data: {
         node: n,
         result: result?.nodes[n.id],
@@ -394,13 +415,16 @@ function buildFlowGraph(
   const edges: Edge[] = graph.edges.map((e: GTMEdge) => {
     // Animate the edge feeding the active step — data visibly flowing in.
     const active = e.edgeType === "data" && runningNodeId === e.target && !!result?.nodes[e.source]?.ok;
+    const base = edgeStyle(e.edgeType);
+    const proposed = proposedEdgeIds?.has(e.id);
     return {
       id: e.id,
       source: e.source,
       target: e.target,
       label: e.label,
-      ...edgeStyle(e.edgeType),
+      ...base,
       ...(active ? { animated: true, className: "loop-edge-data loop-edge-active" } : {}),
+      ...(proposed ? { className: `${base.className ?? ""} loop-edge-proposed`.trim(), animated: true } : {}),
     };
   });
 
@@ -550,7 +574,8 @@ function RunZoom({ running }: { running: boolean }) {
 
 export function GraphCanvas({
   graph, result, running, runningNodeId = null, selection, connectors, subsystemHealth = {}, contractAudits = {},
-  onSelect, onNodePositionChange, onConnectNodes, onDeleteEdges, onAddNode, onLoadRecipe, panelOpen, variant,
+  onSelect, onNodePositionChange, onConnectNodes, onDeleteEdges, onAddNode, onLoadRecipe, panelOpen, variant, mode,
+  proposedNodeIds, proposedEdgeIds,
 }: {
   graph: GTMGraph;
   result: GTMRunResult | null;
@@ -569,6 +594,11 @@ export function GraphCanvas({
   panelOpen?: boolean;
   // "ideation" draws nodes in with a staggered build animation (workflows being composed).
   variant?: "ideation";
+  // The active program mode, applied as a visual lens over the one graph (see lensClass).
+  mode?: string;
+  // Nodes/edges the operator has STAGED but not applied — rendered as ghosts for founder review.
+  proposedNodeIds?: Set<string>;
+  proposedEdgeIds?: Set<string>;
 }) {
   const handleSelect = useCallback((id: string) => onSelect(id), [onSelect]);
   const editable = variant !== "ideation" && !!onAddNode;
@@ -591,8 +621,8 @@ export function GraphCanvas({
   }, [graph, onNodePositionChange]);
 
   const { nodes, edges } = useMemo(
-    () => buildFlowGraph(graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect),
-    [graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect],
+    () => buildFlowGraph(graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, mode, proposedNodeIds, proposedEdgeIds),
+    [graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, mode, proposedNodeIds, proposedEdgeIds],
   );
 
   const handleNodeDragStop = useCallback(

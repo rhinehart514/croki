@@ -3,6 +3,7 @@ import {
   AlertCircle, Bot, CheckCircle2, Circle, LoaderCircle, Maximize2, MessageSquareText,
   Minimize2, Play, Send, ShieldCheck, Square, Wrench, X,
 } from "lucide-react";
+import { statusLabel } from "@/lib/status";
 import type { OperatorEvent, OperatorSession } from "@/types";
 
 // Operator narration arrives as markdown (the model writes tables, bold, bullets). Rendered raw
@@ -48,9 +49,9 @@ function MarkdownLite({ text }: { text: string }) {
 const TERMINAL = new Set(["completed", "blocked", "failed", "cancelled"]);
 
 const STARTERS = [
+  "Land 3 design-partner calls this month",
   "Find people who'd care about my product and draft outreach",
-  "Shape this channel from its outcome backward",
-  "Debug this workflow until it reaches my review gate",
+  "Turn my product's strengths into content that ranks",
 ];
 
 function eventIcon(event: OperatorEvent) {
@@ -68,6 +69,7 @@ function eventIcon(event: OperatorEvent) {
 // either starts a new session (when idle) or continues the current one — one conversation.
 export function ComposerDock({
   session, running, boundChannelName, viewingMismatch, onSend, onCancel, onReviewGate, onReturnToChannel,
+  floating = false, focusSignal = 0,
 }: {
   session: OperatorSession | null;
   running: boolean;
@@ -80,12 +82,39 @@ export function ComposerDock({
   onCancel: () => void | Promise<void>;
   onReviewGate: (nodeId: string) => void;
   onReturnToChannel?: () => void;
+  // On the program workbench the dock floats over a four-zone IDE rather than holding its own
+  // column, so it opens collapsed (a pill) to keep the inspector visible until summoned.
+  floating?: boolean;
+  // Bumped by the host to summon the chat — e.g. "New program" opens and focuses it, since a
+  // program is created by telling Claude the outcome, not by filling a form.
+  focusSignal?: number;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(floating);
   const [expanded, setExpanded] = useState(false);
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Follow the layout context across navigation: collapse to a pill when the dock starts floating
+  // over the program workbench, restore it when it owns its own lane again. Adjusting state during
+  // render from a changed prop is React's sanctioned pattern — no effect, no cascading render.
+  const [trackedFloating, setTrackedFloating] = useState(floating);
+  if (trackedFloating !== floating) {
+    setTrackedFloating(floating);
+    setCollapsed(floating);
+  }
+
+  // When the host bumps focusSignal (e.g. "New program"), open the dock in the same render so the
+  // input is mounted, then focus it in an effect (a DOM call, not setState — no cascading render).
+  const [trackedFocus, setTrackedFocus] = useState(focusSignal);
+  if (focusSignal !== trackedFocus) {
+    setTrackedFocus(focusSignal);
+    setCollapsed(false);
+  }
+  useEffect(() => {
+    if (focusSignal) inputRef.current?.focus();
+  }, [focusSignal]);
 
   useEffect(() => {
     timelineRef.current?.scrollTo({ top: timelineRef.current.scrollHeight, behavior: "smooth" });
@@ -132,8 +161,8 @@ export function ComposerDock({
           <span className="composer-dock-sub">
             {session
               ? boundChannelName
-                ? <>{session.status.replaceAll("_", " ")} · <span className="composer-dock-channel">{boundChannelName}</span></>
-                : session.status.replaceAll("_", " ")
+                ? <>{statusLabel(session.status)} · <span className="composer-dock-channel">{boundChannelName}</span></>
+                : statusLabel(session.status)
               : "co-pilot · on your subscription"}
           </span>
         </div>
@@ -165,7 +194,7 @@ export function ComposerDock({
       <div className="composer-dock-timeline" ref={timelineRef} aria-live="polite">
         {!session ? (
           <div className="composer-dock-idle">
-            <p className="composer-idle-lead">Tell Claude what this channel should do. It reads your product, builds the workflow, runs it, and stops at your gate.</p>
+            <p className="composer-idle-lead">Tell Claude the outcome you want. It creates the program, builds the agents that chase it, runs them, and stops at your gate.</p>
             <div className="composer-idle-starters">
               {STARTERS.map((s) => (
                 <button key={s} className="composer-idle-starter" onClick={() => setInput(s)} type="button">{s}</button>
@@ -224,8 +253,9 @@ export function ComposerDock({
       {/* ── Composer input (always present) ────────────────────── */}
       <div className="composer-dock-input-wrap">
         <textarea
+          ref={inputRef}
           className="composer-dock-input"
-          placeholder={sendDisabled ? "Claude is working…" : session ? "Reply, redirect, or ask it to continue…" : "Ask Claude to build this channel…"}
+          placeholder={sendDisabled ? "Claude is working…" : session ? "Reply, redirect, or ask it to continue…" : "Tell Claude the outcome you want…"}
           value={input}
           disabled={sendDisabled}
           onChange={(e) => setInput(e.target.value)}

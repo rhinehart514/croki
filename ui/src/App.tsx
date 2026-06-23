@@ -7,8 +7,11 @@ import {
   auditGraph,
   getConnectors,
   getEngineState,
+  getConnection,
+  type ConnectionStatus,
   getContext,
   getLibrary,
+  getPrograms,
   getGraphTemplate,
   getPilotOutreachRecipe,
   getOperatorSession,
@@ -16,19 +19,20 @@ import {
   getOpportunities,
   listProjects,
   runGraph,
+  runProgramStream,
   activateProject,
   cancelOperatorSession,
   composeOpportunityChannel,
-  createChannel,
   createProject,
   createOperatorSession,
   ideateStream,
   listOperatorSessions,
   resolveOperatorGate,
+  resolveOperatorProposal,
   resumeOperatorSession,
   runGraphStream,
   saveGraph,
-  setActiveChannel,
+  setActiveWorkflow,
   updateOpportunity,
 } from "@/api";
 import { ArtifactEditor } from "@/components/ArtifactEditor";
@@ -36,8 +40,11 @@ import { ComposerDock } from "@/components/ComposerDock";
 import { GraphCanvas } from "@/components/GraphCanvas";
 import { GoalLauncher } from "@/components/GoalLauncher";
 import { NodeEditor } from "@/components/NodeEditor";
+import { ProgramCanvas, type ProgramCanvasMode, type DebugTab } from "@/components/ProgramCanvas";
 import { GtmExplorer } from "@/components/GtmExplorer";
 import { buildIdeationCanvas, buildChannelDefaults, channelIdFromNode, type LaneState } from "@/lib/ideationGraph";
+import { statusLabel } from "@/lib/status";
+import { findProgramForGraph, graphBelongsToProgram, programGraphId } from "@/lib/program";
 import { ProductUnderstanding } from "@/components/ProductUnderstanding";
 import { ProjectPicker } from "@/components/ProjectPicker";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
@@ -46,9 +53,11 @@ import { Button } from "@/components/ui/button";
 import type {
   ChannelMeta, ConnectorMeta, ContextManifest, DataAdapter, Decisions, EngineState, GateDecision, GraphOperation, GtmLibrary, GTMContractAudit, GTMGraph, GTMNode, GTMOpportunity,
   GTMProject, GTMRunResult, NodeSelection, OperatorSession, OpportunityStudio as OpportunityStudioState, ProjectSummary,
+  AgentCreationPolicy, AgentInstance, FeedbackSignal, OutcomeProgram,
+  AgentEvaluation, DomainEvent,
 } from "@/types";
 
-type MainTab = "build" | "simulate" | "run";
+type MainTab = ProgramCanvasMode;
 
 // Health → band color, identical to the canvas node badge (GraphCanvas healthHex), so a
 // node's health reads the same number and color on the canvas, in the editor, and in the rail.
@@ -69,6 +78,15 @@ const CONTEXT_LAYERS: Array<{ key: string; label: string }> = [
   { key: "taste", label: "taste" },
   { key: "state", label: "state" },
 ];
+
+function programRouteFromLocation() {
+  const match = window.location.pathname.match(/^\/projects\/([^/]+)\/programs\/([^/]+)\/canvas\/?$/);
+  if (!match) return null;
+  return {
+    projectId: decodeURIComponent(match[1]),
+    programId: decodeURIComponent(match[2]),
+  };
+}
 
 function ContextPill({ manifest, fallbackPct }: { manifest: ContextManifest | null; fallbackPct: number }) {
   if (!manifest) {
@@ -101,7 +119,7 @@ function ContextPill({ manifest, fallbackPct }: { manifest: ContextManifest | nu
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<MainTab>("build");
+  const [activeTab, setActiveTab] = useState<MainTab>("design");
   // The canvas IS the workspace. "projects" is the only other base view — the cold-start picker
   // before any product exists. Understand and Opportunities are no longer destinations that swap
   // the canvas out; they float OVER it as dismissable overlays (set via `overlay`), so the IDE is
@@ -120,7 +138,22 @@ export default function App() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [activeProject, setActiveProjectState] = useState<GTMProject | null>(null);
   const [opportunityStudio, setOpportunityStudio] = useState<OpportunityStudioState | null>(null);
+  const [programs, setPrograms] = useState<OutcomeProgram[]>([]);
+  const [activeProgramId, setActiveProgramId] = useState<string | null>(null);
+  const [agentPolicies, setAgentPolicies] = useState<AgentCreationPolicy[]>([]);
+  const [agentInstances, setAgentInstances] = useState<AgentInstance[]>([]);
+  const [agentEvaluations, setAgentEvaluations] = useState<AgentEvaluation[]>([]);
+  const [feedbackSignals, setFeedbackSignals] = useState<FeedbackSignal[]>([]);
+  const [domainEvents, setDomainEvents] = useState<DomainEvent[]>([]);
+  // Bumped to summon the Claude co-pilot — a program is created by telling Claude the outcome,
+  // not by filling a form, so "New program" opens and focuses the chat.
+  const [composerFocus, setComposerFocus] = useState(0);
+  // Lets an explorer click deep-link the program canvas's bottom debugger to a specific tab.
+  const [debugFocus, setDebugFocus] = useState<{ tab: DebugTab; nonce: number } | null>(null);
   const [projectBusy, setProjectBusy] = useState(false);
+  // Is a live Claude available? Drives the cold-start state — composing, ideating, and the operator
+  // all need a signed-in subscription, so an unconnected founder gets a clear path, not a dead end.
+  const [connection, setConnection] = useState<ConnectionStatus | null>(null);
 
   // Graph state
   const [graph, setGraph] = useState<GTMGraph | null>(null);
@@ -170,6 +203,7 @@ export default function App() {
   // The library (subagents + skills on disk) is product-wide; load it once for the explorer.
   useEffect(() => {
     getLibrary().then(setLibrary).catch(console.error);
+    getConnection().then(setConnection).catch(() => {});
   }, []);
 
   const loadChannel = useCallback(async (channelId: string) => {
@@ -179,10 +213,11 @@ export default function App() {
       const [graphResponse, engineResponse] = await Promise.all([
         getGraphTemplate(channelId),
         getEngineState(channelId),
-        setActiveChannel(channelId),
+        setActiveWorkflow(channelId),
       ]);
       setActiveChannelId(channelId);
       setGraph(graphResponse.graph);
+      setActiveProgramId(graphResponse.graph.outcomeProgramId ?? null);
       setFlowRuns(graphResponse.runs ?? []);
       setRunResult(null);
       setSelection(null);
@@ -201,26 +236,58 @@ export default function App() {
   const refreshProjectScope = useCallback(async () => {
     const [catalog, projectResponse] = await Promise.all([listProjects(), getProject()]);
     const studioResponse = await getOpportunities(projectResponse.project.id).catch(() => ({ opportunities: null }));
+    const programResponse = await getPrograms(projectResponse.project.id).catch(() => null);
     setProjects(catalog.projects);
     setActiveProjectState(projectResponse.project);
-    setChannels(projectResponse.project.channels);
+    setChannels(projectResponse.project.workflows ?? projectResponse.project.channels);
     setOpportunityStudio(studioResponse.opportunities);
+    setPrograms(programResponse?.programs ?? []);
+    setAgentPolicies(programResponse?.policies ?? []);
+    setAgentInstances(programResponse?.foundry.instances ?? []);
+    setAgentEvaluations(programResponse?.foundry.evaluations ?? []);
+    setFeedbackSignals(programResponse?.feedback.signals ?? []);
+    setDomainEvents(programResponse?.events ?? []);
     return projectResponse.project;
   }, []);
 
   // Boot
   useEffect(() => {
     let live = true;
-    Promise.all([getProject(), getConnectors(), listProjects()]).then(async ([projectResponse, connectorResponse, catalog]) => {
+    Promise.all([getProject(), getConnectors(), listProjects()]).then(async ([initialProjectResponse, connectorResponse, initialCatalog]) => {
       if (!live) return;
-      const channelId = projectResponse.project.activeChannelId || projectResponse.project.channels[0]?.id;
+      const route = programRouteFromLocation();
+      let projectResponse = initialProjectResponse;
+      let catalog = initialCatalog;
+      if (route?.projectId && route.projectId !== projectResponse.project.id) {
+        await activateProject(route.projectId).catch(() => null);
+        [projectResponse, catalog] = await Promise.all([getProject(), listProjects()]);
+        if (!live) return;
+      }
+      let channelId = projectResponse.project.activeWorkflowId
+        || projectResponse.project.activeChannelId
+        || (projectResponse.project.workflows ?? projectResponse.project.channels)[0]?.id;
       setConnectors(connectorResponse.connectors);
-      setChannels(projectResponse.project.channels);
+      setChannels(projectResponse.project.workflows ?? projectResponse.project.channels);
       setActiveProjectState(projectResponse.project);
       setProjects(catalog.projects);
       getOpportunities(projectResponse.project.id).then((response) => {
         if (live) setOpportunityStudio(response.opportunities);
       }).catch(() => {});
+      const programResponse = await getPrograms(projectResponse.project.id).catch(() => null);
+      if (!live) return;
+      const routedProgramId = route?.projectId === projectResponse.project.id ? route.programId : null;
+      const selectedProgram = programResponse?.programs.find((program) => program.id === routedProgramId)
+        ?? findProgramForGraph(programResponse?.programs ?? [], channelId)
+        ?? programResponse?.programs[0]
+        ?? null;
+      setPrograms(programResponse?.programs ?? []);
+      setAgentPolicies(programResponse?.policies ?? []);
+      setAgentInstances(programResponse?.foundry.instances ?? []);
+      setAgentEvaluations(programResponse?.foundry.evaluations ?? []);
+      setFeedbackSignals(programResponse?.feedback.signals ?? []);
+      setDomainEvents(programResponse?.events ?? []);
+      setActiveProgramId(selectedProgram?.id ?? null);
+      channelId = programGraphId(selectedProgram) ?? channelId;
       if (!channelId) {
         // A product with no channels still lands on the canvas (its empty state guides the first
         // move); only a total cold start (no workspace) shows the product picker.
@@ -236,6 +303,7 @@ export default function App() {
       if (!live) return;
       setActiveChannelId(channelId);
       setGraph(graphResponse.graph);
+      setActiveProgramId(graphResponse.graph.outcomeProgramId ?? selectedProgram?.id ?? null);
       setFlowRuns(graphResponse.runs ?? []);
       setEngine(engineResponse.engine);
     }).catch(console.error);
@@ -300,7 +368,9 @@ export default function App() {
         syncOperator(response.session);
         // While Claude is thinking, surface the flows it's proposing — open the ideation canvas the
         // moment channels appear, so the founder watches workflows load instead of an empty canvas.
-        if (activeProjectId && !operatorRunId.current) {
+        // But never hijack the canvas when the founder is already focused on a program (or reviewing
+        // a proposal): pre-existing channels on the project must not yank them out of their work.
+        if (activeProjectId && !operatorRunId.current && !activeProgramId) {
           const opp = await getOpportunities(activeProjectId).catch(() => null);
           if (live && opp?.opportunities) {
             setOpportunityStudio(opp.opportunities);
@@ -321,7 +391,7 @@ export default function App() {
       live = false;
       window.clearInterval(timer);
     };
-  }, [operatorSessionId, operatorSessionStatus, syncOperator]);
+  }, [activeProjectId, activeProgramId, operatorSessionId, operatorSessionStatus, syncOperator]);
 
   // Graph actions
   const executeGraph = useCallback(async (
@@ -364,8 +434,49 @@ export default function App() {
       setGraphRunning(false);
       setRunningNodeId(null);
       loadEngine(graph?.id ?? activeChannelId); // a run updates the ledger → refresh health + problems
+      void refreshProjectScope();
     }
-  }, [activeChannelId, approvals, decisions, graph, loadEngine]);
+  }, [activeChannelId, approvals, decisions, graph, loadEngine, refreshProjectScope]);
+
+  // The flagship "Run Program" now streams node-by-node like the raw-graph path — each step lights
+  // up as it runs and its content lands the moment it succeeds, then run_done carries the program
+  // summary (learning signals, next agent versions) for tab routing.
+  const executeProgram = useCallback(async () => {
+    if (!activeProject || !activeProgramId) return;
+    const resumeRunId = runResult?.runId;
+    setGraphRunning(true);
+    setRunningNodeId(null);
+    setGraphError(null);
+    setRunResult({ runId: `live-${Date.now()}`, graphId: graph?.id ?? "", ok: false, nodes: {}, executionOrder: [], pendingGates: [], feedbackEdges: [] });
+    try {
+      await runProgramStream(activeProject.id, activeProgramId, { approvals, decisions, resumeRunId }, (ev) => {
+        if (ev.type === "node_start") {
+          setRunningNodeId(ev.nodeId);
+        } else if (ev.type === "node_done") {
+          setRunningNodeId((cur) => (cur === ev.nodeId ? null : cur));
+          setRunResult((cur) => cur ? { ...cur, nodes: { ...cur.nodes, [ev.nodeId]: ev.result } } : cur);
+          if (ev.result.items?.length || ev.result.pendingReview) setSelection(ev.nodeId);
+        } else if (ev.type === "run_done") {
+          const result = ev.result;
+          setRunResult(result);
+          setFlowRuns((current) => [...current, result].slice(-10));
+          if (result.pendingGates[0]) setActiveTab("review");
+          else if (ev.nextVersions.length || ev.feedbackSignals > 0) setActiveTab("learning");
+          else setActiveTab("run");
+          if (!result.ok && !result.pendingGates.length) setGraphError(result.error || "One or more steps need attention.");
+        } else if (ev.type === "run_error") {
+          setGraphError(ev.error);
+        }
+      });
+      await refreshProjectScope();
+      loadEngine(graph?.id ?? activeChannelId);
+    } catch (error) {
+      setGraphError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setGraphRunning(false);
+      setRunningNodeId(null);
+    }
+  }, [activeChannelId, activeProgramId, activeProject, approvals, decisions, graph, loadEngine, refreshProjectScope, runResult]);
 
   // Streaming run — the full loop, animated. Each step lights up as it runs and its
   // content lands the moment it succeeds, instead of one batch at the end.
@@ -410,8 +521,9 @@ export default function App() {
       setGraphRunning(false);
       setRunningNodeId(null);
       loadEngine(graph?.id ?? activeChannelId);
+      void refreshProjectScope();
     }
-  }, [activeChannelId, approvals, decisions, graph, loadEngine]);
+  }, [activeChannelId, approvals, decisions, graph, loadEngine, refreshProjectScope]);
 
   const approveGate = useCallback(async (nodeId: string) => {
     const next = { ...approvals, [nodeId]: true };
@@ -549,12 +661,14 @@ export default function App() {
   }, [graph]);
 
   const handleCommandSubmit = useCallback(async (goal: string) => {
-    const response = await createOperatorSession(goal, graph?.id);
+    // Bind the new session to the program on screen so its program tools target that program, not
+    // the newest one — the deterministic half of making the "Build the first agent" button reliable.
+    const response = await createOperatorSession(goal, graph?.id, activeProgramId ?? undefined);
     operatorGraphRevision.current = response.session.graphRevision;
     operatorRunId.current = null;
     ideationAutoOpened.current = false; // a new goal may propose fresh flows to watch load
     setOperatorSession(response.session);
-  }, [graph?.id]);
+  }, [graph?.id, activeProgramId]);
 
   // One conversation: talking to Claude continues the live session, or starts a new one
   // when idle. The dock decides nothing about safety — App owns create vs. resume.
@@ -569,13 +683,6 @@ export default function App() {
     }
   }, [operatorSession, handleCommandSubmit, syncOperator]);
 
-  const handleCreateChannel = useCallback(async (name: string, objective: string) => {
-    const result = await createChannel({ name, objective });
-    const project = await getProject();
-    setChannels(project.project.channels);
-    await loadChannel(result.channel.id);
-  }, [loadChannel]);
-
   const handleProjectOpen = useCallback(async (projectId: string) => {
     setProjectBusy(true);
     setGraphError(null);
@@ -585,7 +692,9 @@ export default function App() {
       setGraph(null);
       setActiveChannelId(null);
       const project = await refreshProjectScope();
-      const channelId = project.activeChannelId || project.channels[0]?.id;
+      const channelId = project.activeWorkflowId
+        || project.activeChannelId
+        || (project.workflows ?? project.channels)[0]?.id;
       if (channelId) await loadChannel(channelId);
       setView("canvas");
       setOverlay(null);
@@ -595,6 +704,75 @@ export default function App() {
       setProjectBusy(false);
     }
   }, [loadChannel, refreshProjectScope]);
+
+  const handleProgramOpen = useCallback(async (programId: string) => {
+    const program = programs.find((item) => item.id === programId);
+    if (!program || !activeProject) return;
+    setProjectBusy(true);
+    setGraphError(null);
+    try {
+      setActiveProgramId(program.id);
+      setSelection(null);
+      setOverlay(null);
+      setIdeationOpen(false);
+      setView("canvas");
+      const graphId = programGraphId(program);
+      if (graphId) {
+        await setActiveWorkflow(graphId);
+        setActiveChannelId(graphId);
+      } else if (program.channelId) {
+        await setActiveWorkflow(program.channelId);
+        setActiveChannelId(program.channelId);
+      }
+      if (graphId) {
+        const [graphResponse, engineResponse] = await Promise.all([
+          getGraphTemplate(graphId),
+          getEngineState(graphId),
+        ]);
+        setGraph(graphResponse.graph);
+        setFlowRuns(graphResponse.runs ?? []);
+        setRunResult(null);
+        setEngine(engineResponse.engine);
+        setGraphSavedAt(graphResponse.graph.store?.lastRunAt ?? null);
+      }
+      window.history.replaceState(null, "", `/projects/${encodeURIComponent(activeProject.id)}/programs/${encodeURIComponent(program.id)}/canvas`);
+    } catch (error) {
+      setGraphError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setProjectBusy(false);
+    }
+  }, [activeProject, programs]);
+
+  // The single explorer → canvas deep-link. Clicking a policy, run, learning signal, or domain
+  // event in the explorer opens its program and lands the canvas on the right mode/run/debug-tab,
+  // so those sections navigate instead of dead-ending as read-only lists.
+  const handleFocusProgram = useCallback(async (
+    programId: string,
+    focus: { mode?: ProgramCanvasMode; run?: GTMRunResult; debugTab?: DebugTab } = {},
+  ) => {
+    await handleProgramOpen(programId);
+    if (focus.run) setRunResult(focus.run);
+    if (focus.mode) setActiveTab(focus.mode);
+    if (focus.debugTab) setDebugFocus({ tab: focus.debugTab, nonce: Date.now() });
+  }, [handleProgramOpen]);
+
+  // "New program" / "Start your first program" — there's no form; a program is born from the
+  // conversation. Surface the canvas, leave any open overlay, and summon the co-pilot focused.
+  const handleNewProgram = useCallback(() => {
+    setOverlay(null);
+    setIdeationOpen(false);
+    setView("canvas");
+    setComposerFocus((n) => n + 1);
+  }, []);
+
+  // The canvas says "this program needs agents" — this performs it. Sends a program-scoped
+  // instruction to the operator (derive needs → build the agent), which is design-time and
+  // reversible (the gate still holds), then opens the chat so the founder watches it work.
+  const handleBuildAgents = useCallback((program: OutcomeProgram) => {
+    const instruction = `Build the first agent for the program "${program.name}". Derive what agent this program needs from the product, then create the personalized agent and compose its workflow up to the founder gate.`;
+    setComposerFocus((n) => n + 1);
+    void handleComposerSend(instruction);
+  }, [handleComposerSend]);
 
   const handleProjectCreate = useCallback(async (input: { name?: string; repoPath: string; outcome: string }) => {
     setProjectBusy(true);
@@ -655,7 +833,7 @@ export default function App() {
     setIdeationLane(null);
     setLaneStates({});
     setIdeationThinking("");
-    setIdeationStatus("Ideating channels from grounded reality…");
+    setIdeationStatus("Ideating workflows from grounded reality…");
     setProjectBusy(true);
     try {
       await ideateStream(activeProject.id, (ev) => {
@@ -703,6 +881,15 @@ export default function App() {
     await buildChannelDefaults(channel, agentsFor(channel), handleOpportunityUpdate, handleOpportunityCompose);
   }, [agentsFor, handleOpportunityUpdate, handleOpportunityCompose]);
 
+  // Author a new subagent or skill from the UI: name it, then open the editor on a fresh ref. The
+  // artifact has no file yet — the editor's save creates ~/.claude/{agents,skills}/<ref>, so this is
+  // the in-product authoring entry the three-lane workspace will eventually grow from.
+  const handleNewArtifact = useCallback((type: "agent" | "skill") => {
+    const raw = window.prompt(`Name the new ${type} (kebab-case, e.g. ${type === "agent" ? "gtm-lead-scout" : "positioning"})`);
+    const ref = raw?.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-|-$/g, "");
+    if (ref) setArtifactEdit({ type, ref });
+  }, []);
+
   const handleOperatorCancel = useCallback(async () => {
     if (!operatorSession) return;
     const response = await cancelOperatorSession(operatorSession.id);
@@ -724,6 +911,16 @@ export default function App() {
   const selectedNodeSubsystem = selectedNode
     ? engine?.subsystems.find((s) => s.id === selectedNode.category) ?? null
     : null;
+  const activeProgram = useMemo(
+    () => programs.find((program) => program.id === activeProgramId)
+      ?? findProgramForGraph(programs, graph?.id)
+      ?? null,
+    [activeProgramId, graph?.id, programs],
+  );
+  const programRuns = useMemo(
+    () => graphBelongsToProgram(graph, activeProgram) ? flowRuns : [],
+    [activeProgram, flowRuns, graph],
+  );
 
   useEffect(() => {
     if (!selectedNode) return;
@@ -809,6 +1006,35 @@ export default function App() {
 
   const runCount = graph?.store?.runs ?? flowRuns.length;
 
+  // On-canvas proposals: when the operator stages a graph change, render the would-be graph with the
+  // new nodes/edges ghosted and let the founder accept or discard. "Vibe up to the gate" now covers
+  // the agent editing the graph too — nothing it proposes lands until the founder accepts on-canvas.
+  const pendingProposal = operatorSession?.status === "waiting_for_proposal" ? operatorSession.pendingProposal ?? null : null;
+  const proposalActive = !!(pendingProposal && graph && pendingProposal.graphId === graph.id);
+  const displayGraph = proposalActive && pendingProposal ? pendingProposal.preview : graph;
+  const proposedNodeIds = useMemo(() => {
+    if (!proposalActive || !pendingProposal || !graph) return undefined;
+    const current = new Set(graph.nodes.map((node) => node.id));
+    return new Set(pendingProposal.preview.nodes.filter((node) => !current.has(node.id)).map((node) => node.id));
+  }, [proposalActive, pendingProposal, graph]);
+  const proposedEdgeIds = useMemo(() => {
+    if (!proposalActive || !pendingProposal || !graph) return undefined;
+    const current = new Set(graph.edges.map((edge) => edge.id));
+    return new Set(pendingProposal.preview.edges.filter((edge) => !current.has(edge.id)).map((edge) => edge.id));
+  }, [proposalActive, pendingProposal, graph]);
+
+  const handleResolveProposal = useCallback(async (accept: boolean) => {
+    if (!operatorSession) return;
+    try {
+      // Accept commits the exact staged ops server-side and bumps the graph revision; syncOperator
+      // reloads the real graph. Discard drops them and resumes the operator.
+      const response = await resolveOperatorProposal(operatorSession.id, accept);
+      syncOperator(response.session);
+    } catch (error) {
+      setGraphError(error instanceof Error ? error.message : String(error));
+    }
+  }, [operatorSession, syncOperator]);
+
   return (
     <main className="loop-shell">
       {/* ── Toolbar ──────────────────────────────────────────────────────── */}
@@ -828,7 +1054,7 @@ export default function App() {
           />
           <span className="loop-toolbar-sep">/</span>
           <span className="loop-toolbar-crumb loop-toolbar-crumb-active">
-            {view === "projects" ? "Products" : graph?.name ?? "Canvas"}
+            {view === "projects" ? "Products" : activeProgram?.name ?? graph?.name ?? "Canvas"}
           </span>
           {view === "canvas" && graph ? (
             <span className={`loop-draft-badge ${hasUnsaved ? "unsaved" : "saved"}`}>
@@ -839,14 +1065,14 @@ export default function App() {
 
         <nav className="loop-tabs">
           {view === "canvas" && graph
-            ? (["build", "simulate", "run"] as MainTab[]).map((tab) => (
+            ? (["design", "simulation", "run", "review", "learning"] as MainTab[]).map((tab) => (
                 <button
                   key={tab}
                   className={`loop-tab ${activeTab === tab ? "loop-tab-active" : ""}`}
                   onClick={() => setActiveTab(tab)}
                   type="button"
                 >
-                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  {tab === "simulation" ? "Simulation" : tab.charAt(0).toUpperCase() + tab.slice(1)}
                 </button>
               ))
             : null}
@@ -854,16 +1080,24 @@ export default function App() {
 
         <div className="loop-toolbar-right">
           <ContextPill manifest={contextManifest} fallbackPct={contextPct} />
-          <div className={`loop-model-btn ${operatorSession ? "operator-present" : ""}`}>
-            <span className={`loop-model-dot ${operatorSession ? "live" : ""}`} />
+          <div
+            className={`loop-model-btn ${operatorSession ? "operator-present" : ""} ${connection && !connection.connected ? "disconnected" : ""}`}
+            title={connection && !connection.connected ? connection.reason ?? "Claude is not connected." : connection?.label ?? undefined}
+          >
+            <span className={`loop-model-dot ${operatorSession ? "live" : ""} ${connection && !connection.connected ? "off" : ""}`} />
             {operatorSession
-              ? `Claude · ${operatorSession.status.replaceAll("_", " ")}`
-              : "Claude · subscription"}
+              ? `Claude · ${statusLabel(operatorSession.status)}`
+              : connection && !connection.connected
+                ? "Claude · not connected"
+                : "Claude · subscription"}
           </div>
           {view === "canvas" ? <Button
             className="loop-simulate-btn"
             disabled={graphRunning || !graph || graph.nodes.length === 0}
-            onClick={() => { setActiveTab("simulate"); void streamRun(); }}
+            // Simulate is a preview, not a run: for a program it switches to the Simulation lens
+            // (the static execution plan), which never executes. Only the non-program graph path
+            // still streams a real run into the SimulationPanel drawer.
+            onClick={() => { setActiveTab("simulation"); if (!activeProgram) void streamRun(); }}
             type="button"
           >
             {graphRunning && !runningNodeId ? (
@@ -876,11 +1110,11 @@ export default function App() {
           {view === "canvas" ? <Button
             className="loop-run-btn"
             disabled={graphRunning || !graph || graph.nodes.length === 0}
-            onClick={() => void streamRun()}
+            onClick={() => void (activeProgram ? executeProgram() : streamRun())}
             type="button"
           >
             {graphRunning ? <LoaderCircle className="spin" /> : null}
-            Run loop
+            Run program
           </Button> : null}
         </div>
       </header>
@@ -893,12 +1127,22 @@ export default function App() {
           <GtmExplorer
             channels={channels}
             activeChannelId={activeChannelId}
+            activeProgramId={activeProgram?.id ?? null}
             currentView={ideationOpen ? "opportunities" : overlay ?? "canvas"}
             onOpenChannel={(id) => { setOverlay(null); setIdeationOpen(false); void loadChannel(id); }}
-            onCreateChannel={handleCreateChannel}
+            onOpenProgram={(id) => { void handleProgramOpen(id); }}
+            onFocusProgram={(id, focus) => { void handleFocusProgram(id, focus); }}
+            onNewProgram={handleNewProgram}
             onOpenArtifact={(type, ref) => setArtifactEdit({ type, ref })}
+            onNewArtifact={handleNewArtifact}
             onOpenView={(v) => { if (v === "opportunities") startIdeation(); else if (v === "understand") { setIdeationOpen(false); setOverlay("understand"); } else { setOverlay(null); setIdeationOpen(false); } }}
             library={library}
+            programs={programs}
+            agentPolicies={agentPolicies}
+            agentInstances={agentInstances}
+            feedbackSignals={feedbackSignals}
+            domainEvents={domainEvents}
+            runs={programRuns}
             contextManifest={contextManifest}
             engine={engine}
             graph={graph}
@@ -933,15 +1177,15 @@ export default function App() {
                 />
               ) : (
                 <div className="canvas-empty">
-                  <strong>{projectBusy ? "Ideating workflows…" : "No channels yet"}</strong>
+                  <strong>{projectBusy ? "Ideating workflows…" : "No workflows yet"}</strong>
                   <span>{projectBusy
-                    ? (ideationStatus ?? "Reading your product and the cited evidence, proposing channels.")
-                    : "Re-ideate to propose channels for this product."}</span>
+                    ? (ideationStatus ?? "Reading your product and the cited evidence, proposing workflows.")
+                    : "Re-ideate to propose workflows for this product."}</span>
                 </div>
               )}
               <div className="ideation-topbar">
                 <div className="ideation-topbar-title">
-                  <span className="ideation-board-eyebrow">Ideating channels</span>
+                  <span className="ideation-board-eyebrow">Ideating workflows</span>
                   <strong>
                     {ideationStatus && ideationChannels.length > 0
                       ? `Composing workflows · ${composedCount}/${ideationChannels.length} model-composed`
@@ -978,12 +1222,45 @@ export default function App() {
                 </div>
               ) : null}
             </>
+          ) : activeProgram ? (
+            <ProgramCanvas
+              agents={agentInstances}
+              evaluations={agentEvaluations}
+              events={domainEvents}
+              feedback={feedbackSignals}
+              graph={graphBelongsToProgram(displayGraph, activeProgram) ? displayGraph : null}
+              mode={activeTab}
+              onModeChange={setActiveTab}
+              onRunProgram={() => void executeProgram()}
+              onBuildAgents={() => handleBuildAgents(activeProgram)}
+              onSelectNode={setSelection}
+              proposedNodeIds={proposedNodeIds}
+              proposedEdgeIds={proposedEdgeIds}
+              onNodePositionChange={handleNodePositionChange}
+              onConnectNodes={handleGraphConnect}
+              onDeleteEdges={handleDeleteEdges}
+              onAddNode={handleAddNode}
+              onLoadRecipe={handleLoadPilotRecipe}
+              focusDebug={debugFocus}
+              policies={agentPolicies}
+              program={activeProgram}
+              runResult={runResult}
+              running={graphRunning}
+              runningNodeId={runningNodeId}
+              runs={programRuns}
+              selection={selection}
+              connectors={connectors}
+              subsystemHealth={subsystemHealth}
+              contractAudits={contractAudits}
+            />
           ) : graph ? (
             <>
               <GraphCanvas
                 connectors={connectors}
                 contractAudits={contractAudits}
-                graph={graph}
+                graph={displayGraph ?? graph}
+                proposedNodeIds={proposedNodeIds}
+                proposedEdgeIds={proposedEdgeIds}
                 onAddNode={handleAddNode}
                 onConnectNodes={handleGraphConnect}
                 onDeleteEdges={handleDeleteEdges}
@@ -1016,7 +1293,7 @@ export default function App() {
           )}
 
           {/* Toolbar overlay: zoom controls at top-left */}
-          {view === "canvas" && graph && (
+          {view === "canvas" && graph && !activeProgram && (
             <div className="loop-graph-actions">
               <button
                 className={`loop-save-chip ${graphSavedAt ? "saved" : ""}`}
@@ -1044,11 +1321,45 @@ export default function App() {
             </div>
           )}
 
+          {/* Cold start — no live Claude. Compose/ideate/operator all need a signed-in subscription,
+              so name the path to connect instead of letting the founder hit a raw error mid-action. */}
+          {connection && !connection.connected && (
+            <div className="loop-connect-banner" role="status">
+              <AlertTriangle />
+              <div className="loop-connect-text">
+                <strong>Connect Claude to build</strong>
+                <span>Composing, ideating, and the operator run on your Claude subscription. Run <code>claude</code> in your terminal to sign in, or set <code>CLAUDE_CODE_OAUTH_TOKEN</code>. You can still explore the canvas, library, and any existing program meanwhile.</span>
+              </div>
+            </div>
+          )}
+
           {/* Error banner */}
           {graphError && (
             <div className="loop-error-banner" role="alert">
               <AlertTriangle />
               <span>{graphError}</span>
+            </div>
+          )}
+
+          {/* On-canvas proposal review — Claude staged a graph change; the new nodes/edges are
+              ghosted on the canvas and the founder accepts or discards here. */}
+          {proposalActive && pendingProposal && (
+            <div className="loop-proposal-bar" role="region" aria-label="Proposed graph changes">
+              <div className="loop-proposal-text">
+                <strong>
+                  <Sparkles />
+                  Claude proposes {pendingProposal.changes.length} change{pendingProposal.changes.length === 1 ? "" : "s"}
+                </strong>
+                <span>{pendingProposal.rationale}</span>
+              </div>
+              <div className="loop-proposal-actions">
+                <button className="loop-proposal-discard" disabled={graphRunning} onClick={() => void handleResolveProposal(false)} type="button">
+                  Discard
+                </button>
+                <button className="loop-proposal-accept" disabled={graphRunning} onClick={() => void handleResolveProposal(true)} type="button">
+                  <Check /> Accept change{pendingProposal.changes.length === 1 ? "" : "s"}
+                </button>
+              </div>
             </div>
           )}
 
@@ -1078,6 +1389,8 @@ export default function App() {
         {view !== "projects" ? <ComposerDock
           session={operatorSession}
           running={graphRunning}
+          floating={!!activeProgram && !ideationOpen}
+          focusSignal={composerFocus}
           boundChannelName={boundChannel?.name ?? null}
           viewingMismatch={viewingMismatch}
           onSend={handleComposerSend}
@@ -1196,10 +1509,10 @@ export default function App() {
       <SimulationPanel
         flowRuns={flowRuns}
         graph={graph}
-        open={activeTab === "simulate"}
+        open={activeTab === "simulation" && !activeProgram}
         result={runResult}
         running={graphRunning}
-        onClose={() => setActiveTab("build")}
+        onClose={() => setActiveTab("design")}
         onSelectRun={(run) => {
           setRunResult(run);
           setSelection(run.pendingGates[0] ?? Object.keys(run.nodes)[0] ?? null);

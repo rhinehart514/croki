@@ -25,6 +25,7 @@ import {
   groundProjectInWorkspace,
   loadProject,
   setActiveChannel,
+  setActiveWorkflow,
   setActiveProject,
   updateChannel,
   updateSharedContext,
@@ -35,6 +36,13 @@ import {
   updateOpportunity,
 } from "./opportunity-engine.mjs";
 import { composeOpportunityChannel, composeGraphForChannel } from "./workflow-composer.mjs";
+import { executeDomainCommand } from "./domain-commands.mjs";
+import { listOutcomePrograms, syncProgramStoreFromEvents } from "./program-store.mjs";
+import { runProgram } from "./program-runtime.mjs";
+import { appendDomainEvent, listDomainEvents } from "./domain-events.mjs";
+import { listAgentCreationPolicies } from "./agent-policy-store.mjs";
+import { loadCapabilityFoundry } from "./capability-foundry.mjs";
+import { loadFeedbackLedger, recordFeedbackSignalsFromRun } from "./feedback-ledger.mjs";
 import {
   compareChannelRuns,
   createPortfolioArtifact,
@@ -47,11 +55,13 @@ import { runGraph } from "./graph.mjs";
 import { liveStepRuntime } from "./agent-bridge.mjs";
 import { createClaudeIdeator } from "./ideation.mjs";
 import { createClaudeComposer } from "./composition.mjs";
+import { selectRuntime, authModeLabel } from "./runtimes/index.mjs";
 import { listArtifacts, readArtifact, writeArtifact } from "./artifact-store.mjs";
 import {
   cancelOperatorSession,
   launchOperatorSession,
   resolveOperatorGate,
+  resolveOperatorProposal,
   resumeOperatorSession,
 } from "./operator-runtime.mjs";
 import {
@@ -188,6 +198,100 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, { opportunities: getOpportunityStudio({ projectId }) });
     } catch (err) {
       json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  const projectProgramsMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/programs$/);
+  if (req.method === "GET" && projectProgramsMatch) {
+    try {
+      const projectId = decodeURIComponent(projectProgramsMatch[1]);
+      json(res, 200, {
+        programs: listOutcomePrograms(projectId),
+        policies: listAgentCreationPolicies(projectId),
+        foundry: loadCapabilityFoundry(projectId),
+        feedback: loadFeedbackLedger(projectId),
+        events: listDomainEvents(projectId),
+      });
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  const projectProgramRunMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/programs\/([^/]+)\/run$/);
+  if (req.method === "POST" && projectProgramRunMatch) {
+    try {
+      const projectId = decodeURIComponent(projectProgramRunMatch[1]);
+      const programId = decodeURIComponent(projectProgramRunMatch[2]);
+      const body = await readBody(req);
+      const project = loadProject({ projectId });
+      const run = await runProgram(programId, {
+        ...body,
+        projectId,
+        stepRuntime: liveStepRuntime({ cwd: project.sharedContext?.repository?.repo || process.cwd() }),
+      }, { projectId });
+      json(res, 200, {
+        programId: run.programId,
+        graphId: run.graphId,
+        programStatus: run.programStatus,
+        storedRunCount: run.storedRunCount,
+        feedbackSignals: run.feedback.signals.length,
+        evaluations: run.evaluations.length,
+        nextVersions: run.nextVersions.map((item) => ({
+          policyId: item.policy.id,
+          agentInstanceId: item.instance.id,
+          previousInstanceId: item.instance.previousInstanceId,
+          version: item.instance.version,
+        })),
+        result: run.result,
+      });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Streaming program run — the program canvas's flagship "Run Program" lights up node-by-node like
+  // the raw-graph path, instead of returning one batch at the end. runProgram already forwards the
+  // onEvent callback to runGraph, so the steps stream; we add the program summary in run_done.
+  const projectProgramRunStreamMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/programs\/([^/]+)\/run\/stream$/);
+  if (req.method === "POST" && projectProgramRunStreamMatch) {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+    });
+    const send = (event) => { res.write(`data: ${JSON.stringify(event)}\n\n`); };
+    try {
+      const projectId = decodeURIComponent(projectProgramRunStreamMatch[1]);
+      const programId = decodeURIComponent(projectProgramRunStreamMatch[2]);
+      const body = await readBody(req);
+      const project = loadProject({ projectId });
+      const run = await runProgram(programId, {
+        ...body,
+        projectId,
+        stepRuntime: liveStepRuntime({ cwd: project.sharedContext?.repository?.repo || process.cwd() }),
+        onEvent: send,
+      }, { projectId });
+      send({
+        type: "run_done",
+        result: run.result,
+        programStatus: run.programStatus,
+        storedRunCount: run.storedRunCount,
+        feedbackSignals: run.feedback.signals.length,
+        evaluations: run.evaluations.length,
+        nextVersions: run.nextVersions.map((item) => ({
+          policyId: item.policy.id,
+          agentInstanceId: item.instance.id,
+          previousInstanceId: item.instance.previousInstanceId,
+          version: item.instance.version,
+        })),
+      });
+    } catch (err) {
+      send({ type: "run_error", error: err instanceof Error ? err.message : String(err) });
+    } finally {
+      res.end();
     }
     return;
   }
@@ -373,6 +477,73 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "POST" && url.pathname === "/api/project/active-workflow") {
+    try {
+      const body = await readBody(req);
+      const project = setActiveWorkflow(body.workflowId ?? body.channelId);
+      json(res, 200, { activeWorkflowId: project.activeChannelId, activeChannelId: project.activeChannelId });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/program-workflows") {
+    try {
+      const body = await readBody(req);
+      const project = loadProject();
+      const created = await executeDomainCommand("CreateProgramWorkflow", {
+        ...body,
+        projectId: project.id,
+      }, { projectId: project.id });
+      const savedProject = setActiveChannel(created.channel.id);
+      json(res, 201, {
+        project: getProjectWithChannels(),
+        program: created.program,
+        workflow: created.channel,
+        graph: created.workflowGraph,
+        activeChannelId: savedProject.activeChannelId,
+      });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  const updateProgramWorkflowMatch = url.pathname.match(/^\/api\/program-workflows\/([^/]+)\/update$/);
+  if (req.method === "POST" && updateProgramWorkflowMatch) {
+    try {
+      const body = await readBody(req);
+      const project = loadProject();
+      const workflow = getChannel(project, decodeURIComponent(updateProgramWorkflowMatch[1]));
+      if (!workflow.outcomeProgramId) throw new Error(`Workflow is not program-backed: ${workflow.id}`);
+      const program = await executeDomainCommand("UpdateProgramWorkflowMetadata", {
+        ...body,
+        projectId: project.id,
+        programId: workflow.outcomeProgramId,
+        channelId: workflow.id,
+      }, { projectId: project.id });
+      const updatedProject = getProjectWithChannels();
+      const updatedWorkflow = updatedProject.channels.find((item) => item.outcomeProgramId === program.id || item.id === workflow.id);
+      json(res, 200, { project: updatedProject, program, workflow: updatedWorkflow });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  const duplicateProgramWorkflowMatch = url.pathname.match(/^\/api\/program-workflows\/([^/]+)\/duplicate$/);
+  if (req.method === "POST" && duplicateProgramWorkflowMatch) {
+    try {
+      const body = await readBody(req);
+      const duplicated = duplicateChannel(decodeURIComponent(duplicateProgramWorkflowMatch[1]), body);
+      json(res, 201, { ...duplicated, workflow: duplicated.channel });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
   if (req.method === "POST" && url.pathname === "/api/channels") {
     try {
       const body = await readBody(req);
@@ -454,6 +625,7 @@ const server = http.createServer(async (req, res) => {
       const session = createOperatorSession({
         goal: body.goal,
         graphId: flow.graph?.id ?? null,
+        programId: body.programId ?? null,
         projectId: project.id,
         graphRevision: flow.graph?.revision ?? 0,
         workspaceId: body.workspaceId,
@@ -478,7 +650,19 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const operatorActionMatch = url.pathname.match(/^\/api\/operator\/sessions\/([^/]+)\/(resume|gate|cancel)$/);
+  // Connection status — does the founder have a live Claude the operator/composer/ideator can use?
+  // Drives the cold-start state so an unconnected user gets a clear path, not a dead-end error.
+  if (req.method === "GET" && url.pathname === "/api/connection") {
+    const selection = selectRuntime({});
+    json(res, 200, {
+      connected: !!selection.adapter,
+      label: selection.adapter ? (selection.auth ? authModeLabel(selection.auth) : selection.adapter.label) : null,
+      reason: selection.adapter ? null : selection.reason,
+    });
+    return;
+  }
+
+  const operatorActionMatch = url.pathname.match(/^\/api\/operator\/sessions\/([^/]+)\/(resume|gate|proposal|cancel)$/);
   if (req.method === "POST" && operatorActionMatch) {
     try {
       const body = await readBody(req);
@@ -486,8 +670,9 @@ const server = http.createServer(async (req, res) => {
       let session;
       if (action === "resume") session = resumeOperatorSession(sessionId, body.input);
       else if (action === "gate") session = await resolveOperatorGate(sessionId, body);
+      else if (action === "proposal") session = resolveOperatorProposal(sessionId, body);
       else session = cancelOperatorSession(sessionId);
-      json(res, action === "gate" ? 200 : 202, { session: publicOperatorSession(session) });
+      json(res, action === "gate" || action === "proposal" ? 200 : 202, { session: publicOperatorSession(session) });
     } catch (err) {
       json(res, 409, { error: err instanceof Error ? err.message : String(err) });
     }
@@ -786,12 +971,16 @@ const server = http.createServer(async (req, res) => {
     let graphId = requested;
     try { graphId = getChannel(project, requested).graphId; } catch { /* legacy graph id */ }
     const saved = loadFlow(graphId, null);
-    if (!saved.graph) {
+    const ownedProgram = listOutcomePrograms(project.id).find((program) =>
+      program.workflowGraph?.id === graphId || program.id === requested
+    );
+    const graph = saved.graph ?? ownedProgram?.workflowGraph ?? null;
+    if (!graph) {
       json(res, 404, { error: `Graph not found: ${graphId}` });
       return;
     }
     json(res, 200, {
-      graph: applySharedContextToGraph(saved.graph, project.sharedContext),
+      graph: applySharedContextToGraph(graph, project.sharedContext),
       runs: saved.runs.slice(-10).map((run) => run.result),
     }); return;
   }
@@ -805,6 +994,16 @@ const server = http.createServer(async (req, res) => {
       const validation = validateGraph(body.graph);
       if (!validation.ok) throw new Error(`Graph is invalid: ${validation.errors.join(" ")}`);
       const saved = saveFlow(body.graph);
+      if (saved.graph.outcomeProgramId) {
+        const project = loadProject();
+        appendDomainEvent(project.id, {
+          type: "WorkflowGraphUpdated",
+          aggregateType: "OutcomeProgram",
+          aggregateId: saved.graph.outcomeProgramId,
+          data: { graphId: saved.graph.id, workflowGraph: saved.graph },
+        });
+        syncProgramStoreFromEvents(project.id);
+      }
       json(res, 200, { graph: saved.graph, savedAt: saved.updatedAt });
     } catch (err) { json(res, 400, { error: err instanceof Error ? err.message : String(err) }); }
     return;
@@ -933,6 +1132,7 @@ Never return a replacement graph. Keep the patch narrow and preserve founder gat
         stepRuntime: liveStepRuntime({ cwd: project.sharedContext?.repository?.repo || process.cwd() }),
       });
       const saved = recordFlowRun(body.graph, result);
+      recordFeedbackSignalsFromRun({ projectId: project.id, graph: body.graph, result });
       // Graph failures are domain results. Return the full per-node result so
       // the client can render partial success, blocked nodes, and recovery.
       json(res, 200, {
@@ -987,6 +1187,7 @@ Never return a replacement graph. Keep the patch narrow and preserve founder gat
         onEvent: send,
       });
       const saved = recordFlowRun(body.graph, result);
+      recordFeedbackSignalsFromRun({ projectId: project.id, graph: body.graph, result });
       send({
         type: "run_done",
         result: {

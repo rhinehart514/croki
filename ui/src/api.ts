@@ -5,6 +5,8 @@ import type {
   WorkspaceSummary, ProjectSummary, OpportunityStudio, GTMOpportunity, DataAdapter,
   ContextManifest, GtmLibrary,
   GraphOperation, GTMContractAudit,
+  OutcomeProgram, AgentCreationPolicy, AgentInstance, PersonalizationProfile, FeedbackSignal,
+  AgentEvaluation, DomainEvent,
 } from "@/types";
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -236,8 +238,8 @@ export const listOperatorSessions = (projectId?: string) =>
 export const getOperatorSession = (sessionId: string) =>
   get<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}`);
 
-export const createOperatorSession = (goal: string, graphId?: string) =>
-  post<{ session: OperatorSession }>("/api/operator/sessions", { goal, graphId });
+export const createOperatorSession = (goal: string, graphId?: string, programId?: string) =>
+  post<{ session: OperatorSession }>("/api/operator/sessions", { goal, graphId, programId });
 
 export const resumeOperatorSession = (sessionId: string, input: string) =>
   post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/resume`, { input });
@@ -249,6 +251,14 @@ export const resolveOperatorGate = (
 
 export const cancelOperatorSession = (sessionId: string) =>
   post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/cancel`, {});
+
+// Accept or discard a graph change the operator staged for review (the on-canvas ghost proposal).
+export const resolveOperatorProposal = (sessionId: string, accept: boolean) =>
+  post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/proposal`, { accept });
+
+// ── Connection status — is a live Claude available for compose/ideate/operator ──
+export type ConnectionStatus = { connected: boolean; label: string | null; reason: string | null };
+export const getConnection = () => get<ConnectionStatus>("/api/connection");
 
 // ── Project (channels list) ──────────────────────────────────────────────────
 export async function getProject(): Promise<{ project: GTMProject }> {
@@ -273,6 +283,82 @@ export const getOpportunities = (projectId: string) =>
   get<{ opportunities: OpportunityStudio }>(
     `/api/projects/${encodeURIComponent(projectId)}/opportunities`,
   );
+
+export const getPrograms = (projectId: string) =>
+  get<{
+    programs: OutcomeProgram[];
+    policies: AgentCreationPolicy[];
+    foundry: {
+      instances: AgentInstance[];
+      profiles: PersonalizationProfile[];
+      evaluations: AgentEvaluation[];
+    };
+    feedback: { signals: FeedbackSignal[] };
+    events: DomainEvent[];
+  }>(`/api/projects/${encodeURIComponent(projectId)}/programs`);
+
+export const runProgram = (
+  projectId: string,
+  programId: string,
+  options: { targetNodeId?: string; approvals?: Record<string, boolean>; decisions?: Decisions; resumeRunId?: string } = {},
+) => post<{
+  programId: string;
+  graphId: string;
+  programStatus: string;
+  storedRunCount: number;
+  feedbackSignals: number;
+  evaluations: number;
+  nextVersions: Array<{ policyId: string; agentInstanceId: string; previousInstanceId: string | null; version: number }>;
+  result: GTMRunResult;
+}>(`/api/projects/${encodeURIComponent(projectId)}/programs/${encodeURIComponent(programId)}/run`, options);
+
+// Program run over SSE — the program canvas streams node-by-node like the raw-graph path. run_done
+// carries the program summary (status, learning signals, next agent versions) the batch endpoint did.
+export type ProgramRunStreamEvent =
+  | { type: "node_start"; nodeId: string; category?: string; kind?: string; label?: string }
+  | { type: "node_done"; nodeId: string; result: GTMRunResult["nodes"][string] }
+  | {
+      type: "run_done";
+      result: GTMRunResult;
+      programStatus: string;
+      storedRunCount: number;
+      feedbackSignals: number;
+      evaluations: number;
+      nextVersions: Array<{ policyId: string; agentInstanceId: string; previousInstanceId: string | null; version: number }>;
+    }
+  | { type: "run_error"; error: string };
+
+export async function runProgramStream(
+  projectId: string,
+  programId: string,
+  options: { approvals?: Record<string, boolean>; decisions?: Decisions; resumeRunId?: string },
+  onEvent: (event: ProgramRunStreamEvent) => void,
+): Promise<void> {
+  const res = await fetch(
+    `/api/projects/${encodeURIComponent(projectId)}/programs/${encodeURIComponent(programId)}/run/stream`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(options) },
+  );
+  if (!res.ok || !res.body) {
+    const payload = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error || `Program run stream failed (${res.status}).`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const frames = buf.split("\n\n");
+    buf = frames.pop() ?? "";
+    for (const frame of frames) {
+      const line = frame.split("\n").find((l) => l.startsWith("data: "));
+      if (line) {
+        try { onEvent(JSON.parse(line.slice(6)) as ProgramRunStreamEvent); } catch { /* skip malformed frame */ }
+      }
+    }
+  }
+}
 
 export const generateOpportunities = (projectId: string) =>
   post<{ opportunities: OpportunityStudio }>(
@@ -299,30 +385,45 @@ export const composeOpportunityChannel = (
     input?: DataAdapter;
     output?: DataAdapter;
   },
-) => post<{ channel: ChannelMeta; graph: GTMGraph }>(
+) => post<{ channel: ChannelMeta; program: OutcomeProgram; agents: Array<{ instance: AgentInstance; policy: AgentCreationPolicy; profile: PersonalizationProfile }>; graph: GTMGraph }>(
   `/api/projects/${encodeURIComponent(projectId)}/compose`,
   input,
 );
 
+export const setActiveWorkflow = (workflowId: string) =>
+  post<{ activeWorkflowId: string; activeChannelId?: string }>("/api/project/active-workflow", { workflowId });
+
 export const setActiveChannel = (channelId: string) =>
-  post<{ activeChannelId: string }>("/api/project/active-channel", { channelId });
+  setActiveWorkflow(channelId).then((result) => ({ activeChannelId: result.activeWorkflowId }));
+
+export const createWorkflow = (input: { name: string; objective: string; kind?: string }) =>
+  post<{ workflow: ChannelMeta; channel?: ChannelMeta }>("/api/program-workflows", input)
+    .then((result) => ({ workflow: result.workflow ?? result.channel! }));
 
 export const createChannel = (input: { name: string; objective: string; kind?: string }) =>
-  post<{ channel: ChannelMeta }>("/api/channels", input);
+  createWorkflow(input).then((result) => ({ channel: result.workflow }));
+
+export const duplicateWorkflow = (workflowId: string, input: { name: string; objective?: string }) =>
+  post<{ workflow?: ChannelMeta; channel?: ChannelMeta }>(
+    `/api/program-workflows/${encodeURIComponent(workflowId)}/duplicate`,
+    input,
+  ).then((result) => ({ workflow: result.workflow ?? result.channel! }));
 
 export const duplicateChannel = (channelId: string, input: { name: string; objective?: string }) =>
-  post<{ channel: ChannelMeta }>(
-    `/api/channels/${encodeURIComponent(channelId)}/duplicate`,
-    input,
-  );
+  duplicateWorkflow(channelId, input).then((result) => ({ channel: result.workflow }));
+
+export const updateWorkflow = (
+  workflowId: string,
+  patch: Partial<Pick<ChannelMeta, "name" | "objective" | "kind" | "enabled">>,
+) => post<{ workflow?: ChannelMeta; channel?: ChannelMeta }>(
+  `/api/program-workflows/${encodeURIComponent(workflowId)}/update`,
+  patch,
+).then((result) => ({ workflow: result.workflow ?? result.channel! }));
 
 export const updateChannel = (
   channelId: string,
   patch: Partial<Pick<ChannelMeta, "name" | "objective" | "kind" | "enabled">>,
-) => post<{ channel: ChannelMeta }>(
-  `/api/channels/${encodeURIComponent(channelId)}/update`,
-  patch,
-);
+) => updateWorkflow(channelId, patch).then((result) => ({ channel: result.workflow }));
 
 export const getPortfolioBrief = () =>
   get<{ brief: PortfolioBrief }>("/api/project/brief");

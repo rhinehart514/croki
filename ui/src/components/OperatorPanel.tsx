@@ -13,6 +13,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
+import { statusLabel } from "@/lib/status";
 import type { OperatorEvent, OperatorSession } from "@/types";
 
 const TERMINAL = new Set(["completed", "blocked", "failed", "cancelled"]);
@@ -25,10 +26,6 @@ function eventIcon(event: OperatorEvent) {
   if (event.type.includes("completed")) return <CheckCircle2 aria-hidden="true" />;
   if (event.type.includes("founder")) return <MessageSquareText aria-hidden="true" />;
   return <Circle aria-hidden="true" />;
-}
-
-function statusLabel(status: OperatorSession["status"]) {
-  return status.replaceAll("_", " ");
 }
 
 export function OperatorPanel({

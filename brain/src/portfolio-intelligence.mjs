@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { loadFlow } from "./flow-store.mjs";
-import { getChannel, loadProject, updateSharedContext } from "./project-store.mjs";
+import { getChannel, getProjectChannels, loadProject, updateSharedContext } from "./project-store.mjs";
 
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
@@ -99,7 +99,8 @@ function runStats(flow) {
 
 export function derivePortfolioBrief(options = {}) {
   const project = loadProject(options);
-  const channels = project.channels.map((channel) => ({
+  const projectedChannels = getProjectChannels(project, options);
+  const channels = projectedChannels.map((channel) => ({
     id: channel.id,
     name: channel.name,
     kind: channel.kind,
@@ -107,7 +108,7 @@ export function derivePortfolioBrief(options = {}) {
     ...runStats(loadFlow(channel.graphId, null, options)),
   }));
   const observedOutcomes = (project.sharedContext.outcomes ?? []).filter((outcome) => outcome.observation === "observed");
-  const outcomeCounts = Object.fromEntries(project.channels.map((channel) => [
+  const outcomeCounts = Object.fromEntries(projectedChannels.map((channel) => [
     channel.id,
     observedOutcomes.filter((outcome) => outcome.channelId === channel.id)
       .reduce((counts, outcome) => ({
@@ -173,7 +174,7 @@ export function createPortfolioArtifact(options = {}) {
 
 export function recordObservedOutcome(input, options = {}) {
   const project = loadProject(options);
-  const channel = getChannel(project, input.channelId);
+  const channel = getChannel(project, input.channelId, options);
   const type = String(input.type || "").trim();
   const gtmActionId = String(input.gtmActionId || "").trim();
   if (!type) throw new Error("Outcome type is required.");
@@ -212,7 +213,7 @@ export function recordObservedOutcome(input, options = {}) {
 
 export function recordExperiment(input, options = {}) {
   const project = loadProject(options);
-  const channel = getChannel(project, input.channelId);
+  const channel = getChannel(project, input.channelId, options);
   const hypothesis = String(input.hypothesis || "").trim();
   if (!hypothesis) throw new Error("An experiment hypothesis is required.");
   const experiment = {

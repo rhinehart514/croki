@@ -3363,6 +3363,8 @@ svg {
 .project-switcher {
   position: relative;
   display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .project-switcher-trigger {
@@ -3379,6 +3381,8 @@ svg {
   font-weight: 640;
   cursor: pointer;
   transition: background 120ms var(--ease), border-color 120ms var(--ease);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .project-switcher-trigger:hover {
@@ -3396,6 +3400,7 @@ svg {
 
 .project-switcher-name {
   max-width: 200px;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3892,6 +3897,45 @@ svg {
 }
 
 .loop-error-banner svg { flex: 0 0 auto; }
+
+/* Cold start — no live Claude. Calmer than an error (it's a state, not a failure): an amber
+   "here's how to connect" card top-center, so the founder gets a path instead of a dead end. */
+.loop-connect-banner {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 560px;
+  padding: 12px 16px;
+  border: 1px solid #e7c98a;
+  border-radius: 10px;
+  background: #fffaf0;
+  box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.22);
+}
+
+.loop-connect-banner svg { flex: 0 0 auto; width: 16px; height: 16px; color: #b7791f; margin-top: 1px; }
+.loop-connect-text { display: grid; gap: 3px; }
+.loop-connect-text strong { font-size: 12.5px; color: var(--ink); }
+.loop-connect-text span { color: #7a6a4a; font-size: 11.5px; line-height: 1.5; }
+.loop-connect-text code { padding: 0 4px; border-radius: 4px; background: #f1e6cf; font-size: 11px; }
+
+/* Disconnected model pill — the toolbar reflects connection so the state is always visible. */
+.loop-model-btn.disconnected { border-color: #e7c98a; color: #b7791f; }
+.loop-model-dot.off { background: #d9a441; }
+
+/* Explorer cluster label — groups the sections into a few anchors instead of 11 flat peers. */
+.explorer-group-label {
+  padding: 12px 14px 4px;
+  color: var(--faint, #9aa0aa);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
 
 /* ── Right detail panel ──────────────────────────────────────────────────── */
 
@@ -7522,7 +7566,7 @@ svg {
 
   .loop-toolbar-left {
     flex: 0 1 auto;
-    max-width: 112px;
+    max-width: 148px;
   }
 
   .loop-brand-name,
@@ -7533,6 +7577,10 @@ svg {
 
   .loop-toolbar-crumb-link {
     max-width: 68px;
+  }
+
+  .project-switcher-name {
+    max-width: 76px;
   }
 
   .loop-tabs {
@@ -7583,6 +7631,18 @@ svg {
   .loop-toolbar-right .loop-model-btn {
     display: none;
   }
+
+  .loop-graph-actions {
+    top: 144px;
+    right: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: calc(100vw - 96px);
+  }
+
+  .loop-canvas-area .react-flow__controls {
+    top: 56px;
+  }
 }
 
 /* ── Explorer (IDE left pane) ──────────────────────────────────────────────── */
@@ -7611,6 +7671,26 @@ svg {
 .explorer-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .explorer-row-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .explorer-row-meta { color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.explorer-foundry-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 6px 12px 2px 30px;
+}
+.explorer-foundry-stats span {
+  min-width: 0;
+  padding: 5px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 10px;
+  font-weight: 650;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* ── Operator narration (markdown-lite) ───────────────────────────────────── */
 .composer-event-detail { color: var(--ink-2); font-size: 12.5px; line-height: 1.5; }
@@ -7633,6 +7713,840 @@ svg {
 
 /* Orbit pages (Understand / Opportunities / Channels) render in the IDE center column. */
 .loop-canvas-area.orbit-scroll { overflow-y: auto; overflow-x: hidden; }
+
+/* ── Outcome Program canvas — the executable source map ───────────────────── */
+.program-workbench {
+  display: grid;
+  /* topbar · mode strip · canvas (flexible) · debugger */
+  grid-template-rows: auto auto minmax(0, 1fr) 178px;
+  height: 100%;
+  min-width: 0;
+  background: var(--canvas);
+}
+
+/* The program workbench is already a four-zone IDE (explorer · canvas · inspector · debugger), so
+   the co-pilot keeps its uniform bottom-right floating panel (.composer-dock.floating) rather than
+   claiming a fifth full-height column. App opens it collapsed here (the `floating` prop) so the
+   inspector stays visible until Claude is summoned. */
+
+.program-topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.76);
+  backdrop-filter: blur(18px);
+}
+
+.program-title-block {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.program-path,
+.inspector-kicker {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.program-title-block h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 720;
+  line-height: 1.12;
+}
+
+.program-status-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.program-status-pill,
+.program-node-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 21px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  padding: 0 8px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 10px;
+  font-weight: 680;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.program-status-pill.good,
+.program-node-badge.good { color: var(--proven); border-color: color-mix(in srgb, var(--proven) 24%, white); background: var(--proven-soft); }
+.program-status-pill.warn,
+.program-node-badge.warn { color: var(--gap); border-color: color-mix(in srgb, var(--gap) 24%, white); background: var(--gap-soft); }
+.program-status-pill.bad,
+.program-node-badge.bad { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 24%, white); background: var(--danger-soft); }
+
+.program-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.program-mode-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+
+.program-mode-tabs button,
+.debugger-tabs button,
+.program-secondary-action,
+.program-primary-action {
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.program-mode-tabs button {
+  height: 27px;
+  padding: 0 10px;
+}
+
+.program-mode-tabs button.active,
+.debugger-tabs button.active {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-card);
+}
+
+.program-secondary-action,
+.program-primary-action {
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.program-primary-action {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.program-primary-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Mode strip — states the question the current mode asks of the program, so each lens reads as a
+   distinct view rather than the same canvas with a different tab highlighted. */
+.program-mode-intent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 32px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.program-mode-intent-label {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.program-mode-intent-q {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.program-mode-intent-action {
+  flex: none;
+  height: 26px;
+  padding: 0 11px;
+  border: 1px solid var(--gap);
+  border-radius: 7px;
+  background: var(--gap-soft);
+  color: var(--gap);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.program-canvas-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  min-height: 0;
+}
+
+/* A mode emphasizes the columns it is about; the rest recede so the eye lands where the work is.
+   Design lights all three, so nothing is muted there. */
+.program-node-column.muted {
+  opacity: 0.4;
+}
+
+.program-canvas-plane {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(148px, 0.95fr) minmax(158px, 1fr) minmax(148px, 0.95fr);
+  gap: 18px;
+  min-width: 0;
+  padding: 34px 32px 30px;
+  overflow: auto;
+  background:
+    radial-gradient(circle, var(--canvas-dot) 1px, transparent 1px) 0 0 / 22px 22px,
+    linear-gradient(180deg, #fff 0%, var(--canvas) 100%);
+}
+
+.program-node-column {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  align-content: center;
+  gap: 14px;
+  min-width: 0;
+  transition: opacity 160ms ease;
+}
+
+.program-node-column:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -17px;
+  width: 14px;
+  height: 1px;
+  background: var(--ghost);
+}
+
+.program-loop-back {
+  position: absolute;
+  right: 66px;
+  bottom: 28px;
+  left: 34%;
+  z-index: 1;
+  height: 54px;
+  border-right: 1px solid var(--gap);
+  border-bottom: 1px solid var(--gap);
+  border-left: 1px solid var(--gap);
+  border-radius: 0 0 18px 18px;
+  opacity: 0.78;
+  pointer-events: none;
+}
+
+.program-loop-back span {
+  position: absolute;
+  left: 50%;
+  bottom: -10px;
+  transform: translateX(-50%);
+  padding: 0 8px;
+  color: var(--gap);
+  background: var(--canvas);
+  font-size: 10px;
+  font-weight: 720;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Canvas-first: the program's plane IS the real execution graph (GraphCanvas), not a card grid.
+   Override the dotted card-plane styles — React Flow brings its own background and needs a clean,
+   full-height, non-scrolling container or it collapses to zero height. */
+.program-canvas-graph {
+  display: block;
+  grid-template-columns: none;
+  padding: 0;
+  overflow: hidden;
+  background: var(--canvas);
+}
+
+/* The mode lens, applied per node by GraphCanvas.lensClass. A mode foregrounds the nodes it is
+   about and recedes the rest — same graph, different question. Dim matches the muted-column
+   register (0.4) the card grid used, so the canvas reads calm. */
+.react-flow .loop-node-lens-dim {
+  opacity: 0.4;
+  transition: opacity 180ms ease;
+}
+.react-flow .loop-node-lens-focus {
+  opacity: 1;
+  transition: opacity 180ms ease;
+}
+
+/* On-canvas proposals — operator-staged nodes/edges rendered as ghosts for founder review. A
+   restrained indigo dashed treatment reads as "draft / pending decision", distinct from both the
+   monochrome committed nodes and the gate's amber. Transient: gone the moment the founder resolves. */
+.react-flow .loop-node-proposed .loop-node {
+  border-style: dashed;
+  border-color: #6366f1;
+  background: #6366f10c;
+  box-shadow: 0 0 0 1px #6366f133, 0 10px 24px -14px #6366f1aa;
+}
+
+.react-flow__edge.loop-edge-proposed .react-flow__edge-path {
+  stroke: #6366f1;
+  stroke-dasharray: 6 4;
+}
+
+.loop-proposal-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  width: max-content;
+  max-width: min(680px, calc(100% - 64px));
+  padding: 12px 16px;
+  border: 1px solid #6366f1;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 16px 44px -16px rgba(49, 46, 129, 0.55);
+}
+
+.loop-proposal-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.loop-proposal-text strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.loop-proposal-text strong svg { width: 14px; height: 14px; color: #6366f1; }
+
+.loop-proposal-text span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loop-proposal-actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.loop-proposal-discard {
+  padding: 7px 13px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.loop-proposal-accept {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  border: 1px solid #6366f1;
+  border-radius: 8px;
+  background: #6366f1;
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.loop-proposal-accept svg { width: 13px; height: 13px; }
+.loop-proposal-bar button:disabled { opacity: 0.5; cursor: default; }
+
+/* Inspector — the program framing the DAG lacks. Agent chips select a policy to read; no synthetic
+   canvas nodes. */
+.inspector-agent-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.inspector-agent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.inspector-agent-chip.selected {
+  border-color: var(--ink);
+  background: var(--surface-2);
+}
+
+.inspector-inline-action {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--gap);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+  text-decoration: underline;
+}
+
+.inspector-contract {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.inspector-eval {
+  margin-top: 6px;
+  padding: 7px 9px;
+  border-left: 2px solid var(--line-2);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.program-node-card {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-areas:
+    "icon copy"
+    "icon badge";
+  gap: 8px 10px;
+  min-height: 92px;
+  padding: 13px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 140ms var(--ease), box-shadow 140ms var(--ease), transform 140ms var(--ease);
+}
+
+.program-node-card:hover,
+.program-node-card.selected {
+  border-color: var(--ink);
+  box-shadow: var(--shadow-pop);
+  transform: translateY(-1px);
+}
+
+.program-node-icon {
+  grid-area: icon;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+.program-node-card.kind-gate .program-node-icon,
+.program-node-card.kind-learning .program-node-icon {
+  color: var(--gap);
+  background: var(--gap-soft);
+}
+
+.program-node-copy {
+  grid-area: copy;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.program-node-copy strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 1.15;
+}
+
+.program-node-copy small {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.program-node-badge {
+  grid-area: badge;
+  justify-self: start;
+  max-width: 100%;
+}
+
+.program-empty-agents {
+  display: grid;
+  gap: 8px;
+  align-content: center;
+  min-height: 160px;
+  padding: 18px;
+  border: 1px dashed var(--ghost);
+  border-radius: var(--r-md);
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.7);
+  text-align: center;
+}
+
+.program-empty-agents svg {
+  margin: 0 auto;
+  color: var(--faint);
+  font-size: 24px;
+}
+
+.program-empty-agents strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.program-empty-agents span {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.program-build-agents {
+  justify-self: center;
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--primary);
+  border-radius: var(--r-md);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.program-build-agents:hover { filter: brightness(1.05); }
+.program-build-agents:disabled { opacity: 0.45; cursor: not-allowed; }
+.program-build-agents svg { color: currentColor; font-size: 14px; margin: 0; }
+
+.program-inspector {
+  min-width: 0;
+  padding: 22px;
+  overflow: auto;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.program-inspector h2 {
+  margin: 8px 0 8px;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 720;
+}
+
+.program-inspector p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.inspector-facts {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 0;
+}
+
+.inspector-facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.inspector-facts dt {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 720;
+  text-transform: uppercase;
+}
+
+.inspector-facts dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 650;
+  text-align: right;
+}
+
+.inspector-section {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.inspector-section h3,
+.rule-list strong {
+  margin: 0;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.rule-list {
+  display: grid;
+  gap: 6px;
+}
+
+.rule-list span {
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink-2);
+  background: var(--surface-2);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.program-debugger {
+  min-height: 0;
+  border-top: 1px solid var(--line);
+  background: #101014;
+  color: white;
+}
+
+.debugger-tabs {
+  display: flex;
+  gap: 3px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.debugger-tabs button {
+  height: 26px;
+  padding: 0 10px;
+  color: rgba(255,255,255,0.62);
+}
+
+.debugger-tabs button.active {
+  background: rgba(255,255,255,0.1);
+  color: white;
+  box-shadow: none;
+}
+
+.debugger-body {
+  height: calc(100% - 43px);
+  overflow: auto;
+  padding: 8px 10px 12px;
+}
+
+.timeline-list,
+.diff-list {
+  display: grid;
+  gap: 6px;
+}
+
+.debug-row {
+  display: grid;
+  grid-template-columns: 18px 190px minmax(0, 1fr) 160px;
+  align-items: center;
+  gap: 10px;
+  min-height: 30px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.045);
+}
+
+.debug-row span:first-child {
+  color: rgba(255,255,255,0.62);
+}
+
+.debug-row strong {
+  overflow: hidden;
+  color: white;
+  font-size: 11px;
+  font-weight: 680;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.debug-row small,
+.debug-row em {
+  overflow: hidden;
+  color: rgba(255,255,255,0.58);
+  font-size: 11px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.debugger-empty {
+  padding: 18px;
+  color: rgba(255,255,255,0.55);
+  font-size: 12px;
+}
+
+.policy-diff {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 7px;
+  background: rgba(255,255,255,0.05);
+}
+
+.policy-diff strong {
+  color: white;
+  font-size: 12px;
+}
+
+.policy-diff span {
+  color: rgba(255,255,255,0.6);
+  font-size: 11px;
+}
+
+.policy-diff code {
+  color: #bbf7d0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: normal;
+}
+
+/* Learning thread — the closed loop as a vertical decision → rule → agent story. Used in both the
+   light inspector and the dark debugger, so the base is light and the debugger overrides for dark. */
+.thread-list { display: grid; gap: 14px; padding: 4px; }
+.learning-thread {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.learning-thread + .learning-thread { margin-top: 2px; }
+.learning-thread-step { display: grid; gap: 4px; }
+.learning-thread-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted);
+}
+.learning-thread-signal { font-size: 11.5px; line-height: 1.4; color: var(--ink); }
+.learning-thread-arrow {
+  display: flex; align-items: center; gap: 6px;
+  padding-left: 2px;
+  font-size: 10px; font-weight: 650; letter-spacing: 0.02em; color: var(--muted);
+}
+.learning-thread-arrow::before { content: "↓"; font-size: 13px; line-height: 1; }
+.learning-thread-rule { font-size: 11px; line-height: 1.4; font-family: var(--font-mono); }
+.learning-thread-rule.pos { color: #16a34a; }
+.learning-thread-rule.neg { color: #dc2626; }
+.learning-thread-agent { font-size: 12px; font-weight: 650; color: var(--ink); }
+
+.program-debugger .learning-thread { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); }
+.program-debugger .learning-thread-signal,
+.program-debugger .learning-thread-agent { color: rgba(255,255,255,0.92); }
+.program-debugger .learning-thread-label,
+.program-debugger .learning-thread-arrow { color: rgba(255,255,255,0.55); }
+.program-debugger .learning-thread-rule.pos { color: #86efac; }
+.program-debugger .learning-thread-rule.neg { color: #fca5a5; }
+
+.program-graph-detail {
+  position: absolute;
+  inset: 76px 28px 210px 28px;
+  z-index: 8;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+}
+
+@media (max-width: 1180px) {
+  .program-canvas-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .program-inspector {
+    display: none;
+  }
+
+  .program-canvas-plane {
+    grid-template-columns: 1fr;
+  }
+
+  .program-node-column:not(:last-child)::after,
+  .program-loop-back {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .program-topbar {
+    display: grid;
+    padding: 16px;
+  }
+
+  .program-title-block h1 {
+    font-size: 22px;
+  }
+
+  .program-actions {
+    overflow-x: auto;
+  }
+
+  .program-canvas-plane {
+    padding: 20px 16px 180px;
+  }
+
+  /* The graph plane keeps React Flow's own full-bleed layout at every width. */
+  .program-canvas-graph {
+    padding: 0;
+  }
+
+  .program-debugger {
+    min-height: 180px;
+  }
+
+  .debug-row {
+    grid-template-columns: 18px minmax(90px, 0.8fr) minmax(0, 1fr);
+  }
+
+  .debug-row em {
+    display: none;
+  }
+}
 
 /* Brand is a home button now (click → canvas). */
 button.loop-brand { background: none; border: 0; cursor: pointer; }

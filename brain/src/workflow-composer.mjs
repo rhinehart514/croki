@@ -1,7 +1,13 @@
 import { validateGraph } from "./graph-operations.mjs";
-import { createChannel, loadProject, saveProject } from "./project-store.mjs";
+import { channelIdFor } from "./channel-graph.mjs";
+import { getChannel, getProjectChannels, loadProject, saveProject } from "./project-store.mjs";
 import { saveFlow } from "./flow-store.mjs";
 import { writeArtifact } from "./artifact-store.mjs";
+import {
+  annotateGraphWithProgram,
+  compileOpportunityProgram,
+  markProgramComposed,
+} from "./program-compiler.mjs";
 
 // Honest blank default: with no composer wired, compose nothing rather than fall back to a
 // hardcoded skeleton (the cage we removed). Live composition is createClaudeComposer.
@@ -14,29 +20,6 @@ function slug(value) {
 const OPEN_KINDS = new Set(["agent", "skill", "code"]);
 const CATEGORIES = new Set(["context", "source", "gate", "execute", "measure", "enrich", "filter", "generate", "resource"]);
 const DEFAULT_CONNECTOR = { context: "product", source: "manual", gate: "default", execute: "local", measure: "default" };
-
-function agentMarkdown(agent) {
-  return `---
-name: ${agent.ref}
-description: ${agent.objective}
-tools: Read, Glob, Grep, WebSearch, WebFetch
-model: ${agent.model || (agent.provider === "codex" ? "gpt-5" : "sonnet")}
-provider: ${agent.provider || "claude"}
----
-
-# ${agent.title}
-
-${agent.prompt}
-
-## Input
-
-Structured JSON items from the upstream workflow step plus grounded product and learning context.
-
-## Output
-
-Return only a JSON array of result objects. Preserve evidence, dates, and uncertainty.
-`;
-}
 
 // The founder's concrete input adapter → a source node's connector and config. The model chose
 // the topology; the founder's real data (the CSV, the endpoint) is bound here by the host.
@@ -182,6 +165,7 @@ export async function composeOpportunityChannel(input, options = {}) {
   if (agents.some((agent) => !agent)) throw new Error("One or more selected agent opportunities do not exist.");
   if (agents.some((agent) => agent.status !== "accepted")) throw new Error("Accept every selected agent before composition.");
 
+  const compiled = compileOpportunityProgram({ project, channel, agents }, options);
   const { nodes, edges } = await composeGraphForChannel({
     channel,
     agents,
@@ -191,39 +175,59 @@ export async function composeOpportunityChannel(input, options = {}) {
     compose: options.compose || blankCompose,
   });
 
-  // Write the markdown artifact for every accepted agent so its node resolves at run time.
-  for (const agent of agents) writeArtifact("agent", agent.ref, agentMarkdown(agent), options);
+  // Write the real personalized capability artifact for every accepted agent so its node resolves
+  // at run time, and so the founder can edit the policy/profile-born agent directly.
+  for (const agent of compiled.agents) writeArtifact("agent", agent.instance.ref, agent.markdown, options);
 
-  const created = createChannel({
-    name: input.name || channel.title,
-    objective: input.objective || channel.objective,
-    kind: input.kind || "composed",
-  }, options);
   const projectAfterChannel = loadProject(options);
+  const channelName = input.name || channel.title;
+  const channelObjective = input.objective || channel.objective;
+  const channelKind = input.kind || "composed";
+  const channelId = channelIdFor(channelName, getProjectChannels(projectAfterChannel, options).map((item) => item.id));
+  const graphId = projectAfterChannel.id === "default" ? channelId : `${projectAfterChannel.id}--${channelId}`;
 
-  const graph = {
-    id: created.channel.graphId,
-    name: created.channel.name,
-    kind: created.channel.kind,
-    objective: created.channel.objective,
+  const graph = annotateGraphWithProgram({
+    id: graphId,
+    name: channelName,
+    kind: channelKind,
+    objective: channelObjective,
     version: "1.0.0",
     revision: 1,
     nodes,
     edges,
-    store: { path: `.gtm/flows/${created.channel.graphId}.json`, runs: 0 },
-  };
+    store: { path: `.gtm/flows/${graphId}.json`, runs: 0 },
+  }, compiled);
   const validation = validateGraph(graph);
   if (!validation.ok) throw new Error(`Composed workflow is invalid: ${validation.errors.join(" ")}`);
   saveFlow(graph, options);
+  markProgramComposed(compiled.program, {
+    channelId,
+    graphId,
+    workflowGraph: graph,
+    name: channelName,
+    objective: channelObjective,
+    kind: channelKind,
+  }, options);
 
   const updatedItems = (projectAfterChannel.opportunities?.items ?? []).map((item) => {
-    if (item.id === channel.id) return { ...item, status: "accepted", composedChannelId: created.channel.id, updatedAt: new Date().toISOString() };
+    if (item.id === channel.id) return { ...item, status: "accepted", composedChannelId: channelId, updatedAt: new Date().toISOString() };
     return item;
   });
-  saveProject({
+  const savedProject = saveProject({
     ...projectAfterChannel,
-    activeChannelId: created.channel.id,
+    activeChannelId: channelId,
     opportunities: { ...(projectAfterChannel.opportunities ?? {}), items: updatedItems },
   }, options);
-  return { channel: created.channel, graph, validation };
+  const projectedChannel = getChannel(savedProject, channelId, options);
+  return {
+    channel: projectedChannel,
+    program: compiled.program,
+    agents: compiled.agents.map((agent) => ({
+      instance: agent.instance,
+      policy: agent.policy,
+      profile: agent.profile,
+    })),
+    graph,
+    validation,
+  };
 }

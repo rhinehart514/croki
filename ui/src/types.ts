@@ -158,6 +158,7 @@ export type ChannelMeta = {
   kind: string;
   objective: string;
   graphId: string;
+  outcomeProgramId?: string;
   enabled: boolean;
   status: "idle" | "error" | "done" | "waiting";
   lastRunAt: string | null;
@@ -187,9 +188,131 @@ export type GTMProject = {
   id: string;
   name: string;
   activeChannelId: string | null;
+  activeWorkflowId?: string | null;
   sharedContext: SharedContext;
   channels: ChannelMeta[];
+  workflows?: ChannelMeta[];
   opportunities?: OpportunityStudio;
+};
+
+export type OutcomeProgram = {
+  id: string;
+  projectId: string;
+  name: string;
+  desiredOutcome: Record<string, unknown>;
+  buyerHypothesis: Record<string, unknown>;
+  channelHypothesis: Record<string, unknown>;
+  measurementPlan: Record<string, unknown>;
+  status: "draft" | "ready" | "running" | "waiting_for_gate" | "paused" | "learning" | "complete" | "retired" | "blocked" | "active" | string;
+  sourceOpportunityId?: string | null;
+  channelId?: string | null;
+  graphId?: string | null;
+  workflowGraph?: GTMGraph | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AgentCreationPolicy = {
+  id: string;
+  lineageId?: string;
+  previousPolicyId?: string | null;
+  projectId: string;
+  programId: string | null;
+  sourceOpportunityId?: string | null;
+  scope: "project" | "program" | "channel" | string;
+  purpose: string;
+  positiveRules: string[];
+  negativeRules: string[];
+  evidenceRequirements: string[];
+  safetyRules: string[];
+  requiredInputs: string[];
+  requiredOutputs: string[];
+  evaluationSignals: string[];
+  version: number;
+  feedbackSignalIds: string[];
+  revisionReason?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PersonalizationProfile = {
+  id: string;
+  projectId: string;
+  programId: string | null;
+  creationPolicyId: string | null;
+  productTruth: Citation[];
+  buyerHypothesis: Record<string, unknown>;
+  channelHypothesis: Record<string, unknown>;
+  founderTaste: Record<string, unknown>;
+  marketMemory: Record<string, unknown>;
+  priorRunState: unknown[];
+  knownBlindSpots: string[];
+  assembledAt: string;
+};
+
+export type AgentInstance = {
+  id: string;
+  lineageId?: string;
+  previousInstanceId?: string | null;
+  projectId: string;
+  ref: string;
+  blueprintId: string;
+  programId: string;
+  channelId?: string | null;
+  sourceOpportunityId?: string | null;
+  job: string;
+  inputContract: string[];
+  outputContract: string[];
+  personalizationProfileId: string;
+  creationPolicyId: string;
+  artifactPath: string;
+  evaluationSignals: string[];
+  version: number;
+  status: "draft" | "active" | "retired" | string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AgentEvaluation = {
+  id: string;
+  projectId: string;
+  programId: string | null;
+  runId: string | null;
+  nodeId: string | null;
+  agentInstanceId: string;
+  creationPolicyId: string | null;
+  status: string;
+  outputContractSatisfied: boolean;
+  evidenceUsed: boolean;
+  uncertaintyPreserved: boolean;
+  founderSignals: string[];
+  runFailure: string | null;
+  recommendations: string[];
+  createdAt: string;
+};
+
+export type FeedbackSignal = {
+  id: string;
+  projectId: string;
+  graphId: string | null;
+  runId: string | null;
+  nodeId: string;
+  type: string;
+  summary: string;
+  itemId?: string | null;
+  policyIds?: string[];
+  observedAt: string;
+};
+
+export type DomainEvent = {
+  id: string;
+  projectId: string;
+  type: string;
+  aggregateType: string | null;
+  aggregateId: string | null;
+  commandId: string | null;
+  createdAt: string;
+  data: Record<string, unknown>;
 };
 
 export type ProjectSummary = {
@@ -396,6 +519,7 @@ export type GTMGraph = {
   revision?: number;
   kind?: string;
   objective?: string;
+  outcomeProgramId?: string;
   sharedContextVersion?: number;
   nodes: GTMNode[];
   edges: GTMEdge[];
@@ -539,6 +663,7 @@ export type OperatorStatus =
   | "ready"
   | "running"
   | "waiting_for_gate"
+  | "waiting_for_proposal"
   | "waiting_for_input"
   | "interrupted"
   | "completed"
@@ -570,6 +695,7 @@ export type OperatorSessionSummary = {
 
 export type OperatorSession = OperatorSessionSummary & {
   schemaVersion: number;
+  programId?: string | null;
   model: string;
   startedAt?: string | null;
   completedAt?: string | null;
@@ -582,6 +708,18 @@ export type OperatorSession = OperatorSessionSummary & {
     runId: string;
     nodeIds: string[];
     runResult: GTMRunResult;
+  } | null;
+  // A graph change the operator staged for founder review — rendered on the canvas as ghost
+  // nodes/edges with accept/discard. `preview` is the full would-be graph; `changes` are the
+  // human-readable per-operation summaries.
+  pendingProposal?: {
+    id: string;
+    graphId: string;
+    baseRevision: number;
+    rationale: string;
+    operations: GraphOperation[];
+    changes: Array<{ type: string; detail: string }>;
+    preview: GTMGraph;
   } | null;
   events: OperatorEvent[];
 };

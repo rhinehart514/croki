@@ -16,3 +16,6 @@ dist/
 
 # Browser-tooling session cache
 .playwright-cli/
+
+# Local verification artifacts (screenshots, scratch)
+output/

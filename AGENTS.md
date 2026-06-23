@@ -7,17 +7,21 @@ reads what the product actually does and where wins actually enter; then you bui
 edit, and run go-to-market systems the way you vibe-code — describe the change in plain
 language, watch it change, run it, and gate anything that touches the outside world.
 
-A GTM system is composed, not a fixed pipeline. A workflow step can be a connector
-(`tool`), a subagent (`agent`), a skill, or `code` — whatever the frontier model
-composes. The real artifacts of GTM engineering are workflows, skills, and agents, and
-the founder (and the operator) build them here.
+A GTM system is composed, not a fixed pipeline. The domain object is the
+`OutcomeProgram`; the capability object is the personalized `AgentInstance`; the
+compounding rule object is the `AgentCreationPolicy`; and the `GTMGraph` is the
+execution plan. A workflow step can be a connector (`tool`), a subagent (`agent`), a
+skill, or `code` — whatever the frontier model composes. The real artifacts of GTM
+engineering are outcome programs, workflows, skills, and agents, and the founder (and
+the operator) build them here.
 
-The wedge is grounding. Every other GTM AI tool is ungrounded and collapses to the
-generic. GTM IDE grounds the model in three things at once: the real product code
-(a read-only scan with `file:line` evidence), the live run state (an MCP server lets
-Claude operate the engine through tools), and the founder's own taste (the loop
-learns from every gate decision). The result is GTM that knows your product instead
-of guessing at it.
+The wedge is grounding plus capability creation. Every other GTM AI tool is ungrounded
+and collapses to the generic. GTM IDE grounds the model in three things at once: the
+real product code (a read-only scan with `file:line` evidence), the live run state (an
+MCP server lets Claude operate the engine through tools), and the founder's own taste
+(the loop learns from every gate decision). The result is GTM that knows your product
+instead of guessing at it, then uses feedback to improve the rules that create the
+next specialized agent.
 
 The spine is "vibe up to the gate, never past it." Building and editing a flow is
 fast and reversible, exactly like code. Execution — anything that sends, publishes,
@@ -107,6 +111,18 @@ attribution gap is repaired in the product code.
   `executeOperatorTool` against the durable session store, so persistence and safety
   stay GTM-owned. It exposes no approve/send/publish tool by construction.
 - `brain/src/flow-store.mjs` owns durable flow edits and the run ledger.
+- `brain/src/program-store.mjs` owns durable outcome programs: desired outcome,
+  buyer hypothesis, channel hypothesis, measurement plan, status, and workflow link.
+- `brain/src/agent-policy-store.mjs` owns agent creation policies: contracts, evidence
+  requirements, positive/negative rules, safety rules, evaluation signals, and revision
+  from feedback.
+- `brain/src/capability-foundry.mjs` owns personalization profiles and agent instances:
+  the product/founder/market/program context used at birth and the concrete agent
+  capability created from it.
+- `brain/src/program-compiler.mjs` owns the domain handoff from accepted opportunities
+  into outcome program → policy → personalized agent → executable graph.
+- `brain/src/feedback-ledger.mjs` owns normalized feedback signals from gates and run
+  failures, and feeds them back into agent creation policies.
 - `brain/src/engine.mjs` derives the GTM engine state (all subsystems) from real
   signals — scan, run ledger, connectors, gate decisions. Powers inline node health
   and the Problems rail. Never seeded.
@@ -159,6 +175,13 @@ attribution gap is repaired in the product code.
   through an open step — not a Node connector. Code is for the deterministic spine only.
 - A workflow is composed from open step kinds; the connector taxonomy is an optional
   label, never the thing that limits what the agent can express.
+- Agent creation is a first-class domain process. No personalized agent is born without
+  a specific job, input contract, output contract, evidence requirement, safety rule,
+  and evaluation signal. A graph may run an agent instance, but the graph is not the
+  policy that created that agent.
+- Feedback improves creation rules, not only runtime prompts. Founder approvals,
+  rejections, edits, run failures, observed outcomes, and measurement gaps become
+  `FeedbackSignal` records that can revise the relevant `AgentCreationPolicy`.
 - Composition is not a fixed skeleton. The graph topology is composed by the model
   (`composition.mjs`, injectable; live `createClaudeComposer`; doctrine in the editable
   `~/.claude/agents/gtm-compose-workflow.md`) — it may branch, parallelize, gate more than once,

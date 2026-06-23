@@ -1,11 +1,19 @@
 # GTM IDE
 
-GTM IDE is a local, code-grounded workspace for debugging and operating
-go-to-market flows. Open a repository, name the event that represents a real
-win, and the product connects production-code evidence to a safe change loop:
+GTM IDE is a local, code-grounded workspace for creating outcome programs,
+generating personalized GTM capabilities, running them through gated workflows,
+and compounding feedback into better future capabilities. Open a repository,
+name the event that represents a real win, and the product connects
+production-code evidence to a safe change loop:
 
 ```text
 inspect → diagnose → propose → review → apply → verify
+```
+
+For go-to-market execution, the domain loop is:
+
+```text
+outcome program → agent creation policy → personalized agent → workflow → gate → feedback → better policy
 ```
 
 The source repository stays under founder control. Scans are read-only.
@@ -80,18 +88,21 @@ graphs:
 - Select or add multiple repository-backed product projects.
 - Preserve independent code evidence, shared intelligence, opportunities, and
   channels for each product.
+- Compile accepted channel opportunities into durable outcome programs with
+  buyer hypotheses, channel hypotheses, measurement plans, and status.
 - Generate code-derived channel opportunities with production `file:line`
   evidence while keeping unsupported strategic bets explicitly speculative.
 - Review, edit, accept, defer, or reject channel and agent opportunities before
   they mutate a workflow.
-- Choose Claude or Codex for each accepted agent and preserve the agent as an
-  editable markdown artifact.
+- Choose Claude or Codex for each accepted agent; the capability foundry creates
+  an agent creation policy, personalization profile, personalized agent
+  instance, and editable markdown artifact.
 - Compose accepted opportunities into a validated input → agents → founder
   gate → output → measure workflow.
 - Use manual rows, local CSV content, or HTTP APIs as inputs; stage outputs
   locally or send approved items through a configured HTTP API.
-- Feed observed outcomes, product feedback, and founder decisions into the
-  learning context used by future runs.
+- Feed observed outcomes, product feedback, founder decisions, and run failures
+  into the feedback ledger so future agent creation policies improve.
 
 ## Run
 
@@ -144,6 +155,11 @@ brain/src/operator-store.mjs durable operator sessions and event history
 brain/src/operator-runtime.mjs resident model/tool operation loop
 brain/src/channel-graph.mjs blank and duplicated channel graph creation
 brain/src/project-store.mjs arbitrary channel portfolio + shared intelligence
+brain/src/program-store.mjs durable outcome programs
+brain/src/agent-policy-store.mjs agent creation policies and policy revision
+brain/src/capability-foundry.mjs personalization profiles and agent instances
+brain/src/feedback-ledger.mjs normalized feedback signals
+brain/src/program-compiler.mjs program → policy → agent → graph compilation
 brain/src/server.mjs      local API and static application server
 ui/                      React, Tailwind, and React Flow interface
 ```

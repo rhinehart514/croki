@@ -3,8 +3,15 @@ import { liveStepRuntime } from "./agent-bridge.mjs";
 import { createClaudeIdeator } from "./ideation.mjs";
 import { createClaudeComposer } from "./composition.mjs";
 import { loadFlow, recordFlowRun, saveFlow } from "./flow-store.mjs";
+import { loadFeedbackLedger, recordFeedbackSignalsFromRun } from "./feedback-ledger.mjs";
 import { applyGraphOperations, validateGraph } from "./graph-operations.mjs";
 import { listConnectors, runGraph } from "./graph.mjs";
+import { appendDomainEvent, listDomainEvents } from "./domain-events.mjs";
+import { executeDomainCommand } from "./domain-commands.mjs";
+import { loadCapabilityFoundry } from "./capability-foundry.mjs";
+import { listAgentCreationPolicies } from "./agent-policy-store.mjs";
+import { listOutcomePrograms, syncProgramStoreFromEvents } from "./program-store.mjs";
+import { runProgram } from "./program-runtime.mjs";
 import { buildDraftMemory, extractDecisions } from "./memory.mjs";
 import {
   appendOperatorEvent,
@@ -19,7 +26,7 @@ import {
   getProjectWithChannels,
   listProjects,
   loadProject,
-  setActiveChannel,
+  setActiveWorkflow,
   updateChannel,
   updateSharedContext,
 } from "./project-store.mjs";
@@ -39,6 +46,79 @@ import { authModeLabel, selectRuntime } from "./runtimes/index.mjs";
 
 const activeSessions = new Map();
 
+const GRAPH_OPERATIONS_INPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    rationale: { type: "string" },
+    operations: {
+      type: "array",
+      minItems: 1,
+      maxItems: 24,
+      items: {
+        type: "object",
+        properties: {
+          type: {
+            type: "string",
+            enum: [
+              "set_graph_name",
+              "add_node",
+              "remove_node",
+              "update_node",
+              "connect_nodes",
+              "disconnect_nodes",
+            ],
+          },
+          name: { type: "string" },
+          nodeId: { type: "string" },
+          edgeId: { type: "string" },
+          node: {
+            type: "object",
+            description: "A workflow step. A 'tool' step (the default) is a registered connector and needs category + connector. An 'agent', 'skill', or 'code' step is composed freely and needs a ref (the subagent/skill/transform name) instead.",
+            properties: {
+              id: { type: "string" },
+              kind: {
+                type: "string",
+                enum: ["tool", "agent", "skill", "code"],
+                description: "tool = connector (default); agent = invoke a subagent; skill = apply a skill's judgment; code = a bounded transform.",
+              },
+              ref: { type: "string", description: "For agent/skill/code steps: the subagent, skill, or transform to invoke." },
+              category: {
+                type: "string",
+                enum: ["resource", "source", "context", "enrich", "filter", "generate", "gate", "execute", "measure"],
+              },
+              connector: { type: "string" },
+              label: { type: "string" },
+              position: {
+                type: "object",
+                properties: { x: { type: "number" }, y: { type: "number" } },
+                required: ["x", "y"],
+              },
+              config: { type: "object" },
+              agentPrompt: { type: "string" },
+              sourceOfTruth: { type: "array", items: { type: "string" } },
+            },
+            required: ["id", "label", "position", "config"],
+          },
+          edge: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              source: { type: "string" },
+              target: { type: "string" },
+              edgeType: { type: "string", enum: ["data", "context", "feedback"] },
+              label: { type: "string" },
+            },
+            required: ["id", "source", "target", "edgeType"],
+          },
+          patch: { type: "object" },
+        },
+        required: ["type"],
+      },
+    },
+  },
+  required: ["rationale", "operations"],
+};
+
 const TOOLS = [
   {
     name: "inspect_projects",
@@ -47,17 +127,17 @@ const TOOLS = [
   },
   {
     name: "inspect_portfolio",
-    description: "Inspect all GTM channels, their objectives, status, run history, and the shared product-intelligence version.",
+    description: "Inspect all outcome-program workflows, their objectives, status, run history, and the shared product-intelligence version.",
     input_schema: { type: "object", properties: {}, required: [] },
   },
   {
     name: "inspect_shared_context",
-    description: "Inspect the shared repository evidence, product, positioning, ICP, founder taste, contacts, outcomes, experiments, artifacts, and product feedback used by every channel.",
+    description: "Inspect the shared repository evidence, product, positioning, ICP, founder taste, contacts, outcomes, experiments, artifacts, and product feedback used by every workflow.",
     input_schema: { type: "object", properties: {}, required: [] },
   },
   {
     name: "update_shared_context",
-    description: "Update shared GTM intelligence across every channel. Preserve evidence status and do not present inferred positioning or ICP as proven.",
+    description: "Update shared GTM intelligence across every workflow. Preserve evidence status and do not present inferred positioning or ICP as proven.",
     input_schema: {
       type: "object",
       properties: {
@@ -68,8 +148,17 @@ const TOOLS = [
     },
   },
   {
+    name: "switch_workflow",
+    description: "Switch the durable operator to another outcome-program workflow before inspecting, editing, or running it.",
+    input_schema: {
+      type: "object",
+      properties: { workflowId: { type: "string" } },
+      required: ["workflowId"],
+    },
+  },
+  {
     name: "switch_channel",
-    description: "Switch the durable operator to another channel program before inspecting, editing, or running it.",
+    description: "Compatibility alias for switch_workflow.",
     input_schema: {
       type: "object",
       properties: { channelId: { type: "string" } },
@@ -77,8 +166,8 @@ const TOOLS = [
     },
   },
   {
-    name: "create_channel",
-    description: "Create a blank founder-defined GTM channel, make it active, then shape its graph with typed graph operations.",
+    name: "create_workflow",
+    description: "Create a blank outcome-program workflow, make it active, then shape its graph with founder-reviewed typed graph operations.",
     input_schema: {
       type: "object",
       properties: {
@@ -90,8 +179,34 @@ const TOOLS = [
     },
   },
   {
+    name: "create_channel",
+    description: "Compatibility alias for create_workflow.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        objective: { type: "string" },
+        kind: { type: "string" },
+      },
+      required: ["name", "objective"],
+    },
+  },
+  {
+    name: "duplicate_workflow",
+    description: "Duplicate an existing outcome-program workflow and its current graph as a new independently editable workflow.",
+    input_schema: {
+      type: "object",
+      properties: {
+        workflowId: { type: "string" },
+        name: { type: "string" },
+        objective: { type: "string" },
+      },
+      required: ["workflowId", "name"],
+    },
+  },
+  {
     name: "duplicate_channel",
-    description: "Duplicate an existing channel and its current graph as a new independently editable channel.",
+    description: "Compatibility alias for duplicate_workflow.",
     input_schema: {
       type: "object",
       properties: {
@@ -103,8 +218,23 @@ const TOOLS = [
     },
   },
   {
+    name: "update_workflow",
+    description: "Rename, clarify, classify, enable, or archive an outcome-program workflow without changing its graph nodes.",
+    input_schema: {
+      type: "object",
+      properties: {
+        workflowId: { type: "string" },
+        name: { type: "string" },
+        objective: { type: "string" },
+        kind: { type: "string" },
+        enabled: { type: "boolean" },
+      },
+      required: ["workflowId"],
+    },
+  },
+  {
     name: "update_channel",
-    description: "Rename, clarify, classify, enable, or archive a founder-defined channel without changing its graph nodes.",
+    description: "Compatibility alias for update_workflow.",
     input_schema: {
       type: "object",
       properties: {
@@ -181,6 +311,140 @@ const TOOLS = [
     },
   },
   {
+    name: "inspect_program",
+    description: "Inspect an outcome program, its domain events, policies, agent instances, evaluations, and feedback signals.",
+    input_schema: {
+      type: "object",
+      properties: { programId: { type: "string" } },
+      required: [],
+    },
+  },
+  {
+    name: "create_program",
+    description: "Create an outcome program from a founder-stated outcome. This emits OutcomeProgramCreated.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        objective: { type: "string" },
+        desiredOutcome: { type: "object" },
+        measurementPlan: { type: "object" },
+      },
+      required: ["name"],
+    },
+  },
+  {
+    name: "derive_agent_needs",
+    description: "Record the agent needs implied by a program before creating personalized agents. The program defaults to the session's current program.",
+    input_schema: {
+      type: "object",
+      properties: {
+        programId: { type: "string", description: "Optional. Defaults to the session's current program." },
+        needs: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string" },
+              objective: { type: "string", description: "What this agent must accomplish." },
+            },
+          },
+        },
+      },
+      required: ["needs"],
+    },
+  },
+  {
+    name: "create_personalized_agents",
+    description: "Create policy-backed personalized agent instances for an outcome program. The program defaults to the one this session is working on; pass programId only to target a different one.",
+    input_schema: {
+      type: "object",
+      properties: {
+        programId: { type: "string", description: "Optional. Defaults to the session's current program." },
+        agents: {
+          type: "array",
+          description: "The agents to create. Each needs at minimum a purpose and a ref.",
+          items: {
+            type: "object",
+            properties: {
+              ref: { type: "string", description: "Short kebab-case handle, e.g. founder-outreach-drafter." },
+              purpose: { type: "string", description: "The agent's specific job — what it does and why. Required." },
+              objective: { type: "string", description: "Optional restatement of the job; purpose is used if omitted." },
+              negativeRules: { type: "array", items: { type: "string" }, description: "Things the agent must not do." },
+              evidenceRequirements: { type: "array", items: { type: "string" } },
+              requiredInputs: { type: "array", items: { type: "string" } },
+              requiredOutputs: { type: "array", items: { type: "string" } },
+            },
+            required: ["ref", "purpose"],
+          },
+        },
+      },
+      required: ["agents"],
+    },
+  },
+  {
+    name: "compose_program_workflow",
+    description: "Attach a composed graph to an outcome program and mark the program ready.",
+    input_schema: {
+      type: "object",
+      properties: {
+        programId: { type: "string", description: "Optional. Defaults to the session's current program." },
+        graphId: { type: "string" },
+        channelId: { type: "string" },
+      },
+      required: ["graphId"],
+    },
+  },
+  {
+    name: "run_program",
+    description: "Run an outcome program through workflow, founder gate, feedback, evaluation, and next agent version creation. The program defaults to the session's current program.",
+    input_schema: {
+      type: "object",
+      properties: {
+        programId: { type: "string", description: "Optional. Defaults to the session's current program." },
+        targetNodeId: { type: "string" },
+        resumeRunId: { type: "string" },
+        approvals: { type: "object" },
+        decisions: { type: "object" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "inspect_program_feedback",
+    description: "Inspect feedback signals, agent evaluations, and policy revisions for a program. Defaults to the session's current program.",
+    input_schema: {
+      type: "object",
+      properties: { programId: { type: "string", description: "Optional. Defaults to the session's current program." } },
+      required: [],
+    },
+  },
+  {
+    name: "revise_program_from_feedback",
+    description: "Revise program agent policies from explicit feedback signals without mutating old runs.",
+    input_schema: {
+      type: "object",
+      properties: {
+        programId: { type: "string" },
+        signals: { type: "array", items: { type: "object" } },
+      },
+      required: ["programId", "signals"],
+    },
+  },
+  {
+    name: "create_next_agent_version",
+    description: "Create the next personalized agent version from a revised policy.",
+    input_schema: {
+      type: "object",
+      properties: {
+        programId: { type: "string" },
+        previousInstance: { type: "object" },
+        policy: { type: "object" },
+      },
+      required: ["programId", "previousInstance", "policy"],
+    },
+  },
+  {
     name: "inspect_graph",
     description: "Read the current executable GTM graph, including nodes, edges, revision, and recent run count.",
     input_schema: { type: "object", properties: {}, required: [] },
@@ -191,80 +455,9 @@ const TOOLS = [
     input_schema: { type: "object", properties: {}, required: [] },
   },
   {
-    name: "patch_graph",
-    description: "Apply validated, reversible typed operations to the GTM graph. Never return a replacement graph.",
-    input_schema: {
-      type: "object",
-      properties: {
-        rationale: { type: "string" },
-        operations: {
-          type: "array",
-          minItems: 1,
-          maxItems: 24,
-          items: {
-            type: "object",
-            properties: {
-              type: {
-                type: "string",
-                enum: [
-                  "set_graph_name",
-                  "add_node",
-                  "remove_node",
-                  "update_node",
-                  "connect_nodes",
-                  "disconnect_nodes",
-                ],
-              },
-              name: { type: "string" },
-              nodeId: { type: "string" },
-              edgeId: { type: "string" },
-              node: {
-                type: "object",
-                description: "A workflow step. A 'tool' step (the default) is a registered connector and needs category + connector. An 'agent', 'skill', or 'code' step is composed freely and needs a ref (the subagent/skill/transform name) instead.",
-                properties: {
-                  id: { type: "string" },
-                  kind: {
-                    type: "string",
-                    enum: ["tool", "agent", "skill", "code"],
-                    description: "tool = connector (default); agent = invoke a subagent; skill = apply a skill's judgment; code = a bounded transform.",
-                  },
-                  ref: { type: "string", description: "For agent/skill/code steps: the subagent, skill, or transform to invoke." },
-                  category: {
-                    type: "string",
-                    enum: ["resource", "source", "context", "enrich", "filter", "generate", "gate", "execute", "measure"],
-                  },
-                  connector: { type: "string" },
-                  label: { type: "string" },
-                  position: {
-                    type: "object",
-                    properties: { x: { type: "number" }, y: { type: "number" } },
-                    required: ["x", "y"],
-                  },
-                  config: { type: "object" },
-                  agentPrompt: { type: "string" },
-                  sourceOfTruth: { type: "array", items: { type: "string" } },
-                },
-                required: ["id", "label", "position", "config"],
-              },
-              edge: {
-                type: "object",
-                properties: {
-                  id: { type: "string" },
-                  source: { type: "string" },
-                  target: { type: "string" },
-                  edgeType: { type: "string", enum: ["data", "context", "feedback"] },
-                  label: { type: "string" },
-                },
-                required: ["id", "source", "target", "edgeType"],
-              },
-              patch: { type: "object" },
-            },
-            required: ["type"],
-          },
-        },
-      },
-      required: ["rationale", "operations"],
-    },
+    name: "propose_graph_changes",
+    description: "Stage validated, reversible typed graph operations for founder review on the canvas instead of applying them directly. The founder sees the preview and accepts or discards it; the session pauses until that decision.",
+    input_schema: GRAPH_OPERATIONS_INPUT_SCHEMA,
   },
   {
     name: "validate_graph",
@@ -407,13 +600,63 @@ function summarizeRun(result) {
   };
 }
 
+function summarizeProgramRun(run) {
+  return {
+    programId: run.programId,
+    graphId: run.graphId,
+    programStatus: run.programStatus,
+    storedRunCount: run.storedRunCount,
+    feedbackSignals: run.feedback.signals.length,
+    evaluations: run.evaluations.length,
+    nextVersions: run.nextVersions.map((item) => ({
+      policyId: item.policy.id,
+      agentInstanceId: item.instance.id,
+      previousInstanceId: item.instance.previousInstanceId,
+      version: item.instance.version,
+    })),
+    result: summarizeRun(run.result),
+  };
+}
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
+function slugifyRef(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+}
+
+// Resolve which program a tool call targets, deterministically — code's job, not the model's. The
+// model may pass an exact id, a name, or nothing; in every case we bind to the session's program
+// first (set when the founder opened it, e.g. the "Build the first agent" button), then the
+// session graph's program, then the newest. This removes the "guess the slugified id" seam.
+function resolveProgram(session, input = {}, programs = []) {
+  const ref = input.programId || input.programName;
+  if (ref) {
+    const match = programs.find((program) => program.id === ref || program.name === ref);
+    if (match) return match;
+  }
+  if (session?.programId) {
+    const bound = programs.find((program) => program.id === session.programId);
+    if (bound) return bound;
+  }
+  if (session?.graphId) {
+    const byGraph = programs.find((program) => program.graphId === session.graphId);
+    if (byGraph) return byGraph;
+  }
+  return programs.at(-1) ?? null;
+}
+
 function systemPrompt(session, workspace) {
   const grounding = workspace
     ? `The active repository is ${workspace.repo}. The defined win event is "${workspace.outcome}".`
     : "No repository workspace is currently active. State that limitation before making product claims.";
   return `You are the resident GTM operator inside GTM IDE.
 
-Your job is to work the founder's goal through the product's real executable system: inspect grounded product evidence, inspect and patch the graph, run the smallest useful scope, diagnose actual failures, revise, rerun, and stop whenever founder judgment or external permission is required.
+Your job is to advance an outcome program through the product's executable domain loop: founder outcome → agent needs → personalized agents → composed workflow → run → founder gate → feedback → evaluation → next agent version. Graph tools are lower-level repair tools, not the first vocabulary.
 
 Founder goal:
 ${session.goal}
@@ -422,17 +665,18 @@ Grounding:
 ${grounding}
 
 Operating rules:
-- Begin by inspecting product truth, the graph, and current problems unless a resumed session already contains that evidence.
-- For a new product or portfolio goal, inspect projects and generate reviewable opportunities before creating a blank channel.
-- For portfolio goals, inspect all founder-defined channels and shared context before choosing where to work.
+- Begin by inspecting product truth, programs, and current problems unless a resumed session already contains that evidence.
+- For a new product or portfolio goal, inspect projects and generate reviewable opportunities before creating a blank workflow.
+- For portfolio goals, inspect all outcome-program workflows and shared context before choosing where to work.
 - Do not invent a fixed channel catalog. Keep code-derived and speculative opportunities separate, and do not compose either until the founder has accepted it.
-- Use create_channel only for an explicitly requested blank motion. Prefer review_opportunity plus compose_opportunity_channel for product-derived systems.
+- Prefer inspect_program, create_program, derive_agent_needs, create_personalized_agents, compose_program_workflow, and run_program when the work is an outcome loop.
+- Use create_workflow only for an explicitly requested blank motion. Prefer review_opportunity plus compose_opportunity_channel for product-derived systems, then run_program once a program exists.
 - Keep product, positioning, ICP, founder taste, contacts, and outcomes in shared context rather than duplicating them into graphs.
-- Use typed graph operations. Never invent a replacement graph or claim a change that a tool did not apply.
+- Use propose_graph_changes for graph edits. Never invent a replacement graph or claim a change that the founder has not accepted.
 - Prefer running and observing over theorizing. Repair actual failures and rerun affected work.
 - Product claims must come from repository evidence or be labeled inferred or blind.
 - Never approve a gate. Never send, publish, deploy, charge, or alter an external system.
-- When run_loop reaches a gate, the runtime pauses automatically for the founder.
+- When run_program reaches a gate, the runtime pauses automatically for the founder.
 - Ask for founder input only when a consequential choice cannot be inferred safely.
 - Keep working until the goal is achieved, honestly blocked, or needs founder judgment.
 - Call complete when you are done.`;
@@ -450,6 +694,7 @@ async function executeGraphRun(session, { targetNodeId } = {}, options = {}) {
     stepRuntime: liveStepRuntime({ cwd: options.cwd }),
   });
   const stored = recordFlowRun(flow.graph, result, options);
+  recordFeedbackSignalsFromRun({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
   let next = {
     ...session,
     lastRunId: result.runId,
@@ -502,8 +747,8 @@ async function executeTool(session, tool, options = {}) {
     const next = addEvent(session, {
       type: "inspection",
       title: "Inspected the GTM portfolio",
-      detail: `${project.channels.length} coordinated channel programs · shared context v${project.sharedContext.version}`,
-      data: { activeChannelId: project.activeChannelId },
+      detail: `${project.workflows.length} outcome-program workflow${project.workflows.length === 1 ? "" : "s"} · shared context v${project.sharedContext.version}`,
+      data: { activeWorkflowId: project.activeWorkflowId, activeChannelId: project.activeChannelId },
     }, options);
     return { session: next, result: project, pause: false };
   }
@@ -533,66 +778,83 @@ async function executeTool(session, tool, options = {}) {
     };
   }
 
-  if (tool.name === "switch_channel") {
+  if (tool.name === "switch_workflow" || tool.name === "switch_channel") {
     const project = loadProject(options);
-    const channel = getChannel(project, input.channelId);
-    setActiveChannel(channel.id, options);
+    const workflowId = input.workflowId ?? input.channelId;
+    const channel = getChannel(project, workflowId);
+    setActiveWorkflow(channel.id, options);
     const next = addEvent({
       ...session,
       graphId: channel.graphId,
       graphRevision: loadFlow(channel.graphId, null, options).graph?.revision ?? 0,
     }, {
-      type: "channel_switched",
+      type: "workflow_switched",
       title: `Switched to ${channel.name}`,
       detail: channel.objective,
-      data: { channelId: channel.id, graphId: channel.graphId },
+      data: { workflowId: channel.id, channelId: channel.id, graphId: channel.graphId },
     }, options);
-    return { session: next, result: { channel, graphId: channel.graphId }, pause: false };
+    return { session: next, result: { workflow: channel, channel, graphId: channel.graphId }, pause: false };
   }
 
-  if (tool.name === "create_channel") {
-    const created = createChannel(input, options);
-    setActiveChannel(created.channel.id, options);
+  if (tool.name === "create_workflow" || tool.name === "create_channel") {
+    const project = loadProject(options);
+    const created = await executeDomainCommand("CreateProgramWorkflow", {
+      ...input,
+      projectId: project.id,
+    }, { ...options, projectId: project.id });
+    setActiveWorkflow(created.channel.id, options);
     const next = addEvent({
       ...session,
       graphId: created.channel.graphId,
       graphRevision: 0,
     }, {
-      type: "channel_created",
+      type: "workflow_created",
       title: `Created ${created.channel.name}`,
-      detail: created.channel.objective || "Blank channel ready to shape.",
-      data: { channelId: created.channel.id, graphId: created.channel.graphId },
+      detail: created.channel.objective || "Blank workflow ready to shape.",
+      data: { workflowId: created.channel.id, channelId: created.channel.id, graphId: created.channel.graphId },
     }, options);
-    return { session: next, result: created.channel, pause: false };
+    return { session: next, result: { ...created.channel, workflowId: created.channel.id }, pause: false };
   }
 
-  if (tool.name === "duplicate_channel") {
-    const created = duplicateChannel(input.channelId, input, options);
-    setActiveChannel(created.channel.id, options);
+  if (tool.name === "duplicate_workflow" || tool.name === "duplicate_channel") {
+    const workflowId = input.workflowId ?? input.channelId;
+    const created = duplicateChannel(workflowId, input, options);
+    setActiveWorkflow(created.channel.id, options);
     const revision = loadFlow(created.channel.graphId, null, options).graph?.revision ?? 0;
     const next = addEvent({
       ...session,
       graphId: created.channel.graphId,
       graphRevision: revision,
     }, {
-      type: "channel_duplicated",
+      type: "workflow_duplicated",
       title: `Duplicated as ${created.channel.name}`,
       detail: created.channel.objective || null,
-      data: { channelId: created.channel.id, graphId: created.channel.graphId },
+      data: { workflowId: created.channel.id, channelId: created.channel.id, graphId: created.channel.graphId },
     }, options);
-    return { session: next, result: created.channel, pause: false };
+    return { session: next, result: { ...created.channel, workflowId: created.channel.id }, pause: false };
   }
 
-  if (tool.name === "update_channel") {
-    const { channelId, ...patch } = input;
-    const updated = updateChannel(channelId, patch, options);
+  if (tool.name === "update_workflow" || tool.name === "update_channel") {
+    const { workflowId: workflowIdInput, channelId: channelIdInput, ...patch } = input;
+    const workflowId = workflowIdInput ?? channelIdInput;
+    const project = loadProject(options);
+    const current = getChannel(project, workflowId, options);
+    const program = current.outcomeProgramId
+      ? await executeDomainCommand("UpdateProgramWorkflowMetadata", {
+          ...patch,
+          projectId: project.id,
+          programId: current.outcomeProgramId,
+          channelId: current.id,
+        }, { ...options, projectId: project.id })
+      : null;
+    const updated = program ? { channel: getChannel(loadProject(options), current.id, options) } : updateChannel(workflowId, patch, options);
     const next = addEvent(session, {
-      type: "channel_updated",
+      type: "workflow_updated",
       title: `Updated ${updated.channel.name}`,
       detail: updated.channel.objective || null,
-      data: { channelId: updated.channel.id, enabled: updated.channel.enabled },
+      data: { workflowId: updated.channel.id, channelId: updated.channel.id, enabled: updated.channel.enabled },
     }, options);
-    return { session: next, result: updated.channel, pause: false };
+    return { session: next, result: { ...updated.channel, workflowId: updated.channel.id }, pause: false };
   }
 
   if (tool.name === "inspect_portfolio_brief") {
@@ -693,6 +955,239 @@ async function executeTool(session, tool, options = {}) {
     return { session: next, result: composed, pause: false };
   }
 
+  if (tool.name === "inspect_program") {
+    const project = loadProject(options);
+    const programs = listOutcomePrograms(project.id, { ...options, projectId: project.id });
+    const selected = resolveProgram(session, input, programs);
+    const foundry = loadCapabilityFoundry(project.id, { ...options, projectId: project.id });
+    const policies = listAgentCreationPolicies(project.id, { ...options, projectId: project.id });
+    const events = listDomainEvents(project.id, selected ? { ...options, aggregateId: selected.id } : options);
+    const feedback = loadFeedbackLedger(project.id, { ...options, projectId: project.id });
+    const next = addEvent(session, {
+      type: "inspection",
+      title: selected ? `Inspected ${selected.name}` : "Inspected programs",
+      detail: selected ? `${selected.status} · ${selected.graphId ? "workflow composed" : "no workflow yet"}` : `${programs.length} programs found`,
+    }, options);
+    return {
+      session: next,
+      result: {
+        program: selected ?? null,
+        programs,
+        policies: selected ? policies.filter((policy) => policy.programId === selected.id) : policies,
+        instances: selected ? foundry.instances.filter((item) => item.programId === selected.id) : foundry.instances,
+        evaluations: selected ? foundry.evaluations.filter((item) => item.programId === selected.id) : foundry.evaluations,
+        feedbackSignals: selected
+          ? feedback.signals.filter((signal) => signal.graphId === selected.graphId)
+          : feedback.signals.slice(-20),
+        events,
+      },
+      pause: false,
+    };
+  }
+
+  if (tool.name === "create_program") {
+    const project = loadProject(options);
+    const program = await executeDomainCommand("CreateOutcomeProgram", {
+      ...input,
+      projectId: project.id,
+    }, { ...options, projectId: project.id });
+    // Bind the session to the program it just created, so derive_agent_needs / create_personalized
+    // _agents / compose / run all target it without the model having to echo the slugified id back.
+    const next = addEvent({ ...session, programId: program.id }, {
+      type: "program_created",
+      title: `Created ${program.name}`,
+      detail: program.desiredOutcome?.description || input.objective || "Outcome program created.",
+      data: { programId: program.id },
+    }, options);
+    return { session: next, result: program, pause: false };
+  }
+
+  if (tool.name === "derive_agent_needs") {
+    const project = loadProject(options);
+    const programs = listOutcomePrograms(project.id, { ...options, projectId: project.id });
+    const program = resolveProgram(session, input, programs);
+    if (!program) throw new Error("No outcome program to derive agent needs for. Create one first.");
+    const needs = [];
+    for (const need of input.needs ?? []) {
+      needs.push(await executeDomainCommand("DeriveAgentNeed", {
+        ...need,
+        programId: program.id,
+        projectId: project.id,
+      }, { ...options, projectId: project.id }));
+    }
+    const next = addEvent(session, {
+      type: "agent_needs_derived",
+      title: "Derived program agent needs",
+      detail: `${needs.length} need${needs.length === 1 ? "" : "s"} recorded.`,
+      data: { programId: program.id },
+    }, options);
+    return { session: next, result: needs, pause: false };
+  }
+
+  if (tool.name === "create_personalized_agents") {
+    const project = loadProject(options);
+    const programs = listOutcomePrograms(project.id, { ...options, projectId: project.id });
+    const program = resolveProgram(session, input, programs);
+    if (!program) throw new Error("No outcome program to create agents for. Create one first.");
+    const created = [];
+    for (const agent of input.agents ?? []) {
+      // Tolerate the field names a model naturally reaches for. The policy purpose and the agent's
+      // job/ref are required downstream, so derive them from any reasonable synonym and only fail if
+      // the agent is genuinely unnamed — code's job to absorb input-shape variance, not to crash.
+      const purpose = firstNonEmpty(agent.purpose, agent.objective, agent.job, agent.role, agent.description, agent.title, agent.name);
+      const job = firstNonEmpty(agent.objective, agent.job, agent.purpose, agent.title, agent.name) || purpose;
+      const title = firstNonEmpty(agent.title, agent.name, agent.role, purpose);
+      const ref = firstNonEmpty(agent.ref, agent.id, slugifyRef(title));
+      if (!purpose || !ref) {
+        throw new Error(`Each agent needs a purpose/objective and a name. Got: ${JSON.stringify(agent).slice(0, 160)}`);
+      }
+      const policy = await executeDomainCommand("CreateAgentCreationPolicy", {
+        projectId: project.id,
+        programId: program.id,
+        sourceOpportunityId: agent.id ?? null,
+        purpose,
+        positiveRules: agent.positiveRules ?? [],
+        negativeRules: agent.negativeRules ?? ["Do not make unsupported outcome claims."],
+        evidenceRequirements: agent.evidenceRequirements ?? ["Separate product facts from hypotheses."],
+        safetyRules: agent.safetyRules ?? ["External effects must pass through a founder gate."],
+        requiredInputs: agent.requiredInputs ?? ["programContext", "productTruth", "upstreamItems"],
+        requiredOutputs: agent.requiredOutputs ?? ["structuredResults", "evidence", "uncertainty"],
+        evaluationSignals: agent.evaluationSignals ?? ["founderDecision", "founderEdit", "runFailure", "observedOutcome"],
+      }, { ...options, projectId: project.id });
+      created.push(await executeDomainCommand("CreatePersonalizedAgent", {
+        project,
+        program,
+        policy,
+        agentOpportunity: { ...agent, ref, title, objective: job },
+      }, { ...options, projectId: project.id }));
+    }
+    const next = addEvent(session, {
+      type: "personalized_agents_created",
+      title: "Created personalized agents",
+      detail: `${created.length} agent${created.length === 1 ? "" : "s"} created for the program.`,
+      data: { programId: program.id },
+    }, options);
+    return { session: next, result: created, pause: false };
+  }
+
+  if (tool.name === "compose_program_workflow") {
+    const project = loadProject(options);
+    const programs = listOutcomePrograms(project.id, { ...options, projectId: project.id });
+    const target = resolveProgram(session, input, programs);
+    if (!target) throw new Error("No outcome program to compose a workflow for.");
+    const program = await executeDomainCommand("ComposeProgramWorkflow", {
+      ...input,
+      programId: target.id,
+      projectId: project.id,
+    }, { ...options, projectId: project.id });
+    const next = addEvent({
+      ...session,
+      graphId: program.graphId || session.graphId,
+    }, {
+      type: "program_workflow_composed",
+      title: `Program workflow ready: ${program.name}`,
+      detail: program.graphId,
+      data: { programId: program.id, graphId: program.graphId },
+    }, options);
+    return { session: next, result: program, pause: false };
+  }
+
+  if (tool.name === "run_program") {
+    const project = loadProject(options);
+    const programs = listOutcomePrograms(project.id, { ...options, projectId: project.id });
+    const target = resolveProgram(session, input, programs);
+    if (!target) throw new Error("No outcome program to run.");
+    const run = await runProgram(target.id, {
+      ...input,
+      projectId: project.id,
+      stepRuntime: liveStepRuntime({ cwd: options.cwd }),
+    }, { ...options, projectId: project.id });
+    const next = addEvent({
+      ...session,
+      graphId: run.graphId,
+      lastRunId: run.result.runId,
+      status: run.result.pendingGates.length ? "waiting_for_gate" : session.status,
+      pendingGate: run.result.pendingGates.length
+        ? { programId: target.id, runId: run.result.runId, nodeIds: run.result.pendingGates, runResult: run.result }
+        : null,
+    }, {
+      type: "program_run_completed",
+      title: "Ran the outcome program",
+      detail: run.result.pendingGates.length
+        ? `Paused at ${run.result.pendingGates.length} founder gate${run.result.pendingGates.length === 1 ? "" : "s"}.`
+        : `Program is ${run.programStatus}.`,
+      data: {
+        programId: target.id,
+        runId: run.result.runId,
+        programStatus: run.programStatus,
+        feedbackSignals: run.feedback.signals.length,
+        nextVersions: run.nextVersions.length,
+      },
+    }, options);
+    return { session: next, result: summarizeProgramRun(run), pause: next.status === "waiting_for_gate" };
+  }
+
+  if (tool.name === "inspect_program_feedback") {
+    const project = loadProject(options);
+    const program = resolveProgram(session, input, listOutcomePrograms(project.id, { ...options, projectId: project.id }));
+    if (!program) throw new Error("No outcome program to inspect feedback for.");
+    const foundry = loadCapabilityFoundry(project.id, { ...options, projectId: project.id });
+    const policies = listAgentCreationPolicies(project.id, { ...options, projectId: project.id }).filter((policy) => policy.programId === program.id);
+    const policyIds = new Set(policies.map((policy) => policy.id));
+    const feedback = loadFeedbackLedger(project.id, { ...options, projectId: project.id }).signals.filter((signal) =>
+      signal.graphId === program.graphId || (signal.policyIds ?? []).some((policyId) => policyIds.has(policyId))
+    );
+    const next = addEvent(session, {
+      type: "inspection",
+      title: "Inspected program feedback",
+      detail: `${feedback.length} signal${feedback.length === 1 ? "" : "s"} · ${policies.length} polic${policies.length === 1 ? "y" : "ies"}`,
+    }, options);
+    return {
+      session: next,
+      result: {
+        program,
+        feedback,
+        policies,
+        evaluations: foundry.evaluations.filter((item) => item.programId === program.id),
+        instances: foundry.instances.filter((item) => item.programId === program.id),
+      },
+      pause: false,
+    };
+  }
+
+  if (tool.name === "revise_program_from_feedback") {
+    const project = loadProject(options);
+    const revisions = await executeDomainCommand("ReviseAgentPolicyFromFeedback", {
+      ...input,
+      projectId: project.id,
+    }, { ...options, projectId: project.id });
+    const next = addEvent(session, {
+      type: "program_revised",
+      title: "Revised program policies",
+      detail: `${revisions.length} polic${revisions.length === 1 ? "y" : "ies"} created.`,
+      data: { programId: input.programId, policyIds: revisions.map((policy) => policy.id) },
+    }, options);
+    return { session: next, result: revisions, pause: false };
+  }
+
+  if (tool.name === "create_next_agent_version") {
+    const project = loadProject(options);
+    const program = listOutcomePrograms(project.id, { ...options, projectId: project.id }).find((item) => item.id === input.programId);
+    if (!program) throw new Error(`Outcome program not found: ${input.programId}`);
+    const created = await executeDomainCommand("CreateNextAgentVersion", {
+      ...input,
+      project,
+      program,
+    }, { ...options, projectId: project.id });
+    const next = addEvent(session, {
+      type: "next_agent_version_created",
+      title: `Created ${created.instance.ref} v${created.instance.version}`,
+      detail: created.instance.job,
+      data: { programId: program.id, agentInstanceId: created.instance.id },
+    }, options);
+    return { session: next, result: created, pause: false };
+  }
+
   if (tool.name === "inspect_graph") {
     const flow = flowFor(session, options);
     const next = addEvent(session, {
@@ -740,27 +1235,48 @@ async function executeTool(session, tool, options = {}) {
   }
 
   if (tool.name === "patch_graph") {
-    const flow = flowFor(session, options);
-    const patched = applyGraphOperations(flow.graph, input.operations);
-    const saved = saveFlow(patched.graph, options);
-    const next = addEvent({
-      ...session,
-      graphRevision: saved.graph.revision ?? 0,
-    }, {
-      type: "graph_patched",
-      title: "Patched the GTM graph",
-      detail: input.rationale,
-      data: { revision: saved.graph.revision, changes: patched.changes },
+    const next = addEvent(session, {
+      type: "graph_patch_rejected",
+      title: "Direct graph patch rejected",
+      detail: "Agent graph edits must be staged with propose_graph_changes for founder review.",
+      data: { tool: "patch_graph" },
     }, options);
     return {
       session: next,
-      result: {
-        revision: saved.graph.revision,
-        changes: patched.changes,
-        validation: patched.validation,
-        graph: saved.graph,
-      },
+      result: { ok: false, error: "Use propose_graph_changes; direct agent graph patches are not allowed." },
       pause: false,
+    };
+  }
+
+  if (tool.name === "propose_graph_changes") {
+    const flow = flowFor(session, options);
+    // Validate by applying to a clone — this throws on any invalid op and yields the preview the
+    // founder will review. The real graph is NOT touched; nothing is saved until they accept.
+    const preview = applyGraphOperations(flow.graph, input.operations);
+    const proposalId = `proposal-${Date.now()}`;
+    const next = addEvent({
+      ...session,
+      status: "waiting_for_proposal",
+      pendingProposal: {
+        id: proposalId,
+        graphId: flow.graph.id,
+        baseRevision: flow.graph.revision ?? 0,
+        rationale: input.rationale,
+        operations: input.operations,
+        changes: preview.changes,
+        preview: preview.graph,
+      },
+      error: null,
+    }, {
+      type: "graph_proposed",
+      title: "Proposed graph changes for review",
+      detail: input.rationale,
+      data: { proposalId, changes: preview.changes },
+    }, options);
+    return {
+      session: next,
+      result: { paused: true, proposalId, changes: preview.changes },
+      pause: true,
     };
   }
 
@@ -850,7 +1366,7 @@ async function executeTool(session, tool, options = {}) {
 export async function runOperatorSession(id, runtime = {}) {
   const options = runtime.options ?? {};
   let session = getOperatorSession(id, options);
-  if (["waiting_for_gate", "waiting_for_input", "completed", "cancelled", "blocked"].includes(session.status)) {
+  if (["waiting_for_gate", "waiting_for_proposal", "waiting_for_input", "completed", "cancelled", "blocked"].includes(session.status)) {
     return session;
   }
   if (session.stepCount >= session.maxSteps) {
@@ -1011,6 +1527,9 @@ export function resumeOperatorSession(id, input, runtime = {}) {
   if (session.status === "waiting_for_gate") {
     throw new Error("Resolve the founder gate before resuming the operator.");
   }
+  if (session.status === "waiting_for_proposal") {
+    throw new Error("Accept or discard the proposed graph changes before resuming the operator.");
+  }
   if (["completed", "cancelled"].includes(session.status)) throw new Error(`Session is already ${session.status}.`);
   const text = String(input || "").trim();
   if (!text) throw new Error("A founder response is required.");
@@ -1039,6 +1558,47 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
   if (session.status !== "waiting_for_gate" || !session.pendingGate?.runResult) {
     throw new Error("This operator session is not waiting at a founder gate.");
   }
+  if (session.pendingGate.programId) {
+    const project = loadProject(options);
+    const run = await runProgram(session.pendingGate.programId, {
+      projectId: project.id,
+      resumeRunId: session.pendingGate.runId,
+      approvals: payload.approvals && typeof payload.approvals === "object" ? payload.approvals : {},
+      decisions: payload.decisions && typeof payload.decisions === "object" ? payload.decisions : {},
+      stepRuntime: liveStepRuntime({ cwd: options.cwd }),
+    }, { ...options, projectId: project.id });
+    session = addEvent({
+      ...session,
+      graphId: run.graphId,
+      lastRunId: run.result.runId,
+      pendingGate: run.result.pendingGates.length
+        ? { programId: session.pendingGate.programId, runId: run.result.runId, nodeIds: run.result.pendingGates, runResult: run.result }
+        : null,
+      status: run.result.pendingGates.length ? "waiting_for_gate" : "ready",
+      modelMessages: run.result.pendingGates.length ? session.modelMessages : [
+        ...(session.modelMessages ?? []),
+        {
+          role: "user",
+          content: `Founder gate resolved. Continued program run ${run.result.runId}. Result: ${JSON.stringify(summarizeProgramRun(run))}`,
+        },
+      ],
+    }, {
+      type: "gate_resolved",
+      title: "Founder gate resolved",
+      detail: run.result.pendingGates.length
+        ? "Another founder gate is waiting."
+        : `${run.feedback.signals.length} feedback signal${run.feedback.signals.length === 1 ? "" : "s"} recorded.`,
+      data: {
+        runId: run.result.runId,
+        programId: session.pendingGate.programId,
+        programStatus: run.programStatus,
+        feedbackSignals: run.feedback.signals.length,
+        nextVersions: run.nextVersions.length,
+      },
+    }, options);
+    if (session.status === "ready") launchOperatorSession(session.id, runtime);
+    return session;
+  }
   const flow = flowFor(session, options);
   const result = await runGraph(flow.graph, {
     approvals: payload.approvals && typeof payload.approvals === "object" ? payload.approvals : {},
@@ -1048,6 +1608,7 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
     stepRuntime: liveStepRuntime({ cwd: options.cwd }),
   });
   recordFlowRun(flow.graph, result, options);
+  recordFeedbackSignalsFromRun({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
   session = addEvent({
     ...session,
     lastRunId: result.runId,
@@ -1074,6 +1635,76 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
   return session;
 }
 
+function persistProgramWorkflowGraph(graph, options = {}) {
+  if (!graph?.outcomeProgramId) return;
+  const projectId = options.projectId || "default";
+  appendDomainEvent(projectId, {
+    type: "WorkflowGraphUpdated",
+    aggregateType: "OutcomeProgram",
+    aggregateId: graph.outcomeProgramId,
+    data: { graphId: graph.id, workflowGraph: graph },
+  }, options);
+  syncProgramStoreFromEvents(projectId, options);
+}
+
+// The founder accepts or discards a staged graph proposal. Accept applies the exact reviewed
+// operations to the current graph and resumes the operator; discard drops them and resumes the
+// operator told not to reapply. Mirrors resolveOperatorGate: founder-only, never an agent tool.
+export function resolveOperatorProposal(id, payload = {}, runtime = {}) {
+  const options = runtime.options ?? {};
+  const session = getOperatorSession(id, options);
+  if (session.status !== "waiting_for_proposal" || !session.pendingProposal) {
+    throw new Error("This session has no graph proposal waiting for review.");
+  }
+  const proposal = session.pendingProposal;
+  const accept = payload.accept === true || payload.decision === "accept";
+
+  if (accept) {
+    const flow = flowFor(session, options);
+    // Re-apply against the live graph (not the cached preview) so the commit is valid even if the
+    // graph moved since the proposal was staged; applyGraphOperations re-validates and throws if not.
+    const patched = applyGraphOperations(flow.graph, proposal.operations);
+    const saved = saveFlow(patched.graph, options);
+    persistProgramWorkflowGraph(saved.graph, options);
+    const next = addEvent({
+      ...session,
+      status: "ready",
+      pendingProposal: null,
+      error: null,
+      graphRevision: saved.graph.revision ?? 0,
+      modelMessages: [
+        ...(session.modelMessages ?? []),
+        { role: "user", content: `Founder accepted the proposed graph changes (${proposal.changes.length} operation${proposal.changes.length === 1 ? "" : "s"}). They are now applied. Continue.` },
+      ],
+    }, {
+      type: "graph_patched",
+      title: "Founder accepted proposed changes",
+      detail: proposal.rationale,
+      data: { revision: saved.graph.revision, changes: patched.changes, proposalId: proposal.id },
+    }, options);
+    launchOperatorSession(id, runtime);
+    return next;
+  }
+
+  const next = addEvent({
+    ...session,
+    status: "ready",
+    pendingProposal: null,
+    error: null,
+    modelMessages: [
+      ...(session.modelMessages ?? []),
+      { role: "user", content: "Founder discarded the proposed graph changes. Do not reapply them; consider a different approach." },
+    ],
+  }, {
+    type: "graph_proposal_discarded",
+    title: "Founder discarded proposed changes",
+    detail: proposal.rationale,
+    data: { proposalId: proposal.id },
+  }, options);
+  launchOperatorSession(id, runtime);
+  return next;
+}
+
 export function cancelOperatorSession(id, options = {}) {
   const session = getOperatorSession(id, options);
   return addEvent({
@@ -1082,6 +1713,7 @@ export function cancelOperatorSession(id, options = {}) {
     completedAt: new Date().toISOString(),
     pendingQuestion: null,
     pendingGate: null,
+    pendingProposal: null,
   }, {
     type: "session_cancelled",
     title: "Operator session cancelled",

@@ -3,6 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { channelIdFor, cloneChannelGraph, createBlankChannelGraph } from "./channel-graph.mjs";
 import { loadFlow, saveFlow } from "./flow-store.mjs";
+import { listOutcomePrograms } from "./program-store.mjs";
+import { createProgramWorkflow, programWorkflowChannel, updateProgramWorkflowMetadata } from "./program-workflow-commands.mjs";
 
 const SCHEMA_VERSION = 4;
 const CATALOG_SCHEMA_VERSION = 1;
@@ -218,7 +220,7 @@ export function listProjects(options = {}) {
       repo: project.sharedContext?.repository?.repo ?? null,
       outcome: project.sharedContext?.repository?.outcome ?? null,
       headline: project.sharedContext?.repository?.headline ?? null,
-      channelCount: project.channels.length,
+      channelCount: getProjectChannels(project, options).length,
       opportunityCount: project.opportunities?.items?.length ?? 0,
       updatedAt: project.updatedAt,
     })),
@@ -255,8 +257,53 @@ export function setActiveProject(projectId, options = {}) {
   return loadProject({ ...options, projectId });
 }
 
-export function getChannel(project, channelId) {
-  const channel = project.channels.find((item) => item.id === channelId || item.graphId === channelId);
+function channelFromProgram(program, options = {}) {
+  const base = programWorkflowChannel(program);
+  const flow = loadFlow(base.graphId, null, options);
+  const graph = program.workflowGraph ?? flow.graph ?? null;
+  const runs = flow.runs ?? [];
+  const lastRun = runs.at(-1) ?? null;
+  return {
+    ...base,
+    status: deriveChannelStatus(runs),
+    lastRunAt: lastRun?.createdAt ?? null,
+    lastRunOk: lastRun ? lastRun.ok === true : null,
+    pendingGates: lastRun?.pendingGates?.length ?? 0,
+    nodeCount: graph?.nodes?.length ?? 0,
+    runCount: runs.length,
+    graphRevision: graph?.revision ?? 0,
+  };
+}
+
+function channelFromLegacy(project, channel, options = {}) {
+  const flow = loadFlow(channel.graphId, null, options);
+  const runs = flow.runs ?? [];
+  const lastRun = runs.at(-1) ?? null;
+  return {
+    ...channel,
+    status: deriveChannelStatus(runs),
+    lastRunAt: lastRun?.createdAt ?? null,
+    lastRunOk: lastRun ? lastRun.ok === true : null,
+    pendingGates: lastRun?.pendingGates?.length ?? 0,
+    nodeCount: flow.graph?.nodes?.length ?? 0,
+    runCount: runs.length,
+    graphRevision: flow.graph?.revision ?? 0,
+  };
+}
+
+export function getProjectChannels(project, options = {}) {
+  const programs = listOutcomePrograms(project.id, { ...options, projectId: project.id })
+    .filter((program) => program.workflowGraph || program.graphId || program.channelId);
+  const programChannels = programs.map((program) => channelFromProgram(program, { ...options, projectId: project.id }));
+  const used = new Set(programChannels.flatMap((channel) => [channel.id, channel.graphId]).filter(Boolean));
+  const legacyChannels = (project.channels ?? [])
+    .filter((channel) => !used.has(channel.id) && !used.has(channel.graphId))
+    .map((channel) => channelFromLegacy(project, channel, options));
+  return [...programChannels, ...legacyChannels];
+}
+
+export function getChannel(project, channelId, options = {}) {
+  const channel = getProjectChannels(project, options).find((item) => item.id === channelId || item.graphId === channelId || item.outcomeProgramId === channelId);
   if (!channel) throw new Error(`Channel not found: ${channelId}`);
   return channel;
 }
@@ -318,74 +365,109 @@ export function applySharedContextToGraph(graph, sharedContext) {
 
 export function setActiveChannel(channelId, options = {}) {
   const project = loadProject(options);
-  const channel = getChannel(project, channelId);
+  const channel = getChannel(project, channelId, options);
   return saveProject({ ...project, activeChannelId: channel.id }, options);
+}
+
+export function setActiveWorkflow(workflowId, options = {}) {
+  return setActiveChannel(workflowId, options);
 }
 
 export function createChannel(input, options = {}) {
   const project = loadProject(options);
   const name = String(input?.name || "").trim();
   if (!name) throw new Error("Channel name is required.");
-  const id = channelIdFor(input.id || name, project.channels.map((channel) => channel.id));
-  const channel = {
+  const existingIds = getProjectChannels(project, options).map((channel) => channel.id);
+  const id = channelIdFor(input.id || name, existingIds);
+  return createProgramBackedChannel(project, {
     id,
-    graphId: project.id === "default" ? id : `${project.id}--${id}`,
     name,
-    kind: String(input.kind || "custom").trim() || "custom",
     objective: String(input.objective || "").trim(),
-    enabled: true,
-    createdAt: now(),
-  };
-  saveFlow(createBlankChannelGraph(channel), options);
-  const saved = saveProject({
-    ...project,
-    channels: [...project.channels, channel],
-    activeChannelId: project.activeChannelId || channel.id,
+    kind: String(input.kind || "custom").trim() || "custom",
+    sourceOpportunityId: input.sourceOpportunityId ?? null,
   }, options);
-  return { project: saved, channel };
 }
 
 export function duplicateChannel(channelId, input = {}, options = {}) {
   const project = loadProject(options);
-  const source = getChannel(project, channelId);
+  const source = getChannel(project, channelId, options);
   const sourceFlow = loadFlow(source.graphId, null, options);
   const name = String(input.name || `${source.name} copy`).trim();
-  const id = channelIdFor(input.id || name, project.channels.map((channel) => channel.id));
-  const channel = {
-    ...source,
+  const id = channelIdFor(input.id || name, getProjectChannels(project, options).map((channel) => channel.id));
+  const graphId = project.id === "default" ? id : `${project.id}--${id}`;
+  const objective = String(input.objective ?? source.objective ?? "").trim();
+  const kind = String(input.kind ?? source.kind ?? "custom").trim() || "custom";
+  const graph = cloneChannelGraph(sourceFlow.graph ?? source.workflowGraph ?? createBlankChannelGraph(source), {
     id,
-    graphId: project.id === "default" ? id : `${project.id}--${id}`,
     name,
-    objective: String(input.objective ?? source.objective ?? "").trim(),
-    kind: String(input.kind ?? source.kind ?? "custom").trim() || "custom",
-    createdAt: now(),
-  };
-  saveFlow(cloneChannelGraph(sourceFlow.graph, channel), options);
-  const saved = saveProject({ ...project, channels: [...project.channels, channel] }, options);
-  return { project: saved, channel };
+    objective,
+    kind,
+  });
+  return createProgramBackedChannel(project, {
+    id,
+    graphId,
+    name,
+    objective,
+    kind,
+    workflowGraph: { ...graph, id: graphId },
+  }, options);
 }
 
 export function updateChannel(channelId, patch, options = {}) {
   const project = loadProject(options);
-  const current = getChannel(project, channelId);
+  const current = getChannel(project, channelId, options);
   const allowed = new Set(["name", "objective", "kind", "enabled"]);
   const unknown = Object.keys(patch ?? {}).filter((key) => !allowed.has(key));
   if (unknown.length) throw new Error(`Unsupported channel fields: ${unknown.join(", ")}`);
   const channel = { ...current, ...structuredClone(patch ?? {}) };
   if (!String(channel.name || "").trim()) throw new Error("Channel name is required.");
-  const channels = project.channels.map((item) => item.id === current.id ? channel : item);
   const flow = loadFlow(current.graphId, null, options);
-  if (flow.graph) saveFlow({
+  const workflowGraph = flow.graph ? {
     ...flow.graph,
     name: channel.name,
     objective: channel.objective,
     kind: channel.kind,
-  }, options);
+  } : null;
+  if (workflowGraph) saveFlow(workflowGraph, options);
+  if (current.outcomeProgramId) {
+    updateProgramWorkflowMetadata({
+      projectId: project.id,
+      programId: current.outcomeProgramId,
+      channelId: current.id,
+      name: channel.name,
+      objective: channel.objective,
+      kind: channel.kind,
+      enabled: channel.enabled,
+      workflowGraph,
+    }, { ...options, projectId: project.id });
+  }
+  const legacyChannels = (project.channels ?? []).map((item) => item.id === current.id ? channel : item);
+  const projected = getProjectChannels({ ...project, channels: legacyChannels }, options);
   const nextActive = channel.enabled === false && project.activeChannelId === channel.id
-    ? channels.find((item) => item.enabled !== false && item.id !== channel.id)?.id ?? null
+    ? projected.find((item) => item.enabled !== false && item.id !== channel.id)?.id ?? null
     : project.activeChannelId;
-  const saved = saveProject({ ...project, channels, activeChannelId: nextActive }, options);
+  const saved = saveProject({ ...project, channels: legacyChannels, activeChannelId: nextActive }, options);
   return { project: saved, channel };
+}
+
+function createProgramBackedChannel(project, input = {}, options = {}) {
+  const graphId = input.graphId || (project.id === "default" ? input.id : `${project.id}--${input.id}`);
+  const created = createProgramWorkflow({
+    projectId: project.id,
+    id: input.id,
+    name: input.name,
+    objective: input.objective,
+    sourceOpportunityId: input.sourceOpportunityId ?? null,
+    channelId: input.id,
+    graphId,
+    kind: input.kind || "custom",
+    workflowGraph: input.workflowGraph,
+  }, { ...options, projectId: project.id });
+  const saved = saveProject({
+    ...project,
+    activeChannelId: project.activeChannelId || input.id,
+  }, options);
+  return { project: saved, channel: getChannel(saved, created.channel.id, options) };
 }
 
 export function updateSharedContext(patch, options = {}) {
@@ -434,26 +516,18 @@ function deriveChannelStatus(runs) {
 
 export function getProjectWithChannels(options = {}) {
   const project = loadProject(options);
-  const channels = project.channels.map((channel) => {
-    const flow = loadFlow(channel.graphId, null, options);
-    const runs = flow.runs ?? [];
-    const lastRun = runs.at(-1) ?? null;
-    return {
-      ...channel,
-      status: deriveChannelStatus(runs),
-      lastRunAt: lastRun?.createdAt ?? null,
-      lastRunOk: lastRun ? lastRun.ok === true : null,
-      pendingGates: lastRun?.pendingGates?.length ?? 0,
-      nodeCount: flow.graph?.nodes?.length ?? 0,
-      runCount: runs.length,
-      graphRevision: flow.graph?.revision ?? 0,
-    };
-  });
+  const channels = getProjectChannels(project, options);
   return {
     id: project.id,
     name: project.name,
-    activeChannelId: project.activeChannelId,
+    activeChannelId: channels.some((channel) => channel.id === project.activeChannelId)
+      ? project.activeChannelId
+      : channels[0]?.id ?? null,
+    activeWorkflowId: channels.some((channel) => channel.id === project.activeChannelId)
+      ? project.activeChannelId
+      : channels[0]?.id ?? null,
     sharedContext: project.sharedContext,
     channels,
+    workflows: channels,
   };
 }

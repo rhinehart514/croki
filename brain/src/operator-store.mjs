@@ -62,6 +62,10 @@ export function createOperatorSession(input, options = {}) {
     id,
     goal,
     graphId: input.graphId || null,
+    // The program this session is driving, when the founder opened it from a program (e.g. the
+    // "Build the first agent" button). Lets the program tools bind to the intended program instead
+    // of guessing the newest one.
+    programId: input.programId || null,
     projectId: input.projectId || null,
     workspaceId: input.workspaceId || null,
     model: input.model || process.env.GTM_IDE_OPERATOR_MODEL || "claude-sonnet-4-6",
@@ -79,6 +83,11 @@ export function createOperatorSession(input, options = {}) {
     error: null,
     pendingQuestion: null,
     pendingGate: null,
+    // A staged set of typed graph operations the operator wants to make, held for founder review on
+    // the canvas (ghost nodes/edges + accept/discard) instead of applied silently. Mirrors
+    // pendingGate: durable, pauses the session, resolved by the founder. "Vibe up to the gate" now
+    // covers the agent editing the graph too.
+    pendingProposal: null,
     events: [],
     modelMessages: [],
   };

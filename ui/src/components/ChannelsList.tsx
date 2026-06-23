@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Copy, FileText, LoaderCircle, Plus, X } from "lucide-react";
 import {
-  createChannel,
+  createWorkflow,
   createPortfolioBriefArtifact,
-  duplicateChannel,
+  duplicateWorkflow,
   getPortfolioBrief,
   getProject,
 } from "@/api";
@@ -56,7 +56,7 @@ export function ChannelsList({
     try {
       const [{ project }, briefResponse] = await Promise.all([getProject(), getPortfolioBrief()]);
       setProjectName(project.name);
-      setChannels(project.channels);
+      setChannels(project.workflows ?? project.channels);
       setBrief(briefResponse.brief);
     } finally {
       setLoading(false);
@@ -71,7 +71,7 @@ export function ChannelsList({
     return (
       <div className="channels-loading">
         <LoaderCircle className="spin" />
-        <span>Loading channels…</span>
+        <span>Loading workflows...</span>
       </div>
     );
   }
@@ -105,7 +105,7 @@ export function ChannelsList({
         </button>
         <button className="channels-brief-btn" onClick={() => setCreating(true)} type="button">
           <Plus />
-          New channel
+          New workflow
         </button>
       </div>
 
@@ -117,28 +117,28 @@ export function ChannelsList({
             const name = newName.trim();
             const objective = newObjective.trim();
             if (!name || !objective) return;
-            const result = await createChannel({ name, objective });
+            const result = await createWorkflow({ name, objective });
             setNewName("");
             setNewObjective("");
             setCreating(false);
             await refresh();
-            onOpenChannel(result.channel.id);
+            onOpenChannel(result.workflow.id);
           }}
         >
           <div>
             <strong>Define the motion</strong>
-            <span>The graph starts blank. You or Claude shape how this channel works.</span>
+            <span>The graph starts blank. You or Claude shape how this workflow works.</span>
           </div>
           <input
-            aria-label="Channel name"
+            aria-label="Workflow name"
             onChange={(event) => setNewName(event.target.value)}
-            placeholder="Channel name"
+            placeholder="Workflow name"
             value={newName}
           />
           <input
-            aria-label="Channel objective"
+            aria-label="Workflow objective"
             onChange={(event) => setNewObjective(event.target.value)}
-            placeholder="What outcome should this channel produce?"
+            placeholder="What outcome should this workflow produce?"
             value={newObjective}
           />
           <button className="channel-card-open" type="submit">Create</button>
@@ -170,9 +170,9 @@ export function ChannelsList({
       <div className="channels-grid">
         {channels.length === 0 ? (
           <div className="channels-empty">
-            <strong>No channels yet</strong>
-            <span>Create the first motion when you know what job it should do. GTM IDE will not choose the portfolio for you.</span>
-            <button className="channel-card-open" onClick={() => setCreating(true)} type="button">Create first channel</button>
+            <strong>No workflows yet</strong>
+            <span>Create the first workflow when you know what job it should do. GTM IDE will not choose the portfolio for you.</span>
+            <button className="channel-card-open" onClick={() => setCreating(true)} type="button">Create first workflow</button>
           </div>
         ) : null}
         {channels.map((ch) => (
@@ -207,11 +207,11 @@ export function ChannelsList({
             <button
               className="channel-card-copy"
               onClick={async () => {
-                const result = await duplicateChannel(ch.id, { name: `${ch.name} copy` });
+                const result = await duplicateWorkflow(ch.id, { name: `${ch.name} copy` });
                 await refresh();
-                onOpenChannel(result.channel.id);
+                onOpenChannel(result.workflow.id);
               }}
-              title="Duplicate channel"
+              title="Duplicate workflow"
               type="button"
             >
               <Copy />

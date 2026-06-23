@@ -72,6 +72,11 @@ async function listChannels() {
   }
 }
 
+async function listWorkflows() {
+  const data = await listChannels();
+  return { workflows: data.channels ?? [], channels: data.channels ?? [] };
+}
+
 /**
  * get_channel — returns graph + last run for a channel.
  * Only one channel exists for now; the id parameter is accepted but ignored.
@@ -81,12 +86,20 @@ async function getChannel({ id }) {  // eslint-disable-line no-unused-vars
   return { graph, lastRun: runs?.at(-1) ?? null };
 }
 
+async function getWorkflow({ id, workflowId }) {
+  return getChannel({ id: workflowId ?? id });
+}
+
 /**
  * run_channel — runs the full graph and returns the run result.
  */
 async function runChannel({ id }) {  // eslint-disable-line no-unused-vars
   const { graph } = await getTemplate(id);
   return brainPost("/api/graph/run", { graph, approvals: {} });
+}
+
+async function runWorkflow({ id, workflowId }) {
+  return runChannel({ id: workflowId ?? id });
 }
 
 /**
@@ -106,6 +119,10 @@ async function runNode({ channelId, nodeId }) {  // eslint-disable-line no-unuse
   return nodeResult;
 }
 
+async function runWorkflowNode({ workflowId, channelId, nodeId }) {
+  return runNode({ channelId: workflowId ?? channelId, nodeId });
+}
+
 /**
  * approve_gate — approves a pending gate node and continues the run.
  */
@@ -115,6 +132,10 @@ async function approveGate({ channelId, nodeId }) {  // eslint-disable-line no-u
     graph,
     approvals: { [nodeId]: true },
   });
+}
+
+async function approveWorkflowGate({ workflowId, channelId, nodeId }) {
+  return approveGate({ channelId: workflowId ?? channelId, nodeId });
 }
 
 /**
@@ -129,24 +150,27 @@ async function getItems({ channelId, nodeId }) {  // eslint-disable-line no-unus
   return { items, count: items.length };
 }
 
+async function getWorkflowItems({ workflowId, channelId, nodeId }) {
+  return getItems({ channelId: workflowId ?? channelId, nodeId });
+}
+
 /**
- * mutate_channel — applies a natural-language mutation command to the graph.
- * Requires POST /api/graph/mutate (A2 task). After mutating, saves the result.
+ * mutate_channel — disabled compatibility path.
+ * Agent graph edits must be staged through the resident operator's proposal flow.
  */
 async function mutateChannel({ channelId, command }) {  // eslint-disable-line no-unused-vars
-  const { graph } = await getTemplate(channelId);
-  const mutated = await brainPost("/api/graph/mutate", { graph, command });
-  // Save the mutated graph so the change persists.
-  await brainPost("/api/graph/save", { graph: mutated.graph });
-  return mutated;
+  return {
+    ok: false,
+    error: "Direct MCP graph mutation is disabled. Start or resume an operator session and use propose_graph_changes so the founder can review the preview before it is applied.",
+  };
 }
 
 async function listOperatorSessions() {
   return brainGet("/api/operator/sessions");
 }
 
-async function startOperatorSession({ goal, channelId }) {
-  return brainPost("/api/operator/sessions", { goal, graphId: channelId });
+async function startOperatorSession({ goal, workflowId, channelId }) {
+  return brainPost("/api/operator/sessions", { goal, graphId: workflowId ?? channelId });
 }
 
 async function getOperatorSession({ sessionId }) {
@@ -170,15 +194,27 @@ async function updateSharedContext({ patch }) {
 }
 
 async function createChannel(input) {
-  return brainPost("/api/channels", input);
+  return brainPost("/api/program-workflows", input);
+}
+
+async function createWorkflow(input) {
+  return brainPost("/api/program-workflows", input);
 }
 
 async function duplicateChannel({ channelId, ...input }) {
-  return brainPost(`/api/channels/${encodeURIComponent(channelId)}/duplicate`, input);
+  return duplicateWorkflow({ workflowId: channelId, ...input });
+}
+
+async function duplicateWorkflow({ workflowId, ...input }) {
+  return brainPost(`/api/program-workflows/${encodeURIComponent(workflowId)}/duplicate`, input);
 }
 
 async function updateChannel({ channelId, ...patch }) {
-  return brainPost(`/api/channels/${encodeURIComponent(channelId)}/update`, patch);
+  return updateWorkflow({ workflowId: channelId, ...patch });
+}
+
+async function updateWorkflow({ workflowId, ...patch }) {
+  return brainPost(`/api/program-workflows/${encodeURIComponent(workflowId)}/update`, patch);
 }
 
 async function listProjects() {
@@ -300,8 +336,18 @@ const TOOLS = [
     handler: composeOpportunityChannel,
   },
   {
+    name: "list_workflows",
+    description: "List all outcome-program workflows in the current project. Returns id, program id, status, run history, and graph shape metadata.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+    handler: listWorkflows,
+  },
+  {
     name: "list_channels",
-    description: "List all GTM channels in the current project. Returns id, name, status, last run time, node count, and run count for each channel.",
+    description: "Compatibility alias for list_workflows.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -310,8 +356,22 @@ const TOOLS = [
     handler: listChannels,
   },
   {
+    name: "create_workflow",
+    description: "Create a blank outcome-program workflow. Channel is stored only as workflow metadata.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        objective: { type: "string" },
+        kind: { type: "string" },
+      },
+      required: ["name", "objective"],
+    },
+    handler: createWorkflow,
+  },
+  {
     name: "create_channel",
-    description: "Create a blank founder-defined channel. GTM IDE does not impose a channel template.",
+    description: "Compatibility alias for create_workflow.",
     inputSchema: {
       type: "object",
       properties: {
@@ -324,8 +384,22 @@ const TOOLS = [
     handler: createChannel,
   },
   {
+    name: "duplicate_workflow",
+    description: "Duplicate an existing outcome-program workflow into a separately editable program-backed workflow.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workflowId: { type: "string" },
+        name: { type: "string" },
+        objective: { type: "string" },
+      },
+      required: ["workflowId", "name"],
+    },
+    handler: duplicateWorkflow,
+  },
+  {
     name: "duplicate_channel",
-    description: "Duplicate an existing channel and its graph into a separately editable channel.",
+    description: "Compatibility alias for duplicate_workflow.",
     inputSchema: {
       type: "object",
       properties: {
@@ -338,8 +412,24 @@ const TOOLS = [
     handler: duplicateChannel,
   },
   {
+    name: "update_workflow",
+    description: "Rename, clarify, classify, enable, or archive a program-backed workflow.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workflowId: { type: "string" },
+        name: { type: "string" },
+        objective: { type: "string" },
+        kind: { type: "string" },
+        enabled: { type: "boolean" },
+      },
+      required: ["workflowId"],
+    },
+    handler: updateWorkflow,
+  },
+  {
     name: "update_channel",
-    description: "Rename, clarify, classify, enable, or archive a founder-defined channel.",
+    description: "Compatibility alias for update_workflow.",
     inputSchema: {
       type: "object",
       properties: {
@@ -354,36 +444,73 @@ const TOOLS = [
     handler: updateChannel,
   },
   {
-    name: "get_channel",
-    description: "Get the full graph definition and last run result for a channel.",
+    name: "get_workflow",
+    description: "Get the full graph definition and last run result for an outcome-program workflow.",
     inputSchema: {
       type: "object",
       properties: {
-        id: { type: "string", description: "Founder-defined channel id" },
+        workflowId: { type: "string", description: "Workflow id" },
+      },
+      required: ["workflowId"],
+    },
+    handler: getWorkflow,
+  },
+  {
+    name: "get_channel",
+    description: "Compatibility alias for get_workflow.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Workflow/channel id" },
       },
       required: ["id"],
     },
     handler: getChannel,
   },
   {
-    name: "run_channel",
-    description: "Run the full GTM graph for a channel. Returns the run result with per-node output, items, and any pending gates.",
+    name: "run_workflow",
+    description: "Run the full workflow graph. Returns the run result with per-node output, items, and any pending gates.",
     inputSchema: {
       type: "object",
       properties: {
-        id: { type: "string", description: "Channel id" },
+        workflowId: { type: "string", description: "Workflow id" },
+      },
+      required: ["workflowId"],
+    },
+    handler: runWorkflow,
+  },
+  {
+    name: "run_channel",
+    description: "Compatibility alias for run_workflow.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Workflow/channel id" },
       },
       required: ["id"],
     },
     handler: runChannel,
   },
   {
-    name: "run_node",
-    description: "Run a single node in a channel's graph. Returns that node's result (items, status, error if any).",
+    name: "run_workflow_node",
+    description: "Run one workflow node and its dependencies. Returns that node's result.",
     inputSchema: {
       type: "object",
       properties: {
-        channelId: { type: "string", description: "Channel id" },
+        workflowId: { type: "string", description: "Workflow id" },
+        nodeId: { type: "string", description: "Node id to run (e.g. 'source-1')" },
+      },
+      required: ["workflowId", "nodeId"],
+    },
+    handler: runWorkflowNode,
+  },
+  {
+    name: "run_node",
+    description: "Compatibility alias for run_workflow_node.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        channelId: { type: "string", description: "Workflow/channel id" },
         nodeId: { type: "string", description: "Node id to run (e.g. 'source-1')" },
       },
       required: ["channelId", "nodeId"],
@@ -391,12 +518,25 @@ const TOOLS = [
     handler: runNode,
   },
   {
-    name: "approve_gate",
-    description: "Approve a pending gate node to unblock and continue a paused run.",
+    name: "approve_workflow_gate",
+    description: "Approve a pending founder gate node to unblock and continue a paused workflow run.",
     inputSchema: {
       type: "object",
       properties: {
-        channelId: { type: "string", description: "Channel id" },
+        workflowId: { type: "string", description: "Workflow id" },
+        nodeId: { type: "string", description: "Gate node id to approve" },
+      },
+      required: ["workflowId", "nodeId"],
+    },
+    handler: approveWorkflowGate,
+  },
+  {
+    name: "approve_gate",
+    description: "Compatibility alias for approve_workflow_gate.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        channelId: { type: "string", description: "Workflow/channel id" },
         nodeId: { type: "string", description: "Gate node id to approve" },
       },
       required: ["channelId", "nodeId"],
@@ -404,12 +544,25 @@ const TOOLS = [
     handler: approveGate,
   },
   {
-    name: "get_items",
-    description: "Get the items array from the last run for a specific node (e.g. prospects sourced, contacts enriched, messages generated).",
+    name: "get_workflow_items",
+    description: "Get the items array from the last workflow run for a specific node.",
     inputSchema: {
       type: "object",
       properties: {
-        channelId: { type: "string", description: "Channel id" },
+        workflowId: { type: "string", description: "Workflow id" },
+        nodeId: { type: "string", description: "Node id" },
+      },
+      required: ["workflowId", "nodeId"],
+    },
+    handler: getWorkflowItems,
+  },
+  {
+    name: "get_items",
+    description: "Compatibility alias for get_workflow_items.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        channelId: { type: "string", description: "Workflow/channel id" },
         nodeId: { type: "string", description: "Node id" },
       },
       required: ["channelId", "nodeId"],
@@ -418,11 +571,11 @@ const TOOLS = [
   },
   {
     name: "mutate_channel",
-    description: "Mutate a channel's graph using a natural language command (e.g. 'add a LinkedIn enrichment step after source'). The change is applied and saved.",
+    description: "Disabled compatibility path. Agent graph edits must go through the resident operator proposal flow for founder review.",
     inputSchema: {
       type: "object",
       properties: {
-        channelId: { type: "string", description: "Channel id" },
+        channelId: { type: "string", description: "Workflow/channel id" },
         command: { type: "string", description: "Natural language mutation command" },
       },
       required: ["channelId", "command"],
@@ -458,7 +611,8 @@ const TOOLS = [
       type: "object",
       properties: {
         goal: { type: "string", description: "The market outcome or GTM problem to work." },
-        channelId: { type: "string", description: "Optional graph/channel id." },
+        workflowId: { type: "string", description: "Optional workflow id." },
+        channelId: { type: "string", description: "Optional compatibility workflow/channel id." },
       },
       required: ["goal"],
     },
