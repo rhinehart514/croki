@@ -40,6 +40,11 @@ The Buffalo Projects acceptance case proves:
 
 The secondary flow surface supports reusable GTM execution graphs:
 
+- Arbitrary founder-defined channels. A new project starts with no prescribed
+  channel catalog; each new channel starts as a blank durable graph.
+- Channel creation, duplication, renaming, activation, and archiving without a
+  hard-coded limit. Four to six simultaneous motions are an operating target,
+  not six product templates.
 - Editable context, prompts, connector choices, configuration, and node
   positions.
 - Full-flow or dependency-scoped single-node runs.
@@ -50,9 +55,43 @@ The secondary flow surface supports reusable GTM execution graphs:
 - Local staging of founder-approved actions. The default graph never sends
   outreach.
 
+The resident GTM operator turns that graph into an IDE loop:
+
+- Runs through the bundled Claude Code Agent SDK, using an existing Claude Code
+  login when available; a direct Anthropic API runtime remains the fallback.
+- Accepts a durable plain-language goal.
+- Inspects repository evidence, graph state, connector readiness, and problems.
+- Applies validated typed graph patches rather than replacing graph JSON.
+- Runs nodes or the full loop, diagnoses real results, and keeps working.
+- Pauses at founder gates and resumes the exact reviewed run without rerunning
+  upstream work.
+- Preserves its goal, model conversation, events, run checkpoint, and status
+  under `~/.gtm-ide/operator-sessions`.
+
 External search and generation require their respective environment keys. A
 missing key blocks only the dependent branch and leaves every completed result
 inspectable.
+
+## Product and opportunity studio
+
+The project-level front door now completes the path into those executable
+graphs:
+
+- Select or add multiple repository-backed product projects.
+- Preserve independent code evidence, shared intelligence, opportunities, and
+  channels for each product.
+- Generate code-derived channel opportunities with production `file:line`
+  evidence while keeping unsupported strategic bets explicitly speculative.
+- Review, edit, accept, defer, or reject channel and agent opportunities before
+  they mutate a workflow.
+- Choose Claude or Codex for each accepted agent and preserve the agent as an
+  editable markdown artifact.
+- Compose accepted opportunities into a validated input → agents → founder
+  gate → output → measure workflow.
+- Use manual rows, local CSV content, or HTTP APIs as inputs; stage outputs
+  locally or send approved items through a configured HTTP API.
+- Feed observed outcomes, product feedback, and founder decisions into the
+  learning context used by future runs.
 
 ## Run
 
@@ -99,7 +138,12 @@ brain/src/workspace.mjs   durable proof, revision, decision, and run state
 brain/src/revision.mjs    review, apply, and revert safety
 brain/src/build.mjs       isolated worktree + Codex change-set generation
 brain/src/graph.mjs       dependency-aware GTM graph execution
+brain/src/graph-operations.mjs validated typed graph patches
 brain/src/flow-store.mjs  durable graph and run history
+brain/src/operator-store.mjs durable operator sessions and event history
+brain/src/operator-runtime.mjs resident model/tool operation loop
+brain/src/channel-graph.mjs blank and duplicated channel graph creation
+brain/src/project-store.mjs arbitrary channel portfolio + shared intelligence
 brain/src/server.mjs      local API and static application server
 ui/                      React, Tailwind, and React Flow interface
 ```

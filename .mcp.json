@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "gtm-ide": {
+      "command": "node",
+      "args": ["brain/src/mcp.mjs"],
+      "cwd": "/Users/laneyfraass/gtm-ide",
+      "description": "GTM IDE — run channels, inspect nodes, approve gates, mutate loops via natural language"
+    }
+  }
+}

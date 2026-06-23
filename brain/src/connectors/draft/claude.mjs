@@ -1,4 +1,5 @@
 import { Anthropic } from "@anthropic-ai/sdk";
+import { renderDraftMemory } from "../../memory.mjs";
 
 export const meta = {
   id: "claude",
@@ -35,8 +36,17 @@ export async function run(stage, upstream, context) {
     throw new Error("ANTHROPIC_API_KEY is not set — add it to your environment and restart.");
   }
 
+  // Loop memory: founder decisions from prior runs, injected by the runner.
+  const memory = context?.__memory ?? null;
+  const memoryMeta = {
+    approved: memory?.approved?.length ?? 0,
+    rejected: memory?.rejected?.length ?? 0,
+    edits: memory?.edits?.length ?? 0,
+  };
+  const memoryBlock = renderDraftMemory(memory);
+
   const prospects = upstream.filter((i) => i.type === "prospect");
-  if (prospects.length === 0) return { ok: true, items: [], meta: { count: 0 } };
+  if (prospects.length === 0) return { ok: true, items: [], meta: { count: 0, memory: memoryMeta } };
 
   const client = new Anthropic();
   const senderName = stage.config.senderName || context?.senderName || "Jacob";
@@ -58,7 +68,7 @@ export async function run(stage, upstream, context) {
           prospectName: p.name,
           prospectSummary: p.summary?.slice(0, 300) || "limited public info",
           prospectUrl: p.url || "unknown",
-        });
+        }) + memoryBlock;
         const message = await client.messages.create({
           model,
           max_tokens: 350,
@@ -72,5 +82,5 @@ export async function run(stage, upstream, context) {
     })
   );
 
-  return { ok: true, items: drafted, meta: { count: drafted.length } };
+  return { ok: true, items: drafted, meta: { count: drafted.length, memory: memoryMeta } };
 }

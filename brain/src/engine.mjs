@@ -1,0 +1,397 @@
+// GTM Engine OS — derived from real state, never seeded.
+//
+// Every subsystem's health, throughput, confidence, issues, and actions are
+// computed from real signals:
+//   - the active workspace's scanned win event   (code grounding)
+//   - the default channel's run ledger            (what ran, what it produced)
+//   - live connector readiness                    (wired vs stubbed vs unset)
+//   - recorded founder gate decisions             (the only real pre-send signal)
+//
+// Nothing here is invented. A subsystem with no signal yet says so plainly
+// instead of showing a confident fake number. Seeded mock data is gone.
+
+import { extractDecisions } from "./memory.mjs";
+
+const PIPELINE_LABELS = {
+  research: "Research", context: "Context", source: "Source", enrich: "Enrich",
+  filter: "Filter", generate: "Generate", gate: "Gate", execute: "Execute",
+  measure: "Measure", learn: "Learn",
+};
+const SUBSYSTEM_IDS = new Set(Object.keys(PIPELINE_LABELS));
+
+// ─── Ledger + connector helpers ───────────────────────────────────────────────
+
+function lastRun(runs) {
+  return runs.at(-1) ?? null;
+}
+
+function nodesOfCategory(runs, category) {
+  const nodes = lastRun(runs)?.result?.nodes ?? null;
+  if (!nodes) return [];
+  return Object.values(nodes).filter((n) => n?.category === category);
+}
+
+function connectorsForCategory(connectors, category) {
+  return connectors.filter((c) => c.category === category);
+}
+
+function categoryReady(connectors, category) {
+  return connectorsForCategory(connectors, category).some((c) => c.configured && !c.stub);
+}
+
+// A connector actually sends only if it declares a send-class action. The
+// default execute connector stages locally (allowed verbs are stage/export),
+// so it never counts as a real send path.
+const SEND_VERB = /send|publish|deploy/i;
+function isRealSender(connector) {
+  const verbs = [...(connector.allowed ?? []), ...(connector.approvalRequired ?? [])];
+  return verbs.some((verb) => SEND_VERB.test(verb));
+}
+
+// Shape with honest defaults; each deriver overrides what it can prove.
+function subsystem(id, fields) {
+  return {
+    id,
+    label: PIPELINE_LABELS[id],
+    derived: true,
+    health: 0,
+    throughput: 0,
+    confidence: 0,
+    agentStatus: "idle",
+    activeIssues: [],
+    suggestedActions: [],
+    ...fields,
+  };
+}
+
+// ─── Flow-mapped subsystems (source / enrich / filter / generate / execute) ────
+//
+// Each maps to a node category in the flow graph. Health reflects what the last
+// run's node of that category actually did, plus whether a connector is wired.
+
+function deriveFlowStage(id, runs, connectors, present = true) {
+  // A connector flow-stage is only a real subsystem of THIS channel when the graph
+  // actually contains a connector-backed (tool) node of that category, or a run
+  // produced one. An agent/skill step that happens to carry the category does NOT
+  // make a missing connector a problem — that's the old taxonomy leaking back in.
+  // Absent → honest 0 (no issue, no action), so it never shows up as a phantom problem.
+  if (!present) {
+    return subsystem(id, { health: 0, confidence: 0 });
+  }
+  const label = PIPELINE_LABELS[id];
+  const lower = label.toLowerCase();
+  const cats = connectorsForCategory(connectors, id);
+  const ready = cats.some((c) => c.configured && !c.stub);
+  const mine = nodesOfCategory(runs, id);
+  const ran = mine.length > 0;
+  const items = mine.reduce((sum, n) => sum + (Array.isArray(n.items) ? n.items.length : 0), 0);
+  const errored = mine.find((n) => n.ok === false && !n.blocked && !n.pendingReview);
+  const blocked = mine.some((n) => n.blocked);
+
+  if (errored) {
+    return subsystem(id, {
+      health: 38, confidence: 50, agentStatus: "investigating", throughput: items,
+      activeIssues: [errored.error || `${label} failed on the last run.`],
+      suggestedActions: [`Fix the ${lower} error, then re-run the loop.`],
+    });
+  }
+  if (!ready) {
+    const names = cats.map((c) => c.name).filter(Boolean).join(", ");
+    return subsystem(id, {
+      health: cats.length ? 44 : 28, confidence: 40,
+      activeIssues: [`No ${lower} connector is configured${names ? ` (${names} available)` : ""}.`],
+      suggestedActions: [`Configure a ${lower} connector to activate this stage.`],
+    });
+  }
+  if (blocked) {
+    return subsystem(id, {
+      health: 58, confidence: 55, throughput: items,
+      activeIssues: ["Blocked on the last run — waiting on an upstream stage."],
+      suggestedActions: ["Clear the upstream failure, then re-run the loop."],
+    });
+  }
+  if (!ran) {
+    return subsystem(id, {
+      health: 64, confidence: 60,
+      activeIssues: ["Ready, but this stage hasn't run yet."],
+      suggestedActions: [`Run the loop to see ${lower} produce live output.`],
+    });
+  }
+  if (items === 0) {
+    return subsystem(id, {
+      health: 66, confidence: 64, agentStatus: "monitoring",
+      activeIssues: ["Ran clean but produced no items."],
+      suggestedActions: [`Check the input feeding ${lower}.`],
+    });
+  }
+  return subsystem(id, { health: 88, confidence: 82, agentStatus: "monitoring", throughput: items });
+}
+
+// ─── Gate: the founder review stage — measured by decisions, not throughput ────
+
+function deriveGate(runs) {
+  const mine = nodesOfCategory(runs, "gate");
+  if (!mine.length) {
+    return subsystem("gate", {
+      health: 64, confidence: 60,
+      activeIssues: ["No founder review has run yet."],
+      suggestedActions: ["Run the loop to stage drafts for review."],
+    });
+  }
+  const items = mine.flatMap((n) => (Array.isArray(n.items) ? n.items : []));
+  const pending = items.filter((i) => i.approvalStatus === "pending").length;
+  const approved = items.filter((i) => i.approvalStatus === "approved").length;
+  const issues = [];
+  const actions = [];
+  if (pending > 0) {
+    issues.push(`${pending} draft${pending > 1 ? "s" : ""} awaiting your review.`);
+    actions.push(`Review ${pending} pending draft${pending > 1 ? "s" : ""} at the gate.`);
+  }
+  return subsystem("gate", {
+    health: 100, confidence: 100, throughput: approved,
+    agentStatus: pending > 0 ? "monitoring" : "idle",
+    activeIssues: issues, suggestedActions: actions,
+  });
+}
+
+// ─── Context: grounded in real product code when a workspace is open ───────────
+
+function deriveContext(connectors, report) {
+  const ready = categoryReady(connectors, "context");
+  if (!report) {
+    return subsystem("context", {
+      health: 66, confidence: 60,
+      activeIssues: ["No repository grounding — open a workspace to ground context in real product code."],
+      suggestedActions: ["Open a workspace so context reflects the actual product."],
+    });
+  }
+  if (!ready) {
+    return subsystem("context", {
+      health: 55, confidence: 50,
+      activeIssues: ["Context connectors (ICP, product) are not configured."],
+      suggestedActions: ["Define ICP and product context for this channel."],
+    });
+  }
+  return subsystem("context", { health: 88, confidence: 85, agentStatus: "monitoring" });
+}
+
+// ─── Research: no real signal source exists yet — say so, don't fake it ────────
+
+function deriveResearch() {
+  return subsystem("research", {
+    health: 0, confidence: 0,
+    activeIssues: ["No research agent is connected yet."],
+    suggestedActions: ["Connect a research source to activate this subsystem."],
+  });
+}
+
+// ─── Learn: scales with the founder decisions actually recorded in the ledger ──
+
+function deriveLearn(runs) {
+  const decisions = extractDecisions(runs);
+  const total = decisions.approved.length + decisions.rejected.length + decisions.edits.length;
+  if (total === 0) {
+    return subsystem("learn", {
+      health: 32, confidence: 40,
+      activeIssues: ["No founder decisions recorded yet — the loop has nothing to learn from."],
+      suggestedActions: ["Approve, reject, or edit drafts at a gate to start the learning loop."],
+    });
+  }
+  return subsystem("learn", {
+    health: Math.min(85, 55 + total * 5), confidence: 70, throughput: total,
+    agentStatus: "monitoring",
+  });
+}
+
+// ─── Measure: the seam where code-grounding and the GTM flow meet ──────────────
+//
+// Can the system connect a GTM send to the outcome it was chasing? Answerable
+// from real state, never invented: the scanned win event (defined? carries a
+// source?), the run ledger (anything reach execute?), and connector state (real
+// send connector, or only the local stager?).
+
+function countStagedSends(runs) {
+  const nodes = lastRun(runs)?.result?.nodes ?? null;
+  if (!nodes) return 0;
+  return Object.values(nodes)
+    .filter((node) => node?.category === "execute" && Array.isArray(node.items))
+    .reduce((sum, node) => sum + node.items.length, 0);
+}
+
+export function deriveMeasure(report = null, runs = [], connectors = []) {
+  const sends = countStagedSends(runs);
+  const sendReady = connectors.some(
+    (c) => c.category === "execute" && c.configured && !c.stub && isRealSender(c),
+  );
+
+  const issues = [];
+  const actions = [];
+  let health;
+  let confidence;
+  let agentStatus;
+
+  if (!report) {
+    health = 0;
+    confidence = 0;
+    agentStatus = "idle";
+    issues.push("No outcome defined — open a workspace and scan a repo to set the win event.");
+    actions.push("Open a workspace: point at a repo and name the win event you sell on.");
+  } else {
+    const win = report.winEvent ?? {};
+    const winName = win.name || "the win event";
+    const winFound = win.found === true;
+    const carries = Array.isArray(win.attributionProperties) && win.attributionProperties.length > 0;
+
+    if (!winFound) {
+      health = 18;
+      confidence = 30;
+      agentStatus = "investigating";
+      issues.push(`Win event "${winName}" is not proven in production code — outcomes cannot be measured.`);
+      actions.push(`Emit one canonical "${winName}" event where the outcome is committed.`);
+    } else if (!carries) {
+      // The Buffalo-Projects acceptance case: the win event fires, but with no
+      // source on it, so a send can never be attributed to the outcome.
+      health = 40;
+      confidence = 72;
+      agentStatus = "investigating";
+      issues.push(`Attribution is blind — "${winName}" is emitted without a source, so sends cannot be connected to outcomes.`);
+      actions.push(`Carry the captured source into "${winName}" so outcomes attribute back to a channel.`);
+    } else if (sendReady && sends > 0) {
+      // Substrate proven and real sends are flowing — outcomes are observable.
+      health = 86;
+      confidence = 88;
+      agentStatus = "monitoring";
+    } else {
+      // Substrate proven, but either no real send connector is wired or nothing
+      // has been sent yet — staged-locally items are not measured outcomes.
+      health = 72;
+      confidence = 88;
+      agentStatus = "idle";
+      if (sendReady) {
+        issues.push("Measurement is ready, but nothing has run through the send connector yet.");
+        actions.push("Run the loop end to end so outcomes begin flowing into measure.");
+      }
+    }
+  }
+
+  if (!sendReady) {
+    issues.push("No send connector configured — outbound is staged locally, so real outcomes can't yet be observed.");
+    actions.push("Connect a send connector (e.g. Gmail) to turn staged sends into observable outcomes.");
+  }
+
+  return subsystem("measure", {
+    health,
+    // Real outcomes captured. Stays 0 until a real send connector closes the
+    // loop — staged-but-unsent items are not measured outcomes.
+    throughput: 0,
+    confidence,
+    agentStatus,
+    activeIssues: issues,
+    suggestedActions: actions,
+  });
+}
+
+// ─── Investigations / findings / recommendations — all derived ─────────────────
+
+function measureEvidence(report) {
+  const win = report.winEvent ?? {};
+  const carried = win.attributionProperties?.length ? win.attributionProperties.join(", ") : "none";
+  return [
+    `Win event "${win.name ?? "?"}" — ${win.found ? "proven in production code" : "not found in production code"}.`,
+    `Attribution carried on the win event: ${carried}.`,
+    report.headline ?? "",
+  ].filter(Boolean);
+}
+
+// Open an investigation for any subsystem in real trouble (health 1–49). A
+// not-connected subsystem (health 0) is not an investigation — it's just unwired.
+function deriveInvestigations(subsystems, report) {
+  return subsystems
+    .filter((s) => s.health > 0 && s.health < 50 && s.activeIssues.length)
+    .sort((a, b) => a.health - b.health)
+    .slice(0, 8)
+    .map((s) => ({
+      id: `inv-${s.id}`,
+      subsystem: s.id,
+      // The same derived health the canvas node badge shows — one number, rendered
+      // everywhere. The rail must not invent a second figure (it used to show confidence).
+      health: s.health,
+      problem: s.activeIssues[0],
+      evidence: s.id === "measure" && report ? measureEvidence(report) : [...s.activeIssues],
+      confidence: s.confidence,
+      impact: "high",
+      recommendation: s.suggestedActions[0] ?? "Address the issue above.",
+      nextActions: s.suggestedActions,
+      status: "open",
+    }));
+}
+
+// Findings come from real failures in the most recent run.
+function deriveFindings(runs) {
+  const run = lastRun(runs);
+  const nodes = run?.result?.nodes;
+  if (!nodes) return [];
+  const createdAt = run.createdAt ?? new Date().toISOString();
+  return Object.values(nodes)
+    .filter((n) => n.ok === false && !n.blocked && n.error && SUBSYSTEM_IDS.has(n.category))
+    .slice(0, 4)
+    .map((n, i) => ({
+      id: `find-${n.nodeId ?? i}`,
+      type: "regression",
+      summary: n.error,
+      subsystem: n.category,
+      priority: "high",
+      createdAt,
+    }));
+}
+
+function deriveTopRecommendations(subsystems) {
+  return subsystems
+    .filter((s) => s.health > 0 && s.health < 70 && s.suggestedActions.length)
+    .sort((a, b) => a.health - b.health)
+    .slice(0, 5)
+    .map((s) => s.suggestedActions[0]);
+}
+
+// ─── Public: compose the engine state from real signals ────────────────────────
+
+// Which connector flow-stages this channel actually uses. A stage counts as present
+// when the graph has a tool node of that category (kind tool / unset), or a run
+// produced one. Returns null when no graph is supplied — legacy callers then derive
+// every stage from the connector registry as before.
+function presentFlowStages(graph) {
+  if (!graph || !Array.isArray(graph.nodes)) return null;
+  const cats = new Set();
+  for (const node of graph.nodes) {
+    if ((node.kind ?? "tool") === "tool") cats.add(node.category);
+  }
+  return cats;
+}
+
+export function getEngineState({ report = null, runs = [], connectors = [], graph = null } = {}) {
+  const toolStages = presentFlowStages(graph);
+  const present = (id) =>
+    toolStages === null || toolStages.has(id) || nodesOfCategory(runs, id).length > 0;
+
+  const subsystems = [
+    deriveResearch(),
+    deriveContext(connectors, report),
+    deriveFlowStage("source", runs, connectors, present("source")),
+    deriveFlowStage("enrich", runs, connectors, present("enrich")),
+    deriveFlowStage("filter", runs, connectors, present("filter")),
+    deriveFlowStage("generate", runs, connectors, present("generate")),
+    deriveGate(runs),
+    deriveFlowStage("execute", runs, connectors, present("execute")),
+    deriveMeasure(report, runs, connectors),
+    deriveLearn(runs),
+  ];
+
+  return {
+    subsystems,
+    agents: [],
+    topRecommendations: deriveTopRecommendations(subsystems),
+    investigations: deriveInvestigations(subsystems, report),
+    experiments: [],
+    recentFindings: deriveFindings(runs),
+  };
+}

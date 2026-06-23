@@ -27,7 +27,7 @@ open repo  →  context node reads it  →  source finds real people
     →  ledger records it  →  next run is smarter
 ```
 
-Every step in that chain has to fire. The current build has the repo scan and the workspace proof loop working. The GTM flow loop — source → generate → gate → execute — does not run yet. That's what closes the gap.
+Every step in that chain has to fire. The current build has the repository scan, executable DAG, founder gate, run ledger, learning memory, and durable resident operator working. The remaining frontier is at the world's edge: one approved action must reach a real connector and return a real attributable outcome.
 
 **What each step requires:**
 
@@ -121,6 +121,12 @@ Claude reads the repo, reads the prompt, assembles nodes, connects edges. The di
 
 Click any node. Claude explains what it's doing, what it found, what it's uncertain about. You redirect in plain language. The node reconfigures from the conversation. No forms.
 
+### The operator session is durable
+
+A command creates a real operation session, not a one-shot graph rewrite. The operator can inspect product evidence, inspect problems, patch through typed operations, validate, run, diagnose, and rerun. Its event trail remains available after closing the panel or reloading the app. If the process stops, the session becomes resumable rather than disappearing.
+
+When a run reaches a founder gate, the operator pauses. Approval continues from the exact prepared run items, so live sourcing and generation do not silently change between review and execution.
+
 ### The gate is a reading session
 
 Drafts appear as cards. Each one shows:
@@ -178,7 +184,12 @@ The pattern: GTM IDE orchestrates. MCP tools provide the data. Claude reasons ov
 
 ## Multi-channel
 
-The DAG supports parallel branches — one per channel — sharing the same context nodes. ICP and product are defined once. Each channel runs its own source → enrich → generate → gate → execute path.
+The project can hold the set of channels the founder actually chooses to run.
+It does not ship a catalog of six assumed motions. A channel begins as a blank,
+durable graph; the founder or resident Claude operator shapes its nodes and
+edges around the intended outcome. Channels share product, positioning, ICP,
+founder taste, contacts, outcomes, experiments, and proof artifacts while
+keeping their executable graphs and run histories independent.
 
 The top of the canvas shows mission control:
 ```
@@ -215,7 +226,7 @@ Not a report. Not a dashboard. A ledger entry and a sharper starting point for t
 
 5. **Gate UX** — card-based review, inline conversation, `A/R/E` keyboard shortcuts.
 
-6. **Vibe mode** — describe the goal, Claude builds the DAG. Natural language as the primary entry point.
+6. **Vibe mode** — describe the goal, bundled Claude Code builds the DAG through typed operations. Natural language is the primary entry point.
 
 7. **Multi-channel view** — parallel branches, mission control header.
 
@@ -223,6 +234,6 @@ Not a report. Not a dashboard. A ledger entry and a sharper starting point for t
 
 ## Version
 
-v0.0.4 — architecture defined, workspace mode and flow library running, single-channel DAG executing with stubs, 41 tests passing. Claude agent harness not yet wired.
+v0.3.0 — durable resident operator wired end to end: founder-defined channels, bundled Claude Code Agent SDK, typed graph patches, live event history, exact founder-gate continuation, interruption recovery, dashboard polling, and MCP session controls. The remaining product proof is one approved action through a live destination and one attributable observed outcome.
 
-Last updated: 2026-06-20
+Last updated: 2026-06-21

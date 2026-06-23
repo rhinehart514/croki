@@ -13,6 +13,9 @@ import * as productContext from "./context/product.mjs";
 
 import * as exaFind from "./find/exa.mjs";
 import * as apolloFind from "./find/apollo.mjs";
+import * as manualFind from "./find/manual.mjs";
+import * as csvFind from "./find/csv.mjs";
+import * as apiFind from "./find/api.mjs";
 
 import * as clayEnrich from "./enrich/clay.mjs";
 import * as clearbitEnrich from "./enrich/clearbit.mjs";
@@ -24,6 +27,7 @@ import * as openaiDraft from "./draft/openai.mjs";
 
 import * as defaultGate from "./gate/default.mjs";
 import * as localExecute from "./execute/local.mjs";
+import * as httpExecute from "./execute/http.mjs";
 
 import * as defaultMeasure from "./measure/default.mjs";
 
@@ -31,15 +35,15 @@ import * as defaultMeasure from "./measure/default.mjs";
 const REGISTRY = {
   resource:  { exa: exaResource, clay: clayResource, claude: claudeResource, gmail: gmailResource },
   context:   { icp: icpContext, product: productContext },
-  source:    { exa: exaFind, apollo: apolloFind },
-  find:      { exa: exaFind, apollo: apolloFind },   // legacy alias
+  source:    { exa: exaFind, apollo: apolloFind, manual: manualFind, csv: csvFind, api: apiFind },
+  find:      { exa: exaFind, apollo: apolloFind, manual: manualFind, csv: csvFind, api: apiFind },   // legacy alias
   enrich:    { clay: clayEnrich, clearbit: clearbitEnrich },
   filter:    { default: defaultScore },
   score:     { default: defaultScore },               // legacy alias
   generate:  { claude: claudeDraft, openai: openaiDraft },
   draft:     { claude: claudeDraft, openai: openaiDraft }, // legacy alias
   gate:      { default: defaultGate },
-  execute:   { local: localExecute },
+  execute:   { local: localExecute, http: httpExecute },
   measure:   { default: defaultMeasure },
   icp:       {                                        // legacy: icp stage type in old pipeline tests
     default: {

@@ -13,3 +13,6 @@ dist/
 .venture/
 .DS_Store
 *.gtm-ide-summary.txt
+
+# Browser-tooling session cache
+.playwright-cli/

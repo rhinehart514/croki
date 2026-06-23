@@ -21,6 +21,28 @@ function write(file, value) {
   fs.renameSync(temporary, file);
 }
 
+function graphSnapshot(graph) {
+  return {
+    revision: graph.revision ?? 0,
+    name: graph.name,
+    nodes: graph.nodes.map((node) => ({
+      id: node.id,
+      category: node.category,
+      connector: node.connector ?? null,
+      label: node.label,
+      config: node.config ?? {},
+      agentPrompt: node.agentPrompt ?? "",
+    })),
+    edges: graph.edges.map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      edgeType: edge.edgeType,
+      label: edge.label ?? null,
+    })),
+  };
+}
+
 export function loadFlow(graphId, fallback, options = {}) {
   const file = fileFor(graphId, options);
   if (!fs.existsSync(file)) {
@@ -76,6 +98,7 @@ export function recordFlowRun(graph, result, options = {}) {
     ok: result.ok,
     targetNodeId: result.targetNodeId,
     pendingGates: result.pendingGates,
+    graphSnapshot: graphSnapshot(graph),
     result,
   }].slice(-50);
   const durable = {

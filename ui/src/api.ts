@@ -1,7 +1,10 @@
 import type {
-  ApplyReadiness, BuildResult, ConnectorMeta, GTMGraph, GTMRunResult,
-  GTMRevision, GTMWorkspace, Pipeline, PipelineRunResult, ScanReport,
-  WorkspaceSummary,
+  ApplyReadiness, BuildResult, ConnectorMeta, Decisions, EngineState, GTMGraph, GTMProject, GTMRunResult,
+  GTMRevision, GTMWorkspace, OperatorSession, OperatorSessionSummary, Pipeline, PipelineRunResult, PortfolioBrief,
+  ScanReport, ChannelMeta, ChannelRunDiff, GTMNode, GTMEdge,
+  WorkspaceSummary, ProjectSummary, OpportunityStudio, GTMOpportunity, DataAdapter,
+  ContextManifest, GtmLibrary,
+  GraphOperation, GTMContractAudit,
 } from "@/types";
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -20,6 +23,19 @@ async function get<T>(path: string): Promise<T> {
   if (!res.ok) throw new Error(`${path} failed (${res.status}).`);
   return res.json() as Promise<T>;
 }
+
+// ── Engine OS ───────────────────────────────────────────────────────────────
+export const getEngineState = (channelId?: string) =>
+  get<{ engine: EngineState }>(`/api/engine${channelId ? `?channel=${encodeURIComponent(channelId)}` : ""}`);
+
+// ── Context substrate (the multiplier, made visible) ──────────────────────────
+export const getContext = (channelId?: string) =>
+  get<{ channelId: string; manifest: ContextManifest; text: string }>(
+    `/api/context${channelId ? `?channel=${encodeURIComponent(channelId)}` : ""}`
+  );
+
+// ── The library — subagents and skills on disk (parts of GTM engineering) ─────
+export const getLibrary = () => get<GtmLibrary>("/api/library");
 
 // ── Funnel ──────────────────────────────────────────────────────────────────
 export const scanRepository   = (repoPath: string, winEvent: string) =>
@@ -75,17 +91,268 @@ export const applyWorkspaceRevision = (
 export const getConnectors = () =>
   get<{ connectors: ConnectorMeta[] }>("/api/connectors");
 
-// ── GTM Graph (DAG — new) ───────────────────────────────────────────────────
-export const getGraphTemplate = () =>
-  get<{ graph: GTMGraph; runs?: GTMRunResult[] }>("/api/graph/template");
+// ── GTM Graph (DAG — zoom 3) ────────────────────────────────────────────────
+export const getGraphTemplate = (channelId?: string) =>
+  get<{ graph: GTMGraph; runs?: GTMRunResult[] }>(
+    `/api/graph/template${channelId ? `?channel=${encodeURIComponent(channelId)}` : ""}`,
+  );
 
 export const saveGraph = (graph: GTMGraph) =>
   post<{ graph: GTMGraph; savedAt: string }>("/api/graph/save", { graph });
 
+export const applyGraphOperations = (graph: GTMGraph, operations: GraphOperation[]) =>
+  post<{ graph: GTMGraph; changes: Array<{ type: string; detail: string }> }>(
+    "/api/graph/operations",
+    { graph, operations },
+  );
+
+export const auditGraph = (graph: GTMGraph, runResult?: GTMRunResult | null) =>
+  post<{ audits: Record<string, GTMContractAudit> }>("/api/graph/audit", { graph, runResult });
+
+export const getPilotOutreachRecipe = () =>
+  get<{ graph: GTMGraph }>("/api/graph/recipes/pilot-outreach");
+
+// ── Artifacts — subagents & skills as real, fully-editable .md files ─────────
+export type ArtifactType = "agent" | "skill";
+export type ArtifactSummary = {
+  type: ArtifactType; ref: string; name: string; description: string; tools: string; model: string;
+};
+export type ArtifactFile = {
+  type: ArtifactType; ref: string; exists: boolean; content: string; meta: Record<string, string>;
+};
+
+export const listArtifacts = () =>
+  get<{ agents: ArtifactSummary[]; skills: ArtifactSummary[] }>("/api/artifacts");
+
+export const getArtifact = (type: ArtifactType, ref: string) =>
+  get<ArtifactFile>(`/api/artifact?type=${type}&ref=${encodeURIComponent(ref)}`);
+
+export const saveArtifact = (type: ArtifactType, ref: string, content: string) =>
+  post<{ ok: boolean; type: ArtifactType; ref: string; path: string }>(
+    "/api/artifact/save", { type, ref, content },
+  );
+
 export const runGraph = (
   graph: GTMGraph,
-  options: { targetNodeId?: string; approvals?: Record<string, boolean> } = {},
+  options: {
+    targetNodeId?: string;
+    approvals?: Record<string, boolean>;
+    decisions?: Decisions;
+    resumeRunId?: string;
+  } = {},
 ) => post<GTMRunResult>("/api/graph/run", { graph, ...options });
+
+// Streaming run events — one per step, so the flow animates and content reveals live.
+export type RunStreamEvent =
+  | { type: "run_start"; nodeIds: string[] }
+  | { type: "node_start"; nodeId: string; category?: string; kind?: string; label?: string }
+  | { type: "node_done"; nodeId: string; result: GTMRunResult["nodes"][string] }
+  | { type: "run_done"; result: GTMRunResult }
+  | { type: "run_error"; error: string };
+
+// Run the graph over SSE, calling onEvent for each step. Returns when the stream ends.
+export async function runGraphStream(
+  graph: GTMGraph,
+  options: { targetNodeId?: string; approvals?: Record<string, boolean>; decisions?: Decisions; resumeRunId?: string },
+  onEvent: (event: RunStreamEvent) => void,
+): Promise<void> {
+  const res = await fetch("/api/graph/run/stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ graph, ...options }),
+  });
+  if (!res.ok || !res.body) {
+    const payload = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error || `Run stream failed (${res.status}).`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const frames = buf.split("\n\n");
+    buf = frames.pop() ?? "";
+    for (const frame of frames) {
+      const line = frame.split("\n").find((l) => l.startsWith("data: "));
+      if (line) {
+        try { onEvent(JSON.parse(line.slice(6)) as RunStreamEvent); } catch { /* skip malformed frame */ }
+      }
+    }
+  }
+}
+
+// ── Streaming ideation — workflows composed and streamed onto the canvas live ──
+export type IdeateStreamEvent =
+  | { type: "status"; message: string }
+  | { type: "proposals"; channels: GTMOpportunity[]; agents: GTMOpportunity[] }
+  | { type: "composing"; channelId: string; title: string }
+  | { type: "thinking"; channelId: string | null; text: string }
+  | { type: "workflow"; channelId: string; title: string; nodes: GTMNode[]; edges: GTMEdge[] }
+  | { type: "workflow_error"; channelId: string; error: string }
+  | { type: "done" }
+  | { type: "error"; error: string };
+
+// Ideate over SSE: proposals arrive first, then each channel's real composed graph streams in as
+// it finishes. onEvent fires per frame; resolves when the stream ends.
+export async function ideateStream(
+  projectId: string,
+  onEvent: (event: IdeateStreamEvent) => void,
+): Promise<void> {
+  const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/ideate/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (!res.ok || !res.body) {
+    const payload = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error || `Ideation stream failed (${res.status}).`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const frames = buf.split("\n\n");
+    buf = frames.pop() ?? "";
+    for (const frame of frames) {
+      const line = frame.split("\n").find((l) => l.startsWith("data: "));
+      if (line) {
+        try { onEvent(JSON.parse(line.slice(6)) as IdeateStreamEvent); } catch { /* skip malformed frame */ }
+      }
+    }
+  }
+}
+
+// ── Durable resident operator ────────────────────────────────────────────────
+export const listOperatorSessions = (projectId?: string) =>
+  get<{ sessions: OperatorSessionSummary[] }>(
+    `/api/operator/sessions${projectId ? `?project=${encodeURIComponent(projectId)}` : ""}`,
+  );
+
+export const getOperatorSession = (sessionId: string) =>
+  get<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}`);
+
+export const createOperatorSession = (goal: string, graphId?: string) =>
+  post<{ session: OperatorSession }>("/api/operator/sessions", { goal, graphId });
+
+export const resumeOperatorSession = (sessionId: string, input: string) =>
+  post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/resume`, { input });
+
+export const resolveOperatorGate = (
+  sessionId: string,
+  payload: { approvals?: Record<string, boolean>; decisions?: Decisions },
+) => post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/gate`, payload);
+
+export const cancelOperatorSession = (sessionId: string) =>
+  post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/cancel`, {});
+
+// ── Project (channels list) ──────────────────────────────────────────────────
+export async function getProject(): Promise<{ project: GTMProject }> {
+  const res = await fetch("/api/project");
+  if (!res.ok) throw new Error("Project endpoint not available");
+  return res.json() as Promise<{ project: GTMProject }>;
+}
+
+export const listProjects = () =>
+  get<{ activeProjectId: string | null; projects: ProjectSummary[] }>("/api/projects");
+
+export const createProject = (input: { name?: string; repoPath: string; outcome: string }) =>
+  post<{ project: GTMProject; activeProjectId: string }>("/api/projects", input);
+
+export const activateProject = (projectId: string) =>
+  post<{ project: GTMProject; activeProjectId: string }>(
+    `/api/projects/${encodeURIComponent(projectId)}/activate`,
+    {},
+  );
+
+export const getOpportunities = (projectId: string) =>
+  get<{ opportunities: OpportunityStudio }>(
+    `/api/projects/${encodeURIComponent(projectId)}/opportunities`,
+  );
+
+export const generateOpportunities = (projectId: string) =>
+  post<{ opportunities: OpportunityStudio }>(
+    `/api/projects/${encodeURIComponent(projectId)}/opportunities/generate`,
+    {},
+  );
+
+export const updateOpportunity = (
+  projectId: string,
+  opportunityId: string,
+  patch: Partial<GTMOpportunity>,
+) => post<{ opportunity: GTMOpportunity }>(
+  `/api/projects/${encodeURIComponent(projectId)}/opportunities/${encodeURIComponent(opportunityId)}`,
+  { patch },
+);
+
+export const composeOpportunityChannel = (
+  projectId: string,
+  input: {
+    channelOpportunityId: string;
+    agentOpportunityIds: string[];
+    name?: string;
+    objective?: string;
+    input?: DataAdapter;
+    output?: DataAdapter;
+  },
+) => post<{ channel: ChannelMeta; graph: GTMGraph }>(
+  `/api/projects/${encodeURIComponent(projectId)}/compose`,
+  input,
+);
+
+export const setActiveChannel = (channelId: string) =>
+  post<{ activeChannelId: string }>("/api/project/active-channel", { channelId });
+
+export const createChannel = (input: { name: string; objective: string; kind?: string }) =>
+  post<{ channel: ChannelMeta }>("/api/channels", input);
+
+export const duplicateChannel = (channelId: string, input: { name: string; objective?: string }) =>
+  post<{ channel: ChannelMeta }>(
+    `/api/channels/${encodeURIComponent(channelId)}/duplicate`,
+    input,
+  );
+
+export const updateChannel = (
+  channelId: string,
+  patch: Partial<Pick<ChannelMeta, "name" | "objective" | "kind" | "enabled">>,
+) => post<{ channel: ChannelMeta }>(
+  `/api/channels/${encodeURIComponent(channelId)}/update`,
+  patch,
+);
+
+export const getPortfolioBrief = () =>
+  get<{ brief: PortfolioBrief }>("/api/project/brief");
+
+export const createPortfolioBriefArtifact = () =>
+  post<{ artifact: Record<string, unknown>; sharedContextVersion: number }>(
+    "/api/project/artifacts/portfolio-brief",
+    {},
+  );
+
+export const compareChannelRuns = (channelId: string, before?: string, after?: string) => {
+  const params = new URLSearchParams();
+  if (before) params.set("before", before);
+  if (after) params.set("after", after);
+  const query = params.size ? `?${params.toString()}` : "";
+  return get<{ diff: ChannelRunDiff }>(
+    `/api/channels/${encodeURIComponent(channelId)}/runs/compare${query}`,
+  );
+};
+
+// ── Graph mutation ───────────────────────────────────────────────────────────
+export async function mutateGraph(graph: GTMGraph, command: string): Promise<{ graph: GTMGraph; description: string; changes: unknown[] }> {
+  const res = await fetch("/api/graph/mutate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ graph, command }),
+  });
+  if (!res.ok) throw new Error(`Mutate failed: ${res.status}`);
+  return res.json() as Promise<{ graph: GTMGraph; description: string; changes: unknown[] }>;
+}
 
 // ── Legacy pipeline (kept for backward compat) ──────────────────────────────
 export const getPipelineTemplate = () =>

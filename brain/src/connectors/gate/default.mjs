@@ -1,6 +1,13 @@
 // Gate node — venture doctrine: no send happens without founder approval.
 // Execution pauses here. The graph runner returns pendingGates so the UI can
 // surface the review queue. The founder approves/edits/rejects each item.
+//
+// The per-item decisions captured here are the loop's real learning signal:
+// they are stamped onto items, recorded in the run ledger, and read back into
+// the next run by memory.mjs. See brain/src/memory.mjs.
+import { draftKey } from "../../memory.mjs";
+import crypto from "node:crypto";
+
 export const meta = {
   id: "default",
   name: "Founder review",
@@ -12,7 +19,19 @@ export const meta = {
   approvalRequired: ["continue"],
 };
 
-export async function run(node, upstream) {
+function actionId(node, item, index, context) {
+  if (item.gtmActionId) return item.gtmActionId;
+  const originRunId = context?.__run?.originRunId || "untracked-run";
+  const identity = draftKey(item) || item.draft || item.message || String(index);
+  const digest = crypto
+    .createHash("sha256")
+    .update(`${originRunId}:${node.id}:${identity}`)
+    .digest("hex")
+    .slice(0, 24);
+  return `gtm-${digest}`;
+}
+
+export async function run(node, upstream, context) {
   if (upstream.length === 0) {
     return {
       ok: true,
@@ -21,11 +40,49 @@ export async function run(node, upstream) {
       meta: { awaitingReview: 0, note: "No items require review." },
     };
   }
+  // Per-item founder decisions (approve / reject / edit) — the real learning
+  // signal. Keyed by draftKey(item). Undecided items stay pending.
+  const decisions = node.runtime?.decisions;
+  if (decisions && typeof decisions === "object") {
+    let pending = 0;
+    const items = upstream.map((item, index) => {
+      const gtmActionId = actionId(node, item, index, context);
+      const d = decisions[draftKey(item)];
+      if (!d || (d.decision !== "approve" && d.decision !== "reject")) {
+        pending += 1;
+        return { ...item, gtmActionId, gated: true, approved: false, approvalStatus: "pending" };
+      }
+      if (d.decision === "reject") {
+        return { ...item, gtmActionId, gated: true, approved: false, approvalStatus: "rejected" };
+      }
+      const edited = typeof d.editedDraft === "string" && d.editedDraft.trim();
+      return {
+        ...item,
+        gtmActionId,
+        gated: true,
+        approved: true,
+        approvalStatus: "approved",
+        ...(edited ? { editedFrom: item.draft ?? null, draft: d.editedDraft } : {}),
+      };
+    });
+    return {
+      ok: true,
+      items,
+      pendingReview: pending > 0,
+      meta: {
+        approved: items.filter((i) => i.approvalStatus === "approved").length,
+        rejected: items.filter((i) => i.approvalStatus === "rejected").length,
+        awaitingReview: pending,
+      },
+    };
+  }
+
   if (node.runtime?.approved) {
     return {
       ok: true,
-      items: upstream.map((item) => ({
+      items: upstream.map((item, index) => ({
         ...item,
+        gtmActionId: actionId(node, item, index, context),
         gated: true,
         approved: true,
         approvalStatus: "approved",
@@ -35,8 +92,9 @@ export async function run(node, upstream) {
     };
   }
   // support both old (stage, upstream) and new (node, upstream) call signatures
-  const items = upstream.map((item) => ({
+  const items = upstream.map((item, index) => ({
     ...item,
+    gtmActionId: actionId(node, item, index, context),
     gated: true,
     approved: false,
     approvalStatus: "pending",

@@ -115,6 +115,34 @@ describe("runGraph — gate nodes pause for review", () => {
     assert.equal(approved.nodes.gate.pendingReview, false);
     assert.equal(approved.nodes.measure.ok, true);
   });
+
+  it("resumes the exact prepared gate items without rerunning upstream nodes", async () => {
+    const graph = {
+      id: "durable-gate-flow",
+      nodes: [
+        { id: "ctx", category: "context", connector: "product", label: "Context", config: { name: "Prepared item" } },
+        { id: "gate", category: "gate", connector: "default", label: "Review", config: {} },
+        { id: "measure", category: "measure", connector: "default", label: "Measure", config: {} },
+      ],
+      edges: [
+        { id: "a", source: "ctx", target: "gate", edgeType: "data" },
+        { id: "b", source: "gate", target: "measure", edgeType: "data" },
+      ],
+    };
+    const pending = await runGraph(graph);
+    pending.nodes.gate.items[0].name = "Immutable prepared item";
+    const preparedActionId = pending.nodes.gate.items[0].gtmActionId;
+    graph.nodes[0].config.name = "A different rerun value";
+
+    const resumed = await runGraph(graph, {
+      approvals: { gate: true },
+      resumeResult: pending,
+    });
+    assert.equal(resumed.resumedFromRunId, pending.runId);
+    assert.equal(resumed.nodes.gate.items[0].name, "Immutable prepared item");
+    assert.equal(resumed.nodes.gate.items[0].gtmActionId, preparedActionId);
+    assert.equal(resumed.nodes.measure.ok, true);
+  });
 });
 
 describe("runGraph — feedback edges deferred", () => {
