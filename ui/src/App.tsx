@@ -1469,9 +1469,14 @@ export default function App() {
                     // grounding_citation; older connectors emit draft / subject / name. Read both so a
                     // real staged note shows its full subject, body, and the evidence for WHY this person.
                     const key = itemKey(item, i);
-                    const subject = pickStr(item.suggested_subject_line, item.subject, item.founder_name, item.name, item.type) ?? "Draft";
-                    const body = pickStr(item.draft_note, item.draft, item.summary);
-                    const evidence = pickStr(item.grounding_citation);
+                    const subject = pickStr(item.suggested_subject_line, item.subject, item.founder_name, item.name, item.handle, item.type) ?? "Staged action";
+                    const body = pickStr(item.draft_note, item.draft, item.message, item.summary);
+                    const evidence = pickStr(item.grounding_citation, item.icpFitRationale, item.fitRationale, item.nowTrigger);
+                    // Discovery motions stage a prospect (no message yet); outbound stages a drafted note.
+                    // The gate card adapts to whatever's staged so every motion stays reviewable.
+                    const trigger = pickStr(item.nowTrigger, item.now_trigger);
+                    const who = pickStr(item.role, item.title, item.company);
+                    const sourceUrl = pickStr(item.sourceUrl, item.url, item.founder_github_or_url);
                     const decided = decisions[gate.nodeId]?.[key]?.decision;
                     const wasEdited = !!decisions[gate.nodeId]?.[key]?.editedDraft;
                     const editing = editingDraft?.key === key;
@@ -1487,7 +1492,15 @@ export default function App() {
                             rows={7}
                             autoFocus
                           />
-                        ) : body ? <p className="loop-approvals-body">{body}</p> : null}
+                        ) : body ? (
+                          <p className="loop-approvals-body">{body}</p>
+                        ) : (
+                          <div className="loop-approvals-prospect">
+                            {trigger ? <p><span className="k">Now:</span> {trigger}</p> : null}
+                            {who ? <p><span className="k">Who:</span> {who}</p> : null}
+                            {sourceUrl ? <p><span className="k">Source:</span> {sourceUrl}</p> : null}
+                          </div>
+                        )}
                         {evidence ? <p className="loop-approvals-evidence">Why them: {evidence}</p> : null}
                       </div>
                       {/* Per-draft review IS the diff — one human at a time, and the decision banks taste.

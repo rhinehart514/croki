@@ -352,7 +352,7 @@ export function GtmExplorer({
             type="button"
           >
             <ShieldCheck size={13} />
-            <span className="explorer-row-name">{pendingApprovals} draft{pendingApprovals === 1 ? "" : "s"} need your review</span>
+            <span className="explorer-row-name">{pendingApprovals} draft{pendingApprovals === 1 ? " needs" : "s need"} your review</span>
           </button>
         ) : null}
         {runs.length === 0 ? (

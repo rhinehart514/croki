@@ -8992,3 +8992,11 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .loop-approvals-decided{margin-top:8px;font-size:12px;font-weight:600}
 .loop-approvals-decided.is-approve{color:var(--proven)}
 .loop-approvals-decided.is-reject{color:var(--danger)}
+
+/* Fix: the generic .loop-approvals-item-actions button rule (higher specificity) was hiding the
+   colored Approve background, leaving white-on-white. Qualify the variants so they win. */
+.loop-approvals-item-actions button.appr-approve{background:var(--proven);border-color:var(--proven);color:#fff}
+.loop-approvals-item-actions button.appr-reject{background:#fff;color:var(--danger);border-color:#e7c9c2}
+.loop-approvals-item-actions button.appr-edit{background:#fff;color:var(--ink)}
+.loop-approvals-prospect{font-size:13px;line-height:1.5;margin:6px 0 0;color:var(--ink)}
+.loop-approvals-prospect .k{color:var(--muted)}
