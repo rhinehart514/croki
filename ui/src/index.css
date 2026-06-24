@@ -8475,28 +8475,28 @@ svg {
 
 .program-debugger {
   min-height: 0;
-  border-top: 1px solid var(--line);
-  background: #101014;
-  color: white;
+  border-top: 1px solid var(--line-2);
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
 .debugger-tabs {
   display: flex;
   gap: 3px;
   padding: 8px 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid var(--line);
 }
 
 .debugger-tabs button {
   height: 26px;
   padding: 0 10px;
-  color: rgba(255,255,255,0.62);
+  color: var(--muted);
 }
 
 .debugger-tabs button.active {
-  background: rgba(255,255,255,0.1);
-  color: white;
-  box-shadow: none;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
 
 .debugger-body {
@@ -8519,16 +8519,17 @@ svg {
   min-height: 30px;
   padding: 5px 8px;
   border-radius: 6px;
-  background: rgba(255,255,255,0.045);
+  background: var(--surface);
+  border: 1px solid var(--line);
 }
 
 .debug-row span:first-child {
-  color: rgba(255,255,255,0.62);
+  color: var(--faint);
 }
 
 .debug-row strong {
   overflow: hidden;
-  color: white;
+  color: var(--ink);
   font-size: 11px;
   font-weight: 680;
   text-overflow: ellipsis;
@@ -8538,7 +8539,7 @@ svg {
 .debug-row small,
 .debug-row em {
   overflow: hidden;
-  color: rgba(255,255,255,0.58);
+  color: var(--muted);
   font-size: 11px;
   font-style: normal;
   text-overflow: ellipsis;
@@ -8547,7 +8548,7 @@ svg {
 
 .debugger-empty {
   padding: 18px;
-  color: rgba(255,255,255,0.55);
+  color: var(--muted);
   font-size: 12px;
 }
 
@@ -8556,16 +8557,17 @@ svg {
   gap: 6px;
   padding: 10px;
   border-radius: 7px;
-  background: rgba(255,255,255,0.05);
+  background: var(--surface);
+  border: 1px solid var(--line);
 }
 
 .policy-diff strong {
-  color: white;
+  color: var(--ink);
   font-size: 12px;
 }
 
 .policy-diff span {
-  color: rgba(255,255,255,0.6);
+  color: var(--muted);
   font-size: 11px;
 }
 
@@ -8603,14 +8605,8 @@ svg {
 .learning-thread-rule.pos { color: #16a34a; }
 .learning-thread-rule.neg { color: #dc2626; }
 .learning-thread-agent { font-size: 12px; font-weight: 650; color: var(--ink); }
-
-.program-debugger .learning-thread { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); }
-.program-debugger .learning-thread-signal,
-.program-debugger .learning-thread-agent { color: rgba(255,255,255,0.92); }
-.program-debugger .learning-thread-label,
-.program-debugger .learning-thread-arrow { color: rgba(255,255,255,0.55); }
-.program-debugger .learning-thread-rule.pos { color: #86efac; }
-.program-debugger .learning-thread-rule.neg { color: #fca5a5; }
+/* The debugger is now light (matches the warm IDE), so the learning thread inherits the light base —
+   no dark overrides needed. */
 
 .program-graph-detail {
   position: absolute;

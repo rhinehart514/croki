@@ -374,7 +374,15 @@ function Timeline({ events, feedback }: { events: DomainEvent[]; feedback: Feedb
 
 function EventList({ events }: { events: DomainEvent[] }) {
   if (!events.length) return <div className="debugger-empty">No domain events recorded for this program yet.</div>;
-  return <div className="timeline-list">{events.slice(-12).reverse().map((event) => <DebugRow key={event.id} icon={<GitBranch />} title={event.type} detail={event.aggregateId ?? ""} meta={event.createdAt} />)}</div>;
+  return <div className="timeline-list">{events.slice(-12).reverse().map((event) => (
+    <DebugRow
+      key={event.id}
+      icon={<GitBranch />}
+      title={event.type.replace(/([a-z0-9])([A-Z])/g, "$1 $2")}
+      detail={event.aggregateType ?? ""}
+      meta={new Date(event.createdAt).toLocaleString()}
+    />
+  ))}</div>;
 }
 
 function RunLogs({ runs }: { runs: GTMRunResult[] }) {
