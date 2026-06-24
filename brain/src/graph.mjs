@@ -194,6 +194,32 @@ async function runNode(node, upstream, context, store, opts = {}) {
 // source has no real items to stand on and can't fetch its own, drop it and let the agent it feeds
 // be the self-sourcing entry (that agent finds its own candidates from public signals). Deterministic
 // and idempotent, so a fresh run and a later gate-resume see the identical graph.
+// When a loop is made self-sourcing, the rigid field contracts (accepts/emits) designed for a
+// deterministic seed-list flow no longer fit: the discovery agent emits a generic candidate shape and
+// each downstream agent enriches best-effort. Relax the FIELD contracts on every agent/code node on
+// the path to a gate (item-flow via minItems is kept) so the chain isn't re-blocked node-by-node —
+// the founder still reviews everything at the gate. This is what breaks the one-node-downstream
+// whack-a-mole: a self-sourcing agent chain is best-effort, not contract-rigid.
+function relaxPreGateContracts(nodes, edges) {
+  const incoming = new Map();
+  for (const e of edges) {
+    if (!incoming.has(e.target)) incoming.set(e.target, []);
+    incoming.get(e.target).push(e.source);
+  }
+  const preGate = new Set();
+  const stack = nodes.filter((n) => n.category === "gate").map((n) => n.id);
+  while (stack.length) {
+    const id = stack.pop();
+    for (const src of incoming.get(id) ?? []) {
+      if (!preGate.has(src)) { preGate.add(src); stack.push(src); }
+    }
+  }
+  return nodes.map((n) =>
+    (preGate.has(n.id) && (n.kind === "agent" || n.kind === "code"))
+      ? { ...n, contract: { ...(n.contract ?? {}), accepts: [], emits: [] } }
+      : n);
+}
+
 function makeEntryRunnable(graph) {
   if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) return graph;
   const source = graph.nodes.find((n) => n.category === "source" && n.kind !== "agent");
@@ -213,11 +239,10 @@ function makeEntryRunnable(graph) {
   const edges = graph.edges
     .filter((e) => !(e.source === source.id && e.target === downstreamAgent.id))
     .map((e) => (e.target === source.id ? { ...e, target: downstreamAgent.id } : e));
-  // The promoted agent is now the entry — it must run on ZERO upstream items and self-source. Its
-  // contract still required incoming items (minItems/accepts), so auditInput would block it for the
-  // exact reason the empty source did. Clear the incoming-item gate; keep `emits` so the downstream
-  // contracts that read this node's output still hold.
-  const nodes = graph.nodes
+  // The promoted agent is now the entry — it must run on ZERO upstream items and self-source. Clear
+  // its incoming-item gate and reframe it for discovery (below); the pre-gate field contracts are then
+  // relaxed so the generic candidate shape flows node-to-node without re-blocking.
+  let nodes = graph.nodes
     .filter((n) => n.id !== source.id)
     .map((n) => (n.id === downstreamAgent.id
       ? {
@@ -230,6 +255,7 @@ function makeEntryRunnable(graph) {
           agentPrompt: `You are the DISCOVERY entry for this go-to-market loop and you were given NO seed list. Using the product grounding and ICP in your context plus WebSearch/WebFetch on real public sources, FIND 3-5 real, currently-active people or organizations that fit this product's ICP and have a recent public now-trigger.${typeof n.agentPrompt === "string" && n.agentPrompt.trim() ? ` Then apply your role: ${n.agentPrompt.trim()}` : ""} Return ONLY a JSON array of real, source-traceable candidates — each with a name/handle, a source url, and one line on why them. Invent nothing; if you can only verify 2, return 2.`,
         }
       : n));
+  nodes = relaxPreGateContracts(nodes, edges);
   return { ...graph, nodes, edges };
 }
 
