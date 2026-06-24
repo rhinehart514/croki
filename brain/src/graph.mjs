@@ -214,10 +214,16 @@ function relaxPreGateContracts(nodes, edges) {
       if (!preGate.has(src)) { preGate.add(src); stack.push(src); }
     }
   }
-  return nodes.map((n) =>
-    (preGate.has(n.id) && (n.kind === "agent" || n.kind === "code"))
-      ? { ...n, contract: { ...(n.contract ?? {}), accepts: [], emits: [] } }
-      : n);
+  return nodes.map((n) => {
+    // The gate is human review — it must NOT reject real drafts on a field-name technicality (the
+    // draft carries `subject`/`body`/`to` while the contract demanded `decisionMaker`/`personalFact`).
+    // Accept whatever the chain staged; keep minItems 1 so it still pauses on ≥1 draft.
+    if (n.category === "gate") return { ...n, contract: { ...(n.contract ?? {}), accepts: [], minItems: 1 } };
+    if (preGate.has(n.id) && (n.kind === "agent" || n.kind === "code")) {
+      return { ...n, contract: { ...(n.contract ?? {}), accepts: [], emits: [] } };
+    }
+    return n;
+  });
 }
 
 function makeEntryRunnable(graph) {
