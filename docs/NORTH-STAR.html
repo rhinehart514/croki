@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GTM IDE — Product Eval North Star</title>
+<style>
+  :root{
+    --paper:#FAF9F5; --ink:#2A2520; --muted:#6B6358; --faint:#9B9388;
+    --clay:#C96442; --clay-soft:#E8D5CC; --line:#E7E1D8;
+    --real:#3D7A5A; --paper-state:#B07A2E; --hollow:#C0503A;
+    --card:#FFFFFF;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:920px;margin:0 auto;padding:56px 28px 96px}
+  .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--clay);font-weight:600}
+  h1{font-size:34px;line-height:1.1;margin:10px 0 6px;letter-spacing:-.01em}
+  .sub{color:var(--muted);font-size:15px}
+  .rule{height:1px;background:var(--line);margin:36px 0}
+
+  .north{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--clay);
+    border-radius:14px;padding:26px 28px;box-shadow:0 1px 0 rgba(0,0,0,.02)}
+  .north h2{margin:0 0 12px;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--clay)}
+  .north .sentence{font-size:21px;line-height:1.42;letter-spacing:-.01em}
+  .north .sentence b{color:var(--clay)}
+  .metric{display:flex;gap:22px;flex-wrap:wrap;margin-top:22px;padding-top:20px;border-top:1px dashed var(--line)}
+  .metric .m{flex:1;min-width:180px}
+  .metric .k{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .metric .v{font-size:18px;font-weight:600;margin-top:3px}
+  .metric .v small{font-weight:400;color:var(--muted);font-size:14px}
+
+  h3.sec{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 16px}
+
+  .callout{background:#FBF3EE;border:1px solid var(--clay-soft);border-radius:12px;padding:18px 20px}
+  .callout b{color:var(--clay)}
+  .motions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .chip{font-size:13px;border:1px solid var(--clay-soft);background:#fff;color:var(--ink);
+    border-radius:999px;padding:5px 12px}
+  .chip.more{color:var(--faint);border-style:dashed}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:680px){.grid{grid-template-columns:1fr}}
+  .locked{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:13px 15px}
+  .locked .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .locked .v{font-weight:600;margin-top:2px}
+  .locked .v small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:2px}
+
+  .layer{display:flex;gap:14px;padding:16px 0;border-top:1px solid var(--line)}
+  .layer:first-child{border-top:0}
+  .layer .id{font-variant-numeric:tabular-nums;color:var(--faint);font-weight:600;width:30px;flex:none}
+  .layer .body{flex:1}
+  .layer .name{font-weight:600}
+  .layer .bar{color:var(--muted);font-size:14.5px;margin-top:2px}
+  .layer .now{font-size:13.5px;margin-top:6px}
+  .state{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    padding:3px 9px;border-radius:999px;white-space:nowrap;align-self:flex-start}
+  .s-real{color:var(--real);background:#E8F1EB}
+  .s-paper{color:var(--paper-state);background:#F6ECDA}
+  .s-hollow{color:var(--hollow);background:#F7E4DF}
+
+  .shape{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:22px 24px}
+  .shape .big{font-size:20px;font-weight:600;letter-spacing:-.01em}
+  .shape .big .spiky{color:var(--clay)}
+
+  .track{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .track h4{margin:0 0 8px;font-size:14px}
+  .track ol{margin:0;padding-left:18px;color:var(--ink);font-size:14.5px}
+  .track li{margin:4px 0}
+  .converge{margin-top:14px;font-size:14.5px;color:var(--ink)}
+  .converge b{color:var(--clay)}
+  footer{margin-top:40px;color:var(--faint);font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">GTM IDE · Product Eval</div>
+  <h1>The North Star</h1>
+  <div class="sub">The bar for a Cursor-level go-to-market IDE. Set 2026-06-24. Crucible drafted; founder elevated.</div>
+
+  <div class="rule"></div>
+
+  <div class="north">
+    <h2>The aim, in one sentence</h2>
+    <div class="sentence">
+      GTM IDE is the IDE for go-to-market: <b>vibe-code any go-to-market motion</b>,
+      grounded in your real product, review every real-world action like a diff at the gate,
+      and watch it get sharper as it learns your taste. <b>Cursor-level is earned the day a
+      dev-tool founder who isn't you</b> points it at their product, composes a motion, and
+      <b>closes a real loop</b> — a genuine outcome with a real human.
+    </div>
+    <div class="metric">
+      <div class="m"><div class="k">The one number</div>
+        <div class="v">Strangers who closed a loop <small>— any motion, any real outcome</small></div></div>
+      <div class="m"><div class="k">The gate</div>
+        <div class="v">0 → 1 <small>first stranger through, inside 30 days</small></div></div>
+      <div class="m"><div class="k">The moat</div>
+        <div class="v">Taste <small>— durable; the loop banks it every run</small></div></div>
+    </div>
+  </div>
+
+  <div class="rule"></div>
+
+  <h3 class="sec">It is every motion — not outbound</h3>
+  <div class="callout">
+    The product is the IDE for <b>all</b> of go-to-market. It must be set up for any motion,
+    and the surface <b>adapts per motion</b>. "Closing a loop" is whatever a real outcome means
+    for that motion — a reply, a booked call, a signup, a partner conversation. We prove the gate
+    on one motion first only because 30 days forces it; the product is never locked to one.
+    <div class="motions">
+      <span class="chip">Outbound</span>
+      <span class="chip">Inbound / content</span>
+      <span class="chip">Product-led</span>
+      <span class="chip">Partnerships</span>
+      <span class="chip more">+ whatever the model composes</span>
+    </div>
+  </div>
+
+  <div class="rule"></div>
+
+  <h3 class="sec">What the founder locked</h3>
+  <div class="grid">
+    <div class="locked"><div class="k">The verb</div><div class="v">Vibe-code your customers<small>the new thing you can now do</small></div></div>
+    <div class="locked"><div class="k">First cohort</div><div class="v">Dev-tool founders<small>the Show HN crowd the discovery agent already finds</small></div></div>
+    <div class="locked"><div class="k">The wedge</div><div class="v">You ARE the ICP<small>dogfood + peer credibility, not a generalist's</small></div></div>
+    <div class="locked"><div class="k">Day-zero channel</div><div class="v">Eat your own dog food<small>point GTM IDE at GTM IDE to reach dev-tool founders</small></div></div>
+    <div class="locked"><div class="k">The gate (non-negotiable)</div><div class="v">A stranger closes a loop<small>external reality is the bar — not a great product alone</small></div></div>
+    <div class="locked"><div class="k">Horizon</div><div class="v">30 days<small>a deadline with teeth</small></div></div>
+    <div class="locked"><div class="k">Primary reader</div><div class="v">Human + agent, co-equal<small>two front doors in lockstep</small></div></div>
+    <div class="locked"><div class="k">Adaptive UI</div><div class="v">Reshapes per motion<small>genuinely Cursor-level surface</small></div></div>
+    <div class="locked"><div class="k">Risk weighting</div><div class="v">Momentum AND retention<small>both gate — nobody-tries and nobody-stays both kill</small></div></div>
+    <div class="locked"><div class="k">Monetization</div><div class="v">Parked<small>chase the gate first; price from evidence later</small></div></div>
+  </div>
+
+  <div class="rule"></div>
+
+  <h3 class="sec">The eval — 8 layers, with tonight's honest mark</h3>
+
+  <div class="layer"><div class="id">01</div><div class="body">
+    <div class="name">Worth-building</div>
+    <div class="bar">Run it once and you'd be upset if it vanished; not weekend-clonable; a better base model makes it <i>better</i>, not obsolete.</div>
+    <div class="now">Grounding + taste are the un-cloneable seat. Sound on paper; retention unproven without a user.</div>
+  </div><span class="state s-real">Real · paper-pass</span></div>
+
+  <div class="layer"><div class="id">02</div><div class="body">
+    <div class="name">Positioning</div>
+    <div class="bar">Ask a frontier LLM "Cursor for go-to-market" and it names us, off a one-sentence category a model lifts verbatim.</div>
+    <div class="now">The sentence ("vibe-code your customers") is frontier-grade and liftable. External presence is zero — no model names us yet.</div>
+  </div><span class="state s-paper">Paper</span></div>
+
+  <div class="layer"><div class="id">03</div><div class="body">
+    <div class="name">Capability</div>
+    <div class="bar">A genuinely new verb, impossible-before, that strengthens with better models — taste as the compounding seat.</div>
+    <div class="now">Demonstrated this session: build → run → gate → taste. Durable seat now real. One of the strongest layers.</div>
+  </div><span class="state s-real">Real · strong</span></div>
+
+  <div class="layer"><div class="id">05</div><div class="body">
+    <div class="name">Mental-model / IA</div>
+    <div class="bar">A stranger predicts every nav item before clicking; an agent drives the whole loop via MCP; one vocabulary across both readers; provenance first-class. New stretch: the surface adapts per motion.</div>
+    <div class="now">Rebuilt this session — IA ~87, both front doors consistent, evidence at the gate. Closest to Cursor-level. Adaptive-per-motion is the open stretch.</div>
+  </div><span class="state s-real">Real · near bar</span></div>
+
+  <div class="layer"><div class="id">06</div><div class="body">
+    <div class="name">Founder-fit / wedge</div>
+    <div class="bar">A privileged door a generalist lacks, a structural reason incumbents won't follow, an earned secret.</div>
+    <div class="now">Wedge set: you ARE the ICP (dogfood + peer cred). Unproven — no real external user has touched it.</div>
+  </div><span class="state s-paper">Paper</span></div>
+
+  <div class="layer"><div class="id">07</div><div class="body">
+    <div class="name">Distribution</div>
+    <div class="bar">A day-zero channel into the workflow, an owned audience, a moat that survives a days-clone.</div>
+    <div class="now">Channel set: eat your own dog food. The postable artifact now exists (a real closed loop). Reach activated = zero.</div>
+  </div><span class="state s-paper">Paper</span></div>
+
+  <div class="layer"><div class="id">08</div><div class="body">
+    <div class="name">Growth-loop</div>
+    <div class="bar">Each use deposits un-shortcuttable input (taste); visibly sharper at use N than use 1; switching cost = the taste bank.</div>
+    <div class="now">Mechanism made real tonight — gate decisions feed the next run, proven live. "Visibly sharper" is one approval + rerun from shown.</div>
+  </div><span class="state s-real">Real · mechanism</span></div>
+
+  <div class="layer"><div class="id">09</div><div class="body">
+    <div class="name">Desire / monetization</div>
+    <div class="bar">A tell-a-friend moment that's already real; love survives generation; value lands app-side. The 11-star is motion-dependent — the real outcome for whatever motion you run.</div>
+    <div class="now">The tell-a-friend moment exists (real people + grounded drafts). Monetization parked by choice. Value-capture thesis (taste) is sound.</div>
+  </div><span class="state s-paper">Paper · money parked</span></div>
+
+  <div class="rule"></div>
+
+  <h3 class="sec">The shape</h3>
+  <div class="shape">
+    <div class="big"><span class="spiky">Spiky</span> — product-real, market-paper.</div>
+    <p style="margin:12px 0 0;color:var(--ink)">
+      The strategy core (worth-building, capability, IA) and the loop (taste) are climbing toward
+      Cursor-level and are largely real. The four market layers (positioning presence, founder-fit,
+      distribution, desire) are frontier-sound but at zero external reality. A round grade would hide
+      the hole. The honest read is one fatal gap that gates four layers at once:
+      <b style="color:var(--clay)">no real outside human has closed a loop.</b>
+      Everything routes to tripping that.
+    </p>
+  </div>
+
+  <div class="rule"></div>
+
+  <h3 class="sec">The plan — two tracks, joined at the gate</h3>
+  <div class="grid">
+    <div class="track">
+      <h4>Track A — finish the product half</h4>
+      <ol>
+        <li>Measure becomes real (capture the motion's real outcome)</li>
+        <li>The gated send — one click, still behind the wall</li>
+        <li>Prove taste compounds <i>visibly</i> (one approval + rerun)</li>
+        <li>The project-aware one-prompt entry</li>
+        <li>Adaptive-per-motion surface + craft pass</li>
+      </ol>
+    </div>
+    <div class="track">
+      <h4>Track B — open the market half</h4>
+      <ol>
+        <li>Publish the category — one citable artifact a model can name</li>
+        <li>Eat your own dog food — point GTM IDE at itself</li>
+        <li>Build in public — the closed loop is the post</li>
+        <li>Put it in front of one real dev-tool founder</li>
+      </ol>
+    </div>
+  </div>
+  <div class="converge">
+    <b>Convergence:</b> Track A gets just far enough that an outside founder can close a loop unaided;
+    Track B puts it in front of one. That single event — <b>a stranger closes a loop and gets a real
+    outcome</b> — flips four layers from paper to real at once. That is the moonshot, and it has a date: 30 days.
+  </div>
+
+  <footer>
+    Crucible eval · GTM IDE · craft layer de-scoped (founder owns UI craft). The eval is the asset that
+    compounds; the build is downstream. The bar rises from here.
+  </footer>
+
+</div>
+</body>
+</html>
