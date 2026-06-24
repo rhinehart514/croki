@@ -9000,3 +9000,7 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .loop-approvals-item-actions button.appr-edit{background:#fff;color:var(--ink)}
 .loop-approvals-prospect{font-size:13px;line-height:1.5;margin:6px 0 0;color:var(--ink)}
 .loop-approvals-prospect .k{color:var(--muted)}
+
+/* A gate pause is "paused", not "failed" — amber, never red. */
+.sim-scenario-status.gate{color:var(--gap)}
+.sim-run-dot.gate{background:var(--gap)}

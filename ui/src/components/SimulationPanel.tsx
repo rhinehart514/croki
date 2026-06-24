@@ -81,8 +81,8 @@ export function SimulationPanel({
               <div className="sim-section-label">Scenario</div>
               <div className="sim-scenario-card">
                 <strong>Current run</strong>
-                <span className={`sim-scenario-status ${result ? (result.ok ? "ok" : "err") : "muted"}`}>
-                  {result ? (result.ok ? "Complete" : "Needs attention") : "No run yet"}
+                <span className={`sim-scenario-status ${result ? (result.pendingGates?.length ? "gate" : result.ok ? "ok" : "err") : "muted"}`}>
+                  {result ? (result.pendingGates?.length ? "Paused at gate" : result.ok ? "Complete" : "Needs attention") : "No run yet"}
                 </span>
                 <div className="sim-scenario-meta">
                   {graph?.nodes.length ?? 0} nodes total
@@ -146,10 +146,10 @@ export function SimulationPanel({
                     onClick={() => onSelectRun?.(run)}
                     type="button"
                   >
-                    <span className={`sim-run-dot ${run.ok ? "ok" : "err"}`} />
+                    <span className={`sim-run-dot ${run.pendingGates?.length ? "gate" : run.ok ? "ok" : "err"}`} />
                     <div className="sim-run-info">
                       <strong>{run.targetNodeId ? `Step · ${run.targetNodeId}` : "Full loop"}</strong>
-                      <span>{run.ok ? "Complete" : "Needs attention"} · {run.runId.slice(0, 12)}</span>
+                      <span>{run.pendingGates?.length ? "Paused at gate" : run.ok ? "Complete" : "Needs attention"} · {run.runId.slice(0, 12)}</span>
                     </div>
                     <span className="sim-run-nodes">
                       {Object.values(run.nodes).filter((n) => n.ok).length}/{Object.keys(run.nodes).length}

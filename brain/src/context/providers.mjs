@@ -85,11 +85,12 @@ export function createStateProvider(runs = []) {
       const recent = runs.slice(-5);
       const lines = recent.map((run) => {
         const when = typeof run.createdAt === "string" ? run.createdAt.slice(0, 10) : "?";
-        const status = run.ok === false ? "failed" : "ok";
+        const paused = Array.isArray(run.pendingGates) && run.pendingGates.length;
+        // Pausing at the founder gate is the intended spine, not a failure — label it as such so the
+        // run history (and the model reading it) never treats a safe pause as a broken run.
+        const status = paused ? "paused at gate" : run.ok === false ? "failed" : "ok";
         const target = run.targetNodeId ? ` (target ${run.targetNodeId})` : "";
-        const gates = Array.isArray(run.pendingGates) && run.pendingGates.length
-          ? `, paused at gate ${run.pendingGates.join("/")}`
-          : "";
+        const gates = paused ? ` (${run.pendingGates.join("/")})` : "";
         return `- ${when}: run ${status}${target}${gates}`;
       });
       return {

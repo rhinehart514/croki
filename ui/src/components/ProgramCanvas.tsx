@@ -379,7 +379,7 @@ function EventList({ events }: { events: DomainEvent[] }) {
 
 function RunLogs({ runs }: { runs: GTMRunResult[] }) {
   if (!runs.length) return <div className="debugger-empty">No runs have been recorded yet.</div>;
-  return <div className="timeline-list">{runs.slice(-8).reverse().map((run) => <DebugRow key={run.runId} icon={<Play />} title={run.runId} detail={run.ok ? "Completed" : run.error ?? "Needs attention"} meta={`${run.pendingGates.length} gates`} />)}</div>;
+  return <div className="timeline-list">{runs.slice(-8).reverse().map((run) => <DebugRow key={run.runId} icon={<Play />} title={run.runId} detail={run.pendingGates.length ? "Paused at gate" : run.ok ? "Completed" : run.error ?? "Needs attention"} meta={`${run.pendingGates.length} gates`} />)}</div>;
 }
 
 function ReplayPanel({ runResult }: { runResult: GTMRunResult | null }) {

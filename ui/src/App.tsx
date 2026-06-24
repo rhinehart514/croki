@@ -445,11 +445,13 @@ export default function App() {
           },
         } : current);
       }
-      const firstProblem = result.pendingGates[0]
-        ?? Object.entries(result.nodes).find(([, node]) => !node.ok)?.[0]
-        ?? targetNodeId;
+      // Select only a genuinely-failed node — never auto-open the gate's editor on a review submit
+      // (that yanked a modal open after every approve). A pending gate or a downstream node blocked
+      // *by* that pause is not a failure to jump to.
+      const firstProblem = Object.entries(result.nodes).find(([, node]) => !node.ok && !node.pendingReview && !node.blocked)?.[0];
       if (firstProblem) setSelection(firstProblem);
-      if (!result.ok) setGraphError(result.error || "One or more steps need attention.");
+      // Pausing at the founder gate is the spine, not a failure — only alert on a real error.
+      if (!result.ok && !result.pendingGates.length) setGraphError(result.error || "One or more steps need attention.");
     } catch (error) {
       setGraphError(error instanceof Error ? error.message : String(error));
     } finally {
