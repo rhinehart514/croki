@@ -220,7 +220,15 @@ function makeEntryRunnable(graph) {
   const nodes = graph.nodes
     .filter((n) => n.id !== source.id)
     .map((n) => (n.id === downstreamAgent.id
-      ? { ...n, contract: { ...(n.contract ?? {}), accepts: [], minItems: 0 } }
+      ? {
+          ...n,
+          contract: { ...(n.contract ?? {}), accepts: [], minItems: 0 },
+          // The agent's own instruction assumed a seed list to enrich; as the self-sourcing entry it
+          // was handed nothing and returned 0 items. Reframe it for DISCOVERY so it finds its own
+          // candidates from public signals + the product grounding (this is what a working outbound
+          // source-agent does). Its original instruction runs second, on what it found.
+          agentPrompt: `You are the DISCOVERY entry for this go-to-market loop and you were given NO seed list. Using the product grounding and ICP in your context plus WebSearch/WebFetch on real public sources, FIND 3-5 real, currently-active people or organizations that fit this product's ICP and have a recent public now-trigger.${typeof n.agentPrompt === "string" && n.agentPrompt.trim() ? ` Then apply your role: ${n.agentPrompt.trim()}` : ""} Return ONLY a JSON array of real, source-traceable candidates — each with a name/handle, a source url, and one line on why them. Invent nothing; if you can only verify 2, return 2.`,
+        }
       : n));
   return { ...graph, nodes, edges };
 }

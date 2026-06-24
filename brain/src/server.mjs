@@ -38,7 +38,7 @@ import {
 import { composeOpportunityChannel, composeGraphForChannel } from "./workflow-composer.mjs";
 import { executeDomainCommand } from "./domain-commands.mjs";
 import { listOutcomePrograms, syncProgramStoreFromEvents } from "./program-store.mjs";
-import { runProgram } from "./program-runtime.mjs";
+import { runProgram, buildRunGrounding } from "./program-runtime.mjs";
 import { appendDomainEvent, listDomainEvents } from "./domain-events.mjs";
 import { listAgentCreationPolicies } from "./agent-policy-store.mjs";
 import { loadCapabilityFoundry } from "./capability-foundry.mjs";
@@ -1134,6 +1134,7 @@ Never return a replacement graph. Keep the patch narrow and preserve founder gat
         approvals: body.approvals && typeof body.approvals === "object" ? body.approvals : {},
         decisions: body.decisions && typeof body.decisions === "object" ? body.decisions : {},
         memory,
+        grounding: buildRunGrounding(project),
         // Feed the context substrate: prior runs become the "what's been tried" state layer.
         runs: prior.runs,
         resumeResult: resumeRecord?.result ?? null,
@@ -1189,6 +1190,7 @@ Never return a replacement graph. Keep the patch narrow and preserve founder gat
         approvals: body.approvals && typeof body.approvals === "object" ? body.approvals : {},
         decisions: body.decisions && typeof body.decisions === "object" ? body.decisions : {},
         memory,
+        grounding: buildRunGrounding(project),
         // Feed the context substrate: prior runs become the "what's been tried" state layer.
         runs: prior.runs,
         resumeResult: resumeRecord?.result ?? null,
