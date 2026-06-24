@@ -189,7 +189,35 @@ async function runNode(node, upstream, context, store, opts = {}) {
 
 // ─── Main graph runner ────────────────────────────────────────────────────────
 
+// Runnable-entry invariant, enforced at the run path so it catches EVERY graph — freshly composed,
+// operator-attached, or stale-persisted. A loop must not block at an empty source: if the entry
+// source has no real items to stand on and can't fetch its own, drop it and let the agent it feeds
+// be the self-sourcing entry (that agent finds its own candidates from public signals). Deterministic
+// and idempotent, so a fresh run and a later gate-resume see the identical graph.
+function makeEntryRunnable(graph) {
+  if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) return graph;
+  const source = graph.nodes.find((n) => n.category === "source" && n.kind !== "agent");
+  if (!source) return graph;
+  const items = source.config?.items;
+  const standsOnData =
+    (Array.isArray(items) && items.length > 0)
+    || source.connector === "api"
+    || !!source.config?.endpoint
+    || (source.connector === "csv" && !!source.config?.csv);
+  if (standsOnData) return graph;
+  const downstreamAgent = graph.edges
+    .filter((e) => e.source === source.id)
+    .map((e) => graph.nodes.find((n) => n.id === e.target))
+    .find((n) => n && n.kind === "agent");
+  if (!downstreamAgent) return graph;
+  const edges = graph.edges
+    .filter((e) => !(e.source === source.id && e.target === downstreamAgent.id))
+    .map((e) => (e.target === source.id ? { ...e, target: downstreamAgent.id } : e));
+  return { ...graph, nodes: graph.nodes.filter((n) => n.id !== source.id), edges };
+}
+
 export async function runGraph(graph, opts = {}) {
+  graph = makeEntryRunnable(graph);
   const {
     store,
     targetNodeId,
