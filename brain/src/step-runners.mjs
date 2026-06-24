@@ -41,7 +41,7 @@ export function makeStepRuntime(overrides = {}) {
 // The live step runtime: a real agent invoker (the rented frontier model) and skill
 // loader (judgment from disk), both passed in so the host hardcodes neither. With a
 // dependency absent, the kind falls back to its honest default rather than pretending.
-export function createStepRuntime({ agentInvoker, skillLoader } = {}) {
+export function createStepRuntime({ agentInvoker, skillLoader, codeTransforms = {} } = {}) {
   return {
     async agent(node, upstream, context) {
       if (typeof agentInvoker !== "function") return defaultStepRuntime.agent(node);
@@ -63,8 +63,18 @@ export function createStepRuntime({ agentInvoker, skillLoader } = {}) {
       const guidance = typeof skillLoader === "function" ? await skillLoader(node.ref) : null;
       return { ok: true, items: upstream, meta: { kind: "skill", ref: node.ref, applied: !!guidance, guidance: guidance ?? null } };
     },
-    async code(node) {
-      return defaultStepRuntime.code(node);
+    async code(node, upstream) {
+      const fn = node.ref && typeof codeTransforms[node.ref] === "function" ? codeTransforms[node.ref] : null;
+      // No registered transform — pass items through unchanged (an honest no-op, applied:false)
+      // rather than dead-ending the loop. A code step is a deterministic filter/transform; when one
+      // isn't implemented it must not be a wall, since the founder reviews everything at the gate.
+      if (!fn) return { ok: true, items: upstream ?? [], meta: { kind: "code", ref: node.ref, applied: false } };
+      try {
+        const out = fn(upstream ?? [], node.config ?? {});
+        return { ok: true, items: Array.isArray(out) ? out : (upstream ?? []), meta: { kind: "code", ref: node.ref, applied: true } };
+      } catch (err) {
+        return { ok: true, items: upstream ?? [], meta: { kind: "code", ref: node.ref, applied: false, error: err?.message } };
+      }
     },
   };
 }
