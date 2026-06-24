@@ -171,6 +171,15 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       const workspace = openWorkspace(expandHome(body.repoPath), body.outcome || body.winEvent);
       const name = String(body.name || path.basename(workspace.repo)).trim();
+      // Reuse an existing project for the same repo instead of spawning a duplicate (rodentradar-2,
+      // -3…). Pointing twice at the same product re-grounds and re-activates the one project.
+      const existing = (listProjects().projects || []).find((p) => p.repo === workspace.repo);
+      if (existing) {
+        setActiveProject(existing.id);
+        const project = groundProjectInWorkspace(workspace, { projectId: existing.id });
+        json(res, 200, { project, workspace, activeProjectId: existing.id });
+        return;
+      }
       const created = createProject({ name });
       const project = groundProjectInWorkspace(workspace, { projectId: created.project.id });
       json(res, 201, { project, workspace, activeProjectId: created.project.id });
