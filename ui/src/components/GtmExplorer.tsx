@@ -101,6 +101,27 @@ export function GtmExplorer({
   // the Runs section the way a code editor badges source control.
   const pendingApprovals = channels.reduce((sum, ch) => sum + (ch.pendingGates ?? 0), 0);
 
+  // An outcome the founder is chasing is either a program (the rich, compiled form) or a standalone
+  // system that exists before any program is compiled. Channels are what actually get built first —
+  // the operator composes a channel graph well before a heavyweight OutcomeProgram ever persists —
+  // so a channel is a first-class outcome here, never hidden under a program that may not exist yet.
+  // This closes the seam where the rail showed an empty "start an outcome" pitch while real systems
+  // sat on the canvas.
+  const channelsForProgram = (programId: string) =>
+    channels.filter((ch) => ch.outcomeProgramId === programId);
+  const linkedChannelIds = new Set(
+    channels
+      .filter((ch) => ch.outcomeProgramId && programs.some((p) => p.id === ch.outcomeProgramId))
+      .map((ch) => ch.id),
+  );
+  const standaloneChannels = channels.filter((ch) => !linkedChannelIds.has(ch.id));
+  const outcomeCount = programs.length + standaloneChannels.length;
+  const channelDot = (ch: ChannelMeta) =>
+    ch.pendingGates > 0 ? "var(--gap)" : ch.lastRunOk === false ? "var(--danger)" : ch.runCount > 0 ? "var(--proven)" : "var(--ghost)";
+  const channelMeta = (ch: ChannelMeta) =>
+    ch.pendingGates > 0 ? `${ch.pendingGates} gate${ch.pendingGates === 1 ? "" : "s"}`
+      : ch.runCount > 0 ? `${ch.runCount} run${ch.runCount === 1 ? "" : "s"}` : "ready";
+
   if (collapsed) {
     return (
       <nav className="loop-problems-rail collapsed" aria-label="Explorer (collapsed)">
@@ -123,8 +144,8 @@ export function GtmExplorer({
       {/* ── Outcomes — the primary tree, the "files" ─────────────────────────
           One outcome is one thing you're going for, plus the system that chases it. With zero
           outcomes, this section IS the first-run pitch and call to action — not a placeholder. */}
-      <Section icon={<ShieldCheck size={13} />} title="Outcomes" count={programs.length || undefined} defaultOpen>
-        {programs.length === 0 ? (
+      <Section icon={<ShieldCheck size={13} />} title="Outcomes" count={outcomeCount || undefined} defaultOpen>
+        {outcomeCount === 0 ? (
           <div className="explorer-firstrun">
             <strong>Start with an outcome</strong>
             <p>Name what you want to happen — a meeting booked, a user activated, a pilot signed. GTM IDE reads your product and builds the agents that chase it, stopping at your gate before anything leaves.</p>
@@ -137,37 +158,52 @@ export function GtmExplorer({
           </div>
         ) : (
           <>
+            {/* Programs — the compiled, rich form of an outcome — list first, each with the systems
+                (channels) composed under it nested as children. */}
             {programs.map((program) => (
-              <button key={program.id} className={`explorer-row ${program.id === activeProgramId ? "active" : ""}`} onClick={() => onOpenProgram(program.id)} type="button">
-                <span className="explorer-dot" style={{ background: TONE_DOT[statusTone(program.status)] }} />
-                <span className="explorer-row-name">{program.name}</span>
-                <span className="explorer-row-meta">{statusLabel(program.status)}</span>
+              <div key={program.id}>
+                <button className={`explorer-row ${program.id === activeProgramId ? "active" : ""}`} onClick={() => onOpenProgram(program.id)} type="button">
+                  <span className="explorer-dot" style={{ background: TONE_DOT[statusTone(program.status)] }} />
+                  <span className="explorer-row-name">{program.name}</span>
+                  <span className="explorer-row-meta">{statusLabel(program.status)}</span>
+                </button>
+                {channelsForProgram(program.id).length > 0 ? (
+                  <div className="explorer-subgroup">
+                    <span className="explorer-subgroup-label">Systems</span>
+                    {channelsForProgram(program.id).map((ch) => (
+                      <button
+                        key={ch.id}
+                        className={`explorer-row explorer-row-child ${ch.id === activeChannelId ? "active" : ""}`}
+                        onClick={() => onOpenChannel(ch.id)}
+                        type="button"
+                      >
+                        <span className="explorer-dot" style={{ background: channelDot(ch) }} />
+                        <span className="explorer-row-name">{ch.name}</span>
+                        <span className="explorer-row-meta">{channelMeta(ch)}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+
+            {/* Standalone systems — a channel the founder has built that no program wraps yet. It IS
+                an outcome (it has a goal, a system, runs, and a gate), so it sits at the top level as
+                its own outcome rather than hidden. This is the common case before a program compiles. */}
+            {standaloneChannels.map((ch) => (
+              <button
+                key={ch.id}
+                className={`explorer-row ${ch.id === activeChannelId ? "active" : ""}`}
+                onClick={() => onOpenChannel(ch.id)}
+                type="button"
+                title={ch.objective || ch.name}
+              >
+                <span className="explorer-dot" style={{ background: channelDot(ch) }} />
+                <span className="explorer-row-name">{ch.name}</span>
+                <span className="explorer-row-meta">{channelMeta(ch)}</span>
               </button>
             ))}
-            {/* The system under an outcome — the composed workflows — listed only while one exists,
-                as children of the outcomes they belong to, not as a competing top-level section. */}
-            {channels.length > 0 ? (
-              <div className="explorer-subgroup">
-                <span className="explorer-subgroup-label">Systems</span>
-                {channels.map((ch) => (
-                  <button
-                    key={ch.id}
-                    className={`explorer-row explorer-row-child ${ch.id === activeChannelId ? "active" : ""}`}
-                    onClick={() => onOpenChannel(ch.id)}
-                    type="button"
-                  >
-                    <span
-                      className="explorer-dot"
-                      style={{ background: ch.pendingGates > 0 ? "var(--gap)" : ch.lastRunOk === false ? "var(--danger)" : ch.runCount > 0 ? "var(--proven)" : "var(--ghost)" }}
-                    />
-                    <span className="explorer-row-name">{ch.name}</span>
-                    <span className="explorer-row-meta">
-                      {ch.pendingGates > 0 ? `${ch.pendingGates} gate` : ch.runCount > 0 ? `${ch.runCount} run${ch.runCount !== 1 ? "s" : ""}` : "—"}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
+
             <button className="explorer-row explorer-new" onClick={onNewProgram} type="button">
               <Plus size={13} /><span className="explorer-row-name">New outcome</span>
             </button>

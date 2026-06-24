@@ -253,32 +253,65 @@ async function composeOpportunityChannel({ projectId, ...input }) {
 // Outcome programs — the product's declared domain center (OutcomeProgram).
 // ---------------------------------------------------------------------------
 
+// A founder's real outcomes are programs (the rich, compiled form) PLUS the standalone systems
+// (channels) that exist before any program is compiled — the operator composes a channel graph well
+// before a heavyweight OutcomeProgram ever persists. Reporting only programs would tell an agent
+// "0 outcomes" while real systems sit on the canvas — the same seam the human rail closes. The
+// active project's systems come from GET /api/project; we merge in only the systems no program wraps.
+async function standaloneSystems(projectId, programs) {
+  try {
+    const proj = await brainGet("/api/project");
+    if ((proj.project?.id ?? projectId) !== projectId) return []; // channels are the active project's
+    const programIds = new Set((programs ?? []).map((p) => p.id));
+    return (proj.project?.channels ?? [])
+      .filter((ch) => !ch.outcomeProgramId || !programIds.has(ch.outcomeProgramId))
+      .map((ch) => ({
+        id: ch.id, name: ch.name, form: "system", objective: ch.objective ?? null,
+        status: ch.status, graphId: ch.graphId, runCount: ch.runCount ?? 0, pendingGates: ch.pendingGates ?? 0,
+      }));
+  } catch {
+    return []; // the channel endpoint is optional; fall back to programs only
+  }
+}
+
 /**
- * list_outcomes — every outcome program in the project, with its policies,
- * personalized agents, feedback, and domain-event trail.
+ * list_outcomes — every outcome in the project: programs (with their policies, agents, feedback,
+ * and domain-event trail) and the standalone systems not yet wrapped by a program.
  */
 async function listOutcomes({ projectId } = {}) {
   const id = await resolveProjectId(projectId);
   const data = await brainGet(`/api/projects/${encodeURIComponent(id)}/programs`);
-  return { projectId: id, ...data };
+  const systems = await standaloneSystems(id, data.programs);
+  const outcomes = [
+    ...(data.programs ?? []).map((p) => ({ id: p.id, name: p.name, form: "program", status: p.status, graphId: p.graphId ?? null })),
+    ...systems,
+  ];
+  return { projectId: id, outcomes, ...data, systems };
 }
 
 /**
- * get_outcome — one outcome program by id, resolved from the project's program
- * list (the host exposes no single-program endpoint).
+ * get_outcome — one outcome by id (or name): a program with its policies, or, failing that, a
+ * standalone system (channel). The host exposes no single-program endpoint, so both resolve from
+ * the project's lists.
  */
 async function getOutcome({ outcomeId, projectId }) {
   const id = await resolveProjectId(projectId);
   const data = await brainGet(`/api/projects/${encodeURIComponent(id)}/programs`);
   const program = (data.programs ?? []).find((p) => p.id === outcomeId || p.name === outcomeId);
-  if (!program) {
-    return {
-      error: `No outcome program "${outcomeId}" in project ${id}.`,
-      available: (data.programs ?? []).map((p) => ({ id: p.id, name: p.name })),
-    };
+  if (program) {
+    const policies = (data.policies ?? []).filter((policy) => policy.programId === program.id);
+    return { projectId: id, form: "program", program, policies };
   }
-  const policies = (data.policies ?? []).filter((policy) => policy.programId === program.id);
-  return { projectId: id, program, policies };
+  const systems = await standaloneSystems(id, data.programs);
+  const system = systems.find((s) => s.id === outcomeId || s.name === outcomeId);
+  if (system) return { projectId: id, form: "system", system };
+  return {
+    error: `No outcome "${outcomeId}" in project ${id}.`,
+    available: [
+      ...(data.programs ?? []).map((p) => ({ id: p.id, name: p.name, form: "program" })),
+      ...systems.map((s) => ({ id: s.id, name: s.name, form: "system" })),
+    ],
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -328,7 +361,7 @@ const TOOLS = [
   // ── Outcome programs — the domain center (OutcomeProgram) ───────────────────
   {
     name: "list_outcomes",
-    description: "List the outcome programs (the product's declared domain center) in a project, with their agent-creation policies, personalized agents, feedback signals, and domain-event trail. Defaults to the active project; pass projectId to target another. Read this to orient on what the product is actually trying to achieve before touching workflows. Read-only; does not create or run a program.",
+    description: "List every outcome in a project: compiled outcome programs (the declared domain center, with their agent-creation policies, personalized agents, feedback signals, and domain-event trail) AND the standalone systems (channels) the founder has built that no program wraps yet — each is a real outcome with a goal, a system, and a gate. The unified set is returned in `outcomes`. Defaults to the active project; pass projectId to target another. Read this first to orient on what the product is actually chasing before touching workflows. Read-only; does not create or run anything.",
     inputSchema: {
       type: "object",
       properties: { projectId: { type: "string", description: "Optional. Defaults to the active project." } },
@@ -338,7 +371,7 @@ const TOOLS = [
   },
   {
     name: "get_outcome",
-    description: "Get one outcome program by id (or name) plus its agent-creation policies. Use after list_outcomes when you need the full detail of a single program. Defaults to the active project. Read-only; to run the program's workflow use run_workflow.",
+    description: "Get one outcome by id (or name): a compiled program plus its agent-creation policies, or — failing that — a standalone system (channel) the founder built before any program wrapped it. The response's `form` field says which. Use after list_outcomes for the full detail of a single outcome. Defaults to the active project. Read-only; to run the outcome's workflow use run_workflow.",
     inputSchema: {
       type: "object",
       properties: {

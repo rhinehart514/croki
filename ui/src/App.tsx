@@ -1427,7 +1427,7 @@ export default function App() {
                   <strong>Nothing waiting</strong>
                   <p>
                     {pendingApprovals > 0
-                      ? `${pendingApprovals} draft${pendingApprovals === 1 ? "" : "s"} are gated in other systems. Open that outcome to review them.`
+                      ? `${pendingApprovals} draft${pendingApprovals === 1 ? " is" : "s are"} gated in other systems. Open that outcome to review ${pendingApprovals === 1 ? "it" : "them"}.`
                       : "Nothing has reached the gate. When a run stages a draft to send, publish, or charge, it stops here for your approval first — nothing leaves the building without it."}
                   </p>
                 </div>
