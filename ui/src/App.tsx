@@ -44,6 +44,7 @@ import { ProgramCanvas, type ProgramCanvasMode, type DebugTab } from "@/componen
 import { GtmExplorer } from "@/components/GtmExplorer";
 import { buildIdeationCanvas, buildChannelDefaults, channelIdFromNode, type LaneState } from "@/lib/ideationGraph";
 import { statusLabel } from "@/lib/status";
+import { itemKey } from "@/lib/itemKey";
 import { findProgramForGraph, graphBelongsToProgram, programGraphId } from "@/lib/program";
 import { ProductUnderstanding } from "@/components/ProductUnderstanding";
 import { ProjectPicker } from "@/components/ProjectPicker";
@@ -175,6 +176,8 @@ export default function App() {
   const [connectors, setConnectors] = useState<ConnectorMeta[]>([]);
   const [approvals, setApprovals] = useState<Record<string, boolean>>({});
   const [decisions, setDecisions] = useState<Decisions>({});
+  // The draft currently being edited in the gate review (the "edit-then-approve" path). One at a time.
+  const [editingDraft, setEditingDraft] = useState<{ key: string; text: string } | null>(null);
   const [graphSavedAt, setGraphSavedAt] = useState<string | null>(null);
   const [flowRuns, setFlowRuns] = useState<GTMRunResult[]>([]);
   const [contractAudits, setContractAudits] = useState<Record<string, GTMContractAudit>>({});
@@ -1461,37 +1464,66 @@ export default function App() {
                   </div>
                   {gate.items.length === 0 ? (
                     <p className="loop-approvals-gate-note">Staged content loads when this gate's run is open.</p>
-                  ) : gate.items.slice(0, 6).map((item, i) => {
+                  ) : gate.items.map((item, i) => {
                     // The drafter emits draft_note / suggested_subject_line / founder_name /
                     // grounding_citation; older connectors emit draft / subject / name. Read both so a
-                    // real staged note shows its subject, body, and the evidence for WHY this person.
+                    // real staged note shows its full subject, body, and the evidence for WHY this person.
+                    const key = itemKey(item, i);
                     const subject = pickStr(item.suggested_subject_line, item.subject, item.founder_name, item.name, item.type) ?? "Draft";
                     const body = pickStr(item.draft_note, item.draft, item.summary);
                     const evidence = pickStr(item.grounding_citation);
+                    const decided = decisions[gate.nodeId]?.[key]?.decision;
+                    const wasEdited = !!decisions[gate.nodeId]?.[key]?.editedDraft;
+                    const editing = editingDraft?.key === key;
                     return (
-                    <article className="loop-approvals-item" key={item.id ?? `${gate.nodeId}-${i}`}>
+                    <article className={`loop-approvals-item ${decided ? `is-${decided}` : ""}`} key={key}>
                       <div className="loop-approvals-item-text">
                         <strong>{subject}</strong>
-                        {body ? <p>{body.slice(0, 240)}</p> : null}
-                        {evidence ? <p className="loop-approvals-evidence">Why them: {evidence.slice(0, 180)}</p> : null}
-                        {item.source ? (
-                          <span className={`loop-approvals-source tag-${item.source.tag}`}>
-                            {item.source.tag} · {item.source.tool}
-                          </span>
-                        ) : null}
+                        {editing ? (
+                          <textarea
+                            className="loop-approvals-edit"
+                            value={editingDraft.text}
+                            onChange={(e) => setEditingDraft({ key, text: e.target.value })}
+                            rows={7}
+                            autoFocus
+                          />
+                        ) : body ? <p className="loop-approvals-body">{body}</p> : null}
+                        {evidence ? <p className="loop-approvals-evidence">Why them: {evidence}</p> : null}
                       </div>
+                      {/* Per-draft review IS the diff — one human at a time, and the decision banks taste.
+                          Approve / edit-then-approve / reject each record a per-item decision that flows
+                          into the run ledger and shapes the next run's drafter. */}
+                      {decided ? (
+                        <div className={`loop-approvals-decided is-${decided}`}>
+                          {decided === "approve" ? "Approved" : "Rejected"}{wasEdited ? " · your edit banked" : ""}
+                        </div>
+                      ) : editing ? (
+                        <div className="loop-approvals-item-actions">
+                          <button className="appr-approve" type="button"
+                            onClick={() => { void submitGateReview(gate.nodeId, { [key]: { decision: "approve", editedDraft: editingDraft.text } }); setEditingDraft(null); }}>
+                            Save &amp; approve
+                          </button>
+                          <button className="appr-ghost" type="button" onClick={() => setEditingDraft(null)}>Cancel</button>
+                        </div>
+                      ) : (
+                        <div className="loop-approvals-item-actions">
+                          <button className="appr-approve" type="button"
+                            onClick={() => void submitGateReview(gate.nodeId, { [key]: { decision: "approve" } })}>
+                            Approve
+                          </button>
+                          <button className="appr-edit" type="button"
+                            onClick={() => setEditingDraft({ key, text: body ?? "" })}>
+                            Edit
+                          </button>
+                          <button className="appr-reject" type="button"
+                            onClick={() => void submitGateReview(gate.nodeId, { [key]: { decision: "reject" } })}>
+                            Reject
+                          </button>
+                        </div>
+                      )}
                     </article>
                     );
                   })}
-                  <div className="loop-approvals-gate-actions">
-                    <button
-                      className="loop-approvals-review"
-                      onClick={() => { setApprovalsOpen(false); jumpToNode(gate.nodeId); }}
-                      type="button"
-                    >
-                      Review evidence & approve / edit / reject
-                    </button>
-                  </div>
                 </section>
               ))}
             </div>

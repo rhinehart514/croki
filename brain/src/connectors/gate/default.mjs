@@ -62,7 +62,9 @@ export async function run(node, upstream, context) {
         gated: true,
         approved: true,
         approvalStatus: "approved",
-        ...(edited ? { editedFrom: item.draft ?? null, draft: d.editedDraft } : {}),
+        // The original lives in draft (legacy) or draft_note (agent drafter) — capture whichever as
+        // the "before" and write the founder's rewrite to both so the edit banks as a before/after pair.
+        ...(edited ? { editedFrom: item.draft ?? item.draft_note ?? null, draft: d.editedDraft, draft_note: d.editedDraft } : {}),
       };
     });
     return {
