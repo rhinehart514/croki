@@ -48,6 +48,7 @@ import { itemKey } from "@/lib/itemKey";
 import { findProgramForGraph, graphBelongsToProgram, programGraphId } from "@/lib/program";
 import { ProductUnderstanding } from "@/components/ProductUnderstanding";
 import { ProjectPicker } from "@/components/ProjectPicker";
+import { ProductEntry } from "@/components/ProductEntry";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { SimulationPanel } from "@/components/SimulationPanel";
 import { Button } from "@/components/ui/button";
@@ -133,7 +134,7 @@ export default function App() {
   // before any product exists. Understand and Opportunities are no longer destinations that swap
   // the canvas out; they float OVER it as dismissable overlays (set via `overlay`), so the IDE is
   // never replaced. Channels live in the explorer, not a page.
-  const [view, setView] = useState<"projects" | "canvas">("canvas");
+  const [view, setView] = useState<"projects" | "canvas" | "start">("canvas");
   const [overlay, setOverlay] = useState<"understand" | null>(null);
   // Ideation runs IN the canvas: each proposed channel is drawn as its own workflow, multiple
   // workflows laid out in lanes on one canvas. The chat narrates; clicking a lane builds it.
@@ -309,7 +310,9 @@ export default function App() {
       if (!channelId) {
         // A product with no channels still lands on the canvas (its empty state guides the first
         // move); only a total cold start (no workspace) shows the product picker.
-        setView(projectResponse.project.sharedContext.repository.workspaceId ? "canvas" : "projects");
+        // A founder with no scanned product lands on the one-prompt front door (point at your
+        // product, say your goal), not the dense cockpit — the project-aware stranger entry.
+        setView(projectResponse.project.sharedContext.repository.workspaceId ? "canvas" : "start");
         const engineResponse = await getEngineState();
         if (live) setEngine(engineResponse.engine);
         return;
@@ -816,6 +819,33 @@ export default function App() {
     }
   }, [refreshProjectScope]);
 
+  // The one-prompt front door: point at a product (scan), then the goal becomes the operator's
+  // durable goal, which composes the loop to the gate — the whole stranger path in one action.
+  const handleProductStart = useCallback(async (input: { repoPath: string; outcome: string; goal: string }) => {
+    setProjectBusy(true);
+    setGraphError(null);
+    try {
+      await createProject({ repoPath: input.repoPath, outcome: input.outcome });
+      setOperatorSession(null);
+      setGraph(null);
+      setActiveChannelId(null);
+      await refreshProjectScope();
+      setView("canvas");
+      // Hand the goal to the operator — it inspects the freshly-scanned product and composes the
+      // system, exactly like the dogfood session did, so the stranger watches their OWN loop build.
+      const response = await createOperatorSession(input.goal);
+      operatorGraphRevision.current = response.session.graphRevision;
+      operatorRunId.current = null;
+      setOperatorSession(response.session);
+      setComposerFocus((n) => n + 1);
+    } catch (error) {
+      setGraphError(error instanceof Error ? error.message : String(error));
+      setView("start");
+    } finally {
+      setProjectBusy(false);
+    }
+  }, [refreshProjectScope]);
+
   const handleOpportunityUpdate = useCallback(async (opportunityId: string, patch: Partial<GTMOpportunity>) => {
     if (!activeProject) return;
     const response = await updateOpportunity(activeProject.id, opportunityId, patch);
@@ -1095,6 +1125,7 @@ export default function App() {
             busy={projectBusy}
             onSwitch={handleProjectOpen}
             onManage={() => setView("projects")}
+            onNewProduct={() => setView("start")}
           />
           <span className="loop-toolbar-sep">/</span>
           <span className="loop-toolbar-crumb loop-toolbar-crumb-active">
@@ -1169,10 +1200,10 @@ export default function App() {
       </header>
 
       {/* ── Body ─────────────────────────────────────────────────────────── */}
-      <div className={`loop-body ${view === "projects" ? "studio-mode" : ""}`}>
+      <div className={`loop-body ${view !== "canvas" ? "studio-mode" : ""}`}>
         {/* The Explorer is the persistent IDE nav. Understand and Opportunities are not pages —
             they open as overlays OVER the canvas, so the IDE frame is never swapped out. */}
-        {view !== "projects" ? (
+        {view === "canvas" ? (
           <GtmExplorer
             channels={channels}
             activeChannelId={activeChannelId}
@@ -1198,11 +1229,18 @@ export default function App() {
 
         {/* Center — the canvas IS the workspace. Only the cold-start picker replaces it. */}
         <section className="loop-canvas-area">
-          {view === "projects" ? (
+          {view === "start" ? (
+            <ProductEntry
+              busy={projectBusy}
+              onStart={handleProductStart}
+              onSeePortfolio={projects.length ? () => setView("projects") : undefined}
+            />
+          ) : view === "projects" ? (
             <ProjectPicker
               activeProjectId={activeProject?.id ?? null}
               busy={projectBusy}
               onCreate={handleProjectCreate}
+              onNewProduct={() => setView("start")}
               onOpen={handleProjectOpen}
               projects={projects}
             />
@@ -1546,7 +1584,7 @@ export default function App() {
         ) : null}
 
         {/* Persistent Claude co-pilot — channels + conversation + composer, always docked */}
-        {view !== "projects" ? <ComposerDock
+        {view === "canvas" ? <ComposerDock
           session={operatorSession}
           running={graphRunning}
           floating={!!activeProgram && !ideationOpen}

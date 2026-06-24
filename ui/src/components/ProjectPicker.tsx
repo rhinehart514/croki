@@ -8,12 +8,14 @@ export function ProjectPicker({
   busy,
   onOpen,
   onCreate,
+  onNewProduct,
 }: {
   projects: ProjectSummary[];
   activeProjectId: string | null;
   busy: boolean;
   onOpen: (projectId: string) => void | Promise<void>;
   onCreate: (input: { name?: string; repoPath: string; outcome: string }) => void | Promise<void>;
+  onNewProduct?: () => void;
 }) {
   const [creating, setCreating] = useState(projects.length === 0);
   const [name, setName] = useState("");
@@ -28,7 +30,7 @@ export function ProjectPicker({
           <h1 id="project-picker-title">Choose the product you are taking to market</h1>
           <p>Each product keeps its own code evidence, opportunities, agents, channels, and learning loop.</p>
         </div>
-        <button className="studio-primary-action" onClick={() => setCreating(true)} type="button">
+        <button className="studio-primary-action" onClick={() => onNewProduct ? onNewProduct() : setCreating(true)} type="button">
           <Plus /> Add product
         </button>
       </header>

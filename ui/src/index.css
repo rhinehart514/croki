@@ -9004,3 +9004,23 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 /* A gate pause is "paused", not "failed" — amber, never red. */
 .sim-scenario-status.gate{color:var(--gap)}
 .sim-run-dot.gate{background:var(--gap)}
+
+/* The one-prompt front door — point at your product, say your goal. */
+.product-entry{display:flex;align-items:center;justify-content:center;min-height:100%;padding:56px 24px;overflow:auto}
+.product-entry-inner{width:100%;max-width:560px}
+.product-entry-eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--proven);font-weight:600}
+.product-entry-title{font-size:30px;line-height:1.12;letter-spacing:-.01em;margin:10px 0 8px;color:var(--ink)}
+.product-entry-sub{color:var(--muted);font-size:15px;line-height:1.5;margin:0 0 28px}
+.product-entry-field{display:block;margin-bottom:16px}
+.product-entry-label{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:6px}
+.product-entry-input,.product-entry-goal{width:100%;font:15px/1.5 inherit;padding:11px 13px;border:1px solid var(--line);
+  border-radius:10px;background:#fff;color:var(--ink);resize:vertical}
+.product-entry-input:focus,.product-entry-goal:focus{outline:none;border-color:var(--proven);box-shadow:0 0 0 3px var(--proven-soft)}
+.product-entry-adv{margin:2px 0 20px;font-size:13px;color:var(--muted)}
+.product-entry-adv summary{cursor:pointer;user-select:none}
+.product-entry-adv .product-entry-input{margin-top:8px}
+.product-entry-go{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;font-size:15px;font-weight:600;
+  padding:13px;border-radius:11px;border:0;background:var(--ink);color:#fff;cursor:pointer;min-height:48px}
+.product-entry-go:disabled{opacity:.5;cursor:not-allowed}
+.product-entry-foot{font-size:12.5px;color:var(--faint);text-align:center;margin:14px 0 0}
+.product-entry-link{background:none;border:0;color:var(--muted);text-decoration:underline;cursor:pointer;font-size:inherit}

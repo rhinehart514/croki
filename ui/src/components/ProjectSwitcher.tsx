@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, FolderGit2, LoaderCircle, Settings2 } from "lucide-react";
+import { Check, ChevronDown, FolderGit2, LoaderCircle, Plus, Settings2 } from "lucide-react";
 import type { ProjectSummary } from "@/types";
 
 /**
@@ -12,12 +12,14 @@ export function ProjectSwitcher({
   busy,
   onSwitch,
   onManage,
+  onNewProduct,
 }: {
   projects: ProjectSummary[];
   activeProjectId: string | null;
   busy: boolean;
   onSwitch: (projectId: string) => void | Promise<void>;
   onManage: () => void;
+  onNewProduct?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -74,6 +76,15 @@ export function ProjectSwitcher({
               {project.id === activeProjectId ? <Check className="project-switcher-check" /> : null}
             </button>
           ))}
+          {onNewProduct ? (
+            <button
+              className="project-switcher-manage"
+              type="button"
+              onClick={() => { setOpen(false); onNewProduct(); }}
+            >
+              <Plus /> Point at a new product
+            </button>
+          ) : null}
           <button
             className="project-switcher-manage"
             type="button"
