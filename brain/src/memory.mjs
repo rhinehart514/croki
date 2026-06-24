@@ -37,11 +37,16 @@ export function extractDecisions(runs = [], { limit = 5 } = {}) {
       for (const item of node.items) {
         const status = item?.approvalStatus;
         if (status !== "approved" && status !== "rejected") continue;
-        // Read both the legacy connector field (`draft`) and the agent drafter's field
-        // (`draft_note`). Without this, approving an agent-drafted note recorded nothing and the
-        // taste bank stayed empty forever — the founder's decisions never reached the next run.
-        const draft = typeof item?.draft === "string" ? item.draft
-          : typeof item?.draft_note === "string" ? item.draft_note : null;
+        // The draft may be a plain string (legacy `draft`), an agent `draft_note`, or a STRUCTURED
+        // object `{subject, body}` (the agent drafter's real shape). Coerce any of them to reviewable
+        // text — an object draft was silently skipped, so every approval banked nothing and taste
+        // stayed empty forever despite the gate working end to end.
+        const rawDraft = item?.draft ?? item?.draft_note ?? item?.message ?? item?.body;
+        const draft = typeof rawDraft === "string" ? rawDraft
+          : (rawDraft && typeof rawDraft === "object")
+            ? [rawDraft.subject, rawDraft.body ?? rawDraft.message ?? rawDraft.text]
+                .filter((s) => typeof s === "string" && s.trim()).join("\n").trim()
+            : null;
         if (!draft) continue;
         const personName = item?.name ?? item?.founder_name ?? null;
 
