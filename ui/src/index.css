@@ -8414,12 +8414,16 @@ svg {
   margin: 16px 0 0;
 }
 
+/* Stack label over value, left-aligned — a long value (e.g. the buyer hypothesis) now wraps in the
+   rail instead of being shoved right and overflowing off-screen. */
 .inspector-facts div {
   display: flex;
-  justify-content: space-between;
-  gap: 16px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
   padding: 9px 0;
   border-bottom: 1px solid var(--line);
+  min-width: 0;
 }
 
 .inspector-facts dt {
@@ -8432,9 +8436,12 @@ svg {
 .inspector-facts dd {
   margin: 0;
   color: var(--ink);
-  font-size: 11px;
-  font-weight: 650;
-  text-align: right;
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.45;
+  text-align: left;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .inspector-section {
@@ -8824,26 +8831,28 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .workflow-palette-menu .workflow-recipe > svg { color: var(--gap); }
 
 .workflow-audit {
-  width: min(290px, 30vw); overflow: hidden; border: 1px solid var(--line-2);
+  width: min(260px, 22vw); overflow: hidden; border: 1px solid var(--line-2);
   border-radius: var(--r-lg); background: color-mix(in srgb, var(--surface) 96%, transparent);
   box-shadow: var(--shadow-card);
 }
 .workflow-audit-head {
-  height: 34px; display: flex; align-items: center; justify-content: space-between;
-  padding: 0 10px; border-bottom: 1px solid var(--line); font-size: 11.5px;
+  width: 100%; height: 34px; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 10px; font-size: 11.5px; background: transparent; border: 0; color: inherit; cursor: pointer;
 }
+.workflow-audit.open .workflow-audit-head { border-bottom: 1px solid var(--line); }
 .workflow-audit-head span { color: var(--muted); font-size: 10.5px; }
-.workflow-audit > button {
+.workflow-audit-head .has-issues { color: var(--danger); font-weight: 600; }
+.workflow-audit-row {
   width: 100%; display: grid; grid-template-columns: 9px 1fr; gap: 8px;
   padding: 8px 10px; border: 0; border-bottom: 1px solid var(--line); background: transparent;
   text-align: left; cursor: pointer;
 }
-.workflow-audit > button:last-child { border-bottom: 0; }
-.workflow-audit > button:hover,
-.workflow-audit > button:focus-visible { background: var(--surface-2); outline: none; }
-.workflow-audit > button span:last-child { display: flex; min-width: 0; flex-direction: column; }
-.workflow-audit > button strong { font-size: 11px; color: var(--ink); }
-.workflow-audit > button small { font-size: 10px; line-height: 1.35; color: var(--muted); white-space: normal; }
+.workflow-audit-row:last-child { border-bottom: 0; }
+.workflow-audit-row:hover,
+.workflow-audit-row:focus-visible { background: var(--surface-2); outline: none; }
+.workflow-audit-row span:last-child { display: flex; min-width: 0; flex-direction: column; }
+.workflow-audit-row strong { font-size: 11px; color: var(--ink); }
+.workflow-audit-row small { font-size: 10px; line-height: 1.35; color: var(--muted); white-space: normal; }
 .workflow-audit-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 4px; background: var(--faint); }
 .workflow-audit-dot.state-blocked { background: var(--danger); }
 .workflow-audit-dot.state-waiting { background: var(--gap); }
@@ -8881,7 +8890,7 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 
 @media (max-width: 900px) {
   .workflow-audit { width: 220px; max-height: 180px; overflow-y: auto; }
-  .workflow-audit > button small { display: none; }
+  .workflow-audit-row small { display: none; }
 }
 
 /* ── Goal launcher (the front door — say what you want) ────────────────────── */
