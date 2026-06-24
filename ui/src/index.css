@@ -9024,3 +9024,13 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .product-entry-go:disabled{opacity:.5;cursor:not-allowed}
 .product-entry-foot{font-size:12.5px;color:var(--faint);text-align:center;margin:14px 0 0}
 .product-entry-link{background:none;border:0;color:var(--muted);text-decoration:underline;cursor:pointer;font-size:inherit}
+
+/* Building state — shown while the operator composes from the goal just given (never re-ask). */
+.building-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;
+  height:100%;padding:48px;color:var(--ink)}
+.building-state .spin{width:26px;height:26px;color:var(--proven)}
+.building-state strong{font-size:18px}
+.building-state span{color:var(--muted);font-size:14px;max-width:440px;line-height:1.5}
+.composer-dock-retry{display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-size:12.5px;font-weight:600;
+  padding:6px 12px;border-radius:7px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+.composer-dock-retry:hover{background:#f6f4ef}

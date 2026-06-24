@@ -245,8 +245,15 @@ export function ComposerDock({
       )}
       {session?.error && !session.pendingQuestion && (
         <div className="composer-dock-question error">
-          <strong>Claude stopped</strong>
-          <span>{session.error}</span>
+          <strong>Claude hit a snag</strong>
+          <span>
+            {/connection closed|mid-response|network|ECONNRESET|timed out|timeout/i.test(session.error)
+              ? "The model connection dropped mid-thought — usually transient. Pick up where it left off."
+              : session.error}
+          </span>
+          <button className="composer-dock-retry" onClick={() => void onSend("continue")} type="button">
+            <Play size={13} /> Try again
+          </button>
         </div>
       )}
 

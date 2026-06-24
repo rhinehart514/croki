@@ -1365,8 +1365,16 @@ export default function App() {
                 </div>
               ) : null}
             </>
+          ) : operatorSession && (operatorSession.status === "ready" || operatorSession.status === "running") ? (
+            // The operator is already composing the loop from the goal just given — never re-ask for
+            // the goal here. Show a focused "building" state; the live work streams in the dock.
+            <div className="building-state">
+              <LoaderCircle className="spin" />
+              <strong>Claude is building your loop</strong>
+              <span>Reading {activeProject?.name ?? "your product"} and composing the system to chase your goal — it'll stop at your gate. Watch it work in the panel on the right.</span>
+            </div>
           ) : (
-            // No channel selected yet — the goal-driven front door (say what you want, in words).
+            // No channel selected yet and nothing composing — the goal-driven front door.
             <GoalLauncher
               productName={activeProject?.name ?? "Your product"}
               busy={projectBusy}
