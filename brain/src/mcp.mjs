@@ -10,6 +10,8 @@
  * Or via npm:  npm run mcp
  */
 
+import { fileURLToPath } from "node:url";
+
 const BRAIN = "http://localhost:4317";
 
 // ---------------------------------------------------------------------------
@@ -38,6 +40,16 @@ async function brainPost(path, body) {
 // Fetch the graph template (graph + last 10 runs).
 async function getTemplate(channelId) {
   return brainGet(`/api/graph/template${channelId ? `?channel=${encodeURIComponent(channelId)}` : ""}`);
+}
+
+// Resolve which project an outcome tool targets. Code's job, not the model's:
+// an explicit projectId wins; otherwise bind to the active project. Deterministic.
+async function resolveProjectId(projectId) {
+  if (projectId) return projectId;
+  const data = await brainGet("/api/projects");
+  const active = data.activeProjectId ?? data.projects?.[0]?.id;
+  if (!active) throw new Error("No active project. Create one with create_project first.");
+  return active;
 }
 
 // ---------------------------------------------------------------------------
@@ -155,13 +167,14 @@ async function getWorkflowItems({ workflowId, channelId, nodeId }) {
 }
 
 /**
- * mutate_channel — disabled compatibility path.
- * Agent graph edits must be staged through the resident operator's proposal flow.
+ * request_workflow_change — disabled direct-edit path. Graph edits are never
+ * applied straight from this surface; they must be staged through the resident
+ * operator's proposal flow so the founder can review the preview first.
  */
-async function mutateChannel({ channelId, command }) {  // eslint-disable-line no-unused-vars
+async function requestWorkflowChange({ workflowId, channelId, command }) {  // eslint-disable-line no-unused-vars
   return {
     ok: false,
-    error: "Direct MCP graph mutation is disabled. Start or resume an operator session and use propose_graph_changes so the founder can review the preview before it is applied.",
+    error: "Direct graph mutation is disabled. Start or resume an operator session (start_operator_session) and use propose_graph_changes so the founder can review the preview before it is applied.",
   };
 }
 
@@ -193,24 +206,12 @@ async function updateSharedContext({ patch }) {
   return brainPost("/api/project/context", { patch });
 }
 
-async function createChannel(input) {
-  return brainPost("/api/program-workflows", input);
-}
-
 async function createWorkflow(input) {
   return brainPost("/api/program-workflows", input);
 }
 
-async function duplicateChannel({ channelId, ...input }) {
-  return duplicateWorkflow({ workflowId: channelId, ...input });
-}
-
 async function duplicateWorkflow({ workflowId, ...input }) {
   return brainPost(`/api/program-workflows/${encodeURIComponent(workflowId)}/duplicate`, input);
-}
-
-async function updateChannel({ channelId, ...patch }) {
-  return updateWorkflow({ workflowId: channelId, ...patch });
 }
 
 async function updateWorkflow({ workflowId, ...patch }) {
@@ -249,19 +250,59 @@ async function composeOpportunityChannel({ projectId, ...input }) {
 }
 
 // ---------------------------------------------------------------------------
+// Outcome programs — the product's declared domain center (OutcomeProgram).
+// ---------------------------------------------------------------------------
+
+/**
+ * list_outcomes — every outcome program in the project, with its policies,
+ * personalized agents, feedback, and domain-event trail.
+ */
+async function listOutcomes({ projectId } = {}) {
+  const id = await resolveProjectId(projectId);
+  const data = await brainGet(`/api/projects/${encodeURIComponent(id)}/programs`);
+  return { projectId: id, ...data };
+}
+
+/**
+ * get_outcome — one outcome program by id, resolved from the project's program
+ * list (the host exposes no single-program endpoint).
+ */
+async function getOutcome({ outcomeId, projectId }) {
+  const id = await resolveProjectId(projectId);
+  const data = await brainGet(`/api/projects/${encodeURIComponent(id)}/programs`);
+  const program = (data.programs ?? []).find((p) => p.id === outcomeId || p.name === outcomeId);
+  if (!program) {
+    return {
+      error: `No outcome program "${outcomeId}" in project ${id}.`,
+      available: (data.programs ?? []).map((p) => ({ id: p.id, name: p.name })),
+    };
+  }
+  const policies = (data.policies ?? []).filter((policy) => policy.programId === program.id);
+  return { projectId: id, program, policies };
+}
+
+// ---------------------------------------------------------------------------
 // Tool registry
 // ---------------------------------------------------------------------------
 
+// One workflow-id schema, shared by canonical tools. The canonical noun is
+// "workflow" (the OutcomeProgram's execution plan); "channel" is workflow
+// metadata, not a second object. Channel-named tools below are thin
+// backward-compatible aliases that delegate to the same handlers.
+const WORKFLOW_ID = { type: "string", description: "Workflow id." };
+const NODE_ID = { type: "string", description: "Node id within the workflow graph (e.g. 'source-1')." };
+
 const TOOLS = [
+  // ── Project scope ──────────────────────────────────────────────────────────
   {
     name: "list_projects",
-    description: "List repository-backed GTM projects and identify the active product scope.",
+    description: "List the repository-backed product projects and which one is active. Read first to learn the active scope before any workflow, outcome, or opportunity call. Does not create or switch projects.",
     inputSchema: { type: "object", properties: {}, required: [] },
     handler: listProjects,
   },
   {
     name: "create_project",
-    description: "Create and activate a project by scanning a local repository and its real win event.",
+    description: "Create and activate a product project by read-only scanning a local repository and its real win event. Use once per product, before generating opportunities or workflows. Does not run any go-to-market work; only establishes the grounded scope.",
     inputSchema: {
       type: "object",
       properties: {
@@ -275,7 +316,7 @@ const TOOLS = [
   },
   {
     name: "activate_project",
-    description: "Switch the active product project. Channels, opportunities, and shared intelligence follow this scope.",
+    description: "Switch which product project is active so that following workflow, outcome, opportunity, and shared-context calls resolve to it. Use to change scope; use list_projects first to find the id. Does not create a project.",
     inputSchema: {
       type: "object",
       properties: { projectId: { type: "string" } },
@@ -283,9 +324,36 @@ const TOOLS = [
     },
     handler: activateProject,
   },
+
+  // ── Outcome programs — the domain center (OutcomeProgram) ───────────────────
+  {
+    name: "list_outcomes",
+    description: "List the outcome programs (the product's declared domain center) in a project, with their agent-creation policies, personalized agents, feedback signals, and domain-event trail. Defaults to the active project; pass projectId to target another. Read this to orient on what the product is actually trying to achieve before touching workflows. Read-only; does not create or run a program.",
+    inputSchema: {
+      type: "object",
+      properties: { projectId: { type: "string", description: "Optional. Defaults to the active project." } },
+      required: [],
+    },
+    handler: listOutcomes,
+  },
+  {
+    name: "get_outcome",
+    description: "Get one outcome program by id (or name) plus its agent-creation policies. Use after list_outcomes when you need the full detail of a single program. Defaults to the active project. Read-only; to run the program's workflow use run_workflow.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        outcomeId: { type: "string", description: "Outcome program id or name." },
+        projectId: { type: "string", description: "Optional. Defaults to the active project." },
+      },
+      required: ["outcomeId"],
+    },
+    handler: getOutcome,
+  },
+
+  // ── Opportunities ──────────────────────────────────────────────────────────
   {
     name: "list_opportunities",
-    description: "Inspect durable channel and agent opportunities for a project, including evidence origin and founder review status.",
+    description: "List the durable channel and agent opportunities for a project, including each one's evidence origin and founder review status. Use to see what has been proposed before composing a workflow. Read-only; use review_opportunity to change status.",
     inputSchema: {
       type: "object",
       properties: { projectId: { type: "string" } },
@@ -295,7 +363,7 @@ const TOOLS = [
   },
   {
     name: "generate_opportunities",
-    description: "Generate code-derived and explicitly speculative channel and agent opportunities for a project.",
+    description: "Generate fresh code-derived and explicitly speculative channel and agent opportunities for a project. Use when the opportunity list is empty or stale. Produces proposals only; it does not accept them or build a workflow.",
     inputSchema: {
       type: "object",
       properties: { projectId: { type: "string" } },
@@ -305,7 +373,7 @@ const TOOLS = [
   },
   {
     name: "review_opportunity",
-    description: "Edit or mark one channel or agent opportunity accepted, rejected, deferred, or proposed.",
+    description: "Edit one channel or agent opportunity or mark it accepted, rejected, deferred, or proposed. Use to record the founder's judgment before composing. Changes status and fields only; it does not compose a workflow.",
     inputSchema: {
       type: "object",
       properties: {
@@ -319,12 +387,12 @@ const TOOLS = [
   },
   {
     name: "compose_opportunity_channel",
-    description: "Compose an accepted channel and accepted agents into a validated gated workflow with input, output, measure, and feedback steps.",
+    description: "Compose one accepted channel opportunity and accepted agent opportunities into a validated, gated workflow with input, founder gate, output, measure, and feedback steps. Use after the opportunities are accepted via review_opportunity. Builds the workflow graph; it does not run it (use run_workflow) and never sends anything.",
     inputSchema: {
       type: "object",
       properties: {
         projectId: { type: "string" },
-        channelOpportunityId: { type: "string" },
+        channelOpportunityId: { type: "string", description: "The accepted channel opportunity id." },
         agentOpportunityIds: { type: "array", items: { type: "string" } },
         name: { type: "string" },
         objective: { type: "string" },
@@ -335,61 +403,35 @@ const TOOLS = [
     },
     handler: composeOpportunityChannel,
   },
+
+  // ── Workflows — author (the OutcomeProgram's execution plan) ────────────────
   {
     name: "list_workflows",
-    description: "List all outcome-program workflows in the current project. Returns id, program id, status, run history, and graph shape metadata.",
-    inputSchema: {
-      type: "object",
-      properties: {},
-      required: [],
-    },
+    description: "List every outcome-program workflow in the active project, with id, program id, status, run history, and graph-shape metadata. Use to find a workflow id before getting, running, or editing one. Read-only.",
+    inputSchema: { type: "object", properties: {}, required: [] },
     handler: listWorkflows,
   },
   {
-    name: "list_channels",
-    description: "Compatibility alias for list_workflows.",
-    inputSchema: {
-      type: "object",
-      properties: {},
-      required: [],
-    },
-    handler: listChannels,
-  },
-  {
     name: "create_workflow",
-    description: "Create a blank outcome-program workflow. Channel is stored only as workflow metadata.",
+    description: "Create a blank outcome-program workflow, then shape its graph with founder-reviewed operations. Use to start a workflow from scratch; use compose_opportunity_workflow instead to build one from accepted opportunities. Channel is stored only as workflow metadata, not a separate object.",
     inputSchema: {
       type: "object",
       properties: {
         name: { type: "string" },
         objective: { type: "string" },
-        kind: { type: "string" },
+        kind: { type: "string", description: "Optional channel label stored as metadata." },
       },
       required: ["name", "objective"],
     },
     handler: createWorkflow,
   },
   {
-    name: "create_channel",
-    description: "Compatibility alias for create_workflow.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        name: { type: "string" },
-        objective: { type: "string" },
-        kind: { type: "string" },
-      },
-      required: ["name", "objective"],
-    },
-    handler: createChannel,
-  },
-  {
     name: "duplicate_workflow",
-    description: "Duplicate an existing outcome-program workflow into a separately editable program-backed workflow.",
+    description: "Copy an existing outcome-program workflow and its graph into a new, independently editable workflow. Use to fork a working workflow before experimenting. Does not run either workflow.",
     inputSchema: {
       type: "object",
       properties: {
-        workflowId: { type: "string" },
+        workflowId: WORKFLOW_ID,
         name: { type: "string" },
         objective: { type: "string" },
       },
@@ -398,29 +440,15 @@ const TOOLS = [
     handler: duplicateWorkflow,
   },
   {
-    name: "duplicate_channel",
-    description: "Compatibility alias for duplicate_workflow.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        channelId: { type: "string" },
-        name: { type: "string" },
-        objective: { type: "string" },
-      },
-      required: ["channelId", "name"],
-    },
-    handler: duplicateChannel,
-  },
-  {
     name: "update_workflow",
-    description: "Rename, clarify, classify, enable, or archive a program-backed workflow.",
+    description: "Rename, restate the objective, relabel the channel, enable, or archive a workflow's metadata. Use for metadata edits only; to change the graph nodes, start an operator session and use propose_graph_changes. Does not run the workflow.",
     inputSchema: {
       type: "object",
       properties: {
-        workflowId: { type: "string" },
+        workflowId: WORKFLOW_ID,
         name: { type: "string" },
         objective: { type: "string" },
-        kind: { type: "string" },
+        kind: { type: "string", description: "Optional channel label stored as metadata." },
         enabled: { type: "boolean" },
       },
       required: ["workflowId"],
@@ -428,169 +456,83 @@ const TOOLS = [
     handler: updateWorkflow,
   },
   {
-    name: "update_channel",
-    description: "Compatibility alias for update_workflow.",
+    name: "request_workflow_change",
+    description: "Disabled by design: this surface cannot edit a workflow graph directly. It returns guidance to start_operator_session and propose_graph_changes so the founder reviews a preview first. Use update_workflow for metadata; this tool never mutates the graph.",
     inputSchema: {
       type: "object",
       properties: {
-        channelId: { type: "string" },
-        name: { type: "string" },
-        objective: { type: "string" },
-        kind: { type: "string" },
-        enabled: { type: "boolean" },
+        workflowId: WORKFLOW_ID,
+        command: { type: "string", description: "Natural-language description of the desired graph change." },
       },
-      required: ["channelId"],
+      required: ["workflowId", "command"],
     },
-    handler: updateChannel,
+    handler: requestWorkflowChange,
   },
+
+  // ── Workflows — read ───────────────────────────────────────────────────────
   {
     name: "get_workflow",
-    description: "Get the full graph definition and last run result for an outcome-program workflow.",
+    description: "Get the full graph definition and last run result for one workflow. Use after list_workflows to inspect a workflow's nodes and latest output. Read-only; use run_workflow to execute it.",
     inputSchema: {
       type: "object",
-      properties: {
-        workflowId: { type: "string", description: "Workflow id" },
-      },
+      properties: { workflowId: WORKFLOW_ID },
       required: ["workflowId"],
     },
     handler: getWorkflow,
   },
   {
-    name: "get_channel",
-    description: "Compatibility alias for get_workflow.",
+    name: "get_workflow_items",
+    description: "Get the items array produced by a specific node in the workflow's last run. Use to inspect what a node actually emitted (leads, drafts, scores) after run_workflow. Read-only; reads stored results, does not re-run.",
     inputSchema: {
       type: "object",
-      properties: {
-        id: { type: "string", description: "Workflow/channel id" },
-      },
-      required: ["id"],
+      properties: { workflowId: WORKFLOW_ID, nodeId: NODE_ID },
+      required: ["workflowId", "nodeId"],
     },
-    handler: getChannel,
+    handler: getWorkflowItems,
   },
+
+  // ── Workflows — run and gate ───────────────────────────────────────────────
   {
     name: "run_workflow",
-    description: "Run the full workflow graph. Returns the run result with per-node output, items, and any pending gates.",
+    description: "Run the full workflow graph and return per-node output, items, and any pending founder gates. Use to execute an authored workflow end-to-end. Stops at every founder gate and never sends, publishes, or charges; clear gates with approve_workflow_gate.",
     inputSchema: {
       type: "object",
-      properties: {
-        workflowId: { type: "string", description: "Workflow id" },
-      },
+      properties: { workflowId: WORKFLOW_ID },
       required: ["workflowId"],
     },
     handler: runWorkflow,
   },
   {
-    name: "run_channel",
-    description: "Compatibility alias for run_workflow.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        id: { type: "string", description: "Workflow/channel id" },
-      },
-      required: ["id"],
-    },
-    handler: runChannel,
-  },
-  {
     name: "run_workflow_node",
-    description: "Run one workflow node and its dependencies. Returns that node's result.",
+    description: "Run one workflow node and its upstream dependencies, then return that node's result. Use to test or debug a single step instead of the whole graph. Stops at any founder gate on the path; never sends.",
     inputSchema: {
       type: "object",
-      properties: {
-        workflowId: { type: "string", description: "Workflow id" },
-        nodeId: { type: "string", description: "Node id to run (e.g. 'source-1')" },
-      },
+      properties: { workflowId: WORKFLOW_ID, nodeId: NODE_ID },
       required: ["workflowId", "nodeId"],
     },
     handler: runWorkflowNode,
   },
   {
-    name: "run_node",
-    description: "Compatibility alias for run_workflow_node.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        channelId: { type: "string", description: "Workflow/channel id" },
-        nodeId: { type: "string", description: "Node id to run (e.g. 'source-1')" },
-      },
-      required: ["channelId", "nodeId"],
-    },
-    handler: runNode,
-  },
-  {
     name: "approve_workflow_gate",
-    description: "Approve a pending founder gate node to unblock and continue a paused workflow run.",
+    description: "Record the founder's approval of one pending founder-gate node so a paused run continues from the exact reviewed items. Use only after run_workflow reports a pending gate. This is the single gate-approval verb; it reuses prepared items and does not re-run upstream work.",
     inputSchema: {
       type: "object",
-      properties: {
-        workflowId: { type: "string", description: "Workflow id" },
-        nodeId: { type: "string", description: "Gate node id to approve" },
-      },
+      properties: { workflowId: WORKFLOW_ID, nodeId: { type: "string", description: "Gate node id to approve." } },
       required: ["workflowId", "nodeId"],
     },
     handler: approveWorkflowGate,
   },
-  {
-    name: "approve_gate",
-    description: "Compatibility alias for approve_workflow_gate.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        channelId: { type: "string", description: "Workflow/channel id" },
-        nodeId: { type: "string", description: "Gate node id to approve" },
-      },
-      required: ["channelId", "nodeId"],
-    },
-    handler: approveGate,
-  },
-  {
-    name: "get_workflow_items",
-    description: "Get the items array from the last workflow run for a specific node.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        workflowId: { type: "string", description: "Workflow id" },
-        nodeId: { type: "string", description: "Node id" },
-      },
-      required: ["workflowId", "nodeId"],
-    },
-    handler: getWorkflowItems,
-  },
-  {
-    name: "get_items",
-    description: "Compatibility alias for get_workflow_items.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        channelId: { type: "string", description: "Workflow/channel id" },
-        nodeId: { type: "string", description: "Node id" },
-      },
-      required: ["channelId", "nodeId"],
-    },
-    handler: getItems,
-  },
-  {
-    name: "mutate_channel",
-    description: "Disabled compatibility path. Agent graph edits must go through the resident operator proposal flow for founder review.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        channelId: { type: "string", description: "Workflow/channel id" },
-        command: { type: "string", description: "Natural language mutation command" },
-      },
-      required: ["channelId", "command"],
-    },
-    handler: mutateChannel,
-  },
+
+  // ── Shared context ─────────────────────────────────────────────────────────
   {
     name: "get_shared_context",
-    description: "Read product truth, positioning, ICP, founder taste, contacts, outcomes, experiments, artifacts, and product feedback shared across all channels.",
+    description: "Read the project-wide GTM intelligence shared by every workflow: product truth, positioning, ICP, founder taste, contacts, outcomes, experiments, artifacts, and product feedback. Read before drafting or composing so work is grounded. Read-only.",
     inputSchema: { type: "object", properties: {}, required: [] },
     handler: getSharedContext,
   },
   {
     name: "update_shared_context",
-    description: "Update shared GTM intelligence used across every channel. Inferred ideas must remain marked inferred.",
+    description: "Patch the project-wide shared GTM intelligence used across every workflow. Use to record new positioning, contacts, or feedback. Inferred claims must stay marked inferred; do not present them as proven.",
     inputSchema: {
       type: "object",
       properties: { patch: { type: "object" } },
@@ -598,21 +540,22 @@ const TOOLS = [
     },
     handler: updateSharedContext,
   },
+
+  // ── Operator sessions — the resident GTM operator ──────────────────────────
   {
     name: "list_operator_sessions",
-    description: "List durable resident GTM operator sessions and their current status.",
+    description: "List the durable resident-operator sessions and their current status. Use to find an existing session to resume before starting a new one. Read-only.",
     inputSchema: { type: "object", properties: {}, required: [] },
     handler: listOperatorSessions,
   },
   {
     name: "start_operator_session",
-    description: "Give the resident GTM operator a goal. It will inspect, patch, validate, run, debug, and pause at founder gates.",
+    description: "Give the resident GTM operator a durable goal; it inspects evidence, edits the graph through reviewed operations, runs, debugs, and pauses at founder gates. Use for open-ended 'work this outcome' tasks rather than driving single tools yourself. It never approves a gate or sends anything.",
     inputSchema: {
       type: "object",
       properties: {
         goal: { type: "string", description: "The market outcome or GTM problem to work." },
-        workflowId: { type: "string", description: "Optional workflow id." },
-        channelId: { type: "string", description: "Optional compatibility workflow/channel id." },
+        workflowId: { type: "string", description: "Optional workflow id to start from." },
       },
       required: ["goal"],
     },
@@ -620,7 +563,7 @@ const TOOLS = [
   },
   {
     name: "get_operator_session",
-    description: "Inspect one durable operator session, including its event trail, pending question, or pending founder gate.",
+    description: "Inspect one operator session: its event trail, any pending question, and any pending founder gate. Use to see why a session paused and what it needs next. Read-only.",
     inputSchema: {
       type: "object",
       properties: { sessionId: { type: "string" } },
@@ -630,7 +573,7 @@ const TOOLS = [
   },
   {
     name: "resume_operator_session",
-    description: "Resume a paused or interrupted operator session with explicit founder direction. Founder gates must be resolved in GTM IDE.",
+    description: "Resume a paused or interrupted operator session with explicit founder direction. Use after get_operator_session shows a pending question. Founder gates themselves are resolved in GTM IDE, not here.",
     inputSchema: {
       type: "object",
       properties: {
@@ -643,7 +586,7 @@ const TOOLS = [
   },
   {
     name: "cancel_operator_session",
-    description: "Stop a resident operator session while preserving its durable history.",
+    description: "Stop a running operator session while preserving its durable history. Use to abandon a goal; the session record and events are kept. Does not delete prior runs or artifacts.",
     inputSchema: {
       type: "object",
       properties: { sessionId: { type: "string" } },
@@ -651,9 +594,62 @@ const TOOLS = [
     },
     handler: cancelOperatorSession,
   },
+
+  // ── Backward-compatible aliases ────────────────────────────────────────────
+  // The canonical noun is "workflow". A lean set of the most-referenced legacy
+  // channel names is kept so existing external callers keep working; they
+  // delegate to the same handlers. Prefer the canonical workflow names.
+  {
+    name: "get_channel",
+    description: "Backward-compatible alias for get_workflow.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { type: "string", description: "Workflow id." } },
+      required: ["id"],
+    },
+    handler: getChannel,
+  },
+  {
+    name: "run_channel",
+    description: "Backward-compatible alias for run_workflow.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { type: "string", description: "Workflow id." } },
+      required: ["id"],
+    },
+    handler: runChannel,
+  },
+  {
+    name: "approve_gate",
+    description: "Backward-compatible alias for approve_workflow_gate.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        channelId: { type: "string", description: "Workflow id." },
+        nodeId: { type: "string", description: "Gate node id to approve." },
+      },
+      required: ["channelId", "nodeId"],
+    },
+    handler: approveGate,
+  },
+  {
+    name: "mutate_channel",
+    description: "Backward-compatible alias for request_workflow_change (disabled direct-edit path).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        channelId: { type: "string", description: "Workflow id." },
+        command: { type: "string", description: "Natural-language graph change." },
+      },
+      required: ["channelId", "command"],
+    },
+    handler: requestWorkflowChange,
+  },
 ];
 
 const TOOL_MAP = new Map(TOOLS.map((t) => [t.name, t]));
+
+export { TOOLS, TOOL_MAP };
 
 // ---------------------------------------------------------------------------
 // JSON-RPC 2.0 stdio transport
@@ -731,41 +727,51 @@ async function dispatch(message) {
   }
 }
 
+export { dispatch };
+
 // ---------------------------------------------------------------------------
 // Main loop — read newline-delimited JSON from stdin
 // ---------------------------------------------------------------------------
 
-let buffer = "";
+function main() {
+  let buffer = "";
 
-process.stdin.setEncoding("utf8");
+  process.stdin.setEncoding("utf8");
 
-process.stdin.on("data", (chunk) => {
-  buffer += chunk;
-  const lines = buffer.split("\n");
-  buffer = lines.pop(); // keep incomplete trailing line
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    let message;
-    try {
-      message = JSON.parse(trimmed);
-    } catch {
-      respondError(null, -32700, "Parse error");
-      continue;
+  process.stdin.on("data", (chunk) => {
+    buffer += chunk;
+    const lines = buffer.split("\n");
+    buffer = lines.pop(); // keep incomplete trailing line
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      let message;
+      try {
+        message = JSON.parse(trimmed);
+      } catch {
+        respondError(null, -32700, "Parse error");
+        continue;
+      }
+      dispatch(message).catch((err) => {
+        respondError(message?.id ?? null, -32603, "Internal error", String(err));
+      });
     }
-    dispatch(message).catch((err) => {
-      respondError(message?.id ?? null, -32603, "Internal error", String(err));
-    });
-  }
-});
+  });
 
-process.stdin.on("end", () => {
-  // Flush any remaining buffer content.
-  if (buffer.trim()) {
-    let message;
-    try { message = JSON.parse(buffer.trim()); } catch { return; }
-    dispatch(message).catch(() => {});
-  }
-});
+  process.stdin.on("end", () => {
+    // Flush any remaining buffer content.
+    if (buffer.trim()) {
+      let message;
+      try { message = JSON.parse(buffer.trim()); } catch { return; }
+      dispatch(message).catch(() => {});
+    }
+  });
 
-process.stderr.write("GTM IDE MCP server ready (stdio)\n");
+  process.stderr.write("GTM IDE MCP server ready (stdio)\n");
+}
+
+// Only start the stdio transport when run directly, so the module can be
+// imported (e.g. by tests) without hijacking stdin.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
+}
