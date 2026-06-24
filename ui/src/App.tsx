@@ -61,6 +61,14 @@ type MainTab = ProgramCanvasMode;
 
 // Health → band color, identical to the canvas node badge (GraphCanvas healthHex), so a
 // node's health reads the same number and color on the canvas, in the editor, and in the rail.
+// First non-empty string among loosely-typed item fields. Staged gate items carry free-form keys
+// (draft_note, suggested_subject_line, grounding_citation…) typed as unknown, so the review surface
+// reads them defensively rather than asserting a fixed shape.
+function pickStr(...vals: unknown[]): string | null {
+  for (const v of vals) if (typeof v === "string" && v.trim()) return v;
+  return null;
+}
+
 function healthHex(health: number): string {
   if (health < 50) return "#dc2626";
   if (health < 70) return "#d97706";
@@ -220,8 +228,13 @@ export default function App() {
       setActiveChannelId(channelId);
       setGraph(graphResponse.graph);
       setActiveProgramId(graphResponse.graph.outcomeProgramId ?? null);
-      setFlowRuns(graphResponse.runs ?? []);
-      setRunResult(null);
+      const priorRuns = graphResponse.runs ?? [];
+      setFlowRuns(priorRuns);
+      // Rehydrate the latest persisted run so opening an outcome shows its REAL state — the node
+      // results on the canvas, the impact strip, and any drafts staged at its gate. Without this a
+      // completed run (one fired headlessly via the API, or in a prior session) was invisible: the
+      // gate's staged drafts sat in the ledger but never reached the review surface.
+      setRunResult(priorRuns.length ? priorRuns[priorRuns.length - 1] : null);
       setSelection(null);
       setApprovals({});
       setDecisions({});
@@ -306,7 +319,11 @@ export default function App() {
       setActiveChannelId(channelId);
       setGraph(graphResponse.graph);
       setActiveProgramId(graphResponse.graph.outcomeProgramId ?? selectedProgram?.id ?? null);
-      setFlowRuns(graphResponse.runs ?? []);
+      const bootRuns = graphResponse.runs ?? [];
+      setFlowRuns(bootRuns);
+      // Hydrate the latest run on first paint too, so the outcome you land on shows its real state
+      // (node results, staged drafts) without needing a manual click to re-open it.
+      setRunResult(bootRuns.length ? bootRuns[bootRuns.length - 1] : null);
       setEngine(engineResponse.engine);
     }).catch(console.error);
     return () => { live = false; };
@@ -1013,7 +1030,6 @@ export default function App() {
   // lists the gate nodes waiting in the run on screen (the operator's pending gate, or the last run's
   // pendingGates), each with the staged drafts it is holding — never fabricated. If nothing is
   // pending, the panel shows the honest quiet state.
-  const pendingApprovals = channels.reduce((sum, ch) => sum + (ch.pendingGates ?? 0), 0);
   const gateNodeIds = operatorSession?.status === "waiting_for_gate"
     ? operatorSession.pendingGate?.nodeIds ?? []
     : runResult?.pendingGates ?? [];
@@ -1022,6 +1038,12 @@ export default function App() {
     const result = runResult?.nodes[nodeId] ?? null;
     return { nodeId, label: node?.label ?? nodeId, items: result?.items ?? [] };
   }), [gateNodeIds, graph, runResult]);
+  // The badge counts the real drafts staged in the loaded outcome's run when one is open; it only
+  // falls back to the cross-channel meta count (which can lag a headless run) when nothing is loaded.
+  const loadedDrafts = approvalItems.reduce((sum, gate) => sum + gate.items.length, 0);
+  const pendingApprovals = loadedDrafts > 0
+    ? loadedDrafts
+    : channels.reduce((sum, ch) => sum + (ch.pendingGates ?? 0), 0);
 
   // On-canvas proposals: when the operator stages a graph change, render the would-be graph with the
   // new nodes/edges ghosted and let the founder accept or discard. "Vibe up to the gate" now covers
@@ -1439,13 +1461,19 @@ export default function App() {
                   </div>
                   {gate.items.length === 0 ? (
                     <p className="loop-approvals-gate-note">Staged content loads when this gate's run is open.</p>
-                  ) : gate.items.slice(0, 6).map((item, i) => (
+                  ) : gate.items.slice(0, 6).map((item, i) => {
+                    // The drafter emits draft_note / suggested_subject_line / founder_name /
+                    // grounding_citation; older connectors emit draft / subject / name. Read both so a
+                    // real staged note shows its subject, body, and the evidence for WHY this person.
+                    const subject = pickStr(item.suggested_subject_line, item.subject, item.founder_name, item.name, item.type) ?? "Draft";
+                    const body = pickStr(item.draft_note, item.draft, item.summary);
+                    const evidence = pickStr(item.grounding_citation);
+                    return (
                     <article className="loop-approvals-item" key={item.id ?? `${gate.nodeId}-${i}`}>
                       <div className="loop-approvals-item-text">
-                        <strong>{item.subject ?? item.name ?? item.type ?? "Draft"}</strong>
-                        {item.draft || item.summary ? (
-                          <p>{String(item.draft ?? item.summary).slice(0, 180)}</p>
-                        ) : null}
+                        <strong>{subject}</strong>
+                        {body ? <p>{body.slice(0, 240)}</p> : null}
+                        {evidence ? <p className="loop-approvals-evidence">Why them: {evidence.slice(0, 180)}</p> : null}
                         {item.source ? (
                           <span className={`loop-approvals-source tag-${item.source.tag}`}>
                             {item.source.tag} · {item.source.tool}
@@ -1453,7 +1481,8 @@ export default function App() {
                         ) : null}
                       </div>
                     </article>
-                  ))}
+                    );
+                  })}
                   <div className="loop-approvals-gate-actions">
                     <button
                       className="loop-approvals-review"

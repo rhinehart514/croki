@@ -8969,3 +8969,9 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 }
 .rail-item-head { align-items: flex-start; }
 .rail-item-head .rail-item-problem { margin: 0; font-weight: 500; }
+
+/* Grounding evidence on a staged draft — the receipt for WHY this person, shown at the gate. */
+.loop-approvals-evidence {
+  font-size: 12px; color: var(--muted);
+  border-left: 2px solid var(--proven); padding-left: 8px; margin-top: 6px;
+}
