@@ -54,6 +54,30 @@ describe("memory — extractDecisions", () => {
     const d = extractDecisions(runs);
     assert.equal(d.approved.length, 0);
   });
+
+  it("reads the agent drafter's fields (draft_note / founder_name), not just the legacy ones", () => {
+    // Regression: agent-drafted items carry draft_note / founder_name / gtmActionId, never
+    // draft / name. Before the fix, approving one recorded nothing and taste stayed empty forever.
+    const runs = [
+      runWithGate([
+        { founder_name: "Mario", gtmActionId: "act-1", draft_note: "grounded note to Mario", approvalStatus: "approved" },
+        { founder_name: "Luca", gtmActionId: "act-2", draft_note: "the founder rewrite", editedFrom: "the model draft", approvalStatus: "approved" },
+      ]),
+    ];
+    const d = extractDecisions(runs);
+    assert.equal(d.approved.length, 2);
+    assert.equal(d.approved[0].draft, "grounded note to Mario");
+    assert.equal(d.approved[0].name, "Mario");
+    assert.equal(d.edits.length, 1);
+    assert.deepEqual(d.edits[0], { from: "the model draft", to: "the founder rewrite" });
+  });
+
+  it("keys an agent-drafted item (no email/url/name) by a founder fallback so decisions match", () => {
+    assert.equal(draftKey({ founder_github_or_url: "github.com/x", gtmActionId: "act-9" }), "github.com/x");
+    assert.equal(draftKey({ gtmActionId: "act-9" }), "act-9");
+    // legacy items still key exactly as before (email wins)
+    assert.equal(draftKey({ email: "a@x.com", gtmActionId: "act-9" }), "a@x.com");
+  });
 });
 
 describe("memory — buildDraftMemory", () => {

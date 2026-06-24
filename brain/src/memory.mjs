@@ -9,8 +9,14 @@
 // Connector-agnostic: it reads decisions off any gate node and shapes them into
 // a memory object. Which connectors consume that memory is their choice.
 
+// Stable per-item key for matching a founder's gate decision to the right draft across runs.
+// The legacy contact fields (email/url/name/id) come first so existing flows key exactly as before;
+// the founder_* and gtmActionId fallbacks cover agent-drafted items that carry none of those, which
+// otherwise keyed to null and could never be matched. Mirrors itemKey() in ui/src/lib/itemKey.ts —
+// keep the order identical in both.
 export function draftKey(item) {
-  return item?.email || item?.linkedinUrl || item?.url || item?.name || item?.id || null;
+  return item?.email || item?.linkedinUrl || item?.url || item?.name || item?.id
+    || item?.founder_github_or_url || item?.founder_name || item?.gtmActionId || null;
 }
 
 // Pull founder decisions out of recorded runs, newest first.
@@ -31,20 +37,25 @@ export function extractDecisions(runs = [], { limit = 5 } = {}) {
       for (const item of node.items) {
         const status = item?.approvalStatus;
         if (status !== "approved" && status !== "rejected") continue;
-        const draft = item?.draft;
-        if (!draft || typeof draft !== "string") continue;
+        // Read both the legacy connector field (`draft`) and the agent drafter's field
+        // (`draft_note`). Without this, approving an agent-drafted note recorded nothing and the
+        // taste bank stayed empty forever — the founder's decisions never reached the next run.
+        const draft = typeof item?.draft === "string" ? item.draft
+          : typeof item?.draft_note === "string" ? item.draft_note : null;
+        if (!draft) continue;
+        const personName = item?.name ?? item?.founder_name ?? null;
 
         const dedupKey = `${status}:${draftKey(item) ?? draft.slice(0, 40)}`;
         if (seen.has(dedupKey)) continue;
         seen.add(dedupKey);
 
         if (status === "approved") {
-          if (approved.length < limit) approved.push({ name: item.name ?? null, draft });
+          if (approved.length < limit) approved.push({ name: personName, draft });
           if (typeof item.editedFrom === "string" && item.editedFrom && edits.length < limit) {
             edits.push({ from: item.editedFrom, to: draft });
           }
         } else if (rejected.length < limit) {
-          rejected.push({ name: item.name ?? null, draft });
+          rejected.push({ name: personName, draft });
         }
       }
     }
