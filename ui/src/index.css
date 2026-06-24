@@ -7841,10 +7841,16 @@ svg {
 .program-workbench {
   display: grid;
   /* topbar · mode strip · canvas (flexible) · debugger */
-  grid-template-rows: auto auto minmax(0, 1fr) 178px;
+  grid-template-rows: auto auto minmax(0, 1fr) 200px;
   height: 100%;
   min-width: 0;
   background: var(--canvas);
+}
+
+/* Debugger collapsed to its toggle bar — the canvas claims the reclaimed height. Default state:
+   the graph is the workspace, the debugger is a drawer you summon. */
+.program-workbench.debug-collapsed {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
 }
 
 /* The program workbench is already a four-zone IDE (explorer · canvas · inspector · debugger), so
@@ -8474,17 +8480,61 @@ svg {
 }
 
 .program-debugger {
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   border-top: 1px solid var(--line-2);
   background: var(--surface-2);
   color: var(--ink);
 }
 
+.debugger-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.program-debugger.collapsed .debugger-head {
+  border-bottom: 0;
+}
+
+.debugger-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  height: 26px;
+  padding: 0 8px 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.debugger-toggle:hover { color: var(--ink); background: var(--surface); }
+.debugger-toggle svg { transition: transform 160ms var(--ease); }
+.debugger-toggle svg.rot { transform: rotate(-90deg); }
+
+.debugger-collapsed-hint {
+  border: 0;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 550;
+}
+.debugger-collapsed-hint:hover { color: var(--muted); }
+
 .debugger-tabs {
   display: flex;
   gap: 3px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--line);
 }
 
 .debugger-tabs button {
@@ -8500,7 +8550,8 @@ svg {
 }
 
 .debugger-body {
-  height: calc(100% - 43px);
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
   padding: 8px 10px 12px;
 }
@@ -8605,6 +8656,7 @@ svg {
 .learning-thread-rule.pos { color: #16a34a; }
 .learning-thread-rule.neg { color: #dc2626; }
 .learning-thread-agent { font-size: 12px; font-weight: 650; color: var(--ink); }
+.inspector-thread-overflow { margin-top: 4px; color: var(--faint); font-size: 11px; }
 /* The debugger is now light (matches the warm IDE), so the learning thread inherits the light base —
    no dark overrides needed. */
 

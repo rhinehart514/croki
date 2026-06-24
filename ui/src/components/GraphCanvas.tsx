@@ -572,12 +572,27 @@ function RunZoom({ running }: { running: boolean }) {
   return null;
 }
 
+// ─── Re-fit — re-frame the graph when its container resizes (e.g. the debugger drawer toggles) ──
+// React Flow only auto-fits on mount; a CSS grid resize around it leaves the old viewport. Bumping
+// the nonce re-frames after the layout settles so the pipeline fills the reclaimed space.
+function Refitter({ nonce }: { nonce?: number }) {
+  const { fitView } = useReactFlow();
+  const seen = useRef(nonce);
+  useEffect(() => {
+    if (nonce === undefined || nonce === seen.current) return;
+    seen.current = nonce;
+    const t = setTimeout(() => fitView({ padding: 0.16, duration: 420 }), 90);
+    return () => clearTimeout(t);
+  }, [nonce, fitView]);
+  return null;
+}
+
 // ─── Canvas ───────────────────────────────────────────────────────────────────
 
 export function GraphCanvas({
   graph, result, running, runningNodeId = null, selection, connectors, subsystemHealth = {}, contractAudits = {},
   onSelect, onNodePositionChange, onConnectNodes, onDeleteEdges, onAddNode, onLoadRecipe, panelOpen, variant, mode,
-  proposedNodeIds, proposedEdgeIds,
+  proposedNodeIds, proposedEdgeIds, refitNonce,
 }: {
   graph: GTMGraph;
   result: GTMRunResult | null;
@@ -601,6 +616,8 @@ export function GraphCanvas({
   // Nodes/edges the operator has STAGED but not applied — rendered as ghosts for founder review.
   proposedNodeIds?: Set<string>;
   proposedEdgeIds?: Set<string>;
+  // Bump to re-fit the viewport after the container resizes (debugger drawer open/close).
+  refitNonce?: number;
 }) {
   const handleSelect = useCallback((id: string) => onSelect(id), [onSelect]);
   const editable = variant !== "ideation" && !!onAddNode;
@@ -657,6 +674,7 @@ export function GraphCanvas({
     >
       <NodeFocuser selection={selection} panelOpen={!!panelOpen} active={!running} />
       <RunZoom running={running} />
+      <Refitter nonce={refitNonce} />
       {editable && onAddNode ? (
         <StepPalette empty={graph.nodes.length === 0} disabled={running} onAddNode={onAddNode} onLoadRecipe={onLoadRecipe} />
       ) : null}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  Bot, CheckCircle2, GitBranch, History, Play, TestTube2,
+  Bot, CheckCircle2, ChevronDown, GitBranch, History, Play, TestTube2,
 } from "lucide-react";
 import { GraphCanvas } from "@/components/GraphCanvas";
 import { statusLabel as canonicalStatus, toneForPhrase } from "@/lib/status";
@@ -141,6 +141,14 @@ export function ProgramCanvas({
 
   const intent = MODE_INTENT[mode];
   const [debugTab, setDebugTab] = useState<DebugTab>(MODE_INTENT.design.debug);
+  // The debugger is a drawer you summon, not a permanent band — collapsed by default so the canvas
+  // (the actual workspace) owns the vertical space. Toggling it bumps a nonce that re-fits the graph
+  // into the reclaimed/relinquished height.
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [refitNonce, setRefitNonce] = useState(0);
+  const toggleDebug = () => { setDebugOpen((open) => !open); setRefitNonce((n) => n + 1); };
+  // Opening a specific tab from collapsed should reveal the drawer, not silently switch a hidden tab.
+  const openDebugTab = (tab: DebugTab) => { setDebugTab(tab); if (!debugOpen) toggleDebug(); };
   // Which agent's policy + rules the inspector is expanded on. Independent of the canvas node
   // selection: the graph carries the execution plan, the inspector carries the program framing.
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
@@ -158,6 +166,7 @@ export function ProgramCanvas({
   if (focusDebug && focusDebug.nonce !== trackedDebugNonce) {
     setTrackedDebugNonce(focusDebug.nonce);
     setDebugTab(focusDebug.tab);
+    if (!debugOpen) { setDebugOpen(true); setRefitNonce((n) => n + 1); }
   }
 
   const selectedAgent = selectedAgentId ? programAgents.find((agent) => agent.id === selectedAgentId) ?? null : null;
@@ -169,9 +178,18 @@ export function ProgramCanvas({
     .filter((policy) => policy.previousPolicyId)
     .map((revised) => {
       const prev = programPolicies.find((policy) => policy.id === revised.previousPolicyId) ?? null;
+      // Dedupe by summary: a repeated identical run failure ("Waiting for at least 1 input item")
+      // banks one feedback signal per run, so without this the same line renders many times in one thread.
+      const seenSummaries = new Set<string>();
       const drivingSignals = programFeedback.filter((signal) =>
         (revised.feedbackSignalIds ?? []).includes(signal.id)
-        || (signal.policyIds ?? []).includes(revised.previousPolicyId ?? ""));
+        || (signal.policyIds ?? []).includes(revised.previousPolicyId ?? ""))
+        .filter((signal) => {
+          const key = `${signal.type}:${signal.summary}`;
+          if (seenSummaries.has(key)) return false;
+          seenSummaries.add(key);
+          return true;
+        });
       const newAgent = programAgents.find((agent) => agent.creationPolicyId === revised.id) ?? null;
       const addedNegative = revised.negativeRules.filter((rule) => !(prev?.negativeRules ?? []).includes(rule));
       const addedPositive = revised.positiveRules.filter((rule) => !(prev?.positiveRules ?? []).includes(rule));
@@ -183,8 +201,13 @@ export function ProgramCanvas({
   const hasGraph = !!graph && graph.nodes.length > 0;
   const pendingGate = runResult?.pendingGates?.[0] ?? null;
 
+  const DEBUG_LABEL: Record<DebugTab, string> = {
+    timeline: "Timeline", events: "Events", runLogs: "Run Logs",
+    replay: "Replay", diff: "Diff", contracts: "Contracts",
+  };
+
   return (
-    <div className="program-workbench">
+    <div className={`program-workbench${debugOpen ? "" : " debug-collapsed"}`}>
       <header className="program-topbar">
         <div className="program-title-block">
           <span className="program-path">Outcome Program</span>
@@ -246,6 +269,7 @@ export function ProgramCanvas({
               onAddNode={onAddNode}
               onLoadRecipe={onLoadRecipe}
               panelOpen={false}
+              refitNonce={refitNonce}
             />
           ) : (
             <div className="program-empty-agents">
@@ -322,7 +346,12 @@ export function ProgramCanvas({
             <div className="inspector-section">
               <h3>What your decisions changed</h3>
               {learningThreads.length ? (
-                learningThreads.map((thread) => <LearningThread key={thread.revised.id} thread={thread} />)
+                <>
+                  {learningThreads.slice(0, 4).map((thread) => <LearningThread key={thread.revised.id} thread={thread} />)}
+                  {learningThreads.length > 4 ? (
+                    <p className="inspector-thread-overflow">+{learningThreads.length - 4} earlier loop{learningThreads.length - 4 === 1 ? "" : "s"} — open the Diff tab for the full history.</p>
+                  ) : null}
+                </>
               ) : programFeedback.length ? (
                 <p>{programFeedback.length} decision{programFeedback.length === 1 ? "" : "s"} recorded — run again so they revise an agent.</p>
               ) : (
@@ -333,14 +362,27 @@ export function ProgramCanvas({
         </aside>
       </div>
 
-      <section className="program-debugger" aria-label="Program debugger">
-        <div className="debugger-tabs">
-          {(["timeline", "events", "runLogs", "replay", "diff", "contracts"] as DebugTab[]).map((tab) => (
-            <button key={tab} className={debugTab === tab ? "active" : ""} onClick={() => setDebugTab(tab)} type="button">
-              {tab === "runLogs" ? "Run Logs" : tab.charAt(0).toUpperCase() + tab.slice(1)}
+      <section className={`program-debugger${debugOpen ? "" : " collapsed"}`} aria-label="Program debugger">
+        <div className="debugger-head">
+          <button className="debugger-toggle" onClick={toggleDebug} type="button" aria-expanded={debugOpen}>
+            <ChevronDown className={debugOpen ? "" : "rot"} size={14} />
+            <span>Debugger</span>
+          </button>
+          {debugOpen ? (
+            <div className="debugger-tabs">
+              {(["timeline", "events", "runLogs", "replay", "diff", "contracts"] as DebugTab[]).map((tab) => (
+                <button key={tab} className={debugTab === tab ? "active" : ""} onClick={() => setDebugTab(tab)} type="button">
+                  {DEBUG_LABEL[tab]}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <button className="debugger-collapsed-hint" onClick={() => openDebugTab(debugTab)} type="button">
+              {DEBUG_LABEL[debugTab]} · open to inspect
             </button>
-          ))}
+          )}
         </div>
+        {debugOpen ? (
         <div className="debugger-body">
           {debugTab === "timeline" ? <Timeline events={programEvents} feedback={programFeedback} /> : null}
           {debugTab === "events" ? <EventList events={programEvents} /> : null}
@@ -349,6 +391,7 @@ export function ProgramCanvas({
           {debugTab === "diff" ? <ThreadPanel threads={learningThreads} /> : null}
           {debugTab === "contracts" ? <ContractsPanel agents={programAgents} policies={programPolicies} evaluations={programEvaluations} /> : null}
         </div>
+        ) : null}
       </section>
     </div>
   );
