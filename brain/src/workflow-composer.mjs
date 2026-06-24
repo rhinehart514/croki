@@ -115,7 +115,9 @@ function assertGateWall(nodes, edges) {
 // Bind the founder's concrete input/output onto the model's source/execute nodes. The model
 // picked where they go; the founder's real data lands here.
 function bindIO(nodes, channel, inputAdapter, outputAdapter) {
-  const source = nodes.find((n) => n.category === "source");
+  // Only a tool/manual source takes a bound connector. An agent-kind entry self-sources (it finds
+  // its own candidates), so never stamp a connector onto it.
+  const source = nodes.find((n) => n.category === "source" && n.kind !== "agent");
   if (source) {
     const bound = inputBinding(inputAdapter ?? channel.input ?? {});
     source.connector = bound.connector;
@@ -127,6 +129,45 @@ function bindIO(nodes, channel, inputAdapter, outputAdapter) {
     execute.connector = bound.connector;
     execute.config = { ...bound.config, ...execute.config };
   }
+}
+
+function hasConcreteInput(adapter) {
+  if (!adapter || typeof adapter !== "object") return false;
+  return !!(adapter.items?.length || (typeof adapter.csv === "string" && adapter.csv.trim()) || adapter.endpoint);
+}
+
+// The runnable-entry invariant (host-enforced, like the gate wall — NOT a request to the model).
+// A composed loop must RUN on its first try and reach the founder gate, not block at an empty
+// source waiting for a list the founder doesn't have. When the founder gave no concrete input, a
+// tool/manual source can't stand on real data — so drop it and let the discovery/research agent it
+// feeds become the self-sourcing entry (the agent finds its own candidates from public signals,
+// exactly like a working outbound loop). If no downstream agent exists, convert the source itself
+// into a discovery agent.
+function ensureRunnableEntry(nodes, edges, agents = [], inputAdapter, channel = {}) {
+  if (hasConcreteInput(inputAdapter ?? channel.input)) return { nodes, edges };
+  const source = nodes.find((n) => n.category === "source" && n.kind !== "agent");
+  if (!source) return { nodes, edges };
+  const downstreamAgent = edges
+    .filter((e) => e.source === source.id)
+    .map((e) => nodes.find((n) => n.id === e.target))
+    .find((n) => n && n.kind === "agent");
+  if (downstreamAgent) {
+    // Drop the empty source; rewire its incoming edges (e.g. product context) into the agent, and
+    // drop the source→agent edge. The agent runs first and self-sources.
+    const newEdges = edges
+      .filter((e) => !(e.source === source.id && e.target === downstreamAgent.id))
+      .map((e) => (e.target === source.id ? { ...e, target: downstreamAgent.id } : e));
+    return { nodes: nodes.filter((n) => n.id !== source.id), edges: newEdges };
+  }
+  const discovery = agents.find((a) => /find|research|prospect|discover|buyer|signal|scout|lead|source|enrich/i.test(`${a.ref} ${a.objective ?? ""} ${a.title ?? ""}`)) ?? agents[0];
+  if (discovery?.ref) {
+    source.kind = "agent";
+    source.ref = discovery.ref;
+    delete source.connector;
+    source.agentPrompt = source.agentPrompt || "Find real, current candidates that fit this product's ICP from public signals. Return a JSON array of candidate items.";
+    source.label = source.label || "Find candidates";
+  }
+  return { nodes, edges };
 }
 
 // The pure compose path: model designs the graph, host normalizes, binds IO, and enforces the
@@ -145,8 +186,11 @@ export async function composeGraphForChannel({ channel, agents = [], grounding =
       ? "Composition is model-driven and needs a live Claude subscription. Sign in and try again."
       : `Composition failed: ${spec.error}`);
   }
-  const { nodes, edges } = normalizeComposedGraph(spec);
-  if (nodes.length === 0) throw new Error("Composer returned no usable nodes.");
+  const normalized = normalizeComposedGraph(spec);
+  if (normalized.nodes.length === 0) throw new Error("Composer returned no usable nodes.");
+  // Host invariant: guarantee the first node can run unaided (no empty-source dead-end) before
+  // binding IO and enforcing the wall.
+  const { nodes, edges } = ensureRunnableEntry(normalized.nodes, normalized.edges, agents, input ?? channel.input, channel);
   bindIO(nodes, channel, input ?? channel.input, output ?? channel.output);
   assertGateWall(nodes, edges);
   return { nodes, edges };
