@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle, Check, LoaderCircle, Play, Sparkles, X,
+  AlertTriangle, Check, LoaderCircle, Play, ShieldCheck, Sparkles, X,
 } from "lucide-react";
 import {
   applyGraphOperations as applyGraphOperationsApi,
@@ -148,6 +148,8 @@ export default function App() {
   // Bumped to summon the Claude co-pilot — a program is created by telling Claude the outcome,
   // not by filling a form, so "New program" opens and focuses the chat.
   const [composerFocus, setComposerFocus] = useState(0);
+  // The Approvals panel — the founder gate's first-class home. Opens from the toolbar badge.
+  const [approvalsOpen, setApprovalsOpen] = useState(false);
   // Lets an explorer click deep-link the program canvas's bottom debugger to a specific tab.
   const [debugFocus, setDebugFocus] = useState<{ tab: DebugTab; nonce: number } | null>(null);
   const [projectBusy, setProjectBusy] = useState(false);
@@ -1006,6 +1008,21 @@ export default function App() {
 
   const runCount = graph?.store?.runs ?? flowRuns.length;
 
+  // ── Approvals — the founder gate, surfaced ────────────────────────────────
+  // The cross-system count is real pending-gate data from each channel's ledger. The panel itself
+  // lists the gate nodes waiting in the run on screen (the operator's pending gate, or the last run's
+  // pendingGates), each with the staged drafts it is holding — never fabricated. If nothing is
+  // pending, the panel shows the honest quiet state.
+  const pendingApprovals = channels.reduce((sum, ch) => sum + (ch.pendingGates ?? 0), 0);
+  const gateNodeIds = operatorSession?.status === "waiting_for_gate"
+    ? operatorSession.pendingGate?.nodeIds ?? []
+    : runResult?.pendingGates ?? [];
+  const approvalItems = useMemo(() => gateNodeIds.map((nodeId) => {
+    const node = graph?.nodes.find((n) => n.id === nodeId) ?? null;
+    const result = runResult?.nodes[nodeId] ?? null;
+    return { nodeId, label: node?.label ?? nodeId, items: result?.items ?? [] };
+  }), [gateNodeIds, graph, runResult]);
+
   // On-canvas proposals: when the operator stages a graph change, render the would-be graph with the
   // new nodes/edges ghosted and let the founder accept or discard. "Vibe up to the gate" now covers
   // the agent editing the graph too — nothing it proposes lands until the founder accepts on-canvas.
@@ -1063,22 +1080,27 @@ export default function App() {
           ) : null}
         </div>
 
-        <nav className="loop-tabs">
-          {view === "canvas" && graph
-            ? (["design", "simulation", "run", "review", "learning"] as MainTab[]).map((tab) => (
-                <button
-                  key={tab}
-                  className={`loop-tab ${activeTab === tab ? "loop-tab-active" : ""}`}
-                  onClick={() => setActiveTab(tab)}
-                  type="button"
-                >
-                  {tab === "simulation" ? "Simulation" : tab.charAt(0).toUpperCase() + tab.slice(1)}
-                </button>
-              ))
-            : null}
-        </nav>
-
         <div className="loop-toolbar-right">
+          {/* Approvals — the founder gate is the whole safety spine, so it gets a first-class home.
+              Quiet (a ghost outline) at zero; prominent (filled amber, a count) when drafts wait. It
+              opens the Approvals panel listing every gated draft with its evidence and approve/edit/
+              reject. The count is real pending-gate data, never fabricated. */}
+          {view === "canvas" ? (
+            <button
+              className={`loop-approvals-btn ${pendingApprovals > 0 ? "has-pending" : ""} ${approvalsOpen ? "open" : ""}`}
+              onClick={() => setApprovalsOpen((v) => !v)}
+              type="button"
+              aria-haspopup="dialog"
+              aria-expanded={approvalsOpen}
+              title={pendingApprovals > 0
+                ? `${pendingApprovals} draft${pendingApprovals === 1 ? "" : "s"} waiting for your approval`
+                : "No drafts waiting — nothing has reached the gate"}
+            >
+              <ShieldCheck className="loop-approvals-icon" />
+              <span>Approvals</span>
+              {pendingApprovals > 0 ? <span className="loop-approvals-count">{pendingApprovals}</span> : null}
+            </button>
+          ) : null}
           <ContextPill manifest={contextManifest} fallbackPct={contextPct} />
           <div
             className={`loop-model-btn ${operatorSession ? "operator-present" : ""} ${connection && !connection.connected ? "disconnected" : ""}`}
@@ -1138,10 +1160,7 @@ export default function App() {
             onOpenView={(v) => { if (v === "opportunities") startIdeation(); else if (v === "understand") { setIdeationOpen(false); setOverlay("understand"); } else { setOverlay(null); setIdeationOpen(false); } }}
             library={library}
             programs={programs}
-            agentPolicies={agentPolicies}
             agentInstances={agentInstances}
-            feedbackSignals={feedbackSignals}
-            domainEvents={domainEvents}
             runs={programRuns}
             contextManifest={contextManifest}
             engine={engine}
@@ -1384,6 +1403,71 @@ export default function App() {
           )}
 
         </section>
+
+        {/* ── Approvals panel — the founder gate's first-class home ─────────
+            Listed: every gated draft the run on screen is holding, with its evidence and a way to
+            act. Quiet honest state when nothing is pending. Modeled on a source-control review list:
+            the badge counts, this panel resolves. */}
+        {approvalsOpen && view === "canvas" ? (
+          <aside className="loop-approvals-panel" role="dialog" aria-label="Approvals" aria-modal="false">
+            <header className="loop-approvals-head">
+              <div className="loop-approvals-head-title">
+                <ShieldCheck />
+                <strong>Approvals</strong>
+                {pendingApprovals > 0 ? <span className="loop-approvals-count">{pendingApprovals}</span> : null}
+              </div>
+              <button className="loop-approvals-close" onClick={() => setApprovalsOpen(false)} type="button" aria-label="Close approvals">
+                <X />
+              </button>
+            </header>
+            <div className="loop-approvals-body">
+              {approvalItems.length === 0 ? (
+                <div className="loop-approvals-empty">
+                  <ShieldCheck />
+                  <strong>Nothing waiting</strong>
+                  <p>
+                    {pendingApprovals > 0
+                      ? `${pendingApprovals} draft${pendingApprovals === 1 ? "" : "s"} are gated in other systems. Open that outcome to review them.`
+                      : "Nothing has reached the gate. When a run stages a draft to send, publish, or charge, it stops here for your approval first — nothing leaves the building without it."}
+                  </p>
+                </div>
+              ) : approvalItems.map((gate) => (
+                <section className="loop-approvals-gate" key={gate.nodeId}>
+                  <div className="loop-approvals-gate-head">
+                    <strong>{gate.label}</strong>
+                    <span>{gate.items.length} draft{gate.items.length === 1 ? "" : "s"} staged</span>
+                  </div>
+                  {gate.items.length === 0 ? (
+                    <p className="loop-approvals-gate-note">Staged content loads when this gate's run is open.</p>
+                  ) : gate.items.slice(0, 6).map((item, i) => (
+                    <article className="loop-approvals-item" key={item.id ?? `${gate.nodeId}-${i}`}>
+                      <div className="loop-approvals-item-text">
+                        <strong>{item.subject ?? item.name ?? item.type ?? "Draft"}</strong>
+                        {item.draft || item.summary ? (
+                          <p>{String(item.draft ?? item.summary).slice(0, 180)}</p>
+                        ) : null}
+                        {item.source ? (
+                          <span className={`loop-approvals-source tag-${item.source.tag}`}>
+                            {item.source.tag} · {item.source.tool}
+                          </span>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
+                  <div className="loop-approvals-gate-actions">
+                    <button
+                      className="loop-approvals-review"
+                      onClick={() => { setApprovalsOpen(false); jumpToNode(gate.nodeId); }}
+                      type="button"
+                    >
+                      Review evidence & approve / edit / reject
+                    </button>
+                  </div>
+                </section>
+              ))}
+            </div>
+          </aside>
+        ) : null}
 
         {/* Persistent Claude co-pilot — channels + conversation + composer, always docked */}
         {view !== "projects" ? <ComposerDock

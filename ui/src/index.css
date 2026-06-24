@@ -7692,6 +7692,129 @@ svg {
   white-space: nowrap;
 }
 
+/* ── Explorer: IDE-done-right rail (Outcomes tree, Library, sub-groups) ──────── */
+/* First-run: the Outcomes section is the call to action itself when nothing exists yet. */
+.explorer-firstrun { padding: 6px 14px 12px 30px; display: grid; gap: 8px; }
+.explorer-firstrun strong { font-size: 13px; color: var(--ink); }
+.explorer-firstrun p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.explorer-firstrun-cta {
+  display: inline-flex; align-items: center; gap: 7px; width: 100%; justify-content: center;
+  margin-top: 2px; padding: 8px 12px; border: 0; border-radius: var(--r-sm); cursor: pointer;
+  background: var(--accent); color: #fff; font-size: 12.5px; font-weight: 650;
+}
+.explorer-firstrun-cta:hover { background: #000; }
+.explorer-firstrun-cta svg { flex-shrink: 0; }
+.explorer-firstrun-secondary {
+  display: inline-flex; align-items: center; gap: 6px; width: 100%; justify-content: center;
+  padding: 6px 12px; border: 1px solid var(--line-2); border-radius: var(--r-sm); cursor: pointer;
+  background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 600;
+}
+.explorer-firstrun-secondary:hover { color: var(--ink); border-color: var(--ghost); }
+.explorer-firstrun-secondary svg { flex-shrink: 0; }
+
+/* A child cluster under a tree row — the system(s) under an outcome, the agents for an outcome. */
+.explorer-subgroup { padding: 4px 0 2px; }
+.explorer-subgroup-label {
+  display: block; padding: 4px 12px 3px 30px; color: var(--faint);
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.explorer-row-child { padding-left: 38px; font-size: 12px; }
+.explorer-row-child svg { color: var(--muted); flex-shrink: 0; }
+
+/* A waiting-approval row — amber, because the founder gate is a real state, not decoration. */
+.explorer-row-approve {
+  color: var(--gap); font-weight: 600;
+  background: color-mix(in srgb, var(--gap) 8%, transparent);
+}
+.explorer-row-approve:hover { background: color-mix(in srgb, var(--gap) 14%, transparent); }
+.explorer-row-approve svg { color: var(--gap); flex-shrink: 0; }
+
+/* Product grounding — a quiet rail footer, not a top-level peer. */
+.explorer-rail-foot {
+  display: flex; align-items: center; gap: 8px; width: 100%; margin-top: auto;
+  padding: 11px 14px; border: 0; border-top: 1px solid var(--line); cursor: pointer;
+  background: var(--panel); color: var(--muted); font-size: 12px; font-weight: 560; text-align: left;
+}
+.explorer-rail-foot:hover { color: var(--ink); background: var(--surface-2); }
+.explorer-rail-foot.active { color: var(--ink); font-weight: 650; }
+.explorer-rail-foot svg { flex-shrink: 0; color: var(--muted); }
+.explorer-rail-foot span:nth-of-type(1) { flex: 1; }
+.explorer-rail-foot-meta { color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+
+/* ── Approvals — the founder gate, surfaced (toolbar badge + panel) ──────────── */
+.loop-approvals-btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px;
+  border: 1px solid var(--line-2); border-radius: var(--r-sm); cursor: pointer;
+  background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 600;
+  transition: background 120ms var(--ease), border-color 120ms var(--ease), color 120ms var(--ease);
+}
+.loop-approvals-btn:hover { color: var(--ink); border-color: var(--ghost); }
+.loop-approvals-btn.open { border-color: var(--accent); color: var(--ink); }
+.loop-approvals-icon { width: 14px; height: 14px; flex-shrink: 0; }
+/* Prominent only when drafts wait — the VS Code source-control register: quiet at zero. */
+.loop-approvals-btn.has-pending {
+  color: #7a4d12; border-color: color-mix(in srgb, var(--gap) 45%, transparent);
+  background: var(--gap-soft);
+}
+.loop-approvals-btn.has-pending:hover { border-color: var(--gap); }
+.loop-approvals-btn.has-pending .loop-approvals-icon { color: var(--gap); }
+.loop-approvals-count {
+  min-width: 16px; padding: 1px 5px; border-radius: 999px;
+  background: var(--gap); color: #fff; font-size: 10px; font-weight: 700; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.loop-approvals-panel {
+  position: absolute; top: 8px; right: 16px; width: 380px; max-height: calc(100vh - 120px);
+  z-index: 60; display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-xl);
+  box-shadow: var(--shadow-pop); overflow: hidden;
+}
+.loop-approvals-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; border-bottom: 1px solid var(--line);
+}
+.loop-approvals-head-title { display: flex; align-items: center; gap: 8px; }
+.loop-approvals-head-title strong { font-size: 13.5px; color: var(--ink); }
+.loop-approvals-head-title svg { width: 16px; height: 16px; color: var(--gap); }
+.loop-approvals-close {
+  width: 26px; height: 26px; border: 0; border-radius: var(--r-sm); background: none; cursor: pointer;
+  color: var(--muted); display: grid; place-items: center;
+}
+.loop-approvals-close:hover { background: var(--surface-2); color: var(--ink); }
+.loop-approvals-close svg { width: 15px; height: 15px; }
+.loop-approvals-body { padding: 10px 12px 14px; overflow-y: auto; }
+
+.loop-approvals-empty { display: grid; gap: 7px; padding: 18px 8px; text-align: center; justify-items: center; }
+.loop-approvals-empty svg { width: 26px; height: 26px; color: var(--ghost); }
+.loop-approvals-empty strong { font-size: 13px; color: var(--ink); }
+.loop-approvals-empty p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); max-width: 300px; }
+
+.loop-approvals-gate { padding: 8px 0 10px; border-bottom: 1px solid var(--line); }
+.loop-approvals-gate:last-child { border-bottom: 0; }
+.loop-approvals-gate-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 0 2px 6px; }
+.loop-approvals-gate-head strong { font-size: 12.5px; color: var(--ink); }
+.loop-approvals-gate-head span { font-size: 11px; color: var(--faint); }
+.loop-approvals-gate-note { margin: 0; padding: 0 2px; font-size: 11.5px; color: var(--faint); }
+.loop-approvals-item {
+  padding: 8px 10px; margin: 4px 0; border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.loop-approvals-item-text strong { display: block; font-size: 12.5px; color: var(--ink); }
+.loop-approvals-item-text p { margin: 3px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+.loop-approvals-source {
+  display: inline-block; margin-top: 6px; padding: 1px 7px; border-radius: 999px;
+  font-size: 10px; font-weight: 650; background: var(--surface-2); color: var(--muted);
+}
+.loop-approvals-source.tag-observed { color: var(--proven); background: var(--proven-soft); }
+.loop-approvals-source.tag-blind { color: var(--gap); background: var(--gap-soft); }
+.loop-approvals-gate-actions { padding: 6px 2px 0; }
+.loop-approvals-review {
+  width: 100%; padding: 8px; border: 0; border-radius: var(--r-sm); cursor: pointer;
+  background: var(--gap); color: #fff; font-size: 12px; font-weight: 650;
+}
+.loop-approvals-review:hover { background: #c2780a; }
+
 /* ── Operator narration (markdown-lite) ───────────────────────────────────── */
 .composer-event-detail { color: var(--ink-2); font-size: 12.5px; line-height: 1.5; }
 .composer-event-detail p { margin: 4px 0; }
@@ -8800,14 +8923,19 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .goal-launcher-secondary button:disabled { opacity: 0.5; cursor: default; }
 
 /* ── Claude dock as a FLOATING card on the canvas (not a full-height rail) ──── */
+/* The open co-pilot is a real right-edge COLUMN, not an absolute overlay: it sits in the loop-body
+   grid's third track so the canvas shrinks to fit beside it. This is the fix for the dock hiding the
+   founder-gate node — the canvas now lays out AROUND the dock instead of behind it. The collapsed
+   state (.composer-pill) is the only floating element, and it is small enough never to cover a node. */
 .composer-dock.floating {
-  position: absolute; right: 18px; bottom: 18px; top: auto;
-  flex: none; width: 384px; max-height: 60vh; height: auto;
-  background: var(--surface); border: 1px solid var(--line-2); border-left: 1px solid var(--line-2);
-  border-radius: var(--r-xl); box-shadow: var(--shadow-pop); overflow: hidden; z-index: 30;
-  transition: width 160ms var(--ease), max-height 160ms var(--ease);
+  position: relative; right: auto; bottom: auto; top: auto;
+  flex: 0 0 384px; width: 384px; height: 100%; max-height: none;
+  margin: 0; align-self: stretch;
+  background: var(--surface); border: none; border-left: 1px solid var(--line-2);
+  border-radius: 0; box-shadow: none; overflow: hidden; z-index: 30;
+  transition: flex-basis 160ms var(--ease), width 160ms var(--ease);
 }
-.composer-dock.floating.expanded { width: 468px; max-height: 82vh; }
+.composer-dock.floating.expanded { flex-basis: 468px; width: 468px; max-height: none; }
 .composer-dock.floating .composer-dock-head { border-radius: var(--r-xl) var(--r-xl) 0 0; }
 .composer-dock-icon {
   width: 28px; height: 28px; flex-shrink: 0; border: 0; background: none; cursor: pointer;
