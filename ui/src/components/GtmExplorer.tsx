@@ -78,6 +78,7 @@ export function GtmExplorer({
   onJumpToNode: (nodeId: string) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [archivedOpen, setArchivedOpen] = useState(false);
   const problems = (graph?.nodes.length === 0) ? [] : engine?.investigations ?? [];
   // Some subsystems (learn) have no node of their own — route to the gate, where founder
   // decisions are recorded, so a problem never dead-ends without a place to act.
@@ -115,7 +116,13 @@ export function GtmExplorer({
       .map((ch) => ch.id),
   );
   const standaloneChannels = channels.filter((ch) => !linkedChannelIds.has(ch.id));
-  const outcomeCount = programs.length + standaloneChannels.length;
+  // Archived/dead systems shouldn't sit at equal weight in the active list. ChannelMeta has no
+  // archived status (only idle/error/done/waiting), so a name heuristic is the only honest signal
+  // available — prefer a real status field if one is ever added to the model.
+  const isArchivedChannel = (ch: ChannelMeta) => /\b(archived|dupe|duplicate)\b/i.test(ch.name);
+  const liveStandalone = standaloneChannels.filter((ch) => !isArchivedChannel(ch));
+  const archivedStandalone = standaloneChannels.filter(isArchivedChannel);
+  const outcomeCount = programs.length + liveStandalone.length;
   const channelDot = (ch: ChannelMeta) =>
     ch.pendingGates > 0 ? "var(--gap)" : ch.lastRunOk === false ? "var(--danger)" : ch.runCount > 0 ? "var(--proven)" : "var(--ghost)";
   const channelMeta = (ch: ChannelMeta) =>
@@ -190,7 +197,7 @@ export function GtmExplorer({
             {/* Standalone systems — a channel the founder has built that no program wraps yet. It IS
                 an outcome (it has a goal, a system, runs, and a gate), so it sits at the top level as
                 its own outcome rather than hidden. This is the common case before a program compiles. */}
-            {standaloneChannels.map((ch) => (
+            {liveStandalone.map((ch) => (
               <button
                 key={ch.id}
                 className={`explorer-row ${ch.id === activeChannelId ? "active" : ""}`}
@@ -203,6 +210,34 @@ export function GtmExplorer({
                 <span className="explorer-row-meta">{channelMeta(ch)}</span>
               </button>
             ))}
+
+            {/* Archived systems — dead or duplicate outcomes, collapsed out of the way so they
+                don't compete with live work, but still reachable. */}
+            {archivedStandalone.length > 0 ? (
+              <div className="explorer-subgroup">
+                <button
+                  className="explorer-subgroup-toggle"
+                  onClick={() => setArchivedOpen((v) => !v)}
+                  type="button"
+                >
+                  {archivedOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                  <span className="explorer-subgroup-label">Archived</span>
+                  <span className="rail-count">{archivedStandalone.length}</span>
+                </button>
+                {archivedOpen ? archivedStandalone.map((ch) => (
+                  <button
+                    key={ch.id}
+                    className={`explorer-row explorer-row-child explorer-row-archived ${ch.id === activeChannelId ? "active" : ""}`}
+                    onClick={() => onOpenChannel(ch.id)}
+                    type="button"
+                    title={ch.objective || ch.name}
+                  >
+                    <span className="explorer-dot" style={{ background: "var(--ghost)" }} />
+                    <span className="explorer-row-name">{ch.name}</span>
+                  </button>
+                )) : null}
+              </div>
+            ) : null}
 
             <button className="explorer-row explorer-new" onClick={onNewProgram} type="button">
               <Plus size={13} /><span className="explorer-row-name">New outcome</span>
@@ -281,6 +316,9 @@ export function GtmExplorer({
             <div className="rail-item" key={p.id}>
               <div className="rail-item-head">
                 <AlertTriangle />
+                <p className="rail-item-problem">{p.problem}</p>
+              </div>
+              <div className="rail-item-meta">
                 <span className="rail-item-sub">{p.subsystem}</span>
                 <span
                   className="rail-item-health"
@@ -290,7 +328,6 @@ export function GtmExplorer({
                   {p.health}
                 </span>
               </div>
-              <p className="rail-item-problem">{p.problem}</p>
               {node ? (
                 <button className="rail-item-fix" onClick={() => onJumpToNode(node.id)} type="button">
                   Fix in {node.label}<ArrowRight />

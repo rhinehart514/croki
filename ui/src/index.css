@@ -8955,3 +8955,17 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .composer-pill-avatar.running { background: #ecfdf3; color: #24a568; }
 .composer-pill-avatar svg { width: 15px; height: 15px; }
 .composer-pill-text { font-size: 13px; font-weight: 550; }
+
+/* Archived outcomes subgroup + Problems-rail legibility (text-first). */
+.explorer-subgroup-toggle {
+  display: flex; align-items: center; gap: 6px;
+  width: 100%; padding: 2px 0; background: none; border: 0; cursor: pointer;
+  color: var(--muted); text-align: left;
+}
+.explorer-row-archived .explorer-row-name { color: var(--muted); }
+.rail-item-meta {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 4px; padding-left: 22px;
+}
+.rail-item-head { align-items: flex-start; }
+.rail-item-head .rail-item-problem { margin: 0; font-weight: 500; }
