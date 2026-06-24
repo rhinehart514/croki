@@ -213,7 +213,16 @@ function makeEntryRunnable(graph) {
   const edges = graph.edges
     .filter((e) => !(e.source === source.id && e.target === downstreamAgent.id))
     .map((e) => (e.target === source.id ? { ...e, target: downstreamAgent.id } : e));
-  return { ...graph, nodes: graph.nodes.filter((n) => n.id !== source.id), edges };
+  // The promoted agent is now the entry — it must run on ZERO upstream items and self-source. Its
+  // contract still required incoming items (minItems/accepts), so auditInput would block it for the
+  // exact reason the empty source did. Clear the incoming-item gate; keep `emits` so the downstream
+  // contracts that read this node's output still hold.
+  const nodes = graph.nodes
+    .filter((n) => n.id !== source.id)
+    .map((n) => (n.id === downstreamAgent.id
+      ? { ...n, contract: { ...(n.contract ?? {}), accepts: [], minItems: 0 } }
+      : n));
+  return { ...graph, nodes, edges };
 }
 
 export async function runGraph(graph, opts = {}) {
