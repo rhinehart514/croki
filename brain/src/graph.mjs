@@ -206,20 +206,33 @@ function relaxPreGateContracts(nodes, edges) {
     if (!incoming.has(e.target)) incoming.set(e.target, []);
     incoming.get(e.target).push(e.source);
   }
+  const gateIds = nodes.filter((n) => n.category === "gate").map((n) => n.id);
   const preGate = new Set();
-  const stack = nodes.filter((n) => n.category === "gate").map((n) => n.id);
+  const stack = [...gateIds];
   while (stack.length) {
     const id = stack.pop();
     for (const src of incoming.get(id) ?? []) {
       if (!preGate.has(src)) { preGate.add(src); stack.push(src); }
     }
   }
+  // Everything the founder gate feeds. Post-gate staging must trust the founder's approval, not
+  // re-litigate the draft's field names — the gate IS the contract checkpoint.
+  const postGate = new Set();
+  for (const gateId of gateIds) for (const d of descendants(gateId, edges)) postGate.add(d);
   return nodes.map((n) => {
     // The gate is human review — it must NOT reject real drafts on a field-name technicality (the
     // draft carries `subject`/`body`/`to` while the contract demanded `decisionMaker`/`personalFact`).
-    // Accept whatever the chain staged; keep minItems 1 so it still pauses on ≥1 draft.
-    if (n.category === "gate") return { ...n, contract: { ...(n.contract ?? {}), accepts: [], minItems: 1 } };
+    // Clear both sides of its contract: accept whatever the chain staged, and stop promising specific
+    // output fields the human-approved item may not carry. Keep minItems 1 so it still pauses on ≥1 draft.
+    if (n.category === "gate") return { ...n, contract: { ...(n.contract ?? {}), accepts: [], emits: [], minItems: 1 } };
     if (preGate.has(n.id) && (n.kind === "agent" || n.kind === "code")) {
+      return { ...n, contract: { ...(n.contract ?? {}), accepts: [], emits: [] } };
+    }
+    // Post-gate execute (staging/send) trusts the approval: relax BOTH sides of its field contract.
+    // Its input must not block an approved draft on a name mismatch, and its output must not promise
+    // send-only fields (messageId/sentAt) that local staging honestly never produces. Measure is
+    // deliberately left untouched so it stays honestly blind when the win event carries no source.
+    if (postGate.has(n.id) && n.category === "execute") {
       return { ...n, contract: { ...(n.contract ?? {}), accepts: [], emits: [] } };
     }
     return n;
@@ -354,7 +367,7 @@ export async function runGraph(graph, opts = {}) {
     emit({ type: "node_start", nodeId, category: node.category, kind: node.kind ?? "tool", label: node.label });
     const inputAudit = auditInput(node, upstream);
     let result;
-    if (inputAudit.state === "blocked" || inputAudit.state === "waiting" || inputAudit.state === "blind") {
+    if (inputAudit.state === "blocked" || inputAudit.state === "waiting") {
       result = {
         nodeId,
         category: node.category,
@@ -365,6 +378,13 @@ export async function runGraph(graph, opts = {}) {
         error: inputAudit.message,
         contractAudit: inputAudit,
       };
+    } else if (inputAudit.state === "blind") {
+      // Blind is honest, not fatal. Measurement that can't attribute (e.g. the win event carries no
+      // source) is a real product gap, but it must not fail an otherwise-successful run — a fully
+      // approved, staged run reads "completed", and Measure reports its gap separately. Let the node
+      // run on what it has (it self-labels each item attributed/blind) and flag it blind, not blocked.
+      result = await runNode(node, upstream, context, store, { approvals, decisions, stepRuntime });
+      result = { ...result, ok: result.ok !== false, blind: true, contractAudit: inputAudit };
     } else {
       result = await runNode(node, upstream, context, store, { approvals, decisions, stepRuntime });
       const outputAudit = result.ok ? auditOutput(node, result.items ?? []) : inputAudit;
@@ -422,7 +442,9 @@ export async function runGraph(graph, opts = {}) {
   const feedbackEdges = edges.filter((e) => e.edgeType === "feedback");
 
   const results = Object.fromEntries(nodeResults.entries());
-  const ok = Array.from(nodeResults.values()).every((r) => r.ok && !r.pendingReview);
+  // A blind node (measurement that can't attribute yet) is an honest gap, not a failure — it never
+  // counts against the run. A pending gate does (the run isn't done until the founder decides).
+  const ok = Array.from(nodeResults.values()).every((r) => (r.ok || r.blind) && !r.pendingReview);
 
   return {
     runId,

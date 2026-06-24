@@ -104,7 +104,11 @@ export function normalizeRunFeedback({ projectId = "default", graph, result } = 
         }
       }
     }
-    if (nodeResult?.ok === false && nodeResult.error) {
+    // Only a GENUINE step failure is a learning signal. A node that is `blocked` (waiting on a gate
+    // pause or a failed upstream) or `blind` (honest measurement gap) is not the agent's fault, so
+    // banking it as RunFailure floods the policy with noise and spawns junk agent revisions. The
+    // earlier flood of identical "Waiting for at least 1 input item" loops came from exactly this.
+    if (nodeResult?.ok === false && nodeResult.error && !nodeResult.blocked && !nodeResult.blind) {
       signals.push(signal({
         projectId,
         graphId: graph?.id ?? result?.graphId ?? null,

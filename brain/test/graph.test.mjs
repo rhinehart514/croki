@@ -145,6 +145,35 @@ describe("runGraph — gate nodes pause for review", () => {
   });
 });
 
+describe("runGraph — blind measurement is honest, not fatal", () => {
+  it("a blind measure node flags blind without failing the run", async () => {
+    // The measure node requires an attribution `source` that nothing upstream promises — the real
+    // RodentRadar gap. The node must report blind, but the run must still complete (ok: true) so a
+    // fully approved, staged run does not read "blocked".
+    const graph = {
+      id: "blind-measure-flow",
+      nodes: [
+        { id: "ctx", category: "context", connector: "product", label: "Context", config: { name: "Test" } },
+        { id: "gate", category: "gate", connector: "default", label: "Review", config: {} },
+        {
+          id: "measure", category: "measure", connector: "default", label: "Measure",
+          config: { joinKey: "gtmActionId" },
+          contract: { accepts: ["gtmActionId", "source"], emits: ["attribution"] },
+        },
+      ],
+      edges: [
+        { id: "a", source: "ctx", target: "gate", edgeType: "data" },
+        { id: "b", source: "gate", target: "measure", edgeType: "data" },
+      ],
+    };
+    const run = await runGraph(graph, { approvals: { gate: true } });
+    assert.equal(run.nodes.measure.blind, true, "measure should report blind");
+    assert.equal(run.nodes.measure.ok, true, "a blind node is not a failure");
+    assert.equal(run.ok, true, "a blind measure must not fail the whole run");
+    assert.equal(run.error, undefined);
+  });
+});
+
 describe("runGraph — feedback edges deferred", () => {
   it("feedback edges are returned but not executed", async () => {
     const g = defaultGraphTemplate();

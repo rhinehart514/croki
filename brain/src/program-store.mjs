@@ -24,8 +24,11 @@ const TRANSITIONS = new Map([
   ["waiting_for_gate", new Set(["running", "learning", "paused", "blocked", "complete"])],
   ["paused", new Set(["ready", "running", "retired", "blocked"])],
   ["learning", new Set(["ready", "running", "complete", "blocked", "retired"])],
-  ["complete", new Set(["ready", "retired"])],
-  ["blocked", new Set(["ready", "retired"])],
+  // complete and blocked are recoverable, not dead ends: the founder fixes what's wrong (or just
+  // wants another pass) and re-runs. Re-running enters "running" directly, so both must allow it —
+  // otherwise an approved-but-blocked program could never be resumed at all.
+  ["complete", new Set(["ready", "running", "retired"])],
+  ["blocked", new Set(["ready", "running", "retired"])],
   ["retired", new Set([])],
 ]);
 

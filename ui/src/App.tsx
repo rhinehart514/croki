@@ -468,15 +468,21 @@ export default function App() {
   // The flagship "Run Program" now streams node-by-node like the raw-graph path — each step lights
   // up as it runs and its content lands the moment it succeeds, then run_done carries the program
   // summary (learning signals, next agent versions) for tab routing.
-  const executeProgram = useCallback(async () => {
+  const executeProgram = useCallback(async (
+    nextApprovals: Record<string, boolean> = approvals,
+    nextDecisions: Decisions = decisions,
+    // Resume the exact reviewed run by default so a gate decision reuses the staged artifacts
+    // instead of re-running discovery/draft behind the founder's back. A fresh "Run Program"
+    // passes undefined to start clean.
+    resumeRunId: string | undefined = runResult?.runId,
+  ) => {
     if (!activeProject || !activeProgramId) return;
-    const resumeRunId = runResult?.runId;
     setGraphRunning(true);
     setRunningNodeId(null);
     setGraphError(null);
     setRunResult({ runId: `live-${Date.now()}`, graphId: graph?.id ?? "", ok: false, nodes: {}, executionOrder: [], pendingGates: [], feedbackEdges: [] });
     try {
-      await runProgramStream(activeProject.id, activeProgramId, { approvals, decisions, resumeRunId }, (ev) => {
+      await runProgramStream(activeProject.id, activeProgramId, { approvals: nextApprovals, decisions: nextDecisions, resumeRunId }, (ev) => {
         if (ev.type === "node_start") {
           setRunningNodeId(ev.nodeId);
         } else if (ev.type === "node_done") {
@@ -560,11 +566,14 @@ export default function App() {
       syncOperator(response.session);
       return;
     }
+    // In a program, the gate decision must resume the PROGRAM run (program-runtime owns resume + the
+    // learning loop). Routing it through the raw-graph path re-ran discovery and banked junk feedback.
+    if (activeProgramId) { await executeProgram(next, decisions, runResult?.runId); return; }
     await executeGraph(undefined, next, decisions, runResult?.runId);
-  }, [approvals, decisions, executeGraph, operatorSession, runResult?.runId, syncOperator]);
+  }, [approvals, decisions, executeGraph, executeProgram, activeProgramId, operatorSession, runResult?.runId, syncOperator]);
 
   // Per-item founder review: record approve/reject/edit decisions for a gate
-  // node, then re-run so they flow into the run ledger and shape the next run.
+  // node, then resume so they flow into the run ledger and shape the next run.
   const submitGateReview = useCallback(async (
     nodeId: string,
     nodeDecisions: Record<string, GateDecision>,
@@ -576,8 +585,11 @@ export default function App() {
       syncOperator(response.session);
       return;
     }
+    // Program gate review resumes the program run (exact staged items reused, full domain loop runs);
+    // the raw-graph path is only for a standalone channel graph.
+    if (activeProgramId) { await executeProgram(approvals, next, runResult?.runId); return; }
     await executeGraph(undefined, approvals, next, runResult?.runId);
-  }, [decisions, approvals, executeGraph, operatorSession, runResult?.runId, syncOperator]);
+  }, [decisions, approvals, executeGraph, executeProgram, activeProgramId, operatorSession, runResult?.runId, syncOperator]);
 
   const persistGraph = useCallback(async () => {
     if (!graph) return;
