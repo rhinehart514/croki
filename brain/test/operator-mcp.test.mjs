@@ -26,6 +26,15 @@ describe("operator MCP bridge — safety surface", () => {
     assert.throws(() => assertSafeTool("send_email"), /Refusing to expose/);
   });
 
+  it("exposes the product-picture tools and they pass the safe-tool gate", () => {
+    const exposed = new Set(safeOperatorTools().map((tool) => tool.name));
+    for (const name of ["derive_product_model", "revise_product_model", "record_product_signal"]) {
+      // assertSafeTool throws on a forbidden verb; the three picture verbs are safe by construction.
+      assert.doesNotThrow(() => assertSafeTool(name));
+      assert.ok(exposed.has(name), `${name} must be exposed to the operator subprocess`);
+    }
+  });
+
   it("requires a session id", () => {
     assert.throws(() => createOperatorBridge({}), /GTM_IDE_OPERATOR_SESSION/);
   });

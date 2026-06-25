@@ -34,6 +34,9 @@ import {
   saveGraph,
   setActiveWorkflow,
   updateOpportunity,
+  getProductModel,
+  deriveProductModel,
+  reviseProductModel,
 } from "@/api";
 import { ArtifactEditor } from "@/components/ArtifactEditor";
 import { ComposerDock } from "@/components/ComposerDock";
@@ -47,6 +50,7 @@ import { statusLabel } from "@/lib/status";
 import { itemKey } from "@/lib/itemKey";
 import { findProgramForGraph, graphBelongsToProgram, programGraphId } from "@/lib/program";
 import { ProductUnderstanding } from "@/components/ProductUnderstanding";
+import { ProductCanvas } from "@/components/ProductCanvas";
 import { ProjectPicker } from "@/components/ProjectPicker";
 import { ProductEntry } from "@/components/ProductEntry";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
@@ -56,7 +60,7 @@ import type {
   ChannelMeta, ConnectorMeta, ContextManifest, DataAdapter, Decisions, EngineState, GateDecision, GraphOperation, GtmLibrary, GTMContractAudit, GTMGraph, GTMNode, GTMOpportunity,
   GTMProject, GTMRunResult, NodeSelection, OperatorSession, OpportunityStudio as OpportunityStudioState, ProjectSummary,
   AgentCreationPolicy, AgentInstance, FeedbackSignal, OutcomeProgram,
-  AgentEvaluation, DomainEvent,
+  AgentEvaluation, DomainEvent, ProductModel, ProductModelEdit,
 } from "@/types";
 
 type MainTab = ProgramCanvasMode;
@@ -135,7 +139,7 @@ export default function App() {
   // the canvas out; they float OVER it as dismissable overlays (set via `overlay`), so the IDE is
   // never replaced. Channels live in the explorer, not a page.
   const [view, setView] = useState<"projects" | "canvas" | "start">("canvas");
-  const [overlay, setOverlay] = useState<"understand" | null>(null);
+  const [overlay, setOverlay] = useState<"understand" | "product" | null>(null);
   // Ideation runs IN the canvas: each proposed channel is drawn as its own workflow, multiple
   // workflows laid out in lanes on one canvas. The chat narrates; clicking a lane builds it.
   const [ideationOpen, setIdeationOpen] = useState(false);
@@ -148,6 +152,10 @@ export default function App() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [activeProject, setActiveProjectState] = useState<GTMProject | null>(null);
   const [opportunityStudio, setOpportunityStudio] = useState<OpportunityStudioState | null>(null);
+  // The living product picture — the founder-editable INTERPRETATION aggregate, loaded alongside the
+  // active project. Edits persist through the domain commands (revise/derive) then re-fetch.
+  const [productModel, setProductModel] = useState<ProductModel | null>(null);
+  const [productModelBusy, setProductModelBusy] = useState(false);
   const [programs, setPrograms] = useState<OutcomeProgram[]>([]);
   const [activeProgramId, setActiveProgramId] = useState<string | null>(null);
   const [agentPolicies, setAgentPolicies] = useState<AgentCreationPolicy[]>([]);
@@ -354,6 +362,45 @@ export default function App() {
       .catch(() => {});
     return () => { live = false; };
   }, [activeProjectId]);
+
+  // Load the current living product picture whenever the active product changes. The model is
+  // per-project, so it's fetched alongside the project and cleared when none is active. The clear
+  // and the fetch both land in async callbacks, never synchronously in the effect body.
+  useEffect(() => {
+    let live = true;
+    const load = activeProjectId
+      ? getProductModel().then(({ productModel: model }) => model).catch(() => null)
+      : Promise.resolve(null);
+    void load.then((model) => { if (live) setProductModel(model); });
+    return () => { live = false; };
+  }, [activeProjectId]);
+
+  // Derive a first draft (or re-derive) from the scan grounding — the server injects the live
+  // generator. Re-fetch after so the surface reflects the new version.
+  const handleDeriveProductModel = useCallback(async () => {
+    if (!activeProject) return;
+    setProductModelBusy(true);
+    try {
+      const { productModel: model } = await deriveProductModel();
+      setProductModel(model);
+    } finally {
+      setProductModelBusy(false);
+    }
+  }, [activeProject]);
+
+  // A founder edit — persists the changed bag through ReviseProductModel (its own append-only event
+  // log → a new version), then re-fetches so the surface shows the persisted version.
+  const handleReviseProductModel = useCallback(async (edit: ProductModelEdit) => {
+    if (!activeProject) return;
+    setProductModelBusy(true);
+    try {
+      await reviseProductModel(edit);
+      const { productModel: model } = await getProductModel();
+      setProductModel(model);
+    } finally {
+      setProductModelBusy(false);
+    }
+  }, [activeProject]);
 
   const syncOperator = useCallback((next: OperatorSession) => {
     setOperatorSession(next);
@@ -1146,6 +1193,30 @@ export default function App() {
               {hasUnsaved ? "Draft" : "Saved"}
             </span>
           ) : null}
+          {/* GTM ↔ Product mode. GTM is the go-to-market engine; Product is the living picture of
+              what the product IS. One model underneath — editing the picture grounds the GTM side. */}
+          {view === "canvas" && activeProject ? (
+            <div className="loop-mode-switch" role="tablist" aria-label="Mode">
+              <button
+                role="tab"
+                aria-selected={overlay !== "product"}
+                className={`loop-mode-tab ${overlay !== "product" ? "active" : ""}`}
+                onClick={() => setOverlay(null)}
+                type="button"
+              >
+                GTM
+              </button>
+              <button
+                role="tab"
+                aria-selected={overlay === "product"}
+                className={`loop-mode-tab ${overlay === "product" ? "active" : ""}`}
+                onClick={() => { setIdeationOpen(false); setOverlay("product"); }}
+                type="button"
+              >
+                Product
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <div className="loop-toolbar-right">
@@ -1225,7 +1296,7 @@ export default function App() {
             onNewProgram={handleNewProgram}
             onOpenArtifact={(type, ref) => setArtifactEdit({ type, ref })}
             onNewArtifact={handleNewArtifact}
-            onOpenView={(v) => { if (v === "opportunities") startIdeation(); else if (v === "understand") { setIdeationOpen(false); setOverlay("understand"); } else { setOverlay(null); setIdeationOpen(false); } }}
+            onOpenView={(v) => { if (v === "opportunities") startIdeation(); else if (v === "understand") { setIdeationOpen(false); setOverlay("understand"); } else if (v === "product") { setIdeationOpen(false); setOverlay("product"); } else { setOverlay(null); setIdeationOpen(false); } }}
             library={library}
             programs={programs}
             agentInstances={agentInstances}
@@ -1482,6 +1553,23 @@ export default function App() {
                   studio={opportunityStudio}
                 />
               </div>
+            </div>
+          )}
+
+          {/* Product mode — the living picture as a full React Flow canvas, the same visual language
+              as the GTM graph. It fills the workspace (the explorer + assistant frame stay), so
+              flipping GTM↔Product swaps the canvas, not the whole page. The editable INTERPRETATION
+              layer on top of the cited truth. */}
+          {overlay === "product" && activeProject && (
+            <div className="canvas-overlay canvas-overlay-flush" role="region" aria-label="Product mode">
+              <ProductCanvas
+                model={productModel}
+                busy={productModelBusy}
+                productName={activeProject.name}
+                onDerive={handleDeriveProductModel}
+                onRevise={handleReviseProductModel}
+                onExitToGtm={() => setOverlay(null)}
+              />
             </div>
           )}
 

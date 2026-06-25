@@ -155,9 +155,31 @@ function deriveGate(runs) {
 }
 
 // ─── Context: grounded in real product code when a workspace is open ───────────
+//
+// Health derives from the REAL scan state, never seeded. A ready context connector
+// alone used to mint a constant 88 regardless of what the scan actually proved — that
+// is the seeded value AGENTS.md forbids. The only admissible inputs are the truth-grade
+// sources the citation rule names: the raw scan report and connector readiness. The
+// founder-editable ProductModel (interpretation, holds speculative guesses) is NEVER an
+// input here — wiring it in would let interpretation move a truth-layer number.
+//
+// The shape read is the RAW scan report (server.mjs passes getWorkspace(...).report),
+// whose real keys are repo / filesScanned / stack / winEvent / analytics / attribution /
+// gaps (scan.mjs:333-371). It has no productName, no flattened evidence[] — those live on
+// the understanding object, not the raw report, so they are not read here.
+
+function reportCitationCount(report) {
+  const sections = [report.winEvent, report.analytics, report.attribution];
+  return sections.reduce((sum, section) => {
+    const cites = Array.isArray(section?.citations) ? section.citations.length : 0;
+    return sum + cites;
+  }, 0);
+}
 
 function deriveContext(connectors, report) {
   const ready = categoryReady(connectors, "context");
+
+  // 1. No report at all — grounding never ran. Honest "open a workspace" blank.
   if (!report) {
     return subsystem("context", {
       health: 66, confidence: 60,
@@ -165,6 +187,7 @@ function deriveContext(connectors, report) {
       suggestedActions: ["Open a workspace so context reflects the actual product."],
     });
   }
+
   if (!ready) {
     return subsystem("context", {
       health: 55, confidence: 50,
@@ -172,7 +195,62 @@ function deriveContext(connectors, report) {
       suggestedActions: ["Define ICP and product context for this channel."],
     });
   }
-  return subsystem("context", { health: 88, confidence: 85, agentStatus: "monitoring" });
+
+  const gaps = Array.isArray(report.gaps) ? report.gaps : [];
+  const gapIssues = gaps
+    .map((g) => (typeof g === "string" ? g : g?.title || g?.summary))
+    .filter(Boolean);
+
+  // 2. Report present but read nothing — grounding ran over an empty/unreadable repo.
+  if (report.filesScanned === 0 || !report.repo) {
+    return subsystem("context", {
+      health: 24, confidence: 30, agentStatus: "investigating",
+      activeIssues: [
+        "The scan read no product code — context cannot be grounded in a real product.",
+        ...gapIssues,
+      ],
+      suggestedActions: ["Point the workspace at a repository that contains real product code."],
+    });
+  }
+
+  const stack = Array.isArray(report.stack) ? report.stack : [];
+  const citations = reportCitationCount(report);
+
+  // 3. Scan read files but nothing is cited (or no stack detected) — context exists but
+  // is ungrounded. This is the exact case that wrongly showed 88: a ready context
+  // connector over a real-but-uncited report. Drop below the investigation threshold so
+  // the Problems rail can route to Context.
+  if (citations === 0 || stack.length === 0) {
+    return subsystem("context", {
+      health: 42, confidence: 45, agentStatus: "investigating",
+      activeIssues: [
+        "Context is ungrounded — the scan cited no product facts, so grounding is thin.",
+        ...gapIssues,
+      ],
+      suggestedActions: ["Scan a repo with real product code so context grounds in cited facts."],
+    });
+  }
+
+  // 4. Grounded, but blind on the win event (a proven hole) — cap in the mid band and
+  // surface the blind spot, exactly as Measure does for blind attribution.
+  if (report.winEvent && report.winEvent.found === false) {
+    return subsystem("context", {
+      health: 48, confidence: 55, agentStatus: "investigating",
+      activeIssues: [
+        `Context is blind on the win event "${report.winEvent.name || "the win event"}" — it is not proven in product code.`,
+        ...gapIssues,
+      ],
+      suggestedActions: ["Emit the win event in production code so context can ground on the outcome."],
+    });
+  }
+
+  // 5. Citations present, a stack detected, the win event proven, and context connectors
+  // ready — the real high band, now earned by cited reality rather than seeded.
+  return subsystem("context", {
+    health: 88, confidence: 85, agentStatus: "monitoring",
+    activeIssues: gapIssues,
+    suggestedActions: gapIssues.length ? ["Close the scan gaps to deepen grounding."] : [],
+  });
 }
 
 // ─── Research: no real signal source exists yet — say so, don't fake it ────────

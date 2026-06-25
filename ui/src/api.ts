@@ -6,7 +6,7 @@ import type {
   ContextManifest, GtmLibrary,
   GraphOperation, GTMContractAudit,
   OutcomeProgram, AgentCreationPolicy, AgentInstance, PersonalizationProfile, FeedbackSignal,
-  AgentEvaluation, DomainEvent,
+  AgentEvaluation, DomainEvent, ProductModel, ProductModelEdit, ProductPinTargetKind,
 } from "@/types";
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -255,6 +255,31 @@ export const cancelOperatorSession = (sessionId: string) =>
 // Accept or discard a graph change the operator staged for review (the on-canvas ghost proposal).
 export const resolveOperatorProposal = (sessionId: string, accept: boolean) =>
   post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/proposal`, { accept });
+
+// ── Living Product Picture — the founder-editable interpretation aggregate ─────
+// Read the current projected model; edits persist through the three domain commands (NOT a raw
+// sharedContext patch), which is what keeps the picture on its own append-only event log so edits
+// accumulate and version instead of overwriting.
+export const getProductModel = () =>
+  get<{ productModel: ProductModel | null }>("/api/product-model");
+
+// First-draft generation — the server injects the live createClaudeProductModeler generator.
+export const deriveProductModel = () =>
+  post<{ productModel: ProductModel | null }>("/api/product-model/derive", {});
+
+// A founder edit (or an accepted re-derivation): the editable bags are whitelisted, version bumps,
+// the lineage is preserved. Re-fetch after to reflect the new version.
+export const reviseProductModel = (edit: ProductModelEdit) =>
+  post<{ productModel: ProductModel | null }>("/api/product-model/revise", edit);
+
+// The "living" stroke: pin an already-persisted FeedbackSignal onto a specific element.
+export const recordProductSignal = (input: {
+  signalId: string;
+  target: { kind: ProductPinTargetKind; id?: string | null };
+  type?: string;
+  summary?: string;
+  observedAt?: string;
+}) => post<{ productModel: ProductModel | null }>("/api/product-model/signal", input);
 
 // ── Connection status — is a live Claude available for compose/ideate/operator ──
 export type ConnectionStatus = { connected: boolean; label: string | null; reason: string | null };

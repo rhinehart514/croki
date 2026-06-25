@@ -1,0 +1,185 @@
+/* WorkflowLens — workflows as stacked flow diagrams. Calm monochrome, same language as the GTM
+   graph and the other lenses: white step cards on the canvas, hairline lane dividers, color
+   rationed to the shared provenance tags. Bespoke-to-this-lens only; the shared look (cards, tags,
+   panel) comes from index.css + shared.tsx. */
+
+.workflow-lens {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--canvas);
+}
+
+/* The lane column scrolls vertically; each lane scrolls its steps horizontally on its own. */
+.workflow-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 22px 22px 96px;
+}
+.workflow-lanes {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 100%;
+}
+
+/* A lane = one workflow: header, optional summary, then the left → right step sequence. */
+.workflow-lane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  transition: border-color 140ms var(--ease), box-shadow 140ms var(--ease);
+}
+/* A guessed flow is ghosted at the lane level — dashed, lifted off the solid ramp — so it can never
+   read as a proven flow next to a derived one. Mirrors .product-node-speculative. */
+.workflow-lane-spec {
+  border-style: dashed;
+  border-color: var(--ghost);
+  background: repeating-linear-gradient(135deg, var(--surface), var(--surface) 10px, var(--surface-2) 10px, var(--surface-2) 11px);
+}
+.workflow-lane-selected {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 1px var(--ink), var(--shadow-card);
+}
+
+.workflow-lane-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+.workflow-lane-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.workflow-lane-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.25;
+}
+.workflow-lane-actor {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+.workflow-lane-head .product-prov { margin-left: auto; }
+
+.workflow-lane-summary {
+  margin: -2px 0 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--muted);
+  max-width: 64ch;
+}
+
+/* The step sequence — horizontal, scrollable, joined by arrows. */
+.workflow-steps {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 2px 2px 6px;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.workflow-steps::-webkit-scrollbar { height: 7px; }
+.workflow-steps::-webkit-scrollbar-thumb { background: var(--ghost); border-radius: 999px; }
+
+.workflow-step-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  position: relative;
+}
+/* The ordinal — a quiet mono index above-left of each card so the order is unmistakable. */
+.workflow-step-index {
+  align-self: flex-start;
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  flex: 0 0 auto;
+}
+/* The shared ObjectCard, kept a touch narrower than the graph default so a multi-step flow fits. */
+.workflow-step-card {
+  width: 208px;
+  height: 100%;
+  text-align: left;
+}
+.workflow-step-arrow { margin: 0 4px; }
+
+.workflow-steps-empty,
+.workflow-empty-note {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* Honest empty states. */
+.workflow-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+.workflow-empty-note { max-width: 380px; text-align: center; }
+
+/* Legend — floats top-right over the lanes; docks to the bottom full-width at ≤560px via
+   .lens-panel-dock (defined in index.css). */
+.workflow-legend {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 232px;
+  z-index: 4;
+}
+.workflow-legend-counts { display: flex; gap: 6px; flex-wrap: wrap; }
+.workflow-legend-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+@media (max-width: 560px) {
+  .workflow-scroll { padding: 16px 12px 120px; }
+  .workflow-lane { padding: 12px 12px; }
+}

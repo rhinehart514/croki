@@ -19,3 +19,5 @@ dist/
 
 # Local verification artifacts (screenshots, scratch)
 output/
+.design-loop/
+/*.png

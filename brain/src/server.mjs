@@ -37,6 +37,8 @@ import {
 } from "./opportunity-engine.mjs";
 import { composeOpportunityChannel, composeGraphForChannel } from "./workflow-composer.mjs";
 import { executeDomainCommand } from "./domain-commands.mjs";
+import { getProductModel } from "./product-model-store.mjs";
+import { createClaudeProductModeler } from "./product-model-generator.mjs";
 import { listOutcomePrograms, syncProgramStoreFromEvents } from "./program-store.mjs";
 import { runProgram, buildRunGrounding } from "./program-runtime.mjs";
 import { appendDomainEvent, listDomainEvents } from "./domain-events.mjs";
@@ -55,6 +57,7 @@ import { runGraph } from "./graph.mjs";
 import { liveStepRuntime } from "./agent-bridge.mjs";
 import { createClaudeIdeator } from "./ideation.mjs";
 import { createClaudeComposer } from "./composition.mjs";
+import { createClaudeEvaluator } from "./eval.mjs";
 import { selectRuntime, authModeLabel } from "./runtimes/index.mjs";
 import { listArtifacts, readArtifact, writeArtifact } from "./artifact-store.mjs";
 import {
@@ -415,6 +418,7 @@ const server = http.createServer(async (req, res) => {
       json(res, 201, await composeOpportunityChannel(body, {
         projectId,
         compose: createClaudeComposer({ cwd: composeRepo }),
+        evaluate: createClaudeEvaluator({ cwd: composeRepo }),
       }));
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
@@ -513,6 +517,66 @@ const server = http.createServer(async (req, res) => {
         graph: created.workflowGraph,
         activeChannelId: savedProject.activeChannelId,
       });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Living Product Picture — the founder-editable interpretation aggregate. Three state-changing
+  // commands funnel through executeDomainCommand (the single chokepoint), plus a read. derive injects
+  // the live createClaudeProductModeler generator; revise/signal are pure host state moves. This is
+  // Door 1 (human HTTP); the brain MCP is an HTTP client to these routes, so they exist first.
+  if (req.method === "GET" && url.pathname === "/api/product-model") {
+    try {
+      const project = loadProject();
+      json(res, 200, { productModel: getProductModel(project.id) ?? null });
+    } catch (err) {
+      json(res, 500, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/product-model/derive") {
+    try {
+      const body = await readBody(req);
+      const project = loadProject();
+      const repo = project.sharedContext?.repository?.repo || process.cwd();
+      const productModel = await executeDomainCommand("DeriveProductModel", {
+        ...body,
+        projectId: project.id,
+      }, { projectId: project.id, generate: createClaudeProductModeler({ cwd: repo }) });
+      json(res, 200, { productModel });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/product-model/revise") {
+    try {
+      const body = await readBody(req);
+      const project = loadProject();
+      const productModel = await executeDomainCommand("ReviseProductModel", {
+        ...body,
+        projectId: project.id,
+      }, { projectId: project.id });
+      json(res, 200, { productModel });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/product-model/signal") {
+    try {
+      const body = await readBody(req);
+      const project = loadProject();
+      const productModel = await executeDomainCommand("RecordProductSignal", {
+        ...body,
+        projectId: project.id,
+      }, { projectId: project.id });
+      json(res, 200, { productModel });
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
@@ -743,7 +807,11 @@ const server = http.createServer(async (req, res) => {
       } : null;
 
       const memory = buildDraftMemory(extractDecisions(runs));
-      const providers = providersFromContext({ grounding, __memory: memory, __state: runs });
+      // The editable interpretation rides alongside the cited grounding. The product-model provider
+      // emits the founder-editable shape (things/relationships/goals/states + pinned signals); the
+      // product provider keeps emitting cited truth. Both run — they answer different questions.
+      const productModel = getProductModel(project.id) ?? null;
+      const providers = providersFromContext({ grounding, productModel, __memory: memory, __state: runs });
       const assembled = assembleContext({ providers, intent: `assemble context for channel ${requestedChannel}` });
       json(res, 200, { channelId: requestedChannel, manifest: assembled.manifest, text: assembled.text });
     } catch (err) {

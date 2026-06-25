@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { assembleContext } from "../src/context/assembler.mjs";
 import {
   createProductProvider,
+  createProductModelProvider,
   createMarketProvider,
   createTasteProvider,
   createStateProvider,
@@ -154,6 +155,81 @@ test("providersFromContext builds providers only for the grounding the run carri
     __run: { runId: "x" }, // unrecognized — must NOT become a provider
   });
   assert.deepEqual(some.map((p) => p.name), ["product", "market", "taste", "state"]);
+
+  // The Living Product Picture registers as the `product-model` provider when present.
+  const withModel = providersFromContext({ productModel: POPULATED_MODEL });
+  assert.deepEqual(withModel.map((p) => p.name), ["product-model"]);
+});
+
+// ─── The Living Product Picture provider (interpretation, never cited truth) ───
+
+const POPULATED_MODEL = {
+  things: [
+    { id: "thing-project", name: "Project", provenance: "derived", evidence: [{ file: "brain/src/scan.mjs", line: 204 }] },
+    { id: "thing-operator", name: "Operator", provenance: "speculative", evidence: [] },
+  ],
+  relationships: [
+    { id: "rel-creates", from: "Operator", to: "Project", label: "creates", provenance: "speculative" },
+  ],
+  userGoals: [
+    { id: "goal-ship", goal: "Ship a GTM system from the product code", provenance: "speculative" },
+  ],
+  states: [
+    { id: "state-draft", name: "draft", thingId: "thing-project", provenance: "speculative" },
+  ],
+  pinnedSignals: [
+    { id: "pin-1", signalId: "sig-1", type: "ObservedOutcome", summary: "First operator shipped a flow", target: { kind: "thing", id: "thing-project" } },
+  ],
+};
+
+test("product-model provider returns null on an empty model, a text+meta block on a populated one", () => {
+  // Honest blank: no things → no layer, exactly like the other providers.
+  assert.equal(createProductModelProvider({ things: [] }).contribute(), null);
+  assert.equal(createProductModelProvider(null).contribute(), null);
+  assert.equal(createProductModelProvider({}).contribute(), null);
+
+  const block = createProductModelProvider(POPULATED_MODEL).contribute();
+  assert.ok(block, "a populated model must contribute a block");
+  assert.match(block.text, /Project/);
+  assert.match(block.text, /Operator/);
+  // Meta is the instrument the overlay reads — counts of each bag, split by provenance.
+  assert.equal(block.meta.things, 2);
+  assert.equal(block.meta.relationships, 1);
+  assert.equal(block.meta.userGoals, 1);
+  assert.equal(block.meta.states, 1);
+  assert.equal(block.meta.pinnedSignals, 1);
+  assert.equal(block.meta.derived, 1); // only the cited Project counts as derived
+  assert.equal(block.meta.speculative, 1);
+});
+
+test("the interpretation block can never read as cited truth in the assembled prompt", () => {
+  const block = createProductModelProvider(POPULATED_MODEL).contribute();
+
+  // The verbatim header marks the whole block as interpretation, not cited reality.
+  assert.match(block.text, /INTERPRETATION \(founder-editable, not cited reality\)/);
+
+  // A `derived` Thing renders with its file:line citation.
+  assert.match(block.text, /- Thing: Project \[derived: brain\/src\/scan\.mjs:204\]/);
+
+  // A `speculative` Thing renders with an explicit unproven marker and NO fabricated citation.
+  const operatorLine = block.text.split("\n").find((l) => l.includes("Operator"));
+  assert.match(operatorLine, /speculative — founder\/model guess, not proven from code/);
+  assert.doesNotMatch(operatorLine, /derived:/);
+  assert.doesNotMatch(operatorLine, /:\d+\]/); // no fabricated file:line on a guess
+});
+
+test("product-model provider lights up through the assembler alongside the cited-truth product block", () => {
+  const { text } = assembleContext({
+    intent: "ideate channels",
+    providers: [
+      createProductProvider(UNDERSTANDING),
+      createProductModelProvider(POPULATED_MODEL),
+    ],
+  });
+  // Both base-layer blocks are present and distinguishable: cited product vs. interpretation.
+  assert.match(text, /\[product\]/);
+  assert.match(text, /\[product-model\]/);
+  assert.match(text, /INTERPRETATION \(founder-editable, not cited reality\)/);
 });
 
 test("market provider carries outside-the-codebase buyer reality, blank when absent", () => {

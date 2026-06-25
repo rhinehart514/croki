@@ -82,6 +82,73 @@ describe("engine — Measure is derived from real scan + ledger, not seeded", ()
     // No fabricated content: agents and experiments stay empty until real.
     assert.deepEqual(state.agents, []);
     assert.deepEqual(state.experiments, []);
+
+    // Context specifically must not show a confident 88 over an ungrounded report, even
+    // with a ready context connector — that was the seeded value AGENTS.md forbids.
+    const ungrounded = subsystemOf(
+      getEngineState({ report: UNGROUNDED, connectors: CONTEXT_READY }),
+      "context",
+    );
+    assert.notEqual(ungrounded.health, 88, "Context must not be seeded to 88 for an ungrounded report");
+  });
+});
+
+function contextOf(state) {
+  return subsystemOf(state, "context");
+}
+
+// Real raw-report shapes (scan.mjs:333-371 keys only — no invented productName). The
+// ungrounded case is paired with a configured, non-stub context connector so the derive
+// actually reaches the formerly-seeded high band rather than short-circuiting on "no
+// connector" / "no report".
+const CONTEXT_READY = [{ category: "context", configured: true, stub: false }];
+const UNGROUNDED = {
+  repo: "/x", filesScanned: 12, stack: [],
+  winEvent: { name: "project_created", found: false, citations: [] },
+  analytics: { citations: [] },
+  attribution: { citations: [] },
+  gaps: [{ title: "No analytics instrumentation found" }],
+};
+const GROUNDED = {
+  repo: "/x", filesScanned: 40, stack: ["package.json"],
+  winEvent: { name: "project_created", found: true, citations: [{ file: "src/win.js", line: 1 }] },
+  analytics: { citations: [{ file: "src/track.js", line: 1 }] },
+  attribution: { citations: [] },
+  gaps: [],
+};
+
+describe("engine — Context is derived from real scan state, never seeded at 88", () => {
+  it("drops below the seeded 88 when context connectors are ready but the scan is uncited", () => {
+    // This case returned exactly 88 on the old code (ready connector + uncited report).
+    const c = contextOf(getEngineState({ report: UNGROUNDED, connectors: CONTEXT_READY }));
+    assert.notEqual(c.health, 88, "an ungrounded report must not mint the seeded 88");
+    assert.ok(c.health < 88, `expected ungrounded health < 88, got ${c.health}`);
+  });
+
+  it("caps health in the mid band and surfaces the blind spot when the win event is blind", () => {
+    const c = contextOf(getEngineState({ report: UNGROUNDED, connectors: CONTEXT_READY }));
+    assert.ok(c.health >= 40 && c.health <= 60, `expected mid-band health, got ${c.health}`);
+    assert.match(c.activeIssues.join(" "), /ungrounded|blind/i);
+  });
+
+  it("rises once the scan is grounded — grounded health beats ungrounded", () => {
+    const ungrounded = contextOf(getEngineState({ report: UNGROUNDED, connectors: CONTEXT_READY }));
+    const grounded = contextOf(getEngineState({ report: GROUNDED, connectors: CONTEXT_READY }));
+    assert.ok(grounded.health > ungrounded.health, `expected ${grounded.health} > ${ungrounded.health}`);
+    assert.equal(grounded.health, 88, "a fully grounded scan earns the high band");
+  });
+
+  it("surfaces a Context investigation when the scan is ungrounded", () => {
+    const state = getEngineState({ report: UNGROUNDED, connectors: CONTEXT_READY });
+    assert.ok(
+      state.investigations.some((i) => i.subsystem === "context"),
+      "an ungrounded Context must route to the Problems rail",
+    );
+  });
+
+  it("a fully grounded scan opens no Context investigation", () => {
+    const state = getEngineState({ report: GROUNDED, connectors: CONTEXT_READY });
+    assert.ok(!state.investigations.some((i) => i.subsystem === "context"));
   });
 });
 

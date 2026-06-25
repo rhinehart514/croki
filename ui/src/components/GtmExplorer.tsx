@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   AlertTriangle, ArrowRight, ChevronDown, ChevronRight, ChevronLeft,
-  Bot, Sparkles, ListChecks, Plus, History, Layers, ShieldCheck,
+  Bot, Sparkles, ListChecks, Plus, History, Layers, ShieldCheck, Boxes,
 } from "lucide-react";
 import type {
   AgentInstance, ChannelMeta, ContextManifest, EngineState,
@@ -48,7 +48,7 @@ function Section({
   );
 }
 
-type ExplorerView = "projects" | "understand" | "opportunities" | "channels" | "canvas";
+type ExplorerView = "projects" | "understand" | "product" | "opportunities" | "channels" | "canvas";
 
 export function GtmExplorer({
   channels, activeChannelId, activeProgramId, currentView, onOpenChannel, onOpenProgram, onFocusProgram, onNewProgram,
@@ -383,6 +383,18 @@ export function GtmExplorer({
         <Layers size={13} />
         <span>Product grounding</span>
         <span className="explorer-rail-foot-meta">{contextManifest?.contributingProviders ?? 0}/4</span>
+      </button>
+
+      {/* The living product picture — the founder-editable INTERPRETATION on top of the cited
+          grounding above. Its own overlay, opened the same dismissable way. */}
+      <button
+        className={`explorer-rail-foot ${currentView === "product" ? "active" : ""}`}
+        onClick={() => onOpenView("product")}
+        type="button"
+        title="Open the living product picture — the editable model of your product's objects, relationships, goals, and states"
+      >
+        <Boxes size={13} />
+        <span>Product picture</span>
       </button>
     </nav>
   );

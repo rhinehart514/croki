@@ -250,6 +250,28 @@ async function composeOpportunityChannel({ projectId, ...input }) {
 }
 
 // ---------------------------------------------------------------------------
+// Living Product Picture — the founder-editable interpretation of the product
+// (its core objects, their relationships, user goals, key states). HTTP client
+// to Door 1; the derive route injects the live generator host-side.
+// ---------------------------------------------------------------------------
+
+async function getProductModel() {
+  return brainGet("/api/product-model");
+}
+
+async function deriveProductModel(input = {}) {
+  return brainPost("/api/product-model/derive", input);
+}
+
+async function reviseProductModel(input = {}) {
+  return brainPost("/api/product-model/revise", input);
+}
+
+async function recordProductSignal(input = {}) {
+  return brainPost("/api/product-model/signal", input);
+}
+
+// ---------------------------------------------------------------------------
 // Outcome programs — the product's declared domain center (OutcomeProgram).
 // ---------------------------------------------------------------------------
 
@@ -572,6 +594,60 @@ const TOOLS = [
       required: ["patch"],
     },
     handler: updateSharedContext,
+  },
+
+  // ── Product picture — the founder-editable interpretation of the product ────
+  {
+    name: "get_product_model",
+    description: "Read the current Living Product Picture for the active project: the founder-editable interpretation of the product — its core objects, their relationships, the user goals, the key states, and any real-world signals pinned onto them. This is interpretation, not cited truth; read it to understand how the product is organized for users before drafting or composing. Read-only.",
+    inputSchema: { type: "object", properties: {}, required: [] },
+    handler: getProductModel,
+  },
+  {
+    name: "derive_product_model",
+    description: "Generate a first-draft Living Product Picture by interpreting the active project's scanned grounding through rented intelligence: it proposes the product's core objects, relationships, user goals, and states, citing file:line where derived and marking genuine guesses speculative. Use when no picture exists yet or to re-derive from a fresh scan; the founder edits the result with revise_product_model. Produces an interpretation only; it never sends, publishes, or charges.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        grounding: { type: "object", description: "Optional grounding snapshot to interpret. Defaults to the project scan." },
+        market: { type: "object", description: "Optional buyer/market context to inform the interpretation." },
+      },
+      required: [],
+    },
+    handler: deriveProductModel,
+  },
+  {
+    name: "revise_product_model",
+    description: "Apply a founder edit to the Living Product Picture: change the things, relationships, user goals, or states bags. Each revision bumps the version on the same lineage, so edits accumulate and the prior version stays in the event log. Use to correct or sharpen the interpretation. Signals are not edited here; use record_product_signal. Does not send anything.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        modelId: { type: "string", description: "The product model id to revise. Defaults to the project's current model." },
+        things: { type: "array", items: { type: "object" } },
+        relationships: { type: "array", items: { type: "object" } },
+        userGoals: { type: "array", items: { type: "object" } },
+        states: { type: "array", items: { type: "object" } },
+        generatedBy: { type: "string" },
+      },
+      required: [],
+    },
+    handler: reviseProductModel,
+  },
+  {
+    name: "record_product_signal",
+    description: "Pin a real-world feedback signal onto a specific element of the Living Product Picture (a thing, relationship, goal, state, or the whole model) so the interpretation stays current with what the world actually said. The signal body stays in the feedback ledger; only the pin is recorded here. Use when observed feedback maps onto a part of the product. Does not send or publish.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        modelId: { type: "string", description: "Optional. Defaults to the project's current model." },
+        signalId: { type: "string", description: "The FeedbackSignal id to pin." },
+        target: { type: "object", description: "{ kind: 'thing'|'relationship'|'goal'|'state'|'model', id }." },
+        type: { type: "string", description: "The signal type, mirroring the FeedbackSignal." },
+        summary: { type: "string" },
+      },
+      required: [],
+    },
+    handler: recordProductSignal,
   },
 
   // ── Operator sessions — the resident GTM operator ──────────────────────────

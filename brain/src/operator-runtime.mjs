@@ -2,6 +2,8 @@ import { getEngineState } from "./engine.mjs";
 import { liveStepRuntime } from "./agent-bridge.mjs";
 import { createClaudeIdeator } from "./ideation.mjs";
 import { createClaudeComposer } from "./composition.mjs";
+import { createClaudeEvaluator } from "./eval.mjs";
+import { createClaudeProductModeler } from "./product-model-generator.mjs";
 import { loadFlow, recordFlowRun, saveFlow } from "./flow-store.mjs";
 import { loadFeedbackLedger, recordFeedbackSignalsFromRun } from "./feedback-ledger.mjs";
 import { applyGraphOperations, validateGraph } from "./graph-operations.mjs";
@@ -13,6 +15,7 @@ import { listAgentCreationPolicies } from "./agent-policy-store.mjs";
 import { listOutcomePrograms, syncProgramStoreFromEvents } from "./program-store.mjs";
 import { runProgram } from "./program-runtime.mjs";
 import { buildDraftMemory, extractDecisions } from "./memory.mjs";
+import { mergeSharedDecisions } from "./shared-judgments.mjs";
 import {
   appendOperatorEvent,
   getOperatorSession,
@@ -276,6 +279,49 @@ const TOOLS = [
     name: "inspect_product",
     description: "Inspect the active repository-grounded product report, win event, gaps, and file:line evidence.",
     input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "derive_product_model",
+    description: "Generate a first-draft Living Product Picture for the active project: the founder-editable interpretation of the product (core objects, relationships, user goals, key states) derived from the scanned grounding. Interpretation, not cited truth. Produces a draft only; never sends or publishes.",
+    input_schema: {
+      type: "object",
+      properties: {
+        grounding: { type: "object", description: "Optional grounding snapshot. Defaults to the project scan." },
+        market: { type: "object", description: "Optional buyer/market context." },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "revise_product_model",
+    description: "Apply a founder edit to the Living Product Picture's things, relationships, user goals, or states. Each revision bumps the version on the same lineage so edits accumulate. Signals are not edited here; use record_product_signal.",
+    input_schema: {
+      type: "object",
+      properties: {
+        modelId: { type: "string", description: "Optional. Defaults to the project's current model." },
+        things: { type: "array", items: { type: "object" } },
+        relationships: { type: "array", items: { type: "object" } },
+        userGoals: { type: "array", items: { type: "object" } },
+        states: { type: "array", items: { type: "object" } },
+        generatedBy: { type: "string" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "record_product_signal",
+    description: "Pin a real-world feedback signal onto a specific element of the Living Product Picture (thing, relationship, goal, state, or the whole model) so the interpretation stays current. The signal body stays in the feedback ledger; only the pin is recorded here.",
+    input_schema: {
+      type: "object",
+      properties: {
+        modelId: { type: "string", description: "Optional. Defaults to the project's current model." },
+        signalId: { type: "string", description: "The FeedbackSignal id to pin." },
+        target: { type: "object", description: "{ kind: 'thing'|'relationship'|'goal'|'state'|'model', id }." },
+        type: { type: "string" },
+        summary: { type: "string" },
+      },
+      required: [],
+    },
   },
   {
     name: "generate_opportunities",
@@ -569,8 +615,10 @@ function flowFor(session, options = {}) {
   };
 }
 
-function memoryFor(runs) {
-  return buildDraftMemory(extractDecisions(runs));
+function memoryFor(runs, options) {
+  // Merge this project's gate decisions with the shared taste ledger (the global rig + other
+  // projects), so the operator's draft voice compounds across both rigs (HARNESS.md invariant 4).
+  return buildDraftMemory(mergeSharedDecisions(extractDecisions(runs), options));
 }
 
 function summarizeNodeResult(node) {
@@ -690,7 +738,7 @@ async function executeGraphRun(session, { targetNodeId } = {}, options = {}) {
   const flow = flowFor(session, options);
   const result = await runGraph(flow.graph, {
     targetNodeId,
-    memory: memoryFor(flow.runs),
+    memory: memoryFor(flow.runs, options),
     stepRuntime: liveStepRuntime({ cwd: options.cwd }),
   });
   const stored = recordFlowRun(flow.graph, result, options);
@@ -901,6 +949,56 @@ async function executeTool(session, tool, options = {}) {
     return { session: next, result: compactProduct(workspace), pause: false };
   }
 
+  // Living Product Picture — three in-process commands through executeDomainCommand (the same
+  // chokepoint Door 1 uses). derive injects the live generator; revise/signal are pure host state
+  // moves. The verbs (Derive/Revise/Record) carry no forbidden outbound meaning — the picture stays
+  // inside the founder-gate wall.
+  if (tool.name === "derive_product_model") {
+    const project = loadProject(options);
+    const repo = options.cwd || project.sharedContext?.repository?.repo || process.cwd();
+    const productModel = await executeDomainCommand("DeriveProductModel", {
+      ...input,
+      projectId: project.id,
+    }, { ...options, projectId: project.id, generate: options.generate || createClaudeProductModeler({ cwd: repo }) });
+    const next = addEvent(session, {
+      type: "product_model_derived",
+      title: "Derived the product picture",
+      detail: `${productModel?.things?.length ?? 0} things · ${productModel?.relationships?.length ?? 0} relationships · ${productModel?.userGoals?.length ?? 0} goals · ${productModel?.states?.length ?? 0} states`,
+      data: { modelId: productModel?.id ?? null },
+    }, options);
+    return { session: next, result: productModel, pause: false };
+  }
+
+  if (tool.name === "revise_product_model") {
+    const project = loadProject(options);
+    const productModel = await executeDomainCommand("ReviseProductModel", {
+      ...input,
+      projectId: project.id,
+    }, { ...options, projectId: project.id });
+    const next = addEvent(session, {
+      type: "product_model_revised",
+      title: "Revised the product picture",
+      detail: `Now version ${productModel?.version ?? "?"}.`,
+      data: { modelId: productModel?.id ?? null, version: productModel?.version ?? null },
+    }, options);
+    return { session: next, result: productModel, pause: false };
+  }
+
+  if (tool.name === "record_product_signal") {
+    const project = loadProject(options);
+    const productModel = await executeDomainCommand("RecordProductSignal", {
+      ...input,
+      projectId: project.id,
+    }, { ...options, projectId: project.id });
+    const next = addEvent(session, {
+      type: "product_signal_recorded",
+      title: "Pinned a real-world signal onto the product picture",
+      detail: `${productModel?.pinnedSignals?.length ?? 0} signals pinned.`,
+      data: { modelId: productModel?.id ?? null },
+    }, options);
+    return { session: next, result: productModel, pause: false };
+  }
+
   if (tool.name === "generate_opportunities") {
     const project = loadProject(options);
     const workspaceId = project.sharedContext?.repository?.workspaceId;
@@ -941,6 +1039,7 @@ async function executeTool(session, tool, options = {}) {
     const composed = await composeOpportunityChannel(input, {
       ...options,
       compose: options.compose || createClaudeComposer({ cwd: composeRepo }),
+      evaluate: options.evaluate || createClaudeEvaluator({ cwd: composeRepo }),
     });
     const next = addEvent({
       ...session,
@@ -1603,7 +1702,7 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
   const result = await runGraph(flow.graph, {
     approvals: payload.approvals && typeof payload.approvals === "object" ? payload.approvals : {},
     decisions: payload.decisions && typeof payload.decisions === "object" ? payload.decisions : {},
-    memory: memoryFor(flow.runs),
+    memory: memoryFor(flow.runs, options),
     resumeResult: session.pendingGate.runResult,
     stepRuntime: liveStepRuntime({ cwd: options.cwd }),
   });

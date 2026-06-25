@@ -9091,3 +9091,392 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .composer-dock-retry{display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-size:12.5px;font-weight:600;
   padding:6px 12px;border-radius:7px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
 .composer-dock-retry:hover{background:#f6f4ef}
+
+/* ── Living Product Picture — the editable interpretation overlay ───────────── */
+.pp-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+.pp-panel-wide { grid-column: 1 / -1; }
+.pp-count {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.pp-row {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.pp-row:last-child { border-bottom: 0; }
+.pp-row-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.pp-kind, .pp-rel {
+  font-size: 11px;
+  color: var(--muted);
+}
+.pp-rel { font-weight: 600; color: var(--ink); }
+.pp-summary {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.pp-prov {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.pp-prov-derived { background: rgba(22, 163, 74, 0.12); color: #16a34a; }
+.pp-prov-speculative { background: rgba(217, 119, 6, 0.12); color: #d97706; }
+.pp-edit {
+  font: inherit;
+  color: var(--ink);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  padding: 3px 6px;
+  resize: vertical;
+}
+.pp-edit:hover { border-color: var(--line); }
+.pp-edit:focus { outline: none; border-color: var(--accent, #2563eb); background: #fff; }
+.pp-edit-name { font-size: 13px; font-weight: 600; flex: 1 1 auto; min-width: 80px; }
+.pp-edit-label { font-size: 12px; font-style: italic; flex: 0 1 auto; min-width: 60px; }
+.pp-edit-summary { display: block; width: 100%; margin-top: 6px; font-size: 11.5px; line-height: 1.45; }
+.pp-cite {
+  display: inline-block;
+  margin: 6px 6px 0 0;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--line);
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+/* ─── Product mode — the living picture as a canvas ─────────────────────────── */
+
+/* Product mode fills the workspace with no overlay bar (the toolbar GTM/Product switch is the
+   way out), so override the canvas-overlay's two-row grid to a single full-bleed cell. */
+.canvas-overlay-flush {
+  grid-template-rows: 1fr;
+  background: var(--canvas);
+}
+.product-canvas { width: 100%; height: 100%; min-height: 0; }
+.product-canvas .react-flow__attribution { display: none; }
+
+/* Thing node — the same calm white card language as the GTM node. */
+.product-node {
+  position: relative;
+  width: 232px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 13px;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  transition: box-shadow 150ms var(--ease), border-color 150ms var(--ease), transform 150ms var(--ease);
+}
+.product-node:hover { box-shadow: var(--shadow-pop); transform: translateY(-1px); }
+.product-node-selected { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink), var(--shadow-pop); }
+/* A guess is visibly ghosted — dashed border, lifted off the solid ramp — so it can never read
+   as a proven fact next to a derived object. */
+.product-node-speculative {
+  border-style: dashed;
+  border-color: var(--ghost);
+  background: repeating-linear-gradient(135deg, var(--surface), var(--surface) 9px, var(--surface-2) 9px, var(--surface-2) 10px);
+}
+
+.product-handle { width: 7px; height: 7px; background: var(--faint); border: none; }
+
+.product-node-head { display: flex; align-items: center; gap: 7px; }
+.product-node-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: var(--r-sm);
+  background: rgba(24, 24, 27, 0.06); color: var(--ink-2);
+}
+.product-node-icon svg { width: 13px; height: 13px; }
+.product-node-kind {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--muted);
+}
+.product-node-live {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 9.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
+  color: var(--gap);
+}
+.product-node-live-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--gap);
+  box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.5); animation: product-pulse 2s infinite var(--ease);
+}
+@keyframes product-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.45); }
+  70% { box-shadow: 0 0 0 6px rgba(217, 119, 6, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0); }
+}
+
+.product-prov {
+  margin-left: auto;
+  font-size: 9.5px; font-weight: 600; letter-spacing: 0.02em;
+  padding: 1px 6px; border-radius: 999px; white-space: nowrap;
+}
+.product-prov-derived { color: var(--proven); background: rgba(22, 163, 74, 0.10); }
+.product-prov-spec { color: var(--gap); background: rgba(217, 119, 6, 0.10); }
+
+.product-node-name { font-size: 13.5px; font-weight: 600; color: var(--ink); line-height: 1.25; }
+.product-node-summary {
+  font-size: 11.5px; line-height: 1.4; color: var(--muted);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.product-node-states { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.product-state-pill {
+  font-size: 10px; color: var(--ink-2);
+  padding: 1px 6px; border-radius: 5px; background: var(--surface-2); border: 1px solid var(--line);
+}
+
+/* Edges — relationships. A speculative relationship is dashed and faint. */
+.product-edge .react-flow__edge-path { stroke: var(--ghost); stroke-width: 1.5; }
+.product-edge-spec .react-flow__edge-path { stroke: var(--ghost); stroke-width: 1.5; stroke-dasharray: 5 5; opacity: 0.7; }
+.product-edge .react-flow__edge-text { font-size: 10px; fill: var(--muted); }
+.product-edge .react-flow__edge-textbg { fill: var(--canvas); }
+
+/* Header panel — what the picture is, how grounded. */
+.product-head-panel {
+  display: flex; align-items: center; gap: 14px;
+  padding: 9px 13px; background: var(--panel); backdrop-filter: blur(8px);
+  border: 1px solid var(--line-2); border-radius: var(--r-lg); box-shadow: var(--shadow-card);
+}
+.product-head-title { display: flex; flex-direction: column; gap: 1px; }
+.product-head-name { font-size: 13px; font-weight: 600; color: var(--ink); }
+.product-head-meta { font-size: 10.5px; color: var(--muted); }
+.product-head-counts { display: flex; gap: 6px; }
+.product-count { font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 999px; }
+.product-count-cited { color: var(--proven); background: rgba(22, 163, 74, 0.10); }
+.product-count-guess { color: var(--gap); background: rgba(217, 119, 6, 0.10); }
+.product-rederive-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; font-weight: 500; color: var(--ink-2);
+  padding: 5px 10px; border: 1px solid var(--line-2); border-radius: var(--r-md);
+  background: var(--surface); cursor: pointer; transition: background 140ms var(--ease);
+}
+.product-rederive-btn:hover:not(:disabled) { background: var(--surface-2); }
+.product-rederive-btn:disabled { opacity: 0.6; cursor: default; }
+.product-rederive-btn svg { width: 13px; height: 13px; }
+
+/* Goals panel — what people come to do. */
+.product-goals-panel {
+  width: 250px; padding: 11px 13px;
+  background: var(--panel); backdrop-filter: blur(8px);
+  border: 1px solid var(--line-2); border-radius: var(--r-lg); box-shadow: var(--shadow-card);
+}
+.product-goals-title {
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--muted); margin-bottom: 8px;
+}
+.product-goals-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; max-height: 320px; overflow-y: auto; }
+.product-goal { display: flex; flex-direction: column; gap: 2px; }
+.product-goal-spec { opacity: 0.7; }
+.product-goal-actor { font-size: 10px; font-weight: 600; color: var(--ink); text-transform: uppercase; letter-spacing: 0.02em; }
+.product-goal-text { font-size: 11.5px; line-height: 1.35; color: var(--ink-2); }
+
+/* The shared-model wire, made visible. */
+.product-bridge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11.5px; font-weight: 500; color: var(--muted);
+  padding: 6px 13px; border: 1px solid var(--line-2); border-radius: 999px;
+  background: var(--panel); backdrop-filter: blur(8px); cursor: pointer;
+  transition: color 140ms var(--ease), border-color 140ms var(--ease);
+}
+.product-bridge:hover { color: var(--ink); border-color: var(--ink); }
+.product-bridge svg { width: 13px; height: 13px; }
+
+/* Inline editor for the selected object. */
+.product-editor {
+  width: 268px; padding: 12px 13px;
+  background: var(--surface); border: 1px solid var(--line-2);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-pop);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.product-editor-head { display: flex; align-items: center; justify-content: space-between; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.product-editor-close { border: none; background: none; cursor: pointer; font-size: 16px; line-height: 1; color: var(--faint); }
+.product-editor-name {
+  font-size: 13px; font-weight: 600; color: var(--ink);
+  padding: 6px 9px; border: 1px solid var(--line-2); border-radius: var(--r-md); background: var(--surface-2);
+}
+.product-editor-summary {
+  font-size: 11.5px; line-height: 1.4; color: var(--ink-2); resize: vertical;
+  padding: 6px 9px; border: 1px solid var(--line-2); border-radius: var(--r-md); background: var(--surface-2);
+  font-family: inherit;
+}
+.product-editor-name:focus, .product-editor-summary:focus { outline: none; border-color: var(--ink); }
+.product-editor-foot { font-size: 10px; color: var(--faint); }
+
+/* Empty state — no picture yet. */
+.product-canvas-empty {
+  height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; text-align: center; padding: 40px;
+}
+.product-empty-icon { width: 28px; height: 28px; color: var(--faint); }
+.product-canvas-empty h2 { font-size: 17px; font-weight: 600; color: var(--ink); margin: 0; }
+.product-canvas-empty p { font-size: 13px; line-height: 1.5; color: var(--muted); max-width: 380px; margin: 0; }
+.product-derive-btn {
+  display: inline-flex; align-items: center; gap: 7px; margin-top: 6px;
+  font-size: 13px; font-weight: 500; color: var(--surface);
+  padding: 9px 16px; border: none; border-radius: var(--r-md); background: var(--ink); cursor: pointer;
+  transition: opacity 140ms var(--ease);
+}
+.product-derive-btn:disabled { opacity: 0.6; cursor: default; }
+.product-derive-btn svg { width: 15px; height: 15px; }
+
+/* GTM / Product mode switch in the toolbar. */
+.loop-mode-switch {
+  display: inline-flex; align-items: center; gap: 1px;
+  margin-left: 10px; padding: 2px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--line-2);
+}
+.loop-mode-tab {
+  font-size: 11.5px; font-weight: 600; color: var(--muted);
+  padding: 3px 11px; border: none; border-radius: 6px; background: none; cursor: pointer;
+  transition: background 140ms var(--ease), color 140ms var(--ease);
+}
+.loop-mode-tab:hover { color: var(--ink-2); }
+.loop-mode-tab.active { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-card); }
+
+/* ── Multi-lens Product canvas — the SHELL ──────────────────────────────────────
+   The lens-switchable host. One calm tool, five lenses over the same model: a quiet docked lens
+   bar on top, the active lens filling the rest. Same monochrome as the GTM graph; color stays
+   rationed to the shared provenance tags (green derived / amber guess). Shared by all lenses;
+   only this file (the shell) defines it — lenses use these classes + the shared primitives. */
+.product-canvas-shell {
+  display: flex; flex-direction: column; min-height: 0; height: 100%;
+  background: var(--canvas);
+}
+
+/* Lens bar — docked, never floating. Holds the switcher, the grounding read-out, the actions. */
+.lens-bar {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 14px;
+  padding: 9px 14px;
+  background: var(--panel); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line-2);
+}
+.lens-switcher {
+  display: inline-flex; align-items: center; gap: 1px;
+  padding: 2px; border-radius: var(--r-md);
+  background: var(--surface-2); border: 1px solid var(--line-2);
+}
+.lens-tab {
+  font-size: 12px; font-weight: 600; color: var(--muted);
+  padding: 4px 12px; border: none; border-radius: 6px; background: none; cursor: pointer;
+  white-space: nowrap;
+  transition: background 140ms var(--ease), color 140ms var(--ease);
+}
+.lens-tab:hover { color: var(--ink-2); }
+.lens-tab.active { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-card); }
+
+.lens-bar-meta {
+  display: flex; align-items: center; gap: 8px;
+  margin-left: 4px; min-width: 0;
+}
+.lens-bar-meta .product-head-meta { white-space: nowrap; }
+
+.lens-bar-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.lens-bridge {
+  font-size: 11.5px; font-weight: 500; color: var(--muted);
+  padding: 5px 12px; border: 1px solid var(--line-2); border-radius: 999px;
+  background: var(--surface); cursor: pointer; white-space: nowrap;
+  transition: color 140ms var(--ease), border-color 140ms var(--ease);
+}
+.lens-bridge:hover { color: var(--ink); border-color: var(--ink); }
+
+/* The active lens fills the rest; the lens owns its own canvas + floating panels. */
+.lens-frame { position: relative; flex: 1 1 auto; min-height: 0; width: 100%; }
+
+/* ── Shared lens primitives (built here, imported by every lens) ────────────────── */
+
+/* LensPanel — the translucent panel chrome, matching .product-head-panel. */
+.lens-panel {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 11px 13px;
+  background: var(--panel); backdrop-filter: blur(8px);
+  border: 1px solid var(--line-2); border-radius: var(--r-lg); box-shadow: var(--shadow-card);
+}
+.lens-panel-title {
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+/* ObjectCard — reuses .product-node (harvested from the original canvas). The flow variant drops
+   the hover-lift transform that fights React Flow's transform-based positioning. */
+.lens-object-card { width: 232px; }
+.lens-object-card-flow:hover { transform: none; }
+
+/* Focal card — the center of gravity. Wider, larger title, heavier elevation and a ring, so the
+   hub reads as the heart of the picture instead of one more card in a grid of equals. */
+.lens-object-card-focal {
+  width: 268px;
+  border-color: var(--ink);
+  box-shadow: 0 0 0 1px var(--ink), var(--shadow-pop);
+}
+.lens-object-card-focal .product-node-name { font-size: 16px; line-height: 1.2; }
+.lens-object-card-focal .product-node-icon { width: 26px; height: 26px; }
+.lens-object-card-focal .product-node-icon svg { width: 15px; height: 15px; }
+
+/* The "flows into" arrow glyph, sized to the mono row. */
+.lens-flow-arrow { width: 13px; height: 13px; color: var(--faint); flex: 0 0 auto; }
+
+/* Lens stub — the placeholder the shell ships with before the lens agents fill each in. */
+.lens-stub {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; text-align: center; padding: 32px;
+}
+.lens-stub-tag {
+  font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted);
+  padding: 4px 12px; border: 1px dashed var(--ghost); border-radius: 999px; background: var(--surface);
+}
+.lens-stub-note { font-size: 12.5px; line-height: 1.5; color: var(--muted); max-width: 360px; margin: 0; }
+
+/* ── Mobile (390px) — dock and stack, never float off-screen ─────────────────────
+   The old single canvas floated panels at the React-Flow corners; below they overflowed and hid
+   nodes. The shell already docks the lens bar; here it wraps to its own rows, and any lens panel
+   that opts into .lens-panel-dock pins to the bottom edge full-width instead of floating. */
+@media (max-width: 560px) {
+  .lens-bar {
+    flex-wrap: wrap; gap: 8px; padding: 8px 10px;
+  }
+  .lens-switcher {
+    order: 1; flex: 1 1 100%;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .lens-switcher::-webkit-scrollbar { display: none; }
+  .lens-bar-meta { order: 2; flex-wrap: wrap; }
+  .lens-bar-actions { order: 3; margin-left: auto; }
+  .lens-bridge { display: none; }            /* the toolbar GTM/Product switch is the way back */
+
+  /* Any lens that floats a side/legend panel should add .lens-panel-dock to it; on mobile it
+     leaves the floating corner and docks across the bottom so it can't push nodes off-screen. */
+  .lens-panel-dock {
+    position: absolute !important;
+    left: 8px !important; right: 8px !important; bottom: 8px !important;
+    top: auto !important; width: auto !important; max-width: none !important;
+    max-height: 42%; overflow-y: auto;
+  }
+}

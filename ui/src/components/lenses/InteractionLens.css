@@ -1,0 +1,53 @@
+/* InteractionLens — bespoke CSS for the state-machine / wireflow lens.
+ *
+ * Only what the shared primitives don't already give us. The node card itself is the shared
+ * ObjectCard (.product-node), the edges reuse .product-edge / .product-edge-spec, the legend uses
+ * the shared LensPanel. What's left is the SUBTLE kind distinction the brief asks for — a screen
+ * (a real surface a user lands on) should read differently from a transient state/mode — without
+ * adding any decorative color. We do it with a hairline left accent on the card, monochrome, so the
+ * canvas still reads as one calm tool.
+ */
+
+/* The lens root fills the shell's .lens-frame (the shell owns that wrapper; the lens fills it
+ * absolutely, same contract as the jobs / ia / workflow lenses) so the React Flow canvas inside
+ * gets a definite height. */
+.interaction-lens { position: absolute; inset: 0; }
+
+/* A "screen" is a place the user lands; give its card a solid ink left edge so surfaces stand out
+ * from transient states at a glance. State/mode keep the default hairline. Speculative cards keep
+ * their ghosted dashed treatment from .product-node-speculative untouched. */
+.interaction-node-screen { border-left: 2px solid var(--ink); }
+
+/* State and mode are transient — a softer, lighter left edge marks them as "in-between" nodes. */
+.interaction-node-state { border-left: 2px solid var(--ghost); }
+.interaction-node-mode  { border-left: 2px dashed var(--ghost); }
+
+/* The legend's tiny kind key — a column of one-line rows mapping the accent to its meaning. */
+.interaction-legend-rows { display: flex; flex-direction: column; gap: 5px; }
+.interaction-legend-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; color: var(--muted); line-height: 1.3;
+}
+.interaction-legend-swatch {
+  flex: 0 0 auto; width: 14px; height: 0; align-self: center;
+}
+.interaction-legend-swatch-screen { border-top: 2px solid var(--ink); }
+.interaction-legend-swatch-state  { border-top: 2px solid var(--ghost); }
+.interaction-legend-swatch-mode   { border-top: 2px dashed var(--ghost); }
+
+.interaction-legend-counts {
+  display: flex; flex-wrap: wrap; gap: 6px 10px;
+  font-size: 11px; color: var(--muted);
+}
+.interaction-legend-count-cited { color: var(--proven); }
+.interaction-legend-count-guess { color: var(--gap); }
+
+/* Empty within-lens state — the model has objects in other bags but no interactions/transitions
+ * yet. Mirrors the calm centered note, scoped to the lens frame (not the whole product). */
+.interaction-empty {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; text-align: center; padding: 32px; pointer-events: none;
+}
+.interaction-empty-title { font-size: 13px; font-weight: 600; color: var(--ink); }
+.interaction-empty-note { font-size: 12px; line-height: 1.5; color: var(--muted); max-width: 340px; margin: 0; }

@@ -52,6 +52,9 @@ function emptyState() {
     profiles: new Map(),
     instances: new Map(),
     evaluations: [],
+    // The ProductModel aggregate: one current record per lineage keyed by id (a revision keeps the
+    // same id, so it overwrites the single current record while the event log retains every version).
+    productModels: new Map(),
   };
 }
 
@@ -147,6 +150,22 @@ export function applyDomainEvent(state, event) {
     case "AgentEvaluated":
       state.evaluations.push({ ...data });
       break;
+    case "ProductModelDerived":
+    case "ProductModelRevised":
+      // The full aggregate rides in data (DDD.md:125). A revision keeps the same id, so it
+      // overwrites the single current record; the event log still holds the prior version.
+      state.productModels.set(data.id, { ...data });
+      break;
+    case "ProductSignalRecorded": {
+      // A real-world signal pinned onto a specific element. Fold the pin onto its parent model's
+      // pinnedSignals (mirrors MeasurementPlanDefined's fold-onto-parent). The signal body stays in
+      // feedback-ledger.mjs; only the pin lives here.
+      const model = state.productModels.get(event.aggregateId);
+      if (model) {
+        model.pinnedSignals = [...(model.pinnedSignals ?? []), { ...data }];
+      }
+      break;
+    }
     default:
       // Narration-only events (run started, gate opened, founder decisions, observed outcomes)
       // are history, not state transitions for these aggregates — intentionally no-op.
@@ -171,5 +190,6 @@ export function rebuildProjectState(projectId = "default", options = {}) {
     profiles: [...state.profiles.values()],
     instances: [...state.instances.values()],
     evaluations: state.evaluations,
+    productModels: [...state.productModels.values()],
   };
 }

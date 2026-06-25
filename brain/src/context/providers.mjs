@@ -51,6 +51,93 @@ export function createProductProvider(understanding) {
   };
 }
 
+// Product-model provider — wraps the founder-editable Living Product Picture: the
+// interpretive model of the product (its core things, relationships, user goals, states)
+// that the cited-truth scan deliberately lacks. This is INTERPRETATION, not truth — it
+// holds `speculative` founder/model guesses — so the block is framed so a reading agent
+// can never mistake it for a cited fact: a verbatim interpretation header, plus an inline
+// provenance marker on every element (a `derived` element shows its file:line citation; a
+// `speculative` element shows an explicit unproven marker and NO citation). Honest blank:
+// an empty model (no things) contributes nothing, exactly like the other providers' null.
+function citationOf(element) {
+  const cite = Array.isArray(element?.evidence) ? element.evidence.find((c) => c && c.file) : null;
+  if (!cite) return null;
+  return cite.line != null ? `${cite.file}:${cite.line}` : `${cite.file}`;
+}
+
+function renderElement(prefix, name, element) {
+  // A `derived` element renders with its file:line citation; if it claims derived but
+  // carries no citation it is shown as a labelled guess, never as a bare fact (the same
+  // one-directional valve the host applies at command time).
+  if (element?.provenance === "derived") {
+    const cite = citationOf(element);
+    if (cite) return `- ${prefix}: ${name} [derived: ${cite}]`;
+    return `- ${prefix}: ${name} [speculative — founder/model guess, not proven from code]`;
+  }
+  return `- ${prefix}: ${name} [speculative — founder/model guess, not proven from code]`;
+}
+
+export function createProductModelProvider(model) {
+  return {
+    name: "product-model",
+    layer: "base",
+    contribute() {
+      const things = Array.isArray(model?.things) ? model.things : [];
+      if (!things.length) return null;
+
+      const relationships = Array.isArray(model.relationships) ? model.relationships : [];
+      const userGoals = Array.isArray(model.userGoals) ? model.userGoals : [];
+      const states = Array.isArray(model.states) ? model.states : [];
+      const pinned = Array.isArray(model.pinnedSignals) ? model.pinnedSignals : [];
+
+      const lines = ["INTERPRETATION (founder-editable, not cited reality):"];
+
+      lines.push("Things:");
+      for (const thing of things) {
+        lines.push(renderElement("Thing", thing.name ?? thing.id ?? "?", thing));
+      }
+      if (relationships.length) {
+        lines.push("Relationships:");
+        for (const rel of relationships) {
+          const label = `${rel.from ?? "?"} ${rel.label ?? "relates to"} ${rel.to ?? "?"}`;
+          lines.push(renderElement("Relationship", label, rel));
+        }
+      }
+      if (userGoals.length) {
+        lines.push("User goals:");
+        for (const goal of userGoals) {
+          lines.push(renderElement("Goal", goal.goal ?? goal.id ?? "?", goal));
+        }
+      }
+      if (states.length) {
+        lines.push("States:");
+        for (const state of states) {
+          lines.push(renderElement("State", state.name ?? state.id ?? "?", state));
+        }
+      }
+      if (pinned.length) {
+        lines.push("Pinned real-world signals (observed feedback on the picture):");
+        for (const signal of pinned) {
+          lines.push(`- ${signal.type ?? "Signal"}: ${signal.summary ?? signal.signalId ?? "?"}`);
+        }
+      }
+
+      return {
+        text: lines.join("\n"),
+        meta: {
+          things: things.length,
+          relationships: relationships.length,
+          userGoals: userGoals.length,
+          states: states.length,
+          pinnedSignals: pinned.length,
+          derived: things.filter((t) => t.provenance === "derived" && citationOf(t)).length,
+          speculative: things.filter((t) => !(t.provenance === "derived" && citationOf(t))).length,
+        },
+      };
+    },
+  };
+}
+
 // Taste provider — wraps the taste profile built from founder gate decisions. This is the
 // compounding layer: the one thing raw Claude and competitors structurally cannot copy, because
 // it is built from THIS founder's accumulated approvals, rejections, and edits.
@@ -150,6 +237,11 @@ export function createMarketProvider(market) {
 export function providersFromContext(context = {}) {
   const providers = [];
   if (context.grounding) providers.push(createProductProvider(context.grounding));
+  // The Living Product Picture: founder-editable interpretation. Routes through this single
+  // adapter so a founder edit ripples into every downstream agent prompt. Distinct from the
+  // cited-truth `product` provider above — both run; they answer different questions (what is
+  // provably there vs. how it's organized for the user).
+  if (context.productModel) providers.push(createProductModelProvider(context.productModel));
   if (context.market) providers.push(createMarketProvider(context.market));
   if (context.__memory) providers.push(createTasteProvider(context.__memory));
   if (Array.isArray(context.__state)) providers.push(createStateProvider(context.__state));

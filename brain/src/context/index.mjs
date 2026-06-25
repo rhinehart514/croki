@@ -8,6 +8,7 @@
 export { assembleContext } from "./assembler.mjs";
 export {
   createProductProvider,
+  createProductModelProvider,
   createMarketProvider,
   createTasteProvider,
   createStateProvider,

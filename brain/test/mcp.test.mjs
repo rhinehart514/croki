@@ -6,7 +6,9 @@ const names = TOOLS.map((t) => t.name);
 
 describe("MCP tool IA — canonical surface", () => {
   it("keeps the tool count in a reasonable range", () => {
-    assert.ok(TOOLS.length >= 10 && TOOLS.length <= 30, `expected 10–30 tools, got ${TOOLS.length}`);
+    // Ceiling raised from 30→36 when the Living Product Picture added its four-tool object family
+    // (get/derive/revise/signal). The bound still guards IA hygiene; it just admits the new object.
+    assert.ok(TOOLS.length >= 10 && TOOLS.length <= 36, `expected 10–36 tools, got ${TOOLS.length}`);
   });
 
   it("has unique tool names", () => {
@@ -56,6 +58,30 @@ describe("MCP tool IA — canonical surface", () => {
     for (const tool of TOOLS) {
       assert.ok(tool.description.length > 40, `${tool.name} description too thin`);
       assert.ok(tool.inputSchema && tool.inputSchema.type === "object", `${tool.name} needs an object schema`);
+    }
+  });
+
+  it("exposes the Living Product Picture as first-class read + edit tools", () => {
+    for (const name of [
+      "get_product_model",
+      "derive_product_model",
+      "revise_product_model",
+      "record_product_signal",
+    ]) {
+      assert.ok(names.includes(name), `${name} must exist`);
+      assert.ok(TOOL_MAP.get(name).inputSchema.type === "object", `${name} needs an object schema`);
+    }
+  });
+
+  it("keeps the product-picture tools inside the founder-gate wall (no outbound verb)", () => {
+    const forbidden = /approve|send|publish|deploy|charge/i;
+    for (const name of [
+      "get_product_model",
+      "derive_product_model",
+      "revise_product_model",
+      "record_product_signal",
+    ]) {
+      assert.ok(!forbidden.test(name), `${name} must not carry an outbound verb`);
     }
   });
 });
