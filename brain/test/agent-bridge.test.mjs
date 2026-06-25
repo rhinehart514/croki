@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { buildAgentPrompt, createProviderAgentInvoker, loadAgentDefinition, loadSkillGuidance, parseAgentItems } from "../src/agent-bridge.mjs";
 import { createStepRuntime } from "../src/step-runners.mjs";
+import { buildDesignState } from "../src/design-state-store.mjs";
 
 describe("loadSkillGuidance — judgment from disk", () => {
   it("reads a skill's SKILL.md when present", () => {
@@ -82,6 +83,28 @@ describe("buildAgentPrompt — merges a loaded definition, no-ops cleanly when a
     // shape preserved: prompt + manifest still present
     assert.equal(typeof built.prompt, "string");
     assert.ok("manifest" in built);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("assembles the founder's DesignState into the agent prompt through the real run-path assembler", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-design-bridge-"));
+    // Exactly what runGraph injects onto a node's context (graph.mjs: `context.designState = designState`).
+    const designState = buildDesignState({ projectId: "p1" }, { root });
+    const built = buildAgentPrompt({
+      ref: "channel-artifact-drafter",
+      prompt: "Draft the landing hero.",
+      items: [{ id: "1" }],
+      context: { designState },
+      agentDefinitionRoot: root,
+    });
+    // The clean base-layer block is rendered into the actual agent prompt (not a standalone call).
+    assert.match(built.prompt, /Warm Calm/);
+    assert.match(built.prompt, /Komoot/);
+    assert.match(built.prompt, /Grounded context/);
+    // The design provider rode into the manifest the UI inspector reads.
+    assert.ok(built.manifest.providers.find((p) => p.name === "design" && p.contributed));
+    // And it is NOT also dumped as raw JSON in the passthrough (excluded from `rest`).
+    assert.doesNotMatch(built.prompt, /"houseStyle": "Warm Calm"/);
     fs.rmSync(root, { recursive: true, force: true });
   });
 });

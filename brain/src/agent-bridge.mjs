@@ -118,7 +118,7 @@ export function buildAgentPrompt({ ref, prompt, items, context = {}, artifactPat
   const assembled = assembleContext({ providers: providersFromContext(context), intent: prompt || "" });
 
   // eslint-disable-next-line no-unused-vars
-  const { grounding, productModel, market, __memory, __state, signal, ...rest } = context ?? {};
+  const { grounding, productModel, market, __memory, __state, signal, designState, ...rest } = context ?? {};
   const restJson = Object.keys(rest).length ? JSON.stringify(rest, null, 2) : null;
 
   // Load the real on-disk definition if one exists. When found, the agent's own doctrine + role

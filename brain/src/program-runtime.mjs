@@ -3,6 +3,7 @@ import { loadFlow, recordFlowRun } from "./flow-store.mjs";
 import { runGraph } from "./graph.mjs";
 import { buildDraftMemory, extractDecisions } from "./memory.mjs";
 import { mergeSharedDecisions } from "./shared-judgments.mjs";
+import { getDesignState } from "./design-state-store.mjs";
 import { gradeRun } from "./eval.mjs";
 import { loadProject } from "./project-store.mjs";
 import {
@@ -71,6 +72,7 @@ export async function runProgram(programId, input = {}, options = {}) {
     approvals: input.approvals && typeof input.approvals === "object" ? input.approvals : {},
     decisions: input.decisions && typeof input.decisions === "object" ? input.decisions : {},
     memory: buildDraftMemory(mergeSharedDecisions(extractDecisions(flow.runs), options)),
+    designState: getDesignState(projectId, options),
     grounding: buildRunGrounding(project),
     runs: flow.runs,
     resumeResult: resumeRecord?.result ?? null,

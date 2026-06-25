@@ -38,6 +38,7 @@ import {
 import { composeOpportunityChannel, composeGraphForChannel } from "./workflow-composer.mjs";
 import { executeDomainCommand } from "./domain-commands.mjs";
 import { getProductModel } from "./product-model-store.mjs";
+import { getDesignState } from "./design-state-store.mjs";
 import { createClaudeProductModeler } from "./product-model-generator.mjs";
 import { listOutcomePrograms, syncProgramStoreFromEvents } from "./program-store.mjs";
 import { runProgram, buildRunGrounding } from "./program-runtime.mjs";
@@ -811,7 +812,7 @@ const server = http.createServer(async (req, res) => {
       // emits the founder-editable shape (things/relationships/goals/states + pinned signals); the
       // product provider keeps emitting cited truth. Both run — they answer different questions.
       const productModel = getProductModel(project.id) ?? null;
-      const providers = providersFromContext({ grounding, productModel, __memory: memory, __state: runs });
+      const providers = providersFromContext({ grounding, productModel, __memory: memory, __state: runs, designState: getDesignState(project.id) });
       const assembled = assembleContext({ providers, intent: `assemble context for channel ${requestedChannel}` });
       json(res, 200, { channelId: requestedChannel, manifest: assembled.manifest, text: assembled.text });
     } catch (err) {
@@ -1184,6 +1185,7 @@ Never return a replacement graph. Keep the patch narrow and preserve founder gat
         approvals: body.approvals && typeof body.approvals === "object" ? body.approvals : {},
         decisions: body.decisions && typeof body.decisions === "object" ? body.decisions : {},
         memory,
+        designState: getDesignState(project.id),
         grounding: buildRunGrounding(project),
         // Feed the context substrate: prior runs become the "what's been tried" state layer.
         runs: prior.runs,
@@ -1240,6 +1242,7 @@ Never return a replacement graph. Keep the patch narrow and preserve founder gat
         approvals: body.approvals && typeof body.approvals === "object" ? body.approvals : {},
         decisions: body.decisions && typeof body.decisions === "object" ? body.decisions : {},
         memory,
+        designState: getDesignState(project.id),
         grounding: buildRunGrounding(project),
         // Feed the context substrate: prior runs become the "what's been tried" state layer.
         runs: prior.runs,

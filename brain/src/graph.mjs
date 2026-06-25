@@ -287,6 +287,7 @@ export async function runGraph(graph, opts = {}) {
     decisions = {},
     memory = null,
     grounding = null,
+    designState = null,
     runs = null,
     resumeResult = null,
     stepRuntime = defaultStepRuntime,
@@ -356,6 +357,10 @@ export async function runGraph(graph, opts = {}) {
     // Inject loop memory (founder decisions from prior runs) for nodes that
     // generate reviewable artifacts. Connectors opt in by reading context.__memory.
     if (memory) context.__memory = memory;
+    // Inject the founder's front-end DesignState (the "Warm Calm" house style + reference library)
+    // so any agent/skill step that produces UI starts from the founder's captured taste instead of
+    // the generic mean. The design provider in context/providers.mjs renders it into the base layer.
+    if (designState) context.designState = designState;
     // Inject grounding and run-state so the context substrate (agent-bridge) can assemble a real
     // base layer for agent/skill steps. The assembler only renders a summary into the prompt, so
     // the full ledger never bloats the model call — just the cited product map and "what's tried".

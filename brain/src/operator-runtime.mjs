@@ -16,6 +16,7 @@ import { listOutcomePrograms, syncProgramStoreFromEvents } from "./program-store
 import { runProgram } from "./program-runtime.mjs";
 import { buildDraftMemory, extractDecisions } from "./memory.mjs";
 import { mergeSharedDecisions } from "./shared-judgments.mjs";
+import { getDesignState } from "./design-state-store.mjs";
 import {
   appendOperatorEvent,
   getOperatorSession,
@@ -621,6 +622,12 @@ function memoryFor(runs, options) {
   return buildDraftMemory(mergeSharedDecisions(extractDecisions(runs), options));
 }
 
+function designStateFor(session, options) {
+  // The founder's front-end house style for this project (falls back to the seeded global default),
+  // injected so any UI an operator step produces starts from captured taste, not the generic mean.
+  return getDesignState(session?.projectId || options?.projectId || "default", options);
+}
+
 function summarizeNodeResult(node) {
   return {
     nodeId: node.nodeId,
@@ -739,6 +746,7 @@ async function executeGraphRun(session, { targetNodeId } = {}, options = {}) {
   const result = await runGraph(flow.graph, {
     targetNodeId,
     memory: memoryFor(flow.runs, options),
+    designState: designStateFor(session, options),
     stepRuntime: liveStepRuntime({ cwd: options.cwd }),
   });
   const stored = recordFlowRun(flow.graph, result, options);
@@ -1703,6 +1711,7 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
     approvals: payload.approvals && typeof payload.approvals === "object" ? payload.approvals : {},
     decisions: payload.decisions && typeof payload.decisions === "object" ? payload.decisions : {},
     memory: memoryFor(flow.runs, options),
+    designState: designStateFor(session, options),
     resumeResult: session.pendingGate.runResult,
     stepRuntime: liveStepRuntime({ cwd: options.cwd }),
   });

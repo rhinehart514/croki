@@ -14,6 +14,7 @@
 // pull). The host owns what's on the table; the rented intelligence owns the pull.
 
 import { renderTasteProfile } from "../memory.mjs";
+import { renderDesignState } from "../design-state-store.mjs";
 
 // Product provider — wraps the grounded scan (product-understanding.mjs). Cited reality only;
 // it reports a BLIND win event honestly rather than implying attribution it cannot prove.
@@ -160,6 +161,32 @@ export function createTasteProvider(profile) {
   };
 }
 
+// Design provider — wraps the founder's front-end DesignState (the "Warm Calm" house style and the
+// curated reference library). Like the taste provider, this is a compounding layer raw Claude can't
+// copy: it carries THIS founder's captured front-end taste across visual / IA / components / motion,
+// anchored to real flagged screens. A base layer, because matching the founder's design register is
+// as load-bearing for non-generic UI as matching the real product. Honest blank: no references and
+// no state contributes nothing.
+export function createDesignProvider(designState) {
+  return {
+    name: "design",
+    layer: "base",
+    contribute() {
+      const text = renderDesignState(designState);
+      if (!text) return null;
+      const grounded = Object.values(designState?.dimensions ?? {}).filter((d) => d?.grounded).length;
+      return {
+        text,
+        meta: {
+          houseStyle: designState?.houseStyle ?? null,
+          references: designState?.references?.length ?? 0,
+          groundedDimensions: grounded,
+        },
+      };
+    },
+  };
+}
+
 // State provider — wraps the run ledger into a compact "what has been tried" summary so the
 // model does not re-propose a move that already ran (or already failed). Derived from real
 // recorded runs only; an empty ledger contributes nothing.
@@ -244,6 +271,10 @@ export function providersFromContext(context = {}) {
   if (context.productModel) providers.push(createProductModelProvider(context.productModel));
   if (context.market) providers.push(createMarketProvider(context.market));
   if (context.__memory) providers.push(createTasteProvider(context.__memory));
+  // The founder's front-end house style + reference library. Distinct from the taste provider
+  // (which is decision history): this is the captured DESIGN register that shapes any UI the run
+  // produces, so GTM front-end output starts from "Warm Calm" instead of the generic mean.
+  if (context.designState) providers.push(createDesignProvider(context.designState));
   if (Array.isArray(context.__state)) providers.push(createStateProvider(context.__state));
   if (context.signal) providers.push(createSignalProvider(context.signal));
   return providers;
