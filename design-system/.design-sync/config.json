@@ -1,0 +1,34 @@
+{
+  "pkg": "@gtm-ide/design-system",
+  "projectId": "afb43466-28ed-4726-9481-268780c73f97",
+  "globalName": "GtmIde",
+  "shape": "package",
+  "buildCmd": "npm run build",
+  "cssEntry": "styles.css",
+  "readmeHeader": ".design-sync/conventions.md",
+  "extraFonts": [
+    "node_modules/@fontsource-variable/geist/wght.css",
+    "node_modules/@fontsource-variable/geist-mono/wght.css"
+  ],
+  "overrides": {
+    "Toolbar": { "cardMode": "column" }
+  },
+  "componentSrcMap": {
+    "CardHeader": null,
+    "CardTitle": null,
+    "CardDescription": null,
+    "CardContent": null,
+    "Brand": null,
+    "ToolbarDivider": null,
+    "ToolbarSpacer": null,
+    "ChatHeader": null,
+    "ChatIconButton": null,
+    "ChatAttachment": null,
+    "ChatMessage": null,
+    "ChatReply": null,
+    "ChatToolCall": null,
+    "ChatDocRef": null,
+    "ChatPill": null,
+    "ChatComposer": null
+  }
+}

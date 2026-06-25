@@ -1,0 +1,746 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GTM IDE — Design System</title>
+<script>
+  /* The vendored, read-only @gtm-ide bundle renders element arrays through a
+     jsx-runtime shim that trips React's dev-only 'unique key prop' warning.
+     Filter just that one false-positive so genuine errors stay visible. */
+  (function () {
+    var orig = console.error;
+    console.error = function (m) {
+      if (typeof m === "string" && m.indexOf('unique "key" prop') > -1) return;
+      return orig.apply(console, arguments);
+    };
+  })();
+</script>
+<link rel="stylesheet" href="styles.css">
+<style>
+  /* ════════════════════════════════════════════════════════════════
+     STITCH AESTHETIC — warm greige canvas, faint dot grid, soft pastel
+     ambient so frosted glass reads, monochrome ink, pill controls, big
+     friendly headline. Page vars are --st-* so they never collide with
+     the read-only DS tokens shown in Foundations.
+     ════════════════════════════════════════════════════════════════ */
+  :root {
+    --st-bg: #f0efec;
+    --st-bg-2: #e9e8e3;
+    --st-dot: rgba(0,0,0,0.055);
+    --st-ink: #1c1c1e;
+    --st-ink-2: #46464b;
+    --st-muted: #74747a;
+    --st-faint: #9b9ba1;
+    --st-line: rgba(0,0,0,0.075);
+    --st-line-2: rgba(0,0,0,0.12);
+    --st-primary: #1c1c1e;
+    --st-glass: rgba(255,255,255,0.52);
+    --st-glass-2: rgba(255,255,255,0.66);
+    --st-glass-brd: rgba(255,255,255,0.85);
+    --st-blue: #aec6f0;
+    --st-lilac: #cbbdf0;
+    --st-peach: #f3cdb6;
+    --st-mint: #b9e3cf;
+    --st-r: 22px;
+    --st-r-lg: 28px;
+    --st-pill: 999px;
+    --st-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --st-mono: var(--font-mono, ui-monospace, "Geist Mono", monospace);
+    --st-glass-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 18px 50px -22px rgba(20,20,25,0.28), inset 0 1px 0 rgba(255,255,255,0.7);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: var(--st-sans);
+    color: var(--st-ink);
+    background:
+      radial-gradient(var(--st-dot) 1px, transparent 1.4px) 0 0 / 22px 22px,
+      var(--st-bg);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01";
+  }
+  /* soft pastel ambient so the glass has something to refract */
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(46vw 40vw at 78% -6%, rgba(174,198,240,0.55), transparent 60%),
+      radial-gradient(40vw 38vw at 6% 8%, rgba(203,189,240,0.42), transparent 62%),
+      radial-gradient(44vw 42vw at 92% 82%, rgba(243,205,182,0.40), transparent 60%),
+      radial-gradient(40vw 40vw at 14% 96%, rgba(185,227,207,0.36), transparent 62%);
+    filter: saturate(1.05);
+  }
+  ::selection { background: var(--st-ink); color: #fff; }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 32px; }
+
+  /* glass primitive */
+  .glass {
+    background: var(--st-glass);
+    -webkit-backdrop-filter: blur(26px) saturate(1.6);
+    backdrop-filter: blur(26px) saturate(1.6);
+    border: 1px solid var(--st-glass-brd);
+    box-shadow: var(--st-glass-shadow);
+  }
+
+  /* eyebrow */
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--st-mono); font-size: 11.5px; font-weight: 500;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--st-muted);
+  }
+  .eyebrow::before { content: "✦"; color: var(--st-ink); font-size: 10px; }
+
+  /* ── Top bar (glass) ───────────────────────────────────────── */
+  .nav { position: sticky; top: 14px; z-index: 60; margin: 14px auto 0; max-width: 1160px; padding: 0 32px; }
+  .nav__in {
+    display: flex; align-items: center; gap: 14px; height: 58px; padding: 0 12px 0 18px;
+    border-radius: var(--st-pill);
+    background: var(--st-glass-2);
+    -webkit-backdrop-filter: blur(26px) saturate(1.6); backdrop-filter: blur(26px) saturate(1.6);
+    border: 1px solid var(--st-glass-brd);
+    box-shadow: var(--st-glass-shadow);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 580; font-size: 19px; letter-spacing: -0.02em; }
+  .brand .mk { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--st-ink); color: #fff; }
+  .brand .mk svg { width: 16px; height: 16px; }
+  .beta { font-family: var(--st-mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; color: var(--st-muted); border: 1px solid var(--st-line-2); border-radius: var(--st-pill); padding: 4px 9px; background: rgba(255,255,255,0.5); }
+  .nav__links { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .nav__links a { color: var(--st-ink-2); text-decoration: none; font-size: 13.5px; font-weight: 500; padding: 8px 14px; border-radius: var(--st-pill); transition: background .16s, color .16s; }
+  .nav__links a:hover { background: rgba(255,255,255,0.6); color: var(--st-ink); }
+  .nav__cta { background: var(--st-ink); color: #fff !important; font-family: var(--st-mono); font-size: 12px; font-weight: 600; padding: 9px 15px !important; }
+  .nav__cta:hover { background: #000; }
+  @media (max-width: 820px){ .nav__links a:not(.nav__cta){ display:none; } }
+
+  /* ── Hero (Stitch welcome) ─────────────────────────────────── */
+  .hero { padding: 76px 0 56px; text-align: center; }
+  .hero .eyebrow { margin-bottom: 26px; }
+  .hero h1 { margin: 0 auto; max-width: 16ch; font-size: clamp(3rem, 8vw, 6.4rem); font-weight: 540; letter-spacing: -0.045em; line-height: 0.96; color: var(--st-ink); }
+  .hero h1 .dots { color: var(--st-faint); }
+  .hero .sub { margin: 28px auto 0; max-width: 56ch; font-size: 1.08rem; line-height: 1.6; color: var(--st-muted); text-wrap: pretty; }
+  .hero .sub b { color: var(--st-ink-2); font-weight: 560; }
+
+  .suggest { margin: 36px auto 0; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; max-width: 860px; }
+  .suggest .pill {
+    font-size: 13.5px; color: var(--st-ink-2); padding: 11px 18px; border-radius: var(--st-pill);
+    background: var(--st-glass); border: 1px solid var(--st-glass-brd);
+    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03), inset 0 1px 0 rgba(255,255,255,0.6);
+    cursor: default; transition: transform .14s, box-shadow .14s;
+  }
+  .suggest .pill:hover { transform: translateY(-1px); box-shadow: 0 8px 22px -10px rgba(20,20,25,0.25), inset 0 1px 0 rgba(255,255,255,0.7); }
+
+  /* glass prompt input (the Stitch composer) */
+  .composer { margin: 26px auto 0; max-width: 860px; border-radius: var(--st-r-lg); padding: 22px 22px 14px; text-align: left; }
+  .composer .ph { font-size: 16px; line-height: 1.55; color: var(--st-ink-2); }
+  .composer .ph .cursor { display: inline-block; width: 2px; height: 1.05em; background: var(--st-ink); vertical-align: -3px; margin-left: 1px; animation: blink 1.1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .composer .bar { display: flex; align-items: center; gap: 10px; margin-top: 20px; }
+  .composer .ic { width: 36px; height: 36px; border-radius: var(--st-pill); display: grid; place-items: center; border: 1px solid var(--st-line-2); background: rgba(255,255,255,0.5); color: var(--st-ink-2); }
+  .composer .ic svg { width: 17px; height: 17px; }
+  .seg { display: inline-flex; padding: 4px; gap: 2px; border-radius: var(--st-pill); background: rgba(0,0,0,0.04); border: 1px solid var(--st-line); }
+  .seg b { font-weight: 600; font-size: 13px; padding: 6px 14px; border-radius: var(--st-pill); color: var(--st-muted); display: inline-flex; align-items: center; gap: 6px; }
+  .seg b.on { background: #fff; color: var(--st-ink); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+  .seg b svg { width: 14px; height: 14px; }
+  .composer .model { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; color: var(--st-ink-2); padding: 8px 13px; border-radius: var(--st-pill); border: 1px solid var(--st-line-2); background: rgba(255,255,255,0.5); }
+  .composer .model svg { width: 14px; height: 14px; }
+  .composer .send { width: 38px; height: 38px; border-radius: var(--st-pill); background: var(--st-ink); color: #fff; display: grid; place-items: center; }
+  .composer .send svg { width: 17px; height: 17px; }
+
+  /* ── Section scaffold ──────────────────────────────────────── */
+  section.band { padding: 58px 0; }
+  .sec-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 30px; }
+  .sec-head .l { display: grid; gap: 14px; }
+  .sec-head h2 { margin: 0; font-size: clamp(1.7rem, 3vw, 2.4rem); font-weight: 560; letter-spacing: -0.035em; color: var(--st-ink); }
+  .sec-head p { margin: 0; max-width: 44ch; font-size: 14px; line-height: 1.6; color: var(--st-muted); }
+  .codeword { font-family: var(--st-mono); font-size: 12px; color: var(--st-ink-2); background: rgba(255,255,255,0.55); border: 1px solid var(--st-line); border-radius: 6px; padding: 1px 6px; }
+
+  /* ── Principles ────────────────────────────────────────────── */
+  .principles { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+  .pr { border-radius: var(--st-r); padding: 26px; display: grid; gap: 12px; align-content: start; }
+  .pr .ix { font-family: var(--st-mono); font-size: 12px; color: var(--st-ink); }
+  .pr h3 { margin: 0; font-size: 1.12rem; font-weight: 580; letter-spacing: -0.02em; }
+  .pr p { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--st-muted); }
+  @media (max-width: 820px){ .principles { grid-template-columns: 1fr; } }
+
+  /* ── Panels (glass) ────────────────────────────────────────── */
+  .panel { border-radius: var(--st-r); overflow: hidden; }
+  .panel + .panel { margin-top: 16px; }
+  .panel__hd { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 18px 24px; border-bottom: 1px solid var(--st-line); }
+  .panel__hd h3 { margin: 0; font-size: 14.5px; font-weight: 580; letter-spacing: -0.01em; display: flex; align-items: baseline; gap: 10px; }
+  .panel__hd h3 .ix { font-family: var(--st-mono); color: var(--st-faint); font-size: 12px; }
+  .panel__hd .role { font-family: var(--st-mono); font-size: 11px; color: var(--st-faint); }
+  .panel__bd { padding: 24px; }
+
+  /* swatches */
+  .swatches { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .sw { display: grid; gap: 9px; }
+  .sw__chip { height: 56px; border-radius: 14px; border: 1px solid var(--st-line-2); box-shadow: inset 0 1px 0 rgba(255,255,255,0.4); }
+  .sw__chip.pair { display: grid; grid-template-columns: 1.4fr 1fr; padding: 0; overflow: hidden; }
+  .sw__chip.pair span { display: block; }
+  .sw__name { font-family: var(--st-mono); font-size: 11.5px; color: var(--st-ink); font-weight: 500; }
+  .sw__meta { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .sw__role { font-size: 11px; color: var(--st-muted); }
+  .sw__hex { font-family: var(--st-mono); font-size: 10.5px; color: var(--st-faint); }
+  .grp + .grp { margin-top: 24px; }
+  .mini-head { font-family: var(--st-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--st-muted); margin: 0 0 14px; }
+
+  /* type scale */
+  .type-row { display: grid; grid-template-columns: 110px 1fr auto; align-items: baseline; gap: 18px; padding: 15px 0; border-top: 1px solid var(--st-line); }
+  .type-row:first-child { border-top: 0; }
+  .type-row .k { font-family: var(--st-mono); font-size: 11px; color: var(--st-ink); }
+  .type-row .sample { color: var(--st-ink); letter-spacing: -0.025em; line-height: 1.1; }
+  .type-row .px { font-family: var(--st-mono); font-size: 11px; color: var(--st-faint); white-space: nowrap; }
+
+  /* spacing / radius / elevation */
+  .triple { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px){ .triple { grid-template-columns: 1fr; } }
+  .inset { background: rgba(255,255,255,0.4); border: 1px solid var(--st-line); border-radius: 16px; padding: 22px; }
+  .space-row { display: grid; grid-template-columns: 96px 1fr 40px; align-items: center; gap: 14px; }
+  .space-row + .space-row { margin-top: 11px; }
+  .space-row .k { font-family: var(--st-mono); font-size: 11px; color: var(--st-muted); }
+  .space-bar { height: 13px; background: var(--st-ink); border-radius: 4px; }
+  .space-row .px { font-family: var(--st-mono); font-size: 11px; color: var(--st-faint); text-align: right; }
+  .radius-grid { display: flex; flex-wrap: wrap; gap: 20px; }
+  .radius-item, .elev-item { display: grid; gap: 9px; justify-items: center; }
+  .radius-box { width: 70px; height: 70px; background: rgba(255,255,255,0.7); border: 1px solid var(--st-line-2); border-bottom: 2px solid var(--st-ink); }
+  .radius-item .k, .elev-item .k { font-family: var(--st-mono); font-size: 11px; color: var(--st-muted); }
+  .elev-grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); }
+  .elev-card { width: 100%; height: 70px; background: #fff; border: 1px solid var(--st-line); border-radius: 14px; }
+
+  /* fonts */
+  .font-grid { display: grid; gap: 16px; grid-template-columns: 1fr 1fr; }
+  .font-card { padding: 22px; border: 1px solid var(--st-line); border-radius: 16px; background: rgba(255,255,255,0.4); display: grid; gap: 12px; }
+  .font-card .tag { font-family: var(--st-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--st-faint); }
+  .font-card .glyphs { color: var(--st-ink); font-size: 2.7rem; letter-spacing: -0.03em; line-height: 1; }
+  .font-card.mono .glyphs { font-family: var(--st-mono); letter-spacing: 0; }
+  .font-card .set { font-size: 13px; color: var(--st-muted); }
+  .font-card.mono .set { font-family: var(--st-mono); }
+  @media (max-width: 700px){ .font-grid { grid-template-columns: 1fr; } }
+
+  /* ── Component specimens (glass shell, white stage) ────────── */
+  .specimens { display: grid; gap: 22px; }
+  .specimen { border-radius: var(--st-r-lg); overflow: hidden; }
+  .specimen__hd { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 20px 24px; border-bottom: 1px solid var(--st-line); }
+  .specimen__hd .t { display: grid; gap: 4px; }
+  .specimen__hd .t h3 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.02em; color: var(--st-ink); }
+  .specimen__hd .t .role { font-size: 12.5px; color: var(--st-muted); }
+  .api { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: 56%; }
+  .api code { font-family: var(--st-mono); font-size: 10.5px; padding: 4px 8px; border-radius: var(--st-pill); background: rgba(255,255,255,0.6); border: 1px solid var(--st-line-2); color: var(--st-ink-2); white-space: nowrap; }
+  .api code b { color: var(--st-ink); font-weight: 700; }
+  .stage { padding: 30px; background: rgba(255,255,255,0.34); color: var(--st-ink); }
+  .stage.dotted { background: radial-gradient(rgba(0,0,0,0.05) 1px, transparent 1.2px) 0 0 / 18px 18px, rgba(255,255,255,0.34); }
+  .stage-split { display: grid; grid-template-columns: 1fr 1fr; }
+  .stage-split > .stage { border-left: 1px solid var(--st-line); }
+  .stage-split > .stage:first-child { border-left: 0; }
+  .scap { font-family: var(--st-mono); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--st-muted); margin-bottom: 16px; }
+  @media (max-width: 720px){ .stage-split { grid-template-columns: 1fr; } .stage-split > .stage { border-left: 0; border-top: 1px solid var(--st-line); } .api { display: none; } }
+
+  /* ── WorkflowNode, re-skinned to glass (page-layer override) ──
+     One --node-accent var drives the top bar, icon tint & eyebrow. */
+  .specimen .gtm-node {
+    --node-accent: var(--st-muted);
+    position: relative; overflow: hidden;
+    min-width: 170px; max-width: 220px; gap: 4px; padding: 15px 14px;
+    color: var(--st-ink-2);
+    background: var(--st-glass);
+    -webkit-backdrop-filter: blur(22px) saturate(1.6); backdrop-filter: blur(22px) saturate(1.6);
+    border: 1px solid var(--st-glass-brd);
+    border-radius: 18px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 14px 34px -18px rgba(20,20,25,0.30), inset 0 1px 0 rgba(255,255,255,0.72);
+  }
+  .specimen .gtm-node::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--node-accent); opacity: 0.92;
+  }
+  .specimen .gtm-node:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 24px 50px -20px rgba(20,20,25,0.40), inset 0 1px 0 rgba(255,255,255,0.82);
+  }
+  .specimen .gtm-node__icon {
+    width: 26px; height: 26px; border-radius: 9px;
+    color: var(--node-accent);
+    background: color-mix(in srgb, var(--node-accent) 15%, rgba(255,255,255,0.7));
+    border: 1px solid color-mix(in srgb, var(--node-accent) 22%, transparent);
+  }
+  .specimen .gtm-node__icon svg { width: 13px; height: 13px; }
+  .specimen .gtm-node__category { color: var(--node-accent); font-weight: 700; letter-spacing: 0.09em; }
+  .specimen .gtm-node__label { margin-top: 9px; font-weight: 640; color: var(--st-ink); }
+  .specimen .gtm-node__count { color: var(--st-muted); }
+  .specimen .gtm-node__connector { color: var(--st-faint); }
+  .specimen .gtm-node__status { color: var(--node-accent); }
+  /* category → accent */
+  .specimen .gtm-node--source   { --node-accent: var(--cat-source); }
+  .specimen .gtm-node--enrich   { --node-accent: var(--cat-enrich); }
+  .specimen .gtm-node--filter   { --node-accent: var(--cat-filter); }
+  .specimen .gtm-node--generate { --node-accent: var(--cat-generate); }
+  .specimen .gtm-node--gate     { --node-accent: var(--cat-gate); }
+  .specimen .gtm-node--execute  { --node-accent: var(--cat-execute); }
+  .specimen .gtm-node--measure  { --node-accent: var(--cat-measure); }
+  /* states */
+  .specimen .gtm-node--selected {
+    border-color: var(--st-ink);
+    box-shadow: 0 0 0 3px rgba(28,28,30,0.13), 0 18px 40px -18px rgba(20,20,25,0.38), inset 0 1px 0 rgba(255,255,255,0.8);
+  }
+  .specimen .gtm-node--error {
+    --node-accent: var(--danger);
+    border-color: color-mix(in srgb, var(--danger) 45%, var(--st-glass-brd));
+    background: color-mix(in srgb, var(--danger) 9%, var(--st-glass));
+  }
+  .specimen .gtm-node__error-text { color: var(--danger); }
+
+  .manifest { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+  .manifest span { font-family: var(--st-mono); font-size: 12px; color: var(--st-muted); padding: 7px 13px; border-radius: var(--st-pill); background: var(--st-glass); border: 1px solid var(--st-glass-brd); }
+  .manifest span b { color: var(--st-ink); font-weight: 500; }
+
+  /* ── Patterns (from references, glass) ─────────────────────── */
+  .pattern { border-radius: var(--st-r); overflow: hidden; }
+  .pattern + .pattern { margin-top: 16px; }
+  .pattern__hd { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 22px; border-bottom: 1px solid var(--st-line); }
+  .pattern__hd h3 { margin: 0; font-size: 14.5px; font-weight: 580; letter-spacing: -0.01em; }
+  .pattern__hd .src { font-family: var(--st-mono); font-size: 11px; color: var(--st-faint); white-space: nowrap; }
+  .pattern__hd .src b { color: var(--st-ink); font-weight: 500; }
+  .pattern__bd { padding: 30px; }
+
+  .statblk { display: grid; grid-template-columns: repeat(3,1fr); gap: 28px; }
+  .statblk .it { display: grid; gap: 9px; align-content: start; }
+  .statblk .n { font-size: clamp(2.2rem,4vw,3.2rem); font-weight: 560; letter-spacing: -0.04em; line-height: 1; color: var(--st-ink); }
+  .statblk .n em { font-style: normal; color: var(--st-ink-2); }
+  .statblk .l { font-family: var(--st-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--st-faint); }
+  .statblk .ctx { font-size: 13px; color: var(--st-muted); line-height: 1.55; }
+  @media (max-width: 720px){ .statblk { grid-template-columns: 1fr; gap: 22px; } }
+
+  .compare { display: grid; }
+  .cmp { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 22px; padding: 15px 0; border-top: 1px solid var(--st-line); }
+  .cmp:first-child { border-top: 0; padding-top: 0; }
+  .cmp .lab { font-size: 14px; color: var(--st-ink); font-weight: 500; }
+  .cmp .hd { font-family: var(--st-mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--st-faint); }
+  .cmp .with { font-family: var(--st-mono); font-size: 13.5px; color: var(--st-ink); text-align: right; }
+  .cmp .with b { color: var(--st-ink); font-weight: 700; }
+  .cmp .without { font-family: var(--st-mono); font-size: 13px; color: var(--st-faint); text-decoration: line-through; text-align: right; min-width: 84px; }
+
+  .steps { display: grid; grid-template-columns: repeat(4,1fr); gap: 20px; }
+  .stp { display: grid; gap: 10px; align-content: start; }
+  .stp .bar { height: 2px; background: linear-gradient(90deg, var(--st-ink), rgba(28,28,30,0.08)); border-radius: 2px; }
+  .stp .num { font-family: var(--st-mono); font-size: 12px; color: var(--st-ink); }
+  .stp h4 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .stp p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--st-muted); }
+  @media (max-width: 820px){ .steps { grid-template-columns: 1fr 1fr; } }
+
+  .ftcols { display: grid; grid-template-columns: repeat(3,1fr); gap: 24px; }
+  .ftcol { display: grid; gap: 10px; align-content: start; }
+  .ftcol .h { font-family: var(--st-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--st-faint); }
+  .ftag { display: inline-flex; align-items: center; width: max-content; font-family: var(--st-mono); font-size: 12.5px; color: var(--st-ink); padding: 7px 13px; border-radius: var(--st-pill); border: 1px solid var(--st-line-2); background: rgba(255,255,255,0.5); }
+  .ftag::before { content: "+"; color: var(--st-ink); margin-right: 7px; font-weight: 600; }
+  @media (max-width: 720px){ .ftcols { grid-template-columns: 1fr; gap: 20px; } }
+
+  .quote { display: grid; gap: 22px; max-width: 62ch; }
+  .quote p { margin: 0; font-size: clamp(1.3rem,2.4vw,1.8rem); line-height: 1.4; letter-spacing: -0.025em; color: var(--st-ink); font-weight: 500; }
+  .quote .by { display: flex; align-items: center; gap: 13px; }
+  .quote .av { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, var(--st-blue), var(--st-lilac)); flex: 0 0 auto; box-shadow: inset 0 1px 0 rgba(255,255,255,0.5); }
+  .quote .by .nm { font-size: 14px; font-weight: 600; }
+  .quote .by .rl { font-size: 12.5px; color: var(--st-muted); }
+
+  .promptbar { display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 20px; border-radius: var(--st-r); border: 1px solid var(--st-glass-brd); background: rgba(255,255,255,0.5); box-shadow: inset 0 1px 0 rgba(255,255,255,0.6); }
+  .promptbar .ph { flex: 1; font-size: 14.5px; color: var(--st-muted); }
+  .promptbar .ph b { color: var(--st-ink); font-weight: 600; }
+  .promptbar .send { width: 36px; height: 36px; border-radius: var(--st-pill); background: var(--st-ink); display: grid; place-items: center; color: #fff; flex: 0 0 auto; }
+  .promptbar .send svg { width: 16px; height: 16px; }
+  .starter { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .starter span { display: inline-flex; align-items: center; gap: 7px; font-family: var(--st-mono); font-size: 12px; color: var(--st-muted); padding: 7px 13px; border-radius: var(--st-pill); border: 1px solid var(--st-line); background: rgba(255,255,255,0.4); }
+  .starter span svg { width: 14px; height: 14px; color: var(--st-ink-2); flex: 0 0 auto; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--st-ink); padding: 8px 13px; border-radius: var(--st-pill); border: 1px solid var(--st-line-2); background: rgba(255,255,255,0.5); }
+  .chip .lg { width: 16px; height: 16px; display: grid; place-items: center; flex: 0 0 auto; }
+  .chip .lg svg { width: 16px; height: 16px; display: block; }
+  .badges { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  .badge2 { display: inline-flex; align-items: center; gap: 9px; font-family: var(--st-mono); font-size: 11.5px; letter-spacing: 0.03em; color: var(--st-muted); padding: 8px 13px; border-radius: var(--st-pill); border: 1px solid var(--st-line); background: rgba(255,255,255,0.4); }
+
+  .logowall { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 38px; }
+  .logowall span { font-family: var(--st-mono); font-weight: 600; font-size: 15px; letter-spacing: -0.01em; color: var(--st-faint); }
+
+  footer { padding: 48px 0 64px; }
+  footer .card { border-radius: var(--st-r); padding: 26px 30px; display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; align-items: center; }
+  footer .mono { font-family: var(--st-mono); font-size: 12px; color: var(--st-faint); }
+  footer .links { display: flex; gap: 18px; }
+  footer .links a { color: var(--st-muted); font-size: 13px; text-decoration: none; }
+  footer .links a:hover { color: var(--st-ink); }
+</style>
+</head>
+<body>
+
+<!-- ░░ Top bar ░░ -->
+<nav class="nav"><div class="nav__in">
+  <div class="brand">
+    <span class="mk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 7h16M4 12h10M4 17h7"></path></svg></span>
+    GTM IDE
+  </div>
+  <div class="nav__links">
+    <a href="#foundations">Foundations</a>
+    <a href="#components">Components</a>
+    <a href="#patterns">Patterns</a>
+    <a href="#" class="nav__cta">Get the kit</a>
+  </div>
+</div></nav>
+
+<!-- ░░ Hero ░░ -->
+<header class="hero"><div class="wrap">
+  <span class="eyebrow">@gtm-ide/design-system</span>
+  <h1>Welcome to the kit<span class="dots">..</span></h1>
+  <p class="sub">A soft, airy, monochrome system for composing go-to-market workflows. <b>Frosted glass surfaces</b>, pill controls, one ink ramp — <b>12 components</b> and <b>66 tokens</b>, distraction-free.</p>
+
+  <div class="suggest">
+    <span class="pill">Source ICP accounts from GitHub…</span>
+    <span class="pill">Enrich &amp; score a prospect list…</span>
+    <span class="pill">Draft grounded openers…</span>
+  </div>
+
+  <div class="composer glass">
+    <div class="ph">Compose a go-to-market workflow — background soft pastel, surfaces brushed glass, thin modern icons. The graph should feel airy and distraction-free<span class="cursor"></span></div>
+    <div class="bar">
+      <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg></div>
+      <div class="seg">
+        <b class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="3" width="10" height="18" rx="2"></rect></svg>Graph</b>
+        <b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"></rect></svg>Run</b>
+      </div>
+      <div class="model"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"></path></svg> Sonnet 4.5 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"></path></svg></div>
+      <div class="send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 19V5M6 11l6-6 6 6"></path></svg></div>
+    </div>
+  </div>
+</div></header>
+
+<!-- ░░ Principles ░░ -->
+<section class="band" style="padding-top:18px"><div class="wrap">
+  <div class="sec-head"><div class="l"><span class="eyebrow">Principles</span></div></div>
+  <div class="principles">
+    <div class="pr glass"><div class="ix">01</div><h3>Soft &amp; airy</h3><p>A warm greige canvas, a faint dot grid, and frosted-glass surfaces. Generous space; nothing competes for attention.</p></div>
+    <div class="pr glass"><div class="ix">02</div><h3>Monochrome ink</h3><p>One zinc ramp carries hierarchy through weight and presence. Color appears only to signal state or node category.</p></div>
+    <div class="pr glass"><div class="ix">03</div><h3>Pill &amp; glass</h3><p>Controls are pills, surfaces are glass, the primary action is a single near-black ink button. Calm reads as confidence.</p></div>
+  </div>
+</div></section>
+
+<!-- ═══════════════ FOUNDATIONS ═══════════════ -->
+<section class="band" id="foundations"><div class="wrap">
+  <div class="sec-head">
+    <div class="l"><span class="eyebrow">Foundations</span><h2>Tokens, not hexes</h2></div>
+    <p>Every value below is a CSS custom property declared once on <span class="codeword">:root</span>. Layout glue references them; nothing is hardcoded.</p>
+  </div>
+
+  <!-- Aesthetic tokens (new) -->
+  <div class="panel glass">
+    <div class="panel__hd"><h3><span class="ix">00</span>Canvas &amp; glass</h3><span class="role">aesthetic · --st-*</span></div>
+    <div class="panel__bd"><div class="swatches">
+      <div class="sw"><div class="sw__chip" style="background:var(--st-bg)"></div><div class="sw__name">--st-bg</div><div class="sw__meta"><span class="sw__role">Canvas</span><span class="sw__hex">#f0efec</span></div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--st-bg-2)"></div><div class="sw__name">--st-bg-2</div><div class="sw__meta"><span class="sw__role">Inset</span><span class="sw__hex">#e9e8e3</span></div></div>
+      <div class="sw"><div class="sw__chip glass" style="border-radius:14px"></div><div class="sw__name">--st-glass</div><div class="sw__meta"><span class="sw__role">Surface</span><span class="sw__hex">white α52</span></div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--st-blue)"></div><div class="sw__name">--st-blue</div><div class="sw__meta"><span class="sw__role">Ambient</span><span class="sw__hex">#aec6f0</span></div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--st-lilac)"></div><div class="sw__name">--st-lilac</div><div class="sw__meta"><span class="sw__role">Ambient</span><span class="sw__hex">#cbbdf0</span></div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--st-peach)"></div><div class="sw__name">--st-peach</div><div class="sw__meta"><span class="sw__role">Ambient</span><span class="sw__hex">#f3cdb6</span></div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--st-mint)"></div><div class="sw__name">--st-mint</div><div class="sw__meta"><span class="sw__role">Ambient</span><span class="sw__hex">#b9e3cf</span></div></div>
+    </div></div>
+  </div>
+
+  <!-- Ink ramp -->
+  <div class="panel glass">
+    <div class="panel__hd"><h3><span class="ix">01</span>Ink ramp</h3><span class="role">color · text · zinc</span></div>
+    <div class="panel__bd"><div class="swatches">
+      <div class="sw"><div class="sw__chip" style="background:var(--ink)"></div><div class="sw__name">--ink</div><div class="sw__meta"><span class="sw__role">Titles</span><span class="sw__hex">#18181b</span></div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--ink-2)"></div><div class="sw__name">--ink-2</div><div class="sw__meta"><span class="sw__role">Body</span><span class="sw__hex">#3f3f46</span></div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--muted)"></div><div class="sw__name">--muted</div><div class="sw__meta"><span class="sw__role">Labels</span><span class="sw__hex">#71717a</span></div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--faint)"></div><div class="sw__name">--faint</div><div class="sw__meta"><span class="sw__role">Meta</span><span class="sw__hex">#a1a1aa</span></div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--ghost)"></div><div class="sw__name">--ghost</div><div class="sw__meta"><span class="sw__role">Disabled</span><span class="sw__hex">#d4d4d8</span></div></div>
+    </div></div>
+  </div>
+
+  <!-- Surfaces -->
+  <div class="panel glass">
+    <div class="panel__hd"><h3><span class="ix">02</span>Surfaces &amp; lines</h3><span class="role">color · surface</span></div>
+    <div class="panel__bd"><div class="swatches">
+      <div class="sw"><div class="sw__chip" style="background:var(--canvas)"></div><div class="sw__name">--canvas</div><div class="sw__meta"><span class="sw__role">Workspace</span><span class="sw__hex">#fafafa</span></div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--surface)"></div><div class="sw__name">--surface</div><div class="sw__meta"><span class="sw__role">Cards</span><span class="sw__hex">#ffffff</span></div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--surface-2)"></div><div class="sw__name">--surface-2</div><div class="sw__meta"><span class="sw__role">Inset</span><span class="sw__hex">#f4f4f5</span></div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--line)"></div><div class="sw__name">--line</div><div class="sw__meta"><span class="sw__role">Hairline</span><span class="sw__hex">#ececec</span></div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--line-2)"></div><div class="sw__name">--line-2</div><div class="sw__meta"><span class="sw__role">Border</span><span class="sw__hex">#e4e4e7</span></div></div>
+    </div></div>
+  </div>
+
+  <!-- Action + semantic -->
+  <div class="panel glass">
+    <div class="panel__hd"><h3><span class="ix">03</span>Action &amp; semantic</h3><span class="role">color · meaning only</span></div>
+    <div class="panel__bd">
+      <div class="grp">
+        <div class="mini-head">Action</div>
+        <div class="swatches">
+          <div class="sw"><div class="sw__chip" style="background:var(--primary)"></div><div class="sw__name">--primary</div><div class="sw__meta"><span class="sw__role">Deploy / Run</span><span class="sw__hex">#18181b</span></div></div>
+          <div class="sw"><div class="sw__chip" style="background:var(--on-primary);border-color:var(--st-line-2)"></div><div class="sw__name">--on-primary</div><div class="sw__meta"><span class="sw__role">On dark</span><span class="sw__hex">#ffffff</span></div></div>
+          <div class="sw"><div class="sw__chip" style="background:var(--link)"></div><div class="sw__name">--link</div><div class="sw__meta"><span class="sw__role">Links</span><span class="sw__hex">#2563eb</span></div></div>
+        </div>
+      </div>
+      <div class="grp">
+        <div class="mini-head">Status — token / soft pair</div>
+        <div class="swatches">
+          <div class="sw"><div class="sw__chip pair"><span style="background:var(--proven)"></span><span style="background:var(--proven-soft)"></span></div><div class="sw__name">--proven</div><div class="sw__meta"><span class="sw__role">Proven</span><span class="sw__hex">#16a34a</span></div></div>
+          <div class="sw"><div class="sw__chip pair"><span style="background:var(--gap)"></span><span style="background:var(--gap-soft)"></span></div><div class="sw__name">--gap</div><div class="sw__meta"><span class="sw__role">Gap</span><span class="sw__hex">#d97706</span></div></div>
+          <div class="sw"><div class="sw__chip pair"><span style="background:var(--danger)"></span><span style="background:var(--danger-soft)"></span></div><div class="sw__name">--danger</div><div class="sw__meta"><span class="sw__role">Failing</span><span class="sw__hex">#dc2626</span></div></div>
+          <div class="sw"><div class="sw__chip pair"><span style="background:var(--blind)"></span><span style="background:var(--surface-2)"></span></div><div class="sw__name">--blind</div><div class="sw__meta"><span class="sw__role">No signal</span><span class="sw__hex">#a1a1aa</span></div></div>
+          <div class="sw"><div class="sw__chip" style="background:var(--agent)"></div><div class="sw__name">--agent</div><div class="sw__meta"><span class="sw__role">Agent</span><span class="sw__hex">#18181b</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Category -->
+  <div class="panel glass">
+    <div class="panel__hd"><h3><span class="ix">04</span>Node category accents</h3><span class="role">the only structural hue</span></div>
+    <div class="panel__bd"><div class="swatches">
+      <div class="sw"><div class="sw__chip" style="background:var(--cat-source)"></div><div class="sw__name">--cat-source</div><div class="sw__meta"><span class="sw__role">Source</span><span class="sw__hex">#2282c4</span></div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--cat-enrich)"></div><div class="sw__name">--cat-enrich</div><div class="sw__meta"><span class="sw__role">Enrich</span><span class="sw__hex">#6b5cde</span></div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--cat-filter)"></div><div class="sw__name">--cat-filter</div><div class="sw__meta"><span class="sw__role">Filter</span><span class="sw__hex">#d97706</span></div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--cat-generate)"></div><div class="sw__name">--cat-generate</div><div class="sw__meta"><span class="sw__role">Generate</span><span class="sw__hex">#16a34a</span></div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--cat-gate)"></div><div class="sw__name">--cat-gate</div><div class="sw__meta"><span class="sw__role">Gate</span><span class="sw__hex">#18181b</span></div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--cat-execute)"></div><div class="sw__name">--cat-execute</div><div class="sw__meta"><span class="sw__role">Execute</span><span class="sw__hex">#d84c4c</span></div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--cat-measure)"></div><div class="sw__name">--cat-measure</div><div class="sw__meta"><span class="sw__role">Measure</span><span class="sw__hex">#3b9e6b</span></div></div>
+    </div></div>
+  </div>
+
+  <!-- Type -->
+  <div class="panel glass">
+    <div class="panel__hd"><h3><span class="ix">05</span>Type scale</h3><span class="role">Geist · 14px base</span></div>
+    <div class="panel__bd">
+      <div class="type-row"><span class="k">--text-2xl</span><span class="sample" style="font-size:var(--text-2xl);font-weight:560">Compose the outreach graph</span><span class="px">26 · title</span></div>
+      <div class="type-row"><span class="k">--text-xl</span><span class="sample" style="font-size:var(--text-xl);font-weight:560">Compose the outreach graph</span><span class="px">21 · section</span></div>
+      <div class="type-row"><span class="k">--text-lg</span><span class="sample" style="font-size:var(--text-lg);font-weight:580">Compose the outreach graph</span><span class="px">17 · card</span></div>
+      <div class="type-row"><span class="k">--text-md</span><span class="sample" style="font-size:var(--text-md);font-weight:500">Compose the outreach graph</span><span class="px">16 · emphasis</span></div>
+      <div class="type-row"><span class="k">--text-base</span><span class="sample" style="font-size:var(--text-base)">Compose the outreach graph</span><span class="px">14 · body</span></div>
+      <div class="type-row"><span class="k">--text-sm</span><span class="sample" style="font-size:var(--text-sm)">Compose the outreach graph</span><span class="px">13 · label</span></div>
+      <div class="type-row"><span class="k">--text-xs</span><span class="sample" style="font-size:var(--text-xs)">Compose the outreach graph</span><span class="px">11 · meta</span></div>
+    </div>
+  </div>
+
+  <!-- Space / radius / elevation / fonts -->
+  <div class="panel glass">
+    <div class="panel__hd"><h3><span class="ix">06</span>Space, radius &amp; elevation</h3><span class="role">4px rhythm</span></div>
+    <div class="panel__bd">
+      <div class="triple">
+        <div class="inset">
+          <div class="mini-head">Spacing — 4px base</div>
+          <div class="space-row"><span class="k">--space-1</span><div class="space-bar" style="width:4px"></div><span class="px">4</span></div>
+          <div class="space-row"><span class="k">--space-2</span><div class="space-bar" style="width:8px"></div><span class="px">8</span></div>
+          <div class="space-row"><span class="k">--space-3</span><div class="space-bar" style="width:12px"></div><span class="px">12</span></div>
+          <div class="space-row"><span class="k">--space-4</span><div class="space-bar" style="width:16px"></div><span class="px">16</span></div>
+          <div class="space-row"><span class="k">--space-5</span><div class="space-bar" style="width:20px"></div><span class="px">20</span></div>
+          <div class="space-row"><span class="k">--space-6</span><div class="space-bar" style="width:24px"></div><span class="px">24</span></div>
+          <div class="space-row"><span class="k">--space-8</span><div class="space-bar" style="width:32px"></div><span class="px">32</span></div>
+          <div class="space-row"><span class="k">--space-12</span><div class="space-bar" style="width:48px"></div><span class="px">48</span></div>
+        </div>
+        <div style="display:grid;gap:16px">
+          <div class="inset">
+            <div class="mini-head">Radius</div>
+            <div class="radius-grid">
+              <div class="radius-item"><div class="radius-box" style="border-radius:var(--r-sm)"></div><span class="k">sm · 6</span></div>
+              <div class="radius-item"><div class="radius-box" style="border-radius:var(--r-md)"></div><span class="k">md · 9</span></div>
+              <div class="radius-item"><div class="radius-box" style="border-radius:var(--r-lg)"></div><span class="k">lg · 12</span></div>
+              <div class="radius-item"><div class="radius-box" style="border-radius:var(--r-xl)"></div><span class="k">xl · 16</span></div>
+              <div class="radius-item"><div class="radius-box" style="border-radius:999px"></div><span class="k">pill</span></div>
+            </div>
+          </div>
+          <div class="inset">
+            <div class="mini-head">Elevation</div>
+            <div class="elev-grid">
+              <div class="elev-item"><div class="elev-card" style="box-shadow:var(--shadow-xs)"></div><span class="k">xs</span></div>
+              <div class="elev-item"><div class="elev-card" style="box-shadow:var(--shadow-sm)"></div><span class="k">sm</span></div>
+              <div class="elev-item"><div class="elev-card" style="box-shadow:var(--shadow-card)"></div><span class="k">card</span></div>
+              <div class="elev-item"><div class="elev-card" style="box-shadow:var(--shadow-pop)"></div><span class="k">pop</span></div>
+              <div class="elev-item"><div class="elev-card" style="box-shadow:var(--shadow-modal)"></div><span class="k">modal</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="grp" style="margin-top:22px">
+        <div class="mini-head">Type families</div>
+        <div class="font-grid">
+          <div class="font-card"><span class="tag">Sans · UI &amp; content</span><div class="glyphs">Aa Gg 0123</div><span class="set">Geist Variable — default</span></div>
+          <div class="font-card mono"><span class="tag">Mono · code &amp; paths</span><div class="glyphs">Aa Gg 0123</div><span class="set">Geist Mono — var(--font-mono)</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<!-- ═══════════════ COMPONENTS ═══════════════ -->
+<section class="band" id="components"><div class="wrap">
+  <div class="sec-head">
+    <div class="l"><span class="eyebrow">Live components · window.GtmIde</span><h2>The real package, on glass</h2></div>
+    <p>Every specimen is the published <span class="codeword">@gtm-ide/design-system</span> rendered live — styled only through its props and variants.</p>
+  </div>
+
+  <div class="manifest">
+    <span><b>Button</b></span><span><b>Badge</b></span><span><b>WorkflowNode</b></span><span><b>Card</b></span><span><b>Input</b></span><span><b>Textarea</b></span><span><b>SegmentedTabs</b></span><span><b>StatusDot</b></span><span><b>SectionHeading</b></span><span><b>CitationCard</b></span><span><b>ProspectCard</b></span><span><b>Chat</b></span><span><b>Toolbar</b></span>
+  </div>
+
+  <div class="specimens">
+
+    <div class="specimen glass">
+      <div class="specimen__hd"><div class="t"><h3>Toolbar</h3><span class="role">The frosted top bar — brand, breadcrumbs, global actions.</span></div>
+        <div class="api"><code><b>Brand</b></code><code><b>ToolbarDivider</b></code><code><b>ToolbarSpacer</b></code></div></div>
+      <div class="stage" style="padding:0"><div id="demo-toolbar"></div></div>
+    </div>
+
+    <div class="specimen glass">
+      <div class="specimen__hd"><div class="t"><h3>WorkflowNode</h3><span class="role">A canvas node — app icon, title &amp; settings, with run state, cost and mapped-field rows; wired by bezier connectors.</span></div>
+        <div class="api"><code><b>icon</b></code><code><b>title</b></code><code><b>autoRun</b></code><code><b>cost</b></code><code><b>fields</b></code><code><b>selected</b></code></div></div>
+      <div class="stage dotted"><div id="demo-nodes"></div></div>
+    </div>
+
+    <div class="specimen glass">
+      <div class="specimen__hd"><div class="t"><h3>Button</h3><span class="role">The dark ink pill is primary — Deploy / Publish / Run.</span></div>
+        <div class="api"><code><b>variant</b> primary·secondary·ghost·outline</code><code><b>size</b> md·sm·icon</code></div></div>
+      <div class="stage"><div id="demo-buttons"></div></div>
+    </div>
+
+    <div class="specimen glass">
+      <div class="specimen__hd"><div class="t"><h3>Badge</h3><span class="role">Compact chips &amp; pills — square app/status icons, an avatar, and icon+text metadata.</span></div>
+        <div class="api"><code><b>icon chip</b></code><code><b>avatar</b></code><code><b>pill</b></code><code><b>tone</b></code></div></div>
+      <div class="stage"><div id="demo-badges"></div></div>
+    </div>
+
+    <div class="specimen glass">
+      <div class="specimen__hd"><div class="t"><h3>SegmentedTabs · StatusDot · SectionHeading</h3><span class="role">The mode strip, the tone marker, and the tracked rail label.</span></div></div>
+      <div class="stage"><div class="scap">SegmentedTabs — controlled, click to switch</div><div id="demo-tabs"></div></div>
+      <div class="stage-split">
+        <div class="stage"><div class="scap">StatusDot</div><div id="demo-dots"></div></div>
+        <div class="stage"><div class="scap">SectionHeading</div><div id="demo-headings"></div></div>
+      </div>
+    </div>
+
+    <div class="specimen glass">
+      <div class="specimen__hd"><div class="t"><h3>Input · Textarea</h3><span class="role">Text fields with a mono variant for refs, paths, and prompts.</span></div>
+        <div class="api"><code><b>mono</b></code><code><b>disabled</b></code></div></div>
+      <div class="stage"><div id="demo-inputs"></div></div>
+    </div>
+
+    <div class="specimen glass">
+      <div class="specimen__hd"><div class="t"><h3>Card</h3><span class="role">A media card — thumbnail, title, edited-time, and a footer row of metadata badges.</span></div></div>
+      <div class="stage dotted"><div id="demo-cards"></div></div>
+    </div>
+
+    <div class="specimen glass">
+      <div class="specimen__hd"><div class="t"><h3>CitationCard · ProspectCard</h3><span class="role">The file:line grounding receipt, and an enriched account with a fit score.</span></div></div>
+      <div class="stage-split">
+        <div class="stage"><div class="scap">CitationCard</div><div id="demo-citations"></div></div>
+        <div class="stage"><div class="scap">ProspectCard</div><div id="demo-prospects"></div></div>
+      </div>
+    </div>
+
+    <div class="specimen glass">
+      <div class="specimen__hd"><div class="t"><h3>Chat</h3><span class="role">The AI assistant panel — attachment, message bubble, tool-call &amp; doc references, reply actions, and a composer with Canvas + model selector.</span></div>
+        <div class="api"><code><b>attachment</b></code><code><b>toolCall</b></code><code><b>docRef</b></code><code><b>composer</b></code></div></div>
+      <div class="stage dotted"><div id="demo-chat"></div></div>
+    </div>
+
+  </div>
+<section class="band" id="patterns"><div class="wrap">
+  <div class="sec-head">
+    <div class="l"><span class="eyebrow">Patterns · from the references</span><h2>Composition blocks</h2></div>
+    <p>Higher-order blocks rebuilt in the GTM IDE language from the same glass &amp; token foundation.</p>
+  </div>
+
+  <div class="pattern glass">
+    <div class="pattern__hd"><h3>Stat block</h3><span class="src">↳ <b>Paraform</b> · Titan</span></div>
+    <div class="pattern__bd"><div class="statblk">
+      <div class="it"><div class="n"><em>3×</em></div><div class="l">Faster to first touch</div><div class="ctx">From sourced account to sent opener, against a manual SDR motion.</div></div>
+      <div class="it"><div class="n">128</div><div class="l">Accounts / run</div><div class="ctx">Sourced from a single GitHub signal channel watching ICP repos.</div></div>
+      <div class="it"><div class="n"><em>98%</em></div><div class="l">Grounded drafts</div><div class="ctx">Every opener traced to a <span style="font-family:var(--st-mono)">file:line</span> citation before it sends.</div></div>
+    </div></div>
+  </div>
+
+  <div class="pattern glass">
+    <div class="pattern__hd"><h3>Comparison stat — with / without</h3><span class="src">↳ <b>Titan Intake</b></span></div>
+    <div class="pattern__bd"><div class="compare">
+      <div class="cmp"><span class="lab hd">Step</span><span class="with hd">With agents</span><span class="without hd" style="text-decoration:none">Manual</span></div>
+      <div class="cmp"><span class="lab">Find ICP accounts</span><span class="with"><b>2 min</b></span><span class="without">3 hrs</span></div>
+      <div class="cmp"><span class="lab">Enrich firmographics</span><span class="with"><b>15 sec</b></span><span class="without">25 min</span></div>
+      <div class="cmp"><span class="lab">Draft the opener</span><span class="with"><b>6 sec</b></span><span class="without">8 min</span></div>
+    </div></div>
+  </div>
+
+  <div class="pattern glass">
+    <div class="pattern__hd"><h3>Numbered process</h3><span class="src">↳ <b>Titan Intake</b></span></div>
+    <div class="pattern__bd"><div class="steps">
+      <div class="stp"><div class="bar"></div><div class="num">01</div><h4>Source</h4><p>Watch ICP repos for dependency adds and first GTM-engineer hires.</p></div>
+      <div class="stp"><div class="bar"></div><div class="num">02</div><h4>Enrich</h4><p>Pull firmographics and buying signals into structured, scored rows.</p></div>
+      <div class="stp"><div class="bar"></div><div class="num">03</div><h4>Gate</h4><p>A founder reviews and approves before anything leaves the graph.</p></div>
+      <div class="stp"><div class="bar"></div><div class="num">04</div><h4>Execute</h4><p>Send the opener through your connector, grounded to a citation.</p></div>
+    </div></div>
+  </div>
+
+  <div class="pattern glass">
+    <div class="pattern__hd"><h3>Feature tags</h3><span class="src">↳ <b>Titan Intake</b></span></div>
+    <div class="pattern__bd"><div class="ftcols">
+      <div class="ftcol"><div class="h">Source</div><span class="ftag">ICP repos</span><span class="ftag">Job posts</span><span class="ftag">Funding rounds</span></div>
+      <div class="ftcol"><div class="h">Enrich</div><span class="ftag">Firmographics</span><span class="ftag">Tech stack</span><span class="ftag">Intent signals</span></div>
+      <div class="ftcol"><div class="h">Measure</div><span class="ftag">Attribution</span><span class="ftag">Reply rate</span><span class="ftag">Pipeline</span></div>
+    </div></div>
+  </div>
+
+  <div class="pattern glass">
+    <div class="pattern__hd"><h3>Quote card</h3><span class="src">↳ <b>Paraform</b></span></div>
+    <div class="pattern__bd"><div class="quote">
+      <p>“Imagine if your GTM stack actually composed. We read our outreach like code now — every node grounded, every gate ours.”</p>
+      <div class="by"><div class="av"></div><div><div class="nm">Corey Stein</div><div class="rl">VP Growth, Northwind Labs</div></div></div>
+    </div></div>
+  </div>
+
+  <div class="pattern glass">
+    <div class="pattern__hd"><h3>Prompt bar</h3><span class="src">↳ <b>Retool</b></span></div>
+    <div class="pattern__bd">
+      <div class="promptbar">
+        <div class="ph">Describe a go-to-market workflow… use <b>@</b> to add a connector</div>
+        <div class="send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></div>
+      </div>
+      <div class="starter"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.4"></circle><circle cx="6" cy="18" r="2.4"></circle><circle cx="18" cy="7" r="2.4"></circle><path d="M6 8.4v7.2M18 9.4c0 4-4 3.6-6 5.6"></path></svg>Source ICP accounts</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5.5" rx="7" ry="2.6"></ellipse><path d="M5 5.5v13c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6v-13"></path><path d="M5 12c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6"></path></svg>Enrich + score</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"></path><path d="M14 6l4 4"></path></svg>Draft openers</span></div>
+    </div>
+  </div>
+
+  <div class="pattern glass">
+    <div class="pattern__hd"><h3>Connectors &amp; governance</h3><span class="src">↳ <b>Retool</b> · Titan</span></div>
+    <div class="pattern__bd">
+      <div class="chips">
+        <span class="chip"><span class="lg"><svg viewBox="0 0 24 24" fill="none" stroke="#336791" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5.5" rx="7" ry="2.8"></ellipse><path d="M5 5.5v13c0 1.6 3.1 2.8 7 2.8s7-1.2 7-2.8v-13"></path><path d="M5 12c0 1.6 3.1 2.8 7 2.8s7-1.2 7-2.8"></path></svg></span>Postgres</span>
+        <span class="chip"><span class="lg"><svg viewBox="0 0 24 24" fill="none" stroke="#29b5e8" stroke-width="1.7" stroke-linecap="round"><path d="M12 2v20M3.4 7l17.2 10M20.6 7L3.4 17"></path></svg></span>Snowflake</span>
+        <span class="chip"><span class="lg"><svg viewBox="0 0 24 24" fill="none" stroke="#1c1c1e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"></path></svg></span>REST API</span>
+        <span class="chip"><span class="lg"><svg viewBox="0 0 24 24" fill="none" stroke="#3f8624" stroke-width="1.7" stroke-linejoin="round"><path d="M4.5 6h15l-1.3 13.2a1 1 0 01-1 .8H6.8a1 1 0 01-1-.8L4.5 6z"></path><path d="M3.5 6h17"></path></svg></span>S3</span>
+        <span class="chip"><span class="lg"><svg viewBox="0 0 24 24" fill="#d97757"><path d="M12 2l2.3 7.7L22 12l-7.7 2.3L12 22l-2.3-7.7L2 12l7.7-2.3z"></path></svg></span>Anthropic</span>
+        <span class="chip"><span class="lg"><svg viewBox="0 0 24 24" fill="#5b3df5"><path d="M13 2L4 13.5h5.5L9 22l9-11.5h-5.5z"></path></svg></span>Instantly</span>
+      </div>
+      <div class="badges">
+        <span class="badge2">SOC 2 Type II</span>
+        <span class="badge2">ISO 27001</span>
+        <span class="badge2">HIPAA</span>
+        <span class="badge2">SAML / SSO</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pattern glass">
+    <div class="pattern__hd"><h3>Logo wall</h3><span class="src">↳ all three</span></div>
+    <div class="pattern__bd">
+      <div class="eyebrow" style="margin-bottom:20px">Trusted by go-to-market teams</div>
+      <div class="logowall"><span>NORTHWIND</span><span>MERIDIAN</span><span>PALLET</span><span>BASIS</span><span>LOOP&nbsp;AI</span><span>ACME&nbsp;CO</span><span>HELIX</span></div>
+    </div>
+  </div>
+</div></section>
+
+<footer><div class="wrap"><div class="card glass">
+  <span class="mono">@gtm-ide/design-system@0.1.0 — tokens &amp; components, one page</span>
+  <div class="links"><a href="#foundations">Foundations</a><a href="#components">Components</a><a href="#patterns">Patterns</a></div>
+</div></div></footer>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="_ds_bundle.js"></script>
+<script type="text/babel" src="demos.jsx"></script>
+</body>
+</html>

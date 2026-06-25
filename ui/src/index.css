@@ -85,6 +85,13 @@
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --dur-fast: 120ms;
   --dur-base: 200ms;
+  /* Motion layer additions — entrances, lands, ambient. Hover/press stay on
+     --dur-fast/--ease-out so interaction reads instant; only entrances/lands
+     get the soft overshoot. */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* soft overshoot — entrances, content-lands only */
+  --dur-slow: 360ms;                                 /* panel/overlay entrances, stagger base */
+  --dur-amb: 22s;                                    /* ambient pastel drift period */
+  --lift-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 16px 38px -16px rgba(20, 20, 25, 0.30);
 
   /* Back-compat aliases (older classes referenced these) */
   --accent: oklch(0.21 0.006 285.9);
@@ -9628,4 +9635,865 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
     top: auto !important; width: auto !important; max-width: none !important;
     max-height: 42%; overflow-y: auto;
   }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   STITCH GLASS LAYER — synced from design-system/styles.css (the source of
+   truth), plus the product-class glass surfaces.
+
+   Reversible by construction: nothing below applies unless an ancestor carries
+   data-skin="glass" (set in ui/index.html). Remove that one attribute and the
+   app is byte-for-byte the shipped zinc system. The token remap reskins every
+   token-driven rule for free; the named .loop-* overrides add the frost / rim /
+   pill shape that a token alone cannot, and convert the handful of hardcoded
+   literals (toolbar, dock, dark resource strip, purple context node, the two
+   !important CTAs). Semantic + node-category colors are KEPT untouched.
+   ════════════════════════════════════════════════════════════════════════ */
+:root {
+  --st-bg: #f0efec;
+  --st-bg-2: #e9e8e3;
+  --st-dot: rgba(0, 0, 0, 0.055);
+  --st-ink: #1c1c1e;
+  --st-ink-2: #46464b;
+  --st-muted: #74747a;
+  --st-faint: #9b9ba1;
+  --st-line: rgba(0, 0, 0, 0.075);
+  --st-line-2: rgba(0, 0, 0, 0.12);
+  --st-primary: #1c1c1e;
+  --st-glass: rgba(255, 255, 255, 0.52);
+  --st-glass-2: rgba(255, 255, 255, 0.66);
+  --st-glass-brd: rgba(255, 255, 255, 0.85);
+  --st-glass-dark: rgba(20, 20, 25, 0.55);
+  --st-ring: rgba(28, 28, 30, 0.13);
+  --st-blue: #aec6f0;
+  --st-lilac: #cbbdf0;
+  --st-peach: #f3cdb6;
+  --st-mint: #b9e3cf;
+  --st-r: 22px;
+  --st-r-lg: 28px;
+  --st-pill: 999px;
+  --st-glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 18px 50px -22px rgba(20, 20, 25, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --st-node-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 14px 34px -18px rgba(20, 20, 25, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  --st-pop-shadow: 0 8px 22px -10px rgba(20, 20, 25, 0.25);
+  --st-modal-shadow: 0 30px 80px -28px rgba(20, 20, 25, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+[data-skin="glass"] {
+  --canvas: var(--st-bg);
+  --canvas-dot: var(--st-dot);
+  --surface: var(--st-glass);
+  --surface-2: var(--st-bg-2);
+  --panel: var(--st-glass-2);
+  --ink: var(--st-ink);
+  --ink-2: var(--st-ink-2);
+  --muted: var(--st-muted);
+  --faint: var(--st-faint);
+  --ghost: #c9c9cf;
+  --line: var(--st-line);
+  --line-2: var(--st-line-2);
+  --primary: var(--st-primary);
+  --accent: var(--st-ink);
+  --accent-soft: var(--st-bg-2);
+  --r-sm: 8px;
+  --r-md: 11px;
+  --r-lg: 18px;
+  --r-xl: 22px;
+  --shadow-card: var(--st-glass-shadow);
+  --shadow-pop: var(--st-pop-shadow);
+  --shadow-modal: var(--st-modal-shadow);
+  /* KEPT: --link, --proven/-soft, --gap/-soft/-ink, --danger/-soft, --blind,
+     --agent, every --cat-* — semantics shared under both skins. */
+}
+
+/* ── Base plane — warm greige + printed dot-grid + soft pastel ambient ────── */
+[data-skin="glass"] body,
+[data-skin="glass"] .loop-shell,
+[data-skin="glass"] .app-shell {
+  background: var(--st-bg);
+}
+
+[data-skin="glass"] .loop-canvas-area {
+  background:
+    radial-gradient(var(--st-dot) 1px, transparent 1.4px) 0 0 / 22px 22px,
+    radial-gradient(46vw 40vw at 84% -8%, rgba(174, 198, 240, 0.20), transparent 60%),
+    radial-gradient(42vw 40vw at 6% 8%, rgba(203, 189, 240, 0.16), transparent 62%),
+    radial-gradient(44vw 42vw at 92% 96%, rgba(243, 205, 182, 0.14), transparent 60%),
+    radial-gradient(40vw 40vw at 16% 98%, rgba(185, 227, 207, 0.12), transparent 62%),
+    var(--st-bg);
+}
+
+/* ── Frosted toolbar ─────────────────────────────────────────────────────── */
+[data-skin="glass"] .loop-toolbar {
+  background: var(--st-glass-2);
+  -webkit-backdrop-filter: blur(26px) saturate(1.6);
+  backdrop-filter: blur(26px) saturate(1.6);
+  border-bottom: 1px solid var(--st-glass-brd);
+  box-shadow: var(--st-glass-shadow);
+}
+
+/* ── Glass graph nodes (category color stays — it is inline on .loop-node-icon) ─ */
+[data-skin="glass"] .loop-node {
+  background: var(--st-glass);
+  -webkit-backdrop-filter: blur(22px) saturate(1.6);
+  backdrop-filter: blur(22px) saturate(1.6);
+  border: 1px solid var(--st-glass-brd);
+  border-radius: 18px;
+  box-shadow: var(--st-node-shadow);
+}
+
+[data-skin="glass"] .loop-node:hover {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 24px 50px -20px rgba(20, 20, 25, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+[data-skin="glass"] .loop-node-selected {
+  border-color: var(--st-ink);
+  box-shadow: 0 0 0 3px var(--st-ring), var(--st-node-shadow);
+}
+
+/* Dark resource strip — keep its dark identity, as dark glass on warm greige */
+[data-skin="glass"] .loop-node-resource {
+  background: var(--st-glass-dark);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+/* Context / ghost node — drop the purple, read speculative via dashed glass */
+[data-skin="glass"] .loop-node-context {
+  background: rgba(255, 255, 255, 0.38);
+  border: 1px dashed var(--st-line-2);
+}
+
+/* ── Frosted side panels + rails ─────────────────────────────────────────── */
+[data-skin="glass"] .loop-problems-rail,
+[data-skin="glass"] .loop-detail-panel,
+[data-skin="glass"] .operator-panel,
+[data-skin="glass"] .loop-approvals-panel {
+  background: var(--st-glass);
+  -webkit-backdrop-filter: blur(26px) saturate(1.6);
+  backdrop-filter: blur(26px) saturate(1.6);
+  border-color: var(--st-glass-brd);
+  box-shadow: var(--st-glass-shadow);
+}
+
+/* ── Hero glass composer dock ────────────────────────────────────────────── */
+[data-skin="glass"] .composer-dock {
+  background: var(--st-glass);
+  -webkit-backdrop-filter: blur(26px) saturate(1.6);
+  backdrop-filter: blur(26px) saturate(1.6);
+  border-color: var(--st-glass-brd);
+  box-shadow: var(--st-glass-shadow);
+}
+
+[data-skin="glass"] .composer-dock-input {
+  background: rgba(255, 255, 255, 0.55);
+  border-color: var(--st-line-2);
+}
+
+[data-skin="glass"] .composer-dock-send {
+  background: var(--st-ink);
+  border-radius: var(--st-pill);
+}
+
+/* ── Pill controls ───────────────────────────────────────────────────────── */
+[data-skin="glass"] .loop-tabs {
+  border-radius: var(--st-pill);
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--st-line);
+}
+
+[data-skin="glass"] .loop-tab,
+[data-skin="glass"] .loop-mode-tab {
+  border-radius: var(--st-pill);
+}
+
+[data-skin="glass"] .loop-tab-active,
+[data-skin="glass"] .loop-tab.active,
+[data-skin="glass"] .loop-mode-tab.active {
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+[data-skin="glass"] .loop-model-btn,
+[data-skin="glass"] .loop-context-badge {
+  border-radius: var(--st-pill);
+  background: var(--st-glass);
+  border: 1px solid var(--st-glass-brd);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+/* ── The two !important CTAs — strip the hardcoded ink, follow the skin ────── */
+[data-skin="glass"] .loop-run-btn {
+  background: var(--st-ink) !important;
+  border-radius: var(--st-pill) !important;
+  box-shadow: 0 6px 16px -6px rgba(20, 20, 25, 0.4) !important;
+}
+
+[data-skin="glass"] .loop-simulate-btn {
+  background: var(--st-glass-2) !important;
+  color: var(--st-ink) !important;
+  border: 1px solid var(--st-glass-brd) !important;
+  border-radius: var(--st-pill) !important;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   STITCH GLASS TAIL — STAGE 2
+   Four appended sections, all under data-skin="glass" (or token-default-safe),
+   so the shipped zinc skin stays byte-for-byte intact:
+     (1) SHADOW + RING re-tokenization to the glass-remapped family
+     (2) DE-PURPLE the live legacy families + remaining decorative purple
+     (3) GLASS overrides for the remaining flat surfaces (frost/rim/pill/inset)
+   The MOTION LAYER (4) follows as its own fenced block at the very end.
+   Semantic colors (--proven/--gap/--danger/--blind/--agent, every --cat-*) are
+   KEPT untouched throughout.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── (1) SHADOW + RING TAIL ──────────────────────────────────────────────────
+   The base rules below carry raw cool-zinc rgba drops / focus halos that the
+   glass remap never reaches (selector isn't a glass override, shadow isn't
+   tokenized). Re-point them under glass to the remapped --shadow-* family and a
+   --st-ring frosted ring, so they follow the warm greige skin. Default skin is
+   untouched. Canvas node cards first (most visible cool-on-warm mismatch). */
+
+/* Canvas node-card drops → remapped card/pop elevation */
+[data-skin="glass"] .stage-node,
+[data-skin="glass"] .pipe-node,
+[data-skin="glass"] .icp-node,
+[data-skin="glass"] .gtm-node,
+[data-skin="glass"] .gtm-node-context {
+  box-shadow: var(--shadow-card);
+}
+[data-skin="glass"] .stage-node:hover,
+[data-skin="glass"] .pipe-node:hover,
+[data-skin="glass"] .icp-node:hover,
+[data-skin="glass"] .gtm-node:hover {
+  box-shadow: var(--shadow-pop);
+}
+/* Dark resource node — keep dark identity, warm the drop */
+[data-skin="glass"] .gtm-node-resource {
+  box-shadow: var(--st-node-shadow);
+}
+
+/* React-Flow controls — cool drop → card */
+[data-skin="glass"] .react-flow__controls,
+[data-skin="glass"] .loop-canvas-area .react-flow__controls {
+  box-shadow: var(--shadow-card);
+}
+
+/* Panels / banners / bars / cards — cool/black drops → card/pop/modal */
+[data-skin="glass"] .engine-status-bar,
+[data-skin="glass"] .subsystem-card,
+[data-skin="glass"] .node-overview-side,
+[data-skin="glass"] .loop-memory-banner {
+  box-shadow: var(--shadow-card);
+}
+[data-skin="glass"] .subsystem-card:hover,
+[data-skin="glass"] .investigation-row:hover,
+[data-skin="glass"] .inv-card:hover,
+[data-skin="glass"] .loop-error-banner,
+[data-skin="glass"] .loop-connect-banner,
+[data-skin="glass"] .channel-card:hover {
+  box-shadow: var(--shadow-pop);
+}
+[data-skin="glass"] .node-detail-workspace,
+[data-skin="glass"] .blank-channel-guide,
+[data-skin="glass"] .loop-proposal-bar {
+  box-shadow: var(--shadow-modal);
+}
+/* Command bar floats as a popover (also frosted in section 3) */
+[data-skin="glass"] .cmd-bar {
+  box-shadow: var(--st-glass-shadow);
+}
+
+/* Buttons / small chips — zinc drops → pop, brand drops left as-is */
+[data-skin="glass"] .scan-form button,
+[data-skin="glass"] .build-button,
+[data-skin="glass"] .run-pipeline-btn {
+  box-shadow: var(--shadow-pop);
+}
+[data-skin="glass"] .mode-tab-active,
+[data-skin="glass"] .debugger-tabs button.active {
+  box-shadow: var(--shadow-xs);
+}
+/* Dark Run dropdown variant still leaked zinc — align to glass pop */
+[data-skin="glass"] .loop-run-btn-menu,
+[data-skin="glass"] .loop-run-btn-dropdown {
+  box-shadow: var(--st-pop-shadow);
+}
+
+/* Resource / context base drops that the existing glass overrides didn't reach
+   (those override bg/border but not box-shadow) — warm the leaking drop */
+[data-skin="glass"] .loop-node-resource {
+  box-shadow: var(--st-node-shadow);
+}
+[data-skin="glass"] .loop-node-context {
+  box-shadow: var(--st-node-shadow);
+}
+[data-skin="glass"] .gtm-node-context {
+  box-shadow: var(--shadow-card);
+}
+
+/* Focus-ring halos — raw zinc → frosted --st-ring (mirrors .loop-node-selected) */
+[data-skin="glass"] .scan-form input:focus,
+[data-skin="glass"] .pipeline-form textarea.icp-query:focus,
+[data-skin="glass"] .agent-editor-field textarea:focus,
+[data-skin="glass"] .agent-editor-prompt:focus,
+[data-skin="glass"] .review-controls textarea:focus,
+[data-skin="glass"] .node-notes-field:focus,
+[data-skin="glass"] .operator-response textarea:focus {
+  box-shadow: 0 0 0 3px var(--st-ring);
+}
+
+/* Selected-card rings — swap the zinc ring portion to --st-ring, drop to pop.
+   Dark resource variants keep a dark drop. */
+[data-skin="glass"] .stage-node.stage-selected,
+[data-skin="glass"] .pipe-node-selected,
+[data-skin="glass"] .icp-node-selected,
+[data-skin="glass"] .gtm-node-selected,
+[data-skin="glass"] .gtm-node-context.gtm-node-selected,
+[data-skin="glass"] .subsystem-card-selected,
+[data-skin="glass"] .loop-node-context.loop-node-selected {
+  box-shadow: 0 0 0 3px var(--st-ring), var(--shadow-pop);
+}
+[data-skin="glass"] .gtm-node-resource.gtm-node-selected,
+[data-skin="glass"] .loop-node-resource.loop-node-selected {
+  box-shadow: 0 0 0 3px var(--st-ring), var(--st-node-shadow);
+}
+
+/* Ring-only halos — avatars / focus indicators */
+[data-skin="glass"] .agent-dot,
+[data-skin="glass"] .operator-avatar.running {
+  box-shadow: 0 0 0 4px var(--st-ring);
+}
+[data-skin="glass"] .workflow-step.selected {
+  box-shadow: 0 0 0 2px var(--st-ring);
+}
+
+/* Border-color focus that hardcoded ink/blue — follow the skin */
+[data-skin="glass"] .artifact-editor-textarea:focus,
+[data-skin="glass"] .composer-channel-create input:focus,
+[data-skin="glass"] .composer-dock-input:focus,
+[data-skin="glass"] .pp-edit:focus,
+[data-skin="glass"] .product-editor-textarea:focus,
+[data-skin="glass"] .product-editor-input:focus {
+  border-color: var(--st-ink);
+}
+
+/* ── (2) DE-PURPLE TAIL ──────────────────────────────────────────────────────
+   Every decorative purple/indigo → glass / greige / ink under glass. Live legacy
+   families (still referenced by NodeEditor / CitationList / ChangeSetPanel) get a
+   real glass pass; dead pre-.loop families are de-purpled defensively (cheap, and
+   they leave no risk) but NOT deleted — deletion is deferred to Stage 3 once a
+   dead-code pass is verified against JSX. KEPT: --link (restrained blue),
+   --agent/--accent (deliberate ink), every semantic + node-category color. */
+
+/* Ambient indigo glows on legacy/fallback shells → neutral greige */
+[data-skin="glass"] .app-shell,
+[data-skin="glass"] .engine-os {
+  background: var(--st-bg);
+}
+/* Brand-mark / context-era indigo drop shadows → neutral pop */
+[data-skin="glass"] .brand-mark,
+[data-skin="glass"] .loop-brand-mark,
+[data-skin="glass"] .agent-card {
+  box-shadow: var(--st-pop-shadow);
+}
+
+/* Legacy lilac borders/gradients → glass rim + greige fill (live: prospect/copy/
+   agent-message/signal via NodeEditor; dead-but-defused: pipe/icp/gtm-context) */
+[data-skin="glass"] .agent-message {
+  border-color: var(--st-line-2);
+  background: var(--st-glass);
+}
+[data-skin="glass"] .prospect-draft,
+[data-skin="glass"] .copy-button {
+  border-color: var(--st-line-2);
+}
+[data-skin="glass"] .pipe-type-icp .pipe-node-icon,
+[data-skin="glass"] .pipe-type-gate .pipe-node-icon {
+  background: rgba(0, 0, 0, 0.04);
+}
+[data-skin="glass"] .icp-node,
+[data-skin="glass"] .gtm-node-context {
+  border-color: var(--st-line-2);
+  background: var(--st-glass);
+}
+/* Hardcoded purple category accent on the dead .gtm-node-enrich top-border —
+   no --cat-enrich token exists, so neutralize the literal under glass */
+[data-skin="glass"] .gtm-node-enrich {
+  border-top-color: var(--st-line-2);
+}
+/* Diff-hunk periwinkle header text → ink-2 */
+[data-skin="glass"] .diff-hunk {
+  color: var(--st-ink-2);
+}
+
+/* Live .loop-* context node lilac → dashed glass (base rule carried raw lilac
+   that the existing override at the head of the layer already neutralizes for
+   the dashed look; re-assert here so bg/border are unambiguous). */
+[data-skin="glass"] .loop-node-context {
+  background: rgba(255, 255, 255, 0.38);
+  /* base .loop-node-context carries `border-color: #d4d5fc !important`, so the
+     glass dashed border must out-!important it or the lilac edge survives. */
+  border: 1px dashed var(--st-line-2) !important;
+}
+
+/* Dead legacy .agent-card still carried a lilac border + tinted gradient — neutralize
+   so no decorative purple survives under glass even if the class is ever revived. */
+[data-skin="glass"] .agent-card {
+  background: var(--st-glass);
+  border-color: var(--st-glass-brd);
+}
+
+/* Suggested-change card lilac → greige frost */
+[data-skin="glass"] .node-suggested-change {
+  border-color: var(--st-line-2);
+  background: var(--st-glass);
+}
+
+/* The indigo proposal block (proposed node + edge + bar + accept) — NOT reached
+   by the glass layer at all; de-indigo to ink/greige while keeping it legible
+   as a distinct "proposed" state via a dashed ink rim + ink fill button. */
+[data-skin="glass"] .react-flow .loop-node-proposed .loop-node {
+  border-color: var(--st-ink);
+  background: rgba(28, 28, 30, 0.04);
+  box-shadow: 0 0 0 1px var(--st-ring), var(--st-node-shadow);
+}
+[data-skin="glass"] .react-flow__edge.loop-edge-proposed .react-flow__edge-path {
+  stroke: var(--st-ink);
+}
+[data-skin="glass"] .loop-proposal-bar {
+  border-color: var(--st-glass-brd);
+  box-shadow: var(--shadow-modal);
+}
+[data-skin="glass"] .loop-proposal-text strong svg {
+  color: var(--st-ink);
+}
+[data-skin="glass"] .loop-proposal-accept {
+  border-color: var(--st-ink);
+  background: var(--st-ink);
+}
+
+/* The one decorative purple the glass system itself still introduced: the lilac
+   ambient wash on the canvas. Swap the lilac radial for a peach one so the plane
+   carries no purple even post-reskin. (Re-declares the full background stack so
+   the order stays identical to the head-of-layer rule — peach replaces lilac.) */
+[data-skin="glass"] .loop-canvas-area {
+  background:
+    radial-gradient(var(--st-dot) 1px, transparent 1.4px) 0 0 / 22px 22px,
+    radial-gradient(46vw 40vw at 84% -8%, rgba(174, 198, 240, 0.20), transparent 60%),
+    radial-gradient(42vw 40vw at 6% 8%, rgba(243, 205, 182, 0.14), transparent 62%),
+    radial-gradient(44vw 42vw at 92% 96%, rgba(243, 205, 182, 0.12), transparent 60%),
+    radial-gradient(40vw 40vw at 16% 98%, rgba(185, 227, 207, 0.12), transparent 62%),
+    var(--st-bg);
+}
+
+/* DEAD families noted but deliberately left in place (no live JSX reference; risk
+   of breakage if deleted blind — defer deletion to a verified Stage 3 dead-code
+   pass): the stage-node, pipe-node, channel-group, icp-node, gtm-node, edge,
+   engine-os / os- / subsystem- / investigation- / impl-shell families, plus the
+   legacy toolbar / brand / scan-form / mode-tab top-bar and shell. Their
+   decorative purple is neutralized above so they stay safe under glass even if
+   one of them is ever revived. */
+
+/* ── (3) REMAINING SURFACES TAIL ─────────────────────────────────────────────
+   Glass overrides for the flat surfaces the token remap can't fully reskin:
+   frost + rim + shadow on cards/panels/drawers, pill controls, greige insets on
+   inputs, and a few broken-token / cold-blue / dark-theme-mint repairs. Anything
+   already token-driven (just needing --surface/--line/--shadow-*) is omitted —
+   it reskins for free. Semantic colors stay. */
+
+/* Frost cards — lift off the greige plane as glass */
+[data-skin="glass"] .program-node-card,
+[data-skin="glass"] .channel-card,
+[data-skin="glass"] .opportunity-card,
+[data-skin="glass"] .product-node,
+[data-skin="glass"] .project-create-panel,
+[data-skin="glass"] .project-choice,
+[data-skin="glass"] .gate-review-card,
+[data-skin="glass"] .hero-card {
+  background: var(--st-glass);
+  -webkit-backdrop-filter: blur(22px) saturate(1.6);
+  backdrop-filter: blur(22px) saturate(1.6);
+  border-color: var(--st-glass-brd);
+  box-shadow: var(--st-node-shadow);
+}
+/* Hero keeps its ink accent rail */
+[data-skin="glass"] .hero-card {
+  border-left-color: var(--st-ink);
+}
+/* Channel-card hover → glass hover shadow */
+[data-skin="glass"] .channel-card:hover {
+  border-color: var(--st-glass-brd);
+  box-shadow: 0 24px 50px -20px rgba(20, 20, 25, 0.4);
+}
+/* Accepted opportunity border → proven (semantic kept) */
+[data-skin="glass"] .opportunity-card.accepted {
+  border-color: var(--proven);
+}
+
+/* Frost panels / topbar / drawers / modals — stronger blur, glass/modal shadow */
+[data-skin="glass"] .program-topbar,
+[data-skin="glass"] .cmd-bar,
+[data-skin="glass"] .product-head-panel,
+[data-skin="glass"] .product-goals-panel,
+[data-skin="glass"] .product-bridge,
+[data-skin="glass"] .lens-bar,
+[data-skin="glass"] .lens-panel,
+[data-skin="glass"] .product-editor,
+[data-skin="glass"] .explorer-foot-peek {
+  background: var(--st-glass-2);
+  -webkit-backdrop-filter: blur(26px) saturate(1.6);
+  backdrop-filter: blur(26px) saturate(1.6);
+  border-color: var(--st-glass-brd);
+  box-shadow: var(--st-glass-shadow);
+}
+[data-skin="glass"] .program-topbar {
+  border-bottom: 1px solid var(--st-glass-brd);
+}
+[data-skin="glass"] .sim-drawer,
+[data-skin="glass"] .artifact-editor,
+[data-skin="glass"] .node-detail-workspace {
+  background: var(--st-glass-2);
+  -webkit-backdrop-filter: blur(30px) saturate(1.6);
+  backdrop-filter: blur(30px) saturate(1.6);
+  border-color: var(--st-glass-brd);
+  box-shadow: var(--st-modal-shadow);
+}
+[data-skin="glass"] .artifact-editor {
+  border-left: 1px solid var(--st-glass-brd);
+}
+[data-skin="glass"] .node-detail-workspace {
+  border: 1px solid var(--st-glass-brd);
+  border-radius: var(--st-r);
+}
+/* Avoid double-frost seams inside the frosted modal */
+[data-skin="glass"] .node-detail-workspace .node-editor-wrap,
+[data-skin="glass"] .node-detail-workspace-header,
+[data-skin="glass"] .node-detail-workspace .node-editor-tabs,
+[data-skin="glass"] .sim-tabs {
+  background: transparent;
+}
+/* Warm/neutralize the cold scrim behind the modal */
+[data-skin="glass"] .node-detail-modal-backdrop {
+  background: rgba(20, 20, 25, 0.34);
+}
+
+/* Frosted plane for floating canvases (de-white the hard #fff plane start) */
+[data-skin="glass"] .program-canvas-plane {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, var(--st-bg));
+}
+
+/* Pill controls — segmented tracks/thumbs + badges as true pills on frost */
+[data-skin="glass"] .program-mode-tabs,
+[data-skin="glass"] .lens-switcher,
+[data-skin="glass"] .loop-mode-switch {
+  border-radius: var(--st-pill);
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--st-line);
+}
+[data-skin="glass"] .program-mode-tabs button.active,
+[data-skin="glass"] .lens-tab.active,
+[data-skin="glass"] .loop-mode-tab.active {
+  border-radius: var(--st-pill);
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+[data-skin="glass"] .program-status-pill,
+[data-skin="glass"] .program-node-badge,
+[data-skin="glass"] .program-mode-intent-label,
+[data-skin="glass"] .lens-bridge,
+[data-skin="glass"] .cmd-bar-chip {
+  border-radius: var(--st-pill);
+  border-color: var(--st-glass-brd);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+/* Pill CTAs — ink fill, pill radius, glass CTA drop */
+[data-skin="glass"] .program-primary-action,
+[data-skin="glass"] .program-build-agents,
+[data-skin="glass"] .product-derive-btn,
+[data-skin="glass"] .artifact-door-btn,
+[data-skin="glass"] .explorer-firstrun-cta {
+  background: var(--st-ink);
+  border-radius: var(--st-pill);
+  box-shadow: 0 6px 16px -6px rgba(20, 20, 25, 0.4);
+}
+[data-skin="glass"] .cmd-bar-send.active {
+  background: var(--st-ink);
+  border-radius: var(--st-pill);
+}
+/* De-purple the cmd-bar send active-hover (#4a4dd4 → ink) */
+[data-skin="glass"] .cmd-bar-send.active:hover {
+  background: var(--st-ink);
+}
+[data-skin="glass"] .cmd-bar-send {
+  border-color: var(--st-line-2);
+}
+
+/* Greige inset inputs / textareas — frosted fill + line rim + ink text */
+[data-skin="glass"] .artifact-editor-textarea,
+[data-skin="glass"] .channel-create input,
+[data-skin="glass"] .project-create-panel input,
+[data-skin="glass"] .opportunity-decisions button,
+[data-skin="glass"] .gate-review-draft-edit,
+[data-skin="glass"] .program-empty-agents {
+  background: rgba(255, 255, 255, 0.52);
+  border-color: var(--st-line-2);
+  color: var(--st-ink);
+}
+[data-skin="glass"] .sim-scenario-card {
+  background: rgba(255, 255, 255, 0.45);
+  border-color: var(--st-line-2);
+}
+
+/* Cold blue-grey → greige (cmd-bar chrome) */
+[data-skin="glass"] .cmd-bar-wrap {
+  background: linear-gradient(180deg, rgba(240, 239, 236, 0) 0%, rgba(240, 239, 236, 0.96));
+}
+[data-skin="glass"] .cmd-bar {
+  border-color: var(--st-glass-brd);
+  background: var(--st-glass);
+  -webkit-backdrop-filter: blur(26px) saturate(1.6);
+  backdrop-filter: blur(26px) saturate(1.6);
+}
+[data-skin="glass"] .cmd-bar-k {
+  border-color: var(--st-line);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* Broken shadcn-style tokens (undefined --border/--background/--foreground/
+   --muted-foreground) → real tokens, so these inputs render at all */
+[data-skin="glass"] .channel-create input {
+  border-color: var(--st-line-2);
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--st-ink);
+}
+[data-skin="glass"] .channel-create-close,
+[data-skin="glass"] .channel-card-copy {
+  color: var(--st-muted);
+}
+
+/* Artifact-editor literals → tokens (worst hardcoded-literal block) */
+[data-skin="glass"] .artifact-editor-head,
+[data-skin="glass"] .artifact-editor-foot {
+  border-color: var(--st-line);
+}
+[data-skin="glass"] .artifact-editor-close {
+  color: var(--st-muted);
+}
+[data-skin="glass"] .artifact-editor-kind-icon,
+[data-skin="glass"] .artifact-editor-summary-key {
+  color: var(--st-ink);
+}
+[data-skin="glass"] .artifact-summary-val {
+  color: var(--st-ink-2);
+}
+[data-skin="glass"] .artifact-door-btn {
+  color: #fff;
+}
+
+/* Dark-theme mint on a light debugger → readable proven green */
+[data-skin="glass"] .policy-diff code {
+  color: var(--proven);
+}
+
+/* Product / lens panels carried only blur(8px) — bump frost to system strength
+   (covered by the panel group above; product-node gets node-frost) */
+[data-skin="glass"] .product-node {
+  border-color: var(--st-glass-brd);
+}
+
+/* Decisions buttons / project inputs that hardcoded white → frosted */
+[data-skin="glass"] .opportunity-decisions button {
+  background: rgba(255, 255, 255, 0.5);
+}
+[data-skin="glass"] .channels-list-footer {
+  background: var(--st-glass);
+  border-color: var(--st-glass-brd);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   (4) MOTION LAYER — glass-native interaction motion.
+   Tokens live in :root (added above). All decorative/ambient motion is wrapped
+   in the comprehensive prefers-reduced-motion block at the very end; only the
+   live-progress spinner survives that wall. Most of this applies in both skins
+   (motion is skin-agnostic); the ambient drift is glass-only by selector.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Keyframes ──────────────────────────────────────────────────────────── */
+/* Glass panel / overlay entrance — fade + rise, soft spring settle */
+@keyframes glass-panel-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* Right-anchored panel (approvals) — rise + slight scale from its corner */
+@keyframes glass-pop-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* Staggered child reveal — small rise used by list items */
+@keyframes stagger-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* Streaming content lands as a step's output arrives */
+@keyframes content-land {
+  from { opacity: 0; transform: translateY(4px); filter: blur(2px); }
+  to   { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+/* Frosted run glow — upgrades node-run-pulse to a soft pastel-tinted halo */
+@keyframes node-run-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(28, 28, 30, 0.0), var(--shadow-card); }
+  50%      { box-shadow: 0 0 0 5px rgba(28, 28, 30, 0.07),
+                         0 8px 26px -10px rgba(174, 198, 240, 0.55), var(--shadow-pop); }
+}
+/* Composer caret blink (only if a fake caret element is rendered) */
+@keyframes caret-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+/* Decorative ambient pastel drift — low amplitude, slow, canvas glow only */
+@keyframes ambient-drift {
+  0%   { background-position: 0 0, 84% -8%, 6% 8%, 92% 96%, 16% 98%, 0 0; }
+  50%  { background-position: 0 0, 80% -4%, 9% 5%, 95% 92%, 13% 95%, 0 0; }
+  100% { background-position: 0 0, 84% -8%, 6% 8%, 92% 96%, 16% 98%, 0 0; }
+}
+
+/* ── Hover-lift (glass) — pills / cards / nodes / buttons ───────────────────
+   Standardize the curve to --ease-out and add lift to surfaces that lack it.
+   Nodes already lift inline; here we only retune the curve + raise the amount. */
+.gtm-btn, .loop-btn, .composer-dock-retry, .ideation-build,
+.channel-card-open, .copy-button, .loop-approvals-review {
+  transition: transform var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-fast) var(--ease-out),
+              background var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out);
+}
+.gtm-btn:hover, .loop-btn:hover, .composer-dock-retry:hover { transform: translateY(-1px); }
+
+.opportunity-card, .channel-card, .ideation-card, .gtm-card, .prospect-card, .citation {
+  transition: transform var(--dur-base) var(--ease-out),
+              box-shadow var(--dur-base) var(--ease-out),
+              border-color var(--dur-base) var(--ease-out);
+}
+.opportunity-card:hover, .channel-card:hover, .gtm-card:hover, .prospect-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--lift-shadow);
+}
+
+.stage-node, .pipe-node, .gtm-node, .loop-node, .icp-node {
+  transition: transform var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out);
+}
+.stage-node:hover, .pipe-node:hover, .gtm-node:hover, .loop-node:hover { transform: translateY(-3px); }
+
+/* ── Press — overrides the hover-lift while held, no overshoot ─────────────── */
+.gtm-btn:active, .loop-btn:active, .mode-tab:active, .gtm-tab:active,
+.composer-dock-send:active:not(:disabled), .loop-approvals-review:active,
+.channel-card-open:active, .copy-button:active, .ideation-build:active,
+.opportunity-card:active, .channel-card:active {
+  transform: scale(0.98) translateY(0);
+  transition-duration: 80ms;
+}
+
+/* ── Panel / overlay entrance ──────────────────────────────────────────────── */
+.loop-approvals-panel        { animation: glass-pop-in   var(--dur-slow) var(--ease-spring) both; }
+.canvas-overlay-bar          { animation: glass-panel-in var(--dur-slow) var(--ease-out) both; }
+.composer-dock.floating,
+.composer-pill               { animation: glass-panel-in var(--dur-slow) var(--ease-out) both; }
+.node-detail-workspace       { animation: glass-panel-in var(--dur-slow) var(--ease-spring) both; }
+.product-editor-overlay,
+.workflow-palette-menu,
+.loop-model-menu             { animation: glass-panel-in var(--dur-base) var(--ease-out) both; }
+
+/* ── Staggered reveals — capped at ~6 so late items don't lag ──────────────── */
+.loop-approvals-item,
+.explorer-row,
+.opportunity-card,
+.channel-card,
+.prospect-card,
+.ideation-card {
+  animation: stagger-rise var(--dur-base) var(--ease-out) both;
+}
+.loop-approvals-item:nth-child(1), .explorer-row:nth-child(1), .opportunity-card:nth-child(1) { animation-delay: 0ms; }
+.loop-approvals-item:nth-child(2), .explorer-row:nth-child(2), .opportunity-card:nth-child(2) { animation-delay: 40ms; }
+.loop-approvals-item:nth-child(3), .explorer-row:nth-child(3), .opportunity-card:nth-child(3) { animation-delay: 80ms; }
+.loop-approvals-item:nth-child(4), .explorer-row:nth-child(4), .opportunity-card:nth-child(4) { animation-delay: 120ms; }
+.loop-approvals-item:nth-child(5), .explorer-row:nth-child(5), .opportunity-card:nth-child(5) { animation-delay: 160ms; }
+.loop-approvals-item:nth-child(n+6), .explorer-row:nth-child(n+6), .opportunity-card:nth-child(n+6) { animation-delay: 200ms; }
+
+/* ── Node run pulse → frosted glow + content-land ──────────────────────────
+   Repoint the running rules to the pastel glow (later, same specificity → wins
+   the animation property). Stream content lands as each step's output arrives. */
+.loop-node-running                 { animation: node-run-glow 1.6s var(--ease) infinite; }
+.loop-node-running .loop-node-icon { animation: node-run-glow 1.6s var(--ease) infinite; }
+.loop-node-justdone .loop-node-preview,
+.loop-node-justdone .loop-node-count,
+.composer-event,
+.composer-event-detail {
+  animation: content-land var(--dur-base) var(--ease-spring) both;
+}
+
+/* ── Composer caret + send press + tab/segment active settle ───────────────── */
+.composer-dock-input:focus { caret-color: var(--ink); }
+.composer-caret {
+  display: inline-block; width: 1px; height: 1.05em;
+  background: var(--ink); animation: caret-blink 1.06s steps(1) infinite;
+}
+.composer-dock-send {
+  transition: transform var(--dur-fast) var(--ease-out),
+              background var(--dur-fast) var(--ease-out);
+}
+.composer-dock-send:active:not(:disabled) { transform: scale(0.92); }
+.mode-tab, .gtm-tab {
+  transition: background var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-fast) var(--ease-out);
+}
+.mode-tab-active, .gtm-tab--active { transition: all var(--dur-base) var(--ease-spring); }
+
+/* ── Ambient pastel drift (decorative, glass canvas only) ──────────────────
+   The glass canvas background packs the dot-grid first, then four pastel
+   radials, then the base color. The drift keeps the first (dot-grid) and last
+   (base) positions fixed and only nudges the four pastels by ≤4% — reads as a
+   slow breath, never as movement that competes with the work. background-size
+   must stay 1:1 with that layer order; pastels are oversized to allow the shift. */
+[data-skin="glass"] .loop-canvas-area {
+  background-size:
+    22px 22px,
+    140% 140%, 140% 140%, 140% 140%, 140% 140%,
+    auto;
+  animation: ambient-drift var(--dur-amb) ease-in-out infinite;
+  will-change: background-position;
+}
+
+/* ── Reduced-motion — the hard wall (supersedes the narrow L4577 block) ──────
+   Disables every non-essential motion (added + pre-existing decorative) and
+   freezes lift/press displacement. The live-progress spinner is allowed to keep
+   turning — it carries meaning, not decoration. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .stage-node:hover, .pipe-node:hover, .gtm-node:hover, .loop-node:hover, .icp-node:hover,
+  .opportunity-card:hover, .channel-card:hover, .gtm-card:hover, .prospect-card:hover,
+  .gtm-btn:hover, .loop-btn:hover,
+  .gtm-btn:active, .loop-btn:active, .mode-tab:active, .gtm-tab:active,
+  .composer-dock-send:active, .opportunity-card:active, .channel-card:active {
+    transform: none !important;
+  }
+  [data-skin="glass"] .loop-canvas-area,
+  .loop-node-running, .loop-node-running .loop-node-icon,
+  .ideation-thinking-dot, .shimmer-line,
+  .product-pulse, .composer-caret {
+    animation: none !important;
+  }
+  /* Live-progress spinner keeps turning (meaning, not decoration) */
+  .spin { animation: spin 0.8s linear infinite !important; }
 }
