@@ -9,6 +9,7 @@ import { listDomainEvents } from "../src/domain-events.mjs";
 import { saveFlow } from "../src/flow-store.mjs";
 import { createProject, loadProject } from "../src/project-store.mjs";
 import { createOutcomeProgram, defineMeasurementPlan, listOutcomePrograms, updateOutcomeProgram } from "../src/program-store.mjs";
+import { markProgramComposed } from "../src/program-compiler.mjs";
 import { runProgram } from "../src/program-runtime.mjs";
 import { makeStepRuntime } from "../src/step-runners.mjs";
 
@@ -93,7 +94,7 @@ describe("program runtime executable domain loop", () => {
       ],
     };
     saveFlow(graph, options);
-    updateOutcomeProgram(program.id, { status: "ready", graphId: graph.id }, { ...options, projectId: project.id });
+    updateOutcomeProgram(program.id, { lifecycle: "active", graphId: graph.id }, { ...options, projectId: project.id });
 
     const stepRuntime = makeStepRuntime({
       agent: async (_node, upstream) => ({
@@ -133,7 +134,10 @@ describe("program runtime executable domain loop", () => {
     assert.equal(learned.nextVersions.length, 1);
 
     const programs = listOutcomePrograms(project.id, { ...options, projectId: project.id });
-    assert.equal(programs.find((item) => item.id === program.id).status, "learning");
+    // status split: the run writes lastRunStatus; lifecycle stays founder-controlled ("active").
+    const storedProgram = programs.find((item) => item.id === program.id);
+    assert.equal(storedProgram.lastRunStatus, "learning");
+    assert.equal(storedProgram.lifecycle, "active");
 
     const policies = listAgentCreationPolicies(project.id, { ...options, projectId: project.id });
     const policyV1 = policies.find((item) => item.id === policy.id);
@@ -159,5 +163,63 @@ describe("program runtime executable domain loop", () => {
     assert.ok(eventTypes.has("AgentEvaluated"));
     assert.ok(eventTypes.has("AgentCreationPolicyUpdated"));
     assert.ok(eventTypes.has("NextAgentVersionCreated"));
+  });
+
+  it("a composed program is lifecycle 'active' and a blocked program is re-runnable (no transition error)", async () => {
+    const program = createOutcomeProgram({
+      projectId: project.id,
+      name: "Re-runnable program",
+      objective: "Prove a blocked program can be run again.",
+      desiredOutcome: { type: "meeting_booked", description: "Book a qualified founder call." },
+    }, { ...options, projectId: project.id });
+    const graph = {
+      id: "rerun-graph",
+      name: "Re-run graph",
+      outcomeProgramId: program.id,
+      revision: 1,
+      nodes: [
+        { id: "seed", category: "source", connector: "manual", label: "Seed", config: { items: [{ id: "lead-1" }] } },
+        {
+          id: "work",
+          kind: "agent",
+          ref: "always-fails",
+          label: "Failing step",
+          config: {},
+          contract: { accepts: ["id"], emits: ["id"], minItems: 1 },
+        },
+      ],
+      edges: [{ id: "a", source: "seed", target: "work", edgeType: "data" }],
+    };
+    saveFlow(graph, options);
+    // Composing the workflow activates the lifecycle; there is no single "ready" status anymore.
+    const composed = markProgramComposed(program, {
+      channelId: program.channelId ?? program.id,
+      graphId: graph.id,
+      workflowGraph: graph,
+    }, { ...options, projectId: project.id });
+    assert.equal(composed.lifecycle, "active");
+    // graphId is the ledger key and must equal workflowGraph.id (contract §4).
+    assert.equal(composed.graphId, composed.workflowGraph.id);
+
+    const failingRuntime = makeStepRuntime({
+      agent: async () => ({ ok: false, items: [], error: "intentional failure" }),
+    });
+
+    const first = await runProgram(program.id, { stepRuntime: failingRuntime }, { ...options, projectId: project.id });
+    assert.equal(first.programStatus, "blocked");
+    assert.equal(
+      listOutcomePrograms(project.id, { ...options, projectId: project.id })
+        .find((item) => item.id === program.id).lastRunStatus,
+      "blocked",
+    );
+
+    // The bug class this refactor kills: a blocked program must run again without a lifecycle
+    // transition error. lastRunStatus has no state machine, so re-running just overwrites it.
+    const second = await runProgram(program.id, { stepRuntime: failingRuntime }, { ...options, projectId: project.id });
+    assert.equal(second.programStatus, "blocked");
+    const afterRerun = listOutcomePrograms(project.id, { ...options, projectId: project.id })
+      .find((item) => item.id === program.id);
+    assert.equal(afterRerun.lastRunStatus, "blocked");
+    assert.equal(afterRerun.lifecycle, "active");
   });
 });

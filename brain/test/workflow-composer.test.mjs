@@ -136,7 +136,8 @@ describe("model-composed workflow (no fixed skeleton)", () => {
 
     const programShape = (p) => ({
       id: p.id,
-      status: p.status,
+      lifecycle: p.lifecycle,
+      lastRunStatus: p.lastRunStatus ?? null,
       graphId: p.graphId ?? null,
       workflowGraphId: p.workflowGraph?.id ?? null,
     });

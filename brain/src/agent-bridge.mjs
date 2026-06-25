@@ -31,6 +31,37 @@ export function loadSkillGuidance(ref, { root } = {}) {
   }
 }
 
+// ── Agent definition loader (real, deterministic) ────────────────────────────
+// The symmetric twin of loadSkillGuidance. A born agent instance points at its definition via
+// artifactPath; hand-authored subagents live at ~/.claude/agents/<ref>.md (the same file the UI
+// editor writes). This reads whichever exists so the real doctrine + role drives the run, not just
+// a "you are the <ref> agent" label. Resolution order:
+//   1. an explicit, resolvable artifactPath (the instance's own definition)
+//   2. ~/.claude/agents/<ref>.md
+//   3. ~/.claude/agents/<ref>/AGENT.md
+// Returns the markdown text, or null when nothing is found — the caller then runs the ref as a
+// focused task exactly as before. Never throws on a missing file.
+export function loadAgentDefinition(ref, { artifactPath, root } = {}) {
+  const base = root || path.join(os.homedir(), ".claude", "agents");
+  const candidates = [];
+  if (artifactPath && typeof artifactPath === "string") {
+    candidates.push(path.isAbsolute(artifactPath) ? artifactPath : path.resolve(artifactPath));
+  }
+  if (ref && typeof ref === "string") {
+    candidates.push(path.join(base, `${ref}.md`));
+    candidates.push(path.join(base, ref, "AGENT.md"));
+  }
+  for (const file of candidates) {
+    try {
+      const text = fs.readFileSync(file, "utf8");
+      if (typeof text === "string" && text.trim()) return text;
+    } catch {
+      // try the next candidate
+    }
+  }
+  return null;
+}
+
 // ── Agent result parsing (pure, tested) ──────────────────────────────────────
 // A subagent returns prose that should contain a JSON array of result items. Pull the
 // array out whether it's fenced, inline, or the whole message. Returns [] when there is
@@ -82,7 +113,7 @@ export function parseAgentObject(text) {
 // a clean, selected base-layer block; anything the substrate doesn't recognize (context-node
 // output, __run) is passed through as JSON so no information is lost. Returns the manifest too, so
 // the caller can attach it to the node result — that is the instrument the UI inspector reads.
-export function buildAgentPrompt({ ref, prompt, items, context = {} }) {
+export function buildAgentPrompt({ ref, prompt, items, context = {}, artifactPath, agentDefinitionRoot } = {}) {
   const input = JSON.stringify(items ?? [], null, 2);
   const assembled = assembleContext({ providers: providersFromContext(context), intent: prompt || "" });
 
@@ -90,8 +121,16 @@ export function buildAgentPrompt({ ref, prompt, items, context = {} }) {
   const { grounding, __memory, __state, signal, ...rest } = context ?? {};
   const restJson = Object.keys(rest).length ? JSON.stringify(rest, null, 2) : null;
 
+  // Load the real on-disk definition if one exists. When found, the agent's own doctrine + role
+  // drives the run; when not, we fall back to the original one-line label (identical to before),
+  // so a missing definition is a pure no-op.
+  const definition = loadAgentDefinition(ref, { artifactPath, root: agentDefinitionRoot });
+  const role = definition
+    ? `You are acting as the "${ref}" GTM subagent. Follow this agent definition:\n\n${definition.trim()}`
+    : `You are doing the work of the "${ref}" GTM subagent.`;
+
   const text = [
-    `You are doing the work of the "${ref}" GTM subagent.`,
+    role,
     prompt ? `\nTask:\n${prompt}` : "",
     assembled.text ? `\nGrounded context:\n${assembled.text}` : "",
     restJson ? `\nAdditional workflow context (JSON):\n${restJson}` : "",
@@ -99,7 +138,7 @@ export function buildAgentPrompt({ ref, prompt, items, context = {} }) {
     `\nReturn ONLY a JSON array of result items — no prose, no preamble. Each item should be a JSON object. If you have nothing to return, return [].`,
   ].filter(Boolean).join("\n");
 
-  return { prompt: text, manifest: assembled.manifest };
+  return { prompt: text, manifest: assembled.manifest, definitionLoaded: !!definition };
 }
 
 // Classify a Claude Code error result so a quota or turn-budget cutoff stops masquerading as a
@@ -171,8 +210,8 @@ export async function runClaudeQuery({ prompt, cwd = process.cwd(), model, maxTu
 // failures in the ledger. Cheap item-transform steps finish early regardless; ideation still
 // overrides higher. A step can always set config.maxTurns.
 export function createClaudeAgentInvoker({ cwd = process.cwd(), model, maxTurns = 20, onText } = {}) {
-  return async function invoke({ ref, prompt, items, context, config = {} }) {
-    const built = buildAgentPrompt({ ref, prompt, items, context });
+  return async function invoke({ ref, prompt, items, context, config = {}, artifactPath }) {
+    const built = buildAgentPrompt({ ref, prompt, items, context, artifactPath: artifactPath ?? config.artifactPath });
     const { text, error } = await runClaudeQuery({
       prompt: built.prompt,
       cwd,
@@ -188,7 +227,7 @@ export function createClaudeAgentInvoker({ cwd = process.cwd(), model, maxTurns 
 }
 
 export function createCodexAgentInvoker({ cwd = process.cwd(), model, binary = "codex" } = {}) {
-  return async function invoke({ ref, prompt, items, context, config = {} }) {
+  return async function invoke({ ref, prompt, items, context, config = {}, artifactPath }) {
     const outputFile = path.join(os.tmpdir(), `gtm-ide-codex-${process.pid}-${Date.now()}.txt`);
     const args = [
       "exec",
@@ -200,7 +239,7 @@ export function createCodexAgentInvoker({ cwd = process.cwd(), model, binary = "
       ...(config.model || model ? ["--model", config.model || model] : []),
       "-",
     ];
-    const built = buildAgentPrompt({ ref, prompt, items, context });
+    const built = buildAgentPrompt({ ref, prompt, items, context, artifactPath: artifactPath ?? config.artifactPath });
     const task = built.prompt;
     const result = await new Promise((resolve) => {
       const child = spawn(binary, args, {

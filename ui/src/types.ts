@@ -176,7 +176,7 @@ export type SharedContext = {
   product: { name: string; description: string; valueProps: string[]; claims: unknown[] };
   positioning: Record<string, unknown>;
   icp: Record<string, unknown>;
-  founderTaste: Record<string, unknown>;
+  founderTaste: FounderTaste;
   contacts: Record<string, unknown>;
   outcomes: unknown[];
   experiments: unknown[];
@@ -188,24 +188,72 @@ export type GTMProject = {
   id: string;
   name: string;
   activeChannelId: string | null;
-  activeWorkflowId?: string | null;
   sharedContext: SharedContext;
   channels: ChannelMeta[];
-  workflows?: ChannelMeta[];
   opportunities?: OpportunityStudio;
 };
 
+// The semantic heart of a program, typed. These were Record<string, unknown> bags the UI had to
+// probe with guessed key lists; the real shapes (from the brain producers) are declared here.
+export type DesiredOutcome = {
+  description: string;
+  type: string;
+  target?: string | number | null;
+};
+
+export type BuyerHypothesis = {
+  description?: string;
+  status?: string;
+  audience?: string;
+  target?: string;
+};
+
+export type ChannelHypothesis = {
+  label?: string;
+  objective?: string;
+  kind?: string;
+  enabled?: boolean;
+  status?: string;
+  id?: string;
+  motion?: string;
+  evidence?: Citation[];
+  description?: string;
+};
+
+// All optional on purpose: an empty {} is the honest "measurement not defined / blind" state. The
+// scaled-run gate enforces joinKey && outcomeEvent at runtime; the type does not fake their presence.
+export type MeasurementPlan = {
+  outcomeEvent?: string;
+  joinKey?: string;
+  attributionSource?: string | null;
+  blindSpots?: string[];
+  createdAt?: string;
+};
+
+// Program state, split into its two real concerns. `lifecycle` is founder-controlled and durable;
+// `lastRunStatus` is derived from the most recent run and disposable. Conflating them into one field
+// is what made "blocked" a dead-end the founder could not re-run out of.
+export type ProgramLifecycle = "draft" | "active" | "retired";
+export type ProgramRunStatus = "running" | "waiting_for_gate" | "learning" | "complete" | "blocked";
+
 export type OutcomeProgram = {
   id: string;
+  // Lineage triplet — mirrors AgentCreationPolicy / AgentInstance so a revised program is traceable.
+  lineageId?: string;
+  previousProgramId?: string | null;
+  version?: number;
   projectId: string;
   name: string;
-  desiredOutcome: Record<string, unknown>;
-  buyerHypothesis: Record<string, unknown>;
-  channelHypothesis: Record<string, unknown>;
-  measurementPlan: Record<string, unknown>;
-  status: "draft" | "ready" | "running" | "waiting_for_gate" | "paused" | "learning" | "complete" | "retired" | "blocked" | "active" | string;
+  desiredOutcome: DesiredOutcome;
+  buyerHypothesis: BuyerHypothesis;
+  channelHypothesis: ChannelHypothesis;
+  measurementPlan: MeasurementPlan;
+  lifecycle: ProgramLifecycle;
+  lastRunStatus: ProgramRunStatus | null;
   sourceOpportunityId?: string | null;
   channelId?: string | null;
+  // workflowGraph is authoritative (the graph body); graphId is only the flow-store ledger key and
+  // always equals workflowGraph.id.
   graphId?: string | null;
   workflowGraph?: GTMGraph | null;
   createdAt: string;
@@ -235,16 +283,31 @@ export type AgentCreationPolicy = {
   updatedAt: string;
 };
 
+// Founder taste and market memory have stable shapes from their producers (project sharedContext
+// and the capability foundry); type them instead of leaving them as bags.
+export type FounderTaste = {
+  approvedPatterns?: string[];
+  rejectedPatterns?: string[];
+  edits?: unknown[];
+  policies?: string[];
+};
+
+export type MarketMemory = {
+  outcomes?: unknown[];
+  productFeedback?: unknown[];
+  experiments?: unknown[];
+};
+
 export type PersonalizationProfile = {
   id: string;
   projectId: string;
   programId: string | null;
   creationPolicyId: string | null;
   productTruth: Citation[];
-  buyerHypothesis: Record<string, unknown>;
-  channelHypothesis: Record<string, unknown>;
-  founderTaste: Record<string, unknown>;
-  marketMemory: Record<string, unknown>;
+  buyerHypothesis: BuyerHypothesis;
+  channelHypothesis: ChannelHypothesis;
+  founderTaste: FounderTaste;
+  marketMemory: MarketMemory;
   priorRunState: unknown[];
   knownBlindSpots: string[];
   assembledAt: string;
@@ -821,62 +884,6 @@ export type EngineState = {
   recentFindings: AgentFinding[];
 };
 
-// ─── Legacy pipeline types (kept for backward compat in any remaining tests) ──
-
-export type PipelineStageType = "icp" | "find" | "enrich" | "score" | "draft" | "gate";
-
-export type PipelineStage = {
-  id: string;
-  type: PipelineStageType;
-  label: string;
-  connector: string;
-  config: Record<string, unknown>;
-  agentPrompt?: string;
-};
-
-export type Channel = {
-  id: string;
-  label: string;
-  stages: PipelineStage[];
-};
-
-export type IcpDefinition = {
-  query: string;
-  geography?: string;
-  industry?: string;
-  keywords?: string[];
-};
-
-export type Pipeline = {
-  id?: string;
-  name?: string;
-  icp: IcpDefinition;
-  channels: Channel[];
-  context?: Record<string, unknown>;
-};
-
-export type Prospect = GTMItem;
-
-export type PipelineStageResult = {
-  stageId: string;
-  channelId: string;
-  type: PipelineStageType;
-  connector?: string;
-  ok: boolean;
-  items: GTMItem[];
-  meta?: Record<string, unknown>;
-  error?: string;
-};
-
-export type ChannelResult = {
-  channelId: string;
-  label: string;
-  ok: boolean;
-  stages: PipelineStageResult[];
-};
-
-export type PipelineRunResult = {
-  ok: boolean;
-  channels: ChannelResult[];
-  error?: string;
-};
+// The legacy pipeline types (Pipeline/Channel/PipelineStage/Prospect/…) were removed here — the
+// open node model (GTMGraph) replaced them. The brain's legacy cold-outbound runner is retired in
+// the same pass.

@@ -258,7 +258,7 @@ export default function App() {
     const programResponse = await getPrograms(projectResponse.project.id).catch(() => null);
     setProjects(catalog.projects);
     setActiveProjectState(projectResponse.project);
-    setChannels(projectResponse.project.workflows ?? projectResponse.project.channels);
+    setChannels(projectResponse.project.channels);
     setOpportunityStudio(studioResponse.opportunities);
     setPrograms(programResponse?.programs ?? []);
     setAgentPolicies(programResponse?.policies ?? []);
@@ -282,11 +282,10 @@ export default function App() {
         [projectResponse, catalog] = await Promise.all([getProject(), listProjects()]);
         if (!live) return;
       }
-      let channelId = projectResponse.project.activeWorkflowId
-        || projectResponse.project.activeChannelId
-        || (projectResponse.project.workflows ?? projectResponse.project.channels)[0]?.id;
+      let channelId = projectResponse.project.activeChannelId
+        || projectResponse.project.channels[0]?.id;
       setConnectors(connectorResponse.connectors);
-      setChannels(projectResponse.project.workflows ?? projectResponse.project.channels);
+      setChannels(projectResponse.project.channels);
       setActiveProjectState(projectResponse.project);
       setProjects(catalog.projects);
       getOpportunities(projectResponse.project.id).then((response) => {
@@ -731,9 +730,8 @@ export default function App() {
       setGraph(null);
       setActiveChannelId(null);
       const project = await refreshProjectScope();
-      const channelId = project.activeWorkflowId
-        || project.activeChannelId
-        || (project.workflows ?? project.channels)[0]?.id;
+      const channelId = project.activeChannelId
+        || project.channels[0]?.id;
       if (channelId) await loadChannel(channelId);
       setView("canvas");
       setOverlay(null);

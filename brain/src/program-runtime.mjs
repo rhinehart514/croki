@@ -6,7 +6,7 @@ import { loadProject } from "./project-store.mjs";
 import {
   getOutcomeProgram,
   syncProgramStoreFromEvents,
-  validateOutcomeProgramTransition,
+  updateOutcomeProgram,
 } from "./program-store.mjs";
 import {
   evaluateAgentInstancesFromRun,
@@ -141,8 +141,8 @@ export async function runProgram(programId, input = {}, options = {}) {
     }, options);
   }
 
-  const status = nextProgramStatus({ result, feedback, evaluations, nextVersions });
-  transitionProgramStatus({ ...program, status: "running" }, status, { ...options, projectId });
+  const lastRunStatus = nextProgramStatus({ result, feedback, evaluations, nextVersions });
+  transitionProgramStatus(program, lastRunStatus, { ...options, projectId });
   return {
     programId: program.id,
     graphId: flow.graph.id,
@@ -151,22 +151,43 @@ export async function runProgram(programId, input = {}, options = {}) {
     evaluations,
     nextVersions,
     storedRunCount: saved.runs.length,
-    programStatus: status,
+    // API COMPAT: the server + UI read `run.programStatus`. It now carries the run-derived
+    // lastRunStatus value (waiting_for_gate / blocked / learning / complete), not a lifecycle.
+    programStatus: lastRunStatus,
   };
 }
 
-function transitionProgramStatus(program, status, options = {}) {
+// Run-derived status only. `lastRunStatus` has NO state machine: a run writes it directly so a
+// previously blocked program is always re-runnable (the bug class this refactor kills — no
+// lifecycle transition may block a re-run). We never call validateOutcomeProgramTransition here;
+// lifecycle ("draft"/"active"/"retired") is founder-controlled and lives elsewhere.
+//
+// The skip-when-unchanged check reads the CURRENT stored value, not the caller's snapshot: within a
+// single run the start transition writes "running" before the end transition reads, so a stale
+// snapshot would wrongly skip the end write (leaving the store stuck on "running" when a re-run
+// ends in the same status it ended in last time, e.g. blocked → blocked).
+function transitionProgramStatus(program, lastRunStatus, options = {}) {
   const projectId = options.projectId || program.projectId || "default";
-  const nextStatus = validateOutcomeProgramTransition(program.status, status);
-  if (program.status === nextStatus) return program;
+  const current = getCurrentLastRunStatus(program, { ...options, projectId });
+  if (current === lastRunStatus) return program;
   ensureProgramCreationEvent(program, { ...options, projectId });
+  updateOutcomeProgram(program.id, { lastRunStatus }, { ...options, projectId });
   appendDomainEvent(projectId, {
     type: "ProgramStatusChanged",
     aggregateType: "OutcomeProgram",
     aggregateId: program.id,
-    data: { status: nextStatus },
+    data: { lastRunStatus },
   }, options);
-  return syncProgramStoreFromEvents(projectId, options).find((item) => item.id === program.id) ?? { ...program, status: nextStatus };
+  return syncProgramStoreFromEvents(projectId, options).find((item) => item.id === program.id)
+    ?? { ...program, lastRunStatus };
+}
+
+function getCurrentLastRunStatus(program, options = {}) {
+  try {
+    return getOutcomeProgram(program.id, options.projectId, options).lastRunStatus ?? null;
+  } catch {
+    return program.lastRunStatus ?? null;
+  }
 }
 
 function ensureProgramCreationEvent(program, options = {}) {
@@ -250,6 +271,7 @@ function createNextVersions({ project, program, graph, updatedPolicies = [] } = 
   return versions;
 }
 
+// Returns a ProgramRunStatus value (the lastRunStatus the run ended in), not a lifecycle.
 function nextProgramStatus({ result, feedback, evaluations, nextVersions } = {}) {
   if (result?.pendingGates?.length) return "waiting_for_gate";
   if (!result?.ok) return "blocked";

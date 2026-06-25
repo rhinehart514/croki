@@ -747,8 +747,8 @@ async function executeTool(session, tool, options = {}) {
     const next = addEvent(session, {
       type: "inspection",
       title: "Inspected the GTM portfolio",
-      detail: `${project.workflows.length} outcome-program workflow${project.workflows.length === 1 ? "" : "s"} · shared context v${project.sharedContext.version}`,
-      data: { activeWorkflowId: project.activeWorkflowId, activeChannelId: project.activeChannelId },
+      detail: `${project.channels.length} outcome-program workflow${project.channels.length === 1 ? "" : "s"} · shared context v${project.sharedContext.version}`,
+      data: { activeChannelId: project.activeChannelId },
     }, options);
     return { session: next, result: project, pause: false };
   }
@@ -966,7 +966,7 @@ async function executeTool(session, tool, options = {}) {
     const next = addEvent(session, {
       type: "inspection",
       title: selected ? `Inspected ${selected.name}` : "Inspected programs",
-      detail: selected ? `${selected.status} · ${selected.graphId ? "workflow composed" : "no workflow yet"}` : `${programs.length} programs found`,
+      detail: selected ? `${selected.lastRunStatus ?? selected.lifecycle} · ${selected.graphId ? "workflow composed" : "no workflow yet"}` : `${programs.length} programs found`,
     }, options);
     return {
       session: next,

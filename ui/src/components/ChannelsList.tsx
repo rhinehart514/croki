@@ -56,7 +56,7 @@ export function ChannelsList({
     try {
       const [{ project }, briefResponse] = await Promise.all([getProject(), getPortfolioBrief()]);
       setProjectName(project.name);
-      setChannels(project.workflows ?? project.channels);
+      setChannels(project.channels);
       setBrief(briefResponse.brief);
     } finally {
       setLoading(false);

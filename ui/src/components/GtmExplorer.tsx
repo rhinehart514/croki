@@ -170,9 +170,9 @@ export function GtmExplorer({
             {programs.map((program) => (
               <div key={program.id}>
                 <button className={`explorer-row ${program.id === activeProgramId ? "active" : ""}`} onClick={() => onOpenProgram(program.id)} type="button">
-                  <span className="explorer-dot" style={{ background: TONE_DOT[statusTone(program.status)] }} />
+                  <span className="explorer-dot" style={{ background: TONE_DOT[statusTone(program.lastRunStatus ?? program.lifecycle)] }} />
                   <span className="explorer-row-name">{program.name}</span>
-                  <span className="explorer-row-meta">{statusLabel(program.status)}</span>
+                  <span className="explorer-row-meta">{statusLabel(program.lastRunStatus ?? program.lifecycle)}</span>
                 </button>
                 {channelsForProgram(program.id).length > 0 ? (
                   <div className="explorer-subgroup">

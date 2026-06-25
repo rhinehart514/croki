@@ -1,6 +1,6 @@
 import type {
   ApplyReadiness, BuildResult, ConnectorMeta, Decisions, EngineState, GTMGraph, GTMProject, GTMRunResult,
-  GTMRevision, GTMWorkspace, OperatorSession, OperatorSessionSummary, Pipeline, PipelineRunResult, PortfolioBrief,
+  GTMRevision, GTMWorkspace, OperatorSession, OperatorSessionSummary, PortfolioBrief,
   ScanReport, ChannelMeta, ChannelRunDiff, GTMNode, GTMEdge,
   WorkspaceSummary, ProjectSummary, OpportunityStudio, GTMOpportunity, DataAdapter,
   ContextManifest, GtmLibrary,
@@ -454,10 +454,3 @@ export async function mutateGraph(graph: GTMGraph, command: string): Promise<{ g
   if (!res.ok) throw new Error(`Mutate failed: ${res.status}`);
   return res.json() as Promise<{ graph: GTMGraph; description: string; changes: unknown[] }>;
 }
-
-// ── Legacy pipeline (kept for backward compat) ──────────────────────────────
-export const getPipelineTemplate = () =>
-  get<{ pipeline: Pipeline }>("/api/pipeline/template");
-
-export const runPipeline = (pipeline: Pipeline) =>
-  post<PipelineRunResult>("/api/pipeline/run", { pipeline });

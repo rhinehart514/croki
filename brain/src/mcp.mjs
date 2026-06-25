@@ -283,7 +283,7 @@ async function listOutcomes({ projectId } = {}) {
   const data = await brainGet(`/api/projects/${encodeURIComponent(id)}/programs`);
   const systems = await standaloneSystems(id, data.programs);
   const outcomes = [
-    ...(data.programs ?? []).map((p) => ({ id: p.id, name: p.name, form: "program", status: p.status, graphId: p.graphId ?? null })),
+    ...(data.programs ?? []).map((p) => ({ id: p.id, name: p.name, form: "program", status: p.lastRunStatus ?? p.lifecycle, graphId: p.graphId ?? null })),
     ...systems,
   ];
   return { projectId: id, outcomes, ...data, systems };

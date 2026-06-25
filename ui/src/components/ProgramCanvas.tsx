@@ -52,7 +52,7 @@ function programHeadline(program: OutcomeProgram, runResult: GTMRunResult | null
   if (runResult && !runResult.ok) return "blocked";
   if (runResult?.ok) return "completed";
   if (!graph) return "not composed";
-  return canonicalStatus(program.status);
+  return canonicalStatus(program.lastRunStatus ?? program.lifecycle);
 }
 
 export function ProgramCanvas({
@@ -288,7 +288,7 @@ export function ProgramCanvas({
           <h2>{program.name}</h2>
           <p>{firstString(program.desiredOutcome, ["description", "target", "type"], "The program needs a stated outcome.")}</p>
           <dl className="inspector-facts">
-            <div><dt>Status</dt><dd>{canonicalStatus(program.status)}</dd></div>
+            <div><dt>Status</dt><dd>{canonicalStatus(program.lastRunStatus ?? program.lifecycle)}</dd></div>
             <div><dt>Buyer</dt><dd>{firstString(program.buyerHypothesis, ["description", "audience", "target"], "Not recorded")}</dd></div>
             <div><dt>Channel</dt><dd>{firstString(program.channelHypothesis, ["objective", "motion", "description"], "Not recorded")}</dd></div>
             <div><dt>Outcome event</dt><dd>{text(program.measurementPlan?.outcomeEvent, "missing")}</dd></div>

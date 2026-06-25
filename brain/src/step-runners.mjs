@@ -45,12 +45,16 @@ export function createStepRuntime({ agentInvoker, skillLoader, codeTransforms = 
   return {
     async agent(node, upstream, context) {
       if (typeof agentInvoker !== "function") return defaultStepRuntime.agent(node);
+      // Prefer the instance's own on-disk definition when the node carries a path to it (set by
+      // the program compiler from AgentInstance.artifactPath). The invoker's loader uses this to
+      // run the real agent doctrine; ref-only nodes still work — artifactPath is just undefined.
       const out = await agentInvoker({
         ref: node.ref,
         prompt: node.agentPrompt ?? "",
         items: upstream,
         config: node.config ?? {},
         context: context ?? {},
+        artifactPath: node.config?.artifactPath ?? node.artifactPath,
       });
       return {
         ok: out?.ok !== false,

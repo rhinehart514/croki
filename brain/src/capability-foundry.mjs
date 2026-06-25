@@ -30,10 +30,26 @@ function fileFor(projectId, options = {}) {
   return path.join(root(options), "capability-foundry", `${safeId(projectId)}.json`);
 }
 
+// Where a born agent's on-disk definition lives. It sits under the SAME foundry root the
+// .json store uses (root()) — not a new home — so the definition travels with its store.
+// agent-bridge's loader tries this path first, then falls back to ~/.claude/agents/<ref>.md.
+function artifactFileFor(ref, options = {}) {
+  return path.join(root(options), "capability-foundry", "agents", `${safeId(ref)}.md`);
+}
+
 function write(file, value) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`);
+  fs.renameSync(tmp, file);
+}
+
+// Atomically write raw text (the agent-definition markdown). Same temp+rename as write(), but
+// without the JSON encoding — the file on disk is the literal markdown the bridge reads.
+function writeText(file, text) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tmp, String(text));
   fs.renameSync(tmp, file);
 }
 
@@ -149,6 +165,7 @@ export function createPersonalizedAgent({ project, program, policy, agentOpportu
   const profile = assemblePersonalizationProfile({ project, program, policy, priorRunState });
   const previous = matching.length ? latestInstance(matching) : null;
   const createdAt = now();
+  const artifactPath = artifactFileFor(ref, options);
   const instance = {
     id,
     lineageId: baseInstanceId,
@@ -164,7 +181,7 @@ export function createPersonalizedAgent({ project, program, policy, agentOpportu
     outputContract: policy.requiredOutputs,
     personalizationProfileId: profile.id,
     creationPolicyId: policy.id,
-    artifactPath: `agents/${ref}.md`,
+    artifactPath,
     evaluationSignals: policy.evaluationSignals,
     version,
     status: "active",
@@ -176,6 +193,15 @@ export function createPersonalizedAgent({ project, program, policy, agentOpportu
     profiles: [...store.profiles, profile].slice(-500),
     instances: [...store.instances, instance],
   }, options);
+  // Persist the agent's definition where artifactPath points, so the model the bridge invokes
+  // can actually read it. Idempotent (one ref → one stable file) and best-effort: a write failure
+  // never blocks agent creation — the bridge falls back to the ref-only label when no file loads.
+  try {
+    const markdown = agentInstanceMarkdown({ instance, policy, profile, agentOpportunity });
+    writeText(artifactPath, markdown);
+  } catch {
+    // best effort — the definition is a convenience for the bridge, not a correctness invariant
+  }
   return { instance, profile };
 }
 

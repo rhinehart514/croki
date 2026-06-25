@@ -62,7 +62,7 @@ describe("outcome program and capability foundry", () => {
     const policy = ensureAgentCreationPolicy({ project, program, agentOpportunity: agent }, options);
     const created = createPersonalizedAgent({ project, program, policy, agentOpportunity: agent }, options);
 
-    assert.equal(program.status, "ready");
+    assert.equal(program.lifecycle, "active");
     assert.equal(program.measurementPlan.joinKey, "gtmActionId");
     assert.ok(policy.requiredInputs.includes("productTruth"));
     assert.ok(policy.evidenceRequirements.some((rule) => rule.includes("app.ts:3")));
@@ -70,6 +70,20 @@ describe("outcome program and capability foundry", () => {
     assert.equal(created.profile.productTruth.length, 1);
     assert.equal(listOutcomePrograms(project.id, options).length, 1);
     assert.equal(loadCapabilityFoundry(project.id, options).instances.length, 1);
+  });
+
+  it("persists the agent definition to disk at the instance's artifactPath", () => {
+    const program = ensureOutcomeProgramForChannel(project, channel, options);
+    const policy = ensureAgentCreationPolicy({ project, program, agentOpportunity: agent }, options);
+    const created = createPersonalizedAgent({ project, program, policy, agentOpportunity: agent }, options);
+
+    assert.ok(created.instance.artifactPath, "instance keeps an artifactPath");
+    assert.equal(path.isAbsolute(created.instance.artifactPath), true);
+    assert.ok(created.instance.artifactPath.includes("capability-foundry"), "definition lives under the foundry root, not a new home");
+    assert.equal(fs.existsSync(created.instance.artifactPath), true, "the definition file actually exists");
+    const md = fs.readFileSync(created.instance.artifactPath, "utf8");
+    assert.match(md, /name: proof-extraction/);
+    assert.match(md, /Extract product-specific proof/);
   });
 
   it("turns founder feedback into a new agent creation policy version", () => {

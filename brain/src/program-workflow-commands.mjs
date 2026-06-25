@@ -29,7 +29,9 @@ export function createProgramWorkflow(input = {}, options = {}) {
     sourceOpportunityId: input.sourceOpportunityId ?? null,
     channelId,
     graphId,
-    status: input.status || "ready",
+    // This command composes a workflow in the same breath (it emits WorkflowComposed below), so the
+    // program is born active. lifecycle is founder-controlled; there is no longer a single status.
+    lifecycle: input.lifecycle || "active",
     desiredOutcome: input.desiredOutcome ?? {
       type: "program_outcome",
       description: objective,
@@ -145,7 +147,7 @@ export function programWorkflowChannel(program = {}) {
     name: channel.label || program.name || "Untitled program",
     kind: channel.kind || "custom",
     objective: channel.objective || program.desiredOutcome?.description || "",
-    enabled: channel.enabled !== false && program.status !== "retired",
+    enabled: channel.enabled !== false && program.lifecycle !== "retired",
     createdAt: program.createdAt,
     outcomeProgramId: program.id,
   };

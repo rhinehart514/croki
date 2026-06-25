@@ -50,7 +50,7 @@ import {
   recordExperiment,
   recordObservedOutcome,
 } from "./portfolio-intelligence.mjs";
-import { defaultTemplate, listConnectors, runPipeline } from "./pipeline.mjs";
+import { listConnectors } from "./connectors/registry.mjs";
 import { runGraph } from "./graph.mjs";
 import { liveStepRuntime } from "./agent-bridge.mjs";
 import { createClaudeIdeator } from "./ideation.mjs";
@@ -951,24 +951,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Pipeline default template
-  if (req.method === "GET" && url.pathname === "/api/pipeline/template") {
-    json(res, 200, { pipeline: defaultTemplate() }); return;
-  }
-
-  // Pipeline run (multi-channel)
-  if (req.method === "POST" && url.pathname === "/api/pipeline/run") {
-    try {
-      const body = await readBody(req);
-      if (!body.pipeline || !Array.isArray(body.pipeline.channels)) {
-        throw new Error("Request must include a pipeline object with a channels array.");
-      }
-      const result = await runPipeline(body.pipeline);
-      json(res, result.ok ? 200 : 422, result);
-    } catch (err) { json(res, 400, { error: err instanceof Error ? err.message : String(err) }); }
-    return;
-  }
-
   // GTM Graph — default template
   if (req.method === "GET" && url.pathname === "/api/graph/template") {
     const project = loadProject();
@@ -983,7 +965,7 @@ const server = http.createServer(async (req, res) => {
     const ownedProgram = listOutcomePrograms(project.id).find((program) =>
       program.workflowGraph?.id === graphId || program.id === requested
     );
-    const graph = saved.graph ?? ownedProgram?.workflowGraph ?? null;
+    const graph = ownedProgram?.workflowGraph ?? saved.graph ?? null;
     if (!graph) {
       json(res, 404, { error: `Graph not found: ${graphId}` });
       return;

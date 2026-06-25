@@ -523,11 +523,7 @@ export function getProjectWithChannels(options = {}) {
     activeChannelId: channels.some((channel) => channel.id === project.activeChannelId)
       ? project.activeChannelId
       : channels[0]?.id ?? null,
-    activeWorkflowId: channels.some((channel) => channel.id === project.activeChannelId)
-      ? project.activeChannelId
-      : channels[0]?.id ?? null,
     sharedContext: project.sharedContext,
     channels,
-    workflows: channels,
   };
 }

@@ -10,6 +10,41 @@
 
 import { listDomainEvents } from "./domain-events.mjs";
 
+// The legacy single-`status` → split mapping, kept local to the projection so a legacy
+// ProgramStatusChanged event (which carried data.status) still folds correctly: lifecycle values set
+// lifecycle, run values set lastRunStatus. New events carry data.lastRunStatus directly. Mirrors
+// program-store.mjs's LEGACY_STATUS_MAP.
+const LEGACY_STATUS_MAP = new Map([
+  ["draft", { lifecycle: "draft" }],
+  ["ready", { lifecycle: "active" }],
+  ["active", { lifecycle: "active" }],
+  ["retired", { lifecycle: "retired" }],
+  ["running", { lastRunStatus: "running" }],
+  ["waiting_for_gate", { lastRunStatus: "waiting_for_gate" }],
+  ["learning", { lastRunStatus: "learning" }],
+  ["complete", { lastRunStatus: "complete" }],
+  ["blocked", { lastRunStatus: "blocked" }],
+  ["paused", {}],
+]);
+
+// Split a created-program payload into the schemaVersion-2 shape. A current record already has
+// lifecycle/lastRunStatus and passes through; a legacy record carrying a single `status` is mapped
+// and the lineage triplet is backfilled. Kept local to avoid a cycle with program-store.mjs (which
+// imports rebuildProjectState from here).
+function foldCreatedProgram(data = {}) {
+  const { status, ...rest } = data;
+  const program = { ...rest };
+  if (program.lifecycle === undefined || program.lastRunStatus === undefined) {
+    const mapped = LEGACY_STATUS_MAP.get(String(status ?? "draft")) ?? {};
+    if (program.lifecycle === undefined) program.lifecycle = mapped.lifecycle ?? "draft";
+    if (program.lastRunStatus === undefined) program.lastRunStatus = mapped.lastRunStatus ?? null;
+  }
+  if (program.lineageId === undefined || program.lineageId === null) program.lineageId = program.id;
+  if (program.previousProgramId === undefined) program.previousProgramId = null;
+  if (program.version === undefined || program.version === null) program.version = 1;
+  return program;
+}
+
 function emptyState() {
   return {
     programs: new Map(),
@@ -25,7 +60,10 @@ export function applyDomainEvent(state, event) {
   const data = event?.data ?? {};
   switch (event?.type) {
     case "OutcomeProgramCreated":
-      state.programs.set(data.id, { ...data });
+      // The created record carries lifecycle/lastRunStatus/lineage. A legacy create event (logged
+      // before the status split) carried a single `status` instead — split it on the way in so a
+      // rebuild from an old log produces the current shape.
+      state.programs.set(data.id, foldCreatedProgram(data));
       break;
     case "MeasurementPlanDefined": {
       // The event carries the plan; fold it onto the program the same way the store does.
@@ -36,7 +74,9 @@ export function applyDomainEvent(state, event) {
     case "WorkflowComposed": {
       const program = state.programs.get(event.aggregateId);
       if (program) {
-        program.status = "ready";
+        // Composing a workflow makes the program runnable: the founder-controlled lifecycle becomes
+        // "active". This replaces the old status:"ready" set.
+        program.lifecycle = "active";
         program.channelId = data.channelId ?? program.channelId ?? null;
         program.graphId = data.graphId ?? program.graphId ?? null;
         program.workflowGraph = data.workflowGraph ?? program.workflowGraph ?? null;
@@ -78,7 +118,18 @@ export function applyDomainEvent(state, event) {
     }
     case "ProgramStatusChanged": {
       const program = state.programs.get(event.aggregateId);
-      if (program && data.status) program.status = data.status;
+      if (program) {
+        // New events carry the disposable run outcome directly.
+        if (data.lastRunStatus !== undefined) {
+          program.lastRunStatus = data.lastRunStatus;
+        } else if (data.status !== undefined) {
+          // Back-compat: a legacy event carried a single status. Interpret it through the migration
+          // map — lifecycle values move lifecycle, run values move lastRunStatus.
+          const mapped = LEGACY_STATUS_MAP.get(String(data.status)) ?? {};
+          if (mapped.lifecycle !== undefined) program.lifecycle = mapped.lifecycle;
+          if (mapped.lastRunStatus !== undefined) program.lastRunStatus = mapped.lastRunStatus;
+        }
+      }
       break;
     }
     case "AgentCreationPolicyCreated":

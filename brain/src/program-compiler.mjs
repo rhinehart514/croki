@@ -116,11 +116,16 @@ export function annotateGraphWithProgram(graph, compiled) {
 }
 
 export function markProgramComposed(program, { channelId, graphId, workflowGraph, name, objective, kind, enabled = true } = {}, options = {}) {
+  // Composition activates the program's lifecycle (founder-controlled), not a run-status. The old
+  // single status:"ready" is gone; a composed program is "active" and immediately runnable.
+  const graphBody = workflowGraph ?? null;
+  // graphId is the flow-store ledger key and must always equal workflowGraph.id (contract §4).
+  const ledgerGraphId = graphBody?.id ?? graphId ?? null;
   const updated = updateOutcomeProgram(program.id, {
-    status: "ready",
+    lifecycle: "active",
     channelId,
-    graphId,
-    workflowGraph: workflowGraph ?? null,
+    graphId: ledgerGraphId,
+    workflowGraph: graphBody,
     ...(name ? { name } : {}),
     ...(objective ? { desiredOutcome: { ...(program.desiredOutcome ?? {}), description: objective } } : {}),
     ...(name || objective || kind ? {
