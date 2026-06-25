@@ -2,6 +2,8 @@ import { appendDomainEvent, listDomainEvents } from "./domain-events.mjs";
 import { loadFlow, recordFlowRun } from "./flow-store.mjs";
 import { runGraph } from "./graph.mjs";
 import { buildDraftMemory, extractDecisions } from "./memory.mjs";
+import { mergeSharedDecisions } from "./shared-judgments.mjs";
+import { gradeRun } from "./eval.mjs";
 import { loadProject } from "./project-store.mjs";
 import {
   getOutcomeProgram,
@@ -68,13 +70,17 @@ export async function runProgram(programId, input = {}, options = {}) {
     targetNodeId: typeof input.targetNodeId === "string" ? input.targetNodeId : undefined,
     approvals: input.approvals && typeof input.approvals === "object" ? input.approvals : {},
     decisions: input.decisions && typeof input.decisions === "object" ? input.decisions : {},
-    memory: buildDraftMemory(extractDecisions(flow.runs)),
+    memory: buildDraftMemory(mergeSharedDecisions(extractDecisions(flow.runs), options)),
     grounding: buildRunGrounding(project),
     runs: flow.runs,
     resumeResult: resumeRecord?.result ?? null,
     stepRuntime: input.stepRuntime ?? options.stepRuntime,
     onEvent: input.onEvent,
   });
+  // Grade the run against its eval — its answer key — oracle first, then the shared grade.mjs
+  // (HARNESS.md invariants 1 and 5). Only when an eval was composed; otherwise nothing changes.
+  const evalGrade = flow.graph.eval ? gradeRun({ graph: flow.graph, result }) : null;
+  if (evalGrade) result.evalGrade = evalGrade;
   const saved = recordFlowRun(flow.graph, result, options);
   const feedback = recordFeedbackSignalsFromRun({ projectId, graph: flow.graph, result }, { ...options, projectId });
   const evaluations = evaluateAgentInstancesFromRun({
@@ -147,6 +153,7 @@ export async function runProgram(programId, input = {}, options = {}) {
     programId: program.id,
     graphId: flow.graph.id,
     result,
+    evalGrade,
     feedback,
     evaluations,
     nextVersions,

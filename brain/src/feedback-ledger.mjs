@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { reviseAgentPolicyFromFeedback } from "./agent-policy-store.mjs";
+import { appendGateJudgments } from "./shared-judgments.mjs";
 
 const SCHEMA_VERSION = 1;
 
@@ -134,6 +135,13 @@ export function recordFeedbackSignals(signals = [], options = {}) {
 }
 
 export function recordFeedbackSignalsFromRun({ projectId = "default", graph, result } = {}, options = {}) {
+  // Also bank the founder's gate decisions in the shared taste ledger both rigs read (HARNESS.md
+  // invariant 4). Never let taste capture break the run.
+  try {
+    appendGateJudgments({ projectId, graph, result }, options);
+  } catch {
+    // capture is best-effort; a write failure must not interrupt feedback recording
+  }
   const signals = normalizeRunFeedback({ projectId, graph, result });
   const ledger = recordFeedbackSignals(signals, { ...options, projectId });
   const byPolicy = new Map();

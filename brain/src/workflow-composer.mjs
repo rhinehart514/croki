@@ -1,4 +1,5 @@
 import { validateGraph } from "./graph-operations.mjs";
+import { deriveChannelEval } from "./eval.mjs";
 import { channelIdFor } from "./channel-graph.mjs";
 import { getChannel, getProjectChannels, loadProject, saveProject } from "./project-store.mjs";
 import { saveFlow } from "./flow-store.mjs";
@@ -219,6 +220,17 @@ export async function composeOpportunityChannel(input, options = {}) {
     compose: options.compose || blankCompose,
   });
 
+  // Derive this channel's eval — its answer key — at compose time (HARNESS.md invariant 1). With
+  // no evaluator wired the eval is null and composition is unaffected; with one wired it is stored
+  // on the graph and the run path grades against it.
+  const channelEval = await deriveChannelEval({
+    goal: input.objective || channel.objective,
+    channel,
+    agents,
+    grounding: project.opportunities?.understanding ?? null,
+    evaluate: options.evaluate,
+  });
+
   // Write the real personalized capability artifact for every accepted agent so its node resolves
   // at run time, and so the founder can edit the policy/profile-born agent directly.
   for (const agent of compiled.agents) writeArtifact("agent", agent.instance.ref, agent.markdown, options);
@@ -241,6 +253,7 @@ export async function composeOpportunityChannel(input, options = {}) {
     edges,
     store: { path: `.gtm/flows/${graphId}.json`, runs: 0 },
   }, compiled);
+  if (channelEval) graph.eval = channelEval;
   const validation = validateGraph(graph);
   if (!validation.ok) throw new Error(`Composed workflow is invalid: ${validation.errors.join(" ")}`);
   saveFlow(graph, options);
