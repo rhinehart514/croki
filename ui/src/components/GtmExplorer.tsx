@@ -372,18 +372,38 @@ export function GtmExplorer({
         ))}
       </Section>
 
-      {/* Product grounding (context) and the learning loop are not rail peers — they open from
-          inside an outcome. One quiet link keeps the grounding deep-dive reachable. */}
-      <button
-        className={`explorer-rail-foot ${currentView === "understand" ? "active" : ""}`}
-        onClick={() => onOpenView("understand")}
-        type="button"
-        title="Open product grounding — what Claude reads about your product"
-      >
-        <Layers size={13} />
-        <span>Product grounding</span>
-        <span className="explorer-rail-foot-meta">{contextManifest?.contributingProviders ?? 0}/4</span>
-      </button>
+      {/* Product grounding is ambient context, not a workflow step — so it reads as a glance, not a
+          destination. Hovering the rail foot peeks what Claude actually reads about the product
+          (the live context providers) right here; opening the full panel stays optional, never the
+          only way to see anything. */}
+      <div className="explorer-foot-grounding">
+        <button
+          className={`explorer-rail-foot ${currentView === "understand" ? "active" : ""}`}
+          onClick={() => onOpenView("understand")}
+          type="button"
+          title="Open product grounding — what Claude reads about your product"
+        >
+          <Layers size={13} />
+          <span>Product grounding</span>
+          <span className="explorer-rail-foot-meta">{contextManifest?.contributingProviders ?? 0}/4</span>
+        </button>
+        <div className="explorer-foot-peek" role="tooltip">
+          <span className="explorer-foot-peek-eyebrow">What Claude reads about your product</span>
+          {contextManifest?.providers?.length ? (
+            <ul className="explorer-foot-peek-list">
+              {contextManifest.providers.map((p) => (
+                <li key={p.name} className={p.contributed ? "on" : "off"}>
+                  <span className="explorer-foot-peek-dot" />
+                  <span className="explorer-foot-peek-name">{p.name}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="explorer-foot-peek-empty">No context assembled yet — connect a repository to ground the model.</p>
+          )}
+          <span className="explorer-foot-peek-cue">Click to inspect the grounding →</span>
+        </div>
+      </div>
 
       {/* The living product picture — the founder-editable INTERPRETATION on top of the cited
           grounding above. Its own overlay, opened the same dismissable way. */}

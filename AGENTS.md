@@ -57,10 +57,19 @@ skill bridges are wired to the subscription (`agent-bridge.mjs`), and the canvas
 the kinds. Proven 2026-06-22: an agent step executes live on the subscription — a real
 model task returned parsed items that flowed through the workflow in ~7s, keyless. Not
 yet proven: the operator (Claude) itself composing an agent-step workflow and driving it
-to the gate, and dispatching the literal on-disk subagent (`agent-bridge.mjs` runs the
-`ref` as a focused subscription task with read-only tools, not yet the
-`~/.claude/agents/<ref>` definition with its own toolset). Not yet built: authoring
-skills and agents from the UI, the three-lane
+to the gate. The on-disk subagent definition now loads: `loadAgentDefinition` reads
+`~/.claude/agents/<ref>.md` and `buildAgentPrompt` merges its doctrine into the run
+(tested in `agent-bridge.test.mjs`); what is still fixed is the toolset — every agent runs
+with the same read-only tools, not its own declared toolset. Portfolio fan-out is built
+and unit-tested but not yet proven live or UI-rendered: `portfolio-graph.mjs`
+(`assemblePortfolioGraph`) unions several composed systems into one branching, multi-gate,
+lane-laid-out diagram and re-asserts the wall on the union, and `composePortfolioGraph`
+(`workflow-composer.mjs`) composes many accepted channels toward one goal — the engine
+turns one goal into many systems, but the live model producing those specs and the canvas
+rendering the lanes are still pending. A credential-gated live smoke test
+(`brain/test/live.test.mjs`, `npm --prefix brain run test:live`) exists to prove the model
+actually composes and an agent step runs on the subscription; it skips until a founder is
+signed in. Not yet built: authoring skills and agents from the UI, the three-lane
 workflows/skills/agents workspace, and the operator's "propose systems" move. A scanned
 product whose win event carries no source stays honestly "blind" in Measure until that
 attribution gap is repaired in the product code.

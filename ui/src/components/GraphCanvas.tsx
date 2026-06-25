@@ -249,9 +249,11 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
         </div>
       </div>
       <span className="loop-node-label">{node.label}</span>
+      {/* The slug is a technical identifier, not the headline. It rides as a faint, single-line
+          caption that never competes with the title; hover (the title attr) reveals the full ref. */}
       {isOpenKind
-        ? <span className="loop-node-connector">{node.ref}</span>
-        : node.connector && <span className="loop-node-connector">{node.connector}</span>}
+        ? <span className="loop-node-connector" title={node.ref}>{node.ref}</span>
+        : node.connector && <span className="loop-node-connector" title={node.connector}>{node.connector}</span>}
       {data.contractAudit && ["waiting", "blocked", "blind"].includes(data.contractAudit.state) && (
         <span
           className={`loop-contract-badge state-${data.contractAudit.state}`}
@@ -305,8 +307,10 @@ function edgeStyle(type: GTMEdgeType): Partial<Edge> {
 // overlaps), and same-rank nodes stack into lanes for branches. Feedback edges are excluded so a
 // loop-closing edge never collapses the ranks. This runs on topology change only — manual drags
 // (position-only updates) are preserved.
-const COLUMN_GAP = 312;
-const ROW_GAP = 176;
+// Generous gutters so the flow reads as a left-to-right sequence with air between steps —
+// wider than any node, so cards never crowd or overlap and the eye can follow the chain.
+const COLUMN_GAP = 364;
+const ROW_GAP = 212;
 
 function topologySignature(graph: GTMGraph): string {
   const nodeIds = graph.nodes.map((n) => n.id).sort().join(",");

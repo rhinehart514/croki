@@ -1,4 +1,5 @@
 import { validateGraph } from "./graph-operations.mjs";
+import { assemblePortfolioGraph } from "./portfolio-graph.mjs";
 import { deriveChannelEval } from "./eval.mjs";
 import { channelIdFor } from "./channel-graph.mjs";
 import { getChannel, getProjectChannels, loadProject, saveProject } from "./project-store.mjs";
@@ -195,6 +196,32 @@ export async function composeGraphForChannel({ channel, agents = [], grounding =
   bindIO(nodes, channel, input ?? channel.input, output ?? channel.output);
   assertGateWall(nodes, edges);
   return { nodes, edges };
+}
+
+// Portfolio fan-out: compose several accepted channels toward ONE goal and union them into a
+// single branching diagram (assemblePortfolioGraph owns the merge + the wall + the layout). The
+// model still composes each system's topology; this is the host orchestration that turns one goal
+// into many systems the founder reviews together. Pure compose path — no persistence — mirroring
+// composeGraphForChannel, so the streaming preview and a persisting caller can both reuse it.
+export async function composePortfolioGraph({ goal, channels = [], grounding = null, compose = blankCompose }) {
+  if (!Array.isArray(channels) || channels.length === 0) {
+    throw new Error("A portfolio needs at least one accepted channel.");
+  }
+  const systems = [];
+  for (const entry of channels) {
+    const channel = entry?.channel ?? entry;
+    const agents = entry?.agents ?? [];
+    const { nodes, edges } = await composeGraphForChannel({
+      channel,
+      agents,
+      grounding: entry?.grounding ?? grounding,
+      input: entry?.input,
+      output: entry?.output,
+      compose,
+    });
+    systems.push({ channel, graph: { nodes, edges } });
+  }
+  return assemblePortfolioGraph({ goal: goal || channels[0]?.channel?.objective || "", systems });
 }
 
 export async function composeOpportunityChannel(input, options = {}) {

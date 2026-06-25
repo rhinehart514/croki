@@ -45,6 +45,15 @@ function firstString(record: Record<string, unknown> | undefined, keys: string[]
   return fallback;
 }
 
+// Trim a hypothesis blob to its lead sentence for the hero focal. Splits on sentence-ending
+// punctuation; falls back to the whole string if there's no clear break. The full text stays in
+// the inspector, so nothing is lost — the hero just stops being a wall.
+function leadSentence(value: string) {
+  const trimmed = value.trim();
+  const match = trimmed.match(/^.*?[.!?](?=\s|$)/);
+  return match ? match[0].trim() : trimmed;
+}
+
 // The program's headline status composes run + program state into one phrase; its tone comes from
 // the shared toneForPhrase so it colors identically to every other status pill in the UI.
 function programHeadline(program: OutcomeProgram, runResult: GTMRunResult | null, graph: GTMGraph | null) {
@@ -249,6 +258,33 @@ export function ProgramCanvas({
 
       <div className={`program-canvas-grid mode-${mode}`}>
         <section className="program-canvas-plane program-canvas-graph" aria-label="Outcome program canvas">
+          {/* Hero thesis band — the buyer bet was buried in the inspector gutter while the
+              canvas top sat empty. Lift the most un-substitutable sentence on the surface into
+              the dead zone as the one monumental focal, at the large type scale. Overlay, so the
+              DAG layout and panning underneath are untouched. */}
+          {(() => {
+            if (!hasGraph || !graph) return null;
+            const trigger = firstString(program.buyerHypothesis, ["nowTrigger", "trigger", "whyNow", "why_now"], "");
+            const buyer = firstString(program.buyerHypothesis, ["description", "audience", "target"], "");
+            const full = trigger || buyer;
+            if (!full || full === "Not recorded") return null;
+            // The hero is ONE monumental focal, not the whole hypothesis essay. Lift only the lead
+            // sentence; the full text already lives in the inspector. Without this the buyer blob
+            // (often a multi-sentence paragraph) renders at page-title size and walls off the canvas.
+            const thesis = leadSentence(full);
+            const outcome = firstString(program.desiredOutcome, ["description", "target", "type"], "");
+            return (
+              <div className="program-canvas-hero">
+                <div className="hero-card">
+                  <span className="hero-kicker">The bet</span>
+                  <p className="hero-thesis">{thesis}</p>
+                  {outcome && outcome !== "The program needs a stated outcome." ? (
+                    <p className="hero-toward"><span>Toward</span>{outcome}</p>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })()}
           {hasGraph && graph ? (
             <GraphCanvas
               mode={mode}

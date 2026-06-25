@@ -9,7 +9,8 @@
   "scripts": {
     "mirror": "node src/mirror.mjs",
     "start": "node src/server.mjs",
-    "test": "node --test"
+    "test": "node --test",
+    "test:live": "GTM_LIVE=1 node --test test/live.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.185",
