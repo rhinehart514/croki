@@ -18,6 +18,7 @@ import { createClaudeComposer } from "../src/composition.mjs";
 import { composeGraphForChannel } from "../src/workflow-composer.mjs";
 import { runGraph } from "../src/graph.mjs";
 import { liveStepRuntime } from "../src/agent-bridge.mjs";
+import { claudeCodeRuntime } from "../src/runtimes/claude-code.mjs";
 
 // Founder-controlled switch. We gate on an explicit opt-in rather than sniffing for a token,
 // because a subscription login can live in the macOS keychain with no env var or creds file —
@@ -92,5 +93,48 @@ describe("live spine — model composes, agent runs on the subscription, gate ho
     assert.equal(enrich.meta?.invoked ?? enrich.meta?.ref, "gtm-enrich", `expected the live invoker to run gtm-enrich; meta=${JSON.stringify(enrich.meta)}`);
     // The wall: the run must be paused at the gate, nothing past it.
     assert.ok(result.pendingGates.includes("gate"), `expected the run to pause at the gate; pending=${JSON.stringify(result.pendingGates)}`);
+  });
+
+  // Check 5: the subscription runtime REMEMBERS its chat across drives. Drive once with a codeword,
+  // capture the SDK session id, then resume that session and ask for the codeword back. The model
+  // can only answer if the prior conversation was actually reloaded — proof the resume is real, not
+  // a fresh start. No MCP tools, no gate; this isolates the session-continuity mechanism.
+  it("resumes the same conversation on the subscription (it remembers your chat)", async () => {
+    const CODEWORD = "GTM-ORANGE-42";
+    let runtimeSessionId = null;
+    const baseCtx = (extra) => ({
+      model: process.env.GTM_IDE_OPERATOR_MODEL || "claude-sonnet-4-6",
+      system: "You are a terse test assistant. Answer in as few words as possible.",
+      tools: [],
+      env: process.env,
+      options: { cwd },
+      maxSteps: 2,
+      stepCount: 0,
+      isCancelled: () => false,
+      currentStatus: () => "running",
+      onText: () => {},
+      onToolStart: () => {},
+      onToolError: () => {},
+      onTurn: () => 1,
+      onRuntimeSession: (sid) => { runtimeSessionId = sid; },
+      ...extra,
+    });
+
+    const first = await claudeCodeRuntime.drive(baseCtx({
+      goal: `Remember this codeword for later: ${CODEWORD}. Reply with just the word "ok".`,
+      runtimeSessionId: null,
+      resumePrompt: null,
+    }));
+    assert.equal(first.kind, "completed", `first drive should complete; got ${JSON.stringify(first)}`);
+    assert.ok(runtimeSessionId, "the runtime should have captured and reported an SDK session id");
+
+    const second = await claudeCodeRuntime.drive(baseCtx({
+      goal: "unused on resume",
+      stepCount: 1,
+      runtimeSessionId,
+      resumePrompt: "What was the codeword I gave you? Reply with ONLY the codeword.",
+    }));
+    assert.equal(second.kind, "completed", `resume drive should complete; got ${JSON.stringify(second)}`);
+    assert.match(second.summary, new RegExp(CODEWORD), `the resumed conversation should recall the codeword; got: ${second.summary}`);
   });
 });

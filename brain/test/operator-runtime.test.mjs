@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { defaultGraphTemplate } from "../src/graph.mjs";
 import { saveFlow } from "../src/flow-store.mjs";
-import { createOperatorSession, getOperatorSession } from "../src/operator-store.mjs";
+import { createOperatorSession, getOperatorSession, saveOperatorSession } from "../src/operator-store.mjs";
 import { operatorTools, resolveOperatorGate, resolveOperatorProposal, runOperatorSession } from "../src/operator-runtime.mjs";
 import { loadFlow } from "../src/flow-store.mjs";
 import { createProject, loadProject } from "../src/project-store.mjs";
@@ -115,6 +115,44 @@ describe("resident GTM operator runtime", () => {
       }]),
     });
     assert.equal(completed.runtime, "anthropic");
+  });
+
+  it("captures the runtime session id and threads it back on the next drive (chat memory)", async () => {
+    const session = createOperatorSession({ goal: "Remember across drives.", graphId: defaultGraphTemplate().id }, options);
+
+    // First drive: a runtime that establishes an SDK session and reports its id.
+    const firstCtx = {};
+    const establishing = {
+      id: "fake-cc",
+      label: "Fake Claude Code",
+      isAvailable: () => ({ ok: true }),
+      drive: async (ctx) => {
+        firstCtx.runtimeSessionId = ctx.runtimeSessionId;
+        ctx.onRuntimeSession("sdk-session-1");
+        return { kind: "completed", summary: "established" };
+      },
+    };
+    await runOperatorSession(session.id, { options, runtime: establishing });
+    const afterFirst = getOperatorSession(session.id, options);
+    assert.equal(firstCtx.runtimeSessionId, null, "the first drive has no prior session to resume");
+    assert.equal(afterFirst.runtimeSessionId, "sdk-session-1", "the captured session id is persisted durably");
+
+    // A real resume re-enters from a runnable status (e.g. after a founder gate); mirror that.
+    saveOperatorSession({ ...getOperatorSession(session.id, options), status: "ready" }, options);
+
+    // Second drive: the stored id is handed to the runtime so it can resume the conversation.
+    const secondCtx = {};
+    const resuming = {
+      id: "fake-cc",
+      label: "Fake Claude Code",
+      isAvailable: () => ({ ok: true }),
+      drive: async (ctx) => {
+        secondCtx.runtimeSessionId = ctx.runtimeSessionId;
+        return { kind: "completed", summary: "resumed" };
+      },
+    };
+    await runOperatorSession(session.id, { options, runtime: resuming });
+    assert.equal(secondCtx.runtimeSessionId, "sdk-session-1", "the next drive resumes the same conversation");
   });
 
   it("pauses at a founder gate and resumes the exact run after approval", async () => {

@@ -1470,6 +1470,21 @@ async function executeTool(session, tool, options = {}) {
   throw new Error(`Unknown operator tool: ${tool.name}`);
 }
 
+// The latest "what changed" instruction to feed a resumed conversation. The resume entry points
+// (founder response, gate resolved, proposal accepted/discarded) each append a plain-string user
+// message to modelMessages describing the change; the Claude Code runtime sends that as the prompt
+// when it resumes its persisted SDK session. Null on a fresh session, where the goal is the prompt.
+function latestResumeInstruction(session) {
+  const messages = session.modelMessages ?? [];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role === "user" && typeof message.content === "string" && message.content.trim()) {
+      return message.content;
+    }
+  }
+  return null;
+}
+
 export async function runOperatorSession(id, runtime = {}) {
   const options = runtime.options ?? {};
   let session = getOperatorSession(id, options);
@@ -1538,6 +1553,17 @@ export async function runOperatorSession(id, runtime = {}) {
     options,
     env: process.env,
     initialMessages: session.modelMessages?.length ? session.modelMessages : null,
+    // Conversation continuity for the Claude Code (subscription) runtime. The runtime resumes the
+    // SDK session id we stored on the prior drive and replays only the latest "what changed"
+    // instruction (founder response, gate resolved, proposal decided) as the new prompt — so the
+    // subprocess remembers the chat instead of restarting cold after every founder pause.
+    runtimeSessionId: session.runtimeSessionId ?? null,
+    resumePrompt: latestResumeInstruction(session),
+    onRuntimeSession: (sid) => {
+      if (sid && sid !== session.runtimeSessionId) {
+        session = saveOperatorSession({ ...session, runtimeSessionId: sid }, options);
+      }
+    },
     maxSteps: session.maxSteps,
     stepCount: session.stepCount,
     isCancelled: () => getOperatorSession(id, options).status === "cancelled",

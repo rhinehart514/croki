@@ -79,6 +79,11 @@ export function createOperatorSession(input, options = {}) {
     maxSteps: Math.max(4, Math.min(Number(input.maxSteps) || 18, 40)),
     graphRevision: Number(input.graphRevision) || 0,
     lastRunId: null,
+    // The Claude Code (subscription) runtime's persisted SDK session id. Captured on the first
+    // drive and resumed on every later one so the operator's conversation survives founder gates,
+    // input pauses, and full process restarts — the model remembers the chat, GTM IDE owns the
+    // durable state around it. Null until a Claude Code drive establishes a session.
+    runtimeSessionId: null,
     summary: null,
     error: null,
     pendingQuestion: null,

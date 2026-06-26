@@ -155,6 +155,14 @@ export function authModeLabel(mode) {
 
 const PAUSE_STATUSES = new Set(["waiting_for_gate", "waiting_for_input", "completed", "blocked"]);
 
+// A resume can fail when the prior on-disk transcript is gone — cleared, expired, or the session
+// was created on another machine/cwd. Detect that narrowly so we only fall back to a cold start
+// for a genuine missing-session error, not for an unrelated failure we should surface.
+export function isResumeFailure(error) {
+  const message = (error instanceof Error ? error.message : String(error || "")).toLowerCase();
+  return /resume|session/.test(message) && /not found|no longer|does not exist|missing|unknown|no conversation|cannot/.test(message);
+}
+
 export function createOperatorSdkServer(ctx) {
   const tools = (ctx.tools ?? []).map((definition) => {
     const schema = z.fromJSONSchema(definition.input_schema ?? { type: "object", properties: {} });
@@ -231,15 +239,23 @@ export const claudeCodeRuntime = {
   // bridge. The bridge executes tools in its own process against the durable
   // session store. The SDK owns model orchestration; GTM IDE still owns state,
   // validation, cancellation, and the exact boundary around founder gates.
+  //
+  // Conversation memory ("remember your chats"): the SDK persists the running
+  // transcript under ~/.claude/projects (persistSession), keyed by cwd + a
+  // session id. On the FIRST drive we let the SDK mint that id and capture it
+  // back through ctx.onRuntimeSession so GTM IDE stores it on the durable
+  // operator session. On every LATER drive — after a founder gate, founder
+  // input, an iteration-budget pause, or a full process restart — we `resume`
+  // that same id and send only the new instruction (ctx.resumePrompt: "the
+  // founder approved the gate", etc.). The subprocess then continues the exact
+  // conversation it was in instead of re-deriving context from cold. GTM IDE
+  // still owns all durable state and the gate; this only restores the model's
+  // working memory across the pauses GTM IDE itself imposes.
   async drive(ctx) {
     const allowedTools = operatorAllowedTools((ctx.tools ?? []).map((tool) => tool.name));
     const sdkServer = createOperatorSdkServer(ctx);
-    const abortController = new AbortController();
-    const timeoutMs = Number(process.env.GTM_IDE_CLAUDE_CODE_TIMEOUT_MS) || 600_000;
-    const timeout = setTimeout(() => abortController.abort(), timeoutMs);
-    const stderr = [];
     const runQuery = ctx.query || agentQuery;
-    let terminalResult = null;
+    const reportSession = typeof ctx.onRuntimeSession === "function" ? ctx.onRuntimeSession : () => {};
 
     // OAuth-first billing. When the founder is on their Claude subscription,
     // strip any stray ANTHROPIC_API_KEY from the subprocess env so the run bills
@@ -252,75 +268,114 @@ export const claudeCodeRuntime = {
       delete childEnv.ANTHROPIC_API_KEY;
     }
 
-    try {
-      const stream = runQuery({
-        prompt: ctx.goal,
-        options: {
-          abortController,
-          cwd: ctx.options?.cwd || process.cwd(),
-          model: ctx.model,
-          maxTurns: Math.max(1, ctx.maxSteps - ctx.stepCount),
-          maxBudgetUsd: Number(process.env.GTM_IDE_CLAUDE_CODE_MAX_BUDGET_USD) || 5,
-          systemPrompt: ctx.system,
-          tools: [],
-          allowedTools,
-          permissionMode: "dontAsk",
-          strictMcpConfig: true,
-          settingSources: [],
-          persistSession: false,
-          pathToClaudeCodeExecutable: ctx.env?.GTM_IDE_CLAUDE_CODE_PATH || undefined,
-          env: childEnv,
-          mcpServers: {
-            [BRIDGE_SERVER]: sdkServer,
+    // One pass over the SDK. resumeId !== null means "continue the stored
+    // conversation"; null means "start a fresh one from the goal".
+    const attempt = async (resumeId) => {
+      const abortController = new AbortController();
+      const timeoutMs = Number(process.env.GTM_IDE_CLAUDE_CODE_TIMEOUT_MS) || 600_000;
+      const timeout = setTimeout(() => abortController.abort(), timeoutMs);
+      const stderr = [];
+      let terminalResult = null;
+      let captured = false;
+      const prompt = resumeId
+        ? (ctx.resumePrompt || "Continue from where you left off.")
+        : ctx.goal;
+
+      try {
+        const stream = runQuery({
+          prompt,
+          options: {
+            abortController,
+            cwd: ctx.options?.cwd || process.cwd(),
+            model: ctx.model,
+            maxTurns: Math.max(1, ctx.maxSteps - ctx.stepCount),
+            maxBudgetUsd: Number(process.env.GTM_IDE_CLAUDE_CODE_MAX_BUDGET_USD) || 5,
+            systemPrompt: ctx.system,
+            tools: [],
+            allowedTools,
+            permissionMode: "dontAsk",
+            strictMcpConfig: true,
+            settingSources: [],
+            // Persist the transcript so a later drive can resume it. This is the
+            // founder's local Claude session store — the local-harness contract.
+            persistSession: true,
+            ...(resumeId ? { resume: resumeId } : {}),
+            pathToClaudeCodeExecutable: ctx.env?.GTM_IDE_CLAUDE_CODE_PATH || undefined,
+            env: childEnv,
+            mcpServers: {
+              [BRIDGE_SERVER]: sdkServer,
+            },
+            stderr: (line) => stderr.push(line),
           },
-          stderr: (line) => stderr.push(line),
-        },
-      });
+        });
 
-      for await (const message of stream) {
-        if (ctx.isCancelled()) {
-          abortController.abort();
-          return { kind: "cancelled" };
-        }
+        for await (const message of stream) {
+          // Capture the session id from the first message that carries one and
+          // hand it to GTM IDE immediately, so even a crash mid-run leaves a
+          // resumable id on the durable session.
+          if (!captured && message?.session_id) {
+            captured = true;
+            reportSession(message.session_id);
+          }
 
-        if (message.type === "assistant" && message.message?.content) {
-          const parsed = parseStreamLine(JSON.stringify(message));
-          if (parsed?.text) ctx.onText(parsed.text);
-          if (parsed?.toolUses?.length) ctx.onTurn();
-        }
+          if (ctx.isCancelled()) {
+            abortController.abort();
+            return { kind: "cancelled" };
+          }
 
-        if (message.type === "result") terminalResult = message;
+          if (message.type === "assistant" && message.message?.content) {
+            const parsed = parseStreamLine(JSON.stringify(message));
+            if (parsed?.text) ctx.onText(parsed.text);
+            if (parsed?.toolUses?.length) ctx.onTurn();
+          }
 
-        // MCP tool execution completes before the following SDK message is
-        // yielded. Check every message so a gate reached by the bridge stops
-        // the resident operator before another model turn can cross it.
-        const status = ctx.currentStatus();
-        if (status === "cancelled") {
-          abortController.abort();
-          return { kind: "cancelled" };
+          if (message.type === "result") terminalResult = message;
+
+          // MCP tool execution completes before the following SDK message is
+          // yielded. Check every message so a gate reached by the bridge stops
+          // the resident operator before another model turn can cross it.
+          const status = ctx.currentStatus();
+          if (status === "cancelled") {
+            abortController.abort();
+            return { kind: "cancelled" };
+          }
+          if (PAUSE_STATUSES.has(status)) {
+            abortController.abort();
+            return { kind: "paused" };
+          }
         }
-        if (PAUSE_STATUSES.has(status)) {
-          abortController.abort();
-          return { kind: "paused" };
-        }
+      } finally {
+        clearTimeout(timeout);
       }
-    } finally {
-      clearTimeout(timeout);
-    }
 
-    if (!terminalResult) {
-      if (abortController.signal.aborted) return { kind: "budget" };
-      throw new Error(stderr.join("").trim().slice(-2_000) || "Claude Code ended without a result.");
-    }
-    if (terminalResult.subtype === "error_max_turns" || terminalResult.subtype === "error_max_budget_usd") {
-      return { kind: "budget" };
-    }
-    if (terminalResult.is_error) {
-      throw new Error(terminalResult.errors?.join(" ") || terminalResult.result || "Claude Code failed.");
-    }
-    return {
-      kind: "completed",
-      summary: terminalResult.result || "Claude Code finished the session.",
+      if (!terminalResult) {
+        if (abortController.signal.aborted) return { kind: "budget" };
+        throw new Error(stderr.join("").trim().slice(-2_000) || "Claude Code ended without a result.");
+      }
+      if (terminalResult.subtype === "error_max_turns" || terminalResult.subtype === "error_max_budget_usd") {
+        return { kind: "budget" };
+      }
+      if (terminalResult.is_error) {
+        throw new Error(terminalResult.errors?.join(" ") || terminalResult.result || "Claude Code failed.");
+      }
+      return {
+        kind: "completed",
+        summary: terminalResult.result || "Claude Code finished the session.",
+      };
     };
+
+    const priorSessionId = ctx.runtimeSessionId || null;
+    try {
+      return await attempt(priorSessionId);
+    } catch (error) {
+      // Resume failed because the prior transcript is gone — don't strand the
+      // founder. Fall back ONCE to a fresh session that re-inspects from the
+      // goal. Any other failure surfaces unchanged.
+      if (priorSessionId && isResumeFailure(error)) {
+        ctx.onText?.("Previous conversation memory was unavailable, so the operator is starting a fresh pass and re-inspecting from the goal.");
+        return await attempt(null);
+      }
+      throw error;
+    }
   },
 };

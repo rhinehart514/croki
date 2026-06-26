@@ -10,6 +10,7 @@ import {
   buildClaudeArgs,
   detectClaudeAuth,
   findClaudeBinary,
+  isResumeFailure,
   operatorAllowedTools,
   parseStreamLine,
 } from "../src/runtimes/claude-code.mjs";
@@ -318,5 +319,119 @@ describe("claudeCodeRuntime availability + helpers", () => {
     assert.equal(queryOptions.strictMcpConfig, true);
     assert.equal(queryOptions.permissionMode, "dontAsk");
     assert.ok(queryOptions.mcpServers["gtm-operator"]);
+  });
+});
+
+// The conversation-memory contract: the subscription runtime captures its SDK session id, resumes
+// it with only the "what changed" instruction on later drives, and falls back to a cold start if
+// the prior transcript is gone. This is what makes the operator "remember your chats" across the
+// founder gates and pauses GTM IDE itself imposes.
+describe("claudeCodeRuntime session continuity", () => {
+  function baseCtx(overrides = {}) {
+    let status = "running";
+    return {
+      sessionId: "op-mem",
+      goal: "Land the first pilot.",
+      model: "claude-sonnet-4-6",
+      system: "Operate GTM IDE.",
+      tools: [{ name: "inspect_problems" }],
+      env: {},
+      options: { cwd: "/tmp" },
+      maxSteps: 8,
+      stepCount: 0,
+      isCancelled: () => false,
+      currentStatus: () => status,
+      onText: () => {},
+      onToolStart: () => {},
+      onTurn: () => 1,
+      _setStatus: (s) => { status = s; },
+      ...overrides,
+    };
+  }
+
+  it("first drive persists the session, captures the SDK session id, and prompts with the goal", async () => {
+    let queryOptions;
+    let queryPrompt;
+    const captured = [];
+    const query = ({ prompt, options }) => {
+      queryPrompt = prompt;
+      queryOptions = options;
+      return (async function* messages() {
+        yield { type: "system", subtype: "init", session_id: "sdk-abc" };
+        yield { type: "result", subtype: "success", result: "done", is_error: false, session_id: "sdk-abc" };
+      }());
+    };
+    const ctx = baseCtx({ query, runtimeSessionId: null, resumePrompt: null, onRuntimeSession: (sid) => captured.push(sid) });
+    const outcome = await claudeCodeRuntime.drive(ctx);
+    assert.equal(outcome.kind, "completed");
+    assert.equal(queryPrompt, "Land the first pilot.", "a fresh session prompts with the goal");
+    assert.equal(queryOptions.persistSession, true, "the transcript is persisted so it can resume");
+    assert.equal(queryOptions.resume, undefined, "a fresh session does not resume");
+    assert.deepEqual(captured, ["sdk-abc"], "the SDK session id is handed back to GTM IDE");
+  });
+
+  it("a later drive resumes the stored session and prompts with only the change", async () => {
+    let queryOptions;
+    let queryPrompt;
+    const query = ({ prompt, options }) => {
+      queryPrompt = prompt;
+      queryOptions = options;
+      return (async function* messages() {
+        yield { type: "result", subtype: "success", result: "continued", is_error: false, session_id: "sdk-abc" };
+      }());
+    };
+    const ctx = baseCtx({
+      query,
+      stepCount: 4,
+      runtimeSessionId: "sdk-abc",
+      resumePrompt: "Founder gate resolved. Continue.",
+      onRuntimeSession: () => {},
+    });
+    const outcome = await claudeCodeRuntime.drive(ctx);
+    assert.equal(outcome.kind, "completed");
+    assert.equal(queryOptions.resume, "sdk-abc", "the stored session id is resumed");
+    assert.equal(queryPrompt, "Founder gate resolved. Continue.", "resume sends only the new instruction, not the whole goal");
+  });
+
+  it("falls back to a fresh session once when the prior transcript is gone", async () => {
+    const prompts = [];
+    const resumes = [];
+    let call = 0;
+    const query = ({ prompt, options }) => {
+      call += 1;
+      prompts.push(prompt);
+      resumes.push(options.resume ?? null);
+      if (call === 1) {
+        return (async function* fail() {
+          // eslint-disable-next-line no-unused-vars
+          for (const _ of []) yield _;
+          throw new Error("Could not resume session sdk-old: session not found.");
+        }());
+      }
+      return (async function* ok() {
+        yield { type: "result", subtype: "success", result: "fresh", is_error: false, session_id: "sdk-new" };
+      }());
+    };
+    const captured = [];
+    const ctx = baseCtx({
+      query,
+      stepCount: 6,
+      runtimeSessionId: "sdk-old",
+      resumePrompt: "Continue.",
+      onRuntimeSession: (sid) => captured.push(sid),
+    });
+    const outcome = await claudeCodeRuntime.drive(ctx);
+    assert.equal(outcome.kind, "completed");
+    assert.equal(call, 2, "it retried exactly once");
+    assert.deepEqual(resumes, ["sdk-old", null], "first tries resume, then falls back to a fresh session");
+    assert.deepEqual(prompts, ["Continue.", "Land the first pilot."], "the fresh pass re-prompts with the goal");
+    assert.deepEqual(captured, ["sdk-new"], "the new session id replaces the dead one");
+  });
+
+  it("isResumeFailure recognizes a missing-session error but not unrelated failures", () => {
+    assert.equal(isResumeFailure(new Error("Could not resume session abc: session not found.")), true);
+    assert.equal(isResumeFailure(new Error("Session no longer exists")), true);
+    assert.equal(isResumeFailure(new Error("rate_limit: overloaded")), false);
+    assert.equal(isResumeFailure(new Error("billing_error")), false);
   });
 });

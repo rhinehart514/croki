@@ -93,6 +93,16 @@ attribution gap is repaired in the product code.
   and `code` steps dispatch here, not through the connector registry. The runtime is
   injectable (honest blank defaults; `createStepRuntime` for live; fakes in tests) so the
   host never owns the intelligence.
+- `brain/src/source-entry.mjs` owns the single domain rule for how a workflow gets its first
+  items — the one predicate (`sourceStandsOnData`) and the one compose-time normalizer
+  (`resolveEntry`) that used to be duplicated across the composer and the runner. A source has
+  one of two modes, derived from its shape so the label can never lie: `provided` (a
+  connector-backed seed — manual/csv/api — the founder configures and controls) or `discovered`
+  (an agent that self-sources). The mode is decided VISIBLY at compose time in the graph the
+  founder persists; the run path never silently rewrites topology. It also owns the run-path
+  contract rules: `relaxGateContracts` (always — the gate is the contract checkpoint) and
+  `relaxDiscoveryChainContracts` (only when the entry is discovered, since a best-effort
+  discovery chain is not contract-rigid while a provided chain keeps its declared fields).
 - `brain/src/agent-bridge.mjs` owns the real step bridges: a skill loader (reads
   `~/.claude/skills/<ref>/SKILL.md`) and a Claude agent invoker that runs a read-only
   subagent on the founder's subscription (OAuth-first, no key, no send/publish path).
@@ -114,7 +124,12 @@ attribution gap is repaired in the product code.
   `ANTHROPIC_API_KEY` as the last-resort fallback, and — when on the subscription —
   strips any stray key from the subprocess so the run bills the subscription, not the
   key. With no credential at all it reports an honest cold-start blocked state naming
-  the options instead of crashing the SDK.
+  the options instead of crashing the SDK. Conversation memory is real on the subscription
+  runtime: the SDK persists its transcript (`persistSession`) and GTM IDE stores the captured
+  session id on the durable operator session, so each later drive `resume`s the same conversation
+  with only the "what changed" instruction (founder response, gate resolved, proposal decided)
+  instead of restarting cold after a founder pause or a full process restart. If the prior
+  transcript is gone, it falls back once to a fresh pass that re-inspects from the goal.
 - `brain/src/operator-mcp.mjs` is the stdio MCP bridge the Claude Code subprocess
   connects to. It exposes the same typed operator tools and routes them through
   `executeOperatorTool` against the durable session store, so persistence and safety
@@ -198,6 +213,16 @@ attribution gap is repaired in the product code.
   enforces the wall: every `execute` node must have a founder `gate` upstream of it on every
   path, or the composition is rejected. The blank default refuses rather than falling back to a
   template.
+- A workflow's entry is one of two first-class, founder-visible source modes — `provided` and
+  `discovered` — and BOTH are real (see `source-entry.mjs`). The mode is decided at compose time
+  in the persisted graph and derived from the node's shape (a connector source is provided; an
+  agent source is discovered), so the label can never disagree with what the runner does. The
+  run path NEVER silently rewrites the entry topology: a founder's connector source stays a
+  connector source. A provided source that has no seed does not dead-end on a cryptic downstream
+  error — it reports an honest "configure this source" state and the founder supplies the seed
+  (manual/csv/api) they control. A graph with no concrete input is composed with a discovered
+  (self-sourcing agent) entry instead, so a fresh composition still runs on its first try and
+  reaches the founder gate.
 - Grounding does not shape. The scan and `product-understanding.mjs` report only cited,
   reproducible reality — never a fixed go-to-market taxonomy and never a pre-written channel.
   Reading the codebase must not collapse the product into outbound, accelerator, or any other
@@ -228,6 +253,6 @@ The requested behavior is implemented, the diff is scoped, `npm test` passes, th
 visible flow is checked when relevant, engine and node numbers stay derived from real
 state, and any publishing or external-state action remains explicitly approved.
 
-Last verified: 2026-06-22. Revisit if the canonical interface or safety boundary
+Last verified: 2026-06-26. Revisit if the canonical interface or safety boundary
 changes. Architecture note: the connector-DAG taxonomy was un-caged into the open node
 model (tool/agent/skill/code) — see `docs/GOAL.md` for the route and its phases.
