@@ -102,7 +102,7 @@ function ProspectCard({ item, showDraft }: { item: GTMItem; showDraft?: boolean 
 
 type ReviewState = Record<string, { decision?: "approve" | "reject"; draft: string; editing: boolean }>;
 
-function GateReview({
+export function GateReview({
   items, running, onSubmit, onApproveAll,
 }: {
   items: GTMItem[];
