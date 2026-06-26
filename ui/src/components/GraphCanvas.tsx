@@ -459,6 +459,7 @@ function buildFlowGraph(
   mode?: string,
   proposedNodeIds?: Set<string>,
   proposedEdgeIds?: Set<string>,
+  highlightedNodeId?: string | null,
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = graph.nodes.map((n) => {
     const sub = subsystemHealth[n.category];
@@ -468,7 +469,13 @@ function buildFlowGraph(
       position: n.position,
       draggable: true,
       selectable: false,
-      className: [lensClass(n, mode), proposedNodeIds?.has(n.id) ? "loop-node-proposed" : ""].filter(Boolean).join(" ") || undefined,
+      className: [
+        lensClass(n, mode),
+        proposedNodeIds?.has(n.id) ? "loop-node-proposed" : "",
+        // Run replay: the scrubber's current step glows; every other node dims so the eye follows
+        // the run step by step. No highlight set → no replay classes, the canvas reads normally.
+        highlightedNodeId ? (highlightedNodeId === n.id ? "loop-node-replay-current" : "loop-node-replay-dim") : "",
+      ].filter(Boolean).join(" ") || undefined,
       data: {
         node: n,
         result: result?.nodes[n.id],
@@ -693,7 +700,7 @@ function Refitter({ nonce }: { nonce?: number }) {
 export function GraphCanvas({
   graph, result, running, runningNodeId = null, selection, connectors, subsystemHealth = {}, contractAudits = {},
   onSelect, onNodePositionChange, onConnectNodes, onDeleteEdges, onAddNode, onLoadRecipe, panelOpen, variant, mode,
-  proposedNodeIds, proposedEdgeIds, refitNonce,
+  proposedNodeIds, proposedEdgeIds, refitNonce, highlightedNodeId = null,
 }: {
   graph: GTMGraph;
   result: GTMRunResult | null;
@@ -719,6 +726,8 @@ export function GraphCanvas({
   proposedEdgeIds?: Set<string>;
   // Bump to re-fit the viewport after the container resizes (debugger drawer open/close).
   refitNonce?: number;
+  // The run scrubber's current step — this node glows, the rest dim, so a replay reads node-by-node.
+  highlightedNodeId?: string | null;
 }) {
   const handleSelect = useCallback((id: string) => onSelect(id), [onSelect]);
   const editable = variant !== "ideation" && !!onAddNode;
@@ -741,8 +750,8 @@ export function GraphCanvas({
   }, [graph, onNodePositionChange]);
 
   const { nodes, edges } = useMemo(
-    () => buildFlowGraph(graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, mode, proposedNodeIds, proposedEdgeIds),
-    [graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, mode, proposedNodeIds, proposedEdgeIds],
+    () => buildFlowGraph(graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, mode, proposedNodeIds, proposedEdgeIds, highlightedNodeId),
+    [graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, mode, proposedNodeIds, proposedEdgeIds, highlightedNodeId],
   );
 
   const handleNodeDragStop = useCallback(

@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
-  Bot, CheckCircle2, ChevronDown, GitBranch, History, Play, TestTube2, X,
+  Bot, CheckCircle2, ChevronDown, GitBranch, History, Pause, Play, X,
 } from "lucide-react";
 import { GraphCanvas } from "@/components/GraphCanvas";
 import { NodeEditor } from "@/components/NodeEditor";
@@ -179,6 +179,12 @@ export function ProgramCanvas({
   // Which agent's policy + rules the inspector is expanded on. Independent of the canvas node
   // selection: the graph carries the execution plan, the inspector carries the program framing.
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  // The run scrubber's playhead: an index into runResult.executionOrder, or null when not scrubbing.
+  // The node at that index glows on the canvas while the rest dim, so a finished run replays
+  // step by step. Only live while the Replay tab is the active debugger view.
+  const [replayStep, setReplayStep] = useState<number | null>(null);
+  const replayActive = debugOpen && debugTab === "replay" && replayStep !== null && !!runResult;
+  const highlightedNodeId = replayActive ? runResult!.executionOrder[replayStep!] ?? null : null;
 
   // Changing mode re-aims the debugger to the tab that mode is about. React's sanctioned
   // adjust-state-during-render pattern — no effect, no cascading render.
@@ -350,6 +356,7 @@ export function ProgramCanvas({
               onLoadRecipe={onLoadRecipe}
               panelOpen={false}
               refitNonce={refitNonce}
+              highlightedNodeId={highlightedNodeId}
             />
           ) : (
             <div className="program-empty-agents">
@@ -524,7 +531,7 @@ export function ProgramCanvas({
           {debugTab === "timeline" ? <Timeline events={programEvents} feedback={programFeedback} /> : null}
           {debugTab === "events" ? <EventList events={programEvents} /> : null}
           {debugTab === "runLogs" ? <RunLogs runs={runs} /> : null}
-          {debugTab === "replay" ? <ReplayPanel runResult={runResult} /> : null}
+          {debugTab === "replay" ? <ReplayScrubber runResult={runResult} step={replayStep} onStep={setReplayStep} onSelectNode={onSelectNode} /> : null}
           {debugTab === "diff" ? <ThreadPanel threads={learningThreads} /> : null}
           {debugTab === "contracts" ? <ContractsPanel agents={programAgents} policies={programPolicies} evaluations={programEvaluations} /> : null}
         </div>
@@ -570,9 +577,71 @@ function RunLogs({ runs }: { runs: GTMRunResult[] }) {
   return <div className="timeline-list">{runs.slice(-8).reverse().map((run) => <DebugRow key={run.runId} icon={<Play />} title={run.runId} detail={run.pendingGates.length ? "Paused at gate" : run.ok ? "Completed" : run.error ?? "Needs attention"} meta={`${run.pendingGates.length} gates`} />)}</div>;
 }
 
-function ReplayPanel({ runResult }: { runResult: GTMRunResult | null }) {
-  if (!runResult) return <div className="debugger-empty">No active run to replay.</div>;
-  return <div className="timeline-list">{Object.values(runResult.nodes).map((node) => <DebugRow key={node.nodeId} icon={<TestTube2 />} title={node.nodeId} detail={node.ok ? `${node.items.length} items` : node.error ?? "Failed"} meta={node.pendingReview ? "gate opened" : node.ok ? "ok" : "blocked"} />)}</div>;
+// The run scrubber: step through a finished run's execution order. Dragging the slider (or pressing
+// play) advances the playhead; the matching canvas node glows while the rest dim, so you watch the
+// run unfold and a failure's location is obvious. Step-based (not wall-clock) because the run result
+// carries the deterministic order but not per-node timing.
+function ReplayScrubber({ runResult, step, onStep, onSelectNode }: {
+  runResult: GTMRunResult | null;
+  step: number | null;
+  onStep: Dispatch<SetStateAction<number | null>>;
+  onSelectNode: (id: string) => void;
+}) {
+  const order = runResult?.executionOrder ?? [];
+  const labelFor = (id: string) => runResult?.nodes[id];
+  const playRef = useRef<number | null>(null);
+  const [playing, setPlaying] = useState(false);
+
+  useEffect(() => {
+    if (!playing) return;
+    playRef.current = window.setInterval(() => {
+      onStep((current) => {
+        const next = (current ?? -1) + 1;
+        if (next >= order.length) { setPlaying(false); return order.length - 1; }
+        return next;
+      });
+    }, 700);
+    return () => { if (playRef.current) window.clearInterval(playRef.current); };
+  }, [playing, order.length, onStep]);
+
+  if (!runResult || order.length === 0) return <div className="debugger-empty">No finished run to replay yet.</div>;
+
+  const active = step ?? 0;
+  const currentId = order[active];
+  const currentResult = labelFor(currentId);
+
+  return (
+    <div className="replay-scrubber">
+      <div className="replay-scrubber-controls">
+        <button
+          className="replay-scrubber-play"
+          onClick={() => { if (step === null) onStep(0); setPlaying((p) => !p); }}
+          type="button"
+          aria-label={playing ? "Pause replay" : "Play replay"}
+        >
+          {playing ? <Pause size={14} /> : <Play size={14} />}
+        </button>
+        <input
+          className="replay-scrubber-range"
+          type="range"
+          min={0}
+          max={order.length - 1}
+          value={active}
+          onChange={(event) => { setPlaying(false); onStep(Number(event.target.value)); }}
+          aria-label="Run step"
+        />
+        <span className="replay-scrubber-count">{active + 1} / {order.length}</span>
+        <button className="replay-scrubber-reset" onClick={() => { setPlaying(false); onStep(null); }} type="button">Reset</button>
+      </div>
+      <button className="replay-scrubber-step" onClick={() => onSelectNode(currentId)} type="button">
+        <span className="replay-scrubber-step-dot" style={{ background: currentResult?.pendingReview ? "var(--gap)" : currentResult?.ok ? "var(--proven)" : "var(--danger)" }} />
+        <span className="replay-scrubber-step-name">{currentResult?.nodeId ?? currentId}</span>
+        <span className="replay-scrubber-step-meta">
+          {currentResult ? currentResult.pendingReview ? "opened the gate" : currentResult.ok ? `${currentResult.items.length} item${currentResult.items.length === 1 ? "" : "s"}` : currentResult.error ?? "blocked" : "no result"}
+        </span>
+      </button>
+    </div>
+  );
 }
 
 type LearningThreadData = {
