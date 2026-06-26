@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { RefreshCw, Sparkles } from "lucide-react";
-import { cn } from "@/lib/utils";
 import type { ProductModel, ProductModelEdit } from "@/types";
 import { ConceptualLens } from "@/components/lenses/ConceptualLens";
 import { JobsLens } from "@/components/lenses/JobsLens";
 import { IaLens } from "@/components/lenses/IaLens";
 import { WorkflowLens } from "@/components/lenses/WorkflowLens";
 import { InteractionLens } from "@/components/lenses/InteractionLens";
+import { SlidingTabs } from "@/components/SlidingTabs";
 
 // ProductCanvas — the Product-mode SHELL. The five-layer ProductModel derives once; this shell lets
 // the founder look at it through five lenses without re-deriving. Each lens reads the SAME model and
@@ -83,20 +83,13 @@ export function ProductCanvas({
       {/* Lens bar — the switcher + the grounding read-out + the redraw / bridge actions. Docks to
           the top; on mobile it stacks and scrolls horizontally instead of floating off-screen. */}
       <div className="lens-bar">
-        <div className="lens-switcher" role="tablist" aria-label="Product lens">
-          {LENSES.map((l) => (
-            <button
-              key={l.id}
-              type="button"
-              role="tab"
-              aria-selected={lens === l.id}
-              className={cn("lens-tab", lens === l.id && "active")}
-              onClick={() => setLens(l.id)}
-            >
-              {l.label}
-            </button>
-          ))}
-        </div>
+        <SlidingTabs
+          items={LENSES.map((l) => ({ value: l.id, label: l.label }))}
+          value={lens}
+          onChange={setLens}
+          layoutId="product-lens"
+          size="sm"
+        />
 
         <div className="lens-bar-meta">
           <span className="product-head-meta">

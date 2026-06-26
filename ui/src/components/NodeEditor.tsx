@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { itemKey } from "@/lib/itemKey";
 import { healthHex } from "@/lib/health";
+import { SlidingTabs } from "@/components/SlidingTabs";
 import type {
   ConnectorMeta, ContextManifest, EngineSubsystem, GateDecision, GTMContractAudit, GTMGraph, GTMItem, GTMNode,
   GTMNodeCategory, GTMNodeResult, GTMRunResult, NodeSelection,
@@ -901,16 +902,16 @@ export function NodeEditor({
 
       {/* Tabs */}
       <div className="node-editor-tabs">
-        {(["overview", "rules", "signals", "history"] as DetailTab[]).map((tab) => (
-          <button
-            className={`node-editor-tab ${activeTab === tab ? "active" : ""}`}
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            type="button"
-          >
-            {tab === "rules" ? "Configuration" : tab === "history" ? "Run history" : tab.charAt(0).toUpperCase() + tab.slice(1)}
-          </button>
-        ))}
+        <SlidingTabs
+          items={(["overview", "rules", "signals", "history"] as DetailTab[]).map((tab) => ({
+            value: tab,
+            label: tab === "rules" ? "Configuration" : tab === "history" ? "Run history" : tab.charAt(0).toUpperCase() + tab.slice(1),
+          }))}
+          value={activeTab}
+          onChange={setActiveTab}
+          layoutId="node-editor-tab"
+          size="sm"
+        />
       </div>
 
       {/* Tab content */}

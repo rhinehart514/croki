@@ -41,6 +41,7 @@ import {
 } from "@/api";
 import { ArtifactEditor } from "@/components/ArtifactEditor";
 import { ComposerDock } from "@/components/ComposerDock";
+import { SlidingTabs } from "@/components/SlidingTabs";
 import { GraphCanvas } from "@/components/GraphCanvas";
 import { GoalLauncher } from "@/components/GoalLauncher";
 import { NodeEditor } from "@/components/NodeEditor";
@@ -1258,26 +1259,13 @@ export default function App() {
           {/* GTM ↔ Product mode. GTM is the go-to-market engine; Product is the living picture of
               what the product IS. One model underneath — editing the picture grounds the GTM side. */}
           {view === "canvas" && activeProject ? (
-            <div className="loop-mode-switch" role="tablist" aria-label="Mode">
-              <button
-                role="tab"
-                aria-selected={overlay !== "product"}
-                className={`loop-mode-tab ${overlay !== "product" ? "active" : ""}`}
-                onClick={() => setOverlay(null)}
-                type="button"
-              >
-                GTM
-              </button>
-              <button
-                role="tab"
-                aria-selected={overlay === "product"}
-                className={`loop-mode-tab ${overlay === "product" ? "active" : ""}`}
-                onClick={() => { setIdeationOpen(false); setOverlay("product"); }}
-                type="button"
-              >
-                Product
-              </button>
-            </div>
+            <SlidingTabs
+              items={[{ value: "gtm", label: "GTM" }, { value: "product", label: "Product" }]}
+              value={overlay === "product" ? "product" : "gtm"}
+              onChange={(v) => { if (v === "product") { setIdeationOpen(false); setOverlay("product"); } else { setOverlay(null); } }}
+              layoutId="gtm-mode"
+              size="sm"
+            />
           ) : null}
         </div>
 

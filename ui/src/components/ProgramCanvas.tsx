@@ -458,13 +458,13 @@ export function ProgramCanvas({
             <span>Debugger</span>
           </button>
           {debugOpen ? (
-            <div className="debugger-tabs">
-              {(["timeline", "events", "runLogs", "replay", "diff", "contracts"] as DebugTab[]).map((tab) => (
-                <button key={tab} className={debugTab === tab ? "active" : ""} onClick={() => setDebugTab(tab)} type="button">
-                  {DEBUG_LABEL[tab]}
-                </button>
-              ))}
-            </div>
+            <SlidingTabs
+              items={(["timeline", "events", "runLogs", "replay", "diff", "contracts"] as DebugTab[]).map((tab) => ({ value: tab, label: DEBUG_LABEL[tab] }))}
+              value={debugTab}
+              onChange={setDebugTab}
+              layoutId="debug-tab"
+              size="sm"
+            />
           ) : (
             <button className="debugger-collapsed-hint" onClick={() => openDebugTab(debugTab)} type="button">
               {DEBUG_LABEL[debugTab]} · open to inspect

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { compareChannelRuns } from "@/api";
+import { SlidingTabs } from "@/components/SlidingTabs";
 import type { ChannelRunDiff, GTMGraph, GTMRunResult } from "@/types";
 
 type SimTab = "canvas" | "config" | "diff" | "simulation" | "runs" | "logs";
@@ -58,16 +59,13 @@ export function SimulationPanel({
       <div className="sim-drawer-inner">
         {/* Tab strip */}
         <div className="sim-tabs">
-          {(["canvas", "config", "diff", "simulation", "runs", "logs"] as SimTab[]).map((t) => (
-            <button
-              className={`sim-tab ${simTab === t ? "active" : ""}`}
-              key={t}
-              onClick={() => setSimTab(t)}
-              type="button"
-            >
-              {t.charAt(0).toUpperCase() + t.slice(1)}
-            </button>
-          ))}
+          <SlidingTabs
+            items={(["canvas", "config", "diff", "simulation", "runs", "logs"] as SimTab[]).map((t) => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) }))}
+            value={simTab}
+            onChange={setSimTab}
+            layoutId="sim-tab"
+            size="sm"
+          />
           <div className="sim-tabs-spacer" />
           <button className="sim-drawer-close" onClick={onClose} type="button">
             <X />
