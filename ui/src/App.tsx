@@ -23,6 +23,7 @@ import {
   activateProject,
   cancelOperatorSession,
   composeOpportunityChannel,
+  previewOpportunityChannel,
   createProject,
   createOperatorSession,
   ideateStream,
@@ -185,6 +186,20 @@ export default function App() {
 
   // Graph state
   const [graph, setGraph] = useState<GTMGraph | null>(null);
+  // A starter system staged from an accepted opportunity: composed but NOT yet persisted, shown
+  // ghosted on the canvas (mirrors the operator's pendingProposal) until the founder accepts or
+  // discards. `input` is what the apply path replays; `preview` is the would-be graph.
+  const [pendingComposition, setPendingComposition] = useState<{
+    input: {
+      channelOpportunityId: string;
+      agentOpportunityIds: string[];
+      input: DataAdapter;
+      output: DataAdapter;
+    };
+    name: string;
+    objective: string;
+    preview: GTMGraph;
+  } | null>(null);
   const [runResult, setRunResult] = useState<GTMRunResult | null>(null);
   const [graphRunning, setGraphRunning] = useState(false);
   const [runningNodeId, setRunningNodeId] = useState<string | null>(null);
@@ -920,6 +935,9 @@ export default function App() {
     } : current);
   }, [activeProject]);
 
+  // Accepting an opportunity no longer persists-and-switches immediately. It PREVIEWS the composed
+  // system (no persistence) and drops it onto the canvas as a ghost the founder accepts or discards —
+  // the same stage-then-gate move the operator already uses for graph edits.
   const handleOpportunityCompose = useCallback(async (input: {
     channelOpportunityId: string;
     agentOpportunityIds: string[];
@@ -930,17 +948,55 @@ export default function App() {
     setProjectBusy(true);
     setGraphError(null);
     try {
-      const response = await composeOpportunityChannel(activeProject.id, input);
-      await refreshProjectScope();
-      await loadChannel(response.channel.id);
+      const preview = await previewOpportunityChannel(activeProject.id, input);
+      setPendingComposition({
+        input,
+        name: preview.name,
+        objective: preview.objective,
+        preview: {
+          id: "composition-preview",
+          name: preview.name,
+          version: "preview",
+          nodes: preview.graph.nodes,
+          edges: preview.graph.edges,
+        },
+      });
       setOverlay(null);
-      setIdeationOpen(false); // composed → land on the new channel's canvas
+      setIdeationOpen(false); // leave the studio/board; the ghost system now sits on the canvas
     } catch (error) {
       setGraphError(error instanceof Error ? error.message : String(error));
     } finally {
       setProjectBusy(false);
     }
-  }, [activeProject, loadChannel, refreshProjectScope]);
+  }, [activeProject]);
+
+  // Accept the staged system: persist the EXACT previewed graph (the apply path replays its
+  // nodes/edges, never re-running the model), then land on the new channel's real canvas.
+  const handleAcceptComposition = useCallback(async () => {
+    if (!activeProject || !pendingComposition) return;
+    setProjectBusy(true);
+    setGraphError(null);
+    try {
+      const response = await composeOpportunityChannel(activeProject.id, {
+        ...pendingComposition.input,
+        graph: { nodes: pendingComposition.preview.nodes, edges: pendingComposition.preview.edges },
+      });
+      setPendingComposition(null);
+      await refreshProjectScope();
+      await loadChannel(response.channel.id);
+      setOverlay(null);
+      setIdeationOpen(false);
+    } catch (error) {
+      setGraphError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setProjectBusy(false);
+    }
+  }, [activeProject, pendingComposition, loadChannel, refreshProjectScope]);
+
+  const handleDiscardComposition = useCallback(() => {
+    setPendingComposition(null);
+    setGraphError(null);
+  }, []);
 
   // Open the ideation canvas and stream it live: proposals first (synth placeholders appear at
   // once), then each channel's REAL model-composed graph streams in and swaps its lane. The
@@ -1150,17 +1206,36 @@ export default function App() {
   // the agent editing the graph too — nothing it proposes lands until the founder accepts on-canvas.
   const pendingProposal = operatorSession?.status === "waiting_for_proposal" ? operatorSession.pendingProposal ?? null : null;
   const proposalActive = !!(pendingProposal && graph && pendingProposal.graphId === graph.id);
-  const displayGraph = proposalActive && pendingProposal ? pendingProposal.preview : graph;
+  // The operator's graph-edit proposal and an opportunity's staged starter system are mutually
+  // exclusive on the canvas; the operator proposal (an edit to a loaded graph) wins when both exist.
+  const compositionPreview = pendingComposition?.preview ?? null;
+  const compositionActive = !!(compositionPreview && !proposalActive);
+  const displayGraph = proposalActive && pendingProposal
+    ? pendingProposal.preview
+    : compositionActive
+      ? compositionPreview
+      : graph;
   const proposedNodeIds = useMemo(() => {
-    if (!proposalActive || !pendingProposal || !graph) return undefined;
-    const current = new Set(graph.nodes.map((node) => node.id));
-    return new Set(pendingProposal.preview.nodes.filter((node) => !current.has(node.id)).map((node) => node.id));
-  }, [proposalActive, pendingProposal, graph]);
+    if (proposalActive && pendingProposal && graph) {
+      const current = new Set(graph.nodes.map((node) => node.id));
+      return new Set(pendingProposal.preview.nodes.filter((node) => !current.has(node.id)).map((node) => node.id));
+    }
+    // A whole new system staged from an accepted opportunity — every node is a ghost until applied.
+    if (compositionActive && compositionPreview) {
+      return new Set(compositionPreview.nodes.map((node) => node.id));
+    }
+    return undefined;
+  }, [proposalActive, pendingProposal, graph, compositionActive, compositionPreview]);
   const proposedEdgeIds = useMemo(() => {
-    if (!proposalActive || !pendingProposal || !graph) return undefined;
-    const current = new Set(graph.edges.map((edge) => edge.id));
-    return new Set(pendingProposal.preview.edges.filter((edge) => !current.has(edge.id)).map((edge) => edge.id));
-  }, [proposalActive, pendingProposal, graph]);
+    if (proposalActive && pendingProposal && graph) {
+      const current = new Set(graph.edges.map((edge) => edge.id));
+      return new Set(pendingProposal.preview.edges.filter((edge) => !current.has(edge.id)).map((edge) => edge.id));
+    }
+    if (compositionActive && compositionPreview) {
+      return new Set(compositionPreview.edges.map((edge) => edge.id));
+    }
+    return undefined;
+  }, [proposalActive, pendingProposal, graph, compositionActive, compositionPreview]);
 
   const handleResolveProposal = useCallback(async (accept: boolean) => {
     if (!operatorSession) return;
@@ -1395,6 +1470,22 @@ export default function App() {
                 </div>
               ) : null}
             </>
+          ) : compositionActive ? (
+            // A starter system staged from an accepted opportunity — drawn ghosted on the canvas
+            // (read-only) until the founder accepts or discards it in the bar below.
+            <GraphCanvas
+              connectors={connectors}
+              contractAudits={contractAudits}
+              graph={displayGraph ?? compositionPreview!}
+              proposedNodeIds={proposedNodeIds}
+              proposedEdgeIds={proposedEdgeIds}
+              onSelect={setSelection}
+              panelOpen={false}
+              result={null}
+              running={false}
+              selection={selection}
+              subsystemHealth={{}}
+            />
           ) : activeProgram ? (
             <ProgramCanvas
               agents={agentInstances}
@@ -1473,7 +1564,7 @@ export default function App() {
           )}
 
           {/* Toolbar overlay: zoom controls at top-left */}
-          {view === "canvas" && graph && !activeProgram && (
+          {view === "canvas" && graph && !activeProgram && !compositionActive && (
             <div className="loop-graph-actions">
               <button
                 className={`loop-save-chip ${graphSavedAt ? "saved" : ""}`}
@@ -1538,6 +1629,28 @@ export default function App() {
                 </button>
                 <button className="loop-proposal-accept" disabled={graphRunning} onClick={() => void handleResolveProposal(true)} type="button">
                   <Check /> Accept change{pendingProposal.changes.length === 1 ? "" : "s"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Staged starter system — an accepted opportunity composed a system, ghosted on the
+              canvas. Accept persists that exact graph and lands on its real channel; discard drops it. */}
+          {compositionActive && pendingComposition && (
+            <div className="loop-proposal-bar" role="region" aria-label="Staged starter system">
+              <div className="loop-proposal-text">
+                <strong>
+                  <Sparkles />
+                  Starter system: {pendingComposition.name}
+                </strong>
+                <span>{pendingComposition.objective} · {pendingComposition.preview.nodes.length} node{pendingComposition.preview.nodes.length === 1 ? "" : "s"} staged. Nothing is saved until you accept.</span>
+              </div>
+              <div className="loop-proposal-actions">
+                <button className="loop-proposal-discard" disabled={projectBusy} onClick={handleDiscardComposition} type="button">
+                  Discard
+                </button>
+                <button className="loop-proposal-accept" disabled={projectBusy} onClick={() => void handleAcceptComposition()} type="button">
+                  {projectBusy ? <LoaderCircle className="spin" /> : <Check />} Accept system
                 </button>
               </div>
             </div>

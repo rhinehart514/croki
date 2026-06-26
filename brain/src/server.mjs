@@ -35,7 +35,7 @@ import {
   saveGeneratedOpportunities,
   updateOpportunity,
 } from "./opportunity-engine.mjs";
-import { composeOpportunityChannel, composeGraphForChannel } from "./workflow-composer.mjs";
+import { composeOpportunityChannel, composeGraphForChannel, previewOpportunityChannel } from "./workflow-composer.mjs";
 import { executeDomainCommand } from "./domain-commands.mjs";
 import { getProductModel } from "./product-model-store.mjs";
 import { getDesignState } from "./design-state-store.mjs";
@@ -403,6 +403,25 @@ const server = http.createServer(async (req, res) => {
       const projectId = decodeURIComponent(opportunityMatch[1]);
       const opportunityId = decodeURIComponent(opportunityMatch[2]);
       json(res, 200, { opportunity: updateOpportunity(opportunityId, body.patch ?? body, { projectId }) });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Preview: compose the channel's real graph and return it WITHOUT persisting — the founder reviews
+  // it ghosted on the canvas, then the /compose apply path persists that exact previewed graph.
+  const composePreviewMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/compose\/preview$/);
+  if (req.method === "POST" && composePreviewMatch) {
+    try {
+      const body = await readBody(req);
+      const projectId = decodeURIComponent(composePreviewMatch[1]);
+      const composeProject = loadProject({ projectId });
+      const composeRepo = composeProject.sharedContext?.repository?.repo || process.cwd();
+      json(res, 200, await previewOpportunityChannel(body, {
+        projectId,
+        compose: createClaudeComposer({ cwd: composeRepo }),
+      }));
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }

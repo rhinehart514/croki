@@ -190,7 +190,10 @@ export async function composePortfolioGraph({ goal, channels = [], grounding = n
   return assemblePortfolioGraph({ goal: goal || channels[0]?.channel?.objective || "", systems });
 }
 
-export async function composeOpportunityChannel(input, options = {}) {
+// Resolve an accepted channel opportunity and its accepted agents from the durable studio. Shared
+// by the preview path (compose-only, no persistence) and the apply path (compose + persist), so the
+// acceptance gate is enforced identically on both.
+function loadAcceptedComposition(input, options) {
   const project = loadProject(options);
   const items = project.opportunities?.items ?? [];
   const channel = items.find((item) => item.id === input.channelOpportunityId && item.type === "channel");
@@ -202,8 +205,16 @@ export async function composeOpportunityChannel(input, options = {}) {
   const agents = requestedAgentIds.map((id) => items.find((item) => item.id === id && item.type === "agent"));
   if (agents.some((agent) => !agent)) throw new Error("One or more selected agent opportunities do not exist.");
   if (agents.some((agent) => agent.status !== "accepted")) throw new Error("Accept every selected agent before composition.");
+  return { project, channel, agents };
+}
 
-  const compiled = compileOpportunityProgram({ project, channel, agents }, options);
+// PREVIEW path: compose the channel's real graph and return it WITHOUT any persistence — no program
+// compilation, no saveFlow, no markProgramComposed, no saveProject, no domain events. The founder
+// sees the would-be system ghosted on the canvas and accepts (the apply path persists that exact
+// previewed graph) or discards it. Mirrors the operator's stage-then-gate proposal: nothing lands
+// until the founder accepts.
+export async function previewOpportunityChannel(input, options = {}) {
+  const { project, channel, agents } = loadAcceptedComposition(input, options);
   const { nodes, edges } = await composeGraphForChannel({
     channel,
     agents,
@@ -212,6 +223,38 @@ export async function composeOpportunityChannel(input, options = {}) {
     output: input.output,
     compose: options.compose || blankCompose,
   });
+  return {
+    channelOpportunityId: channel.id,
+    name: input.name || channel.title,
+    objective: input.objective || channel.objective,
+    graph: { nodes, edges },
+  };
+}
+
+export async function composeOpportunityChannel(input, options = {}) {
+  const { project, channel, agents } = loadAcceptedComposition(input, options);
+
+  const compiled = compileOpportunityProgram({ project, channel, agents }, options);
+  // Apply a previously-previewed graph by reusing its exact nodes/edges — never re-run the model
+  // behind the founder's back on apply (the gate-continuation invariant). The host still re-asserts
+  // the founder-gate wall on the provided topology, since the wall is host-owned on every path.
+  const provided = Array.isArray(input.graph?.nodes) && input.graph.nodes.length ? input.graph : null;
+  let nodes;
+  let edges;
+  if (provided) {
+    nodes = provided.nodes;
+    edges = Array.isArray(provided.edges) ? provided.edges : [];
+    assertGateWall(nodes, edges);
+  } else {
+    ({ nodes, edges } = await composeGraphForChannel({
+      channel,
+      agents,
+      grounding: project.opportunities?.understanding ?? null,
+      input: input.input,
+      output: input.output,
+      compose: options.compose || blankCompose,
+    }));
+  }
 
   // Derive this channel's eval — its answer key — at compose time (HARNESS.md invariant 1). With
   // no evaluator wired the eval is null and composition is unaffected; with one wired it is stored

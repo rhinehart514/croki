@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { composeOpportunityChannel } from "../src/workflow-composer.mjs";
+import { composeOpportunityChannel, previewOpportunityChannel } from "../src/workflow-composer.mjs";
 import { saveGeneratedOpportunities, updateOpportunity } from "../src/opportunity-engine.mjs";
 import { createProject, loadProject } from "../src/project-store.mjs";
 import { loadFlow } from "../src/flow-store.mjs";
@@ -168,6 +168,61 @@ describe("model-composed workflow (no fixed skeleton)", () => {
       composeOpportunityChannel({ channelOpportunityId: channel.id, agentOpportunityIds: agents.map((a) => a.id) }, { ...options, compose: ungated }),
       /gate/i,
     );
+  });
+
+  it("preview composes the graph but persists nothing — no flow, program, or activation", async () => {
+    const { channel, agents } = await acceptChannelAndAgents();
+    const projectId = loadProject(options).id;
+    const eventsBefore = listDomainEvents(projectId, options).length;
+
+    const preview = await previewOpportunityChannel({
+      channelOpportunityId: channel.id,
+      agentOpportunityIds: agents.map((a) => a.id),
+    }, { ...options, compose: branchedComposer });
+
+    // The would-be graph came back, branched topology intact and founder IO bound.
+    assert.ok(preview.graph.nodes.length > 0, "preview returns a composed graph");
+    const fanout = preview.graph.edges.filter((e) => e.source === "src" && e.edgeType === "data");
+    assert.equal(fanout.length, 2, "preview preserves the model's branched topology");
+    assert.ok(preview.graph.nodes.some((n) => n.category === "source" && n.connector === "csv"));
+
+    // Nothing was persisted: no programs, no policies, no agent instances, no new domain events,
+    // no active channel, and the channel opportunity is not marked composed.
+    assert.equal(listOutcomePrograms(projectId, options).length, 0, "preview created no program");
+    assert.equal(listAgentCreationPolicies(projectId, options).length, 0, "preview created no policy");
+    assert.equal(loadCapabilityFoundry(projectId, options).instances.length, 0, "preview created no agent instance");
+    assert.equal(listDomainEvents(projectId, options).length, eventsBefore, "preview emitted no domain events");
+    assert.equal(loadProject(options).activeChannelId ?? null, null, "preview did not activate a channel");
+    const channelAfter = (loadProject(options).opportunities?.items ?? []).find((i) => i.id === channel.id);
+    assert.equal(channelAfter.composedChannelId ?? null, null, "preview did not mark the opportunity composed");
+  });
+
+  it("apply persists the exact previewed graph without re-running the composer", async () => {
+    const { channel, agents } = await acceptChannelAndAgents();
+    const preview = await previewOpportunityChannel({
+      channelOpportunityId: channel.id,
+      agentOpportunityIds: agents.map((a) => a.id),
+    }, { ...options, compose: branchedComposer });
+
+    // Apply with the previewed graph and a composer that would THROW if it ran — proving the apply
+    // path reuses the previewed nodes/edges instead of re-composing behind the founder's back.
+    const explodingComposer = () => { throw new Error("composer must not run on apply of a previewed graph"); };
+    const applied = await composeOpportunityChannel({
+      channelOpportunityId: channel.id,
+      agentOpportunityIds: agents.map((a) => a.id),
+      graph: preview.graph,
+    }, { ...options, compose: explodingComposer });
+
+    assert.equal(applied.validation.ok, true);
+    // The persisted graph is the previewed one (same node count, source bound to csv).
+    assert.equal(applied.graph.nodes.length, preview.graph.nodes.length);
+    assert.equal(loadFlow(applied.channel.graphId, null, options).graph.nodes.length, preview.graph.nodes.length);
+    // Now the side effects DID happen: program, policies, instances, and activation.
+    const projectId = loadProject(options).id;
+    assert.equal(loadProject(options).activeChannelId, applied.channel.id);
+    assert.equal(listOutcomePrograms(projectId, options).length, 1);
+    assert.equal(listAgentCreationPolicies(projectId, options).length, 2);
+    assert.equal(loadCapabilityFoundry(projectId, options).instances.length, 2);
   });
 
   it("the blank default refuses rather than falling back to a template", async () => {
