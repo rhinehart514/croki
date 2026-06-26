@@ -20,6 +20,7 @@ import { getDesignState } from "./design-state-store.mjs";
 import {
   appendOperatorEvent,
   getOperatorSession,
+  listOperatorSessions,
   saveOperatorSession,
 } from "./operator-store.mjs";
 import {
@@ -705,7 +706,31 @@ function resolveProgram(session, input = {}, programs = []) {
   return programs.at(-1) ?? null;
 }
 
-function systemPrompt(session, workspace) {
+// Cross-session memory: the operator's recall of what it has already worked on in THIS project —
+// distinct from the within-session chat memory the runtime resumes (claude-code.mjs). Past sessions
+// become a compact brief so a new goal starts from "here is what you have done before," not a blank
+// slate. Bounded to the few most recent meaningful sessions so the prompt stays small, and scoped to
+// the project so one product's history never leaks into another's.
+function recallPriorSessions(session, options) {
+  const meaningful = new Set(["completed", "interrupted", "waiting_for_gate", "waiting_for_input", "blocked"]);
+  return listOperatorSessions({ ...options, projectId: session.projectId ?? null })
+    .filter((prior) => prior.id !== session.id && prior.goal && (prior.summary || meaningful.has(prior.status)))
+    .slice(0, 5)
+    .map((prior) => ({
+      goal: prior.goal,
+      status: prior.status,
+      summary: prior.summary ? String(prior.summary).slice(0, 240) : null,
+    }));
+}
+
+function renderPriorSessions(priorSessions = []) {
+  if (!priorSessions.length) return "No prior operator sessions in this project — this is a fresh start.";
+  return priorSessions
+    .map((prior) => `- [${prior.status}] ${prior.goal}${prior.summary ? ` — ${prior.summary}` : ""}`)
+    .join("\n");
+}
+
+function systemPrompt(session, workspace, priorSessions = []) {
   const grounding = workspace
     ? `The active repository is ${workspace.repo}. The defined win event is "${workspace.outcome}".`
     : "No repository workspace is currently active. State that limitation before making product claims.";
@@ -718,6 +743,9 @@ ${session.goal}
 
 Grounding:
 ${grounding}
+
+Memory across sessions (what you have already worked on in this project — build on it, do not redo completed work):
+${renderPriorSessions(priorSessions)}
 
 Operating rules:
 - Begin by inspecting product truth, programs, and current problems unless a resumed session already contains that evidence.
@@ -1546,7 +1574,7 @@ export async function runOperatorSession(id, runtime = {}) {
     sessionId: id,
     goal: session.goal,
     model: session.model,
-    system: systemPrompt(session, workspace),
+    system: systemPrompt(session, workspace, recallPriorSessions(session, options)),
     tools: TOOLS,
     client: selection.client ?? null,
     query: runtime.query ?? null,

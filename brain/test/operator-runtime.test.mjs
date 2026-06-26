@@ -155,6 +155,41 @@ describe("resident GTM operator runtime", () => {
     assert.equal(secondCtx.runtimeSessionId, "sdk-session-1", "the next drive resumes the same conversation");
   });
 
+  it("recalls prior sessions in the same project (cross-session memory)", async () => {
+    // A first session that finishes with a summary becomes part of the operator's memory.
+    const first = createOperatorSession({ goal: "Stand up the pest-control outbound channel.", projectId: "rodentradar" }, options);
+    await runOperatorSession(first.id, {
+      options,
+      client: fakeClient([{ content: [{ type: "tool_use", id: "t", name: "complete", input: { outcome: "achieved", summary: "Composed the outbound channel and staged the first drafts." } }] }]),
+    });
+
+    // A second session in the SAME project should see the first in its system prompt.
+    const second = createOperatorSession({ goal: "Now add a referral channel.", projectId: "rodentradar" }, options);
+    let captured = "";
+    await runOperatorSession(second.id, {
+      options,
+      runtime: {
+        id: "capture", label: "Capture", isAvailable: () => ({ ok: true }),
+        drive: async (ctx) => { captured = ctx.system; return { kind: "completed", summary: "noted" }; },
+      },
+    });
+    assert.match(captured, /Memory across sessions/, "the system prompt carries a cross-session memory block");
+    assert.match(captured, /Stand up the pest-control outbound channel/, "it recalls the prior session's goal");
+    assert.match(captured, /staged the first drafts/, "it recalls the prior session's outcome summary");
+
+    // A session in a DIFFERENT project must not see rodentradar's history.
+    const other = createOperatorSession({ goal: "Unrelated product goal.", projectId: "other-product" }, options);
+    let otherSystem = "";
+    await runOperatorSession(other.id, {
+      options,
+      runtime: {
+        id: "capture", label: "Capture", isAvailable: () => ({ ok: true }),
+        drive: async (ctx) => { otherSystem = ctx.system; return { kind: "completed", summary: "noted" }; },
+      },
+    });
+    assert.doesNotMatch(otherSystem, /pest-control outbound/, "memory is scoped to the project — no cross-product leak");
+  });
+
   it("pauses at a founder gate and resumes the exact run after approval", async () => {
     const graph = {
       id: "gate-session",
