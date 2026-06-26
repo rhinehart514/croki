@@ -6540,14 +6540,14 @@ svg {
   gap: 12px;
   margin: 0 0 10px;
   padding: 10px 12px;
-  border: 1px solid var(--gap, #e18b2c);
+  border: 1px solid var(--line-2);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--gap, #e18b2c) 8%, transparent);
+  background: var(--surface-2);
 }
 .artifact-door-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .artifact-door-label {
   font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-  color: var(--gap, #b9751f);
+  color: var(--muted);
 }
 .artifact-door-ref { font-family: ui-monospace, monospace; font-size: 13px; font-weight: 600; }
 .artifact-door-sub { font-size: 11px; color: var(--faint, #8a8f99); }
@@ -9887,6 +9887,49 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 }
 .loop-mode-tab:hover { color: var(--ink-2); }
 .loop-mode-tab.active { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-card); }
+
+/* ── StackAI-grade chrome refinement ─────────────────────────────────────────────
+   Calmer, more spacious chrome: plain-text underline tabs instead of boxed segmented controls,
+   lighter strips, and the one-accent rule enforced — amber belongs to the gate alone, so tabs and
+   toggles go monochrome (active = ink underline / quiet fill), never a second accent color. */
+
+/* Program mode tabs (Design / Simulation / Run / Review / Learning) → plain underline tabs */
+.program-mode-tabs {
+  padding: 0; border: 0; background: transparent; border-radius: 0; gap: 2px;
+}
+.program-mode-tabs button {
+  height: 32px; padding: 0 11px; border-radius: 0;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  font-size: 12px; font-weight: 550;
+}
+.program-mode-tabs button:hover { color: var(--ink); background: transparent; }
+.program-mode-tabs button.active {
+  background: transparent; color: var(--ink); font-weight: 650;
+  border-bottom-color: var(--ink); box-shadow: none;
+}
+
+/* GTM ↔ Product → plain text toggle (drop the boxed segmented control) */
+.loop-mode-switch { padding: 0; border: 0; background: transparent; margin-left: 6px; gap: 2px; }
+.loop-mode-tab { padding: 4px 9px; font-size: 12px; font-weight: 550; border-radius: var(--r-sm); }
+.loop-mode-tab.active { background: var(--surface-2); color: var(--ink); box-shadow: none; font-weight: 650; }
+
+/* Mode-intent strip → drop the boxed label pill; quiet eyebrow + question with more air */
+.program-mode-intent { padding: 9px 32px; background: transparent; }
+.program-mode-intent-label {
+  padding: 0; border: 0; background: transparent; color: var(--muted);
+  font-size: 10px; font-weight: 760; letter-spacing: 0.08em;
+}
+
+/* Node panel tabs → monochrome underline (one-accent rule: no teal --accent) */
+.node-editor-tab.active { color: var(--ink); border-bottom-color: var(--ink); }
+
+/* The node Overview is a two-column grid sized for the full-width workspace; in the ~340px summoned
+   inspector the side column's 260px min collapses the main column, wrapping the uppercase labels
+   word-by-word ("WHAT / THIS / STEP / DOES"). Force one column in the panel so it reads cleanly. */
+.node-edit-panel .node-overview { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.node-edit-panel .node-overview-side { position: static; }
+.node-edit-panel .node-overview-desc { font-size: 13.5px; line-height: 1.6; }
+.node-edit-panel .node-editor-body { padding: 16px 18px 28px; }
 
 /* ── Multi-lens Product canvas — the SHELL ──────────────────────────────────────
    The lens-switchable host. One calm tool, five lenses over the same model: a quiet docked lens
