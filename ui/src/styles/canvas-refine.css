@@ -138,3 +138,49 @@
 .react-flow .loop-node-error {
   background: var(--surface);
 }
+
+/* ── Focus-expand: a node rises into focus while the field recedes ─────────────
+   The card is a two-state object — a glance card on the map (icon+kind / title /
+   state) and a focus card when you edit it. Selecting one LIFTS it, REVEALS its
+   editor, and RECEDES the rest of the canvas, so you edit one step, not in a crowd.
+   Three coordinated but distinct motions on one ease — not a global fade. This is
+   the canvas's one signature interaction, so it's where the motion budget is spent. */
+
+/* Base card carries the transition so lift + settle are smooth both ways. */
+.react-flow .loop-node {
+  transition: box-shadow 200ms var(--ease), border-color 200ms var(--ease), transform 180ms var(--ease);
+  transform-origin: center center;
+}
+
+/* RECEDE — when any node is focused, the unfocused nodes and the edges fall back so
+   the focused card is unmistakable even in a dense graph (the scale read). */
+.loop-pane-focus .react-flow__node { transition: opacity 220ms var(--ease), filter 220ms var(--ease); }
+.loop-pane-focus .react-flow__node:not(:has(.loop-node-selected)) { opacity: 0.38; filter: saturate(0.85); }
+.loop-pane-focus .react-flow__edge { opacity: 0.32; transition: opacity 220ms var(--ease); }
+
+/* LIFT — the focused card rises: a hair of scale + a real (but calm) shadow, never a pop. */
+.react-flow .loop-node.loop-node-selected,
+.react-flow .loop-node.loop-node-selected:hover {
+  transform: scale(1.015);
+  box-shadow: 0 0 0 2px oklch(0.21 0.006 285.9 / 0.10), var(--shadow-pop);
+}
+
+/* REVEAL — the editor fades and slides in as the card opens (its own motion, not the
+   card's lift, not the field's recede). */
+@keyframes loopEditorReveal {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.react-flow .loop-node-editor { animation: loopEditorReveal 220ms var(--ease) both; }
+
+/* ── Collapsed card = glanceable. The technical ref slug is noise on the map; it lives
+   in the expanded config, not the resting card. Hide it until the card has focus. */
+.react-flow .loop-node:not(.loop-node-selected) .loop-node-connector { display: none; }
+
+/* ── Focus card = legible. The editor was cramped; give it width and readable type. */
+.react-flow .loop-node.loop-node-selected { width: 340px; max-width: 340px; }
+.react-flow .loop-node-editor-desc { font-size: 12.5px; line-height: 1.55; }
+.react-flow .loop-node-editor-label { font-size: 10px; letter-spacing: 0.09em; }
+.react-flow .loop-node-editor-stat,
+.react-flow .loop-node-editor-filelabel,
+.react-flow .loop-node-editor-hint { font-size: 11.5px; }

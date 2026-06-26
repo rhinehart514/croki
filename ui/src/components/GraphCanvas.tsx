@@ -1155,7 +1155,7 @@ export function GraphCanvas({
       edgesReconnectable={false}
       deleteKeyCode={editable ? ["Backspace", "Delete"] : null}
       proOptions={{ hideAttribution: true }}
-      className={variant === "ideation" ? "ideation-canvas" : undefined}
+      className={cn(variant === "ideation" && "ideation-canvas", selection && "loop-pane-focus")}
     >
       <NodeFocuser selection={selection} panelOpen={!!panelOpen} active={!running} />
       <RunZoom running={running} />
