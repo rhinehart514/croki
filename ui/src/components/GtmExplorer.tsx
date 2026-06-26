@@ -87,9 +87,43 @@ function isGtmCapability(ref: string): boolean {
   return !PERSONAL_TOOLBOX.has(r);
 }
 
+// A Library capability (agent or skill) as a FEED into the canvas: click the name to edit its file,
+// drag it onto the canvas to add it as a node, or hit +Add to drop it wired to the selection. The
+// founder chose both gestures; this carries them on one row.
+function CapabilityRow({ kind, capRef, label, meta, title, onOpen, onAdd }: {
+  kind: "agent" | "skill";
+  capRef: string;
+  label: string;
+  meta?: string;
+  title?: string;
+  onOpen: () => void;
+  onAdd: () => void;
+}) {
+  return (
+    <div
+      className="explorer-cap-row"
+      draggable
+      onDragStart={(event) => {
+        event.dataTransfer.setData("application/gtm-capability", JSON.stringify({ kind, ref: capRef, label }));
+        event.dataTransfer.effectAllowed = "copy";
+      }}
+      title={title}
+    >
+      <button className="explorer-row explorer-row-child explorer-cap-open" onClick={onOpen} type="button">
+        {kind === "agent" ? <Bot size={12} /> : <Layers size={12} />}
+        <span className="explorer-row-name">{label}</span>
+        {meta ? <span className="explorer-row-meta">{meta}</span> : null}
+      </button>
+      <button className="explorer-cap-add" onClick={onAdd} type="button" aria-label={`Add ${label} to the canvas`} title="Add to the canvas">
+        <Plus size={12} />
+      </button>
+    </div>
+  );
+}
+
 export function GtmExplorer({
   channels, activeChannelId, activeProgramId, currentView, onOpenChannel, onOpenProgram, onFocusProgram, onNewProgram,
-  onOpenArtifact, onNewArtifact, onOpenView, library, programs, agentInstances,
+  onOpenArtifact, onNewArtifact, onAddCapability, onOpenView, library, programs, agentInstances,
   runs, contextManifest, engine, graph, onJumpToNode,
 }: {
   channels: ChannelMeta[];
@@ -104,6 +138,8 @@ export function GtmExplorer({
   onNewProgram: () => void;
   onOpenArtifact: (type: "agent" | "skill", ref: string) => void;
   onNewArtifact: (type: "agent" | "skill") => void;
+  // Add a Library capability onto the canvas as a node (the click-to-add counterpart to drag-drop).
+  onAddCapability: (type: "agent" | "skill", ref: string, label: string) => void;
   onOpenView: (view: ExplorerView) => void;
   library: GtmLibrary | null;
   programs: OutcomeProgram[];
@@ -303,17 +339,16 @@ export function GtmExplorer({
           <div className="explorer-subgroup">
             <span className="explorer-subgroup-label">For this outcome</span>
             {outcomeAgents.map((instance) => (
-              <button
+              <CapabilityRow
                 key={instance.id}
-                className="explorer-row explorer-row-child"
-                onClick={() => onOpenArtifact("agent", instance.ref)}
-                type="button"
-                title={`${instance.job} · the agent's rules open in its editor`}
-              >
-                <Bot size={12} />
-                <span className="explorer-row-name">{instance.ref}</span>
-                <span className="explorer-row-meta">v{instance.version}</span>
-              </button>
+                kind="agent"
+                capRef={instance.ref}
+                label={instance.ref}
+                meta={`v${instance.version}`}
+                title={`${instance.job} · click to edit, drag or +Add to the canvas`}
+                onOpen={() => onOpenArtifact("agent", instance.ref)}
+                onAdd={() => onAddCapability("agent", instance.ref, instance.ref)}
+              />
             ))}
           </div>
         ) : null}
@@ -323,9 +358,15 @@ export function GtmExplorer({
           {gtmAgents.length === 0 ? (
             <p className="explorer-empty">No agents on disk yet.</p>
           ) : gtmAgents.map((a) => (
-            <button key={a.ref} className="explorer-row explorer-row-child" onClick={() => onOpenArtifact("agent", a.ref)} type="button" title={a.description}>
-              <span className="explorer-row-name">{a.ref}</span>
-            </button>
+            <CapabilityRow
+              key={a.ref}
+              kind="agent"
+              capRef={a.ref}
+              label={a.ref}
+              title={a.description ? `${a.description} · click to edit, drag or +Add to the canvas` : "Click to edit, drag or +Add to the canvas"}
+              onOpen={() => onOpenArtifact("agent", a.ref)}
+              onAdd={() => onAddCapability("agent", a.ref, a.ref)}
+            />
           ))}
           <button className="explorer-row explorer-new" onClick={() => onNewArtifact("agent")} type="button">
             <Plus size={13} /><span className="explorer-row-name">New agent</span>
@@ -337,9 +378,15 @@ export function GtmExplorer({
           {gtmSkills.length === 0 ? (
             <p className="explorer-empty">No skills on disk yet.</p>
           ) : gtmSkills.map((s) => (
-            <button key={s.name} className="explorer-row explorer-row-child" onClick={() => onOpenArtifact("skill", s.name)} type="button" title={s.description}>
-              <span className="explorer-row-name">{s.name}</span>
-            </button>
+            <CapabilityRow
+              key={s.name}
+              kind="skill"
+              capRef={s.name}
+              label={s.name}
+              title={s.description ? `${s.description} · click to edit, drag or +Add to the canvas` : "Click to edit, drag or +Add to the canvas"}
+              onOpen={() => onOpenArtifact("skill", s.name)}
+              onAdd={() => onAddCapability("skill", s.name, s.name)}
+            />
           ))}
           <button className="explorer-row explorer-new" onClick={() => onNewArtifact("skill")} type="button">
             <Plus size={13} /><span className="explorer-row-name">New skill</span>

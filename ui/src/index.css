@@ -7786,6 +7786,30 @@ svg {
 .explorer-row-child { padding-left: 38px; font-size: 12px; }
 .explorer-row-child svg { color: var(--muted); flex-shrink: 0; }
 
+/* A Library capability row: the name (click to edit, drag to canvas) plus a +Add that reveals on
+   hover. The whole row is the drag handle — grab cursor signals it. */
+.explorer-cap-row { display: flex; align-items: stretch; cursor: grab; }
+.explorer-cap-row:active { cursor: grabbing; }
+.explorer-cap-open { flex: 1; min-width: 0; }
+.explorer-cap-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  flex-shrink: 0;
+  margin-right: var(--space-1);
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.explorer-cap-row:hover .explorer-cap-add { opacity: 1; }
+.explorer-cap-add:hover { background: var(--surface-2); color: var(--ink); }
+.explorer-cap-add:focus-visible { opacity: 1; outline: 2px solid var(--link); outline-offset: -2px; }
+
 /* A waiting-approval row — amber, because the founder gate is a real state, not decoration. */
 .explorer-row-approve {
   color: var(--gap); font-weight: 600;

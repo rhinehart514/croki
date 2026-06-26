@@ -1298,6 +1298,7 @@ export default function App() {
             onNewProgram={handleNewProgram}
             onOpenArtifact={(type, ref) => setArtifactEdit({ type, ref })}
             onNewArtifact={handleNewArtifact}
+            onAddCapability={(type, ref, label) => handleAddNode({ label, kind: type, category: "generate", ref, contract: { accepts: [], emits: [] } })}
             onOpenView={(v) => { if (v === "opportunities") startIdeation(); else if (v === "understand") { setIdeationOpen(false); setOverlay("understand"); } else if (v === "product") { setIdeationOpen(false); setOverlay("product"); } else { setOverlay(null); setIdeationOpen(false); } }}
             library={library}
             programs={programs}
