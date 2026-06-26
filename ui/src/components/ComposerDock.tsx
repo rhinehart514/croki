@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { statusLabel } from "@/lib/status";
 import { DockContext } from "@/components/DockContext";
+import { SlidingTabs } from "@/components/SlidingTabs";
 import "@/styles/dock-context.css";
 import type { ContextManifest, OperatorEvent, OperatorSession } from "@/types";
 
@@ -344,10 +345,13 @@ export function ComposerDock({
           </span>
         </div>
         {session && session.events.length > 0 ? (
-          <div className="composer-dock-modes" role="tablist" aria-label="Dock view">
-            <button className={view === "focus" ? "active" : ""} onClick={() => setView("focus")} role="tab" aria-selected={view === "focus"} type="button">Focus</button>
-            <button className={view === "thread" ? "active" : ""} onClick={() => setView("thread")} role="tab" aria-selected={view === "thread"} type="button">Thread</button>
-          </div>
+          <SlidingTabs
+            items={[{ value: "focus", label: "Focus" }, { value: "thread", label: "Thread" }]}
+            value={view}
+            onChange={setView}
+            layoutId="dock-view"
+            size="sm"
+          />
         ) : null}
         {sessionActive && (
           <button className="composer-dock-stop" onClick={() => void onCancel()} type="button" title="Stop">

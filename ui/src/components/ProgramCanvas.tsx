@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { GraphCanvas } from "@/components/GraphCanvas";
 import { CanvasGate } from "@/components/CanvasGate";
+import { SlidingTabs } from "@/components/SlidingTabs";
 import { statusLabel as canonicalStatus, toneForPhrase } from "@/lib/status";
 import type {
   AgentCreationPolicy, AgentEvaluation, AgentInstance, ConnectorMeta, DomainEvent, EngineSubsystem,
@@ -308,18 +309,12 @@ export function ProgramCanvas({
           </div>
         </div>
         <div className="program-actions">
-          <div className="program-mode-tabs" aria-label="Canvas mode">
-            {(Object.keys(MODE_LABEL) as ProgramCanvasMode[]).map((nextMode) => (
-              <button
-                key={nextMode}
-                className={mode === nextMode ? "active" : ""}
-                onClick={() => onModeChange(nextMode)}
-                type="button"
-              >
-                {MODE_LABEL[nextMode]}
-              </button>
-            ))}
-          </div>
+          <SlidingTabs
+            items={(Object.keys(MODE_LABEL) as ProgramCanvasMode[]).map((m) => ({ value: m, label: MODE_LABEL[m] }))}
+            value={mode}
+            onChange={onModeChange}
+            layoutId="program-mode"
+          />
           {/* The primary run action lives once, in the global top bar (the shipped convention —
               Linear/StackAI/Lindy all anchor it top-right). The program header keeps only its mode
               tabs, so the founder never sees two "Run" buttons competing on the same screen. */}
