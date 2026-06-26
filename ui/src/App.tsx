@@ -1396,7 +1396,6 @@ export default function App() {
               graph={graphBelongsToProgram(displayGraph, activeProgram) ? displayGraph : null}
               mode={activeTab}
               onModeChange={setActiveTab}
-              onRunProgram={() => void executeProgram()}
               onBuildAgents={() => handleBuildAgents(activeProgram)}
               onSelectNode={setSelection}
               proposedNodeIds={proposedNodeIds}

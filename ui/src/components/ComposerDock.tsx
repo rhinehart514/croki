@@ -125,11 +125,17 @@ export function ComposerDock({
   if (collapsed) {
     return (
       <button className="composer-pill" onClick={() => setCollapsed(false)} type="button" title="Open Claude">
-        <span className={`composer-pill-avatar ${session && !TERMINAL.has(session.status) ? "running" : ""}`}>
+        <span className={`composer-pill-avatar ${running || session?.status === "running" ? "running" : ""}`}>
           {running || session?.status === "running" ? <LoaderCircle className="spin" /> : <Bot />}
         </span>
         <span className="composer-pill-text">
-          {session && !TERMINAL.has(session.status) ? "Claude is working…" : "Ask Claude"}
+          {/* One truth, matching the top bar: "working" ONLY when actually running; when the session
+              is paused for the founder (waiting_for_gate / waiting_for_input) say so, never "working". */}
+          {running || session?.status === "running"
+            ? "Claude is working…"
+            : session && !TERMINAL.has(session.status)
+              ? `Claude · ${statusLabel(session.status)}`
+              : "Ask Claude"}
         </span>
       </button>
     );

@@ -82,7 +82,6 @@ export function ProgramCanvas({
   connectors,
   subsystemHealth = {},
   contractAudits = {},
-  onRunProgram,
   onBuildAgents,
   onSelectNode,
   onNodePositionChange,
@@ -111,7 +110,6 @@ export function ProgramCanvas({
   connectors: ConnectorMeta[];
   subsystemHealth?: Record<string, { health: number; issue?: string }>;
   contractAudits?: Record<string, GTMContractAudit>;
-  onRunProgram: () => void;
   // Fires the operator to derive agent needs and build this program's agents — the canvas
   // describes the next move, so it must also perform it. Design-time and reversible (the gate
   // still holds), so it auto-runs rather than making the founder retype the ask.
@@ -240,9 +238,9 @@ export function ProgramCanvas({
               </button>
             ))}
           </div>
-          <button className="program-primary-action" disabled={running || !graph} onClick={onRunProgram} type="button">
-            {running ? "Running..." : "Run Program"}
-          </button>
+          {/* The primary run action lives once, in the global top bar (the shipped convention —
+              Linear/StackAI/Lindy all anchor it top-right). The program header keeps only its mode
+              tabs, so the founder never sees two "Run" buttons competing on the same screen. */}
         </div>
       </header>
 
