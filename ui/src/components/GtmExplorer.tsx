@@ -70,6 +70,23 @@ function runOutcome(run: GTMRunResult): string {
   return "blocked";
 }
 
+// The on-disk library is the founder's WHOLE ~/.claude toolbox — including personal design and
+// meta skills (design-critic, stochasticBUILD, crucible, prompt-translate, status…) that have
+// nothing to do with go-to-market. A GTM IDE user seeing those next to their outreach agents is
+// pure noise. Scope the product Library to GTM-relevant capabilities by hiding that personal/meta
+// toolbox. The boundary is intentionally explicit and easy to adjust; it never hides a gtm-* ref or
+// a personalized outcome agent.
+const PERSONAL_TOOLBOX = new Set([
+  "assets", "build-flow", "crucible", "prompt-translate", "status", "improve-prompt",
+  "deep-research", "claude-api", "update-config", "keybindings-help", "fewer-permission-prompts",
+  "verify", "code-review", "simplify", "loop", "schedule", "init", "review", "security-review",
+]);
+function isGtmCapability(ref: string): boolean {
+  const r = String(ref).toLowerCase();
+  if (r.startsWith("design") || r.startsWith("stochastic")) return false;
+  return !PERSONAL_TOOLBOX.has(r);
+}
+
 export function GtmExplorer({
   channels, activeChannelId, activeProgramId, currentView, onOpenChannel, onOpenProgram, onFocusProgram, onNewProgram,
   onOpenArtifact, onNewArtifact, onOpenView, library, programs, agentInstances,
@@ -121,6 +138,10 @@ export function GtmExplorer({
   // Pending founder approvals across the whole product — the safety spine, surfaced as a count on
   // the Runs section the way a code editor badges source control.
   const pendingApprovals = channels.reduce((sum, ch) => sum + (ch.pendingGates ?? 0), 0);
+
+  // The product Library shows GTM capabilities only — the personal/meta toolbox is filtered out.
+  const gtmAgents = (library?.agents ?? []).filter((a) => isGtmCapability(a.ref));
+  const gtmSkills = (library?.skills ?? []).filter((s) => isGtmCapability(s.name));
 
   // An outcome the founder is chasing is either a program (the rich, compiled form) or a standalone
   // system that exists before any program is compiled. Channels are what actually get built first —
@@ -277,7 +298,7 @@ export function GtmExplorer({
           Capabilities and Agents are the same thing, so they live together here. The outcome's own
           personalized agents surface first (the ones born for it); the product-wide on-disk agents and
           skills follow. New agent / new skill author a fresh file. */}
-      <Section icon={<Bot size={13} />} title="Library" count={(library?.agents.length ?? 0) + (library?.skills.length ?? 0) || undefined}>
+      <Section icon={<Bot size={13} />} title="Library" count={(gtmAgents.length + gtmSkills.length) || undefined}>
         {outcomeAgents.length ? (
           <div className="explorer-subgroup">
             <span className="explorer-subgroup-label">For this outcome</span>
@@ -299,9 +320,9 @@ export function GtmExplorer({
 
         <div className="explorer-subgroup">
           <span className="explorer-subgroup-label">Agents</span>
-          {(library?.agents ?? []).length === 0 ? (
+          {gtmAgents.length === 0 ? (
             <p className="explorer-empty">No agents on disk yet.</p>
-          ) : (library?.agents ?? []).map((a) => (
+          ) : gtmAgents.map((a) => (
             <button key={a.ref} className="explorer-row explorer-row-child" onClick={() => onOpenArtifact("agent", a.ref)} type="button" title={a.description}>
               <span className="explorer-row-name">{a.ref}</span>
             </button>
@@ -313,9 +334,9 @@ export function GtmExplorer({
 
         <div className="explorer-subgroup">
           <span className="explorer-subgroup-label">Skills</span>
-          {(library?.skills ?? []).length === 0 ? (
+          {gtmSkills.length === 0 ? (
             <p className="explorer-empty">No skills on disk yet.</p>
-          ) : (library?.skills ?? []).map((s) => (
+          ) : gtmSkills.map((s) => (
             <button key={s.name} className="explorer-row explorer-row-child" onClick={() => onOpenArtifact("skill", s.name)} type="button" title={s.description}>
               <span className="explorer-row-name">{s.name}</span>
             </button>
