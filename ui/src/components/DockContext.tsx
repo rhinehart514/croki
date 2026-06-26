@@ -31,20 +31,12 @@ export function DockContext({
       >
         <span className="dctx-label">Reading</span>
         {total > 0 ? (
-          <span className="dctx-chips">
-            {providers.map((p) => (
-              <span
-                key={p.name}
-                className={`dctx-chip ${p.contributed ? "on" : "off"}`}
-                title={p.contributed ? `${p.name} — contributing` : `${p.name} — idle`}
-              >
-                <span className="dctx-dot" aria-hidden="true" />
-                <span className="dctx-chip-name">{p.name}</span>
-              </span>
-            ))}
-            <span className="dctx-count">
-              {contributing}/{total}
-            </span>
+          // A calm summary, not a row of truncated pills: "● 5/5 sources". The per-provider
+          // breakdown lives one click away in the grounding view (this button opens it).
+          <span className="dctx-summary" title={`${contributing} of ${total} sources contributing — ${providers.map((p) => p.name).join(", ")}`}>
+            <span className={`dctx-dot ${contributing > 0 ? "on" : "off"}`} aria-hidden="true" />
+            <span className="dctx-count">{contributing}/{total}</span>
+            <span className="dctx-sources">sources</span>
           </span>
         ) : (
           <span className="dctx-empty">nothing grounded yet</span>

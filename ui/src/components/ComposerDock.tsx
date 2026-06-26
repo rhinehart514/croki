@@ -211,6 +211,17 @@ export function ComposerDock({
   if (collapsed) {
     return (
       <aside className="composer-dock floating resting" aria-label="Claude">
+        {/* When Claude is live, a slim peek above the composer shows the state and opens the
+            conversation — so the resting composer never hides an in-flight session. */}
+        {session ? (
+          <button className="composer-peek" onClick={() => setCollapsed(false)} type="button" title="Open the conversation">
+            <span className={`composer-peek-dot ${working ? "live" : ""}`} />
+            <span className="composer-peek-text">
+              {working ? "Claude is working…" : session.events.length ? session.events[session.events.length - 1].title : `Claude · ${statusLabel(session.status)}`}
+            </span>
+            <Maximize2 size={13} />
+          </button>
+        ) : null}
         {composer}
       </aside>
     );

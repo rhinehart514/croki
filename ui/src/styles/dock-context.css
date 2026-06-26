@@ -55,40 +55,24 @@
   flex-wrap: nowrap;
 }
 
-.dctx-chip {
+/* A calm one-line summary instead of a row of truncated pills. */
+.dctx-summary {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
-  padding: 2px 7px 2px 6px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.dctx-chip.off {
-  color: var(--faint);
 }
 
 .dctx-dot {
   flex: 0 0 auto;
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--proven);
 }
-.dctx-chip.off .dctx-dot {
-  background: var(--line-2);
-}
+.dctx-dot.off { background: var(--line-2); }
 
-.dctx-chip-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 11ch;
-}
+.dctx-sources { font-size: 11px; color: var(--faint); }
 
 .dctx-count {
   flex: 0 0 auto;

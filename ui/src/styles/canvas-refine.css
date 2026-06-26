@@ -146,17 +146,17 @@
    Three coordinated but distinct motions on one ease — not a global fade. This is
    the canvas's one signature interaction, so it's where the motion budget is spent. */
 
-/* Base card carries the transition so lift + settle are smooth both ways. */
+/* Base card carries the transition so lift + settle are smooth both ways. Slow and deliberate. */
 .react-flow .loop-node {
-  transition: box-shadow 200ms var(--ease), border-color 200ms var(--ease), transform 180ms var(--ease);
+  transition: box-shadow 320ms var(--ease), border-color 320ms var(--ease), transform 300ms var(--ease);
   transform-origin: center center;
 }
 
 /* RECEDE — when any node is focused, the unfocused nodes and the edges fall back so
    the focused card is unmistakable even in a dense graph (the scale read). */
-.loop-pane-focus .react-flow__node { transition: opacity 220ms var(--ease), filter 220ms var(--ease); }
+.loop-pane-focus .react-flow__node { transition: opacity 360ms var(--ease), filter 360ms var(--ease); }
 .loop-pane-focus .react-flow__node:not(:has(.loop-node-selected)) { opacity: 0.38; filter: saturate(0.85); }
-.loop-pane-focus .react-flow__edge { opacity: 0.32; transition: opacity 220ms var(--ease); }
+.loop-pane-focus .react-flow__edge { opacity: 0.32; transition: opacity 360ms var(--ease); }
 
 /* LIFT — the focused card rises: a hair of scale + a real (but calm) shadow, never a pop. */
 .react-flow .loop-node.loop-node-selected,
@@ -168,10 +168,10 @@
 /* REVEAL — the editor fades and slides in as the card opens (its own motion, not the
    card's lift, not the field's recede). */
 @keyframes loopEditorReveal {
-  from { opacity: 0; transform: translateY(-6px); }
+  from { opacity: 0; transform: translateY(-8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.react-flow .loop-node-editor { animation: loopEditorReveal 220ms var(--ease) both; }
+.react-flow .loop-node-editor { animation: loopEditorReveal 360ms var(--ease) both; }
 
 /* ── Collapsed card = glanceable. The technical ref slug is noise on the map; it lives
    in the expanded config, not the resting card. Hide it until the card has focus. */

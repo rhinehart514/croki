@@ -89,7 +89,7 @@
      --dur-fast/--ease-out so interaction reads instant; only entrances/lands
      get the soft overshoot. */
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* soft overshoot — entrances, content-lands only */
-  --dur-slow: 360ms;                                 /* panel/overlay entrances, stagger base */
+  --dur-slow: 460ms;                                 /* panel/overlay entrances, stagger base — deliberate, not snappy */
   --dur-amb: 22s;                                    /* ambient pastel drift period */
   --lift-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 16px 38px -16px rgba(20, 20, 25, 0.30);
 
@@ -9154,17 +9154,18 @@ svg {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-width: min(620px, calc(100% - 32px));
+  width: max-content; max-width: min(560px, calc(100% - 32px));
   border: 1px solid var(--line-2);
   border-radius: var(--r-lg);
-  background: color-mix(in srgb, var(--surface) 90%, transparent);
-  backdrop-filter: blur(16px) saturate(1.4); -webkit-backdrop-filter: blur(16px) saturate(1.4);
-  box-shadow: 0 1px 2px rgba(16,18,27,0.06), 0 18px 44px -16px rgba(16,18,27,0.30);
+  /* Opaque when open — a floating tool, not a glass veil. A translucent panel let the canvas
+     nodes bleed through the event rows; solid surface keeps the debugger legible over the graph. */
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(16,18,27,0.06), 0 22px 52px -18px rgba(16,18,27,0.34);
   color: var(--ink);
   overflow: hidden;
 }
-.program-debugger:not(.collapsed) { width: min(620px, calc(100% - 32px)); }
-.program-debugger .debugger-body { max-height: 42vh; overflow-y: auto; }
+.program-debugger:not(.collapsed) { width: min(560px, calc(100% - 32px)); }
+.program-debugger .debugger-body { max-height: 44vh; overflow: auto; }
 
 .debugger-head {
   display: flex;
@@ -9674,13 +9675,28 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
   border-radius: var(--r-xl);
   box-shadow: 0 1px 2px rgba(16,18,27,0.08), 0 24px 60px -14px rgba(16,18,27,0.34);
   overflow: hidden; z-index: 40;
-  transition: width 180ms var(--ease), max-height 180ms var(--ease);
+  transition: width var(--dur-slow) var(--ease), max-height var(--dur-slow) var(--ease);
 }
 .composer-dock.floating.expanded { width: min(760px, calc(100% - 48px)); max-height: min(76vh, 760px); }
 
 /* Resting = the composer alone, centered on the canvas, auto height. The .floating glass card already
    gives the blur, border, shadow, and the bottom-center placement; resting just sheds the panel chrome. */
 .composer-dock.floating.resting { max-height: none; height: auto; width: min(640px, calc(100% - 48px)); }
+
+/* Resting peek — a slim, quiet bar above the composer that surfaces a live session's latest
+   beat and opens the full conversation on click. Monochrome; the dot is the only color. */
+.composer-peek {
+  display: flex; align-items: center; gap: var(--space-2); width: 100%;
+  padding: var(--space-2) var(--space-3); border: 0; background: transparent; cursor: pointer;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  color: var(--muted); font: inherit; font-size: 12px; text-align: left;
+  transition: color var(--dur-fast) var(--ease);
+}
+.composer-peek:hover { color: var(--ink); }
+.composer-peek-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--line-2); flex-shrink: 0; }
+.composer-peek-dot.live { background: var(--proven); }
+.composer-peek-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.composer-peek svg { flex-shrink: 0; color: var(--faint); }
 
 /* ── The command composer — the product's primary input ───────────────────────
    Rivals a real chat composer: a calm textarea over a control row. Left a context "+"
