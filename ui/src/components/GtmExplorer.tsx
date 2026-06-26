@@ -338,6 +338,14 @@ export function GtmExplorer({
         )}
       </Section>
 
+      {/* ── Feeds — everything that flows INTO the canvas (the data-flow shell's left rail). The
+          Library you reach for, plus the product grounding and picture at the rail foot, are inputs
+          you feed the graph; they sit apart from the navigation above (Outcomes, Problems, Runs). */}
+      <div className="explorer-group-label">
+        <span>Feeds</span>
+        <span className="explorer-group-hint">what flows into the canvas</span>
+      </div>
+
       {/* ── Library — agents + skills, one collapsed object ───────────────────
           Capabilities and Agents are the same thing, so they live together here. The outcome's own
           personalized agents surface first (the ones born for it); the product-wide on-disk agents and
