@@ -1,5 +1,5 @@
 import "@/styles/canvas-refine.css";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background, Controls, Handle, Panel, Position, ReactFlow,
   useReactFlow,
@@ -7,15 +7,23 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
-  AlertCircle, Ban, Bot, Check, CheckCircle2, ChevronDown, Circle, Code, Database, FileSpreadsheet, GitMerge,
-  Globe2, Loader, MessageSquare, Plus, Search, ShieldCheck, Sparkles, Target, TrendingUp, Wand2, X, Zap,
+  AlertCircle, Ban, Bot, Check, CheckCircle2, ChevronDown, Circle, Code, Database, FileSpreadsheet, FileText, GitMerge,
+  Globe2, Loader, MessageSquare, Play, Plus, Search, ShieldCheck, Sparkles, Target, Trash2, TrendingUp, Wand2, X, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { healthHex } from "@/lib/health";
+import type { NodeEditorBridge } from "@/components/ProgramCanvas";
 import type {
   ConnectorMeta, GateDecision, GTMEdge, GTMEdgeType, GTMGraph,
   GTMContractAudit, GTMNode, GTMNodeCategory, GTMNodeResult, GTMRunResult, NodeSelection,
 } from "@/types";
+
+// The in-card editor needs the same handler bag the old right rail held (run a step, save the
+// graph, open an artifact, delete, review a gate) plus the live graph (to clone-and-save a notes
+// edit). We thread both through React context — not node data — so buildFlowGraph stays a pure
+// topology mapper and the editor reads the bridge directly.
+type NodeEditorContextValue = { bridge: NodeEditorBridge; graph: GTMGraph } | null;
+const NodeEditorContext = React.createContext<NodeEditorContextValue>(null);
 
 // ─── Category metadata ────────────────────────────────────────────────────────
 
@@ -182,6 +190,183 @@ function ProposalControls({ data }: { data: GTMNodeData }) {
   );
 }
 
+// ─── In-card guided editor ────────────────────────────────────────────────────
+// "Everything in the canvas": selecting a node grows THIS card to reveal its editor inline (no right
+// rail). The content reads top-to-bottom like a sentence — what it does → config → status → actions.
+// It consumes the editor bridge from context, so the node card stays a pure presentational unit.
+
+const CARD_DESCRIPTIONS: Record<string, string> = {
+  resource:  "Declares a connector dependency the downstream steps rely on.",
+  source:    "Brings the first items into the workflow.",
+  context:   "Supplies ICP criteria or product context the later steps read.",
+  enrich:    "Adds research and data to each item.",
+  filter:    "Scores items and keeps the ones that qualify.",
+  generate:  "Drafts the personalized artifact for each item.",
+  gate:      "Pauses for your review before anything reaches the outside world.",
+  execute:   "Stages the approved items locally — it never sends on its own.",
+  measure:   "Captures attributable outcomes from the run.",
+};
+
+function cardDescription(node: GTMNode): string {
+  if (typeof node.config?.description === "string" && node.config.description.trim()) {
+    return String(node.config.description);
+  }
+  if (node.kind === "agent") return "Runs a subagent on your subscription to do fuzzy judgment work.";
+  if (node.kind === "skill") return "Runs a reusable working method (a skill) against each item.";
+  if (node.kind === "code") return "Runs a deterministic transform over the items.";
+  return CARD_DESCRIPTIONS[node.category] ?? "Processes items in the workflow.";
+}
+
+// One small uppercase section label + its body, the repeated rhythm of the guided card.
+function CardSection({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="loop-node-editor-section">
+      <span className="loop-node-editor-label">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+function NodeCardEditor({ node, result, health, contractAudit }: {
+  node: GTMNode;
+  result?: GTMNodeResult;
+  health?: number;
+  contractAudit?: GTMContractAudit;
+}) {
+  const ctx = useContext(NodeEditorContext);
+  // Notes are local-while-typing, saved into the graph onBlur so we don't rebuild the graph on every
+  // keystroke. Seeded from the node's stored notes.
+  const [notes, setNotes] = useState(String(node.config?.notes ?? ""));
+  // Keep the controls from re-triggering the card's own select/deselect handler.
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+
+  if (!ctx) return null;
+  const { bridge, graph } = ctx;
+
+  const isOpenKind = !!node.kind && node.kind !== "tool";
+  const artifactType = node.kind === "agent" ? "agent" : node.kind === "skill" ? "skill" : null;
+
+  const saveNotes = () => {
+    if (String(node.config?.notes ?? "") === notes) return;
+    bridge.onUpdateGraph({
+      ...graph,
+      nodes: graph.nodes.map((n) => n.id !== node.id ? n : { ...n, config: { ...n.config, notes } }),
+    });
+  };
+
+  // Status tone: a satisfied contract / healthy result reads proven; a gate or waiting state reads
+  // amber; a blocked/blind/error state reads danger. Monochrome otherwise.
+  const items = result?.items?.length ?? 0;
+  const contractState = contractAudit?.state;
+  const contractTone =
+    contractState === "blocked" || contractState === "blind" ? "danger" :
+    contractState === "waiting" ? "gap" :
+    contractState === "satisfied" || contractState === "ready" ? "proven" : "muted";
+  const contractText =
+    contractState === "blind" ? "Blind — no attribution source" :
+    contractState === "blocked" ? `Needs ${contractAudit?.missingFields?.[0] ?? "data"}` :
+    contractState === "waiting" ? "Waiting for input" :
+    contractState === "satisfied" ? "Contract satisfied" :
+    contractState === "ready" ? "Ready" : null;
+
+  return (
+    <div className="loop-node-editor nodrag nopan" onClick={stop} onKeyDown={stop} role="group">
+      <CardSection label="What it does">
+        <p className="loop-node-editor-desc">{cardDescription(node)}</p>
+      </CardSection>
+
+      {/* CONFIG — kind-specific and compact. Most kinds need no editable config here in v1. */}
+      {isOpenKind && artifactType && node.ref ? (
+        <CardSection label="Config">
+          <div className="loop-node-editor-fileline">
+            <span className="loop-node-editor-filelabel">{artifactType === "agent" ? "Agent file" : "Skill file"}</span>
+            <code className="loop-node-editor-ref">{node.ref}</code>
+          </div>
+          <button
+            className="loop-node-editor-link"
+            onClick={(e) => { stop(e); bridge.onOpenArtifact(artifactType, node.ref!); }}
+            type="button"
+          >
+            <FileText size={12} /> Edit file
+          </button>
+          <textarea
+            className="loop-node-editor-notes"
+            rows={3}
+            value={notes}
+            placeholder="Notes for this step — context, caveats, a change to make…"
+            aria-label="Step notes"
+            onChange={(e) => setNotes(e.target.value)}
+            onBlur={saveNotes}
+          />
+        </CardSection>
+      ) : node.kind === "code" ? (
+        <CardSection label="Config">
+          {typeof node.config?.code === "string" && node.config.code ? (
+            <pre className="loop-node-editor-code">{String(node.config.code).slice(0, 280)}</pre>
+          ) : (
+            <p className="loop-node-editor-hint">A deterministic transform. Edit its code from the artifact file.</p>
+          )}
+        </CardSection>
+      ) : node.category === "source" ? (
+        <CardSection label="Config">
+          <div className="loop-node-editor-fileline">
+            <span className="loop-node-editor-filelabel">Source</span>
+            <code className="loop-node-editor-ref">{node.connector ?? "manual"}</code>
+          </div>
+          <p className="loop-node-editor-hint">Configure this source — supply the seed it pulls from (manual, CSV, or API).</p>
+        </CardSection>
+      ) : node.category === "gate" ? (
+        <CardSection label="Config">
+          {result?.pendingReview || items > 0 ? (
+            <p className="loop-node-editor-hint">{(result?.meta?.awaitingReview as number) ?? items} draft{items === 1 ? "" : "s"} waiting for your review.</p>
+          ) : (
+            <p className="loop-node-editor-hint">Nothing waiting. A run stages sends here and stops for your approval.</p>
+          )}
+          <button
+            className="loop-node-editor-link"
+            onClick={(e) => { stop(e); bridge.onApproveGate(node.id); }}
+            type="button"
+          >
+            <ShieldCheck size={12} /> Review at the gate
+          </button>
+        </CardSection>
+      ) : null}
+
+      <CardSection label="Status">
+        <div className="loop-node-editor-status">
+          <span className="loop-node-editor-stat"><strong>{items}</strong> item{items === 1 ? "" : "s"}</span>
+          {typeof health === "number" && health > 0 ? (
+            <span className="loop-node-editor-stat" style={{ color: healthHex(health) }}>Health {health}</span>
+          ) : null}
+          {contractText ? (
+            <span className={`loop-node-editor-contract tone-${contractTone}`}>{contractText}</span>
+          ) : null}
+          {result && !result.ok && result.error ? (
+            <span className="loop-node-editor-contract tone-danger">{result.error.slice(0, 60)}</span>
+          ) : null}
+        </div>
+      </CardSection>
+
+      <div className="loop-node-editor-actions">
+        <button
+          className="loop-node-editor-run"
+          onClick={(e) => { stop(e); bridge.onRunNode(node.id); }}
+          type="button"
+        >
+          <Play size={13} /> Run step
+        </button>
+        <button
+          className="loop-node-editor-delete"
+          onClick={(e) => { stop(e); bridge.onDeleteNode(node.id); }}
+          type="button"
+        >
+          <Trash2 size={12} /> Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Resource node (compact dark strip) ──────────────────────────────────────
 
 function ResourceNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
@@ -191,9 +376,14 @@ function ResourceNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
 
   return (
     <>
-    <button
+    {/* div+role=button, not <button>: a selected card mounts the editor's inputs/buttons, and
+        nesting interactive controls in a <button> is invalid. */}
+    <div
       className={cn("loop-node loop-node-resource", selected && "loop-node-selected")}
-      onClick={onSelect} type="button"
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
     >
       <div className="loop-node-resource-inner">
         <span className={cn("loop-node-dot", configured ? "dot-ready" : "dot-missing")} />
@@ -206,7 +396,10 @@ function ResourceNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
         <span className="loop-node-err-text">{result.error?.slice(0, 40)}</span>
       )}
       <Handle type="source" position={Position.Right} />
-    </button>
+      {selected && (
+        <NodeCardEditor node={node} result={result} health={data.health} contractAudit={data.contractAudit} />
+      )}
+    </div>
       <ProposalControls data={data} />
     </>
   );
@@ -227,9 +420,14 @@ function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
 
   return (
     <>
-    <button
+    {/* div+role=button, not <button>: a selected card mounts the editor's inputs/buttons, and
+        nesting interactive controls in a <button> is invalid. */}
+    <div
       className={cn("loop-node loop-node-context", selected && "loop-node-selected")}
-      onClick={onSelect} type="button"
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
     >
       <Handle type="target" position={Position.Left} />
       <div className="loop-node-header">
@@ -248,7 +446,10 @@ function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       {preview && <span className="loop-node-preview">{preview}</span>}
       <Handle type="source" position={Position.Right} />
       <Handle type="source" position={Position.Bottom} id="bottom" />
-    </button>
+      {selected && (
+        <NodeCardEditor node={node} result={result} health={data.health} contractAudit={data.contractAudit} />
+      )}
+    </div>
       <ProposalControls data={data} />
     </>
   );
@@ -267,7 +468,10 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
 
   return (
     <>
-    <button
+    {/* The card IS the editor: a card that expands to mount inputs/buttons can't be a <button>
+        (nested interactive controls are invalid), so it's a div with button semantics. Selecting it
+        grows the card and reveals the guided editor below the collapsed header. */}
+    <div
       className={cn(
         "loop-node",
         // The founder gate is the product's spine — the one place anything reaches the world. It
@@ -280,7 +484,10 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
         status === "done" && "loop-node-done loop-node-justdone",
         status === "pending" && "loop-node-pending",
       )}
-      onClick={onSelect} type="button"
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
     >
       <Handle type="target" position={Position.Left} />
       <div className="loop-node-header">
@@ -323,7 +530,15 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
         <span className="loop-node-err-text">{result.error.slice(0, 55)}</span>
       )}
       <Handle type="source" position={Position.Right} />
-    </button>
+      {selected && (
+        <NodeCardEditor
+          node={node}
+          result={result}
+          health={data.health}
+          contractAudit={data.contractAudit}
+        />
+      )}
+    </div>
       <ProposalControls data={data} />
     </>
   );
@@ -802,7 +1017,7 @@ export function GraphCanvas({
   graph, result, running, runningNodeId = null, selection, connectors, subsystemHealth = {}, contractAudits = {},
   onSelect, onNodePositionChange, onConnectNodes, onDeleteEdges, onAddNode, onLoadRecipe, panelOpen, variant, mode,
   proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, refitNonce, highlightedNodeId = null,
-  bloomNodeId = null, onOpenLibrary,
+  bloomNodeId = null, onOpenLibrary, nodeEditor = null,
 }: {
   graph: GTMGraph;
   result: GTMRunResult | null;
@@ -844,6 +1059,9 @@ export function GraphCanvas({
   // Opens the summoned LibraryPalette from the "+ Add step" control — the replacement for the old
   // left-rail Library. Adds a "Browse full library" entry to the step menu when provided.
   onOpenLibrary?: () => void;
+  // The editor bridge for the in-card guided editor. When a node is selected, its card expands and
+  // mounts NodeCardEditor, which reads this off context — no prop-drilling into node data.
+  nodeEditor?: NodeEditorBridge | null;
 }) {
   const handleSelect = useCallback((id: string) => onSelect(id), [onSelect]);
   const editable = variant !== "ideation" && !!onAddNode;
@@ -912,7 +1130,13 @@ export function GraphCanvas({
     event.dataTransfer.dropEffect = "copy";
   }, [onAddNode]);
 
+  const editorContext = useMemo<NodeEditorContextValue>(
+    () => (nodeEditor ? { bridge: nodeEditor, graph } : null),
+    [nodeEditor, graph],
+  );
+
   return (
+    <NodeEditorContext.Provider value={editorContext}>
     <ReactFlow
       nodes={nodes}
       edges={edges}
@@ -958,5 +1182,6 @@ export function GraphCanvas({
       <Background color="#e4e4e7" gap={26} size={1.5} />
       <Controls showInteractive={false} position="bottom-left" />
     </ReactFlow>
+    </NodeEditorContext.Provider>
   );
 }

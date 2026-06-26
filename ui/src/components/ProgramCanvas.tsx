@@ -5,8 +5,6 @@ import {
 } from "lucide-react";
 import { GraphCanvas } from "@/components/GraphCanvas";
 import { CanvasGate } from "@/components/CanvasGate";
-import { NodeEditor } from "@/components/NodeEditor";
-import { healthHex } from "@/lib/health";
 import { statusLabel as canonicalStatus, toneForPhrase } from "@/lib/status";
 import type {
   AgentCreationPolicy, AgentEvaluation, AgentInstance, ConnectorMeta, DomainEvent, EngineSubsystem,
@@ -285,19 +283,12 @@ export function ProgramCanvas({
   const measurementBlind = !(program.measurementPlan?.joinKey && program.measurementPlan?.outcomeEvent);
   const hasGraph = !!graph && graph.nodes.length > 0;
   const pendingGate = runResult?.pendingGates?.[0] ?? null;
-  // The selected node drives the right zone's context switch (inspector → node editor).
-  const editingNode = selection && nodeEditor ? graph?.nodes.find((n) => n.id === selection) ?? null : null;
-  const editingResult = editingNode ? runResult?.nodes[editingNode.id] ?? null : null;
-  // The right zone is "Gate & results" — the OUTPUT side of the data-flow shell. At rest it leads with
-  // what came out of the canvas: the gate queue, then the last run, then outcome/measurement.
+  // The gate's staged drafts: drives the CanvasGate banner and the gate-node bloom.
   const gateItems = pendingGate ? (runResult?.nodes[pendingGate]?.items ?? []) : [];
   // A run paused at the founder gate with staged drafts: the CanvasGate banner rises, the canvas
   // recedes (.cgate-canvas-dimmed), and the gate node blooms (.cgate-node-bloom). All three keyed off
   // one condition so the dim, the bloom, and the banner appear and clear together.
   const gateBlooming = !!pendingGate && gateItems.length > 0;
-  const ranNodes = runResult ? Object.values(runResult.nodes).filter((n) => n.ok).length : 0;
-  const totalRunNodes = runResult?.executionOrder?.length ?? 0;
-  const itemsFlowed = runResult ? Object.values(runResult.nodes).reduce((sum, n) => sum + (n.items?.length ?? 0), 0) : 0;
 
   const DEBUG_LABEL: Record<DebugTab, string> = {
     timeline: "Timeline", events: "Events", runLogs: "Run Logs",
@@ -357,7 +348,7 @@ export function ProgramCanvas({
         ) : null}
       </div>
 
-      <div className={`program-canvas-grid mode-${mode} ${editingNode ? "editing" : ""} ${!editingNode && inspecting ? "inspecting" : ""}`}>
+      <div className={`program-canvas-grid mode-${mode}`}>
         <section className="program-canvas-plane program-canvas-graph" aria-label="Outcome program canvas">
           {/* Hero thesis band — the buyer bet was buried in the inspector gutter while the
               canvas top sat empty. Lift the most un-substitutable sentence on the surface into
@@ -415,6 +406,7 @@ export function ProgramCanvas({
                 highlightedNodeId={highlightedNodeId}
                 bloomNodeId={gateBlooming ? pendingGate : null}
                 onOpenLibrary={onOpenLibrary}
+                nodeEditor={nodeEditor ?? null}
               />
             </div>
           ) : (
@@ -440,93 +432,113 @@ export function ProgramCanvas({
           ) : null}
         </section>
 
-        {editingNode || inspecting ? (
-        <aside className={`program-inspector ${editingNode ? "program-inspector-editing" : ""}`}>
-          {editingNode && nodeEditor ? (
-            <div className="node-edit-panel">
-              <header className="node-edit-panel-head">
-                <div className="node-edit-panel-heading">
-                  <span className="node-edit-panel-crumb">{editingNode.kind && editingNode.kind !== "tool" ? editingNode.kind : editingNode.category}</span>
-                  <h2>{editingNode.label}</h2>
-                </div>
-                <div className="node-edit-panel-actions">
-                  <button
-                    className="node-edit-panel-run"
-                    disabled={runningNodeId === editingNode.id}
-                    onClick={() => nodeEditor.onRunNode(editingNode.id)}
-                    type="button"
-                  >
-                    <Play size={13} />{runningNodeId === editingNode.id ? "Running…" : "Run step"}
-                  </button>
-                  <button className="node-edit-panel-close" aria-label="Close node editor" onClick={nodeEditor.onClose} type="button">
-                    <X size={15} />
-                  </button>
-                </div>
-                <div className="node-edit-panel-statuses">
-                  <span className={`node-detail-status ${editingResult ? editingResult.ok ? "ok" : "error" : "idle"}`}>
-                    {editingResult ? editingResult.ok ? "Healthy" : "Needs attention" : "Not run"}
-                  </span>
-                  {nodeEditor.subsystem && nodeEditor.subsystem.health > 0 ? (
-                    <span
-                      className="node-detail-status node-detail-health"
-                      style={{ color: healthHex(nodeEditor.subsystem.health), borderColor: healthHex(nodeEditor.subsystem.health) }}
-                      title="Derived from your scan, run ledger, and connectors — the same figure on the canvas node"
-                    >
-                      Health {nodeEditor.subsystem.health}
-                    </span>
-                  ) : null}
-                </div>
-              </header>
-              <NodeEditor
-                key={selection ?? "none"}
-                connectors={connectors}
-                contractAudits={contractAudits}
-                subsystem={nodeEditor.subsystem}
-                flowRuns={nodeEditor.flowRuns}
-                graph={graph}
-                onApproveGate={nodeEditor.onApproveGate}
-                onSubmitReview={nodeEditor.onSubmitReview}
-                onRunNode={nodeEditor.onRunNode}
-                onUpdateGraph={nodeEditor.onUpdateGraph}
-                onOpenArtifact={nodeEditor.onOpenArtifact}
-                onDeleteNode={nodeEditor.onDeleteNode}
-                runResult={runResult}
-                runningNodeId={runningNodeId}
-                selection={selection}
-              />
+      </div>
+
+      {/* Program details — a floating glass sheet over the canvas (never a rail). Holds the agents
+          list, the measurement plan, and the "what your decisions changed" learning threads.
+          Dismissable by Escape, a backdrop click, or the close button. */}
+      {inspecting ? (
+        <ProgramDetailsSheet
+          program={program}
+          programAgents={programAgents}
+          measurementBlind={measurementBlind}
+          mergedLearningThreads={mergedLearningThreads}
+          programFeedback={programFeedback}
+          selectedAgent={selectedAgent}
+          selectedPolicy={selectedPolicy}
+          selectedAgentId={selectedAgentId}
+          setSelectedAgentId={setSelectedAgentId}
+          latestEvaluationByAgent={latestEvaluationByAgent}
+          mode={mode}
+          running={running}
+          onBuildAgents={onBuildAgents}
+          onClose={() => setInspecting(false)}
+        />
+      ) : null}
+
+      <section className={`program-debugger${debugOpen ? "" : " collapsed"}`} aria-label="Program debugger">
+        <div className="debugger-head">
+          <button className="debugger-toggle" onClick={toggleDebug} type="button" aria-expanded={debugOpen}>
+            <ChevronDown className={debugOpen ? "" : "rot"} size={14} />
+            <span>Debugger</span>
+          </button>
+          {debugOpen ? (
+            <div className="debugger-tabs">
+              {(["timeline", "events", "runLogs", "replay", "diff", "contracts"] as DebugTab[]).map((tab) => (
+                <button key={tab} className={debugTab === tab ? "active" : ""} onClick={() => setDebugTab(tab)} type="button">
+                  {DEBUG_LABEL[tab]}
+                </button>
+              ))}
             </div>
           ) : (
-          <>
-          <div className="rzone-head">
-            <span className="rzone-name">Gate &amp; results</span>
-            <span className="rzone-flow">← out of the canvas</span>
-          </div>
+            <button className="debugger-collapsed-hint" onClick={() => openDebugTab(debugTab)} type="button">
+              {DEBUG_LABEL[debugTab]} · open to inspect
+            </button>
+          )}
+        </div>
+        {debugOpen ? (
+        <div className="debugger-body">
+          {debugTab === "timeline" ? <Timeline events={programEvents} feedback={programFeedback} /> : null}
+          {debugTab === "events" ? <EventList events={programEvents} /> : null}
+          {debugTab === "runLogs" ? <RunLogs runs={runs} /> : null}
+          {debugTab === "replay" ? <ReplayScrubber runResult={runResult} step={replayStep} onStep={setReplayStep} onSelectNode={onSelectNode} /> : null}
+          {debugTab === "diff" ? <ThreadPanel threads={learningThreads} /> : null}
+          {debugTab === "contracts" ? <ContractsPanel agents={programAgents} policies={programPolicies} evaluations={programEvaluations} /> : null}
+        </div>
+        ) : null}
+      </section>
+    </div>
+  );
+}
 
-          <div className="rzone-card rzone-gate">
-            <div className="rzone-card-head">At the gate</div>
-            {gateItems.length ? (
-              <>
-                <p className="rzone-gate-count">{gateItems.length} draft{gateItems.length === 1 ? "" : "s"} waiting for your review.</p>
-                <button className="rzone-review" onClick={() => onSelectNode(pendingGate!)} type="button">Review at the gate →</button>
-              </>
-            ) : (
-              <p className="rzone-empty">Nothing waiting. When a run stages a send, it stops here for your approval — nothing leaves the building without it.</p>
-            )}
-          </div>
+// The program details, lifted out of the old right rail into a floating glass sheet over the canvas.
+// Holds what the founder reaches for occasionally — the agents this program built, its measurement
+// plan, and the closed learning loops — not the per-step editor (that now lives in the card). The
+// redundant gate/last-run cards were dropped: the CanvasGate banner and the dock already say that.
+function ProgramDetailsSheet({
+  program, programAgents, measurementBlind, mergedLearningThreads, programFeedback,
+  selectedAgent, selectedPolicy, selectedAgentId, setSelectedAgentId, latestEvaluationByAgent,
+  mode, running, onBuildAgents, onClose,
+}: {
+  program: OutcomeProgram;
+  programAgents: AgentInstance[];
+  measurementBlind: boolean;
+  mergedLearningThreads: LearningThreadData[];
+  programFeedback: FeedbackSignal[];
+  selectedAgent: AgentInstance | null;
+  selectedPolicy: AgentCreationPolicy | null;
+  selectedAgentId: string | null;
+  setSelectedAgentId: Dispatch<SetStateAction<string | null>>;
+  latestEvaluationByAgent: Map<string, AgentEvaluation>;
+  mode: ProgramCanvasMode;
+  running: boolean;
+  onBuildAgents: () => void;
+  onClose: () => void;
+}) {
+  // Escape closes the sheet — the standard dismiss for an overlay.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
-          <div className="rzone-card">
-            <div className="rzone-card-head">Last run</div>
-            {runResult ? (
-              <div className="rzone-metrics">
-                <div><strong>{ranNodes}/{totalRunNodes || ranNodes}</strong><span>nodes</span></div>
-                <div><strong>{itemsFlowed}</strong><span>items</span></div>
-                <div><strong>{runResult.pendingGates.length}</strong><span>at gate</span></div>
-              </div>
-            ) : (
-              <p className="rzone-empty">No run yet. Hit Run program to send items through the canvas.</p>
-            )}
-          </div>
+  return (
+    <div className="program-sheet-scrim" onClick={onClose} role="presentation">
+      <aside
+        className="program-sheet"
+        role="dialog"
+        aria-label="Program details"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="program-sheet-head">
+          <span className="inspector-kicker">Program details</span>
+          <button className="program-sheet-close" aria-label="Close program details" onClick={onClose} type="button">
+            <X size={16} />
+          </button>
+        </header>
 
+        <div className="program-sheet-body">
           <span className="inspector-kicker">Outcome &amp; measurement</span>
           <h2>{program.name}</h2>
           <p>{firstString(program.desiredOutcome, ["description", "target", "type"], "The program needs a stated outcome.")}</p>
@@ -602,43 +614,8 @@ export function ProgramCanvas({
               )}
             </div>
           ) : null}
-          </>
-          )}
-        </aside>
-        ) : null}
-      </div>
-
-      <section className={`program-debugger${debugOpen ? "" : " collapsed"}`} aria-label="Program debugger">
-        <div className="debugger-head">
-          <button className="debugger-toggle" onClick={toggleDebug} type="button" aria-expanded={debugOpen}>
-            <ChevronDown className={debugOpen ? "" : "rot"} size={14} />
-            <span>Debugger</span>
-          </button>
-          {debugOpen ? (
-            <div className="debugger-tabs">
-              {(["timeline", "events", "runLogs", "replay", "diff", "contracts"] as DebugTab[]).map((tab) => (
-                <button key={tab} className={debugTab === tab ? "active" : ""} onClick={() => setDebugTab(tab)} type="button">
-                  {DEBUG_LABEL[tab]}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <button className="debugger-collapsed-hint" onClick={() => openDebugTab(debugTab)} type="button">
-              {DEBUG_LABEL[debugTab]} · open to inspect
-            </button>
-          )}
         </div>
-        {debugOpen ? (
-        <div className="debugger-body">
-          {debugTab === "timeline" ? <Timeline events={programEvents} feedback={programFeedback} /> : null}
-          {debugTab === "events" ? <EventList events={programEvents} /> : null}
-          {debugTab === "runLogs" ? <RunLogs runs={runs} /> : null}
-          {debugTab === "replay" ? <ReplayScrubber runResult={runResult} step={replayStep} onStep={setReplayStep} onSelectNode={onSelectNode} /> : null}
-          {debugTab === "diff" ? <ThreadPanel threads={learningThreads} /> : null}
-          {debugTab === "contracts" ? <ContractsPanel agents={programAgents} policies={programPolicies} evaluations={programEvaluations} /> : null}
-        </div>
-        ) : null}
-      </section>
+      </aside>
     </div>
   );
 }
