@@ -717,6 +717,18 @@ export type GTMEdge = {
 };
 
 // The full graph (replaces Pipeline)
+// One system within a portfolio fan-out: a single composed GTM system, laid out as its own lane in
+// the canvas. Present only on a kind:"portfolio" graph (assemblePortfolioGraph). Drives the
+// swimlane rendering — the lane label, which nodes belong to it, and its gate count.
+export type PortfolioSystem = {
+  id: string;
+  label: string;
+  objective?: string;
+  laneIndex: number;
+  nodeIds: string[];
+  gateIds: string[];
+};
+
 export type GTMGraph = {
   id: string;
   name: string;
@@ -726,6 +738,8 @@ export type GTMGraph = {
   objective?: string;
   outcomeProgramId?: string;
   sharedContextVersion?: number;
+  // Per-system lanes for a portfolio fan-out graph; absent on a single-system graph.
+  systems?: PortfolioSystem[];
   nodes: GTMNode[];
   edges: GTMEdge[];
   // venture-style store reference

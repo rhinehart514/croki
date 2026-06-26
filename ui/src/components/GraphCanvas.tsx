@@ -280,10 +280,41 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
   );
 }
 
+// A portfolio lane: a translucent band behind one system's nodes, labelled with the system and its
+// gate count. Non-interactive (pointer-events off) so it never intercepts a click meant for a node,
+// and rendered behind the nodes (prepended to the node list, zIndex 0).
+function LaneBandComponent({ data }: { data: { label: string; gateCount: number; width: number; height: number } }) {
+  return (
+    <div
+      className="portfolio-lane-band"
+      style={{
+        width: data.width,
+        height: data.height,
+        pointerEvents: "none",
+        border: "1px dashed var(--line, #d4d4d8)",
+        borderRadius: 18,
+        background: "rgba(244,244,245,0.45)",
+        boxSizing: "border-box",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute", top: 12, left: 16,
+          fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
+          color: "var(--faint, #71717a)",
+        }}
+      >
+        {data.label}{data.gateCount ? ` · ${data.gateCount} gate${data.gateCount === 1 ? "" : "s"}` : ""}
+      </div>
+    </div>
+  );
+}
+
 const NODE_TYPES = {
   resourceNode: ResourceNodeComponent,
   contextNode:  ContextNodeComponent,
   workNode:     WorkNodeComponent,
+  laneBand:     LaneBandComponent,
 };
 
 function nodeType(category: GTMNodeCategory): string {
@@ -320,19 +351,23 @@ function topologySignature(graph: GTMGraph): string {
   return `${nodeIds}|${edgeKeys}`;
 }
 
-function computeLayout(graph: GTMGraph): Map<string, { x: number; y: number }> {
-  const ids = new Set(graph.nodes.map((n) => n.id));
-  const order = graph.edges.filter(
-    (e) => e.edgeType !== "feedback" && ids.has(e.source) && ids.has(e.target),
-  );
-  const adj = new Map<string, string[]>(graph.nodes.map((n) => [n.id, []]));
-  const indeg = new Map<string, number>(graph.nodes.map((n) => [n.id, 0]));
+// Longest-path rank (DAG depth) over a node subset, using only data/context edges that stay inside
+// the subset. Shared by the whole-graph layout and the per-lane portfolio layout so both rank the
+// same way.
+function longestPathRank(
+  nodeIds: string[],
+  edges: GTMEdge[],
+): Map<string, number> {
+  const idSet = new Set(nodeIds);
+  const order = edges.filter((e) => e.edgeType !== "feedback" && idSet.has(e.source) && idSet.has(e.target));
+  const adj = new Map<string, string[]>(nodeIds.map((id) => [id, []]));
+  const indeg = new Map<string, number>(nodeIds.map((id) => [id, 0]));
   for (const e of order) {
     adj.get(e.source)!.push(e.target);
     indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1);
   }
-  const rank = new Map<string, number>(graph.nodes.map((n) => [n.id, 0]));
-  const queue = graph.nodes.filter((n) => (indeg.get(n.id) ?? 0) === 0).map((n) => n.id);
+  const rank = new Map<string, number>(nodeIds.map((id) => [id, 0]));
+  const queue = nodeIds.filter((id) => (indeg.get(id) ?? 0) === 0);
   const deg = new Map(indeg);
   while (queue.length) {
     const id = queue.shift()!;
@@ -342,6 +377,36 @@ function computeLayout(graph: GTMGraph): Map<string, { x: number; y: number }> {
       if ((deg.get(next) ?? 0) === 0) queue.push(next);
     }
   }
+  return rank;
+}
+
+// A portfolio fan-out lays each system out as its own horizontal lane: ranked left-to-right within
+// the lane (only the lane's own edges count, so one system never pushes another's ranks), stacked
+// top-to-bottom by laneIndex. This is what makes many composed systems toward one goal read as
+// parallel lanes instead of one tangled DAG.
+const LANE_PITCH = ROW_GAP * 3; // vertical distance between two lanes' baselines
+
+function computeLaneLayout(graph: GTMGraph): Map<string, { x: number; y: number }> {
+  const pos = new Map<string, { x: number; y: number }>();
+  for (const system of graph.systems ?? []) {
+    const rank = longestPathRank(system.nodeIds, graph.edges);
+    const baseY = system.laneIndex * LANE_PITCH;
+    const byRank = new Map<number, string[]>();
+    for (const id of system.nodeIds) {
+      const r = rank.get(id) ?? 0;
+      if (!byRank.has(r)) byRank.set(r, []);
+      byRank.get(r)!.push(id);
+    }
+    for (const [r, group] of byRank) {
+      group.forEach((id, i) => pos.set(id, { x: r * COLUMN_GAP, y: baseY + i * ROW_GAP }));
+    }
+  }
+  return pos;
+}
+
+function computeLayout(graph: GTMGraph): Map<string, { x: number; y: number }> {
+  if (graph.systems?.length) return computeLaneLayout(graph);
+  const rank = longestPathRank(graph.nodes.map((n) => n.id), graph.edges);
   const byRank = new Map<number, string[]>();
   for (const n of graph.nodes) {
     const r = rank.get(n.id) ?? 0;
@@ -416,6 +481,34 @@ function buildFlowGraph(
     };
   });
 
+  // Portfolio swimlanes: one band behind each system, sized to its nodes' bounds. Prepended so they
+  // paint behind the work nodes. Skipped entirely for a single-system graph (no graph.systems).
+  const laneBands: Node[] = [];
+  if (graph.systems?.length) {
+    const NODE_W = 240, NODE_H = 150, PAD = 44;
+    for (const system of graph.systems) {
+      const members = graph.nodes.filter((n) => system.nodeIds.includes(n.id) && n.position);
+      if (!members.length) continue;
+      const xs = members.map((n) => n.position!.x);
+      const ys = members.map((n) => n.position!.y);
+      const minX = Math.min(...xs) - PAD;
+      const minY = Math.min(...ys) - PAD - 16; // extra top room for the lane label
+      const width = Math.max(...xs) + NODE_W + PAD - minX;
+      const height = Math.max(...ys) + NODE_H + PAD - minY;
+      laneBands.push({
+        id: `lane-${system.id}`,
+        type: "laneBand",
+        position: { x: minX, y: minY },
+        draggable: false,
+        selectable: false,
+        focusable: false,
+        zIndex: 0,
+        style: { zIndex: 0 },
+        data: { label: system.label, gateCount: system.gateIds?.length ?? 0, width, height },
+      });
+    }
+  }
+
   const edges: Edge[] = graph.edges.map((e: GTMEdge) => {
     // Animate the edge feeding the active step — data visibly flowing in.
     const active = e.edgeType === "data" && runningNodeId === e.target && !!result?.nodes[e.source]?.ok;
@@ -432,7 +525,7 @@ function buildFlowGraph(
     };
   });
 
-  return { nodes, edges };
+  return { nodes: [...laneBands, ...nodes], edges };
 }
 
 const STEP_OPTIONS: Array<{
