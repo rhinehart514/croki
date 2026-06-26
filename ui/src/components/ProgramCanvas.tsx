@@ -195,7 +195,12 @@ export function ProgramCanvas({
   const [replayStep, setReplayStep] = useState<number | null>(null);
   // Reset the playhead whenever a different run loads, so a stale index can never point past a
   // shorter run's executionOrder (which would render an undefined step / out-of-range highlight).
-  useEffect(() => { setReplayStep(null); }, [runResult?.runId]);
+  // React's adjust-state-during-render pattern (same as trackedMode below) — no effect, no cascade.
+  const [trackedRunId, setTrackedRunId] = useState(runResult?.runId);
+  if (trackedRunId !== runResult?.runId) {
+    setTrackedRunId(runResult?.runId);
+    setReplayStep(null);
+  }
   const order = runResult?.executionOrder ?? [];
   const replayActive = debugOpen && debugTab === "replay" && replayStep !== null && replayStep >= 0 && replayStep < order.length;
   const highlightedNodeId = replayActive ? order[replayStep!] ?? null : null;
@@ -661,7 +666,12 @@ function ReplayScrubber({ runResult, step, onStep, onSelectNode }: {
   }, [playing, order.length, onStep]);
 
   // A new run loaded — stop playing so the interval can't keep firing against the old order.
-  useEffect(() => { setPlaying(false); }, [runResult?.runId]);
+  // Adjust-state-during-render (no effect) so it can't trigger a cascading-render.
+  const [trackedRunId, setTrackedRunId] = useState(runResult?.runId);
+  if (trackedRunId !== runResult?.runId) {
+    setTrackedRunId(runResult?.runId);
+    setPlaying(false);
+  }
 
   if (!runResult || order.length === 0) return <div className="debugger-empty">No finished run to replay yet.</div>;
 

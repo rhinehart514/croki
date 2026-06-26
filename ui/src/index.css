@@ -7796,6 +7796,37 @@ svg {
   color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
 }
 .explorer-group-hint { color: var(--faint); font-size: 10px; }
+
+/* ── Feeds zone — the left rail reframed as the canvas's INPUT edge. The header mirrors the right
+   zone's "Gate & results · ← out of the canvas", reflected: the name leads and the flow cue reads
+   INTO the canvas (→). Monochrome by the one-accent rule — amber belongs to the gate alone, so the
+   input edge stays neutral. The WORKSPACE divider drops navigation + diagnostics (Outcomes,
+   Problems, Runs) below the feeds, so the rail reads inputs-first, top to bottom. */
+.lzone-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-2);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+.lzone-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lzone-name { font-size: 11px; font-weight: 760; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+.lzone-flow { font-size: 10.5px; color: var(--faint); }
+.lzone-divider {
+  display: flex; align-items: baseline; gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-1);
+  border-top: 1px solid var(--line);
+}
+.lzone-divider > span:first-child {
+  color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.lzone-divider-hint { color: var(--faint); font-size: 10px; }
+/* Ambient feeds (grounding, picture, opportunities) now sit at the TOP, not pinned to the foot:
+   reset the auto-margin that pinned them down, and flip the grounding peek to open downward. */
+.feeds-context { display: flex; flex-direction: column; }
+.feeds-context .explorer-foot-grounding,
+.feeds-context .explorer-rail-foot { margin-top: 0; }
+.feeds-context .explorer-foot-peek { top: calc(100% + 6px); bottom: auto; }
+
 .explorer-row-child { padding-left: 38px; font-size: 12px; }
 .explorer-row-child svg { color: var(--muted); flex-shrink: 0; }
 
