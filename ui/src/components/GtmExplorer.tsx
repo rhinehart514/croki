@@ -50,6 +50,26 @@ function Section({
 
 type ExplorerView = "projects" | "understand" | "product" | "opportunities" | "channels" | "canvas";
 
+// A run is identified internally as `run-<epoch-ms>`. That id is for the machine; a person needs to
+// know WHEN it ran and WHAT happened. Recover the time from the id and say it plainly — the same
+// "speak human, not machine" standard the Problems rail already sets.
+function runWhen(runId: string): string {
+  const epoch = Number(String(runId).replace(/^run-/, ""));
+  if (!Number.isFinite(epoch)) return "earlier";
+  const secondsAgo = Math.max(0, Math.round((Date.now() - epoch) / 1000));
+  if (secondsAgo < 45) return "just now";
+  if (secondsAgo < 3600) return `${Math.round(secondsAgo / 60)} min ago`;
+  if (secondsAgo < 86400) return `${Math.round(secondsAgo / 3600)} h ago`;
+  return `${Math.round(secondsAgo / 86400)} d ago`;
+}
+
+// What the run actually did, in the founder's words — gate waiting, completed clean, or stopped.
+function runOutcome(run: GTMRunResult): string {
+  if (run.pendingGates?.length) return `${run.pendingGates.length} at your gate`;
+  if (run.ok) return "completed";
+  return "blocked";
+}
+
 export function GtmExplorer({
   channels, activeChannelId, activeProgramId, currentView, onOpenChannel, onOpenProgram, onFocusProgram, onNewProgram,
   onOpenArtifact, onNewArtifact, onOpenView, library, programs, agentInstances,
@@ -360,14 +380,15 @@ export function GtmExplorer({
         ) : runs.slice(-6).reverse().map((run) => (
           <button
             key={run.runId} className="explorer-row" type="button"
+            title={run.runId}
             onClick={() => activeProgramId && onFocusProgram(activeProgramId, { mode: "run", run, debugTab: "runLogs" })}
           >
             <span
               className="explorer-dot"
               style={{ background: run.pendingGates.length ? "var(--gap)" : run.ok ? "var(--proven)" : "var(--danger)" }}
             />
-            <span className="explorer-row-name">{run.runId}</span>
-            <span className="explorer-row-meta">{run.pendingGates.length ? "gate" : run.ok ? "ok" : "blocked"}</span>
+            <span className="explorer-row-name">{runWhen(run.runId)}</span>
+            <span className="explorer-row-meta">{runOutcome(run)}</span>
           </button>
         ))}
       </Section>
