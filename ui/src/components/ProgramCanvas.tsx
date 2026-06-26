@@ -1,13 +1,30 @@
 import { useMemo, useState } from "react";
 import {
-  Bot, CheckCircle2, ChevronDown, GitBranch, History, Play, TestTube2,
+  Bot, CheckCircle2, ChevronDown, GitBranch, History, Play, TestTube2, X,
 } from "lucide-react";
 import { GraphCanvas } from "@/components/GraphCanvas";
+import { NodeEditor } from "@/components/NodeEditor";
+import { healthHex } from "@/lib/health";
 import { statusLabel as canonicalStatus, toneForPhrase } from "@/lib/status";
 import type {
-  AgentCreationPolicy, AgentEvaluation, AgentInstance, ConnectorMeta, DomainEvent, FeedbackSignal,
-  GTMContractAudit, GTMGraph, GTMNode, GTMRunResult, NodeSelection, OutcomeProgram,
+  AgentCreationPolicy, AgentEvaluation, AgentInstance, ConnectorMeta, DomainEvent, EngineSubsystem,
+  FeedbackSignal, GateDecision, GTMContractAudit, GTMGraph, GTMNode, GTMRunResult, NodeSelection, OutcomeProgram,
 } from "@/types";
+
+// The right zone of the program workbench is context-switching: it shows the program's "Gate &
+// results" inspector by default, and swaps to this node editor whenever a canvas node is selected.
+// This bag carries everything the editor needs that the workbench doesn't already hold.
+export type NodeEditorBridge = {
+  flowRuns: GTMRunResult[];
+  subsystem: EngineSubsystem | null;
+  onApproveGate: (id: string) => void;
+  onSubmitReview: (id: string, decisions: Record<string, GateDecision>) => void;
+  onRunNode: (id: string) => void;
+  onUpdateGraph: (graph: GTMGraph) => void;
+  onOpenArtifact: (type: "agent" | "skill", ref: string) => void;
+  onDeleteNode: (id: string) => void;
+  onClose: () => void;
+};
 
 export type ProgramCanvasMode = "design" | "simulation" | "run" | "review" | "learning";
 export type DebugTab = "timeline" | "events" | "runLogs" | "replay" | "diff" | "contracts";
@@ -92,6 +109,7 @@ export function ProgramCanvas({
   proposedNodeIds,
   proposedEdgeIds,
   focusDebug,
+  nodeEditor,
 }: {
   program: OutcomeProgram;
   graph: GTMGraph | null;
@@ -127,6 +145,8 @@ export function ProgramCanvas({
   // Lets the explorer deep-link the bottom debugger to a specific tab (e.g. clicking a Run opens
   // Run Logs). The nonce makes repeat clicks of the same tab re-fire.
   focusDebug?: { tab: DebugTab; nonce: number } | null;
+  // The bridge to the right-zone node editor. When a node is selected, the inspector swaps to it.
+  nodeEditor?: NodeEditorBridge;
 }) {
   const programAgents = useMemo(() => agents.filter((agent) => agent.programId === program.id), [agents, program.id]);
   const programPolicies = useMemo(() => policies.filter((policy) => policy.programId === program.id), [policies, program.id]);
@@ -230,6 +250,9 @@ export function ProgramCanvas({
   const measurementBlind = !(program.measurementPlan?.joinKey && program.measurementPlan?.outcomeEvent);
   const hasGraph = !!graph && graph.nodes.length > 0;
   const pendingGate = runResult?.pendingGates?.[0] ?? null;
+  // The selected node drives the right zone's context switch (inspector → node editor).
+  const editingNode = selection && nodeEditor ? graph?.nodes.find((n) => n.id === selection) ?? null : null;
+  const editingResult = editingNode ? runResult?.nodes[editingNode.id] ?? null : null;
 
   const DEBUG_LABEL: Record<DebugTab, string> = {
     timeline: "Timeline", events: "Events", runLogs: "Run Logs",
@@ -277,7 +300,7 @@ export function ProgramCanvas({
         ) : null}
       </div>
 
-      <div className={`program-canvas-grid mode-${mode}`}>
+      <div className={`program-canvas-grid mode-${mode} ${editingNode ? "editing" : ""}`}>
         <section className="program-canvas-plane program-canvas-graph" aria-label="Outcome program canvas">
           {/* Hero thesis band — the buyer bet was buried in the inspector gutter while the
               canvas top sat empty. Lift the most un-substitutable sentence on the surface into
@@ -340,7 +363,62 @@ export function ProgramCanvas({
           )}
         </section>
 
-        <aside className="program-inspector">
+        <aside className={`program-inspector ${editingNode ? "program-inspector-editing" : ""}`}>
+          {editingNode && nodeEditor ? (
+            <div className="node-edit-panel">
+              <header className="node-edit-panel-head">
+                <div className="node-edit-panel-heading">
+                  <span className="node-edit-panel-crumb">{editingNode.kind && editingNode.kind !== "tool" ? editingNode.kind : editingNode.category}</span>
+                  <h2>{editingNode.label}</h2>
+                </div>
+                <div className="node-edit-panel-actions">
+                  <button
+                    className="node-edit-panel-run"
+                    disabled={runningNodeId === editingNode.id}
+                    onClick={() => nodeEditor.onRunNode(editingNode.id)}
+                    type="button"
+                  >
+                    <Play size={13} />{runningNodeId === editingNode.id ? "Running…" : "Run step"}
+                  </button>
+                  <button className="node-edit-panel-close" aria-label="Close node editor" onClick={nodeEditor.onClose} type="button">
+                    <X size={15} />
+                  </button>
+                </div>
+                <div className="node-edit-panel-statuses">
+                  <span className={`node-detail-status ${editingResult ? editingResult.ok ? "ok" : "error" : "idle"}`}>
+                    {editingResult ? editingResult.ok ? "Healthy" : "Needs attention" : "Not run"}
+                  </span>
+                  {nodeEditor.subsystem && nodeEditor.subsystem.health > 0 ? (
+                    <span
+                      className="node-detail-status node-detail-health"
+                      style={{ color: healthHex(nodeEditor.subsystem.health), borderColor: healthHex(nodeEditor.subsystem.health) }}
+                      title="Derived from your scan, run ledger, and connectors — the same figure on the canvas node"
+                    >
+                      Health {nodeEditor.subsystem.health}
+                    </span>
+                  ) : null}
+                </div>
+              </header>
+              <NodeEditor
+                key={selection ?? "none"}
+                connectors={connectors}
+                contractAudits={contractAudits}
+                subsystem={nodeEditor.subsystem}
+                flowRuns={nodeEditor.flowRuns}
+                graph={graph}
+                onApproveGate={nodeEditor.onApproveGate}
+                onSubmitReview={nodeEditor.onSubmitReview}
+                onRunNode={nodeEditor.onRunNode}
+                onUpdateGraph={nodeEditor.onUpdateGraph}
+                onOpenArtifact={nodeEditor.onOpenArtifact}
+                onDeleteNode={nodeEditor.onDeleteNode}
+                runResult={runResult}
+                runningNodeId={runningNodeId}
+                selection={selection}
+              />
+            </div>
+          ) : (
+          <>
           <span className="inspector-kicker">Program</span>
           <h2>{program.name}</h2>
           <p>{firstString(program.desiredOutcome, ["description", "target", "type"], "The program needs a stated outcome.")}</p>
@@ -416,6 +494,8 @@ export function ProgramCanvas({
               )}
             </div>
           ) : null}
+          </>
+          )}
         </aside>
       </div>
 

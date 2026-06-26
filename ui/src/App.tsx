@@ -47,6 +47,7 @@ import { ProgramCanvas, type ProgramCanvasMode, type DebugTab } from "@/componen
 import { GtmExplorer } from "@/components/GtmExplorer";
 import { buildIdeationCanvas, buildChannelDefaults, channelIdFromNode, type LaneState } from "@/lib/ideationGraph";
 import { statusLabel } from "@/lib/status";
+import { healthHex } from "@/lib/health";
 import { itemKey } from "@/lib/itemKey";
 import { findProgramForGraph, graphBelongsToProgram, programGraphId } from "@/lib/program";
 import { ProductUnderstanding } from "@/components/ProductUnderstanding";
@@ -73,13 +74,6 @@ type MainTab = ProgramCanvasMode;
 function pickStr(...vals: unknown[]): string | null {
   for (const v of vals) if (typeof v === "string" && v.trim()) return v;
   return null;
-}
-
-function healthHex(health: number): string {
-  if (health < 50) return "#dc2626";
-  if (health < 70) return "#d97706";
-  if (health < 85) return "#ca8a04";
-  return "#16a34a";
 }
 
 // The context pill — the north star, made visible in the toolbar. It shows what the model
@@ -1424,6 +1418,17 @@ export default function App() {
               connectors={connectors}
               subsystemHealth={subsystemHealth}
               contractAudits={contractAudits}
+              nodeEditor={{
+                flowRuns,
+                subsystem: selectedNodeSubsystem,
+                onApproveGate: (id) => void approveGate(id),
+                onSubmitReview: (id, d) => void submitGateReview(id, d),
+                onRunNode: (id) => void executeGraph(id),
+                onUpdateGraph: updateGraph,
+                onOpenArtifact: (type, ref) => setArtifactEdit({ type, ref }),
+                onDeleteNode: handleDeleteNode,
+                onClose: () => setSelection(null),
+              }}
             />
           ) : graph ? (
             <>
@@ -1711,7 +1716,9 @@ export default function App() {
         /> : null}
       </div>
 
-      {selectedNode && graph && (
+      {/* The node editor lives in the program workbench's right panel (ProgramCanvas). This modal
+          remains only for the bare-channel graph path, which has no workbench around it. */}
+      {selectedNode && graph && !activeProgram && (
         <div
           className="node-detail-modal-backdrop"
           onMouseDown={(event) => {
