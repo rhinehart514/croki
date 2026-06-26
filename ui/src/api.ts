@@ -400,6 +400,24 @@ export const updateOpportunity = (
   { patch },
 );
 
+// Preview a composition WITHOUT persisting: returns the would-be graph (nodes/edges) so the founder
+// can review it ghosted on the canvas before anything lands. Mirrors the operator's stage-then-gate
+// proposal. The apply path below (composeOpportunityChannel) persists the exact previewed graph.
+export const previewOpportunityChannel = (
+  projectId: string,
+  input: {
+    channelOpportunityId: string;
+    agentOpportunityIds: string[];
+    name?: string;
+    objective?: string;
+    input?: DataAdapter;
+    output?: DataAdapter;
+  },
+) => post<{ channelOpportunityId: string; name: string; objective: string; graph: { nodes: GTMNode[]; edges: GTMEdge[] } }>(
+  `/api/projects/${encodeURIComponent(projectId)}/compose/preview`,
+  input,
+);
+
 export const composeOpportunityChannel = (
   projectId: string,
   input: {
@@ -409,6 +427,9 @@ export const composeOpportunityChannel = (
     objective?: string;
     input?: DataAdapter;
     output?: DataAdapter;
+    // When present, the apply path persists this exact previewed graph instead of re-composing —
+    // the model is never re-run behind the founder's back on accept.
+    graph?: { nodes: GTMNode[]; edges: GTMEdge[] };
   },
 ) => post<{ channel: ChannelMeta; program: OutcomeProgram; agents: Array<{ instance: AgentInstance; policy: AgentCreationPolicy; profile: PersonalizationProfile }>; graph: GTMGraph }>(
   `/api/projects/${encodeURIComponent(projectId)}/compose`,
