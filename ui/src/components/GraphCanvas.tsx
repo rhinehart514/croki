@@ -508,6 +508,7 @@ function buildFlowGraph(
   onResolveProposal?: (accept: boolean) => void,
   onSubmitReview?: (nodeId: string, decisions: Record<string, GateDecision>) => void,
   onApproveGate?: (nodeId: string) => void,
+  bloomNodeId?: string | null,
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = graph.nodes.map((n) => {
     const sub = subsystemHealth[n.category];
@@ -523,6 +524,9 @@ function buildFlowGraph(
         // Run replay: the scrubber's current step glows; every other node dims so the eye follows
         // the run step by step. No highlight set → no replay classes, the canvas reads normally.
         highlightedNodeId ? (highlightedNodeId === n.id ? "loop-node-replay-current" : "loop-node-replay-dim") : "",
+        // Founder gate bloom: while a run pauses at this gate with staged drafts, the node breathes an
+        // amber ring (the one gate accent) so the eye lands on the wall the CanvasGate banner points to.
+        bloomNodeId && bloomNodeId === n.id ? "cgate-node-bloom" : "",
       ].filter(Boolean).join(" ") || undefined,
       data: {
         node: n,
@@ -610,12 +614,16 @@ const STEP_OPTIONS: Array<{
 ];
 
 function StepPalette({
-  empty, disabled, onAddNode, onLoadRecipe,
+  empty, disabled, onAddNode, onLoadRecipe, onOpenLibrary,
 }: {
   empty: boolean;
   disabled: boolean;
   onAddNode: (spec: Partial<GTMNode> & { label: string }) => void;
   onLoadRecipe?: () => void;
+  // Opens the full LibraryPalette (the summoned replacement for the left-rail Library). When wired,
+  // the menu leads with it so the founder reaches the personalized + on-disk capabilities, not just
+  // the fixed primitives below.
+  onOpenLibrary?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -633,6 +641,12 @@ function StepPalette({
         </button>
         {open ? (
           <div className="workflow-palette-menu" role="menu">
+            {onOpenLibrary ? (
+              <button className="workflow-recipe" onClick={() => { onOpenLibrary(); setOpen(false); }} role="menuitem" type="button">
+                <Bot />
+                <span><strong>Browse the library</strong><small>Your agents and skills — search, drag, or add</small></span>
+              </button>
+            ) : null}
             {empty && onLoadRecipe ? (
               <button className="workflow-recipe" onClick={() => { onLoadRecipe(); setOpen(false); }} role="menuitem" type="button">
                 <Sparkles />
@@ -754,6 +768,7 @@ export function GraphCanvas({
   graph, result, running, runningNodeId = null, selection, connectors, subsystemHealth = {}, contractAudits = {},
   onSelect, onNodePositionChange, onConnectNodes, onDeleteEdges, onAddNode, onLoadRecipe, panelOpen, variant, mode,
   proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, refitNonce, highlightedNodeId = null,
+  bloomNodeId = null, onOpenLibrary,
 }: {
   graph: GTMGraph;
   result: GTMRunResult | null;
@@ -789,6 +804,12 @@ export function GraphCanvas({
   refitNonce?: number;
   // The run scrubber's current step — this node glows, the rest dim, so a replay reads node-by-node.
   highlightedNodeId?: string | null;
+  // The gate node to bloom (amber breathing ring) while a run pauses at the founder gate. The host
+  // sets this to the pending gate id when drafts are staged; null clears the bloom.
+  bloomNodeId?: string | null;
+  // Opens the summoned LibraryPalette from the "+ Add step" control — the replacement for the old
+  // left-rail Library. Adds a "Browse full library" entry to the step menu when provided.
+  onOpenLibrary?: () => void;
 }) {
   const handleSelect = useCallback((id: string) => onSelect(id), [onSelect]);
   const editable = variant !== "ideation" && !!onAddNode;
@@ -811,8 +832,8 @@ export function GraphCanvas({
   }, [graph, onNodePositionChange]);
 
   const { nodes, edges } = useMemo(
-    () => buildFlowGraph(graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, mode, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate),
-    [graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, mode, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate],
+    () => buildFlowGraph(graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, mode, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId),
+    [graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, mode, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId],
   );
 
   const handleNodeDragStop = useCallback(
@@ -868,7 +889,7 @@ export function GraphCanvas({
       <RunZoom running={running} />
       <Refitter nonce={refitNonce} />
       {editable && onAddNode ? (
-        <StepPalette empty={graph.nodes.length === 0} disabled={running} onAddNode={onAddNode} onLoadRecipe={onLoadRecipe} />
+        <StepPalette empty={graph.nodes.length === 0} disabled={running} onAddNode={onAddNode} onLoadRecipe={onLoadRecipe} onOpenLibrary={onOpenLibrary} />
       ) : null}
       {variant !== "ideation" ? <ContractAuditPanel graph={graph} audits={contractAudits} onSelect={onSelect} /> : null}
       {result?.memoryApplied

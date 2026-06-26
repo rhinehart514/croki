@@ -4,7 +4,9 @@ import {
   Minimize2, Play, Send, ShieldCheck, Square, Wrench, X,
 } from "lucide-react";
 import { statusLabel } from "@/lib/status";
-import type { OperatorEvent, OperatorSession } from "@/types";
+import { DockContext } from "@/components/DockContext";
+import "@/styles/dock-context.css";
+import type { ContextManifest, OperatorEvent, OperatorSession } from "@/types";
 
 // Operator narration arrives as markdown (the model writes tables, bold, bullets). Rendered raw
 // it's an illegible wall of pipes and asterisks — the thing that read as "broken" in the panel.
@@ -70,6 +72,7 @@ function eventIcon(event: OperatorEvent) {
 export function ComposerDock({
   session, running, boundChannelName, viewingMismatch, onSend, onCancel, onReviewGate, onReturnToChannel,
   floating = false, focusSignal = 0,
+  contextManifest = null, onOpenGrounding, onOpenPicture, onIdeate,
 }: {
   session: OperatorSession | null;
   running: boolean;
@@ -88,6 +91,12 @@ export function ComposerDock({
   // Bumped by the host to summon the chat — e.g. "New program" opens and focuses it, since a
   // program is created by telling Claude the outcome, not by filling a form.
   focusSignal?: number;
+  // The "what Claude reads" strip in the dock head — the grounding/picture/ideate actions folded in
+  // from the old Explorer rail. All optional so the dock still renders without product context.
+  contextManifest?: ContextManifest | null;
+  onOpenGrounding?: () => void;
+  onOpenPicture?: () => void;
+  onIdeate?: () => void;
 }) {
   const [collapsed, setCollapsed] = useState(floating);
   const [expanded, setExpanded] = useState(false);
@@ -206,6 +215,17 @@ export function ComposerDock({
           <X size={16} />
         </button>
       </header>
+
+      {/* ── What Claude reads — the grounding/picture/ideate actions folded into the dock head, so
+          they stop being mystery buttons on a far rail. Shown only when the host wired the views. */}
+      {onOpenGrounding && onOpenPicture && onIdeate ? (
+        <DockContext
+          contextManifest={contextManifest}
+          onOpenGrounding={onOpenGrounding}
+          onOpenPicture={onOpenPicture}
+          onIdeate={onIdeate}
+        />
+      ) : null}
 
       {/* ── Channel mismatch — this session edits a channel you're not viewing ── */}
       {viewingMismatch && boundChannelName && (

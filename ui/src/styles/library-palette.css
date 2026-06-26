@@ -1,0 +1,236 @@
+/* LibraryPalette — the summoned "+ Add step" popover. A floating glass surface, so it follows the
+   shared glass recipe exactly. Monochrome by the one-accent rule: no decorative color, no amber
+   (the gate owns amber). Prefix: libp-. The host positions this (absolute/anchored) from the canvas;
+   the panel only owns its own box, not where it sits. */
+
+.libp-panel {
+  position: absolute;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  width: 320px;
+  max-height: 460px;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  /* GLASS recipe */
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid color-mix(in srgb, var(--line-2) 72%, transparent);
+  box-shadow: 0 1px 2px rgba(16, 18, 27, 0.08), 0 24px 60px -14px rgba(16, 18, 27, 0.34);
+  animation: libp-in 140ms var(--ease);
+}
+
+@keyframes libp-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── Header: filter input + close ─────────────────────────────────────────── */
+.libp-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border-bottom: 1px solid color-mix(in srgb, var(--line-2) 60%, transparent);
+}
+
+.libp-search {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.libp-search-icon {
+  position: absolute;
+  left: 0;
+  color: var(--faint);
+  pointer-events: none;
+}
+
+.libp-search-input {
+  flex: 1;
+  width: 100%;
+  padding: var(--space-1) 0 var(--space-1) calc(var(--space-4) + var(--space-2));
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: var(--ink);
+}
+.libp-search-input::placeholder { color: var(--faint); }
+.libp-search-input:focus { outline: none; }
+
+.libp-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 120ms var(--ease), color 120ms var(--ease);
+}
+.libp-close:hover { background: var(--surface-2); color: var(--ink); }
+
+/* ── Body: the scrolling groups ───────────────────────────────────────────── */
+.libp-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2);
+}
+
+.libp-group + .libp-group { margin-top: var(--space-3); }
+
+.libp-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-2) var(--space-1);
+}
+
+.libp-group-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.libp-group-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  padding: 2px 4px;
+  transition: color 120ms var(--ease), background 120ms var(--ease);
+}
+.libp-group-new:hover { color: var(--ink); background: var(--surface-2); }
+
+.libp-empty {
+  margin: 0;
+  padding: var(--space-1) var(--space-2) var(--space-2);
+  font-size: 0.75rem;
+  color: var(--faint);
+}
+
+/* ── A capability row: open (left) + add (right) ──────────────────────────── */
+.libp-row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-1);
+  border-radius: var(--r-md);
+  cursor: grab;
+  transition: background 120ms var(--ease);
+}
+.libp-row:active { cursor: grabbing; }
+.libp-row-active,
+.libp-row:hover { background: var(--surface-2); }
+
+.libp-row-open {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2);
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.libp-row-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.libp-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.libp-row-name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.libp-row-desc {
+  font-size: 0.6875rem;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.libp-row-meta {
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+
+.libp-row-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  margin: var(--space-1);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms var(--ease), background 120ms var(--ease), color 120ms var(--ease);
+}
+.libp-row:hover .libp-row-add,
+.libp-row-active .libp-row-add { opacity: 1; }
+.libp-row-add:hover { background: var(--surface); color: var(--ink); }
+.libp-row-add:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
+/* ── Footer hint ──────────────────────────────────────────────────────────── */
+.libp-foot {
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid color-mix(in srgb, var(--line-2) 60%, transparent);
+  font-size: 0.6875rem;
+  color: var(--faint);
+}
+
+.libp-kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  font-family: inherit;
+  font-size: 0.625rem;
+  color: var(--muted);
+}

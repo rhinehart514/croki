@@ -1,0 +1,146 @@
+/* CanvasGate — the founder-gate signature moment.
+   Three public class names:
+   - .cgate-card          the glass banner-card itself (owned by CanvasGate.tsx)
+   - .cgate-canvas-dimmed apply to the canvas graph plane while the gate is open
+   - .cgate-node-bloom    apply to the gate node element while the gate is open
+   Amber (--gap) is the founder-gate accent and is allowed HERE only. */
+
+@keyframes cgate-rise {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* A calm amber pulse for the blooming gate node — breathes, never strobes. */
+@keyframes cgate-bloom {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--gap) 55%, transparent),
+      0 0 0 4px color-mix(in srgb, var(--gap) 16%, transparent),
+      0 0 22px -2px color-mix(in srgb, var(--gap) 30%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--gap) 75%, transparent),
+      0 0 0 7px color-mix(in srgb, var(--gap) 22%, transparent),
+      0 0 34px 2px color-mix(in srgb, var(--gap) 42%, transparent);
+  }
+}
+
+.cgate-card {
+  position: absolute;
+  top: 76px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+
+  /* GLASS recipe — floating surface. */
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid color-mix(in srgb, var(--line-2) 72%, transparent);
+  border-radius: var(--r-lg);
+  box-shadow:
+    0 1px 2px rgba(16, 18, 27, 0.08),
+    0 24px 60px -14px rgba(16, 18, 27, 0.34);
+
+  animation: cgate-rise 0.42s var(--ease) both;
+}
+
+.cgate-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: var(--r-md);
+  color: var(--gap);
+  background: var(--gap-soft);
+  border: 1px solid color-mix(in srgb, var(--gap) 26%, transparent);
+}
+
+.cgate-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.25;
+}
+
+.cgate-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--gap);
+}
+
+.cgate-sub {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.cgate-review {
+  margin-left: var(--space-2);
+  flex-shrink: 0;
+  padding: var(--space-2) var(--space-4);
+  font-size: 0.8125rem;
+  font-weight: 550;
+  font-family: inherit;
+  color: var(--surface);
+  background: var(--gap);
+  border: 1px solid color-mix(in srgb, var(--gap) 80%, black 6%);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: filter 0.16s var(--ease), transform 0.16s var(--ease);
+}
+
+.cgate-review:hover {
+  filter: brightness(1.06);
+}
+
+.cgate-review:active {
+  transform: translateY(0.5px);
+}
+
+.cgate-review:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--gap) 60%, transparent);
+  outline-offset: 2px;
+}
+
+/* Applied by the integration to the canvas graph plane while the gate is open: the canvas recedes
+   so the gate is the only thing alive. */
+.cgate-canvas-dimmed {
+  filter: saturate(0.6) brightness(0.96);
+  opacity: 0.55;
+  transition: filter 0.4s var(--ease), opacity 0.4s var(--ease);
+}
+
+/* Applied by the integration to the gate node element while the gate is open: an amber ring that
+   breathes, pulling the eye to exactly the node the review card is about. */
+.cgate-node-bloom {
+  border-radius: inherit;
+  animation: cgate-bloom 2.4s var(--ease) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cgate-card {
+    animation: none;
+  }
+  .cgate-node-bloom {
+    animation: none;
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--gap) 65%, transparent),
+      0 0 0 5px color-mix(in srgb, var(--gap) 18%, transparent);
+  }
+}

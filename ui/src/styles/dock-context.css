@@ -1,0 +1,140 @@
+/* DockContext — a compact "what Claude reads" strip that sits on the dock glass, between the
+   header and the timeline. Transparent: it inherits the dock's glass, never paints its own panel.
+   Monochrome by rule; the only color is the --proven dot on a contributing provider. */
+
+.dctx {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  min-width: 0;
+  background: transparent;
+  border-bottom: 1px solid color-mix(in srgb, var(--line-2) 60%, transparent);
+}
+
+/* Left side — "Reading" + the provider chips. The whole block is the affordance to open the
+   full grounding, so it's a single button that holds the static label and the live chips. */
+.dctx-reading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border: 0;
+  background: transparent;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  transition: background 120ms var(--ease);
+}
+.dctx-reading:hover {
+  background: color-mix(in srgb, var(--line-2) 40%, transparent);
+}
+.dctx-reading:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--line-2) 80%, transparent);
+  outline-offset: 1px;
+}
+
+.dctx-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.dctx-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  flex-wrap: nowrap;
+}
+
+.dctx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 2px 7px 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.dctx-chip.off {
+  color: var(--faint);
+}
+
+.dctx-dot {
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--proven);
+}
+.dctx-chip.off .dctx-dot {
+  background: var(--line-2);
+}
+
+.dctx-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 11ch;
+}
+
+.dctx-count {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  margin-left: 2px;
+}
+
+.dctx-empty {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+/* Right side — the two quiet text actions. Deliberately understated: plain text buttons, not
+   styled controls, so the dock header and timeline stay the loud surfaces. */
+.dctx-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+}
+
+.dctx-action {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 120ms var(--ease);
+}
+.dctx-action:hover {
+  color: var(--ink);
+}
+.dctx-action:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--line-2) 80%, transparent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.dctx-action-sep {
+  width: 1px;
+  height: 11px;
+  background: var(--line-2);
+}

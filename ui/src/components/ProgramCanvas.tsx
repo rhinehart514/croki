@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
-  Bot, CheckCircle2, ChevronDown, GitBranch, History, Pause, Play, X,
+  Bot, CheckCircle2, ChevronDown, GitBranch, History, Pause, PanelRight, Play, X,
 } from "lucide-react";
 import { GraphCanvas } from "@/components/GraphCanvas";
+import { CanvasGate } from "@/components/CanvasGate";
 import { NodeEditor } from "@/components/NodeEditor";
 import { healthHex } from "@/lib/health";
 import { statusLabel as canonicalStatus, toneForPhrase } from "@/lib/status";
@@ -114,6 +115,7 @@ export function ProgramCanvas({
   onApproveGate,
   focusDebug,
   nodeEditor,
+  onOpenLibrary,
 }: {
   program: OutcomeProgram;
   graph: GTMGraph | null;
@@ -157,6 +159,9 @@ export function ProgramCanvas({
   focusDebug?: { tab: DebugTab; nonce: number } | null;
   // The bridge to the right-zone node editor. When a node is selected, the inspector swaps to it.
   nodeEditor?: NodeEditorBridge;
+  // Opens the summoned LibraryPalette from the canvas "+ Add step" control (the replacement for the
+  // old left-rail Library). Optional, so the canvas still works with no palette wired.
+  onOpenLibrary?: () => void;
 }) {
   const programAgents = useMemo(() => agents.filter((agent) => agent.programId === program.id), [agents, program.id]);
   const programPolicies = useMemo(() => policies.filter((policy) => policy.programId === program.id), [policies, program.id]);
@@ -182,6 +187,10 @@ export function ProgramCanvas({
   // (the actual workspace) owns the vertical space. Toggling it bumps a nonce that re-fits the graph
   // into the reclaimed/relinquished height.
   const [debugOpen, setDebugOpen] = useState(false);
+  // At rest the canvas is full width; the right inspector (agents, measurement, learning) is summoned
+  // by the "Program details" toggle. A selected node still forces the two-column layout (the node
+  // editor lives in that same right zone), so the grid opens whenever EITHER is true.
+  const [inspecting, setInspecting] = useState(false);
   const [refitNonce, setRefitNonce] = useState(0);
   const toggleDebug = () => { setDebugOpen((open) => !open); setRefitNonce((n) => n + 1); };
   // Opening a specific tab from collapsed should reveal the drawer, not silently switch a hidden tab.
@@ -281,6 +290,10 @@ export function ProgramCanvas({
   // The right zone is "Gate & results" — the OUTPUT side of the data-flow shell. At rest it leads with
   // what came out of the canvas: the gate queue, then the last run, then outcome/measurement.
   const gateItems = pendingGate ? (runResult?.nodes[pendingGate]?.items ?? []) : [];
+  // A run paused at the founder gate with staged drafts: the CanvasGate banner rises, the canvas
+  // recedes (.cgate-canvas-dimmed), and the gate node blooms (.cgate-node-bloom). All three keyed off
+  // one condition so the dim, the bloom, and the banner appear and clear together.
+  const gateBlooming = !!pendingGate && gateItems.length > 0;
   const ranNodes = runResult ? Object.values(runResult.nodes).filter((n) => n.ok).length : 0;
   const totalRunNodes = runResult?.executionOrder?.length ?? 0;
   const itemsFlowed = runResult ? Object.values(runResult.nodes).reduce((sum, n) => sum + (n.items?.length ?? 0), 0) : 0;
@@ -318,6 +331,18 @@ export function ProgramCanvas({
           {/* The primary run action lives once, in the global top bar (the shipped convention —
               Linear/StackAI/Lindy all anchor it top-right). The program header keeps only its mode
               tabs, so the founder never sees two "Run" buttons competing on the same screen. */}
+          {/* Program details — the inspector (agents, measurement, learning) is summoned, not resident,
+              so the canvas is full width at rest. This flips it open without selecting a node. */}
+          <button
+            className={`program-inspect-toggle ${inspecting ? "active" : ""}`}
+            onClick={() => setInspecting((v) => !v)}
+            type="button"
+            aria-pressed={inspecting}
+            title={inspecting ? "Hide program details" : "Show program details (agents, measurement, learning)"}
+          >
+            <PanelRight size={14} />
+            <span>Program details</span>
+          </button>
         </div>
       </header>
 
@@ -331,7 +356,7 @@ export function ProgramCanvas({
         ) : null}
       </div>
 
-      <div className={`program-canvas-grid mode-${mode} ${editingNode ? "editing" : ""}`}>
+      <div className={`program-canvas-grid mode-${mode} ${editingNode ? "editing" : ""} ${!editingNode && inspecting ? "inspecting" : ""}`}>
         <section className="program-canvas-plane program-canvas-graph" aria-label="Outcome program canvas">
           {/* Hero thesis band — the buyer bet was buried in the inspector gutter while the
               canvas top sat empty. Lift the most un-substitutable sentence on the surface into
@@ -361,32 +386,36 @@ export function ProgramCanvas({
             );
           })()}
           {hasGraph && graph ? (
-            <GraphCanvas
-              mode={mode}
-              graph={graph}
-              result={runResult}
-              running={running}
-              runningNodeId={runningNodeId}
-              selection={selection}
-              connectors={connectors}
-              subsystemHealth={subsystemHealth}
-              contractAudits={contractAudits}
-              proposedNodeIds={proposedNodeIds}
-              proposedEdgeIds={proposedEdgeIds}
-              proposalActive={proposalActive}
-              onResolveProposal={onResolveProposal}
-              onSubmitReview={onSubmitReview}
-              onApproveGate={onApproveGate}
-              onSelect={onSelectNode}
-              onNodePositionChange={onNodePositionChange}
-              onConnectNodes={onConnectNodes}
-              onDeleteEdges={onDeleteEdges}
-              onAddNode={onAddNode}
-              onLoadRecipe={onLoadRecipe}
-              panelOpen={false}
-              refitNonce={refitNonce}
-              highlightedNodeId={highlightedNodeId}
-            />
+            <div className={`program-graph-host ${gateBlooming ? "cgate-canvas-dimmed" : ""}`}>
+              <GraphCanvas
+                mode={mode}
+                graph={graph}
+                result={runResult}
+                running={running}
+                runningNodeId={runningNodeId}
+                selection={selection}
+                connectors={connectors}
+                subsystemHealth={subsystemHealth}
+                contractAudits={contractAudits}
+                proposedNodeIds={proposedNodeIds}
+                proposedEdgeIds={proposedEdgeIds}
+                proposalActive={proposalActive}
+                onResolveProposal={onResolveProposal}
+                onSubmitReview={onSubmitReview}
+                onApproveGate={onApproveGate}
+                onSelect={onSelectNode}
+                onNodePositionChange={onNodePositionChange}
+                onConnectNodes={onConnectNodes}
+                onDeleteEdges={onDeleteEdges}
+                onAddNode={onAddNode}
+                onLoadRecipe={onLoadRecipe}
+                panelOpen={false}
+                refitNonce={refitNonce}
+                highlightedNodeId={highlightedNodeId}
+                bloomNodeId={gateBlooming ? pendingGate : null}
+                onOpenLibrary={onOpenLibrary}
+              />
+            </div>
           ) : (
             <div className="program-empty-agents">
               <Bot />
@@ -397,8 +426,20 @@ export function ProgramCanvas({
               </button>
             </div>
           )}
+
+          {/* The founder-gate banner — rises over the canvas when a run pauses with staged drafts. It
+              self-gates on itemCount, and sits in this positioned section (top-center). Clicking Review
+              selects the gate node, the same path as the inspector's "Review at the gate" button. */}
+          {hasGraph && graph && pendingGate ? (
+            <CanvasGate
+              gateNodeId={pendingGate}
+              itemCount={gateItems.length}
+              onReview={onSelectNode}
+            />
+          ) : null}
         </section>
 
+        {editingNode || inspecting ? (
         <aside className={`program-inspector ${editingNode ? "program-inspector-editing" : ""}`}>
           {editingNode && nodeEditor ? (
             <div className="node-edit-panel">
@@ -563,6 +604,7 @@ export function ProgramCanvas({
           </>
           )}
         </aside>
+        ) : null}
       </div>
 
       <section className={`program-debugger${debugOpen ? "" : " collapsed"}`} aria-label="Program debugger">

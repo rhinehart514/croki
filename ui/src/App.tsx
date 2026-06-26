@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle, Check, LoaderCircle, Play, ShieldCheck, Sparkles, X,
+  AlertTriangle, ArrowRight, Check, ListChecks, LoaderCircle, Play, ShieldCheck, Sparkles, X,
 } from "lucide-react";
 import {
   applyGraphOperations as applyGraphOperationsApi,
@@ -44,8 +44,12 @@ import { ComposerDock } from "@/components/ComposerDock";
 import { GraphCanvas } from "@/components/GraphCanvas";
 import { GoalLauncher } from "@/components/GoalLauncher";
 import { NodeEditor } from "@/components/NodeEditor";
-import { ProgramCanvas, type ProgramCanvasMode, type DebugTab } from "@/components/ProgramCanvas";
-import { GtmExplorer } from "@/components/GtmExplorer";
+import { ProgramCanvas, type ProgramCanvasMode } from "@/components/ProgramCanvas";
+// GtmExplorer (the old left rail) is intentionally no longer rendered — outcome navigation moved to
+// OutcomeSwitcher, the Library to LibraryPalette, the feeds into ComposerDock, Problems to a toolbar
+// chip. The file is kept on disk for reference; importing it here would trip noUnusedLocals.
+import { OutcomeSwitcher } from "@/components/OutcomeSwitcher";
+import { LibraryPalette } from "@/components/LibraryPalette";
 import { buildIdeationCanvas, buildChannelDefaults, channelIdFromNode, type LaneState } from "@/lib/ideationGraph";
 import { statusLabel } from "@/lib/status";
 import { healthHex } from "@/lib/health";
@@ -82,12 +86,6 @@ function pickStr(...vals: unknown[]): string | null {
 // percentage). Taste is shown even at 0 chars on purpose: an empty moat is a signal to the
 // founder that nothing has been gated yet. Falls back to the old config-completeness % only
 // before the manifest loads.
-const CONTEXT_LAYERS: Array<{ key: string; label: string }> = [
-  { key: "product", label: "product" },
-  { key: "taste", label: "taste" },
-  { key: "state", label: "state" },
-];
-
 function programRouteFromLocation() {
   const match = window.location.pathname.match(/^\/projects\/([^/]+)\/programs\/([^/]+)\/canvas\/?$/);
   if (!match) return null;
@@ -95,44 +93,6 @@ function programRouteFromLocation() {
     projectId: decodeURIComponent(match[1]),
     programId: decodeURIComponent(match[2]),
   };
-}
-
-function ContextPill({ manifest, fallbackPct }: { manifest: ContextManifest | null; fallbackPct: number }) {
-  if (!manifest) {
-    return (
-      <div className="loop-context-badge" title="Assembled model context (loading)">
-        <span className="loop-context-dot" style={{ background: fallbackPct > 60 ? "var(--proven)" : "var(--gap)" }} />
-        Context {fallbackPct}%
-      </div>
-    );
-  }
-  const byName = new Map((manifest.providers ?? []).map((p) => [p.name, p] as const));
-  const total = manifest.totalChars ?? 0;
-  const tasteChars = byName.get("taste")?.chars ?? 0;
-  const title = `What Claude receives for this channel: ${manifest.contributingProviders ?? 0} providers, ${total} chars assembled. `
-    + (tasteChars > 0 ? "Taste is shaping runs." : "Taste is empty — gate a draft to start the learning loop.");
-  return (
-    <div className="loop-context-badge" title={title}>
-      <span className="loop-context-dot" style={{ background: total > 0 ? "var(--proven)" : "var(--gap)" }} />
-      Context
-      {/* Each context layer reads as a labelled chip with a presence dot — grounded (filled) or thin
-          (hollow) — instead of a raw, unexplained character count. The exact size stays one hover
-          away (the receipt is always reachable, never the headline). */}
-      {CONTEXT_LAYERS.map(({ key, label }) => {
-        const chars = byName.get(key)?.chars ?? 0;
-        return (
-          <span
-            key={key}
-            title={`${label}: ${chars.toLocaleString()} chars of assembled context`}
-            style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 4, opacity: chars > 0 ? 1 : 0.5 }}
-          >
-            <span style={{ width: 5, height: 5, borderRadius: "50%", background: chars > 0 ? "var(--proven)" : "var(--ghost)" }} />
-            {label}
-          </span>
-        );
-      })}
-    </div>
-  );
 }
 
 export default function App() {
@@ -171,8 +131,12 @@ export default function App() {
   const [composerFocus, setComposerFocus] = useState(0);
   // The Approvals panel — the founder gate's first-class home. Opens from the toolbar badge.
   const [approvalsOpen, setApprovalsOpen] = useState(false);
-  // Lets an explorer click deep-link the program canvas's bottom debugger to a specific tab.
-  const [debugFocus, setDebugFocus] = useState<{ tab: DebugTab; nonce: number } | null>(null);
+  // The summoned Library palette — opened from the canvas "+ Add step" control, replacing the old
+  // left-rail Library now that the rail is dissolved.
+  const [libraryPaletteOpen, setLibraryPaletteOpen] = useState(false);
+  // The Problems popover — the engine's investigations, surfaced as a compact toolbar chip now that
+  // the Problems rail section is gone with the explorer.
+  const [problemsOpen, setProblemsOpen] = useState(false);
   const [projectBusy, setProjectBusy] = useState(false);
   // Is a live Claude available? Drives the cold-start state — composing, ideating, and the operator
   // all need a signed-in subscription, so an unconnected founder gets a clear path, not a dead end.
@@ -844,19 +808,6 @@ export default function App() {
     }
   }, [activeProject, programs]);
 
-  // The single explorer → canvas deep-link. Clicking a policy, run, learning signal, or domain
-  // event in the explorer opens its program and lands the canvas on the right mode/run/debug-tab,
-  // so those sections navigate instead of dead-ending as read-only lists.
-  const handleFocusProgram = useCallback(async (
-    programId: string,
-    focus: { mode?: ProgramCanvasMode; run?: GTMRunResult; debugTab?: DebugTab } = {},
-  ) => {
-    await handleProgramOpen(programId);
-    if (focus.run) setRunResult(focus.run);
-    if (focus.mode) setActiveTab(focus.mode);
-    if (focus.debugTab) setDebugFocus({ tab: focus.debugTab, nonce: Date.now() });
-  }, [handleProgramOpen]);
-
   // "New program" / "Start your first program" — there's no form; a program is born from the
   // conversation. Surface the canvas, leave any open overlay, and summon the co-pilot focused.
   const handleNewProgram = useCallback(() => {
@@ -1147,6 +1098,22 @@ export default function App() {
     : null;
   const viewingMismatch = !!operatorSession?.graphId && !!graph && operatorSession.graphId !== graph.id;
 
+  // The ranked Problems across the system — the engine's investigations, surfaced now as a toolbar
+  // chip + popover (the explorer rail's Problems section moved here when the rail dissolved). An empty
+  // graph has no nodes to fault, so it shows no problems even if the engine carries stale signals.
+  const problems = useMemo(
+    () => (graph?.nodes.length === 0 ? [] : engine?.investigations ?? []),
+    [graph, engine],
+  );
+  // Some subsystems (learn) have no node of their own — route to the gate, where founder decisions
+  // are recorded, so a problem never dead-ends. Mirrors GtmExplorer's nodeForSubsystem.
+  const nodeForSubsystem = useCallback((subsystem: string) => {
+    const ROUTE_FALLBACK: Record<string, string> = { learn: "gate" };
+    return graph?.nodes.find((n) => n.category === subsystem)
+      ?? (ROUTE_FALLBACK[subsystem] ? graph?.nodes.find((n) => n.category === ROUTE_FALLBACK[subsystem]) : null)
+      ?? null;
+  }, [graph]);
+
   // Subsystem id === node category, so this keys real health onto each node.
   const subsystemHealth = useMemo(
     () => Object.fromEntries(
@@ -1159,19 +1126,19 @@ export default function App() {
   const jumpToNode = useCallback((nodeId: string) => {
     setView("canvas");
     setSelection(nodeId);
+    setProblemsOpen(false);
   }, []);
 
-  const contextSignals = activeProject ? [
-    !!activeProject.sharedContext.repository.repo,
-    !!activeProject.sharedContext.repository.outcome,
-    Array.isArray(activeProject.sharedContext.repository.evidence)
-      && activeProject.sharedContext.repository.evidence.length > 0,
-    !!opportunityStudio?.generatedAt,
-    !!(activeProject.sharedContext.positioning.promise || activeProject.sharedContext.positioning.category),
-  ] : [];
-  const contextPct = contextSignals.length
-    ? Math.round((contextSignals.filter(Boolean).length / contextSignals.length) * 100)
-    : 0;
+  // The single "open a side view" router the dissolved explorer rail used for its foot buttons. Now
+  // shared by the OutcomeSwitcher's "Ideate" action and the dock's "what Claude reads" strip, so all
+  // entry points drive the same overlay/ideation state.
+  const handleOpenView = useCallback((v: "opportunities" | "understand" | "product" | "canvas") => {
+    if (v === "opportunities") void startIdeation();
+    else if (v === "understand") { setIdeationOpen(false); setOverlay("understand"); }
+    else if (v === "product") { setIdeationOpen(false); setOverlay("product"); }
+    else { setOverlay(null); setIdeationOpen(false); }
+  }, [startIdeation]);
+
 
   const runCount = graph?.store?.runs ?? flowRuns.length;
 
@@ -1180,14 +1147,16 @@ export default function App() {
   // lists the gate nodes waiting in the run on screen (the operator's pending gate, or the last run's
   // pendingGates), each with the staged drafts it is holding — never fabricated. If nothing is
   // pending, the panel shows the honest quiet state.
-  const gateNodeIds = operatorSession?.status === "waiting_for_gate"
-    ? operatorSession.pendingGate?.nodeIds ?? []
-    : runResult?.pendingGates ?? [];
-  const approvalItems = useMemo(() => gateNodeIds.map((nodeId) => {
-    const node = graph?.nodes.find((n) => n.id === nodeId) ?? null;
-    const result = runResult?.nodes[nodeId] ?? null;
-    return { nodeId, label: node?.label ?? nodeId, items: result?.items ?? [] };
-  }), [gateNodeIds, graph, runResult]);
+  const approvalItems = useMemo(() => {
+    const gateNodeIds = operatorSession?.status === "waiting_for_gate"
+      ? operatorSession.pendingGate?.nodeIds ?? []
+      : runResult?.pendingGates ?? [];
+    return gateNodeIds.map((nodeId) => {
+      const node = graph?.nodes.find((n) => n.id === nodeId) ?? null;
+      const result = runResult?.nodes[nodeId] ?? null;
+      return { nodeId, label: node?.label ?? nodeId, items: result?.items ?? [] };
+    });
+  }, [operatorSession, runResult, graph]);
   // The badge counts the real drafts staged in the loaded outcome's run when one is open; it only
   // falls back to the cross-channel meta count (which can lag a headless run) when nothing is loaded.
   const loadedDrafts = approvalItems.reduce((sum, gate) => sum + gate.items.length, 0);
@@ -1262,9 +1231,25 @@ export default function App() {
             onNewProduct={() => setView("start")}
           />
           <span className="loop-toolbar-sep">/</span>
-          <span className="loop-toolbar-crumb loop-toolbar-crumb-active">
-            {view === "projects" ? "Products" : activeProgram?.name ?? graph?.name ?? "Canvas"}
-          </span>
+          {view === "canvas" ? (
+            // The outcome breadcrumb is now a switcher: it shows the active outcome and drops a glass
+            // menu of every program + system + standalone channel. It replaces both the static crumb
+            // here and the dissolved left-rail Outcomes tree, so outcome navigation survives the rail.
+            <OutcomeSwitcher
+              programs={programs}
+              channels={channels}
+              activeProgramId={activeProgram?.id ?? null}
+              activeChannelId={activeChannelId}
+              onOpenProgram={(id) => { void handleProgramOpen(id); }}
+              onOpenChannel={(id) => { setOverlay(null); setIdeationOpen(false); void loadChannel(id); }}
+              onNewProgram={handleNewProgram}
+              onIdeate={() => handleOpenView("opportunities")}
+            />
+          ) : (
+            <span className="loop-toolbar-crumb loop-toolbar-crumb-active">
+              {view === "projects" ? "Products" : activeProgram?.name ?? graph?.name ?? "Canvas"}
+            </span>
+          )}
           {view === "canvas" && graph ? (
             <span className={`loop-draft-badge ${hasUnsaved ? "unsaved" : "saved"}`}>
               {hasUnsaved ? "Draft" : "Saved"}
@@ -1297,6 +1282,59 @@ export default function App() {
         </div>
 
         <div className="loop-toolbar-right">
+          {/* Problems — the engine's ranked investigations, surfaced as a compact chip now that the
+              explorer's Problems section is gone. Quiet at zero; carries a count when something is
+              wrong. Opens a small glass popover that routes each problem to the node that fixes it. */}
+          {view === "canvas" ? (
+            <div className="loop-problems-chip-wrap">
+              <button
+                className={`loop-problems-chip ${problems.length > 0 ? "has-problems" : ""} ${problemsOpen ? "open" : ""}`}
+                onClick={() => setProblemsOpen((v) => !v)}
+                type="button"
+                aria-haspopup="dialog"
+                aria-expanded={problemsOpen}
+                title={problems.length > 0
+                  ? `${problems.length} problem${problems.length === 1 ? "" : "s"} across your system`
+                  : "No problems detected"}
+              >
+                <ListChecks className="loop-problems-chip-icon" />
+                <span>Problems</span>
+                {problems.length > 0 ? <span className="loop-problems-chip-count">{problems.length}</span> : null}
+              </button>
+              {problemsOpen ? (
+                <div className="loop-problems-pop" role="dialog" aria-label="Problems">
+                  {problems.length === 0 ? (
+                    <p className="loop-problems-pop-empty">No problems detected. Your system is healthy.</p>
+                  ) : problems.map((p) => {
+                    const node = nodeForSubsystem(p.subsystem);
+                    return (
+                      <div className="loop-problems-pop-item" key={p.id}>
+                        <div className="loop-problems-pop-head">
+                          <AlertTriangle />
+                          <p>{p.problem}</p>
+                        </div>
+                        <div className="loop-problems-pop-meta">
+                          <span className="loop-problems-pop-sub">{p.subsystem}</span>
+                          <span
+                            className="loop-problems-pop-health"
+                            style={{ color: healthHex(p.health), borderColor: healthHex(p.health) }}
+                            title={`Health ${p.health}`}
+                          >
+                            {p.health}
+                          </span>
+                        </div>
+                        {node ? (
+                          <button className="loop-problems-pop-fix" onClick={() => jumpToNode(node.id)} type="button">
+                            Fix in {node.label}<ArrowRight />
+                          </button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {/* Approvals — the founder gate is the whole safety spine, so it gets a first-class home.
               Quiet (a ghost outline) at zero; prominent (filled amber, a count) when drafts wait. It
               opens the Approvals panel listing every gated draft with its evidence and approve/edit/
@@ -1317,7 +1355,6 @@ export default function App() {
               {pendingApprovals > 0 ? <span className="loop-approvals-count">{pendingApprovals}</span> : null}
             </button>
           ) : null}
-          <ContextPill manifest={contextManifest} fallbackPct={contextPct} />
           <div
             className={`loop-model-btn ${operatorSession ? "operator-present" : ""} ${connection && !connection.connected ? "disconnected" : ""}`}
             title={connection && !connection.connected ? connection.reason ?? "Claude is not connected." : connection?.label ?? undefined}
@@ -1358,34 +1395,11 @@ export default function App() {
       </header>
 
       {/* ── Body ─────────────────────────────────────────────────────────── */}
-      <div className={`loop-body ${view !== "canvas" ? "studio-mode" : ""}`}>
-        {/* The Explorer is the persistent IDE nav. Understand and Opportunities are not pages —
-            they open as overlays OVER the canvas, so the IDE frame is never swapped out. */}
-        {view === "canvas" ? (
-          <GtmExplorer
-            channels={channels}
-            activeChannelId={activeChannelId}
-            activeProgramId={activeProgram?.id ?? null}
-            currentView={ideationOpen ? "opportunities" : overlay ?? "canvas"}
-            onOpenChannel={(id) => { setOverlay(null); setIdeationOpen(false); void loadChannel(id); }}
-            onOpenProgram={(id) => { void handleProgramOpen(id); }}
-            onFocusProgram={(id, focus) => { void handleFocusProgram(id, focus); }}
-            onNewProgram={handleNewProgram}
-            onOpenArtifact={(type, ref) => setArtifactEdit({ type, ref })}
-            onNewArtifact={handleNewArtifact}
-            onAddCapability={(type, ref, label) => handleAddNode({ label, kind: type, category: "generate", ref, contract: { accepts: [], emits: [] } })}
-            onOpenView={(v) => { if (v === "opportunities") startIdeation(); else if (v === "understand") { setIdeationOpen(false); setOverlay("understand"); } else if (v === "product") { setIdeationOpen(false); setOverlay("product"); } else { setOverlay(null); setIdeationOpen(false); } }}
-            library={library}
-            programs={programs}
-            agentInstances={agentInstances}
-            runs={programRuns}
-            contextManifest={contextManifest}
-            engine={engine}
-            graph={graph}
-            onJumpToNode={jumpToNode}
-          />
-        ) : null}
-
+      {/* The left explorer rail is dissolved: the canvas IS the interface. Outcome navigation moved to
+          the OutcomeSwitcher in the top bar, the Library to a summoned palette on the canvas, the
+          "what Claude reads" feeds into the dock, and Problems to a toolbar chip. The canvas now fills
+          the body. */}
+      <div className={`loop-body canvas-full ${view !== "canvas" ? "studio-mode" : ""}`}>
         {/* Center — the canvas IS the workspace. Only the cold-start picker replaces it. */}
         <section className="loop-canvas-area">
           {view === "start" ? (
@@ -1503,7 +1517,8 @@ export default function App() {
               onDeleteEdges={handleDeleteEdges}
               onAddNode={handleAddNode}
               onLoadRecipe={handleLoadPilotRecipe}
-              focusDebug={debugFocus}
+              onOpenLibrary={() => setLibraryPaletteOpen(true)}
+              focusDebug={null}
               policies={agentPolicies}
               program={activeProgram}
               runResult={runResult}
@@ -1543,6 +1558,7 @@ export default function App() {
                 onDeleteEdges={handleDeleteEdges}
                 onLoadRecipe={handleLoadPilotRecipe}
                 onNodePositionChange={handleNodePositionChange}
+                onOpenLibrary={() => setLibraryPaletteOpen(true)}
                 onSelect={setSelection}
                 panelOpen={false}
                 result={runResult}
@@ -1707,6 +1723,26 @@ export default function App() {
             </div>
           )}
 
+          {/* The summoned Library — the canvas "+ Add step" control opens this glass palette. It
+              replaces the dissolved left-rail Library: the personalized agents born for THIS outcome
+              first, then the on-disk agents and skills, each draggable onto the canvas or added with
+              one click. Anchored top-left near the Add control; self-closes on Escape / outside-click. */}
+          {view === "canvas" ? (
+            <LibraryPalette
+              open={libraryPaletteOpen}
+              onClose={() => setLibraryPaletteOpen(false)}
+              library={library}
+              agentInstances={activeProgram ? agentInstances.filter((i) => i.programId === activeProgram.id) : []}
+              graph={graph}
+              onAddCapability={(type, ref, label) => {
+                handleAddNode({ label, kind: type, category: "generate", ref, contract: { accepts: [], emits: [] } });
+                setLibraryPaletteOpen(false);
+              }}
+              onOpenArtifact={(type, ref) => setArtifactEdit({ type, ref })}
+              onNewArtifact={handleNewArtifact}
+            />
+          ) : null}
+
         </section>
 
         {/* ── Approvals panel — the founder gate's first-class home ─────────
@@ -1835,6 +1871,10 @@ export default function App() {
           onCancel={handleOperatorCancel}
           onReviewGate={(nodeId) => setSelection(nodeId)}
           onReturnToChannel={boundChannel ? () => void loadChannel(boundChannel.id) : undefined}
+          contextManifest={contextManifest}
+          onOpenGrounding={() => handleOpenView("understand")}
+          onOpenPicture={() => handleOpenView("product")}
+          onIdeate={() => handleOpenView("opportunities")}
         /> : null}
       </div>
 

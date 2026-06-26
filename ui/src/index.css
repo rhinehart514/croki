@@ -3588,8 +3588,16 @@ svg {
   align-items: center;
   gap: 8px;
   flex: 1;
+  min-width: 0;
   justify-content: flex-end;
 }
+
+/* Toolbar overflow hardening — the outcome switcher + Problems chip crowd the bar. Keep the primary
+   actions (Simulate, Run) and the Claude status from clipping or wrapping; let the lower-priority
+   context badge give up width first so nothing pushes Run program off-screen. */
+.loop-model-btn { white-space: nowrap; flex-shrink: 0; }
+.loop-simulate-btn, .loop-run-btn { flex-shrink: 0; }
+.loop-problems-chip-wrap, .loop-approvals-btn { flex-shrink: 0; }
 
 .loop-context-badge {
   display: flex;
@@ -3681,6 +3689,12 @@ svg {
 }
 
 .loop-body.studio-mode {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* The left explorer rail is dissolved — the canvas IS the interface. With no rail column the body is
+   a single full-width column; the Claude dock floats over it (absolute), so it claims no column. */
+.loop-body.canvas-full {
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -7929,6 +7943,70 @@ svg {
   font-variant-numeric: tabular-nums;
 }
 
+/* Problems chip — the engine's investigations, surfaced in the toolbar now that the explorer's
+   Problems section is gone. Monochrome (no amber — amber is the gate only): quiet at zero, an ink
+   count when something is wrong. The popover is a small glass surface that routes to the fix node. */
+.loop-problems-chip-wrap { position: relative; display: inline-flex; }
+.loop-problems-chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px;
+  border: 1px solid var(--line-2); border-radius: var(--r-sm); cursor: pointer;
+  background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 600;
+  transition: background 120ms var(--ease), border-color 120ms var(--ease), color 120ms var(--ease);
+}
+.loop-problems-chip:hover { color: var(--ink); border-color: var(--ghost); }
+.loop-problems-chip.open { border-color: var(--ghost); color: var(--ink); background: var(--surface-2); }
+.loop-problems-chip-icon { width: 14px; height: 14px; flex-shrink: 0; }
+.loop-problems-chip.has-problems { color: var(--ink); border-color: var(--ghost); }
+.loop-problems-chip-count {
+  min-width: 16px; padding: 1px 5px; border-radius: 999px;
+  background: var(--ink); color: var(--surface); font-size: 10px; font-weight: 700; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.loop-problems-pop {
+  position: absolute; top: calc(100% + 8px); right: 0; width: 320px; max-height: 60vh; overflow: auto;
+  z-index: 60; display: flex; flex-direction: column; gap: 8px; padding: 10px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid color-mix(in srgb, var(--line-2) 72%, transparent);
+  border-radius: var(--r-lg);
+  box-shadow: 0 1px 2px rgba(16,18,27,0.08), 0 24px 60px -14px rgba(16,18,27,0.34);
+}
+.loop-problems-pop-empty { font-size: 12.5px; color: var(--muted); padding: 8px 4px; line-height: 1.5; }
+.loop-problems-pop-item {
+  display: flex; flex-direction: column; gap: 6px; padding: 10px;
+  border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface);
+}
+.loop-problems-pop-head { display: flex; align-items: flex-start; gap: 8px; }
+.loop-problems-pop-head svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--muted); margin-top: 1px; }
+.loop-problems-pop-head p { font-size: 12.5px; color: var(--ink); line-height: 1.45; }
+.loop-problems-pop-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.loop-problems-pop-sub { font-size: 11px; color: var(--faint); text-transform: capitalize; }
+.loop-problems-pop-health {
+  min-width: 22px; padding: 1px 6px; border: 1px solid currentColor; border-radius: 999px;
+  font-size: 11px; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums;
+}
+.loop-problems-pop-fix {
+  display: inline-flex; align-items: center; gap: 4px; align-self: flex-start;
+  font: inherit; font-size: 12px; font-weight: 560; color: var(--ink);
+  background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-sm);
+  padding: 4px 8px; cursor: pointer;
+}
+.loop-problems-pop-fix:hover { border-color: var(--ghost); background: var(--surface); }
+.loop-problems-pop-fix svg { width: 13px; height: 13px; }
+
+/* Program details toggle — flips the summoned inspector (agents, measurement, learning) in the
+   program header. Quiet by default; active when the inspector is showing. Monochrome. */
+.program-inspect-toggle {
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px;
+  border: 1px solid var(--line-2); border-radius: var(--r-sm); cursor: pointer;
+  background: var(--surface); color: var(--muted); font-size: 12.5px; font-weight: 600;
+  transition: background 120ms var(--ease), border-color 120ms var(--ease), color 120ms var(--ease);
+}
+.program-inspect-toggle:hover { color: var(--ink); border-color: var(--ghost); }
+.program-inspect-toggle.active { color: var(--ink); border-color: var(--ghost); background: var(--surface-2); }
+.program-inspect-toggle svg { flex-shrink: 0; }
+
 .loop-approvals-panel {
   position: absolute; top: 8px; right: 16px; width: 380px; max-height: calc(100vh - 120px);
   z-index: 60; display: flex; flex-direction: column;
@@ -8197,7 +8275,19 @@ svg {
 
 .program-canvas-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  /* At rest the canvas is full width — the inspector is summoned, not resident. The two-column
+     layout returns only when a node is selected (.editing) or the founder opens Program details
+     (.inspecting). */
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+}
+
+/* The canvas plane wraps GraphCanvas so the founder-gate dim (.cgate-canvas-dimmed) has a real
+   block to recede; it must fill the section or React Flow collapses. */
+.program-graph-host {
+  position: relative;
+  width: 100%;
+  height: 100%;
   min-height: 0;
 }
 
@@ -8747,6 +8837,9 @@ svg {
    editing prompts/rules isn't cramped (the modal it replaces was a wide centered workspace), and
    drop the inspector's gutter padding — the editor owns its own. */
 .program-canvas-grid.editing { grid-template-columns: minmax(0, 1fr) 440px; }
+/* Program details summoned: the same right-zone width as the resident inspector used to be, reused
+   for the agents/measurement/learning view the "Program details" toggle reveals. */
+.program-canvas-grid.inspecting { grid-template-columns: minmax(0, 1fr) 340px; }
 .program-inspector-editing { padding: 0; display: flex; flex-direction: column; }
 .node-edit-panel { display: flex; flex-direction: column; min-height: 0; height: 100%; }
 .node-edit-panel-head {
