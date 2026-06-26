@@ -1,4 +1,7 @@
 import "@/styles/program-header.css";
+import { AnimatePresence, motion } from "motion/react";
+import { Reveal, Collapse, Stagger, StaggerItem } from "@/lib/motion";
+import { SPRING } from "@/lib/springs";
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
   Bot, CheckCircle2, ChevronDown, GitBranch, History, Pause, PanelRight, Play, X,
@@ -432,24 +435,26 @@ export function ProgramCanvas({
       {/* Program details — a floating glass sheet over the canvas (never a rail). Holds the agents
           list, the measurement plan, and the "what your decisions changed" learning threads.
           Dismissable by Escape, a backdrop click, or the close button. */}
-      {inspecting ? (
-        <ProgramDetailsSheet
-          program={program}
-          programAgents={programAgents}
-          measurementBlind={measurementBlind}
-          mergedLearningThreads={mergedLearningThreads}
-          programFeedback={programFeedback}
-          selectedAgent={selectedAgent}
-          selectedPolicy={selectedPolicy}
-          selectedAgentId={selectedAgentId}
-          setSelectedAgentId={setSelectedAgentId}
-          latestEvaluationByAgent={latestEvaluationByAgent}
-          mode={mode}
-          running={running}
-          onBuildAgents={onBuildAgents}
-          onClose={() => setInspecting(false)}
-        />
-      ) : null}
+      <AnimatePresence>
+        {inspecting ? (
+          <ProgramDetailsSheet
+            program={program}
+            programAgents={programAgents}
+            measurementBlind={measurementBlind}
+            mergedLearningThreads={mergedLearningThreads}
+            programFeedback={programFeedback}
+            selectedAgent={selectedAgent}
+            selectedPolicy={selectedPolicy}
+            selectedAgentId={selectedAgentId}
+            setSelectedAgentId={setSelectedAgentId}
+            latestEvaluationByAgent={latestEvaluationByAgent}
+            mode={mode}
+            running={running}
+            onBuildAgents={onBuildAgents}
+            onClose={() => setInspecting(false)}
+          />
+        ) : null}
+      </AnimatePresence>
 
       <section className={`program-debugger${debugOpen ? "" : " collapsed"}`} aria-label="Program debugger">
         <div className="debugger-head">
@@ -471,7 +476,7 @@ export function ProgramCanvas({
             </button>
           )}
         </div>
-        {debugOpen ? (
+        <Collapse open={debugOpen}>
         <div className="debugger-body">
           {debugTab === "timeline" ? <Timeline events={programEvents} feedback={programFeedback} /> : null}
           {debugTab === "events" ? <EventList events={programEvents} /> : null}
@@ -480,7 +485,7 @@ export function ProgramCanvas({
           {debugTab === "diff" ? <ThreadPanel threads={learningThreads} /> : null}
           {debugTab === "contracts" ? <ContractsPanel agents={programAgents} policies={programPolicies} evaluations={programEvaluations} /> : null}
         </div>
-        ) : null}
+        </Collapse>
       </section>
     </div>
   );
@@ -518,14 +523,27 @@ function ProgramDetailsSheet({
   }, [onClose]);
 
   return (
-    <div className="program-sheet-scrim" onClick={onClose} role="presentation">
-      <aside
+    <motion.div
+      className="program-sheet-scrim"
+      onClick={onClose}
+      role="presentation"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={SPRING}
+    >
+      <Reveal
+        open
         className="program-sheet"
+        origin="top-right"
         role="dialog"
-        aria-label="Program details"
-        aria-modal="true"
-        onClick={(e) => e.stopPropagation()}
       >
+        <div
+          aria-label="Program details"
+          aria-modal="true"
+          onClick={(e) => e.stopPropagation()}
+          style={{ display: "flex", flexDirection: "column", minHeight: 0, maxHeight: "inherit", overflow: "hidden" }}
+        >
         <header className="program-sheet-head">
           <span className="inspector-kicker">Program details</span>
           <button className="program-sheet-close" aria-label="Close program details" onClick={onClose} type="button">
@@ -554,19 +572,20 @@ function ProgramDetailsSheet({
           <div className="inspector-section">
             <h3>Agents ({programAgents.length})</h3>
             {programAgents.length ? (
-              <div className="inspector-agent-chips">
+              <Stagger className="inspector-agent-chips">
                 {programAgents.map((agent) => (
-                  <button
-                    key={agent.id}
-                    className={`inspector-agent-chip ${selectedAgentId === agent.id ? "selected" : ""}`}
-                    onClick={() => setSelectedAgentId((current) => current === agent.id ? null : agent.id)}
-                    type="button"
-                  >
-                    <Bot size={12} />
-                    {agent.ref} v{agent.version}
-                  </button>
+                  <StaggerItem key={agent.id}>
+                    <button
+                      className={`inspector-agent-chip ${selectedAgentId === agent.id ? "selected" : ""}`}
+                      onClick={() => setSelectedAgentId((current) => current === agent.id ? null : agent.id)}
+                      type="button"
+                    >
+                      <Bot size={12} />
+                      {agent.ref} v{agent.version}
+                    </button>
+                  </StaggerItem>
                 ))}
-              </div>
+              </Stagger>
             ) : (
               <p>No agents built yet. <button className="inspector-inline-action" onClick={onBuildAgents} disabled={running} type="button">Build the first agent</button>.</p>
             )}
@@ -610,8 +629,9 @@ function ProgramDetailsSheet({
             </div>
           ) : null}
         </div>
-      </aside>
-    </div>
+        </div>
+      </Reveal>
+    </motion.div>
   );
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, FolderGit2, LoaderCircle, Plus, Settings2 } from "lucide-react";
+import { Reveal } from "@/lib/motion";
 import type { ProjectSummary } from "@/types";
 
 /**
@@ -55,8 +56,7 @@ export function ProjectSwitcher({
         <ChevronDown className="project-switcher-caret" />
       </button>
 
-      {open ? (
-        <div className="project-switcher-menu" role="listbox">
+      <Reveal open={open} className="project-switcher-menu" role="listbox" origin="top-left">
           {projects.map((project) => (
             <button
               key={project.id}
@@ -92,8 +92,7 @@ export function ProjectSwitcher({
           >
             <Settings2 /> Manage products
           </button>
-        </div>
-      ) : null}
+      </Reveal>
     </div>
   );
 }

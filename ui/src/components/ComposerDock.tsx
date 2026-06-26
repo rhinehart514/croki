@@ -6,6 +6,7 @@ import {
 import { statusLabel } from "@/lib/status";
 import { DockContext } from "@/components/DockContext";
 import { SlidingTabs } from "@/components/SlidingTabs";
+import { Collapse, Stagger, StaggerItem } from "@/lib/motion";
 import "@/styles/dock-context.css";
 import type { ContextManifest, OperatorEvent, OperatorSession } from "@/types";
 
@@ -117,7 +118,7 @@ function ToolCluster({ events }: { events: OperatorEvent[] }) {
         <span className="cnv-tools-count">{events.length} step{events.length === 1 ? "" : "s"}</span>
         {!open ? <span className="cnv-tools-peek">{events[events.length - 1].title}</span> : null}
       </button>
-      {open ? (
+      <Collapse open={open}>
         <ul className="cnv-tools-list">
           {events.map((e) => (
             <li key={e.id} className="cnv-tool">
@@ -126,7 +127,7 @@ function ToolCluster({ events }: { events: OperatorEvent[] }) {
             </li>
           ))}
         </ul>
-      ) : null}
+      </Collapse>
     </div>
   );
 }
@@ -402,33 +403,45 @@ export function ComposerDock({
         ) : view === "focus" ? (
           <FocusView session={session} />
         ) : (
-          segmentEvents(session.events).map((seg) =>
-            seg.kind === "tool" ? (
-              <ToolCluster key={seg.id} events={seg.events} />
-            ) : seg.kind === "say" ? (
-              <div className="cnv-say" key={seg.id}>
-                <div className="cnv-say-body">
-                  {seg.event.detail ? <MarkdownLite text={seg.event.detail} /> : <p>{seg.event.title}</p>}
-                </div>
-              </div>
-            ) : seg.kind === "you" ? (
-              <div className="cnv-you" key={seg.id}>
-                <div className="cnv-you-bubble">{seg.event.detail || seg.event.title}</div>
-              </div>
-            ) : seg.kind === "ask" ? (
-              <div className="cnv-ask" key={seg.id}>
-                <ShieldCheck size={15} aria-hidden="true" />
-                <div className="cnv-ask-body">
-                  <strong>{seg.event.title}</strong>
-                  {seg.event.detail ? <div className="cnv-ask-detail"><MarkdownLite text={seg.event.detail} /></div> : null}
-                </div>
-              </div>
-            ) : (
-              <div className="cnv-sys" key={seg.id}>
-                <span>{seg.event.detail || seg.event.title}</span>
-              </div>
-            ),
-          )
+          <Stagger className="cnv-thread">
+            {segmentEvents(session.events).map((seg) =>
+              seg.kind === "tool" ? (
+                <StaggerItem key={seg.id}>
+                  <ToolCluster events={seg.events} />
+                </StaggerItem>
+              ) : seg.kind === "say" ? (
+                <StaggerItem key={seg.id}>
+                  <div className="cnv-say">
+                    <div className="cnv-say-body">
+                      {seg.event.detail ? <MarkdownLite text={seg.event.detail} /> : <p>{seg.event.title}</p>}
+                    </div>
+                  </div>
+                </StaggerItem>
+              ) : seg.kind === "you" ? (
+                <StaggerItem key={seg.id}>
+                  <div className="cnv-you">
+                    <div className="cnv-you-bubble">{seg.event.detail || seg.event.title}</div>
+                  </div>
+                </StaggerItem>
+              ) : seg.kind === "ask" ? (
+                <StaggerItem key={seg.id}>
+                  <div className="cnv-ask">
+                    <ShieldCheck size={15} aria-hidden="true" />
+                    <div className="cnv-ask-body">
+                      <strong>{seg.event.title}</strong>
+                      {seg.event.detail ? <div className="cnv-ask-detail"><MarkdownLite text={seg.event.detail} /></div> : null}
+                    </div>
+                  </div>
+                </StaggerItem>
+              ) : (
+                <StaggerItem key={seg.id}>
+                  <div className="cnv-sys">
+                    <span>{seg.event.detail || seg.event.title}</span>
+                  </div>
+                </StaggerItem>
+              ),
+            )}
+          </Stagger>
         )}
       </div>
 

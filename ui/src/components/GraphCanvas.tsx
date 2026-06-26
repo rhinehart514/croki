@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { healthHex } from "@/lib/health";
+import { Reveal } from "@/lib/motion";
 import type { NodeEditorBridge } from "@/components/ProgramCanvas";
 import type {
   ConnectorMeta, GateDecision, GTMEdge, GTMEdgeType, GTMGraph,
@@ -855,8 +856,7 @@ function StepPalette({
         >
           <Plus /> Add step <ChevronDown />
         </button>
-        {open ? (
-          <div className="workflow-palette-menu" role="menu">
+        <Reveal open={open} className="workflow-palette-menu" role="menu" origin="top-left">
             {onOpenLibrary ? (
               <button className="workflow-recipe" onClick={() => { onOpenLibrary(); setOpen(false); }} role="menuitem" type="button">
                 <Bot />
@@ -880,8 +880,7 @@ function StepPalette({
                 <span><strong>{option.label}</strong><small>{option.detail}</small></span>
               </button>
             ))}
-          </div>
-        ) : null}
+        </Reveal>
       </div>
     </Panel>
   );

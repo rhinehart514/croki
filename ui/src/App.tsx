@@ -53,6 +53,7 @@ import { OutcomeSwitcher } from "@/components/OutcomeSwitcher";
 import { LibraryPalette } from "@/components/LibraryPalette";
 import { buildIdeationCanvas, buildChannelDefaults, channelIdFromNode, type LaneState } from "@/lib/ideationGraph";
 import { statusLabel } from "@/lib/status";
+import { Reveal, Stagger, StaggerItem } from "@/lib/motion";
 import { healthHex } from "@/lib/health";
 import { itemKey } from "@/lib/itemKey";
 import { findProgramForGraph, graphBelongsToProgram, programGraphId } from "@/lib/program";
@@ -1289,38 +1290,40 @@ export default function App() {
                 <span>Problems</span>
                 {problems.length > 0 ? <span className="loop-problems-chip-count">{problems.length}</span> : null}
               </button>
-              {problemsOpen ? (
-                <div className="loop-problems-pop" role="dialog" aria-label="Problems">
+              <Reveal open={problemsOpen} className="loop-problems-pop" role="dialog" origin="top-right">
                   {problems.length === 0 ? (
                     <p className="loop-problems-pop-empty">No problems detected. Your system is healthy.</p>
-                  ) : problems.map((p) => {
-                    const node = nodeForSubsystem(p.subsystem);
-                    return (
-                      <div className="loop-problems-pop-item" key={p.id}>
-                        <div className="loop-problems-pop-head">
-                          <AlertTriangle />
-                          <p>{p.problem}</p>
-                        </div>
-                        <div className="loop-problems-pop-meta">
-                          <span className="loop-problems-pop-sub">{p.subsystem}</span>
-                          <span
-                            className="loop-problems-pop-health"
-                            style={{ color: healthHex(p.health), borderColor: healthHex(p.health) }}
-                            title={`Health ${p.health}`}
-                          >
-                            {p.health}
-                          </span>
-                        </div>
-                        {node ? (
-                          <button className="loop-problems-pop-fix" onClick={() => jumpToNode(node.id)} type="button">
-                            Fix in {node.label}<ArrowRight />
-                          </button>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : null}
+                  ) : (
+                    <Stagger>
+                      {problems.map((p) => {
+                        const node = nodeForSubsystem(p.subsystem);
+                        return (
+                          <StaggerItem className="loop-problems-pop-item" key={p.id}>
+                            <div className="loop-problems-pop-head">
+                              <AlertTriangle />
+                              <p>{p.problem}</p>
+                            </div>
+                            <div className="loop-problems-pop-meta">
+                              <span className="loop-problems-pop-sub">{p.subsystem}</span>
+                              <span
+                                className="loop-problems-pop-health"
+                                style={{ color: healthHex(p.health), borderColor: healthHex(p.health) }}
+                                title={`Health ${p.health}`}
+                              >
+                                {p.health}
+                              </span>
+                            </div>
+                            {node ? (
+                              <button className="loop-problems-pop-fix" onClick={() => jumpToNode(node.id)} type="button">
+                                Fix in {node.label}<ArrowRight />
+                              </button>
+                            ) : null}
+                          </StaggerItem>
+                        );
+                      })}
+                    </Stagger>
+                  )}
+              </Reveal>
             </div>
           ) : null}
           {/* Approvals — the founder gate is the whole safety spine, so it gets a first-class home.

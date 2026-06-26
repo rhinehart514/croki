@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Plus, Sparkles } from "lucide-react";
+import { Reveal } from "@/lib/motion";
 import type { ChannelMeta, OutcomeProgram } from "@/types";
 import { statusLabel, statusTone } from "@/lib/status";
 import "@/styles/outcome-switcher.css";
@@ -102,8 +103,7 @@ export function OutcomeSwitcher({
         <ChevronDown className={`osw-trigger-chevron ${open ? "open" : ""}`} size={14} />
       </button>
 
-      {open ? (
-        <div className="osw-popover" role="menu">
+      <Reveal open={open} className="osw-popover" role="menu" origin="top-left">
           {programs.length === 0 && standaloneChannels.length === 0 ? (
             <p className="osw-empty">No outcomes yet. Start one below.</p>
           ) : (
@@ -175,8 +175,7 @@ export function OutcomeSwitcher({
               <span>Ideate outcomes for me</span>
             </button>
           </div>
-        </div>
-      ) : null}
+      </Reveal>
     </div>
   );
 }

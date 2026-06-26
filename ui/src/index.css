@@ -6823,6 +6823,9 @@ svg {
    prominent, the machine traces and lifecycle recede. Rebuilt from a flat log where
    every tool call shouted as loud as the answer. */
 .composer-dock-timeline { display: flex; flex-direction: column; gap: var(--space-4); }
+/* The Thread list is wrapped in <Stagger> (a motion orchestrator) — it carries the column layout so
+   the rows keep their gap as they deal in. */
+.cnv-thread { display: flex; flex-direction: column; gap: var(--space-4); }
 
 /* SAY — Claude's prose. The substance: readable body type, real line-height, no chrome. */
 .cnv-say-body { font-size: 13px; line-height: 1.62; color: var(--ink); }
@@ -9011,9 +9014,8 @@ svg {
   align-items: stretch;
   padding: var(--space-4);
   background: rgba(16, 18, 27, 0.18);
-  animation: program-sheet-fade 160ms var(--ease);
+  /* Enter/exit now driven by Motion (AnimatePresence) in ProgramCanvas, not a one-shot keyframe. */
 }
-@keyframes program-sheet-fade { from { opacity: 0; } to { opacity: 1; } }
 .program-sheet {
   display: flex;
   flex-direction: column;
@@ -9028,11 +9030,6 @@ svg {
   border: 1px solid color-mix(in srgb, var(--line-2) 72%, transparent);
   box-shadow: 0 24px 60px -14px rgba(16, 18, 27, 0.34);
   overflow: hidden;
-  animation: program-sheet-rise 200ms var(--ease);
-}
-@keyframes program-sheet-rise {
-  from { opacity: 0; transform: translateY(10px) scale(0.99); }
-  to { opacity: 1; transform: none; }
 }
 .program-sheet-head {
   display: flex;
