@@ -6879,6 +6879,41 @@ svg {
 .cnv-tool-title { font-size: 11.5px; color: var(--muted); }
 .cnv-tool-detail { font-size: 11px; color: var(--faint); line-height: 1.4; }
 
+/* ── Focus vs Thread — the dock leads with STATE, not the log ──────────────────
+   Focus (default) is the operator's current face: a live presence while working,
+   the answer when done. Thread is the full transcript, opt-in. */
+.composer-dock-modes { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--r-md); background: var(--surface-2); }
+.composer-dock-modes button {
+  border: 0; background: transparent; cursor: pointer; padding: 3px 10px; border-radius: var(--r-sm);
+  font: inherit; font-size: 11px; font-weight: 550; color: var(--muted);
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.composer-dock-modes button:hover { color: var(--ink); }
+.composer-dock-modes button.active { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-card); }
+
+.cnv-focus { padding: var(--space-2) 0; }
+
+/* Live presence while Claude works — a breathing orb + the current beat. */
+.cnv-focus-live { display: flex; gap: var(--space-3); align-items: flex-start; }
+.cnv-focus-orb {
+  width: 10px; height: 10px; border-radius: 50%; background: var(--proven); flex-shrink: 0; margin-top: 4px;
+  animation: focusPulse 1.8s var(--ease) infinite;
+}
+@keyframes focusPulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--proven) 45%, transparent); }
+  70%  { box-shadow: 0 0 0 9px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.cnv-focus-live-body strong { display: block; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.cnv-focus-live-body p { margin: 4px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--muted); }
+
+/* The answer when done — the substance you came back for, prominent and readable. */
+.cnv-focus-eyebrow {
+  display: block; font-size: 9.5px; font-weight: 760; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: var(--space-2);
+}
+.cnv-focus-empty { font-size: 12.5px; color: var(--muted); }
+
 .composer-dock-gate {
   display: flex; align-items: center; gap: 9px; margin: 0 12px 8px; padding: 10px 12px;
   border-radius: 10px; background: color-mix(in srgb, var(--gap, #e18b2c) 12%, transparent);

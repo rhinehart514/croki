@@ -130,6 +130,39 @@ function ToolCluster({ events }: { events: OperatorEvent[] }) {
   );
 }
 
+// FOCUS — the dock's default face. Not a scrolling log: it shows the operator's STATE. While Claude
+// works, a live "now" presence (the current beat). When it's done, the answer itself, prominent and
+// readable. The full transcript is the Thread mode, one click away — you opt into the history, you
+// don't land in it. This is the rebuild: state-first, not log-first.
+function FocusView({ session }: { session: OperatorSession }) {
+  if (session.status === "running") {
+    const beat = [...session.events].reverse().find((e) => e.title);
+    return (
+      <div className="cnv-focus cnv-focus-live">
+        <span className="cnv-focus-orb" aria-hidden="true" />
+        <div className="cnv-focus-live-body">
+          <strong>{beat?.title ?? "Working…"}</strong>
+          {beat?.detail ? <p>{beat.detail}</p> : null}
+        </div>
+      </div>
+    );
+  }
+  const answer = [...session.events].reverse().find((e) => speakerOf(e) === "say" && (e.detail ?? "").trim());
+  if (answer) {
+    return (
+      <div className="cnv-focus cnv-focus-answer">
+        <span className="cnv-focus-eyebrow">Claude</span>
+        <div className="cnv-say-body"><MarkdownLite text={answer.detail ?? answer.title} /></div>
+      </div>
+    );
+  }
+  return (
+    <div className="cnv-focus cnv-focus-empty">
+      <p>{session.summary ?? statusLabel(session.status)}</p>
+    </div>
+  );
+}
+
 // The persistent co-pilot. Always docked, never summoned: your channels at the head, the
 // operator's live narration in the middle, one input at the foot. Talking to Claude here
 // either starts a new session (when idle) or continues the current one — one conversation.
@@ -164,6 +197,8 @@ export function ComposerDock({
 }) {
   const [collapsed, setCollapsed] = useState(floating);
   const [expanded, setExpanded] = useState(false);
+  // The dock leads with the operator's STATE (focus), not the transcript (thread). You opt into history.
+  const [view, setView] = useState<"focus" | "thread">("focus");
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -308,6 +343,12 @@ export function ComposerDock({
               : "co-pilot · on your subscription"}
           </span>
         </div>
+        {session && session.events.length > 0 ? (
+          <div className="composer-dock-modes" role="tablist" aria-label="Dock view">
+            <button className={view === "focus" ? "active" : ""} onClick={() => setView("focus")} role="tab" aria-selected={view === "focus"} type="button">Focus</button>
+            <button className={view === "thread" ? "active" : ""} onClick={() => setView("thread")} role="tab" aria-selected={view === "thread"} type="button">Thread</button>
+          </div>
+        ) : null}
         {sessionActive && (
           <button className="composer-dock-stop" onClick={() => void onCancel()} type="button" title="Stop">
             <Square />
@@ -344,7 +385,7 @@ export function ComposerDock({
       )}
 
       {/* ── Conversation / narration ───────────────────────────── */}
-      <div className="composer-dock-timeline" ref={timelineRef} aria-live="polite">
+      <div className={`composer-dock-timeline ${session && view === "focus" ? "is-focus" : ""}`} ref={timelineRef} aria-live="polite">
         {!session ? (
           <div className="composer-dock-idle">
             <p className="composer-idle-lead">Tell Claude the outcome you want. It creates the program, builds the agents that chase it, runs them, and stops at your gate.</p>
@@ -354,6 +395,8 @@ export function ComposerDock({
               ))}
             </div>
           </div>
+        ) : view === "focus" ? (
+          <FocusView session={session} />
         ) : (
           segmentEvents(session.events).map((seg) =>
             seg.kind === "tool" ? (
