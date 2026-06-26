@@ -6914,6 +6914,25 @@ svg {
 }
 .cnv-focus-empty { font-size: 12.5px; color: var(--muted); }
 
+/* ── Navigation motion — content settles in as you click around (Linear-grade) ──
+   When the thing you clicked swaps the content, the new content rises + fades in on a
+   spring ease instead of snapping. Snappy, not sluggish (~240ms) — nav should feel
+   responsive. Paired with a tactile press on the controls that drive it. */
+@keyframes viewEnter {
+  from { opacity: 0; transform: translateY(7px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.view-enter { animation: viewEnter 240ms var(--ease-out) both; }
+
+/* Tactile press — tabs and switches dip when clicked, the physical feel Linear has. */
+.program-mode-tabs button, .loop-mode-tab, .node-editor-tab,
+.composer-dock-modes button, .debugger-tabs button, .program-secondary-action {
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease-out);
+}
+.program-mode-tabs button:active, .loop-mode-tab:active, .node-editor-tab:active,
+.composer-dock-modes button:active, .debugger-tabs button:active { transform: scale(0.95); }
+
 .composer-dock-gate {
   display: flex; align-items: center; gap: 9px; margin: 0 12px 8px; padding: 10px 12px;
   border-radius: 10px; background: color-mix(in srgb, var(--gap, #e18b2c) 12%, transparent);

@@ -338,7 +338,7 @@ export function ProgramCanvas({
         </div>
       </header>
 
-      <div className="program-mode-intent">
+      <div key={mode} className="program-mode-intent view-enter">
         <span className="program-mode-intent-label">{MODE_LABEL[mode]}</span>
         <span className="program-mode-intent-q">{intent.question}</span>
         {mode === "review" && pendingGate ? (

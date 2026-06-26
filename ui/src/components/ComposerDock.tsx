@@ -385,7 +385,7 @@ export function ComposerDock({
       )}
 
       {/* ── Conversation / narration ───────────────────────────── */}
-      <div className={`composer-dock-timeline ${session && view === "focus" ? "is-focus" : ""}`} ref={timelineRef} aria-live="polite">
+      <div key={session ? view : "idle"} className={`composer-dock-timeline view-enter ${session && view === "focus" ? "is-focus" : ""}`} ref={timelineRef} aria-live="polite">
         {!session ? (
           <div className="composer-dock-idle">
             <p className="composer-idle-lead">Tell Claude the outcome you want. It creates the program, builds the agents that chase it, runs them, and stops at your gate.</p>
