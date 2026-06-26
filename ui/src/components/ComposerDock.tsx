@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  AlertCircle, ArrowUp, Bot, CheckCircle2, Circle, LoaderCircle, Maximize2, MessageSquareText,
-  Minimize2, Play, Plus, ShieldCheck, Square, Wrench, X,
+  AlertCircle, ArrowUp, Bot, ChevronRight, LoaderCircle, Maximize2,
+  Minimize2, Play, Plus, ShieldCheck, Square, X,
 } from "lucide-react";
 import { statusLabel } from "@/lib/status";
 import { DockContext } from "@/components/DockContext";
@@ -35,6 +35,9 @@ function MarkdownLite({ text }: { text: string }) {
   };
   for (const line of lines) {
     if (/^\|?\s*[-:]+\s*(\|\s*[-:]+\s*)+\|?$/.test(line)) continue; // table separator row
+    if (/^-{3,}$|^\*{3,}$/.test(line)) { flush(); blocks.push(<hr key={`hr-${blocks.length}`} className="composer-md-hr" />); continue; }
+    const heading = line.match(/^(#{1,6})\s+(.*)$/);
+    if (heading) { flush(); blocks.push(<p key={`h-${blocks.length}`} className="composer-md-h">{renderInline(heading[2], `h-${blocks.length}`)}</p>); continue; }
     if (line.startsWith("|")) {
       const cells = line.split("|").map((c) => c.trim()).filter(Boolean);
       if (cells.length) bullets.push(cells.join(" · "));
@@ -56,14 +59,75 @@ const STARTERS = [
   "Turn my product's strengths into content that ranks",
 ];
 
-function eventIcon(event: OperatorEvent) {
-  if (event.type === "graph_patched") return <Wrench aria-hidden="true" />;
-  if (event.type === "run_completed") return <Play aria-hidden="true" />;
-  if (event.type.includes("gate")) return <ShieldCheck aria-hidden="true" />;
-  if (event.type.includes("failed") || event.type.includes("interrupted")) return <AlertCircle aria-hidden="true" />;
-  if (event.type.includes("completed")) return <CheckCircle2 aria-hidden="true" />;
-  if (event.type.includes("founder")) return <MessageSquareText aria-hidden="true" />;
-  return <Circle aria-hidden="true" />;
+// ─── Conversation rendering — the operator transcript as a CONVERSATION, not a log ──────────────
+// Every beat falls into one of five registers, ranked by how much it deserves the eye:
+//   ask    — Claude paused for the founder. The one LOUD card (it's the gate moment).
+//   say    — Claude's prose (reasoning / the final answer). The substance, prominent + readable.
+//   you    — the founder's reply. A distinct bubble, so the two speakers never blur.
+//   tool   — a tool call (inspect product, inspect portfolio…). RECEDES: consecutive ones collapse
+//            into one quiet "N steps" cluster so the answer never drowns under machine noise.
+//   system — session lifecycle (started / resumed). A quiet centered line.
+type Speaker = "say" | "you" | "ask" | "system" | "tool";
+function speakerOf(ev: OperatorEvent): Speaker {
+  const t = ev.type;
+  if (t === "operator_note" || t === "session_completed") return "say";
+  if (t === "founder_input_received") return "you";
+  if (t === "founder_input_requested") return "ask";
+  if (t.startsWith("session_")) return "system";
+  return "tool";
+}
+
+type Segment =
+  | { kind: "tool"; id: string; events: OperatorEvent[] }
+  | { kind: Exclude<Speaker, "tool">; id: string; event: OperatorEvent };
+
+function segmentEvents(events: OperatorEvent[]): Segment[] {
+  const out: Segment[] = [];
+  let lastSay: string | null = null;
+  for (const ev of events) {
+    const kind = speakerOf(ev);
+    if (kind === "tool") {
+      const last = out[out.length - 1];
+      if (last && last.kind === "tool") last.events.push(ev);
+      else out.push({ kind: "tool", id: ev.id, events: [ev] });
+      continue;
+    }
+    // "Operator finished" usually repeats the last reasoning verbatim — don't render the wall twice.
+    if (kind === "say") {
+      const d = (ev.detail ?? "").trim();
+      if (d && d === lastSay) continue;
+      if (d) lastSay = d;
+    }
+    out.push({ kind, id: ev.id, event: ev });
+  }
+  return out;
+}
+
+// The collapsed machine trace: one quiet line ("8 steps · Inspected the GTM portfolio") that opens
+// to the individual calls. Defaults closed so the conversation, not the tooling, is what you read.
+function ToolCluster({ events }: { events: OperatorEvent[] }) {
+  const [open, setOpen] = useState(false);
+  const failed = events.some((e) => e.type === "tool_failed" || /failed/i.test(e.title));
+  return (
+    <div className={`cnv-tools ${open ? "open" : ""}`}>
+      <button className="cnv-tools-head" onClick={() => setOpen((v) => !v)} type="button">
+        <ChevronRight className="cnv-tools-chev" size={13} aria-hidden="true" />
+        <span className={`cnv-tools-dot ${failed ? "fail" : "done"}`} aria-hidden="true" />
+        <span className="cnv-tools-count">{events.length} step{events.length === 1 ? "" : "s"}</span>
+        {!open ? <span className="cnv-tools-peek">{events[events.length - 1].title}</span> : null}
+      </button>
+      {open ? (
+        <ul className="cnv-tools-list">
+          {events.map((e) => (
+            <li key={e.id} className="cnv-tool">
+              <span className="cnv-tool-title">{e.title}</span>
+              {e.detail ? <span className="cnv-tool-detail">{e.detail}</span> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
 }
 
 // The persistent co-pilot. Always docked, never summoned: your channels at the head, the
@@ -291,25 +355,33 @@ export function ComposerDock({
             </div>
           </div>
         ) : (
-          session.events.map((event) => (
-            <article className={`composer-event composer-event-${event.type}`} key={event.id}>
-              <span className="composer-event-icon">{eventIcon(event)}</span>
-              <div className="composer-event-body">
-                <div className="composer-event-title">
-                  <strong>{event.title}</strong>
-                  <time>{new Date(event.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</time>
+          segmentEvents(session.events).map((seg) =>
+            seg.kind === "tool" ? (
+              <ToolCluster key={seg.id} events={seg.events} />
+            ) : seg.kind === "say" ? (
+              <div className="cnv-say" key={seg.id}>
+                <div className="cnv-say-body">
+                  {seg.event.detail ? <MarkdownLite text={seg.event.detail} /> : <p>{seg.event.title}</p>}
                 </div>
-                {event.detail ? <div className="composer-event-detail"><MarkdownLite text={event.detail} /></div> : null}
-                {event.type === "graph_patched" && Array.isArray(event.data?.changes) ? (
-                  <ul>
-                    {(event.data.changes as Array<{ detail?: string }>).map((c, i) => (
-                      <li key={`${event.id}-${i}`}>{c.detail}</li>
-                    ))}
-                  </ul>
-                ) : null}
               </div>
-            </article>
-          ))
+            ) : seg.kind === "you" ? (
+              <div className="cnv-you" key={seg.id}>
+                <div className="cnv-you-bubble">{seg.event.detail || seg.event.title}</div>
+              </div>
+            ) : seg.kind === "ask" ? (
+              <div className="cnv-ask" key={seg.id}>
+                <ShieldCheck size={15} aria-hidden="true" />
+                <div className="cnv-ask-body">
+                  <strong>{seg.event.title}</strong>
+                  {seg.event.detail ? <div className="cnv-ask-detail"><MarkdownLite text={seg.event.detail} /></div> : null}
+                </div>
+              </div>
+            ) : (
+              <div className="cnv-sys" key={seg.id}>
+                <span>{seg.event.detail || seg.event.title}</span>
+              </div>
+            ),
+          )
         )}
       </div>
 
