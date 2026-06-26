@@ -238,6 +238,11 @@ export async function composeOpportunityChannel(input, options = {}) {
   // Apply a previously-previewed graph by reusing its exact nodes/edges — never re-run the model
   // behind the founder's back on apply (the gate-continuation invariant). The host still re-asserts
   // the founder-gate wall on the provided topology, since the wall is host-owned on every path.
+  // Contract: when input.graph is provided it MUST be the exact graph previewOpportunityChannel
+  // returned for THIS channel + the SAME input/output adapters — the founder accepted that preview,
+  // so we persist it verbatim (bindIO already ran at preview time) rather than re-composing. We only
+  // re-assert the founder-gate wall, since the wall is host-owned on every path and cannot be trusted
+  // to a client-supplied topology.
   const provided = Array.isArray(input.graph?.nodes) && input.graph.nodes.length ? input.graph : null;
   let nodes;
   let edges;

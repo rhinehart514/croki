@@ -8493,53 +8493,15 @@ svg {
 }
 .loop-proposal-inline-btn svg { width: 14px; height: 14px; }
 .loop-proposal-inline-btn.accept {
-  border-color: #6366f1;
-  background: #6366f1;
+  border-color: var(--proven);
+  background: var(--proven);
   color: #fff;
 }
 .loop-proposal-inline-btn:hover { transform: translateY(-1px) scale(1.05); }
-.loop-proposal-inline-btn.accept:hover { background: #4f46e5; border-color: #4f46e5; }
+.loop-proposal-inline-btn.accept:hover { background: color-mix(in srgb, var(--proven) 85%, #000); border-color: color-mix(in srgb, var(--proven) 85%, #000); }
 .loop-proposal-inline-btn.reject:hover { color: var(--danger); border-color: var(--danger); background: var(--danger-soft); }
 .loop-proposal-inline-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* Gate inline review (slice 5) — the founder gate expanded in place. An amber-rimmed card anchored
-   below the selected gate node, holding its staged-draft review stack so the founder can approve,
-   reject, or edit at the wall without leaving the canvas. Only mounted while the gate is selected, so
-   a collapsed gate never blocks a drag. nodrag/nowheel/nopan let the card scroll and take clicks. */
-.loop-gate-inline {
-  position: absolute;
-  top: calc(100% + 12px);
-  left: 0;
-  width: 340px;
-  max-height: min(62vh, 520px);
-  z-index: 26;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--gap);
-  border-radius: var(--r-lg);
-  background: var(--surface);
-  box-shadow: 0 0 0 1px var(--gap-soft), 0 22px 52px -20px rgba(35, 40, 55, 0.4);
-  cursor: default;
-  text-align: left;
-}
-.loop-gate-inline-head {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 7px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--line);
-  background: linear-gradient(var(--gap-soft), var(--surface));
-  font-size: 12px;
-  font-weight: 650;
-  color: var(--ink);
-}
-.loop-gate-inline-head svg { width: 14px; height: 14px; color: var(--gap); }
-.loop-gate-inline-body {
-  overflow-y: auto;
-  padding: 12px 14px;
-}
 
 /* Inspector — the program framing the DAG lacks. Agent chips select a policy to read; no synthetic
    canvas nodes. */

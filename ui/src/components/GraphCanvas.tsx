@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { healthHex } from "@/lib/health";
-import { GateReview } from "@/components/NodeEditor";
 import type {
   ConnectorMeta, GateDecision, GTMEdge, GTMEdgeType, GTMGraph,
   GTMContractAudit, GTMNode, GTMNodeCategory, GTMNodeResult, GTMRunResult, NodeSelection,
@@ -182,35 +181,6 @@ function ProposalControls({ data }: { data: GTMNodeData }) {
   );
 }
 
-// ─── Gate inline review (slice 5) ─────────────────────────────────────────────
-// The founder gate expands in place: when the gate node is the selected node AND it is holding staged
-// drafts, its review stack floats anchored to the node so the founder can approve/reject/edit at the
-// wall without leaving the canvas. Only mounted while selected, so a collapsed gate never blocks a
-// drag. `nodrag`/`nowheel`/`nopan` let the founder scroll and click inside the card without moving the
-// node or the canvas. Reuses the exact GateReview component the right panel uses.
-function GateInlineReview({ data }: { data: GTMNodeData }) {
-  const { node, result, selected } = data;
-  if (node.category !== "gate" || !selected || !result) return null;
-  const hasStaged = (result.items?.length ?? 0) > 0 || !!result.pendingReview;
-  if (!hasStaged || !data.onSubmitReview || !data.onApproveGate) return null;
-  return (
-    <div className="loop-gate-inline nodrag nowheel nopan" role="region" aria-label={`Review staged drafts for ${node.label}`}>
-      <div className="loop-gate-inline-head">
-        <ShieldCheck />
-        <span>Review at the wall</span>
-      </div>
-      <div className="loop-gate-inline-body">
-        <GateReview
-          items={result.items ?? []}
-          running={data.running}
-          onSubmit={data.onSubmitReview}
-          onApproveAll={data.onApproveGate}
-        />
-      </div>
-    </div>
-  );
-}
-
 // ─── Resource node (compact dark strip) ──────────────────────────────────────
 
 function ResourceNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
@@ -354,7 +324,6 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       <Handle type="source" position={Position.Right} />
     </button>
       <ProposalControls data={data} />
-      <GateInlineReview data={data} />
     </>
   );
 }

@@ -117,7 +117,9 @@ export async function buildChannelDefaults(
   await compose({
     channelOpportunityId: channel.id,
     agentOpportunityIds: agents.map((a) => a.id),
-    input: { type: "manual", label: "Manual input", items: [] },
-    output: { type: "manual", label: "Manual output queue" },
+    // Honor the input/output the opportunity actually specified (the model may have proposed an API
+    // or CSV source); fall back to a manual seed only when the opportunity named none.
+    input: channel.input ?? { type: "manual", label: "Manual input", items: [] },
+    output: channel.output ?? { type: "manual", label: "Manual output queue" },
   });
 }
