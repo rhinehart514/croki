@@ -22,10 +22,11 @@ const TONE_DOT: Record<string, string> = {
 
 // The Explorer — the left rail of the IDE shell, built like a code editor's file tree. ONE primary
 // object lives in the tree: Outcomes (the "files" — each outcome is one thing you're going for, with
-// its editable system underneath). Everything else is a summonable panel, not a peer in the tree:
-// Library (the agents and skills you can reach for), Problems (what's wrong, with a count), and Runs
-// (what has happened). Capabilities, policies, learning, context, and the debugger are NOT rail peers
-// — they open from inside an outcome (an agent's rules show in its editor; learning and context show
+// its editable system underneath). Navigation peers (Problems, Runs) sit below it. Everything that
+// flows INTO the canvas — the Library you reach for, the product grounding the model reads, the
+// living product picture — is grouped at the rail foot under one "Feeds" header, set apart from the
+// navigation above. Capabilities, policies, learning, context, and the debugger are NOT rail peers —
+// they open from inside an outcome (an agent's rules show in its editor; learning and context show
 // inside a run or outcome detail). When there are zero outcomes, the Outcomes section is the first-run
 // call to action itself.
 
@@ -294,59 +295,6 @@ export function GtmExplorer({
         )}
       </Section>
 
-      {/* ── Library — agents + skills, one collapsed object ───────────────────
-          Capabilities and Agents are the same thing, so they live together here. The outcome's own
-          personalized agents surface first (the ones born for it); the product-wide on-disk agents and
-          skills follow. New agent / new skill author a fresh file. */}
-      <Section icon={<Bot size={13} />} title="Library" count={(gtmAgents.length + gtmSkills.length) || undefined}>
-        {outcomeAgents.length ? (
-          <div className="explorer-subgroup">
-            <span className="explorer-subgroup-label">For this outcome</span>
-            {outcomeAgents.map((instance) => (
-              <button
-                key={instance.id}
-                className="explorer-row explorer-row-child"
-                onClick={() => onOpenArtifact("agent", instance.ref)}
-                type="button"
-                title={`${instance.job} · the agent's rules open in its editor`}
-              >
-                <Bot size={12} />
-                <span className="explorer-row-name">{instance.ref}</span>
-                <span className="explorer-row-meta">v{instance.version}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="explorer-subgroup">
-          <span className="explorer-subgroup-label">Agents</span>
-          {gtmAgents.length === 0 ? (
-            <p className="explorer-empty">No agents on disk yet.</p>
-          ) : gtmAgents.map((a) => (
-            <button key={a.ref} className="explorer-row explorer-row-child" onClick={() => onOpenArtifact("agent", a.ref)} type="button" title={a.description}>
-              <span className="explorer-row-name">{a.ref}</span>
-            </button>
-          ))}
-          <button className="explorer-row explorer-new" onClick={() => onNewArtifact("agent")} type="button">
-            <Plus size={13} /><span className="explorer-row-name">New agent</span>
-          </button>
-        </div>
-
-        <div className="explorer-subgroup">
-          <span className="explorer-subgroup-label">Skills</span>
-          {gtmSkills.length === 0 ? (
-            <p className="explorer-empty">No skills on disk yet.</p>
-          ) : gtmSkills.map((s) => (
-            <button key={s.name} className="explorer-row explorer-row-child" onClick={() => onOpenArtifact("skill", s.name)} type="button" title={s.description}>
-              <span className="explorer-row-name">{s.name}</span>
-            </button>
-          ))}
-          <button className="explorer-row explorer-new" onClick={() => onNewArtifact("skill")} type="button">
-            <Plus size={13} /><span className="explorer-row-name">New skill</span>
-          </button>
-        </div>
-      </Section>
-
       {/* ── Problems — the engine, folded in, ranked across the system ──────── */}
       <Section icon={<ListChecks size={13} />} title="Problems" count={problems.length || undefined} defaultOpen={problems.length > 0}>
         {problems.length === 0 ? (
@@ -414,50 +362,112 @@ export function GtmExplorer({
         ))}
       </Section>
 
-      {/* Product grounding is ambient context, not a workflow step — so it reads as a glance, not a
-          destination. Hovering the rail foot peeks what Claude actually reads about the product
-          (the live context providers) right here; opening the full panel stays optional, never the
-          only way to see anything. */}
-      <div className="explorer-foot-grounding">
-        <button
-          className={`explorer-rail-foot ${currentView === "understand" ? "active" : ""}`}
-          onClick={() => onOpenView("understand")}
-          type="button"
-          title="Open product grounding — what Claude reads about your product"
-        >
-          <Layers size={13} />
-          <span>Product grounding</span>
-          <span className="explorer-rail-foot-meta">{contextManifest?.contributingProviders ?? 0}/4</span>
-        </button>
-        <div className="explorer-foot-peek" role="tooltip">
-          <span className="explorer-foot-peek-eyebrow">What Claude reads about your product</span>
-          {contextManifest?.providers?.length ? (
-            <ul className="explorer-foot-peek-list">
-              {contextManifest.providers.map((p) => (
-                <li key={p.name} className={p.contributed ? "on" : "off"}>
-                  <span className="explorer-foot-peek-dot" />
-                  <span className="explorer-foot-peek-name">{p.name}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="explorer-foot-peek-empty">No context assembled yet — connect a repository to ground the model.</p>
-          )}
-          <span className="explorer-foot-peek-cue">Click to inspect the grounding →</span>
-        </div>
-      </div>
+      {/* ── Feeds — what flows INTO the canvas ───────────────────────────────
+          Everything below the navigation is an input the model draws on, not a place you navigate to:
+          the Library of agents and skills you reach for, the product grounding Claude reads, and the
+          living product picture you keep. Grouped under one header and pinned to the rail foot so the
+          inputs read apart from the Outcomes / Problems / Runs navigation above. */}
+      <div className="explorer-feeds">
+        <span className="explorer-group-label">Feeds</span>
 
-      {/* The living product picture — the founder-editable INTERPRETATION on top of the cited
-          grounding above. Its own overlay, opened the same dismissable way. */}
-      <button
-        className={`explorer-rail-foot ${currentView === "product" ? "active" : ""}`}
-        onClick={() => onOpenView("product")}
-        type="button"
-        title="Open the living product picture — the editable model of your product's objects, relationships, goals, and states"
-      >
-        <Boxes size={13} />
-        <span>Product picture</span>
-      </button>
+        {/* Library — agents + skills, one collapsed object. Capabilities and Agents are the same
+            thing, so they live together here. The outcome's own personalized agents surface first
+            (the ones born for it); the product-wide on-disk agents and skills follow. New agent /
+            new skill author a fresh file. */}
+        <Section icon={<Bot size={13} />} title="Library" count={(gtmAgents.length + gtmSkills.length) || undefined}>
+          {outcomeAgents.length ? (
+            <div className="explorer-subgroup">
+              <span className="explorer-subgroup-label">For this outcome</span>
+              {outcomeAgents.map((instance) => (
+                <button
+                  key={instance.id}
+                  className="explorer-row explorer-row-child"
+                  onClick={() => onOpenArtifact("agent", instance.ref)}
+                  type="button"
+                  title={`${instance.job} · the agent's rules open in its editor`}
+                >
+                  <Bot size={12} />
+                  <span className="explorer-row-name">{instance.ref}</span>
+                  <span className="explorer-row-meta">v{instance.version}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="explorer-subgroup">
+            <span className="explorer-subgroup-label">Agents</span>
+            {gtmAgents.length === 0 ? (
+              <p className="explorer-empty">No agents on disk yet.</p>
+            ) : gtmAgents.map((a) => (
+              <button key={a.ref} className="explorer-row explorer-row-child" onClick={() => onOpenArtifact("agent", a.ref)} type="button" title={a.description}>
+                <span className="explorer-row-name">{a.ref}</span>
+              </button>
+            ))}
+            <button className="explorer-row explorer-new" onClick={() => onNewArtifact("agent")} type="button">
+              <Plus size={13} /><span className="explorer-row-name">New agent</span>
+            </button>
+          </div>
+
+          <div className="explorer-subgroup">
+            <span className="explorer-subgroup-label">Skills</span>
+            {gtmSkills.length === 0 ? (
+              <p className="explorer-empty">No skills on disk yet.</p>
+            ) : gtmSkills.map((s) => (
+              <button key={s.name} className="explorer-row explorer-row-child" onClick={() => onOpenArtifact("skill", s.name)} type="button" title={s.description}>
+                <span className="explorer-row-name">{s.name}</span>
+              </button>
+            ))}
+            <button className="explorer-row explorer-new" onClick={() => onNewArtifact("skill")} type="button">
+              <Plus size={13} /><span className="explorer-row-name">New skill</span>
+            </button>
+          </div>
+        </Section>
+
+        {/* Product grounding is ambient context, not a workflow step — so it reads as a glance, not a
+            destination. Hovering the rail foot peeks what Claude actually reads about the product
+            (the live context providers) right here; opening the full panel stays optional, never the
+            only way to see anything. */}
+        <div className="explorer-foot-grounding">
+          <button
+            className={`explorer-rail-foot ${currentView === "understand" ? "active" : ""}`}
+            onClick={() => onOpenView("understand")}
+            type="button"
+            title="Open product grounding — what Claude reads about your product"
+          >
+            <Layers size={13} />
+            <span>Product grounding</span>
+            <span className="explorer-rail-foot-meta">{contextManifest?.contributingProviders ?? 0}/4</span>
+          </button>
+          <div className="explorer-foot-peek" role="tooltip">
+            <span className="explorer-foot-peek-eyebrow">What Claude reads about your product</span>
+            {contextManifest?.providers?.length ? (
+              <ul className="explorer-foot-peek-list">
+                {contextManifest.providers.map((p) => (
+                  <li key={p.name} className={p.contributed ? "on" : "off"}>
+                    <span className="explorer-foot-peek-dot" />
+                    <span className="explorer-foot-peek-name">{p.name}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="explorer-foot-peek-empty">No context assembled yet — connect a repository to ground the model.</p>
+            )}
+            <span className="explorer-foot-peek-cue">Click to inspect the grounding →</span>
+          </div>
+        </div>
+
+        {/* The living product picture — the founder-editable INTERPRETATION on top of the cited
+            grounding above. Its own overlay, opened the same dismissable way. */}
+        <button
+          className={`explorer-rail-foot ${currentView === "product" ? "active" : ""}`}
+          onClick={() => onOpenView("product")}
+          type="button"
+          title="Open the living product picture — the editable model of your product's objects, relationships, goals, and states"
+        >
+          <Boxes size={13} />
+          <span>Product picture</span>
+        </button>
+      </div>
     </nav>
   );
 }

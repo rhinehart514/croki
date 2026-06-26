@@ -3968,6 +3968,7 @@ svg {
 
 /* Explorer cluster label — groups the sections into a few anchors instead of 11 flat peers. */
 .explorer-group-label {
+  display: block;
   padding: 12px 14px 4px;
   color: var(--faint, #9aa0aa);
   font-size: 9.5px;
@@ -7806,9 +7807,17 @@ svg {
 .explorer-rail-foot span:nth-of-type(1) { flex: 1; }
 .explorer-rail-foot-meta { color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }
 
-/* Grounding peek — the rail foot owns the auto-margin so the grounding + product-picture group
-   still pins to the bottom. Hovering reveals what Claude reads, in place, so the full panel is a
-   choice rather than the only way to glance. */
+/* Feeds cluster — the inputs that flow INTO the canvas (Library + product grounding + product
+   picture), grouped under one "Feeds" header and pinned to the rail foot so they read apart from the
+   Outcomes / Problems / Runs navigation above. The wrapper owns the auto-margin now; its block flow
+   collapses the inner rail-foot auto-margins to zero, so the three feeds sit contiguous. The Library
+   section sheds its bottom border so it doesn't double-line with the grounding foot's top border. */
+.explorer-feeds { margin-top: auto; }
+.explorer-feeds .explorer-section { border-bottom: 0; }
+
+/* Grounding peek — hovering reveals what Claude reads, in place, so the full panel is a choice
+   rather than the only way to glance. (Bottom-pinning is owned by .explorer-feeds above; this
+   margin-top:auto is now inert inside that block-flow wrapper.) */
 .explorer-foot-grounding { position: relative; margin-top: auto; }
 .explorer-foot-grounding > .explorer-rail-foot { margin-top: 0; }
 .explorer-foot-peek {
