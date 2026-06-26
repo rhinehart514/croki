@@ -10,6 +10,7 @@ import {
   Globe2, Loader, MessageSquare, Plus, Search, ShieldCheck, Sparkles, Target, TrendingUp, Wand2, X, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { healthHex } from "@/lib/health";
 import { GateReview } from "@/components/NodeEditor";
 import type {
   ConnectorMeta, GateDecision, GTMEdge, GTMEdgeType, GTMGraph,
@@ -103,13 +104,6 @@ type GTMNodeData = {
   onApproveGate?: () => void;
 };
 
-// Health band → color, matching the engine's health thresholds.
-function healthHex(health: number): string {
-  if (health < 50) return "#dc2626";
-  if (health < 70) return "#d97706";
-  if (health < 85) return "#ca8a04";
-  return "#16a34a";
-}
 
 function HealthPill({ health, issue }: { health: number; issue?: string }) {
   const hex = healthHex(health);

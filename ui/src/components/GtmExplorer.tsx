@@ -9,6 +9,7 @@ import type {
 } from "@/types";
 import type { ProgramCanvasMode, DebugTab } from "@/components/ProgramCanvas";
 import { statusLabel, statusTone } from "@/lib/status";
+import { healthHex } from "@/lib/health";
 
 // The explorer dot color follows the shared status tone, so an outcome's state reads the same here as
 // on its canvas pill.
@@ -90,23 +91,26 @@ function isGtmCapability(ref: string): boolean {
 // A Library capability (agent or skill) as a FEED into the canvas: click the name to edit its file,
 // drag it onto the canvas to add it as a node, or hit +Add to drop it wired to the selection. The
 // founder chose both gestures; this carries them on one row.
-function CapabilityRow({ kind, capRef, label, meta, title, onOpen, onAdd }: {
+function CapabilityRow({ kind, capRef, label, meta, title, canAdd, onOpen, onAdd }: {
   kind: "agent" | "skill";
   capRef: string;
   label: string;
   meta?: string;
   title?: string;
+  // Adding to the canvas (drag or +Add) needs a live graph to drop into. With none, the gestures are
+  // disabled rather than silently no-op'ing — the row still opens the file for editing.
+  canAdd: boolean;
   onOpen: () => void;
   onAdd: () => void;
 }) {
   return (
     <div
       className="explorer-cap-row"
-      draggable
-      onDragStart={(event) => {
+      draggable={canAdd}
+      onDragStart={canAdd ? (event) => {
         event.dataTransfer.setData("application/gtm-capability", JSON.stringify({ kind, ref: capRef, label }));
         event.dataTransfer.effectAllowed = "copy";
-      }}
+      } : undefined}
       title={title}
     >
       <button className="explorer-row explorer-row-child explorer-cap-open" onClick={onOpen} type="button">
@@ -114,7 +118,14 @@ function CapabilityRow({ kind, capRef, label, meta, title, onOpen, onAdd }: {
         <span className="explorer-row-name">{label}</span>
         {meta ? <span className="explorer-row-meta">{meta}</span> : null}
       </button>
-      <button className="explorer-cap-add" onClick={onAdd} type="button" aria-label={`Add ${label} to the canvas`} title="Add to the canvas">
+      <button
+        className="explorer-cap-add"
+        onClick={onAdd}
+        type="button"
+        disabled={!canAdd}
+        aria-label={`Add ${label} to the canvas`}
+        title={canAdd ? "Add to the canvas" : "Open a workflow first to add this"}
+      >
         <Plus size={12} />
       </button>
     </div>
@@ -160,9 +171,6 @@ export function GtmExplorer({
     graph?.nodes.find((n) => n.category === subsystem)
     ?? (ROUTE_FALLBACK[subsystem] ? graph?.nodes.find((n) => n.category === ROUTE_FALLBACK[subsystem]) : null)
     ?? null;
-  // Same health bands as the canvas node badge, so the rail's figure reads identically.
-  const healthHex = (health: number) =>
-    health < 50 ? "#dc2626" : health < 70 ? "#d97706" : health < 85 ? "#ca8a04" : "#16a34a";
 
   // The active outcome's per-agent set, so the Library highlights the agents this outcome actually
   // uses (the personalized capabilities born for it) above the product-wide on-disk library.
@@ -346,6 +354,7 @@ export function GtmExplorer({
                 label={instance.ref}
                 meta={`v${instance.version}`}
                 title={`${instance.job} · click to edit, drag or +Add to the canvas`}
+                canAdd={!!graph}
                 onOpen={() => onOpenArtifact("agent", instance.ref)}
                 onAdd={() => onAddCapability("agent", instance.ref, instance.ref)}
               />
@@ -364,6 +373,7 @@ export function GtmExplorer({
               capRef={a.ref}
               label={a.ref}
               title={a.description ? `${a.description} · click to edit, drag or +Add to the canvas` : "Click to edit, drag or +Add to the canvas"}
+              canAdd={!!graph}
               onOpen={() => onOpenArtifact("agent", a.ref)}
               onAdd={() => onAddCapability("agent", a.ref, a.ref)}
             />
@@ -384,6 +394,7 @@ export function GtmExplorer({
               capRef={s.name}
               label={s.name}
               title={s.description ? `${s.description} · click to edit, drag or +Add to the canvas` : "Click to edit, drag or +Add to the canvas"}
+              canAdd={!!graph}
               onOpen={() => onOpenArtifact("skill", s.name)}
               onAdd={() => onAddCapability("skill", s.name, s.name)}
             />

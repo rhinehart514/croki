@@ -193,8 +193,12 @@ export function ProgramCanvas({
   // The node at that index glows on the canvas while the rest dim, so a finished run replays
   // step by step. Only live while the Replay tab is the active debugger view.
   const [replayStep, setReplayStep] = useState<number | null>(null);
-  const replayActive = debugOpen && debugTab === "replay" && replayStep !== null && !!runResult;
-  const highlightedNodeId = replayActive ? runResult!.executionOrder[replayStep!] ?? null : null;
+  // Reset the playhead whenever a different run loads, so a stale index can never point past a
+  // shorter run's executionOrder (which would render an undefined step / out-of-range highlight).
+  useEffect(() => { setReplayStep(null); }, [runResult?.runId]);
+  const order = runResult?.executionOrder ?? [];
+  const replayActive = debugOpen && debugTab === "replay" && replayStep !== null && replayStep >= 0 && replayStep < order.length;
+  const highlightedNodeId = replayActive ? order[replayStep!] ?? null : null;
 
   // Changing mode re-aims the debugger to the tab that mode is about. React's sanctioned
   // adjust-state-during-render pattern — no effect, no cascading render.
@@ -607,7 +611,9 @@ function ReplayScrubber({ runResult, step, onStep, onSelectNode }: {
   const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
-    if (!playing) return;
+    // Never run the playhead when there is nothing to step through — otherwise the interval would
+    // advance to order.length - 1 === -1 on an empty run and poison the index.
+    if (!playing || order.length === 0) return;
     playRef.current = window.setInterval(() => {
       onStep((current) => {
         const next = (current ?? -1) + 1;
@@ -618,9 +624,12 @@ function ReplayScrubber({ runResult, step, onStep, onSelectNode }: {
     return () => { if (playRef.current) window.clearInterval(playRef.current); };
   }, [playing, order.length, onStep]);
 
+  // A new run loaded — stop playing so the interval can't keep firing against the old order.
+  useEffect(() => { setPlaying(false); }, [runResult?.runId]);
+
   if (!runResult || order.length === 0) return <div className="debugger-empty">No finished run to replay yet.</div>;
 
-  const active = step ?? 0;
+  const active = Math.min(step ?? 0, order.length - 1);
   const currentId = order[active];
   const currentResult = labelFor(currentId);
 

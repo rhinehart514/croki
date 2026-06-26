@@ -7807,7 +7807,8 @@ svg {
   transition: opacity var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 .explorer-cap-row:hover .explorer-cap-add { opacity: 1; }
-.explorer-cap-add:hover { background: var(--surface-2); color: var(--ink); }
+.explorer-cap-add:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+.explorer-cap-add:disabled { opacity: 0.4; cursor: default; }
 .explorer-cap-add:focus-visible { opacity: 1; outline: 2px solid var(--link); outline-offset: -2px; }
 
 /* A waiting-approval row — amber, because the founder gate is a real state, not decoration. */
@@ -10210,7 +10211,7 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 
 /* ── (2) DE-PURPLE TAIL ──────────────────────────────────────────────────────
    Every decorative purple/indigo → glass / greige / ink under glass. Live legacy
-   families (still referenced by NodeEditor / CitationList / ChangeSetPanel) get a
+   families (still referenced by NodeEditor / CitationList) get a
    real glass pass; dead pre-.loop families are de-purpled defensively (cheap, and
    they leave no risk) but NOT deleted — deletion is deferred to Stage 3 once a
    dead-code pass is verified against JSX. KEPT: --link (restrained blue),

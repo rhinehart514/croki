@@ -5,20 +5,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { itemKey } from "@/lib/itemKey";
+import { healthHex } from "@/lib/health";
 import type {
   ConnectorMeta, ContextManifest, EngineSubsystem, GateDecision, GTMContractAudit, GTMGraph, GTMItem, GTMNode,
   GTMNodeCategory, GTMNodeResult, GTMRunResult, NodeSelection,
 } from "@/types";
 
 type DetailTab = "overview" | "rules" | "signals" | "history";
-
-// Health → band color, matching the canvas node badge and the modal header pill.
-function healthHex(health: number): string {
-  if (health < 50) return "#dc2626";
-  if (health < 70) return "#d97706";
-  if (health < 85) return "#ca8a04";
-  return "#16a34a";
-}
 
 // ─── Connector selector ───────────────────────────────────────────────────────
 
