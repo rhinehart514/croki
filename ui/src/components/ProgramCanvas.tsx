@@ -273,6 +273,12 @@ export function ProgramCanvas({
   // The selected node drives the right zone's context switch (inspector → node editor).
   const editingNode = selection && nodeEditor ? graph?.nodes.find((n) => n.id === selection) ?? null : null;
   const editingResult = editingNode ? runResult?.nodes[editingNode.id] ?? null : null;
+  // The right zone is "Gate & results" — the OUTPUT side of the data-flow shell. At rest it leads with
+  // what came out of the canvas: the gate queue, then the last run, then outcome/measurement.
+  const gateItems = pendingGate ? (runResult?.nodes[pendingGate]?.items ?? []) : [];
+  const ranNodes = runResult ? Object.values(runResult.nodes).filter((n) => n.ok).length : 0;
+  const totalRunNodes = runResult?.executionOrder?.length ?? 0;
+  const itemsFlowed = runResult ? Object.values(runResult.nodes).reduce((sum, n) => sum + (n.items?.length ?? 0), 0) : 0;
 
   const DEBUG_LABEL: Record<DebugTab, string> = {
     timeline: "Timeline", events: "Events", runLogs: "Run Logs",
@@ -444,7 +450,37 @@ export function ProgramCanvas({
             </div>
           ) : (
           <>
-          <span className="inspector-kicker">Program</span>
+          <div className="rzone-head">
+            <span className="rzone-name">Gate &amp; results</span>
+            <span className="rzone-flow">← out of the canvas</span>
+          </div>
+
+          <div className="rzone-card rzone-gate">
+            <div className="rzone-card-head">At the gate</div>
+            {gateItems.length ? (
+              <>
+                <p className="rzone-gate-count">{gateItems.length} draft{gateItems.length === 1 ? "" : "s"} waiting for your review.</p>
+                <button className="rzone-review" onClick={() => onSelectNode(pendingGate!)} type="button">Review at the gate →</button>
+              </>
+            ) : (
+              <p className="rzone-empty">Nothing waiting. When a run stages a send, it stops here for your approval — nothing leaves the building without it.</p>
+            )}
+          </div>
+
+          <div className="rzone-card">
+            <div className="rzone-card-head">Last run</div>
+            {runResult ? (
+              <div className="rzone-metrics">
+                <div><strong>{ranNodes}/{totalRunNodes || ranNodes}</strong><span>nodes</span></div>
+                <div><strong>{itemsFlowed}</strong><span>items</span></div>
+                <div><strong>{runResult.pendingGates.length}</strong><span>at gate</span></div>
+              </div>
+            ) : (
+              <p className="rzone-empty">No run yet. Hit Run program to send items through the canvas.</p>
+            )}
+          </div>
+
+          <span className="inspector-kicker">Outcome &amp; measurement</span>
           <h2>{program.name}</h2>
           <p>{firstString(program.desiredOutcome, ["description", "target", "type"], "The program needs a stated outcome.")}</p>
           <dl className="inspector-facts">

@@ -8722,6 +8722,34 @@ svg {
   background: var(--surface);
 }
 
+/* The right zone of the data-flow shell = "Gate & results" (the OUTPUT side). The amber gate is the
+   one accent (the wall); everything else is monochrome so the flow reads from layout, not color. */
+.rzone-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2);
+  margin: calc(var(--space-5) * -1) calc(var(--space-5) * -1) var(--space-3);
+  padding: var(--space-4) var(--space-5) var(--space-3);
+  border-bottom: 1px solid var(--line);
+  box-shadow: inset -3px 0 0 var(--gap);
+}
+.rzone-name { font-size: 11px; font-weight: 760; letter-spacing: 0.09em; text-transform: uppercase; color: var(--gap); }
+.rzone-flow { font-size: 10.5px; color: var(--faint); }
+.rzone-card { border: 1px solid var(--line-2); border-radius: var(--r-lg); background: var(--surface); padding: var(--space-3) var(--space-4); margin-bottom: var(--space-3); }
+.rzone-gate { border-color: color-mix(in srgb, var(--gap) 40%, var(--line-2)); background: linear-gradient(var(--gap-soft), var(--surface) 45%); }
+.rzone-card-head { font-size: 11px; font-weight: 760; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin-bottom: var(--space-2); }
+.rzone-gate .rzone-card-head { color: var(--gap); }
+.rzone-gate-count { font-size: var(--text-sm); color: var(--ink); margin-bottom: var(--space-2); }
+.rzone-review {
+  display: inline-flex; align-items: center; gap: var(--space-1); font: inherit; font-size: var(--text-sm); font-weight: 560;
+  color: var(--gap); background: var(--surface); border: 1px solid color-mix(in srgb, var(--gap) 35%, transparent);
+  border-radius: var(--r-md); padding: var(--space-1) var(--space-3); cursor: pointer;
+}
+.rzone-review:hover { background: var(--gap-soft); }
+.rzone-empty { font-size: var(--text-sm); color: var(--muted); line-height: var(--leading-normal); }
+.rzone-metrics { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-3); }
+.rzone-metrics div { display: flex; flex-direction: column; }
+.rzone-metrics strong { font-size: var(--text-xl); font-weight: 600; letter-spacing: var(--tracking-tight); color: var(--ink); }
+.rzone-metrics span { font-size: var(--text-xs); color: var(--muted); margin-top: 2px; }
+
 /* The right zone context-switches to the node editor when a node is selected. Widen the column so
    editing prompts/rules isn't cramped (the modal it replaces was a wide centered workspace), and
    drop the inspector's gutter padding — the editor owns its own. */
