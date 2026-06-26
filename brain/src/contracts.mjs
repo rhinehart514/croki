@@ -1,3 +1,5 @@
+import { sourceStandsOnData, sourceMode, isSourceNode, SOURCE_MODES } from "./source-entry.mjs";
+
 const FIELD_RE = /^[A-Za-z][A-Za-z0-9_.-]*$/;
 
 function uniqueFields(value) {
@@ -38,6 +40,18 @@ function audit(state, message, extra = {}) {
 }
 
 export function auditInput(node, items) {
+  // A source node's readiness is about its OWN config, not upstream items — it is the origin. A
+  // discovered (agent) source self-sources and is always ready; a provided source is ready only
+  // when the founder has configured a seed. This is the run path's "configure this source" signal,
+  // routed through the same audit states the engine already understands.
+  if (isSourceNode(node)) {
+    if (sourceStandsOnData(node)) {
+      return audit("satisfied", sourceMode(node) === SOURCE_MODES.DISCOVERED
+        ? "This source finds its own candidates."
+        : "Input is configured.");
+    }
+    return audit("waiting", "Add manual rows, CSV data, or an API endpoint to seed this source.");
+  }
   const contract = normalizeContract(node.contract);
   if (!contract || (contract.accepts.length === 0 && !contract.minItems)) {
     return audit("ready", "No required input fields declared.");
@@ -100,13 +114,6 @@ export function auditOutput(node, items) {
   });
 }
 
-function sourceHasConfiguredInput(node) {
-  if (node.connector === "manual") return Array.isArray(node.config?.items) && node.config.items.length > 0;
-  if (node.connector === "csv") return typeof node.config?.csv === "string" && node.config.csv.trim().length > 0;
-  if (node.connector === "api") return typeof node.config?.endpoint === "string" && node.config.endpoint.trim().length > 0;
-  return true;
-}
-
 export function auditGraphContracts(graph, runResult = null) {
   const nodes = new Map(graph.nodes.map((node) => [node.id, node]));
   const incoming = new Map(graph.nodes.map((node) => [node.id, []]));
@@ -127,8 +134,8 @@ export function auditGraphContracts(graph, runResult = null) {
     const parents = incoming.get(node.id) ?? [];
     if (parents.length === 0) {
       if (node.category === "source") {
-        return [node.id, sourceHasConfiguredInput(node)
-          ? audit("ready", "Input is configured.", { promisedFields: contract.emits })
+        return [node.id, sourceStandsOnData(node)
+          ? audit("ready", sourceMode(node) === SOURCE_MODES.DISCOVERED ? "This source finds its own candidates." : "Input is configured.", { promisedFields: contract.emits })
           : audit("waiting", "Add manual rows, CSV data, or an API endpoint.", { promisedFields: contract.emits })];
       }
       if (contract.accepts.length > 0 || contract.minItems) {

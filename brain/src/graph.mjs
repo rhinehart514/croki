@@ -11,6 +11,7 @@
 import { getConnector, defaultGraphTemplate, listConnectors } from "./connectors/registry.mjs";
 import { defaultStepRuntime } from "./step-runners.mjs";
 import { auditInput, auditOutput } from "./contracts.mjs";
+import { relaxGateContracts, relaxDiscoveryChainContracts, entryIsDiscovered } from "./source-entry.mjs";
 
 // ─── Topological sort (Kahn's algorithm on data edges) ───────────────────────
 
@@ -189,97 +190,25 @@ async function runNode(node, upstream, context, store, opts = {}) {
 
 // ─── Main graph runner ────────────────────────────────────────────────────────
 
-// Runnable-entry invariant, enforced at the run path so it catches EVERY graph — freshly composed,
-// operator-attached, or stale-persisted. A loop must not block at an empty source: if the entry
-// source has no real items to stand on and can't fetch its own, drop it and let the agent it feeds
-// be the self-sourcing entry (that agent finds its own candidates from public signals). Deterministic
-// and idempotent, so a fresh run and a later gate-resume see the identical graph.
-// When a loop is made self-sourcing, the rigid field contracts (accepts/emits) designed for a
-// deterministic seed-list flow no longer fit: the discovery agent emits a generic candidate shape and
-// each downstream agent enriches best-effort. Relax the FIELD contracts on every agent/code node on
-// the path to a gate (item-flow via minItems is kept) so the chain isn't re-blocked node-by-node —
-// the founder still reviews everything at the gate. This is what breaks the one-node-downstream
-// whack-a-mole: a self-sourcing agent chain is best-effort, not contract-rigid.
-function relaxPreGateContracts(nodes, edges) {
-  const incoming = new Map();
-  for (const e of edges) {
-    if (!incoming.has(e.target)) incoming.set(e.target, []);
-    incoming.get(e.target).push(e.source);
-  }
-  const gateIds = nodes.filter((n) => n.category === "gate").map((n) => n.id);
-  const preGate = new Set();
-  const stack = [...gateIds];
-  while (stack.length) {
-    const id = stack.pop();
-    for (const src of incoming.get(id) ?? []) {
-      if (!preGate.has(src)) { preGate.add(src); stack.push(src); }
-    }
-  }
-  // Everything the founder gate feeds. Post-gate staging must trust the founder's approval, not
-  // re-litigate the draft's field names — the gate IS the contract checkpoint.
-  const postGate = new Set();
-  for (const gateId of gateIds) for (const d of descendants(gateId, edges)) postGate.add(d);
-  return nodes.map((n) => {
-    // The gate is human review — it must NOT reject real drafts on a field-name technicality (the
-    // draft carries `subject`/`body`/`to` while the contract demanded `decisionMaker`/`personalFact`).
-    // Clear both sides of its contract: accept whatever the chain staged, and stop promising specific
-    // output fields the human-approved item may not carry. Keep minItems 1 so it still pauses on ≥1 draft.
-    if (n.category === "gate") return { ...n, contract: { ...(n.contract ?? {}), accepts: [], emits: [], minItems: 1 } };
-    if (preGate.has(n.id) && (n.kind === "agent" || n.kind === "code")) {
-      return { ...n, contract: { ...(n.contract ?? {}), accepts: [], emits: [] } };
-    }
-    // Post-gate execute (staging/send) trusts the approval: relax BOTH sides of its field contract.
-    // Its input must not block an approved draft on a name mismatch, and its output must not promise
-    // send-only fields (messageId/sentAt) that local staging honestly never produces. Measure is
-    // deliberately left untouched so it stays honestly blind when the win event carries no source.
-    if (postGate.has(n.id) && n.category === "execute") {
-      return { ...n, contract: { ...(n.contract ?? {}), accepts: [], emits: [] } };
-    }
-    return n;
-  });
-}
-
-function makeEntryRunnable(graph) {
+// Run-path contract normalization. NOT a topology rewrite — the graph the founder composed and
+// persisted is the graph that runs (the entry mode was decided VISIBLY at compose time; see
+// source-entry.mjs). Two principled passes:
+//   1. relaxGateContracts (always): the founder gate IS the contract checkpoint, so the gate must
+//      not reject a real reviewed draft on a field-name technicality, and a post-gate execute trusts
+//      the approval. Measure is left untouched so it stays honestly blind.
+//   2. relaxDiscoveryChainContracts (discovered entry only): a self-sourcing agent chain is
+//      best-effort, so its pre-gate field contracts are relaxed; a provided (deterministic) graph
+//      keeps its declared contracts, because there they mean something.
+// Deterministic and idempotent, so a fresh run and a later gate-resume see the identical graph.
+function normalizeRunContracts(graph) {
   if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) return graph;
-  const source = graph.nodes.find((n) => n.category === "source" && n.kind !== "agent");
-  if (!source) return graph;
-  const items = source.config?.items;
-  const standsOnData =
-    (Array.isArray(items) && items.length > 0)
-    || source.connector === "api"
-    || !!source.config?.endpoint
-    || (source.connector === "csv" && !!source.config?.csv);
-  if (standsOnData) return graph;
-  const downstreamAgent = graph.edges
-    .filter((e) => e.source === source.id)
-    .map((e) => graph.nodes.find((n) => n.id === e.target))
-    .find((n) => n && n.kind === "agent");
-  if (!downstreamAgent) return graph;
-  const edges = graph.edges
-    .filter((e) => !(e.source === source.id && e.target === downstreamAgent.id))
-    .map((e) => (e.target === source.id ? { ...e, target: downstreamAgent.id } : e));
-  // The promoted agent is now the entry — it must run on ZERO upstream items and self-source. Clear
-  // its incoming-item gate and reframe it for discovery (below); the pre-gate field contracts are then
-  // relaxed so the generic candidate shape flows node-to-node without re-blocking.
-  let nodes = graph.nodes
-    .filter((n) => n.id !== source.id)
-    .map((n) => (n.id === downstreamAgent.id
-      ? {
-          ...n,
-          contract: { ...(n.contract ?? {}), accepts: [], minItems: 0 },
-          // The agent's own instruction assumed a seed list to enrich; as the self-sourcing entry it
-          // was handed nothing and returned 0 items. Reframe it for DISCOVERY so it finds its own
-          // candidates from public signals + the product grounding (this is what a working outbound
-          // source-agent does). Its original instruction runs second, on what it found.
-          agentPrompt: `You are the DISCOVERY entry for this go-to-market loop and you were given NO seed list. Using the product grounding and ICP in your context plus WebSearch/WebFetch on real public sources, FIND 3-5 real, currently-active people or organizations that fit this product's ICP and have a recent public now-trigger.${typeof n.agentPrompt === "string" && n.agentPrompt.trim() ? ` Then apply your role: ${n.agentPrompt.trim()}` : ""} Return ONLY a JSON array of real, source-traceable candidates — each with a name/handle, a source url, and one line on why them. Invent nothing; if you can only verify 2, return 2.`,
-        }
-      : n));
-  nodes = relaxPreGateContracts(nodes, edges);
-  return { ...graph, nodes, edges };
+  let nodes = relaxGateContracts(graph.nodes, graph.edges);
+  if (entryIsDiscovered(nodes, graph.edges)) nodes = relaxDiscoveryChainContracts(nodes, graph.edges);
+  return { ...graph, nodes };
 }
 
 export async function runGraph(graph, opts = {}) {
-  graph = makeEntryRunnable(graph);
+  graph = normalizeRunContracts(graph);
   const {
     store,
     targetNodeId,
