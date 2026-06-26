@@ -1408,6 +1408,10 @@ export default function App() {
               onSelectNode={setSelection}
               proposedNodeIds={proposedNodeIds}
               proposedEdgeIds={proposedEdgeIds}
+              proposalActive={proposalActive}
+              onResolveProposal={(accept) => void handleResolveProposal(accept)}
+              onSubmitReview={(id, d) => void submitGateReview(id, d)}
+              onApproveGate={(id) => void approveGate(id)}
               onNodePositionChange={handleNodePositionChange}
               onConnectNodes={handleGraphConnect}
               onDeleteEdges={handleDeleteEdges}
@@ -1433,6 +1437,10 @@ export default function App() {
                 graph={displayGraph ?? graph}
                 proposedNodeIds={proposedNodeIds}
                 proposedEdgeIds={proposedEdgeIds}
+                proposalActive={proposalActive}
+                onResolveProposal={(accept) => void handleResolveProposal(accept)}
+                onSubmitReview={(id, d) => void submitGateReview(id, d)}
+                onApproveGate={(id) => void approveGate(id)}
                 onAddNode={handleAddNode}
                 onConnectNodes={handleGraphConnect}
                 onDeleteEdges={handleDeleteEdges}

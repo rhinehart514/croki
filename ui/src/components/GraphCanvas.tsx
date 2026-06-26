@@ -6,12 +6,13 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
-  AlertCircle, Ban, Bot, CheckCircle2, ChevronDown, Circle, Code, Database, FileSpreadsheet, GitMerge,
-  Globe2, Loader, MessageSquare, Plus, Search, ShieldCheck, Sparkles, Target, TrendingUp, Wand2, Zap,
+  AlertCircle, Ban, Bot, Check, CheckCircle2, ChevronDown, Circle, Code, Database, FileSpreadsheet, GitMerge,
+  Globe2, Loader, MessageSquare, Plus, Search, ShieldCheck, Sparkles, Target, TrendingUp, Wand2, X, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { GateReview } from "@/components/NodeEditor";
 import type {
-  ConnectorMeta, GTMEdge, GTMEdgeType, GTMGraph,
+  ConnectorMeta, GateDecision, GTMEdge, GTMEdgeType, GTMGraph,
   GTMContractAudit, GTMNode, GTMNodeCategory, GTMNodeResult, GTMRunResult, NodeSelection,
 } from "@/types";
 
@@ -91,6 +92,15 @@ type GTMNodeData = {
   health?: number;
   healthIssue?: string;
   contractAudit?: GTMContractAudit;
+  // Proposal layer (slice 2): this node is an operator-staged ghost, and there is a live proposal to
+  // resolve. The affordance is all-or-nothing — either button resolves the WHOLE proposal — but it is
+  // surfaced loudly right on the ghost so the founder acts where the change is.
+  proposed?: boolean;
+  proposalActive?: boolean;
+  onResolveProposal?: (accept: boolean) => void;
+  // Gate review (slice 5): for a founder gate node, resolve its staged drafts inline on the canvas.
+  onSubmitReview?: (decisions: Record<string, GateDecision>) => void;
+  onApproveGate?: () => void;
 };
 
 // Health band → color, matching the engine's health thresholds.
@@ -146,6 +156,67 @@ function itemSummary(result: GTMNodeResult): string | null {
   return n > 0 ? `${n} items` : null;
 }
 
+// ─── Proposal affordance (slice 2) ────────────────────────────────────────────
+// A loud accept/reject pill floating on a proposed ghost node. The backend resolves proposals
+// all-or-nothing, so either button resolves the WHOLE staged change — but the control sits right on
+// the ghost, where the founder is looking, instead of only at a distant bar. `nodrag`/`nopan` keep a
+// click from grabbing or panning the canvas; stopPropagation keeps it off the node's select handler.
+function ProposalControls({ data }: { data: GTMNodeData }) {
+  if (!data.proposed || !data.proposalActive || !data.onResolveProposal) return null;
+  const resolve = data.onResolveProposal;
+  return (
+    <div className="loop-proposal-inline nodrag nopan" role="group" aria-label="Accept or reject the proposed changes">
+      <button
+        type="button"
+        className="loop-proposal-inline-btn accept"
+        title="Accept the proposed changes"
+        aria-label="Accept the proposed changes"
+        onClick={(e) => { e.stopPropagation(); resolve(true); }}
+      >
+        <Check />
+      </button>
+      <button
+        type="button"
+        className="loop-proposal-inline-btn reject"
+        title="Reject the proposed changes"
+        aria-label="Reject the proposed changes"
+        onClick={(e) => { e.stopPropagation(); resolve(false); }}
+      >
+        <X />
+      </button>
+    </div>
+  );
+}
+
+// ─── Gate inline review (slice 5) ─────────────────────────────────────────────
+// The founder gate expands in place: when the gate node is the selected node AND it is holding staged
+// drafts, its review stack floats anchored to the node so the founder can approve/reject/edit at the
+// wall without leaving the canvas. Only mounted while selected, so a collapsed gate never blocks a
+// drag. `nodrag`/`nowheel`/`nopan` let the founder scroll and click inside the card without moving the
+// node or the canvas. Reuses the exact GateReview component the right panel uses.
+function GateInlineReview({ data }: { data: GTMNodeData }) {
+  const { node, result, selected } = data;
+  if (node.category !== "gate" || !selected || !result) return null;
+  const hasStaged = (result.items?.length ?? 0) > 0 || !!result.pendingReview;
+  if (!hasStaged || !data.onSubmitReview || !data.onApproveGate) return null;
+  return (
+    <div className="loop-gate-inline nodrag nowheel nopan" role="region" aria-label={`Review staged drafts for ${node.label}`}>
+      <div className="loop-gate-inline-head">
+        <ShieldCheck />
+        <span>Review at the wall</span>
+      </div>
+      <div className="loop-gate-inline-body">
+        <GateReview
+          items={result.items ?? []}
+          running={data.running}
+          onSubmit={data.onSubmitReview}
+          onApproveAll={data.onApproveGate}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ─── Resource node (compact dark strip) ──────────────────────────────────────
 
 function ResourceNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
@@ -154,6 +225,7 @@ function ResourceNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
   const configured = conn ? conn.configured && !conn.stub : false;
 
   return (
+    <>
     <button
       className={cn("loop-node loop-node-resource", selected && "loop-node-selected")}
       onClick={onSelect} type="button"
@@ -170,6 +242,8 @@ function ResourceNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       )}
       <Handle type="source" position={Position.Right} />
     </button>
+      <ProposalControls data={data} />
+    </>
   );
 }
 
@@ -187,6 +261,7 @@ function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
   const color = CATEGORY_COLOR[node.category];
 
   return (
+    <>
     <button
       className={cn("loop-node loop-node-context", selected && "loop-node-selected")}
       onClick={onSelect} type="button"
@@ -209,6 +284,8 @@ function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       <Handle type="source" position={Position.Right} />
       <Handle type="source" position={Position.Bottom} id="bottom" />
     </button>
+      <ProposalControls data={data} />
+    </>
   );
 }
 
@@ -224,6 +301,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
   const isOpenKind = !!node.kind && node.kind !== "tool";
 
   return (
+    <>
     <button
       className={cn(
         "loop-node",
@@ -281,6 +359,9 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       )}
       <Handle type="source" position={Position.Right} />
     </button>
+      <ProposalControls data={data} />
+      <GateInlineReview data={data} />
+    </>
   );
 }
 
@@ -459,6 +540,10 @@ function buildFlowGraph(
   mode?: string,
   proposedNodeIds?: Set<string>,
   proposedEdgeIds?: Set<string>,
+  proposalActive?: boolean,
+  onResolveProposal?: (accept: boolean) => void,
+  onSubmitReview?: (nodeId: string, decisions: Record<string, GateDecision>) => void,
+  onApproveGate?: (nodeId: string) => void,
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = graph.nodes.map((n) => {
     const sub = subsystemHealth[n.category];
@@ -481,6 +566,11 @@ function buildFlowGraph(
         health: sub?.health,
         healthIssue: sub?.issue,
         contractAudit: contractAudits[n.id],
+        proposed: proposedNodeIds?.has(n.id) ?? false,
+        proposalActive: proposalActive ?? false,
+        onResolveProposal,
+        onSubmitReview: onSubmitReview ? (decisions: Record<string, GateDecision>) => onSubmitReview(n.id, decisions) : undefined,
+        onApproveGate: onApproveGate ? () => onApproveGate(n.id) : undefined,
       } as GTMNodeData,
     };
   });
@@ -693,7 +783,7 @@ function Refitter({ nonce }: { nonce?: number }) {
 export function GraphCanvas({
   graph, result, running, runningNodeId = null, selection, connectors, subsystemHealth = {}, contractAudits = {},
   onSelect, onNodePositionChange, onConnectNodes, onDeleteEdges, onAddNode, onLoadRecipe, panelOpen, variant, mode,
-  proposedNodeIds, proposedEdgeIds, refitNonce,
+  proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, refitNonce,
 }: {
   graph: GTMGraph;
   result: GTMRunResult | null;
@@ -717,6 +807,14 @@ export function GraphCanvas({
   // Nodes/edges the operator has STAGED but not applied — rendered as ghosts for founder review.
   proposedNodeIds?: Set<string>;
   proposedEdgeIds?: Set<string>;
+  // Slice 2: a proposal is live and resolving it accepts/discards the whole staged change. Surfaced
+  // inline on each ghost node so the founder accepts/rejects where the change is.
+  proposalActive?: boolean;
+  onResolveProposal?: (accept: boolean) => void;
+  // Slice 5: a founder gate node resolves its staged drafts inline on the canvas (the on-canvas
+  // quick-review at the wall). Same handlers the right-panel node editor uses.
+  onSubmitReview?: (nodeId: string, decisions: Record<string, GateDecision>) => void;
+  onApproveGate?: (nodeId: string) => void;
   // Bump to re-fit the viewport after the container resizes (debugger drawer open/close).
   refitNonce?: number;
 }) {
@@ -741,8 +839,8 @@ export function GraphCanvas({
   }, [graph, onNodePositionChange]);
 
   const { nodes, edges } = useMemo(
-    () => buildFlowGraph(graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, mode, proposedNodeIds, proposedEdgeIds),
-    [graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, mode, proposedNodeIds, proposedEdgeIds],
+    () => buildFlowGraph(graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, mode, proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal, onSubmitReview, onApproveGate),
+    [graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, mode, proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal, onSubmitReview, onApproveGate],
   );
 
   const handleNodeDragStop = useCallback(

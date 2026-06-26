@@ -6,7 +6,7 @@ import { GraphCanvas } from "@/components/GraphCanvas";
 import { statusLabel as canonicalStatus, toneForPhrase } from "@/lib/status";
 import type {
   AgentCreationPolicy, AgentEvaluation, AgentInstance, ConnectorMeta, DomainEvent, FeedbackSignal,
-  GTMContractAudit, GTMGraph, GTMNode, GTMRunResult, NodeSelection, OutcomeProgram,
+  GateDecision, GTMContractAudit, GTMGraph, GTMNode, GTMRunResult, NodeSelection, OutcomeProgram,
 } from "@/types";
 
 export type ProgramCanvasMode = "design" | "simulation" | "run" | "review" | "learning";
@@ -91,6 +91,10 @@ export function ProgramCanvas({
   onLoadRecipe,
   proposedNodeIds,
   proposedEdgeIds,
+  proposalActive,
+  onResolveProposal,
+  onSubmitReview,
+  onApproveGate,
   focusDebug,
 }: {
   program: OutcomeProgram;
@@ -124,6 +128,12 @@ export function ProgramCanvas({
   // Operator-staged nodes/edges to ghost on the canvas for founder review (the proposal layer).
   proposedNodeIds?: Set<string>;
   proposedEdgeIds?: Set<string>;
+  // Slice 2: a proposal is live; resolving it accepts/discards the whole staged change, surfaced
+  // inline on each ghost node. Slice 5: gate nodes resolve their staged drafts inline on the canvas.
+  proposalActive?: boolean;
+  onResolveProposal?: (accept: boolean) => void;
+  onSubmitReview?: (nodeId: string, decisions: Record<string, GateDecision>) => void;
+  onApproveGate?: (nodeId: string) => void;
   // Lets the explorer deep-link the bottom debugger to a specific tab (e.g. clicking a Run opens
   // Run Logs). The nonce makes repeat clicks of the same tab re-fire.
   focusDebug?: { tab: DebugTab; nonce: number } | null;
@@ -319,6 +329,10 @@ export function ProgramCanvas({
               contractAudits={contractAudits}
               proposedNodeIds={proposedNodeIds}
               proposedEdgeIds={proposedEdgeIds}
+              proposalActive={proposalActive}
+              onResolveProposal={onResolveProposal}
+              onSubmitReview={onSubmitReview}
+              onApproveGate={onApproveGate}
               onSelect={onSelectNode}
               onNodePositionChange={onNodePositionChange}
               onConnectNodes={onConnectNodes}
