@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  AlertCircle, Bot, CheckCircle2, Circle, LoaderCircle, Maximize2, MessageSquareText,
-  Minimize2, Play, Send, ShieldCheck, Square, Wrench, X,
+  AlertCircle, ArrowUp, Bot, CheckCircle2, Circle, LoaderCircle, Maximize2, MessageSquareText,
+  Minimize2, Play, Plus, ShieldCheck, Square, Wrench, X,
 } from "lucide-react";
 import { statusLabel } from "@/lib/status";
 import { DockContext } from "@/components/DockContext";
@@ -131,7 +131,6 @@ export function ComposerDock({
   useEffect(() => {
     if (openFocus) inputRef.current?.focus();
   }, [openFocus]);
-  const openDock = () => { setCollapsed(false); setOpenFocus((n) => n + 1); };
 
   // ⌘K / Ctrl-K summons the command dock from anywhere — the canvas's command line, always one key away.
   useEffect(() => {
@@ -150,41 +149,72 @@ export function ComposerDock({
     timelineRef.current?.scrollTo({ top: timelineRef.current.scrollHeight, behavior: "smooth" });
   }, [session?.events.length]);
 
-  // Collapsed = a small floating pill on the canvas (avatar + live status), click to reopen the
-  // dock. Keeps Claude present without taking canvas space.
-  if (collapsed) {
-    return (
-      <button className="composer-pill" onClick={openDock} type="button" title="Open Claude">
-        <span className={`composer-pill-avatar ${running || session?.status === "running" ? "running" : ""}`}>
-          {running || session?.status === "running" ? <LoaderCircle className="spin" /> : <Bot />}
-        </span>
-        <span className="composer-pill-text">
-          {/* One truth, matching the top bar: "working" ONLY when actually running; when the session
-              is paused for the founder (waiting_for_gate / waiting_for_input) say so, never "working". */}
-          {running || session?.status === "running"
-            ? "Claude is working…"
-            : session && !TERMINAL.has(session.status)
-              ? `Claude · ${statusLabel(session.status)}`
-              : "Ask Claude to build, run, or change anything…"}
-        </span>
-        <span className="composer-pill-hint">⌘K</span>
-      </button>
-    );
-  }
-
   const sessionActive = !!session && !TERMINAL.has(session.status);
   const waitingGate = session?.status === "waiting_for_gate";
   const pendingGateId = session?.pendingGate?.nodeIds[0];
   // The agent is mid-thought — the input parks until it pauses for you.
   const sendDisabled = running || session?.status === "running" || session?.status === "ready" || waitingGate;
+  const working = running || session?.status === "running";
 
   const send = async () => {
     const value = input.trim();
     if (!value || submitting || sendDisabled) return;
     setSubmitting(true);
+    setCollapsed(false); // sending opens the conversation above the composer
     try { await onSend(value); setInput(""); }
     finally { setSubmitting(false); }
   };
+
+  // The command composer — the product's primary input, built to rival a real chat composer: a calm
+  // textarea over a control row (context on the left, the live model/state, a dark send on the right).
+  // Enter sends, Shift+Enter newlines. Shared by the resting state and the active conversation so the
+  // input never changes shape as you move between them.
+  const composer = (
+    <div className="composer-box">
+      <textarea
+        ref={inputRef}
+        className="composer-box-input"
+        placeholder={sendDisabled ? "Claude is working…" : session ? "Reply, redirect, or ask Claude to continue…" : "Ask Claude to build, run, or change anything…"}
+        value={input}
+        disabled={sendDisabled}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
+        rows={1}
+      />
+      <div className="composer-box-bar">
+        <div className="composer-box-tools">
+          {onOpenGrounding ? (
+            <button className="composer-box-tool" onClick={onOpenGrounding} type="button" title="What Claude reads — grounding, product picture, channels">
+              <Plus size={16} />
+            </button>
+          ) : null}
+          <span className="composer-box-model" title={sessionActive ? "Claude is on this outcome" : "Runs on your Claude subscription"}>
+            <span className={`composer-box-dot ${sessionActive ? "live" : ""}`} />
+            {working ? "Working…" : session ? statusLabel(session.status) : "Claude · subscription"}
+          </span>
+        </div>
+        <button
+          className="composer-box-send"
+          disabled={!input.trim() || sendDisabled || submitting}
+          onClick={() => void send()}
+          type="button"
+          aria-label="Send to Claude"
+        >
+          {submitting ? <LoaderCircle className="spin" /> : <ArrowUp size={18} />}
+        </button>
+      </div>
+    </div>
+  );
+
+  // Resting = the composer alone, centered on the canvas (the command line). The conversation only
+  // rises above it once you send or open a live session — minimizing (the header X) returns here.
+  if (collapsed) {
+    return (
+      <aside className="composer-dock floating resting" aria-label="Claude">
+        {composer}
+      </aside>
+    );
+  }
 
   return (
     <aside className={`composer-dock floating ${expanded ? "expanded" : ""}`} aria-label="Claude co-pilot">
@@ -305,22 +335,8 @@ export function ComposerDock({
         </div>
       )}
 
-      {/* ── Composer input (always present) ────────────────────── */}
-      <div className="composer-dock-input-wrap">
-        <textarea
-          ref={inputRef}
-          className="composer-dock-input"
-          placeholder={sendDisabled ? "Claude is working…" : session ? "Reply, redirect, or ask it to continue…" : "Tell Claude the outcome you want…"}
-          value={input}
-          disabled={sendDisabled}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void send(); }}
-          rows={2}
-        />
-        <button className="composer-dock-send" disabled={!input.trim() || sendDisabled || submitting} onClick={() => void send()} type="button">
-          {submitting ? <LoaderCircle className="spin" /> : <Send />}
-        </button>
-      </div>
+      {/* ── Composer input (the same beautiful composer as the resting state) ── */}
+      {composer}
     </aside>
   );
 }

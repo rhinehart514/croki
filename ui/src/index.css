@@ -8173,17 +8173,20 @@ svg {
 /* ── Outcome Program canvas — the executable source map ───────────────────── */
 .program-workbench {
   display: grid;
-  /* topbar · mode strip · canvas (flexible) · debugger */
-  grid-template-rows: auto auto minmax(0, 1fr) 200px;
+  /* topbar · mode strip · canvas (flexible). The debugger no longer takes a row — it
+     floats bottom-left over the canvas (a summoned tool), and the composer owns the
+     bottom-center, so the canvas keeps the full height. */
+  grid-template-rows: auto auto minmax(0, 1fr);
   height: 100%;
   min-width: 0;
   background: var(--canvas);
+  position: relative;
 }
 
 /* Debugger collapsed to its toggle bar — the canvas claims the reclaimed height. Default state:
    the graph is the workspace, the debugger is a drawer you summon. */
 .program-workbench.debug-collapsed {
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 /* The program workbench is already a four-zone IDE (explorer · canvas · inspector · debugger), so
@@ -9143,14 +9146,25 @@ svg {
   line-height: 1.35;
 }
 
+/* The debugger is a summoned tool, not a docked bar: it floats bottom-left as a glass
+   control (out of the composer's way at bottom-center), and expands upward into a panel
+   when opened. Collapsed, it's a small pill; the canvas owns the space it used to take. */
 .program-debugger {
+  position: absolute; left: 16px; bottom: 16px; z-index: 30;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-top: 1px solid var(--line-2);
-  background: var(--surface-2);
+  max-width: min(620px, calc(100% - 32px));
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  backdrop-filter: blur(16px) saturate(1.4); -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  box-shadow: 0 1px 2px rgba(16,18,27,0.06), 0 18px 44px -16px rgba(16,18,27,0.30);
   color: var(--ink);
+  overflow: hidden;
 }
+.program-debugger:not(.collapsed) { width: min(620px, calc(100% - 32px)); }
+.program-debugger .debugger-body { max-height: 42vh; overflow-y: auto; }
 
 .debugger-head {
   display: flex;
@@ -9649,8 +9663,10 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
    loop-body grid's flow and the canvas reclaims the column the dock used to hold. Glass marks the one
    thing that floats (this dock, and the gate card) — the one-accent rule for elevation, not decoration. */
 .composer-dock.floating {
-  position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%);
-  right: auto; top: auto; flex: none; margin: 0;
+  /* Center via auto margins, not transform: the glass entrance animation owns `transform`
+     (translateY), so a translateX(-50%) here gets clobbered and the box drifts right. */
+  position: absolute; left: 0; right: 0; bottom: 20px; margin: 0 auto;
+  top: auto; flex: none;
   width: min(620px, calc(100% - 48px)); height: auto; max-height: min(60vh, 580px);
   background: color-mix(in srgb, var(--surface) 82%, transparent);
   backdrop-filter: blur(20px) saturate(1.5); -webkit-backdrop-filter: blur(20px) saturate(1.5);
@@ -9661,6 +9677,49 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
   transition: width 180ms var(--ease), max-height 180ms var(--ease);
 }
 .composer-dock.floating.expanded { width: min(760px, calc(100% - 48px)); max-height: min(76vh, 760px); }
+
+/* Resting = the composer alone, centered on the canvas, auto height. The .floating glass card already
+   gives the blur, border, shadow, and the bottom-center placement; resting just sheds the panel chrome. */
+.composer-dock.floating.resting { max-height: none; height: auto; width: min(640px, calc(100% - 48px)); }
+
+/* ── The command composer — the product's primary input ───────────────────────
+   Rivals a real chat composer: a calm textarea over a control row. Left a context "+"
+   and the live model/state; right a dark circular send — the one monochrome primary
+   (amber stays the gate's alone). */
+.composer-box { display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-3) var(--space-2); }
+.composer-dock.floating:not(.resting) .composer-box {
+  border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+}
+.composer-box-input {
+  width: 100%; box-sizing: border-box; border: 0; background: transparent; resize: none;
+  font: inherit; font-size: 14.5px; line-height: 1.55; color: var(--ink);
+  padding: var(--space-1) var(--space-1) 0; min-height: 26px; max-height: 200px; overflow-y: auto;
+}
+.composer-box-input::placeholder { color: var(--faint); }
+.composer-box-input:focus { outline: none; }
+.composer-box-input:disabled { color: var(--muted); cursor: default; }
+.composer-box-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.composer-box-tools { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.composer-box-tool {
+  width: 30px; height: 30px; flex-shrink: 0; display: grid; place-items: center;
+  border: 1px solid var(--line-2); border-radius: 999px; background: transparent;
+  color: var(--muted); cursor: pointer; transition: background var(--ease), color var(--ease), border-color var(--ease);
+}
+.composer-box-tool:hover { background: var(--surface-2); color: var(--ink); border-color: var(--line-2); }
+.composer-box-model {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0;
+  font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.composer-box-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--line-2); flex-shrink: 0; }
+.composer-box-dot.live { background: var(--proven); }
+.composer-box-send {
+  width: 32px; height: 32px; flex-shrink: 0; display: grid; place-items: center;
+  border: 0; border-radius: 50%; background: var(--ink); color: #fff; cursor: pointer;
+  transition: opacity var(--ease), transform var(--ease);
+}
+.composer-box-send:hover:not(:disabled) { opacity: 0.86; transform: translateY(-1px); }
+.composer-box-send:disabled { background: var(--line-2); color: var(--surface); cursor: default; }
+.composer-box-send svg { width: 18px; height: 18px; }
 .composer-dock.floating .composer-dock-head {
   border-radius: var(--r-xl) var(--r-xl) 0 0; background: transparent;
   border-bottom-color: color-mix(in srgb, var(--line) 60%, transparent);
