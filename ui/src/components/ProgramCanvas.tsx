@@ -4,7 +4,7 @@ import { Reveal, Collapse, Stagger, StaggerItem } from "@/lib/motion";
 import { SPRING } from "@/lib/springs";
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
-  Bot, CheckCircle2, ChevronDown, GitBranch, History, Pause, PanelRight, Play, X,
+  Bot, CheckCircle2, ChevronDown, GitBranch, History, Pause, Play, X,
 } from "lucide-react";
 import { GraphCanvas } from "@/components/GraphCanvas";
 import { CanvasGate } from "@/components/CanvasGate";
@@ -32,14 +32,6 @@ export type NodeEditorBridge = {
 
 export type ProgramCanvasMode = "design" | "simulation" | "run" | "review" | "learning";
 export type DebugTab = "timeline" | "events" | "runLogs" | "replay" | "diff" | "contracts";
-
-const MODE_LABEL: Record<ProgramCanvasMode, string> = {
-  design: "Design",
-  simulation: "Simulation",
-  run: "Run",
-  review: "Review",
-  learning: "Learning",
-};
 
 // Each mode is a different question asked of the same program, not a different page. The mode
 // re-skins the one graph (the lens, in GraphCanvas) and points the debugger at the matching tab —
@@ -75,21 +67,10 @@ function leadSentence(value: string) {
   return match ? match[0].trim() : trimmed;
 }
 
-// The program's headline status composes run + program state into one phrase; its tone comes from
-// the shared toneForPhrase so it colors identically to every other status pill in the UI.
-function programHeadline(program: OutcomeProgram, runResult: GTMRunResult | null, graph: GTMGraph | null) {
-  if (runResult?.pendingGates?.length) return "paused at gate";
-  if (runResult && !runResult.ok) return "blocked";
-  if (runResult?.ok) return "completed";
-  if (!graph) return "not composed";
-  return canonicalStatus(program.lastRunStatus ?? program.lifecycle);
-}
-
 export function ProgramCanvas({
   program,
   graph,
   mode,
-  onModeChange,
   runResult,
   runs,
   agents,
@@ -119,11 +100,12 @@ export function ProgramCanvas({
   focusDebug,
   nodeEditor,
   onOpenLibrary,
+  inspecting: inspectingProp,
+  onInspectingChange,
 }: {
   program: OutcomeProgram;
   graph: GTMGraph | null;
   mode: ProgramCanvasMode;
-  onModeChange: (mode: ProgramCanvasMode) => void;
   runResult: GTMRunResult | null;
   runs: GTMRunResult[];
   agents: AgentInstance[];
@@ -165,6 +147,11 @@ export function ProgramCanvas({
   // Opens the summoned LibraryPalette from the canvas "+ Add step" control (the replacement for the
   // old left-rail Library). Optional, so the canvas still works with no palette wired.
   onOpenLibrary?: () => void;
+  // Program details ("inspecting") is now driven from the FloatingDock, so it's lifted to App and
+  // passed in controlled. When unprovided the canvas falls back to its own internal state, so the
+  // component still works standalone.
+  inspecting?: boolean;
+  onInspectingChange?: (open: boolean) => void;
 }) {
   const programAgents = useMemo(() => agents.filter((agent) => agent.programId === program.id), [agents, program.id]);
   const programPolicies = useMemo(() => policies.filter((policy) => policy.programId === program.id), [policies, program.id]);
@@ -191,9 +178,15 @@ export function ProgramCanvas({
   // into the reclaimed/relinquished height.
   const [debugOpen, setDebugOpen] = useState(false);
   // At rest the canvas is full width; the right inspector (agents, measurement, learning) is summoned
-  // by the "Program details" toggle. A selected node still forces the two-column layout (the node
-  // editor lives in that same right zone), so the grid opens whenever EITHER is true.
-  const [inspecting, setInspecting] = useState(false);
+  // by the "Program details" toggle (now in the FloatingDock). A selected node still forces the
+  // two-column layout (the node editor lives in that same right zone), so the grid opens whenever
+  // EITHER is true. Controlled when App passes inspecting/onInspectingChange; else internal.
+  const [inspectingLocal, setInspectingLocal] = useState(false);
+  const inspecting = inspectingProp ?? inspectingLocal;
+  const setInspecting = (next: boolean) => {
+    if (onInspectingChange) onInspectingChange(next);
+    else setInspectingLocal(next);
+  };
   const [refitNonce, setRefitNonce] = useState(0);
   const toggleDebug = () => { setDebugOpen((open) => !open); setRefitNonce((n) => n + 1); };
   // Opening a specific tab from collapsed should reveal the drawer, not silently switch a hidden tab.
@@ -300,52 +293,10 @@ export function ProgramCanvas({
   };
 
   return (
-    <div className={`program-workbench${debugOpen ? "" : " debug-collapsed"}`}>
-      <header className="program-topbar">
-        <div className="program-title-block">
-          <span className="program-path">Outcome Program</span>
-          <h1>{program.name}</h1>
-          <div className="program-status-line">
-            <span className={`program-status-pill ${toneForPhrase(programHeadline(program, runResult, graph))}`}>{programHeadline(program, runResult, graph)}</span>
-            <span>{graph ? `${graph.nodes.length} execution steps` : "No execution graph"}</span>
-            <span>{programAgents.length} agent{programAgents.length === 1 ? "" : "s"} built for it</span>
-          </div>
-        </div>
-        <div className="program-actions">
-          <SlidingTabs
-            items={(Object.keys(MODE_LABEL) as ProgramCanvasMode[]).map((m) => ({ value: m, label: MODE_LABEL[m] }))}
-            value={mode}
-            onChange={onModeChange}
-            layoutId="program-mode"
-          />
-          {/* The primary run action lives once, in the global top bar (the shipped convention —
-              Linear/StackAI/Lindy all anchor it top-right). The program header keeps only its mode
-              tabs, so the founder never sees two "Run" buttons competing on the same screen. */}
-          {/* Program details — the inspector (agents, measurement, learning) is summoned, not resident,
-              so the canvas is full width at rest. This flips it open without selecting a node. */}
-          <button
-            className={`program-inspect-toggle ${inspecting ? "active" : ""}`}
-            onClick={() => setInspecting((v) => !v)}
-            type="button"
-            aria-pressed={inspecting}
-            title={inspecting ? "Hide program details" : "Show program details (agents, measurement, learning)"}
-          >
-            <PanelRight size={14} />
-            <span>Program details</span>
-          </button>
-        </div>
-      </header>
-
-      <div key={mode} className="program-mode-intent view-enter">
-        <span className="program-mode-intent-label">{MODE_LABEL[mode]}</span>
-        <span className="program-mode-intent-q">{intent.question}</span>
-        {mode === "review" && pendingGate ? (
-          <button className="program-mode-intent-action" onClick={() => onSelectNode(pendingGate)} type="button">
-            Review the gate →
-          </button>
-        ) : null}
-      </div>
-
+    // Full-bleed: the program sub-header (eyebrow/title/status, mode tabs, details toggle) and the
+    // mode-intent strip moved into the FloatingDock that floats over the canvas. The workbench is now
+    // just the canvas plane + the summoned details sheet + the bottom debugger drawer.
+    <div className={`program-workbench full-bleed${debugOpen ? "" : " debug-collapsed"}`}>
       <div className={`program-canvas-grid mode-${mode}`}>
         <section className="program-canvas-plane program-canvas-graph" aria-label="Outcome program canvas">
           {/* Hero thesis band — the buyer bet was buried in the inspector gutter while the

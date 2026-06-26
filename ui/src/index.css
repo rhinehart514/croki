@@ -3328,6 +3328,13 @@ svg {
   overflow: hidden;
 }
 
+/* Canvas view is full-bleed: no top toolbar row — the canvas fills the viewport edge to edge and the
+   FloatingDock floats over it. The body owns the whole height; the trailing auto row holds the
+   floating composer dock / drawers. */
+.loop-shell.canvas-bleed {
+  grid-template-rows: 1fr auto;
+}
+
 /* ── Toolbar ─────────────────────────────────────────────────────────────── */
 
 .loop-toolbar {
@@ -8291,6 +8298,13 @@ svg {
    the graph is the workspace, the debugger is a drawer you summon. */
 .program-workbench.debug-collapsed {
   grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+/* Full-bleed: the topbar + mode-intent rows are gone (their controls live in the FloatingDock), so
+   the workbench is a single canvas row that fills the freed height edge to edge. */
+.program-workbench.full-bleed,
+.program-workbench.full-bleed.debug-collapsed {
+  grid-template-rows: minmax(0, 1fr);
 }
 
 /* The program workbench is already a four-zone IDE (explorer · canvas · inspector · debugger), so

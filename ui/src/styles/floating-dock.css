@@ -1,0 +1,236 @@
+/* The floating control dock — one calm, shadcn-grounded bar that floats top-center over the
+   full-bleed canvas. It replaces both the global top toolbar and the program sub-header. Neutral
+   palette, a hairline border, a soft shadow, muted-foreground secondary text, ONE dark primary
+   (Run). Amber belongs to the gate alone — nothing here is amber except the Approvals count. */
+
+.fdock {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform-origin: top center;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 28px);
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--line-2) 78%, transparent);
+  border-radius: var(--r-xl);
+  background: color-mix(in srgb, var(--surface) 84%, transparent);
+  backdrop-filter: blur(22px) saturate(1.6);
+  -webkit-backdrop-filter: blur(22px) saturate(1.6);
+  box-shadow:
+    0 1px 2px oklch(0.21 0.006 285.9 / 0.05),
+    0 18px 48px -16px oklch(0.21 0.006 285.9 / 0.32);
+}
+
+/* Left — product · outcome breadcrumb ------------------------------------------------------- */
+.fdock-left {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.fdock-sep {
+  color: var(--ghost);
+  font-size: 13px;
+  padding: 0 1px;
+  flex-shrink: 0;
+}
+
+/* Center — the mode lenses ------------------------------------------------------------------ */
+.fdock-center {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Right — actions --------------------------------------------------------------------------- */
+.fdock-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.fdock-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--line-2);
+  margin: 0 1px;
+}
+
+/* Claude status — a quiet dot + label, never a button. */
+.fdock-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  height: 28px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 560;
+  white-space: nowrap;
+}
+.fdock-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ghost);
+}
+.fdock-status.live .fdock-status-dot { background: var(--proven); }
+.fdock-status.off { color: var(--gap); }
+.fdock-status.off .fdock-status-dot { background: var(--gap); }
+
+/* Compact icon buttons — the secondary actions (Problems, Approvals, Program details). */
+.fdock-icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 30px;
+  min-width: 30px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 120ms var(--ease), border-color 120ms var(--ease), color 120ms var(--ease);
+}
+.fdock-icon-btn:hover { color: var(--ink); background: var(--surface-2); }
+.fdock-icon-btn.open { color: var(--ink); background: var(--surface-2); border-color: var(--line-2); }
+.fdock-icon-btn.has-count,
+.fdock-icon-btn.has-pending { color: var(--ink); }
+
+.fdock-count {
+  min-width: 16px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+/* The gate's count is the one place amber is allowed — the founder gate owns the accent. */
+.fdock-count.gate { background: var(--gap); color: #fff; }
+
+/* Simulate — ghost. */
+.fdock-ghost-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 120ms var(--ease), background 120ms var(--ease);
+}
+.fdock-ghost-btn:hover:not(:disabled) { border-color: var(--ghost); }
+.fdock-ghost-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Run program — the one dark primary. */
+.fdock-run-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--primary);
+  border-radius: var(--r-md);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 12px;
+  font-weight: 660;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px oklch(0.21 0.006 285.9 / 0.18);
+  transition: background 140ms var(--ease), box-shadow 140ms var(--ease);
+}
+.fdock-run-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary) 88%, white);
+  box-shadow: 0 4px 12px oklch(0.21 0.006 285.9 / 0.24);
+}
+.fdock-run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Problems popover — reuses the glass-popover register from the old toolbar chip. */
+.fdock-pop-wrap { position: relative; display: inline-flex; }
+.fdock-problems-pop {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 320px;
+  max-height: 60vh;
+  overflow: auto;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid color-mix(in srgb, var(--line-2) 72%, transparent);
+  border-radius: var(--r-lg);
+  box-shadow: 0 1px 2px rgba(16,18,27,0.08), 0 24px 60px -14px rgba(16,18,27,0.34);
+}
+.fdock-problems-empty { font-size: 12.5px; color: var(--muted); padding: 8px 4px; line-height: 1.5; }
+.fdock-problems-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.fdock-problems-head { display: flex; align-items: flex-start; gap: 8px; }
+.fdock-problems-head svg { flex-shrink: 0; color: var(--muted); margin-top: 1px; }
+.fdock-problems-head p { font-size: 12.5px; color: var(--ink); line-height: 1.45; }
+.fdock-problems-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.fdock-problems-sub { font-size: 11px; color: var(--faint); text-transform: capitalize; }
+.fdock-problems-health {
+  min-width: 22px;
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.fdock-problems-fix {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 560;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.fdock-problems-fix:hover { border-color: var(--ghost); background: var(--surface); }
+
+/* Narrow viewports — let the breadcrumb give up width first, keep the lenses + actions. */
+@media (max-width: 1100px) {
+  .fdock { gap: 6px; }
+  .fdock-status { display: none; }
+}
+@media (max-width: 880px) {
+  .fdock-left .stabs { display: none; }
+}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle, ArrowRight, Check, ListChecks, LoaderCircle, Play, ShieldCheck, Sparkles, X,
+  AlertTriangle, Check, LoaderCircle, Play, ShieldCheck, Sparkles, X,
 } from "lucide-react";
 import {
   applyGraphOperations as applyGraphOperationsApi,
@@ -41,19 +41,18 @@ import {
 } from "@/api";
 import { ArtifactEditor } from "@/components/ArtifactEditor";
 import { ComposerDock } from "@/components/ComposerDock";
-import { SlidingTabs } from "@/components/SlidingTabs";
+import { FloatingDock } from "@/components/FloatingDock";
 import { GraphCanvas } from "@/components/GraphCanvas";
 import { GoalLauncher } from "@/components/GoalLauncher";
 import { NodeEditor } from "@/components/NodeEditor";
 import { ProgramCanvas, type ProgramCanvasMode } from "@/components/ProgramCanvas";
 // GtmExplorer (the old left rail) is intentionally no longer rendered — outcome navigation moved to
-// OutcomeSwitcher, the Library to LibraryPalette, the feeds into ComposerDock, Problems to a toolbar
-// chip. The file is kept on disk for reference; importing it here would trip noUnusedLocals.
-import { OutcomeSwitcher } from "@/components/OutcomeSwitcher";
+// the FloatingDock's OutcomeSwitcher, the Library to LibraryPalette, the feeds into ComposerDock,
+// Problems to the dock. The breadcrumb switchers, mode lenses, Problems, Approvals, Simulate and Run
+// all live in FloatingDock now, so App no longer imports them directly.
 import { LibraryPalette } from "@/components/LibraryPalette";
 import { buildIdeationCanvas, buildChannelDefaults, channelIdFromNode, type LaneState } from "@/lib/ideationGraph";
 import { statusLabel } from "@/lib/status";
-import { Reveal, Stagger, StaggerItem } from "@/lib/motion";
 import { healthHex } from "@/lib/health";
 import { itemKey } from "@/lib/itemKey";
 import { findProgramForGraph, graphBelongsToProgram, programGraphId } from "@/lib/program";
@@ -139,6 +138,9 @@ export default function App() {
   // The Problems popover — the engine's investigations, surfaced as a compact toolbar chip now that
   // the Problems rail section is gone with the explorer.
   const [problemsOpen, setProblemsOpen] = useState(false);
+  // Program details — the inspector sheet (agents, measurement, learning) over the canvas. Lifted
+  // here from ProgramCanvas so the FloatingDock's details toggle drives the same sheet.
+  const [inspecting, setInspecting] = useState(false);
   const [projectBusy, setProjectBusy] = useState(false);
   // Is a live Claude available? Drives the cold-start state — composing, ideating, and the operator
   // all need a signed-in subscription, so an unconnected founder gets a clear path, not a dead end.
@@ -1019,7 +1021,6 @@ export default function App() {
   }, [operatorSession, syncOperator]);
 
   // Derived
-  const hasUnsaved = !graphSavedAt;
   const selectedNode = useMemo(
     () => graph?.nodes.find((n) => n.id === selection) ?? null,
     [graph, selection],
@@ -1215,8 +1216,13 @@ export default function App() {
   }, [operatorSession, syncOperator]);
 
   return (
-    <main className="loop-shell">
-      {/* ── Toolbar ──────────────────────────────────────────────────────── */}
+    <main className={`loop-shell ${view === "canvas" ? "canvas-bleed" : ""}`}>
+      {/* ── Toolbar ──────────────────────────────────────────────────────────
+          The canvas view is full-bleed: the global top toolbar is gone there, and every control it
+          held moves into the FloatingDock that floats top-center over the canvas (rendered below in
+          the canvas area). The toolbar survives only for the non-canvas views (the product picker /
+          cold-start), where it carries the product switcher and the breadcrumb. */}
+      {view !== "canvas" ? (
       <header className="loop-toolbar">
         <div className="loop-toolbar-left">
           <button className="loop-brand" onClick={() => setView("canvas")} type="button" title="Back to the canvas">
@@ -1233,119 +1239,14 @@ export default function App() {
             onNewProduct={() => setView("start")}
           />
           <span className="loop-toolbar-sep">/</span>
-          {view === "canvas" ? (
-            // The outcome breadcrumb is now a switcher: it shows the active outcome and drops a glass
-            // menu of every program + system + standalone channel. It replaces both the static crumb
-            // here and the dissolved left-rail Outcomes tree, so outcome navigation survives the rail.
-            <OutcomeSwitcher
-              programs={programs}
-              channels={channels}
-              activeProgramId={activeProgram?.id ?? null}
-              activeChannelId={activeChannelId}
-              onOpenProgram={(id) => { void handleProgramOpen(id); }}
-              onOpenChannel={(id) => { setOverlay(null); setIdeationOpen(false); void loadChannel(id); }}
-              onNewProgram={handleNewProgram}
-              onIdeate={() => handleOpenView("opportunities")}
-            />
-          ) : (
-            <span className="loop-toolbar-crumb loop-toolbar-crumb-active">
-              {view === "projects" ? "Products" : activeProgram?.name ?? graph?.name ?? "Canvas"}
-            </span>
-          )}
-          {view === "canvas" && graph ? (
-            <span className={`loop-draft-badge ${hasUnsaved ? "unsaved" : "saved"}`}>
-              {hasUnsaved ? "Draft" : "Saved"}
-            </span>
-          ) : null}
-          {/* GTM ↔ Product mode. GTM is the go-to-market engine; Product is the living picture of
-              what the product IS. One model underneath — editing the picture grounds the GTM side. */}
-          {view === "canvas" && activeProject ? (
-            <SlidingTabs
-              items={[{ value: "gtm", label: "GTM" }, { value: "product", label: "Product" }]}
-              value={overlay === "product" ? "product" : "gtm"}
-              onChange={(v) => { if (v === "product") { setIdeationOpen(false); setOverlay("product"); } else { setOverlay(null); } }}
-              layoutId="gtm-mode"
-              size="sm"
-            />
-          ) : null}
+          {/* Non-canvas views (product picker / cold-start) get only the static crumb — every other
+              control moved to the FloatingDock that floats over the canvas. */}
+          <span className="loop-toolbar-crumb loop-toolbar-crumb-active">
+            {view === "projects" ? "Products" : "New product"}
+          </span>
         </div>
 
         <div className="loop-toolbar-right">
-          {/* Problems — the engine's ranked investigations, surfaced as a compact chip now that the
-              explorer's Problems section is gone. Quiet at zero; carries a count when something is
-              wrong. Opens a small glass popover that routes each problem to the node that fixes it. */}
-          {view === "canvas" ? (
-            <div className="loop-problems-chip-wrap">
-              <button
-                className={`loop-problems-chip ${problems.length > 0 ? "has-problems" : ""} ${problemsOpen ? "open" : ""}`}
-                onClick={() => setProblemsOpen((v) => !v)}
-                type="button"
-                aria-haspopup="dialog"
-                aria-expanded={problemsOpen}
-                title={problems.length > 0
-                  ? `${problems.length} problem${problems.length === 1 ? "" : "s"} across your system`
-                  : "No problems detected"}
-              >
-                <ListChecks className="loop-problems-chip-icon" />
-                <span>Problems</span>
-                {problems.length > 0 ? <span className="loop-problems-chip-count">{problems.length}</span> : null}
-              </button>
-              <Reveal open={problemsOpen} className="loop-problems-pop" role="dialog" origin="top-right">
-                  {problems.length === 0 ? (
-                    <p className="loop-problems-pop-empty">No problems detected. Your system is healthy.</p>
-                  ) : (
-                    <Stagger>
-                      {problems.map((p) => {
-                        const node = nodeForSubsystem(p.subsystem);
-                        return (
-                          <StaggerItem className="loop-problems-pop-item" key={p.id}>
-                            <div className="loop-problems-pop-head">
-                              <AlertTriangle />
-                              <p>{p.problem}</p>
-                            </div>
-                            <div className="loop-problems-pop-meta">
-                              <span className="loop-problems-pop-sub">{p.subsystem}</span>
-                              <span
-                                className="loop-problems-pop-health"
-                                style={{ color: healthHex(p.health), borderColor: healthHex(p.health) }}
-                                title={`Health ${p.health}`}
-                              >
-                                {p.health}
-                              </span>
-                            </div>
-                            {node ? (
-                              <button className="loop-problems-pop-fix" onClick={() => jumpToNode(node.id)} type="button">
-                                Fix in {node.label}<ArrowRight />
-                              </button>
-                            ) : null}
-                          </StaggerItem>
-                        );
-                      })}
-                    </Stagger>
-                  )}
-              </Reveal>
-            </div>
-          ) : null}
-          {/* Approvals — the founder gate is the whole safety spine, so it gets a first-class home.
-              Quiet (a ghost outline) at zero; prominent (filled amber, a count) when drafts wait. It
-              opens the Approvals panel listing every gated draft with its evidence and approve/edit/
-              reject. The count is real pending-gate data, never fabricated. */}
-          {view === "canvas" ? (
-            <button
-              className={`loop-approvals-btn ${pendingApprovals > 0 ? "has-pending" : ""} ${approvalsOpen ? "open" : ""}`}
-              onClick={() => setApprovalsOpen((v) => !v)}
-              type="button"
-              aria-haspopup="dialog"
-              aria-expanded={approvalsOpen}
-              title={pendingApprovals > 0
-                ? `${pendingApprovals} draft${pendingApprovals === 1 ? "" : "s"} waiting for your approval`
-                : "No drafts waiting — nothing has reached the gate"}
-            >
-              <ShieldCheck className="loop-approvals-icon" />
-              <span>Approvals</span>
-              {pendingApprovals > 0 ? <span className="loop-approvals-count">{pendingApprovals}</span> : null}
-            </button>
-          ) : null}
           <div
             className={`loop-model-btn ${operatorSession ? "operator-present" : ""} ${connection && !connection.connected ? "disconnected" : ""}`}
             title={connection && !connection.connected ? connection.reason ?? "Claude is not connected." : connection?.label ?? undefined}
@@ -1357,33 +1258,9 @@ export default function App() {
                 ? "Claude · not connected"
                 : "Claude · subscription"}
           </div>
-          {view === "canvas" ? <Button
-            className="loop-simulate-btn"
-            disabled={graphRunning || !graph || graph.nodes.length === 0}
-            // Simulate is a preview, not a run: for a program it switches to the Simulation lens
-            // (the static execution plan), which never executes. Only the non-program graph path
-            // still streams a real run into the SimulationPanel drawer.
-            onClick={() => { setActiveTab("simulation"); if (!activeProgram) void streamRun(); }}
-            type="button"
-          >
-            {graphRunning && !runningNodeId ? (
-              <LoaderCircle className="spin" />
-            ) : (
-              <Play className="loop-play-icon" />
-            )}
-            Simulate
-          </Button> : null}
-          {view === "canvas" ? <Button
-            className="loop-run-btn"
-            disabled={graphRunning || !graph || graph.nodes.length === 0}
-            onClick={() => void (activeProgram ? executeProgram() : streamRun())}
-            type="button"
-          >
-            {graphRunning ? <LoaderCircle className="spin" /> : null}
-            Run program
-          </Button> : null}
         </div>
       </header>
+      ) : null}
 
       {/* ── Body ─────────────────────────────────────────────────────────── */}
       {/* The left explorer rail is dissolved: the canvas IS the interface. Outcome navigation moved to
@@ -1393,6 +1270,48 @@ export default function App() {
       <div className={`loop-body canvas-full ${view !== "canvas" ? "studio-mode" : ""}`}>
         {/* Center — the canvas IS the workspace. Only the cold-start picker replaces it. */}
         <section className="loop-canvas-area">
+          {/* The floating control dock — every control the old top toolbar and program sub-header
+              held, in one calm bar floating top-center over the full-bleed canvas. */}
+          {view === "canvas" ? (
+            <FloatingDock
+              projects={projects}
+              activeProjectId={activeProject?.id ?? null}
+              projectBusy={projectBusy}
+              onSwitchProject={handleProjectOpen}
+              onManageProjects={() => setView("projects")}
+              onNewProduct={() => setView("start")}
+              programs={programs}
+              channels={channels}
+              activeProgramId={activeProgram?.id ?? null}
+              activeChannelId={activeChannelId}
+              onOpenProgram={(id) => { void handleProgramOpen(id); }}
+              onOpenChannel={(id) => { setOverlay(null); setIdeationOpen(false); void loadChannel(id); }}
+              onNewProgram={handleNewProgram}
+              onIdeate={() => handleOpenView("opportunities")}
+              showGtmToggle={!!activeProject}
+              productMode={overlay === "product"}
+              onModeToggle={(v) => { if (v === "product") { setIdeationOpen(false); setOverlay("product"); } else { setOverlay(null); } }}
+              mode={activeTab}
+              onModeChange={setActiveTab}
+              problems={problems}
+              problemsOpen={problemsOpen}
+              onToggleProblems={() => setProblemsOpen((v) => !v)}
+              nodeForSubsystem={nodeForSubsystem}
+              onJumpToNode={jumpToNode}
+              pendingApprovals={pendingApprovals}
+              approvalsOpen={approvalsOpen}
+              onToggleApprovals={() => setApprovalsOpen((v) => !v)}
+              graph={graph}
+              running={graphRunning}
+              runningNodeId={runningNodeId}
+              onSimulate={() => { setActiveTab("simulation"); if (!activeProgram) void streamRun(); }}
+              onRun={() => void (activeProgram ? executeProgram() : streamRun())}
+              inspecting={inspecting}
+              onToggleInspect={() => setInspecting((v) => !v)}
+              session={operatorSession}
+              connection={connection}
+            />
+          ) : null}
           {view === "start" ? (
             <ProductEntry
               busy={projectBusy}
@@ -1494,7 +1413,8 @@ export default function App() {
               feedback={feedbackSignals}
               graph={graphBelongsToProgram(displayGraph, activeProgram) ? displayGraph : null}
               mode={activeTab}
-              onModeChange={setActiveTab}
+              inspecting={inspecting}
+              onInspectingChange={setInspecting}
               onBuildAgents={() => handleBuildAgents(activeProgram)}
               onSelectNode={setSelection}
               proposedNodeIds={proposedNodeIds}
