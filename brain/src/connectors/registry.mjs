@@ -36,25 +36,12 @@ const REGISTRY = {
   resource:  { exa: exaResource, clay: clayResource, claude: claudeResource, gmail: gmailResource },
   context:   { icp: icpContext, product: productContext },
   source:    { exa: exaFind, apollo: apolloFind, manual: manualFind, csv: csvFind, api: apiFind },
-  find:      { exa: exaFind, apollo: apolloFind, manual: manualFind, csv: csvFind, api: apiFind },   // legacy alias
   enrich:    { clay: clayEnrich, clearbit: clearbitEnrich },
   filter:    { default: defaultScore },
-  score:     { default: defaultScore },               // legacy alias
   generate:  { claude: claudeDraft, openai: openaiDraft },
-  draft:     { claude: claudeDraft, openai: openaiDraft }, // legacy alias
   gate:      { default: defaultGate },
   execute:   { local: localExecute, http: httpExecute },
   measure:   { default: defaultMeasure },
-  icp:       {                                        // legacy: icp stage type in old pipeline tests
-    default: {
-      meta: { id: "default", name: "ICP", category: "context", type: "icp", description: "ICP passthrough.", envKey: null },
-      async run(stage) {
-        const { query } = stage.config ?? {};
-        if (!query?.trim()) throw new Error("ICP stage requires a query.");
-        return { ok: true, items: [{ type: "icp", ...stage.config, query: query.trim() }], meta: {} };
-      },
-    },
-  },
 };
 
 export function getConnector(categoryOrType, id = "default") {
@@ -88,9 +75,6 @@ export function connectorsForCategory(category) {
     configured: meta.envKey ? !!process.env[meta.envKey] : true,
   }));
 }
-
-// Legacy alias
-export const connectorsForType = connectorsForCategory;
 
 // ─── Default graph template — Cold Outbound ───────────────────────────────────
 // Venture doctrine: complete structure, partial activation, local state.

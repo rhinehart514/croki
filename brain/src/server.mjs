@@ -1098,69 +1098,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // GTM Graph — natural language mutation
-  if (req.method === "POST" && url.pathname === "/api/graph/mutate") {
-    try {
-      const body = await readBody(req);
-      const { graph, command } = body;
-      if (!graph || !Array.isArray(graph.nodes)) {
-        json(res, 400, { error: "Request must include a graph object with a nodes array." }); return;
-      }
-      if (!command || typeof command !== "string" || !command.trim()) {
-        json(res, 400, { error: "Request must include a non-empty command string." }); return;
-      }
-      const apiKey = process.env.ANTHROPIC_API_KEY;
-      if (!apiKey) {
-        json(res, 200, { description: "ANTHROPIC_API_KEY not set.", changes: [], graph }); return;
-      }
-      const systemPrompt = `You are a GTM graph editor. Convert the user's command into a small typed patch. Return ONLY valid JSON: { "description": "<what changed and why>", "operations": [...] }.
-
-Supported operations:
-- { "type": "set_graph_name", "name": "..." }
-- { "type": "add_node", "node": { "id", "category", "connector", "label", "position": { "x", "y" }, "config", "agentPrompt?" } }
-- { "type": "remove_node", "nodeId": "..." }
-- { "type": "update_node", "nodeId": "...", "patch": { "label"?, "connector"?, "config"?, "agentPrompt"?, "position"?, "sourceOfTruth"? } }
-- { "type": "connect_nodes", "edge": { "id", "source", "target", "edgeType", "label"? } }
-- { "type": "disconnect_nodes", "edgeId": "..." }
-
-Never return a replacement graph. Keep the patch narrow and preserve founder gates.`;
-      const userMessage = `Command: ${command}\n\nGraph:\n${JSON.stringify(graph, null, 2)}`;
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-haiku-4-5-20251001",
-          max_tokens: 4096,
-          system: systemPrompt,
-          messages: [{ role: "user", content: userMessage }],
-        }),
-      });
-      if (!response.ok) {
-        const errText = await response.text().catch(() => "");
-        json(res, 200, { description: `Claude API error (${response.status}): ${errText.slice(0, 200)}`, changes: [], graph }); return;
-      }
-      const data = await response.json();
-      const raw = data.content?.[0]?.text ?? "";
-      let parsed;
-      try {
-        // Strip markdown code fences if present
-        const stripped = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-        parsed = JSON.parse(stripped);
-      } catch {
-        json(res, 200, { description: "Could not parse command.", changes: [], graph }); return;
-      }
-      json(res, 200, {
-        ...applyGraphOperations(graph, parsed.operations),
-        description: typeof parsed.description === "string" ? parsed.description : "Graph updated.",
-      });
-    } catch (err) { json(res, 400, { error: err instanceof Error ? err.message : String(err) }); }
-    return;
-  }
-
   // GTM Graph — run
   if (req.method === "POST" && url.pathname === "/api/graph/run") {
     try {

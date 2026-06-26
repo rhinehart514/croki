@@ -469,13 +469,3 @@ export const compareChannelRuns = (channelId: string, before?: string, after?: s
   );
 };
 
-// ── Graph mutation ───────────────────────────────────────────────────────────
-export async function mutateGraph(graph: GTMGraph, command: string): Promise<{ graph: GTMGraph; description: string; changes: unknown[] }> {
-  const res = await fetch("/api/graph/mutate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ graph, command }),
-  });
-  if (!res.ok) throw new Error(`Mutate failed: ${res.status}`);
-  return res.json() as Promise<{ graph: GTMGraph; description: string; changes: unknown[] }>;
-}
