@@ -60,19 +60,25 @@ yet proven: the operator (Claude) itself composing an agent-step workflow and dr
 to the gate. The on-disk subagent definition now loads: `loadAgentDefinition` reads
 `~/.claude/agents/<ref>.md` and `buildAgentPrompt` merges its doctrine into the run
 (tested in `agent-bridge.test.mjs`); what is still fixed is the toolset — every agent runs
-with the same read-only tools, not its own declared toolset. Portfolio fan-out is built
-and unit-tested but not yet proven live or UI-rendered: `portfolio-graph.mjs`
-(`assemblePortfolioGraph`) unions several composed systems into one branching, multi-gate,
-lane-laid-out diagram and re-asserts the wall on the union, and `composePortfolioGraph`
-(`workflow-composer.mjs`) composes many accepted channels toward one goal — the engine
-turns one goal into many systems, but the live model producing those specs and the canvas
-rendering the lanes are still pending. A credential-gated live smoke test
-(`brain/test/live.test.mjs`, `npm --prefix brain run test:live`) exists to prove the model
-actually composes and an agent step runs on the subscription; it skips until a founder is
-signed in. Not yet built: authoring skills and agents from the UI, the three-lane
-workflows/skills/agents workspace, and the operator's "propose systems" move. A scanned
-product whose win event carries no source stays honestly "blind" in Measure until that
-attribution gap is repaired in the product code.
+with the same read-only tools, not its own declared toolset. Portfolio fan-out is built and
+unit-tested, and the canvas now RENDERS it: `portfolio-graph.mjs` (`assemblePortfolioGraph`)
+unions several composed systems into one branching, multi-gate, lane-laid-out diagram and
+re-asserts the wall on the union, `composePortfolioGraph` (`workflow-composer.mjs`) composes
+many accepted channels toward one goal, and `GraphCanvas.tsx` reads the resulting `systems`
+manifest to draw each system as its own labelled swimlane (lane-aware layout + a band per
+system). Still pending: the live model producing those specs, and the operator's "propose
+systems" move that composes a portfolio and loads it into those lanes (the data path that
+feeds the rendering end to end). A credential-gated live smoke test (`brain/test/live.test.mjs`,
+`npm --prefix brain run test:live`) proves the model composes, an agent step runs on the
+subscription, the gate holds, AND the operator resumes its conversation across drives; it skips
+until a founder is signed in. The operator carries memory at two levels: within a session it
+resumes the Claude Code conversation across founder pauses, and across sessions it recalls prior
+goals and outcomes in the same project (`recallPriorSessions`, injected into the system prompt).
+Authoring skills and agents from the UI is built (`handleNewArtifact` → `ArtifactEditor` →
+`/api/artifact/save`). Not yet built: the three-lane workflows/skills/agents workspace, and the
+operator's "propose systems" move named above. A scanned product whose win event carries no
+source stays honestly "blind" in Measure until that attribution gap is repaired in the product
+code.
 
 ## Canonical commands
 
