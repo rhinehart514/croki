@@ -200,9 +200,32 @@ export function ProgramCanvas({
       const newAgent = programAgents.find((agent) => agent.creationPolicyId === revised.id) ?? null;
       const addedNegative = revised.negativeRules.filter((rule) => !(prev?.negativeRules ?? []).includes(rule));
       const addedPositive = revised.positiveRules.filter((rule) => !(prev?.positiveRules ?? []).includes(rule));
-      return { revised, drivingSignals, newAgent, addedNegative, addedPositive };
+      return { revised, drivingSignals, newAgent, addedNegative, addedPositive, mergedCount: 1 };
     })
     .reverse(), [programPolicies, programFeedback, programAgents]);
+
+  // Collapse threads that tell the IDENTICAL story — same driving signals, same (often empty) rule
+  // changes — into one card with a count. A graph stuck on "Waiting for at least 1 input item" banks
+  // a revision every run; un-collapsed that floods the feed with 30 copies of one line. Distinct
+  // learning (a real rule change) has a different key and is never merged. Most-recent representative
+  // is kept (the array is already reversed to most-recent-first).
+  const mergedLearningThreads = useMemo(() => {
+    const byStory = new Map<string, LearningThreadData>();
+    for (const thread of learningThreads) {
+      const ruleChange = thread.addedNegative.length || thread.addedPositive.length;
+      const key = [
+        thread.drivingSignals.map((s) => `${s.type}:${s.summary}`).join("|"),
+        thread.addedNegative.join("|"),
+        thread.addedPositive.join("|"),
+        thread.newAgent?.ref ?? "",
+        ruleChange ? "" : (thread.revised.revisionReason ?? "no-change"),
+      ].join("::");
+      const existing = byStory.get(key);
+      if (existing) existing.mergedCount += 1;
+      else byStory.set(key, { ...thread });
+    }
+    return [...byStory.values()];
+  }, [learningThreads]);
 
   const measurementBlind = !(program.measurementPlan?.joinKey && program.measurementPlan?.outcomeEvent);
   const hasGraph = !!graph && graph.nodes.length > 0;
@@ -376,14 +399,14 @@ export function ProgramCanvas({
             </div>
           ) : null}
 
-          {mode === "learning" || learningThreads.length ? (
+          {mode === "learning" || mergedLearningThreads.length ? (
             <div className="inspector-section">
               <h3>What your decisions changed</h3>
-              {learningThreads.length ? (
+              {mergedLearningThreads.length ? (
                 <>
-                  {learningThreads.slice(0, 4).map((thread) => <LearningThread key={thread.revised.id} thread={thread} />)}
-                  {learningThreads.length > 4 ? (
-                    <p className="inspector-thread-overflow">+{learningThreads.length - 4} earlier loop{learningThreads.length - 4 === 1 ? "" : "s"} — open the Diff tab for the full history.</p>
+                  {mergedLearningThreads.slice(0, 4).map((thread) => <LearningThread key={thread.revised.id} thread={thread} />)}
+                  {mergedLearningThreads.length > 4 ? (
+                    <p className="inspector-thread-overflow">+{mergedLearningThreads.length - 4} more distinct loop{mergedLearningThreads.length - 4 === 1 ? "" : "s"} — open the Diff tab for the full history.</p>
                   ) : null}
                 </>
               ) : programFeedback.length ? (
@@ -478,6 +501,10 @@ type LearningThreadData = {
   newAgent: AgentInstance | null;
   addedNegative: string[];
   addedPositive: string[];
+  // How many consecutive identical revisions collapsed into this one (≥1). A repeated run failure
+  // banks one policy revision per run with no rule change, so without collapsing, the same card
+  // renders many times — the learning feed reads as broken rather than as one recurring signal.
+  mergedCount: number;
 };
 
 function decisionVerb(type: string) {
@@ -495,7 +522,10 @@ function LearningThread({ thread }: { thread: LearningThreadData }) {
   return (
     <div className="learning-thread">
       <div className="learning-thread-step">
-        <span className="learning-thread-label">You decided</span>
+        <span className="learning-thread-label">
+          You decided
+          {thread.mergedCount > 1 ? <span className="learning-thread-count"> · {thread.mergedCount}×</span> : null}
+        </span>
         {drivingSignals.length
           ? drivingSignals.slice(0, 2).map((signal) => (
             <p key={signal.id} className="learning-thread-signal">{decisionVerb(signal.type)}: {signal.summary}</p>
