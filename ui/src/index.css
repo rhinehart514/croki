@@ -4819,6 +4819,17 @@ svg {
   box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.10), var(--shadow-pop);
 }
 
+/* The founder gate — the wall, and the signature of this surface. The one node that carries the
+   amber accent at full weight (icon + border + ring + a faint tint), so the single point where
+   anything reaches the world is unmistakable in an otherwise monochrome canvas. */
+.loop-node-gate {
+  border-color: var(--gap);
+  border-left: 3px solid var(--gap);
+  box-shadow: 0 0 0 1px var(--gap-soft), var(--shadow-card);
+  background: linear-gradient(var(--gap-soft), var(--surface) 62%);
+}
+.loop-node-gate:hover { border-color: var(--gap); }
+
 .loop-node-done { background: var(--surface); border-color: var(--proven) !important; }
 .loop-node-error { border-color: var(--danger) !important; background: var(--danger-soft); }
 .loop-node-pending { border-color: var(--gap) !important; }

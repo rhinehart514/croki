@@ -227,6 +227,10 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
     <button
       className={cn(
         "loop-node",
+        // The founder gate is the product's spine — the one place anything reaches the world. It
+        // carries the single amber accent at full weight so the wall reads at a glance in an
+        // otherwise monochrome canvas.
+        node.category === "gate" && "loop-node-gate",
         selected && "loop-node-selected",
         hasErr && "loop-node-error",
         status === "running" && "loop-node-running",

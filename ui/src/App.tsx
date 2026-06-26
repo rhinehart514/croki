@@ -120,11 +120,19 @@ function ContextPill({ manifest, fallbackPct }: { manifest: ContextManifest | nu
     <div className="loop-context-badge" title={title}>
       <span className="loop-context-dot" style={{ background: total > 0 ? "var(--proven)" : "var(--gap)" }} />
       Context
+      {/* Each context layer reads as a labelled chip with a presence dot — grounded (filled) or thin
+          (hollow) — instead of a raw, unexplained character count. The exact size stays one hover
+          away (the receipt is always reachable, never the headline). */}
       {CONTEXT_LAYERS.map(({ key, label }) => {
         const chars = byName.get(key)?.chars ?? 0;
         return (
-          <span key={key} style={{ marginLeft: 8, opacity: chars > 0 ? 1 : 0.45, fontVariantNumeric: "tabular-nums" }}>
-            {label} {chars}
+          <span
+            key={key}
+            title={`${label}: ${chars.toLocaleString()} chars of assembled context`}
+            style={{ marginLeft: 8, display: "inline-flex", alignItems: "center", gap: 4, opacity: chars > 0 ? 1 : 0.5 }}
+          >
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: chars > 0 ? "var(--proven)" : "var(--ghost)" }} />
+            {label}
           </span>
         );
       })}
