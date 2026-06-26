@@ -9398,39 +9398,58 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .goal-launcher-secondary button:hover:not(:disabled) { color: var(--ink); }
 .goal-launcher-secondary button:disabled { opacity: 0.5; cursor: default; }
 
-/* ── Claude dock as a FLOATING card on the canvas (not a full-height rail) ──── */
-/* The open co-pilot is a real right-edge COLUMN, not an absolute overlay: it sits in the loop-body
-   grid's third track so the canvas shrinks to fit beside it. This is the fix for the dock hiding the
-   founder-gate node — the canvas now lays out AROUND the dock instead of behind it. The collapsed
-   state (.composer-pill) is the only floating element, and it is small enough never to cover a node. */
+/* ── Claude as a bottom-center GLASS command dock floating over the canvas ──── */
+/* The new shell: the canvas IS the interface, and Claude is its command line — a glass bar anchored
+   bottom-center that expands UP into a conversation panel. Absolutely positioned, so it's out of the
+   loop-body grid's flow and the canvas reclaims the column the dock used to hold. Glass marks the one
+   thing that floats (this dock, and the gate card) — the one-accent rule for elevation, not decoration. */
 .composer-dock.floating {
-  position: relative; right: auto; bottom: auto; top: auto;
-  flex: 0 0 384px; width: 384px; height: 100%; max-height: none;
-  margin: 0; align-self: stretch;
-  background: var(--surface); border: none; border-left: 1px solid var(--line-2);
-  border-radius: 0; box-shadow: none; overflow: hidden; z-index: 30;
-  transition: flex-basis 160ms var(--ease), width 160ms var(--ease);
+  position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%);
+  right: auto; top: auto; flex: none; margin: 0;
+  width: min(620px, calc(100% - 48px)); height: auto; max-height: min(60vh, 580px);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: blur(20px) saturate(1.5); -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid color-mix(in srgb, var(--line-2) 72%, transparent);
+  border-radius: var(--r-xl);
+  box-shadow: 0 1px 2px rgba(16,18,27,0.08), 0 24px 60px -14px rgba(16,18,27,0.34);
+  overflow: hidden; z-index: 40;
+  transition: width 180ms var(--ease), max-height 180ms var(--ease);
 }
-.composer-dock.floating.expanded { flex-basis: 468px; width: 468px; max-height: none; }
-.composer-dock.floating .composer-dock-head { border-radius: var(--r-xl) var(--r-xl) 0 0; }
+.composer-dock.floating.expanded { width: min(760px, calc(100% - 48px)); max-height: min(76vh, 760px); }
+.composer-dock.floating .composer-dock-head {
+  border-radius: var(--r-xl) var(--r-xl) 0 0; background: transparent;
+  border-bottom-color: color-mix(in srgb, var(--line) 60%, transparent);
+}
 .composer-dock-icon {
   width: 28px; height: 28px; flex-shrink: 0; border: 0; background: none; cursor: pointer;
   color: var(--muted); border-radius: var(--r-sm); display: grid; place-items: center;
 }
 .composer-dock-icon:hover { background: var(--surface-2); color: var(--ink); }
 
-/* Collapsed = a small floating pill, bottom-right */
+/* Collapsed = a glass command BAR, bottom-center — reads as the canvas's command line, not a tiny
+   assistant bubble. Click anywhere to expand up into the conversation (cursor: text sells the input). */
 .composer-pill {
-  position: absolute; right: 18px; bottom: 18px; z-index: 30;
-  display: inline-flex; align-items: center; gap: 9px; padding: 9px 15px 9px 9px;
-  background: var(--surface); border: 1px solid var(--line-2); border-radius: 999px;
-  box-shadow: var(--shadow-pop); cursor: pointer; color: var(--ink);
+  position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 40;
+  display: inline-flex; align-items: center; gap: 10px;
+  min-width: 340px; max-width: calc(100% - 48px); padding: 9px 11px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: blur(20px) saturate(1.5); -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid color-mix(in srgb, var(--line-2) 72%, transparent);
+  border-radius: 999px;
+  box-shadow: 0 1px 2px rgba(16,18,27,0.08), 0 16px 40px -14px rgba(16,18,27,0.30);
+  cursor: text; color: var(--ink);
+  transition: box-shadow 140ms var(--ease), transform 140ms var(--ease);
 }
-.composer-pill:hover { box-shadow: var(--shadow-pop), 0 0 0 3px var(--surface-2); }
-.composer-pill-avatar { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--ink); }
+.composer-pill:hover { transform: translateX(-50%) translateY(-1px); box-shadow: 0 1px 2px rgba(16,18,27,0.10), 0 22px 50px -12px rgba(16,18,27,0.40); }
+.composer-pill-avatar { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--ink); flex-shrink: 0; }
 .composer-pill-avatar.running { background: #ecfdf3; color: #24a568; }
 .composer-pill-avatar svg { width: 15px; height: 15px; }
-.composer-pill-text { font-size: 13px; font-weight: 550; }
+.composer-pill-text { font-size: 13px; font-weight: 500; color: var(--muted); flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.composer-pill-hint {
+  flex-shrink: 0; font-size: 10.5px; font-weight: 600; color: var(--faint);
+  border: 1px solid var(--line-2); border-radius: var(--r-sm); padding: 2px 7px;
+  letter-spacing: 0.02em;
+}
 
 /* Archived outcomes subgroup + Problems-rail legibility (text-first). */
 .explorer-subgroup-toggle {

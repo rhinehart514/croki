@@ -116,6 +116,27 @@ export function ComposerDock({
     if (focusSignal) inputRef.current?.focus();
   }, [focusSignal]);
 
+  // Opening the command bar drops you straight into the input — it reads as a command line, so a
+  // click should land the cursor, not just reveal a panel you then have to click again.
+  const [openFocus, setOpenFocus] = useState(0);
+  useEffect(() => {
+    if (openFocus) inputRef.current?.focus();
+  }, [openFocus]);
+  const openDock = () => { setCollapsed(false); setOpenFocus((n) => n + 1); };
+
+  // ⌘K / Ctrl-K summons the command dock from anywhere — the canvas's command line, always one key away.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setCollapsed(false);
+        setOpenFocus((n) => n + 1);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   useEffect(() => {
     timelineRef.current?.scrollTo({ top: timelineRef.current.scrollHeight, behavior: "smooth" });
   }, [session?.events.length]);
@@ -124,7 +145,7 @@ export function ComposerDock({
   // dock. Keeps Claude present without taking canvas space.
   if (collapsed) {
     return (
-      <button className="composer-pill" onClick={() => setCollapsed(false)} type="button" title="Open Claude">
+      <button className="composer-pill" onClick={openDock} type="button" title="Open Claude">
         <span className={`composer-pill-avatar ${running || session?.status === "running" ? "running" : ""}`}>
           {running || session?.status === "running" ? <LoaderCircle className="spin" /> : <Bot />}
         </span>
@@ -135,8 +156,9 @@ export function ComposerDock({
             ? "Claude is working…"
             : session && !TERMINAL.has(session.status)
               ? `Claude · ${statusLabel(session.status)}`
-              : "Ask Claude"}
+              : "Ask Claude to build, run, or change anything…"}
         </span>
+        <span className="composer-pill-hint">⌘K</span>
       </button>
     );
   }
