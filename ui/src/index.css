@@ -8225,10 +8225,12 @@ svg {
   border-left: 3px solid var(--ink);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-card);
-  padding: var(--space-5) var(--space-6);
+  /* A slim band, not a hero. The work (the DAG) is the center of this surface; the bet is a quiet
+     eyebrow above it, with the full thesis living in the program rail. */
+  padding: var(--space-2) var(--space-5);
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-0-5);
 }
 .hero-kicker {
   color: var(--muted);
@@ -8239,24 +8241,22 @@ svg {
 }
 .hero-thesis {
   margin: 0;
-  color: var(--ink);
-  font-size: var(--text-2xl);
-  line-height: var(--leading-tight);
+  color: var(--ink-2);
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
   letter-spacing: var(--tracking-tight);
-  font-weight: 560;
+  font-weight: 540;
   text-wrap: balance;
-  /* Safety net: the hero is a band, never a wall. Even if a lead sentence runs long, cap it at
-     three lines so the DAG underneath is always reachable. */
+  /* One line: the eyebrow reminds, it never walls off the DAG. Full thesis is in the program rail. */
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 1;
   overflow: hidden;
 }
+/* Redundant on the canvas — the program objective already lives in the right rail (Channel). Hidden
+   here so the bet stays a single quiet line over the work. */
 .hero-toward {
-  margin: 0;
-  color: var(--ink-2);
-  font-size: var(--text-sm);
-  line-height: var(--leading-normal);
+  display: none;
 }
 .hero-toward span {
   display: inline-block;
