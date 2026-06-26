@@ -9,7 +9,6 @@ import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { OutcomeSwitcher } from "@/components/OutcomeSwitcher";
 import { SlidingTabs } from "@/components/SlidingTabs";
 import type { ProgramCanvasMode } from "@/components/ProgramCanvas";
-import { statusLabel } from "@/lib/status";
 import type { ConnectionStatus } from "@/api";
 import "@/styles/floating-dock.css";
 import type {
@@ -47,8 +46,6 @@ export function FloatingDock({
   pendingApprovals, approvalsOpen, onToggleApprovals,
   graph, running, runningNodeId, onSimulate, onRun,
   inspecting, onToggleInspect,
-  // Claude status
-  session, connection,
 }: {
   projects: ProjectSummary[];
   activeProjectId: string | null;
@@ -88,7 +85,6 @@ export function FloatingDock({
   connection: ConnectionStatus | null;
 }) {
   const noGraph = !graph || graph.nodes.length === 0;
-  const disconnected = !!(connection && !connection.connected);
 
   return (
     <motion.div
@@ -145,21 +141,9 @@ export function FloatingDock({
         />
       </div>
 
-      {/* Right — actions. Compact icon buttons for the secondaries; only Run is the one dark fill. */}
+      {/* Right — actions. Compact icon buttons for the secondaries; only Run is the one dark fill.
+          Claude's live status lives in the command dock at the bottom, so it isn't duplicated here. */}
       <div className="fdock-right">
-        {/* Claude status — quiet dot + label; amber-free, the gate owns amber alone. */}
-        <span
-          className={`fdock-status ${session ? "live" : ""} ${disconnected ? "off" : ""}`}
-          title={disconnected ? connection?.reason ?? "Claude is not connected." : connection?.label ?? undefined}
-        >
-          <span className="fdock-status-dot" />
-          {session
-            ? `Claude · ${statusLabel(session.status)}`
-            : disconnected
-              ? "Claude · offline"
-              : "Claude"}
-        </span>
-
         {/* Problems — ranked engine investigations, opens a glass popover routing each to its node. */}
         <div className="fdock-pop-wrap">
           <button

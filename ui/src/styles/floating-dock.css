@@ -8,7 +8,8 @@
   top: 14px;
   left: 50%;
   transform-origin: top center;
-  z-index: 40;
+  /* Above the product overlay (z-40) so flipping to Product keeps the dock — it's how you flip back. */
+  z-index: 50;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -38,6 +39,10 @@
   padding: 0 1px;
   flex-shrink: 0;
 }
+
+/* Keep the breadcrumb from hogging the bar — cap the outcome name so the dock stays contained. */
+.fdock-left .osw-trigger { max-width: 220px; }
+.fdock-left .osw-trigger-name { max-width: 150px; }
 
 /* Center — the mode lenses ------------------------------------------------------------------ */
 .fdock-center {

@@ -5585,6 +5585,10 @@ svg {
 
 .loop-canvas-area .react-flow__edge-text { fill: var(--muted); font-size: 9px; }
 
+/* The floating dock owns the top band of the canvas; push React Flow's own TOP panels (the "+ Add
+   step" palette, the Pipeline-audit chip, the "THE BET" hero) below the dock so they never collide. */
+.loop-canvas-area .react-flow__panel.top { margin-top: 56px; }
+
 /* ── Spin animation ──────────────────────────────────────────────────────── */
 
 /* (already defined above as .spin but let's ensure it's accessible here) */
