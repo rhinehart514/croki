@@ -886,35 +886,6 @@ function StepPalette({
   );
 }
 
-function ContractAuditPanel({
-  graph, audits, onSelect,
-}: {
-  graph: GTMGraph;
-  audits: Record<string, GTMContractAudit>;
-  onSelect: (id: string) => void;
-}) {
-  const issues = graph.nodes
-    .map((node) => ({ node, audit: audits[node.id] }))
-    .filter(({ audit }) => audit && ["waiting", "blocked", "blind"].includes(audit.state));
-  const [open, setOpen] = useState(false);
-  return (
-    <Panel position="top-right">
-      {/* Collapsed by default to a compact chip so it never crushes the canvas; expands on click. */}
-      <div className={`workflow-audit ${open ? "open" : ""}`} aria-label="Workflow contract audit">
-        <button className="workflow-audit-head" onClick={() => setOpen((v) => !v)} type="button" aria-expanded={open}>
-          <strong>Pipeline audit</strong>
-          <span className={issues.length ? "has-issues" : ""}>{issues.length === 0 ? "Clear" : `${issues.length} issue${issues.length === 1 ? "" : "s"}`}</span>
-        </button>
-        {open ? issues.slice(0, 5).map(({ node, audit }) => (
-          <button key={node.id} className="workflow-audit-row" onClick={() => onSelect(node.id)} type="button">
-            <span className={`workflow-audit-dot state-${audit.state}`} />
-            <span><strong>{node.label}</strong><small>{audit.message}</small></span>
-          </button>
-        )) : null}
-      </div>
-    </Panel>
-  );
-}
 
 // ─── Auto-center on selection ─────────────────────────────────────────────────
 
@@ -1163,7 +1134,6 @@ export function GraphCanvas({
       {editable && onAddNode ? (
         <StepPalette empty={graph.nodes.length === 0} disabled={running} onAddNode={onAddNode} onLoadRecipe={onLoadRecipe} onOpenLibrary={onOpenLibrary} />
       ) : null}
-      {variant !== "ideation" ? <ContractAuditPanel graph={graph} audits={contractAudits} onSelect={onSelect} /> : null}
       {result?.memoryApplied
         && (result.memoryApplied.approved + result.memoryApplied.rejected + result.memoryApplied.edits) > 0 && (
         <Panel position="top-center">
@@ -1179,7 +1149,7 @@ export function GraphCanvas({
         </Panel>
       )}
       <Background color="#e4e4e7" gap={26} size={1.5} />
-      <Controls showInteractive={false} position="bottom-left" />
+      <Controls showInteractive={false} position="bottom-right" />
     </ReactFlow>
     </NodeEditorContext.Provider>
   );

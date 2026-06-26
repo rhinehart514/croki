@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { motion } from "motion/react";
 import {
-  AlertTriangle, ArrowRight, ListChecks, LoaderCircle, PanelRight, Play, ShieldCheck,
+  AlertTriangle, ArrowRight, GitBranch, ListChecks, LoaderCircle, PanelRight, Play, ShieldCheck,
 } from "lucide-react";
 import { SPRING } from "@/lib/springs";
 import { Reveal, Stagger, StaggerItem, Pop } from "@/lib/motion";
@@ -12,7 +13,7 @@ import type { ProgramCanvasMode } from "@/components/ProgramCanvas";
 import type { ConnectionStatus } from "@/api";
 import "@/styles/floating-dock.css";
 import type {
-  ChannelMeta, GTMGraph, GTMNode, Investigation, OperatorSession,
+  ChannelMeta, GTMContractAudit, GTMGraph, GTMNode, Investigation, OperatorSession,
   OutcomeProgram, ProjectSummary,
 } from "@/types";
 
@@ -44,7 +45,7 @@ export function FloatingDock({
   // Right — actions
   problems, problemsOpen, onToggleProblems, nodeForSubsystem, onJumpToNode,
   pendingApprovals, approvalsOpen, onToggleApprovals,
-  graph, running, runningNodeId, onSimulate, onRun,
+  graph, audits, running, runningNodeId, onSimulate, onRun,
   inspecting, onToggleInspect,
 }: {
   projects: ProjectSummary[];
@@ -75,6 +76,7 @@ export function FloatingDock({
   approvalsOpen: boolean;
   onToggleApprovals: () => void;
   graph: GTMGraph | null;
+  audits: Record<string, GTMContractAudit>;
   running: boolean;
   runningNodeId: string | null;
   onSimulate: () => void;
@@ -85,6 +87,12 @@ export function FloatingDock({
   connection: ConnectionStatus | null;
 }) {
   const noGraph = !graph || graph.nodes.length === 0;
+  // Pipeline audit — the contract issues that used to be a canvas chip, now a dock control.
+  const auditIssues = (graph?.nodes ?? [])
+    .map((n) => ({ node: n, audit: audits[n.id] }))
+    .filter((x): x is { node: GTMNode; audit: GTMContractAudit } =>
+      !!x.audit && ["waiting", "blocked", "blind"].includes(x.audit.state));
+  const [auditOpen, setAuditOpen] = useState(false);
 
   return (
     <motion.div
@@ -190,6 +198,46 @@ export function FloatingDock({
                     </StaggerItem>
                   );
                 })}
+              </Stagger>
+            )}
+          </Reveal>
+        </div>
+
+        {/* Pipeline audit — contract issues across the graph, moved off the canvas into the dock. */}
+        <div className="fdock-pop-wrap">
+          <button
+            className={`fdock-icon-btn ${auditIssues.length ? "has-count" : ""} ${auditOpen ? "open" : ""}`}
+            onClick={() => setAuditOpen((v) => !v)}
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={auditOpen}
+            title={auditIssues.length
+              ? `${auditIssues.length} pipeline issue${auditIssues.length === 1 ? "" : "s"}`
+              : "Pipeline audit — contracts clear"}
+          >
+            <GitBranch size={15} />
+            {auditIssues.length ? <Pop k={auditIssues.length} className="fdock-count">{auditIssues.length}</Pop> : null}
+          </button>
+          <Reveal open={auditOpen} className="fdock-problems-pop" role="dialog" origin="top-right">
+            <div className="fdock-pop-title">
+              <strong>Pipeline audit</strong>
+              <span className={auditIssues.length ? "issues" : ""}>
+                {auditIssues.length === 0 ? "Clear" : `${auditIssues.length} issue${auditIssues.length === 1 ? "" : "s"}`}
+              </span>
+            </div>
+            {auditIssues.length === 0 ? (
+              <p className="fdock-problems-empty">No pipeline issues — every step's contract is satisfied.</p>
+            ) : (
+              <Stagger>
+                {auditIssues.slice(0, 8).map(({ node, audit }) => (
+                  <StaggerItem className="fdock-problems-item" key={node.id}>
+                    <div className="fdock-problems-head"><AlertTriangle size={13} /><p>{node.label}</p></div>
+                    <p className="fdock-audit-msg">{audit.message}</p>
+                    <button className="fdock-problems-fix" onClick={() => onJumpToNode(node.id)} type="button">
+                      Fix in {node.label}<ArrowRight size={12} />
+                    </button>
+                  </StaggerItem>
+                ))}
               </Stagger>
             )}
           </Reveal>

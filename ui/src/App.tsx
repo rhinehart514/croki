@@ -1302,6 +1302,7 @@ export default function App() {
               approvalsOpen={approvalsOpen}
               onToggleApprovals={() => setApprovalsOpen((v) => !v)}
               graph={graph}
+              audits={contractAudits}
               running={graphRunning}
               runningNodeId={runningNodeId}
               onSimulate={() => { setActiveTab("simulation"); if (!activeProgram) void streamRun(); }}

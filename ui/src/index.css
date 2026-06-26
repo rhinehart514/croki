@@ -5553,12 +5553,12 @@ svg {
 /* ── React Flow overrides for loop shell ─────────────────────────────────── */
 
 .loop-canvas-area .react-flow__controls {
-  top: 12px;
-  left: 12px;
-  /* React Flow pins this panel bottom-left (bottom:0) at higher specificity; without !important the
-     override loses and top:12px + bottom:0 stretch the box into a tall empty strip. Force it to hug
-     its content at the top-left instead. */
-  bottom: auto !important;
+  /* Zoom lives bottom-RIGHT (Figma-conventional) — clear of the Add-step palette (top-left), the
+     debugger (bottom-left), and the centered command dock. !important beats React Flow's inline pin. */
+  top: auto !important;
+  left: auto !important;
+  bottom: 16px;
+  right: 16px;
   height: fit-content;
   overflow: hidden;
   border: 1px solid rgba(223, 226, 232, 0.9);
