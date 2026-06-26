@@ -1,0 +1,62 @@
+/* program-header.css — calm, compact register for the program sub-header.
+ *
+ * Overrides the heavier defaults in index.css (.program-topbar / .program-title-block /
+ * .program-path / h1 / .program-status-line / .program-mode-intent). StackAI keeps the
+ * workflow name small and inline with lots of air; this leans the header back toward that:
+ * the title reads as a name (not a hero), the eyebrow recedes, the status line stays quiet,
+ * and the mode-intent strip becomes a soft question rather than a banner.
+ *
+ * Selectors are scoped one level deeper than the originals (.program-topbar … / the strip's
+ * own class) so they win the cascade on specificity alone — no !important. The mode tabs and
+ * the Program-details toggle on the right are intentionally left untouched. */
+
+/* Shorter, airier header: less vertical padding so the whole block sits lower. */
+.program-workbench .program-topbar {
+  padding: 12px 22px 11px;
+  align-items: center;
+}
+
+/* Tighten the eyebrow → title → status stack so it reads as one compact unit. */
+.program-topbar .program-title-block {
+  gap: 3px;
+}
+
+/* Eyebrow recedes: smaller, fainter, slightly tighter tracking. It labels the title,
+   it doesn't compete with it. */
+.program-topbar .program-title-block .program-path {
+  color: var(--faint);
+  font-size: 9px;
+  font-weight: 720;
+  letter-spacing: 0.07em;
+}
+
+/* Title reads as a name, not a hero: ~16px, lighter weight, tighter line-height. */
+.program-topbar .program-title-block h1 {
+  font-size: 16px;
+  font-weight: 620;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+/* Status line stays small and calm. */
+.program-topbar .program-status-line {
+  font-size: 10.5px;
+  gap: 7px;
+}
+
+/* Mode-intent strip — a quiet question, not a banner: less vertical weight, smaller text. */
+.program-mode-intent {
+  padding: 6px 22px;
+  gap: 9px;
+  background: var(--surface);
+}
+
+.program-mode-intent .program-mode-intent-label {
+  padding: 1px 7px;
+  font-size: 9px;
+  color: var(--muted);
+}
+
+.program-mode-intent .program-mode-intent-q {
+  font-size: 11px;
+}

@@ -1,3 +1,4 @@
+import "@/styles/canvas-refine.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background, Controls, Handle, Panel, Position, ReactFlow,
@@ -740,7 +741,7 @@ function RunZoom({ running }: { running: boolean }) {
       zoomTo(target, { duration: 520 });
     } else if (baseZoom.current != null) {
       baseZoom.current = null;
-      fitView({ padding: 0.14, duration: 560 });
+      fitView({ padding: 0.14, maxZoom: 1, duration: 560 });
     }
   }, [running, getZoom, zoomTo, fitView]);
 
@@ -756,9 +757,42 @@ function Refitter({ nonce }: { nonce?: number }) {
   useEffect(() => {
     if (nonce === undefined || nonce === seen.current) return;
     seen.current = nonce;
-    const t = setTimeout(() => fitView({ padding: 0.16, duration: 420 }), 90);
+    const t = setTimeout(() => fitView({ padding: 0.14, maxZoom: 1, duration: 420 }), 90);
     return () => clearTimeout(t);
   }, [nonce, fitView]);
+  return null;
+}
+
+// ─── Fit on graph change — center the whole flow in the open canvas ────────────
+// React Flow's `fitView` prop only frames once, on mount. But the graph data and its
+// auto-layout positions arrive asynchronously AFTER mount (the graph loads, then
+// computeLayout pushes new positions through onNodePositionChange), so the one mount
+// fit frames an empty or stale graph and the real flow ends up wherever it lands —
+// commonly low, with dead space above it (the lane layout starts at y≥0 and runs
+// downward; the single-graph layout balances around y=0 but the top overlays — the
+// step palette, the audit chip, a hero banner — eat the top band). This re-fits
+// whenever the topology changes so the flow re-centers in the visible canvas with
+// generous, even padding. `padding: 0.14` leaves air on all sides; `maxZoom: 1` keeps
+// a small graph from blowing up to fill the frame. A short delay lets the node
+// measurements settle before fitting so the bounds are real.
+// `topology` is stable from the first render, but the auto-layout positions settle a few renders
+// LATER (computeLayout pushes them through onNodePositionChange and they round-trip back as the
+// graph prop). So we drive the fit off `bounds` — a signature of where the nodes actually are —
+// which keeps changing until the layout lands, and debounce: each settle render resets the timer,
+// so the fit fires once the positions stop moving, on the REAL bounds. We fit once per topology
+// (fittedTopology) so a later manual drag doesn't yank the viewport back.
+function FitOnGraph({ topology, bounds, running }: { topology: string; bounds: string; running: boolean }) {
+  const { fitView } = useReactFlow();
+  const fittedTopology = useRef<string | null>(null);
+  useEffect(() => {
+    if (running) return;                              // don't fight RunZoom
+    if (fittedTopology.current === topology) return;  // already framed this graph; leave drags alone
+    const t = setTimeout(() => {
+      fittedTopology.current = topology;
+      fitView({ padding: 0.14, maxZoom: 1, duration: 360 });
+    }, 140);
+    return () => clearTimeout(t);
+  }, [topology, bounds, running, fitView]);
   return null;
 }
 
@@ -836,6 +870,20 @@ export function GraphCanvas({
     [graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, mode, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId],
   );
 
+  // Re-fit the viewport whenever the flow's structure changes (load, compose, lanes
+  // appearing). Includes the system lanes so a portfolio fan-out re-frames too.
+  const fitSignature = useMemo(
+    () => `${topologySignature(graph)}|${(graph.systems ?? []).map((s) => s.id).join(",")}`,
+    [graph],
+  );
+
+  // Where the nodes ACTUALLY are — changes as the async auto-layout settles, which is the signal
+  // FitOnGraph debounces on (topology alone is stable before the layout round-trips into place).
+  const boundsSignature = useMemo(
+    () => nodes.map((n) => `${Math.round(n.position?.x ?? 0)},${Math.round(n.position?.y ?? 0)}`).join("|"),
+    [nodes],
+  );
+
   const handleNodeDragStop = useCallback(
     (_event: unknown, node: Node) => { onNodePositionChange?.(node.id, node.position); },
     [onNodePositionChange],
@@ -875,7 +923,7 @@ export function GraphCanvas({
       onDragOver={handleDragOver}
       onEdgesDelete={(deleted) => onDeleteEdges?.(deleted.map((edge) => edge.id))}
       fitView
-      fitViewOptions={{ padding: 0.14 }}
+      fitViewOptions={{ padding: 0.14, maxZoom: 1 }}
       minZoom={0.15}
       maxZoom={1.8}
       nodesConnectable={editable && !running}
@@ -887,6 +935,7 @@ export function GraphCanvas({
     >
       <NodeFocuser selection={selection} panelOpen={!!panelOpen} active={!running} />
       <RunZoom running={running} />
+      <FitOnGraph topology={fitSignature} bounds={boundsSignature} running={running} />
       <Refitter nonce={refitNonce} />
       {editable && onAddNode ? (
         <StepPalette empty={graph.nodes.length === 0} disabled={running} onAddNode={onAddNode} onLoadRecipe={onLoadRecipe} onOpenLibrary={onOpenLibrary} />

@@ -1,0 +1,140 @@
+/* ── Canvas refine: StackAI's calm, spacious register ─────────────────────────
+   Loaded after index.css so these win the cascade on equal-or-greater specificity
+   (no !important). Two jobs: (A) calm the node card — more air, quieter hierarchy,
+   one place for color (the health badge + the gate); (B) nothing here touches the
+   fit — that's a code fix in GraphCanvas.tsx.
+
+   Color contract: monochrome + one accent. Amber (--gap) is the founder GATE's
+   alone. Health colors live only on the health badge (set inline by healthHex).
+   No decorative color anywhere else. */
+
+/* ── (A) The work / context card — calmer, less dense ───────────────────────── */
+/* Scope under .react-flow so these match the originals' context and reliably win
+   without !important. The card gets generous internal padding, a thin 1px line, a
+   soft card shadow, and a roomy radius — air over busyness. */
+.react-flow .loop-node {
+  min-width: 224px;
+  max-width: 264px;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+/* Quieter hover — a soft lift, not a heavy pop. */
+.react-flow .loop-node:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-2);
+  box-shadow: 0 2px 4px oklch(0.21 0.006 285.9 / 0.05), 0 4px 12px oklch(0.21 0.006 285.9 / 0.07);
+}
+
+/* Selection ring stays ink, but thinner and calmer. */
+.react-flow .loop-node-selected {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 2px oklch(0.21 0.006 285.9 / 0.10), var(--shadow-card);
+}
+
+/* ── Header: kind eyebrow + status, with breathing room below ───────────────── */
+.react-flow .loop-node-header {
+  gap: var(--space-2);
+}
+
+/* The icon tile is quieter — a flat surface chip, not a tinted badge. The kind
+   color no longer floods a fill; the eyebrow label carries the kind. */
+.react-flow .loop-node-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.react-flow .loop-node-icon svg {
+  width: 15px !important;
+  height: 15px !important;
+}
+
+/* Kind eyebrow: small, muted, generous tracking — recessive scaffolding. */
+.react-flow .loop-node-type-label {
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.react-flow .loop-node-header-right {
+  gap: var(--space-2);
+}
+
+/* ── Title: the one readable line, with real space above it ─────────────────── */
+.react-flow .loop-node-label {
+  margin-top: var(--space-3);
+  font-size: 13.5px;
+  font-weight: 560;
+  line-height: 1.3;
+  color: var(--ink);
+  letter-spacing: -0.011em;
+}
+
+/* ── Footer/meta: quiet, calm, monochrome ───────────────────────────────────── */
+.react-flow .loop-node-connector {
+  margin-top: var(--space-1);
+  font-size: 9.5px;
+  color: var(--faint);
+  opacity: 0.7;
+}
+
+/* The "4 items" footer count: a quiet muted line, not a colored shout. Color is
+   reserved for the health badge and the gate. */
+.react-flow .loop-node-count {
+  margin-top: var(--space-2);
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 550;
+}
+
+.react-flow .loop-node-preview {
+  margin-top: var(--space-2);
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.react-flow .loop-node-memory {
+  margin-top: var(--space-1);
+}
+
+/* ── Health badge — the one place health color lives ────────────────────────── */
+/* color/borderColor are set inline (healthHex): --proven green, --gap amber,
+   --danger red. We only calm its shape so it reads as a quiet dot-pill, not a
+   loud chip. */
+.react-flow .loop-node-health {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: var(--r-sm);
+  border: 1px solid currentColor;
+  opacity: 0.92;
+}
+
+/* ── The founder gate — keeps its amber, but calmer ─────────────────────────── */
+/* The gate is the wall: it may keep the single accent. We soften the treatment to
+   one quiet left rule + a faint tint, dropping the heavy double ring so it reads
+   calm but still unmistakable. */
+.react-flow .loop-node-gate {
+  border-color: var(--line-2);
+  border-left: 2px solid var(--gap);
+  box-shadow: var(--shadow-card);
+  background: linear-gradient(var(--gap-soft), var(--surface) 70%);
+}
+.react-flow .loop-node-gate .loop-node-icon {
+  background: var(--gap-soft);
+  color: var(--gap);
+}
+
+/* Run/result accent borders stay meaningful (done/error/pending) but lose the
+   heavy fills — a thin colored border is enough on a calm card. */
+.react-flow .loop-node-error {
+  background: var(--surface);
+}

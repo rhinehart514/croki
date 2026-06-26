@@ -1,3 +1,4 @@
+import "@/styles/program-header.css";
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
   Bot, CheckCircle2, ChevronDown, GitBranch, History, Pause, PanelRight, Play, X,
