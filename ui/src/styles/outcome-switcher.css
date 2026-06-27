@@ -52,7 +52,9 @@
 }
 .osw-trigger-chevron.open { transform: rotate(180deg); }
 
-/* Popover — a floating glass surface. */
+/* Popover — the surface and rows come from the shared .menu / .menu-item system (menu.css). Only
+   this menu's anchoring, scroll, status dot, and the nested-Systems indent live here. The outcome
+   switcher sits in the top bar (chrome), so it uses the opaque .menu skin, not the canvas glass. */
 .osw-popover {
   position: absolute;
   top: calc(100% + 6px);
@@ -60,18 +62,6 @@
   z-index: 60;
   min-width: 18rem;
   max-width: 24rem;
-  padding: var(--space-2);
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
-  backdrop-filter: blur(20px) saturate(1.5);
-  -webkit-backdrop-filter: blur(20px) saturate(1.5);
-  border: 1px solid color-mix(in srgb, var(--line-2) 72%, transparent);
-  border-radius: var(--r-lg);
-  box-shadow: 0 1px 2px rgba(16, 18, 27, 0.08), 0 24px 60px -14px rgba(16, 18, 27, 0.34);
-  animation: osw-pop 140ms var(--ease);
-}
-@keyframes osw-pop {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
 }
 
 .osw-list {
@@ -91,28 +81,7 @@
   font-size: 0.8125rem;
 }
 
-/* A single outcome row — program or standalone channel. */
-.osw-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  padding: 6px 8px;
-  background: transparent;
-  border: none;
-  border-radius: var(--r-sm);
-  color: var(--ink);
-  font: inherit;
-  font-size: 0.8125rem;
-  text-align: left;
-  cursor: pointer;
-  transition: background 100ms var(--ease);
-}
-.osw-item:hover { background: var(--surface-2); }
-.osw-item.active { background: var(--surface-2); font-weight: 560; }
-
-.osw-item-child { padding-left: 22px; }
-
+/* The status dot that leads an outcome row — a sanctioned status accent, not chrome. */
 .osw-dot {
   flex: none;
   width: 7px;
@@ -120,59 +89,12 @@
   border-radius: 50%;
 }
 
-.osw-item-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* Systems nested under a program — indent the child rows and their eyebrow. */
+.osw-item-child { padding-left: 22px; }
 
-.osw-item-meta {
-  flex: none;
-  color: var(--muted);
-  font-size: 0.6875rem;
-}
-
-/* Systems nested under a program. */
 .osw-subgroup {
   display: flex;
   flex-direction: column;
   gap: 1px;
 }
-.osw-subgroup-label {
-  padding: 4px 8px 2px 22px;
-  color: var(--faint);
-  font-size: 0.625rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-/* The two ways to start an outcome — separated from the list by a hairline. */
-.osw-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  margin-top: var(--space-2);
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--line);
-}
-.osw-action {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  padding: 6px 8px;
-  background: transparent;
-  border: none;
-  border-radius: var(--r-sm);
-  color: var(--muted);
-  font: inherit;
-  font-size: 0.8125rem;
-  text-align: left;
-  cursor: pointer;
-  transition: background 100ms var(--ease), color 100ms var(--ease);
-}
-.osw-action:hover { background: var(--surface-2); color: var(--ink); }
-.osw-action svg { flex: none; color: var(--faint); }
-.osw-action:hover svg { color: var(--muted); }
+.osw-subgroup-label { padding-left: 22px; }

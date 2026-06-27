@@ -856,28 +856,30 @@ function StepPalette({
         >
           <Plus /> Add step <ChevronDown />
         </button>
-        <Reveal open={open} className="workflow-palette-menu" role="menu" origin="top-left">
+        <Reveal open={open} className="menu menu-glass workflow-palette-menu" role="menu" origin="top-left">
             {onOpenLibrary ? (
-              <button className="workflow-recipe" onClick={() => { onOpenLibrary(); setOpen(false); }} role="menuitem" type="button">
-                <Bot />
-                <span><strong>Browse the library</strong><small>Your agents and skills — search, drag, or add</small></span>
+              <button className="menu-item" onClick={() => { onOpenLibrary(); setOpen(false); }} role="menuitem" type="button">
+                <Bot className="menu-item-icon" />
+                <span className="menu-item-body"><span className="menu-item-label">Browse the library</span><span className="menu-item-meta">Your agents and skills — search, drag, or add</span></span>
               </button>
             ) : null}
             {empty && onLoadRecipe ? (
-              <button className="workflow-recipe" onClick={() => { onLoadRecipe(); setOpen(false); }} role="menuitem" type="button">
-                <Sparkles />
-                <span><strong>Pilot outreach recipe</strong><small>Input → research → draft → gate → stage → measure</small></span>
+              <button className="menu-item" onClick={() => { onLoadRecipe(); setOpen(false); }} role="menuitem" type="button">
+                <Sparkles className="menu-item-icon" />
+                <span className="menu-item-body"><span className="menu-item-label">Pilot outreach recipe</span><span className="menu-item-meta">Input → research → draft → gate → stage → measure</span></span>
               </button>
             ) : null}
+            {(onOpenLibrary || (empty && onLoadRecipe)) ? <div className="menu-sep" role="separator" /> : null}
             {STEP_OPTIONS.map((option) => (
               <button
                 key={option.label}
+                className="menu-item"
                 onClick={() => { onAddNode(option.spec); setOpen(false); }}
                 role="menuitem"
                 type="button"
               >
-                {option.icon}
-                <span><strong>{option.label}</strong><small>{option.detail}</small></span>
+                <span className="menu-item-icon">{option.icon}</span>
+                <span className="menu-item-body"><span className="menu-item-label">{option.label}</span><span className="menu-item-meta">{option.detail}</span></span>
               </button>
             ))}
         </Reveal>

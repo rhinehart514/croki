@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, FolderGit2, LoaderCircle, Plus, Settings2 } from "lucide-react";
 import { Reveal } from "@/lib/motion";
 import type { ProjectSummary } from "@/types";
+import "@/styles/menu.css";
 
 /**
  * Top-left product switcher. Switching the active product re-scopes the whole
@@ -56,11 +57,11 @@ export function ProjectSwitcher({
         <ChevronDown className="project-switcher-caret" />
       </button>
 
-      <Reveal open={open} className="project-switcher-menu" role="listbox" origin="top-left">
+      <Reveal open={open} className="menu project-switcher-menu" role="listbox" origin="top-left">
           {projects.map((project) => (
             <button
               key={project.id}
-              className={`project-switcher-item ${project.id === activeProjectId ? "active" : ""}`}
+              className={`menu-item ${project.id === activeProjectId ? "active" : ""}`}
               role="option"
               aria-selected={project.id === activeProjectId}
               type="button"
@@ -69,28 +70,31 @@ export function ProjectSwitcher({
                 if (project.id !== activeProjectId) void onSwitch(project.id);
               }}
             >
-              <span className="project-switcher-item-main">
-                <strong>{project.name}</strong>
-                <small>{project.channelCount} channels · {project.opportunityCount} opportunities</small>
+              <span className="menu-item-body">
+                <span className="menu-item-label">{project.name}</span>
+                <span className="menu-item-meta">{project.channelCount} channels · {project.opportunityCount} opportunities</span>
               </span>
-              {project.id === activeProjectId ? <Check className="project-switcher-check" /> : null}
+              {project.id === activeProjectId ? <Check className="menu-item-check" /> : null}
             </button>
           ))}
+          <div className="menu-sep" role="separator" />
           {onNewProduct ? (
             <button
-              className="project-switcher-manage"
+              className="menu-item"
               type="button"
               onClick={() => { setOpen(false); onNewProduct(); }}
             >
-              <Plus /> Point at a new product
+              <Plus className="menu-item-icon" />
+              <span className="menu-item-label">Point at a new product</span>
             </button>
           ) : null}
           <button
-            className="project-switcher-manage"
+            className="menu-item"
             type="button"
             onClick={() => { setOpen(false); onManage(); }}
           >
-            <Settings2 /> Manage products
+            <Settings2 className="menu-item-icon" />
+            <span className="menu-item-label">Manage products</span>
           </button>
       </Reveal>
     </div>

@@ -3454,88 +3454,15 @@ svg {
 
 .project-switcher-caret { opacity: 0.7; }
 
+/* The product switcher routes its menu through the shared .menu / .menu-item system (menu.css). Only
+   its anchoring and width live here; the surface and rows are the unified design. */
 .project-switcher-menu {
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
   z-index: 60;
   min-width: 264px;
-  padding: 5px;
-  border: 1px solid var(--line-2);
-  border-radius: var(--r-md);
-  background: var(--surface);
-  box-shadow: var(--shadow-pop);
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
 }
-
-.project-switcher-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 9px;
-  border: none;
-  border-radius: var(--r-sm);
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  transition: background 100ms var(--ease);
-}
-
-.project-switcher-item:hover { background: var(--surface-2); }
-.project-switcher-item.active { background: var(--surface-2); }
-
-.project-switcher-item-main {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.project-switcher-item-main strong {
-  font-size: 12.5px;
-  font-weight: 620;
-  color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.project-switcher-item-main small {
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.project-switcher-check {
-  flex: 0 0 auto;
-  width: 14px;
-  height: 14px;
-  color: var(--proven);
-}
-
-.project-switcher-manage {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  width: 100%;
-  margin-top: 4px;
-  padding: 8px 9px;
-  border: none;
-  border-top: 1px solid var(--line);
-  border-radius: 0 0 var(--r-sm) var(--r-sm);
-  background: transparent;
-  color: var(--muted);
-  font-size: 11.5px;
-  font-weight: 560;
-  cursor: pointer;
-  transition: color 100ms var(--ease), background 100ms var(--ease);
-}
-
-.project-switcher-manage:hover { color: var(--ink); background: var(--surface-2); }
-.project-switcher-manage svg { width: 13px; height: 13px; }
 
 .loop-draft-badge {
   flex: 0 0 auto;
@@ -9651,27 +9578,11 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .workflow-palette-trigger svg { width: 14px; height: 14px; }
 .workflow-palette-trigger svg:last-child { width: 11px; color: var(--faint); }
 .workflow-palette-trigger:disabled { opacity: 0.5; cursor: default; }
+/* The "+ Add step" palette routes its menu through the shared .menu / .menu-item system (menu.css),
+   on the glass skin since it floats over the canvas. Only its anchoring and width live here. */
 .workflow-palette-menu {
-  position: absolute; top: 40px; left: 0; width: 260px; padding: 6px;
-  border: 1px solid var(--line-2); border-radius: var(--r-lg); background: var(--surface);
-  box-shadow: var(--shadow-pop); display: grid; gap: 2px;
+  position: absolute; top: 40px; left: 0; width: 260px;
 }
-.workflow-palette-menu button {
-  width: 100%; display: grid; grid-template-columns: 24px 1fr; gap: 8px; align-items: center;
-  padding: 8px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ink);
-  text-align: left; cursor: pointer;
-}
-.workflow-palette-menu button:hover,
-.workflow-palette-menu button:focus-visible { background: var(--surface-2); outline: none; }
-.workflow-palette-menu button > svg { width: 15px; height: 15px; color: var(--muted); justify-self: center; }
-.workflow-palette-menu button span { display: flex; flex-direction: column; min-width: 0; }
-.workflow-palette-menu button strong { font-size: 12px; font-weight: 650; }
-.workflow-palette-menu button small { font-size: 10.5px; color: var(--muted); line-height: 1.35; }
-.workflow-palette-menu .workflow-recipe {
-  margin-bottom: 4px; padding: 10px 8px; border-bottom: 1px solid var(--line);
-  border-radius: var(--r-sm) var(--r-sm) 0 0;
-}
-.workflow-palette-menu .workflow-recipe > svg { color: var(--gap); }
 
 .workflow-audit {
   width: min(260px, 22vw); overflow: hidden; border: 1px solid var(--line-2);
@@ -11168,7 +11079,6 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .composer-pill               { animation: glass-panel-in var(--dur-slow) var(--ease-out) both; }
 .node-detail-workspace       { animation: glass-panel-in var(--dur-slow) var(--ease-spring) both; }
 .product-editor-overlay,
-.workflow-palette-menu,
 .loop-model-menu             { animation: glass-panel-in var(--dur-base) var(--ease-out) both; }
 
 /* ── Staggered reveals — capped at ~6 so late items don't lag ──────────────── */

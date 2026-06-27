@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Plus, Sparkles } from "lucide-react";
+import { Check, ChevronDown, Plus, Sparkles } from "lucide-react";
 import { Reveal } from "@/lib/motion";
 import type { ChannelMeta, OutcomeProgram } from "@/types";
 import { statusLabel, statusTone } from "@/lib/status";
+import "@/styles/menu.css";
 import "@/styles/outcome-switcher.css";
 
 // The status dot color follows the shared status tone, so an outcome reads the same here as in the
@@ -103,7 +104,7 @@ export function OutcomeSwitcher({
         <ChevronDown className={`osw-trigger-chevron ${open ? "open" : ""}`} size={14} />
       </button>
 
-      <Reveal open={open} className="osw-popover" role="menu" origin="top-left">
+      <Reveal open={open} className="menu osw-popover" role="menu" origin="top-left">
           {programs.length === 0 && standaloneChannels.length === 0 ? (
             <p className="osw-empty">No outcomes yet. Start one below.</p>
           ) : (
@@ -112,7 +113,7 @@ export function OutcomeSwitcher({
               {programs.map((program) => (
                 <div className="osw-group" key={program.id}>
                   <button
-                    className={`osw-item ${program.id === activeProgramId ? "active" : ""}`}
+                    className={`menu-item ${program.id === activeProgramId ? "active" : ""}`}
                     onClick={pick(() => onOpenProgram(program.id))}
                     type="button"
                     role="menuitem"
@@ -121,24 +122,28 @@ export function OutcomeSwitcher({
                       className="osw-dot"
                       style={{ background: OSW_TONE_DOT[statusTone(program.lastRunStatus ?? program.lifecycle)] }}
                     />
-                    <span className="osw-item-name">{program.name}</span>
-                    <span className="osw-item-meta">{statusLabel(program.lastRunStatus ?? program.lifecycle)}</span>
+                    <span className="menu-item-label">{program.name}</span>
+                    {program.id === activeProgramId
+                      ? <Check className="menu-item-check" />
+                      : <span className="menu-item-trail">{statusLabel(program.lastRunStatus ?? program.lifecycle)}</span>}
                   </button>
                   {channelsForProgram(program.id).length > 0 ? (
                     <div className="osw-subgroup">
-                      <span className="osw-subgroup-label">Systems</span>
+                      <span className="menu-label osw-subgroup-label">Systems</span>
                       {channelsForProgram(program.id).map((ch) => (
                         <button
                           key={ch.id}
-                          className={`osw-item osw-item-child ${ch.id === activeChannelId ? "active" : ""}`}
+                          className={`menu-item osw-item-child ${ch.id === activeChannelId ? "active" : ""}`}
                           onClick={pick(() => onOpenChannel(ch.id))}
                           type="button"
                           role="menuitem"
                           title={ch.objective || ch.name}
                         >
                           <span className="osw-dot" style={{ background: channelDot(ch) }} />
-                          <span className="osw-item-name">{ch.name}</span>
-                          <span className="osw-item-meta">{channelMeta(ch)}</span>
+                          <span className="menu-item-label">{ch.name}</span>
+                          {ch.id === activeChannelId
+                            ? <Check className="menu-item-check" />
+                            : <span className="menu-item-trail">{channelMeta(ch)}</span>}
                         </button>
                       ))}
                     </div>
@@ -151,30 +156,31 @@ export function OutcomeSwitcher({
               {standaloneChannels.map((ch) => (
                 <button
                   key={ch.id}
-                  className={`osw-item ${ch.id === activeChannelId ? "active" : ""}`}
+                  className={`menu-item ${ch.id === activeChannelId ? "active" : ""}`}
                   onClick={pick(() => onOpenChannel(ch.id))}
                   type="button"
                   role="menuitem"
                   title={ch.objective || ch.name}
                 >
                   <span className="osw-dot" style={{ background: channelDot(ch) }} />
-                  <span className="osw-item-name">{ch.name}</span>
-                  <span className="osw-item-meta">{channelMeta(ch)}</span>
+                  <span className="menu-item-label">{ch.name}</span>
+                  {ch.id === activeChannelId
+                    ? <Check className="menu-item-check" />
+                    : <span className="menu-item-trail">{channelMeta(ch)}</span>}
                 </button>
               ))}
             </div>
           )}
 
-          <div className="osw-actions">
-            <button className="osw-action" onClick={pick(onNewProgram)} type="button" role="menuitem">
-              <Plus size={13} />
-              <span>New outcome</span>
-            </button>
-            <button className="osw-action" onClick={pick(onIdeate)} type="button" role="menuitem">
-              <Sparkles size={13} />
-              <span>Ideate outcomes for me</span>
-            </button>
-          </div>
+          <div className="menu-sep" role="separator" />
+          <button className="menu-item" onClick={pick(onNewProgram)} type="button" role="menuitem">
+            <Plus className="menu-item-icon" />
+            <span className="menu-item-label">New outcome</span>
+          </button>
+          <button className="menu-item" onClick={pick(onIdeate)} type="button" role="menuitem">
+            <Sparkles className="menu-item-icon" />
+            <span className="menu-item-label">Ideate outcomes for me</span>
+          </button>
       </Reveal>
     </div>
   );
