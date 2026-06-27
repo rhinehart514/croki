@@ -1787,6 +1787,8 @@ export default function App() {
           onOpenGrounding={() => handleOpenView("understand")}
           onOpenPicture={() => handleOpenView("product")}
           onIdeate={() => handleOpenView("opportunities")}
+          onAddNode={activeProgram || graph ? handleAddNode : undefined}
+          onOpenLibrary={() => setLibraryPaletteOpen(true)}
         /> : null}
       </div>
 

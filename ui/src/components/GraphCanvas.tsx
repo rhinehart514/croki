@@ -7,12 +7,11 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
-  AlertCircle, Ban, Bot, Check, CheckCircle2, ChevronDown, Circle, Code, Database, FileSpreadsheet, FileText, GitMerge,
-  Globe2, Loader, MessageSquare, Play, Plus, Search, ShieldCheck, Sparkles, Target, Trash2, TrendingUp, Wand2, X, Zap,
+  AlertCircle, Ban, Bot, Check, CheckCircle2, Circle, Code, Database, FileText, GitMerge,
+  Loader, MessageSquare, Play, Search, ShieldCheck, Sparkles, Target, Trash2, TrendingUp, Wand2, X, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { healthHex } from "@/lib/health";
-import { Reveal } from "@/lib/motion";
 import type { NodeEditorBridge } from "@/components/ProgramCanvas";
 import type {
   ConnectorMeta, GateDecision, GTMEdge, GTMEdgeType, GTMGraph,
@@ -813,80 +812,6 @@ function buildFlowGraph(
   return { nodes: [...laneBands, ...nodes], edges };
 }
 
-const STEP_OPTIONS: Array<{
-  label: string;
-  detail: string;
-  icon: React.ReactNode;
-  spec: Partial<GTMNode> & { label: string };
-}> = [
-  { label: "Manual input", detail: "Paste or enter rows", icon: <Database />, spec: { label: "Manual input", category: "source", connector: "manual", config: { items: [] }, contract: { emits: [] } } },
-  { label: "CSV input", detail: "Import tabular data", icon: <FileSpreadsheet />, spec: { label: "CSV input", category: "source", connector: "csv", config: { csv: "" }, contract: { emits: [] } } },
-  { label: "API input", detail: "Pull JSON records", icon: <Globe2 />, spec: { label: "API input", category: "source", connector: "api", config: { endpoint: "" }, contract: { emits: [] } } },
-  { label: "Agent", detail: "Claude or Codex judgment", icon: <Bot />, spec: { label: "Agent step", category: "generate", kind: "agent", ref: "gtm-enrich", config: {}, contract: { accepts: [], emits: [] } } },
-  { label: "Skill", detail: "Reusable working method", icon: <Wand2 />, spec: { label: "Skill step", category: "generate", kind: "skill", ref: "positioning", config: {}, contract: { accepts: [], emits: [] } } },
-  { label: "Code", detail: "Deterministic transform", icon: <Code />, spec: { label: "Code step", category: "filter", kind: "code", ref: "transform", config: {}, contract: { accepts: [], emits: [] } } },
-  { label: "Founder gate", detail: "Review before outside action", icon: <ShieldCheck />, spec: { label: "Founder review", category: "gate", connector: "default", config: {}, contract: { accepts: [], emits: ["approved", "gtmActionId"] } } },
-  { label: "Staged output", detail: "Local queue, never auto-send", icon: <Zap />, spec: { label: "Stage approved actions", category: "execute", connector: "local", config: {}, contract: { accepts: ["approved", "gtmActionId"], emits: ["gtmActionId", "executionStatus"] } } },
-  { label: "Measure", detail: "Capture attributable outcomes", icon: <TrendingUp />, spec: { label: "Measure outcomes", category: "measure", connector: "default", config: { joinKey: "gtmActionId" }, contract: { accepts: ["gtmActionId", "source"], emits: ["attribution"] } } },
-];
-
-function StepPalette({
-  empty, disabled, onAddNode, onLoadRecipe, onOpenLibrary,
-}: {
-  empty: boolean;
-  disabled: boolean;
-  onAddNode: (spec: Partial<GTMNode> & { label: string }) => void;
-  onLoadRecipe?: () => void;
-  // Opens the full LibraryPalette (the summoned replacement for the left-rail Library). When wired,
-  // the menu leads with it so the founder reaches the personalized + on-disk capabilities, not just
-  // the fixed primitives below.
-  onOpenLibrary?: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Panel position="top-left">
-      <div className="workflow-palette">
-        <button
-          aria-expanded={open}
-          aria-haspopup="menu"
-          className="workflow-palette-trigger"
-          disabled={disabled}
-          onClick={() => setOpen((value) => !value)}
-          type="button"
-        >
-          <Plus /> Add step <ChevronDown />
-        </button>
-        <Reveal open={open} className="menu menu-glass workflow-palette-menu" role="menu" origin="top-left">
-            {onOpenLibrary ? (
-              <button className="menu-item" onClick={() => { onOpenLibrary(); setOpen(false); }} role="menuitem" type="button">
-                <Bot className="menu-item-icon" />
-                <span className="menu-item-body"><span className="menu-item-label">Browse the library</span><span className="menu-item-meta">Your agents and skills — search, drag, or add</span></span>
-              </button>
-            ) : null}
-            {empty && onLoadRecipe ? (
-              <button className="menu-item" onClick={() => { onLoadRecipe(); setOpen(false); }} role="menuitem" type="button">
-                <Sparkles className="menu-item-icon" />
-                <span className="menu-item-body"><span className="menu-item-label">Pilot outreach recipe</span><span className="menu-item-meta">Input → research → draft → gate → stage → measure</span></span>
-              </button>
-            ) : null}
-            {(onOpenLibrary || (empty && onLoadRecipe)) ? <div className="menu-sep" role="separator" /> : null}
-            {STEP_OPTIONS.map((option) => (
-              <button
-                key={option.label}
-                className="menu-item"
-                onClick={() => { onAddNode(option.spec); setOpen(false); }}
-                role="menuitem"
-                type="button"
-              >
-                <span className="menu-item-icon">{option.icon}</span>
-                <span className="menu-item-body"><span className="menu-item-label">{option.label}</span><span className="menu-item-meta">{option.detail}</span></span>
-              </button>
-            ))}
-        </Reveal>
-      </div>
-    </Panel>
-  );
-}
 
 
 // ─── Auto-center on selection ─────────────────────────────────────────────────
@@ -987,9 +912,9 @@ function FitOnGraph({ topology, bounds, running }: { topology: string; bounds: s
 
 export function GraphCanvas({
   graph, result, running, runningNodeId = null, selection, connectors, subsystemHealth = {}, contractAudits = {},
-  onSelect, onNodePositionChange, onConnectNodes, onDeleteEdges, onAddNode, onLoadRecipe, panelOpen, variant, mode,
+  onSelect, onNodePositionChange, onConnectNodes, onDeleteEdges, onAddNode, panelOpen, variant, mode,
   proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, refitNonce, highlightedNodeId = null,
-  bloomNodeId = null, onOpenLibrary, nodeEditor = null,
+  bloomNodeId = null, nodeEditor = null,
 }: {
   graph: GTMGraph;
   result: GTMRunResult | null;
@@ -1133,9 +1058,6 @@ export function GraphCanvas({
       <RunZoom running={running} />
       <FitOnGraph topology={fitSignature} bounds={boundsSignature} running={running} />
       <Refitter nonce={refitNonce} />
-      {editable && onAddNode ? (
-        <StepPalette empty={graph.nodes.length === 0} disabled={running} onAddNode={onAddNode} onLoadRecipe={onLoadRecipe} onOpenLibrary={onOpenLibrary} />
-      ) : null}
       {result?.memoryApplied
         && (result.memoryApplied.approved + result.memoryApplied.rejected + result.memoryApplied.edits) > 0 && (
         <Panel position="top-center">

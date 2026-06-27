@@ -6,9 +6,10 @@ import {
 import { statusLabel } from "@/lib/status";
 import { DockContext } from "@/components/DockContext";
 import { SlidingTabs } from "@/components/SlidingTabs";
-import { Collapse, Stagger, StaggerItem } from "@/lib/motion";
+import { Collapse, Reveal, Stagger, StaggerItem } from "@/lib/motion";
+import { STEP_OPTIONS } from "@/lib/step-options";
 import "@/styles/dock-context.css";
-import type { ContextManifest, OperatorEvent, OperatorSession } from "@/types";
+import type { ContextManifest, GTMNode, OperatorEvent, OperatorSession } from "@/types";
 
 // Operator narration arrives as markdown (the model writes tables, bold, bullets). Rendered raw
 // it's an illegible wall of pipes and asterisks — the thing that read as "broken" in the panel.
@@ -172,6 +173,7 @@ export function ComposerDock({
   session, running, boundChannelName, viewingMismatch, onSend, onCancel, onReviewGate, onReturnToChannel,
   floating = false, focusSignal = 0,
   contextManifest = null, onOpenGrounding, onOpenPicture, onIdeate,
+  onAddNode, onOpenLibrary,
 }: {
   session: OperatorSession | null;
   running: boolean;
@@ -196,8 +198,13 @@ export function ComposerDock({
   onOpenGrounding?: () => void;
   onOpenPicture?: () => void;
   onIdeate?: () => void;
+  // The composer's "+" is the canvas's ONE add affordance now (the separate canvas "Add step" was
+  // collapsed into it): add a building-block step, or open the library for your real agents/skills.
+  onAddNode?: (spec: Partial<GTMNode> & { label: string }) => void;
+  onOpenLibrary?: () => void;
 }) {
   const [collapsed, setCollapsed] = useState(floating);
+  const [addOpen, setAddOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   // The dock leads with the operator's STATE (focus), not the transcript (thread). You opt into history.
   const [view, setView] = useState<"focus" | "thread">("focus");
@@ -284,10 +291,49 @@ export function ComposerDock({
       />
       <div className="composer-box-bar">
         <div className="composer-box-tools">
-          {onOpenGrounding ? (
-            <button className="composer-box-tool" onClick={onOpenGrounding} type="button" title="What Claude reads — grounding, product picture, channels">
-              <Plus size={16} />
-            </button>
+          {/* The ONE add affordance. Opens upward from the "+": your library (real agents/skills) and
+              the building blocks. The separate canvas "Add step" was collapsed into this. */}
+          {onAddNode ? (
+            <div className="composer-add-wrap">
+              <button
+                className={`composer-box-tool ${addOpen ? "open" : ""}`}
+                onClick={() => setAddOpen((v) => !v)}
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={addOpen}
+                title="Add a step — your library, or a building block"
+              >
+                <Plus size={16} />
+              </button>
+              <Reveal open={addOpen} className="menu menu-glass composer-add-menu" role="menu" origin="bottom-left">
+                {onOpenLibrary ? (
+                  <button className="menu-item" onClick={() => { onOpenLibrary(); setAddOpen(false); }} role="menuitem" type="button">
+                    <Bot className="menu-item-icon" />
+                    <span className="menu-item-body">
+                      <span className="menu-item-label">Browse the library</span>
+                      <span className="menu-item-meta">Your agents and skills — search, drag, add</span>
+                    </span>
+                  </button>
+                ) : null}
+                {onOpenLibrary ? <div className="menu-sep" role="separator" /> : null}
+                <span className="menu-label">Add a block</span>
+                {STEP_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.label}
+                    className="menu-item"
+                    onClick={() => { onAddNode(opt.spec); setAddOpen(false); }}
+                    role="menuitem"
+                    type="button"
+                  >
+                    <span className="menu-item-icon">{opt.icon}</span>
+                    <span className="menu-item-body">
+                      <span className="menu-item-label">{opt.label}</span>
+                      <span className="menu-item-meta">{opt.detail}</span>
+                    </span>
+                  </button>
+                ))}
+              </Reveal>
+            </div>
           ) : null}
           <span className="composer-box-model" title={sessionActive ? "Claude is on this outcome" : "Runs on your Claude subscription"}>
             <span className={`composer-box-dot ${sessionActive ? "live" : ""}`} />
