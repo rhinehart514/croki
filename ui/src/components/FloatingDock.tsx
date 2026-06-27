@@ -138,16 +138,19 @@ export function FloatingDock({
         ) : null}
       </div>
 
-      {/* Center — the mode lenses */}
-      <div className="fdock-center">
-        <SlidingTabs
-          items={MODE_ITEMS}
-          value={mode}
-          onChange={onModeChange}
-          layoutId="fdock-mode"
-          size="sm"
-        />
-      </div>
+      {/* Center — the mode lenses. GTM-program lenses only; in Product mode the product canvas has
+          its own lens bar (Conceptual / Goals / IA / …), so the dock hides these to avoid two lens rows. */}
+      {!productMode ? (
+        <div className="fdock-center">
+          <SlidingTabs
+            items={MODE_ITEMS}
+            value={mode}
+            onChange={onModeChange}
+            layoutId="fdock-mode"
+            size="sm"
+          />
+        </div>
+      ) : null}
 
       {/* Right — actions. Compact icon buttons for the secondaries; only Run is the one dark fill.
           Claude's live status lives in the command dock at the bottom, so it isn't duplicated here. */}
