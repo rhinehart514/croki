@@ -1,7 +1,6 @@
-import { useState } from "react";
 import { motion } from "motion/react";
 import {
-  AlertTriangle, ArrowRight, GitBranch, ListChecks, LoaderCircle, PanelRight, Play, ShieldCheck,
+  AlertTriangle, ArrowRight, LoaderCircle, PanelRight, ShieldCheck,
 } from "lucide-react";
 import { SPRING } from "@/lib/springs";
 import { Reveal, Stagger, StaggerItem, Pop } from "@/lib/motion";
@@ -21,12 +20,12 @@ import type {
 // the workbench can never drift on what a mode is.
 type DockMode = ProgramCanvasMode;
 
+// Design · Simulation · Run only. Review was dropped (the Approvals count owns the gate view) and
+// Learning moved into the Program-details sheet — both earned their cut in the value audit.
 const MODE_ITEMS: { value: DockMode; label: string }[] = [
   { value: "design", label: "Design" },
   { value: "simulation", label: "Simulation" },
   { value: "run", label: "Run" },
-  { value: "review", label: "Review" },
-  { value: "learning", label: "Learning" },
 ];
 
 // The single floating control dock that sits top-center over the full-bleed canvas. It carries every
@@ -45,7 +44,7 @@ export function FloatingDock({
   // Right — actions
   problems, problemsOpen, onToggleProblems, nodeForSubsystem, onJumpToNode,
   pendingApprovals, approvalsOpen, onToggleApprovals,
-  graph, audits, running, runningNodeId, onSimulate, onRun,
+  graph, audits, running, onRun,
   inspecting, onToggleInspect,
 }: {
   projects: ProjectSummary[];
@@ -87,12 +86,12 @@ export function FloatingDock({
   connection: ConnectionStatus | null;
 }) {
   const noGraph = !graph || graph.nodes.length === 0;
-  // Pipeline audit — the contract issues that used to be a canvas chip, now a dock control.
+  // Problems (engine investigations) + the pipeline audit (contract issues) are ONE "Issues" surface.
   const auditIssues = (graph?.nodes ?? [])
     .map((n) => ({ node: n, audit: audits[n.id] }))
     .filter((x): x is { node: GTMNode; audit: GTMContractAudit } =>
       !!x.audit && ["waiting", "blocked", "blind"].includes(x.audit.state));
-  const [auditOpen, setAuditOpen] = useState(false);
+  const issueCount = problems.length + auditIssues.length;
 
   return (
     <motion.div
@@ -155,30 +154,33 @@ export function FloatingDock({
       {/* Right — actions. Compact icon buttons for the secondaries; only Run is the one dark fill.
           Claude's live status lives in the command dock at the bottom, so it isn't duplicated here. */}
       <div className="fdock-right">
-        {/* Problems — ranked engine investigations, opens a glass popover routing each to its node. */}
+        {/* Issues — engine investigations (Problems) and contract issues (Pipeline audit) merged into
+            ONE control. Both answer "what's broken across the system"; ranked together in one popover. */}
         <div className="fdock-pop-wrap">
           <button
-            className={`fdock-icon-btn ${problems.length > 0 ? "has-count" : ""} ${problemsOpen ? "open" : ""}`}
+            className={`fdock-icon-btn ${issueCount ? "has-count" : ""} ${problemsOpen ? "open" : ""}`}
             onClick={onToggleProblems}
             type="button"
             aria-haspopup="dialog"
             aria-expanded={problemsOpen}
-            title={problems.length > 0
-              ? `${problems.length} problem${problems.length === 1 ? "" : "s"} across your system`
-              : "No problems detected"}
+            title={issueCount ? `${issueCount} issue${issueCount === 1 ? "" : "s"} across your system` : "No issues — your system is healthy"}
           >
-            <ListChecks size={15} />
-            {problems.length > 0 ? <Pop k={problems.length} className="fdock-count">{problems.length}</Pop> : null}
+            <AlertTriangle size={15} />
+            {issueCount ? <Pop k={issueCount} className="fdock-count">{issueCount}</Pop> : null}
           </button>
           <Reveal open={problemsOpen} className="fdock-problems-pop" role="dialog" origin="top-right">
-            {problems.length === 0 ? (
-              <p className="fdock-problems-empty">No problems detected. Your system is healthy.</p>
+            <div className="fdock-pop-title">
+              <strong>Issues</strong>
+              <span className={issueCount ? "issues" : ""}>{issueCount === 0 ? "Clear" : `${issueCount} issue${issueCount === 1 ? "" : "s"}`}</span>
+            </div>
+            {issueCount === 0 ? (
+              <p className="fdock-problems-empty">No issues — your system is healthy.</p>
             ) : (
               <Stagger>
                 {problems.map((p) => {
                   const node = nodeForSubsystem(p.subsystem);
                   return (
-                    <StaggerItem className="fdock-problems-item" key={p.id}>
+                    <StaggerItem className="fdock-problems-item" key={`p-${p.id}`}>
                       <div className="fdock-problems-head">
                         <AlertTriangle size={13} />
                         <p>{p.problem}</p>
@@ -201,39 +203,8 @@ export function FloatingDock({
                     </StaggerItem>
                   );
                 })}
-              </Stagger>
-            )}
-          </Reveal>
-        </div>
-
-        {/* Pipeline audit — contract issues across the graph, moved off the canvas into the dock. */}
-        <div className="fdock-pop-wrap">
-          <button
-            className={`fdock-icon-btn ${auditIssues.length ? "has-count" : ""} ${auditOpen ? "open" : ""}`}
-            onClick={() => setAuditOpen((v) => !v)}
-            type="button"
-            aria-haspopup="dialog"
-            aria-expanded={auditOpen}
-            title={auditIssues.length
-              ? `${auditIssues.length} pipeline issue${auditIssues.length === 1 ? "" : "s"}`
-              : "Pipeline audit — contracts clear"}
-          >
-            <GitBranch size={15} />
-            {auditIssues.length ? <Pop k={auditIssues.length} className="fdock-count">{auditIssues.length}</Pop> : null}
-          </button>
-          <Reveal open={auditOpen} className="fdock-problems-pop" role="dialog" origin="top-right">
-            <div className="fdock-pop-title">
-              <strong>Pipeline audit</strong>
-              <span className={auditIssues.length ? "issues" : ""}>
-                {auditIssues.length === 0 ? "Clear" : `${auditIssues.length} issue${auditIssues.length === 1 ? "" : "s"}`}
-              </span>
-            </div>
-            {auditIssues.length === 0 ? (
-              <p className="fdock-problems-empty">No pipeline issues — every step's contract is satisfied.</p>
-            ) : (
-              <Stagger>
-                {auditIssues.slice(0, 8).map(({ node, audit }) => (
-                  <StaggerItem className="fdock-problems-item" key={node.id}>
+                {auditIssues.map(({ node, audit }) => (
+                  <StaggerItem className="fdock-problems-item" key={`a-${node.id}`}>
                     <div className="fdock-problems-head"><AlertTriangle size={13} /><p>{node.label}</p></div>
                     <p className="fdock-audit-msg">{audit.message}</p>
                     <button className="fdock-problems-fix" onClick={() => onJumpToNode(node.id)} type="button">
@@ -274,18 +245,7 @@ export function FloatingDock({
 
         <span className="fdock-divider" />
 
-        {/* Simulate — ghost. A preview, never a send. */}
-        <button
-          className="fdock-ghost-btn"
-          disabled={running || noGraph}
-          onClick={onSimulate}
-          type="button"
-        >
-          {running && !runningNodeId ? <LoaderCircle className="spin" size={13} /> : <Play size={13} />}
-          Simulate
-        </button>
-
-        {/* Run program — the one dark primary. */}
+        {/* Run program — the one dark primary. Simulate was cut — the Simulation lens is the preview. */}
         <button
           className="fdock-run-btn"
           disabled={running || noGraph}

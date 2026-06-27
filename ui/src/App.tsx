@@ -524,9 +524,9 @@ export default function App() {
           const result = ev.result;
           setRunResult(result);
           setFlowRuns((current) => [...current, result].slice(-10));
-          if (result.pendingGates[0]) setActiveTab("review");
-          else if (ev.nextVersions.length || ev.feedbackSignals > 0) setActiveTab("learning");
-          else setActiveTab("run");
+          // After a run, land on the Run lens. The Review and Learning lenses were cut — a pending
+          // gate now shows via the Approvals count, and learning lives in the Program-details sheet.
+          setActiveTab("run");
           if (!result.ok && !result.pendingGates.length) setGraphError(result.error || "One or more steps need attention.");
         } else if (ev.type === "run_error") {
           setGraphError(ev.error);
