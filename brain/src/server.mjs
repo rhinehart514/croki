@@ -98,6 +98,30 @@ import {
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const uiRoot = path.resolve(here, "../../ui/dist");
+
+// Load <repoRoot>/.env.local so the team-sync config persists across restarts without exporting env by
+// hand. Minimal KEY=VALUE parser; never overrides an already-set var. CONVEX_URL (written by
+// `npx convex dev`) is mapped to GTM_IDE_CONVEX_URL when the latter isn't set, so wiring a team needs
+// only GTM_IDE_TEAM_ID. With no .env.local and no env, the engine stays fully local — sync never engages.
+(() => {
+  try {
+    const envPath = path.resolve(here, "../../.env.local");
+    if (!fs.existsSync(envPath)) return;
+    for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
+      const m = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*)$/);
+      if (!m) continue;
+      const key = m[1];
+      const val = m[2].trim().replace(/^["']|["']$/g, "");
+      if (!(key in process.env)) process.env[key] = val;
+    }
+    if (!process.env.GTM_IDE_CONVEX_URL && process.env.CONVEX_URL) {
+      process.env.GTM_IDE_CONVEX_URL = process.env.CONVEX_URL;
+    }
+  } catch {
+    /* best-effort: a malformed .env.local never blocks boot */
+  }
+})();
+
 const port = Number(process.env.PORT || 4317);
 const host = process.env.HOST || "127.0.0.1";
 recoverInterruptedOperatorSessions();
