@@ -1338,4 +1338,12 @@ server.listen(port, host, () => {
   const stubs = connectors.filter((c) => c.stub);
   if (ready.length) console.log(`  Connectors ready: ${ready.map((c) => c.name).join(", ")}`);
   if (stubs.length) console.log(`  Connectors stubbed: ${stubs.map((c) => c.name).join(", ")}`);
+  // When a team is configured, hydrate the local store root from the team's shared state on boot.
+  // Best-effort and lazy-loaded — a local-only deployment never touches the sync layer.
+  if (process.env.GTM_IDE_CONVEX_URL && process.env.GTM_IDE_TEAM_ID) {
+    import("./convex-sync.mjs")
+      .then((m) => m.pullTeamDocuments())
+      .then((r) => r?.pulled != null && console.log(`  Team sync: pulled ${r.pulled} shared document(s) from Convex`))
+      .catch(() => {});
+  }
 });

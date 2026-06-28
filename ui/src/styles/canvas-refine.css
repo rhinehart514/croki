@@ -224,6 +224,18 @@
    in the expanded config, not the resting card. Hide it until the card has focus. */
 .react-flow .loop-node:not(.loop-node-selected) .loop-node-connector { display: none; }
 
+/* ── Engine overview: read the forward flow, let the returns recede ───────────
+   The banded overview overlays several channels on one engine, so its edge count is
+   high. Three moves keep it legible: the forward DATA spine reads at full weight; the
+   dashed CONTEXT fan-out (grounding → consumers) drops back so it never competes with
+   the spine; and the FEEDBACK returns (Measure looping up to Source/Ground) fade to a
+   whisper — they're the one thing that has to cross the whole engine, so they read as a
+   faint return stroke instead of slicing through everything. */
+.overview-canvas .loop-edge-context .react-flow__edge-path { opacity: 0.45; }
+.overview-canvas .loop-edge-feedback .react-flow__edge-path { opacity: 0.28; stroke-width: 1.2; }
+/* Hovering a return stroke brings it back to full so it stays inspectable. */
+.overview-canvas .react-flow__edge:hover .react-flow__edge-path { opacity: 0.9; }
+
 /* ── Focus card = legible. The editor was cramped; give it width and readable type. */
 .react-flow .loop-node.loop-node-selected { width: 340px; max-width: 340px; }
 .react-flow .loop-node-editor-desc { font-size: 12.5px; line-height: 1.55; }

@@ -30,4 +30,10 @@ export function atomicWrite(file, value) {
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`);
   fs.renameSync(tmp, file);
+  // Mirror to the team's Convex deployment when one is configured — write-behind, never blocking and
+  // never failing the local write. Lazy dynamic import so the local-only path never loads the sync
+  // layer (or the convex package) at all.
+  if (process.env.GTM_IDE_CONVEX_URL && process.env.GTM_IDE_TEAM_ID) {
+    import("./convex-sync.mjs").then((m) => m.enqueueDocument(file, value)).catch(() => {});
+  }
 }

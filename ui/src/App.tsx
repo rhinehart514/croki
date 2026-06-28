@@ -47,6 +47,8 @@ import { ComposerDock } from "@/components/ComposerDock";
 import { ConnectCapability } from "@/components/ConnectCapability";
 import { FloatingDock } from "@/components/FloatingDock";
 import { GraphCanvas, type OperatorCursorState } from "@/components/GraphCanvas";
+import { TeamOnboarding } from "@/components/TeamOnboarding";
+import { convexEnabled, loadTeamIdentity, type TeamIdentity } from "@/lib/convex";
 import { GoalLauncher } from "@/components/GoalLauncher";
 import { NodeEditor } from "@/components/NodeEditor";
 import { ProgramCanvas } from "@/components/ProgramCanvas";
@@ -188,6 +190,10 @@ export default function App() {
   const [runningNodeId, setRunningNodeId] = useState<string | null>(null);
   const [graphError, setGraphError] = useState<string | null>(null);
   const [selection, setSelection] = useState<NodeSelection>(null);
+  // The team layer (Convex). Null when running solo/local — the whole team flow is opt-in and only
+  // engages when a deployment is configured (VITE_CONVEX_URL). Seeded from localStorage so a returning
+  // teammate lands straight in the workspace, not back through onboarding.
+  const [teamIdentity, setTeamIdentity] = useState<TeamIdentity | null>(() => loadTeamIdentity());
   const [connectors, setConnectors] = useState<ConnectorMeta[]>([]);
   const [capabilities, setCapabilities] = useState<CapabilityServer[]>([]);
   const [approvals, setApprovals] = useState<Record<string, boolean>>({});
@@ -1535,6 +1541,12 @@ export default function App() {
     }
     return null;
   }, [proposalActive, proposalRevealOrder, revealCount, operatorSession?.status, operatorSession?.pendingGate]);
+
+  // First-run team setup. Gated on Convex being configured AND no team chosen yet, so a local/solo
+  // install never sees it. All hooks above have already run, so this early return is rules-of-hooks safe.
+  if (convexEnabled && !teamIdentity) {
+    return <TeamOnboarding onDone={setTeamIdentity} />;
+  }
 
   return (
     <main className={`loop-shell ${view === "canvas" ? "canvas-bleed" : ""}`}>

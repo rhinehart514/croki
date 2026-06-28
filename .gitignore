@@ -21,3 +21,6 @@ dist/
 output/
 .design-loop/
 /*.png
+
+# Convex local deployment credentials
+.env.local

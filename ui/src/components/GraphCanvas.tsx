@@ -1,7 +1,7 @@
 import "@/styles/canvas-refine.css";
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Background, Controls, Handle, Panel, Position, ReactFlow,
+  Background, Controls, Handle, MarkerType, Panel, Position, ReactFlow,
   useReactFlow, useStore, ViewportPortal,
   type Connection, type Edge, type Node, type NodeProps,
 } from "@xyflow/react";
@@ -28,6 +28,13 @@ import type {
 // topology mapper and the editor reads the bridge directly.
 type NodeEditorContextValue = { bridge: NodeEditorBridge; graph: GTMGraph } | null;
 const NodeEditorContext = React.createContext<NodeEditorContextValue>(null);
+
+// Every node carries two handle pairs: a horizontal pair (left in / right out) the focused
+// single-channel view routes through, and a vertical pair (top in / bottom out) the banded engine
+// overview routes through so its top-to-bottom flow reads straight down instead of curving sideways.
+// The vertical handles stay invisible (edges attach to their position regardless) so the cards stay
+// clean — only the routing changes, never the chrome.
+const V_HANDLE: React.CSSProperties = { opacity: 0, pointerEvents: "none" };
 
 // ─── Category metadata ────────────────────────────────────────────────────────
 
@@ -483,7 +490,8 @@ function ResourceNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
           <span className="loop-node-err-text">{result.error?.slice(0, 40)}</span>
         )}
       </button>
-      <Handle type="source" position={Position.Right} />
+      <Handle type="source" position={Position.Right} id="s-r" />
+      <Handle type="source" position={Position.Bottom} id="s-b" style={V_HANDLE} />
       {selected && (
         <NodeCardEditor node={node} result={result} health={data.health} contractAudit={data.contractAudit} />
       )}
@@ -518,7 +526,8 @@ function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       onClick={onSelect}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
     >
-      <Handle type="target" position={Position.Left} />
+      <Handle type="target" position={Position.Left} id="t-l" />
+      <Handle type="target" position={Position.Top} id="t-t" style={V_HANDLE} />
       <div className="loop-node-header">
         <div className="loop-node-icon" style={{ background: `${color}18`, color }}>
           {CATEGORY_ICON[node.category]}
@@ -533,8 +542,8 @@ function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       </div>
       <span className="loop-node-label">{node.label}</span>
       {preview && <span className="loop-node-preview">{preview}</span>}
-      <Handle type="source" position={Position.Right} />
-      <Handle type="source" position={Position.Bottom} id="bottom" />
+      <Handle type="source" position={Position.Right} id="s-r" />
+      <Handle type="source" position={Position.Bottom} id="s-b" style={V_HANDLE} />
       {selected && (
         <NodeCardEditor node={node} result={result} health={data.health} contractAudit={data.contractAudit} />
       )}
@@ -590,7 +599,8 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       onClick={onSelect}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
     >
-      <Handle type="target" position={Position.Left} />
+      <Handle type="target" position={Position.Left} id="t-l" />
+      <Handle type="target" position={Position.Top} id="t-t" style={V_HANDLE} />
       <div className="loop-node-header">
         <div
           className={cn("loop-node-icon", isMcp && "loop-node-icon-brand")}
@@ -648,7 +658,8 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       {hasErr && result?.error && (
         <span className="loop-node-err-text">{result.error.slice(0, 55)}</span>
       )}
-      <Handle type="source" position={Position.Right} />
+      <Handle type="source" position={Position.Right} id="s-r" />
+      <Handle type="source" position={Position.Bottom} id="s-b" style={V_HANDLE} />
       {selected && (
         <NodeCardEditor
           node={node}
@@ -929,6 +940,14 @@ function buildFlowGraph(
   // The ideation preview is the one graph that builds in with a staggered entrance: rank ≈ x / column
   // gap (positions are pre-laid by ideationGraph at 248px columns), so a node's rank drives its delay.
   const ideation = graph.id === "ideation-preview";
+  // The banded engine overview flows top-to-bottom; route its data/context edges through the vertical
+  // handles so connectors run straight down through the role bands. Feedback edges (a channel's Measure
+  // looping back up to Source/Ground) keep the side handles and arc around the edge, where they read as
+  // the return stroke instead of slicing across the whole engine.
+  const banded = !!graph.bands?.length;
+  const EDGE_INK: Record<GTMEdgeType, string> = {
+    data: "#94a3c4", context: "#c4c7db", feedback: "#86b89a",
+  };
   const nodes: Node[] = graph.nodes.map((n) => {
     const sub = subsystemHealth[n.category];
     const laneStatus = ideation && !!(n.config as Record<string, unknown>)?.laneStatus;
@@ -1029,12 +1048,22 @@ function buildFlowGraph(
     const active = e.edgeType === "data" && runningNodeId === e.target && !!result?.nodes[e.source]?.ok;
     const base = edgeStyle(e.edgeType);
     const proposed = proposedEdgeIds?.has(e.id);
+    // Route + direction. In the banded overview, forward edges run through the vertical handles
+    // (straight down the bands); feedback returns keep the side handles and arc around. An arrowhead
+    // makes the flow direction legible everywhere — without it the calm grey lines read as undirected.
+    const isFeedback = e.edgeType === "feedback";
+    const useV = banded && !isFeedback;
+    const routing = {
+      sourceHandle: useV ? "s-b" : "s-r",
+      targetHandle: useV ? "t-t" : "t-l",
+      markerEnd: { type: MarkerType.ArrowClosed, width: 13, height: 13, color: EDGE_INK[e.edgeType] ?? EDGE_INK.data },
+    };
     // Ideation build-in: each edge fades along its target node's cascade beat, so a connector never
     // arrives before the node it points at. Delay = target rank, the same beat the node card uses.
     if (ideation) {
       const rank = Math.max(0, Math.round((posX.get(e.target) ?? 0) / 248));
       return {
-        id: e.id, source: e.source, target: e.target, label: e.label, ...base,
+        id: e.id, source: e.source, target: e.target, label: e.label, ...base, ...routing,
         className: `${base.className ?? ""} lane-edge-enter`.trim(),
         style: { ...(base.style ?? {}), animationDelay: `${rank * 0.09 + 0.12}s` },
       };
@@ -1048,6 +1077,7 @@ function buildFlowGraph(
       target: e.target,
       label: e.label,
       ...base,
+      ...routing,
       ...(active ? { animated: true, className: "loop-edge-data loop-edge-active" } : {}),
       ...(proposed ? { className: `${base.className ?? ""} loop-edge-proposed ${edgeRevealed ? "is-revealed" : "is-unrevealed"}`.trim(), animated: true } : {}),
     };

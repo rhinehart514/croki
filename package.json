@@ -8,5 +8,8 @@
     "test": "npm --prefix brain test && npm run lint && npm run build",
     "start": "npm run build && node brain/src/server.mjs",
     "mcp": "node brain/src/mcp.mjs"
+  },
+  "dependencies": {
+    "convex": "1.42.0"
   }
 }

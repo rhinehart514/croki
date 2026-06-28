@@ -156,13 +156,19 @@ export function buildProjectCanvas(entries: ProjectCanvasEntry[]): GTMGraph | nu
     cellCursor.set(k, j + 1);
     n.position = { x: (channelOriginCol[ci] + j) * COL_W, y: bandY.get(r)! };
   }
-  // Shared nodes: spread evenly across the engine width in their band, centered over their consumers.
+  // Shared nodes: laid at a FIXED pitch (one column slot each, wider than a card) so they never
+  // overlap, ordered left-to-right by where their consumers sit, and centered as a row within the
+  // engine width. The old even-fraction spread divided the width regardless of card width, so a busy
+  // band (e.g. the shared agent pool) packed its cards on top of each other.
   for (const r of ["ground", "capabilities"] as Role[]) {
     const shared = [...finalNode.values()]
       .filter((n) => role.get(n.id) === r && isShared(n.id))
       .sort((a, b) => meanConsumerX(a.id) - meanConsumerX(b.id));
+    if (!shared.length) continue;
+    const rowWidth = shared.length * COL_W;
+    const startX = Math.max(0, (totalWidth - rowWidth) / 2) + (COL_W - NODE_W) / 2;
     shared.forEach((node, i) => {
-      node.position = { x: ((i + 1) / (shared.length + 1)) * totalWidth - NODE_W / 2, y: bandY.get(r)! };
+      node.position = { x: startX + i * COL_W, y: bandY.get(r)! };
     });
   }
 
