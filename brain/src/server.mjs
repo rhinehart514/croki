@@ -33,12 +33,7 @@ import {
   updateSharedContext,
 } from "./project-store.mjs";
 import { deleteProject, mergeProjects } from "./project-merge.mjs";
-import {
-  getOpportunityStudio,
-  saveGeneratedOpportunities,
-  updateOpportunity,
-} from "./opportunity-engine.mjs";
-import { composeOpportunityChannel, composeGraphForChannel, previewOpportunityChannel } from "./workflow-composer.mjs";
+import { composeOpportunityChannel, previewOpportunityChannel } from "./workflow-composer.mjs";
 import { executeDomainCommand } from "./domain-commands.mjs";
 import { getProductModel } from "./product-model-store.mjs";
 import { getDesignState } from "./design-state-store.mjs";
@@ -62,7 +57,6 @@ import {
 import { listConnectors } from "./connectors/registry.mjs";
 import { runGraph } from "./graph.mjs";
 import { liveStepRuntime } from "./agent-bridge.mjs";
-import { createClaudeIdeator } from "./ideation.mjs";
 import { createClaudeComposer } from "./composition.mjs";
 import { createClaudeEvaluator } from "./eval.mjs";
 import { selectRuntime, authModeLabel } from "./runtimes/index.mjs";
@@ -287,17 +281,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const projectOpportunitiesMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/opportunities$/);
-  if (req.method === "GET" && projectOpportunitiesMatch) {
-    try {
-      const projectId = decodeURIComponent(projectOpportunitiesMatch[1]);
-      json(res, 200, { opportunities: getOpportunityStudio({ projectId }) });
-    } catch (err) {
-      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
-    }
-    return;
-  }
-
   const projectProgramsMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/programs$/);
   if (req.method === "GET" && projectProgramsMatch) {
     try {
@@ -494,106 +477,6 @@ const server = http.createServer(async (req, res) => {
       send({ type: "run_error", error: err instanceof Error ? err.message : String(err) });
     } finally {
       res.end();
-    }
-    return;
-  }
-
-  const generateOpportunitiesMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/opportunities\/generate$/);
-  if (req.method === "POST" && generateOpportunitiesMatch) {
-    try {
-      const projectId = decodeURIComponent(generateOpportunitiesMatch[1]);
-      const project = loadProject({ projectId });
-      const workspaceId = project.sharedContext?.repository?.workspaceId;
-      if (!workspaceId) throw new Error("This project has no repository scan.");
-      const workspace = getWorkspace(workspaceId);
-      const repo = project.sharedContext?.repository?.repo || process.cwd();
-      const opportunities = await saveGeneratedOpportunities(workspace.report, {
-        projectId,
-        ideate: createClaudeIdeator({ cwd: repo }),
-      });
-      json(res, 200, { opportunities });
-    } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
-    }
-    return;
-  }
-
-  // Streaming ideation — the canvas-of-workflows experience. Generate the channel proposals, then
-  // compose EACH channel's real graph (model) and stream each completed workflow as it lands, so
-  // the founder watches workflows build onto the canvas one at a time. Per-channel resilient: a
-  // composer failure (e.g. a session limit) reports that lane's error and the rest keep going.
-  const ideateStreamMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/ideate\/stream$/);
-  if (req.method === "POST" && ideateStreamMatch) {
-    res.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-    });
-    const send = (event) => res.write(`data: ${JSON.stringify(event)}\n\n`);
-    try {
-      const projectId = decodeURIComponent(ideateStreamMatch[1]);
-      const project = loadProject({ projectId });
-      const workspaceId = project.sharedContext?.repository?.workspaceId;
-      if (!workspaceId) throw new Error("This project has no repository scan.");
-      const workspace = getWorkspace(workspaceId);
-      const repo = project.sharedContext?.repository?.repo || process.cwd();
-
-      // Throttle token deltas into readable thinking frames — emit when the buffer grows enough or
-      // a sentence closes, so the founder watches reasoning form without flooding the stream.
-      const makeThinker = (channelId) => {
-        let buf = "";
-        return (delta) => {
-          buf += delta;
-          if (buf.length >= 40 || /[.!?\n]$/.test(delta)) {
-            send({ type: "thinking", channelId: channelId ?? null, text: buf });
-            buf = "";
-          }
-        };
-      };
-
-      send({ type: "status", message: "Ideating channels from grounded reality…" });
-      const opportunities = await saveGeneratedOpportunities(workspace.report, {
-        projectId,
-        ideate: createClaudeIdeator({ cwd: repo, onText: makeThinker(null) }),
-      });
-      const channels = (opportunities.items ?? []).filter((i) => i.type === "channel" && i.status !== "rejected");
-      const agents = (opportunities.items ?? []).filter((i) => i.type === "agent");
-      const grounding = opportunities.understanding ?? null;
-      send({ type: "proposals", channels, agents });
-
-      // Compose each channel's real graph, streaming each onto the canvas as it completes, with
-      // the model's live reasoning streamed per lane.
-      for (const channel of channels) {
-        send({ type: "composing", channelId: channel.id, title: channel.title });
-        try {
-          const pinned = channel.selectedAgentIds?.length
-            ? agents.filter((a) => channel.selectedAgentIds.includes(a.id))
-            : agents;
-          const compose = createClaudeComposer({ cwd: repo, onText: makeThinker(channel.id) });
-          const { nodes, edges } = await composeGraphForChannel({ channel, agents: pinned, grounding, compose });
-          send({ type: "workflow", channelId: channel.id, title: channel.title, nodes, edges });
-        } catch (err) {
-          send({ type: "workflow_error", channelId: channel.id, error: err instanceof Error ? err.message : String(err) });
-        }
-      }
-      send({ type: "done" });
-    } catch (err) {
-      send({ type: "error", error: err instanceof Error ? err.message : String(err) });
-    } finally {
-      res.end();
-    }
-    return;
-  }
-
-  const opportunityMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/opportunities\/([^/]+)$/);
-  if (req.method === "POST" && opportunityMatch) {
-    try {
-      const body = await readBody(req);
-      const projectId = decodeURIComponent(opportunityMatch[1]);
-      const opportunityId = decodeURIComponent(opportunityMatch[2]);
-      json(res, 200, { opportunity: updateOpportunity(opportunityId, body.patch ?? body, { projectId }) });
-    } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return;
   }
@@ -984,7 +867,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Connection status — does the founder have a live Claude the operator/composer/ideator can use?
+  // Connection status — does the founder have a live Claude the operator/composer can use?
   // Drives the cold-start state so an unconnected user gets a clear path, not a dead-end error.
   if (req.method === "GET" && url.pathname === "/api/connection") {
     const selection = selectRuntime({});

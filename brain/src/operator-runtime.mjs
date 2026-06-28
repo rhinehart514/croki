@@ -1,6 +1,5 @@
 import { getEngineState } from "./engine.mjs";
 import { liveStepRuntime } from "./agent-bridge.mjs";
-import { createClaudeIdeator } from "./ideation.mjs";
 import { createClaudeComposer } from "./composition.mjs";
 import { createClaudeEvaluator } from "./eval.mjs";
 import { createClaudeProductModeler } from "./product-model-generator.mjs";
@@ -37,10 +36,6 @@ import {
   updateChannel,
   updateSharedContext,
 } from "./project-store.mjs";
-import {
-  saveGeneratedOpportunities,
-  updateOpportunity,
-} from "./opportunity-engine.mjs";
 import { composeOpportunityChannel, composePortfolioFromStudio } from "./workflow-composer.mjs";
 import {
   compareChannelRuns,
@@ -330,41 +325,36 @@ const TOOLS = [
     },
   },
   {
-    name: "generate_opportunities",
-    description: "Generate durable channel and agent opportunities from the active project's repository evidence. Derived and speculative candidates remain explicitly separated.",
-    input_schema: { type: "object", properties: {}, required: [] },
-  },
-  {
-    name: "review_opportunity",
-    description: "Edit and mark one channel or agent opportunity as accepted, rejected, deferred, or proposed. This does not compose a workflow.",
+    name: "compose_channel",
+    description: "Compose one channel — described inline by its objective and the agents that run it — into a validated input → agents → founder gate → output → measure workflow. Re-asserts the founder gate; never sends.",
     input_schema: {
       type: "object",
       properties: {
-        opportunityId: { type: "string" },
-        patch: { type: "object" },
-      },
-      required: ["opportunityId", "patch"],
-    },
-  },
-  {
-    name: "compose_opportunity_channel",
-    description: "Compose one accepted channel and accepted agents into a validated input → agents → founder gate → output → measure workflow.",
-    input_schema: {
-      type: "object",
-      properties: {
-        channelOpportunityId: { type: "string" },
-        agentOpportunityIds: { type: "array", items: { type: "string" } },
-        name: { type: "string" },
-        objective: { type: "string" },
+        title: { type: "string", description: "The channel's name." },
+        objective: { type: "string", description: "What this channel is trying to achieve." },
+        kind: { type: "string" },
+        agents: {
+          type: "array",
+          description: "The agents that run this channel, each described inline.",
+          items: {
+            type: "object",
+            properties: {
+              ref: { type: "string", description: "Short kebab-case handle for the agent." },
+              role: { type: "string" },
+              objective: { type: "string" },
+              prompt: { type: "string" },
+            },
+          },
+        },
         input: { type: "object" },
         output: { type: "object" },
       },
-      required: ["channelOpportunityId", "agentOpportunityIds"],
+      required: ["title", "objective"],
     },
   },
   {
     name: "compose_portfolio",
-    description: "Compose every accepted channel and its accepted agents into ONE branching, multi-gate portfolio graph the founder reviews together — the whole GTM system as a single diagram. Re-asserts the founder gate on every execute path; never sends. Use after several channel opportunities are accepted, to propose the portfolio.",
+    description: "Compose several inline channel specs toward ONE goal into a single branching, multi-gate portfolio graph the founder reviews together — the whole GTM system as one diagram. Re-asserts the founder gate on every execute path; never sends.",
     input_schema: {
       type: "object",
       properties: { goal: { type: "string" } },
@@ -762,11 +752,11 @@ ${renderPriorSessions(priorSessions)}
 
 Operating rules:
 - Begin by inspecting product truth, programs, and current problems unless a resumed session already contains that evidence.
-- For a new product or portfolio goal, inspect projects and generate reviewable opportunities before creating a blank workflow.
+- For a new product or portfolio goal, inspect projects, then decide on the channel and the agents it needs before building.
 - For portfolio goals, inspect all outcome-program workflows and shared context before choosing where to work.
-- Do not invent a fixed channel catalog. Keep code-derived and speculative opportunities separate, and do not compose either until the founder has accepted it.
+- Do not invent a fixed channel catalog. Decide each channel and its agents from the real product and the goal in front of you.
 - Prefer inspect_program, create_program, derive_agent_needs, create_personalized_agents, compose_program_workflow, and run_program when the work is an outcome loop.
-- Use create_workflow only for an explicitly requested blank motion. Prefer review_opportunity plus compose_opportunity_channel for product-derived systems, then run_program once a program exists.
+- Build a channel directly: name the channel and its agents inline and call compose_channel, then run_program once a program exists. Use create_workflow for an explicitly requested blank motion you will shape with typed graph operations.
 - Keep product, positioning, ICP, founder taste, contacts, and outcomes in shared context rather than duplicating them into graphs.
 - Use propose_graph_changes for graph edits. Never invent a replacement graph or claim a change that the founder has not accepted.
 - Prefer running and observing over theorizing. Repair actual failures and rerun affected work.
@@ -1050,42 +1040,7 @@ async function executeTool(session, tool, options = {}) {
     return { session: next, result: productModel, pause: false };
   }
 
-  if (tool.name === "generate_opportunities") {
-    const project = loadProject(options);
-    const workspaceId = project.sharedContext?.repository?.workspaceId;
-    if (!workspaceId) throw new Error("The active project has no repository scan.");
-    const workspace = getWorkspace(workspaceId, options);
-    const repo = options.cwd || project.sharedContext?.repository?.repo || process.cwd();
-    const opportunities = await saveGeneratedOpportunities(workspace.report, {
-      ...options,
-      ideate: options.ideate || createClaudeIdeator({ cwd: repo }),
-    });
-    const channels = opportunities.items.filter((item) => item.type === "channel");
-    const agents = opportunities.items.filter((item) => item.type === "agent");
-    const next = addEvent(session, {
-      type: "opportunities_generated",
-      title: "Generated channel and agent opportunities",
-      detail: `${channels.length} channel opportunities · ${agents.length} agent opportunities · review required before composition`,
-      data: {
-        derived: opportunities.items.filter((item) => item.origin === "derived").length,
-        speculative: opportunities.items.filter((item) => item.origin === "speculative").length,
-      },
-    }, options);
-    return { session: next, result: opportunities, pause: false };
-  }
-
-  if (tool.name === "review_opportunity") {
-    const opportunity = updateOpportunity(input.opportunityId, input.patch, options);
-    const next = addEvent(session, {
-      type: "opportunity_reviewed",
-      title: `${opportunity.status === "accepted" ? "Accepted" : opportunity.status === "rejected" ? "Rejected" : "Updated"} ${opportunity.title}`,
-      detail: opportunity.rationale,
-      data: { opportunityId: opportunity.id, type: opportunity.type, status: opportunity.status },
-    }, options);
-    return { session: next, result: opportunity, pause: false };
-  }
-
-  if (tool.name === "compose_opportunity_channel") {
+  if (tool.name === "compose_channel") {
     const composeRepo = options.cwd || loadProject(options).sharedContext?.repository?.repo || process.cwd();
     const composed = await composeOpportunityChannel(input, {
       ...options,

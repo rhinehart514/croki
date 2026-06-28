@@ -8,7 +8,7 @@
 // rig uses, so neither rig reimplements scoring.
 //
 // Contract: ~/.agents/global/HARNESS.md, invariants 1 (eval-first) and 5 (oracle first, judge
-// second). Injectable like ideation.mjs / composition.mjs: a fake evaluator in tests,
+// second). Injectable like composition.mjs: a fake evaluator in tests,
 // createClaudeEvaluator() live on the subscription, an honest blank default that derives nothing.
 
 import { spawnSync } from "node:child_process";

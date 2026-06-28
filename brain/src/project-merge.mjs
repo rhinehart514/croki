@@ -25,8 +25,8 @@ import { getOperatorSession, listOperatorSessions, saveOperatorSession } from ".
 //   so `loadFlow(graphId)` still finds the flow file. The graphId prefix (e.g. `rodentradar-3--…`)
 //   becomes a cosmetic, opaque string under the target — never rekeyed, so no program→flow reference
 //   ever has to be rewritten.
-// - UNIONED ON THE TARGET PROJECT OBJECT: opportunities and legacy channels (deduped by id). The
-//   target keeps its own sharedContext (its repo grounding) as authoritative.
+// - UNIONED ON THE TARGET PROJECT OBJECT: legacy channels (deduped by id). The target keeps its own
+//   sharedContext (its repo grounding) as authoritative.
 
 function safeId(value) {
   return String(value || "default").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "default";
@@ -83,19 +83,10 @@ function moveOperatorSessions(sourceId, targetId, options) {
 }
 
 function unionProjectCollections(sourceProject, targetProject) {
-  const items = dedupeById(
-    targetProject.opportunities?.items ?? [],
-    sourceProject.opportunities?.items ?? [],
-    targetProject.id,
-  );
   const channels = dedupeById(targetProject.channels ?? [], sourceProject.channels ?? [], targetProject.id);
   return {
     ...targetProject,
     channels,
-    opportunities: {
-      ...(targetProject.opportunities ?? { generatedAt: null, sourceContextVersion: null, items: [] }),
-      items,
-    },
   };
 }
 

@@ -4,8 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { composeOpportunityChannel, previewOpportunityChannel, composePortfolioGraph, composePortfolioFromStudio } from "../src/workflow-composer.mjs";
-import { saveGeneratedOpportunities, updateOpportunity } from "../src/opportunity-engine.mjs";
-import { createProject, loadProject, saveProject } from "../src/project-store.mjs";
+import { createProject, loadProject } from "../src/project-store.mjs";
 import { loadFlow } from "../src/flow-store.mjs";
 import { listOutcomePrograms } from "../src/program-store.mjs";
 import { listAgentCreationPolicies } from "../src/agent-policy-store.mjs";
@@ -16,14 +15,23 @@ import { scanRepo } from "../src/scan.mjs";
 
 const sortById = (rows) => [...rows].sort((a, b) => String(a.id).localeCompare(String(b.id)));
 
-// Ideator and composer are both fakes: the test exercises host plumbing (accept → compose →
-// normalize → bind IO → enforce the wall → persist), not model quality.
-const fakeIdeate = async () => ({ ok: true, items: [
-  { type: "channel", title: "Referral loop", objective: "loop", rationale: "real", origin: "derived",
-    evidence: [{ label: "win", file: "app.ts", line: 1, text: "project_created" }] },
-  { type: "agent", title: "Researcher", objective: "research", rationale: "needed", provider: "claude", prompt: "Research." },
-  { type: "agent", title: "Relevance analyst", objective: "qualify", rationale: "needed", provider: "codex", prompt: "Qualify." },
-] });
+// Channels are now defined directly (by the founder or by Claude) and handed to the composer as an
+// inline spec — there is no auto-generated opportunity accept-list. The composer is a fake: the test
+// exercises host plumbing (compile → normalize → bind IO → enforce the wall → persist), not model
+// quality.
+function channelInput(overrides = {}) {
+  return {
+    title: "Referral loop",
+    objective: "loop",
+    input: { type: "csv", csv: "id,name\n1,Ada" },
+    output: { type: "api", endpoint: "https://example.com/send" },
+    agents: [
+      { ref: "researcher", title: "Researcher", objective: "research", prompt: "Research." },
+      { ref: "relevance-analyst", title: "Relevance analyst", objective: "qualify", prompt: "Qualify." },
+    ],
+    ...overrides,
+  };
+}
 
 // A BRANCHED graph — deliberately not the old linear skeleton — to prove the host preserves
 // whatever topology the model designs.
@@ -57,7 +65,6 @@ function branchedComposer({ agents }) {
 describe("model-composed workflow (no fixed skeleton)", () => {
   let parent;
   let options;
-  let report;
 
   beforeEach(() => {
     parent = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-compose-"));
@@ -66,26 +73,13 @@ describe("model-composed workflow (no fixed skeleton)", () => {
     fs.writeFileSync(path.join(repo, "app.ts"), 'analytics.track("project_created", { projectId, source });\n');
     options = { root: path.join(parent, "state"), claudeDir: path.join(parent, "claude") };
     createProject({ name: "Product" }, options);
-    report = scanRepo(repo, { winEvent: "project_created" });
+    scanRepo(repo, { winEvent: "project_created" });
   });
 
   afterEach(() => fs.rmSync(parent, { recursive: true, force: true }));
 
-  async function acceptChannelAndAgents() {
-    const studio = await saveGeneratedOpportunities(report, { ...options, ideate: fakeIdeate });
-    const channel = studio.items.find((item) => item.type === "channel");
-    const agents = studio.items.filter((item) => item.type === "agent").slice(0, 2);
-    updateOpportunity(channel.id, { status: "accepted", input: { type: "csv", csv: "id,name\n1,Ada" }, output: { type: "api", endpoint: "https://example.com/send" } }, options);
-    for (const agent of agents) updateOpportunity(agent.id, { status: "accepted" }, options);
-    return { channel, agents };
-  }
-
   it("composes the model's branched graph, binds founder IO, and persists", async () => {
-    const { channel, agents } = await acceptChannelAndAgents();
-    const composed = await composeOpportunityChannel({
-      channelOpportunityId: channel.id,
-      agentOpportunityIds: agents.map((a) => a.id),
-    }, { ...options, compose: branchedComposer });
+    const composed = await composeOpportunityChannel(channelInput(), { ...options, compose: branchedComposer });
 
     assert.equal(composed.validation.ok, true);
     // Topology the model designed is preserved: source fans out to two agents.
@@ -101,7 +95,7 @@ describe("model-composed workflow (no fixed skeleton)", () => {
     assert.ok(agentNode.config.agentInstanceId, "agent node points to the personalized agent instance");
     assert.ok(agentNode.config.creationPolicyId, "agent node points to the creation policy");
     assert.ok(agentNode.config.personalizationProfileId, "agent node points to the personalization profile");
-    // Persisted and activated; agent markdown written for each accepted agent.
+    // Persisted and activated; agent markdown written for each agent.
     assert.equal(loadFlow(composed.channel.graphId, null, options).graph.nodes.length, composed.graph.nodes.length);
     assert.equal(loadProject(options).activeChannelId, composed.channel.id);
     assert.equal(listOutcomePrograms(loadProject(options).id, options).length, 1);
@@ -114,11 +108,7 @@ describe("model-composed workflow (no fixed skeleton)", () => {
   });
 
   it("the live compose path is event-complete: state rebuilds purely from the domain log", async () => {
-    const { channel, agents } = await acceptChannelAndAgents();
-    const composed = await composeOpportunityChannel({
-      channelOpportunityId: channel.id,
-      agentOpportunityIds: agents.map((a) => a.id),
-    }, { ...options, compose: branchedComposer });
+    const composed = await composeOpportunityChannel(channelInput(), { ...options, compose: branchedComposer });
 
     const projectId = loadProject(options).id;
     const events = listDomainEvents(projectId, options);
@@ -155,7 +145,6 @@ describe("model-composed workflow (no fixed skeleton)", () => {
   });
 
   it("enforces the wall: rejects an execute node that is not behind a founder gate", async () => {
-    const { channel, agents } = await acceptChannelAndAgents();
     const ungated = () => ({
       ok: true,
       nodes: [
@@ -165,20 +154,16 @@ describe("model-composed workflow (no fixed skeleton)", () => {
       edges: [{ source: "src", target: "out", edgeType: "data" }],
     });
     await assert.rejects(
-      composeOpportunityChannel({ channelOpportunityId: channel.id, agentOpportunityIds: agents.map((a) => a.id) }, { ...options, compose: ungated }),
+      composeOpportunityChannel(channelInput(), { ...options, compose: ungated }),
       /gate/i,
     );
   });
 
   it("preview composes the graph but persists nothing — no flow, program, or activation", async () => {
-    const { channel, agents } = await acceptChannelAndAgents();
     const projectId = loadProject(options).id;
     const eventsBefore = listDomainEvents(projectId, options).length;
 
-    const preview = await previewOpportunityChannel({
-      channelOpportunityId: channel.id,
-      agentOpportunityIds: agents.map((a) => a.id),
-    }, { ...options, compose: branchedComposer });
+    const preview = await previewOpportunityChannel(channelInput(), { ...options, compose: branchedComposer });
 
     // The would-be graph came back, branched topology intact and founder IO bound.
     assert.ok(preview.graph.nodes.length > 0, "preview returns a composed graph");
@@ -187,31 +172,24 @@ describe("model-composed workflow (no fixed skeleton)", () => {
     assert.ok(preview.graph.nodes.some((n) => n.category === "source" && n.connector === "csv"));
 
     // Nothing was persisted: no programs, no policies, no agent instances, no new domain events,
-    // no active channel, and the channel opportunity is not marked composed.
+    // no active channel.
     assert.equal(listOutcomePrograms(projectId, options).length, 0, "preview created no program");
     assert.equal(listAgentCreationPolicies(projectId, options).length, 0, "preview created no policy");
     assert.equal(loadCapabilityFoundry(projectId, options).instances.length, 0, "preview created no agent instance");
     assert.equal(listDomainEvents(projectId, options).length, eventsBefore, "preview emitted no domain events");
     assert.equal(loadProject(options).activeChannelId ?? null, null, "preview did not activate a channel");
-    const channelAfter = (loadProject(options).opportunities?.items ?? []).find((i) => i.id === channel.id);
-    assert.equal(channelAfter.composedChannelId ?? null, null, "preview did not mark the opportunity composed");
   });
 
   it("apply persists the exact previewed graph without re-running the composer", async () => {
-    const { channel, agents } = await acceptChannelAndAgents();
-    const preview = await previewOpportunityChannel({
-      channelOpportunityId: channel.id,
-      agentOpportunityIds: agents.map((a) => a.id),
-    }, { ...options, compose: branchedComposer });
+    const preview = await previewOpportunityChannel(channelInput(), { ...options, compose: branchedComposer });
 
     // Apply with the previewed graph and a composer that would THROW if it ran — proving the apply
     // path reuses the previewed nodes/edges instead of re-composing behind the founder's back.
     const explodingComposer = () => { throw new Error("composer must not run on apply of a previewed graph"); };
-    const applied = await composeOpportunityChannel({
-      channelOpportunityId: channel.id,
-      agentOpportunityIds: agents.map((a) => a.id),
-      graph: preview.graph,
-    }, { ...options, compose: explodingComposer });
+    const applied = await composeOpportunityChannel(
+      { ...channelInput(), graph: preview.graph },
+      { ...options, compose: explodingComposer },
+    );
 
     assert.equal(applied.validation.ok, true);
     // The persisted graph is the previewed one (same node count, source bound to csv).
@@ -226,9 +204,8 @@ describe("model-composed workflow (no fixed skeleton)", () => {
   });
 
   it("the blank default refuses rather than falling back to a template", async () => {
-    const { channel, agents } = await acceptChannelAndAgents();
     await assert.rejects(
-      composeOpportunityChannel({ channelOpportunityId: channel.id, agentOpportunityIds: agents.map((a) => a.id) }, options),
+      composeOpportunityChannel(channelInput(), options),
       /subscription/i,
     );
   });
@@ -275,7 +252,7 @@ describe("one engine, shared agent pool", () => {
   });
 });
 
-describe("composePortfolioFromStudio — live portfolio from accepted opportunities", () => {
+describe("composePortfolioFromStudio — portfolio from inline channel specs", () => {
   let parent;
   let options;
 
@@ -303,30 +280,20 @@ describe("composePortfolioFromStudio — live portfolio from accepted opportunit
     ],
   });
 
-  function seedAcceptedPortfolio() {
-    const project = loadProject(options);
-    const items = [
-      { id: "ch-outbound", type: "channel", status: "accepted", title: "Operator outreach", objective: "reach operators", selectedAgentIds: ["ag-find"] },
-      { id: "ag-find", type: "agent", status: "accepted", title: "Prospector", ref: "gtm-find-prospects", objective: "find prospects" },
-      { id: "ch-referral", type: "channel", status: "accepted", title: "Vouch loop", objective: "earn referrals", selectedAgentIds: ["ag-vouch"] },
-      { id: "ag-vouch", type: "agent", status: "accepted", title: "Voucher", ref: "gtm-vouch-request-message-drafter", objective: "draft vouch" },
-      { id: "ch-proposed", type: "channel", status: "proposed", title: "Not yet accepted", objective: "skip me" },
-    ];
-    saveProject({ ...project, opportunities: { ...(project.opportunities ?? {}), items } }, options);
-  }
+  const inlineChannels = () => ([
+    { channel: { id: "ch-outbound", title: "Operator outreach", objective: "reach operators" }, agents: [{ ref: "gtm-find-prospects", title: "Prospector", objective: "find prospects" }] },
+    { channel: { id: "ch-referral", title: "Vouch loop", objective: "earn referrals" }, agents: [{ ref: "gtm-vouch-request-message-drafter", title: "Voucher", objective: "draft vouch" }] },
+  ]);
 
-  it("unions only the ACCEPTED channels into one valid, gated portfolio", async () => {
-    seedAcceptedPortfolio();
-    const graph = await composePortfolioFromStudio({ goal: "land a pilot" }, { ...options, compose: fakeCompose });
+  it("unions the provided channels into one valid, gated portfolio", async () => {
+    const graph = await composePortfolioFromStudio({ goal: "land a pilot", channels: inlineChannels() }, { ...options, compose: fakeCompose });
     assert.equal(graph.kind, "portfolio");
-    assert.equal(graph.systems.length, 2, "the proposed (unaccepted) channel is excluded");
+    assert.equal(graph.systems.length, 2, "each provided channel becomes a system");
     assert.equal(graph.nodes.filter((n) => n.category === "gate").length, 2, "each system keeps its founder gate");
     assert.equal(graph.name, "land a pilot");
   });
 
-  it("refuses to compose a portfolio when nothing is accepted yet", async () => {
-    const project = loadProject(options);
-    saveProject({ ...project, opportunities: { items: [{ id: "ch", type: "channel", status: "proposed", title: "x", objective: "x" }] } }, options);
-    await assert.rejects(() => composePortfolioFromStudio({}, { ...options, compose: fakeCompose }), /Accept at least one channel/);
+  it("refuses to compose a portfolio when no channel is provided", async () => {
+    await assert.rejects(() => composePortfolioFromStudio({}, { ...options, compose: fakeCompose }), /at least one channel/);
   });
 });

@@ -6,7 +6,7 @@
 // product-understanding.mjs — it is generated here, by an injectable generator, edited by the
 // founder, and demoted by the host when a claimed citation does not exist.
 //
-// The runtime is injectable, mirroring ideation.mjs:
+// The runtime is injectable, like the other rented generators (composition, eval):
 //   - a fake generator in tests,
 //   - createClaudeProductModeler() live on the founder's subscription,
 //   - an honest blank default (blankGenerate) that refuses rather than fabricates.
@@ -15,7 +15,7 @@ import { runClaudeQuery, parseAgentObject } from "./agent-bridge.mjs";
 
 // The modeling doctrine, passed to the product-model agent. Edit
 // ~/.claude/agents/gtm-model-product.md to change how it interprets the product — the instruction
-// is a markdown artifact, not host code (exactly as IDEATION_PROMPT + gtm-ideate-channels.md).
+// is a markdown artifact, not host code (the same pattern every rented agent doctrine follows).
 export const PRODUCT_MODEL_PROMPT = `You are building the interpretive PRODUCT MODEL for ONE specific product: its core objects (things), how they relate, what users are trying to do, and the key states a core object moves through. This is INTERPRETATION layered on top of cited code facts — it is NOT a claim about what the code provably does. It is the shape the truth deliberately lacks.
 
 You are given the product's grounded reality (win event, attribution, stack, blind spots, each cited to file:line) and, when available, its buyer/market context. Read a few key repo files to confirm what the product really is, then interpret it into a small, legible model across FIVE layers of understanding.
@@ -48,8 +48,7 @@ Return ONLY a JSON object with this shape (the host stamps ids, versions, and ti
 Return empty bags for any layer you genuinely cannot ground or responsibly interpret.`;
 
 // Honest blank default: with no generator runtime wired, return an empty model rather than
-// fabricate. Refusing-rather-than-faking is the same discipline as blankIdeate
-// (opportunity-engine.mjs:54) and the context providers' null return.
+// fabricate. Refusing-rather-than-faking is the same discipline as the context providers' null return.
 export const blankGenerate = async () => ({
   ok: true,
   model: { things: [], relationships: [], userGoals: [], states: [], ia: [], workflows: [], interactions: [], transitions: [] },

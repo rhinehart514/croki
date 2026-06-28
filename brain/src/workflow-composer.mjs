@@ -7,7 +7,7 @@ import { saveFlow } from "./flow-store.mjs";
 import { writeArtifact } from "./artifact-store.mjs";
 import {
   annotateGraphWithProgram,
-  compileOpportunityProgram,
+  compileChannelProgram,
   ensureGraphAgents,
   markProgramComposed,
 } from "./program-compiler.mjs";
@@ -152,7 +152,7 @@ function bindIO(nodes, channel, inputAdapter, outputAdapter) {
 
 // The pure compose path: model designs the graph, host normalizes, binds IO, and enforces the
 // gate wall — returns { nodes, edges } with NO persistence and no status mutation. Used by both
-// the streaming ideation preview (compose each proposed channel's real graph, live) and the
+// the streaming compose preview (compose each channel's real graph, live) and the
 // persisting compose below. The model owns topology; the host owns the wall.
 export async function composeGraphForChannel({ channel, agents = [], grounding = null, enginePool = [], input, output, compose = blankCompose }) {
   const spec = await compose({
@@ -215,75 +215,83 @@ export async function composePortfolioGraph({ goal, channels = [], grounding = n
   return assemblePortfolioGraph({ goal: goal || channels[0]?.channel?.objective || "", systems, consolidateGate });
 }
 
-// Live wiring for composePortfolioGraph, which was otherwise test-only: load EVERY accepted channel
-// in the studio (each with its accepted agents) and union them into one portfolio graph. This is the
-// operator's "propose systems" move at portfolio altitude — the founder accepts several channels, the
-// operator composes them together and shows the whole GTM system as one branching, multi-gate diagram.
-// Compose-only, no persistence (mirroring composePortfolioGraph); the per-channel apply path
-// (composeOpportunityChannel) is what persists a runnable system. The wall is re-asserted on the union
-// inside assemblePortfolioGraph, so an ungated send in any lane is rejected before it reaches the canvas.
+// Normalize an inline channel spec from the compose request body. Channels are now defined directly
+// (by the founder or by Claude) and handed in — there is no auto-generated opportunity accept-list to
+// look them up in. A stable id is derived from the title when none is supplied, so the program the
+// channel compiles into stays idempotent across re-composes.
+function channelSpecFrom(input = {}) {
+  const base = input.channel && typeof input.channel === "object" ? input.channel : {};
+  const title = input.title || input.name || base.title || "Channel";
+  const objective = input.objective || base.objective || "";
+  const id = input.channelId || input.id || base.id || `channel:${slug(title)}`;
+  return { ...base, id, title, objective, kind: input.kind || base.kind || null };
+}
+
+// Normalize the inline agent specs the request carries. Each is a plain `{ ref, role?, objective?,
+// prompt?, title? }`; a stable id (derived from ref) keeps the agent's creation policy idempotent.
+function agentSpecsFrom(input = {}) {
+  const raw = Array.isArray(input.agents) ? input.agents : [];
+  return raw
+    .filter((agent) => agent && (agent.ref || agent.title))
+    .map((agent) => {
+      const ref = agent.ref ? String(agent.ref) : slug(agent.title);
+      return {
+        ...agent,
+        ref,
+        id: agent.id || `agent:${ref}`,
+        title: agent.title || agent.role || ref,
+      };
+    });
+}
+
+// Live wiring for composePortfolioGraph: compose SEVERAL inline channels toward ONE goal and union
+// them into one portfolio graph. This is the operator's "propose systems" move at portfolio altitude —
+// the founder hands several channels, the operator composes them together and shows the whole GTM
+// system as one branching, multi-gate diagram. Compose-only, no persistence (mirroring
+// composePortfolioGraph); the per-channel apply path (composeChannel) is what persists a runnable
+// system. The wall is re-asserted on the union inside assemblePortfolioGraph, so an ungated send in
+// any lane is rejected before it reaches the canvas.
 export async function composePortfolioFromStudio(input = {}, options = {}) {
   const project = loadProject(options);
-  const items = project.opportunities?.items ?? [];
-  const acceptedChannels = items.filter((item) => item.type === "channel" && item.status === "accepted");
-  if (!acceptedChannels.length) {
-    throw new Error("Accept at least one channel opportunity before composing a portfolio.");
+  const rawChannels = Array.isArray(input.channels) ? input.channels : [];
+  if (!rawChannels.length) {
+    throw new Error("Provide at least one channel spec before composing a portfolio.");
   }
-  const channels = acceptedChannels.map((channel) => {
-    const agentIds = Array.isArray(channel.selectedAgentIds) ? channel.selectedAgentIds : [];
-    const agents = agentIds
-      .map((id) => items.find((item) => item.id === id && item.type === "agent" && item.status === "accepted"))
-      .filter(Boolean);
-    return { channel, agents };
-  });
+  const channels = rawChannels.map((entry) => ({
+    channel: channelSpecFrom(entry?.channel ? entry : { channel: entry }),
+    agents: agentSpecsFrom(entry?.channel ? entry : { agents: entry?.agents }),
+  }));
   const goal = input.goal
     || project.sharedContext?.outcomes?.[0]?.outcome
-    || acceptedChannels[0]?.objective
+    || channels[0]?.channel?.objective
     || "";
   return composePortfolioGraph({
     goal,
     channels,
-    grounding: project.opportunities?.understanding ?? null,
+    grounding: input.grounding ?? null,
     compose: options.compose || blankCompose,
     consolidateGate: input.consolidateGate === true,
   });
-}
-
-// Resolve an accepted channel opportunity and its accepted agents from the durable studio. Shared
-// by the preview path (compose-only, no persistence) and the apply path (compose + persist), so the
-// acceptance gate is enforced identically on both.
-function loadAcceptedComposition(input, options) {
-  const project = loadProject(options);
-  const items = project.opportunities?.items ?? [];
-  const channel = items.find((item) => item.id === input.channelOpportunityId && item.type === "channel");
-  if (!channel) throw new Error(`Channel opportunity not found: ${input.channelOpportunityId}`);
-  if (channel.status !== "accepted") throw new Error("Accept the channel opportunity before composition.");
-  const requestedAgentIds = Array.isArray(input.agentOpportunityIds)
-    ? input.agentOpportunityIds
-    : channel.selectedAgentIds ?? [];
-  const agents = requestedAgentIds.map((id) => items.find((item) => item.id === id && item.type === "agent"));
-  if (agents.some((agent) => !agent)) throw new Error("One or more selected agent opportunities do not exist.");
-  if (agents.some((agent) => agent.status !== "accepted")) throw new Error("Accept every selected agent before composition.");
-  return { project, channel, agents };
 }
 
 // PREVIEW path: compose the channel's real graph and return it WITHOUT any persistence — no program
 // compilation, no saveFlow, no markProgramComposed, no saveProject, no domain events. The founder
 // sees the would-be system ghosted on the canvas and accepts (the apply path persists that exact
 // previewed graph) or discards it. Mirrors the operator's stage-then-gate proposal: nothing lands
-// until the founder accepts.
+// until the founder accepts. Takes an inline channel spec (+ agents) directly from the request body.
 export async function previewOpportunityChannel(input, options = {}) {
-  const { project, channel, agents } = loadAcceptedComposition(input, options);
+  const channel = channelSpecFrom(input);
+  const agents = agentSpecsFrom(input);
   const { nodes, edges } = await composeGraphForChannel({
     channel,
     agents,
-    grounding: project.opportunities?.understanding ?? null,
+    grounding: input.grounding ?? null,
     input: input.input,
     output: input.output,
     compose: options.compose || blankCompose,
   });
   return {
-    channelOpportunityId: channel.id,
+    channelId: channel.id,
     name: input.name || channel.title,
     objective: input.objective || channel.objective,
     graph: { nodes, edges },
@@ -291,9 +299,11 @@ export async function previewOpportunityChannel(input, options = {}) {
 }
 
 export async function composeOpportunityChannel(input, options = {}) {
-  const { project, channel, agents } = loadAcceptedComposition(input, options);
+  const project = loadProject(options);
+  const channel = channelSpecFrom(input);
+  const agents = agentSpecsFrom(input);
 
-  const compiled = compileOpportunityProgram({ project, channel, agents }, options);
+  const compiled = compileChannelProgram({ project, channel, agents }, options);
   // Apply a previously-previewed graph by reusing its exact nodes/edges — never re-run the model
   // behind the founder's back on apply (the gate-continuation invariant). The host still re-asserts
   // the founder-gate wall on the provided topology, since the wall is host-owned on every path.
@@ -314,7 +324,7 @@ export async function composeOpportunityChannel(input, options = {}) {
       channel,
       agents,
       enginePool: enginePoolFor(project, options),
-      grounding: project.opportunities?.understanding ?? null,
+      grounding: input.grounding ?? null,
       input: input.input,
       output: input.output,
       compose: options.compose || blankCompose,
@@ -328,7 +338,7 @@ export async function composeOpportunityChannel(input, options = {}) {
     goal: input.objective || channel.objective,
     channel,
     agents,
-    grounding: project.opportunities?.understanding ?? null,
+    grounding: input.grounding ?? null,
     evaluate: options.evaluate,
   });
 
@@ -373,14 +383,9 @@ export async function composeOpportunityChannel(input, options = {}) {
     kind: channelKind,
   }, options);
 
-  const updatedItems = (projectAfterChannel.opportunities?.items ?? []).map((item) => {
-    if (item.id === channel.id) return { ...item, status: "accepted", composedChannelId: channelId, updatedAt: new Date().toISOString() };
-    return item;
-  });
   const savedProject = saveProject({
     ...projectAfterChannel,
     activeChannelId: channelId,
-    opportunities: { ...(projectAfterChannel.opportunities ?? {}), items: updatedItems },
   }, options);
   const projectedChannel = getChannel(savedProject, channelId, options);
   return {

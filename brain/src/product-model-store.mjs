@@ -8,9 +8,9 @@
 //
 // Persistence mirrors program-store.mjs exactly: a pure builder stamps the lineage triplet, a
 // normalizer owns ids/timestamps/provenance and demotes evidence-free "derived" elements to
-// "speculative" (the same one-directional valve normalizeProposal applies), atomic temp-file
-// writes, and syncProductModelStoreFromEvents diffs the snapshot against the projection so the
-// event log stays authoritative (DDD.md:125-127).
+// "speculative" (a one-directional valve so an interpretive guess can never launder itself back
+// as cited fact), atomic temp-file writes, and syncProductModelStoreFromEvents diffs the snapshot
+// against the projection so the event log stays authoritative (DDD.md:125-127).
 
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -82,8 +82,8 @@ function evidenceArray(value) {
     .filter((item) => item.file);
 }
 
-// The pollution guard, element by element. Mirrors normalizeProposal (opportunity-engine.mjs:65):
-// the host owns ids/provenance; the model owns content. A "derived" element with zero real
+// The pollution guard, element by element: the host owns ids/provenance; the model owns content.
+// A "derived" element with zero real
 // citations is demoted to "speculative" so an interpretive guess can never launder itself back as
 // cited fact. This is the AGENTS.md citation rule applied at the interpretive boundary.
 function normalizeProvenance(rawProvenance, evidence) {

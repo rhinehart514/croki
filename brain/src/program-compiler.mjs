@@ -54,25 +54,29 @@ export function recordCompiledProgramEvents({ program, agents = [] } = {}, optio
   }
 }
 
-export function compileOpportunityProgram({ project, channel, agents = [], priorRunState = [] } = {}, options = {}) {
+// Compile a plain channel spec — `{ id, title, objective, kind? }` the founder or Claude defined
+// directly — into a live outcome program plus its personalized agents. There is no stored
+// "opportunity" object with a status/review/evidence lifecycle anymore: the channel and its agents
+// are plain specs, and the program is created straight from them.
+export function compileChannelProgram({ project, channel, agents = [], priorRunState = [] } = {}, options = {}) {
   if (!project) throw new Error("A project is required to compile an outcome program.");
-  if (!channel) throw new Error("A channel opportunity is required to compile an outcome program.");
+  if (!channel) throw new Error("A channel spec is required to compile an outcome program.");
   const program = ensureOutcomeProgramForChannel(project, channel, { ...options, projectId: project.id });
-  const compiledAgents = agents.map((agentOpportunity) => {
-    const policy = ensureAgentCreationPolicy({ project, program, agentOpportunity }, { ...options, projectId: project.id });
+  const compiledAgents = agents.map((agentSpec) => {
+    const policy = ensureAgentCreationPolicy({ project, program, agentOpportunity: agentSpec }, { ...options, projectId: project.id });
     const { instance, profile } = createPersonalizedAgent({
       project,
       program,
       policy,
-      agentOpportunity,
+      agentOpportunity: agentSpec,
       priorRunState,
     }, { ...options, projectId: project.id });
     return {
-      opportunity: agentOpportunity,
+      spec: agentSpec,
       policy,
       instance,
       profile,
-      markdown: agentInstanceMarkdown({ instance, policy, profile, agentOpportunity }),
+      markdown: agentInstanceMarkdown({ instance, policy, profile, agentOpportunity: agentSpec }),
     };
   });
   // Make the live path event-complete: the program and every born agent become authoritative
@@ -104,7 +108,7 @@ export function ensureGraphAgents({ project, program, graph, priorRunState = [] 
     const ref = String(node.ref || "").trim();
     if (!ref) continue;
     const job = String(node.label || node.config?.objective || ref).trim();
-    const agentOpportunity = {
+    const agentSpec = {
       id: `graph-agent:${program.id}:${ref}`,
       ref,
       title: node.label || ref,
@@ -116,13 +120,13 @@ export function ensureGraphAgents({ project, program, graph, priorRunState = [] 
       // Carry the node's declared I/O so the minted agent's contract matches the wiring on the canvas.
       ...(node.contract ? { contract: node.contract } : {}),
     };
-    const policy = ensureAgentCreationPolicy({ project, program, agentOpportunity }, { ...options, projectId: project.id });
+    const policy = ensureAgentCreationPolicy({ project, program, agentOpportunity: agentSpec }, { ...options, projectId: project.id });
     const { instance, profile } = createPersonalizedAgent({
-      project, program, policy, agentOpportunity, priorRunState,
+      project, program, policy, agentOpportunity: agentSpec, priorRunState,
     }, { ...options, projectId: project.id });
     minted.push({
-      opportunity: agentOpportunity, policy, instance, profile,
-      markdown: agentInstanceMarkdown({ instance, policy, profile, agentOpportunity }),
+      spec: agentSpec, policy, instance, profile,
+      markdown: agentInstanceMarkdown({ instance, policy, profile, agentOpportunity: agentSpec }),
     });
   }
   if (!minted.length) return { graph, agents: [] };

@@ -1,6 +1,6 @@
 // The composition harness — the model designs the graph, the host owns the wall.
 //
-// composeOpportunityChannel used to stamp one fixed skeleton every time:
+// Channel composition used to stamp one fixed skeleton every time:
 //   context + source -> agent1 -> agent2 -> ... -> founder-gate -> output -> measure
 // That linear outbound shape was the last cage. A channel's real topology depends on the
 // goal — it can branch, run steps in parallel, gate more than once, close a loop, or be a
@@ -8,7 +8,7 @@
 // must not let the model violate: a valid graph, and a founder gate before anything that
 // reaches the world.
 //
-// Injectable, mirroring ideation.mjs: a fake composer in tests, createClaudeComposer() live
+// Injectable: a fake composer in tests, createClaudeComposer() live
 // on the subscription, an honest blank default that composes nothing rather than falling back
 // to a template.
 

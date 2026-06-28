@@ -1,8 +1,8 @@
 import type {
   ApplyReadiness, BuildResult, ConnectorMeta, Decisions, EngineState, GTMGraph, GTMProject, GTMRunResult,
   GTMRevision, GTMWorkspace, OperatorSession, OperatorSessionSummary, PortfolioBrief,
-  ScanReport, ChannelMeta, ChannelRunDiff, GTMNode, GTMEdge,
-  WorkspaceSummary, ProjectSummary, OpportunityStudio, GTMOpportunity, DataAdapter,
+  ScanReport, ChannelMeta, ChannelRunDiff,
+  WorkspaceSummary, ProjectSummary,
   ContextManifest, GtmLibrary,
   GraphOperation, GTMContractAudit,
   OutcomeProgram, AgentCreationPolicy, AgentInstance, PersonalizationProfile, FeedbackSignal,
@@ -211,50 +211,6 @@ export async function runGraphStream(
   }
 }
 
-// ── Streaming ideation — workflows composed and streamed onto the canvas live ──
-export type IdeateStreamEvent =
-  | { type: "status"; message: string }
-  | { type: "proposals"; channels: GTMOpportunity[]; agents: GTMOpportunity[] }
-  | { type: "composing"; channelId: string; title: string }
-  | { type: "thinking"; channelId: string | null; text: string }
-  | { type: "workflow"; channelId: string; title: string; nodes: GTMNode[]; edges: GTMEdge[] }
-  | { type: "workflow_error"; channelId: string; error: string }
-  | { type: "done" }
-  | { type: "error"; error: string };
-
-// Ideate over SSE: proposals arrive first, then each channel's real composed graph streams in as
-// it finishes. onEvent fires per frame; resolves when the stream ends.
-export async function ideateStream(
-  projectId: string,
-  onEvent: (event: IdeateStreamEvent) => void,
-): Promise<void> {
-  const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/ideate/stream`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: "{}",
-  });
-  if (!res.ok || !res.body) {
-    const payload = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(payload.error || `Ideation stream failed (${res.status}).`);
-  }
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const frames = buf.split("\n\n");
-    buf = frames.pop() ?? "";
-    for (const frame of frames) {
-      const line = frame.split("\n").find((l) => l.startsWith("data: "));
-      if (line) {
-        try { onEvent(JSON.parse(line.slice(6)) as IdeateStreamEvent); } catch { /* skip malformed frame */ }
-      }
-    }
-  }
-}
-
 // ── Durable resident operator ────────────────────────────────────────────────
 export const listOperatorSessions = (projectId?: string) =>
   get<{ sessions: OperatorSessionSummary[] }>(
@@ -421,11 +377,6 @@ export const findReferences = (
   );
 };
 
-export const getOpportunities = (projectId: string) =>
-  get<{ opportunities: OpportunityStudio }>(
-    `/api/projects/${encodeURIComponent(projectId)}/opportunities`,
-  );
-
 export const getPrograms = (projectId: string) =>
   get<{
     programs: OutcomeProgram[];
@@ -501,57 +452,6 @@ export async function runProgramStream(
     }
   }
 }
-
-export const generateOpportunities = (projectId: string) =>
-  post<{ opportunities: OpportunityStudio }>(
-    `/api/projects/${encodeURIComponent(projectId)}/opportunities/generate`,
-    {},
-  );
-
-export const updateOpportunity = (
-  projectId: string,
-  opportunityId: string,
-  patch: Partial<GTMOpportunity>,
-) => post<{ opportunity: GTMOpportunity }>(
-  `/api/projects/${encodeURIComponent(projectId)}/opportunities/${encodeURIComponent(opportunityId)}`,
-  { patch },
-);
-
-// Preview a composition WITHOUT persisting: returns the would-be graph (nodes/edges) so the founder
-// can review it ghosted on the canvas before anything lands. Mirrors the operator's stage-then-gate
-// proposal. The apply path below (composeOpportunityChannel) persists the exact previewed graph.
-export const previewOpportunityChannel = (
-  projectId: string,
-  input: {
-    channelOpportunityId: string;
-    agentOpportunityIds: string[];
-    name?: string;
-    objective?: string;
-    input?: DataAdapter;
-    output?: DataAdapter;
-  },
-) => post<{ channelOpportunityId: string; name: string; objective: string; graph: { nodes: GTMNode[]; edges: GTMEdge[] } }>(
-  `/api/projects/${encodeURIComponent(projectId)}/compose/preview`,
-  input,
-);
-
-export const composeOpportunityChannel = (
-  projectId: string,
-  input: {
-    channelOpportunityId: string;
-    agentOpportunityIds: string[];
-    name?: string;
-    objective?: string;
-    input?: DataAdapter;
-    output?: DataAdapter;
-    // When present, the apply path persists this exact previewed graph instead of re-composing —
-    // the model is never re-run behind the founder's back on accept.
-    graph?: { nodes: GTMNode[]; edges: GTMEdge[] };
-  },
-) => post<{ channel: ChannelMeta; program: OutcomeProgram; agents: Array<{ instance: AgentInstance; policy: AgentCreationPolicy; profile: PersonalizationProfile }>; graph: GTMGraph }>(
-  `/api/projects/${encodeURIComponent(projectId)}/compose`,
-  input,
-);
 
 export const setActiveWorkflow = (workflowId: string) =>
   post<{ activeWorkflowId: string; activeChannelId?: string }>("/api/project/active-workflow", { workflowId });

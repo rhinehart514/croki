@@ -24,7 +24,7 @@ describe("project merge + delete", () => {
 
   afterEach(() => fs.rmSync(parent, { recursive: true, force: true }));
 
-  function seed(projectId, { programName, signalId, opportunityId } = {}) {
+  function seed(projectId, { programName, signalId, channelId } = {}) {
     if (programName) {
       const store = loadProgramStore(projectId, options);
       saveProgramStore({
@@ -37,15 +37,15 @@ describe("project merge + delete", () => {
       const ledger = loadFeedbackLedger(projectId, options);
       saveFeedbackLedger({ ...ledger, projectId, signals: [...ledger.signals, { id: signalId, projectId, kind: "gate_approved" }] }, options);
     }
-    if (opportunityId) {
+    if (channelId) {
       const project = loadProject({ ...options, projectId });
-      saveProject({ ...project, opportunities: { ...project.opportunities, items: [{ id: opportunityId, title: opportunityId }] } }, options);
+      saveProject({ ...project, channels: [...(project.channels ?? []), { id: channelId, title: channelId }] }, options);
     }
   }
 
   it("folds a source project's records into the target and removes the source", () => {
-    seed("beta", { programName: "Beta program", signalId: "sig-beta", opportunityId: "opp-beta" });
-    seed("alpha", { opportunityId: "opp-alpha" });
+    seed("beta", { programName: "Beta program", signalId: "sig-beta", channelId: "chan-beta" });
+    seed("alpha", { channelId: "chan-alpha" });
     createOperatorSession({ goal: "beta goal", projectId: "beta" }, options);
 
     mergeProjects(["beta"], "alpha", options);
@@ -63,9 +63,9 @@ describe("project merge + delete", () => {
     assert.deepEqual(listOperatorSessions({ ...options, projectId: "alpha" }).map((s) => s.goal), ["beta goal"]);
     assert.equal(listOperatorSessions({ ...options, projectId: "beta" }).length, 0);
 
-    // Opportunities unioned on the target.
-    const opps = loadProject({ ...options, projectId: "alpha" }).opportunities.items.map((o) => o.id).sort();
-    assert.deepEqual(opps, ["opp-alpha", "opp-beta"]);
+    // Legacy channels unioned on the target.
+    const channels = loadProject({ ...options, projectId: "alpha" }).channels.map((c) => c.id).sort();
+    assert.deepEqual(channels, ["chan-alpha", "chan-beta"]);
 
     // Source gone from the catalog; target is active.
     const catalog = loadProjectCatalog(options);

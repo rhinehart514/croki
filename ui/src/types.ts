@@ -335,7 +335,6 @@ export type GTMProject = {
   activeChannelId: string | null;
   sharedContext: SharedContext;
   channels: ChannelMeta[];
-  opportunities?: OpportunityStudio;
 };
 
 // The semantic heart of a program, typed. These were Record<string, unknown> bags the UI had to
@@ -534,25 +533,6 @@ export type ProjectSummary = {
   updatedAt: string;
 };
 
-export type ProductUnderstanding = {
-  generatedAt: string;
-  productName: string;
-  repository: string;
-  winEvent: ScanReport["winEvent"];
-  headline: string;
-  stack: string[];
-  filesScanned: number;
-  evidenceState: EvidenceState;
-  evidence: Citation[];
-  blindSpots: Array<{
-    id: string;
-    title: string;
-    summary: string;
-    status: EvidenceState;
-    evidence: Citation[];
-  }>;
-};
-
 // ─── Living Product Picture — the founder-editable interpretation aggregate ────
 //
 // Interpretation, not truth: the product's core objects (things), how they relate, what users are
@@ -693,56 +673,6 @@ export type ProductModelEdit = {
   interactions?: ProductInteraction[];
   transitions?: ProductTransition[];
   generatedBy?: "claude" | "blank" | "founder";
-};
-
-export type OpportunityStatus = "proposed" | "accepted" | "rejected" | "deferred";
-export type OpportunityOrigin = "derived" | "speculative";
-export type DataAdapter = {
-  type: "manual" | "csv" | "api";
-  label?: string;
-  items?: Array<Record<string, unknown>>;
-  csv?: string;
-  endpoint?: string;
-  method?: "GET" | "POST";
-  arrayField?: string;
-};
-
-export type GTMOpportunity = {
-  id: string;
-  type: "channel" | "agent";
-  origin: OpportunityOrigin;
-  status: OpportunityStatus;
-  title: string;
-  objective: string;
-  rationale: string;
-  confidence: "high" | "medium" | "low";
-  evidence: Citation[];
-  createdAt: string;
-  updatedAt: string;
-  input?: DataAdapter;
-  output?: DataAdapter;
-  selectedAgentIds?: string[];
-  provider?: "claude" | "codex";
-  model?: string;
-  ref?: string;
-  prompt?: string;
-  composedChannelId?: string;
-};
-
-export type OpportunityIdeationMeta = {
-  ok: boolean;
-  blank: boolean;
-  error: string | null;
-  proposed: number;
-  kept: number;
-};
-
-export type OpportunityStudio = {
-  generatedAt: string | null;
-  sourceContextVersion: number | null;
-  understanding?: ProductUnderstanding | null;
-  ideation?: OpportunityIdeationMeta | null;
-  items: GTMOpportunity[];
 };
 
 export type PortfolioBrief = {

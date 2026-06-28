@@ -230,22 +230,7 @@ async function activateProject({ projectId }) {
   return brainPost(`/api/projects/${encodeURIComponent(projectId)}/activate`, {});
 }
 
-async function listOpportunities({ projectId }) {
-  return brainGet(`/api/projects/${encodeURIComponent(projectId)}/opportunities`);
-}
-
-async function generateOpportunities({ projectId }) {
-  return brainPost(`/api/projects/${encodeURIComponent(projectId)}/opportunities/generate`, {});
-}
-
-async function reviewOpportunity({ projectId, opportunityId, patch }) {
-  return brainPost(
-    `/api/projects/${encodeURIComponent(projectId)}/opportunities/${encodeURIComponent(opportunityId)}`,
-    { patch },
-  );
-}
-
-async function composeOpportunityChannel({ projectId, ...input }) {
+async function composeChannel({ projectId, ...input }) {
   return brainPost(`/api/projects/${encodeURIComponent(projectId)}/compose`, input);
 }
 
@@ -373,13 +358,13 @@ const TOOLS = [
   // ── Project scope ──────────────────────────────────────────────────────────
   {
     name: "list_projects",
-    description: "List the repository-backed product projects and which one is active. Read first to learn the active scope before any workflow, outcome, or opportunity call. Does not create or switch projects.",
+    description: "List the repository-backed product projects and which one is active. Read first to learn the active scope before any workflow, outcome, or channel call. Does not create or switch projects.",
     inputSchema: { type: "object", properties: {}, required: [] },
     handler: listProjects,
   },
   {
     name: "create_project",
-    description: "Create and activate a product project by read-only scanning a local repository and its real win event. Use once per product, before generating opportunities or workflows. Does not run any go-to-market work; only establishes the grounded scope.",
+    description: "Create and activate a product project by read-only scanning a local repository and its real win event. Use once per product, before composing channels or workflows. Does not run any go-to-market work; only establishes the grounded scope.",
     inputSchema: {
       type: "object",
       properties: {
@@ -393,7 +378,7 @@ const TOOLS = [
   },
   {
     name: "activate_project",
-    description: "Switch which product project is active so that following workflow, outcome, opportunity, and shared-context calls resolve to it. Use to change scope; use list_projects first to find the id. Does not create a project.",
+    description: "Switch which product project is active so that following workflow, outcome, channel, and shared-context calls resolve to it. Use to change scope; use list_projects first to find the id. Does not create a project.",
     inputSchema: {
       type: "object",
       properties: { projectId: { type: "string" } },
@@ -427,58 +412,37 @@ const TOOLS = [
     handler: getOutcome,
   },
 
-  // ── Opportunities ──────────────────────────────────────────────────────────
+  // ── Channels ───────────────────────────────────────────────────────────────
   {
-    name: "list_opportunities",
-    description: "List the durable channel and agent opportunities for a project, including each one's evidence origin and founder review status. Use to see what has been proposed before composing a workflow. Read-only; use review_opportunity to change status.",
-    inputSchema: {
-      type: "object",
-      properties: { projectId: { type: "string" } },
-      required: ["projectId"],
-    },
-    handler: listOpportunities,
-  },
-  {
-    name: "generate_opportunities",
-    description: "Generate fresh code-derived and explicitly speculative channel and agent opportunities for a project. Use when the opportunity list is empty or stale. Produces proposals only; it does not accept them or build a workflow.",
-    inputSchema: {
-      type: "object",
-      properties: { projectId: { type: "string" } },
-      required: ["projectId"],
-    },
-    handler: generateOpportunities,
-  },
-  {
-    name: "review_opportunity",
-    description: "Edit one channel or agent opportunity or mark it accepted, rejected, deferred, or proposed. Use to record the founder's judgment before composing. Changes status and fields only; it does not compose a workflow.",
+    name: "compose_channel",
+    description: "Compose an inline channel spec and the agents it needs into a validated, gated workflow with input, founder gate, output, measure, and feedback steps. The channel is defined directly here (by the founder or by Claude) — there is no opportunity accept-list to look it up in. Builds the workflow graph; it does not run it (use run_workflow) and never sends anything.",
     inputSchema: {
       type: "object",
       properties: {
         projectId: { type: "string" },
-        opportunityId: { type: "string" },
-        patch: { type: "object" },
-      },
-      required: ["projectId", "opportunityId", "patch"],
-    },
-    handler: reviewOpportunity,
-  },
-  {
-    name: "compose_opportunity_channel",
-    description: "Compose one accepted channel opportunity and accepted agent opportunities into a validated, gated workflow with input, founder gate, output, measure, and feedback steps. Use after the opportunities are accepted via review_opportunity. Builds the workflow graph; it does not run it (use run_workflow) and never sends anything.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        projectId: { type: "string" },
-        channelOpportunityId: { type: "string", description: "The accepted channel opportunity id." },
-        agentOpportunityIds: { type: "array", items: { type: "string" } },
-        name: { type: "string" },
-        objective: { type: "string" },
+        title: { type: "string", description: "The channel's title." },
+        objective: { type: "string", description: "What this channel is trying to achieve." },
+        kind: { type: "string", description: "Optional channel label stored as metadata." },
+        agents: {
+          type: "array",
+          description: "The agent teammates this channel needs, as inline specs.",
+          items: {
+            type: "object",
+            properties: {
+              ref: { type: "string", description: "Stable agent ref." },
+              role: { type: "string" },
+              objective: { type: "string" },
+              prompt: { type: "string" },
+            },
+          },
+        },
+        name: { type: "string", description: "Optional workflow name override (defaults to the channel title)." },
         input: { type: "object" },
         output: { type: "object" },
       },
-      required: ["projectId", "channelOpportunityId", "agentOpportunityIds"],
+      required: ["projectId", "title", "objective"],
     },
-    handler: composeOpportunityChannel,
+    handler: composeChannel,
   },
 
   // ── Workflows — author (the OutcomeProgram's execution plan) ────────────────
@@ -490,7 +454,7 @@ const TOOLS = [
   },
   {
     name: "create_workflow",
-    description: "Create a blank outcome-program workflow, then shape its graph with founder-reviewed operations. Use to start a workflow from scratch; use compose_opportunity_workflow instead to build one from accepted opportunities. Channel is stored only as workflow metadata, not a separate object.",
+    description: "Create a blank outcome-program workflow, then shape its graph with founder-reviewed operations. Use to start a workflow from scratch; use compose_channel instead to build one from an inline channel spec and its agents. Channel is stored only as workflow metadata, not a separate object.",
     inputSchema: {
       type: "object",
       properties: {
