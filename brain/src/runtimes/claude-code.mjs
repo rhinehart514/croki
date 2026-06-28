@@ -153,7 +153,18 @@ export function authModeLabel(mode) {
   }
 }
 
-const PAUSE_STATUSES = new Set(["waiting_for_gate", "waiting_for_input", "completed", "blocked"]);
+// Every status that must HALT the subprocess drive. The adapter polls ctx.currentStatus()
+// after each SDK message because MCP tools execute out-of-band, so a wall the founder must
+// resolve has to appear here or the model keeps talking past it and the turn-end is misread
+// as "completed" (which then clobbers the pending wall). waiting_for_proposal is a wall:
+// a staged graph change waits for the founder's accept/discard exactly like a gate.
+export const PAUSE_STATUSES = new Set([
+  "waiting_for_gate",
+  "waiting_for_proposal",
+  "waiting_for_input",
+  "completed",
+  "blocked",
+]);
 
 // A resume can fail when the prior on-disk transcript is gone — cleared, expired, or the session
 // was created on another machine/cwd. Detect that narrowly so we only fall back to a cold start

@@ -59,7 +59,8 @@
   .sub{color:var(--secondary);font-size:13.5px;margin-top:2px}
   .grid{margin-top:22px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
   .card{background:var(--card);border:.5px solid var(--hair);border-radius:13px;padding:16px;
-    backdrop-filter:blur(20px);box-shadow:0 1px 3px rgba(0,0,0,.05);cursor:pointer;transition:transform .12s,box-shadow .12s}
+    backdrop-filter:blur(20px);box-shadow:0 1px 3px rgba(0,0,0,.05);cursor:pointer;transition:transform .12s,box-shadow .12s;
+    display:block;width:100%;text-align:left;font:inherit;color:inherit;appearance:none}
   .card:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(0,0,0,.12)}
   .card .top{display:flex;align-items:center;justify-content:space-between}
   .card .nm{font-weight:600;font-size:15px}
@@ -158,11 +159,11 @@ const col=v=>v<.34?'var(--red)':v<.67?'var(--orange)':'var(--green)';
 function ring(label,v){const c=2*Math.PI*15, off=c*(1-v);
   return `<div class="ring"><svg width="36" height="36"><circle cx="18" cy="18" r="15" fill="none" stroke="rgba(120,120,128,.22)" stroke-width="4"/><circle cx="18" cy="18" r="15" fill="none" stroke="${col(v)}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}" transform="rotate(-90 18 18)"/></svg><small>${label}</small></div>`}
 document.getElementById('grid').innerHTML=projects.map((p,i)=>`
-  <div class="card" onclick="open_(${i})">
+  <button type="button" class="card" onclick="open_(${i})">
     <div class="top"><span class="nm">${p.n}</span><span class="chev">›</span></div>
     <div class="rings">${ring('product',p.ph)}${ring('gtm',p.gh)}</div>
     <div class="q">${p.q}</div><div class="path">${p.p}</div>
-  </div>`).join('');
+  </button>`).join('');
 function open_(i){const p=projects[i];
   document.getElementById('home').style.display='none';
   document.getElementById('proj').style.display='grid';

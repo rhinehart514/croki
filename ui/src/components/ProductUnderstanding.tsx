@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, FileCode2, FileText, LoaderCircle, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowRight, FileCode2, FileText, LoaderCircle, Lightbulb } from "lucide-react";
 import type { GTMProject, OpportunityStudio } from "@/types";
 
 export function ProductUnderstanding({
@@ -23,7 +23,7 @@ export function ProductUnderstanding({
           <p>{understanding?.headline || String(repository.headline || "Read this product as grounded reality, then ideate its channels — no shape assumed.")}</p>
         </div>
         <button className="studio-primary-action" disabled={busy || !repository.workspaceId} onClick={() => void onGenerate()} type="button">
-          {busy ? <LoaderCircle className="spin" /> : <Sparkles />}
+          {busy ? <LoaderCircle className="spin" /> : <Lightbulb />}
           {studio?.generatedAt ? "Re-ideate channels" : "Ideate channels"}
         </button>
       </header>

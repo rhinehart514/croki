@@ -4,7 +4,7 @@ import {
   type Edge, type Node, type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { ArrowRight, Box, Circle, FileText, RefreshCw, Sparkles, User, Zap } from "lucide-react";
+import { ArrowRight, Box, Circle, FileText, RefreshCw, Lightbulb, User, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
   ProductModel, ProductModelEdit, ProductStateElement, ProductThing,
@@ -248,14 +248,14 @@ export function ProductFlowCanvas({
   if (!model || things.length === 0) {
     return (
       <div className="product-canvas-empty">
-        <Sparkles className="product-empty-icon" />
+        <Lightbulb className="product-empty-icon" />
         <h2>No picture yet</h2>
         <p>
           Draw the first picture of <strong>{productName}</strong> — its core objects, how they
           relate, and what people come to do. It reads your code and hands you a draft to correct.
         </p>
         <button className="product-derive-btn" onClick={onDerive} disabled={busy} type="button">
-          {busy ? <><RefreshCw className="spin" /> Reading the product…</> : <><Sparkles /> Draw the picture</>}
+          {busy ? <><RefreshCw className="spin" /> Reading the product…</> : <><Lightbulb /> Draw the picture</>}
         </button>
       </div>
     );

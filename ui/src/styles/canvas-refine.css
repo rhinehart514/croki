@@ -55,6 +55,52 @@
   height: 15px !important;
 }
 
+/* External MCP capability chip: the brand logo reads at full ink weight (clear at a glance), on a
+   calm surface tile. The glyph itself blooms to the service's real brand color when the card is
+   focused (BrandGlyph `brand={selected}`) — recognition where attention already is. */
+.react-flow .loop-node-icon-brand {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.react-flow .loop-node-icon-brand svg {
+  width: 17px !important;
+  height: 17px !important;
+}
+
+/* The read/write lane — the wall, made legible on the card. A read tool runs free (proven green
+   dot); a write tool is staged behind the founder gate (gap amber, with a lock). This is the one
+   functional accent an MCP card carries, mirroring the connect-capability "wall" surface. */
+.react-flow .loop-node-lane {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  margin-top: var(--space-2);
+  padding: 2px 7px 2px 6px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  border: 1px solid;
+}
+.react-flow .loop-node-lane.free {
+  color: var(--proven);
+  border-color: color-mix(in oklch, var(--proven) 28%, transparent);
+  background: var(--proven-soft);
+}
+.react-flow .loop-node-lane.gated {
+  color: var(--gap);
+  border-color: color-mix(in oklch, var(--gap) 30%, transparent);
+  background: var(--gap-soft);
+}
+.react-flow .loop-node-lane svg { width: 10px; height: 10px; }
+.react-flow .loop-node-lane-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
 /* Kind eyebrow: small, muted, generous tracking — recessive scaffolding. */
 .react-flow .loop-node-type-label {
   font-size: 9.5px;

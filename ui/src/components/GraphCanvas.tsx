@@ -2,16 +2,20 @@ import "@/styles/canvas-refine.css";
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background, Controls, Handle, Panel, Position, ReactFlow,
-  useReactFlow,
+  useReactFlow, useStore, ViewportPortal,
   type Connection, type Edge, type Node, type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { motion } from "motion/react";
 import {
-  AlertCircle, Ban, Bot, Check, CheckCircle2, Circle, Code, Database, FileText, GitMerge,
-  Loader, MessageSquare, Play, Search, ShieldCheck, Sparkles, Target, Trash2, TrendingUp, Wand2, X, Zap,
+  AlertCircle, Ban, Bot, Check, CheckCircle2, Circle, Code, CornerDownLeft, Database, FileText, GitMerge,
+  Loader, Lock, MessageSquare, MousePointer2, Pencil, Play, Search, ShieldCheck, Lightbulb, Target, Trash2, TrendingUp, Wand2, X, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { healthHex } from "@/lib/health";
+import { agentPersona, FAMILY_TINT } from "@/lib/agentPersona";
+import { brandGlyph } from "@/lib/brandGlyph";
+import { BrandGlyph } from "@/components/BrandGlyph";
 import type { NodeEditorBridge } from "@/components/ProgramCanvas";
 import type {
   ConnectorMeta, GateDecision, GTMEdge, GTMEdgeType, GTMGraph,
@@ -32,7 +36,7 @@ const CATEGORY_ICON: Record<GTMNodeCategory, React.ReactNode> = {
   source:   <Search />,
   context:  <Target />,
   enrich:   <GitMerge />,
-  filter:   <Sparkles />,
+  filter:   <Lightbulb />,
   generate: <MessageSquare />,
   gate:     <ShieldCheck />,
   execute:  <Zap />,
@@ -106,11 +110,36 @@ type GTMNodeData = {
   // surfaced loudly right on the ghost so the founder acts where the change is.
   proposed?: boolean;
   proposalActive?: boolean;
-  onResolveProposal?: (accept: boolean) => void;
+  onResolveProposal?: (accept: boolean, note?: string) => void;
+  // Only the FIRST staged ghost carries the accept/reject affordance — the proposal resolves
+  // all-or-nothing, so one control set (not one per ghost) is the honest surface.
+  proposalLead?: boolean;
   // Gate review (slice 5): for a founder gate node, resolve its staged drafts inline on the canvas.
   onSubmitReview?: (decisions: Record<string, GateDecision>) => void;
   onApproveGate?: () => void;
+  // Ideation build animation: this node's left-to-right rank in its lane. When set, the card springs
+  // in with a delay proportional to the rank, so a freshly composed workflow builds out node by node
+  // instead of popping in whole. Unset on the main canvas (no entrance animation there).
+  appearOrder?: number;
 };
+
+// A lane that hasn't composed yet: the model is reasoning, or the compose failed. Carried on the
+// node's config (config.laneStatus) and rendered by LaneStatusNodeComponent — the honest replacement
+// for the old fabricated placeholder pipeline.
+type LaneStatus = { status: "composing" | "error"; title: string; thinking?: string; error?: string };
+
+// The build-in entrance for a freshly composed node. Returns motion props only when appearOrder is
+// set (ideation), so the main canvas keeps its instant render. Spring + rank-staggered delay gives
+// the left-to-right "watch it build" cascade. motion runs initial→animate once on mount, so a later
+// re-render (selection, health update) never replays it.
+function entranceProps(appearOrder?: number) {
+  if (appearOrder == null) return {};
+  return {
+    initial: { opacity: 0, y: 12, scale: 0.92 },
+    animate: { opacity: 1, y: 0, scale: 1 },
+    transition: { delay: appearOrder * 0.09, type: "spring" as const, stiffness: 440, damping: 32, mass: 0.7 },
+  };
+}
 
 
 function HealthPill({ health, issue }: { health: number; issue?: string }) {
@@ -164,28 +193,85 @@ function itemSummary(result: GTMNodeResult): string | null {
 // the ghost, where the founder is looking, instead of only at a distant bar. `nodrag`/`nopan` keep a
 // click from grabbing or panning the canvas; stopPropagation keeps it off the node's select handler.
 function ProposalControls({ data }: { data: GTMNodeData }) {
-  if (!data.proposed || !data.proposalActive || !data.onResolveProposal) return null;
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const noteRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { if (noteOpen) noteRef.current?.focus(); }, [noteOpen]);
+  // Only the lead ghost shows the controls (the proposal is all-or-nothing). Every other ghost stays
+  // a clean staged card, so the canvas isn't littered with redundant accept pills.
+  if (!data.proposed || !data.proposalActive || !data.onResolveProposal || data.proposalLead === false) return null;
   const resolve = data.onResolveProposal;
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   return (
-    <div className="loop-proposal-inline nodrag nopan" role="group" aria-label="Accept or reject the proposed changes">
-      <button
-        type="button"
-        className="loop-proposal-inline-btn accept"
-        title="Accept the proposed changes"
-        aria-label="Accept the proposed changes"
-        onClick={(e) => { e.stopPropagation(); resolve(true); }}
-      >
-        <Check />
-      </button>
-      <button
-        type="button"
-        className="loop-proposal-inline-btn reject"
-        title="Reject the proposed changes"
-        aria-label="Reject the proposed changes"
-        onClick={(e) => { e.stopPropagation(); resolve(false); }}
-      >
-        <X />
-      </button>
+    <div className="loop-proposal-inline nodrag nopan" role="group" aria-label="Accept or reject the proposed changes" onClick={stop} onKeyDown={stop}>
+      <div className="loop-proposal-inline-row">
+        <button
+          type="button"
+          className="loop-proposal-inline-btn accept"
+          title="Keep these changes"
+          aria-label="Keep the proposed changes"
+          onClick={(e) => { stop(e); resolve(true); }}
+        >
+          <Check />
+        </button>
+        <button
+          type="button"
+          className="loop-proposal-inline-btn reject"
+          title="Discard these changes"
+          aria-label="Discard the proposed changes"
+          onClick={(e) => { stop(e); resolve(false); }}
+        >
+          <X />
+        </button>
+        <button
+          type="button"
+          className={cn("loop-proposal-inline-btn note", noteOpen && "is-open")}
+          title="Keep or redirect with a note"
+          aria-label="Leave a note"
+          aria-expanded={noteOpen}
+          onClick={(e) => { stop(e); setNoteOpen((v) => !v); }}
+        >
+          <Pencil />
+        </button>
+      </div>
+      {/* The note popover — opaque, never glass: a real reading/writing surface. A note can either
+          ride an accept (a quiet annotation the learning loop reads later) or a reject (a redirect —
+          Claude comes back and changes it). Enter = redirect, the most common case. */}
+      {noteOpen ? (
+        <div className="loop-proposal-note">
+          <textarea
+            ref={noteRef}
+            className="loop-proposal-note-input"
+            rows={2}
+            value={note}
+            placeholder="Tell Claude what to change, or note why you're keeping it…"
+            aria-label="Note for Claude"
+            onChange={(e) => setNote(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (note.trim()) resolve(false, note.trim()); }
+              if (e.key === "Escape") { e.preventDefault(); setNoteOpen(false); }
+            }}
+          />
+          <div className="loop-proposal-note-actions">
+            <button
+              type="button"
+              className="loop-proposal-note-btn keep"
+              disabled={!note.trim()}
+              onClick={(e) => { stop(e); resolve(true, note.trim()); }}
+            >
+              <Check size={12} /> Keep + note
+            </button>
+            <button
+              type="button"
+              className="loop-proposal-note-btn redirect"
+              disabled={!note.trim()}
+              onClick={(e) => { stop(e); resolve(false, note.trim()); }}
+            >
+              <CornerDownLeft size={12} /> Redirect
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -270,7 +356,7 @@ function NodeCardEditor({ node, result, health, contractAudit }: {
     contractState === "ready" ? "Ready" : null;
 
   return (
-    <div className="loop-node-editor nodrag nopan" onClick={stop} onKeyDown={stop} role="group">
+    <section className="loop-node-editor nodrag nopan" onClick={stop} onKeyDown={stop} aria-label="Step editor">
       <CardSection label="What it does">
         <p className="loop-node-editor-desc">{cardDescription(node)}</p>
       </CardSection>
@@ -363,7 +449,7 @@ function NodeCardEditor({ node, result, health, contractAudit }: {
           <Trash2 size={12} /> Delete
         </button>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -376,25 +462,27 @@ function ResourceNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
 
   return (
     <>
-    {/* div+role=button, not <button>: a selected card mounts the editor's inputs/buttons, and
-        nesting interactive controls in a <button> is invalid. */}
-    <div
-      className={cn("loop-node loop-node-resource", selected && "loop-node-selected")}
-      role="button"
-      tabIndex={0}
-      onClick={onSelect}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
-    >
-      <div className="loop-node-resource-inner">
-        <span className={cn("loop-node-dot", configured ? "dot-ready" : "dot-missing")} />
-        <span className="loop-node-resource-name">{node.label}</span>
-        {!configured && conn?.envKey && (
-          <span className="loop-node-resource-key">{conn.envKey}</span>
+    {/* The card's clickable summary is a real <button>; the inline editor it reveals when selected is
+        a SIBLING, not a child, so its inputs/buttons are never nested inside a button (invalid HTML). */}
+    <div className={cn("loop-node loop-node-resource", selected && "loop-node-selected")}>
+      <button
+        type="button"
+        className="loop-node-hit"
+        onClick={onSelect}
+        aria-pressed={selected}
+        aria-label={`Select ${node.label}`}
+      >
+        <div className="loop-node-resource-inner">
+          <span className={cn("loop-node-dot", configured ? "dot-ready" : "dot-missing")} />
+          <span className="loop-node-resource-name">{node.label}</span>
+          {!configured && conn?.envKey && (
+            <span className="loop-node-resource-key">{conn.envKey}</span>
+          )}
+        </div>
+        {result && !result.ok && (
+          <span className="loop-node-err-text">{result.error?.slice(0, 40)}</span>
         )}
-      </div>
-      {result && !result.ok && (
-        <span className="loop-node-err-text">{result.error?.slice(0, 40)}</span>
-      )}
+      </button>
       <Handle type="source" position={Position.Right} />
       {selected && (
         <NodeCardEditor node={node} result={result} health={data.health} contractAudit={data.contractAudit} />
@@ -422,7 +510,8 @@ function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
     <>
     {/* div+role=button, not <button>: a selected card mounts the editor's inputs/buttons, and
         nesting interactive controls in a <button> is invalid. */}
-    <div
+    <motion.div
+      {...entranceProps(data.appearOrder)}
       className={cn("loop-node loop-node-context", selected && "loop-node-selected")}
       role="button"
       tabIndex={0}
@@ -449,7 +538,7 @@ function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       {selected && (
         <NodeCardEditor node={node} result={result} health={data.health} contractAudit={data.contractAudit} />
       )}
-    </div>
+    </motion.div>
       <ProposalControls data={data} />
     </>
   );
@@ -465,13 +554,25 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
   const visual  = nodeVisual(node);
   const color   = visual.color;
   const isOpenKind = !!node.kind && node.kind !== "tool";
+  // An agent node reads as a person: the role name is the headline and a family-tinted monogram is the
+  // icon, with the raw ref demoted to the faint slug below. Other kinds keep their connector icon.
+  const persona = node.kind === "agent" && node.ref ? agentPersona(node.ref, node.label) : null;
+  const tint = persona ? FAMILY_TINT[persona.family] : null;
+  // External MCP capability: this step calls a real service (Notion, Gmail, Slack…). Show that
+  // service's real logo, and whether it runs free (read) or sits behind your gate (write) — the wall,
+  // legible on the card itself.
+  const isMcp = node.kind === "mcp";
+  const mcpServer = isMcp ? String(node.config?.server ?? node.ref?.split("/")[0] ?? "") : "";
+  const mcpGlyph = isMcp ? brandGlyph(mcpServer) : null;
+  const mcpWrites = isMcp && node.config?.toolClass === "write";
 
   return (
     <>
     {/* The card IS the editor: a card that expands to mount inputs/buttons can't be a <button>
         (nested interactive controls are invalid), so it's a div with button semantics. Selecting it
         grows the card and reveals the guided editor below the collapsed header. */}
-    <div
+    <motion.div
+      {...entranceProps(data.appearOrder)}
       className={cn(
         "loop-node",
         // The founder gate is the product's spine — the one place anything reaches the world. It
@@ -491,18 +592,36 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
     >
       <Handle type="target" position={Position.Left} />
       <div className="loop-node-header">
-        <div className="loop-node-icon" style={{ background: `${color}14`, color }}>
-          {visual.icon}
+        <div
+          className={cn("loop-node-icon", isMcp && "loop-node-icon-brand")}
+          style={persona && tint
+            ? { background: tint.bg, color: tint.fg, borderRadius: 999, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600 }
+            : isMcp ? undefined
+            : { background: `${color}14`, color }}
+        >
+          {isMcp ? <BrandGlyph serverId={mcpServer} brand={selected} size={17} />
+            : persona ? persona.monogram : visual.icon}
         </div>
         <div className="loop-node-header-right">
-          <span className="loop-node-type-label">{visual.label}</span>
+          <span className="loop-node-type-label">{isMcp ? (mcpGlyph?.title ?? mcpServer.replace(/^./, (c) => c.toUpperCase())) : visual.label}</span>
           {typeof data.health === "number" && data.health > 0 && (
             <HealthPill health={data.health} issue={data.healthIssue} />
           )}
           <span className="loop-node-status"><StatusIcon status={status} /></span>
         </div>
       </div>
-      <span className="loop-node-label">{node.label}</span>
+      <span className="loop-node-label">{persona ? persona.role : node.label}</span>
+      {isMcp && (
+        <span
+          className={cn("loop-node-lane", mcpWrites ? "gated" : "free")}
+          title={mcpWrites
+            ? "Write capability — staged behind your founder gate, never sent on its own"
+            : "Read capability — runs free, nothing leaves the building"}
+        >
+          {mcpWrites ? <Lock /> : <span className="loop-node-lane-dot" aria-hidden />}
+          {mcpWrites ? "Behind your gate" : "Runs free"}
+        </span>
+      )}
       {/* The slug is a technical identifier, not the headline. It rides as a faint, single-line
           caption that never competes with the title; hover (the title attr) reveals the full ref. */}
       {isOpenKind
@@ -538,7 +657,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
           contractAudit={data.contractAudit}
         />
       )}
-    </div>
+    </motion.div>
       <ProposalControls data={data} />
     </>
   );
@@ -574,11 +693,81 @@ function LaneBandComponent({ data }: { data: { label: string; gateCount: number;
   );
 }
 
+// ─── Lane status node ─────────────────────────────────────────────────────────
+// The honest "this lane hasn't composed yet" card. While composing it shows a shimmer spine and the
+// model's live reasoning; on failure it shows why. It is NOT a fabricated workflow — it never draws
+// nodes the model didn't compose. Replaced the instant the real graph streams in.
+function LaneStatusNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
+  const lane = (data.node.config?.laneStatus ?? {}) as LaneStatus;
+  const failed = lane.status === "error";
+  return (
+    <motion.div
+      className={cn("lane-status-card", failed && "lane-status-failed")}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: "easeOut" }}
+    >
+      <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
+      <div className="lane-status-head">
+        <span className={cn("lane-status-icon", failed ? "is-error" : "is-composing")}>
+          {failed ? <AlertCircle size={13} /> : <Loader className="spin" size={13} />}
+        </span>
+        <span className="lane-status-title">{lane.title}</span>
+        <span className="lane-status-stage">{failed ? "Compose failed" : "Composing"}</span>
+      </div>
+      {!failed && (
+        // The shimmer spine: a stand-in for a shape we don't know yet (the model decides how many
+        // nodes). Three pulsing rails, never labelled as real steps.
+        <div className="lane-status-spine" aria-hidden>
+          <span /><span /><span />
+        </div>
+      )}
+      {failed
+        ? <p className="lane-status-error">{lane.error || "The model did not return a usable graph."}</p>
+        : <p className="lane-status-reason">{lane.thinking || "Reading your product and designing the topology this goal needs…"}</p>}
+      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
+    </motion.div>
+  );
+}
+
+// A role-band row on the engine canvas — a full-width horizontal slice (ground, capabilities, the
+// gate wall, stage, measure). The gate band reads as the literal line nothing crosses without the
+// founder: amber rules top and bottom, a lock on its label. Painted behind the work nodes.
+function EngineBandComponent({ data }: { data: { label: string; width: number; height: number; wall?: boolean } }) {
+  const wall = data.wall;
+  return (
+    <div
+      style={{
+        width: data.width, height: data.height, pointerEvents: "none", boxSizing: "border-box",
+        borderRadius: 14,
+        background: wall ? "rgba(217,119,6,0.06)" : "rgba(244,244,245,0.40)",
+        border: wall ? "none" : "1px solid var(--line, #ececec)",
+        borderTop: wall ? "2px solid var(--gap, #d97706)" : undefined,
+        borderBottom: wall ? "2px solid var(--gap, #d97706)" : undefined,
+      }}
+    >
+      <div
+        style={{
+          position: "absolute", top: 8, left: 16,
+          fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
+          color: wall ? "var(--gap, #d97706)" : "var(--faint, #a1a1aa)",
+          display: "flex", alignItems: "center", gap: 6,
+        }}
+      >
+        {wall ? <Lock size={11} /> : null}
+        {data.label}
+      </div>
+    </div>
+  );
+}
+
 const NODE_TYPES = {
-  resourceNode: ResourceNodeComponent,
-  contextNode:  ContextNodeComponent,
-  workNode:     WorkNodeComponent,
-  laneBand:     LaneBandComponent,
+  resourceNode:   ResourceNodeComponent,
+  contextNode:    ContextNodeComponent,
+  workNode:       WorkNodeComponent,
+  laneBand:       LaneBandComponent,
+  engineBand:     EngineBandComponent,
+  laneStatusNode: LaneStatusNodeComponent,
 };
 
 function nodeType(category: GTMNodeCategory): string {
@@ -725,18 +914,35 @@ function buildFlowGraph(
   onSubmitReview?: (nodeId: string, decisions: Record<string, GateDecision>) => void,
   onApproveGate?: (nodeId: string) => void,
   bloomNodeId?: string | null,
+  revealedNodeIds?: Set<string>,
 ): { nodes: Node[]; edges: Edge[] } {
+  // A node is "revealed" unless it's a still-pending proposed ghost. Committed nodes are always
+  // revealed (so an edge from a committed node to the first ghost shows immediately); a proposed node
+  // is revealed once the staged-reveal timer reaches it. No reveal set → every proposed node counts as
+  // revealed (the all-at-once composition-preview path).
+  const isRevealed = (id: string) => !revealedNodeIds || !proposedNodeIds?.has(id) || revealedNodeIds.has(id);
+  // The all-or-nothing accept/reject rides ONE ghost — the last staged node (where the cursor finishes
+  // building), so "watch it build, then decide" reads as one motion ending on the control.
+  const leadProposedId = proposedNodeIds?.size
+    ? [...graph.nodes].reverse().find((n) => proposedNodeIds.has(n.id))?.id ?? null
+    : null;
+  // The ideation preview is the one graph that builds in with a staggered entrance: rank ≈ x / column
+  // gap (positions are pre-laid by ideationGraph at 248px columns), so a node's rank drives its delay.
+  const ideation = graph.id === "ideation-preview";
   const nodes: Node[] = graph.nodes.map((n) => {
     const sub = subsystemHealth[n.category];
+    const laneStatus = ideation && !!(n.config as Record<string, unknown>)?.laneStatus;
+    const appearOrder = ideation && !laneStatus ? Math.max(0, Math.round((n.position?.x ?? 0) / 248)) : undefined;
     return {
       id: n.id,
-      type: nodeType(n.category),
+      type: laneStatus ? "laneStatusNode" : nodeType(n.category),
       position: n.position,
       draggable: true,
       selectable: false,
       className: [
         lensClass(n, mode),
         proposedNodeIds?.has(n.id) ? "loop-node-proposed" : "",
+        proposedNodeIds?.has(n.id) ? (isRevealed(n.id) ? "is-revealed" : "is-unrevealed") : "",
         // Run replay: the scrubber's current step glows; every other node dims so the eye follows
         // the run step by step. No highlight set → no replay classes, the canvas reads normally.
         highlightedNodeId ? (highlightedNodeId === n.id ? "loop-node-replay-current" : "loop-node-replay-dim") : "",
@@ -758,17 +964,41 @@ function buildFlowGraph(
         contractAudit: contractAudits[n.id],
         proposed: proposedNodeIds?.has(n.id) ?? false,
         proposalActive: proposalActive ?? false,
+        proposalLead: leadProposedId ? n.id === leadProposedId : true,
         onResolveProposal,
         onSubmitReview: onSubmitReview ? (decisions: Record<string, GateDecision>) => onSubmitReview(n.id, decisions) : undefined,
         onApproveGate: onApproveGate ? () => onApproveGate(n.id) : undefined,
+        appearOrder,
       } as GTMNodeData,
     };
   });
 
-  // Portfolio swimlanes: one band behind each system, sized to its nodes' bounds. Prepended so they
-  // paint behind the work nodes. Skipped entirely for a single-system graph (no graph.systems).
+  // The engine view draws role-BANDS (ground → capabilities → gate → stage → measure) as full-width
+  // horizontal rows spanning every channel. Preferred over per-system lanes when present, because the
+  // whole point is that channels share one engine: shared bands once across the top, the gate as one
+  // wall. Falls back to per-system swimlanes for an operator portfolio graph that has no bands.
   const laneBands: Node[] = [];
-  if (graph.systems?.length) {
+  if (graph.bands?.length) {
+    const withPos = graph.nodes.filter((n) => n.position);
+    const PAD = 60, NODE_W = 240;
+    const xs = withPos.map((n) => n.position!.x);
+    const minX = xs.length ? Math.min(...xs) - PAD : 0;
+    const maxX = xs.length ? Math.max(...xs) + NODE_W + PAD : 1200;
+    const width = maxX - minX;
+    for (const band of graph.bands) {
+      laneBands.push({
+        id: `band-${band.id}`,
+        type: "engineBand",
+        position: { x: minX, y: band.y },
+        draggable: false,
+        selectable: false,
+        focusable: false,
+        zIndex: 0,
+        style: { zIndex: 0 },
+        data: { label: band.label, width, height: band.height, wall: band.wall },
+      });
+    }
+  } else if (graph.systems?.length) {
     const NODE_W = 240, NODE_H = 150, PAD = 44;
     for (const system of graph.systems) {
       const members = graph.nodes.filter((n) => system.nodeIds.includes(n.id) && n.position);
@@ -793,11 +1023,25 @@ function buildFlowGraph(
     }
   }
 
+  const posX = new Map(graph.nodes.map((n) => [n.id, n.position?.x ?? 0]));
   const edges: Edge[] = graph.edges.map((e: GTMEdge) => {
     // Animate the edge feeding the active step — data visibly flowing in.
     const active = e.edgeType === "data" && runningNodeId === e.target && !!result?.nodes[e.source]?.ok;
     const base = edgeStyle(e.edgeType);
     const proposed = proposedEdgeIds?.has(e.id);
+    // Ideation build-in: each edge fades along its target node's cascade beat, so a connector never
+    // arrives before the node it points at. Delay = target rank, the same beat the node card uses.
+    if (ideation) {
+      const rank = Math.max(0, Math.round((posX.get(e.target) ?? 0) / 248));
+      return {
+        id: e.id, source: e.source, target: e.target, label: e.label, ...base,
+        className: `${base.className ?? ""} lane-edge-enter`.trim(),
+        style: { ...(base.style ?? {}), animationDelay: `${rank * 0.09 + 0.12}s` },
+      };
+    }
+    // A proposed edge holds back until both endpoints have surfaced, so a connector never dangles to a
+    // node that hasn't been revealed yet.
+    const edgeRevealed = isRevealed(e.source) && isRevealed(e.target);
     return {
       id: e.id,
       source: e.source,
@@ -805,7 +1049,7 @@ function buildFlowGraph(
       label: e.label,
       ...base,
       ...(active ? { animated: true, className: "loop-edge-data loop-edge-active" } : {}),
-      ...(proposed ? { className: `${base.className ?? ""} loop-edge-proposed`.trim(), animated: true } : {}),
+      ...(proposed ? { className: `${base.className ?? ""} loop-edge-proposed ${edgeRevealed ? "is-revealed" : "is-unrevealed"}`.trim(), animated: true } : {}),
     };
   });
 
@@ -837,6 +1081,81 @@ function NodeFocuser({ selection, panelOpen, active }: { selection: NodeSelectio
   }, [selection]);
 
   return null;
+}
+
+// ─── The operator cursor — Claude, working on your canvas ─────────────────────
+// Presence over the proposal machinery. Instead of describing a change in a wall of prose, a
+// labelled cursor travels the canvas to each node as it's staged, captions what it's doing, and
+// points at the gate when your review is needed. The camera follows the work (grab the canvas to
+// break away). This is the WATCH beat; the inline ✓/✕/note on the lead ghost is the DECIDE beat
+// that lands right where the cursor finishes. Renders in flow coordinates via ViewportPortal so it
+// tracks pan/zoom for free; the pointer and tag counter-scale so they stay legible at any zoom.
+export type OperatorCursorState = {
+  phase: "build" | "rest" | "gate";
+  revealOrder: string[];     // proposed node ids, in the order they surface
+  revealCount: number;       // how many have surfaced so far
+  staged: number;            // total staged count (for the resting caption)
+  gateNodeId?: string | null;
+};
+
+function OperatorCursor({ graph, state, followBroken, recenterSignal }: {
+  graph: GTMGraph;
+  state: OperatorCursorState;
+  followBroken: boolean;
+  recenterSignal: number;
+}) {
+  const { setCenter, getZoom } = useReactFlow();
+  const zoom = useStore((s) => s.transform[2]);
+  const nodeById = useMemo(() => new Map(graph.nodes.map((n) => [n.id, n])), [graph.nodes]);
+
+  const target = useMemo(() => {
+    if (state.phase === "gate" && state.gateNodeId) return nodeById.get(state.gateNodeId) ?? null;
+    const order = state.revealOrder;
+    if (!order.length) return null;
+    const idx = state.phase === "build"
+      ? Math.min(order.length - 1, Math.max(0, state.revealCount - 1))
+      : order.length - 1;
+    return nodeById.get(order[idx]) ?? null;
+  }, [state, nodeById]);
+
+  // Camera follows the work — re-centers each time the cursor moves to a new node (or the founder
+  // hits "Back to Claude"), but never while the founder has grabbed the canvas to look elsewhere.
+  const lastKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (!target || followBroken) return;
+    const key = `${target.id}:${state.phase}:${recenterSignal}`;
+    if (lastKey.current === key) return;
+    lastKey.current = key;
+    const z = getZoom();
+    setCenter((target.position?.x ?? 0) + 120, (target.position?.y ?? 0) + 56, {
+      zoom: Math.min(1, Math.max(0.62, z)),
+      duration: 620,
+    });
+  }, [target, followBroken, state.phase, recenterSignal, getZoom, setCenter]);
+
+  if (!target) return null;
+  const caption =
+    state.phase === "gate" ? "Reached your gate"
+    : state.phase === "build" ? `Adding ${target.label}`
+    : state.staged > 1 ? `Staged ${state.staged} steps` : "Staged it";
+  const inv = zoom ? 1 / zoom : 1;
+  return (
+    <ViewportPortal>
+      <div
+        className={`op-cursor phase-${state.phase}`}
+        style={{ transform: `translate(${(target.position?.x ?? 0) - 14}px, ${(target.position?.y ?? 0) - 14}px)` }}
+        aria-hidden
+      >
+        <span className="op-cursor-arrow" style={{ transform: `scale(${inv})`, transformOrigin: "top left" }}>
+          <MousePointer2 />
+        </span>
+        <div className="op-cursor-tag" style={{ transform: `scale(${inv})`, transformOrigin: "top left" }}>
+          <span className="op-cursor-name">Claude</span>
+          <span className="op-cursor-caption">{caption}</span>
+        </div>
+      </div>
+    </ViewportPortal>
+  );
 }
 
 // ─── Run zoom — the loop "leans in" while the flywheel turns ──────────────────
@@ -893,18 +1212,18 @@ function Refitter({ nonce }: { nonce?: number }) {
 // which keeps changing until the layout lands, and debounce: each settle render resets the timer,
 // so the fit fires once the positions stop moving, on the REAL bounds. We fit once per topology
 // (fittedTopology) so a later manual drag doesn't yank the viewport back.
-function FitOnGraph({ topology, bounds, running }: { topology: string; bounds: string; running: boolean }) {
+function FitOnGraph({ topology, bounds, running, suspended }: { topology: string; bounds: string; running: boolean; suspended?: boolean }) {
   const { fitView } = useReactFlow();
   const fittedTopology = useRef<string | null>(null);
   useEffect(() => {
-    if (running) return;                              // don't fight RunZoom
+    if (running || suspended) return;                 // don't fight RunZoom or the operator cursor's follow
     if (fittedTopology.current === topology) return;  // already framed this graph; leave drags alone
     const t = setTimeout(() => {
       fittedTopology.current = topology;
       fitView({ padding: 0.14, maxZoom: 1, duration: 360 });
     }, 140);
     return () => clearTimeout(t);
-  }, [topology, bounds, running, fitView]);
+  }, [topology, bounds, running, suspended, fitView]);
   return null;
 }
 
@@ -914,7 +1233,7 @@ export function GraphCanvas({
   graph, result, running, runningNodeId = null, selection, connectors, subsystemHealth = {}, contractAudits = {},
   onSelect, onNodePositionChange, onConnectNodes, onDeleteEdges, onAddNode, panelOpen, variant, mode,
   proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, refitNonce, highlightedNodeId = null,
-  bloomNodeId = null, nodeEditor = null,
+  bloomNodeId = null, nodeEditor = null, revealedNodeIds, onPaneClick, operatorCursor = null,
 }: {
   graph: GTMGraph;
   result: GTMRunResult | null;
@@ -932,12 +1251,17 @@ export function GraphCanvas({
   onLoadRecipe?: () => void;
   panelOpen?: boolean;
   // "ideation" draws nodes in with a staggered build animation (workflows being composed).
-  variant?: "ideation";
+  variant?: "ideation" | "overview";
   // The active program mode, applied as a visual lens over the one graph (see lensClass).
   mode?: string;
   // Nodes/edges the operator has STAGED but not applied — rendered as ghosts for founder review.
   proposedNodeIds?: Set<string>;
   proposedEdgeIds?: Set<string>;
+  // Staged reveal: which proposed ghosts have surfaced yet. The host grows this set on a timer so a
+  // multi-node proposal builds onto the canvas one card at a time instead of popping in whole — each
+  // newly revealed node transitions in (see .loop-node-proposed.is-revealed). Undefined → every
+  // proposed node shows at once (the composition-preview path keeps its old all-at-once behavior).
+  revealedNodeIds?: Set<string>;
   // Slice 2: a proposal is live and resolving it accepts/discards the whole staged change. Surfaced
   // inline on each ghost node so the founder accepts/rejects where the change is.
   proposalActive?: boolean;
@@ -959,8 +1283,26 @@ export function GraphCanvas({
   // The editor bridge for the in-card guided editor. When a node is selected, its card expands and
   // mounts NodeCardEditor, which reads this off context — no prop-drilling into node data.
   nodeEditor?: NodeEditorBridge | null;
+  // Clicking the empty canvas dismisses whatever's open — the in-card editor, any floating overlay
+  // (picker, profile, popovers). The host clears its overlay state; here we just forward the event.
+  onPaneClick?: () => void;
+  // The live operator presence: when set, Claude's cursor travels the canvas as it stages each node
+  // and the camera follows it. Null when no operator work is on screen (the canvas reads normally).
+  operatorCursor?: OperatorCursorState | null;
 }) {
   const handleSelect = useCallback((id: string) => onSelect(id), [onSelect]);
+  // Camera-follow break: the founder grabbed the canvas to look away from where Claude is working.
+  // We pause the follow and offer a "Back to Claude" pill; the recenter nonce re-engages it.
+  const [followBroken, setFollowBroken] = useState(false);
+  const [recenterSignal, setRecenterSignal] = useState(0);
+  // When the operator presence clears, re-engage follow for next time. Adjusting state during render
+  // from a changed prop is React's sanctioned pattern — no effect, no cascading render.
+  const cursorActive = !!operatorCursor;
+  const [trackedCursorActive, setTrackedCursorActive] = useState(cursorActive);
+  if (cursorActive !== trackedCursorActive) {
+    setTrackedCursorActive(cursorActive);
+    if (!cursorActive) setFollowBroken(false);
+  }
   const editable = variant !== "ideation" && !!onAddNode;
 
   // Lay the graph out cleanly whenever its topology changes (load, compose, add/remove a node).
@@ -981,8 +1323,8 @@ export function GraphCanvas({
   }, [graph, onNodePositionChange]);
 
   const { nodes, edges } = useMemo(
-    () => buildFlowGraph(graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, mode, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId),
-    [graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, mode, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId],
+    () => buildFlowGraph(graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, mode, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds),
+    [graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, mode, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds],
   );
 
   // Re-fit the viewport whenever the flow's structure changes (load, compose, lanes
@@ -1043,6 +1385,10 @@ export function GraphCanvas({
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onEdgesDelete={(deleted) => onDeleteEdges?.(deleted.map((edge) => edge.id))}
+      onPaneClick={onPaneClick}
+      // A user-initiated pan/zoom (event is non-null; programmatic setCenter passes null) breaks the
+      // camera-follow so the founder can look away from Claude's work without being yanked back.
+      onMoveStart={(event) => { if (event && operatorCursor) setFollowBroken(true); }}
       fitView
       fitViewOptions={{ padding: 0.14, maxZoom: 1 }}
       minZoom={0.15}
@@ -1052,17 +1398,31 @@ export function GraphCanvas({
       edgesReconnectable={false}
       deleteKeyCode={editable ? ["Backspace", "Delete"] : null}
       proOptions={{ hideAttribution: true }}
-      className={cn(variant === "ideation" && "ideation-canvas", selection && "loop-pane-focus")}
+      className={cn(variant === "ideation" && "ideation-canvas", variant === "overview" && "overview-canvas", selection && "loop-pane-focus")}
     >
-      <NodeFocuser selection={selection} panelOpen={!!panelOpen} active={!running} />
+      <NodeFocuser selection={selection} panelOpen={!!panelOpen} active={!running && !operatorCursor} />
+      {operatorCursor ? (
+        <OperatorCursor graph={graph} state={operatorCursor} followBroken={followBroken} recenterSignal={recenterSignal} />
+      ) : null}
+      {operatorCursor && followBroken ? (
+        <Panel position="top-right">
+          <button
+            type="button"
+            className="op-cursor-back"
+            onClick={() => { setFollowBroken(false); setRecenterSignal((n) => n + 1); }}
+          >
+            <MousePointer2 size={13} /> Back to Claude
+          </button>
+        </Panel>
+      ) : null}
       <RunZoom running={running} />
-      <FitOnGraph topology={fitSignature} bounds={boundsSignature} running={running} />
+      <FitOnGraph topology={fitSignature} bounds={boundsSignature} running={running} suspended={!!operatorCursor} />
       <Refitter nonce={refitNonce} />
       {result?.memoryApplied
         && (result.memoryApplied.approved + result.memoryApplied.rejected + result.memoryApplied.edits) > 0 && (
         <Panel position="top-center">
           <div className="loop-memory-banner">
-            <Sparkles />
+            <Lightbulb />
             <span>
               This run learned from {result.memoryApplied.approved} approved
               {result.memoryApplied.rejected > 0 ? ` · ${result.memoryApplied.rejected} rejected` : ""}

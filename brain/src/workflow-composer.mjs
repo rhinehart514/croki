@@ -8,9 +8,23 @@ import { writeArtifact } from "./artifact-store.mjs";
 import {
   annotateGraphWithProgram,
   compileOpportunityProgram,
+  ensureGraphAgents,
   markProgramComposed,
 } from "./program-compiler.mjs";
 import { resolveEntry, hasConcreteInput, SOURCE_MODES } from "./source-entry.mjs";
+import { listAgentInstances } from "./capability-foundry.mjs";
+
+// The engine's current agent pool — every teammate already minted for this project, deduped by ref.
+// Fed to the composer so a new channel reuses an existing agent instead of minting a near-duplicate;
+// one engine, one shared pool. Job text travels so the model can judge whether an existing ref fits.
+function enginePoolFor(project, options = {}) {
+  if (!project?.id) return [];
+  const byRef = new Map();
+  for (const instance of listAgentInstances(project.id, options)) {
+    if (instance.ref && !byRef.has(instance.ref)) byRef.set(instance.ref, { ref: instance.ref, job: instance.job });
+  }
+  return [...byRef.values()];
+}
 
 // Honest blank default: with no composer wired, compose nothing rather than fall back to a
 // hardcoded skeleton (the cage we removed). Live composition is createClaudeComposer.
@@ -140,11 +154,12 @@ function bindIO(nodes, channel, inputAdapter, outputAdapter) {
 // gate wall — returns { nodes, edges } with NO persistence and no status mutation. Used by both
 // the streaming ideation preview (compose each proposed channel's real graph, live) and the
 // persisting compose below. The model owns topology; the host owns the wall.
-export async function composeGraphForChannel({ channel, agents = [], grounding = null, input, output, compose = blankCompose }) {
+export async function composeGraphForChannel({ channel, agents = [], grounding = null, enginePool = [], input, output, compose = blankCompose }) {
   const spec = await compose({
     goal: input?.objective || channel.objective,
     channel,
     agents: agents.map((a) => ({ ref: a.ref, title: a.title, objective: a.objective, prompt: a.prompt, provider: a.provider })),
+    enginePool,
     grounding,
   });
   if (spec?.ok === false) {
@@ -174,17 +189,27 @@ export async function composePortfolioGraph({ goal, channels = [], grounding = n
     throw new Error("A portfolio needs at least one accepted channel.");
   }
   const systems = [];
+  // The pool grows as channels compose: a later channel sees the agents earlier channels in THIS
+  // portfolio already use, so the model reuses one shared teammate instead of minting a copy per lane.
+  const poolByRef = new Map();
   for (const entry of channels) {
     const channel = entry?.channel ?? entry;
     const agents = entry?.agents ?? [];
     const { nodes, edges } = await composeGraphForChannel({
       channel,
       agents,
+      enginePool: [...poolByRef.values()],
       grounding: entry?.grounding ?? grounding,
       input: entry?.input,
       output: entry?.output,
       compose,
     });
+    for (const agent of agents) {
+      if (agent.ref && !poolByRef.has(agent.ref)) poolByRef.set(agent.ref, { ref: agent.ref, job: agent.objective || agent.title });
+    }
+    for (const node of nodes) {
+      if (node.kind === "agent" && node.ref && !poolByRef.has(node.ref)) poolByRef.set(node.ref, { ref: node.ref, job: node.label });
+    }
     systems.push({ channel, graph: { nodes, edges } });
   }
   return assemblePortfolioGraph({ goal: goal || channels[0]?.channel?.objective || "", systems });
@@ -254,6 +279,7 @@ export async function composeOpportunityChannel(input, options = {}) {
     ({ nodes, edges } = await composeGraphForChannel({
       channel,
       agents,
+      enginePool: enginePoolFor(project, options),
       grounding: project.opportunities?.understanding ?? null,
       input: input.input,
       output: input.output,
@@ -283,7 +309,7 @@ export async function composeOpportunityChannel(input, options = {}) {
   const channelId = channelIdFor(channelName, getProjectChannels(projectAfterChannel, options).map((item) => item.id));
   const graphId = projectAfterChannel.id === "default" ? channelId : `${projectAfterChannel.id}--${channelId}`;
 
-  const graph = annotateGraphWithProgram({
+  let graph = annotateGraphWithProgram({
     id: graphId,
     name: channelName,
     kind: channelKind,
@@ -294,6 +320,12 @@ export async function composeOpportunityChannel(input, options = {}) {
     edges,
     store: { path: `.gtm/flows/${graphId}.json`, runs: 0 },
   }, compiled);
+  // Mint any agent the composed graph reaches for that wasn't a declared opportunity — so a teammate
+  // the model added (a Content Strategist, a Lifecycle Engineer) becomes a real personalized agent
+  // with a contract and an on-disk definition, not a generic step. Idempotent for already-backed nodes.
+  const ensured = ensureGraphAgents({ project: projectAfterChannel, program: compiled.program, graph }, options);
+  for (const agent of ensured.agents) writeArtifact("agent", agent.instance.ref, agent.markdown, options);
+  graph = ensured.graph;
   if (channelEval) graph.eval = channelEval;
   const validation = validateGraph(graph);
   if (!validation.ok) throw new Error(`Composed workflow is invalid: ${validation.errors.join(" ")}`);

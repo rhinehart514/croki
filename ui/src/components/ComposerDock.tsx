@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
-  AlertCircle, ArrowUp, Bot, ChevronRight, LoaderCircle, Maximize2,
+  AlertCircle, ArrowUp, Bot, Boxes, ChevronRight, LoaderCircle, Maximize2,
   Minimize2, Play, Plus, ShieldCheck, Square, X,
 } from "lucide-react";
 import { statusLabel } from "@/lib/status";
 import { DockContext } from "@/components/DockContext";
 import { SlidingTabs } from "@/components/SlidingTabs";
 import { Collapse, Reveal, Stagger, StaggerItem } from "@/lib/motion";
-import { STEP_OPTIONS } from "@/lib/step-options";
+import { STEP_OPTIONS, type StepOption } from "@/lib/step-options";
 import "@/styles/dock-context.css";
 import type { ContextManifest, GTMNode, OperatorEvent, OperatorSession } from "@/types";
 
@@ -106,27 +107,44 @@ function segmentEvents(events: OperatorEvent[]): Segment[] {
   return out;
 }
 
-// The collapsed machine trace: one quiet line ("8 steps · Inspected the GTM portfolio") that opens
-// to the individual calls. Defaults closed so the conversation, not the tooling, is what you read.
-function ToolCluster({ events }: { events: OperatorEvent[] }) {
+// The operator's work, woven into the thread: a collapsed "N steps" receipt that opens to the
+// individual calls, each with its own status dot. Defaults closed so the conversation, not the
+// tooling, is what you read — but it's one keystroke and one click from the full trace, and it never
+// hides that work happened. Fully keyboard- and screen-reader-reachable (a real disclosure widget).
+function ToolCluster({ events, idBase }: { events: OperatorEvent[]; idBase: string }) {
   const [open, setOpen] = useState(false);
   const failed = events.some((e) => e.type === "tool_failed" || /failed/i.test(e.title));
+  const listId = `cnv-tools-${idBase}`;
+  const label = `${events.length} step${events.length === 1 ? "" : "s"}${failed ? ", one failed" : ""} — ${open ? "collapse" : "expand"}`;
   return (
     <div className={`cnv-tools ${open ? "open" : ""}`}>
-      <button className="cnv-tools-head" onClick={() => setOpen((v) => !v)} type="button">
+      <button
+        className="cnv-tools-head"
+        onClick={() => setOpen((v) => !v)}
+        type="button"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-label={label}
+      >
         <ChevronRight className="cnv-tools-chev" size={13} aria-hidden="true" />
         <span className={`cnv-tools-dot ${failed ? "fail" : "done"}`} aria-hidden="true" />
         <span className="cnv-tools-count">{events.length} step{events.length === 1 ? "" : "s"}</span>
         {!open ? <span className="cnv-tools-peek">{events[events.length - 1].title}</span> : null}
       </button>
       <Collapse open={open}>
-        <ul className="cnv-tools-list">
-          {events.map((e) => (
-            <li key={e.id} className="cnv-tool">
-              <span className="cnv-tool-title">{e.title}</span>
-              {e.detail ? <span className="cnv-tool-detail">{e.detail}</span> : null}
-            </li>
-          ))}
+        <ul className="cnv-tools-list" id={listId}>
+          {events.map((e) => {
+            const stepFailed = e.type === "tool_failed" || /failed/i.test(e.title);
+            return (
+              <li key={e.id} className="cnv-tool">
+                <span className={`cnv-tool-dot ${stepFailed ? "fail" : "done"}`} aria-hidden="true" />
+                <span className="cnv-tool-text">
+                  <span className="cnv-tool-title">{e.title}</span>
+                  {e.detail ? <span className="cnv-tool-detail">{e.detail}</span> : null}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       </Collapse>
     </div>
@@ -171,9 +189,9 @@ function FocusView({ session }: { session: OperatorSession }) {
 // either starts a new session (when idle) or continues the current one — one conversation.
 export function ComposerDock({
   session, running, boundChannelName, viewingMismatch, onSend, onCancel, onReviewGate, onReturnToChannel,
-  floating = false, focusSignal = 0,
+  floating = false, focusSignal = 0, recede = false,
   contextManifest = null, onOpenGrounding, onOpenPicture, onIdeate,
-  onAddNode, onOpenLibrary,
+  onAddNode, onAddChain, onOpenLibrary,
 }: {
   session: OperatorSession | null;
   running: boolean;
@@ -192,6 +210,10 @@ export function ComposerDock({
   // Bumped by the host to summon the chat — e.g. "New program" opens and focuses it, since a
   // program is created by telling Claude the outcome, not by filling a form.
   focusSignal?: number;
+  // While Claude is staging a graph change, the cursor builds it onto the canvas and the inline
+  // ✓/✕/note carry the decision — so the dock RECEDES to its peek to leave the watch beat
+  // unobstructed. It re-opens itself the moment the founder resolves the proposal (recede → false).
+  recede?: boolean;
   // The "what Claude reads" strip in the dock head — the grounding/picture/ideate actions folded in
   // from the old Explorer rail. All optional so the dock still renders without product context.
   contextManifest?: ContextManifest | null;
@@ -201,13 +223,48 @@ export function ComposerDock({
   // The composer's "+" is the canvas's ONE add affordance now (the separate canvas "Add step" was
   // collapsed into it): add a building-block step, or open the library for your real agents/skills.
   onAddNode?: (spec: Partial<GTMNode> & { label: string }) => void;
+  // Drop a connected chain of steps at once — "Review & stage" uses it to place the gate and the
+  // staged-output node already wired, so the wall holds by construction.
+  onAddChain?: (specs: (Partial<GTMNode> & { label: string })[]) => void;
   onOpenLibrary?: () => void;
 }) {
-  const [collapsed, setCollapsed] = useState(floating);
+  // Rest as a pill on first paint when the dock floats over the program workbench, OR when a FINISHED
+  // session would otherwise open its full transcript over the read-only overview canvas. Either way the
+  // founder lands on the work, not a panel covering it; the conversation is one click away on the peek.
+  const [collapsed, setCollapsed] = useState(floating || (!floating && !!session && TERMINAL.has(session.status)));
   const [addOpen, setAddOpen] = useState(false);
+  // The "+" stages building-block MODES as chips in the composer instead of dropping a card on the
+  // canvas. The card lands on SEND, built from the typed description — so "+ Input" then "a CSV of WNY
+  // operators" + Enter creates the Input node labeled from your words. Library stays a palette (you
+  // pick a real agent, you don't describe one), so it isn't chipped.
+  const [stepChips, setStepChips] = useState<StepOption[]>([]);
+  // The add menu renders in a body portal so the dock's `overflow: hidden` (the rounded glass card)
+  // can't clip it when it opens upward. We anchor it to the live "+" button rect, fixed to the viewport.
+  const [addPos, setAddPos] = useState<{ left: number; bottom: number } | null>(null);
+  const addBtnRef = useRef<HTMLButtonElement>(null);
+  const toggleAdd = () => {
+    if (addOpen) { setAddOpen(false); return; }
+    const r = addBtnRef.current?.getBoundingClientRect();
+    if (r) setAddPos({ left: r.left, bottom: window.innerHeight - r.top + 8 });
+    setAddOpen(true);
+  };
+  useEffect(() => {
+    if (!addOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (t.closest(".composer-add-portal") || t.closest(".composer-add-wrap")) return;
+      setAddOpen(false);
+    };
+    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") setAddOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onEsc);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onEsc); };
+  }, [addOpen]);
   const [expanded, setExpanded] = useState(false);
-  // The dock leads with the operator's STATE (focus), not the transcript (thread). You opt into history.
-  const [view, setView] = useState<"focus" | "thread">("focus");
+  // The dock leads with the THREAD — the whole conversation in one scroll (your messages, Claude's
+  // work folded into a step receipt, the answer, the gate). Focus (just the latest answer/state) is
+  // still one click away for when you only want the result, but you land in the conversation.
+  const [view, setView] = useState<"focus" | "thread">("thread");
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -222,16 +279,36 @@ export function ComposerDock({
     setCollapsed(floating);
   }
 
+  // A FINISHED session on the read-only overview (the dock is not floating over a program there) rests
+  // as a pill, so a completed transcript never covers the engine the founder came to see. The thread is
+  // one click away on the peek bar. An ACTIVE session, or any session in the focused program view,
+  // behaves as before. Adjusting state during render from a changed prop is React's sanctioned pattern.
+  const terminalOverview = !floating && !!session && TERMINAL.has(session.status);
+  const [trackedTerminalOverview, setTrackedTerminalOverview] = useState(terminalOverview);
+  if (terminalOverview !== trackedTerminalOverview) {
+    setTrackedTerminalOverview(terminalOverview);
+    if (terminalOverview) setCollapsed(true);
+  }
+
   // When the host bumps focusSignal (e.g. "New program"), open the dock in the same render so the
-  // input is mounted, then focus it in an effect (a DOM call, not setState — no cascading render).
+  // input is mounted, then focus it in an effect (a DOM call, not setState — no cascading render). A
+  // finished session over the overview is the one case we don't auto-open: it would re-cover the engine.
   const [trackedFocus, setTrackedFocus] = useState(focusSignal);
   if (focusSignal !== trackedFocus) {
     setTrackedFocus(focusSignal);
-    setCollapsed(false);
+    if (!terminalOverview) setCollapsed(false);
   }
   useEffect(() => {
     if (focusSignal) inputRef.current?.focus();
   }, [focusSignal]);
+
+  // Recede while a proposal stages onto the canvas; rise again once it's resolved. Adjusting state
+  // during render from a changed prop is React's sanctioned pattern — no effect, no extra render.
+  const [trackedRecede, setTrackedRecede] = useState(recede);
+  if (recede !== trackedRecede) {
+    setTrackedRecede(recede);
+    setCollapsed(recede);
+  }
 
   // Opening the command bar drops you straight into the input — it reads as a command line, so a
   // click should land the cursor, not just reveal a panel you then have to click again.
@@ -265,8 +342,23 @@ export function ComposerDock({
   const working = running || session?.status === "running";
 
   const send = async () => {
+    if (submitting) return;
+    // Chips first: an active step chip means "build this block from my words," a local graph edit —
+    // not a message to Claude. It runs even while the operator is working (adding a node is design-time
+    // and reversible), so it bypasses sendDisabled. The card lands here, on send, never on the +click.
+    if (stepChips.length) {
+      const value = input.trim();
+      for (const chip of stepChips) {
+        const spec = value ? { ...chip.spec, label: value } : chip.spec;
+        if (chip.then && onAddChain) onAddChain([spec, chip.then]);
+        else onAddNode?.(spec);
+      }
+      setStepChips([]);
+      setInput("");
+      return;
+    }
     const value = input.trim();
-    if (!value || submitting || sendDisabled) return;
+    if (!value || sendDisabled) return;
     setSubmitting(true);
     setCollapsed(false); // sending opens the conversation above the composer
     try { await onSend(value); setInput(""); }
@@ -277,14 +369,37 @@ export function ComposerDock({
   // textarea over a control row (context on the left, the live model/state, a dark send on the right).
   // Enter sends, Shift+Enter newlines. Shared by the resting state and the active conversation so the
   // input never changes shape as you move between them.
+  const chipMode = stepChips.length > 0;
   const composer = (
-    <div className="composer-box">
+    <div className={`composer-box ${chipMode ? "has-chips" : ""}`}>
+      {/* Staged step modes. While any chip is set, the composer is in "build a step" mode — your words
+          describe the block, Enter creates it on the canvas, and the chip clears. Remove a chip to drop
+          back to talking to Claude. */}
+      {chipMode ? (
+        <div className="composer-chips">
+          {stepChips.map((chip, i) => (
+            <span key={chip.label} className="composer-chip">
+              <span className="composer-chip-icon">{chip.icon}</span>
+              <span className="composer-chip-label">{chip.label}</span>
+              <button
+                className="composer-chip-x"
+                type="button"
+                aria-label={`Remove ${chip.label}`}
+                onClick={() => setStepChips((chips) => chips.filter((_, j) => j !== i))}
+              >
+                <X size={12} />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
       <textarea
         ref={inputRef}
         className="composer-box-input"
-        placeholder={sendDisabled ? "Claude is working…" : session ? "Reply, redirect, or ask Claude to continue…" : "Ask Claude to build, run, or change anything…"}
+        aria-label={chipMode ? `Describe the ${stepChips[stepChips.length - 1].label} step` : "Message Claude"}
+        placeholder={chipMode ? `Describe the ${stepChips[stepChips.length - 1].label} step…` : sendDisabled ? "Claude is working…" : session ? "Reply, redirect, or ask Claude to continue…" : "Ask Claude to build, run, or change anything…"}
         value={input}
-        disabled={sendDisabled}
+        disabled={sendDisabled && !chipMode}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
         rows={1}
@@ -296,8 +411,9 @@ export function ComposerDock({
           {onAddNode ? (
             <div className="composer-add-wrap">
               <button
+                ref={addBtnRef}
                 className={`composer-box-tool ${addOpen ? "open" : ""}`}
-                onClick={() => setAddOpen((v) => !v)}
+                onClick={toggleAdd}
                 type="button"
                 aria-haspopup="menu"
                 aria-expanded={addOpen}
@@ -305,34 +421,49 @@ export function ComposerDock({
               >
                 <Plus size={16} />
               </button>
-              <Reveal open={addOpen} className="menu menu-glass composer-add-menu" role="menu" origin="bottom-left">
-                {onOpenLibrary ? (
-                  <button className="menu-item" onClick={() => { onOpenLibrary(); setAddOpen(false); }} role="menuitem" type="button">
-                    <Bot className="menu-item-icon" />
-                    <span className="menu-item-body">
-                      <span className="menu-item-label">Browse the library</span>
-                      <span className="menu-item-meta">Your agents and skills — search, drag, add</span>
-                    </span>
-                  </button>
-                ) : null}
-                {onOpenLibrary ? <div className="menu-sep" role="separator" /> : null}
-                <span className="menu-label">Add a block</span>
-                {STEP_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.label}
-                    className="menu-item"
-                    onClick={() => { onAddNode(opt.spec); setAddOpen(false); }}
-                    role="menuitem"
-                    type="button"
-                  >
-                    <span className="menu-item-icon">{opt.icon}</span>
-                    <span className="menu-item-body">
-                      <span className="menu-item-label">{opt.label}</span>
-                      <span className="menu-item-meta">{opt.detail}</span>
-                    </span>
-                  </button>
-                ))}
-              </Reveal>
+              {addPos ? createPortal(
+                <div className="composer-add-portal" style={{ left: addPos.left, bottom: addPos.bottom }}>
+                  <Reveal open={addOpen} className="menu composer-add-menu" role="menu" origin="bottom-left">
+                    {/* The wedge action, elevated: your REAL agents and skills, ranked above the generic
+                        building blocks. The one place boldness is spent — a filled row with a trailing chevron. */}
+                    {onOpenLibrary ? (
+                      <button className="menu-item menu-primary" onClick={() => { onOpenLibrary(); setAddOpen(false); }} role="menuitem" type="button">
+                        <Boxes className="menu-item-icon" />
+                        <span className="menu-item-body">
+                          <span className="menu-item-label">Browse the library</span>
+                          <span className="menu-item-meta">Your real agents and skills</span>
+                        </span>
+                        <ChevronRight className="menu-primary-chev" size={15} aria-hidden="true" />
+                      </button>
+                    ) : null}
+                    {/* The building blocks — the deterministic spine the Library and the vibe path
+                        don't hand you, in flow order (in → transform → ship → measure). No eyebrows:
+                        at four rows the order carries the anatomy. "Review & stage" drops the gate
+                        and the staged-output node as one wired pair. */}
+                    {STEP_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.label}
+                        className="menu-item"
+                        onClick={() => {
+                          // Stage the mode as a chip — the card is created on send, not here.
+                          setStepChips((chips) => chips.some((c) => c.label === opt.label) ? chips : [...chips, opt]);
+                          setAddOpen(false);
+                          inputRef.current?.focus();
+                        }}
+                        role="menuitem"
+                        type="button"
+                      >
+                        <span className="menu-item-icon">{opt.icon}</span>
+                        <span className="menu-item-body">
+                          <span className="menu-item-label">{opt.label}</span>
+                          <span className="menu-item-meta">{opt.detail}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </Reveal>
+                </div>,
+                document.body,
+              ) : null}
             </div>
           ) : null}
           <span className="composer-box-model" title={sessionActive ? "Claude is on this outcome" : "Runs on your Claude subscription"}>
@@ -342,12 +473,12 @@ export function ComposerDock({
         </div>
         <button
           className="composer-box-send"
-          disabled={!input.trim() || sendDisabled || submitting}
+          disabled={submitting || (chipMode ? false : (!input.trim() || sendDisabled))}
           onClick={() => void send()}
           type="button"
-          aria-label="Send to Claude"
+          aria-label={chipMode ? "Add the step" : "Send to Claude"}
         >
-          {submitting ? <LoaderCircle className="spin" /> : <ArrowUp size={18} />}
+          {submitting ? <LoaderCircle className="spin" /> : chipMode ? <Plus size={18} /> : <ArrowUp size={18} />}
         </button>
       </div>
     </div>
@@ -361,10 +492,10 @@ export function ComposerDock({
         {/* When Claude is live, a slim peek above the composer shows the state and opens the
             conversation — so the resting composer never hides an in-flight session. */}
         {session ? (
-          <button className="composer-peek" onClick={() => setCollapsed(false)} type="button" title="Open the conversation">
-            <span className={`composer-peek-dot ${working ? "live" : ""}`} />
+          <button className="composer-peek" onClick={() => setCollapsed(false)} type="button" title="Open the conversation" aria-label="Open the conversation with Claude">
+            <span className={`composer-peek-dot ${working ? "live" : ""}`} aria-hidden="true" />
             <span className="composer-peek-text">
-              {working ? "Claude is working…" : session.events.length ? session.events[session.events.length - 1].title : `Claude · ${statusLabel(session.status)}`}
+              {recede ? "Staged on the canvas — keep, change, or note it there" : working ? "Claude is working…" : session.events.length ? session.events[session.events.length - 1].title : `Claude · ${statusLabel(session.status)}`}
             </span>
             <Maximize2 size={13} />
           </button>
@@ -401,14 +532,14 @@ export function ComposerDock({
           />
         ) : null}
         {sessionActive && (
-          <button className="composer-dock-stop" onClick={() => void onCancel()} type="button" title="Stop">
+          <button className="composer-dock-stop" onClick={() => void onCancel()} type="button" title="Stop" aria-label="Stop Claude">
             <Square />
           </button>
         )}
-        <button className="composer-dock-icon" onClick={() => setExpanded((v) => !v)} type="button" title={expanded ? "Shrink" : "Expand"}>
+        <button className="composer-dock-icon" onClick={() => setExpanded((v) => !v)} type="button" title={expanded ? "Shrink" : "Expand"} aria-label={expanded ? "Shrink the panel" : "Expand the panel"} aria-pressed={expanded}>
           {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
         </button>
-        <button className="composer-dock-icon" onClick={() => setCollapsed(true)} type="button" title="Minimize">
+        <button className="composer-dock-icon" onClick={() => setCollapsed(true)} type="button" title="Minimize" aria-label="Minimize the panel">
           <X size={16} />
         </button>
       </header>
@@ -436,7 +567,15 @@ export function ComposerDock({
       )}
 
       {/* ── Conversation / narration ───────────────────────────── */}
-      <div key={session ? view : "idle"} className={`composer-dock-timeline view-enter ${session && view === "focus" ? "is-focus" : ""}`} ref={timelineRef} aria-live="polite">
+      <div
+        key={session ? view : "idle"}
+        className={`composer-dock-timeline view-enter ${session && view === "focus" ? "is-focus" : ""}`}
+        ref={timelineRef}
+        role="log"
+        aria-label="Conversation with Claude"
+        aria-live="polite"
+        aria-relevant="additions text"
+      >
         {!session ? (
           <div className="composer-dock-idle">
             <p className="composer-idle-lead">Tell Claude the outcome you want. It creates the program, builds the agents that chase it, runs them, and stops at your gate.</p>
@@ -453,7 +592,7 @@ export function ComposerDock({
             {segmentEvents(session.events).map((seg) =>
               seg.kind === "tool" ? (
                 <StaggerItem key={seg.id}>
-                  <ToolCluster events={seg.events} />
+                  <ToolCluster events={seg.events} idBase={seg.id} />
                 </StaggerItem>
               ) : seg.kind === "say" ? (
                 <StaggerItem key={seg.id}>
@@ -487,6 +626,14 @@ export function ComposerDock({
                 </StaggerItem>
               ),
             )}
+            {/* The live "now" beat — keeps the thread honest about latency: while Claude works, the
+                bottom of the conversation shows what it's doing this second, not a frozen log. */}
+            {working ? (
+              <div className="cnv-live" role="status">
+                <span className="cnv-live-orb" aria-hidden="true" />
+                <span className="cnv-live-text">{session.events.at(-1)?.title ?? "Working…"}</span>
+              </div>
+            ) : null}
           </Stagger>
         )}
       </div>

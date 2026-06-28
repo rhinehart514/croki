@@ -15,10 +15,11 @@ const NODE_CATEGORIES = new Set([
 const EDGE_TYPES = new Set(["data", "context", "feedback"]);
 
 // Node kinds — the open model. "tool" (or absent) is the connector path and still
-// requires a registered category. "agent" / "skill" / "code" are open steps the agent
-// composes; they require a `ref` instead of a registry category.
-const NODE_KINDS = new Set(["tool", "agent", "skill", "code"]);
-const OPEN_KINDS = new Set(["agent", "skill", "code"]);
+// requires a registered category. "agent" / "skill" / "code" / "mcp" are open steps the agent
+// composes; they require a `ref` instead of a registry category. "mcp" is an external MCP
+// server's tool (ref = "<serverId>/<toolName>"); read tools run free, write tools sit behind a gate.
+const NODE_KINDS = new Set(["tool", "agent", "skill", "code", "mcp"]);
+const OPEN_KINDS = new Set(["agent", "skill", "code", "mcp"]);
 
 function clone(value) {
   return structuredClone(value);

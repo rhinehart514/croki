@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   AlertTriangle, ArrowRight, ChevronDown, ChevronRight, ChevronLeft,
-  Bot, Sparkles, ListChecks, Plus, History, Layers, ShieldCheck, Boxes,
+  Bot, Lightbulb, ListChecks, Plus, History, Layers, ShieldCheck, Boxes,
 } from "lucide-react";
 import type {
   AgentInstance, ChannelMeta, ContextManifest, EngineState,
@@ -351,7 +351,7 @@ export function GtmExplorer({
           type="button"
           title="Ideated channels Claude proposes — compose them into systems on the canvas"
         >
-          <Sparkles size={13} />
+          <Lightbulb size={13} />
           <span>Opportunities</span>
         </button>
       </div>
@@ -376,7 +376,7 @@ export function GtmExplorer({
               <Plus size={14} /> Start your first outcome
             </button>
             <button className="explorer-firstrun-secondary" onClick={() => onOpenView("opportunities")} type="button">
-              <Sparkles size={13} /> Or let Claude propose outcomes
+              <Lightbulb size={13} /> Or let Claude propose outcomes
             </button>
           </div>
         ) : (
@@ -463,7 +463,7 @@ export function GtmExplorer({
               onClick={() => onOpenView("opportunities")}
               type="button"
             >
-              <Sparkles size={13} /><span className="explorer-row-name">Ideate outcomes for me</span>
+              <Lightbulb size={13} /><span className="explorer-row-name">Ideate outcomes for me</span>
             </button>
           </>
         )}

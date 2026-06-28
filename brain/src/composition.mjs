@@ -34,6 +34,7 @@ Critical rules:
   - execute: { "category": "execute", "connector": "local" | "http" } — staged, never sends on its own
   - measure: { "category": "measure", "connector": "default" }
 - Use the accepted agents by their exact refs. Wire each where it belongs.
+- REUSE the engine's existing teammates. You are given the engine's current agent pool — the agents other channels in this same product already use. When an existing engine agent already covers a capability this channel needs, reference it by its EXACT existing ref instead of inventing a near-duplicate. Channels are routes through ONE engine that shares its agent pool; they do not each get a private copy of every worker. Introduce a new agent ref ONLY when no existing teammate fits the job.
 - Give every executable node a plain data contract: "contract": { "accepts": ["fieldName"], "emits": ["fieldName"], "minItems": 1 }. Use only fields the step genuinely needs or can promise. A personal outreach draft should require a real personalFact; measurement should require the attribution join fields it needs.
 - Close the loop where it helps: a feedback edge from measure back to context or source.
 
@@ -44,11 +45,12 @@ Each edge: { "source": "node-id", "target": "node-id", "edgeType": "data" | "con
 // Live composer: reads the repo on the founder's subscription and returns a { nodes, edges }
 // graph spec. The host (workflow-composer.mjs) normalizes, enforces the gate wall, and validates.
 export function createClaudeComposer({ cwd = process.cwd(), model, maxTurns = 24, onText } = {}) {
-  return async function compose({ goal, channel, agents, grounding }) {
+  return async function compose({ goal, channel, agents, grounding, enginePool }) {
     const prompt = [
       COMPOSE_PROMPT,
       `\nChannel objective:\n${goal || channel?.objective || ""}`,
       `\nAccepted agents (use these refs):\n${JSON.stringify(agents ?? [], null, 2)}`,
+      `\nEngine agent pool — reuse an existing ref when it already covers the capability, don't duplicate:\n${JSON.stringify(enginePool ?? [], null, 2)}`,
       `\nProduct grounding:\n${JSON.stringify(grounding ?? {}, null, 2)}`,
     ].join("\n");
     const { text, error } = await runClaudeQuery({ prompt, cwd, model, maxTurns, onText });

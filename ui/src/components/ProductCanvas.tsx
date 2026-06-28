@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { RefreshCw, Sparkles } from "lucide-react";
+import { RefreshCw, Lightbulb } from "lucide-react";
 import type { ProductModel, ProductModelEdit } from "@/types";
 import { ConceptualLens } from "@/components/lenses/ConceptualLens";
 import { JobsLens } from "@/components/lenses/JobsLens";
@@ -58,7 +58,7 @@ export function ProductCanvas({
   if (!model || model.things.length === 0) {
     return (
       <div className="product-canvas-empty">
-        <Sparkles className="product-empty-icon" />
+        <Lightbulb className="product-empty-icon" />
         <h2>No picture yet</h2>
         <p>
           Draw the first picture of <strong>{productName}</strong> — its core objects, how they
@@ -67,7 +67,7 @@ export function ProductCanvas({
         <button className="product-derive-btn" onClick={onDerive} disabled={busy} type="button">
           {busy
             ? <><RefreshCw className="spin" /> Reading the product…</>
-            : <><Sparkles /> Draw the picture</>}
+            : <><Lightbulb /> Draw the picture</>}
         </button>
       </div>
     );

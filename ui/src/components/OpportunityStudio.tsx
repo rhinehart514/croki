@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   Bot, Check, ChevronRight, Code2, FileSpreadsheet, Globe2, LoaderCircle, RotateCcw,
-  ShieldCheck, Sparkles, X,
+  ShieldCheck, Lightbulb, X,
 } from "lucide-react";
 import type { DataAdapter, GTMOpportunity, OpportunityStatus, OpportunityStudio as Studio } from "@/types";
 
@@ -36,7 +36,7 @@ function OpportunityCard({
     <article className={`opportunity-card ${item.status} ${selected ? "selected" : ""}`}>
       <header>
         <span className={`opportunity-kind ${item.type}`}>
-          {item.type === "agent" ? <Bot /> : <Sparkles />}
+          {item.type === "agent" ? <Bot /> : <Lightbulb />}
           {item.type}
         </span>
         <span className={`opportunity-origin ${item.origin}`}>{item.origin === "derived" ? "Code-derived" : "Strategic bet"}</span>
@@ -55,7 +55,7 @@ function OpportunityCard({
           ))}
         </div>
       ) : (
-        <div className="opportunity-evidence speculative"><Sparkles /> No code claim; founder judgment required.</div>
+        <div className="opportunity-evidence speculative"><Lightbulb /> No code claim; founder judgment required.</div>
       )}
       {item.type === "agent" ? (
         <div className="agent-runtime-choice">
@@ -136,7 +136,7 @@ export function OpportunityStudio({
       <div className="opportunity-layout">
         <div className="opportunity-lists">
           <section>
-            <header className="opportunity-section-head"><Sparkles /><strong>Channel opportunities</strong><span>Choose the motions worth building.</span></header>
+            <header className="opportunity-section-head"><Lightbulb /><strong>Channel opportunities</strong><span>Choose the motions worth building.</span></header>
             <div className="opportunity-grid">
               {channels.map((item) => (
                 <OpportunityCard
@@ -244,7 +244,7 @@ export function OpportunityStudio({
             })}
             type="button"
           >
-            {busy ? <LoaderCircle className="spin" /> : <Sparkles />} Compose selected channel
+            {busy ? <LoaderCircle className="spin" /> : <Lightbulb />} Compose selected channel
           </button>
         </aside>
       </div>

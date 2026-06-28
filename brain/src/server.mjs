@@ -8,6 +8,8 @@ import { fileURLToPath } from "node:url";
 import { buildTrackingFix } from "./build.mjs";
 import { getEngineState } from "./engine.mjs";
 import { loadFlow, recordFlowRun, saveFlow } from "./flow-store.mjs";
+import { listServers, getServer, recordServer, removeServer, reclassifyTool, serverView } from "./mcp-store.mjs";
+import { connectStdioServer } from "./mcp-client.mjs";
 import { applyGraphOperations, validateGraph } from "./graph-operations.mjs";
 import { auditGraphContracts } from "./contracts.mjs";
 import { pilotOutreachRecipe } from "./workflow-recipes.mjs";
@@ -30,6 +32,7 @@ import {
   updateChannel,
   updateSharedContext,
 } from "./project-store.mjs";
+import { deleteProject, mergeProjects } from "./project-merge.mjs";
 import {
   getOpportunityStudio,
   saveGeneratedOpportunities,
@@ -200,6 +203,31 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, { project, activeProjectId: project.id });
     } catch (err) {
       json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Fold duplicate projects into one (one project per repo). Records move; sources are dropped.
+  if (req.method === "POST" && url.pathname === "/api/projects/merge") {
+    try {
+      const body = await readBody(req);
+      const sourceIds = Array.isArray(body.sourceIds) ? body.sourceIds : [body.sourceId].filter(Boolean);
+      mergeProjects(sourceIds, body.targetId, { projectId: body.targetId });
+      json(res, 200, listProjects());
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Remove a project and purge its per-project stores. The last project can't be deleted.
+  const deleteProjectMatch = url.pathname.match(/^\/api\/projects\/([^/]+)$/);
+  if (req.method === "DELETE" && deleteProjectMatch) {
+    try {
+      deleteProject(decodeURIComponent(deleteProjectMatch[1]));
+      json(res, 200, listProjects());
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return;
   }
@@ -1223,6 +1251,76 @@ const server = http.createServer(async (req, res) => {
       send({ type: "run_error", error: err instanceof Error ? err.message : String(err) });
     } finally {
       res.end();
+    }
+    return;
+  }
+
+  // ── Capabilities (external MCP servers) ──────────────────────────────────
+  // Connectors are MCP servers Claude calls. The host lists them, classifies each
+  // tool read/write, and holds the writes behind the gate. See mcp-store / mcp-client.
+  if (req.method === "GET" && url.pathname === "/api/capabilities") {
+    json(res, 200, { servers: listServers().map(serverView) });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/capabilities/connect") {
+    try {
+      const body = await readBody(req);
+      if (!body.id && !body.name) throw new Error("connect requires an id or name");
+      let tools = Array.isArray(body.tools) ? body.tools : null;
+      // The bundled local demo MCP server — a real stdio connection (not seeded data),
+      // resolved server-side so the browser never needs the absolute path.
+      if (body.demo) {
+        body.command = process.execPath;
+        body.args = [path.join(here, "demo", "mcp-demo-server.mjs")];
+      }
+      // A live stdio server: actually connect, handshake, and discover its tools.
+      // A catalog/registry entry with tools already known skips the spawn.
+      if (!tools && body.command) {
+        const result = await connectStdioServer({ command: body.command, args: body.args, env: body.env });
+        tools = result.tools;
+        body.auth = body.auth ?? { status: "authed", method: "stdio" };
+        // Connect only needs to discover tools; close the spawned process so it
+        // doesn't leak. A persistent connection for calling tools is a run-path concern.
+        result.client.close();
+      }
+      if (!tools) throw new Error("connect needs a live `command` to discover tools, or a `tools` list");
+      const server = recordServer({ ...body, tools }, {});
+      json(res, 200, { server: serverView(server) });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  const reclassifyMatch = url.pathname.match(/^\/api\/capabilities\/([^/]+)\/reclassify$/);
+  if (req.method === "POST" && reclassifyMatch) {
+    try {
+      const body = await readBody(req);
+      const serverId = decodeURIComponent(reclassifyMatch[1]);
+      const existing = getServer(serverId, {});
+      const tool = existing?.tools.find((t) => t.name === body.tool);
+      const loosening = body.lane === "read" && tool && tool.class === "write";
+      // Loosening the wall is the weighty act — the founder must confirm explicitly.
+      if (loosening && body.confirm !== true) {
+        json(res, 409, { error: "Loosening the wall needs confirmation", needsConfirm: true });
+        return;
+      }
+      const { server, loosenedWall } = reclassifyTool(serverId, body.tool, body.lane, {});
+      json(res, 200, { server: serverView(server), loosenedWall });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  const capabilityMatch = url.pathname.match(/^\/api\/capabilities\/([^/]+)$/);
+  if (req.method === "DELETE" && capabilityMatch) {
+    try {
+      removeServer(decodeURIComponent(capabilityMatch[1]), {});
+      json(res, 200, { servers: listServers().map(serverView) });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return;
   }

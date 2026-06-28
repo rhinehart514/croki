@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Check, Copy, ExternalLink, LoaderCircle, Pencil, Play, Save, ShieldCheck, Sparkles, Trash2, X,
+  Check, Copy, ExternalLink, LoaderCircle, Pencil, Play, Save, ShieldCheck, Lightbulb, Trash2, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -822,7 +822,7 @@ function NodeOverview({
           <div className="node-overview-section">
             <div className="node-overview-label">Founder decision</div>
             <div className="node-suggested-change">
-              <Sparkles className="node-suggested-icon" />
+              <Lightbulb className="node-suggested-icon" />
               <div>
                 <strong>{result.meta?.awaitingReview as number ?? items.length} items awaiting review</strong>
                 <p>Review the prepared artifacts before the workflow can continue.</p>

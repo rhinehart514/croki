@@ -1815,11 +1815,19 @@ function persistProgramWorkflowGraph(graph, options = {}) {
 export function resolveOperatorProposal(id, payload = {}, runtime = {}) {
   const options = runtime.options ?? {};
   const session = getOperatorSession(id, options);
-  if (session.status !== "waiting_for_proposal" || !session.pendingProposal) {
+  // Resolve any session that HOLDS a staged proposal — not only one paused at waiting_for_proposal.
+  // The operator often stages the change and finishes its turn (status → completed) with the proposal
+  // still pending; the founder reviews it whenever. Accept re-applies and resumes; reject drops and
+  // resumes. The only hard requirement is that a proposal actually exists.
+  if (!session.pendingProposal) {
     throw new Error("This session has no graph proposal waiting for review.");
   }
   const proposal = session.pendingProposal;
   const accept = payload.accept === true || payload.decision === "accept";
+  // The founder's note on the decision. On reject it's a redirect (Claude comes back and changes it);
+  // on accept it's a quiet annotation — the operator reads it, and the learning loop can pick it up
+  // later. The note never makes the decision; the founder's ✓/✕ does, and the note only colors it.
+  const note = typeof payload.note === "string" ? payload.note.trim() : "";
 
   if (accept) {
     const flow = flowFor(session, options);
@@ -1828,6 +1836,7 @@ export function resolveOperatorProposal(id, payload = {}, runtime = {}) {
     const patched = applyGraphOperations(flow.graph, proposal.operations);
     const saved = saveFlow(patched.graph, options);
     persistProgramWorkflowGraph(saved.graph, options);
+    const acceptMsg = `Founder accepted the proposed graph changes (${proposal.changes.length} operation${proposal.changes.length === 1 ? "" : "s"}). They are now applied.${note ? ` They left a note: "${note}". Take it as durable guidance for future changes, not a new edit to make now.` : ""} Continue.`;
     const next = addEvent({
       ...session,
       status: "ready",
@@ -1836,18 +1845,21 @@ export function resolveOperatorProposal(id, payload = {}, runtime = {}) {
       graphRevision: saved.graph.revision ?? 0,
       modelMessages: [
         ...(session.modelMessages ?? []),
-        { role: "user", content: `Founder accepted the proposed graph changes (${proposal.changes.length} operation${proposal.changes.length === 1 ? "" : "s"}). They are now applied. Continue.` },
+        { role: "user", content: acceptMsg },
       ],
     }, {
       type: "graph_patched",
-      title: "Founder accepted proposed changes",
-      detail: proposal.rationale,
-      data: { revision: saved.graph.revision, changes: patched.changes, proposalId: proposal.id },
+      title: note ? "Founder accepted with a note" : "Founder accepted proposed changes",
+      detail: note || proposal.rationale,
+      data: { revision: saved.graph.revision, changes: patched.changes, proposalId: proposal.id, note: note || undefined },
     }, options);
     launchOperatorSession(id, runtime);
     return next;
   }
 
+  const rejectMsg = note
+    ? `Founder discarded the proposed graph changes and asked for this instead: "${note}". Do not reapply the discarded changes — make this change instead.`
+    : "Founder discarded the proposed graph changes. Do not reapply them; consider a different approach.";
   const next = addEvent({
     ...session,
     status: "ready",
@@ -1855,13 +1867,13 @@ export function resolveOperatorProposal(id, payload = {}, runtime = {}) {
     error: null,
     modelMessages: [
       ...(session.modelMessages ?? []),
-      { role: "user", content: "Founder discarded the proposed graph changes. Do not reapply them; consider a different approach." },
+      { role: "user", content: rejectMsg },
     ],
   }, {
     type: "graph_proposal_discarded",
-    title: "Founder discarded proposed changes",
-    detail: proposal.rationale,
-    data: { proposalId: proposal.id },
+    title: note ? "Founder redirected the changes" : "Founder discarded proposed changes",
+    detail: note || proposal.rationale,
+    data: { proposalId: proposal.id, note: note || undefined },
   }, options);
   launchOperatorSession(id, runtime);
   return next;

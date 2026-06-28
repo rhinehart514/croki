@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowUp, Sparkles, Workflow } from "lucide-react";
+import { ArrowUp, Lightbulb, Workflow } from "lucide-react";
 
 // The front door — a plain-language goal box, ChatGPT-style. The founder says what they want in
 // their own words; the operator inspects the product, data, and connectors, then proposes systems.
@@ -58,7 +58,7 @@ export function GoalLauncher({
         </div>
 
         <div className="goal-launcher-secondary">
-          <button onClick={onIdeate} disabled={busy} type="button"><Sparkles size={13} /> Or just ideate channels for me</button>
+          <button onClick={onIdeate} disabled={busy} type="button"><Lightbulb size={13} /> Or just ideate channels for me</button>
           {onLoadRecipe ? (
             <button onClick={onLoadRecipe} disabled={busy} type="button"><Workflow size={13} /> Start from the pilot-outreach recipe</button>
           ) : null}

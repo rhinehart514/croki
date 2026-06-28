@@ -6,10 +6,11 @@ import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateActio
 import {
   Bot, CheckCircle2, ChevronDown, GitBranch, History, Pause, Play, X,
 } from "lucide-react";
-import { GraphCanvas } from "@/components/GraphCanvas";
+import { GraphCanvas, type OperatorCursorState } from "@/components/GraphCanvas";
 import { CanvasGate } from "@/components/CanvasGate";
 import { SlidingTabs } from "@/components/SlidingTabs";
 import { statusLabel as canonicalStatus, toneForPhrase } from "@/lib/status";
+import { agentPersona } from "@/lib/agentPersona";
 import type {
   AgentCreationPolicy, AgentEvaluation, AgentInstance, ConnectorMeta, DomainEvent, EngineSubsystem,
   FeedbackSignal, GateDecision, GTMContractAudit, GTMGraph, GTMNode, GTMRunResult, NodeSelection, OutcomeProgram,
@@ -61,7 +62,9 @@ function firstString(record: Record<string, unknown> | undefined, keys: string[]
 export function ProgramCanvas({
   program,
   graph,
-  mode,
+  // The Design/Simulation/Run lenses were cut — one project is one canvas, not three modes of it.
+  // The canvas always renders in its full "design" state; the run trace lives in the debugger tabs.
+  mode = "design",
   runResult,
   runs,
   agents,
@@ -84,6 +87,7 @@ export function ProgramCanvas({
   onLoadRecipe,
   proposedNodeIds,
   proposedEdgeIds,
+  revealedNodeIds,
   proposalActive,
   onResolveProposal,
   onSubmitReview,
@@ -91,12 +95,14 @@ export function ProgramCanvas({
   focusDebug,
   nodeEditor,
   onOpenLibrary,
+  onPaneClick,
+  operatorCursor,
   inspecting: inspectingProp,
   onInspectingChange,
 }: {
   program: OutcomeProgram;
   graph: GTMGraph | null;
-  mode: ProgramCanvasMode;
+  mode?: ProgramCanvasMode;
   runResult: GTMRunResult | null;
   runs: GTMRunResult[];
   agents: AgentInstance[];
@@ -124,10 +130,12 @@ export function ProgramCanvas({
   // Operator-staged nodes/edges to ghost on the canvas for founder review (the proposal layer).
   proposedNodeIds?: Set<string>;
   proposedEdgeIds?: Set<string>;
+  // The subset of proposed ghosts that have surfaced in the staged reveal (the rest stay held back).
+  revealedNodeIds?: Set<string>;
   // Slice 2: a proposal is live; resolving it accepts/discards the whole staged change, surfaced
   // inline on each ghost node. Slice 5: gate nodes resolve their staged drafts inline on the canvas.
   proposalActive?: boolean;
-  onResolveProposal?: (accept: boolean) => void;
+  onResolveProposal?: (accept: boolean, note?: string) => void;
   onSubmitReview?: (nodeId: string, decisions: Record<string, GateDecision>) => void;
   onApproveGate?: (nodeId: string) => void;
   // Lets the explorer deep-link the bottom debugger to a specific tab (e.g. clicking a Run opens
@@ -138,6 +146,10 @@ export function ProgramCanvas({
   // Opens the summoned LibraryPalette from the canvas "+ Add step" control (the replacement for the
   // old left-rail Library). Optional, so the canvas still works with no palette wired.
   onOpenLibrary?: () => void;
+  onPaneClick?: () => void;
+  // The live operator presence — Claude's cursor + camera-follow while it stages nodes. Forwarded
+  // straight to the inner GraphCanvas; null when no operator work is on screen.
+  operatorCursor?: OperatorCursorState | null;
   // Program details ("inspecting") is now driven from the FloatingDock, so it's lifted to App and
   // passed in controlled. When unprovided the canvas falls back to its own internal state, so the
   // component still works standalone.
@@ -302,6 +314,7 @@ export function ProgramCanvas({
                 connectors={connectors}
                 subsystemHealth={subsystemHealth}
                 contractAudits={contractAudits}
+                revealedNodeIds={revealedNodeIds}
                 proposedNodeIds={proposedNodeIds}
                 proposedEdgeIds={proposedEdgeIds}
                 proposalActive={proposalActive}
@@ -309,6 +322,7 @@ export function ProgramCanvas({
                 onSubmitReview={onSubmitReview}
                 onApproveGate={onApproveGate}
                 onSelect={onSelectNode}
+                onPaneClick={onPaneClick}
                 onNodePositionChange={onNodePositionChange}
                 onConnectNodes={onConnectNodes}
                 onDeleteEdges={onDeleteEdges}
@@ -320,6 +334,7 @@ export function ProgramCanvas({
                 bloomNodeId={gateBlooming ? pendingGate : null}
                 onOpenLibrary={onOpenLibrary}
                 nodeEditor={nodeEditor ?? null}
+                operatorCursor={operatorCursor ?? null}
               />
             </div>
           ) : (
@@ -453,7 +468,7 @@ function ProgramDetailsSheet({
         origin="top-right"
         role="dialog"
       >
-        <div
+        <section
           aria-label="Program details"
           aria-modal="true"
           onClick={(e) => e.stopPropagation()}
@@ -544,7 +559,7 @@ function ProgramDetailsSheet({
             </div>
           ) : null}
         </div>
-        </div>
+        </section>
       </Reveal>
     </motion.div>
   );
@@ -732,7 +747,8 @@ function ContractsPanel({ agents, policies, evaluations }: { agents: AgentInstan
   return <div className="timeline-list">{agents.map((agent) => {
     const policy = policies.find((item) => item.id === agent.creationPolicyId);
     const evaluation = evaluations.filter((item) => item.agentInstanceId === agent.id).at(-1);
-    return <DebugRow key={agent.id} icon={<CheckCircle2 />} title={`${agent.ref} v${agent.version}`} detail={`Accepts ${agent.inputContract.length} · Emits ${agent.outputContract.length}`} meta={evaluation?.status ?? policy?.purpose ?? "not evaluated"} />;
+    const role = agentPersona(agent.ref, agent.job).role;
+    return <DebugRow key={agent.id} icon={<CheckCircle2 />} title={`${role} · v${agent.version}`} detail={`Accepts ${agent.inputContract.length} · Emits ${agent.outputContract.length}`} meta={evaluation?.status ?? policy?.purpose ?? "not evaluated"} />;
   })}</div>;
 }
 

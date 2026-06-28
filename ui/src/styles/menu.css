@@ -124,6 +124,23 @@
   background: var(--surface-2);
 }
 
+/* A primary action row — the one elevated, lead action at a menu's head (e.g. the library: real
+   agents/skills ranked above generic blocks). Filled and bordered so it reads as the wedge action,
+   not just the first row. The trailing chevron signals it opens a fuller surface. */
+.menu-item.menu-primary {
+  margin: 2px 2px 4px;
+  padding: 9px 10px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+.menu-item.menu-primary:hover,
+.menu-item.menu-primary:focus-visible {
+  background: color-mix(in srgb, var(--surface-2) 90%, var(--ink));
+}
+.menu-item.menu-primary .menu-item-label { font-weight: 600; }
+.menu-primary-chev { flex: none; margin-left: auto; color: var(--faint); }
+
 .menu-item.destructive,
 .menu-item.destructive > svg:first-child,
 .menu-item.destructive .menu-item-icon {

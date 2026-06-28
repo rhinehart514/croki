@@ -7,6 +7,7 @@ import type {
   GraphOperation, GTMContractAudit,
   OutcomeProgram, AgentCreationPolicy, AgentInstance, PersonalizationProfile, FeedbackSignal,
   AgentEvaluation, DomainEvent, ProductModel, ProductModelEdit, ProductPinTargetKind,
+  CapabilityServer,
 } from "@/types";
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -92,6 +93,26 @@ export const applyWorkspaceRevision = (
 // ── Connector registry ──────────────────────────────────────────────────────
 export const getConnectors = () =>
   get<{ connectors: ConnectorMeta[] }>("/api/connectors");
+
+// ── Capabilities (external MCP servers) ──────────────────────────────────────
+export const getCapabilities = () =>
+  get<{ servers: CapabilityServer[] }>("/api/capabilities");
+
+export const connectCapability = (input: {
+  id?: string; name: string; url?: string; trust?: string; demo?: boolean;
+  command?: string; args?: string[]; tools?: { name: string; description?: string; annotations?: Record<string, unknown> }[];
+}) => post<{ server: CapabilityServer }>("/api/capabilities/connect", input);
+
+// Reclassify a tool across the wall. Loosening (write→read) needs confirm:true, or the
+// server answers 409 with needsConfirm so the UI can ask deliberately.
+export const reclassifyCapabilityTool = (serverId: string, tool: string, lane: "read" | "write", confirm = false) =>
+  post<{ server: CapabilityServer; loosenedWall: boolean }>(
+    `/api/capabilities/${encodeURIComponent(serverId)}/reclassify`, { tool, lane, confirm },
+  );
+
+export const removeCapability = (serverId: string) =>
+  fetch(`/api/capabilities/${encodeURIComponent(serverId)}`, { method: "DELETE" })
+    .then((r) => r.json() as Promise<{ servers: CapabilityServer[] }>);
 
 // ── GTM Graph (DAG — zoom 3) ────────────────────────────────────────────────
 export const getGraphTemplate = (channelId?: string) =>
@@ -252,9 +273,11 @@ export const resolveOperatorGate = (
 export const cancelOperatorSession = (sessionId: string) =>
   post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/cancel`, {});
 
-// Accept or discard a graph change the operator staged for review (the on-canvas ghost proposal).
-export const resolveOperatorProposal = (sessionId: string, accept: boolean) =>
-  post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/proposal`, { accept });
+// Accept or discard a graph change the operator staged for review (the on-canvas ghost proposal). An
+// optional note rides along — a reject note is a redirect (Claude changes it), an accept note a quiet
+// annotation the operator reads and the learning loop can later pick up.
+export const resolveOperatorProposal = (sessionId: string, accept: boolean, note?: string) =>
+  post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/proposal`, { accept, note });
 
 // ── Living Product Picture — the founder-editable interpretation aggregate ─────
 // Read the current projected model; edits persist through the three domain commands (NOT a raw
@@ -302,6 +325,21 @@ export const activateProject = (projectId: string) =>
   post<{ project: GTMProject; activeProjectId: string }>(
     `/api/projects/${encodeURIComponent(projectId)}/activate`,
     {},
+  );
+
+// One project per repo. Remove a duplicate (purges its stores) or fold several into one (no record
+// lost). Both return the refreshed project list so the switcher re-renders.
+export async function deleteProject(projectId: string) {
+  const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, { method: "DELETE" });
+  const payload = (await res.json().catch(() => ({}))) as { activeProjectId?: string | null; projects?: ProjectSummary[]; error?: string };
+  if (!res.ok) throw new Error(payload.error || `Delete failed (${res.status}).`);
+  return payload as { activeProjectId: string | null; projects: ProjectSummary[] };
+}
+
+export const mergeProjects = (sourceIds: string[], targetId: string) =>
+  post<{ activeProjectId: string | null; projects: ProjectSummary[] }>(
+    "/api/projects/merge",
+    { sourceIds, targetId },
   );
 
 export const getOpportunities = (projectId: string) =>

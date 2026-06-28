@@ -12,13 +12,16 @@ const ROW = 150;        // vertical gap between branched nodes in the same rank
 
 export type IdeationLane = { channelId: string; title: string };
 
-// A channel's composed workflow as it streams from the server, plus its live status.
+// A channel's composed workflow as it streams from the server, plus its live status. While a lane
+// is "composing" it carries the model's live reasoning (thinking) so the lane shows real work in
+// progress instead of a fabricated pipeline; "error" carries why the compose failed.
 export type LaneState = {
   status: "composing" | "ready" | "error";
   title: string;
   nodes?: GTMNode[];
   edges?: GTMEdge[];
   error?: string;
+  thinking?: string;
 };
 
 export function channelIdFromNode(nodeId: string): string | null {
@@ -60,31 +63,35 @@ function layoutLane(cid: string, rawNodes: GTMNode[], rawEdges: GTMEdge[], laneT
   return { nodes, edges };
 }
 
-// The synthesized placeholder for a channel still composing: context → its agents → gate → output.
-// Grounded in the proposal's agents; replaced the moment the real composed graph streams in.
-function synthLane(channel: GTMOpportunity, agents: GTMOpportunity[]): { nodes: GTMNode[]; edges: GTMEdge[] } {
-  const nodes: GTMNode[] = [{ id: "ctx", category: "context", connector: "product", label: channel.title, position: { x: 0, y: 0 }, config: {} }];
-  const edges: GTMEdge[] = [];
-  let prev = "ctx";
-  agents.forEach((a, i) => {
-    const id = `a${i}`;
-    nodes.push({ id, category: "generate", kind: "agent", ref: a.ref || a.title, label: a.title, position: { x: 0, y: 0 }, config: {} });
-    edges.push({ id: `ctx-${id}`, source: "ctx", target: id, edgeType: "context" });
-    if (i > 0) edges.push({ id: `${prev}-${id}`, source: prev, target: id, edgeType: "data" });
-    prev = id;
-  });
-  nodes.push({ id: "gate", category: "gate", connector: "default", label: "Founder review", position: { x: 0, y: 0 }, config: {} });
-  edges.push({ id: `${prev}-gate`, source: prev, target: "gate", edgeType: "data" });
-  nodes.push({ id: "out", category: "execute", connector: "local", label: channel.output?.label || "Stage for review", position: { x: 0, y: 0 }, config: {} });
-  edges.push({ id: "gate-out", source: "gate", target: "out", edgeType: "data" });
-  return { nodes, edges };
+// The honest stand-in for a lane that has NOT composed yet — composing or failed. NOT a fabricated
+// pipeline (the old synthLane lied: it drew a finished-looking five-node workflow for a lane that
+// had composed nothing). This is a single status card that says the truth — the model is reasoning
+// (with its live thinking) or the compose errored (with why) — and is replaced the instant the real
+// graph streams in. The canvas renders it via the laneStatusNode type (detected by config.laneStatus).
+function laneStatusNode(channel: GTMOpportunity, state: LaneState | undefined): { nodes: GTMNode[]; edges: GTMEdge[] } {
+  const node: GTMNode = {
+    id: "status",
+    category: "context",
+    connector: "product",
+    label: channel.title,
+    position: { x: 0, y: 0 },
+    config: {
+      laneStatus: {
+        status: state?.status === "error" ? "error" : "composing",
+        title: channel.title,
+        thinking: state?.thinking ?? "",
+        error: state?.error ?? "",
+      },
+    },
+  };
+  return { nodes: [node], edges: [] };
 }
 
-// Assemble the whole ideation canvas: one lane per channel, real composed graph when present,
-// synth placeholder while composing. lanes[] preserves order for the build bar.
+// Assemble the whole ideation canvas: one lane per channel. A lane shows its REAL model-composed
+// graph once the workflow event lands; until then it shows the honest status card above — never a
+// fabricated workflow. lanes[] preserves order for the build bar.
 export function buildIdeationCanvas(
   channels: GTMOpportunity[],
-  agentsFor: (channel: GTMOpportunity) => GTMOpportunity[],
   laneStates: Record<string, LaneState>,
 ): { graph: GTMGraph; lanes: IdeationLane[] } {
   const nodes: GTMNode[] = [];
@@ -95,7 +102,7 @@ export function buildIdeationCanvas(
     const state = laneStates[channel.id];
     const raw = (state?.status === "ready" && state.nodes && state.edges)
       ? { nodes: state.nodes, edges: state.edges }
-      : synthLane(channel, agentsFor(channel));
+      : laneStatusNode(channel, state);
     const laid = layoutLane(channel.id, raw.nodes, raw.edges, laneTop);
     nodes.push(...laid.nodes);
     edges.push(...laid.edges);

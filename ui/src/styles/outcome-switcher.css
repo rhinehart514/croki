@@ -89,12 +89,71 @@
   border-radius: 50%;
 }
 
-/* Systems nested under a program — indent the child rows and their eyebrow. */
-.osw-item-child { padding-left: 22px; }
+/* The channel qualifier demoted to a quiet suffix after the outcome name ("· Trigger Outbound"). */
+.osw-qual {
+  color: var(--muted);
+  font-weight: 400;
+}
 
-.osw-subgroup {
+/* Filter field — only rendered once the list is too long to scan. Reuses the menu's hairline. */
+.osw-filter {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 2px 2px 6px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  color: var(--faint);
+}
+.osw-filter > svg { flex: none; }
+.osw-filter-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.78125rem;
+  outline: none;
+}
+.osw-filter-input::placeholder { color: var(--faint); }
+
+/* A multi-system outcome is a group: its header toggles the systems open/closed. */
+.osw-expander[aria-expanded="true"] { background: var(--surface-2); }
+
+/* Health segments — one per system on a collapsed multi-system row, so the row glances as a status
+   board. Colored by each system's live state via channelDot; sit at the row's end before the count. */
+.osw-segs {
+  flex: none;
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+}
+.osw-seg {
+  width: 14px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--ghost);
+}
+.osw-count {
+  flex: none;
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--faint);
+}
+.osw-expand-chev {
+  flex: none;
+  margin-left: 4px;
+  color: var(--faint);
+  transition: transform 160ms var(--ease);
+}
+.osw-expand-chev.open { transform: rotate(90deg); }
+
+/* Systems listed under an expanded outcome — indent the child rows. */
+.osw-children {
   display: flex;
   flex-direction: column;
   gap: 1px;
 }
-.osw-subgroup-label { padding-left: 22px; }
+.osw-child { padding-left: 24px; }

@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>One engine, not three canvases — canvas × composer directions</title>
+<style>
+  :root{
+    --ink:#18181b; --ink-2:#3f3f46; --muted:#71717a; --faint:#a1a1aa; --ghost:#d4d4d8;
+    --line:#ececec; --line-2:#e4e4e7; --surface:#fff; --surface-2:#f4f4f5;
+    --canvas:#fafafa; --dot:#e4e4e7;
+    --proven:#16a34a; --proven-soft:#f0fdf4; --gap:#d97706; --gap-soft:#fffbeb;
+    --danger:#dc2626; --blind:#a1a1aa; --link:#2563eb;
+    --mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;
+    --r-sm:6px; --r-md:9px; --r-lg:12px; --r-xl:16px;
+    --sh-card:0 1px 2px rgba(24,24,27,.04),0 1px 3px rgba(24,24,27,.06);
+    --sh-pop:0 4px 12px rgba(24,24,27,.08),0 12px 32px rgba(24,24,27,.10);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--sans);color:var(--ink);background:var(--canvas);
+    -webkit-font-smoothing:antialiased;line-height:1.5;font-size:14px;
+    background-image:radial-gradient(var(--dot) 1px,transparent 1px);background-size:22px 22px;}
+  .wrap{max-width:1240px;margin:0 auto;padding:48px 40px 96px;}
+  h1{font-size:26px;letter-spacing:-.011em;margin:0 0 6px;}
+  h2{font-size:21px;letter-spacing:-.011em;margin:0;}
+  .sub{color:var(--muted);font-size:15px;max-width:760px;margin:0 0 4px;}
+  .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:0 0 10px;}
+  .reframe{display:flex;gap:14px;margin:22px 0 8px;flex-wrap:wrap}
+  .reframe .col{flex:1;min-width:300px;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-lg);padding:16px 18px;box-shadow:var(--sh-card)}
+  .reframe .bad{border-left:3px solid var(--ghost)}
+  .reframe .good{border-left:3px solid var(--proven)}
+  .reframe h3{margin:0 0 6px;font-size:13px}
+  .reframe p{margin:0;color:var(--ink-2);font-size:13px}
+  .q{background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-lg);padding:18px 20px;margin:18px 0 40px;box-shadow:var(--sh-card)}
+  .q ol{margin:8px 0 0;padding-left:20px;color:var(--ink-2);font-size:13.5px}
+  .q li{margin:6px 0}
+  .q b{color:var(--ink)}
+
+  .dir{margin:0 0 52px}
+  .dirhead{display:flex;align-items:baseline;gap:12px;margin:0 0 4px}
+  .pill{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;border:1px solid var(--line-2);color:var(--muted);background:var(--surface)}
+  .pill.rec{color:#fff;background:var(--ink);border-color:var(--ink)}
+  .read{color:var(--muted);font-size:13px;margin:8px 0 16px;max-width:900px}
+  .read b{color:var(--ink-2)}
+
+  /* canvas frame */
+  .frame{position:relative;background:var(--canvas);border:1px solid var(--line-2);border-radius:var(--r-xl);box-shadow:var(--sh-card);overflow:hidden}
+  .frame .topbar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--line)}
+  .crumb{font-size:13px;font-weight:560}
+  .crumb .slash{color:var(--ghost);margin:0 7px}
+  .crumb .dim{color:var(--muted);font-weight:400}
+  .topbar .spacer{flex:1}
+  .chip{font-size:11px;color:var(--muted);border:1px solid var(--line-2);border-radius:999px;padding:3px 9px;background:var(--surface)}
+  .chip.warn{color:var(--gap);background:var(--gap-soft);border-color:#f5e3bf}
+
+  /* node primitives */
+  .node{background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-md);padding:8px 10px;box-shadow:var(--sh-card);min-width:0}
+  .node .kind{font-family:var(--mono);font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);display:flex;align-items:center;gap:5px}
+  .node .ttl{font-size:12px;color:var(--ink);margin-top:3px;line-height:1.3}
+  .dotk{width:6px;height:6px;border-radius:2px;background:var(--ghost);display:inline-block}
+  .dotk.ground{background:var(--ink)} .dotk.agent{background:var(--ink)} .dotk.code{background:var(--faint)}
+  .dotk.gate{background:var(--gap)} .dotk.exec{background:var(--ink)} .dotk.measure{background:var(--proven)} .dotk.src{background:var(--link)}
+  .agentchip{display:inline-flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--line-2);border-radius:999px;padding:5px 11px 5px 6px;font-size:12px;box-shadow:var(--sh-card)}
+  . av{width:20px;height:20px;border-radius:50%;background:var(--ink);color:#fff;font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center;font-family:var(--mono)}
+  .band-lbl{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);width:96px;flex:none;padding-top:6px}
+  .shared-tag{font-size:10px;color:var(--proven);background:var(--proven-soft);border:1px solid #cdeed5;border-radius:999px;padding:1px 7px;font-family:var(--mono);letter-spacing:.03em}
+
+  /* ============ DIRECTION B : layered engine, gate as a line ============ */
+  .stack{padding:18px 22px;display:flex;flex-direction:column;gap:0}
+  .row{display:flex;align-items:flex-start;gap:14px;padding:10px 0}
+  .rowbody{flex:1}
+  .ground{background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-md);padding:11px 14px;display:flex;gap:18px;align-items:center;box-shadow:var(--sh-card)}
+  .ground .g{font-size:12px;color:var(--ink-2)} .ground .g b{color:var(--ink)} .ground .g span{color:var(--muted)}
+  .shelf{display:flex;gap:9px;flex-wrap:wrap}
+  .channels{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+  .chan{background:rgba(255,255,255,.55);border:1px dashed var(--ghost);border-radius:var(--r-lg);padding:10px;display:flex;flex-direction:column;gap:7px}
+  .chan .ch-h{font-size:12px;font-weight:580;display:flex;align-items:center;gap:6px}
+  .chan .ch-h .d{width:7px;height:7px;border-radius:50%;}
+  .chan small{color:var(--muted);font-size:10.5px}
+  .gateline{display:flex;align-items:center;gap:12px;margin:14px 0;padding:9px 14px;background:var(--gap-soft);border:1px solid #f0dcae;border-top:2px solid var(--gap);border-bottom:2px solid var(--gap);border-radius:8px}
+  .gateline .lock{width:22px;height:22px;border-radius:6px;background:var(--gap);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px}
+  .gateline .txt{font-size:12.5px;color:#7a4d06;font-weight:560}
+  .gateline .marks{margin-left:auto;display:flex;gap:8px}
+  .gateline .gm{font-size:10px;font-family:var(--mono);color:var(--gap);border:1px solid #e7cd96;background:#fff;border-radius:999px;padding:2px 8px}
+  .belowgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+  .learnrow{display:flex;align-items:center;gap:12px;margin-top:10px;padding:9px 14px;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-md);box-shadow:var(--sh-card)}
+  .learnrow .loop{font-family:var(--mono);font-size:11px;color:var(--proven)}
+  .conn{height:14px;display:flex;justify-content:center}
+  .conn::before{content:"";width:1px;background:var(--ghost)}
+
+  /* composer dock */
+  .withdock{display:grid;grid-template-columns:1fr 300px;gap:0}
+  .dock{background:var(--surface);border-left:1px solid var(--line);display:flex;flex-direction:column}
+  .dock .dh{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line)}
+  .dock .dh .bot{width:22px;height:22px;border-radius:6px;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px}
+  .dock .dh b{font-size:13px} .dock .dh span{font-size:11px;color:var(--muted)}
+  .dock .body{padding:14px;display:flex;flex-direction:column;gap:12px;flex:1}
+  .umsg{align-self:flex-end;background:var(--surface-2);border:1px solid var(--line-2);border-radius:12px 12px 4px 12px;padding:8px 11px;font-size:12.5px;color:var(--ink-2);max-width:90%}
+  .cmsg{font-size:12.5px;color:var(--ink-2)}
+  .cmsg .did{color:var(--ink);font-weight:560}
+  .diffcard{border:1px solid #cdeed5;background:var(--proven-soft);border-radius:var(--r-md);padding:10px}
+  .diffcard .dl{font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--proven)}
+  .diffcard .add{font-size:12px;color:var(--ink);margin-top:5px} .diffcard .add::before{content:"+ ";color:var(--proven);font-family:var(--mono)}
+  .diffcard .rm{font-size:12px;color:var(--muted);text-decoration:line-through;margin-top:3px}
+  .diffcard .acts{display:flex;gap:8px;margin-top:10px}
+  .btn{font-size:12px;border-radius:7px;padding:6px 12px;border:1px solid var(--line-2);background:var(--surface);cursor:pointer;font-weight:560}
+  .btn.pri{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .dock .input{margin-top:auto;border-top:1px solid var(--line);padding:11px 14px;color:var(--faint);font-size:12.5px}
+
+  /* ghost (proposed) channel on canvas */
+  .chan.ghost{border:1px dashed var(--proven);background:var(--proven-soft);position:relative}
+  .chan.ghost .ph{position:absolute;top:-9px;right:8px;font-family:var(--mono);font-size:9px;background:var(--proven);color:#fff;border-radius:999px;padding:1px 7px;letter-spacing:.04em}
+
+  /* ============ DIRECTION A : engine core + branches ============ */
+  .hub{position:relative;padding:26px;display:flex;flex-direction:column;align-items:center;gap:0;min-height:380px}
+  .core{background:var(--ink);color:#fff;border-radius:var(--r-xl);padding:16px 22px;text-align:center;box-shadow:var(--sh-pop);max-width:520px}
+  .core .ct{font-size:13px;font-weight:600;letter-spacing:-.01em}
+  .core .cs{font-size:11px;color:#d4d4d8;margin-top:4px;font-family:var(--mono)}
+  .core .pool{display:flex;gap:6px;justify-content:center;margin-top:10px;flex-wrap:wrap}
+  .core .pa{font-size:10px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:3px 8px}
+  .spokes{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;width:100%;margin-top:34px;position:relative}
+  .spokes::before{content:"";position:absolute;top:-22px;left:16.6%;right:16.6%;height:1px;background:var(--ghost)}
+  .spoke{display:flex;flex-direction:column;gap:8px;align-items:center;position:relative}
+  .spoke::before{content:"";position:absolute;top:-22px;width:1px;height:22px;background:var(--ghost)}
+  .branch{background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-lg);padding:11px;width:100%;box-shadow:var(--sh-card)}
+  .branch .bt{font-size:12px;font-weight:580;display:flex;align-items:center;gap:6px;margin-bottom:7px}
+  .branch .step{font-size:11px;color:var(--ink-2);padding:4px 0;border-top:1px dashed var(--line-2);display:flex;align-items:center;gap:6px}
+  .branch .step:first-of-type{border-top:0}
+  .mini{width:6px;height:6px;border-radius:2px;flex:none}
+
+  /* ============ DIRECTION C : dedup'd true graph ============ */
+  .graph{padding:20px;display:grid;grid-template-columns:160px 150px 1fr 150px;gap:0 26px;align-items:center;position:relative}
+  .gcol{display:flex;flex-direction:column;gap:14px}
+  .gcol.mid{gap:10px}
+  .fanlabel{grid-column:1/-1;font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.07em;text-transform:uppercase;margin-bottom:4px}
+  .gnode{background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-md);padding:8px 10px;box-shadow:var(--sh-card)}
+  .gnode .k{font-family:var(--mono);font-size:9px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em}
+  .gnode .t{font-size:11.5px;margin-top:2px}
+  .gnode.shared{border-color:#cdeed5;background:var(--proven-soft)}
+  .fan{font-size:10px;color:var(--proven);font-family:var(--mono);margin-top:4px}
+  .foot{color:var(--faint);font-size:12px;text-align:center;margin-top:24px;font-family:var(--mono)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="kicker">GTM IDE · canvas × composer · exploration</p>
+  <h1>One engine, not three canvases</h1>
+  <p class="sub">The split-canvas model copies the shared substrate once per channel. There is one RodentRadar engine; channels are routes through it toward different outcomes. Three ways to draw that — each keeps the composer and the canvas as two views of one state.</p>
+
+  <div class="reframe">
+    <div class="col bad">
+      <h3>What's there now — three machines</h3>
+      <p>“Prospect Researcher” and “Outreach Writer” are duplicated nodes across lanes. RodentRadar grounding is repeated at the head of every lane. The shared engine is copied, not shared. Adding a channel means rebuilding the substrate.</p>
+    </div>
+    <div class="col good">
+      <h3>The reframe — one engine, channels off it</h3>
+      <p>Grounding, the agent pool, measurement, the gate policy and the learning loop are <b>shared once</b>. A channel is the only thing that diverges — a path from the shared engine to one outcome. Add a channel = draw one new branch, not a new machine.</p>
+    </div>
+  </div>
+
+  <div class="q">
+    <b style="font-size:13px">The forks we have to call before pixels</b>
+    <ol>
+      <li><b>Shared or copied?</b> When Prospect Researcher serves two channels, is it <b>one node referenced twice</b> (reuse, the engine view) or two instances? This is the data-model decision everything else hangs on.</li>
+      <li><b>What is the unit you zoom between?</b> The engine (all channels at once), the channel (one route), or the node? A product thinker wants to start at <b>outcomes</b> and drill down.</li>
+      <li><b>Where does the composer act?</b> On the whole engine (“add a content channel”) or scoped to whatever's selected? Selection on canvas = scope for the composer.</li>
+      <li><b>Is the gate a node or a property of the engine?</b> If it's the engine's identity (“nothing crosses without you”), it should be <b>one wall every channel passes through</b>, not a box repeated per lane.</li>
+    </ol>
+  </div>
+
+  <!-- ============================ DIRECTION B ============================ -->
+  <div class="dir">
+    <div class="dirhead"><span class="pill rec">Recommended</span><h2>B · Layered engine — the gate is a line</h2></div>
+    <p class="read">The engine reads top to bottom as shared bands. Only the <b>Channels</b> band diverges; everything above and below it is the one engine. The founder gate is a single wall drawn across the whole canvas — every channel visibly crosses it, nothing reaches Stage without you. The composer on the right is editing the same state: a plain-language request renders as a <b>ghosted new channel</b> with inline Accept/Discard — the seam that was broken.<br><b>GTM-engineer read:</b> reuse and the wall are both structural, not per-lane. <b>Product-thinker read:</b> it's a system diagram — ground, capability, route, gate, measure, learn. <b>Customer read:</b> “I can see my whole motion and exactly where my approval sits.” <b>Tradeoff:</b> with 6+ channels the channel band needs horizontal scroll or grouping.</p>
+
+    <div class="frame">
+      <div class="topbar">
+        <span class="crumb">RodentRadar <span class="slash">/</span><span class="dim">Engine</span></span>
+        <span class="spacer"></span>
+        <span class="chip">3 channels</span>
+        <span class="chip warn">1 blind metric</span>
+        <span class="chip">12 gate decisions learned</span>
+      </div>
+      <div class="withdock">
+        <div class="stack">
+          <!-- GROUND -->
+          <div class="row"><div class="band-lbl">Ground <span class="shared-tag">shared</span></div><div class="rowbody">
+            <div class="ground">
+              <div class="g"><b>RodentRadar</b> <span>· source-localization wedge (find the entry hole)</span></div>
+              <div class="g"><b>Buyer:</b> <span>independent PCO operator</span></div>
+              <div class="g"><b>Offer:</b> <span>$49 one-site pilot</span></div>
+            </div>
+          </div></div>
+          <div class="conn"></div>
+          <!-- CAPABILITIES -->
+          <div class="row"><div class="band-lbl">Capabilities <span class="shared-tag">shared</span></div><div class="rowbody">
+            <div class="shelf">
+              <span class="agentchip"><span class="av">PR</span>Prospect Researcher</span>
+              <span class="agentchip"><span class="av">ES</span>Enrichment Scout</span>
+              <span class="agentchip"><span class="av">QA</span>Qualification Analyst</span>
+              <span class="agentchip"><span class="av">OW</span>Outreach Writer</span>
+              <span class="agentchip"><span class="av">AC</span>Attribution Repair</span>
+            </div>
+          </div></div>
+          <div class="conn"></div>
+          <!-- CHANNELS -->
+          <div class="row"><div class="band-lbl">Channels</div><div class="rowbody">
+            <div class="channels">
+              <div class="chan">
+                <div class="ch-h"><span class="d" style="background:var(--link)"></span>Operator outbound</div>
+                <small>discover → research → qualify → draft</small>
+                <div class="node"><div class="kind"><span class="dotk agent"></span>Agent · self-sources</div><div class="ttl">Find 3–5 real WNY operators (public directories)</div></div>
+                <div class="node"><div class="kind"><span class="dotk agent"></span>uses PR · ES · QA</div><div class="ttl">Research + score + opener fact</div></div>
+              </div>
+              <div class="chan">
+                <div class="ch-h"><span class="d" style="background:var(--proven)"></span>Demo-console conversion</div>
+                <small>visitor → enrich → personalized nudge</small>
+                <div class="node"><div class="kind"><span class="dotk src"></span>Source · product event</div><div class="ttl">pilot_requested visitors</div></div>
+                <div class="node"><div class="kind"><span class="dotk agent"></span>uses OW</div><div class="ttl">Map research → outreach shape</div></div>
+              </div>
+              <div class="chan ghost">
+                <span class="ph">proposed</span>
+                <div class="ch-h"><span class="d" style="background:var(--gap)"></span>Audit-prep content</div>
+                <small>angle → draft → rank</small>
+                <div class="node"><div class="kind"><span class="dotk agent"></span>uses OW</div><div class="ttl">Write SQF/AIB explainer from product truth</div></div>
+              </div>
+            </div>
+          </div></div>
+          <!-- THE GATE LINE -->
+          <div class="gateline">
+            <div class="lock">⌧</div>
+            <div class="txt">Founder review — nothing below this line goes out without you</div>
+            <div class="marks">
+              <span class="gm">outbound · 2 drafts</span>
+              <span class="gm">demo · waiting</span>
+              <span class="gm">content · waiting</span>
+            </div>
+          </div>
+          <!-- STAGE -->
+          <div class="row"><div class="band-lbl">Stage</div><div class="rowbody">
+            <div class="belowgrid">
+              <div class="node"><div class="kind"><span class="dotk exec"></span>Execute · staged, never auto-sends</div><div class="ttl">Personal send to named decision-maker</div></div>
+              <div class="node"><div class="kind"><span class="dotk exec"></span>Execute · staged</div><div class="ttl">Demo-console follow-up</div></div>
+              <div class="node" style="opacity:.5"><div class="kind"><span class="dotk exec"></span>Execute</div><div class="ttl">Publish explainer</div></div>
+            </div>
+          </div></div>
+          <div class="conn"></div>
+          <!-- MEASURE -->
+          <div class="row"><div class="band-lbl">Measure <span class="shared-tag">shared</span></div><div class="rowbody">
+            <div class="belowgrid">
+              <div class="node"><div class="kind"><span class="dotk measure"></span>replies · meetings</div><div class="ttl">Discovery calls booked</div></div>
+              <div class="node"><div class="kind"><span class="dotk" style="background:var(--blind)"></span>blind</div><div class="ttl" style="color:var(--gap)">pilot_requested — no source attribution</div></div>
+              <div class="node"><div class="kind"><span class="dotk measure"></span>pilots signed</div><div class="ttl">$49 conversions</div></div>
+            </div>
+          </div></div>
+          <!-- LEARN -->
+          <div class="learnrow">
+            <span class="loop">↺ Learn</span>
+            <span style="font-size:12px;color:var(--ink-2)">12 founder gate decisions → tuned the rules that create the next agent</span>
+            <span style="margin-left:auto;font-size:11px;color:var(--proven);font-family:var(--mono)">feeds back to Capabilities ↑</span>
+          </div>
+        </div>
+
+        <!-- COMPOSER DOCK in sync -->
+        <div class="dock">
+          <div class="dh"><span class="bot">▰</span><b>Claude</b><span>· on your subscription</span></div>
+          <div class="body">
+            <div class="umsg">add a content channel that ranks our audit-prep angle</div>
+            <div class="cmsg"><span class="did">Drew one branch off the engine</span> — it reuses Outreach Writer and your grounding, ends at the same gate. Nothing else changed.</div>
+            <div class="diffcard">
+              <div class="dl">Proposed change · on canvas</div>
+              <div class="add">Channel “Audit-prep content” + draft step</div>
+              <div class="add">edge: Ground → new channel · reuse OW</div>
+              <div class="rm">nothing removed</div>
+              <div class="acts"><button class="btn pri">Accept</button><button class="btn">Discard</button></div>
+            </div>
+            <div class="cmsg" style="color:var(--muted)">Accept and the ghost branch becomes live, then I'll run it to your gate.</div>
+          </div>
+          <div class="input">Ask Claude to build, run, or change anything…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ DIRECTION A ============================ -->
+  <div class="dir">
+    <div class="dirhead"><span class="pill">Alt</span><h2>A · Engine core, channels as branches</h2></div>
+    <p class="read">A literal engine: the core holds grounding, buyer, offer and the shared agent pool; channels radiate out, each ending in its own gate→stage→measure but drawing capability from the center. <b>Strength:</b> the “one engine” idea is visceral — power flows from a core. <b>Tradeoff:</b> hub-and-spoke gets crowded past ~4 channels and the gate is buried per-branch instead of being one wall. Best when you have a small number of bold channels.</p>
+    <div class="frame">
+      <div class="topbar"><span class="crumb">RodentRadar <span class="slash">/</span><span class="dim">Engine</span></span><span class="spacer"></span><span class="chip">core + 3 branches</span></div>
+      <div class="hub">
+        <div class="core">
+          <div class="ct">RodentRadar engine</div>
+          <div class="cs">source-localization · PCO operator · $49 pilot · blind signup</div>
+          <div class="pool"><span class="pa">PR</span><span class="pa">ES</span><span class="pa">QA</span><span class="pa">OW</span><span class="pa">AC</span><span class="pa">↺ learns from 12 gates</span></div>
+        </div>
+        <div class="spokes">
+          <div class="spoke"><div class="branch">
+            <div class="bt"><span class="mini" style="background:var(--link)"></span>Operator outbound</div>
+            <div class="step"><span class="mini" style="background:var(--ink)"></span>discover + research</div>
+            <div class="step"><span class="mini" style="background:var(--gap)"></span>your gate</div>
+            <div class="step"><span class="mini" style="background:var(--proven)"></span>stage → meetings</div>
+          </div></div>
+          <div class="spoke"><div class="branch">
+            <div class="bt"><span class="mini" style="background:var(--proven)"></span>Demo-console</div>
+            <div class="step"><span class="mini" style="background:var(--ink)"></span>enrich visitor</div>
+            <div class="step"><span class="mini" style="background:var(--gap)"></span>your gate</div>
+            <div class="step"><span class="mini" style="background:var(--blind)"></span>measure (blind)</div>
+          </div></div>
+          <div class="spoke"><div class="branch">
+            <div class="bt"><span class="mini" style="background:var(--gap)"></span>Audit-prep content</div>
+            <div class="step"><span class="mini" style="background:var(--ink)"></span>draft from truth</div>
+            <div class="step"><span class="mini" style="background:var(--gap)"></span>your gate</div>
+            <div class="step"><span class="mini" style="background:var(--proven)"></span>rank</div>
+          </div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ DIRECTION C ============================ -->
+  <div class="dir">
+    <div class="dirhead"><span class="pill">Alt</span><h2>C · One dedup'd graph — engineer-true</h2></div>
+    <p class="read">Keep a single directed graph, but a shared node exists <b>once</b> and fans out to every channel that uses it. Sharing is visible as fan-out edges; channels are just the distinct paths to distinct outcomes. <b>Strength:</b> the truest picture of the real engine and its reuse. <b>Tradeoff:</b> closest to a node-graph — needs strong auto-layout or it reads as spaghetti to a non-technical product thinker. The honest engineer's view, riskiest for the customer.</p>
+    <div class="frame">
+      <div class="topbar"><span class="crumb">RodentRadar <span class="slash">/</span><span class="dim">Engine graph</span></span><span class="spacer"></span><span class="chip">shared nodes fan out</span></div>
+      <div class="graph">
+        <div class="fanlabel">shared sources → shared capabilities → channel-specific → shared measure</div>
+        <div class="gcol">
+          <div class="gnode shared"><div class="k">Context · shared</div><div class="t">RodentRadar grounding</div><div class="fan">→ feeds all 3 channels</div></div>
+        </div>
+        <div class="gcol mid">
+          <div class="gnode shared"><div class="k">Agent · shared</div><div class="t">Prospect Researcher</div><div class="fan">→ outbound, demo</div></div>
+          <div class="gnode shared"><div class="k">Agent · shared</div><div class="t">Outreach Writer</div><div class="fan">→ all 3</div></div>
+        </div>
+        <div class="gcol mid">
+          <div class="gnode"><div class="k">Channel · outbound</div><div class="t">Qualify + opener fact → draft</div></div>
+          <div class="gnode"><div class="k">Channel · demo</div><div class="t">Map event → nudge</div></div>
+          <div class="gnode"><div class="k">Channel · content</div><div class="t">Audit-prep explainer</div></div>
+          <div class="gnode" style="border-top:2px solid var(--gap);background:var(--gap-soft)"><div class="k" style="color:var(--gap)">Gate · one wall, all paths</div><div class="t">Founder review before any send</div></div>
+        </div>
+        <div class="gcol">
+          <div class="gnode shared"><div class="k">Measure · shared</div><div class="t">replies · meetings · pilots</div><div class="fan" style="color:var(--gap)">pilot_requested = blind</div></div>
+          <div class="gnode shared"><div class="k">Learn · shared</div><div class="t">↺ gate decisions → creation rules</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="foot">three topologies · one state · composer + canvas are two views of it</p>
+</div>
+</body>
+</html>

@@ -13,6 +13,7 @@ import {
   isResumeFailure,
   operatorAllowedTools,
   parseStreamLine,
+  PAUSE_STATUSES,
 } from "../src/runtimes/claude-code.mjs";
 
 // A ctx test double. Every callback is GTM-IDE-owned in production; here we just
@@ -319,6 +320,49 @@ describe("claudeCodeRuntime availability + helpers", () => {
     assert.equal(queryOptions.strictMcpConfig, true);
     assert.equal(queryOptions.permissionMode, "dontAsk");
     assert.ok(queryOptions.mcpServers["gtm-operator"]);
+  });
+
+  it("every founder wall is in PAUSE_STATUSES, so none can be talked past", () => {
+    // The subprocess adapter polls currentStatus() to know when to stop; any status that
+    // means "the founder must act before another model turn" has to be here. Drift in this
+    // set is exactly the bug that orphaned a staged proposal.
+    for (const wall of ["waiting_for_gate", "waiting_for_proposal", "waiting_for_input"]) {
+      assert.ok(PAUSE_STATUSES.has(wall), `${wall} must halt the drive`);
+    }
+  });
+
+  it("halts the drive when a staged proposal sets waiting_for_proposal", async () => {
+    // Regression: waiting_for_proposal was missing from PAUSE_STATUSES, so a staged graph
+    // change did not stop the subprocess. The model talked past it, the turn-end was misread
+    // as "completed", and the pending proposal was orphaned — the canvas keys its ghost +
+    // accept buttons off waiting_for_proposal, so the founder had nothing to accept.
+    let status = "running";
+    const query = () => (async function* messages() {
+      yield {
+        type: "assistant",
+        message: { content: [{ type: "tool_use", name: "mcp__gtm-operator__propose_graph_changes", input: {} }] },
+      };
+      status = "waiting_for_proposal";
+      yield { type: "user", message: { content: [] } };
+    }());
+    const outcome = await claudeCodeRuntime.drive({
+      sessionId: "op-prop",
+      goal: "Swap the empty source for a discovery agent.",
+      model: "claude-sonnet-4-6",
+      system: "Operate GTM IDE.",
+      tools: [{ name: "propose_graph_changes" }],
+      query,
+      env: {},
+      options: { root: "/tmp/gtm-test", cwd: "/tmp" },
+      maxSteps: 8,
+      stepCount: 0,
+      isCancelled: () => false,
+      currentStatus: () => status,
+      onText: () => {},
+      onToolStart: () => {},
+      onTurn: () => 1,
+    });
+    assert.equal(outcome.kind, "paused", "a staged proposal is a founder wall — pause, do not complete");
   });
 });
 

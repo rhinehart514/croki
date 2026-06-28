@@ -118,8 +118,13 @@ export function assemblePersonalizationProfile({ project, program, policy, prior
   };
 }
 
-function instanceId(program, agentOpportunity) {
-  return `agent-instance-${slug(`${program.id}-${agentOpportunity.ref || agentOpportunity.title}`)}`;
+// An agent's identity is its REF within a project — not the program that first reached for it.
+// One engine, many channels: when two channels both want "prospect-researcher", they get the SAME
+// instance, so personalization and learning land once and the canvas can draw it once with fan-out
+// edges instead of a copy per lane. The store file is already per-project, so the ref alone is the
+// stable lineage key.
+function instanceId(ref) {
+  return `agent-instance-${slug(ref)}`;
 }
 
 function latestInstance(instances) {
@@ -148,12 +153,11 @@ export function createPersonalizedAgent({ project, program, policy, agentOpportu
   const ref = String(agentOpportunity.ref || slug(agentOpportunity.title)).trim();
   if (!ref) throw new Error("No agent without a ref.");
   const store = loadCapabilityFoundry(projectId, options);
-  const baseInstanceId = instanceId(program, agentOpportunity);
-  const matching = store.instances.filter((item) =>
-    item.programId === program.id
-    && item.ref === ref
-    && item.sourceOpportunityId === (agentOpportunity.id ?? null)
-  );
+  const baseInstanceId = instanceId(ref);
+  // Shared by reference: match on ref across the whole project, not on the program that asked.
+  // A channel reaching for an agent another channel already minted reuses it (same policy → same
+  // instance); a genuinely different creation policy versions the shared lineage forward.
+  const matching = store.instances.filter((item) => item.ref === ref);
   const existingForPolicy = matching.find((item) => item.creationPolicyId === policy.id);
   if (existingForPolicy) {
     const profile = store.profiles.find((item) => item.id === existingForPolicy.personalizationProfileId)

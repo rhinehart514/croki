@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { composeOpportunityChannel, previewOpportunityChannel } from "../src/workflow-composer.mjs";
+import { composeOpportunityChannel, previewOpportunityChannel, composePortfolioGraph } from "../src/workflow-composer.mjs";
 import { saveGeneratedOpportunities, updateOpportunity } from "../src/opportunity-engine.mjs";
 import { createProject, loadProject } from "../src/project-store.mjs";
 import { loadFlow } from "../src/flow-store.mjs";
@@ -231,5 +231,46 @@ describe("model-composed workflow (no fixed skeleton)", () => {
       composeOpportunityChannel({ channelOpportunityId: channel.id, agentOpportunityIds: agents.map((a) => a.id) }, options),
       /subscription/i,
     );
+  });
+});
+
+describe("one engine, shared agent pool", () => {
+  // A composer that records the engine pool it was handed, then returns a valid gated graph reusing
+  // the channel's own agent. Proves the host feeds each channel the agents earlier channels use, so
+  // the model can reuse one shared teammate instead of minting a copy per lane.
+  function recordingComposer(seenPools) {
+    return ({ agents, enginePool }) => {
+      seenPools.push(enginePool ?? []);
+      const a = agents[0];
+      return {
+        ok: true,
+        nodes: [
+          { id: "ctx", category: "context", connector: "product", label: "Context" },
+          { id: "ag", kind: "agent", ref: a.ref, label: a.title },
+          { id: "gate", category: "gate", connector: "default", label: "Founder review" },
+          { id: "out", category: "execute", connector: "local", label: "Stage" },
+        ],
+        edges: [
+          { source: "ctx", target: "ag", edgeType: "context" },
+          { source: "ag", target: "gate", edgeType: "data" },
+          { source: "gate", target: "out", edgeType: "data" },
+        ],
+      };
+    };
+  }
+
+  it("feeds each portfolio channel the agents earlier channels already use", async () => {
+    const seenPools = [];
+    await composePortfolioGraph({
+      goal: "land pilots",
+      channels: [
+        { channel: { id: "c1", name: "Outbound", objective: "outbound" }, agents: [{ ref: "researcher", title: "Researcher", objective: "research prospects" }] },
+        { channel: { id: "c2", name: "Referral", objective: "referral" }, agents: [{ ref: "designer", title: "Designer", objective: "design referral" }] },
+      ],
+      compose: recordingComposer(seenPools),
+    });
+    assert.equal(seenPools.length, 2);
+    assert.deepEqual(seenPools[0], [], "the first channel sees an empty engine pool");
+    assert.ok(seenPools[1].some((a) => a.ref === "researcher"), "the second channel sees the first channel's agent in the pool");
   });
 });

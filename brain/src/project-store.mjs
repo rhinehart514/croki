@@ -257,6 +257,29 @@ export function setActiveProject(projectId, options = {}) {
   return loadProject({ ...options, projectId });
 }
 
+// Remove a project from the catalog only — the durable per-project stores (programs, policies,
+// foundry, …) are purged separately by project-merge.mjs so this stays a pure catalog edit with no
+// cross-store imports. A merge calls it to drop each source once its records have moved; a plain
+// delete calls it after purging. The active project never dangles: if the removed one was active,
+// the first survivor takes over. The catalog always keeps at least one project.
+export function deleteProjectFromCatalog(projectId, options = {}) {
+  const catalog = loadProjectCatalog(options);
+  if (!catalog.projects.some((project) => project.id === projectId)) {
+    throw new Error(`Project not found: ${projectId}`);
+  }
+  const projects = catalog.projects.filter((project) => project.id !== projectId);
+  if (!projects.length) throw new Error("Cannot delete the last remaining project.");
+  const activeProjectId = catalog.activeProjectId === projectId
+    ? projects[0].id
+    : catalog.activeProjectId;
+  write(projectFile(options), { ...catalog, activeProjectId, projects });
+  return { activeProjectId, deletedId: projectId };
+}
+
+export function projectStoreRoot(options = {}) {
+  return root(options);
+}
+
 function channelFromProgram(program, options = {}) {
   const base = programWorkflowChannel(program);
   const flow = loadFlow(base.graphId, null, options);

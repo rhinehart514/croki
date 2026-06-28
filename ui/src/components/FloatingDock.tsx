@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
 import {
-  AlertTriangle, ArrowRight, LoaderCircle, PanelRight, ShieldCheck,
+  AlertTriangle, ArrowRight, LoaderCircle, Lightbulb, PanelRight, ShieldCheck,
 } from "lucide-react";
 import { SPRING } from "@/lib/springs";
 import { Reveal, Stagger, StaggerItem, Pop } from "@/lib/motion";
@@ -8,7 +8,6 @@ import { healthHex } from "@/lib/health";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { OutcomeSwitcher } from "@/components/OutcomeSwitcher";
 import { SlidingTabs } from "@/components/SlidingTabs";
-import type { ProgramCanvasMode } from "@/components/ProgramCanvas";
 import type { ConnectionStatus } from "@/api";
 import "@/styles/floating-dock.css";
 import type {
@@ -16,31 +15,21 @@ import type {
   OutcomeProgram, ProjectSummary,
 } from "@/types";
 
-// The mode lenses are the program's lenses — identical to ProgramCanvasMode, reused so the dock and
-// the workbench can never drift on what a mode is.
-type DockMode = ProgramCanvasMode;
-
-// Design · Simulation · Run only. Review was dropped (the Approvals count owns the gate view) and
-// Learning moved into the Program-details sheet — both earned their cut in the value audit.
-const MODE_ITEMS: { value: DockMode; label: string }[] = [
-  { value: "design", label: "Design" },
-  { value: "simulation", label: "Simulation" },
-  { value: "run", label: "Run" },
-];
-
 // The single floating control dock that sits top-center over the full-bleed canvas. It carries every
-// control the dissolved top toolbar and program sub-header used to hold, composed left → center →
-// right (breadcrumb · lenses · actions), the grounded pattern. It owns no logic — App passes the
-// same handlers and state the bars passed before, so this is purely where they live now.
+// control the dissolved top toolbar and program sub-header used to hold, composed left → right
+// (breadcrumb · actions). The Design/Simulation/Run lenses were cut: one project is one canvas, not
+// three modes of it. Run is its own action; the run trace lives in the workbench debugger, not a lens.
 export function FloatingDock({
   // Left — product · outcome breadcrumb
-  projects, activeProjectId, projectBusy, onSwitchProject, onManageProjects, onNewProduct,
+  projects, activeProjectId, projectBusy, onSwitchProject, onManageProjects, onNewProduct, onDeleteProject,
   programs, channels, activeProgramId, activeChannelId,
   onOpenProgram, onOpenChannel, onNewProgram, onIdeate,
+  onShowOverview, overviewActive,
+  // The focused workflow's emergent motion identity ("Outbound loop", "Content loop") — what KIND of
+  // go-to-market this is, derived from its real stages. Null on the all-workflows overview.
+  motionName,
   // GTM ↔ Product
   showGtmToggle, productMode, onModeToggle,
-  // Center — the mode lenses
-  mode, onModeChange,
   // Right — actions
   problems, problemsOpen, onToggleProblems, nodeForSubsystem, onJumpToNode,
   pendingApprovals, approvalsOpen, onToggleApprovals,
@@ -53,6 +42,8 @@ export function FloatingDock({
   onSwitchProject: (id: string) => void | Promise<void>;
   onManageProjects: () => void;
   onNewProduct: () => void;
+  // Remove a duplicate product (one project per repo). Optional → no delete affordance in the switcher.
+  onDeleteProject?: (id: string) => void | Promise<void>;
   programs: OutcomeProgram[];
   channels: ChannelMeta[];
   activeProgramId: string | null;
@@ -61,11 +52,12 @@ export function FloatingDock({
   onOpenChannel: (id: string) => void;
   onNewProgram: () => void;
   onIdeate: () => void;
+  onShowOverview?: () => void;
+  overviewActive?: boolean;
+  motionName?: string | null;
   showGtmToggle: boolean;
   productMode: boolean;
   onModeToggle: (v: "gtm" | "product") => void;
-  mode: DockMode;
-  onModeChange: (m: DockMode) => void;
   problems: Investigation[];
   problemsOpen: boolean;
   onToggleProblems: () => void;
@@ -78,7 +70,6 @@ export function FloatingDock({
   audits: Record<string, GTMContractAudit>;
   running: boolean;
   runningNodeId: string | null;
-  onSimulate: () => void;
   onRun: () => void;
   inspecting: boolean;
   onToggleInspect: () => void;
@@ -114,6 +105,7 @@ export function FloatingDock({
           onSwitch={onSwitchProject}
           onManage={onManageProjects}
           onNewProduct={onNewProduct}
+          onDelete={onDeleteProject}
         />
         <span className="fdock-sep">/</span>
         <OutcomeSwitcher
@@ -124,8 +116,29 @@ export function FloatingDock({
           onOpenProgram={onOpenProgram}
           onOpenChannel={onOpenChannel}
           onNewProgram={onNewProgram}
-          onIdeate={onIdeate}
+          onShowOverview={onShowOverview}
+          overviewActive={overviewActive}
         />
+        {/* Motion identity — names WHAT KIND of go-to-market the focused workflow is, derived from its
+            real stages (no fixed motion list). Hidden on the all-workflows overview and on an empty
+            canvas, where there's no single motion to name. */}
+        {motionName && !overviewActive && !noGraph ? (
+          <span className="fdock-motion" title="The kind of go-to-market this workflow is — derived from its stages">
+            {motionName}
+          </span>
+        ) : null}
+        {/* Ideate — pulled out of the flows dropdown into its own top-bar action. It streams the
+            ideation board (workflows composed from grounded reality). Also reachable from the command
+            dock, so it's never buried in a menu. */}
+        <button
+          className={`fdock-ideate ${overviewActive ? "active" : ""}`}
+          onClick={onIdeate}
+          type="button"
+          title="Ideate workflows from your grounded product"
+        >
+          <Lightbulb size={14} />
+          <span>Ideate</span>
+        </button>
         {showGtmToggle ? (
           <SlidingTabs
             items={[{ value: "gtm", label: "GTM" }, { value: "product", label: "Product" }]}
@@ -136,20 +149,6 @@ export function FloatingDock({
           />
         ) : null}
       </div>
-
-      {/* Center — the mode lenses. GTM-program lenses only; in Product mode the product canvas has
-          its own lens bar (Conceptual / Goals / IA / …), so the dock hides these to avoid two lens rows. */}
-      {!productMode ? (
-        <div className="fdock-center">
-          <SlidingTabs
-            items={MODE_ITEMS}
-            value={mode}
-            onChange={onModeChange}
-            layoutId="fdock-mode"
-            size="sm"
-          />
-        </div>
-      ) : null}
 
       {/* Right — actions. Compact icon buttons for the secondaries; only Run is the one dark fill.
           Claude's live status lives in the command dock at the bottom, so it isn't duplicated here. */}

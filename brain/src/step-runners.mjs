@@ -14,7 +14,7 @@
 // tests inject fakes with makeStepRuntime. Step result shape matches connectors:
 // { ok, items, meta?, error? }.
 
-export const STEP_KINDS = new Set(["agent", "skill", "code"]);
+export const STEP_KINDS = new Set(["agent", "skill", "code", "mcp"]);
 
 export const defaultStepRuntime = {
   async agent(node) {
@@ -29,6 +29,11 @@ export const defaultStepRuntime = {
   },
   async code(node) {
     return { ok: false, items: [], error: `Code step "${node.ref}" has no registered transform.` };
+  },
+  // MCP tool step — the connect/classify surface adds these, but calling out to the server
+  // (read runs free, write stages behind the gate) is the run-path slice, not yet wired here.
+  async mcp(node) {
+    return { ok: false, items: [], error: `MCP tool step "${node.ref}" needs an MCP runtime. None is attached to this run.` };
   },
 };
 

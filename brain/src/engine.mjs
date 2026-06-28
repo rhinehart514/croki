@@ -12,12 +12,28 @@
 
 import { extractDecisions } from "./memory.mjs";
 
-const PIPELINE_LABELS = {
-  research: "Research", context: "Context", source: "Source", enrich: "Enrich",
+// Display hints for known stage ids — NOT a fixed taxonomy. A motion's middle stages are
+// whatever categories its graph actually contains (see motionStageMetas); an unknown category
+// is title-cased, never forced into this outbound vocabulary. Only the four universals
+// (context=Ground, gate, measure, learn) frame every motion; everything between Ground and Gate
+// is the motion's own shape.
+const STAGE_LABELS = {
+  research: "Research", context: "Ground", source: "Source", enrich: "Enrich",
   filter: "Filter", generate: "Generate", gate: "Gate", execute: "Execute",
   measure: "Measure", learn: "Learn",
 };
-const SUBSYSTEM_IDS = new Set(Object.keys(PIPELINE_LABELS));
+// The categories that frame EVERY motion (kept out of the emergent middle, derived specially).
+const UNIVERSAL_STAGES = new Set(["context", "gate", "measure", "learn"]);
+const SUBSYSTEM_IDS = new Set(Object.keys(STAGE_LABELS));
+
+function titleCase(s) {
+  return String(s).replace(/[-_]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+// A stage's display label: a known id keeps its name, an arbitrary motion category is title-cased.
+function stageLabel(id) {
+  return STAGE_LABELS[id] ?? titleCase(id);
+}
 
 // ─── Ledger + connector helpers ───────────────────────────────────────────────
 
@@ -52,7 +68,7 @@ function isRealSender(connector) {
 function subsystem(id, fields) {
   return {
     id,
-    label: PIPELINE_LABELS[id],
+    label: stageLabel(id),
     derived: true,
     health: 0,
     throughput: 0,
@@ -69,19 +85,19 @@ function subsystem(id, fields) {
 // Each maps to a node category in the flow graph. Health reflects what the last
 // run's node of that category actually did, plus whether a connector is wired.
 
-function deriveFlowStage(id, runs, connectors, present = true) {
-  // A connector flow-stage is only a real subsystem of THIS channel when the graph
-  // actually contains a connector-backed (tool) node of that category, or a run
-  // produced one. An agent/skill step that happens to carry the category does NOT
-  // make a missing connector a problem — that's the old taxonomy leaking back in.
-  // Absent → honest 0 (no issue, no action), so it never shows up as a phantom problem.
+function deriveFlowStage(id, runs, connectors, present = true, connectorBacked = true) {
+  // A stage of the motion. `present` guards the legacy (no-graph) caller; the emergent path only
+  // ever passes stages that ARE in the graph, so absent stages never reach here at all (they are
+  // simply not built, not shown as 0). `connectorBacked` is false for agent/skill/code/mcp stages:
+  // those have no connector to configure, so a missing connector is never their problem — health
+  // comes purely from what the run did. Forcing a connector here is the old taxonomy leaking back.
   if (!present) {
     return subsystem(id, { health: 0, confidence: 0 });
   }
-  const label = PIPELINE_LABELS[id];
+  const label = stageLabel(id);
   const lower = label.toLowerCase();
   const cats = connectorsForCategory(connectors, id);
-  const ready = cats.some((c) => c.configured && !c.stub);
+  const ready = !connectorBacked || cats.some((c) => c.configured && !c.stub);
   const mine = nodesOfCategory(runs, id);
   const ran = mine.length > 0;
   const items = mine.reduce((sum, n) => sum + (Array.isArray(n.items) ? n.items.length : 0), 0);
@@ -296,7 +312,57 @@ function countStagedSends(runs) {
     .reduce((sum, node) => sum + node.items.length, 0);
 }
 
-export function deriveMeasure(report = null, runs = [], connectors = []) {
+// Observations a measure stage actually captured on the last run — the general, any-motion signal
+// for "is this outcome observable", used when the motion is NOT conversion-attribution outbound.
+function countMeasureObservations(runs) {
+  const nodes = lastRun(runs)?.result?.nodes ?? null;
+  if (!nodes) return 0;
+  return Object.values(nodes)
+    .filter((node) => node?.category === "measure" && Array.isArray(node.items))
+    .reduce((sum, node) => sum + node.items.length, 0);
+}
+
+// A motion is conversion-attribution (the win-event logic below applies) only when it sources and
+// sends — outbound. A content / community / product-led / partnerships motion has no source stage;
+// its outcome is observed through its own measure stage, not attributed to a code-emitted win event,
+// so "blind attribution" is the wrong frame for it. No graph (a project-wide read) keeps the
+// conversion semantics for backward compatibility.
+function isConversionMotion(graph) {
+  if (!graph || !Array.isArray(graph.nodes)) return true;
+  return graph.nodes.some((n) => n.category === "source");
+}
+
+// Observation-based measurement for any non-outbound motion. Grades on whether the motion's measure
+// stage exists and is observing its outcome — never demands a product-code win event, so a content
+// or community motion is honestly measurable instead of permanently "blind".
+function deriveObservationMeasure(graph, runs) {
+  const hasMeasureStage = graph.nodes.some((n) => n.category === "measure");
+  const observations = countMeasureObservations(runs);
+  if (!hasMeasureStage) {
+    return subsystem("measure", {
+      health: 40, confidence: 45, agentStatus: "investigating", throughput: 0,
+      activeIssues: ["No measure stage — this motion has no way to observe whether its outcome moved."],
+      suggestedActions: ["Add a measure step that captures this motion's real outcome (reach, activations, signups, members)."],
+    });
+  }
+  if (observations > 0) {
+    return subsystem("measure", {
+      health: 84, confidence: 80, agentStatus: "monitoring", throughput: observations,
+    });
+  }
+  return subsystem("measure", {
+    health: 64, confidence: 60, throughput: 0,
+    activeIssues: ["Ready to measure, but no outcome has been observed yet."],
+    suggestedActions: ["Run the loop so the measure stage starts capturing this motion's outcome."],
+  });
+}
+
+export function deriveMeasure(report = null, runs = [], connectors = [], graph = null) {
+  // Non-outbound motions measure their own outcome through their measure stage — the general path
+  // that makes the product work for any project, not just conversion-attribution outbound.
+  if (!isConversionMotion(graph)) {
+    return deriveObservationMeasure(graph, runs);
+  }
   const sends = countStagedSends(runs);
   const sendReady = connectors.some(
     (c) => c.category === "execute" && c.configured && !c.stub && isRealSender(c),
@@ -433,43 +499,120 @@ function deriveTopRecommendations(subsystems) {
 
 // ─── Public: compose the engine state from real signals ────────────────────────
 
-// Which connector flow-stages this channel actually uses. A stage counts as present
-// when the graph has a tool node of that category (kind tool / unset), or a run
-// produced one. Returns null when no graph is supplied — legacy callers then derive
-// every stage from the connector registry as before.
-function presentFlowStages(graph) {
-  if (!graph || !Array.isArray(graph.nodes)) return null;
-  const cats = new Set();
+// The emergent middle: the distinct stage-categories THIS graph actually contains, in flow order
+// (left to right by node position). The four universals never appear here — they frame the motion.
+// Each meta carries whether the stage is connector-backed (a tool node) so its health derivation
+// knows whether a missing connector is even a possible problem.
+function motionStageMetas(graph) {
+  const metas = new Map();
+  const order = [];
   for (const node of graph.nodes) {
-    if ((node.kind ?? "tool") === "tool") cats.add(node.category);
+    const cat = node.category;
+    if (!cat || UNIVERSAL_STAGES.has(cat)) continue;
+    const x = node.position?.x ?? 0;
+    const connectorBacked = (node.kind ?? "tool") === "tool";
+    const prior = metas.get(cat);
+    if (!prior) {
+      metas.set(cat, { id: cat, minX: x, connectorBacked });
+      order.push(cat);
+    } else {
+      prior.minX = Math.min(prior.minX, x);
+      prior.connectorBacked = prior.connectorBacked || connectorBacked;
+    }
   }
-  return cats;
+  return order.map((cat) => metas.get(cat)).sort((a, b) => a.minX - b.minX);
 }
 
-export function getEngineState({ report = null, runs = [], connectors = [], graph = null } = {}) {
-  const toolStages = presentFlowStages(graph);
-  const present = (id) =>
-    toolStages === null || toolStages.has(id) || nodesOfCategory(runs, id).length > 0;
+// The leftmost x of any node in a category, or null if the graph has none. Used to place the
+// gate (the wall) in the health summary so post-gate stages (a send/publish) read after it.
+function categoryMinX(graph, cat) {
+  let min = null;
+  for (const node of graph.nodes) {
+    if (node.category !== cat) continue;
+    const x = node.position?.x ?? 0;
+    min = min === null ? x : Math.min(min, x);
+  }
+  return min;
+}
 
-  const subsystems = [
-    deriveResearch(),
-    deriveContext(connectors, report),
-    deriveFlowStage("source", runs, connectors, present("source")),
-    deriveFlowStage("enrich", runs, connectors, present("enrich")),
-    deriveFlowStage("filter", runs, connectors, present("filter")),
-    deriveFlowStage("generate", runs, connectors, present("generate")),
-    deriveGate(runs),
-    deriveFlowStage("execute", runs, connectors, present("execute")),
-    deriveMeasure(report, runs, connectors),
-    deriveLearn(runs),
-  ];
+// Name the motion by its SHAPE, never from a fixed enum — the un-caging. A descriptive label
+// inferred from the stages actually present, so a content motion reads as a "Content loop" and an
+// outbound one as an "Outbound loop" without any motion taxonomy being hardcoded anywhere. New
+// shapes fall back to naming after their first stage ("Webinar loop"), never to "broken outbound".
+function deriveMotionName(cats) {
+  const set = new Set(cats);
+  const has = (...c) => c.some((x) => set.has(x));
+  // Most-specific non-outbound signatures first, so a content/PLG/community motion is never
+  // mislabelled outbound just because it also sends something.
+  if (has("content", "publish", "seo", "distribute")) return "Content loop";
+  if (has("instrument", "segment", "activate", "onboard", "trigger")) return "Activation loop";
+  if (has("community", "advocate", "event")) return "Community loop";
+  if (has("partner", "integration", "ecosystem")) return "Partnerships loop";
+  if (has("paid", "ad", "campaign")) return "Paid loop";
+  if (has("referral", "invite", "viral")) return "Referral loop";
+  // Outbound's defining stage is sourcing a list — source (alone or with enrich/filter) ⇒ outbound.
+  if (has("source", "enrich", "filter")) return "Outbound loop";
+  if (cats.length) return `${stageLabel(cats[0])} loop`;
+  return "GTM loop";
+}
 
+function composeState(subsystems, report, runs, motion) {
   return {
     subsystems,
+    // The motion's emergent identity: a shape-derived name + the real stages, so the UI can show
+    // "what kind of go-to-market this is" without the host ever picking from a fixed list. Null on
+    // the legacy (no-graph) path, which still derives the full registry pipeline below.
+    motion,
     agents: [],
     topRecommendations: deriveTopRecommendations(subsystems),
     investigations: deriveInvestigations(subsystems, report),
     experiments: [],
     recentFindings: deriveFindings(runs),
   };
+}
+
+export function getEngineState({ report = null, runs = [], connectors = [], graph = null } = {}) {
+  // Emergent path — a graph is supplied, so the motion declares its OWN stages. The four universals
+  // (Ground · Gate · Measure · Learn) frame it; the middle is exactly the graph's stages, in flow
+  // order, partitioned around the gate so the wall sits between the pre-gate work and any send.
+  // A stage the motion doesn't have is simply absent — never a 0-health phantom that reads broken.
+  if (graph && Array.isArray(graph.nodes)) {
+    const metas = motionStageMetas(graph);
+    const gateX = categoryMinX(graph, "gate");
+    const toStage = (meta) =>
+      deriveFlowStage(meta.id, runs, connectors, true, meta.connectorBacked);
+    const preGate = metas.filter((m) => gateX === null || m.minX < gateX).map(toStage);
+    const postGate = metas.filter((m) => gateX !== null && m.minX >= gateX).map(toStage);
+
+    const subsystems = [
+      deriveContext(connectors, report),
+      ...preGate,
+      deriveGate(runs),
+      ...postGate,
+      deriveMeasure(report, runs, connectors, graph),
+      deriveLearn(runs),
+    ];
+    const stages = metas.map((m) => m.id);
+    return composeState(subsystems, report, runs, {
+      name: deriveMotionName(stages),
+      stages,
+    });
+  }
+
+  // Legacy path — no graph supplied (an engine query with no focused workflow). Derive the full
+  // registry pipeline as before, so callers that ask for a project-wide engine read still get every
+  // stage from the connector registry.
+  const subsystems = [
+    deriveResearch(),
+    deriveContext(connectors, report),
+    deriveFlowStage("source", runs, connectors, true),
+    deriveFlowStage("enrich", runs, connectors, true),
+    deriveFlowStage("filter", runs, connectors, true),
+    deriveFlowStage("generate", runs, connectors, true),
+    deriveGate(runs),
+    deriveFlowStage("execute", runs, connectors, true),
+    deriveMeasure(report, runs, connectors),
+    deriveLearn(runs),
+  ];
+  return composeState(subsystems, report, runs, null);
 }

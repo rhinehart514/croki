@@ -81,6 +81,55 @@ export function compileOpportunityProgram({ project, channel, agents = [], prior
   return { program, agents: compiledAgents };
 }
 
+// Build the things the workflow reaches for. The composer — or the founder, dropping a step — can
+// reference an agent teammate that was never compiled from a declared opportunity: a Content
+// Strategist, a Lifecycle Engineer, a Community Lead, whatever the motion needs. Rather than run that
+// as a generic, contract-less step, the foundry MINTS it — a real personalized agent (creation
+// policy + instance + on-disk definition), born for this program — so every agent the graph reaches
+// for becomes an actual teammate that learns at the gate. This is the other half of the open node
+// model: the library is no longer a fixed bin you can only pick from; the graph can reach for a
+// teammate and the foundry creates it.
+//
+// Idempotent: a node already backed by an instance (config.agentInstanceId) is left untouched, and a
+// re-run returns the existing policy/instance for the same ref (the opportunity id is stable per
+// program+ref). Returns the annotated graph (every minted node now carries its instance) and the
+// agents minted this pass.
+export function ensureGraphAgents({ project, program, graph, priorRunState = [] } = {}, options = {}) {
+  if (!project) throw new Error("A project is required to mint the agents a graph reaches for.");
+  if (!program) throw new Error("A program is required to mint the agents a graph reaches for.");
+  if (!graph || !Array.isArray(graph.nodes)) return { graph, agents: [] };
+  const minted = [];
+  for (const node of graph.nodes) {
+    if (node.kind !== "agent" || node.config?.agentInstanceId) continue; // skip non-agents + real ones
+    const ref = String(node.ref || "").trim();
+    if (!ref) continue;
+    const job = String(node.label || node.config?.objective || ref).trim();
+    const agentOpportunity = {
+      id: `graph-agent:${program.id}:${ref}`,
+      ref,
+      title: node.label || ref,
+      objective: job,
+      prompt: node.config?.prompt,
+      provider: node.config?.provider,
+      model: node.config?.model,
+      channelId: graph.id ?? null,
+      // Carry the node's declared I/O so the minted agent's contract matches the wiring on the canvas.
+      ...(node.contract ? { contract: node.contract } : {}),
+    };
+    const policy = ensureAgentCreationPolicy({ project, program, agentOpportunity }, { ...options, projectId: project.id });
+    const { instance, profile } = createPersonalizedAgent({
+      project, program, policy, agentOpportunity, priorRunState,
+    }, { ...options, projectId: project.id });
+    minted.push({
+      opportunity: agentOpportunity, policy, instance, profile,
+      markdown: agentInstanceMarkdown({ instance, policy, profile, agentOpportunity }),
+    });
+  }
+  if (!minted.length) return { graph, agents: [] };
+  recordCompiledProgramEvents({ program, agents: minted }, { ...options, projectId: project.id });
+  return { graph: annotateGraphWithProgram(graph, { program, agents: minted }), agents: minted };
+}
+
 export function annotateGraphWithProgram(graph, compiled) {
   const byRef = new Map(compiled.agents.map((agent) => [agent.instance.ref, agent]));
   return {

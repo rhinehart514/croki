@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { ensureAgentCreationPolicy, listAgentCreationPolicies } from "../src/agent-policy-store.mjs";
 import { createPersonalizedAgent, loadCapabilityFoundry } from "../src/capability-foundry.mjs";
+import { ensureGraphAgents } from "../src/program-compiler.mjs";
 import { recordFeedbackSignalsFromRun } from "../src/feedback-ledger.mjs";
 import { ensureOutcomeProgramForChannel, listOutcomePrograms } from "../src/program-store.mjs";
 
@@ -84,6 +85,61 @@ describe("outcome program and capability foundry", () => {
     const md = fs.readFileSync(created.instance.artifactPath, "utf8");
     assert.match(md, /name: proof-extraction/);
     assert.match(md, /Extract product-specific proof/);
+  });
+
+  it("mints a real teammate for every agent the graph reaches for (build, don't just pick)", () => {
+    const program = ensureOutcomeProgramForChannel(project, channel, options);
+    // A graph that reaches for a teammate no declared opportunity ever compiled — a content motion's
+    // Content Strategist, dropped by the composer. It has no agentInstanceId yet.
+    const graph = {
+      id: "graph-content",
+      nodes: [
+        { id: "research", kind: "agent", ref: "content-research", label: "Content Strategist", contract: { accepts: ["productTruth"], emits: ["angles"] } },
+        { id: "gate", category: "gate", kind: "tool" },
+        { id: "publish", category: "execute", kind: "agent", ref: "content-publish", label: "Distribution Planner" },
+      ],
+      edges: [],
+    };
+    const before = loadCapabilityFoundry(project.id, options).instances.length;
+    const ensured = ensureGraphAgents({ project, program, graph }, options);
+
+    // Both reached-for agents are now real, personalized instances with on-disk definitions.
+    assert.equal(ensured.agents.length, 2, "both reached-for agents were minted");
+    const refs = ensured.agents.map((a) => a.instance.ref).sort();
+    assert.deepEqual(refs, ["content-publish", "content-research"]);
+    assert.equal(loadCapabilityFoundry(project.id, options).instances.length, before + 2);
+    for (const a of ensured.agents) assert.equal(fs.existsSync(a.instance.artifactPath), true, "definition written to disk");
+
+    // The graph nodes now carry their instance — they're teammates, not generic steps.
+    const researchNode = ensured.graph.nodes.find((n) => n.id === "research");
+    assert.ok(researchNode.config.agentInstanceId, "the node is now backed by a minted instance");
+    assert.equal(ensured.graph.outcomeProgramId, program.id);
+
+    // Idempotent: re-running mints nothing new (the node already carries its instance).
+    const again = ensureGraphAgents({ project, program, graph: ensured.graph }, options);
+    assert.equal(again.agents.length, 0, "a second pass mints nothing — already real");
+  });
+
+  it("shares one agent instance across channels instead of copying it per program", () => {
+    // One engine, many channels: a second channel reaching for the same agent ref must reuse the
+    // instance the first channel already minted — not mint a private copy. This is what lets the
+    // canvas draw Prospect Researcher once with fan-out edges instead of a duplicate per lane.
+    const program1 = ensureOutcomeProgramForChannel(project, channel, options);
+    const channel2 = { ...channel, id: "channel-referrals", title: "Referral loop", objective: "Turn pilots into referrals." };
+    const program2 = ensureOutcomeProgramForChannel(project, channel2, options);
+    assert.notEqual(program1.id, program2.id, "two distinct programs");
+
+    const policy = ensureAgentCreationPolicy({ project, program: program1, agentOpportunity: agent }, options);
+    const first = createPersonalizedAgent({ project, program: program1, policy, agentOpportunity: agent }, options);
+    // The second channel reaches for the same ref under the same policy — it must resolve to the
+    // exact same instance, and the store must hold one, not two.
+    const second = createPersonalizedAgent({ project, program: program2, policy, agentOpportunity: agent }, options);
+
+    assert.equal(second.instance.id, first.instance.id, "same ref + policy resolves to one shared instance");
+    assert.equal(second.instance.lineageId, first.instance.lineageId, "shared lineage keyed by ref, not program");
+    assert.ok(!first.instance.id.includes(program1.id), "instance id is not namespaced to the creating program");
+    const refInstances = loadCapabilityFoundry(project.id, options).instances.filter((i) => i.ref === agent.ref);
+    assert.equal(refInstances.length, 1, "the agent exists once for the whole project, shared by both channels");
   });
 
   it("turns founder feedback into a new agent creation policy version", () => {

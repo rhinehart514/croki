@@ -3464,6 +3464,46 @@ svg {
   min-width: 264px;
 }
 
+/* A product row carries the selectable button plus a delete control that stays hidden until you hover
+   the row — the row reads clean, the destructive action only shows when you reach for it. */
+.project-switcher-row {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+.project-switcher-row .menu-item { flex: 1; }
+.project-switcher-delete {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm, 7px);
+  background: transparent;
+  color: var(--faint, #a1a1aa);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--dur-fast, 120ms) var(--ease), color var(--dur-fast, 120ms) var(--ease), background var(--dur-fast, 120ms) var(--ease), border-color var(--dur-fast, 120ms) var(--ease);
+}
+.project-switcher-row:hover .project-switcher-delete,
+.project-switcher-delete:focus-visible,
+.project-switcher-delete.confirm { opacity: 1; }
+.project-switcher-delete svg { width: 14px; height: 14px; }
+.project-switcher-delete:hover { color: #dc2626; background: #dc26260f; }
+.project-switcher-delete.confirm {
+  font-size: 11px;
+  font-weight: 640;
+  letter-spacing: 0.01em;
+  color: #dc2626;
+  border-color: #dc262633;
+  background: #dc26260f;
+}
+
 .loop-draft-badge {
   flex: 0 0 auto;
   padding: 2px 7px;
@@ -4041,12 +4081,26 @@ svg {
   animation: node-backdrop-in 150ms ease-out;
 }
 
+/* Click-outside-to-close as a real control, behind the centered dialog. */
+.node-detail-modal-scrim {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: default;
+}
+
 @keyframes node-backdrop-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
 .node-detail-workspace {
+  position: relative;     /* sit above the absolute click-outside scrim */
+  z-index: 1;
   width: min(1120px, calc(100vw - 76px));
   height: min(820px, calc(100vh - 76px));
   display: grid;
@@ -4871,6 +4925,27 @@ svg {
 .loop-node-done { background: var(--surface); border-color: var(--proven) !important; }
 .loop-node-error { border-color: var(--danger) !important; background: var(--danger-soft); }
 .loop-node-pending { border-color: var(--gap) !important; }
+
+/* The card's clickable summary, as a real button (a node card reveals an editor with controls when
+   selected, so the editor stays a sibling of this button, never nested inside it). Transparent,
+   full-bleed reset so the card looks identical — the semantics change, the pixels don't. */
+.loop-node-hit {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: inherit;
+}
+.loop-node-hit:focus-visible {
+  outline: 2px solid var(--ink, #18181b);
+  outline-offset: 2px;
+}
 
 /* Resource node */
 .loop-node-resource {
@@ -6815,10 +6890,33 @@ svg {
 .cnv-tools-dot.fail { background: var(--danger); }
 .cnv-tools-count { font-weight: 600; flex-shrink: 0; }
 .cnv-tools-peek { color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.cnv-tools-list { list-style: none; margin: var(--space-1) 0 0; padding: 0 0 0 22px; display: flex; flex-direction: column; gap: 5px; }
-.cnv-tool { display: flex; flex-direction: column; gap: 1px; }
+.cnv-tools-list { list-style: none; margin: var(--space-1) 0 0; padding: 0 0 0 19px; display: flex; flex-direction: column; gap: 6px; }
+.cnv-tool { display: grid; grid-template-columns: 6px 1fr; gap: 9px; align-items: start; }
+.cnv-tool-dot { width: 6px; height: 6px; margin-top: 5px; border-radius: 50%; background: var(--proven); }
+.cnv-tool-dot.fail { background: var(--danger); }
+.cnv-tool-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .cnv-tool-title { font-size: 11.5px; color: var(--muted); }
 .cnv-tool-detail { font-size: 11px; color: var(--faint); line-height: 1.4; }
+
+/* LIVE — the "now" beat pinned at the foot of the thread while Claude works. */
+.cnv-live { display: flex; align-items: center; gap: var(--space-2); padding: 2px 2px; }
+.cnv-live-orb { width: 8px; height: 8px; border-radius: 50%; background: var(--proven); flex-shrink: 0; box-shadow: 0 0 0 0 color-mix(in srgb, var(--proven) 50%, transparent); animation: cnv-live-pulse 1.6s var(--ease) infinite; }
+.cnv-live-text { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@keyframes cnv-live-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--proven) 45%, transparent); }
+  70% { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* Keyboard accessibility — a single visible focus ring across every control in the dock, so tabbing
+   through the composer and the thread is never lost. Mouse clicks stay ring-free (:focus-visible). */
+.composer-dock :focus-visible,
+.composer-box :focus-visible,
+.composer-add-portal :focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
 
 /* ── Focus vs Thread — the dock leads with STATE, not the log ──────────────────
    Focus (default) is the operator's current face: a live presence while working,
@@ -8604,6 +8702,22 @@ svg {
   border-color: #6366f1;
   background: #6366f10c;
   box-shadow: 0 0 0 1px #6366f133, 0 10px 24px -14px #6366f1aa;
+  transition: opacity 340ms var(--ease-out), transform 340ms var(--ease-out);
+}
+/* The staged reveal: a proposed node is held back (invisible, nudged down) until the host's timer
+   reaches it, then it transitions up into place — so a multi-step proposal builds onto the canvas one
+   card at a time instead of popping in whole. A single-node proposal just lands immediately. */
+.react-flow .loop-node-proposed.is-unrevealed .loop-node {
+  opacity: 0;
+  transform: translateY(8px) scale(0.965);
+}
+/* Surfaced: it has eased up from the unrevealed state and now breathes — "drafted, awaiting your call." */
+.react-flow .loop-node-proposed.is-revealed .loop-node {
+  animation: ghost-node-breathe 2.8s ease-in-out 200ms infinite;
+}
+@keyframes ghost-node-breathe {
+  0%, 100% { box-shadow: 0 0 0 1px #6366f133, 0 10px 24px -14px #6366f1aa; }
+  50% { box-shadow: 0 0 0 1px #6366f155, 0 12px 28px -12px #6366f1cc; }
 }
 
 /* Run replay (the scrubber): the current step pops and pulses, the rest recede, so the eye follows
@@ -8650,7 +8764,14 @@ svg {
 .react-flow__edge.loop-edge-proposed .react-flow__edge-path {
   stroke: #6366f1;
   stroke-dasharray: 6 4;
+  /* Marching ants toward the staged node — the proposal reads as flowing in, not frozen. */
+  animation: ghost-edge-march 0.55s linear infinite;
 }
+@keyframes ghost-edge-march { to { stroke-dashoffset: -20; } }
+/* A proposed edge fades in only once both its endpoints have surfaced, so it never dangles to a
+   not-yet-revealed node during the staged build. */
+.react-flow__edge.loop-edge-proposed { transition: opacity 300ms var(--ease-out); }
+.react-flow__edge.loop-edge-proposed.is-unrevealed { opacity: 0; }
 
 .loop-proposal-bar {
   position: absolute;
@@ -8737,8 +8858,11 @@ svg {
   right: -10px;
   z-index: 20;
   display: flex;
-  gap: 5px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
 }
+.loop-proposal-inline-row { display: flex; gap: 5px; }
 .loop-proposal-inline-btn {
   display: inline-flex;
   align-items: center;
@@ -8763,7 +8887,82 @@ svg {
 .loop-proposal-inline-btn:hover { transform: translateY(-1px) scale(1.05); }
 .loop-proposal-inline-btn.accept:hover { background: color-mix(in srgb, var(--proven) 85%, #000); border-color: color-mix(in srgb, var(--proven) 85%, #000); }
 .loop-proposal-inline-btn.reject:hover { color: var(--danger); border-color: var(--danger); background: var(--danger-soft); }
+.loop-proposal-inline-btn.note.is-open { color: #6366f1; border-color: #6366f1; background: #6366f114; }
 .loop-proposal-inline-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The note popover — opaque, a real writing surface (never glass). A note can ride an accept (a quiet
+   annotation the operator and the learning loop read) or a reject (a redirect — Claude comes back and
+   changes it). Enter sends a redirect, the common case. */
+.loop-proposal-note {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  width: 250px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #6366f1;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 18px 44px -18px rgba(49, 46, 129, 0.55);
+}
+.loop-proposal-note-input {
+  width: 100%; box-sizing: border-box; resize: none;
+  border: 1px solid var(--line-2); border-radius: 8px;
+  padding: 7px 9px; font: inherit; font-size: 12.5px; line-height: 1.45; color: var(--ink);
+  background: var(--surface);
+}
+.loop-proposal-note-input::placeholder { color: var(--faint); }
+.loop-proposal-note-input:focus { outline: none; border-color: #6366f1; }
+.loop-proposal-note-actions { display: flex; gap: 7px; }
+.loop-proposal-note-btn {
+  flex: 1;
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  padding: 6px 8px; border-radius: 8px; cursor: pointer;
+  font-size: 11.5px; font-weight: 600;
+  border: 1px solid var(--line-2); background: var(--surface); color: var(--muted);
+  transition: background 120ms var(--ease), color 120ms var(--ease), border-color 120ms var(--ease);
+}
+.loop-proposal-note-btn:disabled { opacity: 0.5; cursor: default; }
+.loop-proposal-note-btn.keep:not(:disabled):hover { color: var(--proven); border-color: var(--proven); background: color-mix(in srgb, var(--proven) 10%, transparent); }
+.loop-proposal-note-btn.redirect:not(:disabled):hover { color: #6366f1; border-color: #6366f1; background: #6366f114; }
+
+/* ── The operator cursor — Claude working on the canvas (presence over the proposal layer) ──
+   Renders in flow coordinates (ViewportPortal), so it tracks pan/zoom. The wrapper glides between
+   node positions; the pointer and tag counter-scale (inline) so they stay legible at any zoom. */
+.op-cursor {
+  position: absolute; top: 0; left: 0;
+  pointer-events: none; z-index: 9;
+  transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+.op-cursor-arrow { display: block; color: #6366f1; filter: drop-shadow(0 2px 4px rgba(49,46,129,0.45)); }
+.op-cursor-arrow svg { width: 22px; height: 22px; fill: #6366f1; }
+.op-cursor-tag {
+  position: absolute; top: 20px; left: 16px;
+  display: flex; align-items: baseline; gap: 7px; white-space: nowrap;
+  padding: 5px 10px; border-radius: 8px;
+  background: #4f46e5; color: #fff;
+  box-shadow: 0 10px 26px -12px rgba(49,46,129,0.7);
+  animation: op-cursor-in 240ms var(--ease-out) both;
+}
+.op-cursor-name { font-size: 11.5px; font-weight: 700; letter-spacing: 0.01em; }
+.op-cursor-caption { font-size: 11.5px; font-weight: 500; opacity: 0.92; }
+@keyframes op-cursor-in { from { opacity: 0; transform: translateY(-3px) scale(0.96); } to { opacity: 1; transform: none; } }
+/* At the gate the cursor wears the wall's amber, not indigo — same color grammar as the gate node. */
+.op-cursor.phase-gate .op-cursor-arrow { color: var(--gap, #d97706); }
+.op-cursor.phase-gate .op-cursor-arrow svg { fill: var(--gap, #d97706); }
+.op-cursor.phase-gate .op-cursor-tag { background: var(--gap, #d97706); }
+
+.op-cursor-back {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border-radius: 999px; cursor: pointer;
+  font-size: 12px; font-weight: 600;
+  border: 1px solid #6366f1; background: var(--surface); color: #4f46e5;
+  box-shadow: var(--shadow-pop);
+  transition: background 120ms var(--ease);
+}
+.op-cursor-back:hover { background: #6366f114; }
 
 
 /* Inspector — the program framing the DAG lacks. Agent chips select a policy to read; no synthetic
@@ -9551,6 +9750,12 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 
 /* Workflows draw in — each node builds onto the canvas with a staggered fade/scale. */
 .ideation-canvas .react-flow__node { animation: node-build-in 380ms var(--ease) backwards; }
+
+/* The read-only project overview lays nodes out from pre-computed lane positions and never needs React
+   Flow's interactive measurement. RF keeps a node visibility:hidden until it measures it, and that
+   measurement doesn't reliably complete for this static, non-editable surface — leaving every lane
+   blank. Since positions are already known, override the gate so the lanes always paint. */
+.overview-canvas .react-flow__node { visibility: visible !important; }
 @keyframes node-build-in { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: none; } }
 
 /* ── Live model thinking strip (ideation: watch it reason) ────────────────── */
@@ -9567,6 +9772,53 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   direction: rtl; text-align: left; /* keep the newest streamed text in view */
 }
+
+/* ── Lane status: the honest "not composed yet" card ──────────────────────────
+   Replaces the old fabricated placeholder pipeline. A lane shows this while the model is composing
+   (shimmer spine + live reasoning) or after a failure (the real error), never fake nodes. */
+.lane-status-card {
+  position: relative; width: 300px; display: grid; gap: 9px;
+  padding: 14px 15px; border: 1px solid var(--line-2); border-radius: var(--r-lg);
+  background: var(--surface); box-shadow: var(--shadow-card);
+}
+.lane-status-card.lane-status-failed { border-color: color-mix(in srgb, var(--danger, #d4604f) 45%, var(--line-2)); }
+.lane-status-head { display: flex; align-items: center; gap: 8px; }
+.lane-status-icon { display: grid; place-items: center; flex-shrink: 0; color: var(--muted); }
+.lane-status-icon.is-error { color: var(--danger, #d4604f); }
+.lane-status-icon .spin { animation: spin 0.9s linear infinite; }
+.lane-status-title {
+  font-size: 13px; font-weight: 650; color: var(--ink); line-height: 1.2;
+  flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lane-status-stage {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--muted); flex-shrink: 0;
+}
+.lane-status-failed .lane-status-stage { color: var(--danger, #d4604f); }
+/* The shimmer spine: three rails that pulse in sequence — a stand-in for a shape the model hasn't
+   decided yet, deliberately NOT shaped like real steps. */
+.lane-status-spine { display: flex; gap: 6px; }
+.lane-status-spine span {
+  height: 8px; flex: 1; border-radius: 5px;
+  background: linear-gradient(90deg, var(--surface-2) 0%, var(--ghost) 50%, var(--surface-2) 100%);
+  background-size: 200% 100%; animation: lane-shimmer 1.4s ease-in-out infinite;
+}
+.lane-status-spine span:nth-child(2) { animation-delay: 0.18s; }
+.lane-status-spine span:nth-child(3) { animation-delay: 0.36s; }
+@keyframes lane-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.lane-status-reason {
+  margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--muted);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.lane-status-error {
+  margin: 0; font-size: 11.5px; line-height: 1.5;
+  color: color-mix(in srgb, var(--danger, #d4604f) 80%, var(--ink));
+}
+
+/* Ideation build-in: edges fade along their target node's cascade beat (delay set inline per edge),
+   so a connector never arrives before the node it points at. */
+.lane-edge-enter { animation: lane-edge-fade 0.4s ease-out both; }
+@keyframes lane-edge-fade { from { opacity: 0; } to { opacity: 1; } }
 
 /* ── Workflow authoring and data contracts ───────────────────────────────── */
 .workflow-palette { position: relative; margin: 2px; }
@@ -9741,6 +9993,43 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .composer-box-input::placeholder { color: var(--faint); }
 .composer-box-input:focus { outline: none; }
 .composer-box-input:disabled { color: var(--muted); cursor: default; }
+
+/* Step-mode chips — the "+" stages a building block as a chip here instead of dropping a card. While
+   set, the composer reads as "describe this step." Removable; clears on send. */
+.composer-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 var(--space-1); }
+.composer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 4px 0 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 540;
+  animation: chip-in 200ms var(--ease-out) both;
+}
+@keyframes chip-in {
+  from { opacity: 0; transform: translateY(3px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.composer-chip-icon { display: inline-flex; }
+.composer-chip-icon svg { width: 13px; height: 13px; color: var(--muted); }
+.composer-chip-label { line-height: 1; }
+.composer-chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px; height: 17px;
+  border: 0; border-radius: 999px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+  transition: background 120ms var(--ease), color 120ms var(--ease);
+}
+.composer-chip-x:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); }
 .composer-box-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .composer-box-tools { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
 .composer-box-tool {
@@ -9751,18 +10040,23 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .composer-box-tool:hover { background: var(--surface-2); color: var(--ink); border-color: var(--line-2); }
 .composer-box-tool.open { background: var(--surface-2); color: var(--ink); border-color: var(--line-2); }
 
-/* The dock's "+" add menu — the ONE add affordance, opening UPWARD from the composer. Uses the shared
-   .menu / .menu-glass surface; only the anchoring (above the +, scrollable) lives here. */
+/* The dock's "+" add menu — the ONE add affordance, opening UPWARD from the composer. Rendered in a
+   body portal (.composer-add-portal) so the dock's `overflow: hidden` rounded card can't clip it; it
+   anchors to the "+" button rect, fixed to the viewport. Opaque (.menu, not .menu-glass) so it never
+   shows the conversation bleeding through. */
 .composer-add-wrap { position: relative; display: inline-flex; }
+.composer-add-portal { position: fixed; z-index: 200; }
 .composer-add-menu {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
-  z-index: 60;
   min-width: 264px;
   max-height: 56vh;
   overflow-y: auto;
+  /* Force fully opaque: the menu floats over a busy canvas, and under the glass skin the shared
+     --surface token is translucent (rgba .52). A list of choices must not show the canvas through it. */
+  background: #ffffff;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
+[data-skin="glass"] .composer-add-menu { background: #fbfaf8; border-color: var(--st-line-2); }
 .composer-box-model {
   display: inline-flex; align-items: center; gap: 6px; min-width: 0;
   font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -11178,7 +11472,7 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
   }
   [data-skin="glass"] .loop-canvas-area,
   .loop-node-running, .loop-node-running .loop-node-icon,
-  .ideation-thinking-dot, .shimmer-line,
+  .ideation-thinking-dot, .shimmer-line, .lane-status-spine span, .lane-edge-enter,
   .product-pulse, .composer-caret {
     animation: none !important;
   }

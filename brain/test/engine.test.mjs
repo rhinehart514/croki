@@ -217,6 +217,107 @@ describe("engine — connector-stage problems are graph-aware (no phantom taxono
   });
 });
 
+describe("engine — topology is emergent: the motion's OWN stages, not a fixed outbound pipeline", () => {
+  const stageIds = (state) => state.subsystems.map((s) => s.id);
+
+  it("a non-outbound (content) motion grades with its own stages and NO outbound-stage zeros", () => {
+    // research → generate(=draft) → gate → execute(=publish), all agent steps. No source/enrich/filter.
+    const graph = { nodes: [
+      { id: "r", category: "research", kind: "agent", ref: "content-research", position: { x: 0 } },
+      { id: "d", category: "generate", kind: "agent", ref: "content-draft", position: { x: 260 } },
+      { id: "g", category: "gate", kind: "tool", position: { x: 520 } },
+      { id: "p", category: "execute", kind: "agent", ref: "content-publish", position: { x: 780 } },
+    ], edges: [] };
+    const state = getEngineState({ graph });
+    const ids = stageIds(state);
+    // It has exactly its own stages — never a phantom enrich/filter/source row at 0.
+    assert.ok(!ids.includes("enrich"), "must not invent an enrich stage");
+    assert.ok(!ids.includes("filter"), "must not invent a filter stage");
+    assert.ok(!ids.includes("source"), "must not invent a source stage");
+    assert.ok(ids.includes("research") && ids.includes("generate"), "keeps the stages it does have");
+    // No subsystem reports the broken-looking 0 that absent outbound stages used to show.
+    const flowZeros = state.subsystems.filter((s) => !["measure"].includes(s.id) && s.health === 0);
+    assert.equal(flowZeros.length, 0, `no phantom 0-health stages, got ${flowZeros.map((s) => s.id)}`);
+  });
+
+  it("names the motion by its shape, with no fixed enum", () => {
+    const content = getEngineState({ graph: { nodes: [
+      { id: "r", category: "research", kind: "agent", position: { x: 0 } },
+      { id: "d", category: "generate", kind: "agent", position: { x: 260 } },
+      { id: "p", category: "publish", kind: "agent", position: { x: 520 } },
+    ], edges: [] } });
+    assert.equal(content.motion.name, "Content loop");
+
+    const outbound = getEngineState({ graph: { nodes: [
+      { id: "s", category: "source", kind: "tool", position: { x: 0 } },
+      { id: "e", category: "enrich", kind: "agent", position: { x: 260 } },
+    ], edges: [] } });
+    assert.equal(outbound.motion.name, "Outbound loop");
+  });
+
+  it("surfaces an arbitrary, never-seen stage category as its own title-cased stage", () => {
+    const graph = { nodes: [
+      { id: "w", category: "webinar", kind: "agent", ref: "host-webinar", position: { x: 0 } },
+      { id: "g", category: "gate", kind: "tool", position: { x: 260 } },
+    ], edges: [] };
+    const state = getEngineState({ graph });
+    const webinar = subsystemOf(state, "webinar");
+    assert.ok(webinar, "an unknown category still becomes a real stage");
+    assert.equal(webinar.label, "Webinar", "an unknown category is title-cased, not forced outbound");
+    assert.equal(state.motion.name, "Webinar loop");
+  });
+
+  it("places the gate (the wall) between pre-gate work and a post-gate send", () => {
+    const graph = { nodes: [
+      { id: "s", category: "source", kind: "tool", position: { x: 0 } },
+      { id: "g", category: "gate", kind: "tool", position: { x: 260 } },
+      { id: "x", category: "execute", kind: "tool", position: { x: 520 } },
+    ], edges: [] };
+    const ids = getEngineState({ graph }).subsystems.map((s) => s.id);
+    assert.ok(ids.indexOf("source") < ids.indexOf("gate"), "source is pre-gate");
+    assert.ok(ids.indexOf("gate") < ids.indexOf("execute"), "the send sits after the wall");
+  });
+});
+
+describe("engine — Measure works for ANY motion, not only conversion-attribution outbound", () => {
+  // A content motion: research → draft → publish → measure. No source stage, no code win event.
+  const contentGraph = (measureRan = false) => ({
+    nodes: [
+      { id: "r", category: "research", kind: "agent", position: { x: 0 } },
+      { id: "d", category: "generate", kind: "agent", position: { x: 200 } },
+      { id: "p", category: "publish", kind: "agent", position: { x: 400 } },
+      { id: "m", category: "measure", kind: "agent", position: { x: 600 } },
+    ],
+    edges: [],
+  });
+
+  it("a non-outbound motion is NOT permanently blind on a missing product win event", () => {
+    // No report (no scanned conversion event) — an outbound motion would read blind/critical here.
+    const m = measureOf(getEngineState({ graph: contentGraph() }));
+    assert.ok(m.health >= 50, `a content motion with a measure stage should be measurable, got ${m.health}`);
+    assert.ok(!m.activeIssues.join(" ").match(/win event|attribution/i), "blind-attribution is the wrong frame for a non-conversion motion");
+  });
+
+  it("grades a non-outbound motion on observed outcomes from its own measure stage", () => {
+    const runs = [{ result: { nodes: { m: { category: "measure", ok: true, items: [{}, {}, {}] } } } }];
+    const m = measureOf(getEngineState({ graph: contentGraph(), runs }));
+    assert.ok(m.health >= 80, `observed outcomes should grade high, got ${m.health}`);
+    assert.equal(m.throughput, 3);
+  });
+
+  it("still applies conversion-attribution (blind) honesty to an OUTBOUND motion", () => {
+    // A source+execute motion against the blind-attribution report keeps the honest blind state.
+    const outboundGraph = { nodes: [
+      { id: "s", category: "source", kind: "tool", position: { x: 0 } },
+      { id: "g", category: "gate", kind: "tool", position: { x: 200 } },
+      { id: "x", category: "execute", kind: "tool", position: { x: 400 } },
+    ], edges: [] };
+    const m = measureOf(getEngineState({ report: BLIND_ATTRIBUTION, graph: outboundGraph }));
+    assert.ok(m.health < 50, `outbound blind attribution stays honest, got ${m.health}`);
+    assert.match(m.activeIssues.join(" "), /attribution is blind/i);
+  });
+});
+
 describe("engine — gate and learn derive from founder decisions", () => {
   it("counts pending reviews and approvals at the gate", () => {
     const runs = [{ result: { nodes: { "gate-review": { category: "gate", items: [

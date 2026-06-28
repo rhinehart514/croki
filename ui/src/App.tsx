@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle, Check, LoaderCircle, Play, ShieldCheck, Sparkles, X,
+  AlertTriangle, Check, LoaderCircle, Play, ShieldCheck, Lightbulb, X,
 } from "lucide-react";
 import {
   applyGraphOperations as applyGraphOperationsApi,
   auditGraph,
   getConnectors,
+  getCapabilities,
   getEngineState,
   getConnection,
   type ConnectionStatus,
@@ -21,6 +22,7 @@ import {
   runGraph,
   runProgramStream,
   activateProject,
+  deleteProject,
   cancelOperatorSession,
   composeOpportunityChannel,
   previewOpportunityChannel,
@@ -40,18 +42,21 @@ import {
   reviseProductModel,
 } from "@/api";
 import { ArtifactEditor } from "@/components/ArtifactEditor";
+import { AgentProfile, type AgentProfileView, type TeammateView } from "@/components/AgentProfile";
 import { ComposerDock } from "@/components/ComposerDock";
+import { ConnectCapability } from "@/components/ConnectCapability";
 import { FloatingDock } from "@/components/FloatingDock";
-import { GraphCanvas } from "@/components/GraphCanvas";
+import { GraphCanvas, type OperatorCursorState } from "@/components/GraphCanvas";
 import { GoalLauncher } from "@/components/GoalLauncher";
 import { NodeEditor } from "@/components/NodeEditor";
-import { ProgramCanvas, type ProgramCanvasMode } from "@/components/ProgramCanvas";
+import { ProgramCanvas } from "@/components/ProgramCanvas";
 // GtmExplorer (the old left rail) is intentionally no longer rendered — outcome navigation moved to
 // the FloatingDock's OutcomeSwitcher, the Library to LibraryPalette, the feeds into ComposerDock,
 // Problems to the dock. The breadcrumb switchers, mode lenses, Problems, Approvals, Simulate and Run
 // all live in FloatingDock now, so App no longer imports them directly.
 import { LibraryPalette } from "@/components/LibraryPalette";
 import { buildIdeationCanvas, buildChannelDefaults, channelIdFromNode, type LaneState } from "@/lib/ideationGraph";
+import { buildProjectCanvas } from "@/lib/projectCanvas";
 import { statusLabel } from "@/lib/status";
 import { healthHex } from "@/lib/health";
 import { itemKey } from "@/lib/itemKey";
@@ -61,16 +66,14 @@ import { ProductCanvas } from "@/components/ProductCanvas";
 import { ProjectPicker } from "@/components/ProjectPicker";
 import { ProductEntry } from "@/components/ProductEntry";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
-import { SimulationPanel } from "@/components/SimulationPanel";
 import { Button } from "@/components/ui/button";
 import type {
   ChannelMeta, ConnectorMeta, ContextManifest, DataAdapter, Decisions, EngineState, GateDecision, GraphOperation, GtmLibrary, GTMContractAudit, GTMGraph, GTMNode, GTMOpportunity,
   GTMProject, GTMRunResult, NodeSelection, OperatorSession, OpportunityStudio as OpportunityStudioState, ProjectSummary,
   AgentCreationPolicy, AgentInstance, FeedbackSignal, OutcomeProgram,
   AgentEvaluation, DomainEvent, ProductModel, ProductModelEdit,
+  CapabilityServer, CapabilityTool,
 } from "@/types";
-
-type MainTab = ProgramCanvasMode;
 
 // Health → band color, identical to the canvas node badge (GraphCanvas healthHex), so a
 // node's health reads the same number and color on the canvas, in the editor, and in the rail.
@@ -96,14 +99,23 @@ function programRouteFromLocation() {
   };
 }
 
+// A stable empty subsystem-health map for surfaces with no derived health (the read-only project
+// overview). Passing an inline `{}` would be a fresh object every render, which busts GraphCanvas's
+// node memo and leaves React Flow re-measuring forever (nodes stuck invisible). One shared frozen
+// object keeps the memo stable.
+const EMPTY_SUBSYSTEM_HEALTH: Record<string, { health: number; issue?: string }> = {};
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<MainTab>("design");
   // The canvas IS the workspace. "projects" is the only other base view — the cold-start picker
   // before any product exists. Understand and Opportunities are no longer destinations that swap
   // the canvas out; they float OVER it as dismissable overlays (set via `overlay`), so the IDE is
   // never replaced. Channels live in the explorer, not a page.
   const [view, setView] = useState<"projects" | "canvas" | "start">("canvas");
-  const [overlay, setOverlay] = useState<"understand" | "product" | null>(null);
+  // True until the initial boot load resolves. Guards the canvas empty-state so a deep-link / reload
+  // shows a calm "loading your workspace" instead of flashing the cold-start goal launcher for the
+  // 1–2s before the project's graph arrives.
+  const [booting, setBooting] = useState(true);
+  const [overlay, setOverlay] = useState<"understand" | "product" | "capabilities" | null>(null);
   // Ideation runs IN the canvas: each proposed channel is drawn as its own workflow, multiple
   // workflows laid out in lanes on one canvas. The chat narrates; clicking a lane builds it.
   const [ideationOpen, setIdeationOpen] = useState(false);
@@ -115,6 +127,10 @@ export default function App() {
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [activeProject, setActiveProjectState] = useState<GTMProject | null>(null);
+  // The current project id, mirrored into a ref so URL-sync inside the `[]`-dep load callbacks can read
+  // it without re-creating those callbacks every time the project changes.
+  const activeProjectIdRef = useRef<string | null>(null);
+  activeProjectIdRef.current = activeProject?.id ?? null;
   const [opportunityStudio, setOpportunityStudio] = useState<OpportunityStudioState | null>(null);
   // The living product picture — the founder-editable INTERPRETATION aggregate, loaded alongside the
   // active project. Edits persist through the domain commands (revise/derive) then re-fetch.
@@ -148,6 +164,11 @@ export default function App() {
 
   // Graph state
   const [graph, setGraph] = useState<GTMGraph | null>(null);
+  // One project, one canvas: every built workflow drawn as a labelled lane on the SAME canvas. This
+  // is the project's home view; focusing a single workflow (clicking a lane, or the breadcrumb) loads
+  // it into `graph` for editing/running through the existing single-graph machinery. Overview is the
+  // active surface when this is set and nothing single is focused.
+  const [overviewGraph, setOverviewGraph] = useState<GTMGraph | null>(null);
   // A starter system staged from an accepted opportunity: composed but NOT yet persisted, shown
   // ghosted on the canvas (mirrors the operator's pendingProposal) until the founder accepts or
   // discards. `input` is what the apply path replays; `preview` is the would-be graph.
@@ -168,6 +189,7 @@ export default function App() {
   const [graphError, setGraphError] = useState<string | null>(null);
   const [selection, setSelection] = useState<NodeSelection>(null);
   const [connectors, setConnectors] = useState<ConnectorMeta[]>([]);
+  const [capabilities, setCapabilities] = useState<CapabilityServer[]>([]);
   const [approvals, setApprovals] = useState<Record<string, boolean>>({});
   const [decisions, setDecisions] = useState<Decisions>({});
   // The draft currently being edited in the gate review (the "edit-then-approve" path). One at a time.
@@ -182,8 +204,71 @@ export default function App() {
   const [operatorSession, setOperatorSession] = useState<OperatorSession | null>(null);
   // Channels you're building — shown and switchable in the persistent co-pilot dock.
   const [channels, setChannels] = useState<ChannelMeta[]>([]);
+  // Whether the project already has real workflows to show (built channels or compiled programs),
+  // mirrored into a ref so the operator poll can read it without stale closure. Used to stop the
+  // ideation board from auto-opening over a project that already has a populated canvas.
+  const hasBuiltWorkflowsRef = useRef(false);
+  hasBuiltWorkflowsRef.current = programs.length > 0 || channels.some((ch) => ch.nodeCount > 0);
   // The full-markdown editor for the real subagent/skill artifacts an open step runs.
   const [artifactEdit, setArtifactEdit] = useState<{ type: "agent" | "skill"; ref: string } | null>(null);
+  // Which agent's profile is open — the centered "meet this teammate" sheet. Opening an agent shows
+  // the person (role, mission, what it's learning, contract, guardrails), not the raw file. Editing
+  // the source markdown is still one click away inside the sheet.
+  const [agentProfileRef, setAgentProfileRef] = useState<string | null>(null);
+
+  // The team rail in the profile: each born agent once, keyed by ref (latest version wins). These are
+  // the personalized teammates working this product's outcomes, not the stock library.
+  const agentTeam = useMemo<TeammateView[]>(() => {
+    const byRef = new Map<string, AgentInstance>();
+    for (const inst of agentInstances) {
+      if (inst.status === "retired") continue;
+      const prior = byRef.get(inst.ref);
+      if (!prior || (inst.version ?? 0) > (prior.version ?? 0)) byRef.set(inst.ref, inst);
+    }
+    return [...byRef.values()].map((i) => ({ ref: i.ref, job: i.job }));
+  }, [agentInstances]);
+
+  // Assemble the open agent's profile from REAL data — a born instance (the personalized teammate) if
+  // one matches the ref, otherwise a stock library agent (lighter, not personalized). Team-level
+  // signal/eval counts are the genuine totals, never seeded.
+  const agentProfileView = useMemo<AgentProfileView | null>(() => {
+    if (!agentProfileRef) return null;
+    const instances = agentInstances.filter((i) => i.ref === agentProfileRef);
+    const instance = instances.find((i) => i.status === "active")
+      ?? instances.sort((a, b) => (b.version ?? 0) - (a.version ?? 0))[0];
+    const teamSignalCount = feedbackSignals.length;
+    const teamEvalCount = agentEvaluations.length;
+    if (instance) {
+      const policy = agentPolicies.find((p) => p.id === instance.creationPolicyId) ?? null;
+      return {
+        ref: instance.ref,
+        job: instance.job,
+        personalized: true,
+        status: instance.status,
+        version: instance.version,
+        inputContract: instance.inputContract ?? [],
+        outputContract: instance.outputContract ?? [],
+        policy,
+        evaluationCount: agentEvaluations.filter((e) => e.agentInstanceId === instance.id).length,
+        teamSignalCount,
+        teamEvalCount,
+      };
+    }
+    // Stock on-disk agent (clicked in the library, never born for an outcome): show what the
+    // definition gives us, marked honestly as not yet personalized.
+    const stock = library?.agents.find((a) => a.ref === agentProfileRef);
+    return {
+      ref: agentProfileRef,
+      job: stock?.description ?? "A library agent. Open the source to see what it does.",
+      personalized: false,
+      inputContract: [],
+      outputContract: [],
+      policy: null,
+      evaluationCount: 0,
+      teamSignalCount,
+      teamEvalCount,
+    };
+  }, [agentProfileRef, agentInstances, agentPolicies, agentEvaluations, feedbackSignals, library]);
   const operatorGraphRevision = useRef<number | null>(null);
   const operatorRunId = useRef<string | null>(null);
   // Guards the one-time auto-open of the ideation canvas when an operator run first proposes flows.
@@ -238,12 +323,63 @@ export default function App() {
       setGraphSavedAt(graphResponse.graph.store?.lastRunAt ?? null);
       setEngine(engineResponse.engine);
       setView("canvas");
+      // Sync the URL to the focused workflow so a reload restores it instead of falling back to the
+      // overview. A channel that belongs to a program writes the program deep link the boot parser
+      // already understands.
+      const programId = graphResponse.graph.outcomeProgramId;
+      const projectId = activeProjectIdRef.current;
+      if (projectId && programId) {
+        window.history.replaceState(null, "", `/projects/${encodeURIComponent(projectId)}/programs/${encodeURIComponent(programId)}/canvas`);
+      }
     } catch (error) {
       setGraphError(error instanceof Error ? error.message : String(error));
     } finally {
       setGraphRunning(false);
     }
   }, []);
+
+  // Zoom out to the one-canvas overview: fetch every channel's real graph, assemble them into lanes,
+  // and show that instead of a single focused workflow. Returns false when there's nothing to draw
+  // (no channels with nodes), so callers fall back to focusing a single workflow. Read-only — clicking
+  // a lane focuses that channel through loadChannel.
+  const loadProjectOverview = useCallback(async (channelsForProject: ChannelMeta[]): Promise<boolean> => {
+    const built = channelsForProject.filter((ch) => ch.nodeCount > 0);
+    if (!built.length) { setOverviewGraph(null); return false; }
+    try {
+      const entries = await Promise.all(
+        built.map(async (channel) => ({ channel, graph: (await getGraphTemplate(channel.id)).graph })),
+      );
+      const overview = buildProjectCanvas(entries);
+      if (!overview) { setOverviewGraph(null); return false; }
+      setOverviewGraph(overview);
+      setActiveChannelId(null);
+      setActiveProgramId(null);
+      setGraph(null);
+      setSelection(null);
+      setOverlay(null);
+      setRunResult(null);
+      setView("canvas");
+      // Clear the URL back to the project root so a reload from the overview stays on the overview
+      // (and doesn't re-focus the last program deep link). Skipped during boot, when the ref isn't set
+      // yet and the URL is already root.
+      const projectId = activeProjectIdRef.current;
+      if (projectId) {
+        window.history.replaceState(null, "", `/projects/${encodeURIComponent(projectId)}`);
+      }
+      return true;
+    } catch (error) {
+      setGraphError(error instanceof Error ? error.message : String(error));
+      setOverviewGraph(null);
+      return false;
+    }
+  }, []);
+
+  // Clicking a lane in the read-only overview focuses that workflow. Stable so the overview canvas's
+  // node memo doesn't rebuild every render (which left React Flow re-measuring nodes into invisibility).
+  const handleOverviewSelect = useCallback((id: string) => {
+    const cid = channelIdFromNode(id);
+    if (cid) void loadChannel(cid);
+  }, [loadChannel]);
 
   const refreshProjectScope = useCallback(async () => {
     const [catalog, projectResponse] = await Promise.all([listProjects(), getProject()]);
@@ -278,6 +414,7 @@ export default function App() {
       let channelId = projectResponse.project.activeChannelId
         || projectResponse.project.channels[0]?.id;
       setConnectors(connectorResponse.connectors);
+      getCapabilities().then((r) => { if (live) setCapabilities(r.servers); }).catch(() => null);
       setChannels(projectResponse.project.channels);
       setActiveProjectState(projectResponse.project);
       setProjects(catalog.projects);
@@ -309,6 +446,18 @@ export default function App() {
         if (live) setEngine(engineResponse.engine);
         return;
       }
+      // Land on the one-canvas overview of every workflow, unless a deep link routed us to a specific
+      // program (then honor it and focus that workflow). Falls through to the single-workflow focus
+      // below when there's no overview to draw.
+      if (!routedProgramId) {
+        const wentOverview = await loadProjectOverview(projectResponse.project.channels);
+        if (!live) return;
+        if (wentOverview) {
+          const engineResponse = await getEngineState();
+          if (live) setEngine(engineResponse.engine);
+          return;
+        }
+      }
       const [graphResponse, engineResponse] = await Promise.all([
         getGraphTemplate(channelId),
         getEngineState(channelId),
@@ -323,9 +472,10 @@ export default function App() {
       // (node results, staged drafts) without needing a manual click to re-open it.
       setRunResult(bootRuns.length ? bootRuns[bootRuns.length - 1] : null);
       setEngine(engineResponse.engine);
-    }).catch(console.error);
+    }).catch(console.error).finally(() => { if (live) setBooting(false); });
     return () => { live = false; };
-  }, []);
+    // Boot runs once on mount; loadProjectOverview is a stable callback, listed to satisfy the linter.
+  }, [loadProjectOverview]);
 
   // Restore the latest durable operator session for the active product. Re-runs
   // whenever the active product changes, so switching products in the top-left
@@ -430,8 +580,12 @@ export default function App() {
           const opp = await getOpportunities(activeProjectId).catch(() => null);
           if (live && opp?.opportunities) {
             setOpportunityStudio(opp.opportunities);
-            const hasChannels = (opp.opportunities.items ?? []).some((i) => i.type === "channel" && i.status !== "rejected");
-            if (hasChannels && !ideationAutoOpened.current) {
+            // Auto-open the ideation board only when it's filling an otherwise-empty canvas: there are
+            // freshly PROPOSED (undecided) channels AND the project has no built workflows yet. Once
+            // real workflows exist (the overview has lanes to show), stale proposals from a past
+            // ideation must not re-hijack the canvas on every boot.
+            const hasProposedChannels = (opp.opportunities.items ?? []).some((i) => i.type === "channel" && i.status === "proposed");
+            if (hasProposedChannels && !hasBuiltWorkflowsRef.current && !ideationAutoOpened.current) {
               ideationAutoOpened.current = true;
               setIdeationOpen(true);
             }
@@ -524,9 +678,8 @@ export default function App() {
           const result = ev.result;
           setRunResult(result);
           setFlowRuns((current) => [...current, result].slice(-10));
-          // After a run, land on the Run lens. The Review and Learning lenses were cut — a pending
-          // gate now shows via the Approvals count, and learning lives in the Program-details sheet.
-          setActiveTab("run");
+          // Run results render in place on the canvas nodes; a pending gate shows via the Approvals
+          // count, and the step-by-step trace lives in the workbench debugger. No mode to switch to.
           if (!result.ok && !result.pendingGates.length) setGraphError(result.error || "One or more steps need attention.");
         } else if (ev.type === "run_error") {
           setGraphError(ev.error);
@@ -701,6 +854,58 @@ export default function App() {
     });
   }, [applyOperations, graph]);
 
+  // Drop several connected steps at once. "Review & stage" uses it to place the founder gate and the
+  // staged-output node already wired in sequence, so the wall (every execute needs a gate upstream)
+  // holds by construction instead of leaving the founder to add — and order — two blocks by hand.
+  const handleAddChain = useCallback((specs: (Partial<GTMNode> & { label: string })[]) => {
+    if (!graph || !specs.length) return;
+    const startX = graph.nodes.reduce((maximum, node) => Math.max(maximum, node.position?.x ?? 0), 0) + 264;
+    const stamp = Date.now().toString(36);
+    const nodes = specs.map((spec, i) => {
+      const base = spec.kind && spec.kind !== "tool" ? spec.kind : spec.category ?? "step";
+      return {
+        id: `${base}-${stamp}-${i}`, label: spec.label, position: { x: startX + i * 264, y: 0 },
+        config: spec.config ?? {}, contract: spec.contract,
+        ...(spec.kind && spec.kind !== "tool"
+          ? { kind: spec.kind, category: spec.category ?? "generate", ref: spec.ref ?? "" }
+          : { category: spec.category ?? "source", connector: spec.connector ?? "manual" }),
+      } as GTMNode;
+    });
+    const ops: GraphOperation[] = [
+      ...nodes.map((node) => ({ type: "add_node" as const, node })),
+      ...nodes.slice(1).map((node, i) => ({
+        type: "connect_nodes" as const,
+        edge: { id: `e-${nodes[i].id}-${node.id}`, source: nodes[i].id, target: node.id, edgeType: "data" as const },
+      })),
+    ];
+    void applyOperations(ops).then((next) => {
+      if (next) setSelection(nodes[0].id);
+    });
+  }, [applyOperations, graph]);
+
+  const refreshCapabilities = useCallback(() => {
+    getCapabilities().then((r) => setCapabilities(r.servers)).catch(() => null);
+  }, []);
+
+  // Drop a connected MCP tool onto the canvas as a step. A read tool runs free (a single
+  // enrich node). A write tool acts on the world, so it lands WITH a founder gate upstream —
+  // the wall holds by construction, the same way "Review & stage" does, never a lone sender.
+  const handleAddTool = useCallback((serverId: string, tool: CapabilityTool) => {
+    const ref = `${serverId}/${tool.name}`;
+    const config = { server: serverId, tool: tool.name, toolClass: tool.effectiveClass };
+    if (tool.effectiveClass === "read") {
+      handleAddNode({
+        label: tool.name, kind: "mcp", category: "enrich", ref, config,
+        contract: { accepts: [], emits: [] },
+      });
+      return;
+    }
+    handleAddChain([
+      { label: "Founder review", category: "gate", connector: "default", config: {}, contract: { accepts: [], emits: ["approved", "gtmActionId"] } },
+      { label: tool.name, kind: "mcp", category: "execute", ref, config, contract: { accepts: ["approved"], emits: ["gtmActionId", "executionStatus"] } },
+    ]);
+  }, [handleAddNode, handleAddChain]);
+
   const handleDeleteNode = useCallback((nodeId: string) => {
     void applyOperations([{ type: "remove_node", nodeId }]).then((next) => {
       if (next) setSelection(null);
@@ -711,6 +916,18 @@ export default function App() {
     if (!edgeIds.length) return;
     void applyOperations(edgeIds.map((edgeId) => ({ type: "disconnect_nodes", edgeId })));
   }, [applyOperations]);
+
+  // Clicking the empty canvas dismisses whatever's open — the in-card editor, the library picker, the
+  // agent profile sheet, the Problems/Approvals popovers, the artifact editor. One gesture clears the
+  // surface so the canvas is never left cluttered behind a thing you've moved on from.
+  const dismissOverlays = useCallback(() => {
+    setSelection(null);
+    setLibraryPaletteOpen(false);
+    setAgentProfileRef(null);
+    setProblemsOpen(false);
+    setApprovalsOpen(false);
+    setArtifactEdit(null);
+  }, []);
 
   const handleLoadPilotRecipe = useCallback(async () => {
     if (!graph) return;
@@ -762,9 +979,13 @@ export default function App() {
       setGraph(null);
       setActiveChannelId(null);
       const project = await refreshProjectScope();
-      const channelId = project.activeChannelId
-        || project.channels[0]?.id;
-      if (channelId) await loadChannel(channelId);
+      // Land on the one-canvas overview of every workflow. Only fall back to focusing a single
+      // workflow when there's no overview to draw (a project with one or zero built workflows).
+      const wentOverview = await loadProjectOverview(project.channels);
+      if (!wentOverview) {
+        const channelId = project.activeChannelId || project.channels[0]?.id;
+        if (channelId) await loadChannel(channelId);
+      }
       setView("canvas");
       setOverlay(null);
     } catch (error) {
@@ -772,7 +993,22 @@ export default function App() {
     } finally {
       setProjectBusy(false);
     }
-  }, [loadChannel, refreshProjectScope]);
+  }, [loadChannel, loadProjectOverview, refreshProjectScope]);
+
+  // Remove a duplicate product. The switcher only offers it on non-active rows, so the active scope
+  // never vanishes underfoot — a refresh of the project list is all that's needed.
+  const handleProjectDelete = useCallback(async (projectId: string) => {
+    setProjectBusy(true);
+    setGraphError(null);
+    try {
+      await deleteProject(projectId);
+      await refreshProjectScope();
+    } catch (error) {
+      setGraphError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setProjectBusy(false);
+    }
+  }, [refreshProjectScope]);
 
   const handleProgramOpen = useCallback(async (programId: string) => {
     const program = programs.find((item) => item.id === programId);
@@ -803,6 +1039,16 @@ export default function App() {
         setRunResult(null);
         setEngine(engineResponse.engine);
         setGraphSavedAt(graphResponse.graph.store?.lastRunAt ?? null);
+      } else {
+        // The program has no composed workflow yet — clear the previous program's graph, engine, and
+        // runs so nothing stale (e.g. the motion chip, node health) carries over onto the "no
+        // workflow composed yet" empty state.
+        setGraph(null);
+        setActiveChannelId(null);
+        setFlowRuns([]);
+        setRunResult(null);
+        setEngine(null);
+        setGraphSavedAt(null);
       }
       window.history.replaceState(null, "", `/projects/${encodeURIComponent(activeProject.id)}/programs/${encodeURIComponent(program.id)}/canvas`);
     } catch (error) {
@@ -947,9 +1193,9 @@ export default function App() {
     setGraphError(null);
   }, []);
 
-  // Open the ideation canvas and stream it live: proposals first (synth placeholders appear at
-  // once), then each channel's REAL model-composed graph streams in and swaps its lane. The
-  // founder watches workflows build onto the canvas one at a time.
+  // Open the ideation canvas and stream it live: proposals first (each lane shows an honest
+  // composing card — a shimmer spine plus the model's live reasoning, never a fake workflow), then
+  // each channel's REAL model-composed graph streams in and builds out node by node in its lane.
   const startIdeation = useCallback(async () => {
     if (!activeProject) return;
     setOverlay(null);
@@ -962,7 +1208,20 @@ export default function App() {
     try {
       await ideateStream(activeProject.id, (ev) => {
         if (ev.type === "status") setIdeationStatus(ev.message);
-        else if (ev.type === "thinking") setIdeationThinking((t) => (t + " " + ev.text).slice(-600));
+        else if (ev.type === "thinking") {
+          // Per-lane reasoning streams onto that lane's composing card; channel-less reasoning
+          // (the ideation pass itself) stays in the global thinking strip.
+          if (ev.channelId) {
+            const cid = ev.channelId;
+            setLaneStates((s) => {
+              const cur = s[cid] ?? { status: "composing" as const, title: "" };
+              if (cur.status === "ready") return s; // real graph already landed; don't reopen it
+              return { ...s, [cid]: { ...cur, thinking: ((cur.thinking ?? "") + " " + ev.text).slice(-260) } };
+            });
+          } else {
+            setIdeationThinking((t) => (t + " " + ev.text).slice(-600));
+          }
+        }
         else if (ev.type === "proposals") {
           setOpportunityStudio((cur) => cur
             ? { ...cur, items: [...ev.channels, ...ev.agents] }
@@ -1083,8 +1342,8 @@ export default function App() {
     [opportunityStudio],
   );
   const ideationGraph = useMemo(
-    () => buildIdeationCanvas(ideationChannels, agentsFor, laneStates).graph,
-    [ideationChannels, agentsFor, laneStates],
+    () => buildIdeationCanvas(ideationChannels, laneStates).graph,
+    [ideationChannels, laneStates],
   );
   const composedCount = useMemo(
     () => Object.values(laneStates).filter((s) => s.status === "ready").length,
@@ -1170,7 +1429,13 @@ export default function App() {
   // On-canvas proposals: when the operator stages a graph change, render the would-be graph with the
   // new nodes/edges ghosted and let the founder accept or discard. "Vibe up to the gate" now covers
   // the agent editing the graph too — nothing it proposes lands until the founder accepts on-canvas.
-  const pendingProposal = operatorSession?.status === "waiting_for_proposal" ? operatorSession.pendingProposal ?? null : null;
+  // Surface a staged proposal whenever the session HOLDS one — not only during the brief
+  // waiting_for_proposal window. The operator stages the change and finishes its turn (status flips
+  // to completed) while the proposal sits unresolved on the session; gating on waiting_for_proposal
+  // stranded that change with no way to decide. The decision is the founder's to make whenever, so
+  // the ghosts + cursor + inline ✓/✕/note persist until they resolve it. Cleared on resolve (the
+  // backend nulls pendingProposal), so a resolved session shows nothing.
+  const pendingProposal = operatorSession?.pendingProposal ?? null;
   const proposalActive = !!(pendingProposal && graph && pendingProposal.graphId === graph.id);
   // The operator's graph-edit proposal and an opportunity's staged starter system are mutually
   // exclusive on the canvas; the operator proposal (an edit to a loaded graph) wins when both exist.
@@ -1203,17 +1468,73 @@ export default function App() {
     return undefined;
   }, [proposalActive, pendingProposal, graph, compositionActive, compositionPreview]);
 
-  const handleResolveProposal = useCallback(async (accept: boolean) => {
+  // Staged reveal: the operator hands back a whole proposal at once, but the founder shouldn't see it
+  // pop in fully formed — the new ghost nodes surface one at a time so the workflow visibly builds onto
+  // the canvas. Reveal order follows the preview's node order (operation/topology order). This is a
+  // client-side reveal of an already-staged proposal, not token-by-token model streaming — the "vibe up
+  // to the gate" contract keeps proposals atomic and reviewable, so the build-in is presentational.
+  const proposalRevealOrder = useMemo(() => {
+    if (!proposalActive || !pendingProposal || !graph) return [] as string[];
+    const current = new Set(graph.nodes.map((node) => node.id));
+    return pendingProposal.preview.nodes.filter((node) => !current.has(node.id)).map((node) => node.id);
+  }, [proposalActive, pendingProposal, graph]);
+  const proposalRevealKey = proposalActive ? pendingProposal?.id ?? null : null;
+  const [revealCount, setRevealCount] = useState(0);
+  useEffect(() => {
+    // Nothing to stage (no proposal, or a single node) → reveal everything at once.
+    if (!proposalRevealKey || proposalRevealOrder.length <= 1) {
+      setRevealCount(proposalRevealOrder.length);
+      return;
+    }
+    setRevealCount(0);
+    let count = 0;
+    let timer = window.setTimeout(function tick() {
+      count += 1;
+      setRevealCount(count);
+      if (count < proposalRevealOrder.length) timer = window.setTimeout(tick, 260);
+    }, 140);
+    return () => window.clearTimeout(timer);
+  }, [proposalRevealKey, proposalRevealOrder.length]);
+  // The surfaced ghosts. Undefined once everything's in (or when no proposal is staging), so GraphCanvas
+  // holds nothing back and the canvas reads normally.
+  const revealedNodeIds = useMemo(() => {
+    if (!proposalActive || proposalRevealOrder.length === 0 || revealCount >= proposalRevealOrder.length) {
+      return undefined;
+    }
+    return new Set(proposalRevealOrder.slice(0, revealCount));
+  }, [proposalActive, proposalRevealOrder, revealCount]);
+
+  const handleResolveProposal = useCallback(async (accept: boolean, note?: string) => {
     if (!operatorSession) return;
     try {
       // Accept commits the exact staged ops server-side and bumps the graph revision; syncOperator
-      // reloads the real graph. Discard drops them and resumes the operator.
-      const response = await resolveOperatorProposal(operatorSession.id, accept);
+      // reloads the real graph. Discard drops them and resumes the operator. An optional note rides
+      // along: on reject it's a redirect (Claude comes back and changes it); on accept it's a quiet
+      // annotation the operator reads and the learning loop can later pick up.
+      const response = await resolveOperatorProposal(operatorSession.id, accept, note);
       syncOperator(response.session);
     } catch (error) {
       setGraphError(error instanceof Error ? error.message : String(error));
     }
   }, [operatorSession, syncOperator]);
+
+  // The live operator presence: Claude's cursor travels the canvas as it stages each node (camera
+  // following), then rests on the lead ghost where the ✓/✕/note sits; when a run pauses at the
+  // founder gate, the cursor points there instead. Null whenever there's no operator work on screen.
+  const operatorCursor = useMemo<OperatorCursorState | null>(() => {
+    if (proposalActive && proposalRevealOrder.length) {
+      return {
+        phase: revealCount < proposalRevealOrder.length ? "build" : "rest",
+        revealOrder: proposalRevealOrder,
+        revealCount,
+        staged: proposalRevealOrder.length,
+      };
+    }
+    if (operatorSession?.status === "waiting_for_gate" && operatorSession.pendingGate?.nodeIds?.length) {
+      return { phase: "gate", revealOrder: [], revealCount: 0, staged: 0, gateNodeId: operatorSession.pendingGate.nodeIds[0] };
+    }
+    return null;
+  }, [proposalActive, proposalRevealOrder, revealCount, operatorSession?.status, operatorSession?.pendingGate]);
 
   return (
     <main className={`loop-shell ${view === "canvas" ? "canvas-bleed" : ""}`}>
@@ -1237,6 +1558,7 @@ export default function App() {
             onSwitch={handleProjectOpen}
             onManage={() => setView("projects")}
             onNewProduct={() => setView("start")}
+            onDelete={handleProjectDelete}
           />
           <span className="loop-toolbar-sep">/</span>
           {/* Non-canvas views (product picker / cold-start) get only the static crumb — every other
@@ -1271,8 +1593,10 @@ export default function App() {
         {/* Center — the canvas IS the workspace. Only the cold-start picker replaces it. */}
         <section className="loop-canvas-area">
           {/* The floating control dock — every control the old top toolbar and program sub-header
-              held, in one calm bar floating top-center over the full-bleed canvas. */}
-          {view === "canvas" ? (
+              held, in one calm bar floating top-center over the full-bleed canvas. Hidden while the
+              ideation board is open: that board is a focused takeover with its own topbar (Re-ideate /
+              Close / live "composing N/M" status), so the floating dock would collide with it. */}
+          {view === "canvas" && !ideationOpen ? (
             <FloatingDock
               projects={projects}
               activeProjectId={activeProject?.id ?? null}
@@ -1280,6 +1604,7 @@ export default function App() {
               onSwitchProject={handleProjectOpen}
               onManageProjects={() => setView("projects")}
               onNewProduct={() => setView("start")}
+              onDeleteProject={handleProjectDelete}
               programs={programs}
               channels={channels}
               activeProgramId={activeProgram?.id ?? null}
@@ -1288,11 +1613,12 @@ export default function App() {
               onOpenChannel={(id) => { setOverlay(null); setIdeationOpen(false); void loadChannel(id); }}
               onNewProgram={handleNewProgram}
               onIdeate={() => handleOpenView("opportunities")}
+              onShowOverview={overviewGraph ? () => { void loadProjectOverview(channels); } : undefined}
+              overviewActive={!!overviewGraph && !activeChannelId && !activeProgram}
+              motionName={engine?.motion?.name ?? null}
               showGtmToggle={!!activeProject}
               productMode={overlay === "product"}
               onModeToggle={(v) => { if (v === "product") { setIdeationOpen(false); setOverlay("product"); } else { setOverlay(null); } }}
-              mode={activeTab}
-              onModeChange={setActiveTab}
               problems={problems}
               problemsOpen={problemsOpen}
               onToggleProblems={() => setProblemsOpen((v) => !v)}
@@ -1305,7 +1631,6 @@ export default function App() {
               audits={contractAudits}
               running={graphRunning}
               runningNodeId={runningNodeId}
-              onSimulate={() => { setActiveTab("simulation"); if (!activeProgram) void streamRun(); }}
               onRun={() => void (activeProgram ? executeProgram() : streamRun())}
               inspecting={inspecting}
               onToggleInspect={() => setInspecting((v) => !v)}
@@ -1384,7 +1709,7 @@ export default function App() {
                     onClick={() => void handleBuildChannel(ideationLaneChannel)}
                     type="button"
                   >
-                    {projectBusy ? <LoaderCircle className="spin" /> : <Sparkles />}
+                    {projectBusy ? <LoaderCircle className="spin" /> : <Lightbulb />}
                     Build this workflow
                   </Button>
                 </div>
@@ -1400,11 +1725,28 @@ export default function App() {
               proposedNodeIds={proposedNodeIds}
               proposedEdgeIds={proposedEdgeIds}
               onSelect={setSelection}
+              onPaneClick={dismissOverlays}
               panelOpen={false}
               result={null}
               running={false}
               selection={selection}
               subsystemHealth={{}}
+            />
+          ) : overviewGraph && !activeChannelId && !activeProgram ? (
+            // One project, one canvas: every built workflow as a labelled lane on the same surface.
+            // Read-only overview — clicking a node focuses that workflow for editing/running. The
+            // breadcrumb ("All workflows") and each lane's own label already name the surface, so no
+            // floating caption is layered over the lanes.
+            <GraphCanvas
+              connectors={connectors}
+              graph={overviewGraph}
+              variant="overview"
+              onSelect={handleOverviewSelect}
+              onPaneClick={dismissOverlays}
+              result={null}
+              running={false}
+              selection={null}
+              subsystemHealth={EMPTY_SUBSYSTEM_HEALTH}
             />
           ) : activeProgram ? (
             <ProgramCanvas
@@ -1413,13 +1755,15 @@ export default function App() {
               events={domainEvents}
               feedback={feedbackSignals}
               graph={graphBelongsToProgram(displayGraph, activeProgram) ? displayGraph : null}
-              mode={activeTab}
               inspecting={inspecting}
               onInspectingChange={setInspecting}
               onBuildAgents={() => handleBuildAgents(activeProgram)}
               onSelectNode={setSelection}
+              onPaneClick={dismissOverlays}
+              operatorCursor={operatorCursor}
               proposedNodeIds={proposedNodeIds}
               proposedEdgeIds={proposedEdgeIds}
+              revealedNodeIds={revealedNodeIds}
               proposalActive={proposalActive}
               onResolveProposal={(accept) => void handleResolveProposal(accept)}
               onSubmitReview={(id, d) => void submitGateReview(id, d)}
@@ -1461,6 +1805,7 @@ export default function App() {
                 graph={displayGraph ?? graph}
                 proposedNodeIds={proposedNodeIds}
                 proposedEdgeIds={proposedEdgeIds}
+                revealedNodeIds={revealedNodeIds}
                 proposalActive={proposalActive}
                 onResolveProposal={(accept) => void handleResolveProposal(accept)}
                 onSubmitReview={(id, d) => void submitGateReview(id, d)}
@@ -1472,6 +1817,8 @@ export default function App() {
                 onNodePositionChange={handleNodePositionChange}
                 onOpenLibrary={() => setLibraryPaletteOpen(true)}
                 onSelect={setSelection}
+                onPaneClick={dismissOverlays}
+                operatorCursor={operatorCursor}
                 panelOpen={false}
                 result={runResult}
                 running={graphRunning}
@@ -1493,6 +1840,13 @@ export default function App() {
               <LoaderCircle className="spin" />
               <strong>Claude is building your loop</strong>
               <span>Reading {activeProject?.name ?? "your product"} and composing the system to chase your goal — it'll stop at your gate. Watch it work in the panel on the right.</span>
+            </div>
+          ) : (booting || projectBusy) ? (
+            // Still resolving the workspace (initial boot, or switching products) — a calm loading
+            // state, never the cold-start goal launcher flashing before the real graph arrives.
+            <div className="building-state">
+              <LoaderCircle className="spin" />
+              <strong>Loading your workspace…</strong>
             </div>
           ) : (
             // No channel selected yet and nothing composing — the goal-driven front door.
@@ -1554,27 +1908,11 @@ export default function App() {
             </div>
           )}
 
-          {/* On-canvas proposal review — Claude staged a graph change; the new nodes/edges are
-              ghosted on the canvas and the founder accepts or discards here. */}
-          {proposalActive && pendingProposal && (
-            <div className="loop-proposal-bar" role="region" aria-label="Proposed graph changes">
-              <div className="loop-proposal-text">
-                <strong>
-                  <Sparkles />
-                  Claude proposes {pendingProposal.changes.length} change{pendingProposal.changes.length === 1 ? "" : "s"}
-                </strong>
-                <span>{pendingProposal.rationale}</span>
-              </div>
-              <div className="loop-proposal-actions">
-                <button className="loop-proposal-discard" disabled={graphRunning} onClick={() => void handleResolveProposal(false)} type="button">
-                  Discard
-                </button>
-                <button className="loop-proposal-accept" disabled={graphRunning} onClick={() => void handleResolveProposal(true)} type="button">
-                  <Check /> Accept change{pendingProposal.changes.length === 1 ? "" : "s"}
-                </button>
-              </div>
-            </div>
-          )}
+          {/* The operator proposal's accept/reject lives INLINE on the canvas now — Claude's cursor
+              builds the change and rests on the lead ghost, where the ✓/✕/note sits (the "watch then
+              decide" beat). The old distant bottom bar was removed so the decision happens where the
+              change is, not at a separate surface. The starter-system bar below stays — those ghosts
+              carry no inline controls. */}
 
           {/* Staged starter system — an accepted opportunity composed a system, ghosted on the
               canvas. Accept persists that exact graph and lands on its real channel; discard drops it. */}
@@ -1582,7 +1920,7 @@ export default function App() {
             <div className="loop-proposal-bar" role="region" aria-label="Staged starter system">
               <div className="loop-proposal-text">
                 <strong>
-                  <Sparkles />
+                  <Lightbulb />
                   Starter system: {pendingComposition.name}
                 </strong>
                 <span>{pendingComposition.objective} · {pendingComposition.preview.nodes.length} node{pendingComposition.preview.nodes.length === 1 ? "" : "s"} staged. Nothing is saved until you accept.</span>
@@ -1618,6 +1956,20 @@ export default function App() {
             </div>
           )}
 
+          {/* Capabilities — connect external MCP servers; the wall sorts each tool
+              read (runs free) / write (behind your gate). Replaces the connector picker. */}
+          {overlay === "capabilities" && (
+            <div className="canvas-overlay" role="dialog" aria-modal="true">
+              <div className="canvas-overlay-bar">
+                <span className="canvas-overlay-title">Capabilities</span>
+                <button className="canvas-overlay-close" onClick={() => { setOverlay(null); refreshCapabilities(); }} type="button" title="Back to the canvas">×</button>
+              </div>
+              <div className="canvas-overlay-body">
+                <ConnectCapability onChange={refreshCapabilities} />
+              </div>
+            </div>
+          )}
+
           {/* Product mode — the living picture as a full React Flow canvas, the same visual language
               as the GTM graph. It fills the workspace (the explorer + assistant frame stay), so
               flipping GTM↔Product swaps the canvas, not the whole page. The editable INTERPRETATION
@@ -1645,12 +1997,24 @@ export default function App() {
               onClose={() => setLibraryPaletteOpen(false)}
               library={library}
               agentInstances={activeProgram ? agentInstances.filter((i) => i.programId === activeProgram.id) : []}
+              agentEvaluations={agentEvaluations}
+              agentPolicies={agentPolicies}
               graph={graph}
+              capabilities={capabilities}
               onAddCapability={(type, ref, label) => {
                 handleAddNode({ label, kind: type, category: "generate", ref, contract: { accepts: [], emits: [] } });
                 setLibraryPaletteOpen(false);
               }}
-              onOpenArtifact={(type, ref) => setArtifactEdit({ type, ref })}
+              onAddTool={(serverId, tool) => {
+                handleAddTool(serverId, tool);
+                setLibraryPaletteOpen(false);
+              }}
+              onManageTools={() => { setLibraryPaletteOpen(false); setOverlay("capabilities"); }}
+              onOpenArtifact={(type, ref) => {
+                // Opening an agent shows the teammate profile (the person); skills still open their file.
+                if (type === "agent") { setLibraryPaletteOpen(false); setAgentProfileRef(ref); }
+                else setArtifactEdit({ type, ref });
+              }}
               onNewArtifact={handleNewArtifact}
             />
           ) : null}
@@ -1777,6 +2141,7 @@ export default function App() {
           running={graphRunning}
           floating={!!activeProgram && !ideationOpen}
           focusSignal={composerFocus}
+          recede={proposalActive}
           boundChannelName={boundChannel?.name ?? null}
           viewingMismatch={viewingMismatch}
           onSend={handleComposerSend}
@@ -1788,6 +2153,7 @@ export default function App() {
           onOpenPicture={() => handleOpenView("product")}
           onIdeate={() => handleOpenView("opportunities")}
           onAddNode={activeProgram || graph ? handleAddNode : undefined}
+          onAddChain={activeProgram || graph ? handleAddChain : undefined}
           onOpenLibrary={() => setLibraryPaletteOpen(true)}
         /> : null}
       </div>
@@ -1795,12 +2161,15 @@ export default function App() {
       {/* The node editor lives in the program workbench's right panel (ProgramCanvas). This modal
           remains only for the bare-channel graph path, which has no workbench around it. */}
       {selectedNode && graph && !activeProgram && (
-        <div
-          className="node-detail-modal-backdrop"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setSelection(null);
-          }}
-        >
+        <div className="node-detail-modal-backdrop">
+          {/* A real button for click-outside-to-close — semantic and keyboard-reachable, sitting
+              behind the dialog (which paints above it). Replaces a div with a mousedown handler. */}
+          <button
+            type="button"
+            className="node-detail-modal-scrim"
+            aria-label="Close the step editor"
+            onClick={() => setSelection(null)}
+          />
           <section
             aria-label={`${selectedNode.label} step editor`}
             aria-modal="true"
@@ -1899,18 +2268,17 @@ export default function App() {
         />
       )}
 
-      {/* ── Simulation drawer ─────────────────────────────────────────────── */}
-      <SimulationPanel
-        flowRuns={flowRuns}
-        graph={graph}
-        open={activeTab === "simulation" && !activeProgram}
-        result={runResult}
-        running={graphRunning}
-        onClose={() => setActiveTab("design")}
-        onSelectRun={(run) => {
-          setRunResult(run);
-          setSelection(run.pendingGates[0] ?? Object.keys(run.nodes)[0] ?? null);
-        }}
+      <AgentProfile
+        open={!!agentProfileView}
+        view={agentProfileView}
+        team={agentTeam}
+        onClose={() => setAgentProfileRef(null)}
+        onEditSource={(ref) => { setAgentProfileRef(null); setArtifactEdit({ type: "agent", ref }); }}
+        onAddToCanvas={graph ? (ref) => {
+          handleAddNode({ label: ref, kind: "agent", category: "generate", ref, contract: { accepts: [], emits: [] } });
+          setAgentProfileRef(null);
+        } : undefined}
+        onSelectTeammate={(ref) => setAgentProfileRef(ref)}
       />
     </main>
   );

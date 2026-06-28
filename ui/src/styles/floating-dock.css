@@ -44,6 +44,47 @@
 .fdock-left .osw-trigger { max-width: 220px; }
 .fdock-left .osw-trigger-name { max-width: 150px; }
 
+/* Motion identity — a quiet, read-only chip naming WHAT KIND of go-to-market the focused workflow is
+   ("Outbound loop", "Content loop"), derived from its real stages. Monochrome, subordinate to the
+   outcome name beside it; it labels the motion, it isn't a control. */
+.fdock-motion {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  flex-shrink: 0;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 540;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+/* Ideate — a first-class top-bar action, no longer buried in the flows dropdown. A quiet chip-button
+   that lights up on hover; active while the ideation board is open. */
+.fdock-ideate {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 540;
+  cursor: pointer;
+  transition: background 120ms var(--ease), border-color 120ms var(--ease), color 120ms var(--ease);
+}
+.fdock-ideate:hover { color: var(--ink); background: var(--surface-2); }
+.fdock-ideate.active { color: var(--ink); background: var(--surface-2); border-color: var(--line-2); }
+.fdock-ideate svg { width: 14px; height: 14px; }
+
 /* Center — the mode lenses ------------------------------------------------------------------ */
 .fdock-center {
   display: flex;

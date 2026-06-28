@@ -678,7 +678,7 @@ export type GTMNode = {
   // The open node model. "tool" (or absent) is a registered connector — the category
   // path. "agent" / "skill" / "code" are open steps the agent composes; they carry a
   // `ref` (the subagent, skill, or transform name) instead of a connector.
-  kind?: "tool" | "agent" | "skill" | "code";
+  kind?: "tool" | "agent" | "skill" | "code" | "mcp";
   ref?: string;
   connector?: string;          // headless connector id
   label: string;
@@ -729,6 +729,18 @@ export type PortfolioSystem = {
   gateIds: string[];
 };
 
+// A horizontal role-band on the engine canvas. The whole GTM motion reads top to bottom as shared
+// layers — ground, capabilities, the channel routes, the one founder-gate wall, stage, measure —
+// and only the channel layer fans into columns. `wall: true` marks the gate band the canvas draws
+// as the line nothing crosses without the founder.
+export type EngineBand = {
+  id: string;
+  label: string;
+  y: number;
+  height: number;
+  wall?: boolean;
+};
+
 export type GTMGraph = {
   id: string;
   name: string;
@@ -740,6 +752,9 @@ export type GTMGraph = {
   sharedContextVersion?: number;
   // Per-system lanes for a portfolio fan-out graph; absent on a single-system graph.
   systems?: PortfolioSystem[];
+  // Role-bands for the one-engine overview (ground → capabilities → channels → gate → stage →
+  // measure). When present the canvas draws banded rows instead of per-system lanes.
+  bands?: EngineBand[];
   nodes: GTMNode[];
   edges: GTMEdge[];
   // venture-style store reference
@@ -794,7 +809,7 @@ export type GTMItem = {
 export type GTMNodeResult = {
   nodeId: string;
   category: GTMNodeCategory;
-  kind?: "tool" | "agent" | "skill" | "code";
+  kind?: "tool" | "agent" | "skill" | "code" | "mcp";
   connector?: string;
   ok: boolean;
   items: GTMItem[];
@@ -1033,6 +1048,10 @@ export type EngineAgent = {
 
 export type EngineState = {
   subsystems: EngineSubsystem[];
+  // The motion's emergent identity — a shape-derived name ("Outbound loop", "Content loop") and the
+  // real stages, so the UI can show WHAT KIND of go-to-market this is without any fixed enum. Null on
+  // a project-wide (no-graph) engine read.
+  motion: { name: string; stages: string[] } | null;
   agents: EngineAgent[];
   topRecommendations: string[];
   investigations: Investigation[];
@@ -1043,3 +1062,33 @@ export type EngineState = {
 // The legacy pipeline types (Pipeline/Channel/PipelineStage/Prospect/…) were removed here — the
 // open node model (GTMGraph) replaced them. The brain's legacy cold-outbound runner is retired in
 // the same pass.
+
+// ── Capabilities (external MCP servers Claude calls) ──────────────────────────
+// A tool a connected MCP server brings, with the host's read/write verdict and any
+// founder override. The wall stands on `effectiveClass`.
+export type CapabilityTool = {
+  name: string;
+  description?: string;
+  class: "read" | "write";          // the machine's verdict — never lost
+  reason: string;
+  source: "annotation" | "name" | "default" | "quarantine";
+  declaredReadOnly: boolean | null;
+  declaredDestructive: boolean | null;
+  override: "read" | "write" | null; // the founder's deliberate move across the wall
+  effectiveClass: "read" | "write";
+};
+
+export type CapabilityServer = {
+  id: string;
+  name: string;
+  url: string;
+  trust: "verified" | "community" | "untrusted";
+  auth: { status: "authed" | "expired" | "none"; method: string | null };
+  connectedAt: string;
+  updatedAt: string;
+  read: CapabilityTool[];
+  write: CapabilityTool[];
+  defaultedCount: number;
+  overrideCount: number;
+  toolCount: number;
+};
