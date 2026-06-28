@@ -12,10 +12,98 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { query as agentQuery } from "@anthropic-ai/claude-agent-sdk";
+import { query as agentQuery, createSdkMcpServer, tool as sdkTool } from "@anthropic-ai/claude-agent-sdk";
 import { createStepRuntime } from "./step-runners.mjs";
 import { assembleContext } from "./context/assembler.mjs";
 import { providersFromContext } from "./context/providers.mjs";
+import { createRetrievalTools, RETRIEVAL_SOURCES, SOURCE_TO_TOOL } from "./context/retrieval-tools.mjs";
+
+// Parallel-path flag (E1.4). OFF by default, so the live default behavior and the whole test
+// suite stay on the proven pre-pack until a per-provider comparison (E1.5) earns the cutover.
+// An explicit boolean (per-step config) always wins over the env switch.
+export function agenticRetrievalEnabled(explicit) {
+  if (typeof explicit === "boolean") return explicit;
+  return process.env.GTM_AGENTIC_RETRIEVAL === "1";
+}
+
+// Per-provider cutover (E1.6 + E2.4). The all-or-nothing flag above is one extreme; this is the
+// dial between them. It names WHICH grounding sources have been cut over to agentic retrieval —
+// those become tools the agent pulls; everything else stays pre-packed and proven. The cutover
+// flips one source at a time as the comparison harness (agentic-compare.mjs) earns each move, with
+// taste and design intentionally LAST because their required-consult guarantee is load-bearing.
+//
+// Resolution, highest priority first:
+//   1. an explicit value on the step config (Array | Set | "all" | "" | comma-string)
+//   2. the full-agentic flag — when on, EVERY source is agentic (the old all-on case, unchanged)
+//   3. GTM_AGENTIC_PROVIDERS env (comma list, or "all")
+//   4. nothing → empty set → today's behavior: everything pre-packed, no tools offered.
+//
+// Default (no config, no env, full flag off) returns an EMPTY set, so an unconfigured run is
+// byte-identical to before — the cutover is opt-in per source.
+export function agenticProviders(explicit, { full } = {}) {
+  const all = new Set(RETRIEVAL_SOURCES);
+  const parse = (value) => {
+    if (value == null) return null;
+    if (value instanceof Set) return new Set([...value].filter((s) => all.has(s)));
+    if (Array.isArray(value)) return new Set(value.filter((s) => all.has(s)));
+    if (value === true) return all;
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) return new Set();
+      if (trimmed.toLowerCase() === "all") return all;
+      return new Set(trimmed.split(",").map((s) => s.trim()).filter((s) => all.has(s)));
+    }
+    return null;
+  };
+
+  const fromExplicit = parse(explicit);
+  if (fromExplicit) return fromExplicit;
+
+  // The full-agentic flag (explicit boolean or env) means "cut everything over at once".
+  if (agenticRetrievalEnabled(typeof full === "boolean" ? full : undefined)) return all;
+
+  const fromEnv = parse(process.env.GTM_AGENTIC_PROVIDERS);
+  if (fromEnv) return fromEnv;
+
+  return new Set();
+}
+
+// Render the retrieval-tool catalog the agent reads in agentic mode: which context it CAN pull,
+// and the one standing instruction that protects the moat. The grounded text is NOT stapled in —
+// the agent fetches what this task needs, live, through these tools.
+function renderRetrievalCatalog(tools) {
+  if (!tools.length) return "";
+  const lines = tools.map((t) => `- ${t.name}: ${t.description}`);
+  return [
+    "\nContext tools — the grounding for this run is available THROUGH TOOLS, not pre-loaded. Call only the ones this task needs; do not guess at what you can fetch:",
+    ...lines,
+    "Always call get_taste before drafting or proposing anything the founder will review — it carries the founder's accumulated approvals and rejections, which a generic model cannot guess.",
+  ].join("\n");
+}
+
+// Map the verified retrieval tools (retrieval-tools.mjs) to MCP CallToolResult-shaped handlers.
+// Pure and unit-testable; the actual SDK server is one line away in buildContextMcpServer.
+export function buildContextToolDefs(retrievalTools = []) {
+  return retrievalTools.map((t) => ({
+    name: t.name,
+    description: t.description,
+    handler: async () => {
+      const result = t.call();
+      const text = result.found ? result.text : (result.note || "No data available for this run.");
+      return { content: [{ type: "text", text }] };
+    },
+  }));
+}
+
+// The thin live bridge: wrap the tool defs in an in-process MCP server the agent SDK can call.
+// LIVE-VERIFY PENDING (E1.5): this registration path only truly exercises on a real subscription
+// run, so it stays behind the agentic flag and is never hit by the default suite.
+function buildContextMcpServer(retrievalTools) {
+  const defs = buildContextToolDefs(retrievalTools);
+  if (!defs.length) return null;
+  const tools = defs.map((d) => sdkTool(d.name, d.description, {}, d.handler));
+  return createSdkMcpServer({ name: "gtm_context", version: "0.1.0", tools, alwaysLoad: true });
+}
 
 // ── Skill loader (real, deterministic) ───────────────────────────────────────
 // Skills live in ~/.claude/skills/<ref>/SKILL.md. Returns the guidance text, or null
@@ -60,6 +148,54 @@ export function loadAgentDefinition(ref, { artifactPath, root } = {}) {
     }
   }
   return null;
+}
+
+// ── Per-agent toolset resolution (real, tested) ──────────────────────────────
+// Every agent used to run with the same blanket five read-only tools, ignoring the `tools:` its
+// definition declares — the one fixed thing left in the otherwise-personalized bridge. Now the
+// declared set drives the run, intersected with a host-enforced read-only allowlist so the wall
+// still holds: the bridge NEVER grants a mutation tool (Write / Edit / NotebookEdit) or any
+// send / publish / approve path, and the step still returns staged items behind the founder gate.
+//
+// The allowlist is wider than the default by exactly one tool: Bash. A research scout
+// (gtm-enrich, gtm-signal-github) declares Bash to curl public, free-tier APIs — that is reading,
+// not the GTM send, which only ever happens at an execute node downstream of a gate. Bash is
+// granted ONLY when an agent explicitly declares it; an agent that declares nothing keeps the
+// conservative five. Declared tools outside the allowlist are dropped and recorded (never silent).
+export const DEFAULT_AGENT_TOOLS = ["Read", "Glob", "Grep", "WebSearch", "WebFetch"];
+export const ALLOWED_AGENT_TOOLS = [...DEFAULT_AGENT_TOOLS, "Bash"];
+
+// Parse the `tools:` field from an agent definition's YAML frontmatter. Handles the two real
+// shapes: the inline comma string (`tools: Read, Bash, WebSearch`) and the YAML list form. Returns
+// the declared names, or null when the field is absent (the caller keeps the safe default).
+export function parseDeclaredTools(definition) {
+  if (typeof definition !== "string" || !definition.trim()) return null;
+  const fm = definition.match(/^---\s*\n([\s\S]*?)\n---/);
+  if (!fm) return null;
+  const body = fm[1];
+  const inline = body.match(/^tools:[ \t]*(\S.*)$/m);
+  if (inline) {
+    return inline[1].split(",").map((t) => t.trim()).filter(Boolean);
+  }
+  const list = body.match(/^tools:[ \t]*\n((?:[ \t]*-[ \t]*.+\n?)+)/m);
+  if (list) {
+    return list[1].split("\n").map((l) => l.replace(/^[ \t]*-[ \t]*/, "").trim()).filter(Boolean);
+  }
+  return null;
+}
+
+// Resolve the allowedTools for a run: the declared set intersected with the read-only allowlist,
+// or the conservative default when nothing is declared (or nothing declared survives the filter,
+// so an agent never runs blind). Returns { allowed, declared, dropped } so the caller can record
+// what was granted and what was refused.
+export function resolveAgentTools(definition, { fallback = DEFAULT_AGENT_TOOLS, allowlist = ALLOWED_AGENT_TOOLS } = {}) {
+  const declared = parseDeclaredTools(definition);
+  if (!declared || !declared.length) {
+    return { allowed: [...fallback], declared: null, dropped: [] };
+  }
+  const allowed = declared.filter((t) => allowlist.includes(t));
+  const dropped = declared.filter((t) => !allowlist.includes(t));
+  return { allowed: allowed.length ? allowed : [...fallback], declared, dropped };
 }
 
 // ── Agent result parsing (pure, tested) ──────────────────────────────────────
@@ -113,13 +249,56 @@ export function parseAgentObject(text) {
 // a clean, selected base-layer block; anything the substrate doesn't recognize (context-node
 // output, __run) is passed through as JSON so no information is lost. Returns the manifest too, so
 // the caller can attach it to the node result — that is the instrument the UI inspector reads.
-export function buildAgentPrompt({ ref, prompt, items, context = {}, artifactPath, agentDefinitionRoot } = {}) {
+export function buildAgentPrompt({ ref, prompt, items, context = {}, artifactPath, agentDefinitionRoot, agenticRetrieval, agenticProviders: agenticProvidersConfig } = {}) {
   const input = JSON.stringify(items ?? [], null, 2);
-  const assembled = assembleContext({ providers: providersFromContext(context), intent: prompt || "" });
+
+  // The per-provider cutover set: which sources are pulled through tools vs. pre-packed. The full
+  // flag (`agenticRetrieval`) collapses to "every source agentic"; an explicit provider list cuts
+  // one source at a time; nothing → empty set → today's all-pre-pack behavior.
+  const agenticSet = agenticProviders(agenticProvidersConfig, { full: agenticRetrieval });
+  const fullAgentic = agenticSet.size === RETRIEVAL_SOURCES.length;
+  const partialAgentic = agenticSet.size > 0 && !fullAgentic;
 
   // eslint-disable-next-line no-unused-vars
   const { grounding, productModel, market, __memory, __state, signal, designState, ...rest } = context ?? {};
   const restJson = Object.keys(rest).length ? JSON.stringify(rest, null, 2) : null;
+
+  // Three grounding modes, all over the SAME provider summarizers (E1.4/E1.6):
+  //  - pre-pack (default, empty set): assemble every provider into one block stapled to the prompt.
+  //  - agentic (full set): hand the agent a CATALOG of context tools; let it pull what it needs.
+  //  - partial cutover (some sources): the cut-over sources are offered as tools AND omitted from
+  //    the pre-pack (toggled off in the assembler); the rest are still pre-packed. This is the
+  //    per-provider dial — flip get_market before get_taste, with taste/design last.
+  // Both leave `rest` (context-node output, __run) passed through as JSON so nothing is lost.
+  let contextBlock = "";
+  let manifest;
+  let retrievalTools = null;
+  if (fullAgentic) {
+    retrievalTools = createRetrievalTools(context);
+    contextBlock = renderRetrievalCatalog(retrievalTools);
+    manifest = { mode: "agentic", offered: retrievalTools.map((t) => t.name), assembledAt: new Date().toISOString() };
+  } else if (partialAgentic) {
+    // Tools for the cut-over sources; pre-pack (toggled off for those) for the rest.
+    retrievalTools = createRetrievalTools(context, { sources: [...agenticSet] });
+    const catalog = renderRetrievalCatalog(retrievalTools);
+    // Toggle the cut-over providers OFF in the pre-pack so a source is never delivered both ways.
+    const toggles = {};
+    for (const source of agenticSet) toggles[source] = false;
+    const assembled = assembleContext({ providers: providersFromContext(context), intent: prompt || "", toggles });
+    const prePackBlock = assembled.text ? `\nGrounded context:\n${assembled.text}` : "";
+    contextBlock = [catalog, prePackBlock].filter(Boolean).join("\n");
+    manifest = {
+      mode: "partial-agentic",
+      offered: retrievalTools.map((t) => t.name),
+      prePacked: assembled.manifest,
+      cutover: [...agenticSet],
+      assembledAt: new Date().toISOString(),
+    };
+  } else {
+    const assembled = assembleContext({ providers: providersFromContext(context), intent: prompt || "" });
+    contextBlock = assembled.text ? `\nGrounded context:\n${assembled.text}` : "";
+    manifest = assembled.manifest;
+  }
 
   // Load the real on-disk definition if one exists. When found, the agent's own doctrine + role
   // drives the run; when not, we fall back to the original one-line label (identical to before),
@@ -129,16 +308,19 @@ export function buildAgentPrompt({ ref, prompt, items, context = {}, artifactPat
     ? `You are acting as the "${ref}" GTM subagent. Follow this agent definition:\n\n${definition.trim()}`
     : `You are doing the work of the "${ref}" GTM subagent.`;
 
+  // The agent's own declared toolset, intersected with the read-only allowlist (the wall).
+  const tools = resolveAgentTools(definition);
+
   const text = [
     role,
     prompt ? `\nTask:\n${prompt}` : "",
-    assembled.text ? `\nGrounded context:\n${assembled.text}` : "",
+    contextBlock,
     restJson ? `\nAdditional workflow context (JSON):\n${restJson}` : "",
     `\nInput items (JSON):\n${input}`,
     `\nReturn ONLY a JSON array of result items — no prose, no preamble. Each item should be a JSON object. If you have nothing to return, return [].`,
   ].filter(Boolean).join("\n");
 
-  return { prompt: text, manifest: assembled.manifest, definitionLoaded: !!definition };
+  return { prompt: text, manifest, definitionLoaded: !!definition, tools, retrievalTools };
 }
 
 // Classify a Claude Code error result so a quota or turn-budget cutoff stops masquerading as a
@@ -169,7 +351,7 @@ export function classifyAgentError(message) {
 // run bills the subscription, not a key. Read-only tools only; no send/publish/approve path.
 // onText (optional) fires with each assistant text delta as the model writes — token-level "watch
 // it think". Enabled via includePartialMessages; we read content_block_delta text_delta events.
-export async function runClaudeQuery({ prompt, cwd = process.cwd(), model, maxTurns = 12, onText } = {}) {
+export async function runClaudeQuery({ prompt, cwd = process.cwd(), model, maxTurns = 12, onText, allowedTools = DEFAULT_AGENT_TOOLS, mcpServers } = {}) {
   const childEnv = { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: "gtm-ide/0.3.0" };
   delete childEnv.ANTHROPIC_API_KEY; // subscription, not a raw key
   const stream = agentQuery({
@@ -179,7 +361,10 @@ export async function runClaudeQuery({ prompt, cwd = process.cwd(), model, maxTu
       model: model || undefined,
       maxTurns,
       permissionMode: "dontAsk",
-      allowedTools: ["Read", "Glob", "Grep", "WebSearch", "WebFetch"],
+      allowedTools,
+      // In-process context tools (agentic retrieval, E1.2). Omitted entirely in the default
+      // pre-pack path, so this never changes a non-agentic run.
+      ...(mcpServers ? { mcpServers } : {}),
       settingSources: [],
       persistSession: false,
       includePartialMessages: typeof onText === "function",
@@ -211,18 +396,28 @@ export async function runClaudeQuery({ prompt, cwd = process.cwd(), model, maxTu
 // overrides higher. A step can always set config.maxTurns.
 export function createClaudeAgentInvoker({ cwd = process.cwd(), model, maxTurns = 20, onText } = {}) {
   return async function invoke({ ref, prompt, items, context, config = {}, artifactPath }) {
-    const built = buildAgentPrompt({ ref, prompt, items, context, artifactPath: artifactPath ?? config.artifactPath });
+    const built = buildAgentPrompt({ ref, prompt, items, context, artifactPath: artifactPath ?? config.artifactPath, agenticRetrieval: config.agenticRetrieval, agenticProviders: config.agenticProviders });
+    // Agentic mode: expose the context tools as an in-process MCP server and permit their
+    // namespaced names. Pre-pack mode leaves both undefined, so the call is byte-identical to before.
+    const mcpServers = built.retrievalTools ? { gtm_context: buildContextMcpServer(built.retrievalTools) } : undefined;
+    const allowedTools = mcpServers
+      ? [...built.tools.allowed, ...built.retrievalTools.map((t) => `mcp__gtm_context__${t.name}`)]
+      : built.tools.allowed;
     const { text, error } = await runClaudeQuery({
       prompt: built.prompt,
       cwd,
       model: config.model || model,
       maxTurns: config.maxTurns || maxTurns,
       onText,
+      allowedTools,
+      mcpServers,
     });
+    // Surface the granted toolset (and anything the wall refused) so the run is auditable.
+    const toolMeta = { tools: built.tools.allowed, toolsDropped: built.tools.dropped };
     if (error) {
-      return { ok: false, items: [], error: error.message, meta: { invoked: ref, contextManifest: built.manifest, errorKind: error.kind, retriable: error.retriable } };
+      return { ok: false, items: [], error: error.message, meta: { invoked: ref, contextManifest: built.manifest, errorKind: error.kind, retriable: error.retriable, ...toolMeta } };
     }
-    return { ok: true, items: parseAgentItems(text), meta: { invoked: ref, contextManifest: built.manifest } };
+    return { ok: true, items: parseAgentItems(text), meta: { invoked: ref, contextManifest: built.manifest, ...toolMeta } };
   };
 }
 

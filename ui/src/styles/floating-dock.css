@@ -290,3 +290,37 @@
 @media (max-width: 880px) {
   .fdock-left .stabs { display: none; }
 }
+
+/* Summon control — the agentic replacement for lens tabs. A quiet + that opens a short menu of
+   views to pop onto the canvas as draggable cards. */
+.fdock-summon {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 28px; padding: 0 11px;
+  border: 1px solid var(--line-2); border-radius: 999px;
+  background: var(--surface); color: var(--ink-2);
+  font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: color 130ms var(--ease), border-color 130ms var(--ease), background 130ms var(--ease);
+}
+.fdock-summon:hover { color: var(--ink); border-color: var(--ink); }
+.fdock-summon.open { color: var(--ink); border-color: var(--ink); background: var(--surface-2); }
+.fdock-summon svg { width: 14px; height: 14px; }
+
+.fdock-summon-pop {
+  position: absolute; top: calc(100% + 10px); left: 0;
+  width: 280px; z-index: 60;
+  padding: 6px; border: 1px solid var(--line); border-radius: var(--r-lg);
+  background: var(--canvas); box-shadow: 0 18px 50px -16px rgba(16, 18, 27, 0.34);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.fdock-summon-head {
+  font-size: 11px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 6px 8px 4px;
+}
+.fdock-summon-item {
+  display: flex; flex-direction: column; gap: 1px; align-items: flex-start;
+  padding: 8px 10px; border: none; border-radius: 8px; background: none; cursor: pointer; text-align: left;
+  transition: background 120ms var(--ease);
+}
+.fdock-summon-item:hover { background: var(--surface-2); }
+.fdock-summon-item strong { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.fdock-summon-item span { font-size: 11.5px; color: var(--muted); line-height: 1.35; }

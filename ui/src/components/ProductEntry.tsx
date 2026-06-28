@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ArrowRight, ScanSearch } from "lucide-react";
+import { ArrowRight, FolderOpen, ScanSearch } from "lucide-react";
+import { pickFolder } from "@/api";
 
 // The front door for a stranger: one screen, two truths — point it at your product, say what you
 // want. The repo triggers the read-only scan (the wedge: grounding), and the sentence becomes the
@@ -14,7 +15,13 @@ export function ProductEntry({ busy, onStart, onSeePortfolio }: {
   const [repoPath, setRepoPath] = useState("");
   const [goal, setGoal] = useState("");
   const [outcome, setOutcome] = useState("");
+  const [picking, setPicking] = useState(false);
   const canStart = !!repoPath.trim() && !!goal.trim() && !busy;
+  const choose = async () => {
+    setPicking(true);
+    try { const r = await pickFolder(); if (r.path) setRepoPath(r.path); }
+    finally { setPicking(false); }
+  };
   const submit = () => {
     if (!canStart) return;
     void onStart({ repoPath: repoPath.trim(), outcome: outcome.trim() || "signup", goal: goal.trim() });
@@ -30,16 +37,20 @@ export function ProductEntry({ busy, onStart, onSeePortfolio }: {
           stopping at your gate before anything reaches a real person.
         </p>
 
-        <label className="product-entry-field">
+        <div className="product-entry-field">
           <span className="product-entry-label"><ScanSearch size={14} /> Your product</span>
-          <input
-            className="product-entry-input"
-            placeholder="repo path, or github.com/you/your-product"
-            value={repoPath}
-            disabled={busy}
-            onChange={(e) => setRepoPath(e.target.value)}
-          />
-        </label>
+          <button
+            type="button"
+            className={`product-entry-folder ${repoPath ? "chosen" : ""}`}
+            disabled={busy || picking}
+            onClick={choose}
+          >
+            <FolderOpen size={15} />
+            {repoPath
+              ? <><span className="product-entry-folder-path">{repoPath}</span><span className="product-entry-folder-change">Change</span></>
+              : <span>{picking ? "Opening Finder…" : "Choose your product folder"}</span>}
+          </button>
+        </div>
 
         <label className="product-entry-field">
           <span className="product-entry-label">What do you want to happen?</span>

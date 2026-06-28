@@ -5,7 +5,9 @@ import { createClaudeComposer } from "./composition.mjs";
 import { createClaudeEvaluator } from "./eval.mjs";
 import { createClaudeProductModeler } from "./product-model-generator.mjs";
 import { loadFlow, recordFlowRun, saveFlow } from "./flow-store.mjs";
+import { createDerivedSourceLoader } from "./cross-reference.mjs";
 import { loadFeedbackLedger, recordFeedbackSignalsFromRun } from "./feedback-ledger.mjs";
+import { promoteEntrantsFromRun } from "./person-store.mjs";
 import { applyGraphOperations, validateGraph } from "./graph-operations.mjs";
 import { listConnectors, runGraph } from "./graph.mjs";
 import { appendDomainEvent, listDomainEvents } from "./domain-events.mjs";
@@ -39,7 +41,7 @@ import {
   saveGeneratedOpportunities,
   updateOpportunity,
 } from "./opportunity-engine.mjs";
-import { composeOpportunityChannel } from "./workflow-composer.mjs";
+import { composeOpportunityChannel, composePortfolioFromStudio } from "./workflow-composer.mjs";
 import {
   compareChannelRuns,
   createPortfolioArtifact,
@@ -266,6 +268,8 @@ const TOOLS = [
         channelId: { type: "string" },
         hypothesis: { type: "string" },
         variable: { type: "string" },
+        variant: { type: "string", description: "The changed thing under test (the new treatment)." },
+        control: { type: "string", description: "The baseline the variant is compared against." },
         heldConstant: { type: "array", items: { type: "string" } },
         successSignal: { type: "string" },
       },
@@ -356,6 +360,15 @@ const TOOLS = [
         output: { type: "object" },
       },
       required: ["channelOpportunityId", "agentOpportunityIds"],
+    },
+  },
+  {
+    name: "compose_portfolio",
+    description: "Compose every accepted channel and its accepted agents into ONE branching, multi-gate portfolio graph the founder reviews together — the whole GTM system as a single diagram. Re-asserts the founder gate on every execute path; never sends. Use after several channel opportunities are accepted, to propose the portfolio.",
+    input_schema: {
+      type: "object",
+      properties: { goal: { type: "string" } },
+      required: [],
     },
   },
   {
@@ -776,9 +789,11 @@ async function executeGraphRun(session, { targetNodeId } = {}, options = {}) {
     memory: memoryFor(flow.runs, options),
     designState: designStateFor(session, options),
     stepRuntime: liveStepRuntime({ cwd: options.cwd }),
+    loadLastRunItems: createDerivedSourceLoader({ ...options, projectId: session.projectId || "default" }),
   });
   const stored = recordFlowRun(flow.graph, result, options);
   recordFeedbackSignalsFromRun({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
+  promoteEntrantsFromRun({ projectId: session.projectId || "default", channelId: flow.graph.id, result }, options);
   let next = {
     ...session,
     lastRunId: result.runId,
@@ -1088,6 +1103,22 @@ async function executeTool(session, tool, options = {}) {
       data: { channelId: composed.channel.id, graphId: composed.channel.graphId },
     }, options);
     return { session: next, result: composed, pause: false };
+  }
+
+  if (tool.name === "compose_portfolio") {
+    const composeRepo = options.cwd || loadProject(options).sharedContext?.repository?.repo || process.cwd();
+    const portfolio = await composePortfolioFromStudio(input, {
+      ...options,
+      compose: options.compose || createClaudeComposer({ cwd: composeRepo }),
+    });
+    const systemCount = Array.isArray(portfolio.systems) ? portfolio.systems.length : 0;
+    const next = addEvent(session, {
+      type: "portfolio_composed",
+      title: "Composed the portfolio",
+      detail: `${portfolio.nodes.length} steps across ${systemCount} channels, unioned into one gated diagram.`,
+      data: { nodes: portfolio.nodes.length, systems: systemCount, graphId: portfolio.id },
+    }, options);
+    return { session: next, result: portfolio, pause: false };
   }
 
   if (tool.name === "inspect_program") {
@@ -1768,9 +1799,11 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
     designState: designStateFor(session, options),
     resumeResult: session.pendingGate.runResult,
     stepRuntime: liveStepRuntime({ cwd: options.cwd }),
+    loadLastRunItems: createDerivedSourceLoader({ ...options, projectId: session.projectId || "default" }),
   });
   recordFlowRun(flow.graph, result, options);
   recordFeedbackSignalsFromRun({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
+  promoteEntrantsFromRun({ projectId: session.projectId || "default", channelId: flow.graph.id, result }, options);
   session = addEvent({
     ...session,
     lastRunId: result.runId,

@@ -9,7 +9,8 @@ import "@xyflow/react/dist/style.css";
 import { motion } from "motion/react";
 import {
   AlertCircle, Ban, Bot, Check, CheckCircle2, Circle, Code, CornerDownLeft, Database, FileText, GitMerge,
-  Loader, Lock, MessageSquare, MousePointer2, Pencil, Play, Search, ShieldCheck, Lightbulb, Target, Trash2, TrendingUp, Wand2, X, Zap,
+  Loader, Lock, MessageSquare, MousePointer2, Pencil, Play, Search, ShieldCheck, Lightbulb, Sprout, Target,
+  Telescope, Trash2, TrendingUp, Wand2, X, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { healthHex } from "@/lib/health";
@@ -20,21 +21,15 @@ import type { NodeEditorBridge } from "@/components/ProgramCanvas";
 import type {
   ConnectorMeta, GateDecision, GTMEdge, GTMEdgeType, GTMGraph,
   GTMContractAudit, GTMNode, GTMNodeCategory, GTMNodeResult, GTMRunResult, NodeSelection,
+  Person, PersonAppearance,
 } from "@/types";
 
 // The in-card editor needs the same handler bag the old right rail held (run a step, save the
 // graph, open an artifact, delete, review a gate) plus the live graph (to clone-and-save a notes
 // edit). We thread both through React context — not node data — so buildFlowGraph stays a pure
 // topology mapper and the editor reads the bridge directly.
-type NodeEditorContextValue = { bridge: NodeEditorBridge; graph: GTMGraph } | null;
+type NodeEditorContextValue = { bridge: NodeEditorBridge; graph: GTMGraph; people: Person[] } | null;
 const NodeEditorContext = React.createContext<NodeEditorContextValue>(null);
-
-// Every node carries two handle pairs: a horizontal pair (left in / right out) the focused
-// single-channel view routes through, and a vertical pair (top in / bottom out) the banded engine
-// overview routes through so its top-to-bottom flow reads straight down instead of curving sideways.
-// The vertical handles stay invisible (edges attach to their position regardless) so the cards stay
-// clean — only the routing changes, never the chrome.
-const V_HANDLE: React.CSSProperties = { opacity: 0, pointerEvents: "none" };
 
 // ─── Category metadata ────────────────────────────────────────────────────────
 
@@ -97,6 +92,108 @@ function nodeVisual(node: GTMNode): { color: string; label: string; icon: React.
     label: CATEGORY_LABEL[cat] ?? "Step",
     icon:  CATEGORY_ICON[cat] ?? <Circle />,
   };
+}
+
+// ─── Card taxonomy — typed by the GTM job, not the mechanical kind ────────────
+// A card reads as the go-to-market OBJECT it is, not the connector under it: the headline is the
+// job, the mechanism recedes to a quiet label. Five objects, all rendered by WorkNodeComponent:
+//   Source   — the audience this channel pulls in (mode-marked provided/discovered)
+//   Teammate — a personalized agent (its role is the headline; the kebab ref is a faint slug)
+//   Gate     — the wall: the one place anything reaches the world (the signature card)
+//   Measure  — the scoreboard, honest about blind attribution
+//   Step     — the quiet machinery (tool / code / skill / enrich / filter / generate)
+type CardObject = "source" | "teammate" | "gate" | "measure" | "step";
+function cardObject(node: GTMNode): CardObject {
+  if (node.category === "gate") return "gate";
+  if (node.category === "measure") return "measure";
+  if (node.category === "source") return "source";
+  if (node.kind === "agent") return "teammate";
+  return "step";
+}
+
+// Source mode mirrors brain/src/source-entry.mjs `sourceMode()`: an agent-kind source self-sources
+// (discovered); a connector-backed source is provided. Derived from the node's SHAPE so the left
+// mark can never disagree with what the runner does.
+function sourceMode(node: GTMNode): "provided" | "discovered" {
+  return node.kind === "agent" ? "discovered" : "provided";
+}
+
+// The why-now line a Source card leads with, pulled from the founder/model-authored config. First
+// real value wins; null when the source carries no stated trigger yet.
+function sourceTrigger(node: GTMNode): string | null {
+  const c = (node.config ?? {}) as Record<string, unknown>;
+  for (const key of ["trigger", "nowTrigger", "signal", "query", "criteria"]) {
+    const v = c[key];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return null;
+}
+
+function personInitials(name: string | null | undefined, fallback = "?"): string {
+  if (!name) return fallback;
+  const parts = name.trim().split(/\s+/).slice(0, 2);
+  return parts.map((p) => p[0]?.toUpperCase() ?? "").join("") || fallback;
+}
+
+// The real entrants for one Source card — durable People (P10.3) whose appearances include THIS
+// channel. Each row carries that channel's per-appearance trigger (the why-now that found them
+// here). Real GTM state derived from runs, never seeded: no entrants → honest empty, never a fake.
+type Entrant = { person: Person; appearance: PersonAppearance };
+function sourceEntrants(people: Person[] | undefined, channelId: string | null, node: GTMNode): Entrant[] {
+  if (node.category !== "source" || !people?.length || !channelId) return [];
+  const out: Entrant[] = [];
+  for (const person of people) {
+    // The newest appearance in this channel is the live trigger that found them here.
+    const appearance = [...person.appearances].reverse().find((a) => a.channelId === channelId);
+    if (appearance) out.push({ person, appearance });
+  }
+  return out.sort((a, b) => String(b.appearance.at).localeCompare(String(a.appearance.at)));
+}
+
+// ─── The judgment verdict — grounded / assumed / generic / blind ──────────────
+// Replaces the bare health number with a read on how GROUNDED this node's work is. Every branch
+// maps from a signal the host ALREADY derived from real state — it is never seeded. When no real
+// signal exists, it returns null and the card shows nothing (it never fabricates "grounded"):
+//   blind    ← contractAudit.state "blind"      (e.g. Measure with no attribution source in the code)
+//   blocked  ← contractAudit.state "blocked"    (a hard, named data gap — surfaced as the danger read)
+//   assumed  ← contractAudit "waiting", OR a discovered source (a scout's hypothesis until it runs),
+//              OR engine health 40–69 (real but unconfirmed)
+//   grounded ← contractAudit "satisfied"/"ready", OR a provided source (founder-supplied real seed),
+//              OR engine health ≥ 70 (scan + ledger + connector confidence)
+//   generic  ← engine health 1–39 (real but thin grounding — the node sits near the model's mean)
+type Verdict = "grounded" | "assumed" | "generic" | "blind" | "blocked";
+function nodeVerdict(
+  health: number | undefined,
+  contractAudit: GTMContractAudit | undefined,
+  mode: "provided" | "discovered" | null,
+): { verdict: Verdict; label: string; title: string } | null {
+  const state = contractAudit?.state;
+  const healthNote = typeof health === "number" && health > 0 ? ` · health ${health}` : "";
+  // 1. Contract signals are the most concrete real state — they win.
+  if (state === "blind") return { verdict: "blind", label: "Blind", title: contractAudit?.message ?? "No attribution source" };
+  if (state === "blocked") return { verdict: "blocked", label: `Needs ${contractAudit?.missingFields?.[0] ?? "data"}`, title: contractAudit?.message ?? "Missing required input" };
+  if (state === "waiting") return { verdict: "assumed", label: "Assumed", title: contractAudit?.message ?? "Waiting on upstream input" };
+  if (state === "satisfied" || state === "ready") return { verdict: "grounded", label: "Grounded", title: contractAudit?.message ?? "Contract satisfied" };
+  // 2. Source mode — a persisted topology fact, not a guess.
+  if (mode === "provided") return { verdict: "grounded", label: "Grounded", title: `Founder-supplied seed (provided source)${healthNote}` };
+  if (mode === "discovered") return { verdict: "assumed", label: "Assumed", title: `A scout agent self-sources this audience${healthNote}` };
+  // 3. Engine health — derived from scan + ledger + connectors, never seeded.
+  if (typeof health === "number" && health > 0) {
+    if (health >= 70) return { verdict: "grounded", label: "Grounded", title: `Engine confidence${healthNote}` };
+    if (health >= 40) return { verdict: "assumed", label: "Assumed", title: `Partial grounding${healthNote}` };
+    return { verdict: "generic", label: "Generic", title: `Thin grounding${healthNote}` };
+  }
+  // 4. No real signal — honest blank.
+  return null;
+}
+
+function VerdictBadge({ verdict, label, title }: { verdict: Verdict; label: string; title: string }) {
+  return (
+    <span className={`loop-verdict v-${verdict}`} title={title}>
+      <span className="loop-verdict-dot" aria-hidden />
+      {label}
+    </span>
+  );
 }
 
 // ─── Node data types ──────────────────────────────────────────────────────────
@@ -210,7 +307,7 @@ function ProposalControls({ data }: { data: GTMNodeData }) {
   const resolve = data.onResolveProposal;
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   return (
-    <div className="loop-proposal-inline nodrag nopan" role="group" aria-label="Accept or reject the proposed changes" onClick={stop} onKeyDown={stop}>
+    <div className="loop-proposal-inline nodrag nopan" role="group" aria-label="Accept or reject the proposed changes">
       <div className="loop-proposal-inline-row">
         <button
           type="button"
@@ -255,6 +352,7 @@ function ProposalControls({ data }: { data: GTMNodeData }) {
             aria-label="Note for Claude"
             onChange={(e) => setNote(e.target.value)}
             onKeyDown={(e) => {
+              e.stopPropagation(); // keep typing off React Flow's canvas keyboard shortcuts (delete-node, etc.)
               if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (note.trim()) resolve(false, note.trim()); }
               if (e.key === "Escape") { e.preventDefault(); setNoteOpen(false); }
             }}
@@ -334,8 +432,10 @@ function NodeCardEditor({ node, result, health, contractAudit }: {
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
 
   if (!ctx) return null;
-  const { bridge, graph } = ctx;
+  const { bridge, graph, people } = ctx;
 
+  const mode = node.category === "source" ? sourceMode(node) : null;
+  const entrants = sourceEntrants(people, graph.id, node);
   const isOpenKind = !!node.kind && node.kind !== "tool";
   const artifactType = node.kind === "agent" ? "agent" : node.kind === "skill" ? "skill" : null;
 
@@ -401,12 +501,42 @@ function NodeCardEditor({ node, result, health, contractAudit }: {
           )}
         </CardSection>
       ) : node.category === "source" ? (
-        <CardSection label="Config">
+        <CardSection label="Source">
           <div className="loop-node-editor-fileline">
-            <span className="loop-node-editor-filelabel">Source</span>
-            <code className="loop-node-editor-ref">{node.connector ?? "manual"}</code>
+            <span className="loop-node-editor-filelabel">Mode</span>
+            <code className="loop-node-editor-ref">{mode}</code>
           </div>
-          <p className="loop-node-editor-hint">Configure this source — supply the seed it pulls from (manual, CSV, or API).</p>
+          <p className="loop-node-editor-hint">
+            {mode === "discovered"
+              ? "A scout agent self-sources this audience from public signals."
+              : "A provided source — supply the seed it pulls from (manual, CSV, or API)."}
+          </p>
+          {/* Who enters — the real People this channel has already fetched, each with the per-appearance
+              trigger that found them here. The seed of the personalized drafts that land at the gate. */}
+          <div className="loop-who">
+            <div className="loop-who-head">
+              <span>Who enters</span>
+              <span className="loop-who-sub">
+                {entrants.length ? `${entrants.length} · each its own trigger` : "none yet"}
+              </span>
+            </div>
+            {entrants.length ? (
+              <div className="loop-entrants">
+                {entrants.slice(0, 6).map(({ person, appearance }) => (
+                  <div className="loop-erow" key={person.id}>
+                    <span className="loop-eav" aria-hidden>{personInitials(person.name, person.org?.[0]?.toUpperCase() ?? "?")}</span>
+                    <span className="loop-ename">{person.name ?? person.org ?? person.handle ?? "Unknown"}</span>
+                    {appearance.trigger ? <span className="loop-etrig">— {appearance.trigger}</span> : null}
+                  </div>
+                ))}
+                {entrants.length > 6 ? (
+                  <div className="loop-emore"><b>+{entrants.length - 6} more</b> — each enters with the trigger that found them</div>
+                ) : null}
+              </div>
+            ) : (
+              <p className="loop-node-editor-hint">No entrants yet. Run this source and the people it finds appear here, each with their own trigger.</p>
+            )}
+          </div>
         </CardSection>
       ) : node.category === "gate" ? (
         <CardSection label="Config">
@@ -491,7 +621,6 @@ function ResourceNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
         )}
       </button>
       <Handle type="source" position={Position.Right} id="s-r" />
-      <Handle type="source" position={Position.Bottom} id="s-b" style={V_HANDLE} />
       {selected && (
         <NodeCardEditor node={node} result={result} health={data.health} contractAudit={data.contractAudit} />
       )}
@@ -527,7 +656,6 @@ function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
     >
       <Handle type="target" position={Position.Left} id="t-l" />
-      <Handle type="target" position={Position.Top} id="t-t" style={V_HANDLE} />
       <div className="loop-node-header">
         <div className="loop-node-icon" style={{ background: `${color}18`, color }}>
           {CATEGORY_ICON[node.category]}
@@ -543,7 +671,6 @@ function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       <span className="loop-node-label">{node.label}</span>
       {preview && <span className="loop-node-preview">{preview}</span>}
       <Handle type="source" position={Position.Right} id="s-r" />
-      <Handle type="source" position={Position.Bottom} id="s-b" style={V_HANDLE} />
       {selected && (
         <NodeCardEditor node={node} result={result} health={data.health} contractAudit={data.contractAudit} />
       )}
@@ -557,12 +684,22 @@ function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
 
 function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
   const { node, result, running, selected, onSelect } = data;
+  const ctx = useContext(NodeEditorContext);
   const status  = getStatus(node, result, running);
   const summary = result ? itemSummary(result) : null;
   const hasErr  = status === "error" || status === "blocked";
   const visual  = nodeVisual(node);
   const color   = visual.color;
   const isOpenKind = !!node.kind && node.kind !== "tool";
+  // The card is typed by its GTM object, not its mechanical kind — the headline is the job.
+  const obj = cardObject(node);
+  const mode = obj === "source" ? sourceMode(node) : null;
+  const trigger = obj === "source" ? sourceTrigger(node) : null;
+  // The real entrants for this source's channel (read off context — empty on preview canvases). The
+  // collapsed card shows the count; the opened card (editor) lists each with their own trigger.
+  const entrants = obj === "source" ? sourceEntrants(ctx?.people, ctx?.graph.id ?? null, node) : [];
+  // The judgment verdict replaces the bare health number — derived from real signals only.
+  const verdict = nodeVerdict(data.health, data.contractAudit, mode);
   // An agent node reads as a person: the role name is the headline and a family-tinted monogram is the
   // icon, with the raw ref demoted to the faint slug below. Other kinds keep their connector icon.
   const persona = node.kind === "agent" && node.ref ? agentPersona(node.ref, node.label) : null;
@@ -584,6 +721,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       {...entranceProps(data.appearOrder)}
       className={cn(
         "loop-node",
+        `loop-node-obj-${obj}`,
         // The founder gate is the product's spine — the one place anything reaches the world. It
         // carries the single amber accent at full weight so the wall reads at a glance in an
         // otherwise monochrome canvas.
@@ -600,66 +738,93 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
     >
       <Handle type="target" position={Position.Left} id="t-l" />
-      <Handle type="target" position={Position.Top} id="t-t" style={V_HANDLE} />
-      <div className="loop-node-header">
-        <div
-          className={cn("loop-node-icon", isMcp && "loop-node-icon-brand")}
-          style={persona && tint
-            ? { background: tint.bg, color: tint.fg, borderRadius: 999, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600 }
-            : isMcp ? undefined
-            : { background: `${color}14`, color }}
-        >
-          {isMcp ? <BrandGlyph serverId={mcpServer} brand={selected} size={17} />
-            : persona ? persona.monogram : visual.icon}
-        </div>
-        <div className="loop-node-header-right">
-          <span className="loop-node-type-label">{isMcp ? (mcpGlyph?.title ?? mcpServer.replace(/^./, (c) => c.toUpperCase())) : visual.label}</span>
-          {typeof data.health === "number" && data.health > 0 && (
-            <HealthPill health={data.health} issue={data.healthIssue} />
+      {obj === "source" ? (
+        // ── Source ── the audience is the headline; the left MARK encodes the mode (a scout
+        // telescope for discovered, a seed sprout for provided) so the label can't disagree with
+        // the runner. The trigger carries an observed-vs-assumed dot; a count of who enters foots it.
+        <>
+          <div className="loop-node-srchead">
+            <span className={cn("loop-node-mark", mode === "discovered" ? "mark-scout" : "mark-seed")}>
+              {mode === "discovered" ? <Telescope /> : <Sprout />}
+            </span>
+            <span className="loop-node-kindline">
+              <span className="loop-node-type-label">Source</span>
+              <span className="loop-node-mode">{mode === "discovered" ? "Discovered" : "Provided"}</span>
+            </span>
+            {verdict ? <VerdictBadge {...verdict} /> : null}
+            <span className="loop-node-status"><StatusIcon status={status} /></span>
+          </div>
+          <span className="loop-node-headline">{node.label}</span>
+          {trigger ? (
+            <span className="loop-node-trigger" title={entrants.length ? "Observed — confirmed on the people who entered" : "Assumed — not yet confirmed by a run"}>
+              <span className={cn("loop-node-trigger-dot", entrants.length ? "is-observed" : "is-assumed")} aria-hidden />
+              <span>{trigger}</span>
+            </span>
+          ) : null}
+          <span className="loop-node-enter">
+            {entrants.length
+              ? <><b className="loop-node-enter-n">{entrants.length}</b> enter · each carries its own trigger</>
+              : (summary ?? "No entrants yet — run to populate")}
+          </span>
+        </>
+      ) : (
+        // ── Teammate / Gate / Measure / Step ── job-first header: an icon (a persona monogram for a
+        // Teammate, the brand mark for an MCP step), the quiet object label, the verdict, and status.
+        <>
+          <div className="loop-node-header">
+            <div
+              className={cn("loop-node-icon", isMcp && "loop-node-icon-brand")}
+              style={persona && tint
+                ? { background: tint.bg, color: tint.fg, borderRadius: 999, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600 }
+                : isMcp ? undefined
+                : { background: `${color}14`, color }}
+            >
+              {isMcp ? <BrandGlyph serverId={mcpServer} brand={selected} size={17} />
+                : persona ? persona.monogram : visual.icon}
+            </div>
+            <div className="loop-node-header-right">
+              <span className="loop-node-type-label">
+                {obj === "teammate" ? "Teammate"
+                  : obj === "gate" ? "Gate"
+                  : obj === "measure" ? "Measure"
+                  : isMcp ? (mcpGlyph?.title ?? mcpServer.replace(/^./, (c) => c.toUpperCase()))
+                  : visual.label}
+              </span>
+              {verdict ? <VerdictBadge {...verdict} /> : null}
+              <span className="loop-node-status"><StatusIcon status={status} /></span>
+            </div>
+          </div>
+          <span className="loop-node-label">{persona ? persona.role : node.label}</span>
+          {isMcp && (
+            <span
+              className={cn("loop-node-lane", mcpWrites ? "gated" : "free")}
+              title={mcpWrites
+                ? "Write capability — staged behind your founder gate, never sent on its own"
+                : "Read capability — runs free, nothing leaves the building"}
+            >
+              {mcpWrites ? <Lock /> : <span className="loop-node-lane-dot" aria-hidden />}
+              {mcpWrites ? "Behind your gate" : "Runs free"}
+            </span>
           )}
-          <span className="loop-node-status"><StatusIcon status={status} /></span>
-        </div>
-      </div>
-      <span className="loop-node-label">{persona ? persona.role : node.label}</span>
-      {isMcp && (
-        <span
-          className={cn("loop-node-lane", mcpWrites ? "gated" : "free")}
-          title={mcpWrites
-            ? "Write capability — staged behind your founder gate, never sent on its own"
-            : "Read capability — runs free, nothing leaves the building"}
-        >
-          {mcpWrites ? <Lock /> : <span className="loop-node-lane-dot" aria-hidden />}
-          {mcpWrites ? "Behind your gate" : "Runs free"}
-        </span>
-      )}
-      {/* The slug is a technical identifier, not the headline. It rides as a faint, single-line
-          caption that never competes with the title; hover (the title attr) reveals the full ref. */}
-      {isOpenKind
-        ? <span className="loop-node-connector" title={node.ref}>{node.ref}</span>
-        : node.connector && <span className="loop-node-connector" title={node.connector}>{node.connector}</span>}
-      {data.contractAudit && ["waiting", "blocked", "blind"].includes(data.contractAudit.state) && (
-        <span
-          className={`loop-contract-badge state-${data.contractAudit.state}`}
-          title={data.contractAudit.message}
-        >
-          {data.contractAudit.state === "blind" ? "Blind" :
-            data.contractAudit.state === "blocked" ? `Needs ${data.contractAudit.missingFields[0] ?? "data"}` :
-            "Waiting for input"}
-        </span>
-      )}
-      {summary && !hasErr && <span className="loop-node-count">{summary}</span>}
-      {node.category === "generate" && (() => {
-        const mem = result?.meta?.memory as { approved?: number; rejected?: number; edits?: number } | undefined;
-        const learned = (mem?.approved ?? 0) + (mem?.rejected ?? 0) + (mem?.edits ?? 0);
-        return learned > 0
-          ? <span className="loop-node-memory">★ learned from {learned} decision{learned !== 1 ? "s" : ""}</span>
-          : null;
-      })()}
-      {hasErr && result?.error && (
-        <span className="loop-node-err-text">{result.error.slice(0, 55)}</span>
+          {/* The slug is a technical identifier, not the headline. It rides as a faint, single-line
+              caption that never competes with the title; hover (the title attr) reveals the full ref. */}
+          {isOpenKind
+            ? <span className="loop-node-connector" title={node.ref}>{node.ref}</span>
+            : node.connector && <span className="loop-node-connector" title={node.connector}>{node.connector}</span>}
+          {summary && !hasErr && <span className="loop-node-count">{summary}</span>}
+          {node.category === "generate" && (() => {
+            const mem = result?.meta?.memory as { approved?: number; rejected?: number; edits?: number } | undefined;
+            const learned = (mem?.approved ?? 0) + (mem?.rejected ?? 0) + (mem?.edits ?? 0);
+            return learned > 0
+              ? <span className="loop-node-memory">★ learned from {learned} decision{learned !== 1 ? "s" : ""}</span>
+              : null;
+          })()}
+          {hasErr && result?.error && (
+            <span className="loop-node-err-text">{result.error.slice(0, 55)}</span>
+          )}
+        </>
       )}
       <Handle type="source" position={Position.Right} id="s-r" />
-      <Handle type="source" position={Position.Bottom} id="s-b" style={V_HANDLE} />
       {selected && (
         <NodeCardEditor
           node={node}
@@ -671,36 +836,6 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
     </motion.div>
       <ProposalControls data={data} />
     </>
-  );
-}
-
-// A portfolio lane: a translucent band behind one system's nodes, labelled with the system and its
-// gate count. Non-interactive (pointer-events off) so it never intercepts a click meant for a node,
-// and rendered behind the nodes (prepended to the node list, zIndex 0).
-function LaneBandComponent({ data }: { data: { label: string; gateCount: number; width: number; height: number } }) {
-  return (
-    <div
-      className="portfolio-lane-band"
-      style={{
-        width: data.width,
-        height: data.height,
-        pointerEvents: "none",
-        border: "1px dashed var(--line, #d4d4d8)",
-        borderRadius: 18,
-        background: "rgba(244,244,245,0.45)",
-        boxSizing: "border-box",
-      }}
-    >
-      <div
-        style={{
-          position: "absolute", top: 12, left: 16,
-          fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
-          color: "var(--faint, #71717a)",
-        }}
-      >
-        {data.label}{data.gateCount ? ` · ${data.gateCount} gate${data.gateCount === 1 ? "" : "s"}` : ""}
-      </div>
-    </div>
   );
 }
 
@@ -741,43 +876,10 @@ function LaneStatusNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
   );
 }
 
-// A role-band row on the engine canvas — a full-width horizontal slice (ground, capabilities, the
-// gate wall, stage, measure). The gate band reads as the literal line nothing crosses without the
-// founder: amber rules top and bottom, a lock on its label. Painted behind the work nodes.
-function EngineBandComponent({ data }: { data: { label: string; width: number; height: number; wall?: boolean } }) {
-  const wall = data.wall;
-  return (
-    <div
-      style={{
-        width: data.width, height: data.height, pointerEvents: "none", boxSizing: "border-box",
-        borderRadius: 14,
-        background: wall ? "rgba(217,119,6,0.06)" : "rgba(244,244,245,0.40)",
-        border: wall ? "none" : "1px solid var(--line, #ececec)",
-        borderTop: wall ? "2px solid var(--gap, #d97706)" : undefined,
-        borderBottom: wall ? "2px solid var(--gap, #d97706)" : undefined,
-      }}
-    >
-      <div
-        style={{
-          position: "absolute", top: 8, left: 16,
-          fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
-          color: wall ? "var(--gap, #d97706)" : "var(--faint, #a1a1aa)",
-          display: "flex", alignItems: "center", gap: 6,
-        }}
-      >
-        {wall ? <Lock size={11} /> : null}
-        {data.label}
-      </div>
-    </div>
-  );
-}
-
 const NODE_TYPES = {
   resourceNode:   ResourceNodeComponent,
   contextNode:    ContextNodeComponent,
   workNode:       WorkNodeComponent,
-  laneBand:       LaneBandComponent,
-  engineBand:     EngineBandComponent,
   laneStatusNode: LaneStatusNodeComponent,
 };
 
@@ -844,32 +946,7 @@ function longestPathRank(
   return rank;
 }
 
-// A portfolio fan-out lays each system out as its own horizontal lane: ranked left-to-right within
-// the lane (only the lane's own edges count, so one system never pushes another's ranks), stacked
-// top-to-bottom by laneIndex. This is what makes many composed systems toward one goal read as
-// parallel lanes instead of one tangled DAG.
-const LANE_PITCH = ROW_GAP * 3; // vertical distance between two lanes' baselines
-
-function computeLaneLayout(graph: GTMGraph): Map<string, { x: number; y: number }> {
-  const pos = new Map<string, { x: number; y: number }>();
-  for (const system of graph.systems ?? []) {
-    const rank = longestPathRank(system.nodeIds, graph.edges);
-    const baseY = system.laneIndex * LANE_PITCH;
-    const byRank = new Map<number, string[]>();
-    for (const id of system.nodeIds) {
-      const r = rank.get(id) ?? 0;
-      if (!byRank.has(r)) byRank.set(r, []);
-      byRank.get(r)!.push(id);
-    }
-    for (const [r, group] of byRank) {
-      group.forEach((id, i) => pos.set(id, { x: r * COLUMN_GAP, y: baseY + i * ROW_GAP }));
-    }
-  }
-  return pos;
-}
-
 function computeLayout(graph: GTMGraph): Map<string, { x: number; y: number }> {
-  if (graph.systems?.length) return computeLaneLayout(graph);
   const rank = longestPathRank(graph.nodes.map((n) => n.id), graph.edges);
   const byRank = new Map<number, string[]>();
   for (const n of graph.nodes) {
@@ -887,23 +964,6 @@ function computeLayout(graph: GTMGraph): Map<string, { x: number; y: number }> {
   return pos;
 }
 
-// ─── Mode lens ──────────────────────────────────────────────────────────────
-// The five program modes are not separate surfaces — they re-skin this one graph. A mode
-// emphasizes the nodes it is about and dims the rest, so the same canvas answers a different
-// question. Design and Run light everything (Run shows the whole trace); Simulation and Review
-// foreground the wall; Learning foregrounds what the feedback loop touches. Pure visual — a lens
-// never changes behavior or what runs.
-function lensClass(node: GTMNode, mode?: string): string {
-  if (!mode || mode === "design" || mode === "run") return "";
-  const agent = node.kind === "agent";
-  const focus =
-    mode === "simulation" ? node.category === "gate" || node.category === "execute" || agent :
-    mode === "review" ? node.category === "gate" :
-    mode === "learning" ? node.category === "measure" || agent :
-    true;
-  return focus ? "loop-node-lens-focus" : "loop-node-lens-dim";
-}
-
 // ─── Build React Flow graph ───────────────────────────────────────────────────
 
 function buildFlowGraph(
@@ -916,7 +976,6 @@ function buildFlowGraph(
   subsystemHealth: Record<string, { health: number; issue?: string }>,
   contractAudits: Record<string, GTMContractAudit>,
   onSelect: (id: string) => void,
-  mode?: string,
   proposedNodeIds?: Set<string>,
   proposedEdgeIds?: Set<string>,
   highlightedNodeId?: string | null,
@@ -940,11 +999,6 @@ function buildFlowGraph(
   // The ideation preview is the one graph that builds in with a staggered entrance: rank ≈ x / column
   // gap (positions are pre-laid by ideationGraph at 248px columns), so a node's rank drives its delay.
   const ideation = graph.id === "ideation-preview";
-  // The banded engine overview flows top-to-bottom; route its data/context edges through the vertical
-  // handles so connectors run straight down through the role bands. Feedback edges (a channel's Measure
-  // looping back up to Source/Ground) keep the side handles and arc around the edge, where they read as
-  // the return stroke instead of slicing across the whole engine.
-  const banded = !!graph.bands?.length;
   const EDGE_INK: Record<GTMEdgeType, string> = {
     data: "#94a3c4", context: "#c4c7db", feedback: "#86b89a",
   };
@@ -959,7 +1013,6 @@ function buildFlowGraph(
       draggable: true,
       selectable: false,
       className: [
-        lensClass(n, mode),
         proposedNodeIds?.has(n.id) ? "loop-node-proposed" : "",
         proposedNodeIds?.has(n.id) ? (isRevealed(n.id) ? "is-revealed" : "is-unrevealed") : "",
         // Run replay: the scrubber's current step glows; every other node dims so the eye follows
@@ -992,70 +1045,18 @@ function buildFlowGraph(
     };
   });
 
-  // The engine view draws role-BANDS (ground → capabilities → gate → stage → measure) as full-width
-  // horizontal rows spanning every channel. Preferred over per-system lanes when present, because the
-  // whole point is that channels share one engine: shared bands once across the top, the gate as one
-  // wall. Falls back to per-system swimlanes for an operator portfolio graph that has no bands.
-  const laneBands: Node[] = [];
-  if (graph.bands?.length) {
-    const withPos = graph.nodes.filter((n) => n.position);
-    const PAD = 60, NODE_W = 240;
-    const xs = withPos.map((n) => n.position!.x);
-    const minX = xs.length ? Math.min(...xs) - PAD : 0;
-    const maxX = xs.length ? Math.max(...xs) + NODE_W + PAD : 1200;
-    const width = maxX - minX;
-    for (const band of graph.bands) {
-      laneBands.push({
-        id: `band-${band.id}`,
-        type: "engineBand",
-        position: { x: minX, y: band.y },
-        draggable: false,
-        selectable: false,
-        focusable: false,
-        zIndex: 0,
-        style: { zIndex: 0 },
-        data: { label: band.label, width, height: band.height, wall: band.wall },
-      });
-    }
-  } else if (graph.systems?.length) {
-    const NODE_W = 240, NODE_H = 150, PAD = 44;
-    for (const system of graph.systems) {
-      const members = graph.nodes.filter((n) => system.nodeIds.includes(n.id) && n.position);
-      if (!members.length) continue;
-      const xs = members.map((n) => n.position!.x);
-      const ys = members.map((n) => n.position!.y);
-      const minX = Math.min(...xs) - PAD;
-      const minY = Math.min(...ys) - PAD - 16; // extra top room for the lane label
-      const width = Math.max(...xs) + NODE_W + PAD - minX;
-      const height = Math.max(...ys) + NODE_H + PAD - minY;
-      laneBands.push({
-        id: `lane-${system.id}`,
-        type: "laneBand",
-        position: { x: minX, y: minY },
-        draggable: false,
-        selectable: false,
-        focusable: false,
-        zIndex: 0,
-        style: { zIndex: 0 },
-        data: { label: system.label, gateCount: system.gateIds?.length ?? 0, width, height },
-      });
-    }
-  }
-
   const posX = new Map(graph.nodes.map((n) => [n.id, n.position?.x ?? 0]));
   const edges: Edge[] = graph.edges.map((e: GTMEdge) => {
     // Animate the edge feeding the active step — data visibly flowing in.
     const active = e.edgeType === "data" && runningNodeId === e.target && !!result?.nodes[e.source]?.ok;
     const base = edgeStyle(e.edgeType);
     const proposed = proposedEdgeIds?.has(e.id);
-    // Route + direction. In the banded overview, forward edges run through the vertical handles
-    // (straight down the bands); feedback returns keep the side handles and arc around. An arrowhead
-    // makes the flow direction legible everywhere — without it the calm grey lines read as undirected.
-    const isFeedback = e.edgeType === "feedback";
-    const useV = banded && !isFeedback;
+    // The flow reads left-to-right: every edge runs out the right of its source into the left of its
+    // target. An arrowhead makes the direction legible — without it the calm grey lines read as
+    // undirected.
     const routing = {
-      sourceHandle: useV ? "s-b" : "s-r",
-      targetHandle: useV ? "t-t" : "t-l",
+      sourceHandle: "s-r",
+      targetHandle: "t-l",
       markerEnd: { type: MarkerType.ArrowClosed, width: 13, height: 13, color: EDGE_INK[e.edgeType] ?? EDGE_INK.data },
     };
     // Ideation build-in: each edge fades along its target node's cascade beat, so a connector never
@@ -1083,7 +1084,7 @@ function buildFlowGraph(
     };
   });
 
-  return { nodes: [...laneBands, ...nodes], edges };
+  return { nodes, edges };
 }
 
 
@@ -1261,9 +1262,9 @@ function FitOnGraph({ topology, bounds, running, suspended }: { topology: string
 
 export function GraphCanvas({
   graph, result, running, runningNodeId = null, selection, connectors, subsystemHealth = {}, contractAudits = {},
-  onSelect, onNodePositionChange, onConnectNodes, onDeleteEdges, onAddNode, panelOpen, variant, mode,
+  onSelect, onNodePositionChange, onConnectNodes, onDeleteEdges, onAddNode, panelOpen, variant,
   proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, refitNonce, highlightedNodeId = null,
-  bloomNodeId = null, nodeEditor = null, revealedNodeIds, onPaneClick, operatorCursor = null,
+  bloomNodeId = null, nodeEditor = null, revealedNodeIds, onPaneClick, operatorCursor = null, people = [],
 }: {
   graph: GTMGraph;
   result: GTMRunResult | null;
@@ -1281,9 +1282,7 @@ export function GraphCanvas({
   onLoadRecipe?: () => void;
   panelOpen?: boolean;
   // "ideation" draws nodes in with a staggered build animation (workflows being composed).
-  variant?: "ideation" | "overview";
-  // The active program mode, applied as a visual lens over the one graph (see lensClass).
-  mode?: string;
+  variant?: "ideation";
   // Nodes/edges the operator has STAGED but not applied — rendered as ghosts for founder review.
   proposedNodeIds?: Set<string>;
   proposedEdgeIds?: Set<string>;
@@ -1319,6 +1318,9 @@ export function GraphCanvas({
   // The live operator presence: when set, Claude's cursor travels the canvas as it stages each node
   // and the camera follows it. Null when no operator work is on screen (the canvas reads normally).
   operatorCursor?: OperatorCursorState | null;
+  // The durable, project-scoped People (P10.3) — promoted from real run entrants. A Source card reads
+  // its channel's entrants out of this to show who actually entered, each with their own trigger.
+  people?: Person[];
 }) {
   const handleSelect = useCallback((id: string) => onSelect(id), [onSelect]);
   // Camera-follow break: the founder grabbed the canvas to look away from where Claude is working.
@@ -1335,14 +1337,37 @@ export function GraphCanvas({
   }
   const editable = variant !== "ideation" && !!onAddNode;
 
-  // Lay the graph out cleanly whenever its topology changes (load, compose, add/remove a node).
-  // Position-only updates (manual drags) don't change the signature, so a drag is never undone.
+  // Render-time auto-layout — what actually drives what's on screen.
+  // The composer ships cramped/overlapping positions, and the persistence round-trip (the effect
+  // below) can't be trusted to reach every render path. So we lay a normal channel graph out by DAG
+  // depth AT RENDER and let a manual drag override per node. Ideation preview and portfolios (systems)
+  // keep their own pre-laid positions. A fresh topology clears the drag overrides so a re-compose
+  // re-lays the whole flow.
+  const draggedIds = useRef<Set<string>>(new Set());
+  const layoutSig = `${topologySignature(graph)}|${graph.id}|${graph.systems?.length ? "sys" : ""}`;
+  const autoPos = useMemo(
+    () => (graph.id === "ideation-preview" || graph.systems?.length ? null : computeLayout(graph)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [layoutSig],
+  );
+  const laidOutGraph = useMemo(() => {
+    if (!autoPos) return graph;
+    return {
+      ...graph,
+      nodes: graph.nodes.map((n) =>
+        draggedIds.current.has(n.id) ? n : { ...n, position: autoPos.get(n.id) ?? n.position }),
+    };
+  }, [graph, autoPos]);
+
+  // Persist the computed positions for other readers, and reset drag overrides on a topology change.
+  // The render above no longer depends on this round-trip succeeding — this is belt-and-suspenders.
   const lastTopology = useRef<string | null>(null);
   useEffect(() => {
-    if (!onNodePositionChange) return;
     const sig = topologySignature(graph);
     if (sig === lastTopology.current) return;
     lastTopology.current = sig;
+    draggedIds.current = new Set();
+    if (!onNodePositionChange) return;
     const layout = computeLayout(graph);
     for (const node of graph.nodes) {
       const p = layout.get(node.id);
@@ -1353,8 +1378,8 @@ export function GraphCanvas({
   }, [graph, onNodePositionChange]);
 
   const { nodes, edges } = useMemo(
-    () => buildFlowGraph(graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, mode, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds),
-    [graph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, mode, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds],
+    () => buildFlowGraph(laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds),
+    [laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds],
   );
 
   // Re-fit the viewport whenever the flow's structure changes (load, compose, lanes
@@ -1372,7 +1397,11 @@ export function GraphCanvas({
   );
 
   const handleNodeDragStop = useCallback(
-    (_event: unknown, node: Node) => { onNodePositionChange?.(node.id, node.position); },
+    (_event: unknown, node: Node) => {
+      // This node is now founder-placed: the render-time auto-layout must stop overriding it.
+      draggedIds.current.add(node.id);
+      onNodePositionChange?.(node.id, node.position);
+    },
     [onNodePositionChange],
   ) as Parameters<typeof ReactFlow>[0]["onNodeDragStop"];
 
@@ -1400,8 +1429,8 @@ export function GraphCanvas({
   }, [onAddNode]);
 
   const editorContext = useMemo<NodeEditorContextValue>(
-    () => (nodeEditor ? { bridge: nodeEditor, graph } : null),
-    [nodeEditor, graph],
+    () => (nodeEditor ? { bridge: nodeEditor, graph, people } : null),
+    [nodeEditor, graph, people],
   );
 
   return (
@@ -1428,7 +1457,7 @@ export function GraphCanvas({
       edgesReconnectable={false}
       deleteKeyCode={editable ? ["Backspace", "Delete"] : null}
       proOptions={{ hideAttribution: true }}
-      className={cn(variant === "ideation" && "ideation-canvas", variant === "overview" && "overview-canvas", selection && "loop-pane-focus")}
+      className={cn(variant === "ideation" && "ideation-canvas", selection && "loop-pane-focus")}
     >
       <NodeFocuser selection={selection} panelOpen={!!panelOpen} active={!running && !operatorCursor} />
       {operatorCursor ? (

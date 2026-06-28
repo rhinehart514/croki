@@ -91,6 +91,33 @@ describe("portfolio intelligence", () => {
     assert.equal(result.experiment.result, null);
   });
 
+  it("records an experiment's variant against its control, and stays backward compatible", () => {
+    const withVariant = recordExperiment({
+      channelId: "linkedin-content",
+      hypothesis: "A code-evidence opener beats a generic outcome opener.",
+      variable: "opener",
+      variant: "code-evidence opener",
+      control: "generic outcome opener",
+      successSignal: "reply rate",
+    }, options);
+    assert.equal(withVariant.experiment.variant, "code-evidence opener");
+    assert.equal(withVariant.experiment.control, "generic outcome opener");
+
+    // An experiment recorded without variant/control still loads and runs — the fields are null,
+    // not missing-key errors.
+    const withoutVariant = recordExperiment({
+      channelId: "linkedin-content",
+      hypothesis: "Shorter posts lift dwell time.",
+      variable: "length",
+      successSignal: "dwell",
+    }, options);
+    assert.equal(withoutVariant.experiment.variant, null);
+    assert.equal(withoutVariant.experiment.control, null);
+
+    const stored = loadProject(options).sharedContext.experiments;
+    assert.equal(stored.find((e) => e.id === withVariant.experiment.id).variant, "code-evidence opener");
+  });
+
   it("creates a proof brief derived from current portfolio state", () => {
     const first = createPortfolioArtifact(options);
     const second = createPortfolioArtifact(options);

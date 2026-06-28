@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Check, FolderGit2, LoaderCircle, Plus } from "lucide-react";
+import { Check, FolderGit2, FolderOpen, LoaderCircle, Plus } from "lucide-react";
 import type { ProjectSummary } from "@/types";
+import { pickFolder } from "@/api";
 
 export function ProjectPicker({
   projects,
@@ -21,6 +22,12 @@ export function ProjectPicker({
   const [name, setName] = useState("");
   const [repoPath, setRepoPath] = useState("");
   const [outcome, setOutcome] = useState("");
+  const [picking, setPicking] = useState(false);
+  const choose = async () => {
+    setPicking(true);
+    try { const r = await pickFolder(); if (r.path) setRepoPath(r.path); }
+    finally { setPicking(false); }
+  };
 
   return (
     <section className="project-picker" aria-labelledby="project-picker-title">
@@ -57,8 +64,18 @@ export function ProjectPicker({
             <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Optional; defaults to repository name" />
           </label>
           <label>
-            Repository path
-            <input required value={repoPath} onChange={(event) => setRepoPath(event.target.value)} placeholder="~/Projects/my-product" />
+            Product folder
+            <button
+              type="button"
+              className={`project-folder-pick ${repoPath ? "chosen" : ""}`}
+              disabled={picking}
+              onClick={choose}
+            >
+              <FolderOpen size={15} />
+              {repoPath
+                ? <span className="project-folder-path">{repoPath}</span>
+                : <span>{picking ? "Opening Finder…" : "Choose your product folder"}</span>}
+            </button>
           </label>
           <label>
             Win event

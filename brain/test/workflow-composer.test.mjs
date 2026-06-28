@@ -3,9 +3,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { composeOpportunityChannel, previewOpportunityChannel, composePortfolioGraph } from "../src/workflow-composer.mjs";
+import { composeOpportunityChannel, previewOpportunityChannel, composePortfolioGraph, composePortfolioFromStudio } from "../src/workflow-composer.mjs";
 import { saveGeneratedOpportunities, updateOpportunity } from "../src/opportunity-engine.mjs";
-import { createProject, loadProject } from "../src/project-store.mjs";
+import { createProject, loadProject, saveProject } from "../src/project-store.mjs";
 import { loadFlow } from "../src/flow-store.mjs";
 import { listOutcomePrograms } from "../src/program-store.mjs";
 import { listAgentCreationPolicies } from "../src/agent-policy-store.mjs";
@@ -272,5 +272,61 @@ describe("one engine, shared agent pool", () => {
     assert.equal(seenPools.length, 2);
     assert.deepEqual(seenPools[0], [], "the first channel sees an empty engine pool");
     assert.ok(seenPools[1].some((a) => a.ref === "researcher"), "the second channel sees the first channel's agent in the pool");
+  });
+});
+
+describe("composePortfolioFromStudio — live portfolio from accepted opportunities", () => {
+  let parent;
+  let options;
+
+  beforeEach(() => {
+    parent = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-portfolio-"));
+    options = { root: path.join(parent, "state"), claudeDir: path.join(parent, "claude") };
+    createProject({ name: "Product" }, options);
+  });
+
+  afterEach(() => fs.rmSync(parent, { recursive: true, force: true }));
+
+  // A gated 4-node system per channel, so the union has real shapes and the wall holds.
+  const fakeCompose = async ({ channel, agents }) => ({
+    ok: true,
+    nodes: [
+      { id: "src", category: "source", connector: "manual", label: "Seed", config: { items: [] } },
+      { id: "do", kind: "agent", ref: agents[0]?.ref || "gtm-find-prospects", label: "Work", agentPrompt: channel.objective || "" },
+      { id: "gate", category: "gate", connector: "default", label: "Founder review" },
+      { id: "send", category: "execute", connector: "local", label: "Stage" },
+    ],
+    edges: [
+      { id: "a", source: "src", target: "do", edgeType: "data" },
+      { id: "b", source: "do", target: "gate", edgeType: "data" },
+      { id: "c", source: "gate", target: "send", edgeType: "data" },
+    ],
+  });
+
+  function seedAcceptedPortfolio() {
+    const project = loadProject(options);
+    const items = [
+      { id: "ch-outbound", type: "channel", status: "accepted", title: "Operator outreach", objective: "reach operators", selectedAgentIds: ["ag-find"] },
+      { id: "ag-find", type: "agent", status: "accepted", title: "Prospector", ref: "gtm-find-prospects", objective: "find prospects" },
+      { id: "ch-referral", type: "channel", status: "accepted", title: "Vouch loop", objective: "earn referrals", selectedAgentIds: ["ag-vouch"] },
+      { id: "ag-vouch", type: "agent", status: "accepted", title: "Voucher", ref: "gtm-vouch-request-message-drafter", objective: "draft vouch" },
+      { id: "ch-proposed", type: "channel", status: "proposed", title: "Not yet accepted", objective: "skip me" },
+    ];
+    saveProject({ ...project, opportunities: { ...(project.opportunities ?? {}), items } }, options);
+  }
+
+  it("unions only the ACCEPTED channels into one valid, gated portfolio", async () => {
+    seedAcceptedPortfolio();
+    const graph = await composePortfolioFromStudio({ goal: "land a pilot" }, { ...options, compose: fakeCompose });
+    assert.equal(graph.kind, "portfolio");
+    assert.equal(graph.systems.length, 2, "the proposed (unaccepted) channel is excluded");
+    assert.equal(graph.nodes.filter((n) => n.category === "gate").length, 2, "each system keeps its founder gate");
+    assert.equal(graph.name, "land a pilot");
+  });
+
+  it("refuses to compose a portfolio when nothing is accepted yet", async () => {
+    const project = loadProject(options);
+    saveProject({ ...project, opportunities: { items: [{ id: "ch", type: "channel", status: "proposed", title: "x", objective: "x" }] } }, options);
+    await assert.rejects(() => composePortfolioFromStudio({}, { ...options, compose: fakeCompose }), /Accept at least one channel/);
   });
 });

@@ -1,0 +1,145 @@
+/* composer-posture.css — the Ideate posture chip and the per-message Pin affordance.
+   Both are calm overlays on the existing composer/thread: opaque surfaces, hairline borders,
+   muted ink. No mode takeover — a posture is a register, not a new screen. */
+
+/* ── Ideate posture chip ───────────────────────────────────────────────────
+   Rides above the input in both the resting and the open dock. Quiet by default;
+   it states the register, then gets out of the way. */
+.composer-posture {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin: 8px 10px 0;
+  padding: 4px 6px 4px 8px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+
+.composer-posture-icon {
+  color: var(--ink-2);
+  flex: 0 0 auto;
+}
+
+.composer-posture-label {
+  white-space: nowrap;
+}
+
+.composer-posture-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.composer-posture-x:hover {
+  background: color-mix(in srgb, var(--line-2) 70%, transparent);
+  color: var(--ink);
+}
+
+.composer-posture-x:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--line-2) 80%, transparent);
+  outline-offset: 1px;
+}
+
+/* ── Pin affordance on a Claude paragraph ──────────────────────────────────
+   Lives inside the .cnv-say block. Hidden until the message is hovered (or the
+   menu is open, or the trigger is keyboard-focused), so the conversation stays
+   uncluttered until you reach for it. */
+.cnv-pin {
+  position: relative;
+  margin-top: 4px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.cnv-say:hover .cnv-pin,
+.cnv-pin.open,
+.cnv-pin:focus-within {
+  opacity: 1;
+}
+
+.cnv-pin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.cnv-pin-btn:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--line-2) 90%, var(--ink) 10%);
+}
+
+.cnv-pin-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--line-2) 80%, transparent);
+  outline-offset: 1px;
+}
+
+.cnv-pin-label {
+  font-weight: 500;
+}
+
+/* The kind menu — a small opaque card of the four clarity kinds, anchored to the trigger. */
+.cnv-pin-menu {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 132px;
+  padding: 4px;
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--ink) 14%, transparent);
+}
+
+.cnv-pin-item {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+
+.cnv-pin-item:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.cnv-pin-item:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--line-2) 80%, transparent);
+  outline-offset: -1px;
+}

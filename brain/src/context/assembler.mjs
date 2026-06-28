@@ -1,9 +1,13 @@
-// The assembler — builds the base-layer context map from providers, instrumented.
+// The assembler — the pre-pack path. Builds the base-layer context map from providers and
+// staples it to the prompt before the agent runs.
 //
-// It does NOT pre-stuff detail. It composes the cheap, high-signal base layer and records a
-// MANIFEST of exactly what went in: which providers contributed, their sizes, and their toggle
-// state. Deep retrieval stays the model's job through its own tools — we own the map and the
-// tools, not the pull.
+// This is the legacy default, not the only path. The agentic path (retrieval-tools.mjs) is
+// the inversion: the agent pulls grounding through tools on demand rather than eating a
+// pre-packed block. Both reuse the same provider summarizers (providers.mjs), so neither path
+// can disagree on what a source says. The pre-pack stays the proven default while the agentic
+// path is validated per-provider (E1.5/E1.6); neither is "the spine" — both are real paths
+// over the same sources, and the cut-over is per-provider once the agentic version wins the
+// comparison.
 //
 // The manifest is the instrument. Flip a provider off in `toggles`, reassemble, and compare the
 // downstream output: that ablation is how the recipe — which context actually moves the model

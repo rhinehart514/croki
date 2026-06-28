@@ -28,6 +28,7 @@ import * as openaiDraft from "./draft/openai.mjs";
 import * as defaultGate from "./gate/default.mjs";
 import * as localExecute from "./execute/local.mjs";
 import * as httpExecute from "./execute/http.mjs";
+import * as artifactExecute from "./execute/artifact.mjs";
 
 import * as defaultMeasure from "./measure/default.mjs";
 
@@ -40,7 +41,7 @@ const REGISTRY = {
   filter:    { default: defaultScore },
   generate:  { claude: claudeDraft, openai: openaiDraft },
   gate:      { default: defaultGate },
-  execute:   { local: localExecute, http: httpExecute },
+  execute:   { local: localExecute, http: httpExecute, artifact: artifactExecute },
   measure:   { default: defaultMeasure },
 };
 

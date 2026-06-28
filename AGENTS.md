@@ -60,15 +60,15 @@ yet proven: the operator (Claude) itself composing an agent-step workflow and dr
 to the gate. The on-disk subagent definition now loads: `loadAgentDefinition` reads
 `~/.claude/agents/<ref>.md` and `buildAgentPrompt` merges its doctrine into the run
 (tested in `agent-bridge.test.mjs`); what is still fixed is the toolset — every agent runs
-with the same read-only tools, not its own declared toolset. Portfolio fan-out is built and
-unit-tested, and the canvas now RENDERS it: `portfolio-graph.mjs` (`assemblePortfolioGraph`)
-unions several composed systems into one branching, multi-gate, lane-laid-out diagram and
-re-asserts the wall on the union, `composePortfolioGraph` (`workflow-composer.mjs`) composes
-many accepted channels toward one goal, and `GraphCanvas.tsx` reads the resulting `systems`
-manifest to draw each system as its own labelled swimlane (lane-aware layout + a band per
-system). Still pending: the live model producing those specs, and the operator's "propose
-systems" move that composes a portfolio and loads it into those lanes (the data path that
-feeds the rendering end to end). A credential-gated live smoke test (`brain/test/live.test.mjs`,
+with the same read-only tools, not its own declared toolset. Portfolio composition is built and
+unit-tested: `composePortfolioGraph` (`workflow-composer.mjs`) composes many accepted channels
+toward one goal and `assemblePortfolioGraph` (`portfolio-graph.mjs`) unions them into one
+branching, multi-gate diagram and re-asserts the wall on the union. The canvas no longer draws
+swimlanes (P10, see `docs/CANVAS.md`): the GTM overview is now the `portfolio-map` lens (channels
+as tiles) and the single canvas engine projects the GTM operational object model through four
+lenses. The lane-position layout still computed inside `portfolio-graph.mjs` is now vestigial — no
+renderer reads it — but is retained alongside the load-bearing union and wall assertion. Still
+pending: the live model producing portfolio specs, and the operator's "propose systems" move. A credential-gated live smoke test (`brain/test/live.test.mjs`,
 `npm --prefix brain run test:live`) proves the model composes, an agent step runs on the
 subscription, the gate holds, AND the operator resumes its conversation across drives; it skips
 until a founder is signed in. The operator carries memory at two levels: within a session it
@@ -159,7 +159,14 @@ code.
 - `brain/src/memory.mjs` is the learning loop: it reads founder gate decisions out of
   the ledger and shapes them into guidance for the next run.
 - `brain/src/mcp.mjs` is the MCP server that exposes the engine to Claude as tools.
-- `brain/src/project-store.mjs` owns the multi-channel project manifest.
+- `brain/src/project-store.mjs` owns the multi-channel project manifest, the shared context
+  (ICP, positioning, structured `Claim` objects with a backward-compatible string view, experiments,
+  outcomes, founder taste), and the people projection.
+- `brain/src/person-store.mjs` owns the durable, project-scoped, shared `Person` object — run
+  entrants promoted into one identity across channels (strongest-identifier key), each carrying its
+  per-appearance trigger. Real GTM state derived from runs, never seeded, never sends.
+- `brain/src/cross-reference.mjs` owns the "where does X appear across channels" index for
+  person / icp / claim / experiment — the find-references query behind dedup and the canvas.
 - `brain/src/workspace.mjs` owns durable repository workspaces, proof runs, revisions,
   and founder decisions.
 - `brain/src/revision.mjs` owns review, clean-repository apply, and checked revert.
@@ -171,8 +178,11 @@ code.
   only way to express a GTM system. New agent capability belongs in a subagent or skill,
   not a new connector.
 - `brain/src/server.mjs` serves the local API and the built React client.
-- `ui/` is the canonical product interface — the loop canvas, the Problems rail, and
-  the node editor.
+- `ui/` is the canonical product interface — the object-model canvas
+  (`canvas/CanvasShell.tsx`: one projection-over-an-object-model engine with lenses, used by BOTH
+  GTM and Product modes), the Problems rail, and the node editor. GTM mode projects the operational
+  object model through four lenses (channel-flow, portfolio-map, people, experiment-matrix); Product
+  mode projects the interpretive `ProductModel`. No swimlanes.
 - `Sources/GTMIDE/` is an earlier SwiftUI prototype, not the current release path.
   Reconsider only when full Xcode is available and native packaging is an explicit
   goal.
@@ -238,7 +248,44 @@ code.
   `~/.claude/agents/gtm-ideate-channels.md`). The host only normalizes proposals and demotes
   an evidence-free "derived" claim to "speculative". Opportunity generation is never hand-written
   channel/agent lists in `.mjs`.
+- The canvas is a projection over an object model, not a fixed diagram. One canvas engine
+  renders `projection(objectModel, lens)`; shared objects are shared nodes; selection
+  persists across lenses; focus-to-trace highlights an object's subgraph; there is no fixed
+  swimlane skeleton. Two modes project two object models across the truth wall: Product mode
+  projects the interpretive `ProductModel` (never feeds health); GTM mode projects the GTM
+  operational object model (Channels, Sources, People, Claims, Experiments, ICPs, Outcomes —
+  real state that DOES drive health). The two object models never cross. See `docs/CANVAS.md`.
+- Person is a first-class, durable, project-scoped shared object (`person-store.mjs`),
+  created by promoting real run entrants into durable identities with cross-channel
+  appearances. It enables find-references, dedup, fatigue control, and the experiment
+  matrix. It is real GTM state derived from runs — never seeded — and it never sends.
+- The composer controls the canvas through two channels: view-control (free, instant —
+  focus/frame/select/highlight) and mutation (proposed, ghosted, gated). View-control is
+  navigation and never touches the wall. The composer is locked to one durable operator
+  conversation per project; `projectId` is threaded explicitly, never inherited from a
+  mutable global.
 - Preserve unrelated user changes; this worktree may already be dirty.
+- Context retrieval is agentic: the agent pulls grounding through tools on demand
+  (`retrieval-tools.mjs`); the pre-pack (`assembler.mjs`) is a parallel legacy path being cut
+  over per-provider as the agentic version is validated. Both reuse the same provider
+  summarizers (`providers.mjs`), so neither path can disagree on what a source says. The host
+  owns the sources; who decides to read them is path-specific.
+- Output kind is open: a workflow node's output is any non-empty label the model chooses
+  (`OUTPUT_KIND_HINTS` in `graph-operations.mjs` are hints for the UI, never a validation gate).
+  No single output kind — message, artifact, dataset, signal — is privileged over the others.
+  The open output kind is enforced by `brain/test/anti-cage.test.mjs`.
+- Taste and design are required queried tools before drafting or producing UI. When a step
+  produces a draft or outreach, `get_taste` must appear in the agent's tool calls. When a step
+  produces a UI or visual artifact, both `get_taste` and `get_design` must appear. This rule
+  is enforced by `assertMoatConsulted` in `consult-guard.mjs`. The live wiring — capturing
+  actual tool calls from the agent run and calling the guard at the gate — is a follow-up in
+  `operator-runtime.mjs`/`graph.mjs`.
+- The gate supports pattern and exception approval at volume. `gate-pattern.mjs` lets the
+  founder approve a class of items with a rule (e.g. "any message under 80 words in this
+  voice") and mark exceptions individually, so high-volume runs do not require per-item review.
+- No hard scope around any GTM motion is enforced in the engine. The `brain/test/anti-cage.test.mjs`
+  regression guards: no closed GTM-channel enum in core code, no output kind fixed to
+  email/message, and no re-introduced fixed stage skeleton. The cage stays removed.
 
 ## Verification
 
@@ -259,6 +306,7 @@ The requested behavior is implemented, the diff is scoped, `npm test` passes, th
 visible flow is checked when relevant, engine and node numbers stay derived from real
 state, and any publishing or external-state action remains explicitly approved.
 
-Last verified: 2026-06-26. Revisit if the canonical interface or safety boundary
+Last verified: 2026-06-27. Revisit if the canonical interface or safety boundary
 changes. Architecture note: the connector-DAG taxonomy was un-caged into the open node
-model (tool/agent/skill/code) — see `docs/GOAL.md` for the route and its phases.
+model (tool/agent/skill/code) — see `docs/GOAL.md` for the route and its phases. The
+canvas is being converged onto an object-model projection (P10) — see `docs/CANVAS.md`.

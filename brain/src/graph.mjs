@@ -132,6 +132,25 @@ async function runNode(node, upstream, context, store, opts = {}) {
     }
   }
 
+  // Derived source: a source the founder wired to ANOTHER channel's output (config.sourceChannelId).
+  // Instead of a connector, it pulls that channel's last-run staged items. Read-only — it only reads
+  // staged output and feeds it into this graph; the founder gate downstream still gates every send.
+  if (node.category === "source" && node.config?.sourceChannelId) {
+    const load = opts.loadLastRunItems;
+    if (typeof load !== "function") {
+      return { nodeId: node.id, category: node.category, mode: "derived", ok: false, items: [],
+        error: "This source pulls from another channel, but the run was started without a cross-channel loader." };
+    }
+    try {
+      const items = await load(node.config.sourceChannelId);
+      return { nodeId: node.id, category: node.category, mode: "derived", ok: true, items,
+        meta: { count: items.length, source: "derived", sourceChannelId: node.config.sourceChannelId } };
+    } catch (err) {
+      return { nodeId: node.id, category: node.category, mode: "derived", ok: false, items: [],
+        error: `Could not pull from the source channel: ${err.message}` };
+    }
+  }
+
   const connectorId = node.connector || "default";
   // Category takes precedence; fall back to connector id for legacy compatibility
   const connector = getConnector(node.category, connectorId)
@@ -220,6 +239,7 @@ export async function runGraph(graph, opts = {}) {
     runs = null,
     resumeResult = null,
     stepRuntime = defaultStepRuntime,
+    loadLastRunItems = null,
     onEvent = null,
   } = opts;
   const emit = typeof onEvent === "function" ? onEvent : () => {};
@@ -264,7 +284,7 @@ export async function runGraph(graph, opts = {}) {
     const node = nodeMap.get(nodeId);
     if (!node || node.category !== "context" || !allowedNodes.has(nodeId)) continue;
     if (nodeResults.has(nodeId)) continue;
-    const result = await runNode(node, [], {}, store, { approvals, decisions, stepRuntime });
+    const result = await runNode(node, [], {}, store, { approvals, decisions, stepRuntime, loadLastRunItems });
     nodeResults.set(nodeId, result);
   }
 
@@ -317,10 +337,10 @@ export async function runGraph(graph, opts = {}) {
       // source) is a real product gap, but it must not fail an otherwise-successful run — a fully
       // approved, staged run reads "completed", and Measure reports its gap separately. Let the node
       // run on what it has (it self-labels each item attributed/blind) and flag it blind, not blocked.
-      result = await runNode(node, upstream, context, store, { approvals, decisions, stepRuntime });
+      result = await runNode(node, upstream, context, store, { approvals, decisions, stepRuntime, loadLastRunItems });
       result = { ...result, ok: result.ok !== false, blind: true, contractAudit: inputAudit };
     } else {
-      result = await runNode(node, upstream, context, store, { approvals, decisions, stepRuntime });
+      result = await runNode(node, upstream, context, store, { approvals, decisions, stepRuntime, loadLastRunItems });
       const outputAudit = result.ok ? auditOutput(node, result.items ?? []) : inputAudit;
       result = { ...result, contractAudit: outputAudit };
       if (result.ok && outputAudit.state === "blocked") {

@@ -134,6 +134,62 @@ export function recordFeedbackSignals(signals = [], options = {}) {
   }, options);
 }
 
+// E7.4 — Failure -> tool-creation signal.
+//
+// The existing feedback loop turns founder decisions and run failures into FeedbackSignal records
+// that revise an AgentCreationPolicy (better prompts, better rules). But some failures aren't a
+// prompt problem — the SAME failure recurring is the tell of a MISSING CAPABILITY: the agent keeps
+// re-deriving (and fluffing) a deterministic procedure it has no tool for. This export wires the
+// feedback loop to the self-building loop: it folds repeated RunFailures into a stable signature
+// (the E7.1 crystallization idea applied to error text) and, where one signature recurs past the
+// threshold, emits a tool-creation suggestion rather than only revising a policy.
+//
+// It is purely additive and read-only over the signals — it proposes; the founder gate (tool-birth)
+// still decides. A born tool is PROPOSED, never live.
+
+// Collapse a failure's error text to a stable signature: lowercase, strip the volatile specifics
+// (ids, quoted values, numbers, paths) so "failed to enrich Acme" and "failed to enrich Globex"
+// share one signature, while "failed to enrich" and "failed to score" stay distinct.
+function failureSignature(summary) {
+  return String(summary || "")
+    .toLowerCase()
+    .replace(/"[^"]*"|'[^']*'/g, " ") // quoted concrete values
+    .replace(/\b[0-9a-f]{6,}\b/g, " ") // ids / hashes
+    .replace(/\d+/g, " ") // numbers
+    .replace(/[\/\\][^\s]+/g, " ") // paths
+    .replace(/[^a-z\s]+/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 8)
+    .join(" ")
+    .trim();
+}
+
+export function detectToolCreationSuggestions(signals = [], { threshold = 3 } = {}) {
+  if (!Array.isArray(signals)) {
+    throw new Error("detectToolCreationSuggestions requires an array of signals.");
+  }
+  if (!Number.isInteger(threshold) || threshold < 1) {
+    throw new Error("threshold must be a positive integer.");
+  }
+  const buckets = new Map();
+  for (const item of signals) {
+    if (item?.type !== "RunFailure") continue; // only genuine failures point at a missing capability
+    const signature = failureSignature(item.summary);
+    if (!signature) continue;
+    if (!buckets.has(signature)) buckets.set(signature, { signature, count: 0, sample: item });
+    buckets.get(signature).count += 1;
+  }
+  return [...buckets.values()]
+    .filter((bucket) => bucket.count >= threshold)
+    .sort((a, b) => b.count - a.count || a.signature.localeCompare(b.signature))
+    .map((bucket) => ({
+      reason: `The same failure recurred ${bucket.count} times — a missing capability, not a prompt fix. Consider crystallizing a tool for: ${bucket.signature}.`,
+      signature: bucket.signature,
+      count: bucket.count,
+    }));
+}
+
 export function recordFeedbackSignalsFromRun({ projectId = "default", graph, result } = {}, options = {}) {
   // Also bank the founder's gate decisions in the shared taste ledger both rigs read (HARNESS.md
   // invariant 4). Never let taste capture break the run.

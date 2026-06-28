@@ -20,26 +20,31 @@
 // job (the gate is the contract checkpoint; a best-effort discovery chain is not contract-rigid)
 // live here too so graph.mjs calls them by name instead of re-deriving them.
 
-export const SOURCE_MODES = { PROVIDED: "provided", DISCOVERED: "discovered" };
+export const SOURCE_MODES = { PROVIDED: "provided", DISCOVERED: "discovered", DERIVED: "derived" };
 
 export function isSourceNode(node) {
   return node?.category === "source";
 }
 
-// The mode of a source node, derived from its SHAPE so it can never lie: an agent-kind source
-// self-sources (discovered); a connector-backed source is provided. The persisted `mode` field is
-// only a cached label for the UI — switching a source's mode means changing its shape (connector
-// ↔ agent + ref), not flipping a string, so the runner and the label can never disagree.
+// The mode of a source node, derived from its SHAPE so it can never lie:
+//   derived    — the source carries config.sourceChannelId: it pulls another channel's output. The
+//                founder drew this feed on the canvas; the shape (a real channel id in config) is
+//                the truth, so the runner and the label can never disagree.
+//   discovered — an agent-kind source that self-sources from public signals.
+//   provided   — a connector-backed source (a founder list / CSV / API).
+// The persisted `mode` field is only a cached label for the UI; sourceMode() is the source of truth.
 export function sourceMode(node) {
+  if (isSourceNode(node) && node?.config?.sourceChannelId) return SOURCE_MODES.DERIVED;
   return node?.kind === "agent" ? SOURCE_MODES.DISCOVERED : SOURCE_MODES.PROVIDED;
 }
 
 // The ONE predicate: can this source stand on real data right now? A discovered (agent) source
-// always can — it self-sources. A provided source stands on data only when its connector is
-// actually configured: a non-empty manual list, real CSV text, or an API endpoint.
+// always can — it self-sources. A derived source stands on the channel it pulls from. A provided
+// source stands on data only when its connector is configured: a non-empty manual list, CSV, or API.
 export function sourceStandsOnData(node) {
   if (!isSourceNode(node)) return true;
   if (sourceMode(node) === SOURCE_MODES.DISCOVERED) return true;
+  if (sourceMode(node) === SOURCE_MODES.DERIVED) return true;
   if (node.connector === "manual") return Array.isArray(node.config?.items) && node.config.items.length > 0;
   if (node.connector === "csv") return typeof node.config?.csv === "string" && node.config.csv.trim().length > 0;
   if (node.connector === "api") return typeof node.config?.endpoint === "string" && node.config.endpoint.trim().length > 0;
@@ -81,7 +86,9 @@ export function resolveEntry({ nodes, edges, agents = [], hasInput = false } = {
   if (!source) return { nodes, edges }; // already discovered, or no source at all
 
   if (hasInput || sourceStandsOnData(source)) {
-    return { nodes: nodes.map((n) => (n.id === source.id ? withMode(n, SOURCE_MODES.PROVIDED) : n)), edges };
+    // Keep the source as-is and stamp its real mode label — a derived source (config.sourceChannelId)
+    // stays derived, a configured connector stays provided. Never re-derive a topology that stands.
+    return { nodes: nodes.map((n) => (n.id === source.id ? withMode(n, sourceMode(n)) : n)), edges };
   }
 
   // Outcome 2: a downstream agent can be the self-sourcing entry.
@@ -128,7 +135,7 @@ export function resolveEntry({ nodes, edges, agents = [], hasInput = false } = {
   }
 
   // Outcome 4: leave it provided; the run will ask the founder to configure the seed.
-  return { nodes: nodes.map((n) => (n.id === source.id ? withMode(n, SOURCE_MODES.PROVIDED) : n)), edges };
+  return { nodes: nodes.map((n) => (n.id === source.id ? withMode(n, sourceMode(n)) : n)), edges };
 }
 
 function withMode(node, mode) {

@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { buildAgentPrompt, createProviderAgentInvoker, loadAgentDefinition, loadSkillGuidance, parseAgentItems } from "../src/agent-bridge.mjs";
+import { buildAgentPrompt, createProviderAgentInvoker, loadAgentDefinition, loadSkillGuidance, parseAgentItems, parseDeclaredTools, resolveAgentTools, DEFAULT_AGENT_TOOLS } from "../src/agent-bridge.mjs";
 import { createStepRuntime } from "../src/step-runners.mjs";
 import { buildDesignState } from "../src/design-state-store.mjs";
 
@@ -57,6 +57,57 @@ describe("loadAgentDefinition — agent doctrine from disk (symmetric with loadS
     assert.equal(loadAgentDefinition("does-not-exist", { root: "/tmp/none-here" }), null);
     assert.equal(loadAgentDefinition("", {}), null);
     assert.equal(loadAgentDefinition("x", { artifactPath: "/tmp/none-here/missing.md", root: "/tmp/none-here" }), null);
+  });
+});
+
+describe("per-agent toolsets — the declared set drives the run, the wall still holds", () => {
+  it("parses the inline comma-string `tools:` frontmatter shape", () => {
+    const def = "---\nname: gtm-enrich\ntools: Read, Bash, WebSearch, WebFetch\nmodel: sonnet\n---\nBody.";
+    assert.deepEqual(parseDeclaredTools(def), ["Read", "Bash", "WebSearch", "WebFetch"]);
+  });
+
+  it("parses the YAML list `tools:` frontmatter shape", () => {
+    const def = "---\nname: scout\ntools:\n  - Read\n  - Grep\n  - Bash\n---\nBody.";
+    assert.deepEqual(parseDeclaredTools(def), ["Read", "Grep", "Bash"]);
+  });
+
+  it("returns null when no `tools:` is declared (caller keeps the safe default)", () => {
+    assert.equal(parseDeclaredTools("---\nname: x\nmodel: sonnet\n---\nBody."), null);
+    assert.equal(parseDeclaredTools("no frontmatter here"), null);
+    assert.equal(parseDeclaredTools(""), null);
+  });
+
+  it("grants the conservative five when nothing is declared", () => {
+    const resolved = resolveAgentTools("---\nname: x\n---\nBody.");
+    assert.deepEqual(resolved.allowed, DEFAULT_AGENT_TOOLS);
+    assert.equal(resolved.declared, null);
+    assert.deepEqual(resolved.dropped, []);
+  });
+
+  it("grants Bash only when an agent explicitly declares it", () => {
+    const resolved = resolveAgentTools("---\ntools: Read, Bash, WebSearch\n---\nBody.");
+    assert.deepEqual(resolved.allowed, ["Read", "Bash", "WebSearch"]);
+    assert.deepEqual(resolved.dropped, []);
+  });
+
+  it("drops mutation/send tools the wall refuses, and records them", () => {
+    const resolved = resolveAgentTools("---\ntools: Read, Write, Edit, Bash\n---\nBody.");
+    assert.deepEqual(resolved.allowed, ["Read", "Bash"]);
+    assert.deepEqual(resolved.dropped, ["Write", "Edit"]);
+  });
+
+  it("never runs blind: an all-refused declaration falls back to the safe default", () => {
+    const resolved = resolveAgentTools("---\ntools: Write, Edit\n---\nBody.");
+    assert.deepEqual(resolved.allowed, DEFAULT_AGENT_TOOLS);
+    assert.deepEqual(resolved.dropped, ["Write", "Edit"]);
+  });
+
+  it("buildAgentPrompt carries the resolved toolset, read from the on-disk definition", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-tools-"));
+    fs.writeFileSync(path.join(root, "gtm-enrich.md"), "---\nname: gtm-enrich\ntools: Read, Bash, WebSearch, WebFetch\n---\nDoctrine.");
+    const built = buildAgentPrompt({ ref: "gtm-enrich", prompt: "Enrich.", items: [], agentDefinitionRoot: root });
+    assert.deepEqual(built.tools.allowed, ["Read", "Bash", "WebSearch", "WebFetch"]);
+    fs.rmSync(root, { recursive: true, force: true });
   });
 });
 

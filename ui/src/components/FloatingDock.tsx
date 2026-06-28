@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { motion } from "motion/react";
 import {
-  AlertTriangle, ArrowRight, LoaderCircle, Lightbulb, PanelRight, ShieldCheck,
+  AlertTriangle, ArrowRight, LoaderCircle, Lightbulb, LayoutGrid, PanelRight, Plus, ShieldCheck,
 } from "lucide-react";
 import { SPRING } from "@/lib/springs";
 import { Reveal, Stagger, StaggerItem, Pop } from "@/lib/motion";
@@ -30,11 +31,16 @@ export function FloatingDock({
   motionName,
   // GTM ↔ Product
   showGtmToggle, productMode, onModeToggle,
+  // Summon — the agentic replacement for lens tabs. Instead of navigating between frozen views, you
+  // summon one onto the canvas as a draggable card. The caller passes the summonable views for the
+  // current mode (the dock adapts), and onSummon pops the chosen view up on the canvas.
+  summonItems, onSummon,
   // Right — actions
   problems, problemsOpen, onToggleProblems, nodeForSubsystem, onJumpToNode,
   pendingApprovals, approvalsOpen, onToggleApprovals,
   graph, audits, running, onRun,
   inspecting, onToggleInspect,
+  onOpenWorkspace,
 }: {
   projects: ProjectSummary[];
   activeProjectId: string | null;
@@ -58,6 +64,8 @@ export function FloatingDock({
   showGtmToggle: boolean;
   productMode: boolean;
   onModeToggle: (v: "gtm" | "product") => void;
+  summonItems?: { id: string; label: string; desc?: string }[];
+  onSummon?: (id: string) => void;
   problems: Investigation[];
   problemsOpen: boolean;
   onToggleProblems: () => void;
@@ -73,9 +81,12 @@ export function FloatingDock({
   onRun: () => void;
   inspecting: boolean;
   onToggleInspect: () => void;
+  // Open the three-lane workspace (workflows / skills / agents). Optional → no affordance when absent.
+  onOpenWorkspace?: () => void;
   session: OperatorSession | null;
   connection: ConnectionStatus | null;
 }) {
+  const [summonOpen, setSummonOpen] = useState(false);
   const noGraph = !graph || graph.nodes.length === 0;
   // Problems (engine investigations) + the pipeline audit (contract issues) are ONE "Issues" surface.
   const auditIssues = (graph?.nodes ?? [])
@@ -122,7 +133,7 @@ export function FloatingDock({
         {/* Motion identity — names WHAT KIND of go-to-market the focused workflow is, derived from its
             real stages (no fixed motion list). Hidden on the all-workflows overview and on an empty
             canvas, where there's no single motion to name. */}
-        {motionName && !overviewActive && !noGraph ? (
+        {motionName && !overviewActive && !noGraph && !productMode ? (
           <span className="fdock-motion" title="The kind of go-to-market this workflow is — derived from its stages">
             {motionName}
           </span>
@@ -147,6 +158,39 @@ export function FloatingDock({
             layoutId="fdock-gtm-mode"
             size="sm"
           />
+        ) : null}
+        {/* Summon — the agentic replacement for lens tabs. One + opens a short menu of views you can
+            pop onto the canvas as draggable cards. You ask for what you want to see instead of
+            navigating a fixed taxonomy; Claude can summon the same cards. */}
+        {summonItems && summonItems.length && onSummon ? (
+          <div className="fdock-pop-wrap">
+            <button
+              className={`fdock-summon ${summonOpen ? "open" : ""}`}
+              onClick={() => setSummonOpen((v) => !v)}
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={summonOpen}
+              title="Summon a view onto the canvas"
+            >
+              <Plus size={14} />
+              <span>Summon</span>
+            </button>
+            <Reveal open={summonOpen} className="fdock-summon-pop" role="menu" origin="top-left">
+              <div className="fdock-summon-head">Pop a view onto the canvas</div>
+              {summonItems.map((item) => (
+                <button
+                  key={item.id}
+                  className="fdock-summon-item"
+                  role="menuitem"
+                  type="button"
+                  onClick={() => { onSummon(item.id); setSummonOpen(false); }}
+                >
+                  <strong>{item.label}</strong>
+                  {item.desc ? <span>{item.desc}</span> : null}
+                </button>
+              ))}
+            </Reveal>
+          </div>
         ) : null}
       </div>
 
@@ -216,20 +260,35 @@ export function FloatingDock({
           </Reveal>
         </div>
 
-        {/* Approvals — the founder gate's first-class home. Carries the real pending-draft count. */}
-        <button
-          className={`fdock-icon-btn ${pendingApprovals > 0 ? "has-pending" : ""} ${approvalsOpen ? "open" : ""}`}
-          onClick={onToggleApprovals}
-          type="button"
-          aria-haspopup="dialog"
-          aria-expanded={approvalsOpen}
-          title={pendingApprovals > 0
-            ? `${pendingApprovals} draft${pendingApprovals === 1 ? "" : "s"} waiting for your approval`
-            : "No drafts waiting — nothing has reached the gate"}
-        >
-          <ShieldCheck size={15} />
-          {pendingApprovals > 0 ? <Pop k={pendingApprovals} className="fdock-count gate">{pendingApprovals}</Pop> : null}
-        </button>
+        {/* Approvals — the founder gate's first-class home. Carries the real pending-draft count.
+            GTM-only: the gate is a go-to-market concept, so it's hidden in Product mode. */}
+        {!productMode ? (
+          <button
+            className={`fdock-icon-btn ${pendingApprovals > 0 ? "has-pending" : ""} ${approvalsOpen ? "open" : ""}`}
+            onClick={onToggleApprovals}
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={approvalsOpen}
+            title={pendingApprovals > 0
+              ? `${pendingApprovals} draft${pendingApprovals === 1 ? "" : "s"} waiting for your approval`
+              : "No drafts waiting — nothing has reached the gate"}
+          >
+            <ShieldCheck size={15} />
+            {pendingApprovals > 0 ? <Pop k={pendingApprovals} className="fdock-count gate">{pendingApprovals}</Pop> : null}
+          </button>
+        ) : null}
+
+        {/* Workspace — the three-lane index of workflows, skills, and agents. */}
+        {onOpenWorkspace ? (
+          <button
+            className="fdock-icon-btn"
+            onClick={onOpenWorkspace}
+            type="button"
+            title="Open the workspace — every workflow, skill, and agent"
+          >
+            <LayoutGrid size={15} />
+          </button>
+        ) : null}
 
         {/* Program details — opens the inspector sheet (agents, measurement, learning). */}
         <button
@@ -242,18 +301,21 @@ export function FloatingDock({
           <PanelRight size={15} />
         </button>
 
-        <span className="fdock-divider" />
-
-        {/* Run program — the one dark primary. Simulate was cut — the Simulation lens is the preview. */}
-        <button
-          className="fdock-run-btn"
-          disabled={running || noGraph}
-          onClick={onRun}
-          type="button"
-        >
-          {running ? <LoaderCircle className="spin" size={13} /> : null}
-          Run program
-        </button>
+        {/* Run program — the one dark primary, GTM-only (Product mode has nothing to run). */}
+        {!productMode ? (
+          <>
+            <span className="fdock-divider" />
+            <button
+              className="fdock-run-btn"
+              disabled={running || noGraph}
+              onClick={onRun}
+              type="button"
+            >
+              {running ? <LoaderCircle className="spin" size={13} /> : null}
+              Run program
+            </button>
+          </>
+        ) : null}
       </div>
     </motion.div>
   );

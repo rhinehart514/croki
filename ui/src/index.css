@@ -75,7 +75,7 @@
 
   /* Radius, elevation, motion — restrained. Elevation is a real register now: a node
      card rests low, a popover floats, a modal commands. */
-  --r-sm: 6px;  --r-md: 9px;  --r-lg: 12px;  --r-xl: 16px;
+  --r-sm: 6px;  --r-md: 9px;  --r-lg: 12px;  --r-xl: 16px;  --r-2xl: 24px;
   --shadow-xs: 0 1px 1px oklch(0.21 0.006 285.9 / 0.05);
   --shadow-sm: 0 1px 2px oklch(0.21 0.006 285.9 / 0.06);
   --shadow-card: 0 1px 2px oklch(0.21 0.006 285.9 / 0.04), 0 1px 3px oklch(0.21 0.006 285.9 / 0.06);
@@ -4799,9 +4799,10 @@ svg {
   display: grid;
   align-content: start;
   gap: 4px;
-  padding: 13px 14px;
+  padding: 14px 15px;
   border: 1px solid var(--line-2);
-  border-radius: var(--r-lg);
+  /* Strong rounding — the founder-approved register (collapsed ~18px, opened ~24px). Nothing sharp. */
+  border-radius: 18px;
   text-align: left;
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -4824,8 +4825,11 @@ svg {
 /* Everything-in-the-canvas: the selected card grows in place to hold its guided editor. It widens,
    drops the fixed max-height, and lifts above its neighbors so the inline editor never collides. */
 .loop-node.loop-node-selected {
-  width: 320px;
-  max-width: 320px;
+  width: 340px;
+  max-width: 340px;
+  /* The opened card is a real designed surface — stronger rounding + a soft float, not just a wider
+     strip. The elevation comes from the shadow-pop token; the radius lifts into the opened register. */
+  border-radius: var(--r-2xl);
   z-index: 20;
   cursor: default;
 }
@@ -5119,6 +5123,52 @@ svg {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ── Source card — the audience is the headline, the mode is the mark ─────────── */
+/* The left MARK encodes the source mode so the label can never disagree with the runner: a scout
+   telescope for a self-sourcing (discovered) agent, a seed sprout for a founder-provided seed. */
+.loop-node-srchead { display: flex; align-items: center; gap: 9px; }
+.loop-node-mark {
+  display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 auto;
+  border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--ink-2);
+}
+.loop-node-mark svg { width: 14px !important; height: 14px !important; }
+.loop-node-mark.mark-scout { color: var(--ink); }
+.loop-node-mark.mark-seed { color: var(--proven); border-color: color-mix(in oklch, var(--proven) 24%, transparent); background: var(--proven-soft); }
+.loop-node-kindline { display: flex; flex-direction: column; gap: 1px; min-width: 0; margin-right: auto; }
+.loop-node-mode { font-size: 11px; font-weight: 600; color: var(--ink-2); letter-spacing: 0.005em; }
+.loop-node-headline {
+  margin-top: 11px; font-size: 14px; font-weight: 600; line-height: 1.28; color: var(--ink); letter-spacing: -0.012em;
+}
+.loop-node-trigger { display: flex; align-items: flex-start; gap: 8px; margin-top: 9px; font-size: 11.5px; line-height: 1.38; color: var(--ink-2); }
+.loop-node-trigger-dot { width: 7px; height: 7px; border-radius: 999px; flex: 0 0 auto; margin-top: 4px; }
+.loop-node-trigger-dot.is-observed { background: var(--proven); }
+.loop-node-trigger-dot.is-assumed { background: var(--faint); }
+.loop-node-enter { margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 10px; color: var(--muted); }
+.loop-node-enter-n { color: var(--ink-2); font-weight: 680; font-variant-numeric: tabular-nums; }
+
+/* ── Who enters — the opened Source card's per-entrant list (real People for this channel) ─────── */
+.loop-who { display: grid; gap: 8px; margin-top: 4px; }
+.loop-who-head { display: flex; align-items: baseline; gap: 8px; }
+.loop-who-head > span:first-child { font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.loop-who-sub { font-size: 10px; color: var(--faint); margin-left: auto; }
+.loop-entrants { display: flex; flex-direction: column; gap: 1px; }
+.loop-erow { display: flex; align-items: center; gap: 9px; padding: 6px 7px; border-radius: var(--r-md); }
+.loop-erow:hover { background: var(--surface-2); }
+.loop-eav {
+  display: grid; place-items: center; width: 24px; height: 24px; flex: 0 0 auto;
+  border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface-2);
+  font-size: 9.5px; font-weight: 600; color: var(--muted);
+}
+.loop-ename { font-size: 12px; font-weight: 540; color: var(--ink); flex: 0 0 auto; }
+.loop-etrig { font-size: 11.5px; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.loop-emore { font-size: 11.5px; color: var(--muted); padding: 6px 7px 0; }
+.loop-emore b { color: var(--ink-2); font-weight: 600; }
+
+/* The Gate — the signature card, the wall. The amber accent is reinforced when it is the object so
+   the one place anything reaches the world is unmistakable even before a run pauses on it. */
+.loop-node-obj-gate .loop-node-icon { background: var(--gap-soft); color: var(--gap); }
+.loop-node-obj-gate .loop-node-type-label { color: var(--gap); }
 
 /* ── Loop graph edges ────────────────────────────────────────────────────── */
 
@@ -6757,18 +6807,6 @@ svg {
 .composer-dock-head-text strong { font-size: 13.5px; }
 .composer-dock-sub { font-size: 11px; color: var(--faint, #8a8f99); text-transform: capitalize; }
 .composer-dock-channel { color: var(--ink, #18181b); font-weight: 600; text-transform: none; }
-.composer-dock-mismatch {
-  display: flex; align-items: center; gap: 7px; margin: 0 12px 8px; padding: 8px 11px;
-  border-radius: 9px; background: color-mix(in srgb, var(--gap, #e18b2c) 12%, transparent);
-  font-size: 11px; color: #6b5520;
-}
-.composer-dock-mismatch svg { color: var(--gap, #b9751f); flex-shrink: 0; }
-.composer-dock-mismatch span { flex: 1; min-width: 0; }
-.composer-dock-mismatch strong { text-transform: none; }
-.composer-dock-mismatch button {
-  border: none; border-radius: 7px; padding: 5px 9px; cursor: pointer;
-  background: var(--gap, #e18b2c); color: #fff; font-size: 11px; font-weight: 600; white-space: nowrap;
-}
 .composer-dock-stop, .composer-dock-collapse {
   width: 26px; height: 26px; border-radius: 6px; border: none; background: transparent;
   display: grid; place-items: center; cursor: pointer; color: #71717a;
@@ -8682,26 +8720,15 @@ svg {
   to   { opacity: 1; transform: translateX(-50%); }
 }
 
-/* The mode lens, applied per node by GraphCanvas.lensClass. A mode foregrounds the nodes it is
-   about and recedes the rest — same graph, different question. Dim matches the muted-column
-   register (0.4) the card grid used, so the canvas reads calm. */
-.react-flow .loop-node-lens-dim {
-  opacity: 0.4;
-  transition: opacity 180ms ease;
-}
-.react-flow .loop-node-lens-focus {
-  opacity: 1;
-  transition: opacity 180ms ease;
-}
-
-/* On-canvas proposals — operator-staged nodes/edges rendered as ghosts for founder review. A
-   restrained indigo dashed treatment reads as "draft / pending decision", distinct from both the
-   monochrome committed nodes and the gate's amber. Transient: gone the moment the founder resolves. */
+/* On-canvas proposals — operator-staged nodes/edges rendered as ghosts for founder review. "Not yet
+   real" reads through VALUE and DASH, never a fourth hue: a dashed faint-ink border and a lighter
+   inset on the monochrome ramp, distinct from the solid committed nodes and the gate's amber. This
+   holds the one-accent contract. Transient: gone the moment the founder resolves. */
 .react-flow .loop-node-proposed .loop-node {
   border-style: dashed;
-  border-color: #6366f1;
-  background: #6366f10c;
-  box-shadow: 0 0 0 1px #6366f133, 0 10px 24px -14px #6366f1aa;
+  border-color: var(--ghost);
+  background: var(--surface-2);
+  box-shadow: 0 0 0 1px oklch(0.21 0.006 285.9 / 0.06), 0 10px 24px -14px oklch(0.21 0.006 285.9 / 0.30);
   transition: opacity 340ms var(--ease-out), transform 340ms var(--ease-out);
 }
 /* The staged reveal: a proposed node is held back (invisible, nudged down) until the host's timer
@@ -8716,8 +8743,8 @@ svg {
   animation: ghost-node-breathe 2.8s ease-in-out 200ms infinite;
 }
 @keyframes ghost-node-breathe {
-  0%, 100% { box-shadow: 0 0 0 1px #6366f133, 0 10px 24px -14px #6366f1aa; }
-  50% { box-shadow: 0 0 0 1px #6366f155, 0 12px 28px -12px #6366f1cc; }
+  0%, 100% { box-shadow: 0 0 0 1px oklch(0.21 0.006 285.9 / 0.06), 0 10px 24px -14px oklch(0.21 0.006 285.9 / 0.30); }
+  50% { box-shadow: 0 0 0 1px oklch(0.21 0.006 285.9 / 0.12), 0 12px 28px -12px oklch(0.21 0.006 285.9 / 0.42); }
 }
 
 /* Run replay (the scrubber): the current step pops and pulses, the rest recede, so the eye follows
@@ -8762,7 +8789,8 @@ svg {
 .replay-scrubber-step-meta { font-size: var(--text-xs); color: var(--muted); margin-left: auto; }
 
 .react-flow__edge.loop-edge-proposed .react-flow__edge-path {
-  stroke: #6366f1;
+  /* Faint ink + dash reads "staged, not yet real" through value and motion, not a hue. */
+  stroke: var(--ghost);
   stroke-dasharray: 6 4;
   /* Marching ants toward the staged node — the proposal reads as flowing in, not frozen. */
   animation: ghost-edge-march 0.55s linear infinite;
@@ -8785,10 +8813,10 @@ svg {
   width: max-content;
   max-width: min(680px, calc(100% - 64px));
   padding: 12px 16px;
-  border: 1px solid #6366f1;
+  border: 1px solid var(--ink);
   border-radius: 12px;
   background: var(--surface);
-  box-shadow: 0 16px 44px -16px rgba(49, 46, 129, 0.55);
+  box-shadow: 0 16px 44px -16px oklch(0.21 0.006 285.9 / 0.45);
 }
 
 .loop-proposal-text {
@@ -8805,7 +8833,7 @@ svg {
   color: var(--ink);
 }
 
-.loop-proposal-text strong svg { width: 14px; height: 14px; color: #6366f1; }
+.loop-proposal-text strong svg { width: 14px; height: 14px; color: var(--ink); }
 
 .loop-proposal-text span {
   overflow: hidden;
@@ -8837,9 +8865,9 @@ svg {
   align-items: center;
   gap: 5px;
   padding: 7px 14px;
-  border: 1px solid #6366f1;
+  border: 1px solid var(--ink);
   border-radius: 8px;
-  background: #6366f1;
+  background: var(--ink);
   color: #fff;
   cursor: pointer;
   font-size: 12px;
@@ -8850,8 +8878,8 @@ svg {
 .loop-proposal-bar button:disabled { opacity: 0.5; cursor: default; }
 
 /* Inline accept/reject on a proposed ghost node (slice 2). A compact pill floating on the node's
-   top-right corner, in the same indigo as the rest of the proposal layer, so the founder resolves the
-   staged change right where the ghost is — not only at the distant bottom bar. */
+   top-right corner — the accept wears proven-green, the reject danger, the rest ink — so the founder
+   resolves the staged change right where the ghost is, not only at the distant bottom bar. */
 .loop-proposal-inline {
   position: absolute;
   top: -13px;
@@ -8887,7 +8915,7 @@ svg {
 .loop-proposal-inline-btn:hover { transform: translateY(-1px) scale(1.05); }
 .loop-proposal-inline-btn.accept:hover { background: color-mix(in srgb, var(--proven) 85%, #000); border-color: color-mix(in srgb, var(--proven) 85%, #000); }
 .loop-proposal-inline-btn.reject:hover { color: var(--danger); border-color: var(--danger); background: var(--danger-soft); }
-.loop-proposal-inline-btn.note.is-open { color: #6366f1; border-color: #6366f1; background: #6366f114; }
+.loop-proposal-inline-btn.note.is-open { color: var(--ink); border-color: var(--ink); background: var(--surface-2); }
 .loop-proposal-inline-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* The note popover — opaque, a real writing surface (never glass). A note can ride an accept (a quiet
@@ -8901,10 +8929,10 @@ svg {
   display: grid;
   gap: 8px;
   padding: 10px;
-  border: 1px solid #6366f1;
+  border: 1px solid var(--ink);
   border-radius: 12px;
   background: var(--surface);
-  box-shadow: 0 18px 44px -18px rgba(49, 46, 129, 0.55);
+  box-shadow: 0 18px 44px -18px oklch(0.21 0.006 285.9 / 0.45);
 }
 .loop-proposal-note-input {
   width: 100%; box-sizing: border-box; resize: none;
@@ -8913,7 +8941,7 @@ svg {
   background: var(--surface);
 }
 .loop-proposal-note-input::placeholder { color: var(--faint); }
-.loop-proposal-note-input:focus { outline: none; border-color: #6366f1; }
+.loop-proposal-note-input:focus { outline: none; border-color: var(--ink); }
 .loop-proposal-note-actions { display: flex; gap: 7px; }
 .loop-proposal-note-btn {
   flex: 1;
@@ -8925,7 +8953,7 @@ svg {
 }
 .loop-proposal-note-btn:disabled { opacity: 0.5; cursor: default; }
 .loop-proposal-note-btn.keep:not(:disabled):hover { color: var(--proven); border-color: var(--proven); background: color-mix(in srgb, var(--proven) 10%, transparent); }
-.loop-proposal-note-btn.redirect:not(:disabled):hover { color: #6366f1; border-color: #6366f1; background: #6366f114; }
+.loop-proposal-note-btn.redirect:not(:disabled):hover { color: var(--ink); border-color: var(--ink); background: var(--surface-2); }
 
 /* ── The operator cursor — Claude working on the canvas (presence over the proposal layer) ──
    Renders in flow coordinates (ViewportPortal), so it tracks pan/zoom. The wrapper glides between
@@ -8936,14 +8964,14 @@ svg {
   transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
 }
-.op-cursor-arrow { display: block; color: #6366f1; filter: drop-shadow(0 2px 4px rgba(49,46,129,0.45)); }
-.op-cursor-arrow svg { width: 22px; height: 22px; fill: #6366f1; }
+.op-cursor-arrow { display: block; color: var(--ink); filter: drop-shadow(0 2px 4px oklch(0.21 0.006 285.9 / 0.40)); }
+.op-cursor-arrow svg { width: 22px; height: 22px; fill: var(--ink); }
 .op-cursor-tag {
   position: absolute; top: 20px; left: 16px;
   display: flex; align-items: baseline; gap: 7px; white-space: nowrap;
   padding: 5px 10px; border-radius: 8px;
-  background: #4f46e5; color: #fff;
-  box-shadow: 0 10px 26px -12px rgba(49,46,129,0.7);
+  background: var(--ink); color: #fff;
+  box-shadow: 0 10px 26px -12px oklch(0.21 0.006 285.9 / 0.55);
   animation: op-cursor-in 240ms var(--ease-out) both;
 }
 .op-cursor-name { font-size: 11.5px; font-weight: 700; letter-spacing: 0.01em; }
@@ -8958,11 +8986,11 @@ svg {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 7px 12px; border-radius: 999px; cursor: pointer;
   font-size: 12px; font-weight: 600;
-  border: 1px solid #6366f1; background: var(--surface); color: #4f46e5;
+  border: 1px solid var(--ink); background: var(--surface); color: var(--ink);
   box-shadow: var(--shadow-pop);
   transition: background 120ms var(--ease);
 }
-.op-cursor-back:hover { background: #6366f114; }
+.op-cursor-back:hover { background: var(--surface-2); }
 
 
 /* Inspector — the program framing the DAG lacks. Agent chips select a policy to read; no synthetic
@@ -9751,11 +9779,6 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 /* Workflows draw in — each node builds onto the canvas with a staggered fade/scale. */
 .ideation-canvas .react-flow__node { animation: node-build-in 380ms var(--ease) backwards; }
 
-/* The read-only project overview lays nodes out from pre-computed lane positions and never needs React
-   Flow's interactive measurement. RF keeps a node visibility:hidden until it measures it, and that
-   measurement doesn't reliably complete for this static, non-editable surface — leaving every lane
-   blank. Since positions are already known, override the gate so the lanes always paint. */
-.overview-canvas .react-flow__node { visibility: visible !important; }
 @keyframes node-build-in { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: none; } }
 
 /* ── Live model thinking strip (ideation: watch it reason) ────────────────── */
@@ -9864,15 +9887,21 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .workflow-audit-dot.state-waiting { background: var(--gap); }
 .workflow-audit-dot.state-blind { background: var(--blind); }
 
-.loop-contract-badge {
-  align-self: flex-start; max-width: 100%; padding: 2px 6px; border-radius: 999px;
-  background: var(--surface-2); color: var(--muted); font-size: 9.5px; font-weight: 650;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+/* The judgment verdict — grounded / assumed / generic / blind / blocked. Re-points the old
+   contract-badge primitive: a small pill with a tone dot that replaces the bare health number in a
+   card header. Tones reuse the semantic ramp (proven / gap / faint / danger) — no new hue. */
+.loop-verdict {
+  display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto;
+  padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+  border: 1px solid var(--line-2); background: var(--surface-2);
+  font-size: 9.5px; font-weight: 640; letter-spacing: 0.01em; color: var(--muted);
 }
-.loop-contract-badge.state-blocked { background: var(--danger-soft); color: var(--danger); }
-.loop-contract-badge.state-waiting { color: var(--gap); }
-.loop-contract-badge.state-blind { color: var(--blind); }
-.loop-contract-badge.state-satisfied { color: var(--proven); }
+.loop-verdict-dot { width: 5px; height: 5px; border-radius: 999px; background: currentColor; flex: 0 0 auto; }
+.loop-verdict.v-grounded { color: var(--proven); border-color: color-mix(in oklch, var(--proven) 30%, transparent); background: var(--proven-soft); }
+.loop-verdict.v-assumed  { color: var(--gap); border-color: color-mix(in oklch, var(--gap) 30%, transparent); background: var(--gap-soft); }
+.loop-verdict.v-generic  { color: var(--faint); border-color: var(--line-2); background: var(--surface-2); }
+.loop-verdict.v-blind    { color: var(--blind); border-color: var(--line-2); background: var(--surface-2); }
+.loop-verdict.v-blocked  { color: var(--danger); border-color: color-mix(in oklch, var(--danger) 30%, transparent); background: var(--danger-soft); }
 
 .contract-help, .contract-audit-message {
   margin: 5px 0 10px; color: var(--muted); font-size: 11px; line-height: 1.45;
@@ -9956,7 +9985,14 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
   overflow: hidden; z-index: 40;
   transition: width var(--dur-slow) var(--ease), max-height var(--dur-slow) var(--ease);
 }
-.composer-dock.floating.expanded { width: min(760px, calc(100% - 48px)); max-height: min(76vh, 760px); }
+/* The full conversation panel (non-resting) docks to the bottom-RIGHT as a rail instead of floating
+   as a centered slab that blankets the canvas — the work stays visible while you read Claude. Only
+   the short resting/minimized composer stays bottom-centered. */
+.composer-dock.floating:not(.resting) {
+  left: auto; right: 20px; margin: 0;
+  width: min(460px, calc(100% - 48px));
+}
+.composer-dock.floating.expanded { max-height: min(82vh, 860px); }
 
 /* Resting = the composer alone, centered on the canvas, auto height. The .floating glass card already
    gives the blur, border, shadow, and the bottom-center placement; resting just sheds the panel chrome. */
@@ -10071,6 +10107,218 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .composer-box-send:hover:not(:disabled) { opacity: 0.86; transform: translateY(-1px); }
 .composer-box-send:disabled { background: var(--line-2); color: var(--surface); cursor: default; }
 .composer-box-send svg { width: 18px; height: 18px; }
+
+/* ── Aurora + voice mode — the composer's signature ──────────────────────────
+   Aurora Canvas direction (chosen 2026-06-28, docs/design/composer.md). Palette is
+   black / white / rainbow (founder call 2026-06-28): the composer is strictly
+   MONOCHROME at rest — a faint graphite haze drifts behind the frosted input, no hue.
+   The rainbow is the product's ONLY color and it is reserved for one STATE: engaging
+   voice (the mic) erupts the same field into a full-spectrum conic ring + bloom with a
+   waveform. Color earns its place by meaning; it is never resting decoration. Built
+   bespoke: a registered @property rotates the conic gradient on the compositor, no JS
+   per frame. The global prefers-reduced-motion block (end of file) freezes it all. */
+@property --composer-ang { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
+@keyframes composer-spectrum-spin { to { --composer-ang: 360deg; } }
+@keyframes composer-aurora-drift { to { transform: translate3d(0, -8px, 0) scale(1.08); } }
+@keyframes composer-wave-bounce { 0%, 100% { height: 22%; } 50% { height: 100%; } }
+
+.composer-box {
+  position: relative;
+  --spectrum: conic-gradient(from var(--composer-ang),
+    #ff5d5d, #ff9e3d, #ffd23f, #7be36a, #34d3cf, #5b8def, #b06cf0, #ff5db0, #ff5d5d);
+}
+/* keep every real child above the aurora layer */
+.composer-box > *:not(.composer-aurora) { position: relative; z-index: 1; }
+
+.composer-aurora {
+  position: absolute; inset: 0; z-index: 0; pointer-events: none; border-radius: inherit;
+  overflow: hidden;
+  /* monochrome: a soft graphite drift, no hue — keeps the "live canvas" character without color */
+  background:
+    radial-gradient(45% 60% at 18% 30%, rgba(16, 18, 27, 0.06), transparent 70%),
+    radial-gradient(50% 62% at 82% 22%, rgba(16, 18, 27, 0.05), transparent 70%),
+    radial-gradient(58% 72% at 60% 96%, rgba(16, 18, 27, 0.06), transparent 70%);
+  filter: blur(16px); opacity: 0.7;
+  animation: composer-aurora-drift 16s ease-in-out infinite alternate;
+}
+/* the eruption: the aurora swells into rotating spectrum */
+.composer-box.voice .composer-aurora {
+  background: var(--spectrum); filter: blur(34px); opacity: 0.5;
+  animation: composer-spectrum-spin 4s linear infinite;
+}
+
+/* crisp spectrum ring drawn as a gradient border via mask — voice only */
+.composer-box::after {
+  content: ""; position: absolute; inset: 0; border-radius: var(--r-lg);
+  padding: 1.5px; background: var(--spectrum); pointer-events: none; z-index: 1;
+  opacity: 0; transition: opacity var(--dur-slow) var(--ease-out);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+.composer-box.voice::after { opacity: 1; animation: composer-spectrum-spin 3.2s linear infinite; }
+
+/* the waveform — rises only while listening (Tolan register) */
+.composer-wave {
+  display: flex; align-items: center; justify-content: center; gap: 3px;
+  height: 0; overflow: hidden; opacity: 0;
+  transition: height var(--dur-slow) var(--ease-out), opacity var(--dur-slow) var(--ease-out);
+}
+.composer-box.voice .composer-wave { height: 20px; opacity: 1; margin: 2px 0; }
+.composer-wave i {
+  width: 3px; border-radius: 3px; height: 30%;
+  background: linear-gradient(180deg, #ff5d5d, #5b8def);
+  animation: composer-wave-bounce 1.1s var(--ease-out) infinite;
+}
+.composer-wave i:nth-child(2n) { animation-delay: 0.12s; }
+.composer-wave i:nth-child(3n) { animation-delay: 0.26s; }
+.composer-wave i:nth-child(4n) { animation-delay: 0.4s; }
+.composer-wave i:nth-child(5n) { animation-delay: 0.55s; }
+
+/* mic — sits left of send; active state fills ink (no new accent introduced) */
+.composer-box-actions { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; }
+.composer-box-mic {
+  width: 32px; height: 32px; flex-shrink: 0; display: grid; place-items: center;
+  border: 1px solid var(--line-2); border-radius: 50%; background: transparent;
+  color: var(--muted); cursor: pointer;
+  transition: background var(--ease), color var(--ease), border-color var(--ease), transform var(--ease);
+}
+.composer-box-mic:hover { background: var(--surface-2); color: var(--ink); }
+.composer-box-mic.active { border-color: transparent; background: var(--ink); color: #fff; }
+.composer-box-mic svg { width: 16px; height: 16px; }
+
+/* ── Agent picker — which engine drives the operator (Claude / Codex), in the composer bar ── */
+.agent-picker { position: relative; display: inline-flex; flex-shrink: 0; }
+.agent-picker-trigger {
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 7px 0 8px;
+  border: 1px solid var(--line-2); border-radius: 999px; background: transparent;
+  color: var(--ink); cursor: pointer; font: inherit; font-size: 11.5px; font-weight: 550;
+  transition: background var(--ease), border-color var(--ease);
+}
+.agent-picker-trigger:hover, .agent-picker-trigger.open { background: var(--surface-2); }
+.agent-picker-trigger svg { color: var(--ink); }
+.agent-picker-name { line-height: 1; }
+.agent-picker-chev { color: var(--faint); margin-left: -1px; }
+.agent-picker-portal { position: fixed; z-index: 200; }
+.agent-picker-menu {
+  min-width: 236px; padding: var(--space-1);
+  /* Force fully opaque: this menu floats over the live conversation, and under the glass skin the
+     shared --surface token is translucent — a model list must never show the thread bleeding through. */
+  background: #ffffff;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+[data-skin="glass"] .agent-picker-menu { background: #fbfaf8; border-color: var(--st-line-2); }
+/* a group per engine — a brand-marked header, then that engine's models indented under it */
+.agent-picker-group + .agent-picker-group { margin-top: 2px; padding-top: 4px; border-top: 1px solid var(--line); }
+.agent-picker-group-head {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px 4px;
+}
+.agent-picker-logo {
+  width: 20px; height: 20px; flex-shrink: 0; display: grid; place-items: center;
+  border: 1px solid var(--line-2); border-radius: 6px; background: var(--surface);
+}
+.agent-picker-group-name { font-size: 12px; font-weight: 650; color: var(--ink); }
+.agent-picker-group-meta { font-size: 10.5px; color: var(--faint); margin-left: auto; }
+.agent-picker-model {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  padding: 7px 8px 7px 32px; border: 0; border-radius: var(--r-md, 9px); background: transparent;
+  color: var(--ink); font: inherit; cursor: pointer; transition: background var(--ease);
+}
+.agent-picker-model:hover { background: var(--surface-2); }
+.agent-picker-model.selected { background: var(--surface-2); }
+.agent-picker-model.with-logo { padding-left: 10px; }
+.agent-picker-rowlogo {
+  width: 18px; height: 18px; flex-shrink: 0; display: grid; place-items: center;
+  border: 1px solid var(--line); border-radius: 5px; background: var(--surface);
+}
+.agent-picker-model-label { font-size: 12.5px; font-weight: 550; }
+.agent-picker-model-note { font-size: 11px; color: var(--faint); }
+.agent-picker-preview {
+  font-size: 9px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--muted); border: 1px solid var(--line-2); border-radius: 4px; padding: 1px 4px;
+}
+.agent-picker-check { margin-left: auto; color: var(--ink); flex-shrink: 0; }
+
+/* More-models disclosure — keeps the default menu short (no scroll); springs open via Collapse */
+.agent-picker-more-wrap { margin-top: 2px; padding-top: 4px; border-top: 1px solid var(--line); }
+.agent-picker-more-toggle {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  padding: 7px 8px; border: 0; border-radius: var(--r-md, 9px); background: transparent;
+  color: var(--muted); font: inherit; font-size: 11.5px; font-weight: 550; cursor: pointer;
+  transition: background var(--ease), color var(--ease);
+}
+.agent-picker-more-toggle:hover { background: var(--surface-2); color: var(--ink); }
+.agent-picker-more-chev { color: var(--faint); transition: transform var(--dur-base, 200ms) var(--ease); }
+.agent-picker-more-toggle.open .agent-picker-more-chev { transform: rotate(180deg); }
+.agent-picker-more { display: flex; flex-direction: column; padding-top: 2px; }
+
+/* ── The build room — expanded dock's two-zone view (conversation | live canvas slice) ──────────
+   The right zone mirrors the real canvas node-card language; the running node wears the rainbow
+   "happening now" signal. Reuses @property --composer-ang / @keyframes composer-spectrum-spin. */
+.composer-dock.floating.expanded.buildroom { width: min(1000px, calc(100% - 40px)); }
+.composer-dock-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.composer-dock-body > .composer-dock-timeline { flex: 1; }
+.composer-dock-body.split { flex-direction: row; }
+.composer-dock-body.split > .composer-dock-timeline {
+  flex: 1; min-width: 0; height: 100%;
+  border-right: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+}
+
+.dock-build {
+  width: 332px; flex-shrink: 0; height: 100%; overflow-y: auto;
+  padding: var(--space-3) var(--space-3) var(--space-4);
+  background-color: color-mix(in srgb, var(--surface-2) 55%, transparent);
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--ink) 8%, transparent) 1px, transparent 1px);
+  background-size: 16px 16px; background-position: -1px -1px;
+}
+.dock-build-head { display: flex; align-items: center; gap: 7px; margin-bottom: var(--space-3); }
+.dock-build-head-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: conic-gradient(from var(--composer-ang), #ff5d5d, #ff9e3d, #ffd23f, #7be36a, #34d3cf, #5b8def, #b06cf0, #ff5db0, #ff5d5d);
+  animation: composer-spectrum-spin 3s linear infinite; flex-shrink: 0;
+}
+.dock-build-head-label { font-size: 10.5px; font-weight: 650; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.dock-build-head-count { margin-left: auto; font-size: 10.5px; color: var(--faint); font-family: var(--font-mono); }
+.dock-build-flow { display: flex; flex-direction: column; align-items: center; }
+.dock-build-step { display: flex; flex-direction: column; align-items: center; width: 100%; }
+.dock-build-edge { width: 2px; height: 14px; background: color-mix(in srgb, var(--line-2) 80%, transparent); flex-shrink: 0; }
+
+.dock-build-card {
+  position: relative; width: 100%; background: var(--surface);
+  border: 1px solid var(--line-2); border-radius: 16px;
+  padding: 11px 12px 10px; box-shadow: var(--shadow-card);
+}
+.dock-build-card-head { display: flex; align-items: center; gap: 8px; }
+.dock-build-card-ico {
+  width: 26px; height: 26px; flex-shrink: 0; display: grid; place-items: center;
+  border-radius: var(--r-sm); background: var(--surface-2); color: var(--muted);
+}
+.dock-build-card-eyebrow { font-size: 9.5px; font-weight: 650; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.dock-build-card-tag {
+  margin-left: auto; font-size: 9px; font-weight: 650; letter-spacing: 0.03em;
+  padding: 2px 6px; border-radius: 999px; border: 1px solid; color: var(--gap);
+  border-color: color-mix(in srgb, var(--gap) 30%, transparent); background: var(--gap-soft);
+}
+.dock-build-card-label { margin-top: 9px; font-size: 12.5px; font-weight: 560; line-height: 1.3; letter-spacing: -0.011em; color: var(--ink); }
+/* gate — the canvas signature: amber */
+.dock-build-card.gate { border-color: var(--gap); box-shadow: 0 0 0 1px color-mix(in srgb, var(--gap) 24%, transparent), var(--shadow-card); }
+.dock-build-card.gate .dock-build-card-ico { background: var(--gap-soft); color: var(--gap); }
+.dock-build-card.gate .dock-build-card-eyebrow { color: var(--gap); }
+/* the running node — the ONE rainbow: a rotating spectrum ring around a white card */
+.dock-build-card.live { border-color: transparent; }
+.dock-build-card.live::after {
+  content: ""; position: absolute; inset: 0; border-radius: 16px; padding: 2px;
+  background: conic-gradient(from var(--composer-ang), #ff5d5d, #ff9e3d, #ffd23f, #7be36a, #34d3cf, #5b8def, #b06cf0, #ff5db0, #ff5d5d);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+  animation: composer-spectrum-spin 2.8s linear infinite; pointer-events: none;
+}
+.dock-build-card.live .dock-build-card-ico {
+  background: conic-gradient(from var(--composer-ang), #ff5d5d, #ff9e3d, #ffd23f, #7be36a, #34d3cf, #5b8def, #b06cf0, #ff5db0, #ff5d5d);
+  animation: composer-spectrum-spin 2.4s linear infinite;
+}
+.dock-build-card-tag.now { color: var(--ink-2); border-color: var(--line-2); background: var(--surface-2); }
+
 .composer-dock.floating .composer-dock-head {
   border-radius: var(--r-xl) var(--r-xl) 0 0; background: transparent;
   border-bottom-color: color-mix(in srgb, var(--line) 60%, transparent);
@@ -10166,6 +10414,18 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .product-entry-input,.product-entry-goal{width:100%;font:15px/1.5 inherit;padding:11px 13px;border:1px solid var(--line);
   border-radius:10px;background:#fff;color:var(--ink);resize:vertical}
 .product-entry-input:focus,.product-entry-goal:focus{outline:none;border-color:var(--proven);box-shadow:0 0 0 3px var(--proven-soft)}
+/* Folder picker button — the front door's "point at your product". No typing, no GitHub:
+   it pops the native Finder folder dialog (server-side) and shows the chosen path. */
+.product-entry-folder,.project-folder-pick{width:100%;display:flex;align-items:center;gap:9px;font:14px/1.4 inherit;
+  text-align:left;padding:11px 13px;border:1px dashed var(--line-2);border-radius:10px;background:var(--surface-2);
+  color:var(--muted);cursor:pointer;min-height:46px;transition:border-color var(--dur-fast) var(--ease),background var(--dur-fast) var(--ease)}
+.product-entry-folder:hover,.project-folder-pick:hover{background:var(--surface);border-color:var(--faint);color:var(--ink)}
+.product-entry-folder:disabled,.project-folder-pick:disabled{opacity:.6;cursor:wait}
+.product-entry-folder.chosen,.project-folder-pick.chosen{border-style:solid;border-color:var(--line-2);background:#fff;color:var(--ink);font-weight:500}
+.product-entry-folder svg,.project-folder-pick svg{flex:0 0 auto;color:var(--muted)}
+.product-entry-folder.chosen svg,.project-folder-pick.chosen svg{color:var(--proven)}
+.product-entry-folder-path,.project-folder-path{font-family:var(--font-mono);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.product-entry-folder-change{margin-left:auto;flex:0 0 auto;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint)}
 .product-entry-adv{margin:2px 0 20px;font-size:13px;color:var(--muted)}
 .product-entry-adv summary{cursor:pointer;user-select:none}
 .product-entry-adv .product-entry-input{margin-top:8px}
@@ -10546,6 +10806,16 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 /* The active lens fills the rest; the lens owns its own canvas + floating panels. */
 .lens-frame { position: relative; flex: 1 1 auto; min-height: 0; width: 100%; }
 
+/* Chromeless shell: the lens switcher moved into the floating command dock (one bar, not two), so
+   there's no in-flow lens-bar to push content down. Reserve the dock's height at the top of the
+   frame so lens content (portfolio tiles, people, the product graph) never hides behind the dock. */
+.product-canvas-shell.chromeless .lens-frame { padding-top: 60px; }
+/* The grounding read-out + redraw (Product mode) float as a slim overlay top-right, clear of the dock. */
+.lens-overlay-meta {
+  position: absolute; top: 70px; right: 18px; z-index: 30;
+  display: flex; align-items: center; gap: 8px;
+}
+
 /* ── Shared lens primitives (built here, imported by every lens) ────────────────── */
 
 /* LensPanel — the translucent panel chrome, matching .product-head-panel. */
@@ -10578,6 +10848,39 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 
 /* The "flows into" arrow glyph, sized to the mono row. */
 .lens-flow-arrow { width: 13px; height: 13px; color: var(--faint); flex: 0 0 auto; }
+
+/* ── Portfolio-map lens — the GTM canvas's zoomed-out altitude ────────────────────
+   Every built channel as an opaque tile. Replaces the swimlane overview. The header carries the
+   shared ICP + headline claim every tile inherits; the grid wraps and scrolls on overflow. */
+.portfolio-map {
+  position: absolute; inset: 0; overflow: auto;
+  display: flex; flex-direction: column; gap: 16px;
+  padding: 24px;
+  background: var(--canvas);
+}
+.portfolio-head {
+  display: flex; flex-wrap: wrap; gap: 6px 28px;
+  padding: 12px 16px;
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+}
+.portfolio-head-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.portfolio-head-eyebrow {
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--muted); flex: 0 0 auto;
+}
+.portfolio-head-value { font-size: 13px; color: var(--ink); }
+.portfolio-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  align-content: start;
+}
+.portfolio-grid .lens-object-card { width: auto; }
+.portfolio-tile-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line-2);
+  font-size: 11px; color: var(--muted);
+}
 
 /* Lens stub — the placeholder the shell ships with before the lens agents fill each in. */
 .lens-stub {

@@ -5,6 +5,16 @@ import path from "node:path";
 
 const SCHEMA_VERSION = 1;
 
+// The statuses that close a session for good — it becomes reopenable history, never the dock's live
+// thread. Everything else (ready, running, waiting_*, interrupted, blocked, failed) is a session the
+// founder can still drive, so it remains eligible to be the project's active conversation. Mirrors
+// resumeOperatorSession, which only refuses completed/cancelled.
+const TERMINAL_OPERATOR_STATUSES = new Set(["completed", "cancelled"]);
+
+export function isTerminalOperatorSession(session) {
+  return TERMINAL_OPERATOR_STATUSES.has(session?.status);
+}
+
 function now() {
   return new Date().toISOString();
 }
@@ -147,6 +157,40 @@ export function listOperatorSessions(options = {}) {
       }
     })
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+// The project's current durable operator conversation — the dock's default thread. Returns the most
+// recently updated NON-terminal session for the project, or null if every session is terminal or none
+// exist. Project-scoped (explicit projectId), so one product's thread never bleeds into another's, and
+// terminal (completed/cancelled) sessions are passed over so a finished thread is never reused live.
+export function getActiveSessionForProject(projectId, options = {}) {
+  const summaries = listOperatorSessions({ ...options, projectId: projectId ?? null });
+  const live = summaries.find((summary) => !TERMINAL_OPERATOR_STATUSES.has(summary.status));
+  if (!live) return null;
+  return getOperatorSession(live.id, options);
+}
+
+// Get-or-create the project's durable operator conversation. If a non-terminal session already exists
+// for this project it is returned untouched (the dock reuses the one locked conversation); otherwise a
+// fresh session is created bound to the project. The projectId is authoritative and threaded
+// EXPLICITLY here — never inherited from a mutable global active project.
+export function getOrCreateSessionForProject(projectId, input = {}, options = {}) {
+  const existing = getActiveSessionForProject(projectId, options);
+  if (existing) return { session: existing, created: false };
+  const session = createOperatorSession({ ...input, projectId }, options);
+  return { session, created: true };
+}
+
+// Assert a session belongs to the requested project before driving it. The session's stored projectId
+// is authoritative; a resume/gate/proposal/cancel that names a different project is rejected loudly
+// rather than letting the composer drive another project's conversation. Returns the session on match.
+export function assertOperatorSessionProject(sessionId, projectId, options = {}) {
+  const session = getOperatorSession(sessionId, options);
+  const owner = session.projectId ?? null;
+  if (owner !== projectId) {
+    throw new Error(`Operator session ${sessionId} belongs to project ${owner ?? "none"}, not ${projectId}.`);
+  }
+  return session;
 }
 
 export function publicOperatorSession(session) {

@@ -49,6 +49,9 @@ import { appendDomainEvent, listDomainEvents } from "./domain-events.mjs";
 import { listAgentCreationPolicies } from "./agent-policy-store.mjs";
 import { loadCapabilityFoundry } from "./capability-foundry.mjs";
 import { loadFeedbackLedger, recordFeedbackSignalsFromRun } from "./feedback-ledger.mjs";
+import { listPeople, getPerson, promoteEntrantsFromRun } from "./person-store.mjs";
+import { loadClarity, addClarity, removeClarity } from "./clarity-store.mjs";
+import { findReferences, deriveChannelFeeds, deriveDirectedFeeds, createDerivedSourceLoader } from "./cross-reference.mjs";
 import {
   compareChannelRuns,
   createPortfolioArtifact,
@@ -72,7 +75,9 @@ import {
   resumeOperatorSession,
 } from "./operator-runtime.mjs";
 import {
+  assertOperatorSessionProject,
   createOperatorSession,
+  getActiveSessionForProject,
   getOperatorSession,
   listOperatorSessions,
   publicOperatorSession,
@@ -85,6 +90,7 @@ import {
   reviewRevision,
   revertRevision,
 } from "./revision.mjs";
+import { execFile } from "node:child_process";
 import { scanRepo } from "./scan.mjs";
 import {
   addDecision,
@@ -190,6 +196,31 @@ const server = http.createServer(async (req, res) => {
     json(res, 200, { ok: true }); return;
   }
 
+  // Native folder picker. The server runs locally, so it pops the OS folder dialog and returns the
+  // real absolute path — a browser folder picker can't expose the filesystem path the scanner needs.
+  // No typing, no GitHub: you point Finder at your product. macOS via osascript; other platforms
+  // report unsupported so the UI can fall back. Read-only; it only returns the chosen path.
+  if (req.method === "POST" && url.pathname === "/api/pick-folder") {
+    if (process.platform !== "darwin") { json(res, 200, { unsupported: true }); return; }
+    // Bring the chooser to the FRONT: activate System Events (so a real app is frontmost), then run
+    // `choose folder` OUTSIDE that tell block — it's a Standard Additions command the running script
+    // owns, NOT a System Events verb, so nesting it errors with no dialog. Distinguish a real cancel
+    // (AppleScript error -128) from an actual failure so "not opening" can never silently swallow it.
+    execFile("osascript", [
+      "-e", 'tell application "System Events" to activate',
+      "-e", 'POSIX path of (choose folder with prompt "Choose your product folder")',
+    ], (err, stdout, stderr) => {
+      if (err) {
+        const msg = String(stderr || err.message || "");
+        if (/-128/.test(msg)) { json(res, 200, { cancelled: true }); return; } // user pressed Cancel
+        json(res, 200, { error: msg.trim() || "folder picker failed" }); return;
+      }
+      const picked = String(stdout || "").trim().replace(/\/$/, "");
+      json(res, 200, picked ? { path: picked } : { cancelled: true });
+    });
+    return;
+  }
+
   // Multi-channel project
   if (req.method === "GET" && url.pathname === "/api/projects") {
     try { json(res, 200, listProjects()); }
@@ -280,6 +311,112 @@ const server = http.createServer(async (req, res) => {
       });
     } catch (err) {
       json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // People — the keystone object, promoted from real run entrants. Read-only: the canvas reads
+  // appearances, dedup, and fatigue from here; nothing here writes or sends.
+  const projectPeopleMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/people$/);
+  if (req.method === "GET" && projectPeopleMatch) {
+    try {
+      const projectId = decodeURIComponent(projectPeopleMatch[1]);
+      json(res, 200, { projectId, people: listPeople(projectId) });
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  const projectPersonMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/people\/([^/]+)$/);
+  if (req.method === "GET" && projectPersonMatch) {
+    try {
+      const projectId = decodeURIComponent(projectPersonMatch[1]);
+      const personId = decodeURIComponent(projectPersonMatch[2]);
+      const person = getPerson(projectId, personId);
+      if (!person) { json(res, 404, { error: `Person not found: ${personId}` }); return; }
+      json(res, 200, { projectId, person });
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Clarity — the durable output of an Ideate thinking-posture conversation, pinned onto the canvas by
+  // the founder as a claim / direction / icp / question. Real GTM state captured from the founder's
+  // own pins, never seeded. List, pin one, unpin one.
+  const projectClarityMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/clarity$/);
+  if (req.method === "GET" && projectClarityMatch) {
+    try {
+      const projectId = decodeURIComponent(projectClarityMatch[1]);
+      json(res, 200, { items: loadClarity(projectId) });
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+  if (req.method === "POST" && projectClarityMatch) {
+    try {
+      const body = await readBody(req);
+      const projectId = decodeURIComponent(projectClarityMatch[1]);
+      json(res, 200, { item: addClarity(projectId, body ?? {}) });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  const projectClarityItemMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/clarity\/([^/]+)$/);
+  if (req.method === "DELETE" && projectClarityItemMatch) {
+    try {
+      const projectId = decodeURIComponent(projectClarityItemMatch[1]);
+      const itemId = decodeURIComponent(projectClarityItemMatch[2]);
+      const removed = removeClarity(projectId, itemId);
+      if (!removed) { json(res, 404, { error: `Clarity object not found: ${itemId}` }); return; }
+      json(res, 200, { ok: true });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Cross-reference index — "where does X appear across channels" for person / icp / claim / experiment.
+  const projectReferencesMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/references$/);
+  if (req.method === "GET" && projectReferencesMatch) {
+    try {
+      const projectId = decodeURIComponent(projectReferencesMatch[1]);
+      const kind = url.searchParams.get("kind");
+      const id = url.searchParams.get("id");
+      json(res, 200, findReferences(projectId, { kind, id }));
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Channel feeds — undirected linkage between channels that share the same people, claims, or
+  // experiment variables. One feed per channel pair, sorted by total shared entities descending.
+  const projectChannelFeedsMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/channel-feeds$/);
+  if (req.method === "GET" && projectChannelFeedsMatch) {
+    try {
+      const projectId = decodeURIComponent(projectChannelFeedsMatch[1]);
+      const { feeds } = deriveChannelFeeds(projectId);
+      json(res, 200, { feeds });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Directional feeds — the founder-drawn links where one channel pulls another channel's output.
+  const projectDirectedFeedsMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/directed-feeds$/);
+  if (req.method === "GET" && projectDirectedFeedsMatch) {
+    try {
+      const projectId = decodeURIComponent(projectDirectedFeedsMatch[1]);
+      const { feeds } = deriveDirectedFeeds(projectId, { projectId });
+      json(res, 200, { feeds });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return;
   }
@@ -507,7 +644,11 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === "GET" && url.pathname === "/api/project/context") {
     const project = loadProject();
-    json(res, 200, { sharedContext: project.sharedContext }); return;
+    // The `contacts` stub is now backed by the durable Person store. We surface People as a derived,
+    // read-only field on shared context (never persisted into the project file, so it can never be
+    // seeded) while keeping the legacy `contacts` shape intact for existing readers.
+    const people = listPeople(project.id);
+    json(res, 200, { sharedContext: { ...project.sharedContext, people } }); return;
   }
 
   if (req.method === "GET" && url.pathname === "/api/project/brief") {
@@ -738,6 +879,35 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Drag-to-connect: wire this channel's source to pull from ANOTHER channel's output. Sets the
+  // source node's config.sourceChannelId (the "derived" mode), validates, and persists. Read-only at
+  // run time and still behind the founder gate — it only declares where the channel's input comes from.
+  const channelDeriveMatch = url.pathname.match(/^\/api\/channels\/([^/]+)\/derive$/);
+  if (req.method === "POST" && channelDeriveMatch) {
+    try {
+      const body = await readBody(req);
+      const project = loadProject();
+      const channel = getChannel(project, decodeURIComponent(channelDeriveMatch[1]));
+      const sourceChannelId = typeof body.sourceChannelId === "string" ? body.sourceChannelId : "";
+      if (!sourceChannelId) { json(res, 400, { error: "sourceChannelId is required." }); return; }
+      if (sourceChannelId === channel.id) { json(res, 400, { error: "A channel cannot feed itself." }); return; }
+      getChannel(project, sourceChannelId); // throws 404 below if the source channel doesn't exist
+      const flow = loadFlow(channel.graphId, null);
+      const source = (flow.graph?.nodes ?? []).find((n) => n.category === "source" && n.kind !== "agent");
+      if (!source) { json(res, 400, { error: "This channel has no connector source to wire a feed into." }); return; }
+      const applied = applyGraphOperations(flow.graph, [
+        { type: "update_node", nodeId: source.id, patch: { config: { ...source.config, sourceChannelId } } },
+      ]);
+      const validation = validateGraph(applied.graph);
+      if (!validation.ok) { json(res, 400, { error: `Invalid after wiring the feed: ${validation.errors.join(" ")}` }); return; }
+      const saved = saveFlow(applied.graph);
+      json(res, 200, { ok: true, channelId: channel.id, sourceChannelId, sourceNodeId: source.id, graph: saved.graph });
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
   const compareRunsMatch = url.pathname.match(/^\/api\/channels\/([^/]+)\/runs\/compare$/);
   if (req.method === "GET" && compareRunsMatch) {
     try {
@@ -764,7 +934,21 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && url.pathname === "/api/operator/sessions") {
     try {
       const body = await readBody(req);
-      const project = loadProject();
+      // projectId comes from the REQUEST (the active project the canvas is showing), not from mutable
+      // global active-project state. Fall back to loadProject() only when the client omits it
+      // (back-compat). Resolving the project by explicit id is what removes the composer↔canvas drift.
+      const project = loadProject(body.projectId ? { projectId: body.projectId } : {});
+      // The dock is LOCKED to one durable conversation per project. When the client asks to reuse the
+      // project's thread, return its current non-terminal session if one exists instead of spawning a
+      // parallel conversation; only create when there is no live thread. Default (reuse omitted) keeps
+      // the historical "always create a fresh session" behavior for back-compat callers.
+      if (body.reuse === true) {
+        const existing = getActiveSessionForProject(project.id);
+        if (existing) {
+          json(res, 200, { session: publicOperatorSession(existing), reused: true });
+          return;
+        }
+      }
       const graphId = body.graphId || project.activeChannelId || null;
       const flow = graphId ? loadFlow(graphId, null) : { graph: null };
       const session = createOperatorSession({
@@ -778,7 +962,7 @@ const server = http.createServer(async (req, res) => {
         maxSteps: body.maxSteps,
       });
       launchOperatorSession(session.id);
-      json(res, 202, { session: publicOperatorSession(session) });
+      json(res, 202, { session: publicOperatorSession(session), reused: false });
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
@@ -788,6 +972,11 @@ const server = http.createServer(async (req, res) => {
   const operatorSessionMatch = url.pathname.match(/^\/api\/operator\/sessions\/([^/]+)$/);
   if (req.method === "GET" && operatorSessionMatch) {
     try {
+      // When the canvas names the project it is showing, confirm the session belongs to it before
+      // handing it back — the session's stored projectId is authoritative. Omitting ?project keeps the
+      // unscoped lookup for back-compat readers.
+      const scopedProject = url.searchParams.get("project");
+      if (scopedProject) assertOperatorSessionProject(operatorSessionMatch[1], scopedProject);
       json(res, 200, { session: publicOperatorSession(getOperatorSession(operatorSessionMatch[1])) });
     } catch (err) {
       json(res, 404, { error: err instanceof Error ? err.message : String(err) });
@@ -812,6 +1001,9 @@ const server = http.createServer(async (req, res) => {
     try {
       const body = await readBody(req);
       const [, sessionId, action] = operatorActionMatch;
+      // The session's stored projectId is authoritative. When the composer names the project it is
+      // driving, reject a mismatch loudly rather than letting it resume/gate another project's session.
+      if (body.projectId) assertOperatorSessionProject(sessionId, body.projectId);
       let session;
       if (action === "resume") session = resumeOperatorSession(sessionId, body.input);
       else if (action === "gate") session = await resolveOperatorGate(sessionId, body);
@@ -1195,6 +1387,8 @@ const server = http.createServer(async (req, res) => {
         memory,
         designState: getDesignState(project.id),
         grounding: buildRunGrounding(project),
+        // A derived source pulls another channel's last-run output (read-only, behind the gate).
+        loadLastRunItems: createDerivedSourceLoader({ projectId: project.id }),
         // Feed the context substrate: prior runs become the "what's been tried" state layer.
         runs: prior.runs,
         resumeResult: resumeRecord?.result ?? null,
@@ -1203,6 +1397,7 @@ const server = http.createServer(async (req, res) => {
       });
       const saved = recordFlowRun(body.graph, result);
       recordFeedbackSignalsFromRun({ projectId: project.id, graph: body.graph, result });
+      promoteEntrantsFromRun({ projectId: project.id, channelId: body.graph.id, result });
       // Graph failures are domain results. Return the full per-node result so
       // the client can render partial success, blocked nodes, and recovery.
       json(res, 200, {
@@ -1252,6 +1447,8 @@ const server = http.createServer(async (req, res) => {
         memory,
         designState: getDesignState(project.id),
         grounding: buildRunGrounding(project),
+        // A derived source pulls another channel's last-run output (read-only, behind the gate).
+        loadLastRunItems: createDerivedSourceLoader({ projectId: project.id }),
         // Feed the context substrate: prior runs become the "what's been tried" state layer.
         runs: prior.runs,
         resumeResult: resumeRecord?.result ?? null,
@@ -1260,6 +1457,7 @@ const server = http.createServer(async (req, res) => {
       });
       const saved = recordFlowRun(body.graph, result);
       recordFeedbackSignalsFromRun({ projectId: project.id, graph: body.graph, result });
+      promoteEntrantsFromRun({ projectId: project.id, channelId: body.graph.id, result });
       send({
         type: "run_done",
         result: {

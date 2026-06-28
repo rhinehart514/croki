@@ -221,6 +221,10 @@ export function recordExperiment(input, options = {}) {
     channelId: channel.id,
     hypothesis,
     variable: String(input.variable || "").trim() || null,
+    // Variant-vs-control: the changed thing under test against the baseline it is measured against.
+    // Both optional so older experiments without them still load and run unchanged.
+    variant: String(input.variant || "").trim() || null,
+    control: String(input.control || "").trim() || null,
     heldConstant: Array.isArray(input.heldConstant) ? input.heldConstant : [],
     successSignal: String(input.successSignal || "").trim() || null,
     status: input.status || "draft",

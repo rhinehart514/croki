@@ -184,7 +184,7 @@ export async function composeGraphForChannel({ channel, agents = [], grounding =
 // model still composes each system's topology; this is the host orchestration that turns one goal
 // into many systems the founder reviews together. Pure compose path — no persistence — mirroring
 // composeGraphForChannel, so the streaming preview and a persisting caller can both reuse it.
-export async function composePortfolioGraph({ goal, channels = [], grounding = null, compose = blankCompose }) {
+export async function composePortfolioGraph({ goal, channels = [], grounding = null, compose = blankCompose, consolidateGate = false }) {
   if (!Array.isArray(channels) || channels.length === 0) {
     throw new Error("A portfolio needs at least one accepted channel.");
   }
@@ -212,7 +212,41 @@ export async function composePortfolioGraph({ goal, channels = [], grounding = n
     }
     systems.push({ channel, graph: { nodes, edges } });
   }
-  return assemblePortfolioGraph({ goal: goal || channels[0]?.channel?.objective || "", systems });
+  return assemblePortfolioGraph({ goal: goal || channels[0]?.channel?.objective || "", systems, consolidateGate });
+}
+
+// Live wiring for composePortfolioGraph, which was otherwise test-only: load EVERY accepted channel
+// in the studio (each with its accepted agents) and union them into one portfolio graph. This is the
+// operator's "propose systems" move at portfolio altitude — the founder accepts several channels, the
+// operator composes them together and shows the whole GTM system as one branching, multi-gate diagram.
+// Compose-only, no persistence (mirroring composePortfolioGraph); the per-channel apply path
+// (composeOpportunityChannel) is what persists a runnable system. The wall is re-asserted on the union
+// inside assemblePortfolioGraph, so an ungated send in any lane is rejected before it reaches the canvas.
+export async function composePortfolioFromStudio(input = {}, options = {}) {
+  const project = loadProject(options);
+  const items = project.opportunities?.items ?? [];
+  const acceptedChannels = items.filter((item) => item.type === "channel" && item.status === "accepted");
+  if (!acceptedChannels.length) {
+    throw new Error("Accept at least one channel opportunity before composing a portfolio.");
+  }
+  const channels = acceptedChannels.map((channel) => {
+    const agentIds = Array.isArray(channel.selectedAgentIds) ? channel.selectedAgentIds : [];
+    const agents = agentIds
+      .map((id) => items.find((item) => item.id === id && item.type === "agent" && item.status === "accepted"))
+      .filter(Boolean);
+    return { channel, agents };
+  });
+  const goal = input.goal
+    || project.sharedContext?.outcomes?.[0]?.outcome
+    || acceptedChannels[0]?.objective
+    || "";
+  return composePortfolioGraph({
+    goal,
+    channels,
+    grounding: project.opportunities?.understanding ?? null,
+    compose: options.compose || blankCompose,
+    consolidateGate: input.consolidateGate === true,
+  });
 }
 
 // Resolve an accepted channel opportunity and its accepted agents from the durable studio. Shared

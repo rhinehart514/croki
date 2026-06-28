@@ -7,7 +7,8 @@ import type {
   GraphOperation, GTMContractAudit,
   OutcomeProgram, AgentCreationPolicy, AgentInstance, PersonalizationProfile, FeedbackSignal,
   AgentEvaluation, DomainEvent, ProductModel, ProductModelEdit, ProductPinTargetKind,
-  CapabilityServer,
+  CapabilityServer, Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
+  ClarityObject, ClarityKind,
 } from "@/types";
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -43,6 +44,10 @@ export const getLibrary = () => get<GtmLibrary>("/api/library");
 // ── Funnel ──────────────────────────────────────────────────────────────────
 export const scanRepository   = (repoPath: string, winEvent: string) =>
   post<ScanReport>("/api/scan", { repoPath, winEvent });
+
+// Native folder picker — the local server pops the OS folder dialog and returns the real path.
+export const pickFolder = () =>
+  post<{ path?: string; cancelled?: boolean; unsupported?: boolean; error?: string }>("/api/pick-folder", {});
 
 export const buildTrackingFix = (report: ScanReport) =>
   post<BuildResult>("/api/build", { report });
@@ -256,28 +261,38 @@ export const listOperatorSessions = (projectId?: string) =>
     `/api/operator/sessions${projectId ? `?project=${encodeURIComponent(projectId)}` : ""}`,
   );
 
-export const getOperatorSession = (sessionId: string) =>
-  get<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}`);
+// Scope the read to the project the canvas is showing — the backend rejects (409) a session that does
+// not belong to that project, which is what lets the composer lock to the project with no drift band-aid.
+export const getOperatorSession = (sessionId: string, projectId?: string) =>
+  get<{ session: OperatorSession }>(
+    `/api/operator/sessions/${sessionId}${projectId ? `?project=${encodeURIComponent(projectId)}` : ""}`,
+  );
 
-export const createOperatorSession = (goal: string, graphId?: string, programId?: string) =>
-  post<{ session: OperatorSession }>("/api/operator/sessions", { goal, graphId, programId });
+// One durable conversation per project. `reuse: true` returns the project's live (non-terminal) thread
+// when one exists (`reused: true`) instead of spawning a parallel session, and only creates a fresh one
+// (`reused: false`) when there is none — so the dock can only ever talk about the project on screen.
+export const createOperatorSession = (projectId: string, goal: string, graphId?: string, programId?: string) =>
+  post<{ session: OperatorSession; reused: boolean }>("/api/operator/sessions", {
+    projectId, reuse: true, goal, graphId, programId,
+  });
 
-export const resumeOperatorSession = (sessionId: string, input: string) =>
-  post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/resume`, { input });
+export const resumeOperatorSession = (sessionId: string, projectId: string, input: string) =>
+  post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/resume`, { projectId, input });
 
 export const resolveOperatorGate = (
   sessionId: string,
+  projectId: string,
   payload: { approvals?: Record<string, boolean>; decisions?: Decisions },
-) => post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/gate`, payload);
+) => post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/gate`, { projectId, ...payload });
 
-export const cancelOperatorSession = (sessionId: string) =>
-  post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/cancel`, {});
+export const cancelOperatorSession = (sessionId: string, projectId: string) =>
+  post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/cancel`, { projectId });
 
 // Accept or discard a graph change the operator staged for review (the on-canvas ghost proposal). An
 // optional note rides along — a reject note is a redirect (Claude changes it), an accept note a quiet
 // annotation the operator reads and the learning loop can later pick up.
-export const resolveOperatorProposal = (sessionId: string, accept: boolean, note?: string) =>
-  post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/proposal`, { accept, note });
+export const resolveOperatorProposal = (sessionId: string, projectId: string, accept: boolean, note?: string) =>
+  post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/proposal`, { projectId, accept, note });
 
 // ── Living Product Picture — the founder-editable interpretation aggregate ─────
 // Read the current projected model; edits persist through the three domain commands (NOT a raw
@@ -341,6 +356,70 @@ export const mergeProjects = (sourceIds: string[], targetId: string) =>
     "/api/projects/merge",
     { sourceIds, targetId },
   );
+
+// ── People — the keystone shared object (read-only; promoted from real runs) ──
+export const listPeople = (projectId: string) =>
+  get<{ projectId: string; people: Person[] }>(
+    `/api/projects/${encodeURIComponent(projectId)}/people`,
+  );
+
+// ── Clarity — the durable residue of an Ideate (thinking-posture) conversation ──
+export const getClarity = (projectId: string) =>
+  get<{ items: ClarityObject[] }>(
+    `/api/projects/${encodeURIComponent(projectId)}/clarity`,
+  );
+
+export const addClarity = (projectId: string, kind: ClarityKind, text: string, note?: string) =>
+  post<{ item: ClarityObject }>(
+    `/api/projects/${encodeURIComponent(projectId)}/clarity`,
+    { kind, text, note },
+  );
+
+export const removeClarity = async (projectId: string, itemId: string): Promise<{ ok: boolean }> => {
+  const res = await fetch(
+    `/api/projects/${encodeURIComponent(projectId)}/clarity/${encodeURIComponent(itemId)}`,
+    { method: "DELETE" },
+  );
+  return res.json();
+};
+
+// ── Channel feeds — undirected links between channels that share real entities ──
+export const getChannelFeeds = (projectId: string) =>
+  get<{ feeds: ChannelFeed[] }>(
+    `/api/projects/${encodeURIComponent(projectId)}/channel-feeds`,
+  );
+
+// ── Directed feeds — founder-drawn links where one channel pulls another's output ──
+export const getDirectedFeeds = (projectId: string) =>
+  get<{ feeds: DirectedFeed[] }>(
+    `/api/projects/${encodeURIComponent(projectId)}/directed-feeds`,
+  );
+
+// Wire `channelId`'s source to pull from `sourceChannelId` (drag-to-connect on the engine canvas).
+export const deriveChannelFrom = (channelId: string, sourceChannelId: string) =>
+  post<{ ok: boolean; channelId: string; sourceChannelId: string; sourceNodeId: string }>(
+    `/api/channels/${encodeURIComponent(channelId)}/derive`,
+    { sourceChannelId },
+  );
+
+export const getPerson = (projectId: string, personId: string) =>
+  get<{ projectId: string; person: Person }>(
+    `/api/projects/${encodeURIComponent(projectId)}/people/${encodeURIComponent(personId)}`,
+  );
+
+// "Where does X appear across channels" — the cross-reference / find-references query for a
+// person / icp / claim / experiment.
+export const findReferences = (
+  projectId: string,
+  kind: "person" | "icp" | "claim" | "experiment",
+  id?: string,
+) => {
+  const params = new URLSearchParams({ kind });
+  if (id) params.set("id", id);
+  return get<CrossReferenceResult>(
+    `/api/projects/${encodeURIComponent(projectId)}/references?${params.toString()}`,
+  );
+};
 
 export const getOpportunities = (projectId: string) =>
   get<{ opportunities: OpportunityStudio }>(

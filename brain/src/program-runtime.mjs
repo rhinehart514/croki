@@ -17,6 +17,8 @@ import {
   createNextAgentVersion,
 } from "./capability-foundry.mjs";
 import { recordFeedbackSignalsFromRun } from "./feedback-ledger.mjs";
+import { createDerivedSourceLoader } from "./cross-reference.mjs";
+import { promoteEntrantsFromRun } from "./person-store.mjs";
 import { reviseAgentPolicyFromFeedback } from "./agent-policy-store.mjs";
 
 // Product grounding for a run, so an agent step (especially a self-sourcing discovery entry) knows
@@ -77,6 +79,7 @@ export async function runProgram(programId, input = {}, options = {}) {
     runs: flow.runs,
     resumeResult: resumeRecord?.result ?? null,
     stepRuntime: input.stepRuntime ?? options.stepRuntime,
+    loadLastRunItems: createDerivedSourceLoader({ ...options, projectId }),
     onEvent: input.onEvent,
   });
   // Grade the run against its eval — its answer key — oracle first, then the shared grade.mjs
@@ -85,6 +88,9 @@ export async function runProgram(programId, input = {}, options = {}) {
   if (evalGrade) result.evalGrade = evalGrade;
   const saved = recordFlowRun(flow.graph, result, options);
   const feedback = recordFeedbackSignalsFromRun({ projectId, graph: flow.graph, result }, { ...options, projectId });
+  // Promote run entrants into durable People (the keystone object). Read-derived GTM state, never
+  // health: this feeds find-references / dedup / fatigue, NOT engine or measure. Best-effort inside.
+  promoteEntrantsFromRun({ projectId, channelId: program.channelId ?? flow.graph.id, result }, { ...options, projectId });
   const evaluations = evaluateAgentInstancesFromRun({
     projectId,
     graph: flow.graph,

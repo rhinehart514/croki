@@ -6,6 +6,7 @@
 // they are stamped onto items, recorded in the run ledger, and read back into
 // the next run by memory.mjs. See brain/src/memory.mjs.
 import { draftKey } from "../../memory.mjs";
+import { applyPatternApproval } from "../../gate-pattern.mjs";
 import crypto from "node:crypto";
 
 export const meta = {
@@ -40,6 +41,30 @@ export async function run(node, upstream, context) {
       meta: { awaitingReview: 0, note: "No items require review." },
     };
   }
+  // Pattern + exception gating (E4.1/E4.2): the founder approved a PATTERN after reading a sample,
+  // so auto-approve the clean items and hold ONLY the exceptions (low confidence, flagged, no body)
+  // for individual review. Active only when a pattern decision is present; the per-item path below
+  // is left exactly as it was. This is how the wall survives 500 sends without becoming a stamp.
+  const pattern = node.runtime?.pattern;
+  if (pattern && typeof pattern === "object" && (pattern.decision === "approve" || pattern.decision === "reject")) {
+    const applied = applyPatternApproval(
+      upstream,
+      { decision: pattern.decision, confidenceThreshold: pattern.confidenceThreshold, perItemDecisions: node.runtime?.decisions ?? {} },
+      (item, index) => draftKey(item) || actionId(node, item, index, context),
+    );
+    const items = applied.items.map((item, index) => ({
+      ...item,
+      gtmActionId: item.gtmActionId ?? actionId(node, item, index, context),
+      gated: true,
+    }));
+    return {
+      ok: true,
+      items,
+      pendingReview: applied.pendingReview,
+      meta: { mode: "pattern", ...applied.counts, awaitingReview: applied.counts.pending },
+    };
+  }
+
   // Per-item founder decisions (approve / reject / edit) — the real learning
   // signal. Keyed by draftKey(item). Undecided items stay pending.
   const decisions = node.runtime?.decisions;

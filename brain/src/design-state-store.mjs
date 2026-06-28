@@ -170,6 +170,110 @@ export function addReference(projectId, ref, options = {}) {
   return saveDesignState({ ...state, references }, options);
 }
 
+// ── Queried design (E2.2) ─────────────────────────────────────────────────────
+// A precision instrument: instead of handing the full design state to every prompt, the agent
+// asks a specific question ("motion on mobile", "button component style") and gets only the
+// dimensions and references that overlap with it. Same deterministic keyword-overlap logic as
+// queryTaste (ENGINEERING.md: if code can answer, code answers — no model call). Falls back to
+// the full render when no question is supplied, so get_design stays backward-compatible.
+const DESIGN_STOPWORDS = new Set([
+  "the", "a", "an", "and", "or", "to", "of", "for", "in", "on", "is", "it", "this", "that",
+  "with", "you", "your", "their", "they", "we", "our", "be", "are", "as", "at", "by", "from",
+]);
+
+function designTokens(value) {
+  return (String(value ?? "").toLowerCase().match(/[a-z0-9]+/g) || []).filter(
+    (w) => w.length > 2 && !DESIGN_STOPWORDS.has(w),
+  );
+}
+
+function designOverlap(text, questionTokens) {
+  const present = new Set(designTokens(text));
+  let score = 0;
+  for (const q of questionTokens) if (present.has(q)) score += 1;
+  return score;
+}
+
+// Returns `{ text, meta }` (same shape as queryTaste / provider.contribute) or null when nothing
+// matches (and no state at all). `dimension` can pin to one DESIGN_DIMENSIONS key; `question`
+// scores by keyword overlap. Both together: dimension-filter first, then keyword rank within that.
+export function queryDesign(designState, { question = "", dimension = null } = {}) {
+  if (!designState) return null;
+
+  const q = designTokens(question);
+  const allDims = DESIGN_DIMENSIONS.filter((k) => designState.dimensions?.[k]?.principle);
+  const references = Array.isArray(designState.references) ? designState.references : [];
+
+  // If no question and no dimension, fall back to the full render.
+  if (!q.length && !dimension) {
+    const text = renderDesignState(designState);
+    return text
+      ? { text, meta: { mode: "full", dimensions: allDims.length, references: references.length } }
+      : null;
+  }
+
+  // Pin to a single dimension when the caller specifies one.
+  const targetDims = dimension && DESIGN_DIMENSIONS.includes(dimension)
+    ? [dimension]
+    : allDims;
+
+  // Score dimensions: any principle text that overlaps the question gets included.
+  const scoredDims = targetDims
+    .map((key) => {
+      const dim = designState.dimensions[key];
+      const score = q.length
+        ? designOverlap(dim.principle, q)
+        : 1; // pinned dimension with no question — include it unconditionally
+      return { key, dim, score };
+    })
+    .filter((x) => x.score > 0 || (dimension && x.key === dimension));
+
+  // Score references: include those covering a matched dimension or overlapping the question.
+  const matchedDimKeys = new Set(scoredDims.map((x) => x.key));
+  const scoredRefs = references
+    .map((ref) => {
+      const dimHit = ref.dimensions?.some((d) => matchedDimKeys.has(d)) ? 1 : 0;
+      const textHit = q.length ? designOverlap(`${ref.label} ${ref.proves}`, q) : 0;
+      return { ref, score: dimHit + textHit };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  if (!scoredDims.length && !scoredRefs.length) {
+    return {
+      text: `No design state matches "${question}"${dimension ? ` in dimension "${dimension}"` : ""}. House style: "${designState.houseStyle}".`,
+      meta: { mode: "no-match", question, dimension: dimension ?? null },
+    };
+  }
+
+  // Render only the relevant slice.
+  const lines = [
+    `DESIGN STATE (slice) — house style: "${designState.houseStyle}" / ${designState.feeling}.`,
+  ];
+  const DIMENSION_LABELS_LOCAL = { visual: "Visual", ia: "IA", components: "Components", motion: "Motion", copy: "Copy" };
+  for (const { key, dim } of scoredDims) {
+    const tag = dim.grounded ? "" : " [seed default — not yet anchored to a flagged screen]";
+    lines.push(`${DIMENSION_LABELS_LOCAL[key] ?? key}: ${dim.principle}${tag}`);
+  }
+  if (scoredRefs.length) {
+    lines.push("Matching references:");
+    for (const { ref } of scoredRefs) {
+      const where = ref.url ? ` (${ref.url})` : " (Mobbin)";
+      lines.push(`- ${ref.label} [${ref.dimensions.join(", ")}] — ${ref.proves}${where}`);
+    }
+  }
+  return {
+    text: lines.join("\n"),
+    meta: {
+      mode: "query",
+      question: question || null,
+      dimension: dimension ?? null,
+      matchedDimensions: scoredDims.length,
+      matchedReferences: scoredRefs.length,
+    },
+  };
+}
+
 // Render the DesignState into a compact base-layer prompt block — the same shape the taste provider
 // uses: a high-signal map, not a dump. A grounded dimension shows its anchoring references; a seed
 // dimension is labelled so the model never treats a default as a captured preference.

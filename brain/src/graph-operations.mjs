@@ -21,6 +21,13 @@ const EDGE_TYPES = new Set(["data", "context", "feedback"]);
 const NODE_KINDS = new Set(["tool", "agent", "skill", "code", "mcp"]);
 const OPEN_KINDS = new Set(["agent", "skill", "code", "mcp"]);
 
+// Output kinds are OPEN (E3.1), the same un-caging applied to step kinds. A node MAY declare what
+// it emits — a "message", an "artifact" (a deployable microproduct cut from the product), a
+// "dataset", a "signal", or anything the composer invents — but the set is NEVER closed and
+// "message" is NEVER privileged. Validation accepts any non-empty label; these are hints for the
+// UI and the composer, not an enum the engine branches on. The anti-cage guard (E3.2) keeps it open.
+export const OUTPUT_KIND_HINTS = ["message", "artifact", "dataset", "signal", "none"];
+
 function clone(value) {
   return structuredClone(value);
 }
@@ -100,6 +107,11 @@ export function validateGraph(graph) {
     if (!node?.config || typeof node.config !== "object" || Array.isArray(node.config)) {
       errors.push(`Node "${node?.id ?? "?"}" config must be an object.`);
     }
+    // Open output kind: optional, but when set it must be a real label (never empty). The point is
+    // that ANY label is allowed — the engine must not constrain what a node can emit.
+    if (node?.outputKind !== undefined && (typeof node.outputKind !== "string" || !node.outputKind.trim())) {
+      errors.push(`Node "${node?.id ?? "?"}" outputKind must be a non-empty string when set.`);
+    }
     try { normalizeContract(node?.contract); } catch (error) {
       errors.push(`Node "${node?.id ?? "?"}" contract is invalid: ${error.message}`);
     }
@@ -141,6 +153,7 @@ function applyOne(graph, operation) {
     }
     node.label = requireString(node.label, "Node label");
     node.config = node.config && typeof node.config === "object" && !Array.isArray(node.config) ? node.config : {};
+    if (node.outputKind !== undefined) node.outputKind = requireString(node.outputKind, "Node outputKind");
     if (node.contract != null) node.contract = normalizeContract(node.contract);
     node.position = {
       x: Number.isFinite(node.position?.x) ? node.position.x : 640,
@@ -165,7 +178,7 @@ function applyOne(graph, operation) {
     if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
       throw new Error("update_node requires a patch object.");
     }
-    const allowed = new Set(["label", "connector", "config", "agentPrompt", "position", "sourceOfTruth", "kind", "ref", "contract"]);
+    const allowed = new Set(["label", "connector", "config", "agentPrompt", "position", "sourceOfTruth", "kind", "ref", "contract", "outputKind"]);
     const unknown = Object.keys(patch).filter((key) => !allowed.has(key));
     if (unknown.length) throw new Error(`Unsupported node patch fields: ${unknown.join(", ")}`);
     const current = graph.nodes[index];

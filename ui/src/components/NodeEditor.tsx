@@ -1,3 +1,4 @@
+import "@/styles/pattern-gate.css";
 import { useState } from "react";
 import {
   Check, Copy, ExternalLink, LoaderCircle, Pencil, Play, Save, ShieldCheck, Lightbulb, Trash2, X,
@@ -88,6 +89,255 @@ function ProspectCard({ item, showDraft }: { item: GTMItem; showDraft?: boolean 
           <p className="prospect-draft-body">{item.draft}</p>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── E4.3 — Pattern gate review (volume approval queue) ──────────────────────
+// When the gate meta carries { mode:"pattern", total, approved, pending, rejected,
+// exceptions }, don't show a flat wall of 500 items. Instead: a pattern summary
+// (total + pending counts + approve/reject-all controls), a sample of representative
+// drafts to read, and a separate exceptions list (items that deviate from the pattern)
+// for individual review.
+//
+// The approve-pattern action sends { decision:"approve" } and per-exception decisions
+// via the same onSubmit / onApproveAll callbacks GateReview uses, so the wire stays
+// additive. A per-exception decision is just an item-level GateDecision keyed by itemKey.
+
+type PatternGateMeta = {
+  mode: "pattern";
+  total: number;
+  approved: number;
+  pending: number;
+  rejected: number;
+  exceptions?: unknown[];
+};
+
+function isPatternMeta(meta: Record<string, unknown>): meta is PatternGateMeta {
+  return meta.mode === "pattern" && typeof meta.total === "number";
+}
+
+type ExceptionState = Record<string, "approve" | "reject" | undefined>;
+
+export function PatternGateReview({
+  items,
+  meta,
+  running,
+  onSubmit,
+  onApproveAll,
+}: {
+  items: GTMItem[];
+  meta: PatternGateMeta;
+  running: boolean;
+  onSubmit: (decisions: Record<string, GateDecision>) => void;
+  onApproveAll: () => void;
+}) {
+  // Pattern decision state: null until the founder acts.
+  const [patternDecision, setPatternDecision] = useState<"approve" | "reject" | null>(null);
+  // Per-exception decisions (exceptions are the deviating items, NOT the full flat list).
+  const [excState, setExcState] = useState<ExceptionState>({});
+
+  const exceptions = items.filter((item) => item.isException);
+  const sample = items.filter((item) => !item.isException).slice(0, 5);
+  const decidedExceptions = Object.values(excState).filter(Boolean).length;
+
+  const setExc = (key: string, decision: "approve" | "reject") =>
+    setExcState((s) => ({ ...s, [key]: s[key] === decision ? undefined : decision }));
+
+  const submitAll = () => {
+    const out: Record<string, GateDecision> = {};
+    // Pattern decision: { decision } with no itemKey — the server applies it to pending non-exceptions.
+    if (patternDecision) {
+      out["__pattern__"] = { decision: patternDecision };
+    }
+    // Per-exception decisions, keyed by itemKey.
+    exceptions.forEach((item, i) => {
+      const k = itemKey(item, i);
+      const d = excState[k];
+      if (d) out[k] = { decision: d };
+    });
+    onSubmit(out);
+  };
+
+  const hasDecision = !!patternDecision || decidedExceptions > 0;
+
+  return (
+    <div className="pattern-gate">
+
+      {/* ── Pattern summary ─────────────────────────────────────── */}
+      <div className="pattern-summary">
+        <div className="pattern-summary-head">
+          <span className="pattern-summary-icon" aria-hidden>
+            <ShieldCheck />
+          </span>
+          <span className="pattern-summary-title">
+            Pattern review — {meta.pending} pending
+          </span>
+          <span className="pattern-summary-count">{meta.total} total</span>
+        </div>
+        <div className="pattern-counts">
+          <div className="pattern-count-cell">
+            <span className="pattern-count-value pending-value">{meta.pending}</span>
+            <span className="pattern-count-label">pending</span>
+          </div>
+          <div className="pattern-count-cell">
+            <span className="pattern-count-value approved-value">{meta.approved}</span>
+            <span className="pattern-count-label">approved</span>
+          </div>
+          <div className="pattern-count-cell">
+            <span className="pattern-count-value rejected-value">{meta.rejected}</span>
+            <span className="pattern-count-label">rejected</span>
+          </div>
+          <div className="pattern-count-cell">
+            <span className="pattern-count-value">{exceptions.length}</span>
+            <span className="pattern-count-label">exceptions</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Pattern action ──────────────────────────────────────── */}
+      {patternDecision ? (
+        <div className={`pattern-confirmed ${patternDecision}-confirmed`}>
+          {patternDecision === "approve" ? <Check size={14} /> : <X size={14} />}
+          Pattern {patternDecision === "approve" ? "approved" : "rejected"} — submit to apply
+        </div>
+      ) : (
+        <div>
+          <div className="pattern-actions">
+            <button
+              type="button"
+              className="pattern-btn pattern-btn-approve"
+              disabled={running}
+              onClick={() => setPatternDecision("approve")}
+            >
+              <Check /> Approve pattern ({meta.pending})
+            </button>
+            <button
+              type="button"
+              className="pattern-btn pattern-btn-reject"
+              disabled={running}
+              onClick={() => setPatternDecision("reject")}
+            >
+              <X /> Reject pattern
+            </button>
+          </div>
+          <p className="pattern-decision-note">
+            Approve the pattern to accept all pending non-exception items at once.
+            Review the sample and exceptions below before deciding.
+          </p>
+        </div>
+      )}
+
+      {/* ── Sample ─────────────────────────────────────────────── */}
+      {sample.length > 0 ? (
+        <div>
+          <div className="pattern-section-head">
+            <span className="pattern-section-label">Sample</span>
+            <span className="pattern-section-sub">
+              {sample.length} of {items.filter((i) => !i.isException).length} — read a few before deciding
+            </span>
+          </div>
+          <div className="pattern-sample-list">
+            {sample.map((item, i) => (
+              <div className="pattern-sample-card" key={itemKey(item, i)}>
+                <div className="pattern-sample-name">{item.name ?? `Draft ${i + 1}`}</div>
+                {item.draft ? (
+                  <p className="pattern-sample-draft">{String(item.draft).slice(0, 320)}</p>
+                ) : null}
+                {item.viaPattern ? (
+                  <span className="pattern-via-tag">via pattern</span>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {/* ── Exceptions ─────────────────────────────────────────── */}
+      {exceptions.length > 0 ? (
+        <div>
+          <div className="pattern-section-head">
+            <span className="pattern-section-label">Exceptions</span>
+            <span className="pattern-section-sub">
+              {exceptions.length} item{exceptions.length !== 1 ? "s" : ""} that deviate from the pattern — each needs a decision
+            </span>
+          </div>
+          <div className="pattern-exceptions-list">
+            {exceptions.map((item, i) => {
+              const k = itemKey(item, i);
+              const d = excState[k];
+              const reasons = (item.reasons as string[] | undefined) ?? [];
+              return (
+                <div
+                  className={cn("pattern-exception-card", d === "approve" ? "exc-approve" : d === "reject" ? "exc-reject" : "")}
+                  key={k}
+                >
+                  <div className="pattern-exception-head">
+                    <span className="pattern-exception-name">{item.name ?? `Exception ${i + 1}`}</span>
+                    {d ? (
+                      <span className={cn("pattern-exception-pill", `pill-${d}`)}>
+                        {d === "approve" ? "Approved" : "Rejected"}
+                      </span>
+                    ) : null}
+                  </div>
+                  {reasons.length > 0 ? (
+                    <div className="pattern-exception-reasons">
+                      {reasons.slice(0, 3).map((r, ri) => (
+                        <span className="pattern-exception-reason" key={ri}>{r}</span>
+                      ))}
+                    </div>
+                  ) : null}
+                  {item.draft ? (
+                    <p className="pattern-exception-draft">{String(item.draft).slice(0, 240)}</p>
+                  ) : null}
+                  <div className="pattern-exception-actions">
+                    <button
+                      type="button"
+                      className={cn("exc-btn exc-approve", d === "approve" && "active")}
+                      onClick={() => setExc(k, "approve")}
+                    >
+                      <Check /> Approve
+                    </button>
+                    <button
+                      type="button"
+                      className={cn("exc-btn exc-reject", d === "reject" && "active")}
+                      onClick={() => setExc(k, "reject")}
+                    >
+                      <X /> Reject
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <p className="pattern-empty" style={{ fontSize: "var(--text-xs)" }}>No exceptions — all pending items match the pattern.</p>
+      )}
+
+      {/* ── Submit ─────────────────────────────────────────────── */}
+      <div className="pattern-submit-row">
+        <span className="pattern-submit-count">
+          {patternDecision ? `Pattern ${patternDecision}` : "No pattern decision yet"}
+          {decidedExceptions > 0 ? ` · ${decidedExceptions} exception${decidedExceptions !== 1 ? "s" : ""} decided` : ""}
+        </span>
+        <Button
+          disabled={running || !hasDecision}
+          onClick={submitAll}
+          type="button"
+        >
+          {running ? <LoaderCircle className="spin" /> : <ShieldCheck />}
+          Submit review
+        </Button>
+        <Button
+          className="secondary-button"
+          disabled={running}
+          onClick={onApproveAll}
+          type="button"
+        >
+          Approve all
+        </Button>
+      </div>
     </div>
   );
 }
@@ -614,14 +864,30 @@ function WorkNodeEditor({
 
       {node.category === "gate" ? (
         <div className="node-editor-section">
-          {result ? (
-            <GateReview
-              items={items}
-              running={running}
-              onSubmit={onSubmitReview}
-              onApproveAll={onApprove}
-            />
-          ) : (
+          {result ? (() => {
+            // E4.3: if the gate meta carries mode:"pattern", render the volume approval queue.
+            // Otherwise fall back to the standard per-item GateReview.
+            const gateMeta = (result.meta ?? {}) as Record<string, unknown>;
+            if (isPatternMeta(gateMeta)) {
+              return (
+                <PatternGateReview
+                  items={items}
+                  meta={gateMeta}
+                  running={running}
+                  onSubmit={onSubmitReview}
+                  onApproveAll={onApprove}
+                />
+              );
+            }
+            return (
+              <GateReview
+                items={items}
+                running={running}
+                onSubmit={onSubmitReview}
+                onApproveAll={onApprove}
+              />
+            );
+          })() : (
             <p className="gate-review-empty">Run the loop to stage drafts for founder review.</p>
           )}
         </div>

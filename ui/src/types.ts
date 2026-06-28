@@ -169,19 +169,164 @@ export type ChannelMeta = {
   graphRevision: number;
 };
 
+// ─── ChannelFeed — two channels linked by the real entities they share ───────
+// The engine view draws channels as nodes and "feeds" between them. There is no stored "channel A
+// produces, channel B consumes"; the honest derivation is that two channels are LINKED when they
+// touch the same real Person, Claim, or Experiment. Undirected, one feed per channel pair, derived
+// from cross-reference.mjs. Mirrors brain/src/cross-reference.mjs deriveChannelFeeds.
+export type ChannelFeed = {
+  fromChannel: string;
+  toChannel: string;
+  sharedPeople: number;
+  sharedClaims: number;
+  sharedExperiments: number;
+  total: number;
+  label: string;
+};
+
+// A DIRECTIONAL feed the founder drew on the engine canvas: `toChannel` pulls `fromChannel`'s output
+// (the "derived source" mode — fromChannel's last run feeds toChannel's input). Mirrors
+// brain/src/cross-reference.mjs deriveDirectedFeeds.
+export type DirectedFeed = {
+  fromChannel: string;
+  toChannel: string;
+  sourceNodeId: string;
+};
+
+// ─── Claim — a structured, first-class shared object ─────────────────────────
+//
+// Claims are structured objects (the source of truth); `product.claims` is a derived flat string[]
+// projection (back-compat) every legacy reader still consumes. Provenance follows the one-directional
+// truth valve: an evidence-free "derived" claim is demoted to "speculative"; a "founder" claim is the
+// founder's own assertion and is never demoted. Mirrors brain/src/project-store.mjs.
+export type ClaimProvenance = "derived" | "speculative" | "founder";
+
+export type Claim = {
+  id: string;
+  text: string;
+  provenance: ClaimProvenance;
+  evidence: Citation[];
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+// ─── Clarity — the durable residue of an Ideate (thinking-posture) conversation ──
+// Ideate is the composer in a thinking posture: it produces UNDERSTANDING, not channels. The
+// insights it sharpens get PINNED as durable, draggable clarity cards on the canvas — and ground
+// every downstream channel. Four kinds (the founder's set):
+//   claim     — a sharp reusable statement about buyer/market/positioning
+//   direction — a named GTM direction being considered but not yet built
+//   icp       — a sharpening of who the real buyer is
+//   question  — an honest open loose end to come back to
+export type ClarityKind = "claim" | "direction" | "icp" | "question";
+export type ClarityObject = {
+  id: string;
+  kind: ClarityKind;
+  text: string;
+  note?: string;
+  createdAt: string;
+};
+
+// The composer's stance. "build" is the normal vibe-to-the-gate composer; "ideate" is the thinking
+// posture — discuss and get clear, do not eagerly compose a channel.
+export type ComposerPosture = "build" | "ideate";
+
+// ─── Experiment — the shared operational hypothesis (sharedContext.experiments) ─
+//
+// One live hypothesis bound to a channel: which claim/variable it tests, what's held constant, the
+// success signal, status, and the variant-vs-control pair. Distinct from the engine-OS `Experiment`
+// type (which models the engine's own A/B affordance with goal/affectedSubsystems) — this is the GTM
+// object the experiment-matrix lens grids by ICP × claim × channel. Mirrors the brain shape.
+export type GtmExperiment = {
+  id: string;
+  channelId?: string | null;
+  hypothesis?: string;
+  variable?: string;
+  heldConstant?: string;
+  successSignal?: string;
+  status?: string;
+  result?: string | null;
+  variant?: string;
+  control?: string;
+  // The experiment may carry the claim/ICP it tests so the matrix can place it without guessing.
+  claimId?: string | null;
+  icp?: string | null;
+};
+
 export type SharedContext = {
   version: number;
   updatedAt: string | null;
   repository: Record<string, unknown>;
-  product: { name: string; description: string; valueProps: string[]; claims: unknown[] };
+  // product.claims is now a DERIVED flat string[] view of the structured top-level `claims` below.
+  product: { name: string; description: string; valueProps: string[]; claims: string[] };
   positioning: Record<string, unknown>;
   icp: Record<string, unknown>;
   founderTaste: FounderTaste;
   contacts: Record<string, unknown>;
+  // Structured claims — the source of truth `product.claims` projects from.
+  claims: Claim[];
   outcomes: unknown[];
-  experiments: unknown[];
+  experiments: GtmExperiment[];
   artifacts: unknown[];
   productFeedback: unknown[];
+};
+
+// ─── Person — the keystone shared object, promoted from real run entrants ─────
+//
+// A durable, project-scoped, shared identity. The same human is ONE Person across channels because
+// identity collapses to a single stable key. Each appearance records where they surfaced and the
+// per-appearance why-now trigger that found them there. Real GTM state derived from runs, never
+// seeded, never sends. Mirrors brain/src/person-store.mjs.
+export type PersonAppearance = {
+  channelId: string | null;
+  runId: string | null;
+  role: string;
+  trigger: string | null;
+  at: string;
+};
+
+export type Person = {
+  id: string;
+  projectId: string;
+  identityKey: string;
+  name: string | null;
+  org: string | null;
+  handle: string | null;
+  email: string | null;
+  domain: string | null;
+  appearances: PersonAppearance[];
+  firstSeenAt: string;
+  lastSeenAt: string;
+};
+
+// ─── Cross-reference — "where does X appear across channels" ──────────────────
+// The result of GET /api/projects/:id/references?kind=&id=. References are the per-appearance /
+// per-channel hits; the loosely-shaped `references` rows vary by kind (an appearance, a channel hit).
+export type CrossReference = {
+  where: string;
+  channelId?: string | null;
+  channelName?: string;
+  runId?: string | null;
+  role?: string;
+  trigger?: string | null;
+  at?: string;
+  experimentId?: string;
+  variable?: string | null;
+};
+
+export type CrossReferenceResult = {
+  kind: string;
+  id: string | null;
+  references: CrossReference[];
+  referenceCount: number;
+  channelIds: string[];
+  channelCount: number;
+  person?: Person | null;
+  experiment?: GtmExperiment | null;
+  claim?: string | null;
+  claimId?: string | null;
+  icp?: Record<string, unknown>;
 };
 
 export type GTMProject = {
@@ -679,6 +824,10 @@ export type GTMNode = {
   // path. "agent" / "skill" / "code" are open steps the agent composes; they carry a
   // `ref` (the subagent, skill, or transform name) instead of a connector.
   kind?: "tool" | "agent" | "skill" | "code" | "mcp";
+  // What this node emits — OPEN, never a closed enum (E3.1). "message" | "artifact" | "dataset" |
+  // "signal" | "none" are hints, not the limit; the composer may invent others. Engine must not
+  // privilege "message".
+  outputKind?: string;
   ref?: string;
   connector?: string;          // headless connector id
   label: string;
@@ -729,18 +878,6 @@ export type PortfolioSystem = {
   gateIds: string[];
 };
 
-// A horizontal role-band on the engine canvas. The whole GTM motion reads top to bottom as shared
-// layers — ground, capabilities, the channel routes, the one founder-gate wall, stage, measure —
-// and only the channel layer fans into columns. `wall: true` marks the gate band the canvas draws
-// as the line nothing crosses without the founder.
-export type EngineBand = {
-  id: string;
-  label: string;
-  y: number;
-  height: number;
-  wall?: boolean;
-};
-
 export type GTMGraph = {
   id: string;
   name: string;
@@ -750,11 +887,9 @@ export type GTMGraph = {
   objective?: string;
   outcomeProgramId?: string;
   sharedContextVersion?: number;
-  // Per-system lanes for a portfolio fan-out graph; absent on a single-system graph.
+  // Per-system lanes for a portfolio fan-out graph; absent on a single-system graph. Still produced
+  // by brain composition (portfolio-graph.mjs); the canvas swimlane renderer that drew it retired.
   systems?: PortfolioSystem[];
-  // Role-bands for the one-engine overview (ground → capabilities → channels → gate → stage →
-  // measure). When present the canvas draws banded rows instead of per-system lanes.
-  bands?: EngineBand[];
   nodes: GTMNode[];
   edges: GTMEdge[];
   // venture-style store reference

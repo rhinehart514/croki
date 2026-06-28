@@ -261,3 +261,28 @@ describe("listConnectors", () => {
     }
   });
 });
+
+describe("derived source — a channel pulls another channel's output at run time", () => {
+  const derivedGraph = () => ({
+    id: "g-derived", name: "Derived run", version: "1.0.0",
+    nodes: [{ id: "src", category: "source", connector: "manual", label: "Pull from upstream", config: { sourceChannelId: "upstream" }, position: { x: 0, y: 0 } }],
+    edges: [],
+  });
+
+  it("feeds the upstream channel's items in via the injected loader", async () => {
+    let askedFor = null;
+    const result = await runGraph(derivedGraph(), {
+      loadLastRunItems: async (id) => { askedFor = id; return [{ id: "1", name: "Ada" }, { id: "2", name: "Bo" }]; },
+    });
+    assert.equal(askedFor, "upstream", "the loader was asked for the wired source channel");
+    assert.equal(result.nodes.src.ok, true);
+    assert.equal(result.nodes.src.items.length, 2);
+    assert.equal(result.nodes.src.meta.source, "derived");
+  });
+
+  it("fails honestly when no cross-channel loader is provided (never silently empty)", async () => {
+    const result = await runGraph(derivedGraph(), {});
+    assert.equal(result.nodes.src.ok, false);
+    assert.match(result.nodes.src.error, /another channel/i);
+  });
+});

@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -11,6 +12,103 @@ const CATALOG_SCHEMA_VERSION = 1;
 
 function now() {
   return new Date().toISOString();
+}
+
+function slug(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+}
+
+// Claims are structured first-class objects (the source of truth), projected down to the legacy
+// flat string[] at `product.claims` so every existing reader keeps getting plain strings.
+//   Claim = { id, text, provenance, evidence, version, createdAt, updatedAt }
+// Provenance follows the same one-directional truth valve as product-model-store / opportunity
+// normalization: an evidence-free "derived" claim is demoted to "speculative" so an interpretive
+// guess can never launder itself back as cited fact. A "founder" claim is the founder's own
+// assertion and is never demoted. Bare strings (legacy) default to "speculative".
+const CLAIM_PROVENANCE = new Set(["derived", "speculative", "founder"]);
+
+function normalizeClaimProvenance(rawProvenance, evidence = []) {
+  if (rawProvenance === "founder") return "founder";
+  let provenance = CLAIM_PROVENANCE.has(rawProvenance)
+    ? rawProvenance
+    : (evidence.length ? "derived" : "speculative");
+  if (provenance === "derived" && evidence.length === 0) provenance = "speculative";
+  return provenance;
+}
+
+function sameEvidence(a = [], b = []) {
+  if (a.length !== b.length) return false;
+  return a.every((item, index) => JSON.stringify(item) === JSON.stringify(b[index]));
+}
+
+// Normalize one raw claim (a legacy string or a structured object) into a structured Claim. When an
+// existing claim is matched (by id or text), lineage is preserved: the id, createdAt, and version
+// carry forward; the version bumps only when the text actually changes. If nothing changed, the
+// existing object is returned untouched so loads never churn versions or timestamps.
+function normalizeClaim(raw, index, existing = null) {
+  const isString = typeof raw === "string";
+  const text = String(isString ? raw : raw?.text ?? "").trim();
+  if (!text) return null;
+  const evidence = !isString && Array.isArray(raw?.evidence)
+    ? raw.evidence.filter(Boolean)
+    : existing?.evidence ?? [];
+  const provenance = normalizeClaimProvenance(isString ? existing?.provenance : raw?.provenance, evidence);
+  const id = (!isString && raw?.id) ? String(raw.id)
+    : existing?.id ?? `claim-${slug(text) || crypto.randomBytes(3).toString("hex")}-${index}`;
+  const textChanged = existing ? existing.text !== text : true;
+  if (existing
+    && !textChanged
+    && existing.provenance === provenance
+    && existing.id === id
+    && sameEvidence(existing.evidence ?? [], evidence)) {
+    return existing;
+  }
+  const createdAt = existing?.createdAt ?? (!isString && raw?.createdAt ? raw.createdAt : now());
+  const version = existing
+    ? (textChanged ? (existing.version ?? 1) + 1 : existing.version ?? 1)
+    : Number.isInteger(raw?.version) ? raw.version : 1;
+  return { id, text, provenance, evidence, version, createdAt, updatedAt: now() };
+}
+
+// Turn a source list (structured claims, legacy strings, or a mix) into structured claims, matching
+// each against the previous claims by id or text to preserve lineage.
+function reconcileClaimList(source = [], previous = []) {
+  const prevById = new Map((previous ?? []).filter((c) => c && c.id).map((c) => [c.id, c]));
+  const prevByText = new Map((previous ?? []).filter((c) => c && c.text).map((c) => [c.text, c]));
+  return (source ?? [])
+    .map((raw, index) => {
+      const text = String(typeof raw === "string" ? raw : raw?.text ?? "").trim();
+      const existing = (raw && typeof raw === "object" && raw.id && prevById.get(raw.id))
+        || prevByText.get(text)
+        || null;
+      return normalizeClaim(raw, index, existing);
+    })
+    .filter(Boolean);
+}
+
+// Reconcile a shared context so that `claims` (structured, source of truth) and `product.claims`
+// (the flat string[] projection every legacy reader expects) are consistent. Structured claims win
+// when present; otherwise the legacy `product.claims` strings are the source. Idempotent.
+function normalizeSharedContextClaims(sharedContext) {
+  if (!sharedContext) return sharedContext;
+  const structuredFirst = Array.isArray(sharedContext.claims) && sharedContext.claims.length;
+  const previous = (structuredFirst && typeof sharedContext.claims[0] === "object") ? sharedContext.claims : [];
+  const source = structuredFirst ? sharedContext.claims : (sharedContext.product?.claims ?? []);
+  const structured = reconcileClaimList(source, previous);
+  return {
+    ...sharedContext,
+    claims: structured,
+    product: { ...(sharedContext.product ?? {}), claims: structured.map((claim) => claim.text) },
+  };
+}
+
+// The flat string[] projection of structured claims — the view every legacy reader consumes.
+export function claimTexts(claims = []) {
+  return (claims ?? []).map((claim) => (typeof claim === "string" ? claim : claim?.text)).filter(Boolean);
 }
 
 function root(options = {}) {
@@ -45,6 +143,7 @@ function emptySharedContext() {
       valueProps: [],
       claims: [],
     },
+    claims: [],
     positioning: {
       category: "",
       audience: "",
@@ -97,6 +196,7 @@ function migrateProject(project, options = {}) {
   if (project?.schemaVersion === SCHEMA_VERSION && Array.isArray(project.channels)) {
     return {
       ...project,
+      sharedContext: normalizeSharedContextClaims(project.sharedContext ?? emptySharedContext()),
       opportunities: project.opportunities ?? defaultProject().opportunities,
     };
   }
@@ -132,6 +232,7 @@ function migrateProject(project, options = {}) {
   if (!next.channels.some((channel) => channel.id === next.activeChannelId)) {
     next.activeChannelId = next.channels[0]?.id ?? null;
   }
+  next.sharedContext = normalizeSharedContextClaims(next.sharedContext);
   return next;
 }
 
@@ -499,6 +600,7 @@ export function updateSharedContext(patch, options = {}) {
   const allowed = new Set([
     "repository", "product", "positioning", "icp", "founderTaste",
     "contacts", "outcomes", "experiments", "artifacts", "productFeedback",
+    "claims",
   ]);
   const unknown = Object.keys(patch ?? {}).filter((key) => !allowed.has(key));
   if (unknown.length) throw new Error(`Unsupported shared-context fields: ${unknown.join(", ")}`);
@@ -508,7 +610,48 @@ export function updateSharedContext(patch, options = {}) {
     else if (value && typeof value === "object") sharedContext[key] = { ...current[key], ...structuredClone(value) };
     else sharedContext[key] = value;
   }
+  // Reconcile claims against the structured source of truth. A top-level `claims` write is the
+  // structured front door; a legacy `product.claims` write (strings) is still honored. Lineage is
+  // matched against the current structured claims, assigning ids/versions and demoting provenance.
+  const patchedClaims = patch && Object.prototype.hasOwnProperty.call(patch, "claims");
+  const patchedProductClaims = patch?.product && Object.prototype.hasOwnProperty.call(patch.product, "claims");
+  const claimSource = patchedClaims ? sharedContext.claims
+    : patchedProductClaims ? sharedContext.product.claims
+    : (current.claims?.length ? current.claims : sharedContext.product?.claims ?? []);
+  const structuredClaims = reconcileClaimList(claimSource, current.claims ?? []);
+  sharedContext.claims = structuredClaims;
+  sharedContext.product = { ...(sharedContext.product ?? {}), claims: structuredClaims.map((claim) => claim.text) };
   return saveProject({ ...project, sharedContext }, options);
+}
+
+// Structured claim writes. Each loads the current claims, mutates the list, and routes through
+// updateSharedContext so id/version assignment, provenance demotion, and the string[] projection
+// all stay in one place. Read-only listing returns the structured objects.
+export function listClaims(options = {}) {
+  return loadProject(options).sharedContext?.claims ?? [];
+}
+
+export function addClaim(input, options = {}) {
+  const project = loadProject(options);
+  const claims = [...(project.sharedContext?.claims ?? []), input];
+  const saved = updateSharedContext({ claims }, options);
+  return { claims: saved.sharedContext.claims, claim: saved.sharedContext.claims.at(-1) };
+}
+
+export function updateClaim(id, patch, options = {}) {
+  const project = loadProject(options);
+  const current = project.sharedContext?.claims ?? [];
+  if (!current.some((claim) => claim.id === id)) throw new Error(`Claim not found: ${id}`);
+  const claims = current.map((claim) => (claim.id === id ? { ...claim, ...structuredClone(patch ?? {}), id } : claim));
+  const saved = updateSharedContext({ claims }, options);
+  return { claims: saved.sharedContext.claims, claim: saved.sharedContext.claims.find((claim) => claim.id === id) ?? null };
+}
+
+export function removeClaim(id, options = {}) {
+  const project = loadProject(options);
+  const claims = (project.sharedContext?.claims ?? []).filter((claim) => claim.id !== id);
+  const saved = updateSharedContext({ claims }, options);
+  return { claims: saved.sharedContext.claims };
 }
 
 export function groundProjectInWorkspace(workspace, options = {}) {

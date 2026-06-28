@@ -122,6 +122,39 @@ step, not the only vocabulary.
   acceptance test proves founder outcome → program → policy/profile/agent → workflow → gate →
   founder edit/rejection → feedback → policy v2 → agent instance v2.
 
+- **P10 — the object-model canvas. ← landed (P10.1–P10.6; npm test green).** The canvas stops being a fixed
+  diagram and becomes a projection over an object model — one canvas engine rendering
+  `projection(objectModel, lens)`, with two modes projecting two object models across the
+  truth wall (Product mode → the interpretive `ProductModel`, never feeds health; GTM mode
+  → the GTM operational object model — Channels, Sources, People, Claims, Experiments,
+  ICPs, Outcomes — real state that does). The keystone is a durable first-class **Person**
+  object (`person-store.mjs`) promoted from run entrants, enabling find-references, dedup,
+  and the experiment matrix; swimlanes retire; the composer controls the canvas (free
+  view-control + gated mutation) locked to one conversation per project; and the cards
+  re-axe to GTM objects with a judgment verdict. See `docs/CANVAS.md` for the full route
+  and its sub-steps (P10.1–P10.6).
+
+## The open GTM substrate
+
+The host owns four things and only four: the `file:line` product scan (truth), the durable
+stores and run ledger (state), the founder gate (the wall), and typed validated mutations
+(the only way the graph can change). Everything else is open.
+
+What context the agent pulls, which channels it proposes, what the workflow topology looks
+like, what output kind a node produces, and which tools exist — all of that is decided by
+the model at the time of the run, not baked into the host. The agent pulls grounding through
+retrieval tools on demand (`get_product`, `get_taste`, `get_design`, etc.) rather than eating
+a pre-packed block; it composes the graph from open step kinds (`tool`, `agent`, `skill`,
+`code`) with no fixed skeleton; and it labels output with any kind it chooses — there is no
+enum that limits it to "email" or "message."
+
+Microproducts, outreach channels, in-product loops, attribution repair, vouch campaigns —
+these are all compositions over this substrate, not pillars the host pre-builds. The host
+normalizes what the model proposes (it validates the graph, demotes unsupported evidence
+claims, enforces the wall), but the model decides the shape. That separation is what lets
+a founder describe what they want in plain language and get a real GTM system back, not a
+fill-in of fixed slots.
+
 ## Done = proven
 
 Each phase ships with `npm test` green and the visible behavior checked. No phase claims

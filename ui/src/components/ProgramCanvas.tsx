@@ -1,10 +1,11 @@
 import "@/styles/program-header.css";
+import "@/styles/agent-step-trace.css";
 import { AnimatePresence, motion } from "motion/react";
 import { Reveal, Collapse, Stagger, StaggerItem } from "@/lib/motion";
 import { SPRING } from "@/lib/springs";
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
-  Bot, CheckCircle2, ChevronDown, GitBranch, History, Pause, Play, X,
+  AlertCircle, Bot, CheckCircle2, ChevronDown, Circle, GitBranch, History, Pause, Play, ShieldCheck, X,
 } from "lucide-react";
 import { GraphCanvas, type OperatorCursorState } from "@/components/GraphCanvas";
 import { CanvasGate } from "@/components/CanvasGate";
@@ -12,8 +13,8 @@ import { SlidingTabs } from "@/components/SlidingTabs";
 import { statusLabel as canonicalStatus, toneForPhrase } from "@/lib/status";
 import { agentPersona } from "@/lib/agentPersona";
 import type {
-  AgentCreationPolicy, AgentEvaluation, AgentInstance, ConnectorMeta, DomainEvent, EngineSubsystem,
-  FeedbackSignal, GateDecision, GTMContractAudit, GTMGraph, GTMNode, GTMRunResult, NodeSelection, OutcomeProgram,
+  AgentCreationPolicy, AgentEvaluation, AgentInstance, ConnectorMeta, ContextManifest, DomainEvent, EngineSubsystem,
+  FeedbackSignal, GateDecision, GTMContractAudit, GTMGraph, GTMNode, GTMNodeResult, GTMRunResult, NodeSelection, OutcomeProgram,
 } from "@/types";
 
 // The right zone of the program workbench is context-switching: it shows the program's "Gate &
@@ -596,9 +597,202 @@ function EventList({ events }: { events: DomainEvent[] }) {
   ))}</div>;
 }
 
+// ── E1.3 — Tool-call observability: "watch it pull" ──────────────────────────
+// When an agent step runs agentically it fetches context through tools
+// (mcp__gtm_context__get_product, __get_taste, __get_state, __get_signal, etc.).
+// The result meta carries a contextManifest with { mode:"agentic", offered:[toolNames] }
+// and optionally a calledTools:[toolNames] list when per-call telemetry is available.
+// This component surfaces that trace per agent step so the founder can see exactly what
+// the agent pulled — the "watch it pull" beat that makes the context engine visible.
+
+// Safe name shortener: strip the mcp__gtm_context__ prefix so labels read at a glance.
+function shortToolName(name: string): string {
+  return name
+    .replace(/^mcp__gtm[_-]context__/, "")
+    .replace(/^mcp__/, "")
+    .replace(/_/g, " ");
+}
+
+// One expanded step panel. Renders the context trace when the step is an agent step
+// with an agentic contextManifest; shows a plain summary otherwise.
+function RunStepDetail({ result }: { nodeId: string; result: GTMNodeResult }) {
+  const meta = result.meta ?? {};
+  const manifest = meta.contextManifest as ContextManifest | undefined;
+  const calledTools = (meta.calledTools ?? meta.toolsCalled) as string[] | undefined;
+  const isAgentic = manifest && (manifest as Record<string, unknown>).mode === "agentic";
+  const offered: string[] = isAgentic
+    ? (((manifest as Record<string, unknown>).offered) as string[] | undefined) ?? manifest.providers?.map((p) => p.name) ?? []
+    : [];
+  const calledSet = new Set(calledTools ?? []);
+  const hasCallData = (calledTools?.length ?? 0) > 0;
+
+  const items = result.items.length;
+  const category = result.category;
+
+  return (
+    <div className="run-log-step-detail">
+      {/* Context trace — only for agent steps with an agentic manifest */}
+      {isAgentic && offered.length > 0 ? (
+        <div className="agent-trace">
+          <div className="agent-trace-head">
+            <span className="agent-trace-label">Context pulled</span>
+            <span className="agent-trace-mode">agentic</span>
+          </div>
+          <div className="agent-trace-tools">
+            {offered.map((tool) => {
+              const called = hasCallData ? calledSet.has(tool) : null;
+              return (
+                <div className="agent-trace-tool-row" key={tool}>
+                  <span
+                    className={`agent-trace-tool-dot${called === true ? " was-called" : called === false ? " not-called" : ""}`}
+                    aria-hidden
+                  />
+                  <span className="agent-trace-tool-name" title={tool}>{shortToolName(tool)}</span>
+                  {called !== null ? (
+                    <span className={`agent-trace-tool-status${called ? " was-called" : ""}`}>
+                      {called ? "fetched" : "skipped"}
+                    </span>
+                  ) : (
+                    <span className="agent-trace-tool-status">offered</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {hasCallData ? (
+            <p className="agent-trace-summary">
+              <strong>{calledSet.size}</strong> of {offered.length} context tools fetched
+            </p>
+          ) : (
+            // Per-call telemetry slot: offered list is live but call-level events are not yet wired.
+            // When calledTools lands on the meta the dot column above will fill in automatically.
+            <div className="agent-trace-slot" aria-label="Per-call telemetry not yet available">
+              <Circle size={12} />
+              <span>
+                Per-call telemetry pending — offered list is live.
+                Call-level events (which were actually fetched) will appear here when wired.
+              </span>
+            </div>
+          )}
+        </div>
+      ) : result.kind === "agent" || result.kind === "skill" ? (
+        // Agent step but no manifest yet (step hasn't run or used a non-agentic path)
+        <div className="agent-trace-slot" aria-label="No context trace yet">
+          <Circle size={12} />
+          <span>No context trace yet — run this step to see which tools it pulls.</span>
+        </div>
+      ) : null}
+
+      {/* Items summary */}
+      <div className="run-log-items-summary">
+        <strong>{items}</strong>{" "}
+        {category === "gate" ? "draft" + (items !== 1 ? "s" : "") + " at gate"
+          : category === "source" ? "found"
+          : category === "generate" ? "drafted"
+          : category === "filter" ? "qualified"
+          : category === "enrich" ? "enriched"
+          : "item" + (items !== 1 ? "s" : "")}
+        {result.pendingReview ? " · awaiting review" : ""}
+      </div>
+
+      {/* Error detail */}
+      {!result.ok && result.error ? (
+        <div className="run-log-error" role="alert">{result.error}</div>
+      ) : null}
+    </div>
+  );
+}
+
+// A single run's step-by-step log, with expandable context traces on agent steps.
+function RunDetail({ run }: { run: GTMRunResult }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const order = run.executionOrder;
+
+  if (!order.length && !run.error) {
+    return <div className="debugger-empty">This run produced no execution steps.</div>;
+  }
+
+  const toggle = (id: string) => setExpanded((cur) => (cur === id ? null : id));
+
+  return (
+    <div className="run-log-detail">
+      {run.error ? (
+        <div className="run-log-error" role="alert" style={{ margin: "var(--space-3) var(--space-3) 0" }}>
+          {run.error}
+        </div>
+      ) : null}
+      {order.map((nodeId) => {
+        const result = run.nodes[nodeId];
+        if (!result) return null;
+        const isOpen = expanded === nodeId;
+        const tone = result.pendingReview ? "gate"
+          : result.ok ? "ok"
+          : result.blocked ? ""
+          : "err";
+        const statusIcon = result.pendingReview ? <ShieldCheck size={14} />
+          : result.ok ? <CheckCircle2 size={14} />
+          : result.blocked ? <Circle size={14} />
+          : <AlertCircle size={14} />;
+        const meta = result.pendingReview ? "gate"
+          : result.ok ? `${result.items.length} items`
+          : result.error?.slice(0, 32) ?? "blocked";
+        return (
+          <div key={nodeId}>
+            <button
+              type="button"
+              className={`run-log-row ${tone} ${isOpen ? "is-expanded" : ""}`}
+              aria-expanded={isOpen}
+              onClick={() => toggle(nodeId)}
+            >
+              <span className="run-log-row-icon" aria-hidden>{statusIcon}</span>
+              <span className="run-log-row-title">{result.nodeId ?? nodeId}</span>
+              <span className="run-log-row-meta">{meta}</span>
+              <ChevronDown size={13} className="run-log-row-chevron" aria-hidden />
+            </button>
+            {isOpen ? <RunStepDetail nodeId={nodeId} result={result} /> : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Top-level run log: most-recent runs collapsed to one line; clicking a run expands
+// its step-by-step detail with context traces on agent steps.
 function RunLogs({ runs }: { runs: GTMRunResult[] }) {
+  const [expandedRun, setExpandedRun] = useState<string | null>(null);
   if (!runs.length) return <div className="debugger-empty">No runs have been recorded yet.</div>;
-  return <div className="timeline-list">{runs.slice(-8).reverse().map((run) => <DebugRow key={run.runId} icon={<Play />} title={run.runId} detail={run.pendingGates.length ? "Paused at gate" : run.ok ? "Completed" : run.error ?? "Needs attention"} meta={`${run.pendingGates.length} gates`} />)}</div>;
+  const recent = runs.slice(-8).reverse();
+  return (
+    <div className="run-log-detail">
+      {recent.map((run) => {
+        const isOpen = expandedRun === run.runId;
+        const tone = run.pendingGates.length ? "gate" : run.ok ? "ok" : "err";
+        const statusIcon = run.pendingGates.length ? <ShieldCheck size={14} />
+          : run.ok ? <CheckCircle2 size={14} />
+          : <AlertCircle size={14} />;
+        const detail = run.pendingGates.length ? "Paused at gate"
+          : run.ok ? "Completed"
+          : run.error ?? "Needs attention";
+        return (
+          <div key={run.runId}>
+            <button
+              type="button"
+              className={`run-log-row ${tone} ${isOpen ? "is-expanded" : ""}`}
+              aria-expanded={isOpen}
+              onClick={() => setExpandedRun((cur) => (cur === run.runId ? null : run.runId))}
+            >
+              <span className="run-log-row-icon" aria-hidden>{statusIcon}</span>
+              <span className="run-log-row-title" title={run.runId}>{run.runId.slice(-12)}</span>
+              <span className="run-log-row-meta">{detail}</span>
+              <ChevronDown size={13} className="run-log-row-chevron" aria-hidden />
+            </button>
+            {isOpen ? <RunDetail run={run} /> : null}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 // The run scrubber: step through a finished run's execution order. Dragging the slider (or pressing

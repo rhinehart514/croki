@@ -71,12 +71,77 @@ function laneLayout(nodes, laneY) {
   return xByOriginalId.size ? { laneY, x: (originalId) => xByOriginalId.get(originalId) ?? 120 } : { laneY, x: () => 120 };
 }
 
+// Fold every system's founder gate into ONE shared gate — the consolidated approval queue. Many
+// channels at volume should not scatter the founder across one review tab per channel; they should
+// pool into a single queue. We rewire in place on the already-namespaced union: drop each per-system
+// gate node, redirect everything that flowed INTO a gate so it flows into the shared gate, and
+// redirect everything that flowed OUT of a gate so it flows out of the shared gate. The wall is
+// strictly preserved — every path that had a gate before its execute still has the (now shared) gate
+// before its execute — and `assertPortfolioWall` re-checks it on the rewired union regardless.
+//
+// A system that composed with NO gate is left untouched here; the wall assertion then rejects the
+// union if that gateless system has an execute, exactly as it would without consolidation. The shared
+// gate carries `consolidated: true` and `systems` (the systems whose gates merged into it) so the UI
+// can label the single queue.
+const SHARED_GATE_ID = "portfolio__gate";
+
+function consolidateGates(nodes, edges, manifest) {
+  const gateIds = new Set(nodes.filter((n) => n.category === "gate").map((n) => n.id));
+  if (gateIds.size < 1) return { nodes, edges }; // nothing to consolidate
+  // Never collide with a real node id.
+  let sharedId = SHARED_GATE_ID;
+  const existing = new Set(nodes.map((n) => n.id));
+  let suffix = 1;
+  while (existing.has(sharedId)) sharedId = `${SHARED_GATE_ID}-${suffix++}`;
+
+  // Place the shared gate centered vertically, to the right of the lanes, so it reads as the one
+  // junction every lane funnels through.
+  const ys = nodes.map((n) => n.position?.y).filter((y) => Number.isFinite(y));
+  const xs = nodes.map((n) => n.position?.x).filter((x) => Number.isFinite(x));
+  const sharedGate = {
+    id: sharedId,
+    category: "gate",
+    connector: "default",
+    label: "Founder review (all channels)",
+    consolidated: true,
+    systems: [...new Set(nodes.filter((n) => gateIds.has(n.id)).map((n) => n.system).filter(Boolean))],
+    config: {},
+    position: {
+      x: (xs.length ? Math.max(...xs) : 120) + COL_GAP,
+      y: ys.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : LANE_TOP,
+    },
+  };
+
+  const keptNodes = nodes.filter((n) => !gateIds.has(n.id));
+  keptNodes.push(sharedGate);
+
+  const redirect = (id) => (gateIds.has(id) ? sharedId : id);
+  const rewired = [];
+  const seen = new Set();
+  for (const edge of edges) {
+    const source = redirect(edge.source);
+    const target = redirect(edge.target);
+    if (source === target) continue; // a gate→gate edge collapses to a self-loop; drop it
+    const id = `${edge.edgeType ?? "data"}-${source}-${target}`;
+    if (seen.has(id)) continue; // many lanes' gate edges fold onto the same shared edge — dedup
+    seen.add(id);
+    rewired.push({ ...edge, id, source, target });
+  }
+
+  // Reflect the merge in the manifest: every system now points at the one shared gate.
+  for (const system of manifest) system.gateIds = [sharedId];
+  return { nodes: keptNodes, edges: rewired };
+}
+
 // Assemble composed systems into one portfolio graph.
-//   goal     — the plain-language goal the whole portfolio serves (becomes the graph name)
-//   systems  — [{ channel: { id, name, objective }, graph: { nodes, edges } }]
+//   goal            — the plain-language goal the whole portfolio serves (becomes the graph name)
+//   systems         — [{ channel: { id, name, objective }, graph: { nodes, edges } }]
+//   consolidateGate — when true, fold every system's founder gate into ONE shared approval queue
+//                     (the consolidated-queue mode). Defaults to false: each system keeps its own
+//                     gate, the original per-lane behavior, so existing callers are unaffected.
 // Returns one validated graph whose nodes carry { system, systemLabel } so the canvas can render
 // each system as its own cluster, plus a `systems` manifest the UI uses to label and fold lanes.
-export function assemblePortfolioGraph({ goal = "", systems = [] } = {}) {
+export function assemblePortfolioGraph({ goal = "", systems = [], consolidateGate = false } = {}) {
   if (!Array.isArray(systems) || systems.length === 0) {
     throw new Error("A portfolio needs at least one composed system.");
   }
@@ -137,9 +202,13 @@ export function assemblePortfolioGraph({ goal = "", systems = [] } = {}) {
     });
   });
 
+  // Optionally fold the per-system gates into ONE consolidated approval queue. Done BEFORE the wall
+  // assertion so the wall is checked on the exact topology the founder will see and run.
+  const assembled = consolidateGate ? consolidateGates(nodes, edges, manifest) : { nodes, edges };
+
   // The wall and structural validity, on the union. A merge that produced an ungated send, a
   // collided id, or a cycle is rejected here rather than reaching the canvas.
-  assertPortfolioWall(nodes, edges);
+  assertPortfolioWall(assembled.nodes, assembled.edges);
 
   const id = `portfolio-${slug(goal, "goal")}`;
   const graph = {
@@ -149,9 +218,10 @@ export function assemblePortfolioGraph({ goal = "", systems = [] } = {}) {
     objective: goal,
     version: "1.0.0",
     revision: 0,
-    nodes,
-    edges,
+    nodes: assembled.nodes,
+    edges: assembled.edges,
     systems: manifest,
+    consolidatedGate: consolidateGate,
     store: { path: `.gtm/flows/${id}.json`, runs: 0 },
   };
 
@@ -172,6 +242,7 @@ export function summarizePortfolio(graph) {
     nodeCount: nodes.length,
     gateCount: nodes.filter((n) => n.category === "gate").length,
     executeCount: nodes.filter((n) => n.category === "execute").length,
+    consolidatedGate: graph?.consolidatedGate === true,
     systems: systems.map((s) => ({
       id: s.id,
       label: s.label,

@@ -131,3 +131,64 @@ export function renderTasteProfile(profile) {
   if (!profile) return "";
   return renderDraftMemory(profile).replace(/^\n+/, "");
 }
+
+// ── Queried taste (E2.1) ──────────────────────────────────────────────────────
+// The moat as a precision instrument, not a dump. Instead of stapling the founder's entire
+// decision history onto every prompt, the agent asks a SPECIFIC question ("subject line tone",
+// "how direct an ask") and gets only the prior decisions that bear on it. Deterministic keyword
+// overlap — code, not a model call (ENGINEERING.md: if code can answer, code answers). Edits are
+// weighted strongest because an edit is the founder correcting the model, not just judging it.
+// No question (or no usable one) falls back to the full render, so this is a strict superset of
+// renderTasteProfile and get_taste stays backward-compatible.
+const TASTE_STOPWORDS = new Set([
+  "the", "a", "an", "and", "or", "to", "of", "for", "in", "on", "is", "it", "this", "that",
+  "with", "you", "your", "their", "they", "we", "our", "be", "are", "as", "at", "by", "from",
+]);
+
+function tasteTokens(value) {
+  return (String(value ?? "").toLowerCase().match(/[a-z0-9]+/g) || []).filter(
+    (w) => w.length > 2 && !TASTE_STOPWORDS.has(w),
+  );
+}
+
+function tasteOverlap(text, questionTokens) {
+  const present = new Set(tasteTokens(text));
+  let score = 0;
+  for (const q of questionTokens) if (present.has(q)) score += 1;
+  return score;
+}
+
+export function queryTaste(profile, { question = "", limit = 3 } = {}) {
+  if (!profile) return null;
+  const q = tasteTokens(question);
+  if (!q.length) {
+    const text = renderTasteProfile(profile);
+    return text ? { text, meta: { mode: "full", ...(profile.counts ?? {}) } } : null;
+  }
+  const rank = (arr, asText) =>
+    (arr ?? [])
+      .map((entry) => ({ entry, score: tasteOverlap(asText(entry), q) }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map((x) => x.entry);
+
+  const approved = rank(profile.approved, (d) => d);
+  const rejected = rank(profile.rejected, (d) => d);
+  // Always surface a correction: top matches, or — if none match — the most recent edit, since a
+  // correction usually generalizes past the exact words of the question.
+  let edits = rank(profile.edits, (e) => `${e.from} ${e.to}`);
+  if (!edits.length && profile.edits?.length) edits = profile.edits.slice(0, 1);
+
+  if (!approved.length && !rejected.length && !edits.length) {
+    const c = profile.counts ?? {};
+    return {
+      text: `No prior taste decisions match "${question}". Observed so far — approved ${c.approved ?? 0}, rejected ${c.rejected ?? 0}, edits ${c.edits ?? 0}.`,
+      meta: { mode: "no-match", question },
+    };
+  }
+  return {
+    text: renderDraftMemory({ approved, rejected, edits }).replace(/^\n+/, ""),
+    meta: { mode: "query", question, approved: approved.length, rejected: rejected.length, edits: edits.length },
+  };
+}

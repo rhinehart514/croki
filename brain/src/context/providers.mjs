@@ -1,17 +1,21 @@
-// Context providers — one interface over every grounding source.
+// Context providers — one summarizer per grounding source, shared by both retrieval paths.
 //
-// The context substrate's first principle (see docs/GOAL.md): you do NOT stuff a model with
-// everything. Stuffing degrades output — context rot, lost-in-the-middle, the model averaging
-// back toward the generic. Instead you assemble a cheap, high-signal BASE LAYER (the "map")
-// and let the model pull detail through its own tools (Read/Grep/MCP). A provider owns one
-// source and knows how to summarize it into that map.
+// Two paths reach the model, and both are real. The pre-pack path (assembler.mjs) is the
+// proven legacy default: it calls `contribute()` on every provider and staples the result to
+// the front of the prompt before the agent runs. The agentic path (retrieval-tools.mjs) is
+// the inversion: each provider is wrapped in a tool the agent CALLS at the moment it decides
+// it needs that source — push becomes pull.
+//
+// Both paths call the SAME `contribute()` on the SAME provider objects, so the two paths can
+// never disagree on what a source says. What changed between them is only WHO decides to read
+// it. This file owns only the summarizers; neither path owns the other.
 //
 // Contract — a provider is:
 //   { name, layer, contribute(intent) -> { text, meta } | null }
 // `contribute` returns null (an honest blank) when the source has nothing to add, exactly like
 // the step-runtime defaults: a cold source reports the gap rather than fabricating a layer.
 // `layer` is "base" (always-on map) or "retrieved" (deeper detail the model would otherwise
-// pull). The host owns what's on the table; the rented intelligence owns the pull.
+// pull). The host owns the sources; who decides to read them is path-specific.
 
 import { renderTasteProfile } from "../memory.mjs";
 import { renderDesignState } from "../design-state-store.mjs";

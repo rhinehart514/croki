@@ -337,6 +337,28 @@ async function getOutcome({ outcomeId, projectId }) {
 }
 
 // ---------------------------------------------------------------------------
+// People — the keystone object, promoted from real run entrants. Read-only
+// front door: list, get one, and cross-reference where an object appears.
+// ---------------------------------------------------------------------------
+
+async function listPeople({ projectId } = {}) {
+  const id = await resolveProjectId(projectId);
+  return brainGet(`/api/projects/${encodeURIComponent(id)}/people`);
+}
+
+async function getPerson({ personId, projectId }) {
+  const id = await resolveProjectId(projectId);
+  return brainGet(`/api/projects/${encodeURIComponent(id)}/people/${encodeURIComponent(personId)}`);
+}
+
+async function findReferences({ kind, id: refId, projectId }) {
+  const id = await resolveProjectId(projectId);
+  const params = new URLSearchParams({ kind: kind ?? "" });
+  if (refId != null) params.set("id", String(refId));
+  return brainGet(`/api/projects/${encodeURIComponent(id)}/references?${params.toString()}`);
+}
+
+// ---------------------------------------------------------------------------
 // Tool registry
 // ---------------------------------------------------------------------------
 
@@ -594,6 +616,45 @@ const TOOLS = [
       required: ["patch"],
     },
     handler: updateSharedContext,
+  },
+
+  // ── People — the keystone object, promoted from real run entrants ───────────
+  {
+    name: "list_people",
+    description: "List the durable People in a project — real identities promoted from run entrants, deduplicated across channels by a stable identity key. Each carries identity (name, org, handle, email, domain) and its cross-channel appearances. Use to see who has entered the GTM systems, dedup before adding, or check fatigue (who has been hit recently). Defaults to the active project. Read-only; never created by hand, never sends.",
+    inputSchema: {
+      type: "object",
+      properties: { projectId: { type: "string", description: "Optional. Defaults to the active project." } },
+      required: [],
+    },
+    handler: listPeople,
+  },
+  {
+    name: "get_person",
+    description: "Get one Person by id: their stable identity plus every appearance across channels (channel, run, role, the why-now trigger that found them, and when). Use after list_people for the full cross-channel history of one human or org. Defaults to the active project. Read-only.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        personId: { type: "string", description: "Person id." },
+        projectId: { type: "string", description: "Optional. Defaults to the active project." },
+      },
+      required: ["personId"],
+    },
+    handler: getPerson,
+  },
+  {
+    name: "find_references",
+    description: "Answer 'where does X appear across channels' for a person, icp, claim, or experiment. For a person it returns their durable appearances; for icp/claim/experiment it returns the channels that reference it. Use for focus-to-trace and to understand cross-channel reuse before changing a shared object. Defaults to the active project. Read-only; derived, never seeded.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        kind: { type: "string", description: "One of: person, icp, claim, experiment." },
+        id: { type: "string", description: "The object id (person id, experiment id, claim text or index, or icp identifier)." },
+        projectId: { type: "string", description: "Optional. Defaults to the active project." },
+      },
+      required: ["kind", "id"],
+    },
+    handler: findReferences,
   },
 
   // ── Product picture — the founder-editable interpretation of the product ────
