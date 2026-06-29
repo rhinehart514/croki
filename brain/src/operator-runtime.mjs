@@ -38,7 +38,7 @@ import {
   updateSharedContext,
 } from "./project-store.mjs";
 import { canApprove, getMember, resolveCurrentUser } from "./team-store.mjs";
-import { composeOpportunityChannel, composePortfolioFromStudio } from "./workflow-composer.mjs";
+import { composeNakedGraph, composeOpportunityChannel, composePortfolioFromStudio } from "./workflow-composer.mjs";
 import {
   compareChannelRuns,
   createPortfolioArtifact,
@@ -1579,14 +1579,13 @@ async function executeTool(session, tool, options = {}) {
         data: { goal },
       }, options);
       const composeRepo = options.cwd || loadProject(options).sharedContext?.repository?.repo || process.cwd();
-      const composed = await composeOpportunityChannel({
+      const composed = await composeNakedGraph({
         title: firstNonEmpty(input.title, goal),
         objective: goal,
         agents: Array.isArray(input.agents) ? input.agents : [],
       }, {
         ...options,
         compose: options.compose || createClaudeComposer({ cwd: composeRepo }),
-        evaluate: options.evaluate || createClaudeEvaluator({ cwd: composeRepo }),
       });
       working = addEvent({
         ...working,

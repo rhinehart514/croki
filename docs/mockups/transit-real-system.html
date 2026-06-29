@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Living pipeline — in the real design system</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* real tokens — ui/src/index.css */
+    --ink:#18181b; --ink-2:#3f3f46; --muted:#71717a; --faint:#a1a1aa; --ghost:#d4d4d8;
+    --surface:#fff; --surface-2:#f4f4f5; --canvas:#fafafa; --line:#ececec; --line-2:#e4e4e7;
+    --proven:#16a34a; --proven-soft:#f0fdf4; --gap:#d97706; --gap-soft:#fffbeb;
+    --danger:#dc2626; --blind:#a1a1aa; --link:#2563eb;
+    --r-md:9px; --r-lg:12px; --r-xl:16px;
+    --shadow-card:0 1px 2px rgba(24,24,27,.04), 0 1px 3px rgba(24,24,27,.06);
+    --shadow-pop:0 4px 12px rgba(24,24,27,.08), 0 12px 32px rgba(24,24,27,.10);
+    --sans:"Geist", ui-sans-serif, -apple-system, system-ui, sans-serif;
+    --mono:"Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans)}
+  .wrap{display:flex;min-height:100vh}
+  .stage{flex:1;padding:30px 20px 0 38px}
+  .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .title{font-size:21px;font-weight:600;letter-spacing:-.011em;margin:6px 0 1px}
+  .sub{font-size:13px;color:var(--muted);max-width:640px;line-height:1.5}
+  svg{display:block;margin-top:8px;overflow:visible}
+  text{font-family:var(--mono)}
+  .stopname{font-size:10.5px;fill:var(--ink-2);font-family:var(--sans);font-weight:500}
+  .meta{font-size:10px;fill:var(--muted)}
+  .ix{font-size:11px;fill:var(--ink);font-family:var(--sans);font-weight:600}
+  .ixrule{font-size:10px;fill:var(--muted)}
+  .line-name{font-size:9.5px;letter-spacing:.04em;fill:var(--faint)}
+
+  .rail{width:330px;background:var(--surface);border-left:1px solid var(--line-2);padding:28px 22px;display:flex;flex-direction:column;gap:13px}
+  .rail h2{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0;font-family:var(--mono)}
+  .prop{background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-lg);padding:13px 14px;box-shadow:var(--shadow-card)}
+  .prop.promote{border-left:2px solid var(--proven)}
+  .prop.warn{border-left:2px solid var(--danger)}
+  .prop.prune{border-left:2px solid var(--ghost)}
+  .verb{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+  .move{font-size:13.5px;font-weight:600;margin:4px 0 5px;letter-spacing:-.011em}
+  .why{font-size:11.5px;color:var(--muted);line-height:1.5}
+  .why b{color:var(--ink-2);font-weight:600}
+  .acts{display:flex;gap:7px;margin-top:11px}
+  .btn{font-family:var(--sans);font-size:11px;font-weight:500;border-radius:var(--r-md);padding:6px 12px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);cursor:pointer}
+  .btn.go{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:600}
+  .legend{margin-top:auto;border-top:1px solid var(--line);padding-top:13px;display:flex;flex-direction:column;gap:8px}
+  .lrow{display:flex;align-items:center;gap:10px;font-size:10.5px;color:var(--muted)}
+  .lrow b{color:var(--ink);font-weight:600}
+  .sw{width:30px;height:14px;flex:none}
+
+  @keyframes gatepulse{0%,100%{box-shadow:0 0 0 0 rgba(217,119,6,.0)}50%{box-shadow:0 0 0 3px rgba(217,119,6,.14)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="stage">
+    <div class="kicker">home surface · real design system</div>
+    <div class="title">RodentRadar · path to booked pilots</div>
+    <div class="sub">Same living pipeline — now in the product's language. Ink weight is conviction. A moving dot is what's live. Amber is only ever your gate. Calm control room, not a neon map.</div>
+
+    <svg width="1010" height="650" viewBox="0 0 1010 650">
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--ink-2)"/></marker>
+        <marker id="arrowG" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--proven)"/></marker>
+      </defs>
+
+      <!-- VOUCH growth loop: feedback-edge style (proven green dashed, your real convention) -->
+      <path d="M915,300 C972,455 810,560 470,556 C215,552 70,496 70,330" stroke="var(--proven)" stroke-width="1.5" fill="none" opacity="0.5" stroke-dasharray="5 5" marker-end="url(#arrowG)"/>
+      <text x="442" y="585" class="meta" fill="var(--faint)">↺ vouch loop — every booked call seeds 1.4 new signals</text>
+
+      <!-- EMAIL spine: fattest, darkest ink = highest conviction + volume -->
+      <path d="M70,300 L915,300" stroke="var(--ink)" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <!-- LINKEDIN promoted branch: mid ink, mid weight -->
+      <path d="M360,300 L390,384 L640,384 L720,384 L840,300" stroke="var(--ink-2)" stroke-width="4" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+      <!-- GITHUB pull line: thinner, muted -->
+      <path d="M70,150 L210,150 L360,300" stroke="var(--muted)" stroke-width="2.5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+      <!-- WEBINAR experiment: faint hairline dashed = a thin live bet -->
+      <path d="M520,300 L560,480 L720,480" stroke="var(--faint)" stroke-width="2" fill="none" stroke-dasharray="3 5" stroke-linejoin="round" stroke-linecap="round"/>
+
+      <!-- LIVE NOW = restrained moving ink dots (causality motion, not glow) -->
+      <circle r="3.2" fill="var(--ink)"><animateMotion dur="2.8s" repeatCount="indefinite" path="M180,300 L915,300"/></circle>
+      <circle r="3.2" fill="var(--ink)" opacity=".5"><animateMotion dur="2.8s" begin="1.4s" repeatCount="indefinite" path="M180,300 L915,300"/></circle>
+      <circle r="2.6" fill="var(--ink-2)"><animateMotion dur="3.6s" repeatCount="indefinite" path="M360,300 L390,384 L640,384 L840,300"/></circle>
+
+      <!-- ===== STOPS ===== -->
+      <!-- EMAIL line -->
+      <g>
+        <circle cx="70" cy="300" r="6" fill="var(--surface)" stroke="var(--proven)" stroke-width="2.5"/>
+        <text class="stopname" x="56" y="282">ICP signal</text>
+        <circle cx="180" cy="300" r="5.5" fill="var(--surface)" stroke="var(--ink)" stroke-width="2.5"/>
+        <text class="stopname" x="160" y="282">enrich</text>
+        <circle cx="520" cy="300" r="5.5" fill="var(--surface)" stroke="var(--ink)" stroke-width="2.5"/>
+        <text class="stopname" x="498" y="282">draft · voice</text>
+        <circle cx="760" cy="300" r="5.5" fill="var(--surface)" stroke="var(--ink)" stroke-width="2.5"/>
+        <text class="stopname" x="744" y="282">send</text>
+      </g>
+
+      <!-- INTERCHANGE: a SWITCH is neutral ink (automatic logic), never amber -->
+      <g>
+        <circle cx="360" cy="300" r="11" fill="var(--surface)" stroke="var(--ink)" stroke-width="2.5"/>
+        <circle cx="360" cy="300" r="4" fill="var(--ink)"/>
+        <text class="ix" x="300" y="258">⑂ fit score?</text>
+        <text class="ixrule" x="300" y="272">≥70 → fast · &lt;70 → nurture</text>
+      </g>
+
+      <!-- GITHUB stops -->
+      <g>
+        <circle cx="70" cy="150" r="5" fill="var(--surface)" stroke="var(--muted)" stroke-width="2.5"/>
+        <text class="stopname" x="56" y="138">repo star</text>
+        <circle cx="210" cy="150" r="5" fill="var(--surface)" stroke="var(--muted)" stroke-width="2.5"/>
+        <text class="stopname" x="192" y="138">who is it</text>
+        <text class="line-name" x="240" y="154">github pull</text>
+      </g>
+
+      <!-- LINKEDIN stops -->
+      <g>
+        <text class="line-name" x="452" y="376">linkedin · promoted wk8</text>
+        <circle cx="560" cy="384" r="5.5" fill="var(--surface)" stroke="var(--ink-2)" stroke-width="2.5"/>
+        <text class="stopname" x="540" y="408">DM draft</text>
+      </g>
+
+      <!-- GATES — the only amber on the canvas. soft bloom. -->
+      <g>
+        <rect x="589" y="289" width="22" height="22" rx="6" fill="var(--gap-soft)" stroke="var(--gap)" stroke-width="2.5" style="animation:gatepulse 2.4s infinite"/>
+        <text class="meta" x="576" y="334" fill="var(--gap)">⏸ gate · 3 staged</text>
+      </g>
+      <g>
+        <rect x="632" y="373" width="22" height="22" rx="6" fill="var(--gap-soft)" stroke="var(--gap)" stroke-width="2.5"/>
+        <text class="meta" x="664" y="389" fill="var(--gap)">⏸ gate</text>
+      </g>
+
+      <!-- WEBINAR experiment stops -->
+      <g>
+        <circle cx="560" cy="480" r="5" fill="var(--surface)" stroke="var(--faint)" stroke-width="2" stroke-dasharray="2 2"/>
+        <text class="stopname" x="500" y="502" fill="var(--muted)">invite list</text>
+        <circle cx="720" cy="480" r="5.5" fill="var(--surface)" stroke="var(--faint)" stroke-width="2" stroke-dasharray="2 2"/>
+        <text class="stopname" x="700" y="502" fill="var(--muted)">d6 · watching</text>
+        <text class="line-name" x="586" y="474">webinar · experiment</text>
+      </g>
+
+      <!-- retired collapsed -->
+      <g>
+        <circle cx="120" cy="430" r="5" fill="var(--surface)" stroke="var(--ghost)" stroke-width="2"/>
+        <text class="meta" x="134" y="434" fill="var(--faint)">⤺ 3 closed (twitter, cold dm, paid)</text>
+      </g>
+
+      <!-- TERMINUS — proven green = the win -->
+      <g>
+        <circle cx="915" cy="300" r="12" fill="var(--proven-soft)" stroke="var(--proven)" stroke-width="3"/>
+        <circle cx="915" cy="300" r="4" fill="var(--proven)"/>
+        <text class="stopname" x="892" y="280" fill="var(--proven)">Booked pilot</text>
+        <text class="meta" x="900" y="330" fill="var(--muted)">14 this qtr</text>
+      </g>
+    </svg>
+  </div>
+
+  <!-- ===== STRATEGIST ===== -->
+  <aside class="rail">
+    <h2>Strategist</h2>
+
+    <div class="prop warn">
+      <div class="verb">cross-channel conflict</div>
+      <div class="move">Email + LinkedIn hit 41 of the same people</div>
+      <div class="why">Same <b>Person</b> on two live lines this week — reads as pressure, not presence. Hold one, or stagger by 6 days.</div>
+      <div class="acts"><button class="btn go">Stagger them</button><button class="btn">Ignore</button></div>
+    </div>
+
+    <div class="prop promote">
+      <div class="verb">promote candidate</div>
+      <div class="move">Webinar is trending up — not proven yet</div>
+      <div class="why"><b>Day 6, 31 registered.</b> If it clears 12% show-rate by day 10, I'll propose routing the fit-score switch here. Watching.</div>
+      <div class="acts"><button class="btn">Watch</button></div>
+    </div>
+
+    <div class="prop prune">
+      <div class="verb">retire</div>
+      <div class="move">Trim 2 stale stops on the GitHub line</div>
+      <div class="why">"who is it" enrich hasn't changed routing in <b>3 weeks</b> — cost without a decision. Collapse it into the switch.</div>
+      <div class="acts"><button class="btn go">Approve</button><button class="btn">Keep</button></div>
+    </div>
+
+    <div class="legend">
+      <div class="lrow"><svg class="sw"><line x1="0" y1="7" x2="30" y2="7" stroke="var(--ink)" stroke-width="6" stroke-linecap="round"/></svg><span><b>Thick ink</b> — proven, high volume</span></div>
+      <div class="lrow"><svg class="sw"><line x1="0" y1="7" x2="30" y2="7" stroke="var(--faint)" stroke-width="2" stroke-dasharray="3 5"/></svg><span><b>Faint dashed</b> — experiment in flight</span></div>
+      <div class="lrow"><svg class="sw"><circle cx="15" cy="7" r="6" fill="var(--surface)" stroke="var(--ink)" stroke-width="2.5"/></svg><span><b>Ink switch</b> — logic routes, auto</span></div>
+      <div class="lrow"><svg class="sw"><rect x="8" y="0" width="14" height="14" rx="4" fill="var(--gap-soft)" stroke="var(--gap)" stroke-width="2"/></svg><span><b>Amber</b> — only ever your gate</span></div>
+      <div class="lrow"><svg class="sw"><circle cx="15" cy="7" r="3.4" fill="var(--ink)"/></svg><span><b>Moving dot</b> — flowing right now</span></div>
+    </div>
+  </aside>
+</div>
+</body>
+</html>

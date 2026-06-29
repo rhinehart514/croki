@@ -315,6 +315,51 @@ export async function previewOpportunityChannel(input, options = {}) {
   };
 }
 
+// The naked compose: the model designs the graph for a goal (research/enrich/draft agents behind a
+// founder gate) and we persist it as a runnable flow. NOTHING ELSE — no outcome program, no creation
+// policy, no capability foundry, no on-disk agent artifacts. The agent nodes carry their prompt inline
+// (agentPrompt), so they run without a written definition; the founder gate is the only checkpoint and
+// the wall is re-asserted here. This is what compose_and_run uses now: goal in, runnable graph out, the
+// run reaches the gate, the founder reviews. The whole program/policy/foundry layer is gone from this path.
+export async function composeNakedGraph(input, options = {}) {
+  const project = loadProject(options);
+  const channel = channelSpecFrom(input);
+  const agents = agentSpecsFrom(input);
+
+  const { nodes, edges } = await composeGraphForChannel({
+    channel,
+    agents,
+    enginePool: enginePoolFor(project, options),
+    grounding: input.grounding ?? null,
+    clarity: clarityGrounding(project.id, options),
+    input: input.input,
+    output: input.output,
+    compose: options.compose || blankCompose,
+  });
+
+  const channelName = input.name || channel.title;
+  const channelObjective = input.objective || channel.objective;
+  const channelId = channelIdFor(channelName, getProjectChannels(project, options).map((item) => item.id));
+  const graphId = project.id === "default" ? channelId : `${project.id}--${channelId}`;
+  const graph = {
+    id: graphId,
+    name: channelName,
+    kind: input.kind || "composed",
+    objective: channelObjective,
+    version: "1.0.0",
+    revision: 1,
+    nodes,
+    edges,
+    store: { path: `.gtm/flows/${graphId}.json`, runs: 0 },
+  };
+  // The wall, re-asserted on the composed topology: every execute node must have a founder gate upstream.
+  assertGateWall(nodes, edges);
+  const validation = validateGraph(graph);
+  if (!validation.ok) throw new Error(`Composed workflow is invalid: ${validation.errors.join(" ")}`);
+  saveFlow(graph, options);
+  return { channel: { id: channelId, name: channelName, graphId }, graph, validation };
+}
+
 export async function composeOpportunityChannel(input, options = {}) {
   const project = loadProject(options);
   const channel = channelSpecFrom(input);
