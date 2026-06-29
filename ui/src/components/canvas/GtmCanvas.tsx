@@ -263,8 +263,8 @@ const LENSES: LensDef<GtmCanvasModel, never>[] = [
   { id: "experiment-matrix", label: "Experiment matrix", Component: ExperimentMatrixLensWrapper },
 ];
 
-// Lightweight lens metadata (id + label) so the single command dock can render the GTM switcher.
-export const GTM_LENS_META = LENSES.map((l) => ({ id: l.id, label: l.label }));
+// Lens metadata (id + label) for the command dock's switcher lives in the sibling `lens-meta.ts`
+// (a non-component module) so this file only exports components and fast-refresh stays intact.
 
 export function GtmCanvas({
   model, defaultLensId = "channel-flow", activeLensId, onLensChange, chromeless,

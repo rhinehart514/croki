@@ -3,6 +3,7 @@
 // ICP sharpening, or an open question. The parent wraps this in <CanvasCard>, which provides the
 // drag handle, dismiss button, and opaque frame — so this renders the body only: a kind badge,
 // the main text, and an optional note.
+import { useState } from "react";
 import type { ClarityObject, ClarityKind } from "@/types";
 import "@/styles/clarity-card-content.css";
 
@@ -24,9 +25,12 @@ const KIND_META: Record<ClarityKind, { label: string; modifier: string }> = {
 export function ClarityCard({ item }: { item: ClarityObject }) {
   const meta = KIND_META[item.kind];
 
-  // Relative time label — createdAt is an ISO string.
+  // Relative time label — createdAt is an ISO string. Capture "now" once at mount via a lazy state
+  // initializer (a sanctioned place for an impure read) so render itself stays pure — the label is a
+  // point-in-time stamp, not a live ticker, so a frozen reference instant is exactly right.
+  const [now] = useState(() => Date.now());
   const created = new Date(item.createdAt);
-  const age = Date.now() - created.getTime();
+  const age = now - created.getTime();
   const timeLabel = age < 60_000
     ? "just now"
     : age < 3_600_000

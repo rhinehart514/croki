@@ -5,7 +5,8 @@ import {
   Mic, Minimize2, PenLine, Pin, Play, Plus, Search, Send, ShieldCheck, Square, X,
 } from "lucide-react";
 import { statusLabel } from "@/lib/status";
-import { AgentPicker, DEFAULT_MODEL, modelById } from "@/components/AgentPicker";
+import { AgentPicker } from "@/components/AgentPicker";
+import { DEFAULT_MODEL, modelById } from "@/components/agent-picker-models";
 import { DockContext } from "@/components/DockContext";
 import { SlidingTabs } from "@/components/SlidingTabs";
 import { Collapse, Reveal, Stagger, StaggerItem } from "@/lib/motion";
@@ -13,6 +14,19 @@ import { STEP_OPTIONS, type StepOption } from "@/lib/step-options";
 import "@/styles/dock-context.css";
 import "@/styles/composer-posture.css";
 import type { ClarityKind, ContextManifest, GTMGraph, GTMNode, GTMNodeCategory, OperatorEvent, OperatorSession } from "@/types";
+
+// Minimal shape of the Web Speech API's SpeechRecognition we touch — the DOM lib types it behind
+// a vendor-prefixed global that isn't in our tsconfig's lib, so we declare just the surface we use.
+type SpeechRecognitionLike = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: (e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void;
+  onend: () => void;
+  onerror: () => void;
+  start: () => void;
+  stop: () => void;
+};
 
 // Operator narration arrives as markdown (the model writes tables, bold, bullets). Rendered raw
 // it's an illegible wall of pipes and asterisks — the thing that read as "broken" in the panel.
@@ -417,7 +431,7 @@ export function ComposerDock({
     if (voiceOn) { stopVoice(); return; }
     setVoiceOn(true);
     inputRef.current?.focus();
-    const SR = (window as unknown as { SpeechRecognition?: new () => any; webkitSpeechRecognition?: new () => any });
+    const SR = (window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike });
     const Ctor = SR.SpeechRecognition ?? SR.webkitSpeechRecognition;
     if (!Ctor) return; // no recognition: the rainbow still runs as a visual mode
     const r = new Ctor();

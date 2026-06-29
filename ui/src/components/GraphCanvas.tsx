@@ -1354,6 +1354,12 @@ export function GraphCanvas({
     if (!autoPos) return graph;
     return {
       ...graph,
+      // draggedIds is a deliberately non-reactive mutable set: it's populated in the drag-stop event
+      // handler (which must NOT re-render) and cleared in the topology-change effect below. Reading it
+      // here only DECIDES which nodes the auto-layout may move; the set never changes WITHIN a render,
+      // so this read is render-stable. State would either re-render on every drag-stop or fight the
+      // reset. A ref is the right tool, so this read during render is intentional.
+      // eslint-disable-next-line react-hooks/refs
       nodes: graph.nodes.map((n) =>
         draggedIds.current.has(n.id) ? n : { ...n, position: autoPos.get(n.id) ?? n.position }),
     };
