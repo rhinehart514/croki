@@ -2,87 +2,74 @@
 
 ## Product purpose
 
-GTM IDE is the IDE for go-to-market. You point it at your product's codebase; it
-reads what the product actually does and where wins actually enter; then you build,
-edit, and run go-to-market systems the way you vibe-code — describe the change in plain
-language, watch it change, run it, and gate anything that touches the outside world.
+GTM IDE is the IDE for go-to-market. You point it at your product's codebase; it reads
+what the product actually does and where wins actually enter; then you say a go-to-market
+goal in plain words and it builds the work and runs it up to your approval gate. Nothing
+sends, publishes, or charges until you approve. It learns your taste from every gate
+decision, so the next build is sharper.
 
-A GTM system is composed, not a fixed pipeline. The domain object is the
-`OutcomeProgram`; the capability object is the personalized `AgentInstance`; the
-compounding rule object is the `AgentCreationPolicy`; and the `GTMGraph` is the
-execution plan. A workflow step can be a connector (`tool`), a subagent (`agent`), a
-skill, or `code` — whatever the frontier model composes. The real artifacts of GTM
-engineering are outcome programs, workflows, skills, and agents, and the founder (and
-the operator) build them here.
+There is no required setup — no program to stand up, no policy to define, no template to
+pick. A founder hands the operator a goal ("get 5 pilot conversations without paid ads")
+and one move does most of it: the operator reads the product, composes the agents and steps
+the goal needs (research, enrich, draft — whatever fits), builds a workflow behind a founder
+gate, and runs it to that gate. The executable artifact is a `GTMGraph` of open steps; a step
+is a connector (`tool`), a subagent (`agent`), a skill (`skill`), a deterministic transform
+(`code`), or an external MCP tool (`mcp`) — whatever the model composes.
 
-The wedge is grounding plus capability creation. Every other GTM AI tool is ungrounded
-and collapses to the generic. GTM IDE grounds the model in three things at once: the
-real product code (a read-only scan with `file:line` evidence), the live run state (an
-MCP server lets Claude operate the engine through tools), and the founder's own taste
-(the loop learns from every gate decision). The result is GTM that knows your product
-instead of guessing at it, then uses feedback to improve the rules that create the
-next specialized agent.
+## The harness — the only three things the host constrains
 
-The spine is "vibe up to the gate, never past it." Building and editing a flow is
-fast and reversible, exactly like code. Execution — anything that sends, publishes,
-or charges — is a hard wall behind a founder gate.
+The product's whole design is to hold the rented model on a short leash for exactly three
+things and let it run free on everything else. This is the spine; do not re-grow a fourth
+constraint.
 
-The resident GTM operator owns the IDE loop inside the product: it accepts a durable
-goal, inspects product evidence and live problems, changes the graph through validated
-typed operations, runs and debugs it, pauses at founder gates, and resumes from the
-exact reviewed artifacts. Its session survives browser and process interruptions.
+1. **Truth.** A read-only scan of the product with `file:line` evidence (`scan.mjs`,
+   `product-understanding.mjs`). The model's claims about what the product *already does* come
+   from here, or are labeled inferred. It cannot invent product facts.
+2. **The Wall.** The founder gate. Nothing reaches the outside world without an explicit founder
+   approval. Every `execute` node must have a founder `gate` upstream of it on every path or the
+   composition is rejected (`assertGateWall`). The default execute connector stages locally and
+   never sends. "Vibe up to the gate, never past it."
+3. **Taste.** The run ledger of gate decisions becomes durable memory that shapes the next run
+   (`memory.mjs`, `feedback-ledger.mjs`); a drafting agent must consult it (`get_taste`) and a
+   visual one must also consult `get_design` (`consult-guard.mjs`).
 
-GTM is debugged like a codebase. Every node in the flow carries real health derived
-from the scan, the run ledger, and connector state; a Problems rail ranks what is
-wrong across the whole system and routes you to the node that fixes it. Two front
-doors stay in lockstep: the human dashboard and the agent (MCP) interface drive the
-same engine.
+The host also owns the plumbing a model must not: durable state (flows, sessions, people) and
+typed, validated graph mutations. Everything beyond those — what the channels are, which agents
+to compose, how the graph branches, how many approaches to try — is the model's job, decided
+fresh each time, never pre-structured by host-side domain objects.
 
-Approach — the route, do not drift from it. The host is thin and owns only what a model
-must not: the `file:line` scan (truth), the durable stores and run ledger (state), the
-founder gate (the wall), and typed validated mutations. The intelligence is rented, never
-rebuilt in the host — the operator drives on the founder's Claude subscription (or Codex
-headless) and composes workflows out of open steps, reaching the GTM capability that
-already lives in skills (`ideate`, `positioning`, `distribute`) and subagents
-(`gtm-enrich`, `gtm-signal-github`). Two anti-patterns to refuse: do not re-implement an
-agent capability as a Node connector, and do not treat the legacy `cold-outbound`
-connector DAG as "the loop to fix" — that fixed taxonomy is the cage that was removed.
-The connector registry survives only as the `tool` step kind, for genuinely deterministic
-work (the scorer, the HTTP sender). Outreach runs as an agent-composed workflow, not as
-Exa→Clay→draft.
+**What was deliberately removed (2026-06-29 — do NOT re-introduce):** the outcome-program /
+agent-creation-policy / capability-foundry machinery, the opportunity accept/reject board,
+portfolio composition, blocking input contracts, and the `provided`/`discovered` source-mode
+gymnastics. These were a second cage on top of the connector-DAG cage: they made the model spend
+its turns satisfying an ontology instead of doing go-to-market, and runs dead-ended on
+`minItems` and registration before reaching the gate. The model now drives a goal to the gate
+through a slim toolset and a free compose. If you find yourself adding a "program," a "policy," a
+required pre-run object, or a contract that blocks a run before the gate, stop — that is the cage.
 
-Honest frontier: the open node model is real and tested — `tool`/`agent`/`skill`/`code`
-steps dispatch through an injectable step runtime (`step-runners.mjs`), the agent and
-skill bridges are wired to the subscription (`agent-bridge.mjs`), and the canvas renders
-the kinds. Proven 2026-06-22: an agent step executes live on the subscription — a real
-model task returned parsed items that flowed through the workflow in ~7s, keyless. Not
-yet proven: the operator (Claude) itself composing an agent-step workflow and driving it
-to the gate. The on-disk subagent definition now loads: `loadAgentDefinition` reads
-`~/.claude/agents/<ref>.md` and `buildAgentPrompt` merges its doctrine into the run
-(tested in `agent-bridge.test.mjs`); what is still fixed is the toolset — every agent runs
-with the same read-only tools, not its own declared toolset. Portfolio composition is built and
-unit-tested: `composePortfolioGraph` (`workflow-composer.mjs`) composes many accepted channels
-toward one goal and `assemblePortfolioGraph` (`portfolio-graph.mjs`) unions them into one
-branching, multi-gate diagram and re-asserts the wall on the union. The canvas no longer draws
-swimlanes (P10, see `docs/CANVAS.md`): the GTM overview is now the `portfolio-map` lens (channels
-as tiles) and the single canvas engine projects the GTM operational object model through four
-lenses. The lane-position layout still computed inside `portfolio-graph.mjs` is now vestigial — no
-renderer reads it — but is retained alongside the load-bearing union and wall assertion. The
-"propose systems" move is now wired on BOTH front doors: the founder composes a portfolio from the
-dashboard (`PortfolioComposer.tsx` → `composePortfolio` → `/api/projects/:id/compose/portfolio`),
-and the operator's `compose_portfolio` tool now declares the `channels` input its handler requires
-(it previously threw on every call). Still pending: the live model autonomously producing strong
-portfolio specs end-to-end. A credential-gated live smoke test (`brain/test/live.test.mjs`,
-`npm --prefix brain run test:live`) proves the model composes, an agent step runs on the
-subscription, the gate holds, AND the operator resumes its conversation across drives; it skips
-until a founder is signed in. The operator carries memory at two levels: within a session it
-resumes the Claude Code conversation across founder pauses, and across sessions it recalls prior
-goals and outcomes in the same project (`recallPriorSessions`, injected into the system prompt).
-Authoring skills and agents from the UI is built (`handleNewArtifact` → `ArtifactEditor` →
-`/api/artifact/save`). Not yet built: the three-lane workflows/skills/agents workspace. A scanned
-product whose win event carries no
-source stays honestly "blind" in Measure until that attribution gap is repaired in the product
-code.
+## The run, end to end
+
+`goal → operator reads product truth → compose_and_run → composeNakedGraph builds a graph behind
+a founder gate → runGraph executes the open steps → the run stops at the gate → founder reviews →
+approve releases the exact staged items`. Proven live on the subscription: a goal produced a
+research → qualify → draft workflow that found real founders and staged personalized drafts at the
+gate, nothing sent, with no program/policy/foundry anywhere in the path.
+
+## The resident operator
+
+The operator drives a goal to the gate on the founder's Claude subscription. It is the brain
+behind both the dashboard "Go" and the goal launcher. It is naked by construction: the model is
+handed ONLY a slim toolset (`NAKED_TOOLS` in `operator-runtime.mjs`) — read the product, read/write
+shared context (taste), `compose_and_run` (the one build-and-run door), an inspect/repair loop for a
+failed run, `request_founder_input`, and `complete`. It never sees programs, policies, the foundry,
+portfolio, or channel CRUD. Its system prompt tells it to build and run, not to march through an
+ontology. It owns every durable and safety decision (session state, the run ledger, the gate,
+cancellation, restart recovery) and rents a provider-neutral runtime to do only the reasoning.
+
+Two front doors stay in lockstep: the human dashboard and the agent (MCP) interface drive the same
+engine. GTM is debugged like a codebase — every node carries real health from the scan, the run
+ledger, and connector state; a Problems rail ranks what's wrong and routes you to the node that
+fixes it.
 
 ## Canonical commands
 
@@ -98,254 +85,201 @@ code.
 
 ## Architecture
 
-- `brain/src/scan.mjs` owns grounded repository analysis — the code grounding, with
-  `file:line` citations.
-- `brain/src/graph.mjs` owns the GTM workflow DAG: dependency-scoped execution, founder
-  approval gates, exact gate continuation, the learning-memory injection point, and
-  dispatch by node `kind` (a `tool` node runs a connector; `agent`/`skill`/`code` nodes
-  run through the injectable step runtime).
-- `brain/src/step-runners.mjs` owns the open step kinds — the un-caging. `agent`, `skill`,
-  `code`, and `mcp` steps dispatch here, not through the connector registry. The runtime is
-  injectable (honest blank defaults; `createStepRuntime` for live; fakes in tests) so the
-  host never owns the intelligence. Each kind now does real work, not a pass-through: a
-  `skill` step appends its loaded `SKILL.md` to a shared run accumulator (`context.__skillGuidance`,
-  threaded by `graph.mjs`) that a downstream `agent` step folds into its prompt; a `code` step runs
-  a DETERMINISTIC built-in transform (`BUILTIN_CODE_TRANSFORMS` — dedupe/filter/limit/sort/
-  rename-fields, no eval) selected by `config.ref`; and `mcp` is now in the composer's node menu
-  (`composition.mjs`) so the model can actually emit it. `applied:false` is the honest no-op when a
-  ref/loader is absent — never a silent dead-end.
-- `brain/src/source-entry.mjs` owns the single domain rule for how a workflow gets its first
-  items — the one predicate (`sourceStandsOnData`) and the one compose-time normalizer
-  (`resolveEntry`) that used to be duplicated across the composer and the runner. A source has
-  one of two modes, derived from its shape so the label can never lie: `provided` (a
-  connector-backed seed — manual/csv/api — the founder configures and controls) or `discovered`
-  (an agent that self-sources). The mode is decided VISIBLY at compose time in the graph the
-  founder persists; the run path never silently rewrites topology. It also owns the run-path
-  contract rules: `relaxGateContracts` (always — the gate is the contract checkpoint) and
-  `relaxDiscoveryChainContracts` (only when the entry is discovered, since a best-effort
-  discovery chain is not contract-rigid while a provided chain keeps its declared fields).
+- `brain/src/scan.mjs` owns grounded repository analysis — the code grounding, with `file:line`
+  citations. `product-understanding.mjs` reports only cited, reproducible reality (never a GTM
+  taxonomy).
+- `brain/src/graph.mjs` owns the `GTMGraph` DAG run: dependency-scoped execution, founder approval
+  gates, exact gate continuation, the taste/memory injection point, and dispatch by node `kind`
+  (a `tool` node runs a connector; `agent`/`skill`/`code`/`mcp` nodes run through the injectable step
+  runtime). It normalizes run contracts so the gate is the ONLY checkpoint (see `source-entry.mjs`).
+- `brain/src/step-runners.mjs` owns the open step kinds — the un-caging. `agent`, `skill`, `code`,
+  and `mcp` steps dispatch here, not through the connector registry. The runtime is injectable (honest
+  blank defaults; `createStepRuntime` for live; fakes in tests) so the host never owns the intelligence.
+  Each kind does real work: a `skill` step appends its loaded `SKILL.md` to a shared run accumulator
+  (`context.__skillGuidance`, threaded by `graph.mjs`) that a downstream `agent` step folds into its
+  prompt; a `code` step runs a DETERMINISTIC built-in transform (`BUILTIN_CODE_TRANSFORMS` —
+  dedupe/filter/limit/sort/rename-fields, no eval) selected by `config.ref`; `mcp` is in the composer's
+  node menu. `applied:false` is the honest no-op when a ref/loader is absent — never a silent dead-end.
+- `brain/src/workflow-composer.mjs` owns `composeNakedGraph` — the one compose. The model designs the
+  graph for a goal (research/enrich/draft agents behind a founder gate via `composeGraphForChannel`),
+  the host binds the founder's input/output, re-asserts the wall, and persists a runnable flow. NO
+  program, policy, foundry, or agent artifacts: agent nodes carry their prompt inline, so they run
+  without a written definition. This is what `compose_and_run` uses.
+- `brain/src/source-entry.mjs` owns the run-path contract rules. The founder gate is the ONLY contract
+  checkpoint: `relaxGateContracts` (the gate must not reject a reviewed draft on a field-name
+  technicality; post-gate trusts the approval) and `relaxPreGateContracts` (every pre-gate node has its
+  `minItems` and field contracts zeroed, so a freely-composed graph runs to the gate on whatever it
+  produced — contracts stay ADVISORY for the UI, never a dead-end). It also still derives the
+  `provided`/`discovered` source label from a node's shape for display.
 - `brain/src/agent-bridge.mjs` owns the real step bridges: a skill loader (reads
-  `~/.claude/skills/<ref>/SKILL.md`) and a Claude agent invoker that runs a read-only
-  subagent on the founder's subscription (OAuth-first, no key, no send/publish path).
-  `liveStepRuntime` composes both; the server and operator run paths pass it to `runGraph`.
-- `brain/src/graph-operations.mjs` owns validated, reversible typed graph changes. Open
-  `kind` steps require a `ref` instead of a registry category; category is an optional
-  label, not the dispatch key.
+  `~/.claude/skills/<ref>/SKILL.md`) and a Claude agent invoker that runs a read-only subagent on the
+  founder's subscription (OAuth-first, no key, no send/publish path). `liveStepRuntime` composes both
+  (plus `BUILTIN_CODE_TRANSFORMS` and the MCP runner); the server and operator run paths pass it to
+  `runGraph`.
+- `brain/src/graph-operations.mjs` owns validated, reversible typed graph changes. Open `kind` steps
+  require a `ref` instead of a registry category; category is an optional label, not the dispatch key.
 - `brain/src/operator-store.mjs` owns durable resident-operator sessions and events.
-- `brain/src/operator-runtime.mjs` owns the model/tool loop: inspect, patch, validate,
-  run, diagnose, pause, resume, and complete. It owns every durable and safety
-  decision (session state, ledger, gates, cancellation, restart recovery) and selects
+- `brain/src/operator-runtime.mjs` owns the model/tool loop and the naked toolset (`NAKED_TOOLS`):
+  inspect product/context, `compose_and_run`, inspect/repair, ask the founder, complete. It owns every
+  durable and safety decision (session state, ledger, gates, cancellation, restart recovery) and selects
   a provider-neutral runtime to do only the reasoning.
-- `brain/src/runtimes/` are the operator runtime adapters behind one "drive the
-  session to its next pause" interface: `claude-code.mjs` (preferred local runtime — a
-  Claude Code subprocess on the founder's subscription, no raw key), `anthropic.mjs`
-  (direct API), and a slot for a future Codex subprocess. Runtime selection is
-  OAuth-first: it prefers Claude Code only when the founder is actually signed in (a
-  stored subscription login or `CLAUDE_CODE_OAUTH_TOKEN`), treats a raw
-  `ANTHROPIC_API_KEY` as the last-resort fallback, and — when on the subscription —
-  strips any stray key from the subprocess so the run bills the subscription, not the
-  key. With no credential at all it reports an honest cold-start blocked state naming
-  the options instead of crashing the SDK. Conversation memory is real on the subscription
-  runtime: the SDK persists its transcript (`persistSession`) and GTM IDE stores the captured
-  session id on the durable operator session, so each later drive `resume`s the same conversation
-  with only the "what changed" instruction (founder response, gate resolved, proposal decided)
-  instead of restarting cold after a founder pause or a full process restart. If the prior
-  transcript is gone, it falls back once to a fresh pass that re-inspects from the goal.
-- `brain/src/operator-mcp.mjs` is the stdio MCP bridge the Claude Code subprocess
-  connects to. It exposes the same typed operator tools and routes them through
-  `executeOperatorTool` against the durable session store, so persistence and safety
-  stay GTM-owned. It exposes no approve/send/publish tool by construction.
+- `brain/src/runtimes/` are the operator runtime adapters behind one "drive the session to its next
+  pause" interface: `claude-code.mjs` (preferred — a Claude Code subprocess on the founder's
+  subscription, no raw key), `anthropic.mjs` (direct API), and a slot for a future Codex subprocess.
+  Selection is OAuth-first: it prefers Claude Code only when the founder is signed in (a stored
+  subscription login or `CLAUDE_CODE_OAUTH_TOKEN`), treats a raw `ANTHROPIC_API_KEY` as last-resort, and
+  — when on the subscription — strips any stray key from the subprocess so the run bills the
+  subscription. With no credential it reports an honest cold-start blocked state instead of crashing.
+  Conversation memory is real on the subscription runtime: the SDK persists its transcript and GTM IDE
+  stores the captured session id, so each later drive `resume`s the same conversation with only the
+  "what changed" instruction after a founder pause or a full process restart.
+- `brain/src/operator-mcp.mjs` is the stdio MCP bridge the Claude Code subprocess connects to. It
+  routes the operator tools through `executeOperatorTool` against the durable session store and exposes
+  no approve/send/publish tool by construction.
 - `brain/src/flow-store.mjs` owns durable flow edits and the run ledger.
-- `brain/src/program-store.mjs` owns durable outcome programs: desired outcome,
-  buyer hypothesis, channel hypothesis, measurement plan, status, and workflow link.
-- `brain/src/agent-policy-store.mjs` owns agent creation policies: contracts, evidence
-  requirements, positive/negative rules, safety rules, evaluation signals, and revision
-  from feedback.
-- `brain/src/capability-foundry.mjs` owns personalization profiles and agent instances:
-  the product/founder/market/program context used at birth and the concrete agent
-  capability created from it.
-- `brain/src/program-compiler.mjs` owns the domain handoff from a channel spec
-  (`compileChannelProgram`, taking a plain `{ id, title, objective }` channel plus inline
-  agent specs — not a stored accept/reject opportunity) into outcome program → policy →
-  personalized agent → executable graph.
-- `brain/src/feedback-ledger.mjs` owns normalized feedback signals from gates and run
-  failures, and feeds them back into agent creation policies. It also crystallizes repeated
-  deterministic procedures into PENDING, gated `ToolBirthProposal` signals (it never auto-births).
-- `brain/src/tool-registry-store.mjs` owns the BACK of the self-building loop — the durable,
-  project-scoped registry and `approveToolBirth`, the one FOUNDER-only path that turns a pending
-  proposal into a registered, callable tool. The wall holds: birth requires authored code + a test
-  (re-asserted via `proposeTool`/`gateToolBirth`), there is no agent/operator approve path, and the
-  founder drives it from the `ToolForge` dashboard card via `POST /api/projects/:id/tool-proposals/
-  :id/approve`. (Executing a registered tool inside the step runtime is a deliberately separate,
-  not-yet-built leg — the registry stores code+test; nothing invokes a born tool yet.)
-- `brain/src/engine.mjs` derives the GTM engine state (all subsystems) from real
-  signals — scan, run ledger, connectors, gate decisions. Powers inline node health
-  and the Problems rail. Never seeded.
-- `brain/src/memory.mjs` is the learning loop: it reads founder gate decisions out of
-  the ledger and shapes them into guidance for the next run.
+- `brain/src/feedback-ledger.mjs` owns normalized feedback signals from gates and run failures (the
+  taste loop). It also crystallizes repeated deterministic procedures into PENDING, gated
+  `ToolBirthProposal` signals (it never auto-births).
+- `brain/src/tool-registry-store.mjs` owns the back half of the self-building loop — the durable,
+  project-scoped registry and `approveToolBirth`, the one FOUNDER-only path that turns a pending proposal
+  into a registered, callable tool. The wall holds: birth requires authored code + a test (re-asserted
+  via `proposeTool`/`gateToolBirth`), there is no agent/operator approve path, and the founder drives it
+  from the `ToolForge` dashboard card via `POST /api/projects/:id/tool-proposals/:id/approve`. (Executing
+  a registered tool inside the step runtime is a deliberately separate, not-yet-built leg.)
+- `brain/src/run-grounding.mjs` builds the grounding a run reads; `brain/src/run-compare.mjs` diffs two
+  runs (both extracted from the deleted program machinery as neutral helpers).
+- `brain/src/engine.mjs` derives the GTM engine state (all subsystems) from real signals — scan, run
+  ledger, connectors, gate decisions. Powers inline node health and the Problems rail. Never seeded.
+- `brain/src/memory.mjs` is the taste loop: it reads founder gate decisions out of the ledger and shapes
+  them into guidance for the next run.
 - `brain/src/mcp.mjs` is the MCP server that exposes the engine to Claude as tools.
-- `brain/src/project-store.mjs` owns the multi-channel project manifest, the shared context
-  (ICP, positioning, structured `Claim` objects with a backward-compatible string view, experiments,
-  outcomes, founder taste), and the people projection.
-- `brain/src/person-store.mjs` owns the durable, project-scoped, shared `Person` object — run
-  entrants promoted into one identity across channels (strongest-identifier key), each carrying its
-  per-appearance trigger. Real GTM state derived from runs, never seeded, never sends.
+- `brain/src/project-store.mjs` owns the project manifest, its channels (plain flows now, not program
+  workflows), the shared context (ICP, positioning, structured `Claim` objects with a back-compatible
+  string view, experiments, founder taste), and the people projection.
+- `brain/src/person-store.mjs` owns the durable, project-scoped, shared `Person` object — run entrants
+  promoted into one identity across channels (strongest-identifier key), each carrying its per-appearance
+  trigger. Real GTM state derived from runs, never seeded, never sends.
 - `brain/src/cross-reference.mjs` owns the "where does X appear across channels" index for
   person / icp / claim / experiment — the find-references query behind dedup and the canvas.
-- `brain/src/workspace.mjs` owns durable repository workspaces, proof runs, revisions,
-  and founder decisions.
-- `brain/src/revision.mjs` owns review, clean-repository apply, and checked revert.
-- `brain/src/build.mjs` creates an isolated git worktree and invokes an agent for a
-  narrow code repair.
+- `brain/src/product-model-store.mjs` + `product-model-generator.mjs` own the Product mode interpretive
+  `ProductModel` (a separate feature from the GTM run; `program-projection.mjs` survives only to
+  reconcile its events).
+- `brain/src/workspace.mjs` owns durable repository workspaces, proof runs, revisions, and founder
+  decisions. `revision.mjs` owns review, clean-repository apply, and checked revert. `build.mjs` creates
+  an isolated git worktree and invokes an agent for a narrow code repair.
 - `brain/src/connectors/` are headless, capability-declaring connectors
-  (source / enrich / filter / generate / gate / execute / measure). They are the `tool`
-  step kind — one vocabulary among the open kinds, kept for deterministic work, not the
-  only way to express a GTM system. New agent capability belongs in a subagent or skill,
-  not a new connector.
+  (source / enrich / filter / generate / gate / execute / measure). They are the `tool` step kind — one
+  vocabulary among the open kinds, kept for deterministic work, not the only way to express a GTM system.
+  New agent capability belongs in a subagent or skill, not a new connector.
 - `brain/src/server.mjs` serves the local API and the built React client.
-- `ui/` is the canonical product interface — the object-model canvas
-  (`canvas/CanvasShell.tsx`: one projection-over-an-object-model engine with lenses, used by BOTH
-  GTM and Product modes), the Problems rail, and the node editor. GTM mode projects the operational
-  object model through four lenses (channel-flow, portfolio-map, people, experiment-matrix); Product
-  mode projects the interpretive `ProductModel`. No swimlanes.
+- `ui/` is the canonical product interface — the object-model canvas (`canvas/CanvasShell.tsx`: one
+  projection-over-an-object-model engine with lenses, used by BOTH GTM and Product modes), the interactive
+  run canvas with the founder gate (`GraphCanvas.tsx`, rendered by the channel-flow lens), the Problems
+  rail, the node editor, the channel switcher, the find-references panel (`ReferencesPanel.tsx`), and the
+  self-built-tools card (`ToolForge.tsx`). GTM mode projects the operational object model through four
+  lenses (channel-flow, engine, people, experiment-matrix); Product mode projects the interpretive
+  `ProductModel`. No swimlanes, no program/outcome views.
 - `Sources/GTMIDE/` is an earlier SwiftUI prototype, not the current release path.
-  Reconsider only when full Xcode is available and native packaging is an explicit
-  goal.
 
 ## Product invariants
 
-- The citation rule binds the truth layer, not the head. Claims about what the product
-  *already does* — the scan, `product-understanding.mjs`, engine/measure derivation — are
-  proven by production-code citations or marked inferred or blind. Comments, tests, docs,
-  UI copy, and scanner pattern definitions are not evidence. This rule does NOT govern
-  ideation, strategy, or composition: go-to-market ideas run free, may be openly
-  speculative, and must never be forced to cite a line. Grounding is a tool the model
-  reaches for when a call turns on a product fact — pull, not a tax on every turn.
-  Constrain the hands (the gate, typed mutations, staged execution), not the head.
-- Engine and node health are derived from real state (scan, run ledger, connectors,
-  decisions), never seeded. A subsystem with no signal reports that honestly rather
-  than showing a confident fake number.
-- Scanning is read-only.
-- The build action may create a local branch and worktree, but it stops before
-  commit, push, deployment, or pull-request creation.
-- Direct patch application requires explicit confirmation, an approved revision, the
-  original base commit, a clean source worktree, and a successful patch check.
-- GTM flow execution stops at founder gates. The default execution connector stages
-  actions locally and never sends or publishes; "vibe up to the gate, never past it."
-- Graph changes created by a model use typed operations and pass graph validation.
-- Gate continuation reuses the exact prepared run items; it does not rerun live source,
-  enrichment, or generation work behind the founder's back.
-- The host owns truth, state, and the gate; the intelligence is rented. If a unit of work
-  is fuzzy (research, enrich, ideate, draft, propose), it is a skill or a subagent reached
-  through an open step — not a Node connector. Code is for the deterministic spine only.
-- A workflow is composed from open step kinds; the connector taxonomy is an optional
-  label, never the thing that limits what the agent can express.
-- Agent creation is a first-class domain process. No personalized agent is born without
-  a specific job, input contract, output contract, evidence requirement, safety rule,
-  and evaluation signal. A graph may run an agent instance, but the graph is not the
-  policy that created that agent.
-- Feedback improves creation rules, not only runtime prompts. Founder approvals,
-  rejections, edits, run failures, observed outcomes, and measurement gaps become
-  `FeedbackSignal` records that can revise the relevant `AgentCreationPolicy`.
-- Composition is not a fixed skeleton. The graph topology is composed by the model
-  (`composition.mjs`, injectable; live `createClaudeComposer`; doctrine in the editable
-  `~/.claude/agents/gtm-compose-workflow.md`) — it may branch, parallelize, gate more than once,
-  or close a loop. The host normalizes the spec, binds the founder's concrete input/output, and
-  enforces the wall: every `execute` node must have a founder `gate` upstream of it on every
-  path, or the composition is rejected. The blank default refuses rather than falling back to a
-  template.
-- A workflow's entry is one of two first-class, founder-visible source modes — `provided` and
-  `discovered` — and BOTH are real (see `source-entry.mjs`). The mode is decided at compose time
-  in the persisted graph and derived from the node's shape (a connector source is provided; an
-  agent source is discovered), so the label can never disagree with what the runner does. The
-  run path NEVER silently rewrites the entry topology: a founder's connector source stays a
-  connector source. A provided source that has no seed does not dead-end on a cryptic downstream
-  error — it reports an honest "configure this source" state and the founder supplies the seed
-  (manual/csv/api) they control. A graph with no concrete input is composed with a discovered
-  (self-sourcing agent) entry instead, so a fresh composition still runs on its first try and
-  reaches the founder gate.
-- Grounding does not shape. The scan and `product-understanding.mjs` report only cited,
-  reproducible reality — never a fixed go-to-market taxonomy and never a pre-written channel.
-  Reading the codebase must not collapse the product into outbound, accelerator, or any other
-  direction. Deciding what is GTM-relevant and what channels to run is ideation's job, rented
-  from the model — and ideation is now the composer's thinking posture, not a host-side
-  auto-proposer that emits an accept/reject board. The founder (or Claude) names a channel
-  directly and it compiles into a program (`compileChannelProgram`); the `Ideate` button drives
-  `composerPosture` so the model thinks out loud before committing a channel, and the channel
-  doctrine still lives in the editable `~/.claude/agents/gtm-ideate-channels.md`. There is no
-  `opportunity-engine.mjs` and no `ideation.mjs`; channel/agent lists are never hand-written in
-  `.mjs`. The host only normalizes a proposed channel and demotes an evidence-free "derived"
-  claim to "speculative".
-- The canvas is a projection over an object model, not a fixed diagram. One canvas engine
-  renders `projection(objectModel, lens)`; shared objects are shared nodes; selection
-  persists across lenses; focus-to-trace highlights an object's subgraph; there is no fixed
-  swimlane skeleton. Two modes project two object models across the truth wall: Product mode
-  projects the interpretive `ProductModel` (never feeds health); GTM mode projects the GTM
-  operational object model (Channels, Sources, People, Claims, Experiments, ICPs, Outcomes —
-  real state that DOES drive health). The two object models never cross. See `docs/CANVAS.md`.
-- Person is a first-class, durable, project-scoped shared object (`person-store.mjs`),
-  created by promoting real run entrants into durable identities with cross-channel
-  appearances. It enables find-references, dedup, fatigue control, and the experiment
-  matrix. It is real GTM state derived from runs — never seeded — and it never sends.
-- The composer controls the canvas through two channels: view-control (free, instant —
-  focus/frame/select/highlight) and mutation (proposed, ghosted, gated). View-control is
-  navigation and never touches the wall. The composer is locked to one durable operator
-  conversation per project; `projectId` is threaded explicitly, never inherited from a
-  mutable global.
+- The citation rule binds the truth layer, not the head. Claims about what the product *already does* —
+  the scan, `product-understanding.mjs`, engine/measure derivation — are proven by production-code
+  citations or marked inferred or blind. Comments, tests, docs, UI copy, and scanner pattern definitions
+  are not evidence. This rule does NOT govern ideation, strategy, or composition: go-to-market ideas run
+  free, may be openly speculative, and must never be forced to cite a line. Constrain the hands (the gate,
+  typed mutations, staged execution), not the head.
+- The harness is Truth + Wall + Taste, and nothing else. The host does not impose a program, a policy, a
+  capability factory, an opportunity board, a required pre-run object, or a contract that blocks a run
+  before the gate. Building and running is the model's job; the host only owns truth, durable state, the
+  wall, and typed mutations. Do not re-grow a fourth constraint.
+- The founder gate is the ONLY contract checkpoint. No node before the gate blocks a run on item count
+  or field names — `relaxGateContracts` + `relaxPreGateContracts` zero pre-gate contracts at run time, so
+  a freely-composed graph reaches the gate on whatever it produced and the founder reviews it there.
+  Contracts remain advisory (UI/validation), never a dead-end.
+- Engine and node health are derived from real state (scan, run ledger, connectors, decisions), never
+  seeded. A subsystem with no signal reports that honestly rather than showing a confident fake number.
+- Scanning is read-only. The build action may create a local branch and worktree, but stops before
+  commit, push, deployment, or PR. Direct patch application requires explicit confirmation, an approved
+  revision, the original base commit, a clean source worktree, and a successful patch check.
+- GTM flow execution stops at founder gates. The default execution connector stages actions locally and
+  never sends or publishes. Gate continuation reuses the exact prepared run items; it does not rerun live
+  source, enrichment, or generation work behind the founder's back. Graph changes created by a model use
+  typed operations and pass graph validation.
+- The host owns truth, state, and the gate; the intelligence is rented. If a unit of work is fuzzy
+  (research, enrich, ideate, draft, propose), it is a skill or a subagent reached through an open step —
+  not a Node connector. Code is for the deterministic spine only.
+- A workflow is composed from open step kinds; the connector taxonomy is an optional label, never the
+  thing that limits what the agent can express.
+- The taste loop shapes the next run, not a creation rule. Founder approvals, rejections, edits, run
+  failures, and measurement gaps become `FeedbackSignal` records that feed the next run's memory
+  (`get_taste`) and, when a deterministic procedure recurs, a gated `ToolBirthProposal` the founder can
+  approve into a registered tool. There is no agent-creation policy to revise — agents are composed inline.
+- Composition is not a fixed skeleton. The graph topology is composed by the model (`composition.mjs`,
+  injectable; live `createClaudeComposer`; doctrine in the editable `~/.claude/agents/gtm-compose-workflow.md`)
+  — it may branch, parallelize, gate more than once, or close a loop. The host normalizes the spec, binds the
+  founder's concrete input/output, and enforces the wall: every `execute` node must have a founder `gate`
+  upstream on every path, or the composition is rejected. The blank default refuses rather than falling back
+  to a template.
+- Grounding does not shape. The scan reports only cited, reproducible reality — never a fixed go-to-market
+  taxonomy and never a pre-written channel. Deciding what is GTM-relevant and what channels to run is the
+  model's job, rented — ideation is the composer's thinking posture, not a host-side auto-proposer that emits
+  an accept/reject board. The founder (or Claude) names a channel directly and it composes into a graph
+  (`composeNakedGraph`); the `Ideate` button drives the composer's posture so the model thinks out loud
+  before committing. There is no `opportunity-engine.mjs`, no `ideation.mjs`, no program compiler; channel
+  and agent lists are never hand-written in `.mjs`.
+- The canvas is a projection over an object model, not a fixed diagram. One canvas engine renders
+  `projection(objectModel, lens)`; shared objects are shared nodes; selection persists across lenses;
+  there is no fixed swimlane skeleton. Two modes project two object models across the truth wall: Product
+  mode projects the interpretive `ProductModel` (never feeds health); GTM mode projects the operational
+  object model (Channels, Sources, People, Claims, Experiments, ICPs — real state that DOES drive health,
+  navigated by channel). The two object models never cross. See `docs/CANVAS.md`.
+- Person is a first-class, durable, project-scoped shared object (`person-store.mjs`), created by promoting
+  real run entrants into durable identities with cross-channel appearances. It enables find-references,
+  dedup, fatigue control, and the experiment matrix. Real GTM state derived from runs — never seeded, never
+  sends.
+- The composer is locked to one durable operator conversation per project; `projectId` is threaded
+  explicitly, never inherited from a mutable global.
+- Output kind is open: a node's output is any non-empty label the model chooses (`OUTPUT_KIND_HINTS` in
+  `graph-operations.mjs` are UI hints, never a validation gate). No output kind — message, artifact,
+  dataset, signal — is privileged. Enforced by `brain/test/anti-cage.test.mjs`.
+- Taste and design are required queried tools before drafting or producing UI. A drafting agent's tool
+  calls must include `get_taste`; a visual one's must include `get_taste` AND `get_design`. Enforced by
+  `assertMoatConsulted` in `consult-guard.mjs`: the invoker captures real tool calls onto `meta.toolCalls`,
+  and at the gate `collectConsultViolations` folds a `consultBlocked` result into the run's success.
+  `get_taste` is backed by real founder gate decisions and `get_design` by real design state — neither is a
+  stub.
+- The gate supports pattern and exception approval at volume (`gate-pattern.mjs`): the founder approves a
+  class of items with a rule and marks exceptions individually, so high-volume runs do not require per-item
+  review.
+- No hard scope around any GTM motion is enforced in the engine. `brain/test/anti-cage.test.mjs` guards: no
+  closed GTM-channel enum in core code, no output kind fixed to email/message, no re-introduced fixed stage
+  skeleton. The cage stays removed.
 - Preserve unrelated user changes; this worktree may already be dirty.
-- Context retrieval is agentic: the agent pulls grounding through tools on demand
-  (`retrieval-tools.mjs`); the pre-pack (`assembler.mjs`) is a parallel legacy path being cut
-  over per-provider as the agentic version is validated. Both reuse the same provider
-  summarizers (`providers.mjs`), so neither path can disagree on what a source says. The host
-  owns the sources; who decides to read them is path-specific.
-- Output kind is open: a workflow node's output is any non-empty label the model chooses
-  (`OUTPUT_KIND_HINTS` in `graph-operations.mjs` are hints for the UI, never a validation gate).
-  No single output kind — message, artifact, dataset, signal — is privileged over the others.
-  The open output kind is enforced by `brain/test/anti-cage.test.mjs`.
-- Taste and design are required queried tools before drafting or producing UI. When a step
-  produces a draft or outreach, `get_taste` must appear in the agent's tool calls. When a step
-  produces a UI or visual artifact, both `get_taste` and `get_design` must appear. This rule
-  is enforced by `assertMoatConsulted` in `consult-guard.mjs`. The live wiring is DONE: the agent
-  invoker captures the real tool calls onto `meta.toolCalls` (`agent-bridge.mjs`), and at the gate
-  `collectConsultViolations` runs the guard for every drafting/visual agent feeding it, folding a
-  `consultBlocked` result into the run's success (`graph.mjs`). `get_taste` is backed by real
-  founder gate decisions and `get_design` by real design state — neither is a stub.
-- The gate supports pattern and exception approval at volume. `gate-pattern.mjs` lets the
-  founder approve a class of items with a rule (e.g. "any message under 80 words in this
-  voice") and mark exceptions individually, so high-volume runs do not require per-item review.
-- No hard scope around any GTM motion is enforced in the engine. The `brain/test/anti-cage.test.mjs`
-  regression guards: no closed GTM-channel enum in core code, no output kind fixed to
-  email/message, and no re-introduced fixed stage skeleton. The cage stays removed.
 
 ## Verification
 
 - Scanner changes require regression coverage in `brain/test/scan.test.mjs`.
-- Engine-derivation changes require coverage in `brain/test/engine.test.mjs`; the
-  learning loop is covered in `brain/test/memory.test.mjs`.
-- Operator-runtime changes require `brain/test/operator-runtime.test.mjs`; typed graph
-  changes and persistence are covered by their corresponding operator tests.
-- UI changes require `npm test` and browser verification of the loop (node health +
-  Problems rail), workspace, change-review, and graph partial-failure flows.
-- The Buffalo Projects acceptance case is `~/Buffalo-Projects` with `project_created`;
-  the expected result is a proven attribution gap, and the Measure subsystem reports
-  blind attribution from that same scanned win event.
+- Engine-derivation changes require coverage in `brain/test/engine.test.mjs`; the taste loop is covered in
+  `brain/test/memory.test.mjs`.
+- Operator-runtime changes require `brain/test/operator-runtime.test.mjs`; typed graph changes and
+  persistence are covered by their corresponding tests.
+- UI changes require `npm test` and browser verification of the loop (the goal launcher → operator "Go" →
+  the run reaching the founder gate), node health + Problems rail, find-references, and graph
+  partial-failure flows.
+- The Buffalo Projects acceptance case is `~/Buffalo-Projects` with `project_created`; the expected result
+  is a proven attribution gap, and the Measure subsystem reports blind attribution from that same scanned
+  win event.
 
 ## Definition of done
 
-The requested behavior is implemented, the diff is scoped, `npm test` passes, the
-visible flow is checked when relevant, engine and node numbers stay derived from real
-state, and any publishing or external-state action remains explicitly approved.
+The requested behavior is implemented, the diff is scoped, `npm test` passes, the visible flow is checked
+when relevant, engine and node numbers stay derived from real state, and any publishing or external-state
+action remains explicitly approved.
 
-Last verified: 2026-06-29. Revisit if the canonical interface or safety boundary
-changes. Architecture note: the connector-DAG taxonomy was un-caged into the open node
-model (tool/agent/skill/code/mcp) — see `docs/GOAL.md` for the route and its phases. The
-canvas is being converged onto an object-model projection (P10) — see `docs/CANVAS.md`.
-
-Completion pass (2026-06-29): the dead-end open steps were wired (`skill` applies guidance,
-`code` runs deterministic transforms, `mcp` reachable by the composer); the self-building loop's
-back half landed (`tool-registry-store.mjs` + the `ToolForge` dashboard card); the team-sync
-layer converged onto the single SQLite seam (`convex-backend.mjs`; the legacy `convex-sync` queue
-and the dead `store-fs.atomicWrite` hook retired; `workspace.mjs` now persists through the seam);
-and the agent/human front-door drift closed — find-references (`ReferencesPanel`) and portfolio
-compose (`PortfolioComposer`) are now wired into the dashboard, not operator-only. Four orphaned
-components were deleted (`CitationList`, `GtmExplorer`, `ProductFlowCanvas`, `SimulationPanel`).
+Last verified: 2026-06-29. Architecture note: two cages were removed. First the connector-DAG taxonomy was
+un-caged into the open node model (tool/agent/skill/code/mcp) — see `docs/GOAL.md`. Then the
+outcome-program / policy / capability-foundry / portfolio layer was deleted entirely, leaving the naked
+harness (Truth + Wall + Taste): the operator drives a goal to the founder gate through a slim toolset and a
+free compose (`composeNakedGraph`), proven live. If a doc, test, or module still describes programs,
+policies, the foundry, or portfolio composition as load-bearing, it is stale — the machinery is gone.
