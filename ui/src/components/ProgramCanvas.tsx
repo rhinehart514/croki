@@ -14,7 +14,7 @@ import { statusLabel as canonicalStatus, toneForPhrase } from "@/lib/status";
 import { agentPersona } from "@/lib/agentPersona";
 import type {
   AgentCreationPolicy, AgentEvaluation, AgentInstance, ConnectorMeta, ContextManifest, DomainEvent, EngineSubsystem,
-  FeedbackSignal, GateDecision, GTMContractAudit, GTMGraph, GTMNode, GTMNodeResult, GTMRunResult, NodeSelection, OutcomeProgram,
+  FeedbackSignal, GateDecision, GTMContractAudit, GTMGraph, GTMNode, GTMNodeResult, GTMRunResult, NodeSelection, OutcomeProgram, Person,
 } from "@/types";
 
 // The right zone of the program workbench is context-switching: it shows the program's "Gate &
@@ -98,6 +98,7 @@ export function ProgramCanvas({
   onOpenLibrary,
   onPaneClick,
   operatorCursor,
+  people,
   inspecting: inspectingProp,
   onInspectingChange,
 }: {
@@ -151,6 +152,9 @@ export function ProgramCanvas({
   // The live operator presence — Claude's cursor + camera-follow while it stages nodes. Forwarded
   // straight to the inner GraphCanvas; null when no operator work is on screen.
   operatorCursor?: OperatorCursorState | null;
+  // The durable, project-scoped People — forwarded to the inner GraphCanvas so a Source card can show
+  // who actually entered the channel (each with their own trigger).
+  people?: Person[];
   // Program details ("inspecting") is now driven from the FloatingDock, so it's lifted to App and
   // passed in controlled. When unprovided the canvas falls back to its own internal state, so the
   // component still works standalone.
@@ -306,7 +310,7 @@ export function ProgramCanvas({
           {hasGraph && graph ? (
             <div className={`program-graph-host ${gateBlooming ? "cgate-canvas-dimmed" : ""}`}>
               <GraphCanvas
-                mode={mode}
+                people={people}
                 graph={graph}
                 result={runResult}
                 running={running}
