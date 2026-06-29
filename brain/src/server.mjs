@@ -45,28 +45,17 @@ import {
   resolveCurrentUser,
   teamsForUser,
 } from "./team-store.mjs";
-import { composeOpportunityChannel, previewOpportunityChannel, composePortfolioFromStudio } from "./workflow-composer.mjs";
 import { executeDomainCommand } from "./domain-commands.mjs";
 import { getProductModel } from "./product-model-store.mjs";
 import { getDesignState } from "./design-state-store.mjs";
 import { createClaudeProductModeler } from "./product-model-generator.mjs";
-import { listOutcomePrograms, syncProgramStoreFromEvents } from "./program-store.mjs";
-import { runProgram, buildRunGrounding } from "./program-runtime.mjs";
-import { appendDomainEvent, listDomainEvents } from "./domain-events.mjs";
-import { listAgentCreationPolicies } from "./agent-policy-store.mjs";
-import { loadCapabilityFoundry } from "./capability-foundry.mjs";
+import { buildRunGrounding } from "./run-grounding.mjs";
 import { loadFeedbackLedger, recordFeedbackSignalsFromRun } from "./feedback-ledger.mjs";
 import { listToolRegistry, approveToolBirth } from "./tool-registry-store.mjs";
 import { listPeople, getPerson, promoteEntrantsFromRun } from "./person-store.mjs";
 import { loadClarity, addClarity, removeClarity } from "./clarity-store.mjs";
 import { findReferences, deriveChannelFeeds, deriveDirectedFeeds, createDerivedSourceLoader } from "./cross-reference.mjs";
-import {
-  compareChannelRuns,
-  createPortfolioArtifact,
-  derivePortfolioBrief,
-  recordExperiment,
-  recordObservedOutcome,
-} from "./portfolio-intelligence.mjs";
+import { compareChannelRuns } from "./run-compare.mjs";
 import { listConnectors } from "./connectors/registry.mjs";
 import { runGraph } from "./graph.mjs";
 import { liveStepRuntime } from "./agent-bridge.mjs";
@@ -367,23 +356,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const projectProgramsMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/programs$/);
-  if (req.method === "GET" && projectProgramsMatch) {
-    try {
-      const projectId = decodeURIComponent(projectProgramsMatch[1]);
-      json(res, 200, {
-        programs: listOutcomePrograms(projectId),
-        policies: listAgentCreationPolicies(projectId),
-        foundry: loadCapabilityFoundry(projectId),
-        feedback: loadFeedbackLedger(projectId),
-        events: listDomainEvents(projectId),
-      });
-    } catch (err) {
-      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
-    }
-    return;
-  }
-
   // Self-built tools — the founder-gated tool-birth -> registry leg. GET lists pending proposals
   // (deterministic procedures crystallized from repeated runs — gated, never auto-born) plus the
   // registered, callable tools. Read-only.
@@ -525,142 +497,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const projectProgramRunMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/programs\/([^/]+)\/run$/);
-  if (req.method === "POST" && projectProgramRunMatch) {
-    try {
-      const projectId = decodeURIComponent(projectProgramRunMatch[1]);
-      const programId = decodeURIComponent(projectProgramRunMatch[2]);
-      const body = await readBody(req);
-      const project = loadProject({ projectId });
-      const run = await runProgram(programId, {
-        ...body,
-        projectId,
-        stepRuntime: liveStepRuntime({ cwd: project.sharedContext?.repository?.repo || process.cwd() }),
-      }, { projectId });
-      json(res, 200, {
-        programId: run.programId,
-        graphId: run.graphId,
-        programStatus: run.programStatus,
-        storedRunCount: run.storedRunCount,
-        feedbackSignals: run.feedback.signals.length,
-        evaluations: run.evaluations.length,
-        nextVersions: run.nextVersions.map((item) => ({
-          policyId: item.policy.id,
-          agentInstanceId: item.instance.id,
-          previousInstanceId: item.instance.previousInstanceId,
-          version: item.instance.version,
-        })),
-        result: run.result,
-      });
-    } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
-    }
-    return;
-  }
-
-  // Streaming program run — the program canvas's flagship "Run Program" lights up node-by-node like
-  // the raw-graph path, instead of returning one batch at the end. runProgram already forwards the
-  // onEvent callback to runGraph, so the steps stream; we add the program summary in run_done.
-  const projectProgramRunStreamMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/programs\/([^/]+)\/run\/stream$/);
-  if (req.method === "POST" && projectProgramRunStreamMatch) {
-    res.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-    });
-    const send = (event) => { res.write(`data: ${JSON.stringify(event)}\n\n`); };
-    try {
-      const projectId = decodeURIComponent(projectProgramRunStreamMatch[1]);
-      const programId = decodeURIComponent(projectProgramRunStreamMatch[2]);
-      const body = await readBody(req);
-      const project = loadProject({ projectId });
-      const run = await runProgram(programId, {
-        ...body,
-        projectId,
-        stepRuntime: liveStepRuntime({ cwd: project.sharedContext?.repository?.repo || process.cwd() }),
-        onEvent: send,
-      }, { projectId });
-      send({
-        type: "run_done",
-        result: run.result,
-        programStatus: run.programStatus,
-        storedRunCount: run.storedRunCount,
-        feedbackSignals: run.feedback.signals.length,
-        evaluations: run.evaluations.length,
-        nextVersions: run.nextVersions.map((item) => ({
-          policyId: item.policy.id,
-          agentInstanceId: item.instance.id,
-          previousInstanceId: item.instance.previousInstanceId,
-          version: item.instance.version,
-        })),
-      });
-    } catch (err) {
-      send({ type: "run_error", error: err instanceof Error ? err.message : String(err) });
-    } finally {
-      res.end();
-    }
-    return;
-  }
-
-  // Preview: compose the channel's real graph and return it WITHOUT persisting — the founder reviews
-  // it ghosted on the canvas, then the /compose apply path persists that exact previewed graph.
-  const composePreviewMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/compose\/preview$/);
-  if (req.method === "POST" && composePreviewMatch) {
-    try {
-      const body = await readBody(req);
-      const projectId = decodeURIComponent(composePreviewMatch[1]);
-      const composeProject = loadProject({ projectId });
-      const composeRepo = composeProject.sharedContext?.repository?.repo || process.cwd();
-      json(res, 200, await previewOpportunityChannel(body, {
-        projectId,
-        compose: createClaudeComposer({ cwd: composeRepo }),
-      }));
-    } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
-    }
-    return;
-  }
-
-  const composeMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/compose$/);
-  if (req.method === "POST" && composeMatch) {
-    try {
-      const body = await readBody(req);
-      const projectId = decodeURIComponent(composeMatch[1]);
-      const composeProject = loadProject({ projectId });
-      const composeRepo = composeProject.sharedContext?.repository?.repo || process.cwd();
-      json(res, 201, await composeOpportunityChannel(body, {
-        projectId,
-        compose: createClaudeComposer({ cwd: composeRepo }),
-        evaluate: createClaudeEvaluator({ cwd: composeRepo }),
-      }));
-    } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
-    }
-    return;
-  }
-
-  // Portfolio compose: fan SEVERAL inline channels out toward ONE goal and union them into one
-  // branching, multi-gate diagram. This is the dashboard front door to the operator's "propose
-  // systems" move at portfolio altitude — same grounding (project repo cwd) and same live composer
-  // as the single-channel path, just composing many channels at once. Compose-only, no persistence;
-  // the wall is re-asserted on the union inside assemblePortfolioGraph.
-  const composePortfolioMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/compose\/portfolio$/);
-  if (req.method === "POST" && composePortfolioMatch) {
-    try {
-      const body = await readBody(req);
-      const projectId = decodeURIComponent(composePortfolioMatch[1]);
-      const composeProject = loadProject({ projectId });
-      const composeRepo = composeProject.sharedContext?.repository?.repo || process.cwd();
-      json(res, 201, await composePortfolioFromStudio(body, {
-        projectId,
-        compose: createClaudeComposer({ cwd: composeRepo }),
-      }));
-    } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
-    }
-    return;
-  }
-
   if (req.method === "GET" && url.pathname === "/api/project") {
     try {
       json(res, 200, { project: getProjectWithChannels() });
@@ -675,36 +511,6 @@ const server = http.createServer(async (req, res) => {
     // seeded) while keeping the legacy `contacts` shape intact for existing readers.
     const people = listPeople(project.id);
     json(res, 200, { sharedContext: { ...project.sharedContext, people } }); return;
-  }
-
-  if (req.method === "GET" && url.pathname === "/api/project/brief") {
-    json(res, 200, { brief: derivePortfolioBrief() }); return;
-  }
-
-  if (req.method === "POST" && url.pathname === "/api/project/artifacts/portfolio-brief") {
-    try { json(res, 200, createPortfolioArtifact()); }
-    catch (err) { json(res, 400, { error: err instanceof Error ? err.message : String(err) }); }
-    return;
-  }
-
-  if (req.method === "POST" && url.pathname === "/api/outcomes") {
-    try {
-      const body = await readBody(req);
-      json(res, 200, recordObservedOutcome(body));
-    } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
-    }
-    return;
-  }
-
-  if (req.method === "POST" && url.pathname === "/api/experiments") {
-    try {
-      const body = await readBody(req);
-      json(res, 200, recordExperiment(body));
-    } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
-    }
-    return;
   }
 
   if (req.method === "POST" && url.pathname === "/api/project/context") {
@@ -740,27 +546,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "POST" && url.pathname === "/api/program-workflows") {
-    try {
-      const body = await readBody(req);
-      const project = loadProject();
-      const created = await executeDomainCommand("CreateProgramWorkflow", {
-        ...body,
-        projectId: project.id,
-      }, { projectId: project.id });
-      const savedProject = setActiveChannel(created.channel.id);
-      json(res, 201, {
-        project: getProjectWithChannels(),
-        program: created.program,
-        workflow: created.channel,
-        graph: created.workflowGraph,
-        activeChannelId: savedProject.activeChannelId,
-      });
-    } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
-    }
-    return;
-  }
 
   // Living Product Picture — the founder-editable interpretation aggregate. Three state-changing
   // commands funnel through executeDomainCommand (the single chokepoint), plus a read. derive injects
@@ -822,39 +607,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const updateProgramWorkflowMatch = url.pathname.match(/^\/api\/program-workflows\/([^/]+)\/update$/);
-  if (req.method === "POST" && updateProgramWorkflowMatch) {
-    try {
-      const body = await readBody(req);
-      const project = loadProject();
-      const workflow = getChannel(project, decodeURIComponent(updateProgramWorkflowMatch[1]));
-      if (!workflow.outcomeProgramId) throw new Error(`Workflow is not program-backed: ${workflow.id}`);
-      const program = await executeDomainCommand("UpdateProgramWorkflowMetadata", {
-        ...body,
-        projectId: project.id,
-        programId: workflow.outcomeProgramId,
-        channelId: workflow.id,
-      }, { projectId: project.id });
-      const updatedProject = getProjectWithChannels();
-      const updatedWorkflow = updatedProject.channels.find((item) => item.outcomeProgramId === program.id || item.id === workflow.id);
-      json(res, 200, { project: updatedProject, program, workflow: updatedWorkflow });
-    } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
-    }
-    return;
-  }
 
-  const duplicateProgramWorkflowMatch = url.pathname.match(/^\/api\/program-workflows\/([^/]+)\/duplicate$/);
-  if (req.method === "POST" && duplicateProgramWorkflowMatch) {
-    try {
-      const body = await readBody(req);
-      const duplicated = duplicateChannel(decodeURIComponent(duplicateProgramWorkflowMatch[1]), body);
-      json(res, 201, { ...duplicated, workflow: duplicated.channel });
-    } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
-    }
-    return;
-  }
 
   if (req.method === "POST" && url.pathname === "/api/channels") {
     try {
@@ -1392,10 +1145,7 @@ const server = http.createServer(async (req, res) => {
     let graphId = requested;
     try { graphId = getChannel(project, requested).graphId; } catch { /* legacy graph id */ }
     const saved = loadFlow(graphId, null);
-    const ownedProgram = listOutcomePrograms(project.id).find((program) =>
-      program.workflowGraph?.id === graphId || program.id === requested
-    );
-    const graph = ownedProgram?.workflowGraph ?? saved.graph ?? null;
+    const graph = saved.graph ?? null;
     if (!graph) {
       json(res, 404, { error: `Graph not found: ${graphId}` });
       return;
@@ -1415,16 +1165,6 @@ const server = http.createServer(async (req, res) => {
       const validation = validateGraph(body.graph);
       if (!validation.ok) throw new Error(`Graph is invalid: ${validation.errors.join(" ")}`);
       const saved = saveFlow(body.graph);
-      if (saved.graph.outcomeProgramId) {
-        const project = loadProject();
-        appendDomainEvent(project.id, {
-          type: "WorkflowGraphUpdated",
-          aggregateType: "OutcomeProgram",
-          aggregateId: saved.graph.outcomeProgramId,
-          data: { graphId: saved.graph.id, workflowGraph: saved.graph },
-        });
-        syncProgramStoreFromEvents(project.id);
-      }
       json(res, 200, { graph: saved.graph, savedAt: saved.updatedAt });
     } catch (err) { json(res, 400, { error: err instanceof Error ? err.message : String(err) }); }
     return;

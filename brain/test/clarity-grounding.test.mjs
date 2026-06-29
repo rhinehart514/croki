@@ -8,7 +8,7 @@ import { addClarity, clarityGrounding } from "../src/clarity-store.mjs";
 import { createProject, loadProject } from "../src/project-store.mjs";
 import {
   composeGraphForChannel,
-  previewOpportunityChannel,
+  composeNakedGraph,
 } from "../src/workflow-composer.mjs";
 
 // A fake composer that records the grounding it is handed and returns a minimal, valid graph
@@ -103,7 +103,7 @@ describe("clarity grounding — founder pins reach the composer", () => {
     });
   });
 
-  describe("previewOpportunityChannel — end to end through a real project", () => {
+  describe("composeNakedGraph — end to end through a real project", () => {
     it("injects the project's pinned clarity into the compose prompt grounding", async () => {
       createProject({ name: "GTM IDE" }, options);
       const project = loadProject(options);
@@ -112,7 +112,7 @@ describe("clarity grounding — founder pins reach the composer", () => {
       addClarity(project.id, { kind: "claim", text: "per-site pricing beats per-seat" }, options);
 
       const { compose, calls } = recordingComposer();
-      await previewOpportunityChannel(
+      await composeNakedGraph(
         { title: "Operator outreach", objective: "land one pilot" },
         { ...options, projectId: project.id, compose },
       );
@@ -131,7 +131,7 @@ describe("clarity grounding — founder pins reach the composer", () => {
       const project = loadProject(options);
 
       const { compose, calls } = recordingComposer();
-      await previewOpportunityChannel(
+      await composeNakedGraph(
         { title: "Operator outreach", objective: "land one pilot" },
         { ...options, projectId: project.id, compose },
       );

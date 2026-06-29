@@ -7,7 +7,6 @@ import {
   createProject, listProjects, loadProject, loadProjectCatalog, saveProject,
 } from "../src/project-store.mjs";
 import { deleteProject, mergeProjects } from "../src/project-merge.mjs";
-import { listOutcomePrograms, loadProgramStore, saveProgramStore } from "../src/program-store.mjs";
 import { loadFeedbackLedger, saveFeedbackLedger } from "../src/feedback-ledger.mjs";
 import { createOperatorSession, listOperatorSessions } from "../src/operator-store.mjs";
 
@@ -24,15 +23,7 @@ describe("project merge + delete", () => {
 
   afterEach(() => fs.rmSync(parent, { recursive: true, force: true }));
 
-  function seed(projectId, { programName, signalId, channelId } = {}) {
-    if (programName) {
-      const store = loadProgramStore(projectId, options);
-      saveProgramStore({
-        ...store,
-        projectId,
-        programs: [...store.programs, { id: `program-${projectId}`, projectId, name: programName, graphId: `${projectId}--flow` }],
-      }, options);
-    }
+  function seed(projectId, { signalId, channelId } = {}) {
     if (signalId) {
       const ledger = loadFeedbackLedger(projectId, options);
       saveFeedbackLedger({ ...ledger, projectId, signals: [...ledger.signals, { id: signalId, projectId, kind: "gate_approved" }] }, options);
@@ -44,17 +35,11 @@ describe("project merge + delete", () => {
   }
 
   it("folds a source project's records into the target and removes the source", () => {
-    seed("beta", { programName: "Beta program", signalId: "sig-beta", channelId: "chan-beta" });
+    seed("beta", { signalId: "sig-beta", channelId: "chan-beta" });
     seed("alpha", { channelId: "chan-alpha" });
     createOperatorSession({ goal: "beta goal", projectId: "beta" }, options);
 
     mergeProjects(["beta"], "alpha", options);
-
-    // Programs moved and repointed.
-    const programs = listOutcomePrograms("alpha", options);
-    assert.equal(programs.length, 1);
-    assert.equal(programs[0].name, "Beta program");
-    assert.equal(programs[0].projectId, "alpha");
 
     // Feedback signal moved.
     assert.deepEqual(loadFeedbackLedger("alpha", options).signals.map((s) => s.id), ["sig-beta"]);
@@ -63,7 +48,7 @@ describe("project merge + delete", () => {
     assert.deepEqual(listOperatorSessions({ ...options, projectId: "alpha" }).map((s) => s.goal), ["beta goal"]);
     assert.equal(listOperatorSessions({ ...options, projectId: "beta" }).length, 0);
 
-    // Legacy channels unioned on the target.
+    // Channels unioned on the target.
     const channels = loadProject({ ...options, projectId: "alpha" }).channels.map((c) => c.id).sort();
     assert.deepEqual(channels, ["chan-alpha", "chan-beta"]);
 
@@ -73,18 +58,16 @@ describe("project merge + delete", () => {
     assert.equal(catalog.activeProjectId, "alpha");
 
     // Source store files purged.
-    assert.equal(fs.existsSync(path.join(parent, "programs", "beta.json")), false);
     assert.equal(fs.existsSync(path.join(parent, "feedback-ledger", "beta.json")), false);
   });
 
   it("is idempotent on re-running the same merge (dedupe by id)", () => {
-    seed("beta", { programName: "Beta program", signalId: "sig-beta" });
+    seed("beta", { signalId: "sig-beta" });
     mergeProjects(["beta"], "alpha", options);
     // Re-create beta with the same content and merge again — no duplicate records.
     createProject({ name: "Beta" }, options); // new beta id "beta" (alpha+beta exist → "beta")
-    seed("beta", { programName: "Beta program", signalId: "sig-beta" });
+    seed("beta", { signalId: "sig-beta" });
     mergeProjects(["beta"], "alpha", options);
-    assert.equal(listOutcomePrograms("alpha", options).length, 1);
     assert.equal(loadFeedbackLedger("alpha", options).signals.length, 1);
   });
 
@@ -95,10 +78,10 @@ describe("project merge + delete", () => {
   });
 
   it("deletes a project and purges its stores, never the last one", () => {
-    seed("beta", { programName: "Beta program" });
+    seed("beta", { signalId: "sig-beta" });
     deleteProject("beta", options);
     assert.deepEqual(listProjects(options).projects.map((p) => p.id), ["alpha"]);
-    assert.equal(fs.existsSync(path.join(parent, "programs", "beta.json")), false);
+    assert.equal(fs.existsSync(path.join(parent, "feedback-ledger", "beta.json")), false);
     assert.throws(() => deleteProject("alpha", options), /last remaining/i);
   });
 });

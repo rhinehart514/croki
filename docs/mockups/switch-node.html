@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>The switch node — in cards, real system</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;650&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#18181b; --ink-2:#3f3f46; --muted:#71717a; --faint:#a1a1aa; --ghost:#d4d4d8;
+    --surface:#fff; --surface-2:#f4f4f5; --canvas:#fafafa; --line:#ececec; --line-2:#e4e4e7;
+    --proven:#16a34a; --proven-soft:#f0fdf4; --gap:#d97706; --gap-soft:#fffbeb;
+    --danger:#dc2626; --blind:#a1a1aa; --link:#2563eb;
+    --r-sm:6px; --r-md:9px; --r-lg:12px; --r-xl:16px; --r-2xl:24px;
+    --shadow-card:0 1px 2px rgba(24,24,27,.04), 0 1px 3px rgba(24,24,27,.06);
+    --shadow-pop:0 4px 12px rgba(24,24,27,.08), 0 12px 32px rgba(24,24,27,.10);
+    --sans:"Geist", ui-sans-serif, -apple-system, system-ui, sans-serif;
+    --mono:"Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);padding:30px 38px}
+  .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .title{font-size:21px;font-weight:600;letter-spacing:-.011em;margin:6px 0 1px}
+  .sub{font-size:13px;color:var(--muted);max-width:680px;line-height:1.5;margin-bottom:8px}
+  .cols{display:flex;gap:40px;align-items:flex-start}
+  .colcap{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:0 0 14px}
+
+  /* ---- canvas slice ---- */
+  .canvas{position:relative;width:600px;height:470px;background:var(--canvas);border:1px solid var(--line);border-radius:var(--r-lg);flex:none}
+  .edges{position:absolute;inset:0;pointer-events:none}
+
+  /* ---- node card (real values: canvas-card / canvas-refine) ---- */
+  .node{position:absolute;width:200px;background:var(--surface);border:1px solid var(--line-2);
+    border-radius:var(--r-lg);box-shadow:var(--shadow-card);padding:13px 14px 11px;display:flex;flex-direction:column;gap:4px}
+  .nhead{display:flex;align-items:center;gap:8px}
+  .nicon{width:26px;height:26px;border-radius:var(--r-sm);background:var(--surface-2);display:flex;align-items:center;justify-content:center;color:var(--ink-2);flex:none}
+  .nicon svg{width:15px;height:15px}
+  .neyebrow{font-size:9.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .nstatus{margin-left:auto;width:7px;height:7px;border-radius:50%}
+  .ntitle{font-size:13.5px;font-weight:560;color:var(--ink);letter-spacing:-.011em;line-height:1.3}
+  .nfoot{font-family:var(--mono);font-size:10px;color:var(--faint)}
+
+  /* switch node on canvas: left ink accent = automatic logic (parallel to amber gate = your wall) */
+  .node-switch{border-left:2px solid var(--ink);width:212px}
+  .sw-rule{font-family:var(--mono);font-size:10.5px;color:var(--ink-2);background:var(--surface-2);border-radius:var(--r-sm);padding:3px 7px;margin-top:2px;display:inline-block}
+  .sw-branches{display:flex;flex-direction:column;gap:3px;margin-top:5px}
+  .sw-b{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:9.5px;color:var(--muted)}
+  .sw-b .dot{width:5px;height:5px;border-radius:50%;flex:none}
+  .sw-b .pct{margin-left:auto;color:var(--ink-2)}
+
+  /* gate node accent */
+  .node-gate{border-left:2px solid var(--gap);background:linear-gradient(180deg,var(--gap-soft),var(--surface))}
+  .node-gate .nicon{background:var(--gap-soft);color:var(--gap)}
+
+  /* ---- expanded / focused switch (selected: 340, r-2xl, shadow-pop, ink border) ---- */
+  .focus{width:340px;background:var(--surface);border:1px solid var(--ink);border-radius:var(--r-2xl);
+    box-shadow:var(--shadow-pop);padding:18px 18px 15px;flex:none}
+  .fhead{display:flex;align-items:center;gap:9px;margin-bottom:13px}
+  .ficon{width:30px;height:30px;border-radius:var(--r-md);background:var(--surface-2);display:flex;align-items:center;justify-content:center;color:var(--ink)}
+  .ficon svg{width:17px;height:17px}
+  .feyebrow{font-size:9.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .ftitle{font-size:15px;font-weight:600;letter-spacing:-.011em;color:var(--ink)}
+  .fstate{margin-left:auto;font-family:var(--mono);font-size:9.5px;font-weight:500;color:var(--ink);background:var(--surface-2);border:1px solid var(--line-2);border-radius:100px;padding:3px 9px;display:flex;align-items:center;gap:5px}
+  .fstate .pulse{width:6px;height:6px;border-radius:50%;background:var(--ink);animation:liveblink 1.6s infinite}
+  @keyframes liveblink{0%,100%{opacity:1}50%{opacity:.35}}
+
+  .frow-label{font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}
+  .editrule{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--line-2);border-radius:var(--r-md);padding:9px 11px}
+  .editrule .plain{font-size:12.5px;color:var(--ink-2)}
+  .editrule .val{font-family:var(--mono);font-size:12px;color:var(--ink);background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-sm);padding:2px 7px}
+  .editrule .pencil{margin-left:auto;color:var(--faint)}
+
+  .branch{display:flex;flex-direction:column;gap:5px;padding:10px 0;border-top:1px solid var(--line)}
+  .branch:first-of-type{border-top:none}
+  .bhead{display:flex;align-items:center;gap:8px}
+  .bcond{font-family:var(--mono);font-size:11px;color:var(--ink)}
+  .barrow{color:var(--faint);font-size:11px}
+  .btarget{font-size:12px;color:var(--ink-2);font-weight:500}
+  .bcount{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--muted)}
+  .track{height:5px;background:var(--surface-2);border-radius:100px;overflow:hidden}
+  .fill{height:100%;border-radius:100px}
+  .branch.blind .bcond,.branch.blind .btarget{color:var(--faint)}
+  .blindtag{font-family:var(--mono);font-size:9px;color:var(--blind);border:1px solid var(--ghost);border-radius:4px;padding:1px 5px}
+
+  .ffoot{font-family:var(--mono);font-size:9.5px;color:var(--faint);margin-top:13px;line-height:1.5}
+</style>
+</head>
+<body>
+  <div class="kicker">primitive spec · the switch node</div>
+  <div class="title">A switch makes conditional logic a card you can read and edit</div>
+  <div class="sub">Not hidden in an edge. It's a node — neutral ink (logic is automatic, so never amber). It states its rule in plain language, shows which branch is firing right now and how the traffic split, and stays honest when a branch has no data yet.</div>
+
+  <div class="cols">
+    <!-- ============ CANVAS SLICE (cards are back) ============ -->
+    <div>
+      <p class="colcap">on the canvas · routing between real cards</p>
+      <div class="canvas">
+        <svg class="edges" viewBox="0 0 600 470" preserveAspectRatio="none">
+          <defs>
+            <marker id="a" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto"><path d="M0,0 L6,3.5 L0,7 z" fill="var(--ink-2)"/></marker>
+            <marker id="af" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto"><path d="M0,0 L6,3.5 L0,7 z" fill="var(--faint)"/></marker>
+          </defs>
+          <!-- enrich -> switch : high conviction, thick ink, LIVE (moving dot) -->
+          <path id="e1" d="M224,150 C250,150 248,175 268,182" stroke="var(--ink)" stroke-width="5" fill="none" marker-end="url(#a)"/>
+          <!-- switch -> fast(draft) : firing branch, thick, live -->
+          <path id="e2" d="M376,170 C402,170 400,118 426,112" stroke="var(--ink)" stroke-width="4.5" fill="none" marker-end="url(#a)"/>
+          <!-- switch -> nurture : thinner, not firing right now -->
+          <path id="e3" d="M376,205 C402,205 400,330 426,346" stroke="var(--faint)" stroke-width="2" fill="none" marker-end="url(#af)"/>
+          <!-- live moving dots -->
+          <circle r="3" fill="var(--ink)"><animateMotion dur="2.4s" repeatCount="indefinite"><mpath href="#e1"/></animateMotion></circle>
+          <circle r="3" fill="var(--ink)"><animateMotion dur="2.6s" begin=".6s" repeatCount="indefinite"><mpath href="#e2"/></animateMotion></circle>
+        </svg>
+
+        <!-- Enrich card -->
+        <div class="node" style="left:24px;top:118px">
+          <div class="nhead">
+            <div class="nicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></div>
+            <div class="neyebrow">Agent</div>
+            <div class="nstatus" style="background:var(--proven)"></div>
+          </div>
+          <div class="ntitle">Enrich prospect</div>
+          <div class="nfoot">124 people · health 88</div>
+        </div>
+
+        <!-- Switch card (the new primitive, collapsed) -->
+        <div class="node node-switch" style="left:268px;top:128px">
+          <div class="nhead">
+            <div class="nicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="9" r="2.5"/><path d="M8.3 6.6h4.2a4 4 0 0 1 4 4M6 8.5v7"/></svg></div>
+            <div class="neyebrow">Switch</div>
+            <div class="nstatus" style="background:var(--ink)"></div>
+          </div>
+          <div class="ntitle">Fit score routing</div>
+          <span class="sw-rule">fit score ≥ 70</span>
+          <div class="sw-branches">
+            <div class="sw-b"><span class="dot" style="background:var(--ink)"></span>≥70 → fast<span class="pct">62%</span></div>
+            <div class="sw-b"><span class="dot" style="background:var(--faint)"></span>&lt;70 → nurture<span class="pct">38%</span></div>
+          </div>
+        </div>
+
+        <!-- Draft (fast) card -->
+        <div class="node" style="left:426px;top:64px">
+          <div class="nhead">
+            <div class="nicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7-3-3-7 7v3h3z"/><path d="M16 5l3 3"/></svg></div>
+            <div class="neyebrow">Agent</div>
+            <div class="nstatus" style="background:var(--proven)"></div>
+          </div>
+          <div class="ntitle">Draft · fast path</div>
+          <div class="nfoot">77 today · firing</div>
+        </div>
+
+        <!-- Nurture card -->
+        <div class="node" style="left:426px;top:316px">
+          <div class="nhead">
+            <div class="nicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l2 5 4-12 2 7h6"/></svg></div>
+            <div class="neyebrow">Sequence</div>
+            <div class="nstatus" style="background:var(--faint)"></div>
+          </div>
+          <div class="ntitle">Nurture · 3-touch</div>
+          <div class="nfoot">47 today · slow</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ EXPANDED / FOCUSED SWITCH ============ -->
+    <div>
+      <p class="colcap">selected · the switch opens to its detail</p>
+      <div class="focus">
+        <div class="fhead">
+          <div class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="9" r="2.5"/><path d="M8.3 6.6h4.2a4 4 0 0 1 4 4M6 8.5v7"/></svg></div>
+          <div>
+            <div class="feyebrow">Switch · auto</div>
+            <div class="ftitle">Fit score routing</div>
+          </div>
+          <div class="fstate"><span class="pulse"></span>firing → fast</div>
+        </div>
+
+        <div class="frow-label">Route when</div>
+        <div class="editrule">
+          <span class="plain">a person's</span><span class="val">fit score</span><span class="plain">is</span><span class="val">≥ 70</span>
+          <span class="pencil"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span>
+        </div>
+
+        <div class="frow-label">Branches · live split today</div>
+
+        <div class="branch">
+          <div class="bhead"><span class="bcond">≥ 70</span><span class="barrow">→</span><span class="btarget">Draft · fast path</span><span class="bcount">77 routed</span></div>
+          <div class="track"><div class="fill" style="width:62%;background:var(--ink)"></div></div>
+        </div>
+
+        <div class="branch">
+          <div class="bhead"><span class="bcond">&lt; 70</span><span class="barrow">→</span><span class="btarget">Nurture · 3-touch</span><span class="bcount">47 routed</span></div>
+          <div class="track"><div class="fill" style="width:38%;background:var(--faint)"></div></div>
+        </div>
+
+        <div class="branch blind">
+          <div class="bhead"><span class="bcond">no score</span><span class="barrow">→</span><span class="btarget">Hold for enrich</span><span class="blindtag">blind · 0</span></div>
+          <div class="track"><div class="fill" style="width:0%"></div></div>
+        </div>
+
+        <div class="ffoot">evaluated 2m ago · resolves on every run · reversible<br/>edit the rule in plain language — it re-routes live, never sends</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -195,15 +195,15 @@ async function updateSharedContext({ patch }) {
 }
 
 async function createWorkflow(input) {
-  return brainPost("/api/program-workflows", input);
+  return brainPost("/api/channels", input);
 }
 
 async function duplicateWorkflow({ workflowId, ...input }) {
-  return brainPost(`/api/program-workflows/${encodeURIComponent(workflowId)}/duplicate`, input);
+  return brainPost(`/api/channels/${encodeURIComponent(workflowId)}/duplicate`, input);
 }
 
 async function updateWorkflow({ workflowId, ...patch }) {
-  return brainPost(`/api/program-workflows/${encodeURIComponent(workflowId)}/update`, patch);
+  return brainPost(`/api/channels/${encodeURIComponent(workflowId)}/update`, patch);
 }
 
 async function listProjects() {
@@ -216,10 +216,6 @@ async function createProject(input) {
 
 async function activateProject({ projectId }) {
   return brainPost(`/api/projects/${encodeURIComponent(projectId)}/activate`, {});
-}
-
-async function composeChannel({ projectId, ...input }) {
-  return brainPost(`/api/projects/${encodeURIComponent(projectId)}/compose`, input);
 }
 
 // ---------------------------------------------------------------------------
@@ -245,43 +241,32 @@ async function recordProductSignal(input = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Outcome programs — the product's declared domain center (OutcomeProgram).
+// Outcomes — a founder's real outcomes are the systems (channels/flows) on the
+// canvas: each has a goal, a system, and a founder gate.
 // ---------------------------------------------------------------------------
 
-// A founder's real outcomes are programs (the rich, compiled form) PLUS the standalone systems
-// (channels) that exist before any program is compiled — the operator composes a channel graph well
-// before a heavyweight OutcomeProgram ever persists. Reporting only programs would tell an agent
-// "0 outcomes" while real systems sit on the canvas — the same seam the human rail closes. The
-// active project's systems come from GET /api/project; we merge in only the systems no program wraps.
-async function standaloneSystems(projectId, programs) {
+// The active project's systems come from GET /api/project. Each channel is one outcome.
+async function standaloneSystems(projectId) {
   try {
     const proj = await brainGet("/api/project");
     if ((proj.project?.id ?? projectId) !== projectId) return []; // channels are the active project's
-    const programIds = new Set((programs ?? []).map((p) => p.id));
     return (proj.project?.channels ?? [])
-      .filter((ch) => !ch.outcomeProgramId || !programIds.has(ch.outcomeProgramId))
       .map((ch) => ({
         id: ch.id, name: ch.name, form: "system", objective: ch.objective ?? null,
         status: ch.status, graphId: ch.graphId, runCount: ch.runCount ?? 0, pendingGates: ch.pendingGates ?? 0,
       }));
   } catch {
-    return []; // the channel endpoint is optional; fall back to programs only
+    return [];
   }
 }
 
 /**
- * list_outcomes — every outcome in the project: programs (with their policies, agents, feedback,
- * and domain-event trail) and the standalone systems not yet wrapped by a program.
+ * list_outcomes — every outcome in the project: the systems (channels/flows) the founder has built.
  */
 async function listOutcomes({ projectId } = {}) {
   const id = await resolveProjectId(projectId);
-  const data = await brainGet(`/api/projects/${encodeURIComponent(id)}/programs`);
-  const systems = await standaloneSystems(id, data.programs);
-  const outcomes = [
-    ...(data.programs ?? []).map((p) => ({ id: p.id, name: p.name, form: "program", status: p.lastRunStatus ?? p.lifecycle, graphId: p.graphId ?? null })),
-    ...systems,
-  ];
-  return { projectId: id, outcomes, ...data, systems };
+  const systems = await standaloneSystems(id);
+  return { projectId: id, outcomes: systems, systems };
 }
 
 /**
@@ -295,27 +280,16 @@ async function listToolProposals({ projectId } = {}) {
 }
 
 /**
- * get_outcome — one outcome by id (or name): a program with its policies, or, failing that, a
- * standalone system (channel). The host exposes no single-program endpoint, so both resolve from
- * the project's lists.
+ * get_outcome — one outcome by id (or name): a system (channel/flow) the founder built.
  */
 async function getOutcome({ outcomeId, projectId }) {
   const id = await resolveProjectId(projectId);
-  const data = await brainGet(`/api/projects/${encodeURIComponent(id)}/programs`);
-  const program = (data.programs ?? []).find((p) => p.id === outcomeId || p.name === outcomeId);
-  if (program) {
-    const policies = (data.policies ?? []).filter((policy) => policy.programId === program.id);
-    return { projectId: id, form: "program", program, policies };
-  }
-  const systems = await standaloneSystems(id, data.programs);
+  const systems = await standaloneSystems(id);
   const system = systems.find((s) => s.id === outcomeId || s.name === outcomeId);
   if (system) return { projectId: id, form: "system", system };
   return {
     error: `No outcome "${outcomeId}" in project ${id}.`,
-    available: [
-      ...(data.programs ?? []).map((p) => ({ id: p.id, name: p.name, form: "program" })),
-      ...systems.map((s) => ({ id: s.id, name: s.name, form: "system" })),
-    ],
+    available: systems.map((s) => ({ id: s.id, name: s.name, form: "system" })),
   };
 }
 
@@ -416,40 +390,7 @@ const TOOLS = [
     handler: listToolProposals,
   },
 
-  // ── Channels ───────────────────────────────────────────────────────────────
-  {
-    name: "compose_channel",
-    description: "Compose an inline channel spec and the agents it needs into a validated, gated workflow with input, founder gate, output, measure, and feedback steps. The channel is defined directly here (by the founder or by Claude) — there is no opportunity accept-list to look it up in. Builds the workflow graph; it does not run it (use run_workflow) and never sends anything.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        projectId: { type: "string" },
-        title: { type: "string", description: "The channel's title." },
-        objective: { type: "string", description: "What this channel is trying to achieve." },
-        kind: { type: "string", description: "Optional channel label stored as metadata." },
-        agents: {
-          type: "array",
-          description: "The agent teammates this channel needs, as inline specs.",
-          items: {
-            type: "object",
-            properties: {
-              ref: { type: "string", description: "Stable agent ref." },
-              role: { type: "string" },
-              objective: { type: "string" },
-              prompt: { type: "string" },
-            },
-          },
-        },
-        name: { type: "string", description: "Optional workflow name override (defaults to the channel title)." },
-        input: { type: "object" },
-        output: { type: "object" },
-      },
-      required: ["projectId", "title", "objective"],
-    },
-    handler: composeChannel,
-  },
-
-  // ── Workflows — author (the OutcomeProgram's execution plan) ────────────────
+  // ── Workflows — author (the channel's execution plan) ──────────────────────
   {
     name: "list_workflows",
     description: "List every outcome-program workflow in the active project, with id, program id, status, run history, and graph-shape metadata. Use to find a workflow id before getting, running, or editing one. Read-only.",
@@ -458,7 +399,7 @@ const TOOLS = [
   },
   {
     name: "create_workflow",
-    description: "Create a blank outcome-program workflow, then shape its graph with founder-reviewed operations. Use to start a workflow from scratch; use compose_channel instead to build one from an inline channel spec and its agents. Channel is stored only as workflow metadata, not a separate object.",
+    description: "Create a blank channel/workflow, then shape its graph with founder-reviewed operations. Use to start a workflow from scratch. Channel is stored only as workflow metadata, not a separate object.",
     inputSchema: {
       type: "object",
       properties: {

@@ -3,10 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { executeDomainCommand } from "../src/domain-commands.mjs";
-import { listDomainEvents } from "../src/domain-events.mjs";
 import { recordFlowRun } from "../src/flow-store.mjs";
-import { listOutcomePrograms } from "../src/program-store.mjs";
 import {
   createChannel,
   createProject,
@@ -60,18 +57,13 @@ describe("multi-channel GTM project", () => {
     }, options);
     const rawProject = loadProject(options);
     const project = getProjectWithChannels(options);
-    assert.equal(rawProject.channels.length, 0, "new channel-shaped records are projected from programs, not stored as project aggregates");
+    assert.equal(rawProject.channels.length, 2, "channels are flows stored directly on the project");
     assert.equal(project.channels.length, 2);
     assert.equal(project.activeChannelId, copy.channel.id);
     assert.equal(project.channels.find((channel) => channel.id === copy.channel.id).kind, "partner");
     assert.equal(project.sharedContext.positioning.category, "GTM operating environment");
     assert.equal(project.channels.find((channel) => channel.id === copy.channel.id).positioning, undefined);
-    const programs = listOutcomePrograms(rawProject.id, { ...options, projectId: rawProject.id });
-    assert.equal(programs.length, 2);
-    assert.ok(programs.every((program) => program.workflowGraph?.id), "each projected channel is backed by a program-owned workflow graph");
-    const events = listDomainEvents(rawProject.id, { ...options, projectId: rawProject.id });
-    assert.ok(events.some((event) => event.type === "OutcomeProgramCreated"));
-    assert.ok(events.some((event) => event.type === "ProgramChannelMetadataUpdated"));
+    assert.ok(project.channels.every((channel) => channel.graphId), "each channel is backed by an executable workflow graph");
   });
 
   it("surfaces what the last run produced on each channel (results back on the overview)", () => {
@@ -108,21 +100,5 @@ describe("multi-channel GTM project", () => {
     assert.equal(getProjectWithChannels(options).channels[0].name, "Community proof");
     catalog = listProjects(options);
     assert.equal(catalog.activeProjectId, buffalo.id);
-  });
-
-  it("creates program workflows through the domain command front door", async () => {
-    const project = createProject({ name: "GTM IDE" }, options).project;
-    const created = await executeDomainCommand("CreateProgramWorkflow", {
-      projectId: project.id,
-      name: "Partner proof",
-      objective: "Turn partner wins into proof artifacts.",
-      kind: "partner",
-    }, { ...options, projectId: project.id });
-
-    const projected = getProjectWithChannels({ ...options, projectId: project.id });
-    assert.equal(projected.channels.length, 1);
-    assert.equal(projected.channels[0].id, created.channel.id);
-    assert.equal(projected.channels[0].outcomeProgramId, created.program.id);
-    assert.equal(listOutcomePrograms(project.id, { ...options, projectId: project.id })[0].workflowGraph.id, created.workflowGraph.id);
   });
 });

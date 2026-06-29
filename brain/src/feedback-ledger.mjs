@@ -1,5 +1,4 @@
 import crypto from "node:crypto";
-import { reviseAgentPolicyFromFeedback } from "./agent-policy-store.mjs";
 import { appendGateJudgments } from "./shared-judgments.mjs";
 import { persistence } from "./persistence.mjs";
 import { actionLogFromRun, detectCrystallizationSuggestions } from "./crystallization.mjs";
@@ -214,17 +213,6 @@ export function recordFeedbackSignalsFromRun({ projectId = "default", graph, res
   // decisions) is returned and drives policy revision.
   const actionSignals = actionSignalsFromRun({ projectId, graph, result });
   const ledger = recordFeedbackSignals([...signals, ...actionSignals], { ...options, projectId });
-  const byPolicy = new Map();
-  for (const item of signals) {
-    for (const policyId of item.policyIds ?? []) {
-      if (!byPolicy.has(policyId)) byPolicy.set(policyId, []);
-      byPolicy.get(policyId).push(item);
-    }
-  }
-  const updatedPolicies = [];
-  for (const [policyId, policySignals] of byPolicy.entries()) {
-    updatedPolicies.push(reviseAgentPolicyFromFeedback(policyId, policySignals, { ...options, projectId }));
-  }
   // Run the accumulated action history through the crystallization detector and surface any repeated
   // deterministic procedure as a GATED tool-creation suggestion (the same additive, proposal-only path
   // detectToolCreationSuggestions uses). Nothing is auto-created — the founder/operator gate (tool-birth)
@@ -240,7 +228,7 @@ export function recordFeedbackSignalsFromRun({ projectId = "default", graph, res
     crystallizationSuggestions,
     { ...options, projectId },
   );
-  return { ledger: finalLedger, signals, updatedPolicies, crystallizationSuggestions, toolBirthProposals };
+  return { ledger: finalLedger, signals, updatedPolicies: [], crystallizationSuggestions, toolBirthProposals };
 }
 
 // Read every pending tool-birth proposal banked in a ledger (insertion order). A pending proposal is a

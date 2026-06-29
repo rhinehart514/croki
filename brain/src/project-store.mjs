@@ -6,8 +6,6 @@ import { persistence, storeRoot, PROJECT_COLLECTION, PROJECT_KEY } from "./persi
 // every boot path, so importing the migrator here guarantees the hook is live before the first open.
 import "./migrate-to-sqlite.mjs";
 import { loadFlow, saveFlow, summarizeRunResult } from "./flow-store.mjs";
-import { listOutcomePrograms } from "./program-store.mjs";
-import { createProgramWorkflow, programWorkflowChannel, updateProgramWorkflowMetadata } from "./program-workflow-commands.mjs";
 import { defaultTeamId } from "./team-store.mjs";
 
 const SCHEMA_VERSION = 4;
@@ -404,25 +402,6 @@ export function setProjectTeam(projectId, teamId, options = {}) {
   return saveProject({ ...project, teamId: teamId ?? null }, options);
 }
 
-function channelFromProgram(program, options = {}) {
-  const base = programWorkflowChannel(program);
-  const flow = loadFlow(base.graphId, null, options);
-  const graph = program.workflowGraph ?? flow.graph ?? null;
-  const runs = flow.runs ?? [];
-  const lastRun = runs.at(-1) ?? null;
-  return {
-    ...base,
-    status: deriveChannelStatus(runs),
-    lastRunAt: lastRun?.createdAt ?? null,
-    lastRunOk: lastRun ? lastRun.ok === true : null,
-    pendingGates: lastRun?.pendingGates?.length ?? 0,
-    nodeCount: graph?.nodes?.length ?? 0,
-    runCount: runs.length,
-    graphRevision: graph?.revision ?? 0,
-    lastRunResult: lastRun ? summarizeRunResult(lastRun) : null,
-  };
-}
-
 function channelFromLegacy(project, channel, options = {}) {
   const flow = loadFlow(channel.graphId, null, options);
   const runs = flow.runs ?? [];
@@ -441,18 +420,11 @@ function channelFromLegacy(project, channel, options = {}) {
 }
 
 export function getProjectChannels(project, options = {}) {
-  const programs = listOutcomePrograms(project.id, { ...options, projectId: project.id })
-    .filter((program) => program.workflowGraph || program.graphId || program.channelId);
-  const programChannels = programs.map((program) => channelFromProgram(program, { ...options, projectId: project.id }));
-  const used = new Set(programChannels.flatMap((channel) => [channel.id, channel.graphId]).filter(Boolean));
-  const legacyChannels = (project.channels ?? [])
-    .filter((channel) => !used.has(channel.id) && !used.has(channel.graphId))
-    .map((channel) => channelFromLegacy(project, channel, options));
-  return [...programChannels, ...legacyChannels];
+  return (project.channels ?? []).map((channel) => channelFromLegacy(project, channel, options));
 }
 
 export function getChannel(project, channelId, options = {}) {
-  const channel = getProjectChannels(project, options).find((item) => item.id === channelId || item.graphId === channelId || item.outcomeProgramId === channelId);
+  const channel = getProjectChannels(project, options).find((item) => item.id === channelId || item.graphId === channelId);
   if (!channel) throw new Error(`Channel not found: ${channelId}`);
   return channel;
 }
@@ -528,12 +500,11 @@ export function createChannel(input, options = {}) {
   if (!name) throw new Error("Channel name is required.");
   const existingIds = getProjectChannels(project, options).map((channel) => channel.id);
   const id = channelIdFor(input.id || name, existingIds);
-  return createProgramBackedChannel(project, {
+  return createFlowChannel(project, {
     id,
     name,
     objective: String(input.objective || "").trim(),
     kind: String(input.kind || "custom").trim() || "custom",
-    sourceOpportunityId: input.sourceOpportunityId ?? null,
   }, options);
 }
 
@@ -552,7 +523,7 @@ export function duplicateChannel(channelId, input = {}, options = {}) {
     objective,
     kind,
   });
-  return createProgramBackedChannel(project, {
+  return createFlowChannel(project, {
     id,
     graphId,
     name,
@@ -578,18 +549,6 @@ export function updateChannel(channelId, patch, options = {}) {
     kind: channel.kind,
   } : null;
   if (workflowGraph) saveFlow(workflowGraph, options);
-  if (current.outcomeProgramId) {
-    updateProgramWorkflowMetadata({
-      projectId: project.id,
-      programId: current.outcomeProgramId,
-      channelId: current.id,
-      name: channel.name,
-      objective: channel.objective,
-      kind: channel.kind,
-      enabled: channel.enabled,
-      workflowGraph,
-    }, { ...options, projectId: project.id });
-  }
   const legacyChannels = (project.channels ?? []).map((item) => item.id === current.id ? channel : item);
   const projected = getProjectChannels({ ...project, channels: legacyChannels }, options);
   const nextActive = channel.enabled === false && project.activeChannelId === channel.id
@@ -599,24 +558,37 @@ export function updateChannel(channelId, patch, options = {}) {
   return { project: saved, channel };
 }
 
-function createProgramBackedChannel(project, input = {}, options = {}) {
+// A channel is a flow: a stored channel record in project.channels plus its executable graph in the
+// flow store. No outcome program, no domain events — just the system the founder builds.
+function createFlowChannel(project, input = {}, options = {}) {
+  const kind = String(input.kind || "custom").trim() || "custom";
   const graphId = input.graphId || (project.id === "default" ? input.id : `${project.id}--${input.id}`);
-  const created = createProgramWorkflow({
-    projectId: project.id,
+  const name = input.name;
+  const objective = input.objective ?? "";
+  const workflowGraph = {
+    ...(input.workflowGraph ?? createBlankChannelGraph({ id: graphId, name, objective, kind })),
+    id: graphId,
+    name,
+    objective,
+    kind,
+  };
+  saveFlow(workflowGraph, options);
+  const channel = {
     id: input.id,
-    name: input.name,
-    objective: input.objective,
-    sourceOpportunityId: input.sourceOpportunityId ?? null,
-    channelId: input.id,
     graphId,
-    kind: input.kind || "custom",
-    workflowGraph: input.workflowGraph,
-  }, { ...options, projectId: project.id });
+    name,
+    objective,
+    kind,
+    enabled: input.enabled !== false,
+    createdAt: now(),
+  };
+  const channels = [...(project.channels ?? []), channel];
   const saved = saveProject({
     ...project,
-    activeChannelId: project.activeChannelId || input.id,
+    channels,
+    activeChannelId: project.activeChannelId || channel.id,
   }, options);
-  return { project: saved, channel: getChannel(saved, created.channel.id, options) };
+  return { project: saved, channel: getChannel(saved, channel.id, options) };
 }
 
 export function updateSharedContext(patch, options = {}) {

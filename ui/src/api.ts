@@ -7,7 +7,7 @@ import type {
   GraphOperation, GTMContractAudit,
   OutcomeProgram, AgentCreationPolicy, AgentInstance, PersonalizationProfile, FeedbackSignal,
   AgentEvaluation, DomainEvent, ProductModel, ProductModelEdit, ProductPinTargetKind,
-  CapabilityServer, Person, CrossReferenceResult, PortfolioSystem, ToolRegistryView, RegisteredTool, ChannelFeed, DirectedFeed,
+  CapabilityServer, Person, CrossReferenceResult, ToolRegistryView, RegisteredTool, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole,
 } from "@/types";
 import { identityHeaders } from "@/lib/identity";
@@ -286,28 +286,6 @@ export const recordProductSignal = (input: {
 export type ConnectionStatus = { connected: boolean; label: string | null; reason: string | null };
 export const getConnection = () => get<ConnectionStatus>("/api/connection");
 
-// ── Portfolio compose — fan several channels out toward one goal ──────────────
-// Mirrors the single-channel compose call, but hands in SEVERAL inline channel specs plus the shared
-// goal. The server composes each channel against the project's grounding and unions them into one
-// branching, multi-gate portfolio graph (the wall re-asserted on the union). Compose-only — nothing
-// persists until the per-channel apply path runs.
-export type PortfolioChannelSpec = { id: string; title: string; objective: string };
-// The server returns ONE assembled portfolio graph (a GTMGraph with `kind: "portfolio"`) carrying a
-// `systems` manifest of the channels that were unioned in — not a wrapper object. The manifest shape
-// is the canonical PortfolioSystem ({ id, label, objective?, laneIndex, nodeIds, gateIds }) that
-// assemblePortfolioGraph actually emits.
-export type PortfolioGraph = GTMGraph & {
-  kind: "portfolio";
-  systems: PortfolioSystem[];
-};
-export const composePortfolio = (
-  projectId: string,
-  body: { goal: string; channels: PortfolioChannelSpec[] },
-) =>
-  post<PortfolioGraph>(
-    `/api/projects/${encodeURIComponent(projectId)}/compose/portfolio`,
-    body,
-  );
 
 // ── Project (channels list) ──────────────────────────────────────────────────
 export async function getProject(): Promise<{ project: GTMProject }> {

@@ -49,7 +49,7 @@ const INVARIANTS = [
   {
     id: "taste_ledger_read",
     label: "The run reads the shared taste ledger back, so taste compounds across both rigs.",
-    file: "program-runtime.mjs",
+    file: "operator-runtime.mjs",
     test: (s) => s.includes("mergeSharedDecisions"),
   },
   {

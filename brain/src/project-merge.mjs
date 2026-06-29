@@ -2,10 +2,7 @@ import {
   deleteProjectFromCatalog, loadProject, loadProjectCatalog, saveProject, setActiveProject,
 } from "./project-store.mjs";
 import { persistence } from "./persistence.mjs";
-import { loadProgramStore, saveProgramStore } from "./program-store.mjs";
-import { loadAgentPolicyStore, saveAgentPolicyStore } from "./agent-policy-store.mjs";
 import { loadFeedbackLedger, saveFeedbackLedger } from "./feedback-ledger.mjs";
-import { loadCapabilityFoundry, saveCapabilityFoundry } from "./capability-foundry.mjs";
 import { loadProductModelStore, saveProductModelStore } from "./product-model-store.mjs";
 import { loadDomainEventStore, saveDomainEventStore } from "./domain-events.mjs";
 import { getOperatorSession, listOperatorSessions, saveOperatorSession } from "./operator-store.mjs";
@@ -16,15 +13,13 @@ import { getOperatorSession, listOperatorSessions, saveOperatorSession } from ".
 // (purge its records). Both leave the catalog with a valid active project and at least one survivor.
 //
 // What moves vs. what stays:
-// - MOVES (one file per projectId): programs, agent policies, feedback signals, capability-foundry
-//   profiles/instances/evaluations/blueprints, product models, domain events, and each record's
-//   `projectId` is repointed to the target.
+// - MOVES (one file per projectId): feedback signals, product models, domain events, and each
+//   record's `projectId` is repointed to the target.
 // - REPOINTED IN PLACE (one file per id, carries a projectId field): operator sessions.
-// - STAYS PUT (global, keyed by graphId): flows. A moved program record keeps its existing graphId,
-//   so `loadFlow(graphId)` still finds the flow file. The graphId prefix (e.g. `rodentradar-3--…`)
-//   becomes a cosmetic, opaque string under the target — never rekeyed, so no program→flow reference
-//   ever has to be rewritten.
-// - UNIONED ON THE TARGET PROJECT OBJECT: legacy channels (deduped by id). The target keeps its own
+// - STAYS PUT (global, keyed by graphId): flows. A moved channel keeps its existing graphId, so
+//   `loadFlow(graphId)` still finds the flow file. The graphId prefix becomes a cosmetic, opaque
+//   string under the target — never rekeyed.
+// - UNIONED ON THE TARGET PROJECT OBJECT: channels (deduped by id). The target keeps its own
 //   sharedContext (its repo grounding) as authoritative.
 
 function safeId(value) {
@@ -33,7 +28,7 @@ function safeId(value) {
 
 // The per-project store files this module owns. Each is `<root>/<dir>/<safeId(projectId)>.json`.
 const PROJECT_STORE_DIRS = [
-  "programs", "agent-policies", "feedback-ledger", "capability-foundry", "product-models", "domain-events",
+  "feedback-ledger", "product-models", "domain-events",
 ];
 
 function dedupeById(existing, incoming, targetId) {
@@ -52,24 +47,6 @@ function moveListStore(load, save, listKey, sourceId, targetId, options, cap = n
   const existing = Array.isArray(target?.[listKey]) ? target[listKey] : [];
   const merged = dedupeById(existing, incoming, targetId);
   save({ ...target, projectId: targetId, [listKey]: cap ? merged.slice(-cap) : merged }, options);
-}
-
-function moveCapabilityFoundry(sourceId, targetId, options) {
-  const source = loadCapabilityFoundry(sourceId, options);
-  const hasContent = ["blueprints", "profiles", "instances", "evaluations"]
-    .some((key) => Array.isArray(source?.[key]) && source[key].length);
-  if (!hasContent) return;
-  const target = loadCapabilityFoundry(targetId, options);
-  // blueprints are plain refs (strings), not id-bearing records — union by value.
-  const blueprints = [...new Set([...(target.blueprints ?? []), ...(source.blueprints ?? [])])];
-  saveCapabilityFoundry({
-    ...target,
-    projectId: targetId,
-    blueprints,
-    profiles: dedupeById(target.profiles ?? [], source.profiles ?? [], targetId).slice(-500),
-    instances: dedupeById(target.instances ?? [], source.instances ?? [], targetId),
-    evaluations: dedupeById(target.evaluations ?? [], source.evaluations ?? [], targetId).slice(-1000),
-  }, options);
 }
 
 function moveOperatorSessions(sourceId, targetId, options) {
@@ -115,13 +92,10 @@ export function mergeProjects(sourceIds, targetId, options = {}) {
   }
 
   for (const sourceId of sources) {
-    moveListStore(loadProgramStore, saveProgramStore, "programs", sourceId, targetId, options);
-    moveListStore(loadAgentPolicyStore, saveAgentPolicyStore, "policies", sourceId, targetId, options);
     moveListStore(loadFeedbackLedger, saveFeedbackLedger, "signals", sourceId, targetId, options, 1000);
     moveListStore(loadProductModelStore, saveProductModelStore, "productModels", sourceId, targetId, options);
     // Domain events are an authoritative append-only log — never capped.
     moveListStore(loadDomainEventStore, saveDomainEventStore, "events", sourceId, targetId, options);
-    moveCapabilityFoundry(sourceId, targetId, options);
     moveOperatorSessions(sourceId, targetId, options);
 
     const sourceProject = loadProject({ ...options, projectId: sourceId });

@@ -5,16 +5,11 @@ import { createClaudeEvaluator } from "./eval.mjs";
 import { createClaudeProductModeler } from "./product-model-generator.mjs";
 import { loadFlow, recordFlowRun, saveFlow } from "./flow-store.mjs";
 import { createDerivedSourceLoader } from "./cross-reference.mjs";
-import { loadFeedbackLedger, recordFeedbackSignalsFromRun } from "./feedback-ledger.mjs";
+import { recordFeedbackSignalsFromRun } from "./feedback-ledger.mjs";
 import { promoteEntrantsFromRun } from "./person-store.mjs";
 import { applyGraphOperations, validateGraph } from "./graph-operations.mjs";
 import { listConnectors, runGraph } from "./graph.mjs";
-import { appendDomainEvent, listDomainEvents } from "./domain-events.mjs";
 import { executeDomainCommand } from "./domain-commands.mjs";
-import { loadCapabilityFoundry } from "./capability-foundry.mjs";
-import { listAgentCreationPolicies } from "./agent-policy-store.mjs";
-import { listOutcomePrograms, syncProgramStoreFromEvents } from "./program-store.mjs";
-import { runProgram } from "./program-runtime.mjs";
 import { buildDraftMemory, extractDecisions } from "./memory.mjs";
 import { mergeSharedDecisions } from "./shared-judgments.mjs";
 import { getDesignState } from "./design-state-store.mjs";
@@ -26,25 +21,13 @@ import {
 } from "./operator-store.mjs";
 import {
   applySharedContextToGraph,
-  createChannel,
-  duplicateChannel,
-  getChannel,
-  getProjectWithChannels,
-  listProjects,
   loadProject,
   projectTeamId,
-  setActiveWorkflow,
-  updateChannel,
   updateSharedContext,
 } from "./project-store.mjs";
 import { canApprove, getMember, resolveCurrentUser } from "./team-store.mjs";
-import { composeNakedGraph, composeOpportunityChannel, composePortfolioFromStudio } from "./workflow-composer.mjs";
-import {
-  compareChannelRuns,
-  createPortfolioArtifact,
-  derivePortfolioBrief,
-  recordExperiment,
-} from "./portfolio-intelligence.mjs";
+import { composeNakedGraph } from "./workflow-composer.mjs";
+import { compareChannelRuns } from "./run-compare.mjs";
 import { getWorkspace, listWorkspaces } from "./workspace.mjs";
 import { authModeLabel, selectRuntime } from "./runtimes/index.mjs";
 
@@ -125,16 +108,6 @@ const GRAPH_OPERATIONS_INPUT_SCHEMA = {
 
 const TOOLS = [
   {
-    name: "inspect_projects",
-    description: "List product projects and identify the currently active repository scope.",
-    input_schema: { type: "object", properties: {}, required: [] },
-  },
-  {
-    name: "inspect_portfolio",
-    description: "Inspect all outcome-program workflows, their objectives, status, run history, and the shared product-intelligence version.",
-    input_schema: { type: "object", properties: {}, required: [] },
-  },
-  {
     name: "inspect_shared_context",
     description: "Inspect the shared repository evidence, product, positioning, ICP, founder taste, contacts, outcomes, experiments, artifacts, and product feedback used by every workflow.",
     input_schema: { type: "object", properties: {}, required: [] },
@@ -150,133 +123,6 @@ const TOOLS = [
       },
       required: ["rationale", "patch"],
     },
-  },
-  {
-    name: "switch_workflow",
-    description: "Switch the durable operator to another outcome-program workflow before inspecting, editing, or running it.",
-    input_schema: {
-      type: "object",
-      properties: { workflowId: { type: "string" } },
-      required: ["workflowId"],
-    },
-  },
-  {
-    name: "switch_channel",
-    description: "Compatibility alias for switch_workflow.",
-    input_schema: {
-      type: "object",
-      properties: { channelId: { type: "string" } },
-      required: ["channelId"],
-    },
-  },
-  {
-    name: "create_workflow",
-    description: "Create a blank outcome-program workflow, make it active, then shape its graph with founder-reviewed typed graph operations.",
-    input_schema: {
-      type: "object",
-      properties: {
-        name: { type: "string" },
-        objective: { type: "string" },
-        kind: { type: "string" },
-      },
-      required: ["name", "objective"],
-    },
-  },
-  {
-    name: "create_channel",
-    description: "Compatibility alias for create_workflow.",
-    input_schema: {
-      type: "object",
-      properties: {
-        name: { type: "string" },
-        objective: { type: "string" },
-        kind: { type: "string" },
-      },
-      required: ["name", "objective"],
-    },
-  },
-  {
-    name: "duplicate_workflow",
-    description: "Duplicate an existing outcome-program workflow and its current graph as a new independently editable workflow.",
-    input_schema: {
-      type: "object",
-      properties: {
-        workflowId: { type: "string" },
-        name: { type: "string" },
-        objective: { type: "string" },
-      },
-      required: ["workflowId", "name"],
-    },
-  },
-  {
-    name: "duplicate_channel",
-    description: "Compatibility alias for duplicate_workflow.",
-    input_schema: {
-      type: "object",
-      properties: {
-        channelId: { type: "string" },
-        name: { type: "string" },
-        objective: { type: "string" },
-      },
-      required: ["channelId", "name"],
-    },
-  },
-  {
-    name: "update_workflow",
-    description: "Rename, clarify, classify, enable, or archive an outcome-program workflow without changing its graph nodes.",
-    input_schema: {
-      type: "object",
-      properties: {
-        workflowId: { type: "string" },
-        name: { type: "string" },
-        objective: { type: "string" },
-        kind: { type: "string" },
-        enabled: { type: "boolean" },
-      },
-      required: ["workflowId"],
-    },
-  },
-  {
-    name: "update_channel",
-    description: "Compatibility alias for update_workflow.",
-    input_schema: {
-      type: "object",
-      properties: {
-        channelId: { type: "string" },
-        name: { type: "string" },
-        objective: { type: "string" },
-        kind: { type: "string" },
-        enabled: { type: "boolean" },
-      },
-      required: ["channelId"],
-    },
-  },
-  {
-    name: "inspect_portfolio_brief",
-    description: "Build a current cross-channel brief from real runs, observed outcomes, experiments, artifacts, and product feedback.",
-    input_schema: { type: "object", properties: {}, required: [] },
-  },
-  {
-    name: "create_experiment",
-    description: "Record a disciplined channel experiment with one explicit variable, held constants, and a success signal. This does not invent a result.",
-    input_schema: {
-      type: "object",
-      properties: {
-        channelId: { type: "string" },
-        hypothesis: { type: "string" },
-        variable: { type: "string" },
-        variant: { type: "string", description: "The changed thing under test (the new treatment)." },
-        control: { type: "string", description: "The baseline the variant is compared against." },
-        heldConstant: { type: "array", items: { type: "string" } },
-        successSignal: { type: "string" },
-      },
-      required: ["channelId", "hypothesis", "variable", "successSignal"],
-    },
-  },
-  {
-    name: "create_proof_brief",
-    description: "Create and preserve a proof artifact derived from current portfolio state. It contains no invented outcomes.",
-    input_schema: { type: "object", properties: {}, required: [] },
   },
   {
     name: "inspect_product",
@@ -324,207 +170,6 @@ const TOOLS = [
         summary: { type: "string" },
       },
       required: [],
-    },
-  },
-  {
-    name: "compose_channel",
-    description: "Compose one channel — described inline by its objective and the agents that run it — into a validated input → agents → founder gate → output → measure workflow. Re-asserts the founder gate; never sends.",
-    input_schema: {
-      type: "object",
-      properties: {
-        title: { type: "string", description: "The channel's name." },
-        objective: { type: "string", description: "What this channel is trying to achieve." },
-        kind: { type: "string" },
-        agents: {
-          type: "array",
-          description: "The agents that run this channel, each described inline.",
-          items: {
-            type: "object",
-            properties: {
-              ref: { type: "string", description: "Short kebab-case handle for the agent." },
-              role: { type: "string" },
-              objective: { type: "string" },
-              prompt: { type: "string" },
-            },
-          },
-        },
-        input: { type: "object" },
-        output: { type: "object" },
-      },
-      required: ["title", "objective"],
-    },
-  },
-  {
-    name: "compose_portfolio",
-    description: "Compose several inline channel specs toward ONE goal into a single branching, multi-gate portfolio graph the founder reviews together — the whole GTM system as one diagram. Re-asserts the founder gate on every execute path; never sends.",
-    input_schema: {
-      type: "object",
-      properties: {
-        goal: { type: "string", description: "The single plain-language goal all the channels serve." },
-        channels: {
-          type: "array",
-          description: "The channels to compose toward the goal and union into one branching, multi-gate portfolio graph. At least one is required.",
-          items: {
-            type: "object",
-            properties: {
-              title: { type: "string", description: "The channel's name." },
-              objective: { type: "string", description: "What this channel is trying to achieve." },
-              kind: { type: "string" },
-              agents: {
-                type: "array",
-                description: "The agents that run this channel, each described inline.",
-                items: {
-                  type: "object",
-                  properties: {
-                    ref: { type: "string", description: "Short kebab-case handle for the agent." },
-                    role: { type: "string" },
-                    objective: { type: "string" },
-                    prompt: { type: "string" },
-                  },
-                },
-              },
-              input: { type: "object" },
-              output: { type: "object" },
-            },
-            required: ["title", "objective"],
-          },
-        },
-      },
-      required: ["channels"],
-    },
-  },
-  {
-    name: "inspect_program",
-    description: "Inspect an outcome program, its domain events, policies, agent instances, evaluations, and feedback signals.",
-    input_schema: {
-      type: "object",
-      properties: { programId: { type: "string" } },
-      required: [],
-    },
-  },
-  {
-    name: "create_program",
-    description: "Create an outcome program from a founder-stated outcome. This emits OutcomeProgramCreated.",
-    input_schema: {
-      type: "object",
-      properties: {
-        name: { type: "string" },
-        objective: { type: "string" },
-        desiredOutcome: { type: "object" },
-        measurementPlan: { type: "object" },
-      },
-      required: ["name"],
-    },
-  },
-  {
-    name: "derive_agent_needs",
-    description: "Record the agent needs implied by a program before creating personalized agents. The program defaults to the session's current program.",
-    input_schema: {
-      type: "object",
-      properties: {
-        programId: { type: "string", description: "Optional. Defaults to the session's current program." },
-        needs: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              title: { type: "string" },
-              objective: { type: "string", description: "What this agent must accomplish." },
-            },
-          },
-        },
-      },
-      required: ["needs"],
-    },
-  },
-  {
-    name: "create_personalized_agents",
-    description: "Create policy-backed personalized agent instances for an outcome program. The program defaults to the one this session is working on; pass programId only to target a different one.",
-    input_schema: {
-      type: "object",
-      properties: {
-        programId: { type: "string", description: "Optional. Defaults to the session's current program." },
-        agents: {
-          type: "array",
-          description: "The agents to create. Each needs at minimum a purpose and a ref.",
-          items: {
-            type: "object",
-            properties: {
-              ref: { type: "string", description: "Short kebab-case handle, e.g. founder-outreach-drafter." },
-              purpose: { type: "string", description: "The agent's specific job — what it does and why. Required." },
-              objective: { type: "string", description: "Optional restatement of the job; purpose is used if omitted." },
-              negativeRules: { type: "array", items: { type: "string" }, description: "Things the agent must not do." },
-              evidenceRequirements: { type: "array", items: { type: "string" } },
-              requiredInputs: { type: "array", items: { type: "string" } },
-              requiredOutputs: { type: "array", items: { type: "string" } },
-            },
-            required: ["ref", "purpose"],
-          },
-        },
-      },
-      required: ["agents"],
-    },
-  },
-  {
-    name: "compose_program_workflow",
-    description: "Attach a composed graph to an outcome program and mark the program ready.",
-    input_schema: {
-      type: "object",
-      properties: {
-        programId: { type: "string", description: "Optional. Defaults to the session's current program." },
-        graphId: { type: "string" },
-        channelId: { type: "string" },
-      },
-      required: ["graphId"],
-    },
-  },
-  {
-    name: "run_program",
-    description: "Run an outcome program through workflow, founder gate, feedback, evaluation, and next agent version creation. The program defaults to the session's current program.",
-    input_schema: {
-      type: "object",
-      properties: {
-        programId: { type: "string", description: "Optional. Defaults to the session's current program." },
-        targetNodeId: { type: "string" },
-        resumeRunId: { type: "string" },
-        approvals: { type: "object" },
-        decisions: { type: "object" },
-      },
-      required: [],
-    },
-  },
-  {
-    name: "inspect_program_feedback",
-    description: "Inspect feedback signals, agent evaluations, and policy revisions for a program. Defaults to the session's current program.",
-    input_schema: {
-      type: "object",
-      properties: { programId: { type: "string", description: "Optional. Defaults to the session's current program." } },
-      required: [],
-    },
-  },
-  {
-    name: "revise_program_from_feedback",
-    description: "Revise program agent policies from explicit feedback signals without mutating old runs.",
-    input_schema: {
-      type: "object",
-      properties: {
-        programId: { type: "string" },
-        signals: { type: "array", items: { type: "object" } },
-      },
-      required: ["programId", "signals"],
-    },
-  },
-  {
-    name: "create_next_agent_version",
-    description: "Create the next personalized agent version from a revised policy.",
-    input_schema: {
-      type: "object",
-      properties: {
-        programId: { type: "string" },
-        previousInstance: { type: "object" },
-        policy: { type: "object" },
-      },
-      required: ["programId", "previousInstance", "policy"],
     },
   },
   {
@@ -737,54 +382,11 @@ function summarizeRun(result) {
   };
 }
 
-function summarizeProgramRun(run) {
-  return {
-    programId: run.programId,
-    graphId: run.graphId,
-    programStatus: run.programStatus,
-    storedRunCount: run.storedRunCount,
-    feedbackSignals: run.feedback.signals.length,
-    evaluations: run.evaluations.length,
-    nextVersions: run.nextVersions.map((item) => ({
-      policyId: item.policy.id,
-      agentInstanceId: item.instance.id,
-      previousInstanceId: item.instance.previousInstanceId,
-      version: item.instance.version,
-    })),
-    result: summarizeRun(run.result),
-  };
-}
-
 function firstNonEmpty(...values) {
   for (const value of values) {
     if (typeof value === "string" && value.trim()) return value.trim();
   }
   return "";
-}
-
-function slugifyRef(value) {
-  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
-}
-
-// Resolve which program a tool call targets, deterministically — code's job, not the model's. The
-// model may pass an exact id, a name, or nothing; in every case we bind to the session's program
-// first (set when the founder opened it, e.g. the "Build the first agent" button), then the
-// session graph's program, then the newest. This removes the "guess the slugified id" seam.
-function resolveProgram(session, input = {}, programs = []) {
-  const ref = input.programId || input.programName;
-  if (ref) {
-    const match = programs.find((program) => program.id === ref || program.name === ref);
-    if (match) return match;
-  }
-  if (session?.programId) {
-    const bound = programs.find((program) => program.id === session.programId);
-    if (bound) return bound;
-  }
-  if (session?.graphId) {
-    const byGraph = programs.find((program) => program.graphId === session.graphId);
-    if (byGraph) return byGraph;
-  }
-  return programs.at(-1) ?? null;
 }
 
 // Cross-session memory: the operator's recall of what it has already worked on in THIS project —
@@ -960,28 +562,6 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
 
 async function executeTool(session, tool, options = {}) {
   const input = tool.input ?? {};
-  if (tool.name === "inspect_projects") {
-    const catalog = listProjects(options);
-    const next = addEvent(session, {
-      type: "inspection",
-      title: "Inspected product projects",
-      detail: `${catalog.projects.length} product project${catalog.projects.length === 1 ? "" : "s"} · active ${catalog.activeProjectId || "none"}`,
-      data: { activeProjectId: catalog.activeProjectId },
-    }, options);
-    return { session: next, result: catalog, pause: false };
-  }
-
-  if (tool.name === "inspect_portfolio") {
-    const project = getProjectWithChannels(options);
-    const next = addEvent(session, {
-      type: "inspection",
-      title: "Inspected the GTM portfolio",
-      detail: `${project.channels.length} outcome-program workflow${project.channels.length === 1 ? "" : "s"} · shared context v${project.sharedContext.version}`,
-      data: { activeChannelId: project.activeChannelId },
-    }, options);
-    return { session: next, result: project, pause: false };
-  }
-
   if (tool.name === "inspect_shared_context") {
     const project = loadProject(options);
     const next = addEvent(session, {
@@ -1005,117 +585,6 @@ async function executeTool(session, tool, options = {}) {
       result: { sharedContext: project.sharedContext },
       pause: false,
     };
-  }
-
-  if (tool.name === "switch_workflow" || tool.name === "switch_channel") {
-    const project = loadProject(options);
-    const workflowId = input.workflowId ?? input.channelId;
-    const channel = getChannel(project, workflowId);
-    setActiveWorkflow(channel.id, options);
-    const next = addEvent({
-      ...session,
-      graphId: channel.graphId,
-      graphRevision: loadFlow(channel.graphId, null, options).graph?.revision ?? 0,
-    }, {
-      type: "workflow_switched",
-      title: `Switched to ${channel.name}`,
-      detail: channel.objective,
-      data: { workflowId: channel.id, channelId: channel.id, graphId: channel.graphId },
-    }, options);
-    return { session: next, result: { workflow: channel, channel, graphId: channel.graphId }, pause: false };
-  }
-
-  if (tool.name === "create_workflow" || tool.name === "create_channel") {
-    const project = loadProject(options);
-    const created = await executeDomainCommand("CreateProgramWorkflow", {
-      ...input,
-      projectId: project.id,
-    }, { ...options, projectId: project.id });
-    setActiveWorkflow(created.channel.id, options);
-    const next = addEvent({
-      ...session,
-      graphId: created.channel.graphId,
-      graphRevision: 0,
-    }, {
-      type: "workflow_created",
-      title: `Created ${created.channel.name}`,
-      detail: created.channel.objective || "Blank workflow ready to shape.",
-      data: { workflowId: created.channel.id, channelId: created.channel.id, graphId: created.channel.graphId },
-    }, options);
-    return { session: next, result: { ...created.channel, workflowId: created.channel.id }, pause: false };
-  }
-
-  if (tool.name === "duplicate_workflow" || tool.name === "duplicate_channel") {
-    const workflowId = input.workflowId ?? input.channelId;
-    const created = duplicateChannel(workflowId, input, options);
-    setActiveWorkflow(created.channel.id, options);
-    const revision = loadFlow(created.channel.graphId, null, options).graph?.revision ?? 0;
-    const next = addEvent({
-      ...session,
-      graphId: created.channel.graphId,
-      graphRevision: revision,
-    }, {
-      type: "workflow_duplicated",
-      title: `Duplicated as ${created.channel.name}`,
-      detail: created.channel.objective || null,
-      data: { workflowId: created.channel.id, channelId: created.channel.id, graphId: created.channel.graphId },
-    }, options);
-    return { session: next, result: { ...created.channel, workflowId: created.channel.id }, pause: false };
-  }
-
-  if (tool.name === "update_workflow" || tool.name === "update_channel") {
-    const { workflowId: workflowIdInput, channelId: channelIdInput, ...patch } = input;
-    const workflowId = workflowIdInput ?? channelIdInput;
-    const project = loadProject(options);
-    const current = getChannel(project, workflowId, options);
-    const program = current.outcomeProgramId
-      ? await executeDomainCommand("UpdateProgramWorkflowMetadata", {
-          ...patch,
-          projectId: project.id,
-          programId: current.outcomeProgramId,
-          channelId: current.id,
-        }, { ...options, projectId: project.id })
-      : null;
-    const updated = program ? { channel: getChannel(loadProject(options), current.id, options) } : updateChannel(workflowId, patch, options);
-    const next = addEvent(session, {
-      type: "workflow_updated",
-      title: `Updated ${updated.channel.name}`,
-      detail: updated.channel.objective || null,
-      data: { workflowId: updated.channel.id, channelId: updated.channel.id, enabled: updated.channel.enabled },
-    }, options);
-    return { session: next, result: { ...updated.channel, workflowId: updated.channel.id }, pause: false };
-  }
-
-  if (tool.name === "inspect_portfolio_brief") {
-    const brief = derivePortfolioBrief(options);
-    const next = addEvent(session, {
-      type: "inspection",
-      title: "Built a cross-channel operating brief",
-      detail: `${brief.channels.length} channels · ${brief.observedOutcomes.length} observed outcomes · ${brief.recommendations.length} recommendations`,
-    }, options);
-    return { session: next, result: brief, pause: false };
-  }
-
-  if (tool.name === "create_experiment") {
-    const recorded = recordExperiment(input, options);
-    const next = addEvent(session, {
-      type: "experiment_created",
-      title: "Created a GTM experiment",
-      detail: recorded.experiment.hypothesis,
-      data: { experimentId: recorded.experiment.id, channelId: recorded.experiment.channelId },
-    }, options);
-    return { session: next, result: recorded, pause: false };
-  }
-
-  if (tool.name === "create_proof_brief") {
-    const recorded = createPortfolioArtifact(options);
-    const next = addEvent(session, {
-      type: "artifact_created",
-      title: "Created a portfolio proof brief",
-      detail: recorded.artifact.summary,
-      data: { artifactId: recorded.artifact.id },
-    }, options);
-    return { session: next, result: recorded, pause: false };
   }
 
   if (tool.name === "inspect_product") {
@@ -1178,275 +647,6 @@ async function executeTool(session, tool, options = {}) {
       data: { modelId: productModel?.id ?? null },
     }, options);
     return { session: next, result: productModel, pause: false };
-  }
-
-  if (tool.name === "compose_channel") {
-    const composeRepo = options.cwd || loadProject(options).sharedContext?.repository?.repo || process.cwd();
-    const composed = await composeOpportunityChannel(input, {
-      ...options,
-      compose: options.compose || createClaudeComposer({ cwd: composeRepo }),
-      evaluate: options.evaluate || createClaudeEvaluator({ cwd: composeRepo }),
-    });
-    const next = addEvent({
-      ...session,
-      graphId: composed.channel.graphId,
-      graphRevision: composed.graph.revision,
-    }, {
-      type: "channel_composed",
-      title: `Composed ${composed.channel.name}`,
-      detail: `${composed.graph.nodes.length} steps with a founder gate and attributable feedback loop.`,
-      data: { channelId: composed.channel.id, graphId: composed.channel.graphId },
-    }, options);
-    return { session: next, result: composed, pause: false };
-  }
-
-  if (tool.name === "compose_portfolio") {
-    const composeRepo = options.cwd || loadProject(options).sharedContext?.repository?.repo || process.cwd();
-    const portfolio = await composePortfolioFromStudio(input, {
-      ...options,
-      compose: options.compose || createClaudeComposer({ cwd: composeRepo }),
-    });
-    const systemCount = Array.isArray(portfolio.systems) ? portfolio.systems.length : 0;
-    const next = addEvent(session, {
-      type: "portfolio_composed",
-      title: "Composed the portfolio",
-      detail: `${portfolio.nodes.length} steps across ${systemCount} channels, unioned into one gated diagram.`,
-      data: { nodes: portfolio.nodes.length, systems: systemCount, graphId: portfolio.id },
-    }, options);
-    return { session: next, result: portfolio, pause: false };
-  }
-
-  if (tool.name === "inspect_program") {
-    const project = loadProject(options);
-    const programs = listOutcomePrograms(project.id, { ...options, projectId: project.id });
-    const selected = resolveProgram(session, input, programs);
-    const foundry = loadCapabilityFoundry(project.id, { ...options, projectId: project.id });
-    const policies = listAgentCreationPolicies(project.id, { ...options, projectId: project.id });
-    const events = listDomainEvents(project.id, selected ? { ...options, aggregateId: selected.id } : options);
-    const feedback = loadFeedbackLedger(project.id, { ...options, projectId: project.id });
-    const next = addEvent(session, {
-      type: "inspection",
-      title: selected ? `Inspected ${selected.name}` : "Inspected programs",
-      detail: selected ? `${selected.lastRunStatus ?? selected.lifecycle} · ${selected.graphId ? "workflow composed" : "no workflow yet"}` : `${programs.length} programs found`,
-    }, options);
-    return {
-      session: next,
-      result: {
-        program: selected ?? null,
-        programs,
-        policies: selected ? policies.filter((policy) => policy.programId === selected.id) : policies,
-        instances: selected ? foundry.instances.filter((item) => item.programId === selected.id) : foundry.instances,
-        evaluations: selected ? foundry.evaluations.filter((item) => item.programId === selected.id) : foundry.evaluations,
-        feedbackSignals: selected
-          ? feedback.signals.filter((signal) => signal.graphId === selected.graphId)
-          : feedback.signals.slice(-20),
-        events,
-      },
-      pause: false,
-    };
-  }
-
-  if (tool.name === "create_program") {
-    const project = loadProject(options);
-    const program = await executeDomainCommand("CreateOutcomeProgram", {
-      ...input,
-      projectId: project.id,
-    }, { ...options, projectId: project.id });
-    // Bind the session to the program it just created, so derive_agent_needs / create_personalized
-    // _agents / compose / run all target it without the model having to echo the slugified id back.
-    const next = addEvent({ ...session, programId: program.id }, {
-      type: "program_created",
-      title: `Created ${program.name}`,
-      detail: program.desiredOutcome?.description || input.objective || "Outcome program created.",
-      data: { programId: program.id },
-    }, options);
-    return { session: next, result: program, pause: false };
-  }
-
-  if (tool.name === "derive_agent_needs") {
-    const project = loadProject(options);
-    const programs = listOutcomePrograms(project.id, { ...options, projectId: project.id });
-    const program = resolveProgram(session, input, programs);
-    if (!program) throw new Error("No outcome program to derive agent needs for. Create one first.");
-    const needs = [];
-    for (const need of input.needs ?? []) {
-      needs.push(await executeDomainCommand("DeriveAgentNeed", {
-        ...need,
-        programId: program.id,
-        projectId: project.id,
-      }, { ...options, projectId: project.id }));
-    }
-    const next = addEvent(session, {
-      type: "agent_needs_derived",
-      title: "Derived program agent needs",
-      detail: `${needs.length} need${needs.length === 1 ? "" : "s"} recorded.`,
-      data: { programId: program.id },
-    }, options);
-    return { session: next, result: needs, pause: false };
-  }
-
-  if (tool.name === "create_personalized_agents") {
-    const project = loadProject(options);
-    const programs = listOutcomePrograms(project.id, { ...options, projectId: project.id });
-    const program = resolveProgram(session, input, programs);
-    if (!program) throw new Error("No outcome program to create agents for. Create one first.");
-    const created = [];
-    for (const agent of input.agents ?? []) {
-      // Tolerate the field names a model naturally reaches for. The policy purpose and the agent's
-      // job/ref are required downstream, so derive them from any reasonable synonym and only fail if
-      // the agent is genuinely unnamed — code's job to absorb input-shape variance, not to crash.
-      const purpose = firstNonEmpty(agent.purpose, agent.objective, agent.job, agent.role, agent.description, agent.title, agent.name);
-      const job = firstNonEmpty(agent.objective, agent.job, agent.purpose, agent.title, agent.name) || purpose;
-      const title = firstNonEmpty(agent.title, agent.name, agent.role, purpose);
-      const ref = firstNonEmpty(agent.ref, agent.id, slugifyRef(title));
-      if (!purpose || !ref) {
-        throw new Error(`Each agent needs a purpose/objective and a name. Got: ${JSON.stringify(agent).slice(0, 160)}`);
-      }
-      const policy = await executeDomainCommand("CreateAgentCreationPolicy", {
-        projectId: project.id,
-        programId: program.id,
-        sourceOpportunityId: agent.id ?? null,
-        purpose,
-        positiveRules: agent.positiveRules ?? [],
-        negativeRules: agent.negativeRules ?? ["Do not make unsupported outcome claims."],
-        evidenceRequirements: agent.evidenceRequirements ?? ["Separate product facts from hypotheses."],
-        safetyRules: agent.safetyRules ?? ["External effects must pass through a founder gate."],
-        requiredInputs: agent.requiredInputs ?? ["programContext", "productTruth", "upstreamItems"],
-        requiredOutputs: agent.requiredOutputs ?? ["structuredResults", "evidence", "uncertainty"],
-        evaluationSignals: agent.evaluationSignals ?? ["founderDecision", "founderEdit", "runFailure", "observedOutcome"],
-      }, { ...options, projectId: project.id });
-      created.push(await executeDomainCommand("CreatePersonalizedAgent", {
-        project,
-        program,
-        policy,
-        agentOpportunity: { ...agent, ref, title, objective: job },
-      }, { ...options, projectId: project.id }));
-    }
-    const next = addEvent(session, {
-      type: "personalized_agents_created",
-      title: "Created personalized agents",
-      detail: `${created.length} agent${created.length === 1 ? "" : "s"} created for the program.`,
-      data: { programId: program.id },
-    }, options);
-    return { session: next, result: created, pause: false };
-  }
-
-  if (tool.name === "compose_program_workflow") {
-    const project = loadProject(options);
-    const programs = listOutcomePrograms(project.id, { ...options, projectId: project.id });
-    const target = resolveProgram(session, input, programs);
-    if (!target) throw new Error("No outcome program to compose a workflow for.");
-    const program = await executeDomainCommand("ComposeProgramWorkflow", {
-      ...input,
-      programId: target.id,
-      projectId: project.id,
-    }, { ...options, projectId: project.id });
-    const next = addEvent({
-      ...session,
-      graphId: program.graphId || session.graphId,
-    }, {
-      type: "program_workflow_composed",
-      title: `Program workflow ready: ${program.name}`,
-      detail: program.graphId,
-      data: { programId: program.id, graphId: program.graphId },
-    }, options);
-    return { session: next, result: program, pause: false };
-  }
-
-  if (tool.name === "run_program") {
-    const project = loadProject(options);
-    const programs = listOutcomePrograms(project.id, { ...options, projectId: project.id });
-    const target = resolveProgram(session, input, programs);
-    if (!target) throw new Error("No outcome program to run.");
-    const run = await runProgram(target.id, {
-      ...input,
-      projectId: project.id,
-      stepRuntime: liveStepRuntime({ cwd: options.cwd }),
-    }, { ...options, projectId: project.id });
-    const next = addEvent({
-      ...session,
-      graphId: run.graphId,
-      lastRunId: run.result.runId,
-      status: run.result.pendingGates.length ? "waiting_for_gate" : session.status,
-      pendingGate: run.result.pendingGates.length
-        ? { programId: target.id, runId: run.result.runId, nodeIds: run.result.pendingGates, runResult: run.result }
-        : null,
-    }, {
-      type: "program_run_completed",
-      title: "Ran the outcome program",
-      detail: run.result.pendingGates.length
-        ? `Paused at ${run.result.pendingGates.length} founder gate${run.result.pendingGates.length === 1 ? "" : "s"}.`
-        : `Program is ${run.programStatus}.`,
-      data: {
-        programId: target.id,
-        runId: run.result.runId,
-        programStatus: run.programStatus,
-        feedbackSignals: run.feedback.signals.length,
-        nextVersions: run.nextVersions.length,
-      },
-    }, options);
-    return { session: next, result: summarizeProgramRun(run), pause: next.status === "waiting_for_gate" };
-  }
-
-  if (tool.name === "inspect_program_feedback") {
-    const project = loadProject(options);
-    const program = resolveProgram(session, input, listOutcomePrograms(project.id, { ...options, projectId: project.id }));
-    if (!program) throw new Error("No outcome program to inspect feedback for.");
-    const foundry = loadCapabilityFoundry(project.id, { ...options, projectId: project.id });
-    const policies = listAgentCreationPolicies(project.id, { ...options, projectId: project.id }).filter((policy) => policy.programId === program.id);
-    const policyIds = new Set(policies.map((policy) => policy.id));
-    const feedback = loadFeedbackLedger(project.id, { ...options, projectId: project.id }).signals.filter((signal) =>
-      signal.graphId === program.graphId || (signal.policyIds ?? []).some((policyId) => policyIds.has(policyId))
-    );
-    const next = addEvent(session, {
-      type: "inspection",
-      title: "Inspected program feedback",
-      detail: `${feedback.length} signal${feedback.length === 1 ? "" : "s"} · ${policies.length} polic${policies.length === 1 ? "y" : "ies"}`,
-    }, options);
-    return {
-      session: next,
-      result: {
-        program,
-        feedback,
-        policies,
-        evaluations: foundry.evaluations.filter((item) => item.programId === program.id),
-        instances: foundry.instances.filter((item) => item.programId === program.id),
-      },
-      pause: false,
-    };
-  }
-
-  if (tool.name === "revise_program_from_feedback") {
-    const project = loadProject(options);
-    const revisions = await executeDomainCommand("ReviseAgentPolicyFromFeedback", {
-      ...input,
-      projectId: project.id,
-    }, { ...options, projectId: project.id });
-    const next = addEvent(session, {
-      type: "program_revised",
-      title: "Revised program policies",
-      detail: `${revisions.length} polic${revisions.length === 1 ? "y" : "ies"} created.`,
-      data: { programId: input.programId, policyIds: revisions.map((policy) => policy.id) },
-    }, options);
-    return { session: next, result: revisions, pause: false };
-  }
-
-  if (tool.name === "create_next_agent_version") {
-    const project = loadProject(options);
-    const program = listOutcomePrograms(project.id, { ...options, projectId: project.id }).find((item) => item.id === input.programId);
-    if (!program) throw new Error(`Outcome program not found: ${input.programId}`);
-    const created = await executeDomainCommand("CreateNextAgentVersion", {
-      ...input,
-      project,
-      program,
-    }, { ...options, projectId: project.id });
-    const next = addEvent(session, {
-      type: "next_agent_version_created",
-      title: `Created ${created.instance.ref} v${created.instance.version}`,
-      detail: created.instance.job,
-      data: { programId: program.id, agentInstanceId: created.instance.id },
-    }, options);
-    return { session: next, result: created, pause: false };
   }
 
   if (tool.name === "inspect_graph") {
@@ -1906,48 +1106,6 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
   // team member (owner/approver) may do it. Throws gate_release_forbidden (403) for a viewer/member.
   // The wall in the gate connector is unchanged; this only guards who may stand at it.
   const { actor: releasedBy } = authorizeGateRelease(session, payload, options);
-  if (session.pendingGate.programId) {
-    const project = loadProject(options);
-    const run = await runProgram(session.pendingGate.programId, {
-      projectId: project.id,
-      resumeRunId: session.pendingGate.runId,
-      approvals: payload.approvals && typeof payload.approvals === "object" ? payload.approvals : {},
-      decisions: payload.decisions && typeof payload.decisions === "object" ? payload.decisions : {},
-      stepRuntime: liveStepRuntime({ cwd: options.cwd }),
-    }, { ...options, projectId: project.id });
-    session = addEvent({
-      ...session,
-      graphId: run.graphId,
-      lastRunId: run.result.runId,
-      pendingGate: run.result.pendingGates.length
-        ? { programId: session.pendingGate.programId, runId: run.result.runId, nodeIds: run.result.pendingGates, runResult: run.result }
-        : null,
-      status: run.result.pendingGates.length ? "waiting_for_gate" : "ready",
-      modelMessages: run.result.pendingGates.length ? session.modelMessages : [
-        ...(session.modelMessages ?? []),
-        {
-          role: "user",
-          content: `Founder gate resolved. Continued program run ${run.result.runId}. Result: ${JSON.stringify(summarizeProgramRun(run))}`,
-        },
-      ],
-    }, {
-      type: "gate_resolved",
-      title: "Founder gate resolved",
-      detail: run.result.pendingGates.length
-        ? "Another founder gate is waiting."
-        : `${run.feedback.signals.length} feedback signal${run.feedback.signals.length === 1 ? "" : "s"} recorded.`,
-      data: {
-        runId: run.result.runId,
-        programId: session.pendingGate.programId,
-        programStatus: run.programStatus,
-        feedbackSignals: run.feedback.signals.length,
-        nextVersions: run.nextVersions.length,
-        releasedBy: { userId: releasedBy.userId, name: releasedBy.name },
-      },
-    }, options);
-    if (session.status === "ready") launchOperatorSession(session.id, runtime);
-    return session;
-  }
   const flow = flowFor(session, options);
   const result = await runGraph(flow.graph, {
     approvals: payload.approvals && typeof payload.approvals === "object" ? payload.approvals : {},
@@ -1996,18 +1154,6 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
   return session;
 }
 
-function persistProgramWorkflowGraph(graph, options = {}) {
-  if (!graph?.outcomeProgramId) return;
-  const projectId = options.projectId || "default";
-  appendDomainEvent(projectId, {
-    type: "WorkflowGraphUpdated",
-    aggregateType: "OutcomeProgram",
-    aggregateId: graph.outcomeProgramId,
-    data: { graphId: graph.id, workflowGraph: graph },
-  }, options);
-  syncProgramStoreFromEvents(projectId, options);
-}
-
 // The founder accepts or discards a staged graph proposal. Accept applies the exact reviewed
 // operations to the current graph and resumes the operator; discard drops them and resumes the
 // operator told not to reapply. Mirrors resolveOperatorGate: founder-only, never an agent tool.
@@ -2034,7 +1180,6 @@ export function resolveOperatorProposal(id, payload = {}, runtime = {}) {
     // graph moved since the proposal was staged; applyGraphOperations re-validates and throws if not.
     const patched = applyGraphOperations(flow.graph, proposal.operations);
     const saved = saveFlow(patched.graph, options);
-    persistProgramWorkflowGraph(saved.graph, options);
     const acceptMsg = `Founder accepted the proposed graph changes (${proposal.changes.length} operation${proposal.changes.length === 1 ? "" : "s"}). They are now applied.${note ? ` They left a note: "${note}". Take it as durable guidance for future changes, not a new edit to make now.` : ""} Continue.`;
     const next = addEvent({
       ...session,

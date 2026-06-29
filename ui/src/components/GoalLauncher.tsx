@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowUp, Lightbulb, Network, Workflow } from "lucide-react";
+import { ArrowUp, Lightbulb, Workflow } from "lucide-react";
 
 // The front door — a plain-language goal box, ChatGPT-style. The founder says what they want in
 // their own words; the operator inspects the product, data, and connectors, then proposes systems.
@@ -15,15 +15,13 @@ const EXAMPLE_GOALS = [
 ];
 
 export function GoalLauncher({
-  productName, busy, onSubmitGoal, onIdeate, onLoadRecipe, onProposeSystem,
+  productName, busy, onSubmitGoal, onIdeate, onLoadRecipe,
 }: {
   productName: string;
   busy: boolean;
   onSubmitGoal: (goal: string) => void | Promise<void>;
   onIdeate: () => void;
   onLoadRecipe?: () => void;
-  // Open the portfolio composer — "propose the whole GTM system" (several channels, one goal).
-  onProposeSystem?: () => void;
 }) {
   const [goal, setGoal] = useState("");
   const submit = () => { const g = goal.trim(); if (g && !busy) void onSubmitGoal(g); };
@@ -63,9 +61,6 @@ export function GoalLauncher({
           <button onClick={onIdeate} disabled={busy} type="button"><Lightbulb size={13} /> Or just ideate channels for me</button>
           {onLoadRecipe ? (
             <button onClick={onLoadRecipe} disabled={busy} type="button"><Workflow size={13} /> Start from the pilot-outreach recipe</button>
-          ) : null}
-          {onProposeSystem ? (
-            <button onClick={onProposeSystem} disabled={busy} type="button"><Network size={13} /> Or propose a whole system</button>
           ) : null}
         </div>
       </div>

@@ -9,8 +9,6 @@ import { createOperatorSession, getOperatorSession, saveOperatorSession } from "
 import { operatorTools, resolveOperatorGate, resolveOperatorProposal, runOperatorSession } from "../src/operator-runtime.mjs";
 import { loadFlow } from "../src/flow-store.mjs";
 import { createProject, loadProject } from "../src/project-store.mjs";
-import { createOutcomeProgram } from "../src/program-store.mjs";
-import { loadCapabilityFoundry } from "../src/capability-foundry.mjs";
 
 function fakeClient(responses) {
   let index = 0;
@@ -304,65 +302,4 @@ describe("resident GTM operator runtime", () => {
     assert.ok(resolved.events.some((event) => event.type === "graph_proposal_discarded"));
   });
 
-  it("builds agents for the program the session is bound to, even when the model omits the id", async () => {
-    // Two programs exist; the session is bound to the OLDER one. The model calls
-    // create_personalized_agents WITHOUT a programId — the deterministic resolver must target the
-    // bound program, not the newest (which the old `programs.at(-1)` fallback would have picked).
-    createProject({ name: "GTM IDE" }, options);
-    const project = loadProject(options);
-    const target = createOutcomeProgram({ projectId: project.id, name: "Bound program", objective: "The one the founder opened." }, { ...options, projectId: project.id });
-    createOutcomeProgram({ projectId: project.id, name: "Newer decoy program", objective: "Created after — must NOT receive the agent." }, { ...options, projectId: project.id });
-
-    const session = createOperatorSession({
-      goal: "Build the first agent for the bound program.",
-      projectId: project.id,
-      programId: target.id,
-    }, options);
-
-    const completed = await runOperatorSession(session.id, {
-      options,
-      client: fakeClient([
-        { content: [{
-          type: "tool_use", id: "t1", name: "create_personalized_agents",
-          input: { agents: [{ id: "opp-1", title: "Outreach drafter", objective: "Draft a grounded note", ref: "outreach-drafter" }] },
-        }] },
-        { content: [{ type: "tool_use", id: "t2", name: "complete", input: { outcome: "achieved", summary: "Built the first agent." } }] },
-      ]),
-    });
-
-    assert.equal(completed.status, "completed");
-    const foundry = loadCapabilityFoundry(project.id, { ...options, projectId: project.id });
-    assert.equal(foundry.instances.length, 1);
-    assert.equal(foundry.instances[0].programId, target.id, "agent must attach to the bound program, not the newest");
-  });
-
-  it("tolerates the agent field shapes a live model actually sends", async () => {
-    // Regression for the live run: the model passed agents as { ref, purpose } with no objective or
-    // title, and the policy required a purpose, so creation hard-failed. The handler must derive
-    // purpose/job/ref/title from reasonable synonyms instead of crashing.
-    createProject({ name: "GTM IDE" }, options);
-    const project = loadProject(options);
-    const program = createOutcomeProgram({ projectId: project.id, name: "Field-shape program", objective: "x" }, { ...options, projectId: project.id });
-    const session = createOperatorSession({ goal: "Build agents.", projectId: project.id, programId: program.id }, options);
-
-    const completed = await runOperatorSession(session.id, {
-      options,
-      client: fakeClient([
-        { content: [{
-          type: "tool_use", id: "t1", name: "create_personalized_agents",
-          input: { agents: [
-            { ref: "outreach-drafter", purpose: "Draft a grounded first-contact note" },         // no objective/title
-            { name: "Prospect Researcher", description: "Find founders with a now-trigger" },       // no ref/purpose/objective
-          ] },
-        }] },
-        { content: [{ type: "tool_use", id: "t2", name: "complete", input: { outcome: "achieved", summary: "Built two agents." } }] },
-      ]),
-    });
-
-    assert.equal(completed.status, "completed");
-    assert.ok(!completed.events.some((event) => event.type === "tool_failed"), "no tool should fail on these shapes");
-    const foundry = loadCapabilityFoundry(project.id, { ...options, projectId: project.id });
-    assert.equal(foundry.instances.length, 2);
-    assert.ok(foundry.instances.every((instance) => instance.ref && instance.job), "every agent has a ref and a job");
-  });
 });

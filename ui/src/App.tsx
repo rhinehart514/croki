@@ -62,7 +62,6 @@ import { GoalLauncher } from "@/components/GoalLauncher";
 import { OperatorDriveState } from "@/components/OperatorDriveState";
 const TeamSpace = lazy(() => import("@/components/TeamSpace").then((m) => ({ default: m.TeamSpace })));
 const GoPanel = lazy(() => import("@/components/GoPanel").then((m) => ({ default: m.GoPanel })));
-const PortfolioComposer = lazy(() => import("@/components/PortfolioComposer").then((m) => ({ default: m.PortfolioComposer })));
 import { getMe, canApprove as canApproveApi, operatorGo } from "@/api";
 import { getIdentity, FOUNDER_USER_ID, type ActingIdentity } from "@/lib/identity";
 import type { Me } from "@/types";
@@ -178,7 +177,6 @@ export default function App() {
   const [teamOpen, setTeamOpen] = useState(false);
   const [goOpen, setGoOpen] = useState(false);
   // "Propose the whole GTM system" — the portfolio composer overlay (compose-only, never sends).
-  const [portfolioComposerOpen, setPortfolioComposerOpen] = useState(false);
   // Who I am + my teams, and the space I'm acting in (stamped on requests via lib/identity). The
   // founder personal space is the default; switching in TeamSpace re-scopes my release authority.
   const [me, setMe] = useState<Me | null>(null);
@@ -1911,7 +1909,6 @@ export default function App() {
               onSubmitGoal={(g) => void handleComposerSend(g)}
               onIdeate={() => setComposerPosture("ideate")}
               onLoadRecipe={handleLoadPilotRecipe}
-              onProposeSystem={activeProjectId ? () => setPortfolioComposerOpen(true) : undefined}
             />
           )}
 
@@ -2295,18 +2292,6 @@ export default function App() {
                 if (gateId) setSelection(gateId);
                 setApprovalsOpen(true);
               }}
-            />
-          </Suspense>
-        ) : null}
-
-        {/* Portfolio composer — "propose the whole GTM system": several channels toward one goal,
-            unioned into one branching, multi-gate diagram. Compose-only; nothing persists or sends. */}
-        {portfolioComposerOpen && view === "canvas" && activeProjectId ? (
-          <Suspense fallback={null}>
-            <PortfolioComposer
-              projectId={activeProjectId}
-              goal={operatorSession?.goal ?? ""}
-              onClose={() => setPortfolioComposerOpen(false)}
             />
           </Suspense>
         ) : null}

@@ -1,18 +1,9 @@
 import { validateGraph } from "./graph-operations.mjs";
-import { assemblePortfolioGraph } from "./portfolio-graph.mjs";
 import { deriveChannelEval } from "./eval.mjs";
 import { channelIdFor } from "./channel-graph.mjs";
-import { getChannel, getProjectChannels, loadProject, saveProject } from "./project-store.mjs";
+import { getProjectChannels, loadProject } from "./project-store.mjs";
 import { saveFlow } from "./flow-store.mjs";
-import { writeArtifact } from "./artifact-store.mjs";
-import {
-  annotateGraphWithProgram,
-  compileChannelProgram,
-  ensureGraphAgents,
-  markProgramComposed,
-} from "./program-compiler.mjs";
 import { resolveEntry, hasConcreteInput, SOURCE_MODES } from "./source-entry.mjs";
-import { listAgentInstances } from "./capability-foundry.mjs";
 import { clarityGrounding } from "./clarity-store.mjs";
 
 // Fold the founder's pinned clarity into the product grounding the composer sees, under an explicit
@@ -25,16 +16,12 @@ function groundingWithClarity(grounding, clarity) {
   return { ...(grounding && typeof grounding === "object" ? grounding : {}), founderDirection: clarity };
 }
 
-// The engine's current agent pool — every teammate already minted for this project, deduped by ref.
-// Fed to the composer so a new channel reuses an existing agent instead of minting a near-duplicate;
-// one engine, one shared pool. Job text travels so the model can judge whether an existing ref fits.
-function enginePoolFor(project, options = {}) {
-  if (!project?.id) return [];
-  const byRef = new Map();
-  for (const instance of listAgentInstances(project.id, options)) {
-    if (instance.ref && !byRef.has(instance.ref)) byRef.set(instance.ref, { ref: instance.ref, job: instance.job });
-  }
-  return [...byRef.values()];
+// The engine's current agent pool — the teammates a new channel could reuse instead of minting a
+// near-duplicate. With the capability-foundry layer removed there is no persisted instance pool, so
+// this is empty; the naked path composes agents inline. Kept as the single seam for reuse if a pool
+// is reintroduced.
+function enginePoolFor() {
+  return [];
 }
 
 // Honest blank default: with no composer wired, compose nothing rather than fall back to a
@@ -190,43 +177,6 @@ export async function composeGraphForChannel({ channel, agents = [], grounding =
   return { nodes, edges };
 }
 
-// Portfolio fan-out: compose several accepted channels toward ONE goal and union them into a
-// single branching diagram (assemblePortfolioGraph owns the merge + the wall + the layout). The
-// model still composes each system's topology; this is the host orchestration that turns one goal
-// into many systems the founder reviews together. Pure compose path — no persistence — mirroring
-// composeGraphForChannel, so the streaming preview and a persisting caller can both reuse it.
-export async function composePortfolioGraph({ goal, channels = [], grounding = null, clarity = null, compose = blankCompose, consolidateGate = false }) {
-  if (!Array.isArray(channels) || channels.length === 0) {
-    throw new Error("A portfolio needs at least one accepted channel.");
-  }
-  const systems = [];
-  // The pool grows as channels compose: a later channel sees the agents earlier channels in THIS
-  // portfolio already use, so the model reuses one shared teammate instead of minting a copy per lane.
-  const poolByRef = new Map();
-  for (const entry of channels) {
-    const channel = entry?.channel ?? entry;
-    const agents = entry?.agents ?? [];
-    const { nodes, edges } = await composeGraphForChannel({
-      channel,
-      agents,
-      enginePool: [...poolByRef.values()],
-      grounding: entry?.grounding ?? grounding,
-      clarity: entry?.clarity ?? clarity,
-      input: entry?.input,
-      output: entry?.output,
-      compose,
-    });
-    for (const agent of agents) {
-      if (agent.ref && !poolByRef.has(agent.ref)) poolByRef.set(agent.ref, { ref: agent.ref, job: agent.objective || agent.title });
-    }
-    for (const node of nodes) {
-      if (node.kind === "agent" && node.ref && !poolByRef.has(node.ref)) poolByRef.set(node.ref, { ref: node.ref, job: node.label });
-    }
-    systems.push({ channel, graph: { nodes, edges } });
-  }
-  return assemblePortfolioGraph({ goal: goal || channels[0]?.channel?.objective || "", systems, consolidateGate });
-}
-
 // Normalize an inline channel spec from the compose request body. Channels are now defined directly
 // (by the founder or by Claude) and handed in — there is no auto-generated opportunity accept-list to
 // look them up in. A stable id is derived from the title when none is supplied, so the program the
@@ -256,64 +206,6 @@ function agentSpecsFrom(input = {}) {
     });
 }
 
-// Live wiring for composePortfolioGraph: compose SEVERAL inline channels toward ONE goal and union
-// them into one portfolio graph. This is the operator's "propose systems" move at portfolio altitude —
-// the founder hands several channels, the operator composes them together and shows the whole GTM
-// system as one branching, multi-gate diagram. Compose-only, no persistence (mirroring
-// composePortfolioGraph); the per-channel apply path (composeChannel) is what persists a runnable
-// system. The wall is re-asserted on the union inside assemblePortfolioGraph, so an ungated send in
-// any lane is rejected before it reaches the canvas.
-export async function composePortfolioFromStudio(input = {}, options = {}) {
-  const project = loadProject(options);
-  const rawChannels = Array.isArray(input.channels) ? input.channels : [];
-  if (!rawChannels.length) {
-    throw new Error("Provide at least one channel spec before composing a portfolio.");
-  }
-  const channels = rawChannels.map((entry) => ({
-    channel: channelSpecFrom(entry?.channel ? entry : { channel: entry }),
-    agents: agentSpecsFrom(entry?.channel ? entry : { agents: entry?.agents }),
-  }));
-  const goal = input.goal
-    || project.sharedContext?.outcomes?.[0]?.outcome
-    || channels[0]?.channel?.objective
-    || "";
-  return composePortfolioGraph({
-    goal,
-    channels,
-    grounding: input.grounding ?? null,
-    clarity: clarityGrounding(project.id, options),
-    compose: options.compose || blankCompose,
-    consolidateGate: input.consolidateGate === true,
-  });
-}
-
-// PREVIEW path: compose the channel's real graph and return it WITHOUT any persistence — no program
-// compilation, no saveFlow, no markProgramComposed, no saveProject, no domain events. The founder
-// sees the would-be system ghosted on the canvas and accepts (the apply path persists that exact
-// previewed graph) or discards it. Mirrors the operator's stage-then-gate proposal: nothing lands
-// until the founder accepts. Takes an inline channel spec (+ agents) directly from the request body.
-export async function previewOpportunityChannel(input, options = {}) {
-  const channel = channelSpecFrom(input);
-  const agents = agentSpecsFrom(input);
-  // Resolve the project so the ghosted preview is grounded in the SAME founder direction the apply
-  // path will use — the founder reviews a system composed against their pinned clarity, not without it.
-  const project = loadProject(options);
-  const { nodes, edges } = await composeGraphForChannel({
-    channel,
-    agents,
-    grounding: input.grounding ?? null,
-    clarity: clarityGrounding(project.id, options),
-    input: input.input,
-    output: input.output,
-    compose: options.compose || blankCompose,
-  });
-  return {
-    channelId: channel.id,
-    name: input.name || channel.title,
-    objective: input.objective || channel.objective,
-    graph: { nodes, edges },
-  };
-}
 
 // The naked compose: the model designs the graph for a goal (research/enrich/draft agents behind a
 // founder gate) and we persist it as a runnable flow. NOTHING ELSE — no outcome program, no creation
@@ -337,6 +229,17 @@ export async function composeNakedGraph(input, options = {}) {
     compose: options.compose || blankCompose,
   });
 
+  // Derive this channel's eval — its answer key — at compose time (HARNESS.md invariant 1). With no
+  // evaluator wired the eval is null and composition is unaffected; with one wired it is stored on
+  // the graph and the run path grades against it.
+  const channelEval = await deriveChannelEval({
+    goal: input.objective || channel.objective,
+    channel,
+    agents,
+    grounding: input.grounding ?? null,
+    evaluate: options.evaluate,
+  });
+
   const channelName = input.name || channel.title;
   const channelObjective = input.objective || channel.objective;
   const channelId = channelIdFor(channelName, getProjectChannels(project, options).map((item) => item.id));
@@ -352,6 +255,7 @@ export async function composeNakedGraph(input, options = {}) {
     edges,
     store: { path: `.gtm/flows/${graphId}.json`, runs: 0 },
   };
+  if (channelEval) graph.eval = channelEval;
   // The wall, re-asserted on the composed topology: every execute node must have a founder gate upstream.
   assertGateWall(nodes, edges);
   const validation = validateGraph(graph);
@@ -360,106 +264,3 @@ export async function composeNakedGraph(input, options = {}) {
   return { channel: { id: channelId, name: channelName, graphId }, graph, validation };
 }
 
-export async function composeOpportunityChannel(input, options = {}) {
-  const project = loadProject(options);
-  const channel = channelSpecFrom(input);
-  const agents = agentSpecsFrom(input);
-
-  const compiled = compileChannelProgram({ project, channel, agents }, options);
-  // Apply a previously-previewed graph by reusing its exact nodes/edges — never re-run the model
-  // behind the founder's back on apply (the gate-continuation invariant). The host still re-asserts
-  // the founder-gate wall on the provided topology, since the wall is host-owned on every path.
-  // Contract: when input.graph is provided it MUST be the exact graph previewOpportunityChannel
-  // returned for THIS channel + the SAME input/output adapters — the founder accepted that preview,
-  // so we persist it verbatim (bindIO already ran at preview time) rather than re-composing. We only
-  // re-assert the founder-gate wall, since the wall is host-owned on every path and cannot be trusted
-  // to a client-supplied topology.
-  const provided = Array.isArray(input.graph?.nodes) && input.graph.nodes.length ? input.graph : null;
-  let nodes;
-  let edges;
-  if (provided) {
-    nodes = provided.nodes;
-    edges = Array.isArray(provided.edges) ? provided.edges : [];
-    assertGateWall(nodes, edges);
-  } else {
-    ({ nodes, edges } = await composeGraphForChannel({
-      channel,
-      agents,
-      enginePool: enginePoolFor(project, options),
-      grounding: input.grounding ?? null,
-      clarity: clarityGrounding(project.id, options),
-      input: input.input,
-      output: input.output,
-      compose: options.compose || blankCompose,
-    }));
-  }
-
-  // Derive this channel's eval — its answer key — at compose time (HARNESS.md invariant 1). With
-  // no evaluator wired the eval is null and composition is unaffected; with one wired it is stored
-  // on the graph and the run path grades against it.
-  const channelEval = await deriveChannelEval({
-    goal: input.objective || channel.objective,
-    channel,
-    agents,
-    grounding: input.grounding ?? null,
-    evaluate: options.evaluate,
-  });
-
-  // Write the real personalized capability artifact for every accepted agent so its node resolves
-  // at run time, and so the founder can edit the policy/profile-born agent directly.
-  for (const agent of compiled.agents) writeArtifact("agent", agent.instance.ref, agent.markdown, options);
-
-  const projectAfterChannel = loadProject(options);
-  const channelName = input.name || channel.title;
-  const channelObjective = input.objective || channel.objective;
-  const channelKind = input.kind || "composed";
-  const channelId = channelIdFor(channelName, getProjectChannels(projectAfterChannel, options).map((item) => item.id));
-  const graphId = projectAfterChannel.id === "default" ? channelId : `${projectAfterChannel.id}--${channelId}`;
-
-  let graph = annotateGraphWithProgram({
-    id: graphId,
-    name: channelName,
-    kind: channelKind,
-    objective: channelObjective,
-    version: "1.0.0",
-    revision: 1,
-    nodes,
-    edges,
-    store: { path: `.gtm/flows/${graphId}.json`, runs: 0 },
-  }, compiled);
-  // Mint any agent the composed graph reaches for that wasn't a declared opportunity — so a teammate
-  // the model added (a Content Strategist, a Lifecycle Engineer) becomes a real personalized agent
-  // with a contract and an on-disk definition, not a generic step. Idempotent for already-backed nodes.
-  const ensured = ensureGraphAgents({ project: projectAfterChannel, program: compiled.program, graph }, options);
-  for (const agent of ensured.agents) writeArtifact("agent", agent.instance.ref, agent.markdown, options);
-  graph = ensured.graph;
-  if (channelEval) graph.eval = channelEval;
-  const validation = validateGraph(graph);
-  if (!validation.ok) throw new Error(`Composed workflow is invalid: ${validation.errors.join(" ")}`);
-  saveFlow(graph, options);
-  markProgramComposed(compiled.program, {
-    channelId,
-    graphId,
-    workflowGraph: graph,
-    name: channelName,
-    objective: channelObjective,
-    kind: channelKind,
-  }, options);
-
-  const savedProject = saveProject({
-    ...projectAfterChannel,
-    activeChannelId: channelId,
-  }, options);
-  const projectedChannel = getChannel(savedProject, channelId, options);
-  return {
-    channel: projectedChannel,
-    program: compiled.program,
-    agents: compiled.agents.map((agent) => ({
-      instance: agent.instance,
-      policy: agent.policy,
-      profile: agent.profile,
-    })),
-    graph,
-    validation,
-  };
-}
