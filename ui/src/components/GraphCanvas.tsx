@@ -9,7 +9,7 @@ import "@xyflow/react/dist/style.css";
 import { motion } from "motion/react";
 import {
   AlertCircle, Ban, Bot, Check, CheckCircle2, Circle, Code, CornerDownLeft, Database, FileText, GitMerge,
-  Loader, Lock, MessageSquare, MousePointer2, Pencil, Play, Search, ShieldCheck, Lightbulb, Sprout, Target,
+  Loader, Lock, MessageSquare, MousePointer2, Pencil, Play, Search, ShieldCheck, Lightbulb, Split, Sprout, Target,
   Telescope, Trash2, TrendingUp, Wand2, X, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,7 +17,7 @@ import { healthHex } from "@/lib/health";
 import { agentPersona, FAMILY_TINT } from "@/lib/agentPersona";
 import { useBrandGlyph } from "@/lib/brandGlyph";
 import { BrandGlyph } from "@/components/BrandGlyph";
-import type { NodeEditorBridge } from "@/components/ProgramCanvas";
+import type { NodeEditorBridge } from "@/components/nodeEditorBridge";
 import type {
   ConnectorMeta, GateDecision, GTMEdge, GTMEdgeType, GTMGraph,
   GTMContractAudit, GTMNode, GTMNodeCategory, GTMNodeResult, GTMRunResult, NodeSelection,
@@ -77,10 +77,23 @@ const CATEGORY_LABEL: Record<GTMNodeCategory, string> = {
 // Open node kinds — the un-caging. An agent/skill/code step is not a connector from the
 // registry; it renders by its kind, not its category.
 const KIND_META: Record<string, { color: string; label: string; icon: React.ReactNode }> = {
-  agent: { color: INK,  label: "Agent", icon: <Bot /> },
-  skill: { color: GREY, label: "Skill", icon: <Wand2 /> },
-  code:  { color: GREY, label: "Code",  icon: <Code /> },
+  agent:  { color: INK,  label: "Agent",  icon: <Bot /> },
+  skill:  { color: GREY, label: "Skill",  icon: <Wand2 /> },
+  code:   { color: GREY, label: "Code",   icon: <Code /> },
+  // A switch is automatic logic, so it reads in ink (never amber — amber is reserved for the gate).
+  switch: { color: INK,  label: "Switch", icon: <Split /> },
 };
+
+// A switch edge's predicate, rendered as a short readable rule for the card ("fit ≥ 70", "tag = a").
+const PRED_OP_LABEL: Record<string, string> = {
+  eq: "=", ne: "≠", gt: ">", gte: "≥", lt: "<", lte: "≤", contains: "has", in: "in", exists: "exists", missing: "missing",
+};
+function formatPredicate(p?: { field: string; op?: string; value?: unknown }): string {
+  if (!p || !p.field) return "any";
+  const op = p.op ?? "exists";
+  const label = PRED_OP_LABEL[op] ?? op;
+  return op === "exists" || op === "missing" ? `${p.field} ${label}` : `${p.field} ${label} ${String(p.value)}`;
+}
 
 // How a node renders: by its open kind when it has one, otherwise by its category. Falls
 // back gracefully so a step with no category never breaks the canvas.
@@ -102,11 +115,12 @@ function nodeVisual(node: GTMNode): { color: string; label: string; icon: React.
 //   Gate     — the wall: the one place anything reaches the world (the signature card)
 //   Measure  — the scoreboard, honest about blind attribution
 //   Step     — the quiet machinery (tool / code / skill / enrich / filter / generate)
-type CardObject = "source" | "teammate" | "gate" | "measure" | "step";
+type CardObject = "source" | "teammate" | "gate" | "measure" | "switch" | "step";
 function cardObject(node: GTMNode): CardObject {
   if (node.category === "gate") return "gate";
   if (node.category === "measure") return "measure";
   if (node.category === "source") return "source";
+  if (node.kind === "switch") return "switch";
   if (node.kind === "agent") return "teammate";
   return "step";
 }
@@ -712,6 +726,18 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
   const mcpGlyph = useBrandGlyph(isMcp ? mcpServer : null);
   const mcpWrites = isMcp && node.config?.toolClass === "write";
 
+  // A switch reads its branches off its OUTGOING data edges: each carries the routing predicate (the
+  // rule) and points at the branch it feeds. Read from the live graph on context, not node data.
+  const switchBranches = obj === "switch" && ctx
+    ? ctx.graph.edges
+        .filter((e) => e.source === node.id && e.edgeType === "data")
+        .map((e) => ({
+          id: e.id,
+          rule: formatPredicate(e.predicate),
+          target: ctx.graph.nodes.find((n) => n.id === e.target)?.label ?? e.target,
+        }))
+    : [];
+
   return (
     <>
     {/* The card IS the editor: a card that expands to mount inputs/buttons can't be a <button>
@@ -738,7 +764,31 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
     >
       <Handle type="target" position={Position.Left} id="t-l" />
-      {obj === "source" ? (
+      {obj === "switch" ? (
+        // ── Switch ── conditional logic as a readable card. The rule lives on each outgoing branch:
+        // "fit ≥ 70 → Fast path". Neutral ink (logic is automatic), never the amber of the gate.
+        <>
+          <div className="loop-node-header">
+            <div className="loop-node-icon" style={{ background: `${INK}14`, color: INK }}><Split /></div>
+            <div className="loop-node-header-right">
+              <span className="loop-node-type-label">Switch</span>
+              <span className="loop-node-status"><StatusIcon status={status} /></span>
+            </div>
+          </div>
+          <span className="loop-node-label">{node.label}</span>
+          <div className="loop-node-switch-branches">
+            {switchBranches.length === 0 ? (
+              <span className="loop-node-switch-empty">No branches yet — connect this switch to its paths</span>
+            ) : switchBranches.map((b) => (
+              <span className="loop-node-switch-branch" key={b.id}>
+                <span className="loop-node-switch-rule">{b.rule}</span>
+                <span className="loop-node-switch-arrow" aria-hidden>→</span>
+                <span className="loop-node-switch-target">{b.target}</span>
+              </span>
+            ))}
+          </div>
+        </>
+      ) : obj === "source" ? (
         // ── Source ── the audience is the headline; the left MARK encodes the mode (a scout
         // telescope for discovered, a seed sprout for provided) so the label can't disagree with
         // the runner. The trigger carries an observed-vs-assumed dot; a count of who enters foots it.
@@ -1413,10 +1463,9 @@ export function GraphCanvas({
     [laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds],
   );
 
-  // Re-fit the viewport whenever the flow's structure changes (load, compose, a system
-  // appearing). Includes the system ids so a portfolio fan-out re-frames too.
+  // Re-fit the viewport whenever the flow's structure changes (load, compose).
   const fitSignature = useMemo(
-    () => `${topologySignature(graph)}|${(graph.systems ?? []).map((s) => s.id).join(",")}`,
+    () => topologySignature(graph),
     [graph],
   );
 

@@ -14,7 +14,7 @@
 // tests inject fakes with makeStepRuntime. Step result shape matches connectors:
 // { ok, items, meta?, error? }.
 
-export const STEP_KINDS = new Set(["agent", "skill", "code", "mcp"]);
+export const STEP_KINDS = new Set(["agent", "skill", "code", "mcp", "switch"]);
 
 export const defaultStepRuntime = {
   async agent(node) {
@@ -34,6 +34,14 @@ export const defaultStepRuntime = {
   // (read runs free, write stages behind the gate) is the run-path slice, not yet wired here.
   async mcp(node) {
     return { ok: false, items: [], error: `MCP tool step "${node.ref}" needs an MCP runtime. None is attached to this run.` };
+  },
+  // Switch — a conditional router. It owns no intelligence and needs no live dependency, so the
+  // default IS the real behavior: pass every upstream item through unchanged. The routing itself
+  // happens downstream — each of the switch's outgoing data edges carries a predicate, and
+  // resolveUpstream (graph.mjs) filters this node's items per edge. A switch never sends.
+  async switch(node, upstream) {
+    const items = Array.isArray(upstream) ? upstream : [];
+    return { ok: true, items, meta: { kind: "switch", routed: items.length } };
   },
 };
 
@@ -175,6 +183,16 @@ function applyPredicate(left, op, right) {
   }
 }
 
+// Evaluate a switch/edge predicate { field, op?, value? } against one item. Reuses the one
+// predicate vocabulary above so a switch can never route on logic a `code` filter couldn't express.
+// A null/empty predicate matches everything (an unconditional branch).
+export function evaluateSwitchPredicate(item, predicate) {
+  if (!predicate || typeof predicate !== "object") return true;
+  const { field, op = "exists", value } = predicate;
+  if (!field) return true;
+  return applyPredicate(item?.[field], op, value);
+}
+
 export const BUILTIN_CODE_TRANSFORMS = {
   // Drop duplicates. config.by = a field name (or array of field names) to key on; absent =
   // the whole item's identity. First occurrence wins, input order preserved.
@@ -249,6 +267,8 @@ export function createStepRuntime({ agentInvoker, skillLoader, codeTransforms = 
     // The mcp runner is its own injectable seam (registry + transport). With it absent
     // the kind falls back to the honest blank default rather than pretending a tool ran.
     mcp: typeof mcpRunner === "function" ? mcpRunner : defaultStepRuntime.mcp,
+    // A switch owns no intelligence — the deterministic pass-through default is always correct.
+    switch: defaultStepRuntime.switch,
     async agent(node, upstream, context) {
       if (typeof agentInvoker !== "function") return defaultStepRuntime.agent(node);
       // Prefer the instance's own on-disk definition when the node carries a path to it (set by

@@ -1,5 +1,5 @@
 import { GraphCanvas, type OperatorCursorState } from "@/components/GraphCanvas";
-import type { NodeEditorBridge } from "@/components/ProgramCanvas";
+import type { NodeEditorBridge } from "@/components/nodeEditorBridge";
 import { CanvasShell, type LensDef, type LensProps } from "@/components/canvas/CanvasShell";
 import { PeopleLens } from "@/components/lenses/PeopleLens";
 import { ExperimentMatrixLens } from "@/components/lenses/ExperimentMatrixLens";

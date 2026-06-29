@@ -34,6 +34,7 @@ Critical rules:
   - gate:    { "category": "gate", "connector": "default" }
   - execute: { "category": "execute", "connector": "local" | "http" } — staged, never sends on its own
   - measure: { "category": "measure", "connector": "default" }
+  - switch:  { "kind": "switch", "label": "..." } — a conditional router. Use it when ONE upstream stream should split down different branches by a property of each item (high-fit vs low-fit, replied vs silent), instead of hand-wiring two near-duplicate branches. Its OUTGOING data edges carry the rule. Deterministic, never blocks, never sends; logic is automatic so a switch is NEVER a gate (and still needs a gate downstream of any execute it routes to).
 - Use the accepted agents by their exact refs. Wire each where it belongs.
 - REUSE the engine's existing teammates. You are given the engine's current agent pool — the agents other channels in this same product already use. When an existing engine agent already covers a capability this channel needs, reference it by its EXACT existing ref instead of inventing a near-duplicate. Channels are routes through ONE engine that shares its agent pool; they do not each get a private copy of every worker. Introduce a new agent ref ONLY when no existing teammate fits the job.
 - Give every executable node a plain data contract: "contract": { "accepts": ["fieldName"], "emits": ["fieldName"], "minItems": 1 }. Use only fields the step genuinely needs or can promise. A personal outreach draft should require a real personalFact; measurement should require the attribution join fields it needs.
@@ -41,7 +42,8 @@ Critical rules:
 
 Return ONLY a JSON object: { "nodes": [ ... ], "edges": [ ... ] }.
 Each node: { "id": "kebab-id", plus the kind/category fields above, "label": "...", "contract": { "accepts": [], "emits": [] }, and for agents "ref". Positions optional; the host lays out anything you omit.
-Each edge: { "source": "node-id", "target": "node-id", "edgeType": "data" | "context" | "feedback" }.`;
+Each edge: { "source": "node-id", "target": "node-id", "edgeType": "data" | "context" | "feedback" }.
+A data edge leaving a "switch" node ALSO carries "predicate": { "field": "<itemField>", "op": "eq"|"ne"|"gt"|"gte"|"lt"|"lte"|"exists"|"missing"|"contains"|"in", "value": <v> } — only items matching it take that branch. An unconditional fall-through branch omits the predicate.`;
 
 // Live composer: reads the repo on the founder's subscription and returns a { nodes, edges }
 // graph spec. The host (workflow-composer.mjs) normalizes, enforces the gate wall, and validates.

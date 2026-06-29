@@ -1,12 +1,11 @@
 import type {
   ApplyReadiness, BuildResult, ConnectorMeta, Decisions, EngineState, GTMGraph, GTMProject, GTMRunResult,
-  GTMRevision, GTMWorkspace, OperatorSession, OperatorSessionSummary, PortfolioBrief,
-  ScanReport, ScanPreview, ChannelMeta, ChannelRunDiff,
+  GTMRevision, GTMWorkspace, OperatorSession, OperatorSessionSummary,
+  ScanReport, ScanPreview, ChannelRunDiff,
   WorkspaceSummary, ProjectSummary,
   ContextManifest, GtmLibrary,
   GraphOperation, GTMContractAudit,
-  OutcomeProgram, AgentCreationPolicy, AgentInstance, PersonalizationProfile, FeedbackSignal,
-  AgentEvaluation, DomainEvent, ProductModel, ProductModelEdit, ProductPinTargetKind,
+  ProductModel, ProductModelEdit, ProductPinTargetKind,
   CapabilityServer, Person, CrossReferenceResult, ToolRegistryView, RegisteredTool, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole,
 } from "@/types";
@@ -234,9 +233,9 @@ export const getOperatorSession = (sessionId: string, projectId?: string) =>
 // One durable conversation per project. `reuse: true` returns the project's live (non-terminal) thread
 // when one exists (`reused: true`) instead of spawning a parallel session, and only creates a fresh one
 // (`reused: false`) when there is none — so the dock can only ever talk about the project on screen.
-export const createOperatorSession = (projectId: string, goal: string, graphId?: string, programId?: string) =>
+export const createOperatorSession = (projectId: string, goal: string, graphId?: string) =>
   post<{ session: OperatorSession; reused: boolean }>("/api/operator/sessions", {
-    projectId, reuse: true, goal, graphId, programId,
+    projectId, reuse: true, goal, graphId,
   });
 
 export const resumeOperatorSession = (sessionId: string, projectId: string, input: string) =>
@@ -385,19 +384,6 @@ export const findReferences = (
   );
 };
 
-export const getPrograms = (projectId: string) =>
-  get<{
-    programs: OutcomeProgram[];
-    policies: AgentCreationPolicy[];
-    foundry: {
-      instances: AgentInstance[];
-      profiles: PersonalizationProfile[];
-      evaluations: AgentEvaluation[];
-    };
-    feedback: { signals: FeedbackSignal[] };
-    events: DomainEvent[];
-  }>(`/api/projects/${encodeURIComponent(projectId)}/programs`);
-
 // ── Self-built tools — the founder-gated tool-birth → registry leg ─────────────
 // Pending proposals are deterministic procedures crystallized from repeated runs (gated, never
 // auto-born); registered tools are the callable ones a founder has approved.
@@ -416,112 +402,11 @@ export const approveToolBirth = (
     body,
   );
 
-export const runProgram = (
-  projectId: string,
-  programId: string,
-  options: { targetNodeId?: string; approvals?: Record<string, boolean>; decisions?: Decisions; resumeRunId?: string } = {},
-) => post<{
-  programId: string;
-  graphId: string;
-  programStatus: string;
-  storedRunCount: number;
-  feedbackSignals: number;
-  evaluations: number;
-  nextVersions: Array<{ policyId: string; agentInstanceId: string; previousInstanceId: string | null; version: number }>;
-  result: GTMRunResult;
-}>(`/api/projects/${encodeURIComponent(projectId)}/programs/${encodeURIComponent(programId)}/run`, options);
-
-// Program run over SSE — the program canvas streams node-by-node like the raw-graph path. run_done
-// carries the program summary (status, learning signals, next agent versions) the batch endpoint did.
-export type ProgramRunStreamEvent =
-  | { type: "node_start"; nodeId: string; category?: string; kind?: string; label?: string }
-  | { type: "node_done"; nodeId: string; result: GTMRunResult["nodes"][string] }
-  | {
-      type: "run_done";
-      result: GTMRunResult;
-      programStatus: string;
-      storedRunCount: number;
-      feedbackSignals: number;
-      evaluations: number;
-      nextVersions: Array<{ policyId: string; agentInstanceId: string; previousInstanceId: string | null; version: number }>;
-    }
-  | { type: "run_error"; error: string };
-
-export async function runProgramStream(
-  projectId: string,
-  programId: string,
-  options: { approvals?: Record<string, boolean>; decisions?: Decisions; resumeRunId?: string },
-  onEvent: (event: ProgramRunStreamEvent) => void,
-): Promise<void> {
-  const res = await fetch(
-    `/api/projects/${encodeURIComponent(projectId)}/programs/${encodeURIComponent(programId)}/run/stream`,
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(options) },
-  );
-  if (!res.ok || !res.body) {
-    const payload = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(payload.error || `Program run stream failed (${res.status}).`);
-  }
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const frames = buf.split("\n\n");
-    buf = frames.pop() ?? "";
-    for (const frame of frames) {
-      const line = frame.split("\n").find((l) => l.startsWith("data: "));
-      if (line) {
-        try { onEvent(JSON.parse(line.slice(6)) as ProgramRunStreamEvent); } catch { /* skip malformed frame */ }
-      }
-    }
-  }
-}
-
 export const setActiveWorkflow = (workflowId: string) =>
   post<{ activeWorkflowId: string; activeChannelId?: string }>("/api/project/active-workflow", { workflowId });
 
 export const setActiveChannel = (channelId: string) =>
   setActiveWorkflow(channelId).then((result) => ({ activeChannelId: result.activeWorkflowId }));
-
-export const createWorkflow = (input: { name: string; objective: string; kind?: string }) =>
-  post<{ workflow: ChannelMeta; channel?: ChannelMeta }>("/api/program-workflows", input)
-    .then((result) => ({ workflow: result.workflow ?? result.channel! }));
-
-export const createChannel = (input: { name: string; objective: string; kind?: string }) =>
-  createWorkflow(input).then((result) => ({ channel: result.workflow }));
-
-export const duplicateWorkflow = (workflowId: string, input: { name: string; objective?: string }) =>
-  post<{ workflow?: ChannelMeta; channel?: ChannelMeta }>(
-    `/api/program-workflows/${encodeURIComponent(workflowId)}/duplicate`,
-    input,
-  ).then((result) => ({ workflow: result.workflow ?? result.channel! }));
-
-export const duplicateChannel = (channelId: string, input: { name: string; objective?: string }) =>
-  duplicateWorkflow(channelId, input).then((result) => ({ channel: result.workflow }));
-
-export const updateWorkflow = (
-  workflowId: string,
-  patch: Partial<Pick<ChannelMeta, "name" | "objective" | "kind" | "enabled">>,
-) => post<{ workflow?: ChannelMeta; channel?: ChannelMeta }>(
-  `/api/program-workflows/${encodeURIComponent(workflowId)}/update`,
-  patch,
-).then((result) => ({ workflow: result.workflow ?? result.channel! }));
-
-export const updateChannel = (
-  channelId: string,
-  patch: Partial<Pick<ChannelMeta, "name" | "objective" | "kind" | "enabled">>,
-) => updateWorkflow(channelId, patch).then((result) => ({ channel: result.workflow }));
-
-export const getPortfolioBrief = () =>
-  get<{ brief: PortfolioBrief }>("/api/project/brief");
-
-export const createPortfolioBriefArtifact = () =>
-  post<{ artifact: Record<string, unknown>; sharedContextVersion: number }>(
-    "/api/project/artifacts/portfolio-brief",
-    {},
-  );
 
 export const compareChannelRuns = (channelId: string, before?: string, after?: string) => {
   const params = new URLSearchParams();

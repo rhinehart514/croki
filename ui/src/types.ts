@@ -175,7 +175,6 @@ export type ChannelMeta = {
   kind: string;
   objective: string;
   graphId: string;
-  outcomeProgramId?: string;
   enabled: boolean;
   status: "idle" | "error" | "done" | "waiting";
   lastRunAt: string | null;
@@ -358,189 +357,13 @@ export type GTMProject = {
   channels: ChannelMeta[];
 };
 
-// The semantic heart of a program, typed. These were Record<string, unknown> bags the UI had to
-// probe with guessed key lists; the real shapes (from the brain producers) are declared here.
-export type DesiredOutcome = {
-  description: string;
-  type: string;
-  target?: string | number | null;
-};
-
-export type BuyerHypothesis = {
-  description?: string;
-  status?: string;
-  audience?: string;
-  target?: string;
-};
-
-export type ChannelHypothesis = {
-  label?: string;
-  objective?: string;
-  kind?: string;
-  enabled?: boolean;
-  status?: string;
-  id?: string;
-  motion?: string;
-  evidence?: Citation[];
-  description?: string;
-};
-
-// All optional on purpose: an empty {} is the honest "measurement not defined / blind" state. The
-// scaled-run gate enforces joinKey && outcomeEvent at runtime; the type does not fake their presence.
-export type MeasurementPlan = {
-  outcomeEvent?: string;
-  joinKey?: string;
-  attributionSource?: string | null;
-  blindSpots?: string[];
-  createdAt?: string;
-};
-
-// Program state, split into its two real concerns. `lifecycle` is founder-controlled and durable;
-// `lastRunStatus` is derived from the most recent run and disposable. Conflating them into one field
-// is what made "blocked" a dead-end the founder could not re-run out of.
-export type ProgramLifecycle = "draft" | "active" | "retired";
-export type ProgramRunStatus = "running" | "waiting_for_gate" | "learning" | "complete" | "blocked";
-
-export type OutcomeProgram = {
-  id: string;
-  // Lineage triplet — mirrors AgentCreationPolicy / AgentInstance so a revised program is traceable.
-  lineageId?: string;
-  previousProgramId?: string | null;
-  version?: number;
-  projectId: string;
-  name: string;
-  desiredOutcome: DesiredOutcome;
-  buyerHypothesis: BuyerHypothesis;
-  channelHypothesis: ChannelHypothesis;
-  measurementPlan: MeasurementPlan;
-  lifecycle: ProgramLifecycle;
-  lastRunStatus: ProgramRunStatus | null;
-  sourceOpportunityId?: string | null;
-  channelId?: string | null;
-  // workflowGraph is authoritative (the graph body); graphId is only the flow-store ledger key and
-  // always equals workflowGraph.id.
-  graphId?: string | null;
-  workflowGraph?: GTMGraph | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type AgentCreationPolicy = {
-  id: string;
-  lineageId?: string;
-  previousPolicyId?: string | null;
-  projectId: string;
-  programId: string | null;
-  sourceOpportunityId?: string | null;
-  scope: "project" | "program" | "channel" | string;
-  purpose: string;
-  positiveRules: string[];
-  negativeRules: string[];
-  evidenceRequirements: string[];
-  safetyRules: string[];
-  requiredInputs: string[];
-  requiredOutputs: string[];
-  evaluationSignals: string[];
-  version: number;
-  feedbackSignalIds: string[];
-  revisionReason?: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-// Founder taste and market memory have stable shapes from their producers (project sharedContext
-// and the capability foundry); type them instead of leaving them as bags.
+// Founder taste has a stable shape from its producer (project sharedContext); type it instead of
+// leaving it as a bag. It is read by SharedContext below.
 export type FounderTaste = {
   approvedPatterns?: string[];
   rejectedPatterns?: string[];
   edits?: unknown[];
   policies?: string[];
-};
-
-export type MarketMemory = {
-  outcomes?: unknown[];
-  productFeedback?: unknown[];
-  experiments?: unknown[];
-};
-
-export type PersonalizationProfile = {
-  id: string;
-  projectId: string;
-  programId: string | null;
-  creationPolicyId: string | null;
-  productTruth: Citation[];
-  buyerHypothesis: BuyerHypothesis;
-  channelHypothesis: ChannelHypothesis;
-  founderTaste: FounderTaste;
-  marketMemory: MarketMemory;
-  priorRunState: unknown[];
-  knownBlindSpots: string[];
-  assembledAt: string;
-};
-
-export type AgentInstance = {
-  id: string;
-  lineageId?: string;
-  previousInstanceId?: string | null;
-  projectId: string;
-  ref: string;
-  blueprintId: string;
-  programId: string;
-  channelId?: string | null;
-  sourceOpportunityId?: string | null;
-  job: string;
-  inputContract: string[];
-  outputContract: string[];
-  personalizationProfileId: string;
-  creationPolicyId: string;
-  artifactPath: string;
-  evaluationSignals: string[];
-  version: number;
-  status: "draft" | "active" | "retired" | string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type AgentEvaluation = {
-  id: string;
-  projectId: string;
-  programId: string | null;
-  runId: string | null;
-  nodeId: string | null;
-  agentInstanceId: string;
-  creationPolicyId: string | null;
-  status: string;
-  outputContractSatisfied: boolean;
-  evidenceUsed: boolean;
-  uncertaintyPreserved: boolean;
-  founderSignals: string[];
-  runFailure: string | null;
-  recommendations: string[];
-  createdAt: string;
-};
-
-export type FeedbackSignal = {
-  id: string;
-  projectId: string;
-  graphId: string | null;
-  runId: string | null;
-  nodeId: string;
-  type: string;
-  summary: string;
-  itemId?: string | null;
-  policyIds?: string[];
-  observedAt: string;
-};
-
-export type DomainEvent = {
-  id: string;
-  projectId: string;
-  type: string;
-  aggregateType: string | null;
-  aggregateId: string | null;
-  commandId: string | null;
-  createdAt: string;
-  data: Record<string, unknown>;
 };
 
 export type ProjectSummary = {
@@ -695,33 +518,6 @@ export type ProductModelEdit = {
   generatedBy?: "claude" | "blank" | "founder";
 };
 
-export type PortfolioBrief = {
-  generatedAt: string;
-  project: { id: string; name: string };
-  sharedContextVersion: number;
-  grounding: Record<string, unknown>;
-  positioning: Record<string, unknown>;
-  icp: Record<string, unknown>;
-  channels: Array<{
-    id: string;
-    name: string;
-    kind: string;
-    objective: string;
-    runCount: number;
-    lastRunId: string | null;
-    lastRunAt: string | null;
-    ok: boolean | null;
-    pendingGates: number;
-    counts: Record<string, number>;
-  }>;
-  observedOutcomes: Array<Record<string, unknown>>;
-  outcomeCounts: Record<string, Record<string, number>>;
-  experiments: Array<Record<string, unknown>>;
-  artifacts: Array<Record<string, unknown>>;
-  productFeedback: Array<Record<string, unknown>>;
-  recommendations: string[];
-};
-
 export type ChannelRunDiff = {
   beforeRunId: string;
   afterRunId: string;
@@ -771,9 +567,10 @@ export type GTMNode = {
   id: string;
   category: GTMNodeCategory;
   // The open node model. "tool" (or absent) is a registered connector — the category
-  // path. "agent" / "skill" / "code" are open steps the agent composes; they carry a
-  // `ref` (the subagent, skill, or transform name) instead of a connector.
-  kind?: "tool" | "agent" | "skill" | "code" | "mcp";
+  // path. "agent" / "skill" / "code" / "mcp" are open steps the agent composes; they carry a
+  // `ref` (the subagent, skill, or transform name) instead of a connector. "switch" is a
+  // conditional router — no ref, no category; it splits traffic via per-edge predicates.
+  kind?: "tool" | "agent" | "skill" | "code" | "mcp" | "switch";
   // What this node emits — OPEN, never a closed enum (E3.1). "message" | "artifact" | "dataset" |
   // "signal" | "none" are hints, not the limit; the composer may invent others. Engine must not
   // privilege "message".
@@ -807,25 +604,29 @@ export type GTMContractAudit = {
   itemCount?: number;
 };
 
+// The fixed op vocabulary a switch edge predicate may use (mirrors the engine's applyPredicate).
+export type GTMEdgePredicateOp =
+  | "exists" | "missing" | "eq" | "ne" | "gt" | "gte" | "lt" | "lte" | "contains" | "in";
+
+// A routing rule carried by a data edge leaving a "switch" node: only items where
+// item[field] <op> value holds take this branch. Omitted op defaults to "exists".
+export type GTMEdgePredicate = {
+  field: string;
+  op?: GTMEdgePredicateOp;
+  value?: unknown;
+};
+
 export type GTMEdge = {
   id: string;
   source: string;
   target: string;
   edgeType: GTMEdgeType;
   label?: string;
-};
-
-// The full graph (replaces Pipeline)
-// One system within a portfolio fan-out: a single composed GTM system, laid out as its own lane in
-// the canvas. Present only on a kind:"portfolio" graph (assemblePortfolioGraph). Drives the
-// swimlane rendering — the lane label, which nodes belong to it, and its gate count.
-export type PortfolioSystem = {
-  id: string;
-  label: string;
-  objective?: string;
-  laneIndex: number;
-  nodeIds: string[];
-  gateIds: string[];
+  // Conditional routing: present on a switch's outgoing data edges. Filters which items cross.
+  predicate?: GTMEdgePredicate;
+  // Living-grammar visual weight (0–1): how much live volume/conviction this edge carries.
+  // Derived from the run ledger, never authored. Drives stroke-width in the canvas (Phase 3).
+  conviction?: number;
 };
 
 // A pending tool-birth proposal — a repeated deterministic procedure crystallized from runs, gated and
@@ -872,11 +673,7 @@ export type GTMGraph = {
   revision?: number;
   kind?: string;
   objective?: string;
-  outcomeProgramId?: string;
   sharedContextVersion?: number;
-  // Per-system lanes for a portfolio fan-out graph; absent on a single-system graph. Still produced
-  // by brain composition (portfolio-graph.mjs); the canvas swimlane renderer that drew it retired.
-  systems?: PortfolioSystem[];
   nodes: GTMNode[];
   edges: GTMEdge[];
   // venture-style store reference
@@ -1051,7 +848,6 @@ export type OperatorSessionSummary = {
 
 export type OperatorSession = OperatorSessionSummary & {
   schemaVersion: number;
-  programId?: string | null;
   // The team that owns this session's gate. Release is authorized against this team (owner/approver
   // may release; a member may not). Null/absent → the founder's personal space (solo founder releases).
   teamId?: string | null;

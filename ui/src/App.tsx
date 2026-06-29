@@ -12,7 +12,6 @@ import {
   type ConnectionStatus,
   getContext,
   getLibrary,
-  getPrograms,
   getGraphTemplate,
   getPilotOutreachRecipe,
   getOperatorSession,
@@ -28,7 +27,6 @@ import {
   deriveChannelFrom,
   listProjects,
   runGraph,
-  runProgramStream,
   activateProject,
   deleteProject,
   cancelOperatorSession,
@@ -66,16 +64,14 @@ import { getMe, canApprove as canApproveApi, operatorGo } from "@/api";
 import { getIdentity, FOUNDER_USER_ID, type ActingIdentity } from "@/lib/identity";
 import type { Me } from "@/types";
 import { NodeEditor } from "@/components/NodeEditor";
-import { ProgramCanvas } from "@/components/ProgramCanvas";
-// GtmExplorer (the old left rail) is intentionally no longer rendered — outcome navigation moved to
-// the FloatingDock's OutcomeSwitcher, the Library to LibraryPalette, the feeds into ComposerDock,
+// GtmExplorer (the old left rail) is intentionally no longer rendered — channel navigation moved to
+// the FloatingDock's channel switcher, the Library to LibraryPalette, the feeds into ComposerDock,
 // Problems to the dock. The breadcrumb switchers, mode lenses, Problems, Approvals, Simulate and Run
 // all live in FloatingDock now, so App no longer imports them directly.
 const LibraryPalette = lazy(() => import("@/components/LibraryPalette").then((m) => ({ default: m.LibraryPalette })));
 import { statusLabel } from "@/lib/status";
 import { healthHex } from "@/lib/health";
 import { itemKey } from "@/lib/itemKey";
-import { findProgramForGraph, graphBelongsToProgram, programGraphId } from "@/lib/program";
 const ProductUnderstanding = lazy(() => import("@/components/ProductUnderstanding").then((m) => ({ default: m.ProductUnderstanding })));
 const ProductCanvas = lazy(() => import("@/components/ProductCanvas").then((m) => ({ default: m.ProductCanvas })));
 import { GtmCanvas, type GtmCanvasModel } from "@/components/canvas/GtmCanvas";
@@ -100,8 +96,7 @@ import { Button } from "@/components/ui/button";
 import type {
   ChannelMeta, ConnectorMeta, ContextManifest, Decisions, EngineState, GateDecision, GraphOperation, GtmLibrary, GTMContractAudit, GTMGraph, GTMNode,
   GTMProject, GTMRunResult, NodeSelection, OperatorSession, ProjectSummary,
-  AgentCreationPolicy, AgentInstance, FeedbackSignal, OutcomeProgram,
-  AgentEvaluation, DomainEvent, ProductModel, ProductModelEdit,
+  ProductModel, ProductModelEdit,
   CapabilityServer, CapabilityTool, Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, ComposerPosture,
 } from "@/types";
@@ -121,13 +116,12 @@ function pickStr(...vals: unknown[]): string | null {
 // percentage). Taste is shown even at 0 chars on purpose: an empty moat is a signal to the
 // founder that nothing has been gated yet. Falls back to the old config-completeness % only
 // before the manifest loads.
-function programRouteFromLocation() {
-  const match = window.location.pathname.match(/^\/projects\/([^/]+)\/programs\/([^/]+)\/canvas\/?$/);
+// A deep link routes by project only now (channels are plain flows; there is no separate program
+// surface). /projects/:id activates that project; the project's active channel decides the focus.
+function projectRouteFromLocation() {
+  const match = window.location.pathname.match(/^\/projects\/([^/]+)(?:\/.*)?$/);
   if (!match) return null;
-  return {
-    projectId: decodeURIComponent(match[1]),
-    programId: decodeURIComponent(match[2]),
-  };
+  return { projectId: decodeURIComponent(match[1]) };
 }
 
 export default function App() {
@@ -161,15 +155,8 @@ export default function App() {
   // active project. Edits persist through the domain commands (revise/derive) then re-fetch.
   const [productModel, setProductModel] = useState<ProductModel | null>(null);
   const [productModelBusy, setProductModelBusy] = useState(false);
-  const [programs, setPrograms] = useState<OutcomeProgram[]>([]);
-  const [activeProgramId, setActiveProgramId] = useState<string | null>(null);
-  const [agentPolicies, setAgentPolicies] = useState<AgentCreationPolicy[]>([]);
-  const [agentInstances, setAgentInstances] = useState<AgentInstance[]>([]);
-  const [agentEvaluations, setAgentEvaluations] = useState<AgentEvaluation[]>([]);
-  const [feedbackSignals, setFeedbackSignals] = useState<FeedbackSignal[]>([]);
-  const [domainEvents, setDomainEvents] = useState<DomainEvent[]>([]);
-  // Bumped to summon the Claude co-pilot — a program is created by telling Claude the outcome,
-  // not by filling a form, so "New program" opens and focuses the chat.
+  // Bumped to summon the Claude co-pilot — a new channel is born by telling Claude the goal, not by
+  // filling a form, so "New channel" opens and focuses the chat.
   const [composerFocus, setComposerFocus] = useState(0);
   // The Approvals panel — the founder gate's first-class home. Opens from the toolbar badge.
   const [approvalsOpen, setApprovalsOpen] = useState(false);
@@ -193,9 +180,6 @@ export default function App() {
   // The Problems popover — the engine's investigations, surfaced as a compact toolbar chip now that
   // the Problems rail section is gone with the explorer.
   const [problemsOpen, setProblemsOpen] = useState(false);
-  // Program details — the inspector sheet (agents, measurement, learning) over the canvas. Lifted
-  // here from ProgramCanvas so the FloatingDock's details toggle drives the same sheet.
-  const [inspecting, setInspecting] = useState(false);
   // The active lens per mode — lifted out of the canvas shell so the ONE command dock owns the
   // switcher (one bar, not two). GTM defaults to engine on the overview and channel-flow with a
   // channel open; Product defaults to conceptual.
@@ -312,59 +296,22 @@ export default function App() {
   // the source markdown is still one click away inside the sheet.
   const [agentProfileRef, setAgentProfileRef] = useState<string | null>(null);
 
-  // The team rail in the profile: each born agent once, keyed by ref (latest version wins). These are
-  // the personalized teammates working this product's outcomes, not the stock library.
-  const agentTeam = useMemo<TeammateView[]>(() => {
-    const byRef = new Map<string, AgentInstance>();
-    for (const inst of agentInstances) {
-      if (inst.status === "retired") continue;
-      const prior = byRef.get(inst.ref);
-      if (!prior || (inst.version ?? 0) > (prior.version ?? 0)) byRef.set(inst.ref, inst);
-    }
-    return [...byRef.values()].map((i) => ({ ref: i.ref, job: i.job }));
-  }, [agentInstances]);
+  // The team rail in the profile: the stock on-disk GTM agents. There is no personalized-agent foundry
+  // anymore — agents are the library definitions.
+  const agentTeam = useMemo<TeammateView[]>(
+    () => (library?.agents ?? []).map((a) => ({ ref: a.ref, job: a.description })),
+    [library],
+  );
 
-  // Assemble the open agent's profile from REAL data — a born instance (the personalized teammate) if
-  // one matches the ref, otherwise a stock library agent (lighter, not personalized). Team-level
-  // signal/eval counts are the genuine totals, never seeded.
+  // Assemble the open agent's profile from the stock on-disk library agent (clicked in the library).
   const agentProfileView = useMemo<AgentProfileView | null>(() => {
     if (!agentProfileRef) return null;
-    const instances = agentInstances.filter((i) => i.ref === agentProfileRef);
-    const instance = instances.find((i) => i.status === "active")
-      ?? instances.sort((a, b) => (b.version ?? 0) - (a.version ?? 0))[0];
-    const teamSignalCount = feedbackSignals.length;
-    const teamEvalCount = agentEvaluations.length;
-    if (instance) {
-      const policy = agentPolicies.find((p) => p.id === instance.creationPolicyId) ?? null;
-      return {
-        ref: instance.ref,
-        job: instance.job,
-        personalized: true,
-        status: instance.status,
-        version: instance.version,
-        inputContract: instance.inputContract ?? [],
-        outputContract: instance.outputContract ?? [],
-        policy,
-        evaluationCount: agentEvaluations.filter((e) => e.agentInstanceId === instance.id).length,
-        teamSignalCount,
-        teamEvalCount,
-      };
-    }
-    // Stock on-disk agent (clicked in the library, never born for an outcome): show what the
-    // definition gives us, marked honestly as not yet personalized.
     const stock = library?.agents.find((a) => a.ref === agentProfileRef);
     return {
       ref: agentProfileRef,
       job: stock?.description ?? "A library agent. Open the source to see what it does.",
-      personalized: false,
-      inputContract: [],
-      outputContract: [],
-      policy: null,
-      evaluationCount: 0,
-      teamSignalCount,
-      teamEvalCount,
     };
-  }, [agentProfileRef, agentInstances, agentPolicies, agentEvaluations, feedbackSignals, library]);
+  }, [agentProfileRef, library]);
   const operatorGraphRevision = useRef<number | null>(null);
   const operatorRunId = useRef<string | null>(null);
   const nodeModalRef = useRef<HTMLElement | null>(null);
@@ -442,7 +389,6 @@ export default function App() {
       ]);
       setActiveChannelId(channelId);
       setGraph(graphResponse.graph);
-      setActiveProgramId(graphResponse.graph.outcomeProgramId ?? null);
       const priorRuns = graphResponse.runs ?? [];
       setFlowRuns(priorRuns);
       // Rehydrate the latest persisted run so opening an outcome shows its REAL state — the node
@@ -456,13 +402,12 @@ export default function App() {
       setGraphSavedAt(graphResponse.graph.store?.lastRunAt ?? null);
       setEngine(engineResponse.engine);
       setView("canvas");
-      // Sync the URL to the focused workflow so a reload restores it instead of falling back to the
-      // overview. A channel that belongs to a program writes the program deep link the boot parser
-      // already understands.
-      const programId = graphResponse.graph.outcomeProgramId;
+      // Sync the URL to the focused project so a reload restores it instead of falling back to the
+      // overview. Channels are plain flows now — the URL routes by project; the project's active
+      // channel (persisted server-side via setActiveWorkflow above) decides the focus on reload.
       const projectId = activeProjectIdRef.current;
-      if (projectId && programId) {
-        window.history.replaceState(null, "", `/projects/${encodeURIComponent(projectId)}/programs/${encodeURIComponent(programId)}/canvas`);
+      if (projectId) {
+        window.history.replaceState(null, "", `/projects/${encodeURIComponent(projectId)}`);
       }
     } catch (error) {
       setGraphError(error instanceof Error ? error.message : String(error));
@@ -480,15 +425,13 @@ export default function App() {
     if (!built.length) { setOverviewActive(false); return false; }
     setOverviewActive(true);
     setActiveChannelId(null);
-    setActiveProgramId(null);
     setGraph(null);
     setSelection(null);
     setOverlay(null);
     setRunResult(null);
     setView("canvas");
-    // Clear the URL back to the project root so a reload from the overview stays on the overview
-    // (and doesn't re-focus the last program deep link). Skipped during boot, when the ref isn't set
-    // yet and the URL is already root.
+    // Clear the URL back to the project root so a reload from the overview stays on the overview.
+    // Skipped during boot, when the ref isn't set yet and the URL is already root.
     const projectId = activeProjectIdRef.current;
     if (projectId) {
       window.history.replaceState(null, "", `/projects/${encodeURIComponent(projectId)}`);
@@ -498,16 +441,9 @@ export default function App() {
 
   const refreshProjectScope = useCallback(async () => {
     const [catalog, projectResponse] = await Promise.all([listProjects(), getProject()]);
-    const programResponse = await getPrograms(projectResponse.project.id).catch(() => null);
     setProjects(catalog.projects);
     setActiveProjectState(projectResponse.project);
     setChannels(projectResponse.project.channels);
-    setPrograms(programResponse?.programs ?? []);
-    setAgentPolicies(programResponse?.policies ?? []);
-    setAgentInstances(programResponse?.foundry.instances ?? []);
-    setAgentEvaluations(programResponse?.foundry.evaluations ?? []);
-    setFeedbackSignals(programResponse?.feedback.signals ?? []);
-    setDomainEvents(programResponse?.events ?? []);
     return projectResponse.project;
   }, []);
 
@@ -516,7 +452,7 @@ export default function App() {
     let live = true;
     Promise.all([getProject(), getConnectors(), listProjects()]).then(async ([initialProjectResponse, connectorResponse, initialCatalog]) => {
       if (!live) return;
-      const route = programRouteFromLocation();
+      const route = projectRouteFromLocation();
       let projectResponse = initialProjectResponse;
       let catalog = initialCatalog;
       if (route?.projectId && route.projectId !== projectResponse.project.id) {
@@ -524,7 +460,10 @@ export default function App() {
         [projectResponse, catalog] = await Promise.all([getProject(), listProjects()]);
         if (!live) return;
       }
-      let channelId = projectResponse.project.activeChannelId
+      // The route only carries a project now (handled above by activateProject); the project's own
+      // active channel decides the focus.
+      void route;
+      const channelId = projectResponse.project.activeChannelId
         || projectResponse.project.channels[0]?.id;
       setConnectors(connectorResponse.connectors);
       getCapabilities().then((r) => { if (live) setCapabilities(r.servers); }).catch(() => null);
@@ -532,21 +471,7 @@ export default function App() {
       setActiveProjectState(projectResponse.project);
       setProjects(catalog.projects);
       setBooted(true);
-      const programResponse = await getPrograms(projectResponse.project.id).catch(() => null);
       if (!live) return;
-      const routedProgramId = route?.projectId === projectResponse.project.id ? route.programId : null;
-      const selectedProgram = programResponse?.programs.find((program) => program.id === routedProgramId)
-        ?? findProgramForGraph(programResponse?.programs ?? [], channelId)
-        ?? programResponse?.programs[0]
-        ?? null;
-      setPrograms(programResponse?.programs ?? []);
-      setAgentPolicies(programResponse?.policies ?? []);
-      setAgentInstances(programResponse?.foundry.instances ?? []);
-      setAgentEvaluations(programResponse?.foundry.evaluations ?? []);
-      setFeedbackSignals(programResponse?.feedback.signals ?? []);
-      setDomainEvents(programResponse?.events ?? []);
-      setActiveProgramId(selectedProgram?.id ?? null);
-      channelId = programGraphId(selectedProgram) ?? channelId;
       if (!channelId) {
         // A product with no channels still lands on the canvas (its empty state guides the first
         // move); only a total cold start (no workspace) shows the product picker.
@@ -557,17 +482,14 @@ export default function App() {
         if (live) setEngine(engineResponse.engine);
         return;
       }
-      // Land on the one-canvas overview of every workflow, unless a deep link routed us to a specific
-      // program (then honor it and focus that workflow). Falls through to the single-workflow focus
+      // Land on the one-canvas overview of every channel. Falls through to the single-channel focus
       // below when there's no overview to draw.
-      if (!routedProgramId) {
-        const wentOverview = await loadProjectOverview(projectResponse.project.channels);
-        if (!live) return;
-        if (wentOverview) {
-          const engineResponse = await getEngineState();
-          if (live) setEngine(engineResponse.engine);
-          return;
-        }
+      const wentOverview = await loadProjectOverview(projectResponse.project.channels);
+      if (!live) return;
+      if (wentOverview) {
+        const engineResponse = await getEngineState();
+        if (live) setEngine(engineResponse.engine);
+        return;
       }
       const [graphResponse, engineResponse] = await Promise.all([
         getGraphTemplate(channelId),
@@ -576,10 +498,9 @@ export default function App() {
       if (!live) return;
       setActiveChannelId(channelId);
       setGraph(graphResponse.graph);
-      setActiveProgramId(graphResponse.graph.outcomeProgramId ?? selectedProgram?.id ?? null);
       const bootRuns = graphResponse.runs ?? [];
       setFlowRuns(bootRuns);
-      // Hydrate the latest run on first paint too, so the outcome you land on shows its real state
+      // Hydrate the latest run on first paint too, so the channel you land on shows its real state
       // (node results, staged drafts) without needing a manual click to re-open it.
       setRunResult(bootRuns.length ? bootRuns[bootRuns.length - 1] : null);
       setEngine(engineResponse.engine);
@@ -745,7 +666,7 @@ export default function App() {
       live = false;
       window.clearInterval(timer);
     };
-  }, [activeProjectId, activeProgramId, operatorSessionId, operatorSessionStatus, syncOperator]);
+  }, [activeProjectId, operatorSessionId, operatorSessionStatus, syncOperator]);
 
   // "Watch it work in the panel on the right" only works if that panel is actually open. When a drive
   // STARTS (the operator begins composing/running) or FAILS, pop the live work panel open once so the
@@ -809,51 +730,6 @@ export default function App() {
     }
   }, [activeChannelId, approvals, decisions, graph, loadEngine, refreshProjectScope]);
 
-  // The flagship "Run Program" now streams node-by-node like the raw-graph path — each step lights
-  // up as it runs and its content lands the moment it succeeds, then run_done carries the program
-  // summary (learning signals, next agent versions) for tab routing.
-  const executeProgram = useCallback(async (
-    nextApprovals: Record<string, boolean> = approvals,
-    nextDecisions: Decisions = decisions,
-    // Resume the exact reviewed run by default so a gate decision reuses the staged artifacts
-    // instead of re-running discovery/draft behind the founder's back. A fresh "Run Program"
-    // passes undefined to start clean.
-    resumeRunId: string | undefined = runResult?.runId,
-  ) => {
-    if (!activeProject || !activeProgramId) return;
-    setGraphRunning(true);
-    setRunningNodeId(null);
-    setGraphError(null);
-    setRunResult({ runId: `live-${Date.now()}`, graphId: graph?.id ?? "", ok: false, nodes: {}, executionOrder: [], pendingGates: [], feedbackEdges: [] });
-    try {
-      await runProgramStream(activeProject.id, activeProgramId, { approvals: nextApprovals, decisions: nextDecisions, resumeRunId }, (ev) => {
-        if (ev.type === "node_start") {
-          setRunningNodeId(ev.nodeId);
-        } else if (ev.type === "node_done") {
-          setRunningNodeId((cur) => (cur === ev.nodeId ? null : cur));
-          setRunResult((cur) => cur ? { ...cur, nodes: { ...cur.nodes, [ev.nodeId]: ev.result } } : cur);
-          if (ev.result.items?.length || ev.result.pendingReview) setSelection(ev.nodeId);
-        } else if (ev.type === "run_done") {
-          const result = ev.result;
-          setRunResult(result);
-          setFlowRuns((current) => [...current, result].slice(-10));
-          // Run results render in place on the canvas nodes; a pending gate shows via the Approvals
-          // count, and the step-by-step trace lives in the workbench debugger. No mode to switch to.
-          if (!result.ok && !result.pendingGates.length) setGraphError(result.error || "One or more steps need attention.");
-        } else if (ev.type === "run_error") {
-          setGraphError(ev.error);
-        }
-      });
-      await refreshProjectScope();
-      loadEngine(graph?.id ?? activeChannelId);
-    } catch (error) {
-      setGraphError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setGraphRunning(false);
-      setRunningNodeId(null);
-    }
-  }, [activeChannelId, activeProgramId, activeProject, approvals, decisions, graph, loadEngine, refreshProjectScope, runResult]);
-
   // Streaming run — the full loop, animated. Each step lights up as it runs and its
   // content lands the moment it succeeds, instead of one batch at the end.
   const streamRun = useCallback(async () => {
@@ -909,11 +785,10 @@ export default function App() {
       syncOperator(response.session);
       return;
     }
-    // In a program, the gate decision must resume the PROGRAM run (program-runtime owns resume + the
-    // learning loop). Routing it through the raw-graph path re-ran discovery and banked junk feedback.
-    if (activeProgramId) { await executeProgram(next, decisions, runResult?.runId); return; }
+    // The gate decision resumes the channel graph run — it reuses the exact staged items rather than
+    // re-running discovery/draft behind the founder's back.
     await executeGraph(undefined, next, decisions, runResult?.runId);
-  }, [approvals, decisions, executeGraph, executeProgram, activeProgramId, operatorSession, runResult?.runId, syncOperator]);
+  }, [approvals, decisions, executeGraph, operatorSession, runResult?.runId, syncOperator]);
 
   // Per-item founder review: record approve/reject/edit decisions for a gate
   // node, then resume so they flow into the run ledger and shape the next run.
@@ -928,11 +803,9 @@ export default function App() {
       syncOperator(response.session);
       return;
     }
-    // Program gate review resumes the program run (exact staged items reused, full domain loop runs);
-    // the raw-graph path is only for a standalone channel graph.
-    if (activeProgramId) { await executeProgram(approvals, next, runResult?.runId); return; }
+    // The gate review resumes the channel graph run with the exact staged items reused.
     await executeGraph(undefined, approvals, next, runResult?.runId);
-  }, [decisions, approvals, executeGraph, executeProgram, activeProgramId, operatorSession, runResult?.runId, syncOperator]);
+  }, [decisions, approvals, executeGraph, operatorSession, runResult?.runId, syncOperator]);
 
   const persistGraph = useCallback(async () => {
     if (!graph) return;
@@ -1113,13 +986,12 @@ export default function App() {
     // `reuse: true` returns the project's one live thread instead of spawning a parallel conversation.
     const projectId = activeProjectIdRef.current;
     if (!projectId) return;
-    // Bind the new session to the program on screen so its program tools target that program, not
-    // the newest one — the deterministic half of making the "Build the first agent" button reliable.
-    const response = await createOperatorSession(projectId, goal, graph?.id, activeProgramId ?? undefined);
+    // Bind the new session to the channel graph on screen so its tools target that graph.
+    const response = await createOperatorSession(projectId, goal, graph?.id);
     operatorGraphRevision.current = response.session.graphRevision;
     operatorRunId.current = null;
     setOperatorSession(response.session);
-  }, [graph?.id, activeProgramId]);
+  }, [graph?.id]);
 
   // One conversation: talking to Claude continues the live session, or starts a new one
   // when idle. The dock decides nothing about safety — App owns create vs. resume.
@@ -1180,69 +1052,13 @@ export default function App() {
     }
   }, [refreshProjectScope]);
 
-  const handleProgramOpen = useCallback(async (programId: string) => {
-    const program = programs.find((item) => item.id === programId);
-    if (!program || !activeProject) return;
-    setProjectBusy(true);
-    setGraphError(null);
-    try {
-      setActiveProgramId(program.id);
-      setSelection(null);
-      setOverlay(null);
-      setView("canvas");
-      const graphId = programGraphId(program);
-      if (graphId) {
-        await setActiveWorkflow(graphId);
-        setActiveChannelId(graphId);
-      } else if (program.channelId) {
-        await setActiveWorkflow(program.channelId);
-        setActiveChannelId(program.channelId);
-      }
-      if (graphId) {
-        const [graphResponse, engineResponse] = await Promise.all([
-          getGraphTemplate(graphId),
-          getEngineState(graphId),
-        ]);
-        setGraph(graphResponse.graph);
-        setFlowRuns(graphResponse.runs ?? []);
-        setRunResult(null);
-        setEngine(engineResponse.engine);
-        setGraphSavedAt(graphResponse.graph.store?.lastRunAt ?? null);
-      } else {
-        // The program has no composed workflow yet — clear the previous program's graph, engine, and
-        // runs so nothing stale (e.g. the motion chip, node health) carries over onto the "no
-        // workflow composed yet" empty state.
-        setGraph(null);
-        setActiveChannelId(null);
-        setFlowRuns([]);
-        setRunResult(null);
-        setEngine(null);
-        setGraphSavedAt(null);
-      }
-      window.history.replaceState(null, "", `/projects/${encodeURIComponent(activeProject.id)}/programs/${encodeURIComponent(program.id)}/canvas`);
-    } catch (error) {
-      setGraphError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setProjectBusy(false);
-    }
-  }, [activeProject, programs]);
-
-  // "New program" / "Start your first program" — there's no form; a program is born from the
-  // conversation. Surface the canvas, leave any open overlay, and summon the co-pilot focused.
-  const handleNewProgram = useCallback(() => {
+  // "New channel" — there's no form; a channel is born from the conversation. Surface the canvas,
+  // leave any open overlay, and summon the co-pilot focused.
+  const handleNewChannel = useCallback(() => {
     setOverlay(null);
     setView("canvas");
     setComposerFocus((n) => n + 1);
   }, []);
-
-  // The canvas says "this program needs agents" — this performs it. Sends a program-scoped
-  // instruction to the operator (derive needs → build the agent), which is design-time and
-  // reversible (the gate still holds), then opens the chat so the founder watches it work.
-  const handleBuildAgents = useCallback((program: OutcomeProgram) => {
-    const instruction = `Build the first agent for the program "${program.name}". Derive what agent this program needs from the product, then create the personalized agent and compose its workflow up to the founder gate.`;
-    setComposerFocus((n) => n + 1);
-    void handleComposerSend(instruction);
-  }, [handleComposerSend]);
 
   const handleProjectCreate = useCallback(async (input: { name?: string; repoPath: string; outcome: string }) => {
     setProjectBusy(true);
@@ -1319,16 +1135,6 @@ export default function App() {
   const selectedNodeSubsystem = selectedNode
     ? engine?.subsystems.find((s) => s.id === selectedNode.category) ?? null
     : null;
-  const activeProgram = useMemo(
-    () => programs.find((program) => program.id === activeProgramId)
-      ?? findProgramForGraph(programs, graph?.id)
-      ?? null,
-    [activeProgramId, graph?.id, programs],
-  );
-  const programRuns = useMemo(
-    () => graphBelongsToProgram(graph, activeProgram) ? flowRuns : [],
-    [activeProgram, flowRuns, graph],
-  );
 
   useEffect(() => {
     if (!selectedNode) return;
@@ -1686,15 +1492,15 @@ export default function App() {
       ) : null}
 
       {/* ── Body ─────────────────────────────────────────────────────────── */}
-      {/* The left explorer rail is dissolved: the canvas IS the interface. Outcome navigation moved to
-          the OutcomeSwitcher in the top bar, the Library to a summoned palette on the canvas, the
+      {/* The left explorer rail is dissolved: the canvas IS the interface. Channel navigation moved to
+          the ChannelSwitcher in the top bar, the Library to a summoned palette on the canvas, the
           "what Claude reads" feeds into the dock, and Problems to a toolbar chip. The canvas now fills
           the body. */}
       <div className={`loop-body canvas-full ${view !== "canvas" ? "studio-mode" : ""}`}>
         {/* Center — the canvas IS the workspace. Only the cold-start picker replaces it. */}
         <section className="loop-canvas-area">
-          {/* The floating control dock — every control the old top toolbar and program sub-header
-              held, in one calm bar floating top-center over the full-bleed canvas. */}
+          {/* The floating control dock — every control the old top toolbar held, in one calm bar
+              floating top-center over the full-bleed canvas. */}
           {view === "canvas" && !workspaceOpen ? (
             <FloatingDock
               projects={projects}
@@ -1704,16 +1510,13 @@ export default function App() {
               onManageProjects={() => setView("projects")}
               onNewProduct={() => setView("start")}
               onDeleteProject={handleProjectDelete}
-              programs={programs}
               channels={channels}
-              activeProgramId={activeProgram?.id ?? null}
               activeChannelId={activeChannelId}
-              onOpenProgram={(id) => { void handleProgramOpen(id); }}
               onOpenChannel={(id) => { setOverlay(null); void loadChannel(id); }}
-              onNewProgram={handleNewProgram}
+              onNewChannel={handleNewChannel}
               onIdeate={() => setComposerPosture("ideate")}
               onShowOverview={overviewActive ? () => { void loadProjectOverview(channels); } : undefined}
-              overviewActive={overviewActive && !activeChannelId && !activeProgram}
+              overviewActive={overviewActive && !activeChannelId}
               motionName={engine?.motion?.name ?? null}
               showGtmToggle={!!activeProject}
               productMode={overlay === "product"}
@@ -1732,9 +1535,7 @@ export default function App() {
               audits={contractAudits}
               running={graphRunning}
               runningNodeId={runningNodeId}
-              onRun={() => void (activeProgram ? executeProgram() : streamRun())}
-              inspecting={inspecting}
-              onToggleInspect={() => setInspecting((v) => !v)}
+              onRun={() => void streamRun()}
               onOpenWorkspace={() => setWorkspaceOpen(true)}
               onOpenTeam={() => { setTeamOpen((v) => !v); setGoOpen(false); }}
               teamLabel={teamLabel}
@@ -1822,62 +1623,10 @@ export default function App() {
               onOpen={handleProjectOpen}
               projects={projects}
             />
-          ) : overviewActive && !activeChannelId && !activeProgram ? (
-            // One project, one canvas: the portfolio-map lens — every built channel as a tile.
-            // Clicking a tile opens that channel's flow (the channel-flow lens). The portfolio map
-            // REPLACES the old swimlane overview; the swimlane renderer inside GraphCanvas stays for
-            // now and retires once the People / experiment lenses land (P10.3 steps 4–5).
+          ) : overviewActive && !activeChannelId ? (
+            // One project, one canvas: every built channel as a tile on the engine/portfolio overview.
+            // Clicking a tile opens that channel's flow (the channel-flow lens).
             <GtmCanvas model={gtmCanvasModel} defaultLensId="engine" activeLensId={gtmLensId} onLensChange={setGtmLensId} chromeless onSelectObject={(lensId, id) => { if (lensId === "people") openReference("person", id); else if (lensId === "experiment-matrix") openReference("experiment", id); }} />
-          ) : activeProgram ? (
-            <ProgramCanvas
-              agents={agentInstances}
-              evaluations={agentEvaluations}
-              events={domainEvents}
-              feedback={feedbackSignals}
-              graph={graphBelongsToProgram(displayGraph, activeProgram) ? displayGraph : null}
-              inspecting={inspecting}
-              onInspectingChange={setInspecting}
-              onBuildAgents={() => handleBuildAgents(activeProgram)}
-              onSelectNode={setSelection}
-              onPaneClick={dismissOverlays}
-              operatorCursor={operatorCursor}
-              people={people}
-              proposedNodeIds={proposedNodeIds}
-              proposedEdgeIds={proposedEdgeIds}
-              revealedNodeIds={revealedNodeIds}
-              proposalActive={proposalActive}
-              onResolveProposal={(accept) => void handleResolveProposal(accept)}
-              onSubmitReview={(id, d) => void submitGateReview(id, d)}
-              onApproveGate={(id) => void approveGate(id)}
-              onNodePositionChange={handleNodePositionChange}
-              onConnectNodes={handleGraphConnect}
-              onDeleteEdges={handleDeleteEdges}
-              onAddNode={handleAddNode}
-              onLoadRecipe={handleLoadPilotRecipe}
-              onOpenLibrary={() => setLibraryPaletteOpen(true)}
-              focusDebug={null}
-              policies={agentPolicies}
-              program={activeProgram}
-              runResult={runResult}
-              running={graphRunning}
-              runningNodeId={runningNodeId}
-              runs={programRuns}
-              selection={selection}
-              connectors={connectors}
-              subsystemHealth={subsystemHealth}
-              contractAudits={contractAudits}
-              nodeEditor={{
-                flowRuns,
-                subsystem: selectedNodeSubsystem,
-                onApproveGate: (id) => void approveGate(id),
-                onSubmitReview: (id, d) => void submitGateReview(id, d),
-                onRunNode: (id) => void executeGraph(id),
-                onUpdateGraph: updateGraph,
-                onOpenArtifact: (type, ref) => setArtifactEdit({ type, ref }),
-                onDeleteNode: handleDeleteNode,
-                onClose: () => setSelection(null),
-              }}
-            />
           ) : graph ? (
             // The single channel, through the GTM canvas: the channel-flow lens IS the GraphCanvas
             // (single-channel behavior unchanged), with the portfolio-map lens one tab away. The
@@ -1913,7 +1662,7 @@ export default function App() {
           )}
 
           {/* Toolbar overlay: zoom controls at top-left */}
-          {view === "canvas" && graph && !activeProgram && (
+          {view === "canvas" && graph && (
             <div className="loop-graph-actions">
               <button
                 className={`loop-save-chip ${graphSavedAt ? "saved" : ""}`}
@@ -2035,18 +1784,15 @@ export default function App() {
           )}
 
           {/* The summoned Library — the canvas "+ Add step" control opens this glass palette. It
-              replaces the dissolved left-rail Library: the personalized agents born for THIS outcome
-              first, then the on-disk agents and skills, each draggable onto the canvas or added with
-              one click. Anchored top-left near the Add control; self-closes on Escape / outside-click. */}
+              replaces the dissolved left-rail Library: the on-disk agents and skills, each draggable
+              onto the canvas or added with one click. Anchored top-left near the Add control;
+              self-closes on Escape / outside-click. */}
           {view === "canvas" && libraryPaletteOpen ? (
             <Suspense fallback={null}>
             <LibraryPalette
               open={libraryPaletteOpen}
               onClose={() => setLibraryPaletteOpen(false)}
               library={library}
-              agentInstances={activeProgram ? agentInstances.filter((i) => i.programId === activeProgram.id) : []}
-              agentEvaluations={agentEvaluations}
-              agentPolicies={agentPolicies}
               graph={graph}
               capabilities={capabilities}
               onAddCapability={(type, ref, label) => {
@@ -2300,7 +2046,7 @@ export default function App() {
         {view === "canvas" ? <ComposerDock
           session={operatorSession}
           running={graphRunning}
-          floating={!!activeProgram}
+          floating={false}
           focusSignal={composerFocus}
           recede={proposalActive}
           boundChannelName={boundChannel?.name ?? null}
@@ -2314,17 +2060,16 @@ export default function App() {
           posture={composerPosture}
           onExitPosture={() => setComposerPosture("build")}
           onPin={(kind, text) => { void pinClarity(kind, text); }}
-          onAddNode={activeProgram || graph ? handleAddNode : undefined}
-          onAddChain={activeProgram || graph ? handleAddChain : undefined}
+          onAddNode={graph ? handleAddNode : undefined}
+          onAddChain={graph ? handleAddChain : undefined}
           onOpenLibrary={() => setLibraryPaletteOpen(true)}
           graph={graph}
           runningNodeId={runningNodeId}
         /> : null}
       </div>
 
-      {/* The node editor lives in the program workbench's right panel (ProgramCanvas). This modal
-          remains only for the bare-channel graph path, which has no workbench around it. */}
-      {selectedNode && graph && !activeProgram && (
+      {/* The node editor modal — the channel graph's step editor, opened by selecting a node. */}
+      {selectedNode && graph && (
         <div className="node-detail-modal-backdrop">
           {/* A real button for click-outside-to-close — semantic and keyboard-reachable, sitting
               behind the dialog (which paints above it). Replaces a div with a mousedown handler. */}

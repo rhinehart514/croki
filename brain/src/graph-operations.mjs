@@ -18,8 +18,24 @@ const EDGE_TYPES = new Set(["data", "context", "feedback"]);
 // requires a registered category. "agent" / "skill" / "code" / "mcp" are open steps the agent
 // composes; they require a `ref` instead of a registry category. "mcp" is an external MCP
 // server's tool (ref = "<serverId>/<toolName>"); read tools run free, write tools sit behind a gate.
-const NODE_KINDS = new Set(["tool", "agent", "skill", "code", "mcp"]);
+// "switch" is a routing node — it needs neither a registry category nor a ref. It carries no
+// step of its own; it routes each upstream item to a downstream branch by a per-edge predicate
+// (resolved at run time in graph.mjs). Logic is automatic, so a switch is never a founder gate.
+const NODE_KINDS = new Set(["tool", "agent", "skill", "code", "mcp", "switch"]);
 const OPEN_KINDS = new Set(["agent", "skill", "code", "mcp"]);
+
+// The fixed predicate op vocabulary a switch edge may use — the same set step-runners' applyPredicate
+// understands. A closed op set (no expressions, no eval) keeps routing deterministic and auditable.
+const PREDICATE_OPS = new Set(["exists", "missing", "eq", "ne", "gt", "gte", "lt", "lte", "contains", "in"]);
+
+// Validate an optional edge predicate { field, op?, value? }. Returns an error fragment or null.
+function predicateError(predicate) {
+  if (predicate == null) return null;
+  if (typeof predicate !== "object" || Array.isArray(predicate)) return "predicate must be an object";
+  if (typeof predicate.field !== "string" || !predicate.field.trim()) return "predicate needs a field name";
+  if (predicate.op !== undefined && !PREDICATE_OPS.has(predicate.op)) return `predicate has an unknown op "${predicate.op}"`;
+  return null;
+}
 
 // Output kinds are OPEN (E3.1), the same un-caging applied to step kinds. A node MAY declare what
 // it emits — a "message", an "artifact" (a deployable microproduct cut from the product), a
@@ -97,6 +113,8 @@ export function validateGraph(graph) {
       if (!node?.ref || typeof node.ref !== "string") {
         errors.push(`Node "${node?.id ?? "?"}" of kind "${node.kind}" needs a ref.`);
       }
+    } else if (node?.kind === "switch") {
+      // routing node — needs neither ref nor category
     } else if (!NODE_CATEGORIES.has(node?.category)) {
       errors.push(`Node "${node?.id ?? "?"}" has an invalid category.`);
     }
@@ -126,6 +144,8 @@ export function validateGraph(graph) {
     if (!nodeIds.has(edge?.target)) errors.push(`Edge "${edge?.id ?? "?"}" has an unknown target.`);
     if (!EDGE_TYPES.has(edge?.edgeType)) errors.push(`Edge "${edge?.id ?? "?"}" has an invalid type.`);
     if (edge?.source === edge?.target) errors.push(`Edge "${edge?.id ?? "?"}" cannot connect a node to itself.`);
+    const predErr = predicateError(edge?.predicate);
+    if (predErr) errors.push(`Edge "${edge?.id ?? "?"}" ${predErr}.`);
   }
   if (!errors.length && dataGraphHasCycle(graph.nodes, graph.edges)) {
     errors.push("Data edges contain a cycle.");
@@ -148,6 +168,8 @@ function applyOne(graph, operation) {
     if (node.kind !== undefined && !NODE_KINDS.has(node.kind)) throw new Error(`Invalid node kind: ${node.kind}`);
     if (OPEN_KINDS.has(node.kind)) {
       node.ref = requireString(node.ref, "Node ref");
+    } else if (node.kind === "switch") {
+      // routing node — needs neither ref nor category
     } else if (!NODE_CATEGORIES.has(node.category)) {
       throw new Error(`Invalid node category: ${node.category}`);
     }
@@ -202,12 +224,15 @@ function applyOne(graph, operation) {
     if (!graph.nodes.some((node) => node.id === edge.source)) throw new Error(`Unknown source node: ${edge.source}`);
     if (!graph.nodes.some((node) => node.id === edge.target)) throw new Error(`Unknown target node: ${edge.target}`);
     if (!EDGE_TYPES.has(edge.edgeType)) throw new Error(`Invalid edge type: ${edge.edgeType}`);
+    const predErr = predicateError(edge.predicate);
+    if (predErr) throw new Error(`Edge ${edge.id} ${predErr}.`);
     graph.edges.push({
       id: edge.id,
       source: edge.source,
       target: edge.target,
       edgeType: edge.edgeType,
       ...(edge.label ? { label: String(edge.label) } : {}),
+      ...(edge.predicate ? { predicate: clone(edge.predicate) } : {}),
     });
     return `Connected ${edge.source} to ${edge.target}.`;
   }

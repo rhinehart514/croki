@@ -9,7 +9,7 @@
 //   5. Feedback edges are preserved as explicit future-learning relationships.
 
 import { getConnector, defaultGraphTemplate, listConnectors } from "./connectors/registry.mjs";
-import { defaultStepRuntime } from "./step-runners.mjs";
+import { defaultStepRuntime, evaluateSwitchPredicate } from "./step-runners.mjs";
 import { auditInput, auditOutput } from "./contracts.mjs";
 import { relaxGateContracts, relaxPreGateContracts } from "./source-entry.mjs";
 import { assertMoatConsulted } from "./consult-guard.mjs";
@@ -190,7 +190,16 @@ function resolveUpstream(nodeId, edges, nodeResults) {
     if (!result) continue;
     // Resource nodes produce no items — skip their output
     if (result.meta?.declaration) continue;
-    items.push(...(result.items ?? []));
+    const sourceItems = result.items ?? [];
+    // A data edge MAY carry a predicate (the routing rule a `switch` node exposes). When present,
+    // only items matching it cross this edge — that's how conditional branches split traffic. The
+    // filter is deterministic (item fields, fixed op set), so a gate resume reuses the same routed
+    // items rather than re-deciding behind the founder's back. No predicate = merge as before.
+    if (e.predicate) {
+      items.push(...sourceItems.filter((item) => evaluateSwitchPredicate(item, e.predicate)));
+    } else {
+      items.push(...sourceItems);
+    }
   }
   return items;
 }

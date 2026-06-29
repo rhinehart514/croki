@@ -1,7 +1,7 @@
-/* OutcomeSwitcher — the breadcrumb-style outcome navigator that replaces the top-bar outcome label
-   and the left rail's Outcomes tree. The trigger is a quiet breadcrumb; the dropdown is a floating
-   glass popover. Monochrome by the one-accent rule — amber (--gap) only ever rides in on a status
-   dot (a gate waiting), never as chrome. */
+/* ChannelSwitcher — the breadcrumb-style channel navigator in the floating dock (the `osw-` class
+   prefix is retained for the styles). The trigger is a quiet breadcrumb; the dropdown is a floating
+   popover. Monochrome by the one-accent rule — amber (--gap) only ever rides in on a status dot
+   (a gate waiting), never as chrome. */
 
 .osw-root {
   position: relative;

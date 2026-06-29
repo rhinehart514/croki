@@ -1,33 +1,33 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import {
-  AlertTriangle, ArrowRight, LoaderCircle, Lightbulb, LayoutGrid, PanelRight, Plus, Rocket, ShieldCheck, Users,
+  AlertTriangle, ArrowRight, LoaderCircle, Lightbulb, LayoutGrid, Plus, Rocket, ShieldCheck, Users,
 } from "lucide-react";
 import { SPRING } from "@/lib/springs";
 import { Reveal, Stagger, StaggerItem, Pop } from "@/lib/motion";
 import { healthHex } from "@/lib/health";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
-import { OutcomeSwitcher } from "@/components/OutcomeSwitcher";
+import { ChannelSwitcher } from "@/components/ChannelSwitcher";
 import { SlidingTabs } from "@/components/SlidingTabs";
 import type { ConnectionStatus } from "@/api";
 import "@/styles/floating-dock.css";
 import type {
   ChannelMeta, GTMContractAudit, GTMGraph, GTMNode, Investigation, OperatorSession,
-  OutcomeProgram, ProjectSummary,
+  ProjectSummary,
 } from "@/types";
 
 // The single floating control dock that sits top-center over the full-bleed canvas. It carries every
-// control the dissolved top toolbar and program sub-header used to hold, composed left → right
-// (breadcrumb · actions). The Design/Simulation/Run lenses were cut: one project is one canvas, not
-// three modes of it. Run is its own action; the run trace lives in the workbench debugger, not a lens.
+// control the dissolved top toolbar used to hold, composed left → right (breadcrumb · actions). The
+// Design/Simulation/Run lenses were cut: one project is one canvas, not three modes of it. Run is its
+// own action; the run trace lives in the workbench debugger, not a lens.
 export function FloatingDock({
-  // Left — product · outcome breadcrumb
+  // Left — product · channel breadcrumb
   projects, activeProjectId, projectBusy, onSwitchProject, onManageProjects, onNewProduct, onDeleteProject,
-  programs, channels, activeProgramId, activeChannelId,
-  onOpenProgram, onOpenChannel, onNewProgram, onIdeate,
+  channels, activeChannelId,
+  onOpenChannel, onNewChannel, onIdeate,
   onShowOverview, overviewActive,
-  // The focused workflow's emergent motion identity ("Outbound loop", "Content loop") — what KIND of
-  // go-to-market this is, derived from its real stages. Null on the all-workflows overview.
+  // The focused channel's emergent motion identity ("Outbound loop", "Content loop") — what KIND of
+  // go-to-market this is, derived from its real stages. Null on the all-channels overview.
   motionName,
   // GTM ↔ Product
   showGtmToggle, productMode, onModeToggle,
@@ -39,7 +39,6 @@ export function FloatingDock({
   problems, problemsOpen, onToggleProblems, nodeForSubsystem, onJumpToNode,
   pendingApprovals, approvalsOpen, onToggleApprovals,
   graph, audits, running, onRun,
-  inspecting, onToggleInspect,
   onOpenWorkspace, onOpenTeam, teamLabel, onOpenGo, goActive,
 }: {
   projects: ProjectSummary[];
@@ -50,13 +49,10 @@ export function FloatingDock({
   onNewProduct: () => void;
   // Remove a duplicate product (one project per repo). Optional → no delete affordance in the switcher.
   onDeleteProject?: (id: string) => void | Promise<void>;
-  programs: OutcomeProgram[];
   channels: ChannelMeta[];
-  activeProgramId: string | null;
   activeChannelId: string | null;
-  onOpenProgram: (id: string) => void;
   onOpenChannel: (id: string) => void;
-  onNewProgram: () => void;
+  onNewChannel: () => void;
   onIdeate: () => void;
   onShowOverview?: () => void;
   overviewActive?: boolean;
@@ -79,8 +75,6 @@ export function FloatingDock({
   running: boolean;
   runningNodeId: string | null;
   onRun: () => void;
-  inspecting: boolean;
-  onToggleInspect: () => void;
   // Open the three-lane workspace (workflows / skills / agents). Optional → no affordance when absent.
   onOpenWorkspace?: () => void;
   // Team space (members + roles) and the one-click autonomous "go" entry. Optional → no affordance.
@@ -104,7 +98,7 @@ export function FloatingDock({
     <motion.div
       className="fdock"
       role="toolbar"
-      aria-label="Program controls"
+      aria-label="Channel controls"
       // x holds the horizontal centering (left: 50% + x: -50%) so motion's animated transform never
       // clobbers it — only y/scale/opacity animate on mount.
       style={{ x: "-50%" }}
@@ -124,14 +118,11 @@ export function FloatingDock({
           onDelete={onDeleteProject}
         />
         <span className="fdock-sep">/</span>
-        <OutcomeSwitcher
-          programs={programs}
+        <ChannelSwitcher
           channels={channels}
-          activeProgramId={activeProgramId}
           activeChannelId={activeChannelId}
-          onOpenProgram={onOpenProgram}
           onOpenChannel={onOpenChannel}
-          onNewProgram={onNewProgram}
+          onNewChannel={onNewChannel}
           onShowOverview={onShowOverview}
           overviewActive={overviewActive}
         />
@@ -322,18 +313,7 @@ export function FloatingDock({
           </button>
         ) : null}
 
-        {/* Program details — opens the inspector sheet (agents, measurement, learning). */}
-        <button
-          className={`fdock-icon-btn ${inspecting ? "open" : ""}`}
-          onClick={onToggleInspect}
-          type="button"
-          aria-pressed={inspecting}
-          title={inspecting ? "Hide channel details" : "Show channel details (agents, measurement, learning)"}
-        >
-          <PanelRight size={15} />
-        </button>
-
-        {/* Run program — the one dark primary, GTM-only (Product mode has nothing to run). */}
+        {/* Run — the one dark primary, GTM-only (Product mode has nothing to run). */}
         {!productMode ? (
           <>
             <span className="fdock-divider" />

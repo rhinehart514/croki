@@ -3,7 +3,7 @@ import {
   ArrowRight, Bot, Check, FileCode2, Layers, Lock, Plus, Plug, Search, ShieldCheck, X, Zap,
 } from "lucide-react";
 import type {
-  AgentCreationPolicy, AgentEvaluation, AgentInstance, CapabilityServer, CapabilityTool,
+  CapabilityServer, CapabilityTool,
   GtmLibrary, GTMGraph,
 } from "@/types";
 import { agentPersona, FAMILY_TINT } from "@/lib/agentPersona";
@@ -265,17 +265,12 @@ function PeekPanel({
 }
 
 export function LibraryPalette({
-  open, onClose, library, agentInstances, agentEvaluations, agentPolicies, graph,
+  open, onClose, library, graph,
   capabilities, onAddCapability, onAddTool, onManageTools, onOpenArtifact, onNewArtifact,
 }: {
   open: boolean;
   onClose: () => void;
   library: GtmLibrary | null;
-  agentInstances: AgentInstance[];
-  // The real evidence behind a teammate: evaluations prove it, the creation policy carries its
-  // guardrails. Threaded in so the peek can show "27 runs" and the guardrail count without a fetch.
-  agentEvaluations: AgentEvaluation[];
-  agentPolicies: AgentCreationPolicy[];
   // The active graph these capabilities drop into — read to compute fit-at-this-slot.
   graph: GTMGraph | null;
   // The founder's connected MCP servers — their tools are capability too, listed here so the one
@@ -296,37 +291,6 @@ export function LibraryPalette({
   const available = useMemo(
     () => new Set((graph?.nodes ?? []).flatMap((n) => n.contract?.emits ?? [])),
     [graph],
-  );
-
-  // The personalized agents born for THIS outcome lead — the founder built them for exactly this job.
-  // Each carries the real contract, eval count, and guardrails the peek shows.
-  const outcomeRows: Row[] = useMemo(
-    () => agentInstances
-      .filter((instance) => instance.status !== "retired")
-      .map((instance, idx) => {
-        const p = agentPersona(instance.ref, instance.job);
-        const policy = agentPolicies.find((pol) => pol.id === instance.creationPolicyId);
-        const proven = agentEvaluations.filter((e) => e.agentInstanceId === instance.id).length;
-        return {
-          // id can repeat across duplicate instances in the foundry; index makes the key unique.
-          key: `outcome:${instance.id}:${idx}`,
-          kind: "agent" as const,
-          ref: instance.ref,
-          label: p.role,
-          monogram: p.monogram,
-          family: p.family,
-          sub: instance.ref,
-          job: instance.job,
-          personalized: true,
-          version: instance.version,
-          hasContract: true,
-          accepts: instance.inputContract ?? [],
-          delivers: instance.outputContract ?? [],
-          proven,
-          guardrails: (policy?.negativeRules?.length ?? 0) + (policy?.evidenceRequirements?.length ?? 0),
-        };
-      }),
-    [agentInstances, agentPolicies, agentEvaluations],
   );
 
   const agentRows: Row[] = useMemo(
@@ -361,7 +325,6 @@ export function LibraryPalette({
       || row.job.toLowerCase().includes(q)
       || (row.sub ?? "").toLowerCase().includes(q);
   };
-  const filteredOutcome = outcomeRows.filter(matches);
   const filteredAgents = agentRows.filter(matches);
   const filteredSkills = skillRows.filter(matches);
 
@@ -382,8 +345,8 @@ export function LibraryPalette({
   // One flat ordered list across the three groups, so arrow keys + Enter drive the whole picker and
   // the peek can resolve the highlighted row regardless of which group it sits in.
   const flat = useMemo(
-    () => [...filteredOutcome, ...filteredAgents, ...filteredSkills],
-    [filteredOutcome, filteredAgents, filteredSkills],
+    () => [...filteredAgents, ...filteredSkills],
+    [filteredAgents, filteredSkills],
   );
 
   // Reset the filter and selection the moment the picker is summoned — always opens clean, first row
@@ -523,7 +486,6 @@ export function LibraryPalette({
               ))
             )}
           </div>
-          {filteredOutcome.length > 0 ? renderGroup("For this outcome", filteredOutcome) : null}
           {renderGroup("Agents", filteredAgents, () => onNewArtifact("agent"), "New agent")}
           {renderGroup("Skills", filteredSkills, () => onNewArtifact("skill"), "New skill")}
           <button className="libp-manage-tools" onClick={onManageTools} type="button">
