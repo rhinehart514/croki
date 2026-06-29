@@ -202,19 +202,38 @@ export function resolveAgentTools(definition, { fallback = DEFAULT_AGENT_TOOLS, 
 // A subagent returns prose that should contain a JSON array of result items. Pull the
 // array out whether it's fenced, inline, or the whole message. Returns [] when there is
 // no parseable array rather than throwing — the caller decides what an empty result means.
+// Coerce a parsed JSON value into an items array. A research agent reliably returns GOOD data but
+// not always a bare array: it may wrap the list in an object ({ prospects: [...] }, { items: [...] })
+// or, when it found exactly one, return a single object. Dropping those to [] silently loses real
+// work (observed live: 2 real prospects reported as 0 items). So: an array IS the items; an object
+// with an array-valued field yields that array; a non-empty bare object becomes a one-item array.
+function coerceAgentItems(parsed) {
+  if (Array.isArray(parsed)) return parsed;
+  if (parsed && typeof parsed === "object") {
+    const arrayField = Object.values(parsed).find((v) => Array.isArray(v));
+    if (arrayField) return arrayField;
+    if (Object.keys(parsed).length) return [parsed];
+  }
+  return null;
+}
+
 export function parseAgentItems(text) {
   if (typeof text !== "string" || !text.trim()) return [];
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const candidates = [];
   if (fenced) candidates.push(fenced[1].trim());
-  const start = text.indexOf("[");
-  const end = text.lastIndexOf("]");
-  if (start !== -1 && end > start) candidates.push(text.slice(start, end + 1));
+  // First array span, then first object span (the agent may wrap items in an object), then the whole text.
+  const arrStart = text.indexOf("[");
+  const arrEnd = text.lastIndexOf("]");
+  if (arrStart !== -1 && arrEnd > arrStart) candidates.push(text.slice(arrStart, arrEnd + 1));
+  const objStart = text.indexOf("{");
+  const objEnd = text.lastIndexOf("}");
+  if (objStart !== -1 && objEnd > objStart) candidates.push(text.slice(objStart, objEnd + 1));
   candidates.push(text.trim());
   for (const candidate of candidates) {
     try {
-      const parsed = JSON.parse(candidate);
-      if (Array.isArray(parsed)) return parsed;
+      const items = coerceAgentItems(JSON.parse(candidate));
+      if (items) return items;
     } catch {
       // try the next candidate
     }
