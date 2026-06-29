@@ -48,11 +48,14 @@ export type CanvasShellProps<TModel, TEdit> = {
   // Chromeless — the dock renders the lens switcher, so the shell drops its own lens-bar. Everything
   // stays on the one canvas; only the meta/actions float as a slim overlay.
   chromeless?: boolean;
+  // Bubble an object selection OUT of the shell (which lens, which object id) so the host can react —
+  // e.g. open the find-references drill-down. The shell still keeps its own cross-lens highlight.
+  onSelectObject?: (lensId: string, id: string) => void;
 };
 
 export function CanvasShell<TModel, TEdit>({
   model, lenses, defaultLensId, layoutId, isEmpty, empty, meta, actions, onRevise,
-  activeLensId, onLensChange, chromeless,
+  activeLensId, onLensChange, chromeless, onSelectObject,
 }: CanvasShellProps<TModel, TEdit>) {
   const [internalLens, setInternalLens] = useState<string>(defaultLensId);
   const lens = activeLensId ?? internalLens;
@@ -90,7 +93,7 @@ export function CanvasShell<TModel, TEdit>({
 
       {/* The active lens. It fills the rest of the frame; the lens owns its own canvas/panels. */}
       <div className="lens-frame">
-        <Active model={model} selected={selected} onSelect={setSelected} onRevise={onRevise} />
+        <Active model={model} selected={selected} onSelect={(id) => { setSelected(id); onSelectObject?.(lens, id); }} onRevise={onRevise} />
       </div>
     </div>
   );

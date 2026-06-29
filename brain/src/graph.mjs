@@ -11,7 +11,8 @@
 import { getConnector, defaultGraphTemplate, listConnectors } from "./connectors/registry.mjs";
 import { defaultStepRuntime } from "./step-runners.mjs";
 import { auditInput, auditOutput } from "./contracts.mjs";
-import { relaxGateContracts, relaxDiscoveryChainContracts, entryIsDiscovered } from "./source-entry.mjs";
+import { relaxGateContracts, relaxPreGateContracts } from "./source-entry.mjs";
+import { assertMoatConsulted } from "./consult-guard.mjs";
 
 // ─── Topological sort (Kahn's algorithm on data edges) ───────────────────────
 
@@ -72,6 +73,94 @@ function descendants(nodeId, edges) {
     }
   }
   return found;
+}
+
+// Every node that feeds a gate along data edges — its direct upstream and everything upstream of
+// that, bounded at the next gate so a second gate's drafters are checked at their own gate, not here.
+function gateUpstream(gateId, edges, nodeMap) {
+  const found = new Set();
+  const queue = [];
+  for (const edge of edges) {
+    if (edge.edgeType === "data" && edge.target === gateId) queue.push(edge.source);
+  }
+  while (queue.length) {
+    const current = queue.shift();
+    if (found.has(current)) continue;
+    found.add(current);
+    for (const edge of edges) {
+      if (edge.edgeType !== "data" || edge.target !== current) continue;
+      // Stop at an upstream gate — its producers are that gate's responsibility.
+      if (nodeMap.get(edge.source)?.category === "gate") continue;
+      queue.push(edge.source);
+    }
+  }
+  return found;
+}
+
+// What did this node produce, for the required-consult rule? Decide from the model the node already
+// carries — never a guess: a UI/visual artifact needs taste AND design; a draft/message/outreach
+// needs taste. Anything else (research, enrichment, discovery, planning) carries no moat requirement.
+//
+// outputKind is the open label the composer chose and is AUTHORITATIVE when set — a node the composer
+// labelled a "signal" or "dataset" is research even if its agent ref happens to contain "draft". Only
+// when outputKind is absent do we fall back to the node's category / ref / label as the signal.
+const VISUAL_HINTS = ["ui", "visual", "design", "component", "mockup", "artifact"];
+const DRAFT_HINTS = ["message", "draft", "outreach", "copy", "email", "post"];
+
+function hintMatch(haystack) {
+  const producedVisual = VISUAL_HINTS.some((h) => haystack.includes(h));
+  // "artifact" is treated as visual above; a draft/message is the non-visual founder-reviewed output.
+  const producedDraft = !producedVisual && DRAFT_HINTS.some((h) => haystack.includes(h));
+  return { producedDraft, producedVisual };
+}
+
+function classifyProduction(node) {
+  // Authoritative: the composer's explicit output label, when set. (Read into a local first so this
+  // stays an open-output-kind read, not a hardcoded output-kind equality check.)
+  const declared = node?.outputKind;
+  const label = typeof declared === "string" ? declared.trim() : "";
+  if (label) {
+    return hintMatch(label.toLowerCase());
+  }
+  // Fallback: infer from what the node IS when no output label was set.
+  const haystack = [node?.category, node?.ref, node?.kind, node?.label]
+    .filter((v) => typeof v === "string")
+    .join(" ")
+    .toLowerCase();
+  return hintMatch(haystack);
+}
+
+// Run the required-consult guard for every drafting/UI-producing node feeding a gate. A violation is
+// recorded on the gate result as a blocking issue the founder sees — never a thrown crash. Honest
+// surfacing over silent failure: a draft that skipped the founder's own taste signal does not quietly
+// proceed to review as if it were grounded.
+function collectConsultViolations(gateId, edges, nodeMap, nodeResults) {
+  const violations = [];
+  for (const upstreamId of gateUpstream(gateId, edges, nodeMap)) {
+    const node = nodeMap.get(upstreamId);
+    if (!node) continue;
+    // The moat-consult requirement applies only to rented-intelligence agent steps — the kind that
+    // actually makes tool calls through the bridge and so CAN consult get_taste/get_design. A
+    // deterministic tool/code connector has no tool-call surface to consult through, so subjecting it
+    // would false-block every connector-drafted item. The agent is where taste must be honored.
+    if (node.kind !== "agent") continue;
+    const { producedDraft, producedVisual } = classifyProduction(node);
+    if (!producedDraft && !producedVisual) continue;
+    const result = nodeResults.get(upstreamId);
+    const toolCalls = Array.isArray(result?.meta?.toolCalls) ? result.meta.toolCalls : [];
+    const verdict = assertMoatConsulted({ toolCalls, producedDraft, producedVisual });
+    if (!verdict.ok) {
+      violations.push({
+        nodeId: upstreamId,
+        label: node.label ?? upstreamId,
+        producedDraft,
+        producedVisual,
+        missing: verdict.missing,
+        note: verdict.note,
+      });
+    }
+  }
+  return violations;
 }
 
 // ─── Resolve context inputs for a node ───────────────────────────────────────
@@ -210,19 +299,17 @@ async function runNode(node, upstream, context, store, opts = {}) {
 // ─── Main graph runner ────────────────────────────────────────────────────────
 
 // Run-path contract normalization. NOT a topology rewrite — the graph the founder composed and
-// persisted is the graph that runs (the entry mode was decided VISIBLY at compose time; see
-// source-entry.mjs). Two principled passes:
-//   1. relaxGateContracts (always): the founder gate IS the contract checkpoint, so the gate must
-//      not reject a real reviewed draft on a field-name technicality, and a post-gate execute trusts
-//      the approval. Measure is left untouched so it stays honestly blind.
-//   2. relaxDiscoveryChainContracts (discovered entry only): a self-sourcing agent chain is
-//      best-effort, so its pre-gate field contracts are relaxed; a provided (deterministic) graph
-//      keeps its declared contracts, because there they mean something.
+// persisted is the graph that runs. The founder gate is the ONLY contract checkpoint:
+//   1. relaxGateContracts (always): the gate must not reject a real reviewed draft on a field-name
+//      technicality, and a post-gate execute trusts the approval. Measure is left honestly blind.
+//   2. relaxPreGateContracts (always): no node before the gate blocks the run on item count or field
+//      names. The model composes the work freely and whatever it produces flows to the gate, where the
+//      founder reviews it. Contracts stay ADVISORY (UI/validation) but never dead-end a run pre-gate.
 // Deterministic and idempotent, so a fresh run and a later gate-resume see the identical graph.
 function normalizeRunContracts(graph) {
   if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) return graph;
   let nodes = relaxGateContracts(graph.nodes, graph.edges);
-  if (entryIsDiscovered(nodes, graph.edges)) nodes = relaxDiscoveryChainContracts(nodes, graph.edges);
+  nodes = relaxPreGateContracts(nodes, graph.edges);
   return { ...graph, nodes };
 }
 
@@ -241,9 +328,23 @@ export async function runGraph(graph, opts = {}) {
     stepRuntime = defaultStepRuntime,
     loadLastRunItems = null,
     onEvent = null,
+    authorizeRelease = null,
   } = opts;
   const emit = typeof onEvent === "function" ? onEvent : () => {};
   const { nodes, edges, id: graphId } = graph;
+
+  // The role-gated release wall, asserted at the gate point itself. When this run carries an approval
+  // intent (a gate approval or an approve/release per-item decision) AND the caller supplied an
+  // authorizeRelease guard, the guard must pass before any approval is honored. With no guard the
+  // behavior is unchanged (a solo founder's local run), so this only tightens the team path; it never
+  // weakens it. The gate connector still refuses to send without an approval — this refuses to apply
+  // an approval the actor is not allowed to make.
+  if (typeof authorizeRelease === "function") {
+    const approvesAny = Object.values(approvals).some((v) => v === true)
+      || Object.values(decisions).some((d) => d?.decision === "approve")
+      || Object.values(decisions).some((d) => d?.pattern?.decision === "approve" || d?.decision === "approve");
+    if (approvesAny) authorizeRelease();
+  }
 
   const runId = `run-${Date.now()}`;
   const nodeMap   = new Map(nodes.map((n) => [n.id, n]));
@@ -251,6 +352,10 @@ export async function runGraph(graph, opts = {}) {
   const allowedNodes = relatedNodes(targetNodeId, nodes, edges);
   const nodeResults = new Map();
   const pendingGates = [];
+
+  // Shared skill-guidance accumulator for THIS run. A `skill` step appends its loaded SKILL.md
+  // here (deduped by ref); a downstream `agent` step folds it into its prompt and acts under it.
+  const skillGuidance = [];
 
   // A founder gate resumes the exact prepared artifacts that were reviewed.
   // Everything outside the pending gate and its descendants is restored from
@@ -298,6 +403,7 @@ export async function runGraph(graph, opts = {}) {
       ? structuredClone(resumeResult.nodes[nodeId].items)
       : resolveUpstream(nodeId, edges, nodeResults);
     const context  = resolveContext(nodeId, edges, nodeResults);
+    context.__skillGuidance = skillGuidance;
     context.__run = {
       runId,
       originRunId: resumeResult?.runId ?? runId,
@@ -345,6 +451,23 @@ export async function runGraph(graph, opts = {}) {
       result = { ...result, contractAudit: outputAudit };
       if (result.ok && outputAudit.state === "blocked") {
         result = { ...result, ok: false, blocked: true, error: outputAudit.message };
+      }
+    }
+    // Required-consult guard, asserted at the gate (the founder's review point). For every
+    // drafting/UI-producing node feeding this gate, check the tool calls the agent actually made:
+    // a draft must have called get_taste, a visual artifact get_taste AND get_design. A violation is
+    // surfaced as a blocking issue ON the gate result the founder reads — never a thrown crash — so a
+    // draft that bypassed the founder's own taste signal can't quietly pass as if it were grounded.
+    if (node.category === "gate" && result.ok !== false) {
+      const consultViolations = collectConsultViolations(nodeId, edges, nodeMap, nodeResults);
+      if (consultViolations.length) {
+        result = {
+          ...result,
+          consultViolations,
+          consultBlocked: true,
+          error: result.error
+            ?? `Required-consult check failed: ${consultViolations.length} drafting step(s) skipped the moat. ${consultViolations.map((v) => `${v.label} missing ${v.missing.join(", ")}`).join("; ")}.`,
+        };
       }
     }
     nodeResults.set(nodeId, result);
@@ -397,8 +520,12 @@ export async function runGraph(graph, opts = {}) {
 
   const results = Object.fromEntries(nodeResults.entries());
   // A blind node (measurement that can't attribute yet) is an honest gap, not a failure — it never
-  // counts against the run. A pending gate does (the run isn't done until the founder decides).
-  const ok = Array.from(nodeResults.values()).every((r) => (r.ok || r.blind) && !r.pendingReview);
+  // counts against the run. A pending gate does (the run isn't done until the founder decides). A gate
+  // carrying a required-consult violation also does: a draft that skipped the founder's taste signal
+  // must not let the run read "clean", even after approval — the violation is a blocking issue.
+  const ok = Array.from(nodeResults.values()).every(
+    (r) => (r.ok || r.blind) && !r.pendingReview && !r.consultBlocked,
+  );
 
   return {
     runId,

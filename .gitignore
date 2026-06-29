@@ -9,6 +9,9 @@ node_modules/
 dist/
 *.log
 
+# Desktop app build output (electron-builder)
+release/
+
 # local state
 .venture/
 .DS_Store

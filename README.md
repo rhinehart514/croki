@@ -121,6 +121,37 @@ Open [http://127.0.0.1:4317](http://127.0.0.1:4317).
 
 The default workspace uses `~/Buffalo-Projects` and `project_created`.
 
+## Desktop app (macOS)
+
+The desktop shell (`electron/`) wraps the exact same brain and client — no terminal. The Electron
+main process repairs the Finder PATH (so the operator can find `claude` and `git`), boots the brain on
+a free loopback port, waits for `/api/health`, then opens the window. All state still lives in
+`~/.gtm-ide` and `~/.claude`, so the app and the `npm start` dev server share it.
+
+One-time setup (rebuilds and ad-hoc signs the native SQLite module against Electron's ABI — without
+the signature, macOS Library Validation kills the engine on launch):
+
+```sh
+npm install
+npm run app:rebuild
+```
+
+Run it as a window during development:
+
+```sh
+npm run app
+```
+
+Build the installable, unsigned `.dmg` (output in `release/`):
+
+```sh
+npm run app:dist
+```
+
+The build is unsigned for local single-user use. On first launch, right-click the app and choose
+**Open** to clear Gatekeeper. The window reopens your last active project; with no `.env.local`
+present it runs fully local (no team sync, no onboarding gate).
+
 ## Verify
 
 ```sh

@@ -1,11 +1,16 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { compactAgentError } from "./build.mjs";
+import { persistence } from "./persistence.mjs";
 import { scanRepo } from "./scan.mjs";
 
 const SCHEMA_VERSION = 1;
+
+// Durable workspaces now ride the shared persistence provider — landing in SQLite (the default backend)
+// so they migrate with everything else and mirror to a team when one is configured, instead of being
+// written as raw JSON beside the database the engine reads. One document per workspace, keyed by id.
+const WORKSPACE_COLLECTION = "workspaces";
 
 function now() {
   return new Date().toISOString();
@@ -15,8 +20,10 @@ function stateRoot(options = {}) {
   return options.root || process.env.GTM_IDE_HOME || path.join(os.homedir(), ".gtm-ide");
 }
 
-function workspaceDir(options = {}) {
-  return path.join(stateRoot(options), "workspaces");
+// The persistence provider rooted at this options' home. Resolving the root here keeps the workspace
+// store on exactly the same backend as every other durable store.
+function store(options = {}) {
+  return persistence({ root: stateRoot(options) });
 }
 
 function workspaceId(repo, outcome) {
@@ -25,21 +32,6 @@ function workspaceId(repo, outcome) {
     .update(`${path.resolve(repo)}\0${outcome.trim()}`)
     .digest("hex")
     .slice(0, 16);
-}
-
-function workspaceFile(id, options = {}) {
-  return path.join(workspaceDir(options), `${id}.json`);
-}
-
-function readJson(file) {
-  return JSON.parse(fs.readFileSync(file, "utf8"));
-}
-
-function writeJson(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const temporary = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`);
-  fs.renameSync(temporary, file);
 }
 
 function summarizeRevision(revision) {
@@ -138,39 +130,32 @@ function hydrate(workspace) {
 }
 
 export function listWorkspaces(options = {}) {
-  const dir = workspaceDir(options);
-  if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir)
-    .filter((name) => name.endsWith(".json"))
-    .flatMap((name) => {
-      try {
-        const workspace = readJson(path.join(dir, name));
-        return [{
-          id: workspace.id,
-          name: workspace.name,
-          repo: workspace.repo,
-          outcome: workspace.outcome,
-          updatedAt: workspace.updatedAt,
-          headline: workspace.report?.headline ?? "Not inspected",
-          revisionCount: workspace.revisions?.length ?? 0,
-        }];
-      } catch {
-        return [];
-      }
+  return store(options).list(WORKSPACE_COLLECTION)
+    .flatMap((workspace) => {
+      if (!workspace || !workspace.id) return [];
+      return [{
+        id: workspace.id,
+        name: workspace.name,
+        repo: workspace.repo,
+        outcome: workspace.outcome,
+        updatedAt: workspace.updatedAt,
+        headline: workspace.report?.headline ?? "Not inspected",
+        revisionCount: workspace.revisions?.length ?? 0,
+      }];
     })
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
 }
 
 export function getWorkspace(id, options = {}) {
-  const file = workspaceFile(id, options);
-  if (!fs.existsSync(file)) throw new Error(`Workspace not found: ${id}`);
-  return hydrate(readJson(file));
+  const workspace = store(options).get(WORKSPACE_COLLECTION, id);
+  if (!workspace) throw new Error(`Workspace not found: ${id}`);
+  return hydrate(workspace);
 }
 
 export function saveWorkspace(workspace, options = {}) {
   const { workflow: _workflow, revisionSummaries: _revisionSummaries, ...durable } = workspace;
   const updated = { ...durable, updatedAt: now() };
-  writeJson(workspaceFile(updated.id, options), updated);
+  store(options).set(WORKSPACE_COLLECTION, updated.id, updated);
   return hydrate(updated);
 }
 
@@ -180,8 +165,8 @@ export function openWorkspace(repoInput, outcomeInput, options = {}) {
   if (!outcome) throw new Error("A GTM outcome event is required.");
 
   const id = workspaceId(repo, outcome);
-  const file = workspaceFile(id, options);
-  if (fs.existsSync(file)) return hydrate(readJson(file));
+  const existing = store(options).get(WORKSPACE_COLLECTION, id);
+  if (existing) return hydrate(existing);
 
   const report = scanRepo(repo, { winEvent: outcome });
   const createdAt = now();

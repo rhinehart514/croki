@@ -3,8 +3,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { validateAgentCreationPolicy } from "./agent-policy-store.mjs";
+import { persistence } from "./persistence.mjs";
 
 const SCHEMA_VERSION = 1;
+const COLLECTION = "capability-foundry";
 
 function now() {
   return new Date().toISOString();
@@ -26,8 +28,8 @@ function arr(value) {
   return Array.isArray(value) ? value : [];
 }
 
-function fileFor(projectId, options = {}) {
-  return path.join(root(options), "capability-foundry", `${safeId(projectId)}.json`);
+function keyFor(projectId) {
+  return safeId(projectId);
 }
 
 // Where a born agent's on-disk definition lives. It sits under the SAME foundry root the
@@ -35,13 +37,6 @@ function fileFor(projectId, options = {}) {
 // agent-bridge's loader tries this path first, then falls back to ~/.claude/agents/<ref>.md.
 function artifactFileFor(ref, options = {}) {
   return path.join(root(options), "capability-foundry", "agents", `${safeId(ref)}.md`);
-}
-
-function write(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`);
-  fs.renameSync(tmp, file);
 }
 
 // Atomically write raw text (the agent-definition markdown). Same temp+rename as write(), but
@@ -65,9 +60,8 @@ function emptyStore(projectId) {
 }
 
 export function loadCapabilityFoundry(projectId = "default", options = {}) {
-  const file = fileFor(projectId, options);
-  if (!fs.existsSync(file)) return emptyStore(projectId);
-  const stored = JSON.parse(fs.readFileSync(file, "utf8"));
+  const stored = persistence(options).get(COLLECTION, keyFor(projectId));
+  if (!stored) return emptyStore(projectId);
   if (stored?.schemaVersion === SCHEMA_VERSION && Array.isArray(stored.instances)) return stored;
   return {
     ...emptyStore(projectId),
@@ -86,7 +80,7 @@ export function saveCapabilityFoundry(store, options = {}) {
     ...store,
     schemaVersion: SCHEMA_VERSION,
   };
-  write(fileFor(durable.projectId, options), durable);
+  persistence(options).set(COLLECTION, keyFor(durable.projectId), durable);
   return durable;
 }
 

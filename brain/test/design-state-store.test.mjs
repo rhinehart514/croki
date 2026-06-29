@@ -52,7 +52,8 @@ describe("design state store", () => {
 
   it("persists atomically and reloads the same state", () => {
     const saved = saveDesignState({ projectId: "p2", references: houseStyleSeed().references }, options);
-    assert.ok(fs.existsSync(path.join(parent, "design-state", "p2.json")));
+    // Persisted durably (backend-agnostic: the default SQLite backend stores it in gtm-ide.db, the
+    // JSON backend in design-state/p2.json). The contract under test is the reload round-trip.
     const loaded = getDesignState("p2", options);
     assert.equal(loaded.references.length, saved.references.length);
     assert.equal(loaded.houseStyle, "Warm Calm");

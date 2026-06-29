@@ -2,7 +2,7 @@ import "@/styles/canvas-refine.css";
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background, Controls, Handle, MarkerType, Panel, Position, ReactFlow,
-  useReactFlow, useStore, ViewportPortal,
+  useReactFlow, useStore, useNodesInitialized, useUpdateNodeInternals, ViewportPortal,
   type Connection, type Edge, type Node, type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -15,7 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { healthHex } from "@/lib/health";
 import { agentPersona, FAMILY_TINT } from "@/lib/agentPersona";
-import { brandGlyph } from "@/lib/brandGlyph";
+import { useBrandGlyph } from "@/lib/brandGlyph";
 import { BrandGlyph } from "@/components/BrandGlyph";
 import type { NodeEditorBridge } from "@/components/ProgramCanvas";
 import type {
@@ -709,7 +709,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
   // legible on the card itself.
   const isMcp = node.kind === "mcp";
   const mcpServer = isMcp ? String(node.config?.server ?? node.ref?.split("/")[0] ?? "") : "";
-  const mcpGlyph = isMcp ? brandGlyph(mcpServer) : null;
+  const mcpGlyph = useBrandGlyph(isMcp ? mcpServer : null);
   const mcpWrites = isMcp && node.config?.toolClass === "write";
 
   return (
@@ -1225,6 +1225,28 @@ function Refitter({ nonce }: { nonce?: number }) {
   return null;
 }
 
+// ─── Measure guard — make the nodes paint when the pane mounts at zero size ─────
+// React Flow measures each node once, lazily (a ResizeObserver per card), and keeps a node
+// `visibility: hidden` until it has a measured size. If the canvas mounts inside a container that is
+// momentarily 0-height — the program workbench's `minmax(0, 1fr)` / `min-height: 0` grid chain
+// hasn't resolved yet on a DIRECT boot into a program URL — the cards get measured as zero and never
+// recover: the diagram renders blank with no edges (edges don't draw between unmeasured nodes). This
+// watches the pane size and, the moment it gains real dimensions while nodes are still uninitialized,
+// forces a re-measure of every node so the cards and their edges actually paint. It's a no-op on the
+// path where the pane is sized from the first frame (nodes initialize on their own).
+function MeasureGuard({ nodeIds }: { nodeIds: string[] }) {
+  const sized = useStore((s) => s.width > 0 && s.height > 0);
+  const initialized = useNodesInitialized();
+  const updateNodeInternals = useUpdateNodeInternals();
+  useEffect(() => {
+    if (!sized || initialized || nodeIds.length === 0) return;
+    // Re-measure on the next frame, after the cards have laid out at the real pane size.
+    const raf = requestAnimationFrame(() => updateNodeInternals(nodeIds));
+    return () => cancelAnimationFrame(raf);
+  }, [sized, initialized, nodeIds, updateNodeInternals]);
+  return null;
+}
+
 // ─── Fit on graph change — center the whole flow in the open canvas ────────────
 // React Flow's `fitView` prop only frames once, on mount. But the graph data and its
 // auto-layout positions arrive asynchronously AFTER mount (the graph loads, then
@@ -1339,14 +1361,17 @@ export function GraphCanvas({
 
   // Render-time auto-layout — what actually drives what's on screen.
   // The composer ships cramped/overlapping positions, and the persistence round-trip (the effect
-  // below) can't be trusted to reach every render path. So we lay a normal channel graph out by DAG
-  // depth AT RENDER and let a manual drag override per node. Ideation preview and portfolios (systems)
-  // keep their own pre-laid positions. A fresh topology clears the drag overrides so a re-compose
-  // re-lays the whole flow.
+  // below) can't be trusted to reach every render path. So we lay every graph out by DAG depth AT
+  // RENDER and let a manual drag override per node. Portfolios get the same rank-based layout: their
+  // systems are disconnected subgraphs, so each pipeline stage shares a rank column and the systems
+  // stack into rows within it — a readable left-to-right multi-system grid (this replaced the old
+  // pre-laid swimlane positions). Only the ideation preview keeps its own pre-laid positions, since
+  // it builds in with a staggered entrance keyed off those x's. A fresh topology clears the drag
+  // overrides so a re-compose re-lays the whole flow.
   const draggedIds = useRef<Set<string>>(new Set());
-  const layoutSig = `${topologySignature(graph)}|${graph.id}|${graph.systems?.length ? "sys" : ""}`;
+  const layoutSig = `${topologySignature(graph)}|${graph.id}`;
   const autoPos = useMemo(
-    () => (graph.id === "ideation-preview" || graph.systems?.length ? null : computeLayout(graph)),
+    () => (graph.id === "ideation-preview" ? null : computeLayout(graph)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [layoutSig],
   );
@@ -1388,12 +1413,18 @@ export function GraphCanvas({
     [laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds],
   );
 
-  // Re-fit the viewport whenever the flow's structure changes (load, compose, lanes
-  // appearing). Includes the system lanes so a portfolio fan-out re-frames too.
+  // Re-fit the viewport whenever the flow's structure changes (load, compose, a system
+  // appearing). Includes the system ids so a portfolio fan-out re-frames too.
   const fitSignature = useMemo(
     () => `${topologySignature(graph)}|${(graph.systems ?? []).map((s) => s.id).join(",")}`,
     [graph],
   );
+
+  // Stable list of node ids for the measure guard — recomputed only when the set of nodes changes,
+  // not on every layout-position round-trip, so the guard effect doesn't churn.
+  const nodeIdSignature = useMemo(() => graph.nodes.map((n) => n.id).sort().join(","), [graph.nodes]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const measureNodeIds = useMemo(() => graph.nodes.map((n) => n.id), [nodeIdSignature]);
 
   // Where the nodes ACTUALLY are — changes as the async auto-layout settles, which is the signal
   // FitOnGraph debounces on (topology alone is stable before the layout round-trips into place).
@@ -1480,6 +1511,7 @@ export function GraphCanvas({
           </button>
         </Panel>
       ) : null}
+      <MeasureGuard nodeIds={measureNodeIds} />
       <RunZoom running={running} />
       <FitOnGraph topology={fitSignature} bounds={boundsSignature} running={running} suspended={!!operatorCursor} />
       <Refitter nonce={refitNonce} />

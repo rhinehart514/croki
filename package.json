@@ -2,14 +2,26 @@
   "name": "gtm-ide",
   "private": true,
   "version": "0.3.1",
+  "description": "GTM IDE — the IDE for go-to-market.",
+  "author": "GTM IDE",
+  "main": "electron/main.cjs",
   "scripts": {
     "build": "npm --prefix ui run build",
     "lint": "npm --prefix ui run lint",
     "test": "npm --prefix brain test && npm run lint && npm run build",
     "start": "npm run build && node brain/src/server.mjs",
-    "mcp": "node brain/src/mcp.mjs"
+    "mcp": "node brain/src/mcp.mjs",
+    "app:rebuild": "electron-rebuild --module-dir brain --only better-sqlite3 && codesign -s - -f brain/node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+    "build:desktop": "VITE_CONVEX_URL= npm run build",
+    "app": "npm run build:desktop && electron .",
+    "app:dist": "npm run build:desktop && npm run app:rebuild && electron-builder --mac"
   },
   "dependencies": {
     "convex": "1.42.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "4.0.6",
+    "electron": "42.5.1",
+    "electron-builder": "26.15.3"
   }
 }

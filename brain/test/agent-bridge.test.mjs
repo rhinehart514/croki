@@ -137,6 +137,27 @@ describe("buildAgentPrompt — merges a loaded definition, no-ops cleanly when a
     fs.rmSync(root, { recursive: true, force: true });
   });
 
+  it("folds accumulated skill guidance into the agent prompt as doctrine (not raw passthrough JSON)", () => {
+    const built = buildAgentPrompt({
+      ref: "channel-drafter",
+      prompt: "Draft outreach.",
+      items: [{ id: "1" }],
+      context: { __skillGuidance: [{ ref: "positioning", guidance: "Lead with the now-you-can line." }] },
+      agenticProviders: "", // pre-pack so the assembler is exercised but the skill block is what we check
+    });
+    // The loaded skill judgment reaches the downstream agent's prompt.
+    assert.match(built.prompt, /Skill judgment loaded upstream/i);
+    assert.match(built.prompt, /positioning/);
+    assert.match(built.prompt, /now-you-can line/);
+    // It is doctrine, not data: it must NOT be dumped as the raw passthrough JSON key.
+    assert.doesNotMatch(built.prompt, /"__skillGuidance"/);
+  });
+
+  it("is a clean no-op when no skill guidance has accumulated (block omitted)", () => {
+    const built = buildAgentPrompt({ ref: "channel-drafter", prompt: "Draft.", items: [], context: {}, agenticProviders: "" });
+    assert.doesNotMatch(built.prompt, /Skill judgment loaded upstream/i);
+  });
+
   it("assembles the founder's DesignState into the agent prompt through the real run-path assembler", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-design-bridge-"));
     // Exactly what runGraph injects onto a node's context (graph.mjs: `context.designState = designState`).
@@ -182,12 +203,25 @@ describe("parseAgentItems — pull a JSON array out of model prose", () => {
 });
 
 describe("createStepRuntime — real deps wired into the step runtime", () => {
-  it("a skill step marks applied:true when the loader finds guidance", async () => {
+  it("a skill step marks applied:true when the loader finds guidance AND a run accumulator can carry it", async () => {
     const runtime = createStepRuntime({ skillLoader: (ref) => (ref === "positioning" ? "guidance text" : null) });
-    const out = await runtime.skill({ ref: "positioning" }, [{ id: "x" }], {});
+    const ctx = { __skillGuidance: [] };
+    const out = await runtime.skill({ ref: "positioning" }, [{ id: "x" }], ctx);
     assert.equal(out.ok, true);
     assert.equal(out.meta.applied, true);
     assert.equal(out.items.length, 1);
+    // the loaded judgment actually reached the shared accumulator a downstream agent reads
+    assert.equal(ctx.__skillGuidance.length, 1);
+    assert.equal(ctx.__skillGuidance[0].ref, "positioning");
+    assert.match(ctx.__skillGuidance[0].guidance, /guidance text/);
+  });
+
+  it("a skill step is honestly applied:false when there is no run accumulator to carry guidance to a consumer", async () => {
+    const runtime = createStepRuntime({ skillLoader: () => "guidance text" });
+    const out = await runtime.skill({ ref: "positioning" }, [{ id: "x" }], {});
+    // guidance loaded, but with nowhere to flow it does NOT pretend to be applied
+    assert.equal(out.meta.applied, false);
+    assert.equal(out.meta.guidance, "guidance text");
   });
 
   it("an agent step uses the injected invoker and tags its meta", async () => {

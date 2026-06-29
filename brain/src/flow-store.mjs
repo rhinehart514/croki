@@ -1,24 +1,9 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { persistence } from "./persistence.mjs";
 
-function root(options = {}) {
-  return options.root || process.env.GTM_IDE_HOME || path.join(os.homedir(), ".gtm-ide");
-}
+const COLLECTION = "flows";
 
 function safeId(value) {
   return String(value || "flow").replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 80);
-}
-
-function fileFor(graphId, options = {}) {
-  return path.join(root(options), "flows", `${safeId(graphId)}.json`);
-}
-
-function write(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const temporary = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`);
-  fs.renameSync(temporary, file);
 }
 
 function graphSnapshot(graph) {
@@ -44,15 +29,14 @@ function graphSnapshot(graph) {
 }
 
 export function loadFlow(graphId, fallback, options = {}) {
-  const file = fileFor(graphId, options);
-  if (!fs.existsSync(file)) {
+  const stored = persistence(options).get(COLLECTION, safeId(graphId));
+  if (!stored) {
     return {
       graph: fallback,
       runs: [],
       updatedAt: null,
     };
   }
-  const stored = JSON.parse(fs.readFileSync(file, "utf8"));
   const graph = fallback?.version && stored.graph?.version !== fallback.version
     ? {
         ...fallback,
@@ -85,8 +69,25 @@ export function saveFlow(graph, options = {}) {
     runs: current.runs,
     updatedAt,
   };
-  write(fileFor(graph.id, options), durable);
+  persistence(options).set(COLLECTION, safeId(graph.id), durable);
   return durable;
+}
+
+// Summarize a persisted run's per-node results into a compact, founder-facing shape: the total
+// items the channel produced and a per-category breakdown. This is the "results back" signal the
+// portfolio overview needs without shipping the whole run ledger to the client. Derived from real
+// node output only — a run that produced nothing reports zero, never a seeded number.
+export function summarizeRunResult(run) {
+  const nodes = run?.result?.nodes ?? {};
+  const byCategory = {};
+  let produced = 0;
+  for (const node of Object.values(nodes)) {
+    const count = node.items?.length ?? 0;
+    if (!count) continue;
+    byCategory[node.category] = (byCategory[node.category] ?? 0) + count;
+    produced += count;
+  }
+  return { produced, byCategory };
 }
 
 export function recordFlowRun(graph, result, options = {}) {
@@ -113,6 +114,6 @@ export function recordFlowRun(graph, result, options = {}) {
     runs,
     updatedAt: createdAt,
   };
-  write(fileFor(graph.id, options), durable);
+  persistence(options).set(COLLECTION, safeId(graph.id), durable);
   return durable;
 }

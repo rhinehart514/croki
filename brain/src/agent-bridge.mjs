@@ -13,7 +13,9 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { query as agentQuery, createSdkMcpServer, tool as sdkTool } from "@anthropic-ai/claude-agent-sdk";
-import { createStepRuntime } from "./step-runners.mjs";
+import { createStepRuntime, createMcpStepRunner, BUILTIN_CODE_TRANSFORMS } from "./step-runners.mjs";
+import { getServer, effectiveClass } from "./mcp-store.mjs";
+import { connectStdioServer } from "./mcp-client.mjs";
 import { assembleContext } from "./context/assembler.mjs";
 import { providersFromContext } from "./context/providers.mjs";
 import { createRetrievalTools, RETRIEVAL_SOURCES, SOURCE_TO_TOOL } from "./context/retrieval-tools.mjs";
@@ -266,6 +268,19 @@ export function parseAgentObject(text) {
 // a clean, selected base-layer block; anything the substrate doesn't recognize (context-node
 // output, __run) is passed through as JSON so no information is lost. Returns the manifest too, so
 // the caller can attach it to the node result — that is the instrument the UI inspector reads.
+// Render skill judgment accumulated UPSTREAM in this run. A `skill` step appends its loaded
+// SKILL.md to the shared run context (context.__skillGuidance, threaded by graph.mjs); a
+// downstream agent step acts UNDER that judgment, so it rides high in the prompt as doctrine —
+// not buried in the JSON passthrough. Empty in, empty out (the block is dropped by .filter).
+function renderSkillGuidance(entries) {
+  if (!Array.isArray(entries) || !entries.length) return "";
+  const blocks = entries
+    .filter((entry) => entry && typeof entry.guidance === "string" && entry.guidance.trim())
+    .map((entry) => `Skill — ${entry.ref}:\n${entry.guidance.trim()}`);
+  if (!blocks.length) return "";
+  return ["\nSkill judgment loaded upstream in this run — follow it:", ...blocks].join("\n\n");
+}
+
 export function buildAgentPrompt({ ref, prompt, items, context = {}, artifactPath, agentDefinitionRoot, agenticRetrieval, agenticProviders: agenticProvidersConfig } = {}) {
   const input = JSON.stringify(items ?? [], null, 2);
 
@@ -277,8 +292,11 @@ export function buildAgentPrompt({ ref, prompt, items, context = {}, artifactPat
   const partialAgentic = agenticSet.size > 0 && !fullAgentic;
 
   // eslint-disable-next-line no-unused-vars
-  const { grounding, productModel, market, __memory, __state, signal, designState, ...rest } = context ?? {};
+  const { grounding, productModel, market, __memory, __state, signal, designState, __skillGuidance, ...rest } = context ?? {};
   const restJson = Object.keys(rest).length ? JSON.stringify(rest, null, 2) : null;
+  // Skill judgment a `skill` step loaded earlier in THIS run (graph threads context.__skillGuidance).
+  // Folded in as doctrine below, never dumped into the rest-JSON passthrough.
+  const skillGuidanceBlock = renderSkillGuidance(__skillGuidance);
 
   // Three grounding modes, all over the SAME provider summarizers (E1.4/E1.6):
   //  - pre-pack (default, empty set): assemble every provider into one block stapled to the prompt.
@@ -330,6 +348,7 @@ export function buildAgentPrompt({ ref, prompt, items, context = {}, artifactPat
 
   const text = [
     role,
+    skillGuidanceBlock,
     prompt ? `\nTask:\n${prompt}` : "",
     contextBlock,
     restJson ? `\nAdditional workflow context (JSON):\n${restJson}` : "",
@@ -390,13 +409,34 @@ export async function runClaudeQuery({ prompt, cwd = process.cwd(), model, maxTu
   });
   let text = "";
   let error = null;
+  // Capture the NAMES of every tool the subagent actually called. This is the evidence the
+  // required-consult guard reads at the gate: did a drafting step call get_taste before drafting?
+  // We collect from two SDK shapes so the capture is robust: the streamed content_block_start
+  // tool_use events (when partial messages are on) and the tool_use blocks on each assistant
+  // message (always present). A Set de-dupes repeated calls; the in-process context tools arrive
+  // namespaced (mcp__gtm_context__get_taste), so we also record the bare suffix the guard expects.
+  const toolCalls = new Set();
+  const recordToolName = (name) => {
+    if (!name || typeof name !== "string") return;
+    toolCalls.add(name);
+    const bare = name.includes("__") ? name.slice(name.lastIndexOf("__") + 2) : null;
+    if (bare) toolCalls.add(bare);
+  };
   for await (const message of stream) {
-    if (message.type === "stream_event" && typeof onText === "function") {
+    if (message.type === "stream_event") {
       const ev = message.event;
-      if (ev?.type === "content_block_delta" && ev.delta?.type === "text_delta" && ev.delta.text) {
+      if (ev?.type === "content_block_delta" && ev.delta?.type === "text_delta" && ev.delta.text && typeof onText === "function") {
         try { onText(ev.delta.text); } catch { /* a consumer error never breaks the run */ }
       }
+      if (ev?.type === "content_block_start" && ev.content_block?.type === "tool_use") {
+        recordToolName(ev.content_block.name);
+      }
       continue;
+    }
+    if (message.type === "assistant" && Array.isArray(message.message?.content)) {
+      for (const block of message.message.content) {
+        if (block?.type === "tool_use") recordToolName(block.name);
+      }
     }
     if (message.type !== "result") continue;
     if (typeof message.result === "string") text = message.result;
@@ -404,7 +444,7 @@ export async function runClaudeQuery({ prompt, cwd = process.cwd(), model, maxTu
       error = classifyAgentError(message);
     }
   }
-  return { text, error };
+  return { text, error, toolCalls: [...toolCalls] };
 }
 
 // Default turn budget raised from 12 to 20: a repo-reading discovery agent (find prospects,
@@ -420,7 +460,7 @@ export function createClaudeAgentInvoker({ cwd = process.cwd(), model, maxTurns 
     const allowedTools = mcpServers
       ? [...built.tools.allowed, ...built.retrievalTools.map((t) => `mcp__gtm_context__${t.name}`)]
       : built.tools.allowed;
-    const { text, error } = await runClaudeQuery({
+    const { text, error, toolCalls = [] } = await runClaudeQuery({
       prompt: built.prompt,
       cwd,
       model: config.model || model,
@@ -429,8 +469,9 @@ export function createClaudeAgentInvoker({ cwd = process.cwd(), model, maxTurns 
       allowedTools,
       mcpServers,
     });
-    // Surface the granted toolset (and anything the wall refused) so the run is auditable.
-    const toolMeta = { tools: built.tools.allowed, toolsDropped: built.tools.dropped };
+    // Surface the granted toolset (and anything the wall refused) so the run is auditable, plus the
+    // tool names the agent ACTUALLY called — the evidence the required-consult guard reads at the gate.
+    const toolMeta = { tools: built.tools.allowed, toolsDropped: built.tools.dropped, toolCalls };
     if (error) {
       return { ok: false, items: [], error: error.message, meta: { invoked: ref, contextManifest: built.manifest, errorKind: error.kind, retriable: error.retriable, ...toolMeta } };
     }
@@ -492,10 +533,49 @@ export function createProviderAgentInvoker(options = {}) {
   };
 }
 
-// Compose the live step runtime graph.mjs expects: a provider-aware agent invoker + skill loader.
-export function liveStepRuntime({ cwd, model, skillRoot, claudeInvoker, codexInvoker } = {}) {
+// Resolve which server+tool an mcp node points at, from the persisted MCP store. A node
+// carries either config.server + config.tool, or a `serverId/toolName` ref. We return the
+// tool's EFFECTIVE class (founder override honored) so the run-path wall in step-runners
+// decides read-runs-free vs write-is-gated against the founder's own stored decision.
+function resolveMcpTool(node, _context, { store = { getServer } } = {}) {
+  const cfg = node?.config ?? {};
+  let serverId = cfg.server ?? cfg.serverId ?? null;
+  let toolName = cfg.tool ?? cfg.toolName ?? null;
+  if ((!serverId || !toolName) && typeof node?.ref === "string" && node.ref.includes("/")) {
+    const cut = node.ref.lastIndexOf("/");
+    serverId = serverId ?? node.ref.slice(0, cut);
+    toolName = toolName ?? node.ref.slice(cut + 1);
+  }
+  if (!serverId || !toolName) return null;
+  const server = store.getServer(serverId);
+  if (!server) return null;
+  const tool = (server.tools ?? []).find((t) => t.name === toolName);
+  if (!tool) return null;
+  return { server, tool, effectiveClass: effectiveClass(tool) };
+}
+
+// Live MCP transport: connect to the stdio server the store recorded and call the one tool,
+// then close. Read-only by construction — the wall in step-runners has already refused any
+// write-class tool before we get here, so this path never carries an outward-facing call.
+async function callMcpTool({ server, name, args }) {
+  if (!server?.command) throw new Error(`server "${server?.id ?? "?"}" has no stdio command to launch`);
+  const { client } = await connectStdioServer({ command: server.command, args: server.args ?? [] });
+  try {
+    return await client.callTool(name, args ?? {});
+  } finally {
+    client.close();
+  }
+}
+
+// Compose the live step runtime graph.mjs expects: a provider-aware agent invoker + skill loader
+// + the MCP tool runner (read-only run path; writes stay behind the founder gate).
+export function liveStepRuntime({ cwd, model, skillRoot, claudeInvoker, codexInvoker, codeTransforms = BUILTIN_CODE_TRANSFORMS } = {}) {
   return createStepRuntime({
     agentInvoker: createProviderAgentInvoker({ cwd, model, claudeInvoker, codexInvoker }),
     skillLoader: (ref) => loadSkillGuidance(ref, { root: skillRoot }),
+    // The deterministic spine: `code` steps select a built-in transform by ref (dedupe / filter /
+    // limit / sort / rename-fields). No arbitrary eval — only this fixed registry runs live.
+    codeTransforms,
+    mcpRunner: createMcpStepRunner({ resolveTool: resolveMcpTool, callTool: callMcpTool }),
   });
 }

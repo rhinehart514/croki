@@ -208,6 +208,8 @@ describe("program projection — events are the authoritative history", () => {
           evidence: [{ file: "app.ts", line: 1 }],
           uncertainty: "Attribution has not been proven.",
         })),
+        // A drafting agent consults the founder's taste moat before it writes (required-consult).
+        meta: { toolCalls: ["get_taste"] },
       }),
     });
 

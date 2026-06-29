@@ -166,18 +166,6 @@ async function getWorkflowItems({ workflowId, channelId, nodeId }) {
   return getItems({ channelId: workflowId ?? channelId, nodeId });
 }
 
-/**
- * request_workflow_change — disabled direct-edit path. Graph edits are never
- * applied straight from this surface; they must be staged through the resident
- * operator's proposal flow so the founder can review the preview first.
- */
-async function requestWorkflowChange({ workflowId, channelId, command }) {  // eslint-disable-line no-unused-vars
-  return {
-    ok: false,
-    error: "Direct graph mutation is disabled. Start or resume an operator session (start_operator_session) and use propose_graph_changes so the founder can review the preview before it is applied.",
-  };
-}
-
 async function listOperatorSessions() {
   return brainGet("/api/operator/sessions");
 }
@@ -297,6 +285,16 @@ async function listOutcomes({ projectId } = {}) {
 }
 
 /**
+ * list_tool_proposals — pending tool-birth proposals (deterministic procedures crystallized from
+ * repeated runs, gated and never auto-born) plus the registered, callable self-built tools.
+ * Read-only: routes the founder to a decision; birth is a founder action in the dashboard.
+ */
+async function listToolProposals({ projectId } = {}) {
+  const id = await resolveProjectId(projectId);
+  return brainGet(`/api/projects/${encodeURIComponent(id)}/tool-proposals`);
+}
+
+/**
  * get_outcome — one outcome by id (or name): a program with its policies, or, failing that, a
  * standalone system (channel). The host exposes no single-program endpoint, so both resolve from
  * the project's lists.
@@ -411,6 +409,12 @@ const TOOLS = [
     },
     handler: getOutcome,
   },
+  {
+    name: "list_tool_proposals",
+    description: "List a project's pending tool-birth proposals (deterministic procedures crystallized from repeated runs — gated and NEVER auto-born) plus the registered, callable self-built tools. Read-only: it routes the founder to a decision and does NOT approve or birth anything; birth is a founder action in the dashboard. Defaults to the active project.",
+    inputSchema: { type: "object", properties: { projectId: { type: "string", description: "Optional. Defaults to the active project." } }, required: [] },
+    handler: listToolProposals,
+  },
 
   // ── Channels ───────────────────────────────────────────────────────────────
   {
@@ -495,19 +499,6 @@ const TOOLS = [
       required: ["workflowId"],
     },
     handler: updateWorkflow,
-  },
-  {
-    name: "request_workflow_change",
-    description: "Disabled by design: this surface cannot edit a workflow graph directly. It returns guidance to start_operator_session and propose_graph_changes so the founder reviews a preview first. Use update_workflow for metadata; this tool never mutates the graph.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        workflowId: WORKFLOW_ID,
-        command: { type: "string", description: "Natural-language description of the desired graph change." },
-      },
-      required: ["workflowId", "command"],
-    },
-    handler: requestWorkflowChange,
   },
 
   // ── Workflows — read ───────────────────────────────────────────────────────
@@ -765,19 +756,6 @@ const TOOLS = [
       required: ["channelId", "nodeId"],
     },
     handler: approveGate,
-  },
-  {
-    name: "mutate_channel",
-    description: "Backward-compatible alias for request_workflow_change (disabled direct-edit path).",
-    inputSchema: {
-      type: "object",
-      properties: {
-        channelId: { type: "string", description: "Workflow id." },
-        command: { type: "string", description: "Natural-language graph change." },
-      },
-      required: ["channelId", "command"],
-    },
-    handler: requestWorkflowChange,
   },
 ];
 

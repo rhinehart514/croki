@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Diagram directions</title>
+<style>
+  :root{
+    --bg:#0a0a0c; --ink:#ededf0; --muted:#8c8c96; --faint:#55555f;
+    --amber:#f3b14b; --cyan:#46c6d8;
+    --mono: ui-monospace,"SF Mono",Menlo,monospace;
+    --sans: system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);padding:30px 40px 60px}
+  .head{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:2px}
+  h1{font-size:20px;font-weight:600;margin:0 0 26px}
+  .card{background:#101013;border:1px solid #1f1f25;border-radius:16px;padding:22px 26px 8px;margin-bottom:22px}
+  .label{display:flex;align-items:baseline;gap:12px;margin-bottom:4px}
+  .tag{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#0a0a0c;background:var(--cyan);border-radius:5px;padding:3px 7px}
+  .name{font-size:17px;font-weight:600}
+  .gloss{font-size:12.5px;color:var(--muted);max-width:760px;line-height:1.55;margin:0 0 6px}
+  .gloss b{color:var(--ink);font-weight:600}
+  .verdict{font-family:var(--mono);font-size:11px;color:var(--faint);margin:2px 0 6px}
+  .verdict .good{color:#7fce9c} .verdict .bad{color:#d98a6a}
+  svg{display:block;overflow:visible}
+  text{font-family:var(--mono)}
+  .nl{font-family:var(--sans);font-weight:600;fill:var(--ink)}
+  .ns{fill:var(--muted)}
+</style>
+</head>
+<body>
+<div class="head">diagram language study · three organizing axes</div>
+<h1>Same living pipeline, three ways to draw it</h1>
+
+<defs style="display:none"></defs>
+<svg width="0" height="0"><defs>
+  <linearGradient id="live" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#6e5cff"/><stop offset=".4" stop-color="#46c6d8"/>
+    <stop offset=".75" stop-color="#54d6a0"/><stop offset="1" stop-color="#9ee06a"/>
+  </linearGradient>
+  <linearGradient id="liveV" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#6e5cff"/><stop offset="1" stop-color="#54d6a0"/>
+  </linearGradient>
+</defs></svg>
+
+<!-- ============ A · RIVER ============ -->
+<div class="card">
+  <div class="label"><span class="tag">A</span><span class="name">River — flow is a volume of people</span></div>
+  <p class="gloss">The pipeline is one stream of real people. <b>Width = how many are flowing</b>, so conviction is literal: the spine is a fat channel, a fresh experiment is a trickle, a dead branch is a dried bed tapering to nothing. You <i>watch</i> the river redistribute as a bet wins. Switches are forks; the amber gate is a band the whole river crosses before it pools into an outcome.</p>
+  <div class="verdict"><span class="good">best:</span> volume + growth are felt viscerally · <span class="bad">weak:</span> exact step logic gets fuzzy at a fork</div>
+  <svg width="1120" height="300" viewBox="0 0 1120 300">
+    <!-- source stream -->
+    <path d="M30,128 C120,128 150,128 230,128 L230,184 C150,184 120,184 30,184 Z" fill="#2a2a32"/>
+    <text class="nl" x="44" y="160" font-size="12">signals</text>
+    <!-- community tributary joining from top -->
+    <path d="M150,40 C150,90 200,96 230,128 L230,150 C190,120 150,118 150,72 Z" fill="#23232a"/>
+    <text x="120" y="36" font-size="10" class="ns">community</text>
+    <!-- combined channel to switch -->
+    <path d="M230,118 C320,118 360,116 430,114 L430,196 C360,194 320,192 230,194 Z" fill="#30303a"/>
+    <!-- FORK at x430 -->
+    <!-- spine (fat, live rainbow) -->
+    <path d="M430,120 C540,122 560,132 660,138 L660,196 C560,192 540,190 430,190 Z" fill="url(#live)" opacity="0.92"/>
+    <path d="M660,138 C740,138 760,140 820,140 L820,196 C760,196 740,196 660,196 Z" fill="url(#live)" opacity="0.92"/>
+    <!-- experiment trickle splitting up -->
+    <path d="M430,118 C520,110 560,84 640,72 L640,86 C560,98 520,120 430,128 Z" fill="#46c6d8" opacity="0.8"/>
+    <text x="648" y="70" font-size="10" fill="#7fd8e4">linkedin · 8.1%</text>
+    <!-- dried tributary (retired) -->
+    <path d="M260,205 C320,220 360,222 392,222 L392,228 C360,230 320,232 260,224 Z" fill="#26262c" opacity="0.7"/>
+    <text x="300" y="248" font-size="9.5" fill="var(--faint)">⤺ twitter (dry)</text>
+    <!-- amber gate band -->
+    <rect x="820" y="96" width="26" height="150" rx="6" fill="#f3b14b" opacity="0.16"/>
+    <rect x="820" y="96" width="26" height="150" rx="6" fill="none" stroke="var(--amber)" stroke-opacity=".8"/>
+    <text x="824" y="86" font-size="9.5" fill="var(--amber)">⏸ gate</text>
+    <!-- post-gate to pool -->
+    <path d="M846,150 C900,150 920,150 980,150 L980,190 C920,190 900,190 846,196 Z" fill="#54d6a0" opacity="0.7"/>
+    <!-- outcome pool -->
+    <ellipse cx="1035" cy="168" rx="48" ry="34" fill="#13251c" stroke="#54d6a0" stroke-opacity=".6"/>
+    <text x="1035" y="166" font-size="11" fill="#9ee0b4" text-anchor="middle">booked</text>
+    <text x="1035" y="180" font-size="9.5" fill="#6fae86" text-anchor="middle">14 calls</text>
+    <!-- switch glyph marker -->
+    <circle cx="430" cy="156" r="6" fill="#0a0a0c" stroke="var(--cyan)"/>
+    <text x="412" y="280" font-size="9.5" fill="#7fd8e4">⑂ reply intent?</text>
+  </svg>
+</div>
+
+<!-- ============ B · TRANSIT ============ -->
+<div class="card">
+  <div class="label"><span class="tag">B</span><span class="name">Transit — channels are lines, steps are stops</span></div>
+  <p class="gloss">Borrow the one diagram humans already read at huge complexity: the subway map. Each <b>channel is a colored line</b>, each step a stop, and <b>switches are interchange stations</b> where lines meet and logic routes you. A live experiment is a dashed “under construction” extension; a retired step is a hollow closed station. Scales to dozens of channels without ever becoming a hairball — that’s the whole reason transit maps exist.</p>
+  <div class="verdict"><span class="good">best:</span> legible at extreme scale, iconic · <span class="bad">weak:</span> volume + “happening now” are harder to feel</div>
+  <svg width="1120" height="250" viewBox="0 0 1120 250">
+    <!-- spine line (rainbow, bold) -->
+    <path d="M40,150 L420,150" stroke="url(#live)" stroke-width="9" stroke-linecap="round"/>
+    <path d="M420,150 L760,110" stroke="url(#live)" stroke-width="9" stroke-linecap="round"/>
+    <path d="M760,110 L1000,110" stroke="url(#live)" stroke-width="9" stroke-linecap="round"/>
+    <!-- community line joining at interchange (white) -->
+    <path d="M120,60 L300,60 L420,150" stroke="#cfcfd6" stroke-width="6" stroke-linecap="round" fill="none" opacity="0.8"/>
+    <!-- experiment extension (dashed under construction) -->
+    <path d="M420,150 L700,210" stroke="#46c6d8" stroke-width="5" stroke-dasharray="2 6" stroke-linecap="round"/>
+    <!-- stops helper -->
+    <g font-size="10">
+      <!-- spine stops -->
+      <circle cx="40" cy="150" r="7" fill="#0a0a0c" stroke="#9ee06a" stroke-width="3"/><text x="26" y="178" class="ns">signal</text>
+      <circle cx="230" cy="150" r="7" fill="#0a0a0c" stroke="#54d6a0" stroke-width="3"/><text x="206" y="178" class="ns">enrich</text>
+      <!-- interchange (switch) -->
+      <circle cx="420" cy="150" r="11" fill="#0a0a0c" stroke="var(--cyan)" stroke-width="3"/>
+      <circle cx="420" cy="150" r="4.5" fill="var(--cyan)"/>
+      <text x="398" y="182" fill="#7fd8e4">⑂ reply intent?</text>
+      <circle cx="600" cy="129" r="7" fill="#0a0a0c" stroke="#54d6a0" stroke-width="3"/><text x="578" y="118" class="ns">draft</text>
+      <!-- amber gate station -->
+      <rect x="750" y="100" width="20" height="20" rx="4" fill="#241a08" stroke="var(--amber)" stroke-width="2.5"/>
+      <text x="734" y="96" fill="var(--amber)">⏸ gate</text>
+      <!-- outcome terminus -->
+      <circle cx="1000" cy="110" r="9" fill="#13251c" stroke="#54d6a0" stroke-width="3"/><text x="980" y="138" fill="#9ee0b4">booked</text>
+      <!-- community stops -->
+      <circle cx="120" cy="60" r="6" fill="#0a0a0c" stroke="#cfcfd6" stroke-width="2.5"/><text x="98" y="48" class="ns">repo star</text>
+      <circle cx="300" cy="60" r="6" fill="#0a0a0c" stroke="#cfcfd6" stroke-width="2.5"/><text x="286" y="48" class="ns">vouch</text>
+      <!-- experiment stop (hollow, building) -->
+      <circle cx="560" cy="180" r="6" fill="#0a0a0c" stroke="#46c6d8" stroke-width="2" stroke-dasharray="2 2"/><text x="540" y="202" fill="#6fa6b0">linkedin</text>
+      <circle cx="700" cy="210" r="7" fill="#0a0a0c" stroke="#46c6d8" stroke-width="2" stroke-dasharray="2 2"/><text x="678" y="232" fill="#6fa6b0">8.1% · watching</text>
+      <!-- retired closed station -->
+      <circle cx="230" cy="150" r="7"/><!-- placeholder -->
+    </g>
+    <!-- closed/retired station off the enrich stop -->
+    <circle cx="230" cy="205" r="6" fill="#0a0a0c" stroke="#33333b" stroke-width="2"/>
+    <line x1="230" y1="150" x2="230" y2="199" stroke="#26262c" stroke-width="2" stroke-dasharray="2 4"/>
+    <text x="244" y="209" font-size="9.5" fill="var(--faint)">twitter (closed)</text>
+  </svg>
+</div>
+
+<!-- ============ C · TIMELINE ============ -->
+<div class="card">
+  <div class="label"><span class="tag">C</span><span class="name">Timeline — the x-axis is time, the program grows on it</span></div>
+  <p class="gloss">Don’t lay it out by topology at all — lay it out by <b>when</b>. The spine is a thick track running across the weeks. Every experiment is a branch that <b>lifts off the spine the week you added it</b>, runs in parallel, then either <b>merges back in (promoted — and the spine thickens)</b> or ends in a dot (killed). The strategist’s promote/prune calls become events on the line. This draws the thing you actually said: GTM grows by adding and experimenting, over and over.</p>
+  <div class="verdict"><span class="good">best:</span> shows the living/accreting nature directly, scrubbable history · <span class="bad">weak:</span> current-state topology is implicit, not the focus</div>
+  <svg width="1120" height="250" viewBox="0 0 1120 250">
+    <!-- time axis -->
+    <line x1="40" y1="220" x2="1080" y2="220" stroke="#26262c"/>
+    <g font-size="9.5" fill="var(--faint)">
+      <text x="40" y="238">wk 1</text><text x="300" y="238">wk 4</text>
+      <text x="560" y="238">wk 8</text><text x="820" y="238">wk 11</text>
+      <text x="1020" y="238" fill="var(--cyan)">now</text>
+    </g>
+    <!-- spine track, thickens after a promotion at wk8 -->
+    <path d="M40,130 L560,130" stroke="#cfcfd6" stroke-width="6" stroke-linecap="round" opacity="0.6"/>
+    <path d="M560,130 L1040,130" stroke="url(#live)" stroke-width="12" stroke-linecap="round"/>
+    <text x="40" y="118" font-size="10" class="ns">email spine</text>
+    <!-- experiment 1: linkedin, lifts wk4, merges wk8 (promoted) -->
+    <path d="M300,130 C360,130 360,80 420,80 L520,80 C560,80 560,130 560,130" stroke="#46c6d8" stroke-width="4" fill="none"/>
+    <text x="356" y="72" font-size="9.5" fill="#7fd8e4">linkedin DM</text>
+    <circle cx="560" cy="130" r="5" fill="#9ee06a"/>
+    <text x="500" y="150" font-size="9" fill="#9ee06a">↑ promoted</text>
+    <!-- experiment 2: twitter, lifts wk4, dies wk7 (killed) -->
+    <path d="M300,130 C350,130 350,178 410,178 L470,178" stroke="#6a5b3a" stroke-width="3" fill="none"/>
+    <circle cx="470" cy="178" r="5" fill="none" stroke="#d98a6a" stroke-width="2"/>
+    <text x="370" y="196" font-size="9.5" fill="#a98a5a">twitter ✕ killed wk7</text>
+    <!-- experiment 3: webinar, lifts wk11, still live (dashed, in flight) -->
+    <path d="M820,130 C870,130 870,86 930,86 L1040,86" stroke="#46c6d8" stroke-width="4" stroke-dasharray="2 6" fill="none"/>
+    <text x="876" y="78" font-size="9.5" fill="#6fa6b0">webinar · d6 watching</text>
+    <!-- amber gate event marker on the spine -->
+    <rect x="980" y="120" width="18" height="20" rx="4" fill="#241a08" stroke="var(--amber)" stroke-width="2"/>
+    <text x="966" y="160" font-size="9" fill="var(--amber)">⏸ gate</text>
+    <!-- now marker -->
+    <line x1="1020" y1="40" x2="1020" y2="220" stroke="var(--cyan)" stroke-width="1" stroke-dasharray="2 4" opacity="0.5"/>
+  </svg>
+</div>
+
+</body>
+</html>

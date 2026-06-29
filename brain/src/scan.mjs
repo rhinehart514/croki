@@ -12,6 +12,7 @@ const SKIP_DIRS = new Set([
   ".vercel", ".audit", ".audit-screenshots", ".screens", ".design-shots",
   ".playwright-cli", ".venture", ".founder-os", "out", ".cache", "vendor",
   "__tests__", "__snapshots__", "test", "tests", "docs",
+  ".claude",
 ]);
 const CODE_EXT = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte"]);
 const MAX_BYTES = 500_000;

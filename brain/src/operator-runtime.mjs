@@ -32,10 +32,12 @@ import {
   getProjectWithChannels,
   listProjects,
   loadProject,
+  projectTeamId,
   setActiveWorkflow,
   updateChannel,
   updateSharedContext,
 } from "./project-store.mjs";
+import { canApprove, getMember, resolveCurrentUser } from "./team-store.mjs";
 import { composeOpportunityChannel, composePortfolioFromStudio } from "./workflow-composer.mjs";
 import {
   compareChannelRuns,
@@ -357,8 +359,38 @@ const TOOLS = [
     description: "Compose several inline channel specs toward ONE goal into a single branching, multi-gate portfolio graph the founder reviews together — the whole GTM system as one diagram. Re-asserts the founder gate on every execute path; never sends.",
     input_schema: {
       type: "object",
-      properties: { goal: { type: "string" } },
-      required: [],
+      properties: {
+        goal: { type: "string", description: "The single plain-language goal all the channels serve." },
+        channels: {
+          type: "array",
+          description: "The channels to compose toward the goal and union into one branching, multi-gate portfolio graph. At least one is required.",
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string", description: "The channel's name." },
+              objective: { type: "string", description: "What this channel is trying to achieve." },
+              kind: { type: "string" },
+              agents: {
+                type: "array",
+                description: "The agents that run this channel, each described inline.",
+                items: {
+                  type: "object",
+                  properties: {
+                    ref: { type: "string", description: "Short kebab-case handle for the agent." },
+                    role: { type: "string" },
+                    objective: { type: "string" },
+                    prompt: { type: "string" },
+                  },
+                },
+              },
+              input: { type: "object" },
+              output: { type: "object" },
+            },
+            required: ["title", "objective"],
+          },
+        },
+      },
+      required: ["channels"],
     },
   },
   {
@@ -530,6 +562,23 @@ const TOOLS = [
     input_schema: { type: "object", properties: {}, required: [] },
   },
   {
+    name: "compose_and_run",
+    description: "Autonomously drive a goal end-to-end in one move: compose the channel's workflow if this session has none yet (research/enrich/draft agents behind a founder gate), then run it through the step runtime until it reaches the shared founder gate. Use this when the founder hands a goal and wants the whole system built and run up to the gate without micromanaging each step. It never sends — it stops at the gate for a human release.",
+    input_schema: {
+      type: "object",
+      properties: {
+        goal: { type: "string", description: "The goal to build and run toward. Defaults to the session goal." },
+        title: { type: "string", description: "Optional channel name." },
+        agents: {
+          type: "array",
+          description: "Optional inline agent specs (ref/role/objective/prompt). Omit to let the composer design the agents.",
+          items: { type: "object" },
+        },
+      },
+      required: [],
+    },
+  },
+  {
     name: "inspect_run",
     description: "Inspect a persisted run. Omit runId to inspect the latest run.",
     input_schema: {
@@ -575,6 +624,31 @@ const TOOLS = [
     },
   },
 ];
+
+// The naked harness. The model the founder drives sees ONLY these tools: read the product (truth),
+// one build-and-run door (compose_and_run), the inspect/repair loop for a failed run, the founder-input
+// channel, and complete — plus the light shared-context (taste/memory) read+write. Everything else the
+// operator CAN do (programs, policies, the capability foundry, portfolio/channel CRUD, experiments,
+// product-model derivation) is removed from what the model can reach, so it builds and runs instead of
+// navigating an ontology. `executeOperatorTool` still routes every tool name, so direct API/MCP callers
+// and tests are unaffected — this only narrows what the autonomous model is offered. The wall (founder
+// gate) and taste (shared context) are the only constraints that remain on the model's hands.
+const NAKED_TOOL_NAMES = new Set([
+  "inspect_product",          // truth — read what the product actually is
+  "inspect_shared_context",   // taste/memory — ICP, positioning, what's been tried
+  "update_shared_context",    // record inferred taste/positioning rather than duplicating into graphs
+  "compose_and_run",          // THE move — design the work, build behind a gate, run to the gate
+  "inspect_graph",            // inspect/repair a failed run
+  "inspect_problems",
+  "inspect_run",
+  "propose_graph_changes",
+  "validate_graph",
+  "run_node",
+  "run_loop",
+  "request_founder_input",    // ask the founder only for a real, unsafe-to-infer decision
+  "complete",
+]);
+const NAKED_TOOLS = TOOLS.filter((t) => NAKED_TOOL_NAMES.has(t.name));
 
 function compactProduct(workspace) {
   if (!workspace) {
@@ -642,6 +716,10 @@ function summarizeNodeResult(node) {
     itemCount: Array.isArray(node.items) ? node.items.length : 0,
     error: node.error ?? null,
     meta: node.meta ?? null,
+    // Required-consult violations surfaced by graph.mjs at the gate: drafting/UI steps that skipped
+    // the founder's taste (and design) signal. Carried through so the operator and founder see the
+    // blocking issue at the gate instead of approving a draft as if it were grounded.
+    ...(node.consultBlocked ? { consultBlocked: true, consultViolations: node.consultViolations ?? [] } : {}),
     items: (node.items ?? []).slice(0, 12),
   };
 }
@@ -737,52 +815,111 @@ function systemPrompt(session, workspace, priorSessions = []) {
   const grounding = workspace
     ? `The active repository is ${workspace.repo}. The defined win event is "${workspace.outcome}".`
     : "No repository workspace is currently active. State that limitation before making product claims.";
-  return `You are the resident GTM operator inside GTM IDE.
-
-Your job is to advance an outcome program through the product's executable domain loop: founder outcome → agent needs → personalized agents → composed workflow → run → founder gate → feedback → evaluation → next agent version. Graph tools are lower-level repair tools, not the first vocabulary.
+  return `You are the go-to-market operator inside GTM IDE. A founder hands you a goal; you build the work and run it up to their approval gate. That is the whole job — there is no required setup, no program or policy or template to stand up first.
 
 Founder goal:
 ${session.goal}
 
-Grounding:
+What you can read (the product's truth — your claims come from here):
 ${grounding}
 
-Memory across sessions (what you have already worked on in this project — build on it, do not redo completed work):
+What you've already done in this project (build on it, don't redo it):
 ${renderPriorSessions(priorSessions)}
 
-Operating rules:
-- Begin by inspecting product truth, programs, and current problems unless a resumed session already contains that evidence.
-- For a new product or portfolio goal, inspect projects, then decide on the channel and the agents it needs before building.
-- For portfolio goals, inspect all outcome-program workflows and shared context before choosing where to work.
-- Do not invent a fixed channel catalog. Decide each channel and its agents from the real product and the goal in front of you.
-- Prefer inspect_program, create_program, derive_agent_needs, create_personalized_agents, compose_program_workflow, and run_program when the work is an outcome loop.
-- Build a channel directly: name the channel and its agents inline and call compose_channel, then run_program once a program exists. Use create_workflow for an explicitly requested blank motion you will shape with typed graph operations.
-- Keep product, positioning, ICP, founder taste, contacts, and outcomes in shared context rather than duplicating them into graphs.
-- Use propose_graph_changes for graph edits. Never invent a replacement graph or claim a change that the founder has not accepted.
-- Prefer running and observing over theorizing. Repair actual failures and rerun affected work.
-- Product claims must come from repository evidence or be labeled inferred or blind.
-- Never approve a gate. Never send, publish, deploy, charge, or alter an external system.
-- When run_program reaches a gate, the runtime pauses automatically for the founder.
-- Ask for founder input only when a consequential choice cannot be inferred safely.
-- Keep working until the goal is achieved, honestly blocked, or needs founder judgment.
-- Call complete when you are done.`;
+How you work:
+- One move does most of it: compose_and_run. Given the goal, it designs the agents and steps the goal needs (research, enrich, draft — whatever fits), builds the workflow behind a founder gate, and runs it to that gate. Reach for it first, not last.
+- Decide the approach freely from the real product and the goal in front of you. No fixed channel catalog, no ceremony. If the founder asks for several angles, lay them out in plain language first, then build the ones they pick.
+- The wall is absolute: nothing sends, publishes, deploys, or charges without the founder approving at the gate. You never approve a gate yourself. compose_and_run always stops at the gate.
+- Learn and match the founder's taste from what they've approved and rejected before; don't re-ask what you can infer.
+- Product claims come from the repository, or you label them inferred. Never invent traction, metrics, or facts.
+- Use the graph tools (inspect_graph, inspect_problems, propose_graph_changes, run_node, run_loop) only to inspect or repair an actual failed run — not as the opening vocabulary.
+- Ask the founder only for a real decision you cannot infer safely. Keep going until the work reaches the gate, is honestly blocked, or needs their judgment. Call complete when done.`;
 }
 
 function addEvent(session, event, options) {
   return saveOperatorSession(appendOperatorEvent(session, event), options);
 }
 
-async function executeGraphRun(session, { targetNodeId } = {}, options = {}) {
+// JOB 1 — the role-gated release. The gate connector already owns the WALL: nothing sends until a
+// human supplies an approve decision. This guard answers the separate question of WHO is allowed to
+// supply that decision when the gate is a shared team queue. Viewing (and commenting) is open to the
+// whole team; RELEASE (approve/send) requires a team-store role of owner or approver. A solo founder's
+// session has no team (teamId null → the founder's personal team) where the founder is the owner, so
+// the single-user path stays exactly as before: the founder always passes.
+//
+// Returns the resolved acting user so the caller can stamp the release event with who cleared it.
+function authorizeGateRelease(session, payload = {}, options = {}) {
+  // The team that owns this conversation: the session's stamped teamId, else the project's effective
+  // team (which resolves to the founder's personal team for a single-user project).
+  const teamId = session.teamId
+    || (session.projectId ? projectTeamId(session.projectId, options) : null)
+    || projectTeamId(null, options);
+  // The acting human: explicit payload.userId wins, else identity stamped on the request headers,
+  // else the local founder. Same resolver the team routes use, so the UI and the agent door agree.
+  const actor = resolveCurrentUser({
+    ...options,
+    userId: payload.userId,
+    request: payload.request ?? options.request,
+    headers: payload.headers ?? options.headers,
+  });
+  if (!canApprove(teamId, actor.userId, options)) {
+    const member = getMember(teamId, actor.userId, options);
+    const role = member?.role ?? "non-member";
+    const error = new Error(
+      `${actor.name} (${role}) cannot release this send. Only a team owner or approver may clear the founder gate. Others can view and comment.`,
+    );
+    error.code = "gate_release_forbidden";
+    error.status = 403;
+    error.teamId = teamId;
+    error.userId = actor.userId;
+    throw error;
+  }
+  return { actor, teamId };
+}
+
+async function executeGraphRun(session, { targetNodeId, stream = false } = {}, options = {}) {
   const flow = flowFor(session, options);
+  // When streaming is on (the autonomous compose_and_run drive), surface each step as it executes —
+  // "running node X", "drafted N items", "reached the gate" — onto the durable session events so the
+  // UI can animate progress instead of seeing one batch at the end. The events are persisted through
+  // saveOperatorSession (mutating the local `session` ref), the same mechanism every other event uses.
+  let live = session;
+  const onEvent = stream
+    ? (event) => {
+        if (event.type === "node_start") {
+          live = addEvent(live, {
+            type: "operator_node_start",
+            title: `Running ${event.label || event.nodeId}`,
+            detail: `${event.kind || "tool"} · ${event.category}`,
+            data: { nodeId: event.nodeId, category: event.category, kind: event.kind },
+          }, options);
+        } else if (event.type === "node_done") {
+          const r = event.result ?? {};
+          const count = Array.isArray(r.items) ? r.items.length : 0;
+          live = addEvent(live, {
+            type: r.pendingReview ? "operator_reached_gate" : "operator_node_done",
+            title: r.pendingReview
+              ? `Reached the founder gate · ${count} item${count === 1 ? "" : "s"} awaiting release`
+              : `${r.category === "gate" ? "Gate" : r.category === "generate" || r.kind === "agent" ? "Drafted" : "Completed"} ${event.nodeId} · ${count} item${count === 1 ? "" : "s"}`,
+            detail: r.ok === false ? (r.error ?? "Step failed.") : null,
+            data: { nodeId: event.nodeId, ok: r.ok, itemCount: count, pendingReview: r.pendingReview ?? false },
+          }, options);
+        }
+      }
+    : null;
   const result = await runGraph(flow.graph, {
     targetNodeId,
     memory: memoryFor(flow.runs, options),
     designState: designStateFor(session, options),
-    stepRuntime: liveStepRuntime({ cwd: options.cwd }),
+    // The live subscription-backed step runtime by default; a test injects a fake through
+    // options.stepRuntime so the open agent/skill/code steps run keyless.
+    stepRuntime: options.stepRuntime || liveStepRuntime({ cwd: options.cwd }),
     loadLastRunItems: createDerivedSourceLoader({ ...options, projectId: session.projectId || "default" }),
+    onEvent,
   });
+  if (stream) session = live;
   const stored = recordFlowRun(flow.graph, result, options);
-  recordFeedbackSignalsFromRun({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
+  const feedback = recordFeedbackSignalsFromRun({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
   promoteEntrantsFromRun({ projectId: session.projectId || "default", channelId: flow.graph.id, result }, options);
   let next = {
     ...session,
@@ -801,6 +938,9 @@ async function executeGraphRun(session, { targetNodeId } = {}, options = {}) {
       targetNodeId: targetNodeId ?? null,
       pendingGates: result.pendingGates,
       storedRunCount: stored.runs.length,
+      // Crystallized, gated tool-birth proposals — the operator surfaces them to route the founder
+      // to the dashboard approval (it never approves; birth is a founder action). LIST only.
+      toolBirthProposals: feedback?.toolBirthProposals ?? [],
     },
   }, options);
   if (result.pendingGates.length) {
@@ -1418,7 +1558,63 @@ async function executeTool(session, tool, options = {}) {
   }
 
   if (tool.name === "run_loop") {
-    const run = await executeGraphRun(session, {}, options);
+    const run = await executeGraphRun(session, { stream: true }, options);
+    return { session: run.session, result: summarizeRun(run.result), pause: run.session.status === "waiting_for_gate" };
+  }
+
+  // JOB 2 — the autonomous drive. One move: compose the workflow for the goal if this session has no
+  // graph yet, then run it to the shared founder gate, streaming each step onto the session events.
+  // It never sends — the run stops at the gate for an authorized human release (JOB 1). This is the
+  // operator COMPOSING and DRIVING a goal end-to-end in a single pass.
+  if (tool.name === "compose_and_run") {
+    const goal = firstNonEmpty(input.goal, session.goal);
+    let working = session;
+
+    // Compose only when this session has no executable graph yet — otherwise drive the one it has.
+    if (!working.graphId) {
+      working = addEvent(working, {
+        type: "operator_composing",
+        title: "Composing the workflow",
+        detail: `Designing the channel for: ${goal}`,
+        data: { goal },
+      }, options);
+      const composeRepo = options.cwd || loadProject(options).sharedContext?.repository?.repo || process.cwd();
+      const composed = await composeOpportunityChannel({
+        title: firstNonEmpty(input.title, goal),
+        objective: goal,
+        agents: Array.isArray(input.agents) ? input.agents : [],
+      }, {
+        ...options,
+        compose: options.compose || createClaudeComposer({ cwd: composeRepo }),
+        evaluate: options.evaluate || createClaudeEvaluator({ cwd: composeRepo }),
+      });
+      working = addEvent({
+        ...working,
+        graphId: composed.channel.graphId,
+        graphRevision: composed.graph.revision,
+        programId: composed.program?.id ?? working.programId,
+      }, {
+        type: "operator_workflow_composed",
+        title: `Composed ${composed.channel.name}`,
+        detail: `${composed.graph.nodes.length} steps with a founder gate — ready to run to the gate.`,
+        data: { channelId: composed.channel.id, graphId: composed.channel.graphId, nodes: composed.graph.nodes.length },
+      }, options);
+    } else {
+      working = addEvent(working, {
+        type: "operator_composing",
+        title: "Driving the existing workflow",
+        detail: "This session already has a composed workflow — running it to the gate.",
+        data: { graphId: working.graphId },
+      }, options);
+    }
+
+    working = addEvent(working, {
+      type: "operator_running",
+      title: "Running the workflow to the gate",
+      detail: "Research, enrich, and draft steps run; the run stops at the shared founder gate.",
+    }, options);
+
+    const run = await executeGraphRun(working, { stream: true }, options);
     return { session: run.session, result: summarizeRun(run.result), pause: run.session.status === "waiting_for_gate" };
   }
 
@@ -1561,7 +1757,9 @@ export async function runOperatorSession(id, runtime = {}) {
     goal: session.goal,
     model: session.model,
     system: systemPrompt(session, workspace, recallPriorSessions(session, options)),
-    tools: TOOLS,
+    // The model is handed ONLY the naked toolset (truth + compose_and_run + repair loop + gate + chat).
+    // executeOperatorTool below still routes every tool name for direct API/MCP callers and tests.
+    tools: NAKED_TOOLS,
     client: selection.client ?? null,
     query: runtime.query ?? null,
     options,
@@ -1705,6 +1903,10 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
   if (session.status !== "waiting_for_gate" || !session.pendingGate?.runResult) {
     throw new Error("This operator session is not waiting at a founder gate.");
   }
+  // Role-gated release: resolving a founder gate IS the act of releasing a send, so only an authorized
+  // team member (owner/approver) may do it. Throws gate_release_forbidden (403) for a viewer/member.
+  // The wall in the gate connector is unchanged; this only guards who may stand at it.
+  const { actor: releasedBy } = authorizeGateRelease(session, payload, options);
   if (session.pendingGate.programId) {
     const project = loadProject(options);
     const run = await runProgram(session.pendingGate.programId, {
@@ -1741,6 +1943,7 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
         programStatus: run.programStatus,
         feedbackSignals: run.feedback.signals.length,
         nextVersions: run.nextVersions.length,
+        releasedBy: { userId: releasedBy.userId, name: releasedBy.name },
       },
     }, options);
     if (session.status === "ready") launchOperatorSession(session.id, runtime);
@@ -1755,9 +1958,13 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
     resumeResult: session.pendingGate.runResult,
     stepRuntime: liveStepRuntime({ cwd: options.cwd }),
     loadLastRunItems: createDerivedSourceLoader({ ...options, projectId: session.projectId || "default" }),
+    // Defense-in-depth at the gate point: re-assert authority inside the runner before any approval is
+    // applied. authorizeGateRelease already passed above (or this code is unreachable); re-running it
+    // here means the wall holds even if a future caller wires runGraph approvals without the front guard.
+    authorizeRelease: () => authorizeGateRelease(session, payload, options),
   });
   recordFlowRun(flow.graph, result, options);
-  recordFeedbackSignalsFromRun({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
+  const feedback = recordFeedbackSignalsFromRun({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
   promoteEntrantsFromRun({ projectId: session.projectId || "default", channelId: flow.graph.id, result }, options);
   session = addEvent({
     ...session,
@@ -1779,7 +1986,12 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
     detail: result.pendingGates.length
       ? `${result.pendingGates.length} gate${result.pendingGates.length === 1 ? "" : "s"} still contain undecided items.`
       : "The exact reviewed artifacts continued downstream without rerunning upstream work.",
-    data: { runId: result.runId, pendingGates: result.pendingGates },
+    data: {
+      runId: result.runId,
+      pendingGates: result.pendingGates,
+      releasedBy: { userId: releasedBy.userId, name: releasedBy.name },
+      toolBirthProposals: feedback?.toolBirthProposals ?? [],
+    },
   }, options);
   if (!result.pendingGates.length) launchOperatorSession(id, runtime);
   return session;

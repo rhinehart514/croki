@@ -173,7 +173,7 @@ describe("resident GTM operator runtime", () => {
         drive: async (ctx) => { captured = ctx.system; return { kind: "completed", summary: "noted" }; },
       },
     });
-    assert.match(captured, /Memory across sessions/, "the system prompt carries a cross-session memory block");
+    assert.match(captured, /already done in this project/, "the system prompt carries a cross-session memory block");
     assert.match(captured, /Stand up the pest-control outbound channel/, "it recalls the prior session's goal");
     assert.match(captured, /staged the first drafts/, "it recalls the prior session's outcome summary");
 

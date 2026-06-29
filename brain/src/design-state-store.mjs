@@ -16,11 +16,11 @@
 // Persistence uses the shared store-fs primitives (atomicWrite into ~/.gtm-ide/design-state/<id>.json),
 // the lighter snapshot convention — DesignState is founder taste, not an event-sourced aggregate.
 
-import path from "node:path";
-import fs from "node:fs";
-import { storeRoot, safeId, atomicWrite, now } from "./store-fs.mjs";
+import { safeId, now } from "./store-fs.mjs";
+import { persistence } from "./persistence.mjs";
 
 const SCHEMA_VERSION = 1;
+const COLLECTION = "design-state";
 
 // The cross-front-end dimensions. Design taste is not just "visual" — it shapes structure (IA),
 // component register, motion, and copy. Every front-end task reads the same five.
@@ -31,8 +31,8 @@ const DIMENSION_LABELS = {
   visual: "Visual", ia: "IA", components: "Components", motion: "Motion", copy: "Copy",
 };
 
-function fileFor(projectId, options = {}) {
-  return path.join(storeRoot(options), "design-state", `${safeId(projectId || "default")}.json`);
+function keyFor(projectId) {
+  return safeId(projectId || "default");
 }
 
 // The global house style, seeded from ~/.agents/global/DESIGN-TASTE.md ("Warm Calm"). This is the
@@ -143,7 +143,7 @@ export function buildDesignState({ projectId, houseStyle, feeling, dimensions, r
 
 export function saveDesignState(state, options = {}) {
   const normalized = normalizeDesignState({ ...state, updatedAt: now() }, options);
-  atomicWrite(fileFor(normalized.projectId, options), normalized);
+  persistence(options).set(COLLECTION, keyFor(normalized.projectId), normalized);
   return normalized;
 }
 
@@ -151,10 +151,10 @@ export function saveDesignState(state, options = {}) {
 // every front-end task has the founder's default direction from day one (the floor), even before
 // a single project-specific reference is added.
 export function getDesignState(projectId, options = {}) {
-  const file = fileFor(projectId, options);
-  if (!fs.existsSync(file)) return buildDesignState({ projectId }, options);
+  const stored = persistence(options).get(COLLECTION, keyFor(projectId));
+  if (!stored) return buildDesignState({ projectId }, options);
   try {
-    return normalizeDesignState(JSON.parse(fs.readFileSync(file, "utf8")), { projectId });
+    return normalizeDesignState(stored, { projectId });
   } catch {
     return buildDesignState({ projectId }, options);
   }

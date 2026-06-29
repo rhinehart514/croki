@@ -1,9 +1,8 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { persistence } from "./persistence.mjs";
 
 const SCHEMA_VERSION = 1;
+const COLLECTION = "operator-sessions";
 
 // The statuses that close a session for good — it becomes reopenable history, never the dock's live
 // thread. Everything else (ready, running, waiting_*, interrupted, blocked, failed) is a session the
@@ -19,31 +18,8 @@ function now() {
   return new Date().toISOString();
 }
 
-function root(options = {}) {
-  return options.root || process.env.GTM_IDE_HOME || path.join(os.homedir(), ".gtm-ide");
-}
-
-function sessionsDir(options = {}) {
-  return path.join(root(options), "operator-sessions");
-}
-
 function safeId(value) {
   return String(value || "").replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 100);
-}
-
-function sessionFile(id, options = {}) {
-  return path.join(sessionsDir(options), `${safeId(id)}.json`);
-}
-
-function writeJson(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const temporary = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`);
-  fs.renameSync(temporary, file);
-}
-
-function readJson(file) {
-  return JSON.parse(fs.readFileSync(file, "utf8"));
 }
 
 export function appendOperatorEvent(session, event) {
@@ -77,6 +53,10 @@ export function createOperatorSession(input, options = {}) {
     // of guessing the newest one.
     programId: input.programId || null,
     projectId: input.projectId || null,
+    // The team that owns this session, optional and backward-compatible. Null for a solo founder's
+    // local session (a team of one), set when the project is owned by a real multi-member team so the
+    // Convex sync layer can attribute the conversation. Never gates anything on its own.
+    teamId: input.teamId || null,
     workspaceId: input.workspaceId || null,
     model: input.model || process.env.GTM_IDE_OPERATOR_MODEL || "claude-sonnet-4-6",
     runtime: null,
@@ -104,57 +84,53 @@ export function createOperatorSession(input, options = {}) {
     // covers the agent editing the graph too.
     pendingProposal: null,
     events: [],
-    modelMessages: [],
+    // Usually empty (the goal becomes the first prompt). The autonomous "give it a goal and go" door
+    // (/api/operator/go) seeds one priming user message so the first model turn reaches for
+    // compose_and_run and drives the goal to the gate without per-step micromanagement.
+    modelMessages: Array.isArray(input.modelMessages) ? input.modelMessages : [],
   };
   session = appendOperatorEvent(session, {
     type: "session_created",
     title: "Operator session created",
     detail: goal,
   });
-  writeJson(sessionFile(id, options), session);
+  persistence(options).set(COLLECTION, safeId(id), session);
   return session;
 }
 
 export function saveOperatorSession(session, options = {}) {
   const updated = { ...session, updatedAt: now() };
-  writeJson(sessionFile(updated.id, options), updated);
+  persistence(options).set(COLLECTION, safeId(updated.id), updated);
   return updated;
 }
 
 export function getOperatorSession(id, options = {}) {
-  const file = sessionFile(id, options);
-  if (!fs.existsSync(file)) throw new Error(`Operator session not found: ${id}`);
-  return readJson(file);
+  const session = persistence(options).get(COLLECTION, safeId(id));
+  if (!session) throw new Error(`Operator session not found: ${id}`);
+  return session;
 }
 
 export function listOperatorSessions(options = {}) {
-  const dir = sessionsDir(options);
-  if (!fs.existsSync(dir)) return [];
   // When a projectId is passed, scope the list to that project's sessions.
   // Legacy sessions written before project scoping have projectId === null and
   // surface only in the unscoped list.
   const projectFilter = options.projectId ?? null;
-  return fs.readdirSync(dir)
-    .filter((name) => name.endsWith(".json"))
-    .flatMap((name) => {
-      try {
-        const session = readJson(path.join(dir, name));
-        if (projectFilter && (session.projectId ?? null) !== projectFilter) return [];
-        return [{
-          id: session.id,
-          goal: session.goal,
-          graphId: session.graphId,
-          projectId: session.projectId ?? null,
-          workspaceId: session.workspaceId,
-          status: session.status,
-          createdAt: session.createdAt,
-          updatedAt: session.updatedAt,
-          summary: session.summary,
-          error: session.error,
-        }];
-      } catch {
-        return [];
-      }
+  return persistence(options).list(COLLECTION)
+    .flatMap((session) => {
+      if (!session || !session.id) return [];
+      if (projectFilter && (session.projectId ?? null) !== projectFilter) return [];
+      return [{
+        id: session.id,
+        goal: session.goal,
+        graphId: session.graphId,
+        projectId: session.projectId ?? null,
+        workspaceId: session.workspaceId,
+        status: session.status,
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+        summary: session.summary,
+        error: session.error,
+      }];
     })
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }

@@ -214,6 +214,28 @@
 }
 /* The quiet tier carries less detail — one line of objective so the card stays compact. */
 .engine-node:not(.focal) .engine-node-obj { -webkit-line-clamp: 1; }
+/* The "results back" strip — what the last run actually produced, landed on the channel tile in
+   the overview. Funnel-ordered chips; the count is the loud part, the verb the quiet label. Single
+   line so a calm tile stays compact; extra categories truncate rather than push the foot down. */
+.engine-node-produced {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  mask-image: linear-gradient(to right, #000 86%, transparent);
+  -webkit-mask-image: linear-gradient(to right, #000 86%, transparent);
+}
+.engine-produced-chip { flex: 0 0 auto; }
+.engine-produced-count {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-weight: 600;
+  color: var(--ink);
+}
+
 .engine-node-foot {
   margin-top: auto;
   display: flex;

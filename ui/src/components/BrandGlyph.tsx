@@ -1,5 +1,5 @@
 import { Plug } from "lucide-react";
-import { brandGlyph } from "@/lib/brandGlyph";
+import { useBrandGlyph } from "@/lib/brandGlyph";
 
 // The brand logo, drawn from the real service SVG. Monochrome (currentColor) by default so the
 // canvas stays calm (DESIGN.md: "color for meaning only"); pass `brand` to render the service's
@@ -8,7 +8,7 @@ import { brandGlyph } from "@/lib/brandGlyph";
 export function BrandGlyph({
   serverId, brand = false, size = 16,
 }: { serverId: string; brand?: boolean; size?: number }) {
-  const icon = brandGlyph(serverId);
+  const icon = useBrandGlyph(serverId);
   if (!icon) return <Plug width={size} height={size} aria-hidden />;
   return (
     <svg

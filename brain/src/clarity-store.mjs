@@ -1,7 +1,5 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { persistence } from "./persistence.mjs";
 
 // Clarity — the durable output of an Ideate thinking-posture conversation. A founder pins a thought
 // onto the canvas as one of four kinds: a claim, a direction, an icp, or an open question. It is real
@@ -22,33 +20,19 @@ function now() {
   return new Date().toISOString();
 }
 
-function root(options = {}) {
-  return options.root || process.env.GTM_IDE_HOME || path.join(os.homedir(), ".gtm-ide");
-}
-
 function safeId(value) {
   return String(value || "default").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "default";
 }
 
-function fileFor(projectId, options = {}) {
-  return path.join(root(options), "clarity", `${safeId(projectId)}.json`);
-}
-
-function write(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`);
-  fs.renameSync(tmp, file);
-}
+const COLLECTION = "clarity";
 
 function emptyStore(projectId) {
   return { schemaVersion: SCHEMA_VERSION, projectId, items: [] };
 }
 
 function loadStore(projectId, options = {}) {
-  const file = fileFor(projectId, options);
-  if (!fs.existsSync(file)) return emptyStore(projectId);
-  const stored = JSON.parse(fs.readFileSync(file, "utf8"));
+  const stored = persistence(options).get(COLLECTION, safeId(projectId));
+  if (!stored) return emptyStore(projectId);
   if (stored?.schemaVersion === SCHEMA_VERSION && Array.isArray(stored.items)) return stored;
   return {
     ...emptyStore(projectId),
@@ -64,7 +48,7 @@ function saveStore(store, options = {}) {
     schemaVersion: SCHEMA_VERSION,
     items: Array.isArray(store.items) ? store.items.slice(-MAX_CLARITY) : [],
   };
-  write(fileFor(durable.projectId, options), durable);
+  persistence(options).set(COLLECTION, safeId(durable.projectId), durable);
   return durable;
 }
 
@@ -98,6 +82,30 @@ export function addClarity(projectId = "default", input = {}, options = {}) {
   store.items.push(item);
   saveStore(store, options);
   return item;
+}
+
+// Shape the project's pinned clarity for injection into composer grounding. Returns null when the
+// founder has pinned nothing (so the caller can omit the section entirely rather than show an empty
+// label). Otherwise returns founder INPUT — real direction the founder pinned, NEVER seeded or
+// inferred — grouped by kind so the compose prompt can present it as explicit founder steering:
+// claims to honor, the ICP, directions to take, and open questions to respect. Notes ride along.
+// Doctrine: this is direction from the founder, not invented fact; the labels keep it honest.
+export function clarityGrounding(projectId = "default", options = {}) {
+  const items = loadClarity(projectId, options);
+  if (!items.length) return null;
+  const byKind = { claims: [], icp: [], directions: [], questions: [] };
+  const bucket = { claim: "claims", icp: "icp", direction: "directions", question: "questions" };
+  for (const item of items) {
+    const target = byKind[bucket[item.kind]];
+    if (!target) continue;
+    target.push(item.note ? `${item.text} (${item.note})` : item.text);
+  }
+  const grounding = { source: "founder-pinned-clarity" };
+  if (byKind.claims.length) grounding.claimsToHonor = byKind.claims;
+  if (byKind.icp.length) grounding.icp = byKind.icp;
+  if (byKind.directions.length) grounding.directions = byKind.directions;
+  if (byKind.questions.length) grounding.openQuestions = byKind.questions;
+  return grounding;
 }
 
 // Unpin a clarity object by id. Returns true when one was removed, false when the id was unknown.

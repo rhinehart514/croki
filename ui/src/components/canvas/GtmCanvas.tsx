@@ -1,24 +1,26 @@
 import { GraphCanvas, type OperatorCursorState } from "@/components/GraphCanvas";
 import type { NodeEditorBridge } from "@/components/ProgramCanvas";
 import { CanvasShell, type LensDef, type LensProps } from "@/components/canvas/CanvasShell";
-import { ObjectCard } from "@/components/lenses/shared";
 import { PeopleLens } from "@/components/lenses/PeopleLens";
 import { ExperimentMatrixLens } from "@/components/lenses/ExperimentMatrixLens";
 import { EngineLens } from "@/components/lenses/EngineLens";
 import type {
   ChannelFeed, ChannelMeta, Claim, ConnectorMeta, DirectedFeed, GateDecision, GtmExperiment, GTMContractAudit, GTMGraph, GTMNode,
-  GTMRunResult, NodeSelection, Person, ProductModelProvenance,
+  GTMRunResult, NodeSelection, Person,
 } from "@/types";
 
 // GtmCanvas — GTM mode's instance of the generic CanvasShell. It projects the GTM operational object
-// model through two lenses today:
+// model through these lenses:
 //   - "channel-flow" IS the existing GraphCanvas (one channel's Source → … → Gate → Measure). Single-
 //     channel behavior is unchanged — this lens just forwards the same prop bag App used to mount the
 //     bare GraphCanvas with.
-//   - "portfolio-map" draws every built channel as a tile (status + the shared ICP + the headline
-//     claim it inherits), replacing the swimlane OVERVIEW. Clicking a tile opens that channel's flow.
+//   - "engine" is the single GTM OVERVIEW: every built channel as a node in one network, the feeds
+//     between them, and the shared ICP/claim context header. The earlier separate "portfolio-map"
+//     tile grid was merged into this lens (its only unique value was the context header), so there is
+//     one overview altitude, not two near-identical ones.
+//   - "people" and "experiment-matrix" project the shared People and Experiment objects.
 //
-// Both lenses live in one shell so the founder switches altitude without leaving the surface. The
+// Every lens lives in one shell so the founder switches altitude without leaving the surface. The
 // shell's layoutId is "gtm-lens" — distinct from Product mode's "product-lens" so the SlidingTabs
 // pills never spring into each other across modes. The People and Experiment-matrix lenses, and
 // retiring the swimlane RENDERER inside GraphCanvas, wait for the Person backend (P10.3 steps 4–5).
@@ -137,91 +139,9 @@ function readable(value: unknown): string | null {
   return null;
 }
 
-// A channel's status → the verdict pill the tile carries. A failed or errored channel reads as a
-// guess (amber, off the solid ramp); anything else reads as grounded real state (green).
-function channelVerdict(ch: ChannelMeta): ProductModelProvenance {
-  if (ch.status === "error" || ch.lastRunOk === false) return "speculative";
-  return "derived";
-}
-
-const STATUS_LABEL: Record<ChannelMeta["status"], string> = {
-  idle: "idle",
-  error: "error",
-  done: "done",
-  waiting: "waiting at gate",
-};
-
-// ── portfolio-map: every built channel as a tile, the swimlane overview's replacement. ──
-function PortfolioMapLens({ model: m }: GtmLensProps) {
-  const tiles = m.channels.filter((ch) => ch.nodeCount > 0);
-  const icpLabel = readable(m.icp);
-  const claimLabel = readable(m.claims[0]);
-
-  // Overall health for the channel currently open, averaged from its real subsystem health. Only the
-  // active channel has live engine signal here, so other tiles read their status instead of a number.
-  const healthValues = Object.values(m.subsystemHealth).map((s) => s.health).filter((h) => typeof h === "number");
-  const activeHealth = healthValues.length
-    ? Math.round(healthValues.reduce((a, b) => a + b, 0) / healthValues.length)
-    : null;
-
-  if (!tiles.length) {
-    return (
-      <div className="canvas-empty">
-        <strong>No channels yet</strong>
-        <span>Build a channel and it shows up here as a tile in the portfolio.</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="portfolio-map">
-      {(icpLabel || claimLabel) && (
-        <div className="portfolio-head">
-          {icpLabel && (
-            <div className="portfolio-head-row">
-              <span className="portfolio-head-eyebrow">ICP</span>
-              <span className="portfolio-head-value">{icpLabel}</span>
-            </div>
-          )}
-          {claimLabel && (
-            <div className="portfolio-head-row">
-              <span className="portfolio-head-eyebrow">Claim</span>
-              <span className="portfolio-head-value">{claimLabel}</span>
-            </div>
-          )}
-        </div>
-      )}
-      <div className="portfolio-grid">
-        {tiles.map((ch) => {
-          const active = ch.id === m.activeChannelId;
-          const states = [{ id: "status", label: STATUS_LABEL[ch.status] }];
-          if (ch.pendingGates > 0) states.push({ id: "gates", label: `${ch.pendingGates} at gate` });
-          return (
-            <ObjectCard
-              key={ch.id}
-              kind="channel"
-              name={ch.name}
-              summary={ch.objective}
-              provenance={channelVerdict(ch)}
-              states={states}
-              hasSignal={ch.runCount > 0}
-              selected={active}
-              onSelect={() => m.onOpenChannel(ch.id)}
-              footer={
-                <div className="portfolio-tile-foot">
-                  <span>{ch.runCount} run{ch.runCount === 1 ? "" : "s"}</span>
-                  {active && activeHealth != null && <span>{activeHealth}% healthy</span>}
-                </div>
-              }
-            />
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ── engine: the whole go-to-market as one canvas — channels as nodes, feeds between them. ──
+// ── engine: the whole go-to-market as one canvas — channels as nodes, feeds between them, and the
+// shared ICP/claim context header folded in. The single GTM overview (the former portfolio-map tile
+// grid was merged in: its only unique value was this context header). ──
 function EngineLensWrapper({ model: m }: GtmLensProps) {
   return (
     <EngineLens
@@ -231,6 +151,8 @@ function EngineLensWrapper({ model: m }: GtmLensProps) {
       activeChannelId={m.activeChannelId}
       onDeriveChannel={m.onDeriveChannel}
       onOpenChannel={m.onOpenChannel}
+      icpLabel={readable(m.icp)}
+      claimLabel={readable(m.claims[0])}
     />
   );
 }
@@ -258,7 +180,6 @@ function ExperimentMatrixLensWrapper({ model: m, selected, onSelect }: GtmLensPr
 const LENSES: LensDef<GtmCanvasModel, never>[] = [
   { id: "channel-flow", label: "Channel flow", Component: ChannelFlowLens },
   { id: "engine", label: "Engine", Component: EngineLensWrapper },
-  { id: "portfolio-map", label: "Portfolio map", Component: PortfolioMapLens },
   { id: "people", label: "People", Component: PeopleLensWrapper },
   { id: "experiment-matrix", label: "Experiment matrix", Component: ExperimentMatrixLensWrapper },
 ];
@@ -267,13 +188,15 @@ const LENSES: LensDef<GtmCanvasModel, never>[] = [
 // (a non-component module) so this file only exports components and fast-refresh stays intact.
 
 export function GtmCanvas({
-  model, defaultLensId = "channel-flow", activeLensId, onLensChange, chromeless,
+  model, defaultLensId = "channel-flow", activeLensId, onLensChange, chromeless, onSelectObject,
 }: {
   model: GtmCanvasModel;
-  defaultLensId?: "channel-flow" | "portfolio-map" | "engine";
+  defaultLensId?: "channel-flow" | "engine";
   activeLensId?: string;
   onLensChange?: (id: string) => void;
   chromeless?: boolean;
+  // Bubble an object selection out (lens id + object id) so the host can open find-references.
+  onSelectObject?: (lensId: string, id: string) => void;
 }) {
   return (
     <CanvasShell<GtmCanvasModel, never>
@@ -286,6 +209,7 @@ export function GtmCanvas({
       activeLensId={activeLensId}
       onLensChange={onLensChange}
       chromeless={chromeless}
+      onSelectObject={onSelectObject}
     />
   );
 }

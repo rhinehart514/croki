@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { loadFlow } from "./flow-store.mjs";
+import { loadFlow, summarizeRunResult } from "./flow-store.mjs";
 import { getChannel, getProjectChannels, loadProject, updateSharedContext } from "./project-store.mjs";
 
 function canonical(value) {
@@ -82,18 +82,13 @@ export function compareChannelRuns(before, after) {
 
 function runStats(flow) {
   const last = flow.runs.at(-1) ?? null;
-  const nodes = last?.result?.nodes ?? {};
-  const counts = {};
-  for (const node of Object.values(nodes)) {
-    counts[node.category] = (counts[node.category] ?? 0) + (node.items?.length ?? 0);
-  }
   return {
     runCount: flow.runs.length,
     lastRunId: last?.id ?? null,
     lastRunAt: last?.createdAt ?? null,
     ok: last?.ok ?? null,
     pendingGates: last?.pendingGates?.length ?? 0,
-    counts,
+    counts: summarizeRunResult(last).byCategory,
   };
 }
 

@@ -24,16 +24,12 @@ export function safeId(value, fallback = "default") {
 }
 
 // Durable write: serialize to a per-process temp file, then atomically rename into place so a
-// crash mid-write can never leave a half-written store on disk.
+// crash mid-write can never leave a half-written store on disk. The team-sync mirror lives entirely in
+// convex-backend.mjs now (the single seam); this primitive is a pure local atomic write and does not
+// enqueue anything itself.
 export function atomicWrite(file, value) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`);
   fs.renameSync(tmp, file);
-  // Mirror to the team's Convex deployment when one is configured — write-behind, never blocking and
-  // never failing the local write. Lazy dynamic import so the local-only path never loads the sync
-  // layer (or the convex package) at all.
-  if (process.env.GTM_IDE_CONVEX_URL && process.env.GTM_IDE_TEAM_ID) {
-    import("./convex-sync.mjs").then((m) => m.enqueueDocument(file, value)).catch(() => {});
-  }
 }

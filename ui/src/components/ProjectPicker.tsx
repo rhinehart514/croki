@@ -33,9 +33,9 @@ export function ProjectPicker({
     <section className="project-picker" aria-labelledby="project-picker-title">
       <header className="project-picker-head">
         <div>
-          <span className="studio-eyebrow">Products</span>
-          <h1 id="project-picker-title">Choose the product you are taking to market</h1>
-          <p>Each product keeps its own code evidence, opportunities, agents, channels, and learning loop.</p>
+          <span className="studio-eyebrow">Your products</span>
+          <h1 id="project-picker-title">Choose the product you're taking to market</h1>
+          <p>Each product is a grounded codebase with its own channels, agents, and learning loop.</p>
         </div>
         <button className="studio-primary-action" onClick={() => onNewProduct ? onNewProduct() : setCreating(true)} type="button">
           <Plus /> Add product
@@ -56,8 +56,8 @@ export function ProjectPicker({
           }}
         >
           <div className="project-create-copy">
-            <strong>Add a repository-backed product</strong>
-            <span>The scan is read-only. The win event is the real outcome this product should create.</span>
+            <strong>Add a product</strong>
+            <span>Point it at the codebase. The scan is read-only. The win event is the real outcome this product should create.</span>
           </div>
           <label>
             Product name
@@ -99,16 +99,17 @@ export function ProjectPicker({
             onClick={() => void onOpen(project.id)}
             type="button"
           >
-            <span className="project-choice-icon"><FolderGit2 /></span>
-            <span className="project-choice-main">
-              <strong>{project.name}</strong>
-              <span>{project.repo || "Repository not connected"}</span>
-              <small>{project.headline || "No code understanding generated yet."}</small>
+            <span className="project-choice-top">
+              <span className="project-choice-icon"><FolderGit2 /></span>
+              <span className="project-choice-name">
+                <strong>{project.name}</strong>
+                {project.id === activeProjectId ? <em><Check /> Active</em> : null}
+              </span>
             </span>
+            <span className="project-choice-repo">{project.repo || "Code not connected yet"}</span>
+            <small className="project-choice-headline">{project.headline || "Not scanned yet — open to read its code."}</small>
             <span className="project-choice-meta">
-              <span>{project.channelCount} channels</span>
-              <span>{project.opportunityCount} opportunities</span>
-              {project.id === activeProjectId ? <em><Check /> Active</em> : null}
+              {project.channelCount} {project.channelCount === 1 ? "channel" : "channels"}
             </span>
           </button>
         ))}

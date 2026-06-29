@@ -48,6 +48,23 @@ export type ScanReport = {
   gaps: TrackingGap[];
 };
 
+// The lightweight preview the front-door scan returns: enough to SHOW a stranger what the product
+// learned about their code before they commit a goal. Separate from the full ScanReport (which the
+// durable workspace keeps) — this is the contract the /api/scan front door returns. Every field is
+// optional-tolerant: the preview degrades gracefully if the backend omits one.
+export type ScanPreview = {
+  headline?: string;
+  stack?: string[];
+  // The server returns the full structured win event (name/found/citations). The string
+  // form is the legacy front-door shape; ScanPreview.tsx tolerates both, so the type does too.
+  winEvent?: ScanReport["winEvent"] | string | null;
+  winEventEvidence?: Citation[];
+  blindAttribution?: { blind: boolean; reason?: string };
+  productLine?: string;
+  // The full unflattened scanRepo() output rides along for any field the lane also needs.
+  report?: ScanReport;
+};
+
 export type BuildResult = {
   ok: boolean; branch: string; worktree: string;
   baseCommit?: string;
@@ -167,6 +184,10 @@ export type ChannelMeta = {
   nodeCount: number;
   runCount: number;
   graphRevision: number;
+  // What the last run actually produced — the "results back" signal surfaced on the engine
+  // overview so produced items land next to the strategy that earned them. Null until first run;
+  // derived from real node output, never seeded.
+  lastRunResult: { produced: number; byCategory: Record<string, number> } | null;
 };
 
 // ─── ChannelFeed — two channels linked by the real entities they share ───────
@@ -529,7 +550,6 @@ export type ProjectSummary = {
   outcome: string | null;
   headline: string | null;
   channelCount: number;
-  opportunityCount: number;
   updatedAt: string;
 };
 
@@ -808,6 +828,43 @@ export type PortfolioSystem = {
   gateIds: string[];
 };
 
+// A pending tool-birth proposal — a repeated deterministic procedure crystallized from runs, gated and
+// never auto-born. The founder approves it (supplying code + a test) to register a callable self-built tool.
+export type ToolBirthProposal = {
+  id: string;
+  status: "pending" | "registered";
+  signature: string;
+  reason?: string;
+  count?: number;
+  sample?: unknown;
+  provenance?: string;
+  proposedAt?: string;
+  toolId?: string;
+  resolvedAt?: string;
+};
+
+// A registered, callable self-built tool — born only through an explicit founder approval at the gate.
+export type RegisteredTool = {
+  id: string;
+  name: string;
+  description: string;
+  code: string;
+  test: string;
+  signature?: string | null;
+  provenance?: string;
+  status: string;
+  proposedAt?: string;
+  decidedAt?: string;
+  decisionNote?: string;
+  sourceProposalId?: string;
+};
+
+export type ToolRegistryView = {
+  projectId: string;
+  pending: ToolBirthProposal[];
+  registered: RegisteredTool[];
+};
+
 export type GTMGraph = {
   id: string;
   name: string;
@@ -995,6 +1052,9 @@ export type OperatorSessionSummary = {
 export type OperatorSession = OperatorSessionSummary & {
   schemaVersion: number;
   programId?: string | null;
+  // The team that owns this session's gate. Release is authorized against this team (owner/approver
+  // may release; a member may not). Null/absent → the founder's personal space (solo founder releases).
+  teamId?: string | null;
   model: string;
   startedAt?: string | null;
   completedAt?: string | null;
@@ -1021,6 +1081,32 @@ export type OperatorSession = OperatorSessionSummary & {
     preview: GTMGraph;
   } | null;
   events: OperatorEvent[];
+};
+
+// ─── Team & identity types ────────────────────────────────────────────────────
+
+export type TeamRole = "owner" | "approver" | "member";
+
+export type TeamMember = {
+  userId: string;
+  name: string;
+  email: string | null;
+  role: TeamRole;
+};
+
+// The current user plus the teams they belong to (from /api/me). A personal team always exists.
+export type Me = {
+  user: { userId: string; name: string; email: string | null };
+  teams: Array<{ id: string; name: string; role: TeamRole; memberCount: number; updatedAt: string }>;
+};
+
+export type Team = {
+  id: string;
+  name: string;
+  members: TeamMember[];
+  createdAt: string;
+  updatedAt: string;
+  schemaVersion?: number;
 };
 
 // ─── Connector registry types ─────────────────────────────────────────────────

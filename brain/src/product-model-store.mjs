@@ -13,12 +13,11 @@
 // against the projection so the event log stays authoritative (DDD.md:125-127).
 
 import crypto from "node:crypto";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { rebuildProjectState } from "./program-projection.mjs";
+import { persistence } from "./persistence.mjs";
 
 const SCHEMA_VERSION = 1;
+const COLLECTION = "product-models";
 
 // The bags the founder may edit on a ProductModel. pinnedSignals is NOT here: signals arrive only
 // through RecordProductSignal (the founder edits the model; the world edits the signals).
@@ -41,10 +40,6 @@ function now() {
   return new Date().toISOString();
 }
 
-function root(options = {}) {
-  return options.root || process.env.GTM_IDE_HOME || path.join(os.homedir(), ".gtm-ide");
-}
-
 function safeId(value) {
   return String(value || "default").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "default";
 }
@@ -53,15 +48,8 @@ function slug(value) {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 54);
 }
 
-function fileFor(projectId, options = {}) {
-  return path.join(root(options), "product-models", `${safeId(projectId || "default")}.json`);
-}
-
-function write(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`);
-  fs.renameSync(tmp, file);
+function keyFor(projectId) {
+  return safeId(projectId || "default");
 }
 
 function emptyStore(projectId) {
@@ -299,9 +287,8 @@ export function buildProductModel(input = {}, options = {}) {
 }
 
 export function loadProductModelStore(projectId = "default", options = {}) {
-  const file = fileFor(projectId, options);
-  if (!fs.existsSync(file)) return emptyStore(projectId);
-  const stored = JSON.parse(fs.readFileSync(file, "utf8"));
+  const stored = persistence(options).get(COLLECTION, keyFor(projectId));
+  if (!stored) return emptyStore(projectId);
   return {
     ...emptyStore(projectId),
     ...stored,
@@ -316,7 +303,7 @@ export function saveProductModelStore(store, options = {}) {
     schemaVersion: SCHEMA_VERSION,
     productModels: Array.isArray(store.productModels) ? store.productModels : [],
   };
-  write(fileFor(durable.projectId, options), durable);
+  persistence(options).set(COLLECTION, keyFor(durable.projectId), durable);
   return durable;
 }
 

@@ -1,11 +1,14 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { channelIdFor, cloneChannelGraph, createBlankChannelGraph } from "./channel-graph.mjs";
-import { loadFlow, saveFlow } from "./flow-store.mjs";
+import { persistence, storeRoot, PROJECT_COLLECTION, PROJECT_KEY } from "./persistence.mjs";
+// Side-effect import: arms the SQLite auto-migration boot hook (registerAutoMigrator) so a fresh,
+// empty DB imports any legacy ~/.gtm-ide JSON the first time a provider opens it. project-store is on
+// every boot path, so importing the migrator here guarantees the hook is live before the first open.
+import "./migrate-to-sqlite.mjs";
+import { loadFlow, saveFlow, summarizeRunResult } from "./flow-store.mjs";
 import { listOutcomePrograms } from "./program-store.mjs";
 import { createProgramWorkflow, programWorkflowChannel, updateProgramWorkflowMetadata } from "./program-workflow-commands.mjs";
+import { defaultTeamId } from "./team-store.mjs";
 
 const SCHEMA_VERSION = 4;
 const CATALOG_SCHEMA_VERSION = 1;
@@ -112,18 +115,18 @@ export function claimTexts(claims = []) {
 }
 
 function root(options = {}) {
-  return options.root || process.env.GTM_IDE_HOME || path.join(os.homedir(), ".gtm-ide");
+  return storeRoot(options);
 }
 
-function projectFile(options = {}) {
-  return path.join(root(options), "project.json");
+// The project catalog is the one singleton store — a single object addressed by the fixed
+// (PROJECT_COLLECTION, PROJECT_KEY) pair. The JSON backend keeps writing it to project.json at the
+// root, so the on-disk layout legacy readers expect is preserved.
+function loadCatalogRaw(options = {}) {
+  return persistence(options).get(PROJECT_COLLECTION, PROJECT_KEY);
 }
 
-function write(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const temporary = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`);
-  fs.renameSync(temporary, file);
+function writeCatalog(value, options = {}) {
+  persistence(options).set(PROJECT_COLLECTION, PROJECT_KEY, value);
 }
 
 function emptySharedContext() {
@@ -179,6 +182,11 @@ function defaultProject(input = {}) {
     schemaVersion: SCHEMA_VERSION,
     id: input.id || "default",
     name: input.name || "GTM portfolio",
+    // The team that owns this project, optional and backward-compatible. Defaults to null on disk and
+    // is resolved to the founder's personal team only when read (projectTeamId), so a fresh DB never
+    // forces a team to exist and existing single-user projects keep working untouched. The Convex sync
+    // lane sets a real team id here to make the project multiplayer.
+    teamId: input.teamId ?? null,
     createdAt,
     updatedAt: createdAt,
     activeChannelId: null,
@@ -196,6 +204,7 @@ function migrateProject(project, options = {}) {
   if (project?.schemaVersion === SCHEMA_VERSION && Array.isArray(project.channels)) {
     return {
       ...project,
+      teamId: project.teamId ?? null,
       sharedContext: normalizeSharedContextClaims(project.sharedContext ?? emptySharedContext()),
       opportunities: project.opportunities ?? defaultProject().opportunities,
     };
@@ -269,12 +278,11 @@ function ensureChannelFlows(project, options = {}) {
 }
 
 export function loadProjectCatalog(options = {}) {
-  const file = projectFile(options);
-  const stored = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : null;
+  const stored = loadCatalogRaw(options);
   const catalog = migrateCatalog(stored, options);
   for (const project of catalog.projects) ensureChannelFlows(project, options);
   if (!stored || stored.catalogSchemaVersion !== CATALOG_SCHEMA_VERSION) {
-    write(file, catalog);
+    writeCatalog(catalog, options);
   }
   return catalog;
 }
@@ -298,11 +306,11 @@ export function saveProject(project, options = {}) {
   const projects = exists
     ? catalog.projects.map((item) => item.id === durable.id ? durable : item)
     : [...catalog.projects, durable];
-  write(projectFile(options), {
+  writeCatalog({
     ...catalog,
     activeProjectId: catalog.activeProjectId || durable.id,
     projects,
-  });
+  }, options);
   ensureChannelFlows(durable, options);
   return durable;
 }
@@ -322,7 +330,6 @@ export function listProjects(options = {}) {
       outcome: project.sharedContext?.repository?.outcome ?? null,
       headline: project.sharedContext?.repository?.headline ?? null,
       channelCount: getProjectChannels(project, options).length,
-      opportunityCount: project.opportunities?.items?.length ?? 0,
       updatedAt: project.updatedAt,
     })),
   };
@@ -345,7 +352,7 @@ export function createProject(input = {}, options = {}) {
     activeProjectId: id,
     projects: starter ? [project] : [...catalog.projects, project],
   };
-  write(projectFile(options), savedCatalog);
+  writeCatalog(savedCatalog, options);
   return { project, activeProjectId: id };
 }
 
@@ -354,7 +361,7 @@ export function setActiveProject(projectId, options = {}) {
   if (!catalog.projects.some((project) => project.id === projectId)) {
     throw new Error(`Project not found: ${projectId}`);
   }
-  write(projectFile(options), { ...catalog, activeProjectId: projectId });
+  writeCatalog({ ...catalog, activeProjectId: projectId }, options);
   return loadProject({ ...options, projectId });
 }
 
@@ -373,12 +380,28 @@ export function deleteProjectFromCatalog(projectId, options = {}) {
   const activeProjectId = catalog.activeProjectId === projectId
     ? projects[0].id
     : catalog.activeProjectId;
-  write(projectFile(options), { ...catalog, activeProjectId, projects });
+  writeCatalog({ ...catalog, activeProjectId, projects }, options);
   return { activeProjectId, deletedId: projectId };
 }
 
 export function projectStoreRoot(options = {}) {
   return root(options);
+}
+
+// The team that effectively owns a project. Returns the stored teamId when set, otherwise the founder's
+// personal team (created lazily) so a project is never team-less — without forcing every existing
+// single-user project to have written a teamId. Backward-compatible: a stored null resolves to the
+// personal team only when asked, never on load.
+export function projectTeamId(projectId, options = {}) {
+  const project = loadProject({ ...options, projectId });
+  return project.teamId ?? defaultTeamId(options);
+}
+
+// Set (or clear) the team that owns a project. The Convex sync lane calls this to make a project
+// multiplayer; passing null restores the personal-team default.
+export function setProjectTeam(projectId, teamId, options = {}) {
+  const project = loadProject({ ...options, projectId });
+  return saveProject({ ...project, teamId: teamId ?? null }, options);
 }
 
 function channelFromProgram(program, options = {}) {
@@ -396,6 +419,7 @@ function channelFromProgram(program, options = {}) {
     nodeCount: graph?.nodes?.length ?? 0,
     runCount: runs.length,
     graphRevision: graph?.revision ?? 0,
+    lastRunResult: lastRun ? summarizeRunResult(lastRun) : null,
   };
 }
 
@@ -412,6 +436,7 @@ function channelFromLegacy(project, channel, options = {}) {
     nodeCount: flow.graph?.nodes?.length ?? 0,
     runCount: runs.length,
     graphRevision: flow.graph?.revision ?? 0,
+    lastRunResult: lastRun ? summarizeRunResult(lastRun) : null,
   };
 }
 

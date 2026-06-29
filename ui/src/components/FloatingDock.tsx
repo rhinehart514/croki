@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import {
-  AlertTriangle, ArrowRight, LoaderCircle, Lightbulb, LayoutGrid, PanelRight, Plus, ShieldCheck,
+  AlertTriangle, ArrowRight, LoaderCircle, Lightbulb, LayoutGrid, PanelRight, Plus, Rocket, ShieldCheck, Users,
 } from "lucide-react";
 import { SPRING } from "@/lib/springs";
 import { Reveal, Stagger, StaggerItem, Pop } from "@/lib/motion";
@@ -40,7 +40,7 @@ export function FloatingDock({
   pendingApprovals, approvalsOpen, onToggleApprovals,
   graph, audits, running, onRun,
   inspecting, onToggleInspect,
-  onOpenWorkspace,
+  onOpenWorkspace, onOpenTeam, teamLabel, onOpenGo, goActive,
 }: {
   projects: ProjectSummary[];
   activeProjectId: string | null;
@@ -83,6 +83,11 @@ export function FloatingDock({
   onToggleInspect: () => void;
   // Open the three-lane workspace (workflows / skills / agents). Optional → no affordance when absent.
   onOpenWorkspace?: () => void;
+  // Team space (members + roles) and the one-click autonomous "go" entry. Optional → no affordance.
+  onOpenTeam?: () => void;
+  teamLabel?: string | null;
+  onOpenGo?: () => void;
+  goActive?: boolean;
   session: OperatorSession | null;
   connection: ConnectionStatus | null;
 }) {
@@ -150,6 +155,19 @@ export function FloatingDock({
           <Lightbulb size={14} />
           <span>Ideate</span>
         </button>
+        {/* Go — the one-click autonomous entry. Say a goal; the operator composes and runs it to the
+            shared founder gate, then stops. The flagship "agents that go out and do the work" move. */}
+        {onOpenGo ? (
+          <button
+            className={`fdock-go ${goActive ? "active" : ""}`}
+            onClick={onOpenGo}
+            type="button"
+            title="Give it a goal — it composes and runs the work to your gate"
+          >
+            <Rocket size={14} />
+            <span>Go</span>
+          </button>
+        ) : null}
         {showGtmToggle ? (
           <SlidingTabs
             items={[{ value: "gtm", label: "GTM" }, { value: "product", label: "Product" }]}
@@ -260,6 +278,20 @@ export function FloatingDock({
           </Reveal>
         </div>
 
+        {/* Team — the team space (members, roles, and which space you're acting in). The label names
+            the current space; opening it lets you switch and see who can release a gate. */}
+        {onOpenTeam ? (
+          <button
+            className="fdock-icon-btn fdock-team-btn"
+            onClick={onOpenTeam}
+            type="button"
+            title={teamLabel ? `Team: ${teamLabel}` : "Your team space"}
+          >
+            <Users size={15} />
+            {teamLabel ? <span className="fdock-team-label">{teamLabel}</span> : null}
+          </button>
+        ) : null}
+
         {/* Approvals — the founder gate's first-class home. Carries the real pending-draft count.
             GTM-only: the gate is a go-to-market concept, so it's hidden in Product mode. */}
         {!productMode ? (
@@ -284,7 +316,7 @@ export function FloatingDock({
             className="fdock-icon-btn"
             onClick={onOpenWorkspace}
             type="button"
-            title="Open the workspace — every workflow, skill, and agent"
+            title="Open the workspace — every channel, skill, and agent"
           >
             <LayoutGrid size={15} />
           </button>
@@ -296,7 +328,7 @@ export function FloatingDock({
           onClick={onToggleInspect}
           type="button"
           aria-pressed={inspecting}
-          title={inspecting ? "Hide program details" : "Show program details (agents, measurement, learning)"}
+          title={inspecting ? "Hide channel details" : "Show channel details (agents, measurement, learning)"}
         >
           <PanelRight size={15} />
         </button>
@@ -312,7 +344,7 @@ export function FloatingDock({
               type="button"
             >
               {running ? <LoaderCircle className="spin" size={13} /> : null}
-              Run program
+              Run
             </button>
           </>
         ) : null}

@@ -1,10 +1,9 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { rebuildProjectState } from "./program-projection.mjs";
+import { persistence } from "./persistence.mjs";
 
 const SCHEMA_VERSION = 2;
+const COLLECTION = "programs";
 
 // Lifecycle is the founder-controlled state of an outcome program. It is deliberately small and
 // orthogonal to the run outcome: a program is a draft until it is composed/accepted, active while
@@ -41,10 +40,6 @@ function now() {
   return new Date().toISOString();
 }
 
-function root(options = {}) {
-  return options.root || process.env.GTM_IDE_HOME || path.join(os.homedir(), ".gtm-ide");
-}
-
 function safeId(value) {
   return String(value || "program").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "program";
 }
@@ -53,15 +48,8 @@ function slug(value) {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 54);
 }
 
-function fileFor(projectId, options = {}) {
-  return path.join(root(options), "programs", `${safeId(projectId || "default")}.json`);
-}
-
-function write(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`);
-  fs.renameSync(tmp, file);
+function keyFor(projectId) {
+  return safeId(projectId || "default");
 }
 
 function emptyStore(projectId) {
@@ -87,9 +75,8 @@ export function migrateProgram(record = {}) {
 }
 
 export function loadProgramStore(projectId = "default", options = {}) {
-  const file = fileFor(projectId, options);
-  if (!fs.existsSync(file)) return emptyStore(projectId);
-  const stored = JSON.parse(fs.readFileSync(file, "utf8"));
+  const stored = persistence(options).get(COLLECTION, keyFor(projectId));
+  if (!stored) return emptyStore(projectId);
   const programs = Array.isArray(stored?.programs) ? stored.programs : [];
   // Migrate every record when the on-disk schema predates the status split, mirroring
   // project-store.mjs's migrateProject pattern. migrateProgram is idempotent, so running it on an
@@ -111,7 +98,7 @@ export function saveProgramStore(store, options = {}) {
     schemaVersion: SCHEMA_VERSION,
     programs: Array.isArray(store.programs) ? store.programs : [],
   };
-  write(fileFor(durable.projectId, options), durable);
+  persistence(options).set(COLLECTION, keyFor(durable.projectId), durable);
   return durable;
 }
 

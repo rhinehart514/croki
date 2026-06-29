@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { runGraph } from "../src/graph.mjs";
 import { applyGraphOperations, validateGraph } from "../src/graph-operations.mjs";
-import { makeStepRuntime, defaultStepRuntime } from "../src/step-runners.mjs";
+import { makeStepRuntime, createStepRuntime, defaultStepRuntime } from "../src/step-runners.mjs";
 
 // A minimal source step so workflows have real upstream items to act on.
 function source(id, items) {
@@ -81,6 +81,41 @@ describe("open workflow — skill step (judgment as a workflow node)", () => {
     const out = await defaultStepRuntime.skill({ ref: "positioning" }, [{ id: "x" }], {});
     assert.equal(out.ok, true);
     assert.equal(out.meta.applied, false); // no loader attached → no guidance, said honestly
+  });
+
+  // The dead-end fix: a skill step's loaded judgment used to die in metadata. Now graph.mjs threads a
+  // shared run accumulator (context.__skillGuidance) so a DOWNSTREAM agent step actually receives and
+  // acts under that judgment. This exercises the REAL skill + agent runners end-to-end through runGraph.
+  it("flows a skill step's guidance into a downstream agent step within the same run", async () => {
+    const graph = {
+      id: "sk-flow",
+      nodes: [
+        source("s", [{ id: "p1" }]),
+        { id: "k", kind: "skill", ref: "positioning", label: "Apply positioning", position: { x: 200, y: 0 }, config: {} },
+        { id: "a", kind: "agent", ref: "gtm-discovery-outreach-drafting-agent", label: "Draft", position: { x: 400, y: 0 }, config: {} },
+      ],
+      edges: [
+        { id: "e1", source: "s", target: "k", edgeType: "data" },
+        { id: "e2", source: "k", target: "a", edgeType: "data" },
+      ],
+    };
+    let agentSawGuidance = null;
+    const stepRuntime = createStepRuntime({
+      skillLoader: async (ref) => `DOCTRINE for ${ref}: lead with the now-you-can line`,
+      agentInvoker: async ({ context }) => {
+        agentSawGuidance = context?.__skillGuidance ?? null;
+        return { ok: true, items: [{ id: "draft" }] };
+      },
+    });
+    const result = await runGraph(graph, { stepRuntime });
+
+    // The skill step now reports applied:true because the accumulator was present to carry its guidance.
+    assert.equal(result.nodes.k.meta.applied, true);
+    // The agent step received the skill's loaded judgment through the shared run accumulator.
+    assert.ok(Array.isArray(agentSawGuidance), "agent step should receive the shared skill-guidance accumulator");
+    assert.equal(agentSawGuidance.length, 1);
+    assert.equal(agentSawGuidance[0].ref, "positioning");
+    assert.match(agentSawGuidance[0].guidance, /now-you-can line/);
   });
 });
 

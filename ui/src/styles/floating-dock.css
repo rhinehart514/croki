@@ -85,6 +85,23 @@
 .fdock-ideate.active { color: var(--ink); background: var(--surface-2); border-color: var(--line-2); }
 .fdock-ideate svg { width: 14px; height: 14px; }
 
+/* Go — the one-click autonomous entry. The one accent action in the breadcrumb, so it reads as
+   "the thing that does the work". */
+.fdock-go {
+  display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 12px; flex-shrink: 0;
+  border: 1px solid var(--ink); border-radius: var(--r-md); background: var(--ink); color: #fff;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: filter 120ms var(--ease);
+}
+.fdock-go:hover { filter: brightness(1.12); }
+.fdock-go.active { filter: brightness(.9); }
+.fdock-go svg { width: 14px; height: 14px; }
+
+/* The team chip — the icon button carries the current space label inline so you always know which
+   space you're acting in. */
+.fdock-team-btn { width: auto; gap: 6px; padding: 0 10px; }
+.fdock-team-label { font-size: 12px; font-weight: 540; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* Center — the mode lenses ------------------------------------------------------------------ */
 .fdock-center {
   display: flex;

@@ -1,7 +1,5 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { persistence } from "./persistence.mjs";
 
 // Person — the keystone object. A durable, project-scoped, shared identity promoted from real run
 // entrants. It is real GTM state derived from runs, NEVER seeded, and it NEVER sends. The same human
@@ -26,33 +24,19 @@ function now() {
   return new Date().toISOString();
 }
 
-function root(options = {}) {
-  return options.root || process.env.GTM_IDE_HOME || path.join(os.homedir(), ".gtm-ide");
-}
-
 function safeId(value) {
   return String(value || "default").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "default";
 }
 
-function fileFor(projectId, options = {}) {
-  return path.join(root(options), "people", `${safeId(projectId)}.json`);
-}
-
-function write(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`);
-  fs.renameSync(tmp, file);
-}
+const COLLECTION = "people";
 
 function emptyStore(projectId) {
   return { schemaVersion: SCHEMA_VERSION, projectId, people: [] };
 }
 
 export function loadPersonStore(projectId = "default", options = {}) {
-  const file = fileFor(projectId, options);
-  if (!fs.existsSync(file)) return emptyStore(projectId);
-  const stored = JSON.parse(fs.readFileSync(file, "utf8"));
+  const stored = persistence(options).get(COLLECTION, safeId(projectId));
+  if (!stored) return emptyStore(projectId);
   if (stored?.schemaVersion === SCHEMA_VERSION && Array.isArray(stored.people)) return stored;
   return {
     ...emptyStore(projectId),
@@ -68,7 +52,7 @@ export function savePersonStore(store, options = {}) {
     schemaVersion: SCHEMA_VERSION,
     people: Array.isArray(store.people) ? store.people.slice(-MAX_PEOPLE) : [],
   };
-  write(fileFor(durable.projectId, options), durable);
+  persistence(options).set(COLLECTION, safeId(durable.projectId), durable);
   return durable;
 }
 

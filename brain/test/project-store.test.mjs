@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { executeDomainCommand } from "../src/domain-commands.mjs";
 import { listDomainEvents } from "../src/domain-events.mjs";
+import { recordFlowRun } from "../src/flow-store.mjs";
 import { listOutcomePrograms } from "../src/program-store.mjs";
 import {
   createChannel,
@@ -71,6 +72,25 @@ describe("multi-channel GTM project", () => {
     const events = listDomainEvents(rawProject.id, { ...options, projectId: rawProject.id });
     assert.ok(events.some((event) => event.type === "OutcomeProgramCreated"));
     assert.ok(events.some((event) => event.type === "ProgramChannelMetadataUpdated"));
+  });
+
+  it("surfaces what the last run produced on each channel (results back on the overview)", () => {
+    const created = createChannel({ name: "Review mining", objective: "Mine reviews for signal." }, options);
+    const before = getProjectWithChannels(options).channels.find((channel) => channel.id === created.channel.id);
+    assert.equal(before.lastRunResult, null, "a never-run channel reports no results, not a seeded number");
+
+    // A real run produces items across categories; empty categories must not appear as zeroes.
+    const graph = { id: before.graphId, name: before.name, nodes: [], edges: [] };
+    recordFlowRun(graph, {
+      runId: "run-1", ok: true, pendingGates: [], nodes: {
+        src: { nodeId: "src", category: "source", ok: true, items: [{}, {}, {}] },
+        draft: { nodeId: "draft", category: "generate", ok: true, items: [{}, {}] },
+        empty: { nodeId: "empty", category: "filter", ok: true, items: [] },
+      },
+    }, options);
+
+    const after = getProjectWithChannels(options).channels.find((channel) => channel.id === created.channel.id);
+    assert.deepEqual(after.lastRunResult, { produced: 5, byCategory: { source: 3, generate: 2 } });
   });
 
   it("persists and switches independent product projects", () => {

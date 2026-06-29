@@ -24,6 +24,21 @@ type Tier = { key: string; label: string | null; channels: ChannelMeta[]; w: num
 const STATE_LABEL: Record<ChannelState, string> = { live: "live", needs: "needs you", blocked: "blocked", idle: "idle" };
 const SEVERITY: Record<ChannelState, number> = { blocked: 0, needs: 1, live: 2, idle: 3 };
 
+// What a channel actually DID with the items it produced, read in funnel order so the strip reads
+// left-to-right like the motion itself ("12 found · 8 drafted · 5 staged"). Raw category keys never
+// reach the founder. Only producing categories appear; categories that made nothing are dropped.
+const PRODUCED_VERB: Record<string, string> = {
+  source: "found", enrich: "enriched", filter: "kept",
+  generate: "drafted", gate: "staged", execute: "ready", measure: "measured",
+};
+const PRODUCED_ORDER = ["source", "enrich", "filter", "generate", "gate", "execute", "measure"];
+
+function producedChips(byCategory: Record<string, number>): { label: string; count: number }[] {
+  return PRODUCED_ORDER
+    .filter((cat) => (byCategory[cat] ?? 0) > 0)
+    .map((cat) => ({ label: PRODUCED_VERB[cat] ?? cat, count: byCategory[cat] }));
+}
+
 function channelState(ch: ChannelMeta): ChannelState {
   if (ch.status === "error" || ch.lastRunOk === false) return "blocked";
   if (ch.pendingGates > 0 || ch.status === "waiting") return "needs";
@@ -85,6 +100,7 @@ function curve(ax: number, ay: number, bx: number, by: number): string {
 
 export function EngineLens({
   channels, channelFeeds, directedFeeds, activeChannelId, onDeriveChannel, onOpenChannel,
+  icpLabel = null, claimLabel = null,
 }: {
   channels: ChannelMeta[];
   channelFeeds: ChannelFeed[];
@@ -92,6 +108,10 @@ export function EngineLens({
   activeChannelId: string | null;
   onDeriveChannel: (toChannelId: string, fromChannelId: string) => void;
   onOpenChannel: (channelId: string) => void;
+  // The shared context every channel inherits — the ICP and the headline claim. Folded in from the
+  // retired portfolio-map lens so this single overview carries both the network AND its context.
+  icpLabel?: string | null;
+  claimLabel?: string | null;
 }) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ fromId: string; x: number; y: number } | null>(null);
@@ -159,6 +179,22 @@ export function EngineLens({
 
   return (
     <div className="engine-lens">
+      {(icpLabel || claimLabel) && (
+        <div className="portfolio-head">
+          {icpLabel && (
+            <div className="portfolio-head-row">
+              <span className="portfolio-head-eyebrow">ICP</span>
+              <span className="portfolio-head-value">{icpLabel}</span>
+            </div>
+          )}
+          {claimLabel && (
+            <div className="portfolio-head-row">
+              <span className="portfolio-head-eyebrow">Claim</span>
+              <span className="portfolio-head-value">{claimLabel}</span>
+            </div>
+          )}
+        </div>
+      )}
       <div className="engine-canvas-scroll">
         <div ref={canvasRef} className={`engine-canvas ${drag ? "dragging" : ""}`} style={{ width: layout.width, height: layout.height }}>
           <svg className="engine-wires" width={layout.width} height={layout.height} aria-hidden="true">
@@ -237,6 +273,15 @@ export function EngineLens({
                 </span>
                 <span className="engine-node-name">{ch.name}</span>
                 <span className="engine-node-obj">{ch.objective || "No objective set"}</span>
+                {ch.lastRunResult && ch.lastRunResult.produced > 0 && (
+                  <span className="engine-node-produced">
+                    {producedChips(ch.lastRunResult.byCategory).map((c) => (
+                      <span key={c.label} className="engine-produced-chip">
+                        <span className="engine-produced-count">{c.count}</span> {c.label}
+                      </span>
+                    ))}
+                  </span>
+                )}
                 <span className="engine-node-foot">
                   <span>{ch.nodeCount} step{ch.nodeCount === 1 ? "" : "s"}</span>
                   <span className="sep">·</span>

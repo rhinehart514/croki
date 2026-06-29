@@ -26,6 +26,7 @@ import {
   listProjects,
   groundProjectInWorkspace,
   loadProject,
+  projectTeamId,
   setActiveChannel,
   setActiveWorkflow,
   setActiveProject,
@@ -33,7 +34,18 @@ import {
   updateSharedContext,
 } from "./project-store.mjs";
 import { deleteProject, mergeProjects } from "./project-merge.mjs";
-import { composeOpportunityChannel, previewOpportunityChannel } from "./workflow-composer.mjs";
+import {
+  addMember,
+  canApprove,
+  createTeam,
+  ensurePersonalTeam,
+  getTeam,
+  listMembers,
+  listTeams,
+  resolveCurrentUser,
+  teamsForUser,
+} from "./team-store.mjs";
+import { composeOpportunityChannel, previewOpportunityChannel, composePortfolioFromStudio } from "./workflow-composer.mjs";
 import { executeDomainCommand } from "./domain-commands.mjs";
 import { getProductModel } from "./product-model-store.mjs";
 import { getDesignState } from "./design-state-store.mjs";
@@ -44,6 +56,7 @@ import { appendDomainEvent, listDomainEvents } from "./domain-events.mjs";
 import { listAgentCreationPolicies } from "./agent-policy-store.mjs";
 import { loadCapabilityFoundry } from "./capability-foundry.mjs";
 import { loadFeedbackLedger, recordFeedbackSignalsFromRun } from "./feedback-ledger.mjs";
+import { listToolRegistry, approveToolBirth } from "./tool-registry-store.mjs";
 import { listPeople, getPerson, promoteEntrantsFromRun } from "./person-store.mjs";
 import { loadClarity, addClarity, removeClarity } from "./clarity-store.mjs";
 import { findReferences, deriveChannelFeeds, deriveDirectedFeeds, createDerivedSourceLoader } from "./cross-reference.mjs";
@@ -256,6 +269,79 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Identity + teams. Local-first stays the base: with no signed-in user every request resolves to the
+  // founder, so a solo founder sees no login wall. Real multi-user auth rides on Convex in the other
+  // lane; these routes only model identity-as-data and membership.
+
+  // The current user and the teams they belong to. The personal team is created lazily so this never
+  // returns an empty list for a fresh founder.
+  if (req.method === "GET" && url.pathname === "/api/me") {
+    try {
+      const user = resolveCurrentUser({ request: req });
+      ensurePersonalTeam(user, { request: req });
+      json(res, 200, { user, teams: teamsForUser(user.userId, { request: req }) });
+    } catch (err) {
+      json(res, 500, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/teams") {
+    try { json(res, 200, { teams: listTeams() }); }
+    catch (err) { json(res, 500, { error: err instanceof Error ? err.message : String(err) }); }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/teams") {
+    try {
+      const body = await readBody(req);
+      const team = createTeam({ ...body, owner: body.owner ?? resolveCurrentUser({ request: req }) }, { request: req });
+      json(res, 201, { team });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  const teamMatch = url.pathname.match(/^\/api\/teams\/([^/]+)$/);
+  if (req.method === "GET" && teamMatch) {
+    try { json(res, 200, { team: getTeam(decodeURIComponent(teamMatch[1])) }); }
+    catch (err) { json(res, 404, { error: err instanceof Error ? err.message : String(err) }); }
+    return;
+  }
+
+  const teamMembersMatch = url.pathname.match(/^\/api\/teams\/([^/]+)\/members$/);
+  if (req.method === "GET" && teamMembersMatch) {
+    try { json(res, 200, { members: listMembers(decodeURIComponent(teamMembersMatch[1])) }); }
+    catch (err) { json(res, 404, { error: err instanceof Error ? err.message : String(err) }); }
+    return;
+  }
+
+  if (req.method === "POST" && teamMembersMatch) {
+    try {
+      const body = await readBody(req);
+      const team = addMember(decodeURIComponent(teamMembersMatch[1]), body);
+      json(res, 201, { team, members: team.members });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Whether a user may clear a founder gate on a team (owner/approver yes, member no). The gate lane
+  // reads this; the gate itself still owns the wall.
+  const teamApproveMatch = url.pathname.match(/^\/api\/teams\/([^/]+)\/can-approve\/([^/]+)$/);
+  if (req.method === "GET" && teamApproveMatch) {
+    try {
+      const teamId = decodeURIComponent(teamApproveMatch[1]);
+      const userId = decodeURIComponent(teamApproveMatch[2]);
+      json(res, 200, { teamId, userId, canApprove: canApprove(teamId, userId) });
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
   // Fold duplicate projects into one (one project per repo). Records move; sources are dropped.
   if (req.method === "POST" && url.pathname === "/api/projects/merge") {
     try {
@@ -294,6 +380,41 @@ const server = http.createServer(async (req, res) => {
       });
     } catch (err) {
       json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Self-built tools — the founder-gated tool-birth -> registry leg. GET lists pending proposals
+  // (deterministic procedures crystallized from repeated runs — gated, never auto-born) plus the
+  // registered, callable tools. Read-only.
+  const projectToolProposalsMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/tool-proposals$/);
+  if (req.method === "GET" && projectToolProposalsMatch) {
+    try {
+      const projectId = decodeURIComponent(projectToolProposalsMatch[1]);
+      json(res, 200, listToolRegistry(projectId));
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Birth a tool from a pending proposal — a FOUNDER action. Requires authored code + a test; the
+  // gate refuses anything else. No agent/operator path reaches this.
+  const projectToolApproveMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/tool-proposals\/([^/]+)\/approve$/);
+  if (req.method === "POST" && projectToolApproveMatch) {
+    try {
+      const projectId = decodeURIComponent(projectToolApproveMatch[1]);
+      const proposalId = decodeURIComponent(projectToolApproveMatch[2]);
+      const body = await readBody(req);
+      const result = approveToolBirth({
+        projectId, proposalId,
+        code: body?.code, test: body?.test,
+        name: body?.name, description: body?.description,
+        decisionNote: body?.decisionNote,
+      });
+      json(res, 200, result);
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return;
   }
@@ -511,6 +632,28 @@ const server = http.createServer(async (req, res) => {
         projectId,
         compose: createClaudeComposer({ cwd: composeRepo }),
         evaluate: createClaudeEvaluator({ cwd: composeRepo }),
+      }));
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Portfolio compose: fan SEVERAL inline channels out toward ONE goal and union them into one
+  // branching, multi-gate diagram. This is the dashboard front door to the operator's "propose
+  // systems" move at portfolio altitude — same grounding (project repo cwd) and same live composer
+  // as the single-channel path, just composing many channels at once. Compose-only, no persistence;
+  // the wall is re-asserted on the union inside assemblePortfolioGraph.
+  const composePortfolioMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/compose\/portfolio$/);
+  if (req.method === "POST" && composePortfolioMatch) {
+    try {
+      const body = await readBody(req);
+      const projectId = decodeURIComponent(composePortfolioMatch[1]);
+      const composeProject = loadProject({ projectId });
+      const composeRepo = composeProject.sharedContext?.repository?.repo || process.cwd();
+      json(res, 201, await composePortfolioFromStudio(body, {
+        projectId,
+        compose: createClaudeComposer({ cwd: composeRepo }),
       }));
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
@@ -852,6 +995,40 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // "Give it a goal and go" — JOB 2. Create an operator session for the goal and launch it primed to
+  // autonomously compose the workflow and drive it to the shared founder gate in one pass. The session
+  // is stamped with the acting user (request headers, else founder) and the project's effective team so
+  // the gate becomes a shared, role-gated team queue. Returns immediately (202); the UI streams the
+  // operator_composing / operator_running / operator_node_* / operator_reached_gate events as they land.
+  if (req.method === "POST" && url.pathname === "/api/operator/go") {
+    try {
+      const body = await readBody(req);
+      const goal = String(body.goal || "").trim();
+      if (!goal) { json(res, 400, { error: "A goal is required." }); return; }
+      const project = loadProject(body.projectId ? { projectId: body.projectId } : {});
+      const user = resolveCurrentUser({ request: req });
+      const session = createOperatorSession({
+        goal,
+        projectId: project.id,
+        teamId: body.teamId ?? projectTeamId(project.id, {}),
+        graphId: body.graphId ?? null,
+        model: body.model,
+        maxSteps: body.maxSteps,
+        // Prime the conversation so the very first model turn reaches for compose_and_run, which builds
+        // the workflow (if missing) and runs it to the gate without per-step micromanagement.
+        modelMessages: [{
+          role: "user",
+          content: `${goal}\n\nDrive this goal autonomously to the founder gate in one pass: call compose_and_run to build the workflow and run it up to the shared gate, then stop. Do not send — a human releases at the gate.`,
+        }],
+      });
+      launchOperatorSession(session.id);
+      json(res, 202, { session: publicOperatorSession(session), startedBy: user });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
   const operatorSessionMatch = url.pathname.match(/^\/api\/operator\/sessions\/([^/]+)$/);
   if (req.method === "GET" && operatorSessionMatch) {
     try {
@@ -889,12 +1066,15 @@ const server = http.createServer(async (req, res) => {
       if (body.projectId) assertOperatorSessionProject(sessionId, body.projectId);
       let session;
       if (action === "resume") session = resumeOperatorSession(sessionId, body.input);
-      else if (action === "gate") session = await resolveOperatorGate(sessionId, body);
+      // Role-gated release: pass the acting user (request headers, else founder) so resolveOperatorGate
+      // can authorize the send. A viewer/member release throws gate_release_forbidden → 403.
+      else if (action === "gate") session = await resolveOperatorGate(sessionId, { ...body, request: req });
       else if (action === "proposal") session = resolveOperatorProposal(sessionId, body);
       else session = cancelOperatorSession(sessionId);
       json(res, action === "gate" || action === "proposal" ? 200 : 202, { session: publicOperatorSession(session) });
     } catch (err) {
-      json(res, 409, { error: err instanceof Error ? err.message : String(err) });
+      const status = err?.code === "gate_release_forbidden" ? 403 : 409;
+      json(res, status, { error: err instanceof Error ? err.message : String(err) });
     }
     return;
   }
@@ -1115,14 +1295,49 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Funnel scan
+  // Funnel scan — PREVIEW ONLY. This route shows what the scan found BEFORE a
+  // project is created or composed. It is read-only by construction: scanRepo is
+  // read-only and nothing here persists. Project creation is the separate confirm
+  // step (POST /api/projects). Do NOT add a project-creation side effect here.
   if (req.method === "POST" && url.pathname === "/api/scan") {
     try {
       const body = await readBody(req);
       const report = scanRepo(expandHome(body.repoPath), {
         winEvent: typeof body.winEvent === "string" && body.winEvent.trim() ? body.winEvent.trim() : "project_created",
       });
-      json(res, 200, report);
+
+      // Project the scan report into the named front-door preview contract. These
+      // fields are derived from the report (never invented) so the UI lane has a
+      // stable shape; the full unflattened `report` rides along for everything else.
+      const winFound = report.winEvent?.found === true;
+      const attributionCaptured = report.attribution?.captured === true;
+      // file:line evidence citations for the detected win event.
+      const winEventEvidence = report.winEvent?.citations ?? [];
+      // Honest blind-attribution state: blind when the win event is unproven, or
+      // proven but emitted with no captured acquisition source. The reason mirrors
+      // the scanner's own headline logic so the preview can never disagree with it.
+      const blindAttribution = !winFound
+        ? { blind: true, reason: `The win event “${report.winEvent?.name}” could not be confirmed in production code.` }
+        : !attributionCaptured
+          ? { blind: true, reason: `“${report.winEvent?.name}” is emitted, but no acquisition source is captured to attribute it.` }
+          : { blind: false, reason: `“${report.winEvent?.name}” carries ${report.winEvent.attributionProperties.join(", ") || "no attribution properties"}.` };
+      // One honest plain-language line about the product, derived from real scan
+      // signal (detected stack + files scanned) — no invented traction or claims.
+      const productLine = report.stack?.length
+        ? `${report.stack.join(", ")} project, ${report.filesScanned} files scanned.`
+        : `${report.filesScanned} files scanned; no framework manifest detected.`;
+
+      json(res, 200, {
+        headline: report.headline,
+        stack: report.stack,
+        winEvent: report.winEvent,
+        winEventEvidence,
+        blindAttribution,
+        productLine,
+        // The full grounded report, unflattened, for any field the lane also needs
+        // (analytics, attribution, funnel stages/edges, gaps, citations).
+        report,
+      });
     } catch (err) { json(res, 400, { error: err instanceof Error ? err.message : String(err) }); }
     return;
   }
@@ -1279,7 +1494,7 @@ const server = http.createServer(async (req, res) => {
         stepRuntime: liveStepRuntime({ cwd: project.sharedContext?.repository?.repo || process.cwd() }),
       });
       const saved = recordFlowRun(body.graph, result);
-      recordFeedbackSignalsFromRun({ projectId: project.id, graph: body.graph, result });
+      const feedback = recordFeedbackSignalsFromRun({ projectId: project.id, graph: body.graph, result });
       promoteEntrantsFromRun({ projectId: project.id, channelId: body.graph.id, result });
       // Graph failures are domain results. Return the full per-node result so
       // the client can render partial success, blocked nodes, and recovery.
@@ -1290,6 +1505,10 @@ const server = http.createServer(async (req, res) => {
           : null,
         storedRunCount: saved.runs.length,
         storedAt: saved.updatedAt,
+        // The self-building loop's output: repeated deterministic procedures the founder can
+        // crystallize, and the pending (gated, never auto-born) tool-birth proposals derived from them.
+        crystallizationSuggestions: feedback?.crystallizationSuggestions ?? [],
+        toolBirthProposals: feedback?.toolBirthProposals ?? [],
       });
     } catch (err) { json(res, 400, { error: err instanceof Error ? err.message : String(err) }); }
     return;
@@ -1339,7 +1558,7 @@ const server = http.createServer(async (req, res) => {
         onEvent: send,
       });
       const saved = recordFlowRun(body.graph, result);
-      recordFeedbackSignalsFromRun({ projectId: project.id, graph: body.graph, result });
+      const feedback = recordFeedbackSignalsFromRun({ projectId: project.id, graph: body.graph, result });
       promoteEntrantsFromRun({ projectId: project.id, channelId: body.graph.id, result });
       send({
         type: "run_done",
@@ -1350,6 +1569,8 @@ const server = http.createServer(async (req, res) => {
             : null,
           storedRunCount: saved.runs.length,
           storedAt: saved.updatedAt,
+          crystallizationSuggestions: feedback?.crystallizationSuggestions ?? [],
+          toolBirthProposals: feedback?.toolBirthProposals ?? [],
         },
       });
     } catch (err) {
@@ -1444,11 +1665,16 @@ server.listen(port, host, () => {
   if (ready.length) console.log(`  Connectors ready: ${ready.map((c) => c.name).join(", ")}`);
   if (stubs.length) console.log(`  Connectors stubbed: ${stubs.map((c) => c.name).join(", ")}`);
   // When a team is configured, hydrate the local store root from the team's shared state on boot.
-  // Best-effort and lazy-loaded — a local-only deployment never touches the sync layer.
+  // Best-effort and lazy-loaded — a local-only deployment never touches the sync layer, and prints
+  // nothing alarming: an unconfigured pull reports `disabled` and we stay quiet rather than logging
+  // a "pulled 0" or "pull failed" line for a deployment that never opted into team sync.
   if (process.env.GTM_IDE_CONVEX_URL && process.env.GTM_IDE_TEAM_ID) {
-    import("./convex-sync.mjs")
-      .then((m) => m.pullTeamDocuments())
-      .then((r) => r?.pulled != null && console.log(`  Team sync: pulled ${r.pulled} shared document(s) from Convex`))
+    import("./convex-backend.mjs")
+      .then((m) => m.hydrateTeamDocuments())
+      .then((r) => {
+        if (r?.disabled) return;
+        if (r?.pulled != null) console.log(`  Team sync: pulled ${r.pulled} shared document(s) from Convex`);
+      })
       .catch(() => {});
   }
 });

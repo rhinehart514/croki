@@ -1,8 +1,7 @@
-import fs from "node:fs";
-import path from "node:path";
 import {
-  deleteProjectFromCatalog, loadProject, loadProjectCatalog, projectStoreRoot, saveProject, setActiveProject,
+  deleteProjectFromCatalog, loadProject, loadProjectCatalog, saveProject, setActiveProject,
 } from "./project-store.mjs";
+import { persistence } from "./persistence.mjs";
 import { loadProgramStore, saveProgramStore } from "./program-store.mjs";
 import { loadAgentPolicyStore, saveAgentPolicyStore } from "./agent-policy-store.mjs";
 import { loadFeedbackLedger, saveFeedbackLedger } from "./feedback-ledger.mjs";
@@ -90,11 +89,15 @@ function unionProjectCollections(sourceProject, targetProject) {
   };
 }
 
+// Purge a project's per-project store records. Each per-project store keys its document by
+// safeId(projectId) within its collection (the collection name matches the legacy directory name),
+// so deleting that (collection, key) pair removes the record from whichever backend holds it —
+// SQLite by default, the JSON file on the legacy path. Idempotent: a delete of an absent record is a
+// harmless no-op, so a re-run (or a project that never wrote a given store) is safe.
 function purgeProjectStoreFiles(projectId, options) {
-  const root = projectStoreRoot(options);
-  for (const dir of PROJECT_STORE_DIRS) {
-    const file = path.join(root, dir, `${safeId(projectId)}.json`);
-    fs.rmSync(file, { force: true });
+  const store = persistence(options);
+  for (const collection of PROJECT_STORE_DIRS) {
+    store.delete(collection, safeId(projectId));
   }
 }
 

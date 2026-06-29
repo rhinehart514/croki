@@ -184,3 +184,30 @@
   color: var(--faint, #a1a1aa);
   text-align: center;
 }
+
+/* The error fallback: surface the failure AND the solo escape together, so a Convex-down team call
+   never dead-ends the founder. */
+.onb-error-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+/* The persistent "work locally" escape. Quiet by default — it's the road less taken — but always
+   reachable so the door is never locked. */
+.onb-skip {
+  margin: 10px auto 0;
+  display: block;
+  padding: 4px 8px;
+  border: 0;
+  background: none;
+  color: var(--faint, #a1a1aa);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.onb-skip:hover:not(:disabled) { color: var(--muted, #52525b); }
+.onb-skip:disabled { opacity: 0.5; cursor: default; }

@@ -1,33 +1,19 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { reviseAgentPolicyFromFeedback } from "./agent-policy-store.mjs";
 import { appendGateJudgments } from "./shared-judgments.mjs";
+import { persistence } from "./persistence.mjs";
+import { actionLogFromRun, detectCrystallizationSuggestions } from "./crystallization.mjs";
+import { proposeToolBirthFromCandidate } from "./tool-birth.mjs";
 
 const SCHEMA_VERSION = 1;
+const COLLECTION = "feedback-ledger";
 
 function now() {
   return new Date().toISOString();
 }
 
-function root(options = {}) {
-  return options.root || process.env.GTM_IDE_HOME || path.join(os.homedir(), ".gtm-ide");
-}
-
 function safeId(value) {
   return String(value || "default").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "default";
-}
-
-function fileFor(projectId, options = {}) {
-  return path.join(root(options), "feedback-ledger", `${safeId(projectId)}.json`);
-}
-
-function write(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`);
-  fs.renameSync(tmp, file);
 }
 
 function emptyLedger(projectId) {
@@ -35,9 +21,8 @@ function emptyLedger(projectId) {
 }
 
 export function loadFeedbackLedger(projectId = "default", options = {}) {
-  const file = fileFor(projectId, options);
-  if (!fs.existsSync(file)) return emptyLedger(projectId);
-  const stored = JSON.parse(fs.readFileSync(file, "utf8"));
+  const stored = persistence(options).get(COLLECTION, safeId(projectId));
+  if (!stored) return emptyLedger(projectId);
   if (stored?.schemaVersion === SCHEMA_VERSION && Array.isArray(stored.signals)) return stored;
   return {
     ...emptyLedger(projectId),
@@ -53,7 +38,7 @@ export function saveFeedbackLedger(ledger, options = {}) {
     schemaVersion: SCHEMA_VERSION,
     signals: Array.isArray(ledger.signals) ? ledger.signals : [],
   };
-  write(fileFor(durable.projectId, options), durable);
+  persistence(options).set(COLLECTION, safeId(durable.projectId), durable);
   return durable;
 }
 
@@ -122,6 +107,31 @@ export function normalizeRunFeedback({ projectId = "default", graph, result } = 
     }
   }
   return signals;
+}
+
+// Each executed step as a durable AgentAction signal so the crystallization detector can bucket
+// repeated deterministic procedures ACROSS runs (a single run rarely repeats one). Kept SEPARATE from
+// the founder-feedback signals above — these are bookkeeping for crystallization, not founder
+// decisions, so they never inflate the feedback count or drive a policy revision. Judgment work is
+// excluded later by signature design, never lost here.
+export function actionSignalsFromRun({ projectId = "default", graph, result } = {}) {
+  return actionLogFromRun(graph, result).map((action) => signal({
+    projectId,
+    graphId: graph?.id ?? result?.graphId ?? null,
+    runId: result?.runId ?? null,
+    nodeId: action.nodeId ?? null,
+    type: "AgentAction",
+    summary: String(action.name).slice(0, 160),
+    action,
+  }));
+}
+
+// Rebuild the accumulated action log from banked AgentAction signals, newest runs included, so the
+// detector sees the full deterministic-procedure history rather than one run's worth.
+function actionLogFromLedger(ledger) {
+  return (ledger?.signals ?? [])
+    .filter((item) => item?.type === "AgentAction" && item.action)
+    .map((item) => item.action);
 }
 
 export function recordFeedbackSignals(signals = [], options = {}) {
@@ -199,7 +209,11 @@ export function recordFeedbackSignalsFromRun({ projectId = "default", graph, res
     // capture is best-effort; a write failure must not interrupt feedback recording
   }
   const signals = normalizeRunFeedback({ projectId, graph, result });
-  const ledger = recordFeedbackSignals(signals, { ...options, projectId });
+  // Bank founder-feedback signals AND the action bookkeeping in the same ledger write, so the
+  // crystallization detector sees the accumulated procedure history — but only `signals` (the founder
+  // decisions) is returned and drives policy revision.
+  const actionSignals = actionSignalsFromRun({ projectId, graph, result });
+  const ledger = recordFeedbackSignals([...signals, ...actionSignals], { ...options, projectId });
   const byPolicy = new Map();
   for (const item of signals) {
     for (const policyId of item.policyIds ?? []) {
@@ -211,5 +225,49 @@ export function recordFeedbackSignalsFromRun({ projectId = "default", graph, res
   for (const [policyId, policySignals] of byPolicy.entries()) {
     updatedPolicies.push(reviseAgentPolicyFromFeedback(policyId, policySignals, { ...options, projectId }));
   }
-  return { ledger, signals, updatedPolicies };
+  // Run the accumulated action history through the crystallization detector and surface any repeated
+  // deterministic procedure as a GATED tool-creation suggestion (the same additive, proposal-only path
+  // detectToolCreationSuggestions uses). Nothing is auto-created — the founder/operator gate (tool-birth)
+  // still decides, and judgment work is excluded inside the detector by signature design.
+  const crystallizationSuggestions = detectCrystallizationSuggestions(actionLogFromLedger(ledger));
+  // Close the loop the audit found broken: each detected deterministic-procedure candidate becomes a
+  // PENDING, gated tool-birth proposal (tool-birth.mjs). It is NOT registered and NOT callable —
+  // registration happens only after a founder explicitly approves (Wave 2). The proposal is banked as
+  // a typed ledger signal so it survives a restart, and de-duplicated by signature so a procedure that
+  // keeps recurring across runs yields ONE pending proposal, not a fresh one every run.
+  const { ledger: finalLedger, toolBirthProposals } = recordToolBirthProposals(
+    ledger,
+    crystallizationSuggestions,
+    { ...options, projectId },
+  );
+  return { ledger: finalLedger, signals, updatedPolicies, crystallizationSuggestions, toolBirthProposals };
+}
+
+// Read every pending tool-birth proposal banked in a ledger (insertion order). A pending proposal is a
+// detected crystallization candidate awaiting model-authored code+test and a founder gate; it is inert
+// by construction. Exported so the live run paths (and tests) can surface the durable set.
+export function pendingToolBirthProposals(ledger) {
+  return (ledger?.signals ?? [])
+    .filter((item) => item?.type === "ToolBirthProposal" && item.proposal)
+    .map((item) => item.proposal);
+}
+
+// Turn freshly detected crystallization candidates into PENDING tool-birth proposals, bank the NEW
+// ones (deduped by signature against what the ledger already holds) as typed signals, and return the
+// full durable set. registerTool is never called here — a tool is born only after a founder approves.
+function recordToolBirthProposals(ledger, crystallizationSuggestions, options = {}) {
+  const existing = pendingToolBirthProposals(ledger);
+  const seen = new Set(existing.map((proposal) => proposal.signature));
+  const fresh = [];
+  for (const suggestion of crystallizationSuggestions ?? []) {
+    if (!suggestion?.signature || seen.has(suggestion.signature)) continue;
+    seen.add(suggestion.signature);
+    fresh.push(proposeToolBirthFromCandidate(suggestion));
+  }
+  if (!fresh.length) return { ledger, toolBirthProposals: existing };
+  const finalLedger = recordFeedbackSignals(
+    fresh.map((proposal) => signal({ projectId: options.projectId, type: "ToolBirthProposal", proposal })),
+    options,
+  );
+  return { ledger: finalLedger, toolBirthProposals: pendingToolBirthProposals(finalLedger) };
 }

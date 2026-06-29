@@ -7,16 +7,14 @@
 //
 // The model still composes each system's topology (workflow-composer.mjs / composition.mjs). This
 // module is the deterministic HOST assembly that unions those composed systems into one graph:
-// it namespaces each system so ids never collide, lays the systems out as parallel lanes so the
-// diagram stays legible at density, preserves every gate and feedback edge, and re-asserts the
-// wall across the union (every execute still behind a founder gate on every path). No model, no
-// fabrication — it only assembles what was already composed.
+// it namespaces each system so ids never collide, preserves every gate and feedback edge, and
+// re-asserts the wall across the union (every execute still behind a founder gate on every path).
+// No model, no fabrication — it only assembles what was already composed. Node POSITIONS are not
+// computed here: the canvas lays the union out by DAG rank at render (GraphCanvas.computeLayout),
+// so each system reads as a row in a left-to-right multi-system grid. Composed positions are
+// carried through untouched as a valid fallback.
 
 import { validateGraph } from "./graph-operations.mjs";
-
-const LANE_GAP = 280; // vertical distance between two systems' lanes — keeps lanes from overlapping
-const COL_GAP = 240; // horizontal distance between successive nodes within a lane
-const LANE_TOP = 120; // y of the first lane
 
 function slug(value, fallback = "system") {
   return (
@@ -56,21 +54,6 @@ function assertPortfolioWall(nodes, edges) {
   }
 }
 
-// Lay one system's nodes out as a single horizontal lane at a fixed y, ordered left-to-right by
-// the node's own x (falling back to declaration order). Parallel lanes — one per system — read as
-// distinct rows on the canvas, which is what keeps a 15+ node portfolio legible instead of a
-// hairball.
-function laneLayout(nodes, laneY) {
-  const ordered = [...nodes].sort((a, b) => {
-    const ax = Number.isFinite(a.position?.x) ? a.position.x : 0;
-    const bx = Number.isFinite(b.position?.x) ? b.position.x : 0;
-    return ax - bx;
-  });
-  const xByOriginalId = new Map();
-  ordered.forEach((node, col) => xByOriginalId.set(node.id, 120 + col * COL_GAP));
-  return xByOriginalId.size ? { laneY, x: (originalId) => xByOriginalId.get(originalId) ?? 120 } : { laneY, x: () => 120 };
-}
-
 // Fold every system's founder gate into ONE shared gate — the consolidated approval queue. Many
 // channels at volume should not scatter the founder across one review tab per channel; they should
 // pool into a single queue. We rewire in place on the already-namespaced union: drop each per-system
@@ -94,8 +77,9 @@ function consolidateGates(nodes, edges, manifest) {
   let suffix = 1;
   while (existing.has(sharedId)) sharedId = `${SHARED_GATE_ID}-${suffix++}`;
 
-  // Place the shared gate centered vertically, to the right of the lanes, so it reads as the one
-  // junction every lane funnels through.
+  // Give the shared gate a plausible fallback position (to the right of the existing nodes,
+  // vertically centered). The canvas re-lays the whole union by DAG rank at render, so this is only
+  // a non-overlapping default for any reader that skips the auto-layout.
   const ys = nodes.map((n) => n.position?.y).filter((y) => Number.isFinite(y));
   const xs = nodes.map((n) => n.position?.x).filter((x) => Number.isFinite(x));
   const sharedGate = {
@@ -107,8 +91,8 @@ function consolidateGates(nodes, edges, manifest) {
     systems: [...new Set(nodes.filter((n) => gateIds.has(n.id)).map((n) => n.system).filter(Boolean))],
     config: {},
     position: {
-      x: (xs.length ? Math.max(...xs) : 120) + COL_GAP,
-      y: ys.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : LANE_TOP,
+      x: (xs.length ? Math.max(...xs) : 120) + 240,
+      y: ys.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : 120,
     },
   };
 
@@ -164,8 +148,6 @@ export function assemblePortfolioGraph({ goal = "", systems = [], consolidateGat
     usedSystemIds.add(systemId);
     const systemLabel = channel.name || channel.objective || systemId;
 
-    const laneY = LANE_TOP + laneIndex * LANE_GAP;
-    const lane = laneLayout(rawNodes, laneY);
     const ns = (id) => `${systemId}__${id}`;
 
     const gateIds = [];
@@ -174,12 +156,17 @@ export function assemblePortfolioGraph({ goal = "", systems = [], consolidateGat
       const id = ns(node.id);
       nodeIds.push(id);
       if (node.category === "gate") gateIds.push(id);
+      // Carry the composed position through untouched. The canvas re-lays the whole union by DAG
+      // rank at render, so this is just a valid non-overlapping fallback, not the displayed layout.
+      const position = node.position && Number.isFinite(node.position.x) && Number.isFinite(node.position.y)
+        ? { x: node.position.x, y: node.position.y }
+        : { x: 0, y: 0 };
       nodes.push({
         ...structuredClone(node),
         id,
         system: systemId,
         systemLabel,
-        position: { x: lane.x(node.id), y: laneY },
+        position,
       });
     }
     for (const edge of rawEdges) {

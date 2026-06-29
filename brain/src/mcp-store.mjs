@@ -12,30 +12,14 @@
  * here ever sends — it stores what each tool IS allowed to do, not does it.
  */
 
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { classifyTool, READ_CLASS, WRITE_CLASS } from "./mcp-classifier.mjs";
+import { persistence } from "./persistence.mjs";
 
 const TRUST_LEVELS = new Set(["verified", "community", "untrusted"]);
+const COLLECTION = "capabilities";
 
-function root(options = {}) {
-  return options.root || process.env.GTM_IDE_HOME || path.join(os.homedir(), ".gtm-ide");
-}
-function dir(options = {}) {
-  return path.join(root(options), "capabilities");
-}
 function safeId(value) {
   return String(value || "server").replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 80);
-}
-function fileFor(id, options = {}) {
-  return path.join(dir(options), `${safeId(id)}.json`);
-}
-function write(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const temporary = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`);
-  fs.renameSync(temporary, file);
 }
 function now() {
   return new Date().toISOString();
@@ -92,29 +76,21 @@ export function recordServer(input, options = {}) {
     connectedAt: prior?.connectedAt ?? now(),
     updatedAt: now(),
   };
-  write(fileFor(id, options), server);
+  persistence(options).set(COLLECTION, safeId(id), server);
   return server;
 }
 
 export function getServer(id, options = {}) {
-  const file = fileFor(id, options);
-  if (!fs.existsSync(file)) return null;
-  return JSON.parse(fs.readFileSync(file, "utf8"));
+  return persistence(options).get(COLLECTION, safeId(id));
 }
 
 export function listServers(options = {}) {
-  const folder = dir(options);
-  if (!fs.existsSync(folder)) return [];
-  return fs
-    .readdirSync(folder)
-    .filter((f) => f.endsWith(".json"))
-    .map((f) => JSON.parse(fs.readFileSync(path.join(folder, f), "utf8")))
+  return persistence(options).list(COLLECTION)
     .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 }
 
 export function removeServer(id, options = {}) {
-  const file = fileFor(id, options);
-  if (fs.existsSync(file)) fs.rmSync(file);
+  persistence(options).delete(COLLECTION, safeId(id));
   return true;
 }
 
@@ -140,7 +116,7 @@ export function reclassifyTool(serverId, toolName, lane, options = {}) {
   // an override only persists when it disagrees with the machine; agreeing clears it
   tool.override = lane === tool.class ? null : lane;
   server.updatedAt = now();
-  write(fileFor(serverId, options), server);
+  persistence(options).set(COLLECTION, safeId(serverId), server);
   return { server, tool, loosenedWall: loosening };
 }
 

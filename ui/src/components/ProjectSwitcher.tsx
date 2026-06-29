@@ -78,7 +78,7 @@ export function ProjectSwitcher({
               >
                 <span className="menu-item-body">
                   <span className="menu-item-label">{project.name}</span>
-                  <span className="menu-item-meta">{project.channelCount} channels · {project.opportunityCount} opportunities</span>
+                  <span className="menu-item-meta">{project.channelCount} {project.channelCount === 1 ? "channel" : "channels"}</span>
                 </span>
                 {project.id === activeProjectId ? <Check className="menu-item-check" /> : null}
               </button>

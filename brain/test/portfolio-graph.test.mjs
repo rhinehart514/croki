@@ -57,22 +57,24 @@ describe("portfolio fan-out — many systems, one legible diagram", () => {
     assert.ok(graph.edges.every((e) => ids.includes(e.source) && ids.includes(e.target)));
   });
 
-  it("stays legible at 15+ nodes — each system gets its own non-overlapping lane", () => {
+  it("keeps every system intact at 15+ nodes — id namespacing, manifest, and a valid position per node", () => {
     const graph = assemblePortfolioGraph({
       goal: "multi-motion launch",
       systems: [system("outbound"), system("referral"), system("attribution")],
     });
     assert.equal(graph.nodes.length, 15);
-    // Lanes don't collapse onto each other: each system occupies a distinct y band.
-    const ysBySystem = new Map();
+    assert.equal(validateGraph(graph).ok, true);
+    // Three distinct systems survive the union, each carrying its system tag.
+    assert.equal(graph.systems.length, 3);
+    const systemTags = new Set(graph.nodes.map((n) => n.system));
+    assert.equal(systemTags.size, 3, "three distinct systems");
+    // The manifest names each system's nodes; the union is the sum of those node sets.
+    assert.equal(graph.systems.reduce((sum, s) => sum + s.nodeIds.length, 0), 15);
+    // No host-side swimlane layout anymore: the canvas lays the union out by DAG rank at render.
+    // The assembler only guarantees every node still carries a valid finite position (a fallback the
+    // renderer overrides), so nothing ships position-less.
     for (const n of graph.nodes) {
-      if (!ysBySystem.has(n.system)) ysBySystem.set(n.system, n.position.y);
-      assert.equal(ysBySystem.get(n.system), n.position.y, "a system's nodes share one lane y");
-    }
-    const laneYs = [...ysBySystem.values()].sort((a, b) => a - b);
-    assert.equal(new Set(laneYs).size, 3, "three distinct lanes");
-    for (let i = 1; i < laneYs.length; i += 1) {
-      assert.ok(laneYs[i] - laneYs[i - 1] >= 200, "lanes are separated enough to read");
+      assert.ok(Number.isFinite(n.position.x) && Number.isFinite(n.position.y), "every node has a finite position");
     }
   });
 

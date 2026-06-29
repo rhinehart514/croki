@@ -107,6 +107,9 @@ describe("program runtime executable domain loop", () => {
           evidence: [{ file: "app.ts", line: 1 }],
           uncertainty: "Attribution has not been proven.",
         })),
+        // A drafting agent consults the founder's taste moat before it writes — the required-consult
+        // invariant. The bridge surfaces the agent's real tool calls here; the fake mirrors that.
+        meta: { toolCalls: ["get_taste"] },
       }),
     });
 

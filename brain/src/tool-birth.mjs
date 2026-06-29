@@ -7,7 +7,10 @@
 
 import crypto from "node:crypto";
 
-const STATUSES = new Set(["proposed", "approved", "rejected"]);
+// "pending" is the earliest stage: a crystallization candidate was detected but no code/test has
+// been authored yet, so it is NOT a real proposed tool — it is a birth proposal awaiting authoring
+// and a founder gate. "proposed" means a full spec (code + test) exists and is at the gate.
+const STATUSES = new Set(["pending", "proposed", "approved", "rejected"]);
 
 function requireString(value, label) {
   if (typeof value !== "string" || !value.trim()) {
@@ -57,6 +60,17 @@ export function gateToolBirth(proposedTool, decision) {
   if (verb !== "approve" && verb !== "reject") {
     throw new Error('gateToolBirth decision must be "approve" or "reject".');
   }
+  // The wall, reinforced: a tool can never be approved into a callable state without authored code
+  // AND a test. A "pending" crystallization candidate carries neither, so it cannot be approved
+  // directly — it must first be authored into a full spec through proposeTool. A founder MAY still
+  // reject a pending candidate to dismiss it.
+  if (verb === "approve") {
+    const hasCode = typeof proposedTool.code === "string" && proposedTool.code.trim();
+    const hasTest = typeof proposedTool.test === "string" && proposedTool.test.trim();
+    if (!hasCode || !hasTest) {
+      throw new Error("A tool cannot be approved without authored code and a test — author it through proposeTool first.");
+    }
+  }
   const note = typeof decision === "object" && decision?.note ? String(decision.note) : null;
   return {
     ...proposedTool,
@@ -71,4 +85,38 @@ export function gateToolBirth(proposedTool, decision) {
 // inert by construction.
 export function isCallable(tool) {
   return Boolean(tool) && tool.status === "approved";
+}
+
+// Derive a STABLE, slugged id from the candidate signature so re-detecting the same deterministic
+// procedure on a later run yields the SAME proposal id (idempotent), not a fresh duplicate each run.
+function birthIdFromSignature(signature) {
+  const slug = String(signature || "candidate")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 60) || "candidate";
+  return `toolbirth-${slug}`;
+}
+
+// E7.1 -> E7.2 bridge. Turn one crystallization SUGGESTION (a detected, repeated deterministic
+// procedure) into a PENDING tool-birth proposal. This is the missing link the audit flagged: the
+// detector found a candidate, but nothing carried it toward birth. A pending proposal is NOT a tool —
+// it has no authored code or test yet, so it deliberately cannot pass proposeTool (which rightly
+// refuses a codeless tool) and is inert by construction (isCallable only ever returns true for an
+// explicitly approved tool). The model authors the code+test later; the founder gates after that.
+// Nothing here registers or runs anything.
+export function proposeToolBirthFromCandidate(suggestion = {}) {
+  const signature = requireString(suggestion.signature, "Candidate signature");
+  return {
+    id: birthIdFromSignature(signature),
+    status: "pending", // a detected candidate awaiting model-authored code+test and a founder gate
+    signature,
+    reason: typeof suggestion.reason === "string" && suggestion.reason.trim()
+      ? suggestion.reason
+      : `The deterministic procedure "${signature}" recurred enough to be worth crystallizing into a tool.`,
+    count: Number.isInteger(suggestion.count) ? suggestion.count : 0,
+    sample: suggestion.sample ?? null,
+    provenance: "self-built",
+    proposedAt: new Date().toISOString(),
+  };
 }

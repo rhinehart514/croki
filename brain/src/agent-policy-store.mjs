@@ -1,16 +1,11 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { persistence } from "./persistence.mjs";
 
 const SCHEMA_VERSION = 1;
+const COLLECTION = "agent-policies";
 
 function now() {
   return new Date().toISOString();
-}
-
-function root(options = {}) {
-  return options.root || process.env.GTM_IDE_HOME || path.join(os.homedir(), ".gtm-ide");
 }
 
 function safeId(value) {
@@ -25,25 +20,13 @@ function arr(value) {
   return Array.isArray(value) ? value.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()) : [];
 }
 
-function fileFor(projectId, options = {}) {
-  return path.join(root(options), "agent-policies", `${safeId(projectId)}.json`);
-}
-
-function write(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`);
-  fs.renameSync(tmp, file);
-}
-
 function emptyStore(projectId) {
   return { schemaVersion: SCHEMA_VERSION, projectId, policies: [] };
 }
 
 export function loadAgentPolicyStore(projectId = "default", options = {}) {
-  const file = fileFor(projectId, options);
-  if (!fs.existsSync(file)) return emptyStore(projectId);
-  const stored = JSON.parse(fs.readFileSync(file, "utf8"));
+  const stored = persistence(options).get(COLLECTION, safeId(projectId));
+  if (!stored) return emptyStore(projectId);
   if (stored?.schemaVersion === SCHEMA_VERSION && Array.isArray(stored.policies)) return stored;
   return {
     ...emptyStore(projectId),
@@ -59,7 +42,7 @@ export function saveAgentPolicyStore(store, options = {}) {
     schemaVersion: SCHEMA_VERSION,
     policies: Array.isArray(store.policies) ? store.policies : [],
   };
-  write(fileFor(durable.projectId, options), durable);
+  persistence(options).set(COLLECTION, safeId(durable.projectId), durable);
   return durable;
 }
 

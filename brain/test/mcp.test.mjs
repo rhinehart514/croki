@@ -33,7 +33,6 @@ describe("MCP tool IA — canonical surface", () => {
       "run_workflow",
       "run_workflow_node",
       "approve_workflow_gate",
-      "request_workflow_change",
     ]) {
       assert.ok(names.includes(canonical), `${canonical} must exist`);
     }
@@ -49,11 +48,14 @@ describe("MCP tool IA — canonical surface", () => {
     assert.deepEqual(new Set(gateVerbs), new Set(["approve_workflow_gate", "approve_gate"]));
   });
 
-  it("removed the engine verb 'mutate' from the canonical surface", () => {
-    // mutate_channel survives only as a backward-compatible alias; the canonical
-    // name is request_workflow_change (a domain verb, not an engine verb).
-    assert.ok(names.includes("request_workflow_change"));
+  it("exposes no direct graph-mutation verb on this surface", () => {
+    // Direct graph edits are never applied from the engine surface — they stage
+    // through the operator's propose_graph_changes flow. The old disabled stubs
+    // (request_workflow_change / mutate_channel) were removed rather than kept as
+    // tools whose only behaviour was to refuse.
     assert.ok(!names.includes("mutate_workflow"), "no engine-verb canonical tool");
+    assert.ok(!names.includes("mutate_channel"), "removed disabled stub");
+    assert.ok(!names.includes("request_workflow_change"), "removed disabled stub");
   });
 
   it("every tool description states the action, object, when, and a boundary", () => {
@@ -93,7 +95,6 @@ describe("MCP tool IA — channel aliases delegate to the workflow handlers", ()
     ["get_channel", "get_workflow"],
     ["run_channel", "run_workflow"],
     ["approve_gate", "approve_workflow_gate"],
-    ["mutate_channel", "request_workflow_change"],
   ];
 
   it("registers every alias and its canonical tool", () => {
@@ -114,15 +115,3 @@ describe("MCP tool IA — channel aliases delegate to the workflow handlers", ()
   });
 });
 
-describe("MCP tool IA — disabled direct-edit path", () => {
-  it("request_workflow_change refuses and points at the operator proposal flow", async () => {
-    const tool = TOOL_MAP.get("request_workflow_change");
-    const result = await tool.handler({ workflowId: "w1", command: "add a node" });
-    assert.equal(result.ok, false);
-    assert.match(result.error, /propose_graph_changes/);
-  });
-
-  it("the mutate_channel alias shares the same disabled handler", () => {
-    assert.equal(TOOL_MAP.get("mutate_channel").handler, TOOL_MAP.get("request_workflow_change").handler);
-  });
-});

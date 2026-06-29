@@ -71,6 +71,40 @@ test("stays blind when the requested win event does not exist", () => {
   assert.match(report.headline, /^Blind:/);
 });
 
+test("ignores leftover agent worktrees under .claude", () => {
+  const winEventSource = `
+    posthog.capture("project_created", {
+      projectId,
+      sourceId,
+    });
+  `;
+  const root = fixture({
+    "app/join.tsx": `const sourceId = searchParams.get("utm_source");`,
+    "services/project.ts": winEventSource,
+    // A leftover agent git worktree: a full copy of the repo. None of these
+    // files are the product's real source and they must never be scanned.
+    ".claude/worktrees/agent-a70259b2416edafe8/services/project.ts": winEventSource,
+    ".claude/worktrees/agent-af70964acc54044ec/services/project.ts": winEventSource,
+  });
+
+  const report = scanRepo(root, { winEvent: "project_created" });
+
+  const citedFiles = [
+    ...report.analytics.citations,
+    ...report.attribution.citations,
+    ...report.winEvent.citations,
+  ].map((c) => c.file);
+
+  for (const file of citedFiles) {
+    assert.ok(
+      !file.includes(".claude"),
+      `scan output must not cite a copy under .claude, got: ${file}`,
+    );
+  }
+  // The real source is still scanned.
+  assert.ok(citedFiles.some((file) => file === "services/project.ts"));
+});
+
 test("build prompt stays narrow and includes the grounded evidence", () => {
   const root = fixture({
     "app/join.tsx": `const ref = searchParams.get("ref");`,

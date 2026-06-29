@@ -1,31 +1,15 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { persistence } from "./persistence.mjs";
 
 const SCHEMA_VERSION = 1;
+const COLLECTION = "domain-events";
 
 function now() {
   return new Date().toISOString();
 }
 
-function root(options = {}) {
-  return options.root || process.env.GTM_IDE_HOME || path.join(os.homedir(), ".gtm-ide");
-}
-
 function safeId(value) {
   return String(value || "default").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "default";
-}
-
-function fileFor(projectId, options = {}) {
-  return path.join(root(options), "domain-events", `${safeId(projectId)}.json`);
-}
-
-function write(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`);
-  fs.renameSync(tmp, file);
 }
 
 function emptyStore(projectId) {
@@ -33,9 +17,8 @@ function emptyStore(projectId) {
 }
 
 export function loadDomainEventStore(projectId = "default", options = {}) {
-  const file = fileFor(projectId, options);
-  if (!fs.existsSync(file)) return emptyStore(projectId);
-  const stored = JSON.parse(fs.readFileSync(file, "utf8"));
+  const stored = persistence(options).get(COLLECTION, safeId(projectId));
+  if (!stored) return emptyStore(projectId);
   return {
     ...emptyStore(projectId),
     ...stored,
@@ -50,7 +33,7 @@ export function saveDomainEventStore(store, options = {}) {
     schemaVersion: SCHEMA_VERSION,
     events: Array.isArray(store.events) ? store.events : [],
   };
-  write(fileFor(durable.projectId, options), durable);
+  persistence(options).set(COLLECTION, safeId(durable.projectId), durable);
   return durable;
 }
 

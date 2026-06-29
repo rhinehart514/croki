@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle, Check, LoaderCircle, Play, ShieldCheck, X,
+  AlertTriangle, Check, LoaderCircle, Lock, Play, ShieldCheck, Users, X,
 } from "lucide-react";
 import {
   applyGraphOperations as applyGraphOperationsApi,
@@ -21,6 +21,8 @@ import {
   addClarity,
   removeClarity,
   listPeople,
+  findReferences,
+  getPerson,
   getChannelFeeds,
   getDirectedFeeds,
   deriveChannelFrom,
@@ -43,40 +45,54 @@ import {
   deriveProductModel,
   reviseProductModel,
 } from "@/api";
-import { ArtifactEditor } from "@/components/ArtifactEditor";
-import { WorkspaceView } from "@/components/WorkspaceView";
-import { AgentProfile, type AgentProfileView, type TeammateView } from "@/components/AgentProfile";
+// Heavy overlay/panel components are split into their own chunks and loaded on demand the first time
+// the founder opens them, so they stay out of the initial app chunk. Each is named-exported, so the
+// dynamic import maps the named export onto the default React.lazy expects.
+const ArtifactEditor = lazy(() => import("@/components/ArtifactEditor").then((m) => ({ default: m.ArtifactEditor })));
+const WorkspaceView = lazy(() => import("@/components/WorkspaceView").then((m) => ({ default: m.WorkspaceView })));
+const AgentProfile = lazy(() => import("@/components/AgentProfile").then((m) => ({ default: m.AgentProfile })));
+const ConnectCapability = lazy(() => import("@/components/ConnectCapability").then((m) => ({ default: m.ConnectCapability })));
+import type { AgentProfileView, TeammateView } from "@/components/AgentProfile";
 import { ComposerDock } from "@/components/ComposerDock";
-import { ConnectCapability } from "@/components/ConnectCapability";
 import { FloatingDock } from "@/components/FloatingDock";
 import { type OperatorCursorState } from "@/components/GraphCanvas";
 import { TeamOnboarding } from "@/components/TeamOnboarding";
 import { convexEnabled, loadTeamIdentity, type TeamIdentity } from "@/lib/convex";
 import { GoalLauncher } from "@/components/GoalLauncher";
+import { OperatorDriveState } from "@/components/OperatorDriveState";
+const TeamSpace = lazy(() => import("@/components/TeamSpace").then((m) => ({ default: m.TeamSpace })));
+const GoPanel = lazy(() => import("@/components/GoPanel").then((m) => ({ default: m.GoPanel })));
+const PortfolioComposer = lazy(() => import("@/components/PortfolioComposer").then((m) => ({ default: m.PortfolioComposer })));
+import { getMe, canApprove as canApproveApi, operatorGo } from "@/api";
+import { getIdentity, FOUNDER_USER_ID, type ActingIdentity } from "@/lib/identity";
+import type { Me } from "@/types";
 import { NodeEditor } from "@/components/NodeEditor";
 import { ProgramCanvas } from "@/components/ProgramCanvas";
 // GtmExplorer (the old left rail) is intentionally no longer rendered — outcome navigation moved to
 // the FloatingDock's OutcomeSwitcher, the Library to LibraryPalette, the feeds into ComposerDock,
 // Problems to the dock. The breadcrumb switchers, mode lenses, Problems, Approvals, Simulate and Run
 // all live in FloatingDock now, so App no longer imports them directly.
-import { LibraryPalette } from "@/components/LibraryPalette";
+const LibraryPalette = lazy(() => import("@/components/LibraryPalette").then((m) => ({ default: m.LibraryPalette })));
 import { statusLabel } from "@/lib/status";
 import { healthHex } from "@/lib/health";
 import { itemKey } from "@/lib/itemKey";
 import { findProgramForGraph, graphBelongsToProgram, programGraphId } from "@/lib/program";
-import { ProductUnderstanding } from "@/components/ProductUnderstanding";
-import { ProductCanvas } from "@/components/ProductCanvas";
+const ProductUnderstanding = lazy(() => import("@/components/ProductUnderstanding").then((m) => ({ default: m.ProductUnderstanding })));
+const ProductCanvas = lazy(() => import("@/components/ProductCanvas").then((m) => ({ default: m.ProductCanvas })));
 import { GtmCanvas, type GtmCanvasModel } from "@/components/canvas/GtmCanvas";
 import { CanvasCard } from "@/components/CanvasCard";
 import { ClarityCard } from "@/components/ClarityCard";
 import { PeopleLens } from "@/components/lenses/PeopleLens";
 import { ExperimentMatrixLens } from "@/components/lenses/ExperimentMatrixLens";
+import { ReferencesPanel, type ReferenceKind } from "@/components/ReferencesPanel";
+import { ToolForge } from "@/components/ToolForge";
 
 // The views you can summon onto the GTM canvas as draggable cards — the agentic replacement for
 // lens tabs. You pop one up, drag it, dismiss it; Claude can summon the same cards.
 const SUMMON_GTM = [
   { id: "people", label: "People", desc: "Everyone your channels have touched, across the portfolio." },
   { id: "experiments", label: "Experiment matrix", desc: "ICP × claim × channel — the live hypotheses." },
+  { id: "tools", label: "Self-built tools", desc: "Repeated procedures crystallized into reusable, founder-approved tools." },
 ];
 import { ProjectPicker } from "@/components/ProjectPicker";
 import { ProductEntry } from "@/components/ProductEntry";
@@ -87,7 +103,7 @@ import type {
   GTMProject, GTMRunResult, NodeSelection, OperatorSession, ProjectSummary,
   AgentCreationPolicy, AgentInstance, FeedbackSignal, OutcomeProgram,
   AgentEvaluation, DomainEvent, ProductModel, ProductModelEdit,
-  CapabilityServer, CapabilityTool, Person, ChannelFeed, DirectedFeed,
+  CapabilityServer, CapabilityTool, Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, ComposerPosture,
 } from "@/types";
 
@@ -158,6 +174,19 @@ export default function App() {
   const [composerFocus, setComposerFocus] = useState(0);
   // The Approvals panel — the founder gate's first-class home. Opens from the toolbar badge.
   const [approvalsOpen, setApprovalsOpen] = useState(false);
+  // The team space (members + roles) and the one-click autonomous "Go" entry — wave-2 Lane C.
+  const [teamOpen, setTeamOpen] = useState(false);
+  const [goOpen, setGoOpen] = useState(false);
+  // "Propose the whole GTM system" — the portfolio composer overlay (compose-only, never sends).
+  const [portfolioComposerOpen, setPortfolioComposerOpen] = useState(false);
+  // Who I am + my teams, and the space I'm acting in (stamped on requests via lib/identity). The
+  // founder personal space is the default; switching in TeamSpace re-scopes my release authority.
+  const [me, setMe] = useState<Me | null>(null);
+  const [acting, setActing] = useState<ActingIdentity>(getIdentity());
+  // Whether the acting user may RELEASE a gate on the session's owning team (owner/approver yes,
+  // member no). Drives the role-gated release control in the approval queue. Defaults true for the
+  // solo founder (personal space) so nothing changes for a single-player install.
+  const [canReleaseGate, setCanReleaseGate] = useState(true);
   // The summoned Library palette — opened from the canvas "+ Add step" control, replacing the old
   // left-rail Library now that the rail is dissolved.
   const [libraryPaletteOpen, setLibraryPaletteOpen] = useState(false);
@@ -189,6 +218,29 @@ export default function App() {
     setSummoned((cur) => cur.filter((k) => k !== kind));
   }, []);
 
+  // Find references — the canvas moat made reachable. Selecting a person / experiment on a lens opens
+  // a drill-down of every place that entity appears across channels (plus the Person detail). Read-only.
+  const [reference, setReference] = useState<{
+    kind: ReferenceKind; id: string; loading: boolean;
+    result: CrossReferenceResult | null; person: Person | null;
+  } | null>(null);
+  const openReference = useCallback((kind: ReferenceKind, id: string) => {
+    if (!activeProjectId || !id) return;
+    setReference({ kind, id, loading: true, result: null, person: null });
+    void (async () => {
+      try {
+        const result = await findReferences(activeProjectId, kind, id);
+        let person: Person | null = result.person ?? null;
+        if (kind === "person" && !person) {
+          try { person = (await getPerson(activeProjectId, id)).person; } catch { /* detail optional */ }
+        }
+        setReference((cur) => (cur && cur.kind === kind && cur.id === id ? { ...cur, loading: false, result, person } : cur));
+      } catch {
+        setReference((cur) => (cur && cur.kind === kind && cur.id === id ? { ...cur, loading: false } : cur));
+      }
+    })();
+  }, [activeProjectId]);
+
   // Ideate — the composer's thinking posture, and the durable clarity it pins onto the canvas.
   const [composerPosture, setComposerPosture] = useState<ComposerPosture>("build");
   const [clarityItems, setClarityItems] = useState<ClarityObject[]>([]);
@@ -208,6 +260,10 @@ export default function App() {
   // Is a live Claude available? Drives the cold-start state — composing, ideating, and the operator
   // all need a signed-in subscription, so an unconnected founder gets a clear path, not a dead end.
   const [connection, setConnection] = useState<ConnectionStatus | null>(null);
+  // The "Connect Claude" banner is a soft nudge, not a wall: dismiss it and keep exploring the canvas,
+  // library, and any existing product without a live subscription. The connection state itself stays
+  // live (the model dot still reads "not connected"), so building still names the path when you reach it.
+  const [connectBannerDismissed, setConnectBannerDismissed] = useState(false);
 
   // Graph state
   const [graph, setGraph] = useState<GTMGraph | null>(null);
@@ -336,7 +392,46 @@ export default function App() {
   useEffect(() => {
     getLibrary().then(setLibrary).catch(console.error);
     getConnection().then(setConnection).catch(() => {});
+    getMe().then(setMe).catch(() => {});
   }, []);
+
+  // Resolve whether the acting user may release the gate on the session's owning team. The team is the
+  // session's stored teamId; the personal team (solo founder) always returns canApprove=true server-side.
+  // Re-runs when the session, its team, or the acting user changes. With no team to check (no session
+  // yet, or acting as the founder), release stays open.
+  const sessionTeamId = operatorSession?.teamId ?? null;
+  useEffect(() => {
+    let live = true;
+    if (!sessionTeamId) { setCanReleaseGate(true); return; }
+    canApproveApi(sessionTeamId, acting.userId || FOUNDER_USER_ID)
+      .then(({ canApprove }) => { if (live) setCanReleaseGate(canApprove); })
+      .catch(() => { if (live) setCanReleaseGate(true); });
+    return () => { live = false; };
+  }, [sessionTeamId, acting.userId]);
+
+  // The acting space changed in TeamSpace — refresh "me" (membership/role may have moved) and let the
+  // identity-stamped reads re-resolve on the next poll.
+  const handleTeamChange = useCallback((identity: ActingIdentity) => {
+    setActing(identity);
+    getMe().then(setMe).catch(() => {});
+  }, []);
+
+  // The one-click autonomous drive. Launches a primed session that composes (if needed) and runs to
+  // the shared founder gate, then stops — never sends. The launched session becomes the live operator
+  // session the dock and stream already track.
+  const handleGo = useCallback(async (goal: string) => {
+    const projectId = activeProjectIdRef.current;
+    if (!projectId) return;
+    const { session } = await operatorGo({
+      goal,
+      projectId,
+      teamId: acting.teamId ?? undefined,
+      graphId: graph?.id,
+    });
+    operatorGraphRevision.current = session.graphRevision;
+    operatorRunId.current = null;
+    setOperatorSession(session);
+  }, [acting.teamId, graph?.id]);
 
   const loadChannel = useCallback(async (channelId: string) => {
     setGraphRunning(true);
@@ -653,6 +748,21 @@ export default function App() {
       window.clearInterval(timer);
     };
   }, [activeProjectId, activeProgramId, operatorSessionId, operatorSessionStatus, syncOperator]);
+
+  // "Watch it work in the panel on the right" only works if that panel is actually open. When a drive
+  // STARTS (the operator begins composing/running) or FAILS, pop the live work panel open once so the
+  // reasoning and brief — and any failure reason — are visible without the founder hunting for them.
+  // Only on the transition, so it never fights a founder who deliberately closed it mid-run.
+  const prevDriveStatus = useRef<string | null>(null);
+  useEffect(() => {
+    const st = operatorSessionStatus;
+    const wasActive = ["ready", "running"].includes(prevDriveStatus.current ?? "");
+    const isActive = !!st && ["ready", "running"].includes(st);
+    if ((isActive && !wasActive) || (st === "failed" && prevDriveStatus.current !== "failed")) {
+      setGoOpen(true);
+    }
+    prevDriveStatus.current = st;
+  }, [operatorSessionStatus]);
 
   // Graph actions
   const executeGraph = useCallback(async (
@@ -978,6 +1088,8 @@ export default function App() {
     setProblemsOpen(false);
     setApprovalsOpen(false);
     setArtifactEdit(null);
+    setTeamOpen(false);
+    setGoOpen(false);
   }, []);
 
   const handleLoadPilotRecipe = useCallback(async () => {
@@ -1322,6 +1434,23 @@ export default function App() {
   const pendingApprovals = loadedDrafts > 0
     ? loadedDrafts
     : channels.reduce((sum, ch) => sum + (ch.pendingGates ?? 0), 0);
+  // Every OTHER channel holding drafts at its gate — so the queue is a real cross-channel home for
+  // the founder gate, not just the one run on screen. Each row opens that channel and rehydrates its
+  // run, surfacing its staged drafts in this same panel. Derived from real pending-gate counts.
+  const otherChannelGates = useMemo(
+    () => channels.filter((ch) => (ch.pendingGates ?? 0) > 0 && ch.id !== activeChannelId),
+    [channels, activeChannelId],
+  );
+
+  // The space label on the dock's Team chip — the personal space reads "Personal", a real team reads
+  // its name. The personal team is the first in /api/me's list (acting.teamId null → personal).
+  const personalTeamId = me?.teams[0]?.id ?? null;
+  const actingTeamId = acting.teamId ?? personalTeamId;
+  const teamLabel = !actingTeamId || actingTeamId === personalTeamId
+    ? "Personal"
+    : me?.teams.find((t) => t.id === actingTeamId)?.name ?? "Team";
+  // The acting user's role in the space, for the queue header (e.g. "you're an Approver").
+  const myRole = me?.teams.find((t) => t.id === actingTeamId)?.role ?? null;
 
   // On-canvas proposals: when the operator stages a graph change, render the would-be graph with the
   // new nodes/edges ghosted and let the founder accept or discard. "Vibe up to the gate" now covers
@@ -1609,6 +1738,10 @@ export default function App() {
               inspecting={inspecting}
               onToggleInspect={() => setInspecting((v) => !v)}
               onOpenWorkspace={() => setWorkspaceOpen(true)}
+              onOpenTeam={() => { setTeamOpen((v) => !v); setGoOpen(false); }}
+              teamLabel={teamLabel}
+              onOpenGo={overlay !== "product" && activeProject ? () => { setGoOpen((v) => !v); setTeamOpen(false); } : undefined}
+              goActive={goOpen}
               session={operatorSession}
               connection={connection}
             />
@@ -1628,14 +1761,40 @@ export default function App() {
                 height={kind === "experiments" ? 460 : 520}
               >
                 {kind === "people" ? (
-                  <PeopleLens people={gtmCanvasModel.people} channels={gtmCanvasModel.channels} selected={null} onSelect={() => { /* selection within a summoned card is local for now */ }} />
+                  <PeopleLens people={gtmCanvasModel.people} channels={gtmCanvasModel.channels} selected={reference?.kind === "person" ? reference.id : null} onSelect={(id) => openReference("person", id)} />
                 ) : null}
                 {kind === "experiments" ? (
-                  <ExperimentMatrixLens experiments={gtmCanvasModel.experiments} claims={gtmCanvasModel.claims} icp={gtmCanvasModel.icp} channels={gtmCanvasModel.channels} selected={null} onSelect={() => {}} />
+                  <ExperimentMatrixLens experiments={gtmCanvasModel.experiments} claims={gtmCanvasModel.claims} icp={gtmCanvasModel.icp} channels={gtmCanvasModel.channels} selected={reference?.kind === "experiment" ? reference.id : null} onSelect={(id) => openReference("experiment", id)} />
+                ) : null}
+                {kind === "tools" && activeProjectId ? (
+                  <ToolForge projectId={activeProjectId} />
                 ) : null}
               </CanvasCard>
             );
           })}
+
+          {/* Find references — the cross-channel drill-down for a selected person / experiment, opened
+              from a lens. A draggable opaque CanvasCard like the summoned views; read-only. */}
+          {view === "canvas" && overlay !== "product" && reference && (
+            <CanvasCard
+              key="references"
+              title="Find references"
+              subtitle={reference.kind}
+              onDismiss={() => setReference(null)}
+              initial={{ x: 220, y: 120 }}
+              width={420}
+              height={560}
+            >
+              <ReferencesPanel
+                kind={reference.kind}
+                result={reference.result}
+                person={reference.person}
+                loading={reference.loading}
+                channels={gtmCanvasModel.channels}
+                onOpenChannel={(channelId) => void loadChannel(channelId)}
+              />
+            </CanvasCard>
+          )}
 
           {/* Clarity cards — the durable residue of Ideate sessions, pinned onto the canvas. Draggable
               and dismissible like any summoned card; persisted per-project. */}
@@ -1670,7 +1829,7 @@ export default function App() {
             // Clicking a tile opens that channel's flow (the channel-flow lens). The portfolio map
             // REPLACES the old swimlane overview; the swimlane renderer inside GraphCanvas stays for
             // now and retires once the People / experiment lenses land (P10.3 steps 4–5).
-            <GtmCanvas model={gtmCanvasModel} defaultLensId="engine" activeLensId={gtmLensId} onLensChange={setGtmLensId} chromeless />
+            <GtmCanvas model={gtmCanvasModel} defaultLensId="engine" activeLensId={gtmLensId} onLensChange={setGtmLensId} chromeless onSelectObject={(lensId, id) => { if (lensId === "people") openReference("person", id); else if (lensId === "experiment-matrix") openReference("experiment", id); }} />
           ) : activeProgram ? (
             <ProgramCanvas
               agents={agentInstances}
@@ -1725,15 +1884,18 @@ export default function App() {
             // The single channel, through the GTM canvas: the channel-flow lens IS the GraphCanvas
             // (single-channel behavior unchanged), with the portfolio-map lens one tab away. The
             // blank-channel-guide for an empty graph now lives inside the channel-flow lens.
-            <GtmCanvas model={gtmCanvasModel} defaultLensId="channel-flow" activeLensId={gtmLensId} onLensChange={setGtmLensId} chromeless />
-          ) : operatorSession && (operatorSession.status === "ready" || operatorSession.status === "running") ? (
-            // The operator is already composing the loop from the goal just given — never re-ask for
-            // the goal here. Show a focused "building" state; the live work streams in the dock.
-            <div className="building-state">
-              <LoaderCircle className="spin" />
-              <strong>Claude is building your loop</strong>
-              <span>Reading {activeProject?.name ?? "your product"} and composing the system to chase your goal — it'll stop at your gate. Watch it work in the panel on the right.</span>
-            </div>
+            <GtmCanvas model={gtmCanvasModel} defaultLensId="channel-flow" activeLensId={gtmLensId} onLensChange={setGtmLensId} chromeless onSelectObject={(lensId, id) => { if (lensId === "people") openReference("person", id); else if (lensId === "experiment-matrix") openReference("experiment", id); }} />
+          ) : operatorSession && ["ready", "running", "failed", "blocked"].includes(operatorSession.status) ? (
+            // The operator is driving the loop from the goal just given (or stopped trying). Never
+            // re-ask for the goal here, and never show an opaque spinner: the operator's live
+            // reasoning and the brief it's composing stream right here, and a failure/block surfaces
+            // its reason with a way to pick the loop back up.
+            <OperatorDriveState
+              session={operatorSession}
+              productName={activeProject?.name ?? "your product"}
+              onResume={() => void handleComposerSend("Continue.")}
+              onStartOver={() => void handleOperatorCancel()}
+            />
           ) : (booting || projectBusy) ? (
             // Still resolving the workspace (initial boot, or switching products) — a calm loading
             // state, never the cold-start goal launcher flashing before the real graph arrives.
@@ -1749,6 +1911,7 @@ export default function App() {
               onSubmitGoal={(g) => void handleComposerSend(g)}
               onIdeate={() => setComposerPosture("ideate")}
               onLoadRecipe={handleLoadPilotRecipe}
+              onProposeSystem={activeProjectId ? () => setPortfolioComposerOpen(true) : undefined}
             />
           )}
 
@@ -1781,15 +1944,25 @@ export default function App() {
             </div>
           )}
 
-          {/* Cold start — no live Claude. Compose/ideate/operator all need a signed-in subscription,
-              so name the path to connect instead of letting the founder hit a raw error mid-action. */}
-          {connection && !connection.connected && (
+          {/* No live Claude — a soft, dismissible nudge, not a wall. Composing/ideating/the operator need
+              a signed-in subscription, so we name the path; but you can dismiss this and keep looking
+              around the canvas, library, and any existing product meanwhile. */}
+          {connection && !connection.connected && !connectBannerDismissed && (
             <div className="loop-connect-banner" role="status">
               <AlertTriangle />
               <div className="loop-connect-text">
                 <strong>Connect Claude to build</strong>
-                <span>Composing, ideating, and the operator run on your Claude subscription. Run <code>claude</code> in your terminal to sign in, or set <code>CLAUDE_CODE_OAUTH_TOKEN</code>. You can still explore the canvas, library, and any existing program meanwhile.</span>
+                <span>Composing, ideating, and the operator run on your Claude subscription. Run <code>claude</code> in your terminal to sign in, or set <code>CLAUDE_CODE_OAUTH_TOKEN</code>. You can keep exploring the canvas, library, and any existing product meanwhile.</span>
               </div>
+              <button
+                className="loop-connect-dismiss"
+                onClick={() => setConnectBannerDismissed(true)}
+                type="button"
+                title="Dismiss — keep exploring without Claude"
+                aria-label="Dismiss"
+              >
+                <X />
+              </button>
             </div>
           )}
 
@@ -1816,11 +1989,13 @@ export default function App() {
                 <button className="canvas-overlay-close" onClick={() => setOverlay(null)} type="button" title="Back to the canvas">×</button>
               </div>
               <div className="canvas-overlay-body">
-                <ProductUnderstanding
-                  busy={projectBusy}
-                  onGenerate={() => { setOverlay(null); setComposerPosture("ideate"); }}
-                  project={activeProject}
-                />
+                <Suspense fallback={null}>
+                  <ProductUnderstanding
+                    busy={projectBusy}
+                    onGenerate={() => { setOverlay(null); setComposerPosture("ideate"); }}
+                    project={activeProject}
+                  />
+                </Suspense>
               </div>
             </div>
           )}
@@ -1834,7 +2009,9 @@ export default function App() {
                 <button className="canvas-overlay-close" onClick={() => { setOverlay(null); refreshCapabilities(); }} type="button" title="Back to the canvas">×</button>
               </div>
               <div className="canvas-overlay-body">
-                <ConnectCapability onChange={refreshCapabilities} />
+                <Suspense fallback={null}>
+                  <ConnectCapability onChange={refreshCapabilities} />
+                </Suspense>
               </div>
             </div>
           )}
@@ -1845,16 +2022,18 @@ export default function App() {
               layer on top of the cited truth. */}
           {overlay === "product" && activeProject && (
             <div className="canvas-overlay canvas-overlay-flush" role="region" aria-label="Product mode">
-              <ProductCanvas
-                model={productModel}
-                busy={productModelBusy}
-                productName={activeProject.name}
-                onDerive={handleDeriveProductModel}
-                onRevise={handleReviseProductModel}
-                onExitToGtm={() => setOverlay(null)}
-                activeLensId={productLensId}
-                chromeless
-              />
+              <Suspense fallback={null}>
+                <ProductCanvas
+                  model={productModel}
+                  busy={productModelBusy}
+                  productName={activeProject.name}
+                  onDerive={handleDeriveProductModel}
+                  onRevise={handleReviseProductModel}
+                  onExitToGtm={() => setOverlay(null)}
+                  activeLensId={productLensId}
+                  chromeless
+                />
+              </Suspense>
             </div>
           )}
 
@@ -1862,7 +2041,8 @@ export default function App() {
               replaces the dissolved left-rail Library: the personalized agents born for THIS outcome
               first, then the on-disk agents and skills, each draggable onto the canvas or added with
               one click. Anchored top-left near the Add control; self-closes on Escape / outside-click. */}
-          {view === "canvas" ? (
+          {view === "canvas" && libraryPaletteOpen ? (
+            <Suspense fallback={null}>
             <LibraryPalette
               open={libraryPaletteOpen}
               onClose={() => setLibraryPaletteOpen(false)}
@@ -1888,11 +2068,13 @@ export default function App() {
               }}
               onNewArtifact={handleNewArtifact}
             />
+            </Suspense>
           ) : null}
 
           {/* The three-lane workspace — the "open file" index for the GTM codebase. Full-bleed over
               the canvas; opening a workflow loads it, opening a skill/agent opens its editor. */}
           {view === "canvas" && workspaceOpen ? (
+            <Suspense fallback={null}>
             <WorkspaceView
               channels={channels}
               library={library}
@@ -1907,6 +2089,7 @@ export default function App() {
               onNewWorkflow={() => { setWorkspaceOpen(false); setComposerPosture("ideate"); }}
               onClose={() => setWorkspaceOpen(false)}
             />
+            </Suspense>
           ) : null}
 
         </section>
@@ -1920,22 +2103,34 @@ export default function App() {
             <header className="loop-approvals-head">
               <div className="loop-approvals-head-title">
                 <ShieldCheck />
-                <strong>Approvals</strong>
+                <strong>Team queue</strong>
                 {pendingApprovals > 0 ? <span className="loop-approvals-count">{pendingApprovals}</span> : null}
               </div>
               <button className="loop-approvals-close" onClick={() => setApprovalsOpen(false)} type="button" aria-label="Close approvals">
                 <X />
               </button>
             </header>
+            {/* Who's acting, and whether they can release — the team layer made plain. A member sees
+                why the release controls are off; an owner/approver sees the green "you can release". */}
+            <div className={`loop-approvals-authority ${canReleaseGate ? "can" : "cannot"}`}>
+              <Users />
+              <span className="loop-approvals-authority-space">{teamLabel}</span>
+              <span className="loop-approvals-authority-dot" aria-hidden>·</span>
+              <span className="loop-approvals-authority-role">
+                {myRole ? `you're ${myRole === "approver" ? "an" : "a"} ${myRole}` : "you"}
+              </span>
+              <span className={`loop-approvals-authority-flag ${canReleaseGate ? "can" : "cannot"}`}>
+                {canReleaseGate ? "can release" : "view only"}
+              </span>
+            </div>
             <div className="loop-approvals-body">
-              {approvalItems.length === 0 ? (
+              {approvalItems.length === 0 && otherChannelGates.length === 0 ? (
                 <div className="loop-approvals-empty">
                   <ShieldCheck />
                   <strong>Nothing waiting</strong>
                   <p>
-                    {pendingApprovals > 0
-                      ? `${pendingApprovals} draft${pendingApprovals === 1 ? " is" : "s are"} gated in other systems. Open that outcome to review ${pendingApprovals === 1 ? "it" : "them"}.`
-                      : "Nothing has reached the gate. When a run stages a draft to send, publish, or charge, it stops here for your approval first — nothing leaves the building without it."}
+                    Nothing has reached the gate. When a run stages a draft to send, publish, or charge,
+                    it stops here for your approval first — nothing leaves the building without it.
                   </p>
                 </div>
               ) : approvalItems.map((gate) => (
@@ -1944,6 +2139,29 @@ export default function App() {
                     <strong>{gate.label}</strong>
                     <span>{gate.items.length} draft{gate.items.length === 1 ? "" : "s"} staged</span>
                   </div>
+                  {/* Pattern / bulk release: approve every still-undecided draft in this gate at once,
+                      for a high-volume run. Role-gated like every release; hidden once one or zero
+                      drafts remain undecided. */}
+                  {gate.items.length > 1 && canReleaseGate ? (() => {
+                    const undecided = gate.items.filter((item, i) => !decisions[gate.nodeId]?.[itemKey(item, i)]?.decision);
+                    if (undecided.length < 2) return null;
+                    return (
+                      <button
+                        className="loop-approvals-bulk"
+                        type="button"
+                        onClick={() => {
+                          const batch: Record<string, GateDecision> = {};
+                          gate.items.forEach((item, i) => {
+                            const k = itemKey(item, i);
+                            if (!decisions[gate.nodeId]?.[k]?.decision) batch[k] = { decision: "approve" };
+                          });
+                          void submitGateReview(gate.nodeId, batch);
+                        }}
+                      >
+                        <Check size={13} /> Approve all {undecided.length} matching
+                      </button>
+                    );
+                  })() : null}
                   {gate.items.length === 0 ? (
                     <p className="loop-approvals-gate-note">Staged content loads when this gate's run is open.</p>
                   ) : gate.items.map((item, i) => {
@@ -1992,6 +2210,13 @@ export default function App() {
                         <div className={`loop-approvals-decided is-${decided}`}>
                           {decided === "approve" ? "Approved" : "Rejected"}{wasEdited ? " · your edit banked" : ""}
                         </div>
+                      ) : !canReleaseGate ? (
+                        // Role wall: a member can read the queue but cannot release. The control is
+                        // disabled with a plain reason, not hidden — so the wall is legible, not silent.
+                        <div className="loop-approvals-locked">
+                          <Lock size={12} />
+                          <span>Only an owner or approver on {teamLabel} can release this. Ask a teammate to approve.</span>
+                        </div>
                       ) : editing ? (
                         <div className="loop-approvals-item-actions">
                           <button className="appr-approve" type="button"
@@ -2021,8 +2246,69 @@ export default function App() {
                   })}
                 </section>
               ))}
+
+              {/* Cross-channel queue: every other channel holding drafts at its gate. The founder
+                  gate's home spans the whole portfolio, not just the run on screen — open one and its
+                  staged drafts rehydrate into this panel for review. */}
+              {otherChannelGates.length > 0 ? (
+                <section className="loop-approvals-elsewhere">
+                  <div className="loop-approvals-elsewhere-head">
+                    Waiting in {otherChannelGates.length === 1 ? "another channel" : "other channels"}
+                  </div>
+                  {otherChannelGates.map((ch) => (
+                    <button
+                      key={ch.id}
+                      className="loop-approvals-elsewhere-row"
+                      type="button"
+                      onClick={() => void loadChannel(ch.id)}
+                      title={`Open ${ch.name} to review its staged drafts`}
+                    >
+                      <span className="loop-approvals-elsewhere-dot" aria-hidden />
+                      <span className="loop-approvals-elsewhere-name">{ch.name}</span>
+                      <span className="loop-approvals-elsewhere-count">
+                        {ch.pendingGates} at gate
+                      </span>
+                    </button>
+                  ))}
+                </section>
+              ) : null}
             </div>
           </aside>
+        ) : null}
+
+        {/* ── Team space — members, roles, and which space you're acting in ── */}
+        {teamOpen && view === "canvas" ? (
+          <Suspense fallback={null}>
+            <TeamSpace onClose={() => setTeamOpen(false)} onTeamChange={handleTeamChange} />
+          </Suspense>
+        ) : null}
+
+        {/* ── Give it a goal → Go — the autonomous drive + live work stream ── */}
+        {goOpen && view === "canvas" ? (
+          <Suspense fallback={null}>
+            <GoPanel
+              session={operatorSession}
+              onGo={handleGo}
+              onClose={() => setGoOpen(false)}
+              onReviewGate={() => {
+                const gateId = operatorSession?.pendingGate?.nodeIds[0];
+                if (gateId) setSelection(gateId);
+                setApprovalsOpen(true);
+              }}
+            />
+          </Suspense>
+        ) : null}
+
+        {/* Portfolio composer — "propose the whole GTM system": several channels toward one goal,
+            unioned into one branching, multi-gate diagram. Compose-only; nothing persists or sends. */}
+        {portfolioComposerOpen && view === "canvas" && activeProjectId ? (
+          <Suspense fallback={null}>
+            <PortfolioComposer
+              projectId={activeProjectId}
+              goal={operatorSession?.goal ?? ""}
+              onClose={() => setPortfolioComposerOpen(false)}
+            />
+          </Suspense>
         ) : null}
 
         {/* Persistent Claude co-pilot — channels + conversation + composer, always docked */}
@@ -2153,26 +2439,32 @@ export default function App() {
 
       {/* ── Artifact editor — full markdown for the subagent/skill a step runs ── */}
       {artifactEdit && (
-        <ArtifactEditor
-          type={artifactEdit.type}
-          refName={artifactEdit.ref}
-          open={!!artifactEdit}
-          onClose={() => setArtifactEdit(null)}
-        />
+        <Suspense fallback={null}>
+          <ArtifactEditor
+            type={artifactEdit.type}
+            refName={artifactEdit.ref}
+            open={!!artifactEdit}
+            onClose={() => setArtifactEdit(null)}
+          />
+        </Suspense>
       )}
 
-      <AgentProfile
-        open={!!agentProfileView}
-        view={agentProfileView}
-        team={agentTeam}
-        onClose={() => setAgentProfileRef(null)}
-        onEditSource={(ref) => { setAgentProfileRef(null); setArtifactEdit({ type: "agent", ref }); }}
-        onAddToCanvas={graph ? (ref) => {
-          handleAddNode({ label: ref, kind: "agent", category: "generate", ref, contract: { accepts: [], emits: [] } });
-          setAgentProfileRef(null);
-        } : undefined}
-        onSelectTeammate={(ref) => setAgentProfileRef(ref)}
-      />
+      {agentProfileView && (
+        <Suspense fallback={null}>
+          <AgentProfile
+            open={!!agentProfileView}
+            view={agentProfileView}
+            team={agentTeam}
+            onClose={() => setAgentProfileRef(null)}
+            onEditSource={(ref) => { setAgentProfileRef(null); setArtifactEdit({ type: "agent", ref }); }}
+            onAddToCanvas={graph ? (ref) => {
+              handleAddNode({ label: ref, kind: "agent", category: "generate", ref, contract: { accepts: [], emits: [] } });
+              setAgentProfileRef(null);
+            } : undefined}
+            onSelectTeammate={(ref) => setAgentProfileRef(ref)}
+          />
+        </Suspense>
+      )}
     </main>
   );
 }

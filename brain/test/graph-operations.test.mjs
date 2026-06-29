@@ -59,5 +59,34 @@ describe("typed graph operations", () => {
     assert.equal(result.ok, false);
     assert.match(result.errors.join(" "), /unknown source/i);
   });
+
+  it("accepts an mcp-kind node (open kind, ref required) through add_node and validation", () => {
+    const graph = defaultGraphTemplate();
+    const result = applyGraphOperations(graph, [
+      {
+        type: "add_node",
+        node: {
+          id: "mcp-search",
+          kind: "mcp",
+          ref: "clay/search_people",
+          label: "Find people (Clay)",
+          position: { x: 900, y: 240 },
+          config: { server: "clay", tool: "search_people" },
+        },
+      },
+    ]);
+    const added = result.graph.nodes.find((node) => node.id === "mcp-search");
+    assert.equal(added.kind, "mcp");
+    assert.equal(added.ref, "clay/search_people");
+    assert.equal(result.validation.ok, true);
+  });
+
+  it("rejects an mcp-kind node with no ref (open kinds require a ref)", () => {
+    const graph = defaultGraphTemplate();
+    assert.throws(() => applyGraphOperations(graph, [{
+      type: "add_node",
+      node: { id: "mcp-bad", kind: "mcp", label: "No ref", position: { x: 0, y: 0 }, config: {} },
+    }]), /ref/i);
+  });
 });
 

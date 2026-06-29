@@ -30,6 +30,7 @@ Critical rules:
   - agent:   { "kind": "agent", "ref": "<accepted-agent-ref>" } — judgment/research/drafting; use the provided refs
   - skill:   { "kind": "skill", "ref": "<skill>" }
   - code:    { "kind": "code", "ref": "<deterministic-transform>" } — only for genuinely deterministic work
+  - mcp:     { "kind": "mcp", "ref": "<serverId>/<toolName>" } — call a connected external MCP tool by ref; a read tool runs free, but anything that writes still sits behind a founder gate/wall.
   - gate:    { "category": "gate", "connector": "default" }
   - execute: { "category": "execute", "connector": "local" | "http" } — staged, never sends on its own
   - measure: { "category": "measure", "connector": "default" }

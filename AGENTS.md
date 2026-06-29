@@ -67,23 +67,32 @@ branching, multi-gate diagram and re-asserts the wall on the union. The canvas n
 swimlanes (P10, see `docs/CANVAS.md`): the GTM overview is now the `portfolio-map` lens (channels
 as tiles) and the single canvas engine projects the GTM operational object model through four
 lenses. The lane-position layout still computed inside `portfolio-graph.mjs` is now vestigial — no
-renderer reads it — but is retained alongside the load-bearing union and wall assertion. Still
-pending: the live model producing portfolio specs, and the operator's "propose systems" move. A credential-gated live smoke test (`brain/test/live.test.mjs`,
+renderer reads it — but is retained alongside the load-bearing union and wall assertion. The
+"propose systems" move is now wired on BOTH front doors: the founder composes a portfolio from the
+dashboard (`PortfolioComposer.tsx` → `composePortfolio` → `/api/projects/:id/compose/portfolio`),
+and the operator's `compose_portfolio` tool now declares the `channels` input its handler requires
+(it previously threw on every call). Still pending: the live model autonomously producing strong
+portfolio specs end-to-end. A credential-gated live smoke test (`brain/test/live.test.mjs`,
 `npm --prefix brain run test:live`) proves the model composes, an agent step runs on the
 subscription, the gate holds, AND the operator resumes its conversation across drives; it skips
 until a founder is signed in. The operator carries memory at two levels: within a session it
 resumes the Claude Code conversation across founder pauses, and across sessions it recalls prior
 goals and outcomes in the same project (`recallPriorSessions`, injected into the system prompt).
 Authoring skills and agents from the UI is built (`handleNewArtifact` → `ArtifactEditor` →
-`/api/artifact/save`). Not yet built: the three-lane workflows/skills/agents workspace, and the
-operator's "propose systems" move named above. A scanned product whose win event carries no
+`/api/artifact/save`). Not yet built: the three-lane workflows/skills/agents workspace. A scanned
+product whose win event carries no
 source stays honestly "blind" in Measure until that attribution gap is repaired in the product
 code.
 
 ## Canonical commands
 
-- Run: `npm start`
-- Full verification: `npm test`
+- Run: `npm start` (builds the UI, then serves API + client from `brain/src/server.mjs`)
+- Full verification: `npm test` (runs `brain` tests, then `npm run lint`, then `npm run build`)
+- Brain tests only: `npm --prefix brain test` (Node's built-in runner, `node --test`)
+- One brain test file: `node --test test/<name>.test.mjs` from `brain/`
+- One test by name: add `--test-name-pattern '<regex>'`
+- Lint only: `npm run lint` · Build only: `npm run build` (both target `ui/`)
+- Live smoke test (skips unless a founder is signed in): `npm --prefix brain run test:live`
 - MCP server (agent front door): `npm run mcp`
 - Direct scan: `node brain/src/mirror.mjs <repo> --win <event>`
 
@@ -96,9 +105,15 @@ code.
   dispatch by node `kind` (a `tool` node runs a connector; `agent`/`skill`/`code` nodes
   run through the injectable step runtime).
 - `brain/src/step-runners.mjs` owns the open step kinds — the un-caging. `agent`, `skill`,
-  and `code` steps dispatch here, not through the connector registry. The runtime is
+  `code`, and `mcp` steps dispatch here, not through the connector registry. The runtime is
   injectable (honest blank defaults; `createStepRuntime` for live; fakes in tests) so the
-  host never owns the intelligence.
+  host never owns the intelligence. Each kind now does real work, not a pass-through: a
+  `skill` step appends its loaded `SKILL.md` to a shared run accumulator (`context.__skillGuidance`,
+  threaded by `graph.mjs`) that a downstream `agent` step folds into its prompt; a `code` step runs
+  a DETERMINISTIC built-in transform (`BUILTIN_CODE_TRANSFORMS` — dedupe/filter/limit/sort/
+  rename-fields, no eval) selected by `config.ref`; and `mcp` is now in the composer's node menu
+  (`composition.mjs`) so the model can actually emit it. `applied:false` is the honest no-op when a
+  ref/loader is absent — never a silent dead-end.
 - `brain/src/source-entry.mjs` owns the single domain rule for how a workflow gets its first
   items — the one predicate (`sourceStandsOnData`) and the one compose-time normalizer
   (`resolveEntry`) that used to be duplicated across the composer and the runner. A source has
@@ -154,7 +169,15 @@ code.
   agent specs — not a stored accept/reject opportunity) into outcome program → policy →
   personalized agent → executable graph.
 - `brain/src/feedback-ledger.mjs` owns normalized feedback signals from gates and run
-  failures, and feeds them back into agent creation policies.
+  failures, and feeds them back into agent creation policies. It also crystallizes repeated
+  deterministic procedures into PENDING, gated `ToolBirthProposal` signals (it never auto-births).
+- `brain/src/tool-registry-store.mjs` owns the BACK of the self-building loop — the durable,
+  project-scoped registry and `approveToolBirth`, the one FOUNDER-only path that turns a pending
+  proposal into a registered, callable tool. The wall holds: birth requires authored code + a test
+  (re-asserted via `proposeTool`/`gateToolBirth`), there is no agent/operator approve path, and the
+  founder drives it from the `ToolForge` dashboard card via `POST /api/projects/:id/tool-proposals/
+  :id/approve`. (Executing a registered tool inside the step runtime is a deliberately separate,
+  not-yet-built leg — the registry stores code+test; nothing invokes a born tool yet.)
 - `brain/src/engine.mjs` derives the GTM engine state (all subsystems) from real
   signals — scan, run ledger, connectors, gate decisions. Powers inline node health
   and the Problems rail. Never seeded.
@@ -282,9 +305,11 @@ code.
 - Taste and design are required queried tools before drafting or producing UI. When a step
   produces a draft or outreach, `get_taste` must appear in the agent's tool calls. When a step
   produces a UI or visual artifact, both `get_taste` and `get_design` must appear. This rule
-  is enforced by `assertMoatConsulted` in `consult-guard.mjs`. The live wiring — capturing
-  actual tool calls from the agent run and calling the guard at the gate — is a follow-up in
-  `operator-runtime.mjs`/`graph.mjs`.
+  is enforced by `assertMoatConsulted` in `consult-guard.mjs`. The live wiring is DONE: the agent
+  invoker captures the real tool calls onto `meta.toolCalls` (`agent-bridge.mjs`), and at the gate
+  `collectConsultViolations` runs the guard for every drafting/visual agent feeding it, folding a
+  `consultBlocked` result into the run's success (`graph.mjs`). `get_taste` is backed by real
+  founder gate decisions and `get_design` by real design state — neither is a stub.
 - The gate supports pattern and exception approval at volume. `gate-pattern.mjs` lets the
   founder approve a class of items with a rule (e.g. "any message under 80 words in this
   voice") and mark exceptions individually, so high-volume runs do not require per-item review.
@@ -311,7 +336,16 @@ The requested behavior is implemented, the diff is scoped, `npm test` passes, th
 visible flow is checked when relevant, engine and node numbers stay derived from real
 state, and any publishing or external-state action remains explicitly approved.
 
-Last verified: 2026-06-27. Revisit if the canonical interface or safety boundary
+Last verified: 2026-06-29. Revisit if the canonical interface or safety boundary
 changes. Architecture note: the connector-DAG taxonomy was un-caged into the open node
-model (tool/agent/skill/code) — see `docs/GOAL.md` for the route and its phases. The
+model (tool/agent/skill/code/mcp) — see `docs/GOAL.md` for the route and its phases. The
 canvas is being converged onto an object-model projection (P10) — see `docs/CANVAS.md`.
+
+Completion pass (2026-06-29): the dead-end open steps were wired (`skill` applies guidance,
+`code` runs deterministic transforms, `mcp` reachable by the composer); the self-building loop's
+back half landed (`tool-registry-store.mjs` + the `ToolForge` dashboard card); the team-sync
+layer converged onto the single SQLite seam (`convex-backend.mjs`; the legacy `convex-sync` queue
+and the dead `store-fs.atomicWrite` hook retired; `workspace.mjs` now persists through the seam);
+and the agent/human front-door drift closed — find-references (`ReferencesPanel`) and portfolio
+compose (`PortfolioComposer`) are now wired into the dashboard, not operator-only. Four orphaned
+components were deleted (`CitationList`, `GtmExplorer`, `ProductFlowCanvas`, `SimulationPanel`).

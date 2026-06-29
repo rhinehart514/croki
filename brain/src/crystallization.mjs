@@ -109,3 +109,41 @@ export function detectCrystallizationCandidates(actionLog = [], { threshold = 3 
     .filter((bucket) => bucket.count >= threshold)
     .sort((a, b) => b.count - a.count || a.signature.localeCompare(b.signature));
 }
+
+// E7.1 wiring — turn one run's executed nodes into action-log records so the crystallization detector
+// has something to bucket ACROSS runs. A node's verb is its label (or category) — the thing the step
+// actually DID ("research operator", "score lead"). Gate, resource, and context nodes are skipped:
+// they are the wall and the grounding, not repeatable transforms worth a tool. Judgment is NOT filtered
+// here — the detector excludes it by signature design, and folding the node label keeps that working
+// (a "draft …" node lands in the judgment namespace and can never reach a candidate).
+const NON_ACTION_CATEGORIES = new Set(["gate", "resource", "context"]);
+
+export function actionLogFromRun(graph, result) {
+  const nodes = result?.nodes ?? {};
+  const byId = new Map((graph?.nodes ?? []).map((node) => [node.id, node]));
+  const log = [];
+  for (const [nodeId, nodeResult] of Object.entries(nodes)) {
+    const category = nodeResult?.category ?? byId.get(nodeId)?.category;
+    if (NON_ACTION_CATEGORIES.has(category)) continue;
+    // A blocked/blind node never actually ran a procedure, so it is not an action.
+    if (nodeResult?.blocked || nodeResult?.blind) continue;
+    const node = byId.get(nodeId);
+    const name = node?.label || nodeResult?.label || category || "";
+    if (!name) continue;
+    log.push({ name, targetType: category ?? null, nodeId });
+  }
+  return log;
+}
+
+// Mirror of detectToolCreationSuggestions (in feedback-ledger): run an accumulated action log through
+// the pure detector and shape each candidate into a gated tool-creation SUGGESTION. It proposes; the
+// founder gate (tool-birth) still decides, and a born tool is PROPOSED, never live. Judgment work never
+// reaches here — it is excluded inside detectCrystallizationCandidates by signature design.
+export function detectCrystallizationSuggestions(actionLog = [], options = {}) {
+  return detectCrystallizationCandidates(actionLog, options).map((candidate) => ({
+    reason: `The same deterministic procedure recurred ${candidate.count} times — worth crystallizing into a reusable tool: ${candidate.signature}.`,
+    signature: candidate.signature,
+    count: candidate.count,
+    sample: candidate.sample,
+  }));
+}

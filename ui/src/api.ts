@@ -1,20 +1,21 @@
 import type {
   ApplyReadiness, BuildResult, ConnectorMeta, Decisions, EngineState, GTMGraph, GTMProject, GTMRunResult,
   GTMRevision, GTMWorkspace, OperatorSession, OperatorSessionSummary, PortfolioBrief,
-  ScanReport, ChannelMeta, ChannelRunDiff,
+  ScanReport, ScanPreview, ChannelMeta, ChannelRunDiff,
   WorkspaceSummary, ProjectSummary,
   ContextManifest, GtmLibrary,
   GraphOperation, GTMContractAudit,
   OutcomeProgram, AgentCreationPolicy, AgentInstance, PersonalizationProfile, FeedbackSignal,
   AgentEvaluation, DomainEvent, ProductModel, ProductModelEdit, ProductPinTargetKind,
-  CapabilityServer, Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
-  ClarityObject, ClarityKind,
+  CapabilityServer, Person, CrossReferenceResult, PortfolioSystem, ToolRegistryView, RegisteredTool, ChannelFeed, DirectedFeed,
+  ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole,
 } from "@/types";
+import { identityHeaders } from "@/lib/identity";
 
 async function post<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...identityHeaders() },
     body: JSON.stringify(body),
   });
   const payload = (await res.json().catch(() => ({}))) as T & { error?: string };
@@ -23,7 +24,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(path);
+  const res = await fetch(path, { headers: { ...identityHeaders() } });
   if (!res.ok) throw new Error(`${path} failed (${res.status}).`);
   return res.json() as Promise<T>;
 }
@@ -44,6 +45,12 @@ export const getLibrary = () => get<GtmLibrary>("/api/library");
 // ── Funnel ──────────────────────────────────────────────────────────────────
 export const scanRepository   = (repoPath: string, winEvent: string) =>
   post<ScanReport>("/api/scan", { repoPath, winEvent });
+
+// The front-door scan preview: read the product, hand back the headline / stack / detected win event
+// (with its file:line evidence) and an honest blind-attribution callout — what the founder sees BEFORE
+// committing a goal. Returns the lightweight preview shape; degrades if the backend omits a field.
+export const scanPreview = (repoPath: string, winEvent?: string) =>
+  post<ScanPreview>("/api/scan", { repoPath, ...(winEvent ? { winEvent } : {}) });
 
 // Native folder picker — the local server pops the OS folder dialog and returns the real path.
 export const pickFolder = () =>
@@ -279,6 +286,29 @@ export const recordProductSignal = (input: {
 export type ConnectionStatus = { connected: boolean; label: string | null; reason: string | null };
 export const getConnection = () => get<ConnectionStatus>("/api/connection");
 
+// ── Portfolio compose — fan several channels out toward one goal ──────────────
+// Mirrors the single-channel compose call, but hands in SEVERAL inline channel specs plus the shared
+// goal. The server composes each channel against the project's grounding and unions them into one
+// branching, multi-gate portfolio graph (the wall re-asserted on the union). Compose-only — nothing
+// persists until the per-channel apply path runs.
+export type PortfolioChannelSpec = { id: string; title: string; objective: string };
+// The server returns ONE assembled portfolio graph (a GTMGraph with `kind: "portfolio"`) carrying a
+// `systems` manifest of the channels that were unioned in — not a wrapper object. The manifest shape
+// is the canonical PortfolioSystem ({ id, label, objective?, laneIndex, nodeIds, gateIds }) that
+// assemblePortfolioGraph actually emits.
+export type PortfolioGraph = GTMGraph & {
+  kind: "portfolio";
+  systems: PortfolioSystem[];
+};
+export const composePortfolio = (
+  projectId: string,
+  body: { goal: string; channels: PortfolioChannelSpec[] },
+) =>
+  post<PortfolioGraph>(
+    `/api/projects/${encodeURIComponent(projectId)}/compose/portfolio`,
+    body,
+  );
+
 // ── Project (channels list) ──────────────────────────────────────────────────
 export async function getProject(): Promise<{ project: GTMProject }> {
   const res = await fetch("/api/project");
@@ -389,6 +419,24 @@ export const getPrograms = (projectId: string) =>
     feedback: { signals: FeedbackSignal[] };
     events: DomainEvent[];
   }>(`/api/projects/${encodeURIComponent(projectId)}/programs`);
+
+// ── Self-built tools — the founder-gated tool-birth → registry leg ─────────────
+// Pending proposals are deterministic procedures crystallized from repeated runs (gated, never
+// auto-born); registered tools are the callable ones a founder has approved.
+export const getToolProposals = (projectId: string) =>
+  get<ToolRegistryView>(`/api/projects/${encodeURIComponent(projectId)}/tool-proposals`);
+
+// Birth a tool from a pending proposal — a FOUNDER action. Requires authored code + a test; the
+// server gate refuses anything else.
+export const approveToolBirth = (
+  projectId: string,
+  proposalId: string,
+  body: { code: string; test: string; name?: string; description?: string; decisionNote?: string },
+) =>
+  post<{ tool: RegisteredTool; registry: unknown; alreadyRegistered: boolean }>(
+    `/api/projects/${encodeURIComponent(projectId)}/tool-proposals/${encodeURIComponent(proposalId)}/approve`,
+    body,
+  );
 
 export const runProgram = (
   projectId: string,
@@ -506,4 +554,46 @@ export const compareChannelRuns = (channelId: string, before?: string, after?: s
     `/api/channels/${encodeURIComponent(channelId)}/runs/compare${query}`,
   );
 };
+
+// ── Identity + teams — the team space, members, and the release authority ──────
+// Who am I and which teams am I in (personal team always exists). Identity rides on request headers
+// from lib/identity; the server defaults to the founder when none are stamped.
+export const getMe = () => get<Me>("/api/me");
+
+export const listTeams = () =>
+  get<{ teams: Array<{ id: string; name: string; memberCount: number; createdAt: string; updatedAt: string }> }>(
+    "/api/teams",
+  );
+
+export const createTeam = (input: { name: string; members?: Array<{ userId: string; name?: string; email?: string; role?: TeamRole }> }) =>
+  post<{ team: Team }>("/api/teams", input);
+
+export const getTeamMembers = (teamId: string) =>
+  get<{ members: TeamMember[] }>(`/api/teams/${encodeURIComponent(teamId)}/members`);
+
+export const addTeamMember = (
+  teamId: string,
+  member: { userId: string; name?: string; email?: string; role?: TeamRole },
+) => post<{ team: Team; members: TeamMember[] }>(`/api/teams/${encodeURIComponent(teamId)}/members`, member);
+
+// Whether a user may release a founder gate on a team (owner/approver yes, member/non-member no).
+export const canApprove = (teamId: string, userId: string) =>
+  get<{ teamId: string; userId: string; canApprove: boolean }>(
+    `/api/teams/${encodeURIComponent(teamId)}/can-approve/${encodeURIComponent(userId)}`,
+  );
+
+// ── Autonomous drive — one goal, the operator goes and does the work to the gate ──
+// Launches a session primed to compose (if needed) and run the workflow to the shared founder gate,
+// then stop. Never sends. The live event stream is read back via getOperatorSession polling.
+export const operatorGo = (input: {
+  goal: string;
+  projectId?: string;
+  teamId?: string;
+  graphId?: string;
+  model?: string;
+  maxSteps?: number;
+}) => post<{ session: OperatorSession; startedBy: { userId: string; name: string; email: string | null } }>(
+  "/api/operator/go",
+  input,
+);
 

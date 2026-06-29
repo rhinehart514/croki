@@ -160,8 +160,8 @@ export function OutcomeSwitcher({
   const activeProgram = programs.find((p) => p.id === activeProgramId) ?? null;
   const activeChannel = channels.find((c) => c.id === activeChannelId) ?? null;
   const activeName = overviewActive
-    ? "All workflows"
-    : activeProgram?.name ?? activeChannel?.name ?? "Choose an outcome";
+    ? "All channels"
+    : activeProgram?.name ?? activeChannel?.name ?? "Choose a channel";
   const activeDotColor = activeProgram
     ? OSW_TONE_DOT[statusTone(activeProgram.lastRunStatus ?? activeProgram.lifecycle)]
     : activeChannel
@@ -188,7 +188,7 @@ export function OutcomeSwitcher({
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        title="Switch outcome"
+        title="Switch channel"
       >
         <span className="osw-trigger-dot" style={{ background: activeDotColor }} />
         <OutcomeLabel name={activeName} />
@@ -203,10 +203,10 @@ export function OutcomeSwitcher({
               onClick={pick(onShowOverview)}
               type="button"
               role="menuitem"
-              title="See every workflow on one canvas"
+              title="See every channel on one canvas"
             >
               <LayoutGrid className="menu-item-icon" />
-              <span className="menu-item-label">All workflows</span>
+              <span className="menu-item-label">All channels</span>
               {overviewActive ? <Check className="menu-item-check" /> : null}
             </button>
             <div className="menu-sep" role="separator" />
@@ -220,17 +220,17 @@ export function OutcomeSwitcher({
               className="osw-filter-input"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Find an outcome…"
-              aria-label="Filter outcomes"
+              placeholder="Find a channel…"
+              aria-label="Filter channels"
               autoFocus
             />
           </div>
         ) : null}
 
         {programs.length === 0 && standaloneChannels.length === 0 ? (
-          <p className="osw-empty">No outcomes yet. Start one below.</p>
+          <p className="osw-empty">No channels yet. Start one below.</p>
         ) : programsToShow.length === 0 && standaloneToShow.length === 0 ? (
-          <p className="osw-empty">No outcomes match “{query.trim()}”.</p>
+          <p className="osw-empty">No channels match “{query.trim()}”.</p>
         ) : (
           <div className="osw-list">
             {programsToShow.map((program) => {
@@ -333,7 +333,7 @@ export function OutcomeSwitcher({
         <div className="menu-sep" role="separator" />
         <button className="menu-item" onClick={pick(onNewProgram)} type="button" role="menuitem">
           <Plus className="menu-item-icon" />
-          <span className="menu-item-label">New outcome</span>
+          <span className="menu-item-label">New channel</span>
         </button>
       </Reveal>
     </div>

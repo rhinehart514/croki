@@ -1,0 +1,45 @@
+appId: com.gtmide.desktop
+productName: GTM IDE
+copyright: GTM IDE
+
+# Keep everything as plain files in Resources. The brain is a Node server that reads ui/dist off disk
+# and loads a native SQLite module (better-sqlite3); asar packing would force unpack rules for both.
+# For a local, unsigned, single-user build the size cost is irrelevant and this removes a whole class
+# of "works in dev, breaks packaged" path/native-module bugs.
+asar: false
+
+# We rebuild brain/node_modules/better-sqlite3 against Electron's ABI via the `app:rebuild` script
+# before packaging. electron-builder's own rebuild only targets root deps, so leave it off.
+npmRebuild: false
+
+directories:
+  output: release
+  buildResources: build
+
+# Ad-hoc sign the whole bundle as one unit so the native better-sqlite3 binding isn't killed by
+# macOS Library Validation. See build/after-pack.cjs.
+afterPack: build/after-pack.cjs
+
+files:
+  - electron/**/*
+  - brain/**/*
+  - ui/dist/**/*
+  - package.json
+  - "!**/*.map"
+  - "!brain/test/**"
+  - "!**/*.test.mjs"
+  - "!**/.env.local"
+  - "!**/.DS_Store"
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch:
+        - arm64
+  # Unsigned, local build. No Apple Developer identity, no notarization. Gatekeeper will require a
+  # one-time right-click > Open on first launch.
+  identity: null
+
+dmg:
+  title: GTM IDE

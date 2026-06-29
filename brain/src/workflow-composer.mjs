@@ -13,6 +13,17 @@ import {
 } from "./program-compiler.mjs";
 import { resolveEntry, hasConcreteInput, SOURCE_MODES } from "./source-entry.mjs";
 import { listAgentInstances } from "./capability-foundry.mjs";
+import { clarityGrounding } from "./clarity-store.mjs";
+
+// Fold the founder's pinned clarity into the product grounding the composer sees, under an explicit
+// founderDirection key so the model reads it as real founder steering (claims to honor, ICP,
+// directions, open questions) and never as invented product fact. Returns the grounding untouched
+// when the founder has pinned nothing. `clarity` may be passed in directly (the pure portfolio path)
+// or derived from the project (the persisting entry points); either way it's founder INPUT, not seeded.
+function groundingWithClarity(grounding, clarity) {
+  if (!clarity) return grounding;
+  return { ...(grounding && typeof grounding === "object" ? grounding : {}), founderDirection: clarity };
+}
 
 // The engine's current agent pool — every teammate already minted for this project, deduped by ref.
 // Fed to the composer so a new channel reuses an existing agent instead of minting a near-duplicate;
@@ -154,13 +165,13 @@ function bindIO(nodes, channel, inputAdapter, outputAdapter) {
 // gate wall — returns { nodes, edges } with NO persistence and no status mutation. Used by both
 // the streaming compose preview (compose each channel's real graph, live) and the
 // persisting compose below. The model owns topology; the host owns the wall.
-export async function composeGraphForChannel({ channel, agents = [], grounding = null, enginePool = [], input, output, compose = blankCompose }) {
+export async function composeGraphForChannel({ channel, agents = [], grounding = null, clarity = null, enginePool = [], input, output, compose = blankCompose }) {
   const spec = await compose({
     goal: input?.objective || channel.objective,
     channel,
     agents: agents.map((a) => ({ ref: a.ref, title: a.title, objective: a.objective, prompt: a.prompt, provider: a.provider })),
     enginePool,
-    grounding,
+    grounding: groundingWithClarity(grounding, clarity),
   });
   if (spec?.ok === false) {
     throw new Error(spec.error === "blank"
@@ -184,7 +195,7 @@ export async function composeGraphForChannel({ channel, agents = [], grounding =
 // model still composes each system's topology; this is the host orchestration that turns one goal
 // into many systems the founder reviews together. Pure compose path — no persistence — mirroring
 // composeGraphForChannel, so the streaming preview and a persisting caller can both reuse it.
-export async function composePortfolioGraph({ goal, channels = [], grounding = null, compose = blankCompose, consolidateGate = false }) {
+export async function composePortfolioGraph({ goal, channels = [], grounding = null, clarity = null, compose = blankCompose, consolidateGate = false }) {
   if (!Array.isArray(channels) || channels.length === 0) {
     throw new Error("A portfolio needs at least one accepted channel.");
   }
@@ -200,6 +211,7 @@ export async function composePortfolioGraph({ goal, channels = [], grounding = n
       agents,
       enginePool: [...poolByRef.values()],
       grounding: entry?.grounding ?? grounding,
+      clarity: entry?.clarity ?? clarity,
       input: entry?.input,
       output: entry?.output,
       compose,
@@ -269,6 +281,7 @@ export async function composePortfolioFromStudio(input = {}, options = {}) {
     goal,
     channels,
     grounding: input.grounding ?? null,
+    clarity: clarityGrounding(project.id, options),
     compose: options.compose || blankCompose,
     consolidateGate: input.consolidateGate === true,
   });
@@ -282,10 +295,14 @@ export async function composePortfolioFromStudio(input = {}, options = {}) {
 export async function previewOpportunityChannel(input, options = {}) {
   const channel = channelSpecFrom(input);
   const agents = agentSpecsFrom(input);
+  // Resolve the project so the ghosted preview is grounded in the SAME founder direction the apply
+  // path will use — the founder reviews a system composed against their pinned clarity, not without it.
+  const project = loadProject(options);
   const { nodes, edges } = await composeGraphForChannel({
     channel,
     agents,
     grounding: input.grounding ?? null,
+    clarity: clarityGrounding(project.id, options),
     input: input.input,
     output: input.output,
     compose: options.compose || blankCompose,
@@ -325,6 +342,7 @@ export async function composeOpportunityChannel(input, options = {}) {
       agents,
       enginePool: enginePoolFor(project, options),
       grounding: input.grounding ?? null,
+      clarity: clarityGrounding(project.id, options),
       input: input.input,
       output: input.output,
       compose: options.compose || blankCompose,

@@ -228,6 +228,32 @@ export function relaxDiscoveryChainContracts(nodes, edges) {
   );
 }
 
+// Naked-run rule (the gate is the ONLY contract checkpoint): no node BEFORE the founder gate may block
+// a run on a field-name or item-count technicality. The model composes the work freely; whatever it
+// actually produces flows down to the founder gate, where a human reviews it. So relax accepts/emits
+// AND minItems to nothing on every pre-gate node that isn't the gate or measurement. Measure is left
+// untouched (it stays honestly blind); the gate keeps its own checkpoint contract (relaxGateContracts).
+// This makes contracts ADVISORY on the run path — they still describe shapes for the UI and validation,
+// but they never dead-end a freely-composed graph before the founder has seen its output.
+export function relaxPreGateContracts(nodes, edges) {
+  const gateIds = nodes.filter((n) => n.category === "gate").map((n) => n.id);
+  if (gateIds.length === 0) return nodes;
+  const incoming = buildIncoming(edges);
+  const preGate = new Set();
+  const stack = [...gateIds];
+  while (stack.length) {
+    const id = stack.pop();
+    for (const src of incoming.get(id) ?? []) {
+      if (!preGate.has(src)) { preGate.add(src); stack.push(src); }
+    }
+  }
+  return nodes.map((n) =>
+    preGate.has(n.id) && n.category !== "gate" && n.category !== "measure"
+      ? { ...n, contract: { ...(n.contract ?? {}), accepts: [], emits: [], minItems: 0 } }
+      : n,
+  );
+}
+
 // True when the graph's entry is discovered (self-sourcing). Decided from the data-root nodes (no
 // incoming data edge): a source root decides by its own mode; with no source root, an agent root is
 // self-sourcing. This is precise — it does NOT fire just because some agent sits mid-chain on a

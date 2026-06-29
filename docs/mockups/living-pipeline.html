@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Living pipeline — diagram language study</title>
+<style>
+  :root{
+    --bg:#0a0a0c;
+    --panel:#141418;
+    --panel-edge:#23232a;
+    --ink:#ededf0;
+    --muted:#8c8c96;
+    --faint:#55555f;
+    --amber:#f3b14b;
+    --amber-dim:#5a4422;
+    --cyan:#46c6d8;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans)}
+  .wrap{display:flex;min-height:100vh}
+  .stage{flex:1;padding:34px 28px 0 38px;position:relative}
+  .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .title{font-size:21px;font-weight:600;margin:6px 0 2px}
+  .sub{font-size:13px;color:var(--muted);max-width:560px;line-height:1.5}
+  svg{display:block;margin-top:18px;overflow:visible}
+
+  /* node labels (HTML overlay would misalign — all text lives in SVG) */
+  .nlabel{font-family:var(--sans);font-size:13px;font-weight:600;fill:var(--ink)}
+  .nsub{font-family:var(--mono);font-size:10px;fill:var(--muted);letter-spacing:.02em}
+  .nstate{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em}
+  .predicate{font-family:var(--mono);font-size:11px;fill:#cfeff4}
+
+  /* right rail — the strategist margin */
+  .rail{width:340px;background:var(--panel);border-left:1px solid var(--panel-edge);padding:30px 24px;display:flex;flex-direction:column;gap:18px}
+  .rail h2{font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);margin:0;font-family:var(--mono)}
+  .prop{background:#1b1b21;border:1px solid var(--panel-edge);border-radius:12px;padding:14px 15px}
+  .prop.promote{border-left:2px solid var(--cyan)}
+  .prop.prune{border-left:2px solid var(--faint)}
+  .prop .verb{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .prop .move{font-size:14px;font-weight:600;margin:5px 0 6px}
+  .prop .why{font-size:12px;color:var(--muted);line-height:1.5}
+  .prop .why b{color:var(--ink);font-weight:600}
+  .acts{display:flex;gap:8px;margin-top:12px}
+  .btn{font-family:var(--mono);font-size:11px;border-radius:8px;padding:7px 12px;border:1px solid var(--panel-edge);background:transparent;color:var(--muted);cursor:pointer}
+  .btn.go{background:var(--amber);color:#1a1205;border-color:var(--amber);font-weight:600}
+  .legend{margin-top:auto;border-top:1px solid var(--panel-edge);padding-top:16px;display:flex;flex-direction:column;gap:10px}
+  .lrow{display:flex;align-items:center;gap:11px;font-size:11.5px;color:var(--muted)}
+  .swatch{width:34px;height:0;flex:none}
+  .lrow b{color:var(--ink);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="stage">
+    <div class="kicker">diagram language study · gtm ide canvas</div>
+    <div class="title">The living pipeline</div>
+    <div class="sub">Weight is conviction. Color is tense. Switches read like sentences. The strategist argues in the margin. Same goal, same wall — but the diagram has an opinion about what matters.</div>
+
+    <svg width="1000" height="640" viewBox="0 0 1000 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="live" x1="0" y1="0" x2="1000" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stop-color="#6e5cff"/>
+          <stop offset="0.4" stop-color="#46c6d8"/>
+          <stop offset="0.75" stop-color="#54d6a0"/>
+          <stop offset="1" stop-color="#9ee06a"/>
+        </linearGradient>
+        <marker id="arrow" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+          <path d="M0,0 L6,3.5 L0,7 z" fill="#54d6a0"/>
+        </marker>
+        <marker id="arrowFaint" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+          <path d="M0,0 L6,3.5 L0,7 z" fill="#55555f"/>
+        </marker>
+      </defs>
+
+      <!-- ===== EDGES (drawn first, behind nodes) ===== -->
+      <!-- spine: thick + live rainbow, animated flow -->
+      <path d="M150,300 L210,300" stroke="url(#live)" stroke-width="13" stroke-linecap="round"/>
+      <path d="M330,300 L378,300" stroke="url(#live)" stroke-width="13" stroke-linecap="round"/>
+      <!-- switch -> draft (the winning path, thick) -->
+      <path d="M510,300 C552,300 552,232 596,232" stroke="url(#live)" stroke-width="13" fill="none"/>
+      <!-- draft -> gate -->
+      <path d="M706,232 L760,232" stroke="url(#live)" stroke-width="13" stroke-linecap="round"/>
+      <!-- gate -> outcome (downstream of the amber wall, thinner: not yet sent) -->
+      <path d="M882,232 L910,232" stroke="#54d6a0" stroke-width="7" stroke-linecap="round" marker-end="url(#arrow)"/>
+
+      <!-- animated flow dots on the spine to sell "running now" -->
+      <circle r="2.6" fill="#eafff4">
+        <animateMotion dur="2.4s" repeatCount="indefinite"
+          path="M150,300 L330,300 C460,300 470,300 510,300 C552,300 552,232 596,232 L760,232"/>
+      </circle>
+      <circle r="2.6" fill="#eafff4" opacity="0.7">
+        <animateMotion dur="2.4s" begin="1.2s" repeatCount="indefinite"
+          path="M150,300 L330,300 C460,300 470,300 510,300 C552,300 552,232 596,232 L760,232"/>
+      </circle>
+
+      <!-- switch -> experiment branch: thin, dashed, lower contrast = a live bet, not yet proven -->
+      <path d="M510,300 C552,300 552,452 596,452" stroke="#46c6d8" stroke-width="4" stroke-dasharray="2 5" fill="none" opacity="0.85"/>
+      <!-- experiment -> its own watch state -->
+      <path d="M706,452 L754,452" stroke="#3a6f78" stroke-width="3" stroke-dasharray="2 5" marker-end="url(#arrowFaint)"/>
+
+      <!-- retired stub: ghost, collapsed -->
+      <path d="M444,360 L444,392" stroke="#33333b" stroke-width="2" stroke-dasharray="2 4"/>
+
+      <!-- ===== NODES ===== -->
+      <!-- Entry -->
+      <g>
+        <rect x="40" y="268" width="110" height="64" rx="13" fill="#16161b" stroke="#2a2a32"/>
+        <text class="nlabel" x="60" y="296">New signal</text>
+        <text class="nsub" x="60" y="314">discovered · agent</text>
+      </g>
+      <!-- Enrich -->
+      <g>
+        <rect x="220" y="268" width="110" height="64" rx="13" fill="#16161b" stroke="#2a2a32"/>
+        <text class="nlabel" x="240" y="296">Enrich</text>
+        <text class="nsub" x="240" y="314">research</text>
+      </g>
+
+      <!-- SWITCH — first-class conditional, reads like a sentence -->
+      <g>
+        <rect x="380" y="262" width="130" height="76" rx="13" fill="#11201f" stroke="var(--cyan)" stroke-opacity="0.55"/>
+        <text class="nsub" x="398" y="284" fill="#7fd8e4">switch · auto</text>
+        <text class="predicate" x="398" y="304">reply intent?</text>
+        <circle cx="402" cy="320" r="3" fill="#54d6a0"/>
+        <text class="nstate" x="412" y="323" fill="#54d6a0">firing → draft</text>
+      </g>
+      <!-- retired chip under switch -->
+      <g>
+        <rect x="396" y="396" width="98" height="26" rx="8" fill="#121215" stroke="#2a2a30"/>
+        <text class="nsub" x="408" y="413" fill="#55555f">⤺ 4 retired</text>
+      </g>
+
+      <!-- Draft (spine, proven) -->
+      <g>
+        <rect x="596" y="200" width="110" height="64" rx="13" fill="#16161b" stroke="#2a2a32"/>
+        <text class="nlabel" x="616" y="228">Draft</text>
+        <text class="nsub" x="616" y="246">agent · voice</text>
+      </g>
+
+      <!-- Experiment branch (thin, dashed treatment) -->
+      <g>
+        <rect x="596" y="420" width="110" height="64" rx="13" fill="#101417" stroke="#2c4147" stroke-dasharray="3 4"/>
+        <text class="nlabel" x="616" y="448" fill="#cfeff4">LinkedIn DM</text>
+        <text class="nsub" x="616" y="466" fill="#6fa6b0">experiment · d14</text>
+      </g>
+      <!-- experiment watch state -->
+      <g>
+        <rect x="754" y="436" width="92" height="32" rx="9" fill="#101417" stroke="#24343a"/>
+        <text class="nsub" x="766" y="450" fill="#6fa6b0">8.1% reply</text>
+        <text class="nstate" x="766" y="462" fill="#54d6a0">● beating spine</text>
+      </g>
+
+      <!-- AMBER GATE — the founder wall, categorically different from a switch -->
+      <g>
+        <rect x="760" y="200" width="122" height="64" rx="13" fill="#241a08" stroke="var(--amber)"/>
+        <text class="nsub" x="780" y="226" fill="var(--amber)">⏸ founder gate</text>
+        <text class="nlabel" x="780" y="246" fill="#f6d49a">3 awaiting</text>
+      </g>
+
+      <!-- Outcome terminal -->
+      <g>
+        <rect x="910" y="214" width="78" height="36" rx="18" fill="#13251c" stroke="#54d6a0" stroke-opacity="0.6"/>
+        <text class="nsub" x="926" y="236" fill="#9ee0b4">✓ booked</text>
+      </g>
+    </svg>
+  </div>
+
+  <!-- ===== STRATEGIST MARGIN ===== -->
+  <aside class="rail">
+    <h2>Strategist</h2>
+
+    <div class="prop promote">
+      <div class="verb">↑ promote to spine</div>
+      <div class="move">Make “LinkedIn DM” the default path</div>
+      <div class="why"><b>8.1% reply</b> over 14 days, 2 cohorts — beats the email spine at <b>3.2%</b>. The switch would route the majority here.</div>
+      <div class="acts"><button class="btn go">Approve change</button><button class="btn">Not yet</button></div>
+    </div>
+
+    <div class="prop prune">
+      <div class="verb">↓ retire</div>
+      <div class="move">Kill the “Twitter reply” branch</div>
+      <div class="why"><b>0 replies in 21 days.</b> It’s the heaviest node by run cost and hasn’t moved the goal. Folds into history, reversible.</div>
+      <div class="acts"><button class="btn go">Approve change</button><button class="btn">Keep</button></div>
+    </div>
+
+    <div class="legend">
+      <div class="lrow"><svg class="swatch" height="13"><rect y="4" width="34" height="6" rx="3" fill="url(#live)"/></svg><span><b>Thick + color</b> — proven spine, live now</span></div>
+      <div class="lrow"><svg class="swatch" height="13"><line x1="0" y1="6" x2="34" y2="6" stroke="#46c6d8" stroke-width="3" stroke-dasharray="2 4"/></svg><span><b>Thin + dashed</b> — a live experiment</span></div>
+      <div class="lrow"><svg class="swatch" height="13"><rect y="3" width="34" height="8" rx="2" fill="none" stroke="#46c6d8" stroke-opacity=".6"/></svg><span><b>Cyan switch</b> — logic decides, auto</span></div>
+      <div class="lrow"><svg class="swatch" height="13"><rect y="3" width="34" height="8" rx="2" fill="none" stroke="#f3b14b"/></svg><span><b>Amber gate</b> — you decide, the wall</span></div>
+      <div class="lrow"><svg class="swatch" height="13"><line x1="0" y1="6" x2="34" y2="6" stroke="#33333b" stroke-width="2" stroke-dasharray="2 4"/></svg><span><b>Ghost / collapsed</b> — retired, in history</span></div>
+    </div>
+  </aside>
+</div>
+</body>
+</html>

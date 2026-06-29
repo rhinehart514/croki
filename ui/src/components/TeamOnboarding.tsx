@@ -41,6 +41,24 @@ export function TeamOnboarding({
   const whoValid = email.trim().includes("@") && name.trim().length > 1;
   const teamValid = mode === "create" ? teamName.trim().length > 1 : code.trim().length >= 6;
 
+  // The escape hatch: a solo founder must never be trapped at the door. The team layer is a thin
+  // mirror over local-first state, so when the Convex deployment is unreachable (or the founder just
+  // wants to work alone) we save a LOCAL identity and hand control straight to the workspace — no team
+  // round-trip. Storage is not team-scoped, so a local teamId is the personal space the server already
+  // resolves to by default. Surfaced both as a persistent skip and automatically when a team call fails.
+  const continueSolo = () => {
+    if (busy) return;
+    const id: TeamIdentity = {
+      identity: email.trim() || "founder@local",
+      name: name.trim() || "Founder",
+      teamId: "local",
+      teamName: "Local workspace",
+      role: "owner",
+    };
+    saveTeamIdentity(id);
+    onDone(id);
+  };
+
   const submit = async () => {
     if (busy || !teamValid) return;
     setBusy(true);
@@ -181,7 +199,14 @@ export function TeamOnboarding({
               </label>
             )}
 
-            {error ? <p className="onb-error">{error}</p> : null}
+            {error ? (
+              <div className="onb-error-block">
+                <p className="onb-error">{error}</p>
+                <button className="onb-ghost" onClick={continueSolo} type="button">
+                  Can't reach your team — work locally instead
+                </button>
+              </div>
+            ) : null}
 
             <div className="onb-actions">
               <button className="onb-ghost" onClick={() => setStep("who")} type="button" disabled={busy}>
@@ -198,6 +223,9 @@ export function TeamOnboarding({
         <p className="onb-foot">
           Runs on your own Claude subscription · your code never leaves your machine
         </p>
+        <button className="onb-skip" onClick={continueSolo} type="button" disabled={busy}>
+          Skip — work locally on this machine
+        </button>
       </div>
     </div>
   );

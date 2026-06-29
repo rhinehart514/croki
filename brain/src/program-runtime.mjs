@@ -165,6 +165,11 @@ export async function runProgram(programId, input = {}, options = {}) {
     feedback,
     evaluations,
     nextVersions,
+    // Surface the self-building loop's output at the top level so the run path doesn't have to dig
+    // into `feedback`: detected deterministic procedures and the PENDING, gated tool-birth proposals
+    // derived from them. Both are inert until a founder approves — nothing here is registered or live.
+    crystallizationSuggestions: feedback.crystallizationSuggestions ?? [],
+    toolBirthProposals: feedback.toolBirthProposals ?? [],
     storedRunCount: saved.runs.length,
     // API COMPAT: the server + UI read `run.programStatus`. It now carries the run-derived
     // lastRunStatus value (waiting_for_gate / blocked / learning / complete), not a lifecycle.
