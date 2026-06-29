@@ -109,6 +109,28 @@ describe("entryIsDiscovered — precise, not fooled by a mid-chain agent", () =>
     const edges = [{ source: "a", target: "g", edgeType: "data" }];
     assert.equal(entryIsDiscovered(nodes, edges), true);
   });
+
+  it("a discovered agent entry is not vetoed by an auxiliary provided source on a parallel loop", () => {
+    // The shape that shipped broken: the gate path begins at a discovered agent (decision-maker
+    // research), while a separate provided manual source (inbound replies) feeds a parallel
+    // learning branch that never reaches the gate. The provided source must not shadow discovery.
+    const nodes = [
+      { id: "find", kind: "agent", ref: "gtm-pco-decision-maker-research-agent", mode: "discovered" },
+      { id: "draft", kind: "agent", ref: "gtm-outreach" },
+      gate("g"),
+      provided("replies", [{ id: "r1" }]),
+      { id: "learn", kind: "agent", ref: "gtm-conversation-learning-agent" },
+      { id: "measure", category: "measure" },
+    ];
+    const edges = [
+      { source: "find", target: "draft", edgeType: "data" },
+      { source: "draft", target: "g", edgeType: "data" },
+      { source: "g", target: "measure", edgeType: "data" },
+      { source: "replies", target: "learn", edgeType: "data" },
+      { source: "learn", target: "measure", edgeType: "data" },
+    ];
+    assert.equal(entryIsDiscovered(nodes, edges), true);
+  });
 });
 
 describe("contract relaxation — gate always, discovery chain only when discovered", () => {

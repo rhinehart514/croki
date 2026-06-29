@@ -31,16 +31,28 @@ function richContext() {
 }
 
 describe("agenticProviders — the cutover resolver", () => {
-  it("defaults to an empty set (no config, no env, flag off) — nothing changes", () => {
+  it("defaults to ALL sources (cutover complete: no config, no env → fully agentic)", () => {
     const prior = process.env.GTM_AGENTIC_PROVIDERS;
     const priorFull = process.env.GTM_AGENTIC_RETRIEVAL;
     delete process.env.GTM_AGENTIC_PROVIDERS;
     delete process.env.GTM_AGENTIC_RETRIEVAL;
     try {
-      assert.equal(agenticProviders().size, 0);
+      const set = agenticProviders();
+      assert.equal(set.size, RETRIEVAL_SOURCES.length);
+      for (const source of RETRIEVAL_SOURCES) assert.ok(set.has(source), `${source} should be agentic by default`);
     } finally {
       if (prior !== undefined) process.env.GTM_AGENTIC_PROVIDERS = prior;
       if (priorFull !== undefined) process.env.GTM_AGENTIC_RETRIEVAL = priorFull;
+    }
+  });
+
+  it("an explicit empty string is the escape hatch: empty set → pre-pack everything", () => {
+    const prior = process.env.GTM_AGENTIC_PROVIDERS;
+    delete process.env.GTM_AGENTIC_PROVIDERS;
+    try {
+      assert.equal(agenticProviders("").size, 0, "explicit \"\" opts out of the agentic default");
+    } finally {
+      if (prior !== undefined) process.env.GTM_AGENTIC_PROVIDERS = prior;
     }
   });
 
@@ -91,10 +103,19 @@ describe("agenticProviders — the cutover resolver", () => {
 });
 
 describe("buildAgentPrompt — per-provider partition", () => {
-  it("default (no agentic config) pre-packs everything and offers no tools (byte-for-byte today)", () => {
+  it("default (no agentic config) is now FULLY agentic: every source is a tool, nothing pre-packed", () => {
     const built = buildAgentPrompt({ ref: "gtm-enrich", prompt: "Work it.", items: [], context: richContext() });
-    assert.equal(built.retrievalTools, null, "no tools offered by default");
-    assert.equal(built.manifest.mode, undefined, "default manifest is the pre-pack assembler manifest");
+    assert.equal(built.manifest.mode, "agentic", "default manifest is the agentic catalog");
+    assert.equal(built.retrievalTools.length, RETRIEVAL_SOURCES.length, "every source offered as a tool by default");
+    // The market context is NOT stapled in — it is pulled through get_market.
+    assert.doesNotMatch(built.prompt, /Regional pest-control operators/);
+    assert.match(built.prompt, /get_market/);
+  });
+
+  it("the escape hatch (agenticProviders: \"\") forces the pre-pack: stapled grounding, no tools", () => {
+    const built = buildAgentPrompt({ ref: "gtm-enrich", prompt: "Work it.", items: [], context: richContext(), agenticProviders: "" });
+    assert.equal(built.retrievalTools, null, "no tools offered under the escape hatch");
+    assert.equal(built.manifest.mode, undefined, "escape-hatch manifest is the pre-pack assembler manifest");
     assert.ok(Array.isArray(built.manifest.providers), "pre-pack manifest lists providers");
     // The market context is stapled into the prompt (pre-packed), not pulled.
     assert.match(built.prompt, /Regional pest-control operators/);

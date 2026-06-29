@@ -1,5 +1,10 @@
 # Validation Results
 
+> **Superseded (2026-06-28).** These are the validation results for the Opportunity Studio,
+> which has since been removed (channels are now named directly and compiled via
+> `compileChannelProgram` / `compose_channel`; ideation is the composer's posture). Kept as a
+> dated build-record; see `docs/GOAL.md` P11 and `project-opportunity-studio.md` for the removal.
+
 ## What Changed
 
 - Added durable multi-project selection with backwards-compatible migration from the prior singleton project.

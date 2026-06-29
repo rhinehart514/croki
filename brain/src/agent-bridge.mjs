@@ -26,20 +26,17 @@ export function agenticRetrievalEnabled(explicit) {
   return process.env.GTM_AGENTIC_RETRIEVAL === "1";
 }
 
-// Per-provider cutover (E1.6 + E2.4). The all-or-nothing flag above is one extreme; this is the
-// dial between them. It names WHICH grounding sources have been cut over to agentic retrieval —
-// those become tools the agent pulls; everything else stays pre-packed and proven. The cutover
-// flips one source at a time as the comparison harness (agentic-compare.mjs) earns each move, with
-// taste and design intentionally LAST because their required-consult guarantee is load-bearing.
+// Which grounding sources are pulled agentically (tools the agent calls) vs pre-packed. The cutover
+// is COMPLETE: the default is now FULLY agentic — every source is a tool the agent pulls. Both paths
+// were verified live (each returns real items; the in-process context-tool server runs clean), so
+// the pre-pack is no longer the default — it survives only as an explicit escape hatch.
 //
 // Resolution, highest priority first:
 //   1. an explicit value on the step config (Array | Set | "all" | "" | comma-string)
-//   2. the full-agentic flag — when on, EVERY source is agentic (the old all-on case, unchanged)
-//   3. GTM_AGENTIC_PROVIDERS env (comma list, or "all")
-//   4. nothing → empty set → today's behavior: everything pre-packed, no tools offered.
-//
-// Default (no config, no env, full flag off) returns an EMPTY set, so an unconfigured run is
-// byte-identical to before — the cutover is opt-in per source.
+//   2. the full-agentic flag (GTM_AGENTIC_RETRIEVAL=1) — every source agentic
+//   3. GTM_AGENTIC_PROVIDERS env — the comma list of sources to make agentic; "all" = every source;
+//      "" (empty) = NONE agentic, i.e. fall back to the old pre-pack for everything (the escape hatch)
+//   4. nothing set → the default: FULLY agentic (every source pulled).
 export function agenticProviders(explicit, { full } = {}) {
   const all = new Set(RETRIEVAL_SOURCES);
   const parse = (value) => {
@@ -65,7 +62,8 @@ export function agenticProviders(explicit, { full } = {}) {
   const fromEnv = parse(process.env.GTM_AGENTIC_PROVIDERS);
   if (fromEnv) return fromEnv;
 
-  return new Set();
+  // Cutover complete: with nothing overriding, every source is agentic.
+  return all;
 }
 
 // Render the retrieval-tool catalog the agent reads in agentic mode: which context it CAN pull,

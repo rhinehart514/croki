@@ -173,6 +173,22 @@ function descendantsOf(startIds, edges) {
   return out;
 }
 
+// Every node that can reach any of `targetIds` by walking data edges backward.
+function ancestorsViaData(targetIds, edges) {
+  const out = new Set();
+  const stack = [...targetIds];
+  while (stack.length) {
+    const id = stack.pop();
+    for (const e of edges) {
+      if (e.edgeType === "data" && e.target === id && !out.has(e.source)) {
+        out.add(e.source);
+        stack.push(e.source);
+      }
+    }
+  }
+  return out;
+}
+
 // Always-on domain rule: the founder gate IS the contract checkpoint. The gate itself must not
 // reject a real human-reviewed draft on a field-name technicality, and a post-gate execute
 // (staging/send) must trust the approval rather than re-litigate field names. Measure is left
@@ -216,11 +232,19 @@ export function relaxDiscoveryChainContracts(nodes, edges) {
 // incoming data edge): a source root decides by its own mode; with no source root, an agent root is
 // self-sourcing. This is precise — it does NOT fire just because some agent sits mid-chain on a
 // provided graph, so a provided (deterministic) graph keeps its declared field contracts.
+//
+// Scope matters: relaxation only ever touches the pre-gate chain, so the verdict is judged from the
+// roots of the path that actually REACHES a gate. An auxiliary provided source feeding a parallel
+// learning loop (e.g. inbound replies seeding a conversation-learning branch) is not on the gate
+// path and must not veto discovery on the entry that is. With no gate, judge the whole graph.
 export function entryIsDiscovered(nodes, edges = []) {
   const hasDataParent = new Set();
   for (const e of edges) if (e.edgeType === "data") hasDataParent.add(e.target);
+  const gateIds = nodes.filter((n) => n.category === "gate").map((n) => n.id);
+  const scope = gateIds.length ? ancestorsViaData(gateIds, edges) : null;
+  const inScope = (n) => !scope || scope.has(n.id);
   const roots = nodes.filter(
-    (n) => !hasDataParent.has(n.id) && n.category !== "context" && n.category !== "resource",
+    (n) => inScope(n) && !hasDataParent.has(n.id) && n.category !== "context" && n.category !== "resource",
   );
   const sourceRoot = roots.find(isSourceNode);
   if (sourceRoot) return sourceMode(sourceRoot) === SOURCE_MODES.DISCOVERED;

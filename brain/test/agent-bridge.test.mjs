@@ -147,6 +147,7 @@ describe("buildAgentPrompt — merges a loaded definition, no-ops cleanly when a
       items: [{ id: "1" }],
       context: { designState },
       agentDefinitionRoot: root,
+      agenticProviders: "", // force the pre-pack so the assembler staples DesignState into the prompt
     });
     // The clean base-layer block is rendered into the actual agent prompt (not a standalone call).
     assert.match(built.prompt, /Warm Calm/);

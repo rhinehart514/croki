@@ -259,6 +259,8 @@ test("buildAgentPrompt assembles recognized context and passes the rest through 
       __memory: { approved: ["Saw your second branch opened — worth a swap of notes?"], rejected: [], edits: [] },
       __run: { runId: "run-9", graphId: "find-clients" },
     },
+    // The cutover is complete (default is fully agentic); force the pre-pack to test the assembler.
+    agenticProviders: "",
   });
 
   // Recognized grounding is assembled into the prompt, not dumped as raw JSON.

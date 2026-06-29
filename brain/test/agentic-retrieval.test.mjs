@@ -30,8 +30,8 @@ test("agenticRetrievalEnabled: an explicit boolean overrides the env switch", ()
   }
 });
 
-test("default (pre-pack) mode is unchanged: stapled grounding, no retrieval tools", () => {
-  const built = buildAgentPrompt({ ref: REF, prompt: "draft outreach", context: CONTEXT, agenticRetrieval: false });
+test("pre-pack escape hatch (agenticProviders: \"\"): stapled grounding, no retrieval tools", () => {
+  const built = buildAgentPrompt({ ref: REF, prompt: "draft outreach", context: CONTEXT, agenticProviders: "" });
   assert.match(built.prompt, /Grounded context:/);
   assert.match(built.prompt, /RodentRadar/);
   assert.doesNotMatch(built.prompt, /Context tools —/);

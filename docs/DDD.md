@@ -99,8 +99,9 @@ Program commands come first; the lower-level graph tools are repair tools.
   feedback.
 - `brain/src/capability-foundry.mjs` — personalization profiles, versioned agent instances,
   and evaluations.
-- `brain/src/program-compiler.mjs` — compiles accepted opportunities into program/foundry
-  objects before a graph is saved.
+- `brain/src/program-compiler.mjs` — compiles a channel spec (`compileChannelProgram`) into
+  program/foundry objects before a graph is saved. No opportunity accept-list; the channel is
+  named directly.
 - `brain/src/feedback-ledger.mjs` — records feedback signals and creates revised policies.
 - `brain/src/workflow-composer.mjs` — the model designs the graph; composed agent nodes
   carry `programId`, `agentInstanceId`, `creationPolicyId`, `personalizationProfileId`.

@@ -80,25 +80,26 @@ External search and generation require their respective environment keys. A
 missing key blocks only the dependent branch and leaves every completed result
 inspectable.
 
-## Product and opportunity studio
+## Product and channel composition
 
-The project-level front door now completes the path into those executable
-graphs:
+The project-level front door completes the path into those executable graphs.
+Channels are defined directly — there is no opportunity accept-list to generate
+and review; ideation is the composer's thinking posture (the `Ideate` button),
+not a separate generate-then-accept board.
 
 - Select or add multiple repository-backed product projects.
-- Preserve independent code evidence, shared intelligence, opportunities, and
-  channels for each product.
-- Compile accepted channel opportunities into durable outcome programs with
-  buyer hypotheses, channel hypotheses, measurement plans, and status.
-- Generate code-derived channel opportunities with production `file:line`
-  evidence while keeping unsupported strategic bets explicitly speculative.
-- Review, edit, accept, defer, or reject channel and agent opportunities before
-  they mutate a workflow.
-- Choose Claude or Codex for each accepted agent; the capability foundry creates
-  an agent creation policy, personalization profile, personalized agent
-  instance, and editable markdown artifact.
-- Compose accepted opportunities into a validated input → agents → founder
-  gate → output → measure workflow.
+- Preserve independent code evidence, shared intelligence, and channels for each
+  product.
+- Name a channel directly (by the founder or by Claude) and compile it into a
+  durable outcome program with buyer hypotheses, channel hypotheses, measurement
+  plans, and status (`compileChannelProgram`).
+- Keep code grounding available as production `file:line` evidence while
+  unsupported strategic bets stay explicitly speculative.
+- Choose Claude or Codex for each agent; the capability foundry creates an agent
+  creation policy, personalization profile, personalized agent instance, and
+  editable markdown artifact.
+- Compose a channel spec plus its inline agents into a validated input → agents →
+  founder gate → output → measure workflow (`compose_channel`).
 - Use manual rows, local CSV content, or HTTP APIs as inputs; stage outputs
   locally or send approved items through a configured HTTP API.
 - Feed observed outcomes, product feedback, founder decisions, and run failures

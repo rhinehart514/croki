@@ -73,8 +73,9 @@ proven, so the refactor has one stable surface to target.
   commits the exact ops and resumes the operator, Discard drops them. The program run now streams
   node-by-node like the raw-graph path (`/programs/:id/run/stream`). "Vibe up to the gate" now covers
   the agent editing the graph too.
-- **Phase 4 (shipped):** The domain event-sourcing gap is closed. The live `compileOpportunityProgram`
-  path emits creation events idempotently and `markProgramComposed` emits `WorkflowComposed`, so
+- **Phase 4 (shipped):** The domain event-sourcing gap is closed. The live `compileChannelProgram`
+  path (formerly `compileOpportunityProgram`, before the opportunity object was removed) emits
+  creation events idempotently and `markProgramComposed` emits `WorkflowComposed`, so
   state rebuilds from the log in production (proven by a reconciliation test in
   `workflow-composer.test.mjs`).
 

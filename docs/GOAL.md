@@ -134,6 +134,21 @@ step, not the only vocabulary.
   re-axe to GTM objects with a judgment verdict. See `docs/CANVAS.md` for the full route
   and its sub-steps (P10.1–P10.6).
 
+- **P11 — remove the opportunity object; channels are direct. ← landed.** The
+  auto-generated opportunity accept-list (the generate-then-review RAG pattern the founder
+  rejected) is gone. `opportunity-engine.mjs`, `ideation.mjs`, the `OpportunityStudio` board,
+  and the `list_opportunities` / `generate_opportunities` / `review_opportunity` tools are
+  deleted. A channel is now named directly — by the founder or by Claude — and compiled into a
+  program: `compileOpportunityProgram` → `compileChannelProgram` (a plain
+  `{ id, title, objective }` channel plus inline agent specs, not a stored accept/reject
+  record), and `compose_opportunity_channel` → `compose_channel`, taking the inline channel
+  spec. Ideation no longer runs as a host module; it is the composer's thinking posture (the
+  `Ideate` button drives `composerPosture`), with the channel doctrine still in the editable
+  `~/.claude/agents/gtm-ideate-channels.md`. The references to `ideation.mjs`,
+  `composeOpportunityChannel`, and "accepted opportunities" in P5–P8 above describe the
+  superseded mechanism — the phases happened, but the opportunity object they centered on no
+  longer exists.
+
 ## The open GTM substrate
 
 The host owns four things and only four: the `file:line` product scan (truth), the durable

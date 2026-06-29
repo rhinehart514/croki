@@ -1,5 +1,13 @@
 # Project Opportunity Studio
 
+> **Superseded (2026-06-28).** This documents the generate-then-review Opportunity Studio,
+> which has been removed. The founder rejected the auto-generated accept-list; channels are
+> now named directly and compiled into programs (`compileChannelProgram` / `compose_channel`),
+> and ideation is the composer's thinking posture, not a board. The `OpportunityStudio` UI,
+> `opportunity-engine.mjs`, `ideation.mjs`, and the `list_opportunities` /
+> `generate_opportunities` / `review_opportunity` tools no longer exist. Kept as a dated
+> build-record of what shipped then; see `docs/GOAL.md` P11 for the removal.
+
 ## UX Plan
 
 Entry: project switcher or add-product empty state. Primary path: select repository, understand evidence, review opportunities, compose, and run. Alternate path: return to saved opportunities or add inputs first. Dead end removed: blank channels with no strategic help. Moment of value: evidence-backed channel and agent candidates. Return loop: measured outcomes and founder decisions update future inputs. Primary action: compose the reviewed opportunity set.

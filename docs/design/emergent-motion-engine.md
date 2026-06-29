@@ -71,8 +71,8 @@ Live-verified in the running app (Chrome freed, `motion-chip.png`).
    3 tests in `engine.test.mjs`.
 6. **Foundry mints the agents a graph reaches for — DONE.** `ensureGraphAgents`
    (`program-compiler.mjs`) mints a real personalized teammate — creation policy + instance + on-disk
-   definition — for every agent node the composed graph references that wasn't a declared
-   opportunity. Wired into the live compose path (`workflow-composer.mjs`, right after
+   definition — for every agent node the composed graph references that wasn't already a
+   declared channel agent spec. Wired into the live compose path (`workflow-composer.mjs`, right after
    `annotateGraphWithProgram`), so a Content Strategist or Lifecycle Engineer the model reaches for
    becomes a contract-bound teammate that learns at the gate, not a generic step. Idempotent; covered
    in `capability-foundry.test.mjs`. This is the open node model's other half: the library is no

@@ -7,7 +7,7 @@
 // proven in live-proofs.test.mjs; here we only test the deterministic shape comparison.
 
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it, beforeEach, afterEach } from "node:test";
 import { approxTokens, compareGroundingPaths, compareGroundingOutputs } from "../src/agentic-compare.mjs";
 import { RETRIEVAL_SOURCES } from "../src/context/retrieval-tools.mjs";
 
@@ -42,6 +42,21 @@ function richContext() {
 }
 
 const stepInput = () => ({ ref: "gtm-enrich", prompt: "Find one operator.", items: [{ id: "1" }], context: richContext() });
+
+// The cutover is complete: with no config buildAgentPrompt is now fully agentic. compareGroundingPaths
+// builds its PRE-PACK side straight from the (config-free) stepInput, so we force the escape hatch
+// through the env (`GTM_AGENTIC_PROVIDERS=""` → empty set → pre-pack). The agentic side carries its
+// own explicit config (`agenticRetrieval: true` or `agenticProviders: [...]`), which the resolver
+// ranks ABOVE the env, so the comparison stays honest: pre-pack vs agentic, both explicit.
+let priorAgenticProvidersEnv;
+beforeEach(() => {
+  priorAgenticProvidersEnv = process.env.GTM_AGENTIC_PROVIDERS;
+  process.env.GTM_AGENTIC_PROVIDERS = "";
+});
+afterEach(() => {
+  if (priorAgenticProvidersEnv === undefined) delete process.env.GTM_AGENTIC_PROVIDERS;
+  else process.env.GTM_AGENTIC_PROVIDERS = priorAgenticProvidersEnv;
+});
 
 describe("approxTokens", () => {
   it("is a stable char-based proxy, zero for empty", () => {

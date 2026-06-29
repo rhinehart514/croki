@@ -149,8 +149,10 @@ code.
 - `brain/src/capability-foundry.mjs` owns personalization profiles and agent instances:
   the product/founder/market/program context used at birth and the concrete agent
   capability created from it.
-- `brain/src/program-compiler.mjs` owns the domain handoff from accepted opportunities
-  into outcome program → policy → personalized agent → executable graph.
+- `brain/src/program-compiler.mjs` owns the domain handoff from a channel spec
+  (`compileChannelProgram`, taking a plain `{ id, title, objective }` channel plus inline
+  agent specs — not a stored accept/reject opportunity) into outcome program → policy →
+  personalized agent → executable graph.
 - `brain/src/feedback-ledger.mjs` owns normalized feedback signals from gates and run
   failures, and feeds them back into agent creation policies.
 - `brain/src/engine.mjs` derives the GTM engine state (all subsystems) from real
@@ -243,11 +245,14 @@ code.
   reproducible reality — never a fixed go-to-market taxonomy and never a pre-written channel.
   Reading the codebase must not collapse the product into outbound, accelerator, or any other
   direction. Deciding what is GTM-relevant and what channels to run is ideation's job, rented
-  from the model through `ideation.mjs` (injectable ideator; honest blank default; live
-  `createClaudeIdeator` reads grounding + the real repo; doctrine lives in the editable
-  `~/.claude/agents/gtm-ideate-channels.md`). The host only normalizes proposals and demotes
-  an evidence-free "derived" claim to "speculative". Opportunity generation is never hand-written
-  channel/agent lists in `.mjs`.
+  from the model — and ideation is now the composer's thinking posture, not a host-side
+  auto-proposer that emits an accept/reject board. The founder (or Claude) names a channel
+  directly and it compiles into a program (`compileChannelProgram`); the `Ideate` button drives
+  `composerPosture` so the model thinks out loud before committing a channel, and the channel
+  doctrine still lives in the editable `~/.claude/agents/gtm-ideate-channels.md`. There is no
+  `opportunity-engine.mjs` and no `ideation.mjs`; channel/agent lists are never hand-written in
+  `.mjs`. The host only normalizes a proposed channel and demotes an evidence-free "derived"
+  claim to "speculative".
 - The canvas is a projection over an object model, not a fixed diagram. One canvas engine
   renders `projection(objectModel, lens)`; shared objects are shared nodes; selection
   persists across lenses; focus-to-trace highlights an object's subgraph; there is no fixed
