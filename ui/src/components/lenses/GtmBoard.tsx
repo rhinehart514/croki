@@ -1,14 +1,16 @@
-// GtmBoard — the GTM home as a SPATIAL NODE-FLOW CANVAS. The whole go-to-market is one long left-to-
-// right flow: nine clusters (Strategy 1-4 · Motion 5-6 · Loop 7-9) placed along a gentle wave, SVG
+// GtmBoard — the GTM home as a FREEFORM SPATIAL CANVAS. The whole go-to-market is one open map: nine
+// clusters (Strategy 1-4 · Motion 5-6 · Loop 7-9) spread across 2D space in loose phase zones, SVG
 // wires between consecutive clusters, and a dashed feedback arc from Learning back to Market — the loop
-// closing. Zoomed out you read every belief at once; this is a canvas, not a list.
+// closing. You roam it like a whiteboard: drag empty space to pan (with momentum), scroll/pinch to zoom
+// toward the cursor, and drag a cluster by its header to lay the map out the way you think. Positions
+// persist per project, so the canvas stays yours across reloads.
 //
-// Navigation is focus + swipe-to-unfold. Click a section in the left rail (AltitudeLadder) and the
-// CAMERA FLIES to that cluster while the rest dim. Then SWIPE RIGHT (horizontal trackpad deltaX, or
-// ArrowRight) and the focused section progressively UNFOLDS — first a teaser of its real detail nodes,
-// then, at full extend, its FULL NATIVE DIAGRAM mounts in place (the existing per-layer diagrams from
-// LAYER_DIAGRAMS, or EngineLens for Channels), with the verdict loop intact. Escape / "back to the
-// whole" returns to the full flow.
+// On top of the free roam sits focus + swipe-to-unfold. Click a section in the left rail (AltitudeLadder)
+// or a cluster card and the CAMERA FLIES to that cluster while the rest dim. Then SWIPE RIGHT (horizontal
+// trackpad deltaX, or ArrowRight) and the focused section progressively UNFOLDS — first a teaser of its
+// real detail nodes, then, at full extend, its FULL NATIVE DIAGRAM mounts in place (the existing per-layer
+// diagrams from LAYER_DIAGRAMS, or EngineLens for Channels), with the verdict loop intact. Escape / "back
+// to the whole" returns to the free map. Snapping happens ONLY on a focus click — free roam never snaps.
 //
 // Pure read of real state: every spine line is the band's belief from get_board (honest-blank when
 // null). The board never gates, never triggers a run. Amber (--gap) appears nowhere — it is the
@@ -16,6 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { GripVertical } from "lucide-react";
 import type { GtmCanvasModel } from "@/components/canvas/GtmCanvas";
 import type { LensProps } from "@/components/canvas/CanvasShell";
 import type { LayerBelief } from "@/types";
@@ -27,18 +30,35 @@ import { LAYER_DIAGRAMS } from "@/components/lenses/LAYER_DIAGRAMS";
 import "./GtmBoard.css";
 
 // ── Spatial layout constants ───────────────────────────────────────────────────
-const FLOW_GAP = 470; // horizontal pitch between clusters
-const BASE_Y = 180; // baseline of the flow
-const NODE_W = 300; // spine node width
-const NODE_MID = 56; // vertical offset to a node's wire anchor
-// A gentle vertical wave so the flow reads as a path, not a ruler. Indexed by board order.
-const WAVE = [0, 64, 142, 78, 200, 116, 250, 168, 286];
+const NODE_W = 280; // spine node width
+const CARD_H = 118; // approx card height — wire anchors hit the card's vertical middle
+const NODE_MID = CARD_H / 2;
 const MAX_EXTEND = 3; // 0 spine · 1-2 teaser detail · 3 full diagram
+const MARGIN = 320; // generous pannable breathing room around the map's bounding box
 
-// The camera transform world transition (fly ~0.55s); the diagram crossfade at full extend.
+// The default organic map: clusters spread into loose phase ZONES — Strategy on the left, Motion in the
+// middle, Loop on the right — not a single straight row. Indexed by board order. Founders drag from here;
+// any reposition is saved per project, so this is just the opening arrangement.
+const DEFAULT_LAYOUT: { x: number; y: number }[] = [
+  { x: 60, y: 90 },     // 1 Strategy
+  { x: 470, y: 250 },   // 2
+  { x: 150, y: 480 },   // 3
+  { x: 560, y: 610 },   // 4
+  { x: 980, y: 410 },   // 5 Motion
+  { x: 1240, y: 140 },  // 6
+  { x: 1660, y: 300 },  // 7 Loop
+  { x: 1580, y: 640 },  // 8
+  { x: 2020, y: 500 },  // 9
+];
+
+// The camera fly on focus; the diagram crossfade at full extend.
+const FLY = "transform 0.55s var(--ease)";
 const FADE = { duration: 0.22, ease: [0.22, 1, 0.36, 1] as const };
 
 type Camera = { x: number; y: number; scale: number };
+type XY = { x: number; y: number };
+
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 function readable(value: unknown): string | null {
   if (typeof value === "string") return value.trim() || null;
@@ -156,31 +176,68 @@ export function GtmBoardLens({ model, selected, onSelect }: LensProps<GtmCanvasM
   const [focused, setFocused] = useState<string | null>(null);
   const [extend, setExtend] = useState(0);
   const [panning, setPanning] = useState(false);
+  // Whether the world transform should animate (a focus fly / fit) or track the pointer 1:1 (free pan,
+  // zoom, momentum). Free roam never animates — that's what kills the old conveyor's snap feel.
+  const [animated, setAnimated] = useState(true);
+
+  // Per-project dragged positions, layered over DEFAULT_LAYOUT. Persisted to localStorage so a reposition
+  // survives reload and the canvas stays the founder's. Read lazily (no effect), and re-read on a project
+  // switch via the adjust-state-during-render pattern — React's sanctioned way, no cascading render.
+  const storageKey = `gtm.board.layout.${model.projectId}`;
+  const readLayout = (key: string): Record<string, XY> => {
+    try { const raw = localStorage.getItem(key); return raw ? (JSON.parse(raw) as Record<string, XY>) : {}; }
+    catch { return {}; }
+  };
+  const [overrides, setOverrides] = useState<Record<string, XY>>(() => readLayout(storageKey));
+  const [trackedKey, setTrackedKey] = useState(storageKey);
+  if (trackedKey !== storageKey) {
+    setTrackedKey(storageKey);
+    setOverrides(readLayout(storageKey));
+  }
+  const persist = useCallback((next: Record<string, XY>) => {
+    try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch { /* private mode */ }
+  }, [storageKey]);
 
   // Swipe accumulator + a brief lock so one trackpad flick advances exactly one depth.
   const accRef = useRef(0);
   const lockRef = useRef(false);
+  // Momentum handle for pan inertia.
+  const momentumRef = useRef<number | null>(null);
+  const cancelMomentum = useCallback(() => {
+    if (momentumRef.current !== null) { cancelAnimationFrame(momentumRef.current); momentumRef.current = null; }
+  }, []);
 
   const layers = useMemo(() => (state.status === "ready" ? state.board.layers : []), [state]);
 
-  // ── Spatial positions: clusters along the flow, indexed by board order. ──
+  // ── Spatial positions: DEFAULT_LAYOUT, with any dragged override applied. Indexed by board order. ──
   const positions = useMemo(() => {
     const map = new Map<string, { x: number; y: number; i: number }>();
     layers.forEach((l, i) => {
-      map.set(l.layer, { x: 120 + i * FLOW_GAP, y: BASE_Y + (WAVE[i] ?? i * 40), i });
+      const base = DEFAULT_LAYOUT[i] ?? { x: 80 + i * 360, y: 220 };
+      const o = overrides[l.layer];
+      map.set(l.layer, { x: o?.x ?? base.x, y: o?.y ?? base.y, i });
     });
     return map;
-  }, [layers]);
+  }, [layers, overrides]);
 
-  const contentW = layers.length ? 120 + (layers.length - 1) * FLOW_GAP + NODE_W + 160 : 1200;
-  const contentH = 1080;
+  // The map's bounding box, plus generous margin so it feels open and pannable, not boxed.
+  const bounds = useMemo(() => {
+    let maxX = 900, maxY = 600;
+    positions.forEach((p) => { maxX = Math.max(maxX, p.x + NODE_W); maxY = Math.max(maxY, p.y + CARD_H); });
+    return { w: maxX + MARGIN, h: maxY + MARGIN };
+  }, [positions]);
+  const boundsRef = useRef(bounds);
+  useEffect(() => { boundsRef.current = bounds; }, [bounds]);
 
   // ── Camera math ──
   const fitCamera = useCallback((): Camera => {
-    const sc = Math.min(stageSize.w / contentW, 0.66);
-    const x = Math.max(16, (stageSize.w - contentW * sc) / 2);
-    return { x, y: 28, scale: sc };
-  }, [stageSize.w, contentW]);
+    const sc = clamp(Math.min(stageSize.w / bounds.w, stageSize.h / bounds.h), 0.22, 0.72);
+    return {
+      x: (stageSize.w - bounds.w * sc) / 2,
+      y: (stageSize.h - bounds.h * sc) / 2,
+      scale: sc,
+    };
+  }, [stageSize.w, stageSize.h, bounds.w, bounds.h]);
 
   const focusCamera = useCallback((layer: string, ext: number): Camera => {
     const p = positions.get(layer);
@@ -189,20 +246,18 @@ export function GtmBoardLens({ model, selected, onSelect }: LensProps<GtmCanvasM
     const shift = ext * 150;
     return {
       x: stageSize.w * 0.34 - (p.x + shift) * sc,
-      y: stageSize.h * 0.46 - (p.y + 40) * sc,
+      y: stageSize.h * 0.46 - (p.y + NODE_MID) * sc,
       scale: sc,
     };
   }, [positions, stageSize.w, stageSize.h, fitCamera]);
 
-  // Refs the resize subscription reads without re-subscribing (and without stale closures): whether a
-  // section is focused, and the current content width for the fit math.
+  // Refs the resize subscription reads without re-subscribing (and without stale closures).
   const focusedRef = useRef<string | null>(null);
-  const contentWRef = useRef(contentW);
-  useEffect(() => { focusedRef.current = focused; contentWRef.current = contentW; }, [focused, contentW]);
+  useEffect(() => { focusedRef.current = focused; }, [focused]);
 
-  // Track the stage size against the real viewport, and — while nothing is focused — sit at the
-  // whole-flow altitude. setCamera here runs from the ResizeObserver (an external system), not
-  // synchronously in render. The observer fires on observe(), so first paint frames itself.
+  // Track the stage size against the real viewport, and — while nothing is focused — sit at the fit
+  // altitude. setCamera here runs from the ResizeObserver (an external system). The observer fires on
+  // observe(), so first paint frames itself.
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
@@ -210,9 +265,10 @@ export function GtmBoardLens({ model, selected, onSelect }: LensProps<GtmCanvasM
       const w = el.clientWidth, h = el.clientHeight;
       setStageSize({ w, h });
       if (focusedRef.current === null) {
-        const cw = contentWRef.current;
-        const sc = Math.min(w / cw, 0.66);
-        setCamera({ x: Math.max(16, (w - cw * sc) / 2), y: 28, scale: sc });
+        const b = boundsRef.current;
+        const sc = clamp(Math.min(w / b.w, h / b.h), 0.22, 0.72);
+        setAnimated(false);
+        setCamera({ x: (w - b.w * sc) / 2, y: (h - b.h * sc) / 2, scale: sc });
       }
     };
     const ro = new ResizeObserver(measure);
@@ -220,50 +276,83 @@ export function GtmBoardLens({ model, selected, onSelect }: LensProps<GtmCanvasM
     return () => ro.disconnect();
   }, []);
 
+  useEffect(() => cancelMomentum, [cancelMomentum]);
+
   const toWhole = useCallback(() => {
+    cancelMomentum();
     setFocused(null);
     setExtend(0);
     accRef.current = 0;
+    setAnimated(true);
     setCamera(fitCamera());
-  }, [fitCamera]);
+  }, [fitCamera, cancelMomentum]);
 
   const focusSection = useCallback((layer: string) => {
+    cancelMomentum();
     setFocused(layer);
     setExtend(0);
     accRef.current = 0;
+    setAnimated(true);
     setCamera(focusCamera(layer, 0));
-  }, [focusCamera]);
+  }, [focusCamera, cancelMomentum]);
 
   const setDepth = useCallback((next: number) => {
     if (!focused) return;
-    const clamped = Math.max(0, Math.min(MAX_EXTEND, next));
+    const clamped = clamp(next, 0, MAX_EXTEND);
     setExtend(clamped);
+    setAnimated(true);
     setCamera(focusCamera(focused, clamped));
   }, [focused, focusCamera]);
 
-  // ── Swipe-to-unfold: horizontal-dominant wheel drives the extend level. Vertical scroll passes
-  // through (so a mounted diagram scrolls). Native listener with passive:false to claim deltaX. ──
+  // Reset the layout to the default arrangement and fit — the "make it tidy again" escape hatch.
+  const resetLayout = useCallback(() => {
+    setOverrides({});
+    persist({});
+    cancelMomentum();
+    setFocused(null);
+    setExtend(0);
+    setAnimated(true);
+    setCamera(fitCamera());
+  }, [persist, fitCamera, cancelMomentum]);
+
+  // ── Wheel: focused → swipe-to-unfold (horizontal). Free roam → zoom toward the cursor. ──
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
-      if (!focused) return;
-      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return; // let vertical scroll through
-      e.preventDefault();
-      accRef.current += e.deltaX;
-      if (!lockRef.current && accRef.current > 60) {
-        accRef.current = 0; lockRef.current = true;
-        setDepth(extend + 1);
-        setTimeout(() => { lockRef.current = false; }, 420);
-      } else if (!lockRef.current && accRef.current < -60) {
-        accRef.current = 0; lockRef.current = true;
-        setDepth(extend - 1);
-        setTimeout(() => { lockRef.current = false; }, 420);
+      if (focused) {
+        // Swipe-to-unfold: horizontal-dominant wheel drives extend; vertical scroll passes through so a
+        // mounted diagram scrolls.
+        if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+        e.preventDefault();
+        accRef.current += e.deltaX;
+        if (!lockRef.current && accRef.current > 60) {
+          accRef.current = 0; lockRef.current = true;
+          setDepth(extend + 1);
+          setTimeout(() => { lockRef.current = false; }, 420);
+        } else if (!lockRef.current && accRef.current < -60) {
+          accRef.current = 0; lockRef.current = true;
+          setDepth(extend - 1);
+          setTimeout(() => { lockRef.current = false; }, 420);
+        }
+        return;
       }
+      // Free roam: zoom toward the cursor. preventDefault so the page never scrolls under us.
+      e.preventDefault();
+      cancelMomentum();
+      const rect = el.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const factor = Math.exp(-e.deltaY * 0.0015);
+      setAnimated(false);
+      setCamera((c) => {
+        const ns = clamp(c.scale * factor, 0.2, 1.6);
+        const wx = (mx - c.x) / c.scale, wy = (my - c.y) / c.scale;
+        return { x: mx - wx * ns, y: my - wy * ns, scale: ns };
+      });
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [focused, extend, setDepth]);
+  }, [focused, extend, setDepth, cancelMomentum]);
 
   // Keyboard: arrows extend/retract the focused section; Escape returns to the whole.
   useEffect(() => {
@@ -277,22 +366,78 @@ export function GtmBoardLens({ model, selected, onSelect }: LensProps<GtmCanvasM
     return () => window.removeEventListener("keydown", onKey);
   }, [focused, extend, setDepth, toWhole]);
 
-  // Drag to pan when nothing is focused (explore the whole flow).
+  // ── Drag empty canvas to pan, with light inertia on release. Only while roaming (not focused). ──
   const onPointerDown = (e: React.PointerEvent) => {
     if (focused) return;
-    if ((e.target as HTMLElement).closest(".board-node, .sec, .board-zoom, .board-back")) return;
-    const start = { x: e.clientX, y: e.clientY, cx: camera.x, cy: camera.y };
+    if ((e.target as HTMLElement).closest(".board-node, .board-cluster-head, .sec, .board-zoom, .board-back")) return;
+    cancelMomentum();
+    let last = { x: e.clientX, y: e.clientY, t: performance.now() };
+    let vel = { x: 0, y: 0 };
     setPanning(true);
+    setAnimated(false);
     const move = (ev: PointerEvent) => {
-      setCamera((c) => ({ ...c, x: start.cx + (ev.clientX - start.x), y: start.cy + (ev.clientY - start.y) }));
+      const dx = ev.clientX - last.x, dy = ev.clientY - last.y;
+      const now = performance.now();
+      const dt = Math.max(1, now - last.t);
+      vel = { x: dx / dt, y: dy / dt };
+      last = { x: ev.clientX, y: ev.clientY, t: now };
+      setCamera((c) => ({ ...c, x: c.x + dx, y: c.y + dy }));
     };
     const up = () => {
       setPanning(false);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      // Inertia: keep gliding from the release velocity, decaying with friction. Skipped for reduced motion.
+      if (reduce) return;
+      let vx = vel.x * 16, vy = vel.y * 16; // px/ms → px/frame at ~60fps
+      if (Math.hypot(vx, vy) < 0.6) return;
+      const step = () => {
+        vx *= 0.92; vy *= 0.92;
+        if (Math.abs(vx) < 0.12 && Math.abs(vy) < 0.12) { momentumRef.current = null; return; }
+        setCamera((c) => ({ ...c, x: c.x + vx, y: c.y + vy }));
+        momentumRef.current = requestAnimationFrame(step);
+      };
+      momentumRef.current = requestAnimationFrame(step);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+  };
+
+  // ── Drag a cluster by its header to reposition it on the map. Edges follow; the move persists. ──
+  const onClusterDragStart = (layer: string, e: React.PointerEvent) => {
+    if (focused) return;
+    e.stopPropagation();
+    e.preventDefault();
+    cancelMomentum();
+    const p = positions.get(layer);
+    if (!p) return;
+    const sx = e.clientX, sy = e.clientY;
+    const startX = p.x, startY = p.y;
+    const scale = camera.scale;
+    const move = (ev: PointerEvent) => {
+      setOverrides((prev) => ({
+        ...prev,
+        [layer]: { x: startX + (ev.clientX - sx) / scale, y: startY + (ev.clientY - sy) / scale },
+      }));
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      setOverrides((prev) => { persist(prev); return prev; });
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
+  const zoomBy = (factor: number) => {
+    setAnimated(true);
+    setCamera((c) => {
+      const ns = clamp(c.scale * factor, 0.2, 1.6);
+      // Zoom toward the stage center for the button controls.
+      const cx = stageSize.w / 2, cy = stageSize.h / 2;
+      const wx = (cx - c.x) / c.scale, wy = (cy - c.y) / c.scale;
+      return { x: cx - wx * ns, y: cy - wy * ns, scale: ns };
+    });
   };
 
   const onVerdict = () => setRefreshKey((k) => k + 1);
@@ -322,41 +467,44 @@ export function GtmBoardLens({ model, selected, onSelect }: LensProps<GtmCanvasM
   const focusedLayer = focused ? layers.find((l) => l.layer === focused) ?? null : null;
   const showDiagram = focused !== null && extend >= MAX_EXTEND && focusedLayer !== null;
 
-  // Wires: consecutive clusters + the dashed feedback arc Learning → Market.
+  // Wires: consecutive clusters (center-to-center bezier so they read as a path across the 2D map) + the
+  // dashed feedback arc Learning → Market.
   const wires = layers.slice(0, -1).map((l, i) => {
     const a = positions.get(l.layer)!;
     const b = positions.get(layers[i + 1].layer)!;
-    const ax = a.x + NODE_W, ay = a.y + NODE_MID, bx = b.x, by = b.y + NODE_MID;
-    const mx = (ax + bx) / 2;
+    const ax = a.x + NODE_W / 2, ay = a.y + NODE_MID;
+    const bx = b.x + NODE_W / 2, by = b.y + NODE_MID;
+    const dx = (bx - ax) * 0.5;
     // The wire ARRIVING at the focused cluster lights.
     const lit = focusedIndex === i + 1;
-    return { key: l.layer, d: `M ${ax} ${ay} C ${mx} ${ay}, ${mx} ${by}, ${bx} ${by}`, lit };
+    return { key: l.layer, d: `M ${ax} ${ay} C ${ax + dx} ${ay}, ${bx - dx} ${by}, ${bx} ${by}`, lit };
   });
   const feedback = (() => {
     if (layers.length < 2) return null;
     const last = positions.get(layers[layers.length - 1].layer)!;
     const first = positions.get(layers[0].layer)!;
-    const ax = last.x + NODE_W, ay = last.y + NODE_MID + 24;
-    const bx = first.x, by = first.y + NODE_MID + 24;
-    return `M ${ax} ${ay} C ${ax + 140} 1000, ${bx - 140} 1000, ${bx} ${by}`;
+    const ax = last.x + NODE_W / 2, ay = last.y + CARD_H;
+    const bx = first.x + NODE_W / 2, by = first.y + CARD_H;
+    const dip = bounds.h - MARGIN * 0.4;
+    return `M ${ax} ${ay} C ${ax} ${dip}, ${bx} ${dip}, ${bx} ${by}`;
   })();
 
-  const worldTransition = reduce || panning ? "none" : "transform 0.55s var(--ease)";
+  const worldTransition = reduce ? "none" : animated ? FLY : "none";
 
   return (
     <div className="gtm-board">
       <AltitudeLadder layers={layers} focusedLayer={focused} onFly={focusSection} />
 
-      <div className="board-stage" ref={stageRef} onPointerDown={onPointerDown}>
+      <div className={`board-stage${panning ? " panning" : ""}`} ref={stageRef} onPointerDown={onPointerDown}>
         {/* Top bar — breadcrumb + back-to-the-whole */}
         <div className="board-topbar">
           <div className="board-crumb">
             {focusedLayer
               ? <><b>{layerMeta(focusedLayer.layer).name}</b> · {layerMeta(focusedLayer.layer).sub}</>
-              : "The whole go-to-market — one flow"}
+              : "The whole go-to-market — one map · drag to roam, scroll to zoom"}
           </div>
           {focused && (
-            <button type="button" className="board-back" onClick={toWhole} title="Back to the whole flow (Esc)">
+            <button type="button" className="board-back" onClick={toWhole} title="Back to the whole map (Esc)">
               &#8598; back to the whole
             </button>
           )}
@@ -367,7 +515,7 @@ export function GtmBoardLens({ model, selected, onSelect }: LensProps<GtmCanvasM
           className={`board-world${panning ? " panning" : ""}`}
           style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`, transition: worldTransition }}
         >
-          <svg className="board-wires" width={contentW} height={contentH} aria-hidden="true">
+          <svg className="board-wires" width={bounds.w} height={bounds.h} aria-hidden="true">
             {wires.map((w) => <path key={w.key} className={`board-wire${w.lit ? " lit" : ""}`} d={w.d} />)}
             {feedback && <path className="board-wire feedback" d={feedback} />}
           </svg>
@@ -386,7 +534,14 @@ export function GtmBoardLens({ model, selected, onSelect }: LensProps<GtmCanvasM
                 className={`board-cluster${isFocused ? " focused" : ""}${dim ? " dim" : ""}`}
                 style={{ left: p.x, top: p.y }}
               >
-                <div className="board-cluster-head"><span className="cnum">{meta.n}</span> {l.phase}</div>
+                <div
+                  className="board-cluster-head"
+                  onPointerDown={(e) => onClusterDragStart(l.layer, e)}
+                  title="Drag to reposition"
+                >
+                  <span className="board-cluster-grip" aria-hidden="true"><GripVertical size={13} /></span>
+                  <span className="cnum">{meta.n}</span> {l.phase}
+                </div>
                 <button
                   type="button"
                   className={`board-node spine tone-${badge.tone}${l.belief ? "" : " blind"}`}
@@ -475,11 +630,12 @@ export function GtmBoardLens({ model, selected, onSelect }: LensProps<GtmCanvasM
           )}
         </AnimatePresence>
 
-        {/* Zoom / fit controls */}
+        {/* Zoom / fit / reset controls */}
         <div className="board-zoom">
-          <button type="button" onClick={() => setCamera((c) => ({ ...c, scale: Math.min(1.4, c.scale + 0.12) }))} title="Zoom in">+</button>
-          <button type="button" onClick={() => setCamera((c) => ({ ...c, scale: Math.max(0.4, c.scale - 0.12) }))} title="Zoom out">&minus;</button>
-          <button type="button" onClick={toWhole} title="Fit the whole flow">&#9633;</button>
+          <button type="button" onClick={() => zoomBy(1.18)} title="Zoom in">+</button>
+          <button type="button" onClick={() => zoomBy(1 / 1.18)} title="Zoom out">&minus;</button>
+          <button type="button" onClick={toWhole} title="Fit the whole map">&#9633;</button>
+          <button type="button" onClick={resetLayout} title="Reset the layout">&#8634;</button>
         </div>
       </div>
     </div>

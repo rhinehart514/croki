@@ -3666,10 +3666,12 @@ svg {
   grid-template-columns: minmax(0, 1fr);
 }
 
-/* The left explorer rail is dissolved — the canvas IS the interface. With no rail column the body is
-   a single full-width column; the Claude dock floats over it (absolute), so it claims no column. */
+/* The left explorer rail is dissolved — the canvas IS the interface. The Claude co-pilot is re-homed as
+   an in-flow RIGHT LANE (the auto column), so the canvas/board lays out clear of it and is never covered.
+   When the dock isn't rendered (cold-start launcher) the auto column collapses to zero and the canvas
+   reclaims the full width. */
 .loop-body.canvas-full {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .loop-body.portfolio-mode {
@@ -9418,6 +9420,59 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 /* Resting = the composer alone, centered on the canvas, auto height. The .floating glass card already
    gives the blur, border, shadow, and the bottom-center placement; resting just sheds the panel chrome. */
 .composer-dock.floating.resting { max-height: none; height: auto; width: min(640px, calc(100% - 48px)); }
+
+/* ── Docked co-pilot — an in-flow RIGHT LANE the canvas flexes around, never a panel over the board ──
+   The real fix for the occlusion: the dock takes its own auto column in the loop-body grid, so the
+   board (and exactly where a section unfolds) is always clear of it. Opaque (no glass — you read in it),
+   full body height, tokens only. The expand toggle and the build room widen the lane; the canvas reflows.
+   Collapsed, it becomes a slim edge rail so an idle/finished session hands the width back to the canvas. */
+.composer-dock.docked {
+  position: relative;
+  align-self: stretch;
+  height: 100%;
+  min-height: 0;
+  width: clamp(360px, 30vw, 460px);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  z-index: 30;
+  overflow: hidden;
+  transition: width var(--dur-slow) var(--ease);
+}
+.composer-dock.docked.expanded { width: clamp(440px, 40vw, 640px); }
+.composer-dock.docked.buildroom { width: clamp(640px, 52vw, 880px); }
+.composer-dock.docked .composer-dock-body { flex: 1; min-height: 0; }
+.composer-dock.docked .composer-dock-timeline { flex: 1; min-height: 0; }
+.composer-dock.docked .composer-box {
+  border-top: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+}
+
+/* Collapsed → a slim edge rail with a vertical launcher, out of the content area. */
+.composer-dock.docked.collapsed { width: 48px; align-items: stretch; }
+.dock-rail-launcher {
+  flex: 1; width: 100%; border: 0; background: transparent; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 14px 0; color: var(--muted);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.dock-rail-launcher:hover { background: var(--surface-2); color: var(--ink); }
+.dock-rail-orb {
+  width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+  display: grid; place-items: center; background: var(--surface-2); color: var(--ink);
+}
+.dock-rail-orb.live { background: var(--proven-soft); color: var(--proven); }
+.dock-rail-orb svg { width: 16px; height: 16px; }
+.dock-rail-label {
+  writing-mode: vertical-rl; text-orientation: mixed;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.dock-rail-gate { margin-top: auto; color: var(--gap); display: inline-flex; }
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-dock.docked { transition: none; }
+}
 
 /* Resting peek — a slim, quiet bar above the composer that surfaces a live session's latest
    beat and opens the full conversation on click. Monochrome; the dot is the only color. */

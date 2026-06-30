@@ -710,9 +710,34 @@ export function ComposerDock({
     </div>
   );
 
-  // Resting = the composer alone, centered on the canvas (the command line). The conversation only
-  // rises above it once you send or open a live session — minimizing (the header X) returns here.
+  // Collapsed. When the dock owns a lane (docked, the canvas usage), it shrinks to a SLIM EDGE RAIL with
+  // a launcher — out of the content area, never a panel over the board. The canvas reclaims the width.
   if (collapsed) {
+    if (!floating) {
+      return (
+        <aside className="composer-dock docked collapsed" aria-label="Claude co-pilot">
+          <button
+            className="dock-rail-launcher"
+            onClick={() => setCollapsed(false)}
+            type="button"
+            title="Open Claude"
+            aria-label="Open the conversation with Claude"
+          >
+            <span className={`dock-rail-orb ${working ? "live" : ""}`} aria-hidden="true">
+              {working ? <LoaderCircle className="spin" /> : <Bot size={16} />}
+            </span>
+            <span className="dock-rail-label">Claude</span>
+            {waitingGate ? (
+              <span className="dock-rail-gate" aria-hidden="true" title="Your review is required">
+                <ShieldCheck size={14} />
+              </span>
+            ) : null}
+          </button>
+        </aside>
+      );
+    }
+    // Floating resting = the composer alone, centered on the canvas (the command line). The conversation
+    // only rises above it once you send or open a live session — minimizing (the header X) returns here.
     return (
       <aside className="composer-dock floating resting" aria-label="Claude">
         {/* When Claude is live, a slim peek above the composer shows the state and opens the
@@ -736,7 +761,7 @@ export function ComposerDock({
   const buildRoom = expanded && !!graph && graph.nodes.length > 0;
 
   return (
-    <aside className={`composer-dock floating ${expanded ? "expanded" : ""} ${buildRoom ? "buildroom" : ""}`} aria-label="Claude co-pilot">
+    <aside className={`composer-dock ${floating ? "floating" : "docked"} ${expanded ? "expanded" : ""} ${buildRoom ? "buildroom" : ""}`} aria-label="Claude co-pilot">
       {/* ── Header ─────────────────────────────────────────────── */}
       <header className="composer-dock-head">
         <span className={`composer-dock-avatar ${sessionActive ? "running" : ""}`}>
