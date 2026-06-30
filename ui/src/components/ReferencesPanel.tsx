@@ -87,9 +87,9 @@ function personSubline(p: Person, name: string): string | undefined {
 // The primary descriptor for one reference row, by kind.
 function refPrimary(ref: CrossReference, kind: ReferenceKind): string {
   if (kind === "person") return ref.role?.trim() || "Appeared in a run";
-  if (kind === "experiment") return ref.variable?.trim() || "Tested in this channel";
-  if (kind === "claim") return "Carried in this channel's positioning";
-  return "Named in this channel";
+  if (kind === "experiment") return ref.variable?.trim() || "Tested in this pipeline";
+  if (kind === "claim") return "Carried in this pipeline's positioning";
+  return "Named in this pipeline";
 }
 
 type ChannelGroup = { channelId: string | null; name: string; refs: CrossReference[] };
@@ -145,7 +145,7 @@ export function ReferencesPanel(props: ReferencesPanelProps) {
   if (!result) {
     return (
       <div className="references-panel references-panel-state">
-        <p className="references-state-note">Select an object to trace where it appears across channels.</p>
+        <p className="references-state-note">Select an object to trace where it appears across pipelines.</p>
       </div>
     );
   }
@@ -166,7 +166,7 @@ export function ReferencesPanel(props: ReferencesPanelProps) {
       <div className="references-stat">
         <span className="references-stat-figure">{refCount}</span>
         <span className="references-stat-label">
-          {meta.noun}{refCount === 1 ? "" : "s"} across {channelCount} channel{channelCount === 1 ? "" : "s"}
+          {meta.noun}{refCount === 1 ? "" : "s"} across {channelCount} pipeline{channelCount === 1 ? "" : "s"}
         </span>
       </div>
 
@@ -188,8 +188,8 @@ export function ReferencesPanel(props: ReferencesPanelProps) {
         <div className="references-where-title">Where it appears</div>
         {groups.length === 0 ? (
           <p className="references-empty">
-            No cross-channel appearances yet. When a run surfaces this {meta.eyebrow.toLowerCase()} in a
-            channel, it shows here — derived from real runs, never seeded.
+            No cross-pipeline appearances yet. When a run surfaces this {meta.eyebrow.toLowerCase()} in a
+            pipeline, it shows here — derived from real runs, never seeded.
           </p>
         ) : (
           <ul className="references-channel-list">

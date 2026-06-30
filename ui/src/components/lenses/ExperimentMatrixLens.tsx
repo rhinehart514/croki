@@ -114,8 +114,8 @@ export function ExperimentMatrixLens({
     return (
       <div className="matrix-lens matrix-lens-empty" role="region" aria-label="Experiment matrix lens">
         <p className="matrix-empty-note">
-          No live experiments yet. When you run a claim against a channel, it shows here as a cell in
-          the matrix — which claim, which channel, the variant against the control, and whether it's
+          No live experiments yet. When you run a claim against a pipeline, it shows here as a cell in
+          the matrix — which claim, which pipeline, the variant against the control, and whether it's
           running. This is the "which claim wins in which ICP" surface.
         </p>
       </div>
@@ -145,7 +145,7 @@ export function ExperimentMatrixLens({
         <table className="matrix-table">
           <thead>
             <tr>
-              <th className="matrix-corner">claim × channel</th>
+              <th className="matrix-corner">claim × pipeline</th>
               {columns.map((columnId) => (
                 <th key={columnId} className="matrix-col-head">
                   {channelName.get(columnId) || (columnId === "unattributed" ? "Unattributed" : columnId)}

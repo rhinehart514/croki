@@ -78,7 +78,7 @@ export function ScanPreview({
           <section className="scan-preview-blind">
             <span className="scan-preview-blind-label"><EyeOff size={13} /> Attribution is blind</span>
             <p>{report.blindAttribution?.reason?.trim()
-              || "The win event fires, but nothing in the code records where it came from — so this product can't yet tell which channel earned a win. That's a real gap, not a bug in the scan."}</p>
+              || "The win event fires, but nothing in the code records where it came from — so this product can't yet tell which pipeline earned a win. That's a real gap, not a bug in the scan."}</p>
           </section>
         ) : null}
       </div>

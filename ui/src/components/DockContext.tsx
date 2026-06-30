@@ -49,7 +49,7 @@ export function DockContext({
         </button>
         <span className="dctx-action-sep" aria-hidden="true" />
         <button className="dctx-action" onClick={onIdeate} type="button">
-          Ideate channels
+          Ideate pipelines
         </button>
       </span>
     </div>

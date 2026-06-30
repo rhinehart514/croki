@@ -17,11 +17,11 @@ export function ProductUnderstanding({
         <div>
           <span className="studio-eyebrow">Codebase understanding</span>
           <h1 id="understanding-title">{project.name}</h1>
-          <p>{String(repository.headline || "Read this product as grounded reality, then ideate its channels — no shape assumed.")}</p>
+          <p>{String(repository.headline || "Read this product as grounded reality, then ideate its pipelines — no shape assumed.")}</p>
         </div>
         <button className="studio-primary-action" disabled={busy || !repository.workspaceId} onClick={() => void onGenerate()} type="button">
           <Lightbulb />
-          Ideate channels
+          Ideate pipelines
         </button>
       </header>
 
@@ -32,9 +32,9 @@ export function ProductUnderstanding({
 
       <button className="understanding-empty" disabled={busy || !repository.workspaceId} onClick={() => void onGenerate()} type="button">
         <FileCode2 />
-        <strong>Ideate this product's channels from grounded reality</strong>
-        <span>Reads the win event, the cited evidence, and the repo, then proposes channels with no shape assumed.</span>
-        <em>Ideate channels <ArrowRight /></em>
+        <strong>Ideate this product's pipelines from grounded reality</strong>
+        <span>Reads the win event, the cited evidence, and the repo, then proposes pipelines with no shape assumed.</span>
+        <em>Ideate pipelines <ArrowRight /></em>
       </button>
     </section>
   );

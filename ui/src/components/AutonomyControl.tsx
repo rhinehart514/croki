@@ -22,7 +22,7 @@ type Rung = (typeof RUNGS)[number];
 const RUNG_COPY: Record<Rung, { label: string; blurb: string }> = {
   draft: { label: "Draft", blurb: "The gate holds every staged item for your review." },
   trusted: { label: "Trusted", blurb: "The gate auto-approves clean items, holds the exceptions." },
-  autonomous: { label: "Autonomous", blurb: "Standing approval runs the channel; exceptions still stop." },
+  autonomous: { label: "Autonomous", blurb: "Standing approval runs the pipeline; exceptions still stop." },
 };
 
 const nextRung = (level: Rung): "trusted" | "autonomous" | null =>
@@ -74,8 +74,8 @@ export function AutonomyControl({
       <div className="autonomy-head">
         <ShieldCheck className="autonomy-head-icon" aria-hidden />
         <div className="autonomy-head-text">
-          <strong>Channel autonomy</strong>
-          <span>How much of this channel's gate the founder stands behind.</span>
+          <strong>Pipeline autonomy</strong>
+          <span>How much of this pipeline's gate the founder stands behind.</span>
         </div>
       </div>
 
@@ -97,7 +97,7 @@ export function AutonomyControl({
       <div className="autonomy-wall-note">
         <Lock aria-hidden />
         <span>
-          The gate stays on this channel. Even at autonomous the gate node is present on every path —
+          The gate stays on this pipeline. Even at autonomous the gate node is present on every path —
           promotion is standing founder approval, never the wall's removal.
         </span>
       </div>
@@ -148,14 +148,14 @@ export function AutonomyControl({
             className="autonomy-btn autonomy-btn-promote"
             disabled={!canRelease || busy}
             onClick={() => setComposing(true)}
-            title={canRelease ? undefined : "Only an owner or approver can promote a channel."}
+            title={canRelease ? undefined : "Only an owner or approver can promote a pipeline."}
           >
             <ChevronRight aria-hidden />
             Promote to {RUNG_COPY[target].label.toLowerCase()}
           </button>
         )
       ) : (
-        <p className="autonomy-top-note">This channel is at the top of the ladder.</p>
+        <p className="autonomy-top-note">This pipeline is at the top of the ladder.</p>
       )}
 
       {/* Revoke — always one click back to draft, never amber. */}
@@ -165,7 +165,7 @@ export function AutonomyControl({
           className="autonomy-btn autonomy-btn-revoke"
           disabled={!canRelease || busy}
           onClick={() => void revoke()}
-          title={canRelease ? undefined : "Only an owner or approver can revoke a channel."}
+          title={canRelease ? undefined : "Only an owner or approver can revoke a pipeline."}
         >
           <Undo2 aria-hidden />
           Drop to draft

@@ -35,7 +35,7 @@ export function ProjectPicker({
         <div>
           <span className="studio-eyebrow">Your products</span>
           <h1 id="project-picker-title">Choose the product you're taking to market</h1>
-          <p>Each product is a grounded codebase with its own channels, agents, and learning loop.</p>
+          <p>Each product is a grounded codebase with its own pipelines, agents, and learning loop.</p>
         </div>
         <button className="studio-primary-action" onClick={() => onNewProduct ? onNewProduct() : setCreating(true)} type="button">
           <Plus /> Add product
@@ -109,7 +109,7 @@ export function ProjectPicker({
             <span className="project-choice-repo">{project.repo || "Code not connected yet"}</span>
             <small className="project-choice-headline">{project.headline || "Not scanned yet — open to read its code."}</small>
             <span className="project-choice-meta">
-              {project.channelCount} {project.channelCount === 1 ? "channel" : "channels"}
+              {project.channelCount} {project.channelCount === 1 ? "pipeline" : "pipelines"}
             </span>
           </button>
         ))}

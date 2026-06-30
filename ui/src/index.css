@@ -9795,6 +9795,10 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
   animation: composer-spectrum-spin 2.4s linear infinite;
 }
 .dock-build-card-tag.now { color: var(--ink-2); border-color: var(--line-2); background: var(--surface-2); }
+/* ghost — proposed, not yet accepted: the same "not yet real" language (dash + value, no fourth
+   hue) as the main canvas's .loop-node-proposed, so the build room reads as a true canvas slice. */
+.dock-build-card.ghost { border-style: dashed; border-color: var(--ghost); background: var(--surface-2); box-shadow: none; }
+.dock-build-card-tag.proposed { color: var(--muted); border-color: var(--line-2); background: var(--surface-2); }
 
 .composer-dock.floating .composer-dock-head {
   border-radius: var(--r-xl) var(--r-xl) 0 0; background: transparent;

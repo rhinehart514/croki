@@ -50,7 +50,7 @@ export function WorkspaceView({
         <div className="wsv-head-title">
           <LayoutGrid size={15} />
           <strong>Workspace</strong>
-          <span className="wsv-head-sub">Every channel, skill, and agent in this product</span>
+          <span className="wsv-head-sub">Every pipeline, skill, and agent in this product</span>
         </div>
         <button className="wsv-close" onClick={onClose} type="button" aria-label="Close workspace">
           <X size={15} />
@@ -61,15 +61,15 @@ export function WorkspaceView({
         {/* Workflows — real project state, with live health. */}
         <section className="wsv-lane">
           <div className="wsv-lane-head">
-            <span className="wsv-lane-title"><Workflow size={13} /> Channels</span>
+            <span className="wsv-lane-title"><Workflow size={13} /> Pipelines</span>
             <span className="wsv-lane-count">{channels.length}</span>
-            <button className="wsv-new" onClick={onNewWorkflow} type="button" title="Ideate a new channel">
+            <button className="wsv-new" onClick={onNewWorkflow} type="button" title="Ideate a new pipeline">
               <Plus size={13} />
             </button>
           </div>
           <div className="wsv-lane-body">
             {channels.length === 0 ? (
-              <p className="wsv-empty">No channels yet. Ideate one to start.</p>
+              <p className="wsv-empty">No pipelines yet. Ideate one to start.</p>
             ) : (
               <Stagger className="wsv-cards">
                 {channels.map((ch) => (

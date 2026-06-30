@@ -454,6 +454,38 @@ function gateDraft(item: GTMItem): { to: string; subject?: string; body: string;
   };
 }
 
+// What enrich/filter/draft/measure/execute steps actually produced — the same "read the real thing,
+// not a count" move as gateDraft and the source's who-enters list, for every category that otherwise
+// fell through to a bare item count. Headline is who/what the item is; detail is the one fact that
+// explains why it's here (a fit reason, a score, the enrichment, the draft's subject).
+function itemHeadline(item: GTMItem): string {
+  return String(item.name ?? item.company ?? item.org ?? item.handle ?? item.title ?? item.subject ?? item.email ?? "Item");
+}
+function itemDetail(item: GTMItem): string | null {
+  const v = item.fitReasons?.[0] ?? item.summary ?? item.subject
+    ?? (typeof item.score === "number" ? `score ${item.score}` : null)
+    ?? (item.company && item.name ? item.company : null)
+    ?? (item.fit === true ? "fit" : item.fit === false ? "not a fit" : null);
+  return v != null && v !== "" ? String(v) : null;
+}
+function ProducedPreview({ items }: { items: GTMItem[] }) {
+  if (!items.length) return null;
+  return (
+    <div className="loop-who">
+      <div className="loop-entrants">
+        {items.slice(0, 6).map((item, i) => (
+          <div className="loop-erow" key={String(item.id ?? i)}>
+            <span className="loop-eav" aria-hidden>{itemHeadline(item).slice(0, 2).toUpperCase()}</span>
+            <span className="loop-ename">{itemHeadline(item)}</span>
+            {itemDetail(item) ? <span className="loop-etrig">— {itemDetail(item)}</span> : null}
+          </div>
+        ))}
+      </div>
+      {items.length > 6 ? <div className="loop-emore"><b>+{items.length - 6} more</b></div> : null}
+    </div>
+  );
+}
+
 function NodeCardEditor({ node, result, health, contractAudit }: {
   node: GTMNode;
   result?: GTMNodeResult;
@@ -506,28 +538,31 @@ function NodeCardEditor({ node, result, health, contractAudit }: {
 
       {/* CONFIG — kind-specific and compact. Most kinds need no editable config here in v1. */}
       {isOpenKind && artifactType && node.ref ? (
-        <CardSection label="Config">
-          <div className="loop-node-editor-fileline">
-            <span className="loop-node-editor-filelabel">{artifactType === "agent" ? "Agent file" : "Skill file"}</span>
-            <code className="loop-node-editor-ref" title={node.ref}>{node.ref}</code>
-          </div>
-          <button
-            className="loop-node-editor-link"
-            onClick={(e) => { stop(e); bridge.onOpenArtifact(artifactType, node.ref!); }}
-            type="button"
-          >
-            <FileText size={12} /> Edit file
-          </button>
-          <textarea
-            className="loop-node-editor-notes"
-            rows={3}
-            value={notes}
-            placeholder="Notes for this step — context, caveats, a change to make…"
-            aria-label="Step notes"
-            onChange={(e) => setNotes(e.target.value)}
-            onBlur={saveNotes}
-          />
-        </CardSection>
+        <>
+          <CardSection label="Config">
+            <div className="loop-node-editor-fileline">
+              <span className="loop-node-editor-filelabel">{artifactType === "agent" ? "Agent file" : "Skill file"}</span>
+              <code className="loop-node-editor-ref" title={node.ref}>{node.ref}</code>
+            </div>
+            <button
+              className="loop-node-editor-link"
+              onClick={(e) => { stop(e); bridge.onOpenArtifact(artifactType, node.ref!); }}
+              type="button"
+            >
+              <FileText size={12} /> Edit file
+            </button>
+            <textarea
+              className="loop-node-editor-notes"
+              rows={3}
+              value={notes}
+              placeholder="Notes for this step — context, caveats, a change to make…"
+              aria-label="Step notes"
+              onChange={(e) => setNotes(e.target.value)}
+              onBlur={saveNotes}
+            />
+          </CardSection>
+          {items > 0 ? <CardSection label="Produced"><ProducedPreview items={result?.items ?? []} /></CardSection> : null}
+        </>
       ) : node.kind === "code" ? (
         <CardSection label="Config">
           {typeof node.config?.code === "string" && node.config.code ? (
@@ -609,6 +644,8 @@ function NodeCardEditor({ node, result, health, contractAudit }: {
             <p className="loop-node-editor-hint">Nothing waiting. A run stages sends here and stops for your approval.</p>
           )}
         </CardSection>
+      ) : items > 0 ? (
+        <CardSection label="Produced"><ProducedPreview items={result?.items ?? []} /></CardSection>
       ) : null}
 
       <CardSection label="Status">

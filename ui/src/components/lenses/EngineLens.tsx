@@ -174,8 +174,8 @@ export function EngineLens({
   if (!built.length) {
     return (
       <div className="canvas-empty">
-        <strong>No channels yet</strong>
-        <span>Build a channel and the engine view shows it here, with its live links to the rest.</span>
+        <strong>No pipelines yet</strong>
+        <span>Build a pipeline and the engine view shows it here, with its live links to the rest.</span>
       </div>
     );
   }
@@ -235,7 +235,7 @@ export function EngineLens({
                 <g key={`d-${f.fromChannel}-${f.toChannel}`}>
                   <path className="engine-wire-directed" d={curve(start.x, start.y, end.x, end.y)} markerEnd="url(#engine-arrow)" />
                   <foreignObject x={mid.x - 44} y={mid.y - 12} width="88" height="24">
-                    <div className="engine-feed-chip directed" title="This channel pulls the other channel's output">feeds output</div>
+                    <div className="engine-feed-chip directed" title="This pipeline pulls the other pipeline's output">feeds output</div>
                   </foreignObject>
                 </g>
               );
@@ -269,7 +269,7 @@ export function EngineLens({
                 onClick={() => { if (!drag) onOpenChannel(ch.id); }}
               >
                 <span className="engine-node-top">
-                  <span className="engine-node-kind">{ch.kind || "channel"}</span>
+                  <span className="engine-node-kind">{ch.kind || "pipeline"}</span>
                   <span className={`engine-node-state state-${state}`}>
                     <span className="dot" /> {STATE_LABEL[state]}
                   </span>
@@ -304,7 +304,7 @@ export function EngineLens({
               <span
                 key={`out-${ch.id}`}
                 className="engine-node-out"
-                title="Drag onto another channel to feed it this channel's output"
+                title="Drag onto another pipeline to feed it this pipeline's output"
                 style={{ left: p.x + p.w - 7, top: p.y + p.h / 2 - 7 }}
                 onPointerDown={(e) => {
                   e.preventDefault();

@@ -68,7 +68,7 @@ export function GoalLauncher({
         </div>
 
         <div className="goal-launcher-secondary">
-          <button onClick={onIdeate} disabled={busy} type="button"><Lightbulb size={13} /> Or just ideate channels for me</button>
+          <button onClick={onIdeate} disabled={busy} type="button"><Lightbulb size={13} /> Or just ideate pipelines for me</button>
           {onLoadRecipe ? (
             <button onClick={onLoadRecipe} disabled={busy} type="button"><Workflow size={13} /> Start from the pilot-outreach recipe</button>
           ) : null}

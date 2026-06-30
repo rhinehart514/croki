@@ -112,7 +112,7 @@ export function ProductCanvas({
           className="lens-bridge"
           onClick={onExitToGtm}
           type="button"
-          title="Switch to GTM mode — your channels are grounded in this picture"
+          title="Switch to GTM mode — your pipelines are grounded in this picture"
         >
           This grounds your go-to-market
         </button>

@@ -59,7 +59,7 @@ export function ChannelSwitcher({
   );
 
   const activeChannel = channels.find((c) => c.id === activeChannelId) ?? null;
-  const activeName = overviewActive ? "All channels" : activeChannel?.name ?? "Choose a channel";
+  const activeName = overviewActive ? "All pipelines" : activeChannel?.name ?? "Choose a pipeline";
   const activeDotColor = activeChannel ? channelDot(activeChannel) : "var(--ghost)";
 
   const pick = (fn: () => void) => () => {
@@ -75,7 +75,7 @@ export function ChannelSwitcher({
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        title="Switch channel"
+        title="Switch pipeline"
       >
         <span className="osw-trigger-dot" style={{ background: activeDotColor }} />
         <span className="menu-item-label">{activeName}</span>
@@ -90,10 +90,10 @@ export function ChannelSwitcher({
               onClick={pick(onShowOverview)}
               type="button"
               role="menuitem"
-              title="See every channel on one canvas"
+              title="See every pipeline on one canvas"
             >
               <LayoutGrid className="menu-item-icon" />
-              <span className="menu-item-label">All channels</span>
+              <span className="menu-item-label">All pipelines</span>
               {overviewActive ? <Check className="menu-item-check" /> : null}
             </button>
             <div className="menu-sep" role="separator" />
@@ -107,17 +107,17 @@ export function ChannelSwitcher({
               className="osw-filter-input"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Find a channel…"
-              aria-label="Filter channels"
+              placeholder="Find a pipeline…"
+              aria-label="Filter pipelines"
               autoFocus
             />
           </div>
         ) : null}
 
         {channels.length === 0 ? (
-          <p className="osw-empty">No channels yet. Start one below.</p>
+          <p className="osw-empty">No pipelines yet. Start one below.</p>
         ) : channelsToShow.length === 0 ? (
-          <p className="osw-empty">No channels match “{query.trim()}”.</p>
+          <p className="osw-empty">No pipelines match “{query.trim()}”.</p>
         ) : (
           <div className="osw-list">
             {channelsToShow.map((ch) => (
@@ -142,7 +142,7 @@ export function ChannelSwitcher({
         <div className="menu-sep" role="separator" />
         <button className="menu-item" onClick={pick(onNewChannel)} type="button" role="menuitem">
           <Plus className="menu-item-icon" />
-          <span className="menu-item-label">New channel</span>
+          <span className="menu-item-label">New pipeline</span>
         </button>
       </Reveal>
     </div>

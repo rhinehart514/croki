@@ -61,7 +61,7 @@ export function PeopleLens({ people, channels, selected, onSelect }: PeopleLensP
       <div className="people-lens people-lens-empty" role="region" aria-label="People lens">
         <p className="people-empty-note">
           No people yet. When a run surfaces a real person or org, they're promoted to a durable
-          identity here — one card per human, with every channel they appear in and the why-now that
+          identity here — one card per human, with every pipeline they appear in and the why-now that
           found them. People are derived from real runs; nothing is seeded.
         </p>
       </div>
@@ -76,7 +76,7 @@ export function PeopleLens({ people, channels, selected, onSelect }: PeopleLensP
             (p.appearances ?? []).map((a) => a.channelId).filter(Boolean),
           ).size;
           const states = [
-            { id: "channels", label: `${channelCount} channel${channelCount === 1 ? "" : "s"}` },
+            { id: "channels", label: `${channelCount} pipeline${channelCount === 1 ? "" : "s"}` },
             { id: "appearances", label: `${p.appearances?.length ?? 0} appearance${(p.appearances?.length ?? 0) === 1 ? "" : "s"}` },
           ];
           return (

@@ -99,9 +99,9 @@ import { MicroproductFace, type Microproduct } from "@/components/MicroproductFa
 // out of this junk drawer into a single Settings overlay reached from the dock's gear.
 const SUMMON_GTM = [
   { id: "terminal", label: "Terminal", desc: "A live shell on the canvas — run commands by hand, pipe the output into the graph." },
-  { id: "query", label: "Query", desc: "Interrogate your own data — everyone your channels touched, filtered and sorted live." },
+  { id: "query", label: "Query", desc: "Interrogate your own data — everyone your pipelines touched, filtered and sorted live." },
   { id: "web", label: "Web", desc: "A research browser on the canvas — pull up a prospect's site while you work." },
-  { id: "experiments", label: "Experiment matrix", desc: "ICP × claim × channel — the live hypotheses." },
+  { id: "experiments", label: "Experiment matrix", desc: "ICP × claim × pipeline — the live hypotheses." },
   { id: "inbox", label: "Inbox", desc: "Every world-signal that came in — a commit, a signup, a reply — captured, waiting for you to route or set aside." },
   { id: "microproduct", label: "Microproduct", desc: "Cut a working artifact from your product for a goal — it stages behind your gate, nothing deploys until you approve." },
 ];
@@ -1044,7 +1044,7 @@ export default function App() {
     // assumptions, gets clear — instead of eagerly composing a channel. Building stays a separate,
     // deliberate move. The framing rides on the message; the build posture sends the text as-is.
     const framed = composerPosture === "ideate"
-      ? `[Ideate posture — think and discuss this with me: challenge my assumptions, surface what you know, help me get clear on the go-to-market. Do NOT compose or build a channel/workflow yet — this is thinking, not building.]\n\n${text}`
+      ? `[Ideate posture — think and discuss this with me: challenge my assumptions, surface what you know, help me get clear on the go-to-market. Do NOT compose or build a pipeline/workflow yet — this is thinking, not building.]\n\n${text}`
       : text;
     const s = operatorSession;
     // A pending "New channel" intent must compose fresh, never resume the prior conversation.
@@ -1322,7 +1322,7 @@ export default function App() {
     () => needsYouFlows.map((f) => ({
       id: f.sessionId,
       channelId: f.graphId ?? "",
-      channelName: channels.find((c) => c.id === f.graphId || c.graphId === f.graphId)?.name ?? "this channel",
+      channelName: channels.find((c) => c.id === f.graphId || c.graphId === f.graphId)?.name ?? "this pipeline",
       title: f.label || "Work staged at your gate",
       kind: f.kind,
       count: f.gateNodeIds.length || undefined,
@@ -1873,7 +1873,7 @@ export default function App() {
               onIdeate={() => {
                 setComposerPosture("ideate");
                 void handleComposerSend(
-                  "Ideate go-to-market channels for this product. Read what it does, then think with me: propose a few distinct channels worth running and challenge anything weak. Don't compose or build a channel yet — let's get clear first.",
+                  "Ideate go-to-market pipelines for this product. Read what it does, then think with me: propose a few distinct pipelines worth running and challenge anything weak. Don't compose or build a pipeline yet — let's get clear first.",
                 );
               }}
               onLoadRecipe={handleLoadPilotRecipe}
@@ -2287,7 +2287,7 @@ export default function App() {
               {otherChannelGates.length > 0 ? (
                 <section className="loop-approvals-elsewhere">
                   <div className="loop-approvals-elsewhere-head">
-                    Waiting in {otherChannelGates.length === 1 ? "another channel" : "other channels"}
+                    Waiting in {otherChannelGates.length === 1 ? "another pipeline" : "other pipelines"}
                   </div>
                   {otherChannelGates.map((ch) => (
                     <button
@@ -2347,6 +2347,8 @@ export default function App() {
           onOpenLibrary={() => setLibraryPaletteOpen(true)}
           graph={graph}
           runningNodeId={runningNodeId}
+          proposedNodeIds={proposedNodeIds}
+          result={runResult}
         /> : null}
       </div>
 

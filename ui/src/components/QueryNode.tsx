@@ -96,7 +96,7 @@ export default function QueryNode({ data }: NodeProps<Node<{ node: GTMNode; peop
       {/* nodrag/nowheel so typing and scrolling the results don't pan or zoom the canvas. */}
       <div className="q-node-body nodrag nowheel">
         {people.length === 0 ? (
-          <div className="q-node-empty">No people yet — your channels haven't promoted anyone.</div>
+          <div className="q-node-empty">No people yet — your pipelines haven't promoted anyone.</div>
         ) : results.length === 0 ? (
           <div className="q-node-empty">No matches.</div>
         ) : (

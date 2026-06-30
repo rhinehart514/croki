@@ -82,7 +82,7 @@ export function FloatingDock({
     <motion.div
       className="fdock"
       role="toolbar"
-      aria-label="Channel controls"
+      aria-label="Pipeline controls"
       // x holds the horizontal centering (left: 50% + x: -50%) so motion's animated transform never
       // clobbers it — only y/scale/opacity animate on mount.
       style={{ x: "-50%" }}
@@ -114,7 +114,7 @@ export function FloatingDock({
             real stages (no fixed motion list). Hidden on the all-workflows overview and on an empty
             canvas, where there's no single motion to name. */}
         {motionName && !overviewActive && !noGraph && !productMode ? (
-          <span className="fdock-motion" title="The kind of go-to-market this channel is — derived from its stages">
+          <span className="fdock-motion" title="The kind of go-to-market this pipeline is — derived from its stages">
             {motionName}
           </span>
         ) : null}
@@ -125,7 +125,7 @@ export function FloatingDock({
           className={`fdock-ideate ${overviewActive ? "active" : ""}`}
           onClick={onIdeate}
           type="button"
-          title="Ideate channels from your grounded product"
+          title="Ideate pipelines from your grounded product"
         >
           <Lightbulb size={14} />
           <span>Ideate</span>

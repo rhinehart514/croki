@@ -1252,7 +1252,7 @@ export function NodeEditor({
                 <span className="node-signal-last">{s.last ?? "No data yet"}</span>
               </div>
             ))}
-            <p className="node-signals-note">Live signal tracking connects when you run the channel.</p>
+            <p className="node-signals-note">Live signal tracking connects when you run the pipeline.</p>
           </div>
         )}
 

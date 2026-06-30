@@ -140,7 +140,7 @@ export function InputsInbox({ projectId, channels = [] }: InputsInboxProps) {
       <div className="inputs-inbox-wall">
         <ShieldCheck size={13} />
         <span>
-          A captured signal just sits until you route it into a channel, or set it aside. Routing only
+          A captured signal just sits until you route it into a pipeline, or set it aside. Routing only
           records the decision — any run it later feeds still stops at the founder gate.
         </span>
       </div>
@@ -175,10 +175,10 @@ export function InputsInbox({ projectId, channels = [] }: InputsInboxProps) {
                       <select
                         className="inputs-inbox-select"
                         value={row.target}
-                        aria-label={`Route ${input.kind} to a channel`}
+                        aria-label={`Route ${input.kind} to a pipeline`}
                         onChange={(e) => patchRow(input.id, { target: e.target.value })}
                       >
-                        <option value="">Choose a channel…</option>
+                        <option value="">Choose a pipeline…</option>
                         {channels.map((ch) => (
                           <option key={ch.id} value={ch.id}>{ch.name}</option>
                         ))}
@@ -219,7 +219,7 @@ export function InputsInbox({ projectId, channels = [] }: InputsInboxProps) {
                         <Ban /> Ignore
                       </button>
                       {channels.length === 0 && (
-                        <span className="inputs-inbox-source">No channels yet to route into</span>
+                        <span className="inputs-inbox-source">No pipelines yet to route into</span>
                       )}
                     </div>
                   )}

@@ -79,8 +79,8 @@ function ChannelFlowLens({ model: m }: GtmLensProps) {
   if (!m.graph) {
     return (
       <div className="canvas-empty">
-        <strong>No channel open</strong>
-        <span>Pick a channel from the overview to open its flow.</span>
+        <strong>No pipeline open</strong>
+        <span>Pick a pipeline from the overview to open its flow.</span>
       </div>
     );
   }
@@ -117,7 +117,7 @@ function ChannelFlowLens({ model: m }: GtmLensProps) {
       />
       {m.graph.nodes.length === 0 ? (
         <div className="blank-channel-guide">
-          <strong>Shape this channel from the outcome backward</strong>
+          <strong>Shape this pipeline from the outcome backward</strong>
           <span>Tell Claude what this motion should accomplish, or add the first node yourself. Nothing has been chosen for you.</span>
         </div>
       ) : null}
@@ -161,7 +161,7 @@ const LENSES: LensDef<GtmCanvasModel, never>[] = [
   // The board is the LANDING surface — semantic-zoom home of the nine belief layers. The other GTM
   // lenses stay reachable (channel state still drives channel-flow); full tab removal lands later.
   { id: "board", label: "Board", Component: GtmBoardLens },
-  { id: "channel-flow", label: "Channel flow", Component: ChannelFlowLens },
+  { id: "channel-flow", label: "Pipeline flow", Component: ChannelFlowLens },
   { id: "engine", label: "Engine", Component: EngineLensWrapper },
 ];
 

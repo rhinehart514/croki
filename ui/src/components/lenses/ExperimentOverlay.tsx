@@ -111,7 +111,7 @@ export function ExperimentOverlay({
         >
           <path d={`M ${FORK.x} ${FORK.y + 8} V 150`} className="xo-staple-line" />
           <path d="M0 0 L5 6 L10 0" transform={`translate(${FORK.x - 5} 148)`} className="xo-staple-head" />
-          <text x={FORK.x + 12} y={150} className="xo-staple-label">traces to Channels — the arms are motions</text>
+          <text x={FORK.x + 12} y={150} className="xo-staple-label">traces to Pipelines — the arms are motions</text>
         </motion.g>
       )}
     </svg>

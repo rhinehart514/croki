@@ -267,7 +267,7 @@ function UngroupedView({
     return (
       <div className="armcmp-empty">
         <strong>Nothing to race yet</strong>
-        <span>An ICP experiment forks one belief into two arms — two motions tested with the offer held constant. Build at least two channels and they show here as candidate arms.</span>
+        <span>An ICP experiment forks one belief into two arms — two motions tested with the offer held constant. Build at least two pipelines and they show here as candidate arms.</span>
         {heldConstantHint && <span className="armcmp-empty-hint">{heldConstantHint}</span>}
       </div>
     );
@@ -277,8 +277,8 @@ function UngroupedView({
     <div className="armcmp armcmp-ungrouped" role="region" aria-label="Ungrouped ICP candidates">
       <header className="armcmp-head">
         <span className="armcmp-kicker">ungrouped motions</span>
-        <h2 className="armcmp-hyp">These run as separate channels. Group two of them as the arms of one ICP experiment.</h2>
-        <p className="armcmp-sub">Grouping is yours to confirm — it is never inferred from channel names. The offer you hold constant is the control that makes the race fair.</p>
+        <h2 className="armcmp-hyp">These run as separate pipelines. Group two of them as the arms of one ICP experiment.</h2>
+        <p className="armcmp-sub">Grouping is yours to confirm — it is never inferred from pipeline names. The offer you hold constant is the control that makes the race fair.</p>
       </header>
 
       <div className="armcmp-candidates">
@@ -306,7 +306,7 @@ function UngroupedView({
           <input className="armcmp-input" value={hypothesis} placeholder="Which ICP converts on the pilot?" onChange={(e) => setHypothesis(e.target.value)} />
         </label>
         <button type="button" className="armcmp-group-btn" disabled={busy || picked.size < 2} onClick={group}>
-          {busy ? "Grouping…" : `Group ${picked.size} channel${picked.size === 1 ? "" : "s"} as one ICP experiment`}
+          {busy ? "Grouping…" : `Group ${picked.size} pipeline${picked.size === 1 ? "" : "s"} as one ICP experiment`}
         </button>
       </div>
 

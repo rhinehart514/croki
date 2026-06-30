@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  ArrowUp, BarChart3, Bot, Boxes, ChevronRight, Database, Filter, LoaderCircle, Lightbulb, Maximize2,
-  Mic, Minimize2, PenLine, Pin, Play, Plus, Search, Send, ShieldCheck, Square, X,
+  ArrowUp, BarChart3, Bot, Boxes, ChevronRight, Code, Database, Filter, LoaderCircle, Lightbulb, Maximize2,
+  Mic, Minimize2, PenLine, Pin, Play, Plus, Search, Send, ShieldCheck, Square, Wand2, X,
 } from "lucide-react";
 import { statusLabel } from "@/lib/status";
 import { AgentPicker } from "@/components/AgentPicker";
@@ -13,7 +13,7 @@ import { Collapse, Reveal, Stagger, StaggerItem } from "@/lib/motion";
 import { STEP_OPTIONS, type StepOption } from "@/lib/step-options";
 import "@/styles/dock-context.css";
 import "@/styles/composer-posture.css";
-import type { ClarityKind, ContextManifest, GTMGraph, GTMNode, GTMNodeCategory, OperatorEvent, OperatorSession } from "@/types";
+import type { ClarityKind, ContextManifest, GTMGraph, GTMNode, GTMNodeCategory, GTMRunResult, OperatorEvent, OperatorSession } from "@/types";
 
 // Minimal shape of the Web Speech API's SpeechRecognition we touch — the DOM lib types it behind
 // a vendor-prefixed global that isn't in our tsconfig's lib, so we declare just the surface we use.
@@ -274,40 +274,68 @@ const CATEGORY_META: Record<GTMNodeCategory, { eyebrow: string; Icon: typeof Sea
   context: { eyebrow: "Context", Icon: Boxes },
   resource: { eyebrow: "Connection", Icon: Boxes },
 };
+// Open `kind` steps (agent/skill/code/mcp) carry no `category` — it's an optional label, not the
+// dispatch key (see AGENTS.md). Falling through to CATEGORY_META for them mislabeled every agent
+// step "Source" here. Mirrors GraphCanvas.tsx's KIND_META so a step reads the same kind in both places.
+const KIND_META: Partial<Record<NonNullable<GTMNode["kind"]>, { eyebrow: string; Icon: typeof Search }>> = {
+  agent: { eyebrow: "Agent", Icon: Bot },
+  skill: { eyebrow: "Skill", Icon: Wand2 },
+  code: { eyebrow: "Code", Icon: Code },
+  mcp: { eyebrow: "Connector", Icon: Boxes },
+};
+function buildCardMeta(node: GTMNode) {
+  if (node.kind && node.kind !== "tool" && KIND_META[node.kind]) return KIND_META[node.kind]!;
+  return CATEGORY_META[node.category] ?? CATEGORY_META.source;
+}
 
-function BuildCard({ node, live }: { node: GTMNode; live: boolean }) {
-  const meta = CATEGORY_META[node.category] ?? CATEGORY_META.source;
+function BuildCard({ node, live, ghost }: { node: GTMNode; live: boolean; ghost: boolean }) {
+  const meta = buildCardMeta(node);
   const isGate = node.category === "gate";
   const { Icon } = meta;
   return (
-    <div className={`dock-build-card ${isGate ? "gate" : ""} ${live ? "live" : ""}`}>
+    <div className={`dock-build-card ${isGate ? "gate" : ""} ${live ? "live" : ""} ${ghost ? "ghost" : ""}`}>
       <div className="dock-build-card-head">
         <span className="dock-build-card-ico">{live ? null : <Icon size={14} aria-hidden="true" />}</span>
         <span className="dock-build-card-eyebrow">{meta.eyebrow}</span>
         {isGate ? <span className="dock-build-card-tag">your gate</span> : null}
         {live ? <span className="dock-build-card-tag now">building</span> : null}
+        {ghost && !live ? <span className="dock-build-card-tag proposed">proposed</span> : null}
       </div>
       <div className="dock-build-card-label">{node.label}</div>
     </div>
   );
 }
 
-function BuildRail({ graph, runningNodeId }: { graph: GTMGraph; runningNodeId: string | null }) {
+function BuildRail({ graph, runningNodeId, proposedNodeIds, result }: {
+  graph: GTMGraph;
+  runningNodeId: string | null;
+  // Steps Claude has proposed but the founder hasn't accepted yet — rendered as ghost (dashed) cards,
+  // same "not yet real" language as the main canvas, plus counted out in the summary below.
+  proposedNodeIds?: Set<string> | null;
+  // Run results so far, so the summary can say what's actually changed — not just "N nodes".
+  result?: GTMRunResult | null;
+}) {
   // Flow order: top-down by canvas position, the same reading order the overview canvas uses.
   const nodes = [...graph.nodes]
     .filter((n) => n.category !== "context" && n.category !== "resource")
     .sort((a, b) => (a.position.y - b.position.y) || (a.position.x - b.position.x));
+  const proposedCount = proposedNodeIds ? nodes.filter((n) => proposedNodeIds.has(n.id)).length : 0;
+  const doneCount = result ? nodes.filter((n) => result.nodes[n.id]).length : 0;
   return (
     <div className="dock-build" aria-label="Building on the canvas">
       <div className="dock-build-head">
         <span className="dock-build-head-dot" aria-hidden="true" />
         <span className="dock-build-head-label">Building on canvas</span>
-        <span className="dock-build-head-count">{nodes.length} node{nodes.length === 1 ? "" : "s"}</span>
+        <span className="dock-build-head-count">
+          {nodes.length} node{nodes.length === 1 ? "" : "s"}
+          {proposedCount > 0 ? ` · ${proposedCount} proposed` : ""}
+          {!proposedCount && doneCount > 0 ? ` · ${doneCount} of ${nodes.length} run` : ""}
+        </span>
       </div>
       <div className="dock-build-flow">
         {nodes.map((n, i) => (
           <div className="dock-build-step" key={n.id}>
-            <BuildCard node={n} live={n.id === runningNodeId} />
+            <BuildCard node={n} live={n.id === runningNodeId} ghost={proposedNodeIds?.has(n.id) ?? false} />
             {i < nodes.length - 1 ? <span className="dock-build-edge" aria-hidden="true" /> : null}
           </div>
         ))}
@@ -325,7 +353,7 @@ export function ComposerDock({
   contextManifest = null, onOpenGrounding, onOpenPicture, onIdeate,
   onAddNode, onAddChain, onOpenLibrary,
   posture, onExitPosture, onPin,
-  graph = null, runningNodeId = null,
+  graph = null, runningNodeId = null, proposedNodeIds = null, result = null,
 }: {
   session: OperatorSession | null;
   running: boolean;
@@ -372,6 +400,10 @@ export function ComposerDock({
   // rainbow "now" signal. Optional, so callers without a graph keep the plain conversation.
   graph?: GTMGraph | null;
   runningNodeId?: string | null;
+  // Steps Claude has proposed but the founder hasn't accepted yet, and the run's results so far —
+  // the build room's "what would change" diff: ghost cards for proposed steps, a summary count.
+  proposedNodeIds?: Set<string> | null;
+  result?: GTMRunResult | null;
 }) {
   // Rest as a pill on first paint when the dock floats over the channel workbench, OR when a FINISHED
   // session would otherwise open its full transcript over the read-only overview canvas. Either way the
@@ -883,7 +915,9 @@ export function ComposerDock({
           </Stagger>
         )}
       </div>
-        {buildRoom && graph ? <BuildRail graph={graph} runningNodeId={runningNodeId} /> : null}
+        {buildRoom && graph ? (
+          <BuildRail graph={graph} runningNodeId={runningNodeId} proposedNodeIds={proposedNodeIds} result={result} />
+        ) : null}
       </div>
 
       {/* ── Gate prompt ────────────────────────────────────────── */}

@@ -20,9 +20,9 @@ export const LAYER_META: Record<string, LayerMeta> = {
   trigger: { n: 2, name: "Problem & Trigger", sub: "why-now ladder" },
   positioning: { n: 3, name: "Positioning", sub: "the one-liner" },
   offer: { n: 4, name: "Offer", sub: "value escalation" },
-  channels: { n: 5, name: "Channels", sub: "arms of the ICP test" },
+  channels: { n: 5, name: "Pipelines", sub: "arms of the ICP test" },
   artifacts: { n: 6, name: "Plays & Assets", sub: "touches & shared assets" },
-  people: { n: 7, name: "Pipeline", sub: "survival & the pinch" },
+  people: { n: 7, name: "People", sub: "survival & the pinch" },
   measure: { n: 8, name: "Measurement", sub: "can we prove it?" },
   learn: { n: 9, name: "Learning", sub: "verdict ledger" },
 };
