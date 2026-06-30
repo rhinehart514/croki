@@ -349,6 +349,13 @@ export async function runGraph(graph, opts = {}) {
     // a model-driven run can never write it. Only the microproduct deploy connector reads it; null for a
     // normal run, which is why a normal gate approval never deploys (the deploy connector refuses).
     deployAuthorization = null,
+    // BYO-credential resolution context: the project whose founder-pasted API keys a connector should
+    // prefer over process.env, plus the persistence options (root) to read them from. Threaded onto each
+    // node's context as `context.credentials` so a data connector (clay enrich, http send auth) resolves
+    // a stored key first and falls back to env. Null projectId + {} options means "no stored creds" —
+    // env-only, the prior behavior — so existing runs are unchanged.
+    projectId = null,
+    credentialOptions = {},
   } = opts;
   const emit = typeof onEvent === "function" ? onEvent : () => {};
   const { nodes, edges, id: graphId } = graph;
@@ -424,6 +431,10 @@ export async function runGraph(graph, opts = {}) {
       : resolveUpstream(nodeId, edges, nodeResults);
     const context  = resolveContext(nodeId, edges, nodeResults);
     context.__skillGuidance = skillGuidance;
+    // The BYO-credential lookup a data connector reads (clay enrich keys, http send auth). projectId +
+    // persistence options only — never a secret. The connector calls resolveCredentialToken(projectId,
+    // provider, options): stored founder key first, env var fallback.
+    context.credentials = { projectId, options: credentialOptions };
     context.__run = {
       runId,
       originRunId: resumeResult?.runId ?? runId,

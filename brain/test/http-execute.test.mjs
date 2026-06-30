@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, it } from "node:test";
 import { run } from "../src/connectors/execute/http.mjs";
+import { setCredential } from "../src/credential-store.mjs";
+
+// Isolate the BYO-credential store to a temp home so resolving the send auth never touches ~/.gtm-ide.
+process.env.GTM_IDE_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-http-creds-"));
 
 describe("HTTP execution connector", () => {
   it("sends only approved attributable actions with an idempotency key", async () => {
@@ -39,5 +46,54 @@ describe("HTTP execution connector", () => {
     assert.equal(called, false);
     assert.equal(result.ok, false);
     assert.match(result.items[0].error, /gtmActionId/);
+  });
+});
+
+describe("HTTP send auth — BYO credential resolution (key resolution only, send-gating untouched)", () => {
+  afterEach(() => { delete process.env.GTM_IDE_SEND_AUTH; });
+
+  async function runWithCapture(context) {
+    const requests = [];
+    const result = await run({
+      config: {
+        endpoint: "https://relay.example/send",
+        fetchImpl: async (url, options) => {
+          requests.push(options);
+          return { ok: true, status: 202, json: async () => ({ id: "p-1" }) };
+        },
+      },
+    }, [{ email: "a@example.com", draft: "Hi", approved: true, gtmActionId: "gtm-1" }], context);
+    return { result, requests };
+  }
+
+  it("prefers a founder-pasted send credential over the env var", async () => {
+    process.env.GTM_IDE_SEND_AUTH = "Bearer from-env";
+    setCredential("proj-http", { provider: "http", token: "Bearer from-store" });
+    const { requests } = await runWithCapture({ credentials: { projectId: "proj-http" } });
+    assert.equal(requests[0].headers.Authorization, "Bearer from-store");
+  });
+
+  it("falls back to the env var when no credential is stored (the engineer path still works)", async () => {
+    process.env.GTM_IDE_SEND_AUTH = "Bearer env-only";
+    const { requests } = await runWithCapture({ credentials: { projectId: "proj-http-none" } });
+    assert.equal(requests[0].headers.Authorization, "Bearer env-only");
+  });
+
+  it("sends with no Authorization header when neither a stored nor env credential exists", async () => {
+    const { requests } = await runWithCapture({ credentials: { projectId: "proj-http-empty" } });
+    assert.equal(requests[0].headers.Authorization, undefined);
+  });
+
+  it("never logs the resolved secret", async () => {
+    process.env.GTM_IDE_SEND_AUTH = "Bearer top-secret-token";
+    const logs = [];
+    const orig = { log: console.log, error: console.error, warn: console.warn, info: console.info };
+    for (const k of Object.keys(orig)) console[k] = (...a) => logs.push(a.join(" "));
+    try {
+      await runWithCapture({ credentials: { projectId: "proj-http-log" } });
+    } finally {
+      Object.assign(console, orig);
+    }
+    assert.equal(logs.join("\n").includes("top-secret-token"), false);
   });
 });

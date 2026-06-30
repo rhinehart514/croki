@@ -1349,6 +1349,8 @@ const server = http.createServer(async (req, res) => {
         // Feed the context substrate: prior runs become the "what's been tried" state layer.
         runs: prior.runs,
         resumeResult: resumeRecord?.result ?? null,
+        // BYO credentials: a founder-pasted Clay/Exa/send-auth key for this project wins over env.
+        projectId: project.id,
         // Open steps (agent/skill) reach the rented frontier model + skills on disk.
         stepRuntime: liveStepRuntime({ cwd: project.sharedContext?.repository?.repo || process.cwd() }),
       });
@@ -1414,6 +1416,8 @@ const server = http.createServer(async (req, res) => {
         // Feed the context substrate: prior runs become the "what's been tried" state layer.
         runs: prior.runs,
         resumeResult: resumeRecord?.result ?? null,
+        // BYO credentials: a founder-pasted Clay/Exa/send-auth key for this project wins over env.
+        projectId: project.id,
         stepRuntime: liveStepRuntime({ cwd: project.sharedContext?.repository?.repo || process.cwd() }),
         onEvent: send,
       });

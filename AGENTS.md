@@ -240,9 +240,13 @@ fixes it.
   (never by composition or a run; the typed graph path rejects forging `autonomy`/`blessedPattern` onto a
   gate node), and `revokeChannel` drops it back to hold-everything in one click. NOTE (Phase 1 status):
   the ladder's stores and promotion API exist and are tested, but are not yet wired to a server route or
-  the canvas — promotion is backend-only today. The BYO credential store (`credential-store.mjs`) is the
-  same: durable and tested, but `resolveCredentialToken` has no connector caller yet, so connectors still
-  read `process.env`. Both are deliberate backend scaffolding, not operable end-to-end.
+  the canvas — promotion is backend-only today. The BYO credential store (`credential-store.mjs`) is now
+  WIRED into the data connectors: the Clay enrich connector (Clay + Exa keys) and the HTTP send connector
+  (the outbound `Authorization` auth) resolve through `resolveCredentialToken(projectId, provider, options)`
+  — a founder-pasted key for the project wins, `process.env` stays the fallback. `runGraph` threads the
+  project's `projectId` onto each node's `context.credentials`; the gmail sender and other connectors that
+  still read `process.env` directly are the remaining callers to migrate. (The autonomy ladder above is
+  still backend-only scaffolding.)
 - The host owns truth, state, and the gate; the intelligence is rented. If a unit of work is fuzzy
   (research, enrich, ideate, draft, propose), it is a skill or a subagent reached through an open step —
   not a Node connector. Code is for the deterministic spine only.

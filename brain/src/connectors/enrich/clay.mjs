@@ -1,3 +1,14 @@
+import { resolveCredentialToken } from "../../credential-store.mjs";
+
+// Resolve a provider's API key the BYO way: prefer the founder's pasted credential for this project,
+// fall back to the process env var (the engineer path that still works). projectId + persistence
+// options ride `context.credentials`, threaded by graph.mjs from the run. Returns the raw key or null;
+// the secret is used as a request header only, NEVER logged.
+function resolveKey(context, provider, envKey) {
+  const creds = context?.credentials ?? {};
+  return resolveCredentialToken(creds.projectId ?? null, provider, { envKey, ...(creds.options ?? {}) });
+}
+
 export const meta = {
   id: "clay",
   name: "Clay",
@@ -42,8 +53,7 @@ function extractFromText(text, url) {
   return { title, company, bio, linkedinUrl };
 }
 
-async function exaEnrich(prospect) {
-  const apiKey = process.env.EXA_API_KEY;
+async function exaEnrich(prospect, apiKey) {
   if (!apiKey) return null;
 
   const hostname = prospect.url ? (() => { try { return new URL(prospect.url).hostname; } catch { return ""; } })() : "";
@@ -73,8 +83,7 @@ async function exaEnrich(prospect) {
   }
 }
 
-async function clayEnrich(prospects) {
-  const apiKey = process.env.CLAY_API_KEY;
+async function clayEnrich(prospects, apiKey) {
   const tableId = process.env.CLAY_TABLE_ID;
 
   if (tableId) {
@@ -96,15 +105,17 @@ async function clayEnrich(prospects) {
   return null;
 }
 
-export async function run(stage, upstream) {
+export async function run(stage, upstream, context) {
   const prospects = upstream.filter((i) => i.type === "prospect");
 
-  const clayKey = process.env.CLAY_API_KEY;
-  const exaKey = process.env.EXA_API_KEY;
+  // BYO-credential resolution: a founder-pasted Clay/Exa key (per project) wins, env var is the
+  // fallback. No process.env key read here anymore — the store is the source of truth, env is backup.
+  const clayKey = resolveKey(context, "clay", "CLAY_API_KEY");
+  const exaKey = resolveKey(context, "exa", "EXA_API_KEY");
 
   // Path 1: Clay API
   if (clayKey) {
-    const clayResults = await clayEnrich(prospects);
+    const clayResults = await clayEnrich(prospects, clayKey);
     if (clayResults) {
       return {
         ok: true,
@@ -123,7 +134,7 @@ export async function run(stage, upstream) {
   if (exaKey) {
     const enriched = await Promise.all(
       prospects.map(async (p) => {
-        const extracted = await exaEnrich(p);
+        const extracted = await exaEnrich(p, exaKey);
         if (!extracted) return { ...p, enriched: false };
         return {
           ...p,

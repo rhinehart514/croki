@@ -19,6 +19,18 @@
 //   - Every item carries an attribution id so the Measure node can join the send
 //     back to an outcome. Failures are recorded as failures, never swallowed.
 
+import { resolveCredentialToken } from "../../credential-store.mjs";
+
+// Resolve the outbound auth header the BYO way: a founder-pasted credential for this project wins,
+// the GTM_IDE_SEND_AUTH env var is the fallback (the engineer path still works). projectId + persistence
+// options ride `context.credentials`, threaded by graph.mjs. This is KEY RESOLUTION ONLY — it changes
+// nothing about send-gating: only items the gate stamped `approved === true` are ever sent. The secret
+// is used as the Authorization header value, NEVER logged.
+function resolveSendAuth(context) {
+  const creds = context?.credentials ?? {};
+  return resolveCredentialToken(creds.projectId ?? null, "http", { envKey: "GTM_IDE_SEND_AUTH", ...(creds.options ?? {}) });
+}
+
 export const meta = {
   id: "http",
   name: "HTTP send",
@@ -31,7 +43,7 @@ export const meta = {
   approvalRequired: ["continue_from_gate"],
 };
 
-export async function run(node, upstream) {
+export async function run(node, upstream, context) {
   const endpoint = node.config.endpoint || process.env.GTM_IDE_SEND_ENDPOINT;
   if (!endpoint) {
     // Should not happen — the runner gates on the env key — but never send blind.
@@ -44,7 +56,7 @@ export async function run(node, upstream) {
   }
 
   const channel = node.config.channel || "http";
-  const auth = process.env.GTM_IDE_SEND_AUTH;
+  const auth = resolveSendAuth(context);
   const baseHeaders = { "Content-Type": "application/json", ...(auth ? { Authorization: auth } : {}) };
   const doFetch = node.config.fetchImpl || globalThis.fetch;
 

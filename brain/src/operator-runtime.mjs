@@ -601,6 +601,10 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
     // options.stepRuntime so the open agent/skill/code steps run keyless.
     stepRuntime: options.stepRuntime || liveStepRuntime({ cwd: options.cwd }),
     loadLastRunItems: createDerivedSourceLoader({ ...options, projectId: session.projectId || "default" }),
+    // BYO credentials: a founder-pasted key for this project wins over env; options carries the
+    // persistence root so the stored key resolves from the same store the founder saved it in.
+    projectId: session.projectId || "default",
+    credentialOptions: options,
     onEvent,
   });
   if (stream) session = live;
@@ -1486,6 +1490,10 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
     deployAuthorization,
     stepRuntime: liveStepRuntime({ cwd: options.cwd }),
     loadLastRunItems: createDerivedSourceLoader({ ...options, projectId: session.projectId || "default" }),
+    // BYO credentials: a founder-pasted key for this project wins over env; options carries the
+    // persistence root so the stored key resolves from the same store the founder saved it in.
+    projectId: session.projectId || "default",
+    credentialOptions: options,
     // Defense-in-depth at the gate point: re-assert authority inside the runner before any approval is
     // applied. authorizeGateRelease already passed above (or this code is unreachable); re-running it
     // here means the wall holds even if a future caller wires runGraph approvals without the front guard.
