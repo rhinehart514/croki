@@ -105,6 +105,29 @@ describe("model-composed workflow (no fixed skeleton)", () => {
     );
   });
 
+  it("enforces the wall on EVERY path: rejects a diamond that routes one branch around the gate", async () => {
+    // A gate exists upstream of the execute node on ONE branch, but a sibling branch reaches the
+    // same execute node WITHOUT passing through it. exists-a-gate-ancestor would wrongly pass; the
+    // all-paths wall must reject — one ungated branch into an execute node is an ungated send.
+    const diamondBypass = () => ({
+      ok: true,
+      nodes: [
+        { id: "src", category: "source", connector: "manual", label: "Input" },
+        { id: "gate", category: "gate", connector: "default", label: "Founder review" },
+        { id: "out", category: "execute", connector: "local", label: "Send" },
+      ],
+      edges: [
+        { source: "src", target: "gate", edgeType: "data" },
+        { source: "gate", target: "out", edgeType: "data" },
+        { source: "src", target: "out", edgeType: "data" }, // the ungated bypass branch
+      ],
+    });
+    await assert.rejects(
+      composeNakedGraph(channelInput(), { ...options, compose: diamondBypass }),
+      /every path/i,
+    );
+  });
+
   it("the blank default refuses rather than falling back to a template", async () => {
     await assert.rejects(
       composeNakedGraph(channelInput(), options),

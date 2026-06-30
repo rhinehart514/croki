@@ -112,18 +112,27 @@ function assertGateWall(nodes, edges) {
     if (!incoming.has(edge.target)) incoming.set(edge.target, []);
     incoming.get(edge.target).push(edge.source);
   }
+  // covered(n): EVERY path from a root to n passes through a founder gate. A gate covers itself;
+  // any other node is covered only when it has predecessors and ALL of them are covered. A root
+  // (no incoming) that is not a gate is never covered — a path begins there ungated. This is
+  // all-paths semantics, not exists-a-gate-ancestor: one ungated branch into an execute node
+  // fails the wall even when a sibling branch is gated (the diamond-routing-around-the-gate case).
+  const memo = new Map();
+  const covered = (id, visiting = new Set()) => {
+    if (gates.has(id)) return true;
+    if (memo.has(id)) return memo.get(id);
+    if (visiting.has(id)) return false; // cycle guard: an unresolved loop is not a gate
+    visiting.add(id);
+    const preds = incoming.get(id) ?? [];
+    const result = preds.length > 0 && preds.every((p) => covered(p, visiting));
+    visiting.delete(id);
+    memo.set(id, result);
+    return result;
+  };
   for (const exec of executes) {
-    const seen = new Set();
-    const stack = [...(incoming.get(exec.id) ?? [])];
-    let gated = false;
-    while (stack.length) {
-      const id = stack.pop();
-      if (seen.has(id)) continue;
-      seen.add(id);
-      if (gates.has(id)) { gated = true; break; }
-      stack.push(...(incoming.get(id) ?? []));
-    }
-    if (!gated) throw new Error(`Execute node "${exec.id}" is not behind a founder gate.`);
+    const preds = incoming.get(exec.id) ?? [];
+    const gated = preds.length > 0 && preds.every((p) => covered(p));
+    if (!gated) throw new Error(`Execute node "${exec.id}" is not behind a founder gate on every path.`);
   }
 }
 
