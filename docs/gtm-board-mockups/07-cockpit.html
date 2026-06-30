@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GTM IDE — the cockpit</title>
+<style>
+  :root{
+    --paper:#f7f7f5; --surface:#ffffff; --raise:#fcfcfb; --ink:#15151a; --ink-2:#3a3a42;
+    --muted:#6e6e78; --faint:#a6a6b0; --line:#e9e9e6; --line-2:#f1f1ee;
+    --pass:#15935a; --pass-soft:#eef8f2; --wall:#b06f12; --wall-soft:#fbf4e9; --live:#2f2f38;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,monospace;
+    --serif:"Iowan Old Style","Palatino Linotype",Georgia,serif;
+    --r:13px; --r-sm:9px;
+    --sh:0 1px 2px rgba(20,20,30,.05); --sh-pop:0 18px 44px -20px rgba(20,20,35,.32);
+    --ease:cubic-bezier(.22,1,.36,1); --spring:cubic-bezier(.34,1.5,.5,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:var(--paper);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;font-size:14px}
+  .app{display:grid;grid-template-columns:312px 1fr;height:100vh}
+
+  /* ───── conversation rail (it drives) ───── */
+  .rail{background:var(--raise);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+  .rail-top{padding:16px 18px 14px;border-bottom:1px solid var(--line-2);display:flex;align-items:center;gap:10px}
+  .logo{width:25px;height:25px;border-radius:7px;background:var(--ink);color:#fff;display:grid;place-items:center;font-size:13px}
+  .logo-t{font-weight:600;letter-spacing:-.01em}
+  .logo-t small{color:var(--faint);font-weight:500}
+  .thread{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:16px;min-height:0}
+  .turn-you{align-self:flex-end;max-width:90%;background:var(--ink);color:#fff;border-radius:13px 13px 4px 13px;
+    padding:9px 13px;font-size:13.5px;line-height:1.45}
+  .coach{font-family:var(--serif);font-size:15px;line-height:1.55;color:var(--ink-2)}
+  .coach b{color:var(--ink);font-weight:600;font-family:var(--sans)}
+  .coach .lead{font-style:italic}
+  .coach .pin{margin-top:8px;font-size:12px;color:var(--muted);font-family:var(--sans);
+    display:flex;align-items:center;gap:7px}
+  .coach .pin .dot{width:6px;height:6px;border-radius:50%;background:var(--pass)}
+  .composer{border-top:1px solid var(--line-2);padding:14px}
+  .composer .box{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px 13px;
+    box-shadow:var(--sh)}
+  .composer input{border:none;width:100%;font-size:13.5px;font-family:var(--sans);color:var(--ink);outline:none}
+  .composer input::placeholder{color:var(--faint)}
+  .composer .row{display:flex;align-items:center;gap:8px;margin-top:9px}
+  .composer .model{font-size:11.5px;color:var(--muted);font-family:var(--mono);border:1px solid var(--line);
+    border-radius:999px;padding:3px 9px}
+  .composer .send{margin-left:auto;width:27px;height:27px;border-radius:8px;background:var(--ink);color:#fff;
+    border:none;display:grid;place-items:center;cursor:pointer}
+
+  /* ───── canvas (it shows) ───── */
+  .canvas{position:relative;overflow:hidden;
+    background-image:radial-gradient(#e4e4e0 1px,transparent 1px);background-size:24px 24px}
+  /* top strip: calm at scale — what needs you + the one move */
+  .strip{position:absolute;top:0;left:0;right:0;height:56px;z-index:30;display:flex;align-items:center;gap:14px;
+    padding:0 22px;background:linear-gradient(var(--paper),rgba(247,247,245,.0));}
+  .strip .needs{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted)}
+  .strip .needs b{color:var(--ink);font-weight:600}
+  .strip .badge{background:var(--wall-soft);color:var(--wall);border:1px solid #ecdcc0;border-radius:999px;
+    font-size:12px;font-weight:600;padding:3px 9px}
+  .strip .move{margin-left:auto;display:flex;align-items:center;gap:9px;background:var(--surface);
+    border:1px solid var(--line);border-radius:999px;padding:7px 8px 7px 14px;box-shadow:var(--sh);cursor:pointer}
+  .strip .move .l{font-size:12.5px;color:var(--ink-2)} .strip .move .l b{color:var(--ink)}
+  .strip .move .go{width:24px;height:24px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-size:13px}
+
+  /* the faint living map behind everything — implies the whole thing is there */
+  .ghost{position:absolute;opacity:.5;pointer-events:none}
+  .gnode{position:absolute;width:150px;height:46px;background:var(--surface);border:1px solid var(--line);
+    border-left:2px solid var(--faint);border-radius:9px;box-shadow:var(--sh);opacity:.55}
+  .gnode .gl{font-size:9px;color:var(--faint);padding:8px 10px 0;font-family:var(--mono)}
+  .gnode .gt{font-size:11px;color:var(--muted);padding:1px 10px;font-weight:500}
+  .gnode.pass{border-left-color:var(--pass)}
+  .gwire{position:absolute;height:1px;background:repeating-linear-gradient(90deg,#d8d8d3 0 4px,transparent 4px 9px)}
+
+  /* ───── the ideation loop (the signature) ───── */
+  .loop{position:absolute;top:92px;left:50%;transform:translateX(-50%);width:760px;z-index:10}
+  .goalchip{display:inline-flex;align-items:center;gap:9px;background:var(--ink);color:#fff;border-radius:999px;
+    padding:8px 15px;font-size:13.5px;font-weight:500;box-shadow:var(--sh-pop)}
+  .goalchip .k{font-size:10px;color:#a6a6b0;font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em}
+
+  .bar{margin-top:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+    padding:13px 16px;box-shadow:var(--sh);display:flex;align-items:center;gap:12px}
+  .bar .lbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);flex:0 0 auto}
+  .bar .crit{display:flex;gap:7px;flex-wrap:wrap}
+  .crit .c{font-size:12px;color:var(--ink-2);background:var(--pass-soft);border:1px solid #d6ece0;border-radius:7px;
+    padding:4px 9px;display:flex;align-items:center;gap:6px}
+  .crit .c::before{content:"✓";color:var(--pass);font-size:11px}
+  .bar .edit{margin-left:auto;font-size:12px;color:var(--muted);cursor:pointer;border:1px solid var(--line);
+    border-radius:7px;padding:4px 10px}
+  .bar .edit:hover{color:var(--ink);border-color:var(--faint)}
+
+  .angles{margin-top:10px;display:flex;gap:8px;justify-content:center;opacity:.85}
+  .angle{font-size:11px;color:var(--muted);font-family:var(--mono);border:1px dashed var(--line);
+    border-radius:999px;padding:4px 11px;background:var(--raise);position:relative}
+  .angle .tick{position:absolute;-top:0;right:7px}
+  .angle.done{color:var(--ink-2);border-style:solid;border-color:var(--line)}
+  .fan-note{text-align:center;font-size:11.5px;color:var(--faint);margin-top:9px;font-style:italic;font-family:var(--serif)}
+
+  .survivors{margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .idea{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:15px 16px 14px;
+    box-shadow:var(--sh);position:relative;transition:opacity .35s var(--ease),transform .35s var(--ease),filter .35s}
+  .idea:hover{box-shadow:var(--sh-pop);transform:translateY(-2px)}
+  .idea .pass{font-size:10.5px;font-weight:600;color:var(--pass);background:var(--pass-soft);border-radius:6px;
+    padding:2px 7px;letter-spacing:.02em}
+  .idea h4{font-size:15px;font-weight:600;letter-spacing:-.01em;line-height:1.25;margin:10px 0 6px;padding-right:22px}
+  .idea p{font-size:12.5px;color:var(--muted);line-height:1.45}
+  .idea .foot{margin-top:13px;display:flex;align-items:center;gap:9px}
+  .idea .build{font-size:12px;font-weight:600;color:#fff;background:var(--ink);border:none;border-radius:8px;
+    padding:6px 12px;cursor:pointer}
+  .idea .test{font-size:12px;color:var(--muted);cursor:pointer}
+  .idea .kill{position:absolute;top:13px;right:13px;width:22px;height:22px;border-radius:7px;border:1px solid var(--line);
+    background:var(--raise);color:var(--faint);cursor:pointer;display:grid;place-items:center;font-size:12px;
+    transition:.14s var(--ease)}
+  .idea .kill:hover{color:var(--ink);border-color:var(--ink-2);background:#fff}
+  .idea.killed{opacity:.42;filter:grayscale(.7)}
+  .idea.killed h4{text-decoration:line-through;text-decoration-color:var(--faint)}
+  .idea.killed .foot{display:none}
+  .idea.killed::after{content:"killed · taught it your taste";position:absolute;bottom:14px;left:16px;font-size:11px;
+    color:var(--faint);font-style:italic;font-family:var(--serif)}
+
+  /* the one that's building → a microproduct */
+  .idea.building{border-color:#dcdce4}
+  .idea.building .barfill{margin-top:12px;height:5px;border-radius:3px;background:var(--line-2);overflow:hidden}
+  .idea.building .barfill i{display:block;height:100%;width:62%;background:linear-gradient(90deg,var(--ink),#52525b);
+    border-radius:3px;animation:grow 2.6s var(--ease) infinite alternate}
+  @keyframes grow{from{width:48%}to{width:82%}}
+  .idea.building .agent{margin-top:10px;font-size:11.5px;color:var(--ink-2);font-family:var(--mono);
+    display:flex;align-items:center;gap:7px}
+  .idea.building .agent .sp{width:10px;height:10px;border:1.5px solid var(--line);border-top-color:var(--ink);
+    border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* the wall, present but quiet */
+  .wall{position:absolute;right:22px;bottom:22px;z-index:20;background:var(--surface);border:1px solid #ecdcc0;
+    border-radius:var(--r);box-shadow:var(--sh-pop);padding:14px 16px;width:248px}
+  .wall .h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+  .wall .h .ic{color:var(--wall)}
+  .wall .s{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.45}
+  .wall .act{margin-top:11px;display:flex;gap:8px}
+  .wall .rev{flex:1;font-size:12.5px;font-weight:600;background:var(--wall);color:#fff;border:none;border-radius:8px;padding:7px;cursor:pointer}
+  .wall .later{font-size:12.5px;color:var(--muted);border:1px solid var(--line);border-radius:8px;padding:7px 11px;cursor:pointer;background:none}
+
+  .zoomhint{position:absolute;left:22px;bottom:24px;z-index:20;font-size:11.5px;color:var(--faint);max-width:210px;line-height:1.5}
+  .zoomhint b{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- CONVERSATION RAIL -->
+  <aside class="rail">
+    <div class="rail-top"><div class="logo">▦</div><div class="logo-t">RodentRadar <small>· go-to-market</small></div></div>
+    <div class="thread">
+      <div class="coach"><span class="lead">"Your weakest spot is proof — you can reach people but you can't show them the product works. So I'd make something they can <i>try</i>."</span>
+        <div class="pin"><span class="dot"></span> grounded in your code · the localization engine</div></div>
+      <div class="turn-you">get 5 pilot users for the rodent feature</div>
+      <div class="coach">I set a bar and came at it four ways. Three ideas cleared it — kill the ones that don't feel like you, and I'll build the keeper.</div>
+    </div>
+    <div class="composer">
+      <div class="box">
+        <input placeholder="Tell it a goal, or steer the ideas…" />
+        <div class="row"><span class="model">Opus 4.8</span><button class="send">↑</button></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- CANVAS -->
+  <main class="canvas">
+    <div class="strip">
+      <div class="needs"><span class="badge">2</span> <span><b>things need you</b> today</span></div>
+      <div class="move"><span class="l"><b>One move:</b> connect Gmail so the harness can send</span><span class="go">→</span></div>
+    </div>
+
+    <!-- faint living map behind (the whole GTM is there, one zoom out) -->
+    <div class="ghost" style="inset:0">
+      <div class="gnode pass" style="left:40px;top:430px"><div class="gl">WHO YOU SELL TO</div><div class="gt">Pest-control operators</div></div>
+      <div class="gnode" style="left:240px;top:520px"><div class="gl">HOW YOU REACH</div><div class="gt">2 channels running</div></div>
+      <div class="gnode pass" style="right:60px;top:470px"><div class="gl">PEOPLE</div><div class="gt">12 · 3 near a yes</div></div>
+      <div class="gnode" style="right:280px;top:560px"><div class="gl">WHAT'S WORKING</div><div class="gt">blind — connect proof</div></div>
+      <div class="gwire" style="left:190px;top:452px;width:50px"></div>
+      <div class="gwire" style="left:390px;top:540px;width:120px;transform:rotate(-8deg)"></div>
+    </div>
+
+    <!-- THE IDEATION LOOP -->
+    <div class="loop">
+      <div class="goalchip"><span class="k">ideating</span> get 5 pilot users for the rodent feature</div>
+
+      <div class="bar">
+        <span class="lbl">the bar</span>
+        <div class="crit">
+          <span class="c">attracts a pest-control operator</span>
+          <span class="c">buildable this week</span>
+          <span class="c">shows only what your product can</span>
+        </div>
+        <span class="edit">adjust ↑</span>
+      </div>
+
+      <div class="angles">
+        <span class="angle done">what only you can show</span>
+        <span class="angle done">their worst moment</span>
+        <span class="angle done">cheapest · most proof</span>
+        <span class="angle done">what's spreading</span>
+      </div>
+      <div class="fan-note">four angles, separately — the generator never graded itself</div>
+
+      <div class="survivors" id="survivors">
+        <div class="idea building">
+          <span class="pass">cleared the bar</span>
+          <h4>Free "where are rats getting in?" map</h4>
+          <p>Runs on your real localization engine. An operator uploads a floor plan, sees the entry points — the product, as a free tool.</p>
+          <div class="barfill"><i></i></div>
+          <div class="agent"><span class="sp"></span> Claude Code building → shipping to rodentradar.com/check</div>
+        </div>
+
+        <div class="idea" data-k>
+          <button class="kill" title="kill — teaches it your taste">✕</button>
+          <span class="pass">cleared the bar</span>
+          <h4>"Failed an inspection?" rescue page</h4>
+          <p>Targets the worst moment — a fresh health-code violation — with a 24-hour monitoring setup. Lands on the trigger you already track.</p>
+          <div class="foot"><button class="build">Build it</button><span class="test">or dry-run first</span></div>
+        </div>
+
+        <div class="idea" data-k>
+          <button class="kill" title="kill — teaches it your taste">✕</button>
+          <span class="pass">cleared the bar</span>
+          <h4>Sensor-coverage score for a site</h4>
+          <p>Operator drops in their site; gets a coverage grade and the gaps. Cheap to build on your existing engine, captures the lead.</p>
+          <div class="foot"><button class="build">Build it</button><span class="test">or dry-run first</span></div>
+        </div>
+
+        <div class="idea killed">
+          <span class="pass">below the bar</span>
+          <h4>Generic pest-control ROI calculator</h4>
+          <p>The category default.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- THE WALL, quiet -->
+    <div class="wall">
+      <div class="h"><span class="ic">▌</span> The wall · 3 ready to send</div>
+      <div class="s">Three outreach drafts are staged. Nothing reaches a person until you release them.</div>
+      <div class="act"><button class="rev">Review &amp; release</button><button class="later">Later</button></div>
+    </div>
+
+    <div class="zoomhint"><b>This is one goal in focus.</b> Pinch out to see your whole go-to-market map · talk to steer · kill freely</div>
+  </main>
+</div>
+
+<script>
+  document.querySelectorAll('.idea[data-k] .kill').forEach(b=>{
+    b.addEventListener('click',e=>{const card=e.target.closest('.idea');card.classList.add('killed');
+      card.querySelector('.pass').textContent='below the bar';});
+  });
+  document.querySelectorAll('.idea .build').forEach(b=>{
+    b.addEventListener('click',e=>{const card=e.target.closest('.idea');
+      card.classList.add('building');card.querySelector('.foot').remove();
+      const f=document.createElement('div');f.className='barfill';f.innerHTML='<i></i>';card.appendChild(f);
+      const a=document.createElement('div');a.className='agent';a.innerHTML='<span class="sp"></span> Claude Code building…';card.appendChild(a);
+    });
+  });
+</script>
+</body>
+</html>

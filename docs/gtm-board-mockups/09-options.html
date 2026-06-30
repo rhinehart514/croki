@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GTM IDE — six things it could be</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz@0,6..72;1,6..72&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#f7f7f5; --surface:#fff; --ink:#15151a; --ink-2:#3a3a42; --muted:#6e6e78; --faint:#a6a6b0;
+    --line:#e9e9e6; --line-2:#f1f1ee; --pass:#15935a; --wall:#b06f12; --live:#3b6fe0;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,monospace; --serif:"Newsreader",Georgia,serif;
+    --sh:0 1px 2px rgba(20,20,30,.05); --sh-pop:0 16px 40px -18px rgba(20,20,35,.28);
+    --ease:cubic-bezier(.22,1,.36,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;
+    background-image:radial-gradient(#eaeaea 1px,transparent 1px);background-size:26px 26px}
+  .wrap{max-width:1140px;margin:0 auto;padding:46px 28px 80px}
+  header h1{font-family:var(--serif);font-weight:400;font-size:clamp(30px,4.4vw,46px);letter-spacing:-.02em;line-height:1.05}
+  header h1 em{font-style:italic;color:var(--ink-2)}
+  header p{font-size:16px;color:var(--muted);max-width:60ch;margin-top:16px;line-height:1.55}
+  header p b{color:var(--ink)}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-top:38px}
+  .opt{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--sh);
+    transition:.2s var(--ease)}
+  .opt:hover{box-shadow:var(--sh-pop);transform:translateY(-3px)}
+  .prev{height:208px;position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
+  .body{padding:18px 20px 20px}
+  .body .n{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .body h3{font-family:var(--serif);font-size:23px;font-weight:500;letter-spacing:-.01em;margin:4px 0 0}
+  .body .feel{font-size:13.5px;color:var(--ink-2);line-height:1.5;margin-top:9px}
+  .body .feel b{color:var(--ink);font-weight:600}
+  .body .meta{margin-top:13px;display:flex;flex-direction:column;gap:6px;font-size:12px}
+  .body .meta div{display:flex;gap:8px} .body .meta .k{color:var(--faint);flex:0 0 56px}
+  .body .meta .win{color:var(--pass)} .body .meta .rk{color:var(--muted)}
+
+  /* ── mini-canvas primitives ── */
+  .mini{position:absolute;inset:0}
+  .nd{position:absolute;background:#fff;border:1px solid var(--line);border-left:2px solid var(--faint);
+    border-radius:8px;box-shadow:var(--sh);padding:7px 9px}
+  .nd .l{font-size:7px;color:var(--faint);font-family:var(--mono);text-transform:uppercase}
+  .nd .t{font-size:9.5px;font-weight:600;margin-top:1px;letter-spacing:-.01em}
+  .nd.g{border-left-color:var(--pass)} .nd.a{border-left-color:var(--wall)}
+  .cmp{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);background:#fff;border:1px solid var(--line);
+    border-radius:12px;box-shadow:var(--sh-pop);padding:7px 12px;font-size:9.5px;color:var(--faint);width:62%;display:flex;align-items:center;gap:7px}
+  .cmp .dot{width:5px;height:5px;border-radius:50%;background:var(--ink)}
+  .cmp .snd{margin-left:auto;width:16px;height:16px;border-radius:5px;background:var(--ink);color:#fff;display:grid;place-items:center;font-size:9px}
+  .wire{position:absolute;height:1px;background:repeating-linear-gradient(90deg,#d8d8d3 0 3px,transparent 3px 7px)}
+
+  /* A — Living Map */
+  .pA{background:radial-gradient(#ededed 1px,transparent 1px);background-size:16px 16px;background-color:#fbfbfa}
+  /* B — The Machine (technical) */
+  .pB{background:#14151a}
+  .pB .blk{position:absolute;background:#1d1f27;border:1px solid #2a2d38;border-radius:7px;padding:7px 9px}
+  .pB .blk .l{font-size:7px;color:#6b7280;font-family:var(--mono)} .pB .blk .t{font-size:9.5px;color:#e5e7eb;font-weight:600;margin-top:1px}
+  .pB .gw{position:absolute;height:2px;background:#2a2d38;border-radius:2px;overflow:hidden}
+  .pB .gw::after{content:"";position:absolute;width:12px;height:100%;background:#5b8cff;border-radius:2px;animation:pulse 1.8s linear infinite;box-shadow:0 0 8px #5b8cff}
+  @keyframes pulse{from{left:-12px}to{left:100%}}
+  .pB .cmp{background:#1d1f27;border-color:#2a2d38;color:#6b7280} .pB .cmp .dot{background:#5b8cff} .pB .cmp .snd{background:#5b8cff}
+  /* C — The Team */
+  .pC{background:#fbfbfa}
+  .av{position:absolute;width:34px;height:34px;border-radius:50%;background:#fff;border:1px solid var(--line);box-shadow:var(--sh);
+    display:grid;place-items:center;font-size:11px;font-weight:600;color:var(--ink-2)}
+  .av .ring{position:absolute;inset:-3px;border-radius:50%;border:1.5px solid var(--pass);border-top-color:transparent;animation:spin 1.4s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .av .lbl{position:absolute;top:38px;left:50%;transform:translateX(-50%);font-size:8px;color:var(--muted);white-space:nowrap}
+  /* D — The Stream */
+  .pD{background:#fbfbfa;padding:14px 0 0}
+  .row{position:absolute;left:14%;right:14%;background:#fff;border:1px solid var(--line);border-radius:9px;
+    box-shadow:var(--sh);padding:7px 10px;display:flex;align-items:center;gap:8px}
+  .row .dt{width:6px;height:6px;border-radius:50%;flex:0 0 6px} .row .tx{font-size:9px;color:var(--ink-2);font-weight:500}
+  .row .tg{margin-left:auto;font-size:7.5px;color:var(--faint);font-family:var(--mono)}
+  /* E — Mission Control */
+  .pE{background:#14151a;padding:10px}
+  .tile{position:absolute;background:#1d1f27;border:1px solid #2a2d38;border-radius:6px;padding:6px 8px}
+  .tile .k{font-size:7px;color:#6b7280;font-family:var(--mono)} .tile .v{font-size:13px;color:#e5e7eb;font-weight:700;font-family:var(--mono)}
+  .tile .v.g{color:#34d399} .tile .v.a{color:#fbbf24}
+  .spark{position:absolute;bottom:5px;left:8px;right:8px;height:10px;background:linear-gradient(90deg,#2a2d38 1px,transparent 1px);background-size:6px 100%}
+  .spark::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,#34d39933);clip-path:polygon(0 80%,15% 60%,30% 70%,50% 30%,70% 50%,85% 20%,100% 40%,100% 100%,0 100%)}
+  /* F — Calm Board */
+  .pF{background:#fcfcfb}
+  .card{position:absolute;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh);padding:11px 13px}
+  .card .l{font-size:8px;color:var(--faint);font-family:var(--mono);text-transform:uppercase}
+  .card .t{font-size:12px;font-weight:600;margin-top:3px;letter-spacing:-.01em} .card .s{font-size:9px;color:var(--muted);margin-top:3px}
+  .card .pill{display:inline-block;margin-top:7px;font-size:8px;font-weight:600;color:var(--pass);background:#eef8f2;border-radius:5px;padding:1px 6px}
+
+  footer{margin-top:36px;background:var(--ink);color:#fff;border-radius:16px;padding:26px 30px}
+  footer .e{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.45)}
+  footer h3{font-family:var(--serif);font-weight:400;font-size:24px;margin-top:10px;line-height:1.3}
+  footer h3 em{font-style:italic;color:#d4d4d8} footer p{color:rgba(255,255,255,.75);font-size:14px;margin-top:12px;line-height:1.6;max-width:64ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Six things it could <em>be</em>.</h1>
+    <p>Same bones every time — <b>one canvas, a center-bottom composer, living nodes, the flowing current.</b> What changes is the *personality*: how it looks, how the work feels, who it's for. Look at each, and notice which one you'd want open at 7am.</p>
+  </header>
+
+  <div class="grid">
+
+    <!-- A -->
+    <div class="opt">
+      <div class="prev pA">
+        <div class="mini">
+          <div class="wire" style="left:60px;top:64px;width:46px;transform:rotate(12deg)"></div>
+          <div class="wire" style="left:165px;top:54px;width:50px;transform:rotate(-10deg)"></div>
+          <div class="nd g" style="left:24px;top:40px;width:90px"><div class="l">who you sell to</div><div class="t">PCO operators</div></div>
+          <div class="nd" style="left:120px;top:74px;width:88px"><div class="l">reach</div><div class="t">2 channels</div></div>
+          <div class="nd a" style="left:215px;top:44px;width:84px"><div class="l">what's working</div><div class="t">blind</div></div>
+          <div class="cmp"><span class="dot"></span> get 5 pilot users… <span class="snd">↑</span></div>
+        </div>
+      </div>
+      <div class="body"><div class="n">A</div><h3>The Living Map</h3>
+        <p class="feel">An organic node graph you roam; work <b>flows out of the composer</b> onto the map and reality settles back in. Calm, spatial, Figma-like.</p>
+        <div class="meta"><div><span class="k">Feels</span><span class="rk">Figma for your go-to-market</span></div>
+          <div><span class="k">Wins</span><span class="win">The map teaches you; one grammar</span></div>
+          <div><span class="k">Risk</span><span class="rk">Freedom can read as "now what"</span></div></div>
+      </div>
+    </div>
+
+    <!-- B -->
+    <div class="opt">
+      <div class="prev pB">
+        <div class="mini">
+          <div class="gw" style="left:96px;top:58px;width:40px"></div>
+          <div class="gw" style="left:200px;top:50px;width:36px"></div>
+          <div class="blk" style="left:22px;top:44px;width:74px"><div class="l">FIND</div><div class="t">8 found</div></div>
+          <div class="blk" style="left:130px;top:66px;width:74px"><div class="l">DRAFT</div><div class="t">6 written</div></div>
+          <div class="blk" style="left:230px;top:40px;width:62px"><div class="l">WALL</div><div class="t">3 ⏸</div></div>
+          <div class="cmp"><span class="dot"></span> run the machine <span class="snd">↑</span></div>
+        </div>
+      </div>
+      <div class="body"><div class="n">B</div><h3>The Machine</h3>
+        <p class="feel">A glowing circuit — nodes wired as executable steps, <b>data pulsing through the wires</b> when it runs. You watch your go-to-market <i>execute</i>.</p>
+        <div class="meta"><div><span class="k">Feels</span><span class="rk">n8n, but alive and for GTM</span></div>
+          <div><span class="k">Wins</span><span class="win">"It runs" is undeniable; technical wow</span></div>
+          <div><span class="k">Risk</span><span class="rk">Can feel cold / engineer-y, less human</span></div></div>
+      </div>
+    </div>
+
+    <!-- C -->
+    <div class="opt">
+      <div class="prev pC">
+        <div class="mini">
+          <div class="wire" style="left:74px;top:60px;width:40px"></div>
+          <div class="wire" style="left:180px;top:60px;width:40px"></div>
+          <div class="av" style="left:34px;top:46px">PR<span class="ring"></span><span class="lbl">Prospector</span></div>
+          <div class="av" style="left:138px;top:46px">WR<span class="lbl">Writer</span></div>
+          <div class="av" style="left:242px;top:46px">CL<span class="ring"></span><span class="lbl">Closer</span></div>
+          <div class="cmp"><span class="dot"></span> get me pilot users <span class="snd">↑</span></div>
+        </div>
+      </div>
+      <div class="body"><div class="n">C</div><h3>The Team</h3>
+        <p class="feel">Your go-to-market as a <b>team of named agents</b> you can see working, talk to, and rearrange. You manage an AI GTM org, not a funnel.</p>
+        <div class="meta"><div><span class="k">Feels</span><span class="rk">A crew of teammates doing the work</span></div>
+          <div><span class="k">Wins</span><span class="win">Warm, legible, delegation feels real</span></div>
+          <div><span class="k">Risk</span><span class="rk">Personifying can hide the actual machine</span></div></div>
+      </div>
+    </div>
+
+    <!-- D -->
+    <div class="opt">
+      <div class="prev pD">
+        <div class="mini">
+          <div class="row" style="top:18px"><span class="dt" style="background:var(--pass)"></span><span class="tx">Built: rodent-risk map → live</span><span class="tg">2m</span></div>
+          <div class="row" style="top:54px"><span class="dt" style="background:var(--wall)"></span><span class="tx">3 drafts ready — your okay</span><span class="tg">now</span></div>
+          <div class="row" style="top:90px"><span class="dt" style="background:var(--ink);opacity:.4"></span><span class="tx">Found 8 operators who fit</span><span class="tg">5m</span></div>
+          <div class="cmp"><span class="dot"></span> ask, or steer… <span class="snd">↑</span></div>
+        </div>
+      </div>
+      <div class="body"><div class="n">D</div><h3>The Stream</h3>
+        <p class="feel">A vertical feed flowing up from the composer — every move a row you can open. <b>Chat-native, temporal</b>, almost no spatial map to learn.</p>
+        <div class="meta"><div><span class="k">Feels</span><span class="rk">An activity feed that does things</span></div>
+          <div><span class="k">Wins</span><span class="win">Zero learning curve; mobile-friendly</span></div>
+          <div><span class="k">Risk</span><span class="rk">Loses "see your whole GTM at once"</span></div></div>
+      </div>
+    </div>
+
+    <!-- E -->
+    <div class="opt">
+      <div class="prev pE">
+        <div class="mini">
+          <div class="tile" style="left:14px;top:16px;width:78px"><div class="k">PIPELINE</div><div class="v">47→3</div></div>
+          <div class="tile" style="left:102px;top:16px;width:78px"><div class="k">REPLIES</div><div class="v g">12</div></div>
+          <div class="tile" style="left:190px;top:16px;width:90px"><div class="k">AT WALL</div><div class="v a">3</div></div>
+          <div class="tile" style="left:14px;top:66px;width:170px;height:50px"><div class="k">CHANNELS · LIVE</div><div class="spark"></div></div>
+          <div class="tile" style="left:194px;top:66px;width:86px;height:50px"><div class="k">BUILDING</div><div class="v" style="font-size:9px;color:#9ca3af">2 assets</div></div>
+          <div class="cmp"><span class="dot"></span> command… <span class="snd">↑</span></div>
+        </div>
+      </div>
+      <div class="body"><div class="n">E</div><h3>Mission Control</h3>
+        <p class="feel">A dark command center — many channels as <b>live telemetry</b>, dense and glanceable. Built for the harness running everything at once.</p>
+        <div class="meta"><div><span class="k">Feels</span><span class="rk">A trading terminal for your GTM</span></div>
+          <div><span class="k">Wins</span><span class="win">Scale + autonomy read as power</span></div>
+          <div><span class="k">Risk</span><span class="rk">Intimidating early; bad when empty</span></div></div>
+      </div>
+    </div>
+
+    <!-- F -->
+    <div class="opt">
+      <div class="prev pF">
+        <div class="mini">
+          <div class="card" style="left:24px;top:34px;width:120px"><div class="l">who you sell to</div><div class="t">PCO operators</div><div class="s">won a test</div><span class="pill">✓ proven</span></div>
+          <div class="card" style="left:170px;top:54px;width:120px"><div class="l">next move</div><div class="t">Make a demo</div><div class="s">they can try it</div></div>
+          <div class="cmp"><span class="dot"></span> what should I do? <span class="snd">↑</span></div>
+        </div>
+      </div>
+      <div class="body"><div class="n">F</div><h3>The Calm Board</h3>
+        <p class="feel">Minimal, Linear-clean — a few big calm cards in space, lots of air, one clear next move. <b>Restraint as the personality.</b></p>
+        <div class="meta"><div><span class="k">Feels</span><span class="rk">Linear / Things — quiet and sure</span></div>
+          <div><span class="k">Wins</span><span class="win">Never overwhelms; premium feel</span></div>
+          <div><span class="k">Risk</span><span class="rk">May under-sell the "harness" power</span></div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    <div class="e">If you're asking my read</div>
+    <h3>The base is <em>The Living Map</em> — but steal the <em>Machine's</em> pulsing run and the <em>Calm Board's</em> restraint.</h3>
+    <p>The Living Map is the truest to everything we decided (one canvas, the current, living nodes). It just needs the Machine's <b>"it visibly runs"</b> moment so the harness reads as alive, and the Calm Board's <b>discipline</b> so 5 channels stay calm, not busy. The Team and Mission Control are *modes* you could zoom into, not the home. The Stream is the fallback if the spatial map ever feels like too much.</p>
+  </footer>
+</div>
+</body>
+</html>

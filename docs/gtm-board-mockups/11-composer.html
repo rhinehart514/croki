@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GTM IDE</title>
+<style>
+  :root{
+    --bg:#fcfcfd; --surface:#ffffff; --ink:#0a0a0c; --ink-2:#42424a; --muted:#86868b; --faint:#c2c2c8;
+    --line:#ececef; --line-soft:#f5f5f7;
+    --proven:#1b7f4d; --proven-bg:#f1f8f4; --wall:#a76a12;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
+    --sh:0 1px 3px rgba(12,12,24,.05),0 1px 2px rgba(12,12,24,.03);
+    --sh-2:0 4px 14px -4px rgba(12,12,24,.10),0 1px 3px rgba(12,12,24,.04);
+    --sh-pop:0 24px 60px -16px rgba(12,12,30,.22),0 4px 14px rgba(12,12,30,.06);
+    --ease:cubic-bezier(.32,.72,0,1); --spring:cubic-bezier(.34,1.4,.5,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;font-size:14px;letter-spacing:-.006em}
+  .canvas{position:fixed;inset:0;overflow:hidden;
+    background-image:radial-gradient(rgba(0,0,0,.035) .8px,transparent .8px);background-size:30px 30px}
+
+  /* header */
+  .top{position:absolute;top:0;left:0;right:0;height:54px;z-index:40;display:flex;align-items:center;gap:14px;padding:0 20px}
+  .mk{width:26px;height:26px;border-radius:8px;background:var(--ink);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:600}
+  .brand{font-weight:590;font-size:14.5px} .brand span{color:var(--faint);font-weight:430}
+  .right{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .need{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 13px;box-shadow:var(--sh)}
+  .need b{color:var(--ink);font-weight:560} .need .c{font-size:11px;font-weight:650;color:var(--wall);background:#fbf5ec;border-radius:999px;padding:1px 7px}
+  .move{display:flex;align-items:center;gap:9px;font-size:13px;color:#fff;background:var(--ink);border-radius:999px;padding:6px 8px 6px 14px;box-shadow:var(--sh-2);cursor:pointer}
+  .move .a{width:21px;height:21px;border-radius:50%;background:rgba(255,255,255,.16);display:grid;place-items:center;font-size:11px}
+
+  /* the GTM map = the ambient canvas (what you've built / your state) */
+  .node{position:absolute;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:13px 15px;width:182px;box-shadow:var(--sh);transition:.25s var(--ease)}
+  .node:hover{box-shadow:var(--sh-2);transform:translateY(-1px)}
+  .node .q{font-size:11px;color:var(--muted);font-weight:500}
+  .node .a{font-size:14px;font-weight:560;letter-spacing:-.014em;line-height:1.25;margin-top:5px}
+  .node .s{margin-top:9px;display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--faint)} .dot.p{background:var(--proven)} .dot.w{background:var(--wall)}
+  .node.fresh{border-color:#d8ecd e;box-shadow:0 0 0 3px var(--proven-bg),var(--sh-2)}
+  .node.fresh .a{color:var(--ink)}
+  svg.wires{position:absolute;inset:0;pointer-events:none;overflow:visible}
+  .wire{fill:none;stroke:#e6e6ea;stroke-width:1.5}
+
+  /* ── THE COMPOSER — the workbench. ideation lives inside it. ── */
+  .composer{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);width:660px;z-index:50;
+    background:var(--surface);border:1px solid var(--line);border-radius:24px;box-shadow:var(--sh-pop);
+    display:flex;flex-direction:column;max-height:calc(100vh - 120px);overflow:hidden}
+  .cmp-scroll{overflow-y:auto;padding:20px 22px 6px}
+  .reason{font-size:14.5px;color:var(--ink-2);line-height:1.5;letter-spacing:-.008em}
+  .reason .src{font-size:11.5px;color:var(--faint);margin-top:8px;display:flex;align-items:center;gap:7px}
+  .reason .src .d{width:5px;height:5px;border-radius:50%;background:var(--proven)}
+
+  .work{margin-top:18px;border-top:1px solid var(--line-soft);padding-top:16px}
+  .work .lbl{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);font-weight:500}
+  .work .lbl .pulse{width:7px;height:7px;border-radius:50%;background:var(--ink);position:relative}
+  .work .lbl .pulse::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1.5px solid var(--ink);opacity:0;animation:ring 2.2s var(--ease) infinite}
+  @keyframes ring{0%{opacity:.4;transform:scale(.6)}100%{opacity:0;transform:scale(1.6)}}
+  .bar{margin-top:11px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .bar .h{font-size:11px;color:var(--faint);font-weight:560;letter-spacing:.02em;text-transform:uppercase;margin-right:2px}
+  .crit{font-size:12px;color:var(--ink-2);border:1px solid var(--line);border-radius:8px;padding:4px 9px 4px 7px;display:flex;align-items:center;gap:6px}
+  .crit .ck{width:13px;height:13px;border-radius:50%;background:var(--proven-bg);color:var(--proven);display:grid;place-items:center;font-size:8px}
+  .note{font-size:11.5px;color:var(--faint);margin:12px 0 0}
+
+  .ideas{margin-top:12px;display:flex;flex-direction:column;gap:9px}
+  .idea{border:1px solid var(--line);border-radius:14px;padding:14px 15px;position:relative;transition:.25s var(--ease);background:var(--surface)}
+  .idea:hover{box-shadow:var(--sh-2)}
+  .idea .badge{font-size:11px;color:var(--proven);font-weight:560;display:flex;align-items:center;gap:6px}
+  .idea .badge .d{width:6px;height:6px;border-radius:50%;background:var(--proven)}
+  .idea h4{font-size:15px;font-weight:600;letter-spacing:-.016em;line-height:1.28;margin:9px 30px 5px 0}
+  .idea p{font-size:12.5px;color:var(--muted);line-height:1.45}
+  .idea .foot{margin-top:12px;display:flex;align-items:center;gap:12px}
+  .idea .build{font-size:12.5px;font-weight:560;color:#fff;background:var(--ink);border:none;border-radius:9px;padding:7px 14px;cursor:pointer}
+  .idea .alt{font-size:12.5px;color:var(--muted);cursor:pointer}
+  .idea .kill{position:absolute;top:13px;right:13px;width:23px;height:23px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--faint);cursor:pointer;display:grid;place-items:center;font-size:12px}
+  .idea .kill:hover{color:var(--ink);background:var(--line-soft)}
+  .idea.killed{opacity:.42} .idea.killed h4{text-decoration:line-through;text-decoration-color:var(--faint)}
+  .idea.killed .foot,.idea.killed .kill{display:none} .idea.killed .badge{color:var(--faint)} .idea.killed .badge .d{background:var(--faint)}
+  .idea.building .pf{margin-top:12px;height:4px;border-radius:99px;background:var(--line-soft);overflow:hidden}
+  .idea.building .pf i{display:block;height:100%;background:var(--ink);border-radius:99px;animation:grow 2.4s var(--ease) infinite alternate}
+  @keyframes grow{from{width:44%}to{width:82%}}
+  .idea.building .ag{margin-top:9px;font-size:12px;color:var(--ink-2);display:flex;align-items:center;gap:8px}
+  .idea.building .sp{width:11px;height:11px;border:1.5px solid var(--line);border-top-color:var(--ink);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* the input row — pinned bottom of the composer */
+  .field{border-top:1px solid var(--line-soft);padding:13px 16px}
+  .field .ctx{display:flex;gap:7px;margin-bottom:10px}
+  .field .chip{font-size:11px;color:var(--muted);background:var(--line-soft);border-radius:8px;padding:4px 9px;display:flex;align-items:center;gap:6px}
+  .field .chip .d{width:5px;height:5px;border-radius:50%;background:var(--proven)}
+  .field .row{display:flex;align-items:center;gap:12px}
+  .field input{flex:1;border:none;outline:none;font-size:15.5px;font-family:var(--sans);color:var(--ink);background:none;letter-spacing:-.01em}
+  .field input::placeholder{color:var(--faint)}
+  .field .model{font-size:11.5px;color:var(--muted);cursor:pointer}
+  .field .mic{color:var(--faint);cursor:pointer;font-size:15px}
+  .field .send{width:32px;height:32px;border-radius:11px;background:var(--ink);color:#fff;border:none;display:grid;place-items:center;cursor:pointer;font-size:15px}
+
+  .wall{position:absolute;right:22px;top:74px;z-index:45;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--sh-2);padding:13px 15px;width:228px}
+  .wall .h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:560} .wall .h .d{width:7px;height:7px;border-radius:50%;background:var(--wall)}
+  .wall .s{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.45}
+  .wall .b{margin-top:11px;font-size:12.5px;font-weight:560;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:8px;width:100%;cursor:pointer}
+  .wall .b:hover{background:var(--line-soft)}
+  .ctrls{position:absolute;left:20px;bottom:30px;z-index:40;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:11px;overflow:hidden;box-shadow:var(--sh)}
+  .ctrls button{width:32px;height:31px;border:none;background:none;cursor:pointer;color:var(--muted);font-size:14px;border-bottom:1px solid var(--line-soft)}
+  .ctrls button:last-child{border:none} .ctrls button:hover{background:var(--line-soft);color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="canvas">
+
+  <svg class="wires">
+    <path class="wire" d="M 360 250 C 520 270, 660 250, 760 250"/>
+    <path class="wire" d="M 940 286 C 1030 300, 1080 330, 1090 370"/>
+    <path class="wire" d="M 1180 250 C 1230 264, 1255 290, 1250 330"/>
+  </svg>
+
+  <!-- THE MAP (your built GTM, ambient) -->
+  <div class="node" style="left:200px;top:222px"><div class="q">Who you sell to</div><div class="a">Pest-control operators</div><div class="s"><span class="dot p"></span> proven</div></div>
+  <div class="node" style="left:780px;top:222px"><div class="q">How you reach them</div><div class="a">2 channels live</div><div class="s"><span class="dot"></span> 3 drafts staged</div></div>
+  <div class="node" style="left:1090px;top:222px"><div class="q">People</div><div class="a">12 · 3 near a yes</div><div class="s"><span class="dot p"></span> warming</div></div>
+  <div class="node" style="left:1010px;top:368px"><div class="q">What's working</div><div class="a">No proof yet</div><div class="s"><span class="dot w"></span> blind</div></div>
+
+  <div class="top">
+    <div class="mk">◆</div><div class="brand">RodentRadar <span>· go-to-market</span></div>
+    <div class="right">
+      <div class="need"><span class="c">2</span> <span><b>need you</b> today</span></div>
+      <div class="move">Connect Gmail to send <span class="a">→</span></div>
+    </div>
+  </div>
+
+  <!-- THE COMPOSER — ideation built in -->
+  <div class="composer">
+    <div class="cmp-scroll">
+      <div class="reason">Your weakest spot is proof — you can reach people but can't show them it works. So I'd make something they can try.
+        <div class="src"><span class="d"></span> Grounded in your code · the localization engine</div></div>
+
+      <div class="work">
+        <div class="lbl"><span class="pulse"></span> Ideating · get 5 pilot users for the rodent feature</div>
+        <div class="bar">
+          <span class="h">the bar</span>
+          <span class="crit"><span class="ck">✓</span> attracts an operator</span>
+          <span class="crit"><span class="ck">✓</span> buildable this week</span>
+          <span class="crit"><span class="ck">✓</span> only your product can</span>
+        </div>
+        <div class="note">Four angles, separately — the generator never graded itself. Two cleared the bar, two killed.</div>
+        <div class="ideas" id="ideas">
+          <div class="idea building">
+            <div class="badge"><span class="d"></span> cleared the bar</div>
+            <h4>A free "where are rats getting in?" map</h4>
+            <p>Runs on your real localization engine. An operator drops in a floor plan and sees the entry points — your product, as a tool they can try.</p>
+            <div class="pf"><i></i></div>
+            <div class="ag"><span class="sp"></span> Building → it'll land on your map as a live asset</div>
+          </div>
+          <div class="idea" data-k>
+            <button class="kill">✕</button>
+            <div class="badge"><span class="d"></span> cleared the bar</div>
+            <h4>A "just failed an inspection?" page</h4>
+            <p>Meets the worst moment — a fresh violation — with a 24-hour setup. Lands on a trigger you already track.</p>
+            <div class="foot"><button class="build">Build it</button><span class="alt">Dry-run first</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="ctx"><span class="chip"><span class="d"></span> Reading your repo</span><span class="chip">12 people</span></div>
+      <div class="row">
+        <input placeholder="Ask, or steer the ideas…" />
+        <span class="model">Opus 4.8 ⌄</span><span class="mic">⏺</span>
+        <button class="send">↑</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wall">
+    <div class="h"><span class="d"></span> Ready to send · 3</div>
+    <div class="s">Drafts are staged. Nothing reaches a person until you release them.</div>
+    <button class="b">Review &amp; release</button>
+  </div>
+  <div class="ctrls"><button>+</button><button>−</button><button>⤢</button></div>
+</div>
+<script>
+  document.querySelectorAll('.idea[data-k] .kill').forEach(b=>b.addEventListener('click',e=>{
+    const c=e.target.closest('.idea');c.classList.add('killed');}));
+  document.querySelectorAll('.idea .build').forEach(b=>b.addEventListener('click',e=>{
+    const c=e.target.closest('.idea');c.classList.add('building');c.querySelector('.foot').remove();
+    const pf=document.createElement('div');pf.className='pf';pf.innerHTML='<i></i>';c.appendChild(pf);
+    const ag=document.createElement('div');ag.className='ag';ag.innerHTML='<span class="sp"></span> Building → lands on your map';c.appendChild(ag);}));
+</script>
+</body>
+</html>

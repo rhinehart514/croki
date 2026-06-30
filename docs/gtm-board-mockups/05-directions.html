@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GTM IDE — what we're building, in plain words</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#fafafa; --surface:#ffffff; --ink:#111113; --ink-2:#3f3f46; --muted:#6b6b75; --faint:#a1a1aa;
+    --line:#e8e8eb; --line-2:#f0f0f2; --working:#16a34a; --working-soft:#f0fdf4;
+    --approve:#b9740a; --approve-soft:#fbf3e9; --danger:#dc2626; --blank:#c8c8cf;
+    --serif:'Newsreader',Georgia,serif;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+    --mono:ui-monospace,'SF Mono',Menlo,monospace;
+    --r:14px; --r-sm:9px;
+    --shadow:0 1px 2px rgba(0,0,0,.04); --shadow-lift:0 14px 40px -18px rgba(20,20,25,.30);
+    --ease:cubic-bezier(.22,1,.36,1);
+    --maxw:1080px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    background-image:radial-gradient(#eaeaee 1px,transparent 1px);background-size:26px 26px;background-attachment:fixed}
+
+  /* sticky nav */
+  nav{position:sticky;top:0;z-index:50;backdrop-filter:saturate(1.2) blur(10px);
+    background:rgba(250,250,250,.82);border-bottom:1px solid var(--line)}
+  .nav-in{max-width:var(--maxw);margin:0 auto;padding:13px 28px;display:flex;align-items:center;gap:18px}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:14px;letter-spacing:-.01em}
+  .brand .mk{width:23px;height:23px;border-radius:7px;background:var(--ink);color:#fff;display:grid;place-items:center;font-size:12px}
+  .brand small{color:var(--faint);font-weight:500}
+  .nav-links{margin-left:auto;display:flex;gap:4px}
+  .nav-links a{font-size:13px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:.15s var(--ease)}
+  .nav-links a:hover{color:var(--ink);background:#f0f0f2}
+
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 28px}
+  section{padding:64px 0;border-bottom:1px solid var(--line)}
+  .eyebrow{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);
+    display:flex;align-items:center;gap:9px;margin-bottom:20px}
+  .eyebrow::before{content:"";width:22px;height:1.5px;background:var(--ink);opacity:.5}
+
+  /* hero */
+  .hero{padding:78px 0 60px}
+  .hero h1{font-family:var(--serif);font-weight:400;font-size:clamp(34px,5.4vw,58px);line-height:1.04;
+    letter-spacing:-.02em;max-width:18ch}
+  .hero h1 em{font-style:italic;color:var(--ink-2)}
+  .hero .lede{font-size:18px;color:var(--muted);max-width:54ch;margin-top:24px;line-height:1.55}
+  .hero .lede b{color:var(--ink);font-weight:600}
+  .pillrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:30px}
+  .pill{font-size:12.5px;color:var(--ink-2);background:var(--surface);border:1px solid var(--line);
+    border-radius:999px;padding:7px 14px;box-shadow:var(--shadow)}
+  .pill b{color:var(--ink)}
+
+  h2.sec{font-family:var(--serif);font-weight:400;font-size:clamp(26px,3.6vw,38px);letter-spacing:-.02em;line-height:1.1;max-width:22ch}
+  .sec-sub{font-size:15.5px;color:var(--muted);max-width:60ch;margin-top:14px}
+
+  /* value cards */
+  .vgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:34px}
+  .vcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:22px 22px 20px;
+    box-shadow:var(--shadow);transition:.2s var(--ease);position:relative;overflow:hidden}
+  .vcard:hover{box-shadow:var(--shadow-lift);transform:translateY(-2px)}
+  .vcard .n{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .vcard h3{font-family:var(--serif);font-weight:500;font-size:21px;letter-spacing:-.01em;margin:8px 0 9px;line-height:1.18}
+  .vcard p{font-size:14px;color:var(--muted);line-height:1.5}
+  .vcard .who{margin-top:14px;font-size:12px;color:var(--ink-2);background:#f5f5f6;border-radius:7px;padding:6px 10px;display:inline-block}
+
+  /* jargon table */
+  .jargon{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:0 38px;margin-top:30px;
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 26px;box-shadow:var(--shadow)}
+  .jrow{display:flex;align-items:baseline;gap:12px;padding:11px 0;border-bottom:1px solid var(--line-2)}
+  .jrow .bad{font-family:var(--mono);font-size:12.5px;color:var(--faint);text-decoration:line-through;flex:0 0 38%}
+  .jrow .arrow{color:var(--faint)}
+  .jrow .good{font-size:14px;color:var(--ink);font-weight:500}
+
+  /* process flow */
+  .flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:34px;counter-reset:step}
+  .step{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);padding:16px 16px 15px;
+    box-shadow:var(--shadow);position:relative}
+  .step::before{counter-increment:step;content:counter(step);position:absolute;top:14px;right:15px;
+    font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .step .stage{font-size:14.5px;font-weight:600;letter-spacing:-.01em}
+  .step .ask{font-family:var(--serif);font-style:italic;font-size:14px;color:var(--ink-2);margin-top:3px}
+  .step .does{font-size:12.5px;color:var(--muted);margin-top:9px;line-height:1.45}
+  .loopnote{margin-top:18px;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px}
+  .loopnote .lp{font-family:var(--mono);color:var(--working)}
+
+  /* DIRECTIONS */
+  .dirgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px;margin-top:36px}
+  .dir{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;
+    box-shadow:var(--shadow);transition:.2s var(--ease);display:flex;flex-direction:column}
+  .dir:hover{box-shadow:var(--shadow-lift);transform:translateY(-3px);border-color:#dcdce0}
+  .dir .mock{height:158px;background:var(--paper);border-bottom:1px solid var(--line);position:relative;overflow:hidden;padding:14px}
+  .dir .body{padding:18px 20px 20px}
+  .dir .dh{display:flex;align-items:center;gap:9px}
+  .dir .dn{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .dir h3{font-family:var(--serif);font-weight:500;font-size:23px;letter-spacing:-.01em;margin:5px 0 0}
+  .dir .feel{font-size:14px;color:var(--ink-2);line-height:1.5;margin-top:10px}
+  .dir .feel b{color:var(--ink);font-weight:600}
+  .dir .meta{margin-top:15px;display:flex;flex-direction:column;gap:7px}
+  .dir .meta div{font-size:12.5px;display:flex;gap:8px}
+  .dir .meta .k{color:var(--faint);flex:0 0 64px}
+  .dir .meta .v{color:var(--muted)}
+  .dir .meta .v.win{color:var(--working)}
+  .tag{position:absolute;top:12px;left:12px;font-size:10.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+    background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:999px;padding:3px 9px;color:var(--muted);z-index:3}
+
+  /* mini-mock primitives (the signature element) */
+  .m-node{position:absolute;background:#fff;border:1px solid var(--line);border-left:2.5px solid var(--blank);
+    border-radius:6px;box-shadow:var(--shadow)}
+  .m-node.g{border-left-color:var(--working)} .m-node.a{border-left-color:var(--approve)}
+  .m-line{position:absolute;height:1px;background:repeating-linear-gradient(90deg,#c8c8cf 0 4px,transparent 4px 8px)}
+  .m-bar{background:#ededf0;border-radius:3px}
+  .m-bubble{border-radius:11px;padding:6px 9px;font-size:9px;color:var(--muted);max-width:72%}
+  .m-bubble.me{background:var(--ink);color:#fff;margin-left:auto}
+  .m-bubble.ai{background:#f0f0f2}
+  .m-doc{height:6px;background:#ededf0;border-radius:3px}
+  .m-tile{background:#fff;border:1px solid var(--line);border-radius:6px;box-shadow:var(--shadow)}
+  .m-approve{background:#fff;border:1px solid var(--line);border-radius:7px;box-shadow:var(--shadow);
+    display:flex;align-items:center;gap:6px;padding:7px 9px}
+  .dot{width:6px;height:6px;border-radius:50%}
+  .dot.g{background:var(--working)} .dot.a{background:var(--approve)} .dot.b{background:var(--blank)}
+
+  /* recommendation */
+  .reco{background:var(--ink);color:#fff;border-radius:var(--r);padding:38px 40px;margin-top:30px;box-shadow:var(--shadow-lift)}
+  .reco .eyebrow{color:rgba(255,255,255,.5)} .reco .eyebrow::before{background:#fff;opacity:.4}
+  .reco h3{font-family:var(--serif);font-weight:400;font-size:clamp(24px,3vw,32px);letter-spacing:-.01em;line-height:1.18;max-width:24ch}
+  .reco h3 em{font-style:italic;color:#d4d4d8}
+  .reco p{font-size:15px;color:rgba(255,255,255,.78);line-height:1.6;margin-top:18px;max-width:62ch}
+  .reco p b{color:#fff;font-weight:600}
+  .reco .combo{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+  .reco .combo span{font-size:12.5px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);
+    border-radius:999px;padding:6px 13px}
+
+  footer{padding:40px 0 70px;text-align:center;color:var(--faint);font-size:12.5px}
+  @media(max-width:640px){ section{padding:46px 0} .hero{padding:48px 0 36px} }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-in">
+    <div class="brand"><span class="mk">▦</span> GTM IDE <small>· directions</small></div>
+    <div class="nav-links">
+      <a href="#value">What it's for</a>
+      <a href="#words">Plain words</a>
+      <a href="#process">The journey</a>
+      <a href="#directions">6 directions</a>
+      <a href="#reco">My pick</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<header class="wrap hero">
+  <h1>You built the product.<br>This does the <em>getting-customers</em> part — and never sends anything you didn't okay.</h1>
+  <p class="lede">You tell it what you want — <b>"get my first five customers"</b> — and it does the go-to-market work: figures out who to reach, writes the messages, runs the outreach. Everything stops at <b>you</b> before it goes out. It reads your actual product so it never makes things up, and it learns your taste so each round gets sharper.</p>
+  <div class="pillrow">
+    <span class="pill">🎯 <b>You set the goal</b>, it does the work</span>
+    <span class="pill">🛑 <b>Nothing sends</b> without your okay</span>
+    <span class="pill">📈 <b>Gets smarter</b> every round</span>
+  </div>
+</header>
+
+<!-- VALUE -->
+<section id="value"><div class="wrap">
+  <div class="eyebrow">What it's actually for</div>
+  <h2 class="sec">Five ways to say the value. Tell me which one feels true.</h2>
+  <p class="sec-sub">Same product, different promise. The one that makes you nod is the one we lead with everywhere — the headline, the home screen, the pitch.</p>
+  <div class="vgrid">
+    <div class="vcard"><div class="n">01 — the doer</div>
+      <h3>"Describe the goal. It runs your go-to-market."</h3>
+      <p>You're the founder, not a marketer. Say what you want in a sentence; it finds the people, writes the outreach, runs it — you just approve.</p>
+      <div class="who">Best if the pain is "I don't have time to do GTM"</div>
+    </div>
+    <div class="vcard"><div class="n">02 — the map</div>
+      <h3>"See your whole go-to-market in one place."</h3>
+      <p>Where you stand on everything that matters — who you sell to, what's working, what's still a guess — and the one thing worth doing next.</p>
+      <div class="who">Best if the pain is "I have no idea where I stand"</div>
+    </div>
+    <div class="vcard"><div class="n">03 — the lab</div>
+      <h3>"Run your sales like experiments."</h3>
+      <p>Try a way of reaching people, see if it works, keep it or kill it. Every guess becomes a test, and the winners become what you know.</p>
+      <div class="who">Best if the pain is "I'm guessing and nothing's repeatable"</div>
+    </div>
+    <div class="vcard"><div class="n">04 — the truth</div>
+      <h3>"It reads your product, so it never oversells."</h3>
+      <p>It looks at what your product actually does before it writes a word. No made-up claims, no promises you can't keep — only what's real.</p>
+      <div class="who">Best if the pain is "AI tools write generic lies"</div>
+    </div>
+    <div class="vcard"><div class="n">05 — the compounding</div>
+      <h3>"Every approval teaches it your taste."</h3>
+      <p>Each time you say yes, no, or "change this," it learns. The tenth message sounds like you wrote it. The work gets better while you sleep.</p>
+      <div class="who">Best if the pain is "AI never sounds like me"</div>
+    </div>
+  </div>
+</div></section>
+
+<!-- PLAIN WORDS -->
+<section id="words"><div class="wrap">
+  <div class="eyebrow">Killing our own jargon</div>
+  <h2 class="sec">The words we'll use from now on.</h2>
+  <p class="sec-sub">If the founder can't read a label and know what it means, it's wrong. Left is what we've been saying to each other. Right is what goes on the screen.</p>
+  <div class="jargon">
+    <div class="jrow"><span class="bad">ICP</span><span class="arrow">→</span><span class="good">Who you sell to</span></div>
+    <div class="jrow"><span class="bad">now-trigger</span><span class="arrow">→</span><span class="good">Why they'd buy right now</span></div>
+    <div class="jrow"><span class="bad">positioning</span><span class="arrow">→</span><span class="good">How you say what you are</span></div>
+    <div class="jrow"><span class="bad">channel</span><span class="arrow">→</span><span class="good">A way you reach people</span></div>
+    <div class="jrow"><span class="bad">the gate / the wall</span><span class="arrow">→</span><span class="good">Your okay before it sends</span></div>
+    <div class="jrow"><span class="bad">attribution</span><span class="arrow">→</span><span class="good">Proof of what's working</span></div>
+    <div class="jrow"><span class="bad">pipeline</span><span class="arrow">→</span><span class="good">People you're talking to</span></div>
+    <div class="jrow"><span class="bad">grounded · confidence 65</span><span class="arrow">→</span><span class="good">Proven (won a test)</span></div>
+  </div>
+</div></section>
+
+<!-- PROCESS -->
+<section id="process"><div class="wrap">
+  <div class="eyebrow">The whole journey, plainly</div>
+  <h2 class="sec">Getting customers is eight questions. The product answers them with you.</h2>
+  <p class="sec-sub">This is the entire job, start to finish — not a feature list. Whatever shape we build, it has to make this loop feel obvious and doable. Each box is a question you must answer; the small line is what the product does there.</p>
+  <div class="flow">
+    <div class="step"><div class="stage">Who's it for</div><div class="ask">Who actually buys this?</div><div class="does">Suggests who to target from your product, lets you try a few and compare.</div></div>
+    <div class="step"><div class="stage">Why now</div><div class="ask">What makes them ready today?</div><div class="does">Finds the moments that make someone need you this week.</div></div>
+    <div class="step"><div class="stage">How you say it</div><div class="ask">What's the one line?</div><div class="does">Drafts a few ways to say it; you A/B the ones that land.</div></div>
+    <div class="step"><div class="stage">What they buy</div><div class="ask">The offer and the price?</div><div class="does">Helps shape the offer; checks you can actually deliver it.</div></div>
+    <div class="step"><div class="stage">How you reach them</div><div class="ask">Where do you find them?</div><div class="does">Builds the outreach and runs it — staged for your okay.</div></div>
+    <div class="step"><div class="stage">Who's talking</div><div class="ask">Who replied, what stage?</div><div class="does">Keeps the real people in one place as they move toward a yes.</div></div>
+    <div class="step"><div class="stage">What's working</div><div class="ask">Is any of it landing?</div><div class="does">Shows what actually drove replies — and where you're flying blind.</div></div>
+    <div class="step"><div class="stage">What you learned</div><div class="ask">Keep, kill, or double down?</div><div class="does">Records every call so the next round starts sharper than the last.</div></div>
+  </div>
+  <div class="loopnote"><span class="lp">↻</span> …and what you learned (8) feeds back into who's it for (1). It's a loop, not a checklist — that's the whole point.</div>
+</div></section>
+
+<!-- DIRECTIONS -->
+<section id="directions"><div class="wrap">
+  <div class="eyebrow">Six ways it could look &amp; feel</div>
+  <h2 class="sec">Same job. Six different shapes. Pick the feeling.</h2>
+  <p class="sec-sub">These aren't features — they're whole personalities for the product. Each makes the eight-step journey feel different. Look at the little sketch, read the feeling, and notice which one you'd actually want to open every morning.</p>
+
+  <div class="dirgrid">
+
+    <!-- THE MAP -->
+    <div class="dir">
+      <div class="mock">
+        <span class="tag">what we have now</span>
+        <div class="m-node g" style="left:18px;top:54px;width:78px;height:34px"></div>
+        <div class="m-node" style="left:120px;top:30px;width:78px;height:34px"></div>
+        <div class="m-node a" style="left:118px;top:92px;width:84px;height:34px"></div>
+        <div class="m-node" style="left:224px;top:60px;width:74px;height:34px"></div>
+        <div class="m-line" style="left:96px;top:71px;width:26px"></div>
+        <div class="m-line" style="left:198px;top:50px;width:28px;transform:rotate(14deg)"></div>
+        <div class="m-line" style="left:200px;top:104px;width:26px;transform:rotate(-16deg)"></div>
+      </div>
+      <div class="body">
+        <div class="dh"><span class="dn">A</span></div>
+        <h3>The Map</h3>
+        <p class="feel">Your whole go-to-market as <b>one open canvas of connected pieces</b>. You roam it, zoom into any part to go deeper, and summon new things onto it. Everything's one visual language.</p>
+        <div class="meta">
+          <div><span class="k">Feels like</span><span class="v">Figma for your GTM</span></div>
+          <div><span class="k">Strength</span><span class="v win">Total freedom, see it all at once</span></div>
+          <div><span class="k">Risk</span><span class="v">Freedom can feel like "now what?"</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- THE GUIDE -->
+    <div class="dir">
+      <div class="mock">
+        <div class="m-tile" style="position:absolute;left:30px;top:24px;right:30px;height:62px;border-left:3px solid var(--approve)"></div>
+        <div class="m-bar" style="position:absolute;left:46px;top:38px;width:120px;height:7px"></div>
+        <div class="m-bar" style="position:absolute;left:46px;top:52px;width:178px;height:5px;opacity:.6"></div>
+        <div class="m-node a" style="left:200px;top:54px;width:50px;height:18px;border-radius:5px"></div>
+        <div class="m-line" style="left:30px;top:104px;right:30px;width:auto;opacity:.5"></div>
+        <div class="m-bar" style="position:absolute;left:30px;top:118px;width:90px;height:5px;opacity:.4"></div>
+        <div class="m-bar" style="position:absolute;left:30px;top:130px;width:130px;height:5px;opacity:.4"></div>
+      </div>
+      <div class="body">
+        <div class="dh"><span class="dn">B</span></div>
+        <h3>The Guide</h3>
+        <p class="feel">Opens on <b>the one thing to do next</b>, in plain words, with a button. Calm and opinionated — it holds your hand. Everything else is tucked away until you want it.</p>
+        <div class="meta">
+          <div><span class="k">Feels like</span><span class="v">A coach who tells you the move</span></div>
+          <div><span class="k">Strength</span><span class="v win">Impossible to feel lost</span></div>
+          <div><span class="k">Risk</span><span class="v">Can feel like it's deciding for you</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- THE COCKPIT -->
+    <div class="dir">
+      <div class="mock">
+        <div class="m-tile" style="position:absolute;left:18px;top:20px;width:80px;height:42px"></div>
+        <div class="m-tile" style="position:absolute;left:108px;top:20px;width:80px;height:42px"></div>
+        <div class="m-tile" style="position:absolute;left:198px;top:20px;width:80px;height:42px"></div>
+        <div class="m-bar" style="position:absolute;left:28px;top:30px;width:40px;height:12px;background:var(--working);opacity:.5"></div>
+        <div class="m-bar" style="position:absolute;left:118px;top:30px;width:30px;height:12px"></div>
+        <div style="position:absolute;left:18px;top:78px;width:260px;height:44px;background:#fff;border:1px solid var(--line);border-radius:7px"></div>
+        <div style="position:absolute;left:28px;top:90px;width:170px;height:20px;background:linear-gradient(90deg,var(--working) 0 38%,#ededf0 38%);clip-path:polygon(0 0,100% 0,86% 100%,0 100%);opacity:.55"></div>
+      </div>
+      <div class="body">
+        <div class="dh"><span class="dn">C</span></div>
+        <h3>The Cockpit</h3>
+        <p class="feel">A <b>control panel</b>: your numbers up top, your funnel in the middle, your to-approve queue on the side. Dense, glanceable, in-command.</p>
+        <div class="meta">
+          <div><span class="k">Feels like</span><span class="v">A trading terminal for sales</span></div>
+          <div><span class="k">Strength</span><span class="v win">Everything important, one glance</span></div>
+          <div><span class="k">Risk</span><span class="v">Looks scary early when it's empty</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- THE NOTEBOOK -->
+    <div class="dir">
+      <div class="mock">
+        <div class="m-bar" style="position:absolute;left:34px;top:24px;width:130px;height:9px;background:var(--ink);opacity:.8"></div>
+        <div class="m-doc" style="position:absolute;left:34px;top:46px;right:60px"></div>
+        <div class="m-doc" style="position:absolute;left:34px;top:60px;right:90px"></div>
+        <div class="m-doc" style="position:absolute;left:34px;top:74px;right:120px"></div>
+        <div class="m-bar" style="position:absolute;left:34px;top:98px;width:90px;height:8px;background:var(--ink);opacity:.55"></div>
+        <div class="m-doc" style="position:absolute;left:34px;top:118px;right:70px"></div>
+        <div class="m-doc" style="position:absolute;left:34px;top:132px;right:140px"></div>
+        <div class="m-node g" style="right:30px;top:96px;width:20px;height:42px;border-radius:5px"></div>
+      </div>
+      <div class="body">
+        <div class="dh"><span class="dn">D</span></div>
+        <h3>The Notebook</h3>
+        <p class="feel">Your go-to-market as a <b>living document you co-write with the AI</b>. Sections you expand, it fills in the draft, you edit in place. Reads top to bottom like a plan.</p>
+        <div class="meta">
+          <div><span class="k">Feels like</span><span class="v">Notion that writes itself</span></div>
+          <div><span class="k">Strength</span><span class="v win">Familiar, calm, editable</span></div>
+          <div><span class="k">Risk</span><span class="v">A doc doesn't feel like it's "running"</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- THE CONVERSATION -->
+    <div class="dir">
+      <div class="mock">
+        <div class="m-bubble me" style="position:absolute;right:24px;top:22px">get me 5 pilot calls</div>
+        <div class="m-bubble ai" style="position:absolute;left:24px;top:58px">found 12 people who fit. drafting…</div>
+        <div class="m-node a" style="left:24px;top:96px;width:150px;height:40px;border-radius:8px"></div>
+        <div class="m-bar" style="position:absolute;left:36px;top:106px;width:90px;height:6px"></div>
+        <div class="m-bar" style="position:absolute;left:36px;top:118px;width:60px;height:5px;opacity:.5"></div>
+      </div>
+      <div class="body">
+        <div class="dh"><span class="dn">E</span></div>
+        <h3>The Conversation</h3>
+        <p class="feel">You <b>just talk to it</b>. It works in the chat and drops the results — drafts, lists, things to approve — right inline. Almost no other screen.</p>
+        <div class="meta">
+          <div><span class="k">Feels like</span><span class="v">Texting a co-founder who does it all</span></div>
+          <div><span class="k">Strength</span><span class="v win">Zero learning curve</span></div>
+          <div><span class="k">Risk</span><span class="v">Hard to see the whole picture / history</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- THE QUEUE -->
+    <div class="dir">
+      <div class="mock">
+        <div class="m-approve" style="position:absolute;left:30px;top:24px;right:30px"><span class="dot a"></span><div class="m-bar" style="width:120px;height:6px"></div></div>
+        <div class="m-approve" style="position:absolute;left:30px;top:62px;right:30px"><span class="dot a"></span><div class="m-bar" style="width:150px;height:6px"></div></div>
+        <div class="m-approve" style="position:absolute;left:30px;top:100px;right:30px;opacity:.6"><span class="dot b"></span><div class="m-bar" style="width:90px;height:6px"></div></div>
+        <div style="position:absolute;right:38px;top:30px;width:18px;height:18px;border-radius:5px;background:var(--working);opacity:.8"></div>
+        <div style="position:absolute;right:38px;top:68px;width:18px;height:18px;border-radius:5px;background:var(--working);opacity:.8"></div>
+      </div>
+      <div class="body">
+        <div class="dh"><span class="dn">F</span></div>
+        <h3>The Queue</h3>
+        <p class="feel">The AI works in the background; the product is just <b>a stream of things to approve</b>. Open it, swipe through drafts — yes, no, fix — done in five minutes.</p>
+        <div class="meta">
+          <div><span class="k">Feels like</span><span class="v">An inbox that clears itself</span></div>
+          <div><span class="k">Strength</span><span class="v win">Respects your time completely</span></div>
+          <div><span class="k">Risk</span><span class="v">Feels passive — less "in control"</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div></section>
+
+<!-- RECOMMENDATION -->
+<section id="reco" style="border-bottom:none"><div class="wrap">
+  <div class="reco">
+    <div class="eyebrow">If you're asking my read</div>
+    <h3>It's not one shape — it's <em>The Guide</em> on the surface, <em>The Map</em> underneath, with a <em>Queue</em> for the boring part.</h3>
+    <p>The Map (what we have) is the truth of the product — but on its own it drops you in an open space with no "now what," which is exactly why it felt confusing. So: <b>open on The Guide</b> — one plain-English "here's where you stand, here's the next move." When you want to explore or go off-script, <b>the whole Map is one zoom out</b> — roam anywhere, summon anything. And the repetitive approving lives in <b>a Queue</b> you clear in minutes. One product, three gears: <b>told what to do, free to explore, fast to approve.</b></p>
+    <div class="combo">
+      <span>① open on the next move</span>
+      <span>② zoom out to the whole map</span>
+      <span>③ clear the queue</span>
+    </div>
+  </div>
+  <p class="sec-sub" style="margin-top:26px">Tell me which <b>value line</b> (1–5) rings true and which <b>direction</b> (A–F, or the blend above) you'd open every morning — and I'll mock that one for real, clickable, with your actual RodentRadar data in it.</p>
+</div></section>
+
+<footer>GTM IDE — directions exploration · plain words, real value, six shapes · one file</footer>
+
+</body>
+</html>

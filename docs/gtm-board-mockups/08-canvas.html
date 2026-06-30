@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GTM IDE — everything on the canvas</title>
+<style>
+  :root{
+    --paper:#f7f7f5; --surface:#ffffff; --raise:#fcfcfb; --ink:#15151a; --ink-2:#3a3a42;
+    --muted:#6e6e78; --faint:#a6a6b0; --line:#e9e9e6; --line-2:#f1f1ee;
+    --pass:#15935a; --pass-soft:#eef8f2; --wall:#b06f12; --wall-soft:#fbf4e9;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,monospace;
+    --serif:"Iowan Old Style","Palatino Linotype",Georgia,serif;
+    --r:13px; --sh:0 1px 2px rgba(20,20,30,.05); --sh-pop:0 20px 50px -22px rgba(20,20,35,.34);
+    --sh-float:0 8px 30px -12px rgba(20,20,35,.18);
+    --ease:cubic-bezier(.22,1,.36,1); --spring:cubic-bezier(.34,1.5,.5,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:var(--paper);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;font-size:14px}
+
+  /* THE CANVAS IS EVERYTHING — full bleed. all else floats on top. */
+  .canvas{position:fixed;inset:0;overflow:hidden;
+    background-image:radial-gradient(#e3e3df 1px,transparent 1px);background-size:26px 26px}
+  .world{position:absolute;inset:0}
+
+  /* the GTM map lives ON the canvas (it IS the canvas content) */
+  .node{position:absolute;width:172px;background:var(--surface);border:1px solid var(--line);
+    border-left:2.5px solid var(--faint);border-radius:11px;padding:11px 13px;box-shadow:var(--sh);opacity:.92;
+    transition:opacity .3s,box-shadow .2s,transform .2s}
+  .node:hover{box-shadow:var(--sh-float);transform:translateY(-1px);opacity:1}
+  .node .q{font-size:9.5px;color:var(--faint);font-family:var(--mono);letter-spacing:.03em;text-transform:uppercase}
+  .node .a{font-size:13px;font-weight:600;letter-spacing:-.01em;line-height:1.25;margin-top:3px}
+  .node .s{font-size:11px;color:var(--muted);margin-top:4px}
+  .node.pass{border-left-color:var(--pass)} .node.needs{border-left-color:var(--wall)}
+  .dim{opacity:.4}
+  svg.wires{position:absolute;inset:0;pointer-events:none;overflow:visible}
+  .wire{fill:none;stroke:#dededa;stroke-width:1.5}
+  .wire.flow{stroke:var(--ink);stroke-dasharray:4 5;opacity:.35;stroke-width:1.5}
+
+  /* floating top strip — calm at scale */
+  .strip{position:absolute;top:18px;left:50%;transform:translateX(-50%);z-index:30;display:flex;align-items:center;gap:12px;
+    background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:7px 8px 7px 14px;box-shadow:var(--sh-float)}
+  .strip .b{background:var(--wall-soft);color:var(--wall);border-radius:999px;font-size:11.5px;font-weight:700;padding:2px 8px}
+  .strip .t{font-size:12.5px;color:var(--muted)} .strip .t b{color:var(--ink)}
+  .strip .sep{width:1px;height:16px;background:var(--line)}
+  .strip .move{font-size:12.5px;color:var(--ink-2);display:flex;align-items:center;gap:7px;cursor:pointer}
+  .strip .move .go{width:21px;height:21px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-size:11px}
+
+  /* the brand mark, floating top-left */
+  .brand{position:absolute;top:18px;left:20px;z-index:30;display:flex;align-items:center;gap:9px}
+  .brand .mk{width:25px;height:25px;border-radius:7px;background:var(--ink);color:#fff;display:grid;place-items:center;font-size:13px}
+  .brand .n{font-weight:600;letter-spacing:-.01em} .brand .n small{color:var(--faint);font-weight:500}
+
+  /* ───── the ideation cluster — what the composer TRIGGERED, floated onto the canvas (to the left) ───── */
+  .ideation{position:absolute;left:80px;top:120px;width:452px;z-index:12}
+  .ideation .head{display:inline-flex;align-items:center;gap:8px;background:var(--ink);color:#fff;border-radius:999px;
+    padding:6px 13px;font-size:12.5px;font-weight:500;box-shadow:var(--sh-pop)}
+  .ideation .head .k{font-size:9px;color:#a6a6b0;font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em}
+  .bar{margin-top:11px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:10px 13px;box-shadow:var(--sh-float)}
+  .bar .lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)}
+  .bar .crit{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+  .crit .c{font-size:11.5px;color:var(--ink-2);background:var(--pass-soft);border:1px solid #d6ece0;border-radius:6px;padding:3px 8px;display:flex;align-items:center;gap:5px}
+  .crit .c::before{content:"✓";color:var(--pass);font-size:10px}
+  .angle-note{font-size:11px;color:var(--faint);font-style:italic;font-family:var(--serif);margin:9px 2px 0}
+  .ideas{margin-top:10px;display:flex;flex-direction:column;gap:9px}
+  .idea{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:13px 14px;box-shadow:var(--sh-float);
+    position:relative;transition:opacity .35s var(--ease),filter .35s}
+  .idea:hover{box-shadow:var(--sh-pop)}
+  .idea .tag{font-size:10px;font-weight:600;color:var(--pass);background:var(--pass-soft);border-radius:5px;padding:2px 6px}
+  .idea h4{font-size:14px;font-weight:600;letter-spacing:-.01em;line-height:1.25;margin:8px 22px 5px 0}
+  .idea p{font-size:11.5px;color:var(--muted);line-height:1.4}
+  .idea .foot{margin-top:11px;display:flex;align-items:center;gap:9px}
+  .idea .build{font-size:11.5px;font-weight:600;color:#fff;background:var(--ink);border:none;border-radius:7px;padding:5px 11px;cursor:pointer}
+  .idea .test{font-size:11.5px;color:var(--muted);cursor:pointer}
+  .idea .kill{position:absolute;top:11px;right:11px;width:21px;height:21px;border-radius:6px;border:1px solid var(--line);
+    background:var(--raise);color:var(--faint);cursor:pointer;display:grid;place-items:center;font-size:11px}
+  .idea .kill:hover{color:var(--ink);border-color:var(--ink-2);background:#fff}
+  .idea.killed{opacity:.4;filter:grayscale(.7)} .idea.killed h4{text-decoration:line-through;text-decoration-color:var(--faint)}
+  .idea.killed .foot,.idea.killed .kill{display:none}
+  .idea.killed .tag{color:var(--faint);background:#f1f1ee}
+  .idea.killed::after{content:" · killed, taught it your taste";font-size:10.5px;color:var(--faint);font-style:italic;font-family:var(--serif)}
+  .idea.building .pf{margin-top:10px;height:4px;border-radius:3px;background:var(--line-2);overflow:hidden}
+  .idea.building .pf i{display:block;height:100%;background:linear-gradient(90deg,var(--ink),#52525b);border-radius:3px;animation:grow 2.4s var(--ease) infinite alternate}
+  @keyframes grow{from{width:46%}to{width:84%}}
+  .idea.building .ag{margin-top:8px;font-size:11px;color:var(--ink-2);font-family:var(--mono);display:flex;align-items:center;gap:6px}
+  .idea.building .sp{width:9px;height:9px;border:1.5px solid var(--line);border-top-color:var(--ink);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ───── the COMPOSER — center, bottom. the AI composer. everything you do starts here. ───── */
+  .composer{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);width:600px;z-index:40}
+  .composer .doc{background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--sh-pop);overflow:hidden}
+  .composer .thread{max-height:188px;overflow-y:auto;padding:16px 18px 6px;display:flex;flex-direction:column;gap:13px}
+  .composer .you{align-self:flex-end;background:var(--ink);color:#fff;border-radius:12px 12px 4px 12px;padding:7px 12px;font-size:13px;max-width:82%}
+  .composer .coach{font-family:var(--serif);font-size:14px;line-height:1.5;color:var(--ink-2)}
+  .composer .coach .lead{font-style:italic}
+  .composer .coach .src{font-family:var(--sans);font-size:11px;color:var(--faint);margin-top:6px;display:flex;align-items:center;gap:6px}
+  .composer .coach .src .d{width:5px;height:5px;border-radius:50%;background:var(--pass)}
+  .composer .coach .trig{font-family:var(--sans);font-size:11.5px;color:var(--ink-2);margin-top:8px;display:inline-flex;align-items:center;gap:7px;
+    background:var(--raise);border:1px solid var(--line);border-radius:8px;padding:5px 10px}
+  .composer .coach .trig .ar{color:var(--faint)}
+  .composer .inwrap{border-top:1px solid var(--line-2);padding:12px 14px}
+  .composer .ctx{display:flex;gap:6px;margin-bottom:9px}
+  .composer .chip{font-size:10.5px;color:var(--muted);font-family:var(--mono);background:var(--raise);border:1px solid var(--line);border-radius:7px;padding:3px 8px;display:flex;align-items:center;gap:5px}
+  .composer .chip .d{width:5px;height:5px;border-radius:50%;background:var(--pass)}
+  .composer .inputrow{display:flex;align-items:center;gap:10px}
+  .composer input{flex:1;border:none;outline:none;font-size:14px;font-family:var(--sans);color:var(--ink);background:none}
+  .composer input::placeholder{color:var(--faint)}
+  .composer .model{font-size:11px;color:var(--muted);font-family:var(--mono);border:1px solid var(--line);border-radius:999px;padding:3px 9px;cursor:pointer}
+  .composer .mic{color:var(--faint);cursor:pointer;font-size:15px}
+  .composer .send{width:30px;height:30px;border-radius:9px;background:var(--ink);color:#fff;border:none;display:grid;place-items:center;cursor:pointer;font-size:15px}
+
+  /* the wall, floating quietly */
+  .wall{position:absolute;right:22px;bottom:26px;z-index:35;background:var(--surface);border:1px solid #ecdcc0;border-radius:13px;
+    box-shadow:var(--sh-float);padding:13px 15px;width:232px}
+  .wall .h{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600} .wall .h .ic{color:var(--wall)}
+  .wall .s{font-size:11.5px;color:var(--muted);margin-top:5px;line-height:1.4}
+  .wall .act{margin-top:10px;display:flex;gap:7px}
+  .wall .rev{flex:1;font-size:12px;font-weight:600;background:var(--wall);color:#fff;border:none;border-radius:7px;padding:6px;cursor:pointer}
+  .wall .later{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:7px;padding:6px 10px;cursor:pointer;background:none}
+
+  .ctrls{position:absolute;left:20px;bottom:28px;z-index:30;display:flex;flex-direction:column;gap:1px;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:var(--sh)}
+  .ctrls button{width:31px;height:29px;border:none;background:none;cursor:pointer;color:var(--muted);font-size:14px;border-bottom:1px solid var(--line-2)}
+  .ctrls button:last-child{border-bottom:none} .ctrls button:hover{background:#f4f4f2;color:var(--ink)}
+</style>
+</head>
+<body>
+
+<div class="canvas">
+  <div class="world">
+    <svg class="wires">
+      <path class="wire flow" d="M 300 560 C 360 470, 420 430, 470 410" />
+      <path class="wire" d="M 720 250 C 820 270, 900 300, 980 300" />
+      <path class="wire" d="M 1130 320 C 1180 360, 1190 410, 1180 450" />
+    </svg>
+
+    <!-- the GTM map IS the canvas (dimmed while a goal is in focus, but present) -->
+    <div class="node pass dim" style="left:600px;top:228px"><div class="q">Who you sell to</div><div class="a">Pest-control operators</div><div class="s">proven</div></div>
+    <div class="node dim" style="left:880px;top:280px"><div class="q">How you reach them</div><div class="a">2 channels running</div><div class="s">3 drafts staged</div></div>
+    <div class="node pass dim" style="left:1100px;top:280px"><div class="q">People</div><div class="a">12 · 3 near a yes</div></div>
+    <div class="node needs dim" style="left:1090px;top:440px"><div class="q">What's working</div><div class="a">Blind — no proof yet</div></div>
+    <div class="node dim" style="left:840px;top:470px"><div class="q">Offer</div><div class="a">Not set</div></div>
+  </div>
+
+  <div class="brand"><div class="mk">▦</div><div class="n">RodentRadar <small>· go-to-market</small></div></div>
+
+  <div class="strip">
+    <span class="b">2</span><span class="t"><b>need you</b> today</span>
+    <span class="sep"></span>
+    <span class="move">One move: connect Gmail to send <span class="go">→</span></span>
+  </div>
+
+  <!-- WHAT THE COMPOSER TRIGGERED — floated onto the canvas, to the left -->
+  <div class="ideation">
+    <div class="head"><span class="k">ideating</span> get 5 pilot users for the rodent feature</div>
+    <div class="bar">
+      <div class="lbl">the bar it set</div>
+      <div class="crit">
+        <span class="c">attracts a pest-control operator</span>
+        <span class="c">buildable this week</span>
+        <span class="c">shows only what your product can</span>
+      </div>
+    </div>
+    <div class="angle-note">four angles, separately — the generator never graded itself · two ideas killed</div>
+    <div class="ideas" id="ideas">
+      <div class="idea building">
+        <span class="tag">cleared the bar</span>
+        <h4>Free "where are rats getting in?" map</h4>
+        <p>Runs on your real localization engine. Upload a floor plan, see the entry points — your product, as a free tool.</p>
+        <div class="pf"><i></i></div>
+        <div class="ag"><span class="sp"></span> Claude Code building → rodentradar.com/check</div>
+      </div>
+      <div class="idea" data-k>
+        <button class="kill" title="kill — teaches your taste">✕</button>
+        <span class="tag">cleared the bar</span>
+        <h4>"Failed an inspection?" rescue page</h4>
+        <p>Hits the worst moment — a fresh violation — with a 24-hour setup. Lands on a trigger you already track.</p>
+        <div class="foot"><button class="build">Build it</button><span class="test">or dry-run</span></div>
+      </div>
+      <div class="idea killed">
+        <span class="tag">below the bar</span>
+        <h4>Generic ROI calculator</h4>
+        <p>The category default.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- THE COMPOSER — center, bottom -->
+  <div class="composer">
+    <div class="doc">
+      <div class="thread">
+        <div class="coach"><span class="lead">"Your weakest spot is proof — you can reach people but can't show them it works. So I'd make something they can <i>try</i>."</span>
+          <div class="src"><span class="d"></span> grounded in your code · the localization engine</div></div>
+        <div class="you">get 5 pilot users for the rodent feature</div>
+        <div class="coach">Set a bar, came at it four ways, killed the weak ones.
+          <span class="trig">it went to the canvas <span class="ar">↖</span> 3 ideas, 1 building</span></div>
+      </div>
+      <div class="inwrap">
+        <div class="ctx"><span class="chip"><span class="d"></span> reading your repo</span><span class="chip">12 people</span></div>
+        <div class="inputrow">
+          <input placeholder="Tell it a goal, or steer the ideas…" />
+          <span class="model">Opus 4.8</span>
+          <span class="mic">🎙</span>
+          <button class="send">↑</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wall">
+    <div class="h"><span class="ic">▌</span> The wall · 3 ready</div>
+    <div class="s">Drafts are staged. Nothing reaches a person until you release.</div>
+    <div class="act"><button class="rev">Review &amp; release</button><button class="later">Later</button></div>
+  </div>
+
+  <div class="ctrls"><button>+</button><button>−</button><button>⊡</button></div>
+</div>
+
+<script>
+  document.querySelectorAll('.idea[data-k] .kill').forEach(b=>b.addEventListener('click',e=>{
+    const c=e.target.closest('.idea');c.classList.add('killed');c.querySelector('.tag').textContent='below the bar';}));
+  document.querySelectorAll('.idea .build').forEach(b=>b.addEventListener('click',e=>{
+    const c=e.target.closest('.idea');c.classList.add('building');c.querySelector('.foot').remove();
+    const pf=document.createElement('div');pf.className='pf';pf.innerHTML='<i></i>';c.appendChild(pf);
+    const ag=document.createElement('div');ag.className='ag';ag.innerHTML='<span class="sp"></span> Claude Code building…';c.appendChild(ag);}));
+</script>
+</body>
+</html>
