@@ -17,6 +17,7 @@ import { mergeSharedDecisions } from "./shared-judgments.mjs";
 import { getDesignState } from "./design-state-store.mjs";
 import {
   appendOperatorEvent,
+  armNextWake,
   getOperatorSession,
   listOperatorSessions,
   saveOperatorSession,
@@ -500,10 +501,18 @@ function systemPrompt(session, workspace, priorSessions = []) {
   const grounding = workspace
     ? `The active repository is ${workspace.repo}. The defined win event is "${workspace.outcome}".`
     : "No repository workspace is currently active. State that limitation before making product claims.";
+  // The drive objective. A normal session is driven by a one-off founder goal; an AMBIENT session is
+  // driven by a standing brief — it was woken by a change in the world, not handed a fresh goal. The
+  // brief replaces the goal as the objective; everything else (the wall, the toolset) is identical.
+  const objective = firstNonEmpty(session.goal, session.standingBrief);
+  const objectiveBlock = session.kind === "ambient"
+    ? `Standing brief (this is an AMBIENT wake — a change in the world triggered you, not a one-off goal. React to it, build the work it calls for, and drive it to the founder gate. The wall is identical: nothing sends, deploys, or charges without the founder approving at the gate, and you never approve yourself.):
+${objective}`
+    : `Founder goal:
+${objective}`;
   return `You are the go-to-market operator inside GTM IDE. A founder hands you a goal; you build the work and run it up to their approval gate. That is the whole job — there is no required setup, no program or policy or template to stand up first.
 
-Founder goal:
-${session.goal}
+${objectiveBlock}
 
 What you can read (the product's truth — your claims come from here):
 ${grounding}
@@ -1315,7 +1324,11 @@ export async function runOperatorSession(id, runtime = {}) {
   // is for.
   const ctx = {
     sessionId: id,
-    goal: session.goal,
+    // The objective the runtime drives toward. A goal session uses its goal; an ambient session uses
+    // its standing brief (the same value the system prompt frames above). The runtime hands this to the
+    // model as the opening prompt on a fresh drive — so a goal-less ambient session still has a real
+    // objective to act on without relaxing anything past the gate.
+    goal: firstNonEmpty(session.goal, session.standingBrief),
     model: session.model,
     system: systemPrompt(session, workspace, recallPriorSessions(session, options)),
     // The model is handed ONLY the naked toolset (truth + compose_and_run + repair loop + gate + chat).
@@ -1459,6 +1472,114 @@ export function resumeOperatorSession(id, input, runtime = {}) {
   }, options);
   launchOperatorSession(session.id, runtime);
   return session;
+}
+
+// The founder decisions an ambient wake must NEVER bypass. A session paused at a gate, a graph
+// proposal, or an ideas pick is holding an explicit founder decision; waking it again would jump that
+// wall. The wake refuses until the founder resolves it. (Cancelled/completed are refused separately.)
+const AMBIENT_WAKE_BLOCKING_STATUSES = new Set([
+  "waiting_for_gate",
+  "waiting_for_proposal",
+  "waiting_for_ideas",
+]);
+
+// The AMBIENT wake — the event-triggered / standing-brief twin of resumeOperatorSession. An
+// input-router decision ({ route: "ambient_wake", brief }) or a due standing-brief tick lands here and
+// drives the operator EXACTLY like a goal drive: the same NAKED_TOOLS, the same compose_and_run, the
+// same founder gate. The ONLY difference is the objective — a standing brief replaces the one-off goal,
+// so a kind:'ambient' session needs no goal. THE WALL IS UNTOUCHED: an ambient wake never sends,
+// deploys, or auto-approves. It reaches the founder gate and STOPS, because it launches the same
+// runOperatorSession (which pauses at waiting_for_gate) and the model is handed no approve/send/deploy
+// tool. Cancellation and the gate both hold: a cancelled/terminal session is never re-woken, and a
+// session already paused at a founder decision is not bypassed — that decision must be resolved first.
+export function wakeAmbientSession(id, input = {}, runtime = {}) {
+  const options = runtime.options ?? {};
+  const session = getOperatorSession(id, options);
+  if (session.kind !== "ambient") {
+    throw new Error(`Operator session ${id} is not an ambient session; drive a goal session through its normal path.`);
+  }
+  if (["completed", "cancelled"].includes(session.status)) {
+    throw new Error(`Ambient session is already ${session.status}.`);
+  }
+  if (AMBIENT_WAKE_BLOCKING_STATUSES.has(session.status)) {
+    throw new Error(`Ambient session ${id} is paused at ${session.status}; resolve the founder decision before another wake.`);
+  }
+  if (activeSessions.has(id)) return session; // a drive is already in flight — don't double-fire
+  const brief = firstNonEmpty(input.brief, session.standingBrief, session.goal);
+  if (!brief) throw new Error("An ambient wake needs a standing brief (on the session or the routing decision).");
+  const trigger = firstNonEmpty(input.trigger, input.route, "ambient_wake");
+  const changed = typeof input.detail === "string" && input.detail.trim() ? ` What changed: ${input.detail.trim()}.` : "";
+  const woken = addEvent({
+    ...session,
+    status: "ready",
+    error: null,
+    pendingQuestion: null,
+    // The brief that actually drove this wake stays on the session (under the durable field name the
+    // store persists), so a resumed conversation and the system prompt read the same objective. Ambient
+    // sessions are brief-driven, never goal-driven.
+    standingBrief: brief,
+    // Consume the due schedule and re-arm the NEXT one through the store's armNextWake, which owns the
+    // cadence: a recurring brief (wakeIntervalMs set) re-arms one cadence out so it keeps standing, an
+    // event-only brief re-arms to null and is woken only by the input router. This is the re-arm the
+    // standing-brief tick depends on — without it a fired brief would go silent.
+    nextWakeAt: armNextWake(session),
+    maxSteps: Math.min(60, Math.max(session.maxSteps, session.stepCount + 12)),
+    modelMessages: [
+      ...(session.modelMessages ?? []),
+      {
+        role: "user",
+        content: `Ambient wake (${trigger}). Standing brief: ${brief}.${changed} Compose and run the work this brief calls for and drive it to the founder gate. Stop at the gate — never send, deploy, or approve; the founder releases at the gate.`,
+      },
+    ],
+  }, {
+    type: "ambient_wake",
+    title: "Ambient wake",
+    detail: brief,
+    data: { trigger },
+  }, options);
+  launchOperatorSession(woken.id, runtime);
+  return woken;
+}
+
+// Is this ambient session DUE for a standing-brief wake right now? Due = an ambient session that is
+// idle (not running, not terminal, not paused at a founder decision) with a brief and a nextWakeAt that
+// has arrived. The founder gate is respected: a session waiting at a gate is NEVER auto-woken.
+function isAmbientDue(session, nowMs) {
+  if (!session || session.kind !== "ambient") return false;
+  if (["running", "completed", "cancelled"].includes(session.status)) return false;
+  if (AMBIENT_WAKE_BLOCKING_STATUSES.has(session.status)) return false;
+  if (!firstNonEmpty(session.standingBrief, session.goal)) return false;
+  if (!session.nextWakeAt) return false;
+  const due = new Date(session.nextWakeAt).getTime();
+  return Number.isFinite(due) && due <= nowMs;
+}
+
+// The background tick the HOST schedules (a server interval) — NOT a timer spun in module scope. It
+// wakes every ambient session whose standing brief is due, driving each to the founder gate through
+// wakeAmbientSession. It only DRIVES; it never sends, and an in-flight or gate-paused session is left
+// untouched. Returns the ids it woke so the caller can log/observe. A session that races into a gate or
+// a cancellation between the due check and the launch is skipped, never thrown.
+export function runDueAmbientTicks(runtime = {}) {
+  const options = runtime.options ?? {};
+  const nowMs = Date.now();
+  const woken = [];
+  for (const summary of listOperatorSessions(options)) {
+    if (activeSessions.has(summary.id)) continue;
+    let session;
+    try {
+      session = getOperatorSession(summary.id, options);
+    } catch {
+      continue;
+    }
+    if (!isAmbientDue(session, nowMs)) continue;
+    try {
+      wakeAmbientSession(summary.id, { trigger: "standing_brief_tick" }, runtime);
+      woken.push(summary.id);
+    } catch {
+      // Raced into a gate/cancellation since the due check — skip it, never break the tick.
+    }
+  }
+  return woken;
 }
 
 export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
