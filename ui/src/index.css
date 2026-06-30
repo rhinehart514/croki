@@ -4870,12 +4870,13 @@ svg {
 }
 .loop-node-editor-desc { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ink); }
 .loop-node-editor-hint { margin: 0; font-size: 11px; line-height: 1.45; color: var(--muted); }
-.loop-node-editor-fileline { display: flex; align-items: baseline; gap: var(--space-2); }
-.loop-node-editor-filelabel { font-size: 11px; color: var(--muted); }
+.loop-node-editor-fileline { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+.loop-node-editor-filelabel { font-size: 11px; color: var(--muted); flex: none; }
 .loop-node-editor-ref {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px; color: var(--ink);
   background: var(--surface-2); border-radius: var(--r-sm); padding: 1px 5px;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .loop-node-editor-link {
   display: inline-flex; align-items: center; gap: 5px; align-self: start;

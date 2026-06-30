@@ -585,8 +585,8 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
           live = addEvent(live, {
             type: "operator_node_start",
             title: `Running ${event.label || event.nodeId}`,
-            detail: `${event.kind || "tool"} · ${event.category}`,
-            data: { nodeId: event.nodeId, category: event.category, kind: event.kind },
+            detail: event.category ? `${event.kind || "tool"} · ${event.category}` : (event.ref || event.kind || "tool"),
+            data: { nodeId: event.nodeId, category: event.category, kind: event.kind, ref: event.ref },
           }, options);
         } else if (event.type === "node_done") {
           const r = event.result ?? {};

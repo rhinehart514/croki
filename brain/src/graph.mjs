@@ -455,7 +455,7 @@ export async function runGraph(graph, opts = {}) {
 
     // Stream the step lifecycle so the UI can animate the flow and reveal content
     // as each step succeeds (not one batch at the end).
-    emit({ type: "node_start", nodeId, category: node.category, kind: node.kind ?? "tool", label: node.label });
+    emit({ type: "node_start", nodeId, category: node.category, kind: node.kind ?? "tool", label: node.label, ref: node.ref });
     const inputAudit = auditInput(node, upstream);
     let result;
     if (inputAudit.state === "blocked" || inputAudit.state === "waiting") {

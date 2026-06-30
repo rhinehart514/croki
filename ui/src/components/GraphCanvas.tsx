@@ -509,7 +509,7 @@ function NodeCardEditor({ node, result, health, contractAudit }: {
         <CardSection label="Config">
           <div className="loop-node-editor-fileline">
             <span className="loop-node-editor-filelabel">{artifactType === "agent" ? "Agent file" : "Skill file"}</span>
-            <code className="loop-node-editor-ref">{node.ref}</code>
+            <code className="loop-node-editor-ref" title={node.ref}>{node.ref}</code>
           </div>
           <button
             className="loop-node-editor-link"
@@ -1304,7 +1304,7 @@ function NodeFocuser({ selection, panelOpen, active }: { selection: NodeSelectio
 // that lands right where the cursor finishes. Renders in flow coordinates via ViewportPortal so it
 // tracks pan/zoom for free; the pointer and tag counter-scale so they stay legible at any zoom.
 export type OperatorCursorState = {
-  phase: "build" | "rest" | "gate";
+  phase: "build" | "rest" | "run" | "gate";
   revealOrder: string[];     // proposed node ids, in the order they surface
   revealCount: number;       // how many have surfaced so far
   staged: number;            // total staged count (for the resting caption)
@@ -1349,6 +1349,7 @@ function OperatorCursor({ graph, state, followBroken, recenterSignal }: {
   if (!target) return null;
   const caption =
     state.phase === "gate" ? "Reached your gate"
+    : state.phase === "run" ? `Running ${target.label}`
     : state.phase === "build" ? `Adding ${target.label}`
     : state.staged > 1 ? `Staged ${state.staged} steps` : "Staged it";
   const inv = zoom ? 1 / zoom : 1;

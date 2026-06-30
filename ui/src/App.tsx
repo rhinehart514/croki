@@ -1484,8 +1484,11 @@ export default function App() {
   }, [operatorSession, syncOperator]);
 
   // The live operator presence: Claude's cursor travels the canvas as it stages each node (camera
-  // following), then rests on the lead ghost where the ✓/✕/note sits; when a run pauses at the
-  // founder gate, the cursor points there instead. Null whenever there's no operator work on screen.
+  // following), then rests on the lead ghost where the ✓/✕/note sits. Once the pipeline is composed
+  // and actually EXECUTING, the same cursor follows runningNodeId step by step — without this the
+  // founder watches the chat narrate "Running X" with nothing visibly happening on the canvas. When a
+  // run pauses at the founder gate, the cursor points there instead. Null when there's no operator
+  // work on screen at all.
   const operatorCursor = useMemo<OperatorCursorState | null>(() => {
     if (proposalActive && proposalRevealOrder.length) {
       return {
@@ -1495,11 +1498,14 @@ export default function App() {
         staged: proposalRevealOrder.length,
       };
     }
+    if (graphRunning && runningNodeId) {
+      return { phase: "run", revealOrder: [runningNodeId], revealCount: 1, staged: 0 };
+    }
     if (operatorSession?.status === "waiting_for_gate" && operatorSession.pendingGate?.nodeIds?.length) {
       return { phase: "gate", revealOrder: [], revealCount: 0, staged: 0, gateNodeId: operatorSession.pendingGate.nodeIds[0] };
     }
     return null;
-  }, [proposalActive, proposalRevealOrder, revealCount, operatorSession?.status, operatorSession?.pendingGate]);
+  }, [proposalActive, proposalRevealOrder, revealCount, graphRunning, runningNodeId, operatorSession?.status, operatorSession?.pendingGate]);
 
   // ── View-control channel (composer → canvas) ──────────────────────────────────
   // The operator's current focus, DERIVED from session state — the stable decision node it's resting
