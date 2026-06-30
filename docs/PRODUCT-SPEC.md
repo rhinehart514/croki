@@ -11,7 +11,9 @@
 
 Claude Code is a *harness* that turns the model into a software engineer: a loop, tools, a workspace, memory, guardrails. Point that exact idea at customers instead of code and you get this product — the same scaffolding (find people, write, send, measure; a loop that runs and reacts; memory of your taste and your people; a wall nothing crosses without you) wrapped around Claude so it operates your whole go‑to‑market.
 
-You tell it a goal. It does the work — across many channels, run by a fleet of agents, reacting to signals from the world. You **see, change, and run** all of it on one infinite canvas, and **nothing reaches a real person without your okay.** It reads your actual product so it never lies, and it learns your taste so every round is sharper.
+You tell it a goal. It does the work — across many **pipelines**, run by a fleet of agents, reacting to signals from the world. You **see, change, and run** all of it on one infinite canvas, and **nothing reaches a real person without your okay.** It reads your actual product so it never lies, and it learns your taste so every round is sharper.
+
+> **The unit is a pipeline.** A *pipeline* is one staged flow to your gate — find → enrich → draft → **gate** → send → measure — the actual machine that moves work from a signal to a result. Your go‑to‑market is **many pipelines sitting together**, and you open any one into its own flow. (Not a marketing "channel" — that's just *where* you reach people; a pipeline is the flow that runs. The engine has always executed a pipeline; "channel" was only ever the internal code name for it, which we keep as an identifier, not a concept.)
 
 The canvas is **Figma's surface** (infinite, freeform, beautiful, arrange‑anything) with **n8n's nodes** (real executable steps, data flowing between them, branches, triggers — *it runs*) — and **Claude is the brain wiring and running it all.**
 
@@ -25,26 +27,26 @@ Four calls that shape everything downstream:
 
 - **Who (the wedge):** the **technical founder, pre‑PMF** — can ship a product but doesn't sell. Zero→first customers. Ties the market to people with a repo; that's focus, not a ceiling.
 - **What we lead with:** the **visual harness** — *"watch your whole go‑to‑market run on one living canvas."* That's the headline and the demo. (Grounded + safe is the trust enabler *underneath*, not the lead.) → **Consequence:** the canvas must be genuinely jaw‑dropping — alive, calm at scale, screen‑record‑worthy. It's now the make‑or‑break surface.
-- **Autonomy:** **opt‑in per channel.** It genuinely runs channels unattended once trusted — not drafts‑only. → **Consequence:** trust is existential, and it forces the **per‑channel autonomy ladder** below.
+- **Autonomy:** **opt‑in per pipeline.** It genuinely runs pipelines unattended once trusted — not drafts‑only. → **Consequence:** trust is existential, and it forces the **per‑pipeline autonomy ladder** below.
 - **Hero interaction:** **conversation drives, canvas shows.** You talk; the canvas is the living result you glance at and dive into — never a thing you must operate.
 
-**Positioning (one sentence):** *"Watch your whole go‑to‑market run on one living canvas. You tell it a goal by talking; it builds and runs the machine; and you trust it one channel at a time."* — for the technical founder who can ship a product but never sells it.
+**Positioning (one sentence):** *"Watch your whole go‑to‑market run on one living canvas. You tell it a goal by talking; it builds and runs the machine; and you trust it one pipeline at a time."* — for the technical founder who can ship a product but never sells it.
 
 Four more, that sharpen it further:
 
 - **Sending & trust:** **BYO** — sends through the founder's own Gmail/domain; we guard it (rate limits, provenance on every message, instant recall). No heavy sending infra in v1; build that only when autonomy scales.
 - **First‑run aha → the map *teaches* you.** Not "5 leads." The wow is **the map drawing itself from your product so you *understand* all the layers of go‑to‑market and see where to jump in.** For a founder who doesn't know GTM, comprehension *is* the value — the map is a **teacher + a cockpit**, and most rivals assume you already know go‑to‑market. This is differentiated; protect it.
 - **Data:** BYO lists + your own inbound signals (signups, stars, demo visits) **+ let users connect their own Apollo/Clay/etc. API keys.** Don't fight the data incumbents — let users bring them. We never compete on cold‑data depth.
-- **v1 scope:** go big — **the multi‑channel harness is the v1**, not a single small loop. *But* the **map‑draws‑itself‑and‑teaches‑you must be the first two minutes**, or a big v1 dies slow. Fast comprehension up front; the channels running right behind it.
+- **v1 scope:** go big — **the multi‑pipeline harness is the v1**, not a single small loop. *But* the **map‑draws‑itself‑and‑teaches‑you must be the first two minutes**, or a big v1 dies slow. Fast comprehension up front; the pipelines running right behind it.
 
 And the final, decisive batch:
 
 - **Personality:** an **opinionated coach** — recommends the strong move and explains why, always overridable. It teaches by having a point of view.
-- **Channels are composable, not fixed.** v1 supports *whatever channels fit the product* — the harness composes them (matches the existing naked‑harness engine; no hard channel list). Email + your inbound signals are the common case, but never the only one.
+- **Pipelines are composable, not fixed.** v1 supports *whatever pipelines fit the product* — the harness composes them (matches the existing naked‑harness engine; no hard pipeline list). Email + your inbound signals are the common case, but never the only one.
 - **What it produces — the crown jewel: GTM Microproducts (see below).** Not just outreach. It also **builds small products as go‑to‑market plays**, by handing buildable `html/md/package` files to Claude Code / Codex agents that construct them — grounded in your real product.
 - **Team from v1.** Multiplayer is on — people *and* agents co‑editing the canvas. Turn on the `convex` / `team-store` substrate.
 - **Onboarding (step one):** **connect your repo** — it reads your real product and draws your GTM map; a *describe‑in‑words* fallback covers the pre‑repo case.
-- **Calm at scale:** opening at 5 channels / 30 inputs lands on **what needs you + the single highest‑leverage move**; the whole living map is one zoom out. Calm by default, complexity on the dive. This is the test of "harness, not hairball."
+- **Calm at scale:** opening at 5 pipelines / 30 inputs lands on **what needs you + the single highest‑leverage move**; the whole living map is one zoom out. Calm by default, complexity on the dive. This is the test of "harness, not hairball."
 - **The durable moat:** **the microproducts / build+sell convergence** — structurally uncopyable by data‑first incumbents. Taste and product‑truth compound on top.
 - **Pricing:** **per‑seat + usage** (seats because team‑from‑v1; usage for agent work/runs). Move toward outcome‑based once it's provable.
 - **Evolve, don't rebuild.** The engine already works (harness, executable graph, the wall, taste, person‑graph, team substrate); the cockpit catches up to it. No thrown‑away work.
@@ -60,20 +62,20 @@ A **GTM Microproduct** is a small product built *as* a go‑to‑market play —
 
 This is the build+sell convergence made literal, and it's the moat. It's also the **hardest, riskiest** part of v1 — it wires the go‑to‑market harness into the coding harness and ships real artifacts. Treat it as the thing to protect and get right; let the rest stabilize around it.
 
-### The per‑channel autonomy ladder (the safety story for real autonomy)
+### The per‑pipeline autonomy ladder (the safety story for real autonomy)
 
-Autonomy is *earned per channel*, never granted by default:
+Autonomy is *earned per pipeline*, never granted by default:
 
 ```
-Draft‑only      every item stops at the wall; you approve each (this is where every channel starts)
+Draft‑only      every item stops at the wall; you approve each (this is where every pipeline starts)
    ↓  you approve enough that it learns the pattern
 Trusted         it sends within the patterns you've blessed; only exceptions escalate to you
-   ↓  it proves out on that channel
-Autonomous      runs unattended on that channel
-   ↺  one click yanks any channel back to draft‑only, instantly
+   ↓  it proves out on that pipeline
+Autonomous      runs unattended on that pipeline
+   ↺  one click yanks any pipeline back to draft‑only, instantly
 ```
 
-This is what lets "it runs while you sleep" coexist with "I'm not terrified." The Wall never disappears — it *graduates*, channel by channel, and is always revocable.
+This is what lets "it runs while you sleep" coexist with "I'm not terrified." The Wall never disappears — it *graduates*, pipeline by pipeline, and is always revocable.
 
 ---
 
@@ -114,13 +116,13 @@ Why it beats your alternatives: **vs. you alone** — you ideate from one biased
 
 ## 3. The same loop at scale — why it's a *harness*, not a tool
 
-One goal is the easy case. The real case is **20–30 live inputs feeding 4–5 intertwined channels, worked by a fleet of agents.** That is chaos without orchestration. The harness *is* the orchestration:
+One goal is the easy case. The real case is **20–30 live inputs feeding 4–5 intertwined pipelines, worked by a fleet of agents.** That is chaos without orchestration. The harness *is* the orchestration:
 
 - **Inputs are a living layer.** Commits, signups, demo visits, replies, GitHub stars, a competitor launch, a CSV. The harness routes them: a star → enrich + reach out; a failed onboarding → a save flow; a feature shipped → tell the people who'd care. Event‑driven go‑to‑market.
-- **Channels intertwine — that's the moat.** Not five isolated flows. They share the same *person* (don't hit a lead who's also a star twice), the same *assets* (one page feeds all), the same *voice*, the same *learnings* (a win in one rewires the others). The value is the **wiring between channels**, which no human team tracks and a harness tracks perfectly.
+- **Pipelines intertwine — that's the moat.** Not five isolated flows. They share the same *person* (don't hit a lead who's also a star twice), the same *assets* (one page feeds all), the same *voice*, the same *learnings* (a win in one rewires the others). The value is the **wiring between pipelines**, which no human team tracks and a harness tracks perfectly.
 - **Agents are a fleet you spin up and watch.** A prospector, an enricher, a writer, a closer, an analyst — spawn them, name them, assign them, see them work, retire the dead weight. You run an AI go‑to‑market org.
 - **It runs without you, and the wall scales.** The harness is ambient — always on, reacting, getting better while you sleep. You can't approve every item at scale, so the wall graduates: you approve **patterns** ("fine to send this kind of thing to this kind of person"), and only **exceptions and big calls** escalate to you.
-- **You steer two ways.** *Talk* to it ("lean into dev‑tool founders this week," "pause restaurants," "spin up a content channel") and the *canvas reorganizes*. Conversation is the command line; the canvas is the editor.
+- **You steer two ways.** *Talk* to it ("lean into dev‑tool founders this week," "pause restaurants," "spin up a content pipeline") and the *canvas reorganizes*. Conversation is the command line; the canvas is the editor.
 
 The harness earns its name only if, at that scale, the canvas zoomed out is **calm** — it surfaces the **few things that need you today** and hides the rest until you dive in.
 
@@ -135,11 +137,11 @@ The harness earns its name only if, at that scale, the canvas zoomed out is **ca
 | **Goal** | What you want, in a sentence ("5 pilot users for the rodent feature") | a prompt to the operator |
 | **Decision node** | A real go‑to‑market question with options to ideate, choose, or test | **does not exist as a node** |
 | **Action node** | An executable step (find / enrich / write / wall / send / measure) | connectors + `step-runners.mjs` ✅ |
-| **Flow (channel)** | A wired graph of action nodes that runs to the wall | `GTMGraph`, persisted as a flow ✅ |
+| **Pipeline** | A wired graph of action nodes that runs to the wall — the unit you build, see, and run | `GTMGraph`, persisted as a flow ✅ (`channel` in code) |
 | **The Wall** | Nothing reaches a person without your okay; scales to pattern‑approval | `gate` connector + `gate-pattern.mjs` ✅ |
-| **Inputs** | Live signals from the world that trigger flows | **not first‑class** (`domain-events` only) |
-| **Person** | A real human, deduped across every channel they touch | `person-store.mjs` ✅ |
-| **Intertwining** | The shared threads between channels (same person/asset/voice/learning) | `cross-reference.mjs` ✅ backend, **unvisualized** |
+| **Inputs** | Live signals from the world that trigger pipelines | **not first‑class** (`domain-events` only) |
+| **Person** | A real human, deduped across every pipeline they touch | `person-store.mjs` ✅ |
+| **Intertwining** | The shared threads between pipelines (same person/asset/voice/learning) | `cross-reference.mjs` ✅ backend, **unvisualized** |
 | **Agent** | A named teammate that does a node's work | inline in flows; **no fleet view** |
 | **Taste** | What it learns from your every approval, applied everywhere | `feedback-ledger.mjs` + `memory.mjs` ✅ |
 | **Truth** | What your product actually does, read from the code | `scan.mjs` ✅ |
@@ -154,7 +156,7 @@ You type *"get 5 pilot users for the rodent feature."* The canvas **blooms** —
 
 You hit run. **Real people move through the wires** — found, drafted, stacking at the wall. Nothing sends. You open the wall, approve a pattern, mark one exception, release. Days later the replies are thin from one arm — the **Who?** node lights up: *"this guess isn't landing — re‑ideate?"* The loop never closes.
 
-Meanwhile the harness has been running your other four channels off live signals, deduping people across them, and it surfaces only the two decisions that actually need you. You glance, steer by talking, dive in where you care.
+Meanwhile the harness has been running your other four pipelines off live signals, deduping people across them, and it surfaces only the two decisions that actually need you. You glance, steer by talking, dive in where you care.
 
 ---
 
@@ -180,7 +182,7 @@ The visualization *is* the product (the lead). Its laws:
 - **One frame, adaptive face.** Every node shares the same card frame (learn the canvas once), but its *face* fits its content — a belief shows a line, a person an avatar, a microproduct a *live preview*, a metric a number/spark, a step what it does. One frame, many faces.
 - **Kind + state, consistently encoded.** Kind (belief · step · person · idea · asset · decision · input) and state (idle · running · has‑result · needs‑you · proven) read through the *same* small signals — a left‑edge color, a glyph, a register — never a different shape.
 - **It's alive.** It changes as the current flows through it: a send node fills with people on a run; a belief flips grey→green; a building node shows its agent working. State is visible, not hidden in a panel.
-- **It has depth — it opens.** The card is the collapsed headline; opening a node *densifies* it into more nodes in the same grammar (a channel opens into its executable flow, People into the roster, an idea into its bar‑score and angles). Depth = more nodes, never a foreign diagram.
+- **It has depth — it opens.** The card is the collapsed headline; opening a node *densifies* it into more nodes in the same grammar (a pipeline opens into its executable flow, People into the roster, an idea into its bar‑score and angles). Depth = more nodes, never a foreign diagram.
 - **It has a lifecycle — it transforms.** An idea node, when built, *becomes* a building node, then an asset node. Nodes move through the flow.
 
 So: **one grammar, living objects, adaptive faces** — coherent enough to learn once, alive enough that the canvas never reads as a wall of identical boxes or a ransom note of unrelated charts.
@@ -199,17 +201,17 @@ The **engine is largely built. The cockpit is half‑built. The strategy/ideatio
 - Truth — `scan.mjs`, `product-understanding.mjs`.
 - Intertwining substrate — `person-store.mjs`, `cross-reference.mjs` (shared people, find‑references).
 - Team substrate — `convex-sync.mjs`, `team-store.mjs` (multiplayer base, currently guarded off).
-- The board read‑model and the spatial canvas + the channel `GraphCanvas` (the n8n‑style flow view), the composer dock (chat).
+- The board read‑model and the spatial canvas + the pipeline `GraphCanvas` (the n8n‑style flow view), the composer dock (chat).
 
 **Partial / split:**
-- Two surfaces that should be one: the **board** (strategy/state) and the **channel `GraphCanvas`** (executable flow) are separate views, not two zoom levels of one canvas.
+- Two surfaces that should be one: the **board** (strategy/state) and the **pipeline `GraphCanvas`** (executable flow) are separate views, not two zoom levels of one canvas.
 - Runs are visualized as *static results*, not *live data flowing through the wires*.
 
 **Missing:**
 - **Decision/ideation nodes** — the "goal blooms into forks you ideate" model. The compose today picks a flow; it does not open the *who/message/motion/assets* decisions as explorable nodes.
 - **A first‑class inputs layer** — live signals that trigger flows. Today the operator reacts to a goal and a scan, not to a stream of world events.
 - **Ambient / continuous operation** — the harness is goal‑driven and session‑bound; it does not run always‑on, reacting to inputs, surfacing what needs you.
-- **The intertwining, visualized** — the threads between channels (shared person/asset/voice/learning) exist in data but are never drawn on the canvas.
+- **The intertwining, visualized** — the threads between pipelines (shared person/asset/voice/learning) exist in data but are never drawn on the canvas.
 - **An agent fleet view** — spawn / name / assign / watch / retire agents as a managed team.
 - **The post‑sale half** (onboard → retain → expand — the bowtie right side) and an explicit **motion** choice, per the GTM research.
 - **Jargon‑free surface** — labels today are internal taxonomy ("center of gravity · 65"); the product must speak plain language.
@@ -218,7 +220,7 @@ The **engine is largely built. The cockpit is half‑built. The strategy/ideatio
 
 ## 7. What has to change (the work, by area)
 
-**A. Unify the canvas (the cockpit).** Merge the board and the channel graph into **one infinite Figma‑grade surface** with semantic zoom: high zoom = decision/state nodes, low zoom = executable flow nodes, one node grammar. Freeform roam, summon, draggable — keep the freeform work already shipped; retire the accordion. *Files: the board lens, `GraphCanvas`, `CanvasShell`.*
+**A. Unify the canvas (the cockpit).** Merge the board and the pipeline graph into **one infinite Figma‑grade surface** with semantic zoom: high zoom = decision/state nodes, low zoom = executable flow nodes, one node grammar. Freeform roam, summon, draggable — keep the freeform work already shipped; retire the accordion. *Files: the board lens, `GraphCanvas`, `CanvasShell`.*
 
 **B. Add decision/ideation nodes + the bloom‑and‑compile flow.** A new node kind — a question with generated options you can ideate, choose, or test — and the machinery where a goal explodes into the real GTM decisions (who/message/motion/assets) and the chosen options compile down into the runnable flow. Claude generates the options (grounded in the product + research) and wires the result. *Files: `workflow-composer.mjs` (compose becomes "bloom then compile"), new decision‑node kind in the graph + step runtime, the operator's compose tool.*
 
@@ -226,11 +228,11 @@ The **engine is largely built. The cockpit is half‑built. The strategy/ideatio
 
 **D. Add the inputs layer + make the harness ambient.** A first‑class **Inputs** edge (signals: commits, signups, replies, stars, events) and an always‑on loop that routes inputs to flows and reacts within the wall — turning `run_loop` from goal‑driven one‑shot into a continuous operator that surfaces what needs you. *Files: new `inputs`/signals store + ingestion, `operator-runtime.mjs` loop, `domain-events.mjs`.*
 
-**E. Visualize the intertwining.** Draw the threads `cross-reference.mjs` already computes — shared people/assets/voice/learnings between channels — as first‑class on the canvas; add cross‑channel fatigue control. *Files: `cross-reference.mjs` (exists) → new canvas overlay.*
+**E. Visualize the intertwining.** Draw the threads `cross-reference.mjs` already computes — shared people/assets/voice/learnings between pipelines — as first‑class on the canvas; add cross‑pipeline fatigue control. *Files: `cross-reference.mjs` (exists) → new canvas overlay.*
 
 **F. The agent fleet.** A view to spawn, name, assign, watch, and retire the GTM agents working the nodes. *Builds on the inline agents + the "agent as a person" work.*
 
-**G. Wall‑at‑scale, surfaced.** Bring `gate-pattern.mjs` to the front: approve patterns, escalate exceptions, so one founder runs many channels without drowning. *Files: `gate-pattern.mjs` (exists) → the approve surface.*
+**G. Wall‑at‑scale, surfaced.** Bring `gate-pattern.mjs` to the front: approve patterns, escalate exceptions, so one founder runs many pipelines without drowning. *Files: `gate-pattern.mjs` (exists) → the approve surface.*
 
 **H. Ground the stages in real GTM + kill jargon.** Adopt the researched model — strategy (who/why/say/offer) → **motion** → funnel → **keep/grow (onboard/retain/expand)** → measure → learn‑loop — and replace every internal label with plain words. *Files: `board.mjs` stage model, all node copy.*
 
@@ -243,7 +245,7 @@ The **engine is largely built. The cockpit is half‑built. The strategy/ideatio
 ## 8. Invariants — what must not break
 
 - **Truth.** Claims about what the product *does* are read from the code or marked inferred. Never invented. (`scan.mjs`.)
-- **The Wall, graduated.** A channel starts draft‑only — nothing reaches a person without an explicit okay. Trust is then *earned per channel* up the autonomy ladder (draft → trusted → autonomous), always explicit, always one click from being revoked. A channel only sends unattended after the founder has deliberately promoted it; autonomy is never the default and never silent.
+- **The Wall, graduated.** A pipeline starts draft‑only — nothing reaches a person without an explicit okay. Trust is then *earned per pipeline* up the autonomy ladder (draft → trusted → autonomous), always explicit, always one click from being revoked. A pipeline only sends unattended after the founder has deliberately promoted it; autonomy is never the default and never silent.
 - **Deploy is the wall graduating, never the wall removed.** Scanning and build stop before commit/push/deploy, EXCEPT a microproduct deploy the founder explicitly approved at the gate — always gated, never silent, never set by composition or a run. The deploy execute connector (`connectors/execute/deploy.mjs`) ships a built microproduct (BYO git push/hook as the primary path, a hosted Vercel deploy via the Vercel MCP as the fallback) ONLY when two unforgeable founder authorizations both pass: the gate's `approved === true` stamp on the item, AND an explicit founder deploy confirmation read solely from the founder‑input run path (`node.runtime`/run context), never from `node.config`. Composition's only reach is `node.config`, so a composed graph or an autonomous run can never self‑deploy; with either authorization missing the connector refuses and ships nothing. No silent send/deploy path exists.
 - **Taste.** Every approval, rejection, and edit teaches it, applied to the next run everywhere. (`feedback-ledger`/`memory`.)
 - **Calm at scale.** The cockpit zoomed out shows the few things that need you and hides the rest. Complexity lives in the dive, never the overview.

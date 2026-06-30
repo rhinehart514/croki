@@ -3,8 +3,8 @@
 ## North star
 
 The canvas is a **projection over an object model**, not a fixed diagram. At scale
-(10–30+ sources, intertwined channels, many ICPs, concurrent experiments) a single
-spatial diagram dies — 30 channels drawn as one node graph is unreadable, and 30
+(10–30+ sources, intertwined pipelines, many ICPs, concurrent experiments) a single
+spatial diagram dies — 30 pipelines drawn as one node graph is unreadable, and 30
 swimlanes hide the very thing that matters: the intertwining. The canvas survives by
 becoming one lens onto a shared object model — the IDE pattern (tree + search +
 find-references + a Problems panel + lenses), where the editor tab shows one thing and
@@ -31,22 +31,22 @@ models, across the truth wall.**
 - **Two modes = two object models:**
   - **Product mode** projects the interpretive `ProductModel` — truth-walled, never feeds
     health.
-  - **GTM mode** projects the **GTM operational object model** — real state: Channels,
-    Sources, People, Claims, Experiments, ICPs, Outcomes.
+  - **GTM mode** projects the **GTM operational object model** — real state: Pipelines
+    (`channel` in code), Sources, People, Claims, Experiments, ICPs, Outcomes.
 - **The truth wall** (`docs/PRODUCT-MODEL.md`): the product-understanding model is
   interpretation and must never feed engine/measure health. The GTM operational objects
   are real state and DO drive health. The two object models never cross.
 
 ## The object layer — what exists, what's the gap
 
-Already first-class shared (in `project.sharedContext`, referenced across channels):
+Already first-class shared (in `project.sharedContext`, referenced across pipelines):
 **ICP**, **Positioning**, **Claims** (flat `string[]`), **Experiments**
 (`hypothesis` / `variable` / `heldConstant` / `successSignal` / `status`), **Outcomes**,
 **FounderTaste**; **AgentInstance** shared by `ref`. The object layer is more built than
 it looks — most of the substrate already exists.
 
 The keystone gap: **Person.** Entrants are ephemeral run items (they live only inside the
-last 50 runs and roll off); there is no durable identity and no cross-channel reference.
+last 50 runs and roll off); there is no durable identity and no cross-pipeline reference.
 A `contacts: {}` stub already sits in `sharedContext` as the slot waiting for this object.
 
 Smaller gaps: **Claim** needs structuring (string → object with provenance + version);
@@ -54,14 +54,14 @@ Smaller gaps: **Claim** needs structuring (string → object with provenance + v
 
 ## Person — the keystone object
 
-- Durable, project-scoped, shared across channels. Stable identity key (email / handle /
+- Durable, project-scoped, shared across pipelines. Stable identity key (email / handle /
   domain), so the same human is one object everywhere.
 - Created by **promoting run entrants**: when a run produces items that name a real
   person or org, upsert a `Person` and append an appearance
   `{ channelId, runId, role, trigger, at }`. The per-appearance trigger is the why-now
-  that found them in that channel.
-- Carries: identity, the appearances across channels, and a derived view (where seen, how
-  many channels, last touch).
+  that found them in that pipeline.
+- Carries: identity, the appearances across pipelines, and a derived view (where seen, how
+  many pipelines, last touch).
 - Enables **find-references** (where does this person appear), **dedup**, **fatigue
   control** ("don't hit them from three angles this week"), the **experiment matrix**, and
   the **portfolio Problems rail**.
@@ -72,17 +72,18 @@ Smaller gaps: **Claim** needs structuring (string → object with provenance + v
 ## Cross-reference index
 
 "Where does X appear" as a real query for Person / ICP / Claim / Experiment across all
-channels. New `brain/src/cross-reference.mjs` (or folded into the relevant stores). Powers
+pipelines. New `brain/src/cross-reference.mjs` (or folded into the relevant stores). Powers
 focus-to-trace on the canvas and the portfolio Problems rail.
 
 ## GTM lenses (replace swimlanes)
 
-- **Channel flow** — today's `GTMGraph` (one channel's Source → … → Gate → Measure).
-- **People** — the shared People and their cross-channel appearances.
-- **Experiment matrix** — ICP × claim × channel grid of live hypotheses: which cell runs,
+- **Pipeline flow** (the `channel-flow` lens) — today's `GTMGraph` (one pipeline's
+  Source → … → Gate → Measure).
+- **People** — the shared People and their cross-pipeline appearances.
+- **Experiment matrix** — ICP × claim × pipeline grid of live hypotheses: which cell runs,
   which claim wins in which ICP, what to kill.
-- **Portfolio map** — channels and experiments as tiles (health + ICP + claim + status),
-  zoomable down into one channel's flow.
+- **Portfolio map** — pipelines and experiments as tiles (health + ICP + claim + status),
+  zoomable down into one pipeline's flow.
 
 Swimlane rendering (`portfolio-graph.mjs` lane bands, `GraphCanvas` overview lanes)
 retires.

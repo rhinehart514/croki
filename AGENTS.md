@@ -16,6 +16,19 @@ gate, and runs it to that gate. The executable artifact is a `GTMGraph` of open 
 is a connector (`tool`), a subagent (`agent`), a skill (`skill`), a deterministic transform
 (`code`), or an external MCP tool (`mcp`) — whatever the model composes.
 
+**Vocabulary — the unit is a PIPELINE.** What the founder builds and runs is a **pipeline**: a
+staged, directional flow to the founder gate (find → enrich → draft → **gate** → send → measure).
+This is not a marketing "channel" (where you reach people — email, Show HN, a community); it is the
+*flow that moves work through stages to your gate*, which is what the engine actually executes. The
+overview is **many pipelines sitting together**, and each one opens into its own flow canvas. In the
+codebase this object is still identified as a `channel` (`GTMGraph` persisted as a flow; `channel-store`,
+`composeGraphForChannel`, `promoteChannel`) — a historical name we keep as an internal identifier, not
+a concept. **Product, UI, and operator language say "pipeline."** When this doc says `channel` it means
+the code identifier for a pipeline; when it says "pipeline" it means the concept the founder sees. The
+object has been a pipeline all along — only the label was "channel." (Decided 2026-06-30; a deeper
+identifier rename — `channel-store` → `pipeline-store`, `run_channel` → `run_pipeline` — is a deliberate
+not-yet-done refactor with no functional change, deferred until there's a reason to churn it.)
+
 ## The harness — the only three things the host constrains
 
 The product's whole design is to hold the rented model on a short leash for exactly three
@@ -29,23 +42,23 @@ constraint.
    approval. Every `execute` node must have a founder `gate` upstream of it on every path or the
    composition is rejected (`assertGateWall`). The default execute connector stages locally and
    never sends. "Vibe up to the gate, never past it."
-   The Wall **graduates per channel — it never disappears.** A channel starts at `draft` (the gate
-   holds every item). The founder may explicitly promote a channel up the autonomy ladder
+   The Wall **graduates per pipeline — it never disappears.** A pipeline starts at `draft` (the gate
+   holds every item). The founder may explicitly promote a pipeline up the autonomy ladder
    (`draft → trusted → autonomous`, `promoteChannel`/`revokeChannel` in `project-store.mjs`), banking a
    *blessed pattern* the gate then auto-applies to the clean items while still escalating the exceptions
    (`gate-pattern.mjs`). This is standing founder approval, not the absence of approval: the gate node
    stays structurally present on every path, the promotion is itself an explicit founder act, and one
-   click drops the channel back to `draft`. The safety contract is that **autonomy is only ever set by an
+   click drops the pipeline back to `draft`. The safety contract is that **autonomy is only ever set by an
    explicit founder promotion — never by composition and never by a run.** The standing pattern lives in
    founder-owned durable state (the channel record), and the typed graph-operations path rejects any
    attempt to forge `autonomy`/`blessedPattern` onto a gate node config (`graph-operations.mjs`), so a
-   model-driven mutation can never self-promote a channel past the wall (guarded by `anti-cage.test.mjs`).
+   model-driven mutation can never self-promote a pipeline past the wall (guarded by `anti-cage.test.mjs`).
 3. **Taste.** The run ledger of gate decisions becomes durable memory that shapes the next run
    (`memory.mjs`, `feedback-ledger.mjs`); a drafting agent must consult it (`get_taste`) and a
    visual one must also consult `get_design` (`consult-guard.mjs`).
 
 The host also owns the plumbing a model must not: durable state (flows, sessions, people) and
-typed, validated graph mutations. Everything beyond those — what the channels are, which agents
+typed, validated graph mutations. Everything beyond those — what the pipelines are, which agents
 to compose, how the graph branches, how many approaches to try — is the model's job, decided
 fresh each time, never pre-structured by host-side domain objects.
 
@@ -222,7 +235,7 @@ fixes it.
   founder-input path (`node.runtime.deployAuthorization`, which graph.mjs rebuilds from the founder's
   approvals every run and composition cannot write; secondarily the host-threaded run context), never from
   `node.config`. With either missing the connector refuses and ships nothing. This is the wall GRADUATING
-  per item (like the autonomy ladder graduates a channel), not the wall removed. STATUS: the deploy
+  per item (like the autonomy ladder graduates a pipeline), not the wall removed. STATUS: the deploy
   confirmation is wired end-to-end — an explicit founder confirm at the gate (`payload.deployConfirmed`)
   is built by `resolveOperatorGate` and threaded through `runGraph` onto `node.runtime` — but the live
   SHIP runner (a configured BYO git remote, or the Vercel MCP runner) is not yet wired into the run path,
@@ -233,8 +246,8 @@ fixes it.
 - GTM flow execution stops at founder gates. The default execution connector stages actions locally and
   never sends or publishes. Gate continuation reuses the exact prepared run items; it does not rerun live
   source, enrichment, or generation work behind the founder's back. Graph changes created by a model use
-  typed operations and pass graph validation. The one carve-out is the **per-channel autonomy ladder**:
-  a channel the founder explicitly promoted to `trusted`/`autonomous` carries a blessed pattern that the
+  typed operations and pass graph validation. The one carve-out is the **per-pipeline autonomy ladder**:
+  a pipeline the founder explicitly promoted to `trusted`/`autonomous` carries a blessed pattern that the
   gate auto-applies to clean items, holding only the exceptions. This is standing founder approval, never
   the wall's removal — the gate node stays present, autonomy is set ONLY by an explicit founder promotion
   (never by composition or a run; the typed graph path rejects forging `autonomy`/`blessedPattern` onto a
@@ -263,11 +276,11 @@ fixes it.
   upstream on every path, or the composition is rejected. The blank default refuses rather than falling back
   to a template.
 - Grounding does not shape. The scan reports only cited, reproducible reality — never a fixed go-to-market
-  taxonomy and never a pre-written channel. Deciding what is GTM-relevant and what channels to run is the
+  taxonomy and never a pre-written pipeline. Deciding what is GTM-relevant and what pipelines to run is the
   model's job, rented — ideation is the composer's thinking posture, not a host-side auto-proposer that emits
-  an accept/reject board. The founder (or Claude) names a channel directly and it composes into a graph
+  an accept/reject board. The founder (or Claude) names a pipeline directly and it composes into a graph
   (`composeNakedGraph`); the `Ideate` button drives the composer's posture so the model thinks out loud
-  before committing. There is no `opportunity-engine.mjs`, no `ideation.mjs`, no program compiler; channel
+  before committing. There is no `opportunity-engine.mjs`, no `ideation.mjs`, no program compiler; pipeline
   and agent lists are never hand-written in `.mjs`.
 - The canvas is a projection over an object model, not a fixed diagram. One canvas engine renders
   `projection(objectModel, lens)`; shared objects are shared nodes; selection persists across lenses;

@@ -138,7 +138,7 @@ ProductModel {
 one-directional valve, applied element-by-element. `product-model-store.mjs:90-91`
 (`normalizeProvenance`) demotes any element claiming `provenance:"derived"` with an empty
 `evidence[]` down to `"speculative"`. (The same valve once lived in the now-removed
-`opportunity-engine.mjs`, demoting evidence-free derived channel proposals; the rule survives
+`opportunity-engine.mjs`, demoting evidence-free derived pipeline proposals; the rule survives
 here, owned by the product-model store itself.) A `Thing`/`Relationship`/etc. claiming
 `provenance:"derived"` with an empty `evidence[]` is demoted to `"speculative"` by the host
 at command time (see "the pollution guard" below). An interpretive guess can never launder

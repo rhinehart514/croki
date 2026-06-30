@@ -60,8 +60,8 @@ step, not the only vocabulary.
   The connector registry remains as the `tool` path (kept on purpose — deterministic
   connectors like the scorer and HTTP sender belong in code).
 - **P5 — product-to-system studio. ← landed.** Projects are selectable and preserve
-  independent repository grounding, channels, opportunity decisions, and shared
-  intelligence. The product generates reviewable channel and agent opportunities,
+  independent repository grounding, pipelines, opportunity decisions, and shared
+  intelligence. The product generates reviewable pipeline and agent opportunities,
   separates code-derived claims from speculative bets, lets the founder select Claude
   or Codex per agent, and composes accepted opportunities into a validated gated
   workflow. Inputs support manual rows, CSV, and HTTP APIs; outputs support local staging
@@ -70,20 +70,20 @@ step, not the only vocabulary.
 
 - **P6 — un-shape grounding; ideate instead of templating. ← landed, proven live.** The
   truth layer stops prescribing a go-to-market shape. `product-understanding.mjs` no longer
-  carries a fixed GTM signal taxonomy with pre-written channel recommendations — grounding
+  carries a fixed GTM signal taxonomy with pre-written pipeline recommendations — grounding
   now reports only cited, reproducible reality (win event, attribution, stack, blind spots).
-  Opportunity generation is no longer hand-written `.mjs` judgment (a fixed channel list +
+  Opportunity generation is no longer hand-written `.mjs` judgment (a fixed pipeline list +
   hardcoded speculative bets + four fixed agents). It is rented intelligence: `ideation.mjs`
   exposes an injectable ideator (honest blank default, `createClaudeIdeator` live on the
   subscription, fakes in tests) that reads the grounding AND the real repository and proposes
-  channels with zero shape baked in — outbound, in-product loops, pull/inbound, or a code
+  pipelines with zero shape baked in — outbound, in-product loops, pull/inbound, or a code
   change that closes an instrumentation gap, none privileged. The host still owns the walls:
   it normalizes proposals into the stored shape and demotes any "derived" claim that carries
   no `file:line` evidence to "speculative" so the truth/bet line never blurs. The ideation
   doctrine lives in `~/.claude/agents/gtm-ideate-channels.md` — an editable markdown artifact,
   not host code. Proven 2026-06-22 on `~/Buffalo-Projects`: live ideation returned product-true
-  channels the old taxonomy could not express — a builder self-share loop, a vouch-request
-  peer reach, a cohort-ritual inbound motion, and an "attribution repair" code-change channel —
+  pipelines the old taxonomy could not express — a builder self-share loop, a vouch-request
+  peer reach, a cohort-ritual inbound motion, and an "attribution repair" code-change pipeline —
   each cited to real files the fixed scanner never read.
 
 - **P7 — un-cage composition; the model designs the graph. ← landed.** `composeOpportunityChannel`
@@ -126,24 +126,25 @@ step, not the only vocabulary.
   diagram and becomes a projection over an object model — one canvas engine rendering
   `projection(objectModel, lens)`, with two modes projecting two object models across the
   truth wall (Product mode → the interpretive `ProductModel`, never feeds health; GTM mode
-  → the GTM operational object model — Channels, Sources, People, Claims, Experiments,
-  ICPs, Outcomes — real state that does). The keystone is a durable first-class **Person**
+  → the GTM operational object model — Pipelines (`channel` in code), Sources, People,
+  Claims, Experiments, ICPs, Outcomes — real state that does). The keystone is a durable
+  first-class **Person**
   object (`person-store.mjs`) promoted from run entrants, enabling find-references, dedup,
   and the experiment matrix; swimlanes retire; the composer controls the canvas (free
   view-control + gated mutation) locked to one conversation per project; and the cards
   re-axe to GTM objects with a judgment verdict. See `docs/CANVAS.md` for the full route
   and its sub-steps (P10.1–P10.6).
 
-- **P11 — remove the opportunity object; channels are direct. ← landed.** The
+- **P11 — remove the opportunity object; pipelines are direct. ← landed.** The
   auto-generated opportunity accept-list (the generate-then-review RAG pattern the founder
   rejected) is gone. `opportunity-engine.mjs`, `ideation.mjs`, the `OpportunityStudio` board,
   and the `list_opportunities` / `generate_opportunities` / `review_opportunity` tools are
-  deleted. A channel is now named directly — by the founder or by Claude — and compiled into a
+  deleted. A pipeline is now named directly — by the founder or by Claude — and compiled into a
   program: `compileOpportunityProgram` → `compileChannelProgram` (a plain
-  `{ id, title, objective }` channel plus inline agent specs, not a stored accept/reject
-  record), and `compose_opportunity_channel` → `compose_channel`, taking the inline channel
+  `{ id, title, objective }` pipeline plus inline agent specs, not a stored accept/reject
+  record), and `compose_opportunity_channel` → `compose_channel`, taking the inline pipeline
   spec. Ideation no longer runs as a host module; it is the composer's thinking posture (the
-  `Ideate` button drives `composerPosture`), with the channel doctrine still in the editable
+  `Ideate` button drives `composerPosture`), with the pipeline doctrine still in the editable
   `~/.claude/agents/gtm-ideate-channels.md`. The references to `ideation.mjs`,
   `composeOpportunityChannel`, and "accepted opportunities" in P5–P8 above describe the
   superseded mechanism — the phases happened, but the opportunity object they centered on no
@@ -155,7 +156,7 @@ The host owns four things and only four: the `file:line` product scan (truth), t
 stores and run ledger (state), the founder gate (the wall), and typed validated mutations
 (the only way the graph can change). Everything else is open.
 
-What context the agent pulls, which channels it proposes, what the workflow topology looks
+What context the agent pulls, which pipelines it proposes, what the workflow topology looks
 like, what output kind a node produces, and which tools exist — all of that is decided by
 the model at the time of the run, not baked into the host. The agent pulls grounding through
 retrieval tools on demand (`get_product`, `get_taste`, `get_design`, etc.) rather than eating
@@ -163,7 +164,7 @@ a pre-packed block; it composes the graph from open step kinds (`tool`, `agent`,
 `code`) with no fixed skeleton; and it labels output with any kind it chooses — there is no
 enum that limits it to "email" or "message."
 
-Microproducts, outreach channels, in-product loops, attribution repair, vouch campaigns —
+Microproducts, outreach pipelines, in-product loops, attribution repair, vouch campaigns —
 these are all compositions over this substrate, not pillars the host pre-builds. The host
 normalizes what the model proposes (it validates the graph, demotes unsupported evidence
 claims, enforces the wall), but the model decides the shape. That separation is what lets

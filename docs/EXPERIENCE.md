@@ -35,7 +35,7 @@ One surface, three frames around it:
    touches. Same graph, different question.
 
 3. **The inspector is the program framing the DAG lacks.** Outcome, buyer hypothesis,
-   channel hypothesis, measurement plan, the agents and their creation policies, and the
+   pipeline hypothesis, measurement plan, the agents and their creation policies, and the
    learning threads (decision → revised rule → smarter agent) live in the inspector and the
    debugger — not as fake nodes on the canvas. These are the business object; the graph is
    the execution plan. Clicking an agent shows its policy and rules; clicking a graph node
@@ -59,7 +59,7 @@ proven, so the refactor has one stable surface to target.
 
 - **Phase 1 (this slice — shipped):** Make the real graph the program's plane. Add a mode
   lens to `GraphCanvas`. Rewrite the `ProgramCanvas` inspector as the program-framing panel
-  (outcome / buyer / channel / measurement / agents+policies / learning). Delete the card
+  (outcome / buyer / pipeline / measurement / agents+policies / learning). Delete the card
   grid, the synthetic program nodes, and the redundant "Graph" toggle + second graph render.
   Node clicks open the existing node editor; the gate-review action selects the pending gate
   node. One canvas, mode-aware.

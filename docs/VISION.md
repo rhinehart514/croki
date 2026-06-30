@@ -1,6 +1,6 @@
 # GTM IDE — Vision
 
-**What it is:** A local Claude agent harness for GTM engineering. You open a repository, it reads what you built, and runs a multi-channel pipeline — grounded in your code, powered by Claude at the intelligence nodes, with you in every gate.
+**What it is:** A local Claude agent harness for GTM engineering. You open a repository, it reads what you built, and runs many pipelines — grounded in your code, powered by Claude at the intelligence nodes, with you in every gate. (A pipeline is one staged flow to your gate; "channel" was only ever the code identifier for it.)
 
 Built for Jacob first. Proven on real projects before it touches anyone else.
 
@@ -182,12 +182,12 @@ The pattern: GTM IDE orchestrates. MCP tools provide the data. Claude reasons ov
 
 ---
 
-## Multi-channel
+## Multi-pipeline
 
-The project can hold the set of channels the founder actually chooses to run.
-It does not ship a catalog of six assumed motions. A channel begins as a blank,
+The project can hold the set of pipelines the founder actually chooses to run.
+It does not ship a catalog of six assumed motions. A pipeline begins as a blank,
 durable graph; the founder or resident Claude operator shapes its nodes and
-edges around the intended outcome. Channels share product, positioning, ICP,
+edges around the intended outcome. Pipelines share product, positioning, ICP,
 founder taste, contacts, outcomes, experiments, and proof artifacts while
 keeping their executable graphs and run histories independent.
 
@@ -198,7 +198,7 @@ LINKEDIN   ██░░░░░░░░  2 approved    · running
 CONTENT    ████░░░░░░  building      · Claude drafting
 ```
 
-Click any channel to expand into full DAG view.
+Click any pipeline to expand into full DAG view.
 
 ---
 
@@ -228,12 +228,12 @@ Not a report. Not a dashboard. A ledger entry and a sharper starting point for t
 
 6. **Vibe mode** — describe the goal, bundled Claude Code builds the DAG through typed operations. Natural language is the primary entry point.
 
-7. **Multi-channel view** — parallel branches, mission control header.
+7. **Multi-pipeline view** — parallel branches, mission control header.
 
 ---
 
 ## Version
 
-v0.3.0 — durable resident operator wired end to end: founder-defined channels, bundled Claude Code Agent SDK, typed graph patches, live event history, exact founder-gate continuation, interruption recovery, dashboard polling, and MCP session controls. The remaining product proof is one approved action through a live destination and one attributable observed outcome.
+v0.3.0 — durable resident operator wired end to end: founder-defined pipelines, bundled Claude Code Agent SDK, typed graph patches, live event history, exact founder-gate continuation, interruption recovery, dashboard polling, and MCP session controls. The remaining product proof is one approved action through a live destination and one attributable observed outcome.
 
 Last updated: 2026-06-21

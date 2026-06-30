@@ -4,7 +4,7 @@
 
 ## The shape of the work
 
-**The engine is largely built. Most of the gap is the cockpit catching up + a few new pieces + deliberately letting the wall *graduate*.** Across all five areas the pattern repeats: the hard substrate exists (executable graph, the gate + pattern-approval, taste, truth, person/intertwining, the build worktree, the crucible/ideate machinery, team roles), and what's missing is (a) **surfacing** it on the canvas, (b) **a handful of net-new objects** (Inputs, GtmIdea, the autonomy ladder state, a credential store, a microproduct producer), and (c) **letting the wall graduate** so a microproduct can deploy and a trusted channel can send — without the wall ever disappearing.
+**The engine is largely built. Most of the gap is the cockpit catching up + a few new pieces + deliberately letting the wall *graduate*.** Across all five areas the pattern repeats: the hard substrate exists (executable graph, the gate + pattern-approval, taste, truth, person/intertwining, the build worktree, the crucible/ideate machinery, team roles), and what's missing is (a) **surfacing** it on the canvas, (b) **a handful of net-new objects** (Inputs, GtmIdea, the autonomy ladder state, a credential store, a microproduct producer), and (c) **letting the wall graduate** so a microproduct can deploy and a trusted pipeline can send — without the wall ever disappearing.
 
 ## Reuse as-is — do NOT rebuild
 
@@ -48,8 +48,8 @@
 21. **Operator build-and-ship door** (`compose_microproduct`) + live-preview asset face on canvas. *M*
 22. **Land on the map + signups flow back** (asset store + inputs wiring). *M–L, depends on D-6 inputs.*
 
-### E · Channels / wall / data / sending / team
-23. **Per-channel autonomy ladder (keystone for "real autonomy").** Add `autonomy: draft|trusted|autonomous` + blessed pattern to the channel object; `promote`/`revoke`; teach the gate to auto-apply a trusted channel's pattern via existing `gate-pattern.mjs`; promotion offered from taste, never automatic; revocable in one click. *M, must precede ambient sending.*
+### E · Pipelines / wall / data / sending / team
+23. **Per-pipeline autonomy ladder (keystone for "real autonomy").** Add `autonomy: draft|trusted|autonomous` + blessed pattern to the channel record (the pipeline's durable object); `promote`/`revoke`; teach the gate to auto-apply a trusted pipeline's pattern via existing `gate-pattern.mjs`; promotion offered from taste, never automatic; revocable in one click. *M, must precede ambient sending.*
 24. **BYO credential store** (`credential-store.mjs`) — founder-pasted Gmail/Apollo/Clay keys at runtime (env-only today locks out non-technical founders). Unblocks 25 & data. *M*
 25. **BYO Gmail sender** (`execute/gmail.mjs`) — modeled on `execute/http.mjs`, sends through the founder's Gmail, with the three guardrails: rate limit, provenance per message, recall. *M*
 26. **Surface role-based release** — wire `team-store.canApprove` into the gate route + UI. *S–M*
@@ -64,7 +64,7 @@
 
 ## Decisions the founder must make (these gate the build)
 
-1. **Let the wall graduate?** Microproduct *deploy* and *autonomous channels* both require an explicit invariant carve-out (always gated/approved, never silent). Confirm the carve-out language. *(Existential — the crown jewel and real autonomy both depend on it.)*
+1. **Let the wall graduate?** Microproduct *deploy* and *autonomous pipelines* both require an explicit invariant carve-out (always gated/approved, never silent). Confirm the carve-out language. *(Existential — the crown jewel and real autonomy both depend on it.)*
 2. **Reuse the `crucible`/`ideate` skills as binaries (recommended) or re-implement in-product?** Recommended: reuse `grade.mjs` + `distinct.mjs` + the SKILL doctrine, build the in-product injectable composer around them so the loop is visible and steerable.
 3. **Ambient now or later?** The crown-jewel demo and the visual-harness lead need *zero* ambient work. Ambient (#6–10) is the harder, safety-sensitive leg — sequence it after the lead is real, or pull it forward?
 4. **Hosted deploy provider** for the microproduct fallback — the Vercel MCP is available and wired-able; confirm it's the managed path.

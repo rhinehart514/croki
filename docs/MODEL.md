@@ -20,7 +20,7 @@ rules about not letting one layer leak into another.
 ### 1. Truth — what the code provably does
 
 The scan. Cited `file:line` reality: the stack, the win event, what's attributed, what's
-blind. Read-only. It reports facts and never imposes a shape — no taxonomy, no channel,
+blind. Read-only. It reports facts and never imposes a shape — no taxonomy, no pipeline,
 no "this is an outbound product." If it can't cite it, it says inferred or blind.
 
 Owns: `scan.mjs`, `product-understanding.mjs`. Bound by the citation rule.
@@ -93,7 +93,7 @@ open repo → scan → Product Picture (edit) → name outcome
 Off the same canvas. You reach for it when something is *broken* rather than when you're
 starting fresh. The engine derives real health for every node from the scan, the run
 ledger, and connector state; the Problems rail ranks what's wrong across the whole system
-and routes you to the node that fixes it. Some breaks are in the GTM (a stalled channel);
+and routes you to the node that fixes it. Some breaks are in the GTM (a stalled pipeline);
 some are in the *product code* — a win event with no attribution source stays honestly
 blind until that gap is repaired in the code, in an isolated branch, reviewed as a diff,
 gated before it touches the repo.
@@ -119,7 +119,7 @@ else is a lens, an inspector, or a dock around it.
   — the eye goes to the wall.
 - **Modes are lenses, not surfaces.** Design / Simulation / Run / Review / Learning re-skin
   the one graph to ask a different question about it. A mode never executes; only Run runs.
-- **The inspector carries the business object.** Outcome, buyer hypothesis, channel
+- **The inspector carries the business object.** Outcome, buyer hypothesis, pipeline
   hypothesis, measurement plan, the agents and their creation policies, the learning threads
   — these live in the inspector, not as fake nodes on the canvas.
 - **Claude is a dock, not a mode.** It proposes graph operations and composes workflows;
