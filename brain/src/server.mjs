@@ -51,7 +51,10 @@ import { getProductModel } from "./product-model-store.mjs";
 import { getDesignState } from "./design-state-store.mjs";
 import { createClaudeProductModeler } from "./product-model-generator.mjs";
 import { buildRunGrounding } from "./run-grounding.mjs";
-import { loadFeedbackLedger } from "./feedback-ledger.mjs";
+import { ideaTasteForProject, recordIdeaDecisions } from "./feedback-ledger.mjs";
+import { composeIdeas, createClaudeIdeaGenerator } from "./ideation.mjs";
+import { createClaudeIdeaBar } from "./idea-bar.mjs";
+import { createGtmIdea, getGtmIdea, saveGtmIdea, listGtmIdeas } from "./idea-store.mjs";
 import { recordRunDerivations } from "./run-derivation.mjs";
 import { getBoard } from "./board.mjs";
 import { applyExperimentVerdict } from "./belief-writeback.mjs";
@@ -72,6 +75,7 @@ import {
   cancelOperatorSession,
   launchOperatorSession,
   resolveOperatorGate,
+  resolveOperatorIdeas,
   resolveOperatorProposal,
   resumeOperatorSession,
 } from "./operator-runtime.mjs";
@@ -507,6 +511,98 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Ideas — the durable home for graded ideation output (idea-store.mjs). This is the FOUNDER door:
+  // list what was generated, kill the weak ones, keep the strong ones, and trigger a fresh round. Killing
+  // and keeping are founder acts — they bank an IdeaKill / IdeaKeep FeedbackSignal so idea-taste rides the
+  // feedback rail. These routes are deliberately ABSENT from the MCP agent surface: the generator never
+  // grades, kills, or keeps its own ideas — only the founder does.
+  const projectIdeasMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/ideas$/);
+  if (req.method === "GET" && projectIdeasMatch) {
+    try {
+      const projectId = decodeURIComponent(projectIdeasMatch[1]);
+      const goal = url.searchParams.get("goal");
+      const ideas = listGtmIdeas({ projectId })
+        .filter((idea) => !goal || idea.goal === goal);
+      json(res, 200, { ideas });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Trigger an ideation round for a goal — delegates to the ideate path (composeIdeas): generate wide
+  // across the angle anchors, measure distinctiveness, then a SEPARATE bar grades the survivors. Each
+  // graded idea is persisted as a durable GtmIdea. Nothing sends; this only generates and grades.
+  const projectIdeaRoundMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/ideas\/round$/);
+  if (req.method === "POST" && projectIdeaRoundMatch) {
+    try {
+      const projectId = decodeURIComponent(projectIdeaRoundMatch[1]);
+      const body = await readBody(req);
+      const goal = String(body?.goal || "").trim();
+      if (!goal) { json(res, 400, { error: "An ideation round needs a goal." }); return; }
+      const project = loadProject({ projectId });
+      const repo = project.sharedContext?.repository?.repo || process.cwd();
+      const result = await composeIdeas({
+        goal,
+        grounding: buildRunGrounding(project),
+        generate: createClaudeIdeaGenerator({ cwd: repo }),
+        bar: createClaudeIdeaBar({ cwd: repo }),
+      });
+      const ideas = result.ideas.map((graded) => createGtmIdea({
+        projectId,
+        goal,
+        angle: graded.angle,
+        pitch: graded.pitch,
+        barScore: graded.barScore,
+        axes: graded.axes,
+        verdict: graded.verdict,
+        killed: graded.killed,
+      }));
+      json(res, 200, { ideas, distinctiveness: result.distinctiveness, regenerated: result.regenerated });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Kill an idea — a FOUNDER act. The idea is marked dead in its durable store AND an IdeaKill
+  // FeedbackSignal is banked on the feedback rail. A kill is dead, not deprioritized.
+  const projectIdeaKillMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/ideas\/([^/]+)\/kill$/);
+  if (req.method === "POST" && projectIdeaKillMatch) {
+    try {
+      const projectId = decodeURIComponent(projectIdeaKillMatch[1]);
+      const ideaId = decodeURIComponent(projectIdeaKillMatch[2]);
+      const idea = getGtmIdea(ideaId);
+      const updated = saveGtmIdea({ ...idea, verdict: "killed", killed: true });
+      recordIdeaDecisions({ projectId, decisions: [{ idea: updated, decision: "kill" }] }, { projectId });
+      json(res, 200, { idea: updated });
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Keep an idea — a FOUNDER act that affirms a survivor and banks an IdeaKeep FeedbackSignal. It refuses
+  // to keep a killed idea: a kill is dead, and keep never resurrects it.
+  const projectIdeaKeepMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/ideas\/([^/]+)\/keep$/);
+  if (req.method === "POST" && projectIdeaKeepMatch) {
+    try {
+      const projectId = decodeURIComponent(projectIdeaKeepMatch[1]);
+      const ideaId = decodeURIComponent(projectIdeaKeepMatch[2]);
+      const idea = getGtmIdea(ideaId);
+      if (idea.killed) {
+        json(res, 409, { error: `GtmIdea ${ideaId} was killed; a killed idea is not kept.` });
+        return;
+      }
+      const updated = saveGtmIdea({ ...idea, verdict: "survived", killed: false });
+      recordIdeaDecisions({ projectId, decisions: [{ idea: updated, decision: "keep" }] }, { projectId });
+      json(res, 200, { idea: updated });
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
   // Cross-reference index — "where does X appear across channels" for person / icp / claim / experiment.
   const projectReferencesMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/references$/);
   if (req.method === "GET" && projectReferencesMatch) {
@@ -829,7 +925,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const operatorActionMatch = url.pathname.match(/^\/api\/operator\/sessions\/([^/]+)\/(resume|gate|proposal|cancel)$/);
+  const operatorActionMatch = url.pathname.match(/^\/api\/operator\/sessions\/([^/]+)\/(resume|gate|proposal|ideas|cancel)$/);
   if (req.method === "POST" && operatorActionMatch) {
     try {
       const body = await readBody(req);
@@ -843,8 +939,11 @@ const server = http.createServer(async (req, res) => {
       // can authorize the send. A viewer/member release throws gate_release_forbidden → 403.
       else if (action === "gate") session = await resolveOperatorGate(sessionId, { ...body, request: req });
       else if (action === "proposal") session = resolveOperatorProposal(sessionId, body);
+      // The founder kills/keeps the paused ideas — a founder act, never an agent tool. Picking ideas
+      // resumes the operator to build each kept survivor through its pre-wired compose_and_run.
+      else if (action === "ideas") session = resolveOperatorIdeas(sessionId, body);
       else session = cancelOperatorSession(sessionId);
-      json(res, action === "gate" || action === "proposal" ? 200 : 202, { session: publicOperatorSession(session) });
+      json(res, action === "gate" || action === "proposal" || action === "ideas" ? 200 : 202, { session: publicOperatorSession(session) });
     } catch (err) {
       const status = err?.code === "gate_release_forbidden" ? 403 : 409;
       json(res, status, { error: err instanceof Error ? err.message : String(err) });
@@ -906,7 +1005,7 @@ const server = http.createServer(async (req, res) => {
         blindSpots: (report?.gaps ?? []).map((g) => ({ title: g.title })),
       } : null;
 
-      const memory = buildDraftMemory(extractDecisions(runs));
+      const memory = buildDraftMemory(extractDecisions(runs), { ideaTaste: ideaTasteForProject(project.id) });
       // The editable interpretation rides alongside the cited grounding. The product-model provider
       // emits the founder-editable shape (things/relationships/goals/states + pinned signals); the
       // product provider keeps emitting cited truth. Both run — they answer different questions.
@@ -1231,7 +1330,7 @@ const server = http.createServer(async (req, res) => {
       const prior = loadFlow(body.graph.id, body.graph);
       const project = loadProject();
       const runtimeGraph = applySharedContextToGraph(body.graph, project.sharedContext);
-      const memory = buildDraftMemory(extractDecisions(prior.runs));
+      const memory = buildDraftMemory(extractDecisions(prior.runs), { ideaTaste: ideaTasteForProject(project.id) });
       const resumeRecord = typeof body.resumeRunId === "string"
         ? prior.runs.find((run) => run.id === body.resumeRunId)
         : null;
@@ -1296,7 +1395,7 @@ const server = http.createServer(async (req, res) => {
       const prior = loadFlow(body.graph.id, body.graph);
       const project = loadProject();
       const runtimeGraph = applySharedContextToGraph(body.graph, project.sharedContext);
-      const memory = buildDraftMemory(extractDecisions(prior.runs));
+      const memory = buildDraftMemory(extractDecisions(prior.runs), { ideaTaste: ideaTasteForProject(project.id) });
       const resumeRecord = typeof body.resumeRunId === "string"
         ? prior.runs.find((run) => run.id === body.resumeRunId)
         : null;
@@ -1419,6 +1518,9 @@ const server = http.createServer(async (req, res) => {
 
 // Live terminal sessions for canvas terminal nodes (WebSocket on /api/terminal). Loopback-only.
 attachTerminalServer(server);
+
+// Exported so a test can boot the real route handler on an ephemeral port and close it cleanly.
+export { server };
 
 server.listen(port, host, () => {
   console.log(`GTM IDE running at http://${host}:${port}`);

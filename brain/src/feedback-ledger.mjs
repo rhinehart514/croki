@@ -3,6 +3,7 @@ import { appendGateJudgments } from "./shared-judgments.mjs";
 import { persistence } from "./persistence.mjs";
 import { actionLogFromRun, detectCrystallizationSuggestions } from "./crystallization.mjs";
 import { proposeToolBirthFromCandidate } from "./tool-birth.mjs";
+import { extractIdeaTaste } from "./memory.mjs";
 
 const SCHEMA_VERSION = 1;
 const COLLECTION = "feedback-ledger";
@@ -96,6 +97,60 @@ export function normalizeRunFeedback({ projectId = "default", graph, result } = 
     }
   }
   return signals;
+}
+
+// IdeaKill / IdeaKeep — the founder's verdict on a GENERATED idea, banked on the FEEDBACK rail.
+//
+// Killing or keeping an idea is a FOUNDER act, never the agent's: the agent generates (ideation.mjs)
+// and a separate bar grades (idea-bar.mjs), but only the founder kills or keeps. We bank that decision
+// as a FeedbackSignal so memory.mjs can fold the killed ANGLES back into the next ideation round — the
+// loop-memory equivalent of how gate decisions teach voice, here teaching which angles bite.
+//
+// Deliberately on the FEEDBACK rail and NOT crystallization: idea-taste is judgment, and
+// crystallization excludes ideate/propose by signature design (JUDGMENT_VERBS), so an idea decision can
+// never freeze into a tool. These signals are not AgentAction records and never reach the action log.
+export function ideaDecisionSignals({ projectId = "default", decisions = [] } = {}) {
+  const signals = [];
+  for (const entry of decisions ?? []) {
+    // Accept a bare GtmIdea (its own killed/verdict is the decision) or { idea, decision } where the
+    // founder's explicit "kill" / "keep" overrides the idea's stored verdict.
+    const idea = entry?.idea ?? entry;
+    if (!idea || typeof idea !== "object") continue;
+    const explicit = entry?.decision;
+    const killed = explicit === "kill" || explicit === "killed"
+      || (explicit == null && (idea.killed === true || idea.verdict === "killed"));
+    const kept = !killed && (explicit === "keep" || explicit === "kept" || explicit === "survived"
+      || (explicit == null && (idea.killed === false || idea.verdict === "survived")));
+    if (!killed && !kept) continue; // an undecided idea is not yet a feedback signal
+    const pitch = String(idea.pitch ?? idea.summary ?? "").trim();
+    signals.push(signal({
+      projectId,
+      type: killed ? "IdeaKill" : "IdeaKeep",
+      ideaId: idea.id ?? null,
+      angle: typeof idea.angle === "string" ? idea.angle : null,
+      goal: typeof idea.goal === "string" ? idea.goal : null,
+      barScore: Number.isFinite(idea.barScore) ? idea.barScore : null,
+      summary: pitch ? pitch.slice(0, 200) : (killed ? "Killed idea" : "Kept idea"),
+    }));
+  }
+  return signals;
+}
+
+// Bank a founder's idea kills/keeps in the same feedback ledger gate decisions live in, so the next
+// ideation round reads them through memory.extractIdeaTaste. Pure-additive over the ledger.
+export function recordIdeaDecisions({ projectId = "default", decisions = [] } = {}, options = {}) {
+  const signals = ideaDecisionSignals({ projectId, decisions });
+  const ledger = recordFeedbackSignals(signals, { ...options, projectId });
+  return { ledger, signals };
+}
+
+// The READ side of the idea-taste loop, in ONE place so the operator runtime and the server's memory
+// builders fold idea taste in identically. It loads a project's durable feedback ledger and runs the
+// banked IdeaKill/IdeaKeep signals through memory.extractIdeaTaste — the killed/kept angles the next
+// ideation round avoids or leans into. Returns null when the project has no idea decisions yet, exactly
+// like extractIdeaTaste, so callers can pass the result straight into buildDraftMemory's `ideaTaste`.
+export function ideaTasteForProject(projectId = "default", options = {}) {
+  return extractIdeaTaste(loadFeedbackLedger(projectId, options).signals);
 }
 
 // Each executed step as a durable AgentAction signal so the crystallization detector can bucket

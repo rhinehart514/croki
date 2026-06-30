@@ -258,6 +258,16 @@ export const cancelOperatorSession = (sessionId: string, projectId: string) =>
 export const resolveOperatorProposal = (sessionId: string, projectId: string, accept: boolean, note?: string) =>
   post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/proposal`, { projectId, accept, note });
 
+// The founder resolves an ideate pause: kill the weak ideas, pick the strong ones to build. A FOUNDER
+// act — the operator generated the ideas but never decides which become work. Picking resumes the
+// operator to build each kept idea through its pre-wired compose_and_run (and wires it back to the idea
+// so the run's outcome closes the loop); killing banks an IdeaKill the next ideation round learns from.
+export const resolveOperatorIdeas = (
+  sessionId: string,
+  projectId: string,
+  payload: { build?: string[]; kill?: string[] },
+) => post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/ideas`, { projectId, ...payload });
+
 // ── Living Product Picture — the founder-editable interpretation aggregate ─────
 // Read the current projected model; edits persist through the three domain commands (NOT a raw
 // sharedContext patch), which is what keeps the picture on its own append-only event log so edits

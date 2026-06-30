@@ -27,6 +27,10 @@ import {
 } from "./project-store.mjs";
 import { canApprove, getMember, resolveCurrentUser } from "./team-store.mjs";
 import { composeNakedGraph } from "./workflow-composer.mjs";
+import { composeIdeas, createClaudeIdeaGenerator } from "./ideation.mjs";
+import { createClaudeIdeaBar } from "./idea-bar.mjs";
+import { attachBuildWiring, createGtmIdea, getGtmIdea, listGtmIdeas, saveGtmIdea } from "./idea-store.mjs";
+import { ideaTasteForProject, recordIdeaDecisions } from "./feedback-ledger.mjs";
 import { compareChannelRuns } from "./run-compare.mjs";
 import { getWorkspace, listWorkspaces } from "./workspace.mjs";
 import { authModeLabel, selectRuntime } from "./runtimes/index.mjs";
@@ -215,11 +219,23 @@ const TOOLS = [
         goal: { type: "string", description: "The goal to build and run toward. Defaults to the session goal." },
         title: { type: "string", description: "Optional channel name." },
         compose_new: { type: "boolean", description: "Compose an ADDITIONAL pipeline for this product even though this conversation already built one. Set true when the founder asks for another channel; the new pipeline joins the others on the product's overview. Omit (or false) to drive the pipeline this session already composed." },
+        idea_id: { type: "string", description: "When building a founder-picked idea, the id of that idea (from the ideate pause). The built channel is wired back to it so the run's gate outcome closes the loop onto the idea. Omit for a plain goal that did not come from ideation." },
         agents: {
           type: "array",
           description: "Optional inline agent specs (ref/role/objective/prompt). Omit to let the composer design the agents.",
           items: { type: "object" },
         },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "ideate",
+    description: "Generate go-to-market ideas for a goal and stop for the founder to pick. It proposes a pass/fail bar from the product and the founder's taste, runs several generators from distinct angles, regenerates wider if the batch is too clustered, then a SEPARATE critic grades each idea against the bar — you never grade your own ideas. Surviving ideas are saved and the session PAUSES with them for the founder. It never builds: choosing which idea becomes work is the founder's act, not yours. Each survivor is pre-wired so the founder's pick drops straight into compose_and_run.",
+    input_schema: {
+      type: "object",
+      properties: {
+        goal: { type: "string", description: "The goal to ideate against. Defaults to the session goal." },
       },
       required: [],
     },
@@ -284,6 +300,7 @@ const NAKED_TOOL_NAMES = new Set([
   "inspect_shared_context",   // taste/memory — ICP, positioning, what's been tried
   "update_shared_context",    // record inferred taste/positioning rather than duplicating into graphs
   "compose_and_run",          // THE move — design the work, build behind a gate, run to the gate
+  "ideate",                   // generate ideas, grade with a separate critic, pause for the founder to pick
   "inspect_graph",            // inspect/repair a failed run
   "inspect_problems",
   "inspect_run",
@@ -340,10 +357,45 @@ function flowFor(session, options = {}) {
   };
 }
 
-function memoryFor(runs, options) {
+function memoryFor(runs, options, projectId) {
   // Merge this project's gate decisions with the shared taste ledger (the global rig + other
   // projects), so the operator's draft voice compounds across both rigs (HARNESS.md invariant 4).
-  return buildDraftMemory(mergeSharedDecisions(extractDecisions(runs), options));
+  // Fold in the founder's idea kills/keeps banked on the feedback rail too, so the killed angles teach
+  // the next ideation round which angles bite — the idea half of loop memory, not just draft voice.
+  return buildDraftMemory(mergeSharedDecisions(extractDecisions(runs), options), {
+    ideaTaste: ideaTasteForProject(projectId || "default", options),
+  });
+}
+
+// Close the FRONT of the run→idea loop: once compose_and_run builds the channel for a founder-picked
+// idea, bind that channel's graph id onto the idea (idea-store.attachBuildWiring). Without this, the
+// idea's buildWiring carries only the goal it was pre-wired with, so when the channel later runs to the
+// gate, idea-derivation.recordIdeaOutcomeFromRun can never match the run back to the idea and the loop
+// stays open. The id is found explicitly (the operator passes idea_id) or, as a deterministic fallback,
+// by matching the pre-wired goal — bookkeeping, never a model judgment. Best-effort: a miss is a no-op,
+// never a thrown error that breaks the build, exactly like the other run-derived state.
+function bindComposedChannelToIdea({ projectId = null, ideaId = null, goal = "", channelId } = {}, options = {}) {
+  if (!channelId) return null;
+  try {
+    let idea = null;
+    if (ideaId) {
+      try { idea = getGtmIdea(ideaId, options); } catch { idea = null; }
+    }
+    if (!idea && goal) {
+      idea = listGtmIdeas({ ...options, projectId }).find((candidate) =>
+        !candidate.killed
+        && candidate.buildWiring && typeof candidate.buildWiring === "object"
+        && candidate.buildWiring.kind === "compose_and_run"
+        && candidate.buildWiring.goal === goal
+        && !candidate.buildWiring.channelId) ?? null;
+    }
+    if (!idea || idea.killed) return null;
+    const wiring = (idea.buildWiring && typeof idea.buildWiring === "object") ? idea.buildWiring : {};
+    if (wiring.channelId === channelId) return idea; // already bound
+    return attachBuildWiring(idea.id, { ...wiring, channelId, graphId: channelId }, options);
+  } catch {
+    return null;
+  }
 }
 
 function designStateFor(session, options) {
@@ -513,7 +565,7 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
     : null;
   const result = await runGraph(flow.graph, {
     targetNodeId,
-    memory: memoryFor(flow.runs, options),
+    memory: memoryFor(flow.runs, options, session.projectId),
     designState: designStateFor(session, options),
     // The live subscription-backed step runtime by default; a test injects a fake through
     // options.stepRuntime so the open agent/skill/code steps run keyless.
@@ -798,6 +850,14 @@ async function executeTool(session, tool, options = {}) {
         name: composed.channel.name,
         objective: goal,
       }, options);
+      // If this build came from a founder-picked idea, wire the channel back onto the idea so the run's
+      // gate outcome closes the loop onto it (idea-derivation). Deterministic bookkeeping, best-effort.
+      bindComposedChannelToIdea({
+        projectId: session.projectId ?? null,
+        ideaId: typeof input.idea_id === "string" ? input.idea_id : null,
+        goal,
+        channelId: composed.channel.graphId,
+      }, options);
       working = addEvent({
         ...working,
         graphId: composed.channel.graphId,
@@ -826,6 +886,109 @@ async function executeTool(session, tool, options = {}) {
 
     const run = await executeGraphRun(working, { stream: true }, options);
     return { session: run.session, result: summarizeRun(run.result), pause: run.session.status === "waiting_for_gate" };
+  }
+
+  // JOB 3 — ideate, then PAUSE for the founder. This is the generate-side twin of compose_and_run, and
+  // it stops at a wall of its own: the operator generates ideas but never decides which one becomes work.
+  // It (1) proposes a pass/fail bar from the product + founder taste (a SEPARATE critic — idea-bar.mjs),
+  // (2) runs N angle generators with distinct.mjs regen on a clustered batch and grades survivors with
+  // that separate bar (ideation.composeIdeas refuses to let the generator grade itself), (3) persists
+  // every graded idea durably (idea-store), pre-wiring each SURVIVOR to compose_and_run, then (4) pauses
+  // with the survivors. Killing a survivor or picking one to build is the founder's act — resolved off
+  // the agent surface by resolveOperatorIdeas, never by a tool the model (or the MCP door) can call.
+  if (tool.name === "ideate") {
+    const goal = firstNonEmpty(input.goal, session.goal);
+    if (!goal) throw new Error("ideate needs a goal.");
+    const project = loadProject(options);
+    const ideateRepo = options.cwd || project.sharedContext?.repository?.repo || process.cwd();
+    const workspace = latestWorkspace(session, options);
+    const grounding = compactProduct(workspace);
+    // The founder's taste from past gate decisions (this project + the shared ledger), the same signal
+    // the drafting voice reads — so the generators push toward what the founder has approved before.
+    const taste = memoryFor(session.graphId ? flowFor(session, options).runs : [], options, session.projectId);
+
+    // The generator and the bar are DIFFERENT injected functions by construction (composeIdeas rejects
+    // a shared function). Tests pass keyless fakes; live wires the subscription generator + Claude bar.
+    const generate = options.ideaGenerator || createClaudeIdeaGenerator({ cwd: ideateRepo });
+    const bar = options.ideaBar || createClaudeIdeaBar({ cwd: ideateRepo });
+    const distinct = options.ideaDistinct;
+
+    let working = addEvent(session, {
+      type: "operator_ideating",
+      title: "Ideating against the goal",
+      detail: `Generating across distinct angles, then grading survivors with a separate critic: ${goal}`,
+      data: { goal },
+    }, options);
+
+    const composed = await composeIdeas({
+      goal,
+      grounding,
+      taste,
+      generate,
+      bar,
+      ...(distinct ? { distinct } : {}),
+    });
+
+    // Persist EVERY graded idea durably — survivors AND killed. A killed idea stays on the record so it
+    // is not silently re-proposed next time; only a survivor carries buildWiring (a dead idea is never
+    // wired into a build). The wiring pre-loads compose_and_run with the surviving idea as its goal, so
+    // the founder's pick drops straight into the existing build-and-run door.
+    const persisted = composed.ideas.map((idea) => createGtmIdea({
+      projectId: session.projectId ?? null,
+      goal,
+      angle: idea.angle,
+      pitch: idea.pitch,
+      barScore: idea.barScore,
+      axes: idea.axes,
+      verdict: idea.killed ? "killed" : "survived",
+      killed: idea.killed === true,
+      buildWiring: idea.killed
+        ? null
+        : { kind: "compose_and_run", goal: idea.pitch, title: idea.pitch.slice(0, 80) },
+    }, options));
+    const survivors = persisted.filter((idea) => !idea.killed);
+
+    // PAUSE with the survivors — the founder reviews and picks, exactly like a gate. The operator does
+    // not build; it stops here. pendingIdeas mirrors pendingGate/pendingProposal: durable, founder-resolved.
+    const next = addEvent({
+      ...working,
+      status: "waiting_for_ideas",
+      pendingIdeas: {
+        goal,
+        ideas: survivors.map((idea) => ({
+          id: idea.id,
+          angle: idea.angle,
+          pitch: idea.pitch,
+          barScore: idea.barScore,
+          buildWiring: idea.buildWiring,
+        })),
+        killedCount: persisted.length - survivors.length,
+        distinctiveness: composed.distinctiveness ?? null,
+        regenerated: composed.regenerated === true,
+      },
+      error: null,
+    }, {
+      type: "ideas_proposed",
+      title: survivors.length
+        ? `Proposed ${survivors.length} surviving idea${survivors.length === 1 ? "" : "s"}`
+        : "No ideas cleared the bar",
+      detail: `${persisted.length - survivors.length} killed by the bar · ${survivors.length} cleared the floor — pick which to build.`,
+      data: {
+        goal,
+        surviving: survivors.length,
+        killed: persisted.length - survivors.length,
+        ideaIds: survivors.map((idea) => idea.id),
+      },
+    }, options);
+    return {
+      session: next,
+      result: {
+        paused: true,
+        survivors: survivors.map((idea) => ({ id: idea.id, angle: idea.angle, pitch: idea.pitch, barScore: idea.barScore })),
+        killed: persisted.length - survivors.length,
+      },
+      pause: true,
+    };
   }
 
   if (tool.name === "inspect_run") {
@@ -908,7 +1071,7 @@ function latestResumeInstruction(session) {
 export async function runOperatorSession(id, runtime = {}) {
   const options = runtime.options ?? {};
   let session = getOperatorSession(id, options);
-  if (["waiting_for_gate", "waiting_for_proposal", "waiting_for_input", "completed", "cancelled", "blocked"].includes(session.status)) {
+  if (["waiting_for_gate", "waiting_for_proposal", "waiting_for_input", "waiting_for_ideas", "completed", "cancelled", "blocked"].includes(session.status)) {
     return session;
   }
   if (session.stepCount >= session.maxSteps) {
@@ -1085,6 +1248,9 @@ export function resumeOperatorSession(id, input, runtime = {}) {
   if (session.status === "waiting_for_proposal") {
     throw new Error("Accept or discard the proposed graph changes before resuming the operator.");
   }
+  if (session.status === "waiting_for_ideas") {
+    throw new Error("Pick or kill the proposed ideas before resuming the operator.");
+  }
   if (["completed", "cancelled"].includes(session.status)) throw new Error(`Session is already ${session.status}.`);
   const text = String(input || "").trim();
   if (!text) throw new Error("A founder response is required.");
@@ -1121,7 +1287,7 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
   const result = await runGraph(flow.graph, {
     approvals: payload.approvals && typeof payload.approvals === "object" ? payload.approvals : {},
     decisions: payload.decisions && typeof payload.decisions === "object" ? payload.decisions : {},
-    memory: memoryFor(flow.runs, options),
+    memory: memoryFor(flow.runs, options, session.projectId),
     designState: designStateFor(session, options),
     resumeResult: session.pendingGate.runResult,
     stepRuntime: liveStepRuntime({ cwd: options.cwd }),
@@ -1233,6 +1399,87 @@ export function resolveOperatorProposal(id, payload = {}, runtime = {}) {
   return next;
 }
 
+// The founder reviews the surviving ideas and decides: kill the weak ones, pick the strong ones to
+// build. This is a FOUNDER act — never an agent/MCP tool — exactly like resolving a gate or a proposal.
+// `kill` marks ideas dead in the store (a killed idea never gets wired into a build); `build` resumes
+// the operator with an instruction to drive each kept idea through its pre-wired compose_and_run. The
+// operator generated the ideas; the founder alone decides which become work.
+export function resolveOperatorIdeas(id, payload = {}, runtime = {}) {
+  const options = runtime.options ?? {};
+  const session = getOperatorSession(id, options);
+  if (!session.pendingIdeas) {
+    throw new Error("This session has no proposed ideas waiting for the founder.");
+  }
+  const killIds = Array.isArray(payload.kill) ? payload.kill : [];
+  const buildIds = Array.isArray(payload.build)
+    ? payload.build
+    : (payload.build ? [payload.build] : []);
+
+  // Founder kills: mark each dead in the durable store so it is never re-proposed or wired.
+  const killed = [];
+  const killedIdeas = [];
+  for (const ideaId of killIds) {
+    try {
+      const idea = getGtmIdea(ideaId, options);
+      const dead = saveGtmIdea({ ...idea, verdict: "killed", killed: true, buildWiring: null }, options);
+      killed.push(ideaId);
+      killedIdeas.push(dead);
+    } catch {
+      // An unknown id is ignored rather than failing the whole resolution.
+    }
+  }
+
+  // Founder keeps: the ideas to build. A killed idea cannot be built, even if also listed to build.
+  const toBuild = [];
+  for (const ideaId of buildIds) {
+    if (killed.includes(ideaId)) continue;
+    try {
+      const idea = getGtmIdea(ideaId, options);
+      if (!idea.killed) toBuild.push(idea);
+    } catch {
+      // Unknown id ignored.
+    }
+  }
+
+  // Bank the founder's verdicts as IdeaKill/IdeaKeep signals on the feedback rail — the SAME canonical
+  // shaper the standalone /ideas kill/keep routes use — so a decision made through the operator pause
+  // (the path the `ideate` tool actually stops into) teaches the next ideation round which angles bite,
+  // not only a decision made through the standalone route. Best-effort: never break the resolution.
+  try {
+    recordIdeaDecisions({
+      projectId: session.projectId || "default",
+      decisions: [
+        ...killedIdeas.map((idea) => ({ idea, decision: "kill" })),
+        ...toBuild.map((idea) => ({ idea, decision: "keep" })),
+      ],
+    }, options);
+  } catch {
+    // taste capture is additive; a write failure must not interrupt the founder's pick
+  }
+
+  const instruction = toBuild.length
+    ? `Founder picked ${toBuild.length} idea${toBuild.length === 1 ? "" : "s"} to build: ${toBuild.map((idea) => `"${idea.pitch}" (idea_id ${idea.id})`).join("; ")}. Build each with compose_and_run, passing its idea_id and its pre-wired goal — the first sets this session's channel, any others use compose_new:true. Passing idea_id wires the built channel back to its idea so the run's outcome closes the loop.${killed.length ? ` They killed ${killed.length} other idea${killed.length === 1 ? "" : "s"}; do not revisit those.` : ""}`
+    : `Founder reviewed the ideas${killed.length ? ` and killed ${killed.length}` : ""} but picked none to build yet. Wait for their direction; do not build on your own.`;
+
+  const next = addEvent({
+    ...session,
+    status: "ready",
+    pendingIdeas: null,
+    error: null,
+    modelMessages: [
+      ...(session.modelMessages ?? []),
+      { role: "user", content: instruction },
+    ],
+  }, {
+    type: "ideas_resolved",
+    title: toBuild.length ? "Founder picked ideas to build" : "Founder reviewed the ideas",
+    detail: instruction,
+    data: { built: toBuild.map((idea) => idea.id), killed },
+  }, options);
+  launchOperatorSession(id, runtime);
+  return next;
+}
+
 export function cancelOperatorSession(id, options = {}) {
   const session = getOperatorSession(id, options);
   return addEvent({
@@ -1242,6 +1489,7 @@ export function cancelOperatorSession(id, options = {}) {
     pendingQuestion: null,
     pendingGate: null,
     pendingProposal: null,
+    pendingIdeas: null,
   }, {
     type: "session_cancelled",
     title: "Operator session cancelled",

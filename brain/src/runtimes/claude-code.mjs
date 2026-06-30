@@ -162,6 +162,7 @@ export const PAUSE_STATUSES = new Set([
   "waiting_for_gate",
   "waiting_for_proposal",
   "waiting_for_input",
+  "waiting_for_ideas",
   "completed",
   "blocked",
 ]);

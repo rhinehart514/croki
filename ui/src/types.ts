@@ -844,12 +844,23 @@ export type OperatorStatus =
   | "running"
   | "waiting_for_gate"
   | "waiting_for_proposal"
+  | "waiting_for_ideas"
   | "waiting_for_input"
   | "interrupted"
   | "completed"
   | "blocked"
   | "failed"
   | "cancelled";
+
+// One surviving idea the operator paused with, awaiting the founder's kill/keep verdict. Pre-wired so a
+// pick drops straight into compose_and_run.
+export type PendingIdea = {
+  id: string;
+  angle?: string | null;
+  pitch: string;
+  barScore?: number | null;
+  buildWiring?: { kind?: string; goal?: string; title?: string } | null;
+};
 
 export type OperatorEvent = {
   id: string;
@@ -902,6 +913,15 @@ export type OperatorSession = OperatorSessionSummary & {
     operations: GraphOperation[];
     changes: Array<{ type: string; detail: string }>;
     preview: GTMGraph;
+  } | null;
+  // The surviving ideas the operator paused with for the founder to kill/keep (the ideate move). Present
+  // only while status is "waiting_for_ideas".
+  pendingIdeas?: {
+    goal: string;
+    ideas: PendingIdea[];
+    killedCount?: number;
+    distinctiveness?: unknown;
+    regenerated?: boolean;
   } | null;
   events: OperatorEvent[];
 };

@@ -34,6 +34,7 @@ import {
   createOperatorSession,
   listOperatorSessions,
   resolveOperatorGate,
+  resolveOperatorIdeas,
   resolveOperatorProposal,
   resumeOperatorSession,
   runGraphStream,
@@ -58,6 +59,7 @@ import { TeamOnboarding } from "@/components/TeamOnboarding";
 import { convexEnabled, loadTeamIdentity, type TeamIdentity } from "@/lib/convex";
 import { GoalLauncher } from "@/components/GoalLauncher";
 import { OperatorDriveState } from "@/components/OperatorDriveState";
+import { IdeaReview } from "@/components/IdeaReview";
 const TeamSpace = lazy(() => import("@/components/TeamSpace").then((m) => ({ default: m.TeamSpace })));
 import { getMe, canApprove as canApproveApi } from "@/api";
 import { getIdentity, FOUNDER_USER_ID, type ActingIdentity } from "@/lib/identity";
@@ -1336,6 +1338,19 @@ export default function App() {
     }
   }, [operatorSession, syncOperator]);
 
+  // The founder resolves an ideate pause: build the strong ideas, kill the weak ones. A founder act —
+  // the operator generated and graded the ideas but never decides which become work. Building resumes
+  // the operator to compose+run each pick (wired back to its idea); killing teaches the next round.
+  const handleResolveIdeas = useCallback(async (payload: { build: string[]; kill: string[] }) => {
+    if (!operatorSession) return;
+    try {
+      const response = await resolveOperatorIdeas(operatorSession.id, operatorProjectId(operatorSession), payload);
+      syncOperator(response.session);
+    } catch (error) {
+      setGraphError(error instanceof Error ? error.message : String(error));
+    }
+  }, [operatorSession, syncOperator]);
+
   // The live operator presence: Claude's cursor travels the canvas as it stages each node (camera
   // following), then rests on the lead ghost where the ✓/✕/note sits; when a run pauses at the
   // founder gate, the cursor points there instead. Null whenever there's no operator work on screen.
@@ -1625,6 +1640,11 @@ export default function App() {
               onOpen={handleProjectOpen}
               projects={projects}
             />
+          ) : operatorSession?.status === "waiting_for_ideas" && operatorSession.pendingIdeas ? (
+            // The operator ideated and STOPPED for the founder's call — a blocking decision, so it owns
+            // the screen (like a gate) rather than dropping back to the goal launcher. Build the strong
+            // ideas, kill the weak ones; nothing runs until you pick.
+            <IdeaReview session={operatorSession} onResolve={handleResolveIdeas} />
           ) : overviewActive && !activeChannelId ? (
             // One project, one canvas: opening a product LANDS on the board — the nine belief layers at
             // board altitude. Zoom a band to drop in; the Channels band carries the engine overview.

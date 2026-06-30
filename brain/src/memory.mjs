@@ -68,15 +68,64 @@ export function extractDecisions(runs = [], { limit = 5 } = {}) {
   return { approved, rejected, edits };
 }
 
+// Idea taste — the founder's kills/keeps on GENERATED ideas, read off the feedback ledger's
+// IdeaKill/IdeaKeep signals and shaped into killed/kept ANGLES so the next ideation round avoids the
+// angles the founder has already thrown out. This is the ideation half of loop memory: gate decisions
+// teach voice (above), idea decisions teach which angles bite. Newest decisions win; an angle's count
+// is how many times the founder has killed (or kept) from it. Connector-agnostic, like the rest.
+export function extractIdeaTaste(signals = [], { limit = 5 } = {}) {
+  const killedAngles = new Map();
+  const keptAngles = new Map();
+  const killedPitches = [];
+  const keptPitches = [];
+  for (let i = (signals?.length ?? 0) - 1; i >= 0; i--) {
+    const s = signals[i];
+    if (s?.type !== "IdeaKill" && s?.type !== "IdeaKeep") continue;
+    const killed = s.type === "IdeaKill";
+    const angle = typeof s.angle === "string" && s.angle.trim() ? s.angle.trim() : null;
+    if (angle) {
+      const bucket = killed ? killedAngles : keptAngles;
+      bucket.set(angle, (bucket.get(angle) ?? 0) + 1);
+    }
+    const pitch = typeof s.summary === "string" ? s.summary.trim() : "";
+    if (pitch) (killed ? killedPitches : keptPitches).push(pitch);
+  }
+  const rankAngles = (m) =>
+    [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, limit)
+      .map(([angle, count]) => ({ angle, count }));
+  const taste = {
+    killedAngles: rankAngles(killedAngles),
+    keptAngles: rankAngles(keptAngles),
+    killedPitches: killedPitches.slice(0, limit),
+    keptPitches: keptPitches.slice(0, limit),
+  };
+  const empty = !taste.killedAngles.length && !taste.keptAngles.length
+    && !taste.killedPitches.length && !taste.keptPitches.length;
+  return empty ? null : taste;
+}
+
+// Trim idea taste down to the next run's budget, mirroring how approved/rejected/edits are sliced.
+function shapeIdeaTaste(ideaTaste, maxExamples) {
+  if (!ideaTaste) return null;
+  const killedAngles = (ideaTaste.killedAngles ?? []).slice(0, maxExamples);
+  const keptAngles = (ideaTaste.keptAngles ?? []).slice(0, maxExamples);
+  const killedPitches = (ideaTaste.killedPitches ?? []).slice(0, maxExamples);
+  const keptPitches = (ideaTaste.keptPitches ?? []).slice(0, maxExamples);
+  if (!killedAngles.length && !keptAngles.length && !killedPitches.length && !keptPitches.length) return null;
+  return { killedAngles, keptAngles, killedPitches, keptPitches };
+}
+
 // Shape decisions into a compact memory object the next run consumes.
-// Returns null when there is nothing to learn from yet (the first run).
-export function buildDraftMemory(decisions, { maxExamples = 3 } = {}) {
-  if (!decisions) return null;
-  const approved = (decisions.approved ?? []).slice(0, maxExamples).map((d) => d.draft);
-  const rejected = (decisions.rejected ?? []).slice(0, maxExamples).map((d) => d.draft);
-  const edits = (decisions.edits ?? []).slice(0, maxExamples);
-  if (!approved.length && !rejected.length && !edits.length) return null;
-  return { approved, rejected, edits };
+// Returns null when there is nothing to learn from yet (the first run). `ideaTaste` folds the founder's
+// idea kills/keeps in alongside the gate voice signal, so one memory object carries both halves.
+export function buildDraftMemory(decisions, { maxExamples = 3, ideaTaste = null } = {}) {
+  const approved = (decisions?.approved ?? []).slice(0, maxExamples).map((d) => d.draft);
+  const rejected = (decisions?.rejected ?? []).slice(0, maxExamples).map((d) => d.draft);
+  const edits = (decisions?.edits ?? []).slice(0, maxExamples);
+  const idea = shapeIdeaTaste(ideaTaste, maxExamples);
+  if (!approved.length && !rejected.length && !edits.length && !idea) return null;
+  return { approved, rejected, edits, ...(idea ? { ideaTaste: idea } : {}) };
 }
 
 // Render memory as a prompt block appended to draft instructions.
@@ -101,6 +150,26 @@ export function renderDraftMemory(memory) {
         memory.rejected.map((d, i) => `[rejected ${i + 1}]\n${d}`).join("\n\n")
     );
   }
+  if (memory.ideaTaste?.killedAngles?.length) {
+    parts.push(
+      "Ideation angles the founder has KILLED before. Do not pitch from these again:\n" +
+        memory.ideaTaste.killedAngles
+          .map((a) => `- ${a.angle}${a.count > 1 ? ` (killed ${a.count}×)` : ""}`)
+          .join("\n") +
+        (memory.ideaTaste.killedPitches?.length
+          ? "\nExamples of killed ideas:\n" +
+            memory.ideaTaste.killedPitches.map((p, i) => `[killed ${i + 1}] ${p}`).join("\n")
+          : "")
+    );
+  }
+  if (memory.ideaTaste?.keptAngles?.length) {
+    parts.push(
+      "Ideation angles the founder has KEPT before — lean into these:\n" +
+        memory.ideaTaste.keptAngles
+          .map((a) => `- ${a.angle}${a.count > 1 ? ` (kept ${a.count}×)` : ""}`)
+          .join("\n")
+    );
+  }
   if (!parts.length) return "";
   return "\n\n--- What the founder has taught you so far ---\n" + parts.join("\n\n");
 }
@@ -120,6 +189,8 @@ export function buildTasteProfile(decisions, options = {}) {
       approved: memory.approved.length,
       rejected: memory.rejected.length,
       edits: memory.edits.length,
+      killedAngles: memory.ideaTaste?.killedAngles?.length ?? 0,
+      keptAngles: memory.ideaTaste?.keptAngles?.length ?? 0,
     },
   };
 }
@@ -180,15 +251,26 @@ export function queryTaste(profile, { question = "", limit = 3 } = {}) {
   let edits = rank(profile.edits, (e) => `${e.from} ${e.to}`);
   if (!edits.length && profile.edits?.length) edits = profile.edits.slice(0, 1);
 
-  if (!approved.length && !rejected.length && !edits.length) {
+  // Killed angles generalize past the exact words of the question (like edits), so always carry the
+  // idea taste through — a question about an angle should never miss what the founder already killed.
+  const ideaTaste = profile.ideaTaste ?? null;
+
+  if (!approved.length && !rejected.length && !edits.length && !ideaTaste) {
     const c = profile.counts ?? {};
     return {
-      text: `No prior taste decisions match "${question}". Observed so far — approved ${c.approved ?? 0}, rejected ${c.rejected ?? 0}, edits ${c.edits ?? 0}.`,
+      text: `No prior taste decisions match "${question}". Observed so far — approved ${c.approved ?? 0}, rejected ${c.rejected ?? 0}, edits ${c.edits ?? 0}, killed angles ${c.killedAngles ?? 0}.`,
       meta: { mode: "no-match", question },
     };
   }
   return {
-    text: renderDraftMemory({ approved, rejected, edits }).replace(/^\n+/, ""),
-    meta: { mode: "query", question, approved: approved.length, rejected: rejected.length, edits: edits.length },
+    text: renderDraftMemory({ approved, rejected, edits, ideaTaste }).replace(/^\n+/, ""),
+    meta: {
+      mode: "query",
+      question,
+      approved: approved.length,
+      rejected: rejected.length,
+      edits: edits.length,
+      killedAngles: ideaTaste?.killedAngles?.length ?? 0,
+    },
   };
 }
