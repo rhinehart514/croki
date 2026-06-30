@@ -42,6 +42,12 @@ const PER_ID_COLLECTIONS = [
   "design-state",
   "workspaces",
   "teams",
+  // The world-signal inbox (inputs-store.mjs), founder-pasted API keys (credential-store.mjs), and
+  // graded ideation output (idea-store.mjs). Each is a per-id JSON store under the home root, so each
+  // imports document-by-document like the rest.
+  "inputs",
+  "credentials",
+  "gtm-ideas",
 ];
 
 // List the keys present on disk for a per-id collection (the .json basenames). Missing directory →

@@ -15,6 +15,28 @@ function now() {
   return new Date().toISOString();
 }
 
+// The per-channel autonomy ladder. A channel starts at "draft" (the gate holds everything, today's
+// behavior). The founder can explicitly promote it to "trusted" or "autonomous" — that promotion is
+// itself an explicit, revocable founder approval, applied as a STANDING rule: the channel's blessed
+// pattern auto-approves the clean items at the gate and holds only the exceptions. The wall is not
+// weakened — the founder approved a class of work once and can drop it back to "draft" in one click
+// (revokeChannel). Promotion is ALWAYS explicit; nothing on the run path may auto-promote a channel.
+const AUTONOMY_LEVELS = new Set(["draft", "trusted", "autonomous"]);
+
+// The standing approval a promoted channel carries. It is the input to gate-pattern.mjs's
+// applyPatternApproval at run time, so its shape matches that contract: a decision plus an optional
+// confidence threshold and a human note describing the blessed recipe. A promotion always means
+// "approve the clean items" — a reject pattern is just draft behavior, so decision is pinned to
+// "approve" here.
+function normalizeBlessedPattern(input) {
+  if (!input || typeof input !== "object") return null;
+  const pattern = { decision: "approve", blessedAt: now() };
+  if (typeof input.confidenceThreshold === "number") pattern.confidenceThreshold = input.confidenceThreshold;
+  if (typeof input.note === "string" && input.note.trim()) pattern.note = input.note.trim();
+  if (typeof input.rule === "string" && input.rule.trim()) pattern.rule = input.rule.trim();
+  return pattern;
+}
+
 function slug(value) {
   return String(value || "")
     .toLowerCase()
@@ -422,6 +444,10 @@ function channelFromLegacy(project, channel, options = {}) {
   const lastRun = runs.at(-1) ?? null;
   return {
     ...channel,
+    // Default a legacy channel (written before the autonomy ladder) to the safe rung: draft, no
+    // standing pattern, so the gate holds everything until the founder explicitly promotes it.
+    autonomy: AUTONOMY_LEVELS.has(channel.autonomy) ? channel.autonomy : "draft",
+    blessedPattern: channel.blessedPattern ?? null,
     status: deriveChannelStatus(runs),
     lastRunAt: lastRun?.createdAt ?? null,
     lastRunOk: lastRun ? lastRun.ok === true : null,
@@ -539,6 +565,10 @@ export function registerComposedChannel(input, options = {}) {
     objective: String(input.objective ?? "").trim(),
     kind: String(input.kind || "custom").trim() || "custom",
     enabled: true,
+    // A freshly composed channel starts at the bottom of the autonomy ladder: draft, no standing
+    // pattern. The founder promotes it deliberately once a run has earned trust.
+    autonomy: "draft",
+    blessedPattern: null,
     createdAt: now(),
   };
   const channels = [...(project.channels ?? []), channel];
@@ -600,6 +630,67 @@ export function updateChannel(channelId, patch, options = {}) {
   return { project: saved, channel };
 }
 
+// Move a channel to an autonomy rung and stamp (or clear) its standing approval on the channel's gate
+// nodes, so the next run reads the founder's decision straight off the graph. Shared by promote and
+// revoke. Writing the pattern onto the gate node config keeps the wire self-contained: the gate
+// connector reads node.config, with no new threading through the run path. Draft clears the config,
+// reverting to hold-everything in one save.
+function setChannelAutonomy(project, current, level, blessedPattern, options = {}) {
+  const record = (project.channels ?? []).find((channel) => channel.id === current.id);
+  if (!record) throw new Error(`Channel not found: ${current.id}`);
+  const pattern = level === "draft" ? null : blessedPattern;
+  const nextRecord = { ...record, autonomy: level, blessedPattern: pattern, autonomyUpdatedAt: now() };
+
+  const flow = loadFlow(current.graphId, null, options);
+  if (flow.graph?.nodes?.length) {
+    const nodes = flow.graph.nodes.map((node) => {
+      if (node.category !== "gate") return node;
+      const config = { ...(node.config ?? {}) };
+      if (level === "draft") {
+        delete config.autonomy;
+        delete config.blessedPattern;
+      } else {
+        config.autonomy = level;
+        config.blessedPattern = pattern;
+      }
+      return { ...node, config };
+    });
+    saveFlow({ ...flow.graph, nodes }, options);
+  }
+
+  const channels = (project.channels ?? []).map((channel) => (channel.id === current.id ? nextRecord : channel));
+  const saved = saveProject({ ...project, channels }, options);
+  return { project: saved, channel: getChannel(saved, current.id, options) };
+}
+
+// Promote a channel UP the autonomy ladder ("trusted" or "autonomous") behind a blessed pattern. This
+// is ALWAYS an explicit founder action — never called from a run path — and it is the standing form of
+// a gate approval: from now on the channel's gate auto-approves the clean items and holds only the
+// exceptions. Requires a blessed pattern (the recipe the founder is standing behind); refuses without
+// one and refuses a promotion to "draft" (that is revokeChannel's job).
+export function promoteChannel(channelId, input = {}, options = {}) {
+  const project = loadProject(options);
+  const current = getChannel(project, channelId, options);
+  const level = String(input.autonomy || "trusted").trim();
+  if (level === "draft" || !AUTONOMY_LEVELS.has(level)) {
+    throw new Error(`promoteChannel needs an autonomy level of "trusted" or "autonomous", got "${level}".`);
+  }
+  const blessedPattern = normalizeBlessedPattern(input.blessedPattern);
+  if (!blessedPattern) {
+    throw new Error("Promoting a channel requires a blessed pattern — the standing approval the gate applies.");
+  }
+  return setChannelAutonomy(project, current, level, blessedPattern, options);
+}
+
+// Drop a channel back to "draft" in one call — instantly reverting to hold-everything at the gate and
+// clearing the standing pattern off its gate nodes. Always available; the founder can revoke trust the
+// moment a run surprises them.
+export function revokeChannel(channelId, options = {}) {
+  const project = loadProject(options);
+  const current = getChannel(project, channelId, options);
+  return setChannelAutonomy(project, current, "draft", null, options);
+}
+
 // A channel is a flow: a stored channel record in project.channels plus its executable graph in the
 // flow store. No outcome program, no domain events — just the system the founder builds.
 function createFlowChannel(project, input = {}, options = {}) {
@@ -622,6 +713,10 @@ function createFlowChannel(project, input = {}, options = {}) {
     objective,
     kind,
     enabled: input.enabled !== false,
+    // New channels start at the bottom of the autonomy ladder: draft, no standing pattern. The gate
+    // holds everything until the founder explicitly promotes the channel (promoteChannel).
+    autonomy: "draft",
+    blessedPattern: null,
     createdAt: now(),
   };
   const channels = [...(project.channels ?? []), channel];

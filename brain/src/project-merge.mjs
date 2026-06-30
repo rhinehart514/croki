@@ -6,6 +6,8 @@ import { loadFeedbackLedger, saveFeedbackLedger } from "./feedback-ledger.mjs";
 import { loadProductModelStore, saveProductModelStore } from "./product-model-store.mjs";
 import { loadDomainEventStore, saveDomainEventStore } from "./domain-events.mjs";
 import { getOperatorSession, listOperatorSessions, saveOperatorSession } from "./operator-store.mjs";
+import { loadInputStore, saveInputStore } from "./inputs-store.mjs";
+import { getGtmIdea, listGtmIdeas, saveGtmIdea } from "./idea-store.mjs";
 
 // One project per repo. The dedupe-on-point guard (server.mjs) keeps NEW duplicates from forming;
 // this module cleans up the ones that already exist and powers an in-product "remove this project"
@@ -13,12 +15,16 @@ import { getOperatorSession, listOperatorSessions, saveOperatorSession } from ".
 // (purge its records). Both leave the catalog with a valid active project and at least one survivor.
 //
 // What moves vs. what stays:
-// - MOVES (one file per projectId): feedback signals, product models, domain events, and each
-//   record's `projectId` is repointed to the target.
-// - REPOINTED IN PLACE (one file per id, carries a projectId field): operator sessions.
+// - MOVES (one file per projectId): feedback signals, product models, domain events, captured world
+//   inputs (the append-only signal inbox), and each record's `projectId` is repointed to the target.
+// - REPOINTED IN PLACE (one file per id, carries a projectId field): operator sessions and graded
+//   ideas (gtm-ideas, keyed by the idea's own id) — each is reloaded and re-saved under the target.
 // - STAYS PUT (global, keyed by graphId): flows. A moved channel keeps its existing graphId, so
 //   `loadFlow(graphId)` still finds the flow file. The graphId prefix becomes a cosmetic, opaque
 //   string under the target — never rekeyed.
+// - TARGET AUTHORITATIVE (one file per projectId, dropped from the source on merge): founder-pasted
+//   credentials. Same-repo dedup means the source's keys duplicate the target's; the target's pasted
+//   keys win, and the source's file is purged with the rest, matching the sharedContext rule.
 // - UNIONED ON THE TARGET PROJECT OBJECT: channels (deduped by id). The target keeps its own
 //   sharedContext (its repo grounding) as authoritative.
 
@@ -26,9 +32,13 @@ function safeId(value) {
   return String(value || "default").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "default";
 }
 
-// The per-project store files this module owns. Each is `<root>/<dir>/<safeId(projectId)>.json`.
+// The per-project store files this module owns (keyed by safeId(projectId)). Each is
+// `<root>/<dir>/<safeId(projectId)>.json`. Purged from a source on merge and from a project on delete.
+// "credentials" stays target-authoritative — it has no move step, so the source's pasted keys drop
+// when this purges them. (gtm-ideas is keyed by idea id, not projectId, so it is repointed in place
+// like operator sessions, not listed here.)
 const PROJECT_STORE_DIRS = [
-  "feedback-ledger", "product-models", "domain-events",
+  "feedback-ledger", "product-models", "domain-events", "inputs", "credentials",
 ];
 
 function dedupeById(existing, incoming, targetId) {
@@ -55,6 +65,15 @@ function moveOperatorSessions(sourceId, targetId, options) {
   for (const summary of listOperatorSessions({ ...options, projectId: sourceId })) {
     const session = getOperatorSession(summary.id, options);
     saveOperatorSession({ ...session, projectId: targetId }, options);
+  }
+}
+
+function moveGtmIdeas(sourceId, targetId, options) {
+  // gtm-ideas are keyed by the idea's own id and carry a projectId field, like operator sessions —
+  // repoint each in place so a merged project keeps every survived/killed idea it generated.
+  for (const summary of listGtmIdeas({ ...options, projectId: sourceId })) {
+    const idea = getGtmIdea(summary.id, options);
+    saveGtmIdea({ ...idea, projectId: targetId }, options);
   }
 }
 
@@ -94,9 +113,11 @@ export function mergeProjects(sourceIds, targetId, options = {}) {
   for (const sourceId of sources) {
     moveListStore(loadFeedbackLedger, saveFeedbackLedger, "signals", sourceId, targetId, options, 1000);
     moveListStore(loadProductModelStore, saveProductModelStore, "productModels", sourceId, targetId, options);
-    // Domain events are an authoritative append-only log — never capped.
+    // Domain events and captured inputs are authoritative append-only logs — never capped.
     moveListStore(loadDomainEventStore, saveDomainEventStore, "events", sourceId, targetId, options);
+    moveListStore(loadInputStore, saveInputStore, "inputs", sourceId, targetId, options);
     moveOperatorSessions(sourceId, targetId, options);
+    moveGtmIdeas(sourceId, targetId, options);
 
     const sourceProject = loadProject({ ...options, projectId: sourceId });
     const targetProject = loadProject({ ...options, projectId: targetId });

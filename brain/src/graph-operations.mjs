@@ -51,6 +51,27 @@ function predicateError(predicate) {
 // UI and the composer, not an enum the engine branches on. The anti-cage guard (E3.2) keeps it open.
 export const OUTPUT_KIND_HINTS = ["message", "artifact", "dataset", "signal", "none"];
 
+// The gate's standing-autonomy authority. A trusted/autonomous channel carries `autonomy` +
+// `blessedPattern` on its gate node config, and the gate connector auto-approves clean items off them.
+// That authority is FOUNDER-OWNED durable state: only an explicit founder promotion
+// (project-store's promoteChannel → setChannelAutonomy, which writes the flow directly) may stamp it.
+// A model-driven graph mutation must NEVER be able to forge it — letting clean items through a gate
+// with zero founder review is the Wall hole. These keys are therefore rejected on a gate node here, on
+// every typed mutation path (add_node / update_node). The legitimate founder promotion never routes
+// through these operations, so it is untouched.
+const FOUNDER_OWNED_GATE_CONFIG_KEYS = ["autonomy", "blessedPattern"];
+
+function assertNoForgedAutonomy(category, config) {
+  if (category !== "gate" || !config || typeof config !== "object") return;
+  const forged = FOUNDER_OWNED_GATE_CONFIG_KEYS.filter((key) => Object.prototype.hasOwnProperty.call(config, key));
+  if (forged.length) {
+    throw new Error(
+      `A gate node's ${forged.join(" / ")} is founder-owned standing approval and cannot be set through a graph operation. ` +
+      "Only an explicit founder channel promotion may grant a channel standing autonomy.",
+    );
+  }
+}
+
 function clone(value) {
   return structuredClone(value);
 }
@@ -182,6 +203,7 @@ function applyOne(graph, operation) {
     }
     node.label = requireString(node.label, "Node label");
     node.config = node.config && typeof node.config === "object" && !Array.isArray(node.config) ? node.config : {};
+    assertNoForgedAutonomy(node.category, node.config);
     if (node.outputKind !== undefined) node.outputKind = requireString(node.outputKind, "Node outputKind");
     if (node.contract != null) node.contract = normalizeContract(node.contract);
     node.position = {
@@ -211,6 +233,9 @@ function applyOne(graph, operation) {
     const unknown = Object.keys(patch).filter((key) => !allowed.has(key));
     if (unknown.length) throw new Error(`Unsupported node patch fields: ${unknown.join(", ")}`);
     const current = graph.nodes[index];
+    // category is not a patchable field, so the node stays whatever it already is — guard the patch's
+    // config against forging the founder-owned autonomy keys onto a gate node.
+    if (patch.config) assertNoForgedAutonomy(current.category, patch.config);
     graph.nodes[index] = {
       ...current,
       ...clone(patch),

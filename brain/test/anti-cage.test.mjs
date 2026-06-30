@@ -31,8 +31,12 @@
 
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it } from "node:test";
+import { applyGraphOperations } from "../src/graph-operations.mjs";
+import { loadFlow, saveFlow } from "../src/flow-store.mjs";
+import { createChannel, getChannel, loadProject, promoteChannel, registerComposedChannel } from "../src/project-store.mjs";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -272,6 +276,92 @@ describe("anti-cage: fixed stage skeleton not re-introduced as live code", () =>
       assert.ok(!/from\s+["']\.\/graph\.mjs["']/.test(board), "board.mjs must not import the run engine (graph.mjs).");
       assert.ok(!/runGraph/.test(board), "board.mjs must never call runGraph — it is a pure read.");
       readSrc("belief-writeback.mjs"); // throws if missing
+    });
+  });
+
+  // GUARD E — The wall GRADUATES safely: a channel's standing autonomy is founder-owned and can
+  // never be forged. The autonomy ladder (draft → trusted → autonomous) lets a promoted channel's
+  // gate auto-approve clean items — that is real autonomy, so its safety contract must be pinned the
+  // same way the other cages are. The contract: (1) the gate node stays structurally present, (2)
+  // autonomy is set ONLY by an explicit founder promotion — never by composition and never by a run,
+  // and (3) the typed graph-mutation path (the model's only run-adjacent write to a graph) rejects any
+  // attempt to forge `autonomy`/`blessedPattern` onto a gate node config. Without (3) a model-driven
+  // updateNode({config:{autonomy:"autonomous", blessedPattern:{decision:"approve"}}}) would self-promote
+  // the channel and let clean items through with zero founder review.
+  describe("anti-cage: the wall graduates safely (autonomy is founder-only, never forgeable)", () => {
+    const GATE = (config = {}) => ({
+      id: "gate-1", category: "gate", label: "Founder review", position: { x: 0, y: 0 }, config,
+    });
+
+    it("add_node refuses to forge autonomy/blessedPattern onto a gate node config", () => {
+      const base = { id: "g", name: "g", revision: 0, nodes: [], edges: [] };
+      assert.throws(
+        () => applyGraphOperations(base, [{ type: "add_node", node: GATE({ autonomy: "autonomous", blessedPattern: { decision: "approve" } }) }]),
+        /founder-owned standing approval/,
+        "a model must not be able to add a gate that is pre-promoted to autonomous",
+      );
+    });
+
+    it("update_node refuses to forge autonomy/blessedPattern onto an existing gate node config", () => {
+      const withGate = { id: "g", name: "g", revision: 1, nodes: [GATE()], edges: [] };
+      assert.throws(
+        () => applyGraphOperations(withGate, [{ type: "update_node", nodeId: "gate-1", patch: { config: { autonomy: "trusted", blessedPattern: { decision: "approve" } } } }]),
+        /founder-owned standing approval/,
+        "a model-driven updateNode must not self-promote a gate past the wall",
+      );
+    });
+
+    it("the autonomy guard is gate-scoped, not a blanket cage (a non-gate node may carry any config)", () => {
+      const withAgent = {
+        id: "g", name: "g", revision: 1,
+        nodes: [{ id: "draft-1", kind: "agent", ref: "drafter", label: "Drafter", position: { x: 0, y: 0 }, config: {} }],
+        edges: [],
+      };
+      // An arbitrary config key on a NON-gate node is meaningless but harmless — the guard must not
+      // cage it, or it becomes a fourth constraint on what the model may express.
+      assert.doesNotThrow(() => applyGraphOperations(withAgent, [{ type: "update_node", nodeId: "draft-1", patch: { config: { autonomy: "whatever" } } }]));
+    });
+
+    describe("autonomy is only ever granted by an explicit founder promotion", () => {
+      let parent;
+      let options;
+      beforeEach(() => {
+        parent = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-anticage-autonomy-"));
+        options = { root: parent };
+      });
+      afterEach(() => fs.rmSync(parent, { recursive: true, force: true }));
+
+      it("a freshly created channel starts at draft — composition never grants autonomy", () => {
+        const { channel } = createChannel({ name: "Outbound" }, options);
+        assert.equal(channel.autonomy, "draft");
+        assert.equal(channel.blessedPattern, null);
+      });
+
+      it("a freshly composed+registered channel also starts at draft — the compose path never grants autonomy", () => {
+        const created = createChannel({ name: "Outbound" }, options).channel;
+        const { channel } = registerComposedChannel(
+          { id: "composed-1", graphId: created.graphId, name: "Composed", objective: "" },
+          options,
+        );
+        assert.equal(channel.autonomy, "draft");
+        assert.equal(channel.blessedPattern, null);
+      });
+
+      it("only the founder promotion sets autonomy, and the gate node stays structurally present", () => {
+        const { channel } = createChannel({ name: "Outbound" }, options);
+        const flow = loadFlow(channel.graphId, null, options);
+        saveFlow({ ...flow.graph, nodes: [GATE()] }, options);
+
+        promoteChannel(channel.id, { autonomy: "trusted", blessedPattern: { note: "on-claim outreach" } }, options);
+
+        const promoted = getChannel(loadProject(options), channel.id, options);
+        assert.equal(promoted.autonomy, "trusted");
+        // The gate node is still on the graph — graduation is standing approval, not the gate's removal.
+        const gate = loadFlow(channel.graphId, null, options).graph.nodes.find((n) => n.id === "gate-1");
+        assert.ok(gate, "the gate node must still be structurally present after promotion");
+        assert.equal(gate.category, "gate");
+        assert.equal(gate.config.autonomy, "trusted");
+      });
     });
   });
 

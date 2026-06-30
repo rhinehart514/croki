@@ -29,6 +29,17 @@ constraint.
    approval. Every `execute` node must have a founder `gate` upstream of it on every path or the
    composition is rejected (`assertGateWall`). The default execute connector stages locally and
    never sends. "Vibe up to the gate, never past it."
+   The Wall **graduates per channel — it never disappears.** A channel starts at `draft` (the gate
+   holds every item). The founder may explicitly promote a channel up the autonomy ladder
+   (`draft → trusted → autonomous`, `promoteChannel`/`revokeChannel` in `project-store.mjs`), banking a
+   *blessed pattern* the gate then auto-applies to the clean items while still escalating the exceptions
+   (`gate-pattern.mjs`). This is standing founder approval, not the absence of approval: the gate node
+   stays structurally present on every path, the promotion is itself an explicit founder act, and one
+   click drops the channel back to `draft`. The safety contract is that **autonomy is only ever set by an
+   explicit founder promotion — never by composition and never by a run.** The standing pattern lives in
+   founder-owned durable state (the channel record), and the typed graph-operations path rejects any
+   attempt to forge `autonomy`/`blessedPattern` onto a gate node config (`graph-operations.mjs`), so a
+   model-driven mutation can never self-promote a channel past the wall (guarded by `anti-cage.test.mjs`).
 3. **Taste.** The run ledger of gate decisions becomes durable memory that shapes the next run
    (`memory.mjs`, `feedback-ledger.mjs`); a drafting agent must consult it (`get_taste`) and a
    visual one must also consult `get_design` (`consult-guard.mjs`).
@@ -205,7 +216,16 @@ fixes it.
 - GTM flow execution stops at founder gates. The default execution connector stages actions locally and
   never sends or publishes. Gate continuation reuses the exact prepared run items; it does not rerun live
   source, enrichment, or generation work behind the founder's back. Graph changes created by a model use
-  typed operations and pass graph validation.
+  typed operations and pass graph validation. The one carve-out is the **per-channel autonomy ladder**:
+  a channel the founder explicitly promoted to `trusted`/`autonomous` carries a blessed pattern that the
+  gate auto-applies to clean items, holding only the exceptions. This is standing founder approval, never
+  the wall's removal — the gate node stays present, autonomy is set ONLY by an explicit founder promotion
+  (never by composition or a run; the typed graph path rejects forging `autonomy`/`blessedPattern` onto a
+  gate node), and `revokeChannel` drops it back to hold-everything in one click. NOTE (Phase 1 status):
+  the ladder's stores and promotion API exist and are tested, but are not yet wired to a server route or
+  the canvas — promotion is backend-only today. The BYO credential store (`credential-store.mjs`) is the
+  same: durable and tested, but `resolveCredentialToken` has no connector caller yet, so connectors still
+  read `process.env`. Both are deliberate backend scaffolding, not operable end-to-end.
 - The host owns truth, state, and the gate; the intelligence is rented. If a unit of work is fuzzy
   (research, enrich, ideate, draft, propose), it is a skill or a subagent reached through an open step —
   not a Node connector. Code is for the deterministic spine only.

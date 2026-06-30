@@ -9,6 +9,9 @@ import {
 import { deleteProject, mergeProjects } from "../src/project-merge.mjs";
 import { loadFeedbackLedger, saveFeedbackLedger } from "../src/feedback-ledger.mjs";
 import { createOperatorSession, listOperatorSessions } from "../src/operator-store.mjs";
+import { createGtmIdea, listGtmIdeas } from "../src/idea-store.mjs";
+import { appendInput, listInputs } from "../src/inputs-store.mjs";
+import { getCredential, setCredential } from "../src/credential-store.mjs";
 
 describe("project merge + delete", () => {
   let parent;
@@ -59,6 +62,41 @@ describe("project merge + delete", () => {
 
     // Source store files purged.
     assert.equal(fs.existsSync(path.join(parent, "feedback-ledger", "beta.json")), false);
+  });
+
+  it("repoints a source project's graded ideas (GtmIdea) to the target", () => {
+    const idea = createGtmIdea({ projectId: "beta", goal: "5 pilots", pitch: "Buffalo-local outbound", verdict: "survived" }, options);
+
+    mergeProjects(["beta"], "alpha", options);
+
+    const alphaIdeas = listGtmIdeas({ ...options, projectId: "alpha" });
+    assert.deepEqual(alphaIdeas.map((i) => i.id), [idea.id]);
+    assert.equal(alphaIdeas[0].projectId, "alpha"); // repointed in place, not dropped
+    assert.equal(listGtmIdeas({ ...options, projectId: "beta" }).length, 0);
+  });
+
+  it("moves a source project's captured inputs to the target, repointing projectId", () => {
+    appendInput("beta", { kind: "signup", source: "landing-page", payload: { email: "x@y.z" } }, options);
+
+    mergeProjects(["beta"], "alpha", options);
+
+    const alphaInputs = listInputs("alpha", options);
+    assert.equal(alphaInputs.length, 1);
+    assert.equal(alphaInputs[0].kind, "signup");
+    assert.equal(alphaInputs[0].projectId, "alpha"); // record repointed by the move
+    assert.equal(listInputs("beta", options).length, 0); // source store purged
+  });
+
+  it("keeps the target's pasted credentials authoritative and purges the source's", () => {
+    setCredential("alpha", { provider: "clay", token: "sk-alpha" }, options);
+    setCredential("beta", { provider: "clay", token: "sk-beta" }, options);
+
+    mergeProjects(["beta"], "alpha", options);
+
+    // Target wins (credentials have no move step) and the source's pasted key is purged with its file.
+    assert.equal(getCredential("alpha", "clay", options).token, "sk-alpha");
+    assert.equal(getCredential("beta", "clay", options), null);
+    assert.equal(fs.existsSync(path.join(parent, "credentials", "beta.json")), false);
   });
 
   it("is idempotent on re-running the same merge (dedupe by id)", () => {

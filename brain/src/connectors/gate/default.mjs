@@ -41,11 +41,28 @@ export async function run(node, upstream, context) {
       meta: { awaitingReview: 0, note: "No items require review." },
     };
   }
-  // Pattern + exception gating (E4.1/E4.2): the founder approved a PATTERN after reading a sample,
-  // so auto-approve the clean items and hold ONLY the exceptions (low confidence, flagged, no body)
-  // for individual review. Active only when a pattern decision is present; the per-item path below
-  // is left exactly as it was. This is how the wall survives 500 sends without becoming a stamp.
-  const pattern = node.runtime?.pattern;
+  // Pattern + exception gating (E4.1/E4.2): auto-approve the clean items and hold ONLY the exceptions
+  // (low confidence, flagged, no body) for individual review. This is how the wall survives 500 sends
+  // without becoming a stamp. There are two sources of a pattern decision, in priority order:
+  //   1. node.runtime.pattern — an explicit per-run founder pattern decision (the founder read a
+  //      sample and blessed THIS run's batch).
+  //   2. The channel's STANDING autonomy pattern — a channel the founder promoted up the ladder
+  //      ("trusted"/"autonomous") carries a blessed pattern on its gate config (stamped by
+  //      project-store's promoteChannel). That promotion is itself an explicit, revocable founder
+  //      approval, applied as a standing rule, so auto-apply it here.
+  // A draft channel has neither and falls through to today's per-item hold-everything path below.
+  const runtimePattern = node.runtime?.pattern;
+  const autonomy = node.config?.autonomy ?? null;
+  const blessed = node.config?.blessedPattern;
+  const standingPattern =
+    (autonomy === "trusted" || autonomy === "autonomous") && blessed && typeof blessed === "object"
+      ? blessed
+      : null;
+  const pattern =
+    runtimePattern && typeof runtimePattern === "object"
+    && (runtimePattern.decision === "approve" || runtimePattern.decision === "reject")
+      ? runtimePattern
+      : standingPattern;
   if (pattern && typeof pattern === "object" && (pattern.decision === "approve" || pattern.decision === "reject")) {
     const applied = applyPatternApproval(
       upstream,
@@ -61,7 +78,12 @@ export async function run(node, upstream, context) {
       ok: true,
       items,
       pendingReview: applied.pendingReview,
-      meta: { mode: "pattern", ...applied.counts, awaitingReview: applied.counts.pending },
+      meta: {
+        mode: pattern === standingPattern ? "autonomy" : "pattern",
+        autonomy,
+        ...applied.counts,
+        awaitingReview: applied.counts.pending,
+      },
     };
   }
 

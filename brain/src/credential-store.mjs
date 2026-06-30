@@ -1,0 +1,133 @@
+// The BYO-credential store — durable, project-scoped, founder-pasted API credentials.
+//
+// Today every connector reads its key from `process.env` only (see connectors/enrich/clay.mjs:
+// `process.env.CLAY_API_KEY`). That works for an engineer who can export an env var, but it locks
+// out a non-technical founder who just wants to paste a Gmail / Apollo / Clay key into the product
+// and run. This store is the durable place those pasted credentials live, so a connector can read a
+// key at RUNTIME (per project) instead of demanding it be in the process environment.
+//
+// Scope: host-owned DURABLE STATE, not intelligence. It stages a secret for later use; it never
+// sends, publishes, or charges, so it sits comfortably inside the Wall — the gate still governs any
+// outbound action, this just lets the founder supply the key that action will need. One document per
+// project holds every provider's credential, keyed by provider (lowercased), matching the per-project
+// convention design-state-store.mjs uses.
+//
+// SECURITY: a token is never logged, never printed, and never returned by `list` — `list` redacts to
+// `{ provider, label, savedAt, hasToken }`. Only `get` (the runtime read) and `resolveCredentialToken`
+// return the raw token, to the caller that is about to use it.
+
+import { safeId, now } from "./store-fs.mjs";
+import { persistence } from "./persistence.mjs";
+
+const SCHEMA_VERSION = 1;
+const COLLECTION = "credentials";
+
+function keyFor(projectId) {
+  return safeId(projectId || "default");
+}
+
+// Normalize a provider label to its stable key: lowercased, trimmed, filesystem/lookup-safe. So
+// "Gmail", " gmail ", and "gmail" all address the same credential.
+export function normalizeProvider(provider) {
+  return String(provider || "").trim().toLowerCase();
+}
+
+function emptyStore(projectId) {
+  return { schemaVersion: SCHEMA_VERSION, projectId: projectId || "default", credentials: {}, updatedAt: now() };
+}
+
+function loadStore(projectId, options = {}) {
+  const stored = persistence(options).get(COLLECTION, keyFor(projectId));
+  if (!stored) return emptyStore(projectId);
+  return {
+    ...emptyStore(projectId),
+    ...stored,
+    schemaVersion: SCHEMA_VERSION,
+    credentials: stored.credentials && typeof stored.credentials === "object" ? stored.credentials : {},
+  };
+}
+
+function saveStore(store, options = {}) {
+  const durable = {
+    ...store,
+    schemaVersion: SCHEMA_VERSION,
+    credentials: store.credentials && typeof store.credentials === "object" ? store.credentials : {},
+    updatedAt: now(),
+  };
+  persistence(options).set(COLLECTION, keyFor(durable.projectId), durable);
+  return durable;
+}
+
+// Strip the token out of a credential for any surface that should never see the secret (the list
+// view, an API response, a log line). Reports only that a token IS present, not its value.
+export function redactCredential(credential) {
+  if (!credential) return null;
+  return {
+    provider: credential.provider,
+    label: credential.label ?? null,
+    savedAt: credential.savedAt,
+    hasToken: Boolean(credential.token),
+  };
+}
+
+// Save (or replace, by provider) a founder-pasted credential for a project. Returns the REDACTED
+// credential — the caller that just saved a secret does not need it echoed back, and a redacted
+// return keeps the token out of logs/responses by construction.
+export function setCredential(projectId, input = {}, options = {}) {
+  const provider = normalizeProvider(input.provider);
+  if (!provider) throw new Error("A credential provider is required.");
+  const token = String(input.token ?? "").trim();
+  if (!token) throw new Error("A credential token is required.");
+
+  const store = loadStore(projectId, options);
+  const existing = store.credentials[provider];
+  const credential = {
+    provider,
+    token,
+    label: input.label != null ? String(input.label).slice(0, 80) : (existing?.label ?? null),
+    // First-saved time is preserved across an update so `savedAt` reads as "when the founder first
+    // connected this provider"; the document's own `updatedAt` carries the last-touched time.
+    savedAt: existing?.savedAt || now(),
+  };
+  const saved = saveStore({ ...store, credentials: { ...store.credentials, [provider]: credential } }, options);
+  return redactCredential(saved.credentials[provider]);
+}
+
+// The runtime read: the full credential INCLUDING the token, for the connector about to use it.
+// Null when the project has no credential for this provider. Never logs the token.
+export function getCredential(projectId, provider, options = {}) {
+  const store = loadStore(projectId, options);
+  return store.credentials[normalizeProvider(provider)] ?? null;
+}
+
+// Every provider a project has connected, REDACTED — provider, label, when, and whether a token is
+// present. Never the token itself. Sorted by provider for stable display.
+export function listCredentials(projectId, options = {}) {
+  const store = loadStore(projectId, options);
+  return Object.values(store.credentials)
+    .map(redactCredential)
+    .sort((a, b) => a.provider.localeCompare(b.provider));
+}
+
+// Remove a project's credential for a provider. Returns true when one was actually removed, false
+// when there was none — so a disconnect is idempotent.
+export function removeCredential(projectId, provider, options = {}) {
+  const key = normalizeProvider(provider);
+  const store = loadStore(projectId, options);
+  if (!(key in store.credentials)) return false;
+  const { [key]: _removed, ...rest } = store.credentials;
+  saveStore({ ...store, credentials: rest }, options);
+  return true;
+}
+
+// The runtime resolution a connector calls: prefer the founder's pasted credential for this project,
+// then fall back to the process env var (the engineer path that still works). Deterministic routing —
+// code, not a model call — so BYO and env-only coexist with no behavior change for existing setups.
+// `envKey` names the env var to fall back to; absent it, the convention is `${PROVIDER}_API_KEY`.
+// Returns the raw token string or null. Never logs the token.
+export function resolveCredentialToken(projectId, provider, { envKey, ...options } = {}) {
+  const stored = getCredential(projectId, provider, options);
+  if (stored?.token) return stored.token;
+  const key = envKey || `${normalizeProvider(provider).toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
+  return process.env[key] || null;
+}
