@@ -1383,6 +1383,7 @@ export default function App() {
   // differs. `graph` is null in overview (no channel focused), which lands channel-flow on its empty
   // state until a tile is clicked.
   const gtmCanvasModel = useMemo<GtmCanvasModel>(() => ({
+    projectId: activeProject?.id ?? null,
     graph: displayGraph ?? graph,
     connectors,
     contractAudits,
@@ -1625,9 +1626,9 @@ export default function App() {
               projects={projects}
             />
           ) : overviewActive && !activeChannelId ? (
-            // One project, one canvas: every built channel as a tile on the engine/portfolio overview.
-            // Clicking a tile opens that channel's flow (the channel-flow lens).
-            <GtmCanvas model={gtmCanvasModel} activeLensId="engine" chromeless />
+            // One project, one canvas: opening a product LANDS on the board — the nine belief layers at
+            // board altitude. Zoom a band to drop in; the Channels band carries the engine overview.
+            <GtmCanvas model={gtmCanvasModel} activeLensId="board" chromeless />
           ) : graph ? (
             // The single channel, through the GTM canvas: the channel-flow lens IS the GraphCanvas
             // (single-channel behavior unchanged), with the portfolio-map lens one tab away. The

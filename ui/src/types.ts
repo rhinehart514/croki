@@ -1057,3 +1057,31 @@ export type CapabilityServer = {
   overrideCount: number;
   toolCount: number;
 };
+
+// ─── GTM Board ────────────────────────────────────────────────────────────────
+// The nine belief layers getBoard() returns — the EXACT LayerBelief shape from brain/src/board.mjs.
+// A pure read of real state: a layer with no signal reports belief=null, confidence=0, status="blind"
+// rather than a confident fake. The board never gates or triggers a run.
+
+export type BoardPhase = "Strategy" | "Motion" | "Loop";
+export type BoardGroundingMode = "stated" | "gated" | "derived";
+export type BoardLayerStatus = "blind" | "assumed" | "testing" | "validated";
+
+export type LayerBelief = {
+  // The layer key (icp, trigger, positioning, offer, channels, artifacts, people, measure, learn).
+  layer: string;
+  phase: BoardPhase;
+  // The founder's current belief at this layer, or null when nothing is grounded yet.
+  belief: string | null;
+  groundingMode: BoardGroundingMode;
+  confidence: number; // 0-100, derived from real signal
+  status: BoardLayerStatus;
+  experiments: GtmExperiment[];
+  evidence: string[];
+};
+
+export type BoardView = {
+  projectId: string;
+  layers: LayerBelief[];
+  groups: Record<BoardPhase, LayerBelief[]>;
+};

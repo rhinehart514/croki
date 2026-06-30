@@ -1,6 +1,7 @@
-/* ExperimentMatrixLens — the ICP × claim × channel grid. Bespoke table scaffolding; all color comes
-   from the shared status tokens (green = complete/proven, amber = running, muted = draft). Opaque
-   reading surfaces only. */
+/* ExperimentMatrixLens — the ICP × claim × channel grid. Bespoke table scaffolding; color comes from
+   the shared status tokens (green = complete/proven, muted = draft). Running is NEUTRAL ink with a
+   subtle live pulse — amber (--gap) is the founder gate's alone and never marks an in-flight
+   experiment. Opaque reading surfaces only. */
 
 .matrix-lens {
   position: absolute;
@@ -145,8 +146,10 @@
   border-color: var(--ink);
   box-shadow: 0 0 0 1px var(--ink);
 }
-.matrix-exp.tone-running { border-left: 2px solid var(--gap); }
+/* Running: neutral ink rail with a slow breathing pulse — live, but never amber. */
+.matrix-exp.tone-running { border-left: 2px solid var(--ink-2); animation: matrix-running-pulse 2.4s var(--ease) infinite; }
 .matrix-exp.tone-complete { border-left: 2px solid var(--proven); }
+@keyframes matrix-running-pulse { 0%, 100% { border-left-color: var(--ink-2); } 50% { border-left-color: var(--ghost); } }
 
 .matrix-exp-status {
   font-size: 9.5px;
@@ -154,9 +157,21 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.status-running { color: var(--gap); }
+.status-running { color: var(--ink-2); }
+.status-running::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--ink);
+  vertical-align: middle;
+  animation: matrix-running-pip 1.8s var(--ease) infinite;
+}
 .status-complete { color: var(--proven); }
 .status-muted { color: var(--muted); }
+@keyframes matrix-running-pip { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
 .matrix-exp-ab {
   display: flex;
@@ -219,4 +234,9 @@
 @media (max-width: 560px) {
   .matrix-scroll { padding: 14px 14px 200px; }
   .matrix-legend { right: 12px; left: 12px; width: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .matrix-exp.tone-running,
+  .status-running::before { animation: none; }
 }

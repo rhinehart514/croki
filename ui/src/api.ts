@@ -7,7 +7,7 @@ import type {
   GraphOperation, GTMContractAudit,
   ProductModel, ProductModelEdit, ProductPinTargetKind,
   CapabilityServer, Person, CrossReferenceResult, ToolRegistryView, RegisteredTool, ChannelFeed, DirectedFeed,
-  ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole,
+  ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole, BoardView,
 } from "@/types";
 import { identityHeaders } from "@/lib/identity";
 
@@ -371,6 +371,10 @@ export const getPerson = (projectId: string, personId: string) =>
   get<{ projectId: string; person: Person }>(
     `/api/projects/${encodeURIComponent(projectId)}/people/${encodeURIComponent(personId)}`,
   );
+
+// ── GTM Board — the nine belief layers, a pure read of real state ──────────────
+export const getBoard = (projectId: string) =>
+  get<BoardView>(`/api/projects/${encodeURIComponent(projectId)}/board`);
 
 // "Where does X appear across channels" — the cross-reference / find-references query for a
 // person / icp / claim / experiment.

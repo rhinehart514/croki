@@ -2,6 +2,7 @@ import { GraphCanvas, type OperatorCursorState } from "@/components/GraphCanvas"
 import type { NodeEditorBridge } from "@/components/nodeEditorBridge";
 import { CanvasShell, type LensDef, type LensProps } from "@/components/canvas/CanvasShell";
 import { EngineLens } from "@/components/lenses/EngineLens";
+import { GtmBoardLens } from "@/components/lenses/GtmBoard";
 import type {
   ChannelFeed, ChannelMeta, Claim, ConnectorMeta, DirectedFeed, GateDecision, GtmExperiment, GTMContractAudit, GTMGraph, GTMNode,
   GTMRunResult, NodeSelection, Person,
@@ -22,6 +23,9 @@ import type {
 // spring into each other across modes.
 
 export type GtmCanvasModel = {
+  // The active project — the board lens reads GET /api/projects/:id/board with it. Null before a
+  // project is open (the board then shows its honest loading/empty state).
+  projectId: string | null;
   // ── channel-flow: the GraphCanvas prop bag (null graph → no channel open) ──
   graph: GTMGraph | null;
   connectors: ConnectorMeta[];
@@ -154,6 +158,9 @@ function EngineLensWrapper({ model: m }: GtmLensProps) {
 }
 
 const LENSES: LensDef<GtmCanvasModel, never>[] = [
+  // The board is the LANDING surface — semantic-zoom home of the nine belief layers. The other GTM
+  // lenses stay reachable (channel state still drives channel-flow); full tab removal lands later.
+  { id: "board", label: "Board", Component: GtmBoardLens },
   { id: "channel-flow", label: "Channel flow", Component: ChannelFlowLens },
   { id: "engine", label: "Engine", Component: EngineLensWrapper },
 ];
@@ -165,11 +172,11 @@ export function GtmCanvas({
   model, activeLensId, chromeless,
 }: {
   model: GtmCanvasModel;
-  // The altitude is CONTROLLED by channel state, derived inline by the host (engine on the overview,
+  // The altitude is CONTROLLED by channel state, derived inline by the host (board on the overview,
   // channel-flow with a channel open) — not stored. App reuses ONE GtmCanvas instance across both
   // branches, so the lens must be a controlled prop: an uncontrolled default only seeds the shell's
   // state once and would strand the reused instance on the stale lens when the branch flips.
-  activeLensId: "channel-flow" | "engine";
+  activeLensId: "board" | "channel-flow" | "engine";
   chromeless?: boolean;
 }) {
   return (
