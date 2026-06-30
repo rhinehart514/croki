@@ -2322,7 +2322,7 @@ export default function App() {
         {view === "canvas" && !showGoalLauncher ? <ComposerDock
           session={operatorSession}
           running={graphRunning}
-          floating={false}
+          floating={true}
           focusSignal={composerFocus}
           recede={proposalActive}
           boundChannelName={boundChannel?.name ?? null}
