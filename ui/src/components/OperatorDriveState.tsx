@@ -3,7 +3,7 @@ import { AlertTriangle, LoaderCircle, RotateCcw } from "lucide-react";
 import type { OperatorSession } from "@/types";
 
 // The operator's drive, made watchable. While Claude composes the loop from your goal, its real
-// reasoning and the brief it's building stream HERE — the inspections, the opportunities it found,
+// reasoning and the brief it's building stream HERE — the inspections, the ideas it found,
 // its notes — so "building your loop" is something you watch think, not an opaque spinner pointing at
 // a panel that isn't open. When the drive fails or blocks (a cold start with no runtime, a hit
 // session limit, an error) the reason is surfaced right here, with the trail of what it got through

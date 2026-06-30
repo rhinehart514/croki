@@ -1,4 +1,4 @@
-// One status vocabulary for the whole UI. Program status, operator-session status, and run-derived
+// One status vocabulary for the whole UI. Channel status, operator-session status, and run-derived
 // status were each humanized and colored independently (`status.replaceAll("_"," ")` copy-pasted in
 // six places, two separate `statusLabel` functions, one ad-hoc `badgeClass`), so "waiting at a gate"
 // could read as "waiting_for_gate", "paused at gate", or "pending" depending on the surface. This
@@ -7,7 +7,7 @@
 
 export type StatusTone = "idle" | "active" | "waiting" | "good" | "bad";
 
-// Canonical state keys (program + operator session) → tone. Run-derived phrases go through
+// Canonical state keys (channel + operator session) → tone. Run-derived phrases go through
 // toneForPhrase below instead, since they are composed sentences, not single keys.
 const TONE_BY_KEY: Record<string, StatusTone> = {
   draft: "idle",
@@ -53,9 +53,9 @@ export function statusToneClass(raw?: string | null): string {
   return TONE_CLASS[statusTone(raw)];
 }
 
-// For composed run/program phrases ("paused at gate", "blind attribution", "completed") that are not
-// single canonical keys — substring match to a tone. This is the old ProgramCanvas badgeClass,
-// promoted to the shared module so every surface classifies a phrase the same way.
+// For composed run phrases ("paused at gate", "blind attribution", "completed") that are not
+// single canonical keys — substring match to a tone. This was an ad-hoc badgeClass, promoted to
+// the shared module so every surface classifies a phrase the same way.
 export function toneForPhrase(phrase: string): string {
   const normalized = phrase.toLowerCase();
   if (normalized.includes("blocked") || normalized.includes("blind") || normalized.includes("failed") || normalized.includes("missing")) return "bad";

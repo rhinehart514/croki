@@ -6,7 +6,7 @@ import "@/styles/menu.css";
 
 /**
  * Top-left product switcher. Switching the active product re-scopes the whole
- * workspace — channels, opportunities, and the Claude session that loads with it.
+ * workspace — channels, goals, and the Claude session that loads with it.
  */
 export function ProjectSwitcher({
   projects,

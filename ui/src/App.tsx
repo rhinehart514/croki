@@ -43,6 +43,11 @@ import {
   getProductModel,
   deriveProductModel,
   reviseProductModel,
+  getNeedsYou,
+  composeMicroproduct,
+  promoteChannel,
+  revokeChannel,
+  type FounderFlow,
 } from "@/api";
 // Heavy overlay/panel components are split into their own chunks and loaded on demand the first time
 // the founder opens them, so they stay out of the initial app chunk. Each is named-exported, so the
@@ -83,6 +88,10 @@ import { ExperimentMatrixLens } from "@/components/lenses/ExperimentMatrixLens";
 import { ReferencesPanel, type ReferenceKind } from "@/components/ReferencesPanel";
 import { ToolForge } from "@/components/ToolForge";
 import { IssuesCard } from "@/components/IssuesCard";
+import { NeedsYouStrip, type NeedsYouItem } from "@/components/NeedsYouStrip";
+import { AutonomyControl } from "@/components/AutonomyControl";
+import { InputsInbox } from "@/components/InputsInbox";
+import { MicroproductFace, type Microproduct } from "@/components/MicroproductFace";
 
 // The views you can summon onto the GTM canvas as draggable cards — the agentic replacement for
 // lens tabs. You pop one up, drag it, dismiss it; Claude can summon the same cards.
@@ -93,7 +102,57 @@ const SUMMON_GTM = [
   { id: "query", label: "Query", desc: "Interrogate your own data — everyone your channels touched, filtered and sorted live." },
   { id: "web", label: "Web", desc: "A research browser on the canvas — pull up a prospect's site while you work." },
   { id: "experiments", label: "Experiment matrix", desc: "ICP × claim × channel — the live hypotheses." },
+  { id: "inbox", label: "Inbox", desc: "Every world-signal that came in — a commit, a signup, a reply — captured, waiting for you to route or set aside." },
+  { id: "microproduct", label: "Microproduct", desc: "Cut a working artifact from your product for a goal — it stages behind your gate, nothing deploys until you approve." },
 ];
+
+// Pull the built microproduct preview out of the staged run the compose door returns. The producer's
+// artifact (spec + files) and a built preview (entry file + file list) ride the staged gate item — the
+// run's summarized nodes carry them through verbatim. We scan every node's items for the one that is a
+// microproduct (it has artifactFiles), then use the entry page's full HTML as the inline preview so
+// MicroproductFace can render the real page in a sandboxed iframe with no served URL. Defensive by
+// construction: `staged` is typed `unknown`, so every hop is shape-checked and a miss degrades to null
+// (the face simply shows "No preview yet"), never a throw.
+type StagedFile = { path?: unknown; contents?: unknown };
+type StagedMicroproductItem = {
+  artifactSpec?: { name?: unknown; summary?: unknown; entry?: unknown } | null;
+  artifactFiles?: unknown;
+  preview?: { entry?: unknown } | null;
+};
+function extractMicroproductPreview(
+  staged: unknown,
+): { name: string | null; summary: string | null; previewHtml: string | null } | null {
+  if (!staged || typeof staged !== "object") return null;
+  const nodes = (staged as { nodes?: Record<string, { items?: unknown[] }> }).nodes;
+  if (!nodes || typeof nodes !== "object") return null;
+  for (const node of Object.values(nodes)) {
+    for (const raw of node?.items ?? []) {
+      if (!raw || typeof raw !== "object") continue;
+      const item = raw as StagedMicroproductItem;
+      const files = (Array.isArray(item.artifactFiles) ? item.artifactFiles : []) as StagedFile[];
+      if (!files.length) continue; // not the microproduct item
+      const entryName =
+        (typeof item.preview?.entry === "string" && item.preview.entry) ||
+        (typeof item.artifactSpec?.entry === "string" && item.artifactSpec.entry) ||
+        "index.html";
+      const isHtml = (p: unknown) => typeof p === "string" && /\.html?$/i.test(p);
+      const entryFile =
+        files.find((f) => f.path === entryName) ??
+        files.find((f) => isHtml(f.path)) ??
+        files[0];
+      const previewHtml =
+        entryFile && isHtml(entryFile.path) && typeof entryFile.contents === "string"
+          ? entryFile.contents
+          : null;
+      return {
+        name: typeof item.artifactSpec?.name === "string" ? item.artifactSpec.name : null,
+        summary: typeof item.artifactSpec?.summary === "string" ? item.artifactSpec.summary : null,
+        previewHtml,
+      };
+    }
+  }
+  return null;
+}
 import { ProjectPicker } from "@/components/ProjectPicker";
 import { ProductEntry } from "@/components/ProductEntry";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
@@ -121,7 +180,7 @@ function pickStr(...vals: unknown[]): string | null {
 // percentage). Taste is shown even at 0 chars on purpose: an empty moat is a signal to the
 // founder that nothing has been gated yet. Falls back to the old config-completeness % only
 // before the manifest loads.
-// A deep link routes by project only now (channels are plain flows; there is no separate program
+// A deep link routes by project only now (channels are plain flows; there is no separate channel-graph
 // surface). /projects/:id activates that project; the project's active channel decides the focus.
 function projectRouteFromLocation() {
   const match = window.location.pathname.match(/^\/projects\/([^/]+)(?:\/.*)?$/);
@@ -131,7 +190,7 @@ function projectRouteFromLocation() {
 
 export default function App() {
   // The canvas IS the workspace. "projects" is the only other base view — the cold-start picker
-  // before any product exists. Understand and Opportunities are no longer destinations that swap
+  // before any product exists. Understand and Ideas are no longer destinations that swap
   // the canvas out; they float OVER it as dismissable overlays (set via `overlay`), so the IDE is
   // never replaced. Channels live in the explorer, not a page.
   const [view, setView] = useState<"projects" | "canvas" | "start">("canvas");
@@ -171,7 +230,6 @@ export default function App() {
   // The Issues panel — the system's problem list, now a first-class always-present indicator on the
   // dock (no longer a summoned card). Opens from its toolbar badge, mutually exclusive with Approvals.
   const [issuesOpen, setIssuesOpen] = useState(false);
-  // "Propose the whole GTM system" — the portfolio composer overlay (compose-only, never sends).
   // Who I am + my teams, and the space I'm acting in (stamped on requests via lib/identity). The
   // founder personal space is the default; switching in TeamSpace re-scopes my release authority.
   const [me, setMe] = useState<Me | null>(null);
@@ -255,8 +313,8 @@ export default function App() {
   // is the project's home view; focusing a single workflow (clicking a lane, or the breadcrumb) loads
   // it into `graph` for editing/running through the existing single-graph machinery. Overview is the
   // active surface when this is set and nothing single is focused.
-  // The portfolio-map overview is now a LENS of the GTM canvas, not a separately-assembled swimlane
-  // graph. This flag says "show the project as the portfolio map" (no single channel focused).
+  // The engine overview is now a LENS of the GTM canvas, not a separately-assembled swimlane
+  // graph. This flag says "show the project as the engine overview" (no single channel focused).
   const [overviewActive, setOverviewActive] = useState(false);
   const [runResult, setRunResult] = useState<GTMRunResult | null>(null);
   const [graphRunning, setGraphRunning] = useState(false);
@@ -298,8 +356,8 @@ export default function App() {
   // the source markdown is still one click away inside the sheet.
   const [agentProfileRef, setAgentProfileRef] = useState<string | null>(null);
 
-  // The team rail in the profile: the stock on-disk GTM agents. There is no personalized-agent foundry
-  // anymore — agents are the library definitions.
+  // The team rail in the profile: the stock on-disk GTM agents. There is no per-founder agent factory
+  // anymore — agents are the library definitions, composed inline by the operator.
   const agentTeam = useMemo<TeammateView[]>(
     () => (library?.agents ?? []).map((a) => ({ ref: a.ref, job: a.description })),
     [library],
@@ -401,10 +459,10 @@ export default function App() {
     }
   }, []);
 
-  // Zoom out to the one-canvas overview: show the GTM canvas's portfolio-map lens — every built
+  // Zoom out to the one-canvas overview: show the GTM canvas's engine-overview lens — every built
   // channel as a tile — instead of a single focused workflow. Returns false when there's nothing to
   // show (no channels with nodes), so callers fall back to focusing a single workflow. The assembled
-  // swimlane graph is gone; the portfolio lens reads the channel metas the founder already has.
+  // swimlane graph is gone; the overview lens reads the channel metas the founder already has.
   const loadProjectOverview = useCallback(async (channelsForProject: ChannelMeta[]): Promise<boolean> => {
     const built = channelsForProject.filter((ch) => ch.nodeCount > 0);
     if (!built.length) { setOverviewActive(false); return false; }
@@ -1249,6 +1307,80 @@ export default function App() {
     [channels, activeChannelId],
   );
 
+  // The Wall's quiet voice — every flow paused at a founder gate across this project. Read-only; the
+  // NeedsYouStrip surfaces the single most important paused move and routes the founder to the gate.
+  const [needsYouFlows, setNeedsYouFlows] = useState<FounderFlow[]>([]);
+  useEffect(() => {
+    if (!activeProjectId) { setNeedsYouFlows([]); return; }
+    let alive = true;
+    getNeedsYou(activeProjectId)
+      .then((r) => { if (alive) setNeedsYouFlows(r.flows); })
+      .catch(() => { if (alive) setNeedsYouFlows([]); });
+    return () => { alive = false; };
+  }, [activeProjectId, runResult, pendingApprovals]);
+  const needsYouItems = useMemo<NeedsYouItem[]>(
+    () => needsYouFlows.map((f) => ({
+      id: f.sessionId,
+      channelId: f.graphId ?? "",
+      channelName: channels.find((c) => c.id === f.graphId || c.graphId === f.graphId)?.name ?? "this channel",
+      title: f.label || "Work staged at your gate",
+      kind: f.kind,
+      count: f.gateNodeIds.length || undefined,
+      runId: f.runId ?? undefined,
+    })),
+    [needsYouFlows, channels],
+  );
+
+  // The channel whose gate this panel is reviewing — the autonomy ladder hangs off it. Falls back to
+  // the operator's bound channel when no single channel is focused.
+  const gateChannel = useMemo<ChannelMeta | null>(
+    () => channels.find((c) => c.id === activeChannelId) ?? boundChannel ?? null,
+    [channels, activeChannelId, boundChannel],
+  );
+
+  // Promote / revoke the focused channel's autonomy — explicit founder acts. Both refresh project scope
+  // so the ladder, the gate, and the channel meta re-read from durable state.
+  const handlePromoteChannel = useCallback(async (level: "trusted" | "autonomous", note: string) => {
+    if (!activeProjectId || !gateChannel) return;
+    await promoteChannel(activeProjectId, gateChannel.id, { autonomy: level, blessedPattern: { note } });
+    await refreshProjectScope();
+  }, [activeProjectId, gateChannel, refreshProjectScope]);
+  const handleRevokeChannel = useCallback(async () => {
+    if (!activeProjectId || !gateChannel) return;
+    await revokeChannel(activeProjectId, gateChannel.id);
+    await refreshProjectScope();
+  }, [activeProjectId, gateChannel, refreshProjectScope]);
+
+  // The microproduct build door — a goal cuts a working artifact that STAGES behind the founder gate
+  // (pause:true). Nothing deploys; the live ship happens only at the gate. Held in App state so the
+  // summon card can show the staged face after composing.
+  const [microproduct, setMicroproduct] = useState<Microproduct | null>(null);
+  const [microproductGoal, setMicroproductGoal] = useState("");
+  const [microproductBusy, setMicroproductBusy] = useState(false);
+  const [microproductError, setMicroproductError] = useState<string | null>(null);
+  const handleComposeMicroproduct = useCallback(async () => {
+    if (!activeProjectId || !microproductGoal.trim() || microproductBusy) return;
+    setMicroproductBusy(true);
+    setMicroproductError(null);
+    try {
+      const r = await composeMicroproduct(activeProjectId, { goal: microproductGoal.trim() });
+      // Thread the built preview off the staged gate item so the face shows the real page, not a
+      // placeholder. The deploy graph always pauses at the founder gate, so this lands `staged`.
+      const staged = extractMicroproductPreview(r.staged);
+      setMicroproduct({
+        id: r.session.id,
+        name: staged?.name ?? microproductGoal.trim(),
+        state: r.pause ? "staged" : "built",
+        summary: staged?.summary ?? r.session.summary ?? null,
+        previewHtml: staged?.previewHtml ?? null,
+      });
+    } catch (err) {
+      setMicroproductError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setMicroproductBusy(false);
+    }
+  }, [activeProjectId, microproductGoal, microproductBusy]);
+
   // The space label on the dock's Team chip — the personal space reads "Personal", a real team reads
   // its name. The personal team is the first in /api/me's list (acting.teamId null → personal).
   const personalTeamId = me?.teams[0]?.id ?? null;
@@ -1393,7 +1525,7 @@ export default function App() {
   }, [operatorFocusNodeId]);
 
   // The GTM canvas model — one bag the GtmCanvas projects through its lenses. channel-flow reads the
-  // graph/run/proposal/handler half; portfolio-map reads the channels + the shared ICP/claim half.
+  // graph/run/proposal/handler half; the engine overview reads the channels + the shared ICP/claim half.
   // Both the single-channel mount and the overview mount pass this same model; only the default lens
   // differs. `graph` is null in overview (no channel focused), which lands channel-flow on its empty
   // state until a tile is clicked.
@@ -1563,6 +1695,19 @@ export default function App() {
             />
           ) : null}
 
+          {/* The Wall's quiet voice — one calm line floating under the dock when flows are paused at a
+              gate. Silent when nothing waits. It never approves; it routes the founder to the gate. */}
+          {view === "canvas" && overlay !== "product" ? (
+            <NeedsYouStrip
+              items={needsYouItems}
+              onOpen={(item) => {
+                setApprovalsOpen(true); setProblemsOpen(false); setIssuesOpen(false);
+                if (item.channelId) void loadChannel(item.channelId);
+              }}
+              onOpenAll={() => { setApprovalsOpen(true); setProblemsOpen(false); setIssuesOpen(false); }}
+            />
+          ) : null}
+
           {/* Summoned views — they pop up ON the canvas as draggable cards (the agentic replacement
               for lens tabs). One card per kind; drag by the head, dismiss with ×. */}
           {view === "canvas" && overlay !== "product" && summoned.map((kind, i) => {
@@ -1584,6 +1729,42 @@ export default function App() {
                 ) : null}
                 {kind === "tools" && activeProjectId ? (
                   <ToolForge projectId={activeProjectId} />
+                ) : null}
+                {kind === "inbox" && activeProjectId ? (
+                  <InputsInbox projectId={activeProjectId} channels={channels} />
+                ) : null}
+                {kind === "microproduct" ? (
+                  microproduct ? (
+                    <div style={{ padding: 16, display: "flex", justifyContent: "center" }}>
+                      <MicroproductFace microproduct={microproduct} />
+                    </div>
+                  ) : (
+                    <div className="microproduct-compose">
+                      <p className="microproduct-compose-lede">
+                        Name a goal. A read-only producer cuts a working artifact from your product and stages
+                        it behind your gate — nothing deploys until you approve there.
+                      </p>
+                      <textarea
+                        className="microproduct-compose-input"
+                        value={microproductGoal}
+                        onChange={(e) => setMicroproductGoal(e.target.value)}
+                        placeholder="e.g. a one-page ROI calculator for the pricing page"
+                        rows={3}
+                      />
+                      {microproductError ? (
+                        <p className="microproduct-compose-error">{microproductError}</p>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="microproduct-compose-btn"
+                        disabled={!activeProjectId || !microproductGoal.trim() || microproductBusy}
+                        onClick={() => void handleComposeMicroproduct()}
+                      >
+                        {microproductBusy ? <LoaderCircle size={14} className="spin" /> : null}
+                        {microproductBusy ? "Building…" : "Build microproduct"}
+                      </button>
+                    </div>
+                  )
                 ) : null}
               </CanvasCard>
             );
@@ -1651,7 +1832,7 @@ export default function App() {
             <GtmCanvas model={gtmCanvasModel} activeLensId="board" chromeless />
           ) : graph ? (
             // The single channel, through the GTM canvas: the channel-flow lens IS the GraphCanvas
-            // (single-channel behavior unchanged), with the portfolio-map lens one tab away. The
+            // (single-channel behavior unchanged), with the engine-overview lens one tab away. The
             // blank-channel-guide for an empty graph now lives inside the channel-flow lens.
             <GtmCanvas model={gtmCanvasModel} activeLensId="channel-flow" chromeless />
           ) : operatorSession && ["ready", "running", "failed", "blocked"].includes(operatorSession.status) ? (
@@ -2095,7 +2276,7 @@ export default function App() {
               ))}
 
               {/* Cross-channel queue: every other channel holding drafts at its gate. The founder
-                  gate's home spans the whole portfolio, not just the run on screen — open one and its
+                  gate's home spans every channel, not just the run on screen — open one and its
                   staged drafts rehydrate into this panel for review. */}
               {otherChannelGates.length > 0 ? (
                 <section className="loop-approvals-elsewhere">
@@ -2118,6 +2299,18 @@ export default function App() {
                     </button>
                   ))}
                 </section>
+              ) : null}
+
+              {/* The autonomy ladder for the focused channel — standing founder approval, banked one
+                  explicit promotion at a time and revocable in one click. The gate node never leaves the
+                  graph; this is approval, never the wall's removal. */}
+              {gateChannel ? (
+                <AutonomyControl
+                  channel={gateChannel}
+                  canRelease={canReleaseGate}
+                  onPromote={handlePromoteChannel}
+                  onRevoke={handleRevokeChannel}
+                />
               ) : null}
             </div>
           </aside>

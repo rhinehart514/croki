@@ -11405,3 +11405,60 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
   /* Live-progress spinner keeps turning (meaning, not decoration) */
   .spin { animation: spin 0.8s linear infinite !important; }
 }
+
+/* ── Microproduct compose — the goal-in form on the Microproduct summon card, shown before an artifact
+   has been cut. Opaque content surface, monochrome ink, the build action is a plain primary (the amber
+   gate lives on the staged MicroproductFace, never here). ───────────────────────────────────────── */
+.microproduct-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+.microproduct-compose-lede {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--muted);
+}
+.microproduct-compose-input {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  resize: vertical;
+}
+.microproduct-compose-input:focus-visible {
+  outline: none;
+  border-color: var(--ink);
+}
+.microproduct-compose-error {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--gap);
+}
+.microproduct-compose-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 8px 14px;
+  border: 1px solid var(--ink);
+  border-radius: var(--r-md);
+  background: var(--ink);
+  color: var(--surface);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.microproduct-compose-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

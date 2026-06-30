@@ -187,6 +187,30 @@ export type ChannelMeta = {
   // overview so produced items land next to the strategy that earned them. Null until first run;
   // derived from real node output, never seeded.
   lastRunResult: { produced: number; byCategory: Record<string, number> } | null;
+  // Where this channel sits on the autonomy ladder. "draft" (default) holds every staged item at the
+  // gate; "trusted"/"autonomous" carry a founder-blessed pattern the gate auto-applies to clean items
+  // while still escalating exceptions. Set ONLY by an explicit founder promotion, never by a run.
+  autonomy?: "draft" | "trusted" | "autonomous";
+  // The standing approval the gate applies once a channel is promoted — a one-line recipe banked by the
+  // founder. Null/absent while the channel is at draft.
+  blessedPattern?: { note?: string; [key: string]: unknown } | null;
+};
+
+// ─── Input — one captured world-signal in the ambient inbox ───────────────────
+// A durable, append-only record that "something happened out there" (a commit, a signup, a reply, a
+// star, a CSV row), stamped with the provenance that carried it. It lands "unrouted" and just sits
+// until the founder routes it into a channel or sets it aside — ingestion never runs or sends. Mirrors
+// brain/src/inputs-store.mjs.
+export type Input = {
+  id: string;
+  projectId: string;
+  kind: string;
+  source: string;
+  payload: Record<string, unknown>;
+  provenance: Record<string, unknown> | null;
+  receivedAt: string;
+  status: "unrouted" | "routed" | "ignored";
+  routedTo: string | null;
 };
 
 // ─── ChannelFeed — two channels linked by the real entities they share ───────

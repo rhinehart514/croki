@@ -1,7 +1,7 @@
 import type { ContextManifest } from "@/types";
 
-// What Claude reads, folded into the dock. The grounding, the product picture, and the ideated
-// opportunities used to be mystery buttons on a far rail; here they sit one line under the dock
+// What Claude reads, folded into the dock. The grounding, the product picture, and the bloomed
+// ideas used to be mystery buttons on a far rail; here they sit one line under the dock
 // header as "Reading: <providers> · 5/5", so the founder can see the model's footing and reach
 // the two deeper views inline. Presentational only — the host opens each view via the callbacks.
 export function DockContext({

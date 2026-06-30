@@ -84,7 +84,7 @@ const STARTERS = [
 //   ask    — Claude paused for the founder. The one LOUD card (it's the gate moment).
 //   say    — Claude's prose (reasoning / the final answer). The substance, prominent + readable.
 //   you    — the founder's reply. A distinct bubble, so the two speakers never blur.
-//   tool   — a tool call (inspect product, inspect portfolio…). RECEDES: consecutive ones collapse
+//   tool   — a tool call (inspect product, inspect context…). RECEDES: consecutive ones collapse
 //            into one quiet "N steps" cluster so the answer never drowns under machine noise.
 //   system — session lifecycle (started / resumed). A quiet centered line.
 type Speaker = "say" | "you" | "ask" | "system" | "tool";
@@ -336,11 +336,11 @@ export function ComposerDock({
   onSend: (text: string) => void | Promise<void>;
   onCancel: () => void | Promise<void>;
   onReviewGate: (nodeId: string) => void;
-  // On the program workbench the dock floats over a four-zone IDE rather than holding its own
+  // On the channel workbench the dock floats over a four-zone IDE rather than holding its own
   // column, so it opens collapsed (a pill) to keep the inspector visible until summoned.
   floating?: boolean;
-  // Bumped by the host to summon the chat — e.g. "New program" opens and focuses it, since a
-  // program is created by telling Claude the outcome, not by filling a form.
+  // Bumped by the host to summon the chat — e.g. "New channel" opens and focuses it, since a
+  // channel is created by telling Claude the goal, not by filling a form.
   focusSignal?: number;
   // While Claude is staging a graph change, the cursor builds it onto the canvas and the inline
   // ✓/✕/note carry the decision — so the dock RECEDES to its peek to leave the watch beat
@@ -373,7 +373,7 @@ export function ComposerDock({
   graph?: GTMGraph | null;
   runningNodeId?: string | null;
 }) {
-  // Rest as a pill on first paint when the dock floats over the program workbench, OR when a FINISHED
+  // Rest as a pill on first paint when the dock floats over the channel workbench, OR when a FINISHED
   // session would otherwise open its full transcript over the read-only overview canvas. Either way the
   // founder lands on the work, not a panel covering it; the conversation is one click away on the peek.
   const [collapsed, setCollapsed] = useState(floating || (!floating && !!session && TERMINAL.has(session.status)));
@@ -451,7 +451,7 @@ export function ComposerDock({
   useEffect(() => () => recognitionRef.current?.stop(), []);
 
   // Follow the layout context across navigation: collapse to a pill when the dock starts floating
-  // over the program workbench, restore it when it owns its own lane again. Adjusting state during
+  // over the channel workbench, restore it when it owns its own lane again. Adjusting state during
   // render from a changed prop is React's sanctioned pattern — no effect, no cascading render.
   const [trackedFloating, setTrackedFloating] = useState(floating);
   if (trackedFloating !== floating) {
@@ -459,9 +459,9 @@ export function ComposerDock({
     setCollapsed(floating);
   }
 
-  // A FINISHED session on the read-only overview (the dock is not floating over a program there) rests
+  // A FINISHED session on the read-only overview (the dock is not floating over a channel there) rests
   // as a pill, so a completed transcript never covers the engine the founder came to see. The thread is
-  // one click away on the peek bar. An ACTIVE session, or any session in the focused program view,
+  // one click away on the peek bar. An ACTIVE session, or any session in the focused channel view,
   // behaves as before. Adjusting state during render from a changed prop is React's sanctioned pattern.
   const terminalOverview = !floating && !!session && TERMINAL.has(session.status);
   const [trackedTerminalOverview, setTrackedTerminalOverview] = useState(terminalOverview);
@@ -470,7 +470,7 @@ export function ComposerDock({
     if (terminalOverview) setCollapsed(true);
   }
 
-  // When the host bumps focusSignal (e.g. "New program"), open the dock in the same render so the
+  // When the host bumps focusSignal (e.g. "New channel"), open the dock in the same render so the
   // input is mounted, then focus it in an effect (a DOM call, not setState — no cascading render). A
   // finished session over the overview is the one case we don't auto-open: it would re-cover the engine.
   const [trackedFocus, setTrackedFocus] = useState(focusSignal);

@@ -68,6 +68,48 @@ describe("inputs routing + ambient tick — explicit doors, never auto-fired by 
     assert.equal(listInputs(project, { status: "routed" }).length, 0);
   });
 
+  it("a per-input founder decision routes ONE signal to a channel, or sets it aside — and only records", async () => {
+    const project = "default";
+    // Capture two fresh signals (the prior test worked the inbox empty).
+    for (const body of [{ kind: "reply", source: "email" }, { kind: "star", source: "github" }]) {
+      await fetch(`${base}/api/projects/${project}/inputs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    }
+    const unrouted = listInputs(project, { status: "unrouted" });
+    assert.equal(unrouted.length, 2);
+    const [first, second] = unrouted;
+
+    // Route the first to a chosen channel/flow. The record flips to 'routed' with routedTo set; nothing
+    // runs (the response is just the mutated record, no session).
+    const routeRes = await fetch(`${base}/api/projects/${project}/inputs/route`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ inputId: first.id, routedTo: "flow-welcome" }),
+    });
+    assert.equal(routeRes.status, 200);
+    const routed = (await routeRes.json()).input;
+    assert.equal(routed.status, "routed");
+    assert.equal(routed.routedTo, "flow-welcome");
+    assert.equal("sessionId" in routed, false, "routing only records — it starts no session");
+
+    // Ignore the second. It flips to 'ignored' with no target.
+    const ignoreRes = await fetch(`${base}/api/projects/${project}/inputs/route`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ inputId: second.id, ignore: true }),
+    });
+    assert.equal(ignoreRes.status, 200);
+    const ignored = (await ignoreRes.json()).input;
+    assert.equal(ignored.status, "ignored");
+    assert.equal(ignored.routedTo, null);
+
+    // The inbox is now fully decided — nothing left unrouted.
+    assert.equal(listInputs(project, { status: "unrouted" }).length, 0);
+  });
+
   it("the ambient tick hook is server-callable and wakes nothing when nothing is due", async () => {
     const res = await fetch(`${base}/api/operator/ambient/tick`, { method: "POST" });
     assert.equal(res.status, 200);

@@ -28,6 +28,8 @@ import {
   groundProjectInWorkspace,
   loadProject,
   projectTeamId,
+  promoteChannel,
+  revokeChannel,
   setActiveChannel,
   setActiveWorkflow,
   setActiveProject,
@@ -62,7 +64,7 @@ import { upsertStatedExperiment } from "./stated-experiment.mjs";
 import { listToolRegistry, approveToolBirth } from "./tool-registry-store.mjs";
 import { listPeople, getPerson } from "./person-store.mjs";
 import { loadClarity, addClarity, removeClarity } from "./clarity-store.mjs";
-import { appendInput, listInputs } from "./inputs-store.mjs";
+import { appendInput, listInputs, markRouted } from "./inputs-store.mjs";
 import { routeUnroutedInputs } from "./input-routing.mjs";
 import { findReferences, deriveChannelFeeds, deriveDirectedFeeds, createDerivedSourceLoader } from "./cross-reference.mjs";
 import { compareChannelRuns } from "./run-compare.mjs";
@@ -75,6 +77,7 @@ import { selectRuntime, authModeLabel } from "./runtimes/index.mjs";
 import { listArtifacts, readArtifact, writeArtifact } from "./artifact-store.mjs";
 import {
   cancelOperatorSession,
+  executeOperatorTool,
   launchOperatorSession,
   resolveOperatorGate,
   resolveOperatorIdeas,
@@ -87,6 +90,7 @@ import {
   createOperatorSession,
   getActiveSessionForProject,
   getOperatorSession,
+  listFlowsNeedingFounder,
   listOperatorSessions,
   publicOperatorSession,
   recoverInterruptedOperatorSessions,
@@ -688,6 +692,17 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && projectInputsRouteMatch) {
     try {
       const projectId = decodeURIComponent(projectInputsRouteMatch[1]);
+      const body = await readBody(req);
+      // Per-input founder decision: the inbox's quiet "route this one to a channel/flow, or set it
+      // aside." markRouted ONLY records the decision on the append-only record — it never runs, sends,
+      // or auto-approves. Any run a routed signal later feeds still hits the founder gate. With no
+      // inputId the call falls through to the bulk router below (unchanged).
+      if (body && typeof body.inputId === "string" && body.inputId.trim()) {
+        const target = body.ignore === true ? "ignored" : body.routedTo;
+        const input = markRouted(projectId, body.inputId, target);
+        json(res, 200, { input });
+        return;
+      }
       const results = routeUnroutedInputs(projectId);
       json(res, 200, {
         count: results.length,
@@ -787,6 +802,94 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, { idea: updated });
     } catch (err) {
       json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Channel autonomy — PROMOTE a channel up the ladder (draft → trusted → autonomous). This is a FOUNDER
+  // act and the standing form of a gate approval: from now on the channel's gate auto-approves the clean
+  // items against the blessed pattern and holds only the exceptions. It is never reachable from the agent
+  // (MCP) surface and never fired by a run. The Wall does NOT disappear — the gate node stays present on
+  // every path, the promotion is itself an explicit founder click, and `revoke` drops it back in one call.
+  // promoteChannel itself refuses a missing blessed pattern and refuses a promote-to-draft; we reject the
+  // draft target here too, loudly, so the founder gets a clear message instead of a generic throw.
+  const projectChannelPromoteMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/channels\/([^/]+)\/promote$/);
+  if (req.method === "POST" && projectChannelPromoteMatch) {
+    try {
+      const projectId = decodeURIComponent(projectChannelPromoteMatch[1]);
+      const channelId = decodeURIComponent(projectChannelPromoteMatch[2]);
+      const body = await readBody(req);
+      const autonomy = String(body?.autonomy || "trusted").trim();
+      if (autonomy === "draft") {
+        json(res, 400, { error: "Promote targets trusted or autonomous. To drop a channel back to draft, use revoke." });
+        return;
+      }
+      if (!body?.blessedPattern) {
+        json(res, 400, { error: "Promoting a channel requires a blessed pattern — the standing approval the gate applies." });
+        return;
+      }
+      const { channel } = promoteChannel(channelId, { autonomy, blessedPattern: body.blessedPattern }, { projectId });
+      json(res, 200, { channel });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Channel autonomy — REVOKE: drop a channel back to "draft" in one call, instantly reverting to
+  // hold-everything at the gate and clearing the standing pattern off its gate nodes. Always available;
+  // the founder can revoke trust the moment a run surprises them. Also a founder act, never an agent path.
+  const projectChannelRevokeMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/channels\/([^/]+)\/revoke$/);
+  if (req.method === "POST" && projectChannelRevokeMatch) {
+    try {
+      const projectId = decodeURIComponent(projectChannelRevokeMatch[1]);
+      const channelId = decodeURIComponent(projectChannelRevokeMatch[2]);
+      const { channel } = revokeChannel(channelId, { projectId });
+      json(res, 200, { channel });
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // "Which flows need you" — the read side of the Wall. Every operator session currently PAUSED at a
+  // founder gate across this project (a goal thread and an ambient wake both surface here when their run
+  // stops). Strictly READ-ONLY: it never approves, resolves, or advances a gate — it only tells the
+  // founder where their approval is the blocker. Ordered most-recently-updated first.
+  const projectNeedsYouMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/needs-you$/);
+  if (req.method === "GET" && projectNeedsYouMatch) {
+    try {
+      const projectId = decodeURIComponent(projectNeedsYouMatch[1]);
+      json(res, 200, { projectId, flows: listFlowsNeedingFounder({ projectId }) });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Microproduct build-and-ship door — the deployable twin of compose_and_run. It delegates to the
+  // operator's compose_microproduct path: a read-only, scan-grounded producer cuts a working artifact
+  // from the real product, the host composes a graph whose deploy step is an `execute` node behind a
+  // founder `gate`, and the run STOPS at that gate. Nothing deploys: the deploy connector ships only with
+  // BOTH the gate stamp AND an explicit founder deploy confirmation, neither of which this route can forge.
+  // A goal is required — this is the founder input the door represents; without it we refuse.
+  const projectMicroproductMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/microproduct$/);
+  if (req.method === "POST" && projectMicroproductMatch) {
+    try {
+      const projectId = decodeURIComponent(projectMicroproductMatch[1]);
+      const body = await readBody(req);
+      const goal = String(body?.goal || "").trim();
+      if (!goal) { json(res, 400, { error: "A microproduct needs a goal — what should the artifact do?" }); return; }
+      const project = loadProject({ projectId });
+      const session = createOperatorSession({ goal, projectId: project.id });
+      const result = await executeOperatorTool(session, { name: "compose_microproduct", input: { goal, title: body?.title } });
+      json(res, 202, {
+        session: publicOperatorSession(result.session),
+        staged: result.result ?? null,
+        pause: result.pause === true,
+      });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return;
   }

@@ -111,8 +111,8 @@ export function EngineLens({
   activeChannelId: string | null;
   onDeriveChannel: (toChannelId: string, fromChannelId: string) => void;
   onOpenChannel: (channelId: string) => void;
-  // The shared context every channel inherits — the ICP and the headline claim. Folded in from the
-  // retired portfolio-map lens so this single overview carries both the network AND its context.
+  // The shared context every channel inherits — the ICP and the headline claim. Folded in from a
+  // retired channel-grid view so this single overview carries both the network AND its context.
   icpLabel?: string | null;
   claimLabel?: string | null;
 }) {

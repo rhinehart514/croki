@@ -3,9 +3,9 @@
 // monogram, and function family from HERE, so the reframe can never drift between surfaces.
 //
 // This is a deterministic transform (no model call at render time): a role like "Prospect Researcher"
-// is read off the ref + job by keyword. The raw ref survives only as demoted detail. When the foundry
-// later persists a model-given name on the AgentInstance, this becomes the fallback for agents born
-// before that — humanizing the ref instead of guessing a role.
+// is read off the ref + job by keyword. The raw ref survives only as demoted detail. When the composer
+// persists a model-given name on a composed agent node, this becomes the fallback for agents that
+// carry no such name — humanizing the ref instead of guessing a role.
 
 export type AgentFamily =
   | "research" | "qualify" | "write"

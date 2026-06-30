@@ -14,8 +14,8 @@ import type {
 //     channel behavior is unchanged — this lens just forwards the same prop bag App used to mount the
 //     bare GraphCanvas with.
 //   - "engine" is the single GTM OVERVIEW: every built channel as a node in one network, the feeds
-//     between them, and the shared ICP/claim context header. The earlier separate "portfolio-map"
-//     tile grid was merged into this lens (its only unique value was the context header), so there is
+//     between them, and the shared ICP/claim context header. An earlier separate channel-grid
+//     tile view was merged into this lens (its only unique value was the context header), so there is
 //     one overview altitude, not two near-identical ones.
 //
 // People and Experiments are reached as summoned cards in App, not as lenses here. The shell's
@@ -57,7 +57,7 @@ export type GtmCanvasModel = {
   subsystemHealth: Record<string, { health: number; issue?: string }>;
   icp: Record<string, unknown>;
   // Structured claims (sharedContext.claims) — the source of truth the experiment matrix grids by and
-  // the portfolio map reads its headline claim from.
+  // the engine overview reads its headline claim from.
   claims: Claim[];
   // The shared People object (promoted from real runs) and the live experiments — the data App's
   // summoned People and Experiment-matrix cards project (and that channel-flow reads people from).
@@ -80,7 +80,7 @@ function ChannelFlowLens({ model: m }: GtmLensProps) {
     return (
       <div className="canvas-empty">
         <strong>No channel open</strong>
-        <span>Pick a channel from the portfolio map to open its flow.</span>
+        <span>Pick a channel from the overview to open its flow.</span>
       </div>
     );
   }
@@ -140,8 +140,8 @@ function readable(value: unknown): string | null {
 }
 
 // ── engine: the whole go-to-market as one canvas — channels as nodes, feeds between them, and the
-// shared ICP/claim context header folded in. The single GTM overview (the former portfolio-map tile
-// grid was merged in: its only unique value was this context header). ──
+// shared ICP/claim context header folded in. The single GTM overview (a former channel-grid tile
+// view was merged in: its only unique value was this context header). ──
 function EngineLensWrapper({ model: m }: GtmLensProps) {
   return (
     <EngineLens

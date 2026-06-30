@@ -1083,7 +1083,7 @@ function topologySignature(graph: GTMGraph): string {
 }
 
 // Longest-path rank (DAG depth) over a node subset, using only data/context edges that stay inside
-// the subset. Shared by the whole-graph layout and the per-lane portfolio layout so both rank the
+// the subset. Shared by the whole-graph layout and the per-lane channel layout so both rank the
 // same way.
 function longestPathRank(
   nodeIds: string[],
@@ -1410,8 +1410,8 @@ function Refitter({ nonce }: { nonce?: number }) {
 // ─── Measure guard — make the nodes paint when the pane mounts at zero size ─────
 // React Flow measures each node once, lazily (a ResizeObserver per card), and keeps a node
 // `visibility: hidden` until it has a measured size. If the canvas mounts inside a container that is
-// momentarily 0-height — the program workbench's `minmax(0, 1fr)` / `min-height: 0` grid chain
-// hasn't resolved yet on a DIRECT boot into a program URL — the cards get measured as zero and never
+// momentarily 0-height — the channel workbench's `minmax(0, 1fr)` / `min-height: 0` grid chain
+// hasn't resolved yet on a DIRECT boot into a channel URL — the cards get measured as zero and never
 // recover: the diagram renders blank with no edges (edges don't draw between unmeasured nodes). This
 // watches the pane size and, the moment it gains real dimensions while nodes are still uninitialized,
 // forces a re-measure of every node so the cards and their edges actually paint. It's a no-op on the
@@ -1557,7 +1557,7 @@ export function GraphCanvas({
   // Render-time auto-layout — what actually drives what's on screen.
   // The composer ships cramped/overlapping positions, and the persistence round-trip (the effect
   // below) can't be trusted to reach every render path. So we lay every graph out by DAG depth AT
-  // RENDER and let a manual drag override per node. Portfolios get the same rank-based layout: their
+  // RENDER and let a manual drag override per node. Multi-channel overviews get the same rank-based layout: their
   // systems are disconnected subgraphs, so each pipeline stage shares a rank column and the systems
   // stack into rows within it — a readable left-to-right multi-system grid (this replaced the old
   // pre-laid swimlane positions). Only the ideation preview keeps its own pre-laid positions, since

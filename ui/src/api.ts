@@ -8,6 +8,7 @@ import type {
   ProductModel, ProductModelEdit, ProductPinTargetKind,
   CapabilityServer, Person, CrossReferenceResult, ToolRegistryView, RegisteredTool, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole, BoardView, GtmExperiment,
+  ChannelMeta, Input,
 } from "@/types";
 import { identityHeaders } from "@/lib/identity";
 
@@ -487,5 +488,84 @@ export const addTeamMember = (
 export const canApprove = (teamId: string, userId: string) =>
   get<{ teamId: string; userId: string; canApprove: boolean }>(
     `/api/teams/${encodeURIComponent(teamId)}/can-approve/${encodeURIComponent(userId)}`,
+  );
+
+// ── Channel autonomy ladder — the per-channel standing approval (founder-only) ──
+// Promote a channel UP the ladder (draft → trusted → autonomous): an explicit founder act that banks a
+// `blessedPattern` the gate then auto-applies to clean items while still escalating exceptions.
+// Promote refuses "draft" as a target — to drop a channel back, use revoke. The gate node never leaves
+// the graph; this is standing approval, never the wall's removal.
+export const promoteChannel = (
+  projectId: string,
+  channelId: string,
+  body: { autonomy: "trusted" | "autonomous"; blessedPattern: { note?: string; [key: string]: unknown } },
+) =>
+  post<{ channel: ChannelMeta }>(
+    `/api/projects/${encodeURIComponent(projectId)}/channels/${encodeURIComponent(channelId)}/promote`,
+    body,
+  );
+
+// Revoke — drop a channel back to "draft" in one call, instantly reverting to hold-everything at the
+// gate and clearing the standing pattern. Always available; a founder can pull trust the moment a run
+// surprises them.
+export const revokeChannel = (projectId: string, channelId: string) =>
+  post<{ channel: ChannelMeta }>(
+    `/api/projects/${encodeURIComponent(projectId)}/channels/${encodeURIComponent(channelId)}/revoke`,
+    {},
+  );
+
+// ── The Wall, read side — which flows are paused waiting on the founder ─────────
+// Every operator session paused at a founder gate across this project. Read-only — it never approves;
+// it only says where the founder's approval is the blocker (the NeedsYouStrip's source).
+export type FounderFlow = {
+  sessionId: string;
+  kind: string;
+  projectId: string | null;
+  graphId: string | null;
+  label: string | null;
+  runId: string | null;
+  gateNodeIds: string[];
+  updatedAt: string;
+};
+export const getNeedsYou = (projectId: string) =>
+  get<{ projectId: string; flows: FounderFlow[] }>(
+    `/api/projects/${encodeURIComponent(projectId)}/needs-you`,
+  );
+
+// ── Microproduct build-and-ship door — the deployable twin of compose_and_run ───
+// A goal in; a read-only producer cuts a working artifact from the real product and the host composes a
+// graph whose deploy step sits behind a founder gate. The run STOPS at the gate (pause:true). This call
+// NEVER deploys — the live ship happens only when the founder approves at the gate.
+export const composeMicroproduct = (projectId: string, body: { goal: string; title?: string }) =>
+  post<{ session: OperatorSession; staged: unknown; pause: boolean }>(
+    `/api/projects/${encodeURIComponent(projectId)}/microproduct`,
+    body,
+  );
+
+// ── Ambient inputs inbox — captured world-signals + the founder's per-input routing ──
+// Read the durable, append-only log of "something happened out there" (optionally filtered). The one
+// write per item is the founder's decision: route it into a channel, or set it aside. markRouted only
+// records the decision — it never runs, sends, or auto-approves.
+export const getInputs = (
+  projectId: string,
+  opts: { status?: string; kind?: string; source?: string } = {},
+) => {
+  const params = new URLSearchParams();
+  if (opts.status) params.set("status", opts.status);
+  if (opts.kind) params.set("kind", opts.kind);
+  if (opts.source) params.set("source", opts.source);
+  const query = params.size ? `?${params.toString()}` : "";
+  return get<{ projectId: string; inputs: Input[] }>(
+    `/api/projects/${encodeURIComponent(projectId)}/inputs${query}`,
+  );
+};
+
+export const routeInput = (
+  projectId: string,
+  body: { inputId: string; routedTo: string } | { inputId: string; ignore: true },
+) =>
+  post<{ input: Input }>(
+    `/api/projects/${encodeURIComponent(projectId)}/inputs/route`,
+    body,
   );
 
