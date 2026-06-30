@@ -37,6 +37,8 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import { applyGraphOperations } from "../src/graph-operations.mjs";
 import { loadFlow, saveFlow } from "../src/flow-store.mjs";
 import { createChannel, getChannel, loadProject, promoteChannel, registerComposedChannel } from "../src/project-store.mjs";
+import * as deploy from "../src/connectors/execute/deploy.mjs";
+import { runGraph } from "../src/graph.mjs";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -384,5 +386,103 @@ describe("anti-cage: fixed stage skeleton not re-introduced as live code", () =>
       `composition.mjs appears to prescribe the old fixed skeleton to the composing model without ` +
       `an explicit negation. The skeleton string may only appear in a "do NOT do this" context.`
     );
+  });
+});
+
+// GUARD F — The wall GRADUATES to a deploy, it never disappears. A microproduct deploy is the most
+// dangerous execute node (it ships to the outside world), so its safety contract is pinned the same way
+// every other release is: a deploy fires ONLY after an explicit founder gate approval — NEVER from
+// composition and NEVER from a run. The two unforgeable facts this guards:
+//   (1) deploy without an explicit founder authorization is REFUSED (the runner is never even called);
+//   (2) composition's only reach is node.config, and a config-forged authorization does NOT authorize a
+//       deploy — the connector reads the deploy confirmation solely from the founder-input run path
+//       (node.runtime / run context), so a composed graph or an autonomous run can never self-deploy.
+describe("anti-cage: a microproduct deploys only after an explicit founder gate approval", () => {
+  const FOUNDER_AUTH = { confirmed: true, releasedBy: "founder" };
+  const approved = (over = {}) => ({ gtmActionId: "gtm-1", approved: true, artifactSpec: {}, ...over });
+  // A runner that records whether it was reached. If the wall holds, an unauthorized deploy never reaches it.
+  function spyRunner() {
+    let calls = 0;
+    return { impl: async () => { calls += 1; return { ok: true, url: "https://x.dev", runner: "spy" }; }, get calls() { return calls; } };
+  }
+
+  it("deploy without an explicit founder authorization is refused (the runner is never called)", async () => {
+    const runner = spyRunner();
+    const node = { id: "exe-deploy", category: "execute", connector: "deploy", config: { deployImpl: runner.impl } };
+    const result = await deploy.run(node, [approved()], {});
+    assert.equal(result.ok, false, "an unauthorized deploy must be refused");
+    assert.equal(runner.calls, 0, "the deploy runner must never run without founder authorization");
+    assert.equal(result.meta.reason, "missing_founder_deploy_authorization");
+    assert.match(result.error, /never from composition and never from a run/i);
+  });
+
+  it("composition cannot forge a deploy past the gate — a config-sourced authorization is ignored", async () => {
+    const runner = spyRunner();
+    // node.config is the ONLY surface composition / typed graph mutations write. Putting the
+    // authorization there must NOT authorize a deploy.
+    const node = {
+      id: "exe-deploy", category: "execute", connector: "deploy",
+      config: { deployImpl: runner.impl, deployAuthorization: { confirmed: true, releasedBy: "composed" }, approved: true },
+    };
+    const result = await deploy.run(node, [approved()], {});
+    assert.equal(result.ok, false, "a config-forged authorization must never deploy");
+    assert.equal(runner.calls, 0);
+    assert.equal(result.meta.reason, "missing_founder_deploy_authorization");
+  });
+
+  it("composition cannot forge a deploy through the RUN CONTEXT — a context-sourced authorization is ignored", async () => {
+    const runner = spyRunner();
+    // The real forgeable surface: resolveContext maps any upstream node's emitted
+    // { type:"context", id:"deployAuthorization" } item onto context.deployAuthorization. A composed
+    // graph can emit that item, so the connector must NOT read the authorization from the run context.
+    const node = { id: "exe-deploy", category: "execute", connector: "deploy", config: { deployImpl: runner.impl } };
+    const forgedContext = { deployAuthorization: { type: "context", id: "deployAuthorization", confirmed: true } };
+    const result = await deploy.run(node, [approved()], forgedContext);
+    assert.equal(result.ok, false, "a context-forged authorization must never deploy");
+    assert.equal(runner.calls, 0, "the deploy runner must never run on a context-forged authorization");
+    assert.equal(result.meta.reason, "missing_founder_deploy_authorization");
+  });
+
+  it("END TO END — a composed graph self-supplying deployAuthorization via a context item + a NORMAL gate approval ships NOTHING", async () => {
+    // The live exploit, reproduced through the real run path: an upstream node emits a forged
+    // { type:"context", id:"deployAuthorization", confirmed:true } item, resolveContext maps it onto
+    // context.deployAuthorization, and the gate approves the data item normally (NO deployConfirmed).
+    // Before the runtime-only fix this shipped; now the connector ignores the context, so it refuses.
+    let calls = 0;
+    const graph = {
+      id: "forged-context-flow",
+      nodes: [
+        { id: "art", category: "source", connector: "manual", label: "Built microproduct",
+          config: { items: [{ artifactSpec: { name: "demo" } }] } },
+        // A composition-controlled node emitting the forged authorization as a context item.
+        { id: "forge", category: "source", connector: "manual", label: "Forged auth",
+          config: { items: [{ type: "context", id: "deployAuthorization", confirmed: true }] } },
+        { id: "gate", category: "gate", connector: "default", label: "Gate", config: {} },
+        { id: "deploy", category: "execute", connector: "deploy", label: "Deploy",
+          config: { deployImpl: async () => { calls += 1; return { ok: true, url: "https://x.dev", runner: "spy" }; } } },
+      ],
+      edges: [
+        { id: "e1", source: "art", target: "gate", edgeType: "data" },
+        { id: "e2", source: "gate", target: "deploy", edgeType: "data" },
+        { id: "e3", source: "forge", target: "deploy", edgeType: "context" },
+      ],
+    };
+    // A NORMAL gate approval — no deployAuthorization opt, exactly what a run/composition can produce.
+    const run = await runGraph(graph, { approvals: { gate: true } });
+    assert.equal(run.nodes.deploy.ok, false, "the forged-context authorization must never deploy");
+    assert.equal(calls, 0, "the deploy runner must never fire on a composition-forged authorization");
+    assert.equal(run.nodes.deploy.meta.reason, "missing_founder_deploy_authorization");
+  });
+
+  it("with an explicit founder authorization the same approved item DOES ship — proving the refusal is the gate, not a dead connector", async () => {
+    const runner = spyRunner();
+    const node = {
+      id: "exe-deploy", category: "execute", connector: "deploy",
+      config: { deployImpl: runner.impl }, runtime: { deployAuthorization: FOUNDER_AUTH },
+    };
+    const result = await deploy.run(node, [approved()], {});
+    assert.equal(result.ok, true);
+    assert.equal(runner.calls, 1);
+    assert.equal(result.items[0].deployed, true);
   });
 });

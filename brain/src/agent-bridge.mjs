@@ -479,6 +479,49 @@ export function createClaudeAgentInvoker({ cwd = process.cwd(), model, maxTurns 
   };
 }
 
+// ── Microproduct producer invoker (live, OAuth-first subscription) ───────────
+// The producer leg for a deployable MICROPRODUCT output: it runs a read-only subagent on the
+// founder's Claude subscription that designs a small static artifact (a demo/landing/tool cut from
+// the real product) and returns it AS DATA — { artifactSpec, artifactFiles:[{path,contents}] }. It
+// is the symmetric twin of createClaudeAgentInvoker: same read-only, no-key subscription call, and
+// the SAME wall. The agent has only read tools (DEFAULT_AGENT_TOOLS via runClaudeQuery), so it
+// CANNOT write the files to disk, deploy, publish, or push — it hands back file text the artifact
+// execute connector stages behind the founder gate. There is no send/deploy path here by
+// construction; deploying happens only after an explicit founder gate approval.
+//
+// The doctrine and the prompt are owned by microproduct-composer.mjs (mirroring how composition.mjs
+// owns COMPOSE_PROMPT and calls runClaudeQuery here); this leg takes a fully-built prompt, runs it,
+// and parses the artifact object out of the model's reply. `runQuery` is injectable so a fake
+// subscription can be supplied in tests; it defaults to the real read-only subscription call.
+function coerceArtifactFiles(raw) {
+  if (!Array.isArray(raw)) return [];
+  const files = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const filePath = typeof entry.path === "string" ? entry.path.trim() : "";
+    const contents = typeof entry.contents === "string" ? entry.contents : (typeof entry.content === "string" ? entry.content : null);
+    if (!filePath || contents == null) continue; // a file with no path or no body is dropped, never half-staged
+    files.push({ path: filePath, contents });
+  }
+  return files;
+}
+
+export function createClaudeMicroproductInvoker({ cwd = process.cwd(), model, maxTurns = 24, onText, runQuery = runClaudeQuery } = {}) {
+  return async function produce({ prompt }) {
+    const { text, error, toolCalls = [] } = await runQuery({ prompt, cwd, model, maxTurns, onText });
+    if (error) {
+      return { ok: false, error: error.message, meta: { errorKind: error.kind, retriable: error.retriable, toolCalls } };
+    }
+    const parsed = parseAgentObject(text);
+    if (!parsed) {
+      return { ok: false, error: "Microproduct producer did not return a JSON { artifactSpec, artifactFiles } object.", meta: { toolCalls } };
+    }
+    const artifactSpec = parsed.artifactSpec ?? parsed.spec ?? null;
+    const artifactFiles = coerceArtifactFiles(parsed.artifactFiles ?? parsed.files);
+    return { ok: true, artifactSpec, artifactFiles, meta: { toolCalls } };
+  };
+}
+
 export function createCodexAgentInvoker({ cwd = process.cwd(), model, binary = "codex" } = {}) {
   return async function invoke({ ref, prompt, items, context, config = {}, artifactPath }) {
     const outputFile = path.join(os.tmpdir(), `gtm-ide-codex-${process.pid}-${Date.now()}.txt`);

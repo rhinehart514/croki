@@ -130,6 +130,213 @@ function defaultRunner({ worktree, prompt, summaryFile, timeoutMs }) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Build mode — generalize the worktree from repair-only to BUILD.
+//
+// Given the artifact files a producer staged (path + contents — the same
+// `artifactFiles` the `connectors/execute/artifact.mjs` microproduct connector
+// captures), write them into an isolated git worktree, optionally run the
+// project's install/build, and capture a local preview (the built static output
+// dir + entry file). It STOPS before commit, push, or deploy — exactly like the
+// repair path. Building a microproduct is local; SHIPPING it is a separate,
+// founder-gated leg (`authorizeGateRelease` + the revision confirmation
+// pattern). This file has no deploy/push/publish code path by construction, and
+// it actively rejects an install/build command that looks like a deploy, so the
+// build leg can never smuggle an artifact past the wall.
+
+// A build/install command is local-only. These verbs touch the outside world
+// and belong behind the founder gate, never inside a local build step.
+const DEPLOY_LIKE_COMMAND =
+  /\b(deploy|publish|push|release|go[-_]?live|vercel|netlify|surge|gh-pages|firebase|rsync|scp|curl|wget|s3|cloudfront|now)\b/i;
+
+export function assertLocalBuildCommand(command) {
+  const text = (Array.isArray(command) ? command.join(" ") : String(command || "")).trim();
+  if (!text) throw new Error("Build command is empty.");
+  if (DEPLOY_LIKE_COMMAND.test(text)) {
+    throw new Error(
+      `Build commands are local-only. "${text}" looks like a deploy/publish/push and is rejected — `
+      + "shipping a microproduct is a separate founder-gated leg, never part of a build.",
+    );
+  }
+  return text;
+}
+
+// Write producer-supplied files into the worktree, refusing any path that would
+// escape it (the contents are model/producer output, so the path is untrusted).
+export function writeArtifactFiles(worktree, files) {
+  const root = path.resolve(worktree);
+  const written = [];
+  for (const file of files) {
+    const rel = String(file?.path || "").trim();
+    if (!rel) throw new Error("Each artifact file needs a path.");
+    if (path.isAbsolute(rel)) throw new Error(`Artifact file path must be relative: ${rel}`);
+    const dest = path.resolve(root, rel);
+    if (dest !== root && !dest.startsWith(root + path.sep)) {
+      throw new Error(`Artifact file path escapes the worktree: ${rel}`);
+    }
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.writeFileSync(dest, String(file?.contents ?? ""));
+    written.push(rel);
+  }
+  return written;
+}
+
+function defaultCommandRunner({ worktree, command }) {
+  const parts = Array.isArray(command) ? command : String(command).split(/\s+/).filter(Boolean);
+  const [cmd, ...args] = parts;
+  const result = spawnSync(cmd, args, {
+    cwd: worktree,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  return {
+    ok: result.status === 0,
+    status: result.status,
+    stdout: (result.stdout || "").slice(-40_000),
+    stderr: (result.stderr || "").slice(-40_000),
+  };
+}
+
+// Read the preview the build produced: the static output dir's file list and an
+// entry file. With no build step, the written files ARE the preview (a landing
+// page is already static), so the worktree itself is the preview root.
+function capturePreview(worktree, previewDir) {
+  const dir = previewDir ? path.resolve(worktree, previewDir) : worktree;
+  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+    return { dir, exists: false, files: [], entry: null };
+  }
+  const files = [];
+  const walk = (current, prefix) => {
+    for (const name of fs.readdirSync(current).sort()) {
+      const abs = path.join(current, name);
+      const relName = prefix ? `${prefix}/${name}` : name;
+      const stat = fs.statSync(abs);
+      if (stat.isDirectory()) {
+        if (name === ".git" || name === "node_modules") continue;
+        walk(abs, relName);
+      } else {
+        files.push(relName);
+      }
+    }
+  };
+  walk(dir, "");
+  const entry = files.find((f) => /(^|\/)index\.html?$/i.test(f))
+    || files.find((f) => /\.html?$/i.test(f))
+    || files[0]
+    || null;
+  return { dir, exists: true, files, entry };
+}
+
+// Build a staged microproduct locally. Never commits, pushes, or deploys.
+export async function buildMicroproduct(spec = {}, options = {}) {
+  const files = Array.isArray(spec.files) ? spec.files : [];
+  const name = spec.name || "microproduct";
+
+  if (!files.length) {
+    return {
+      ok: false,
+      mode: "microproduct",
+      worktree: null,
+      files: [],
+      buildSteps: [],
+      preview: null,
+      staged: false,
+      deployed: false,
+      error: "No artifact files to build.",
+    };
+  }
+
+  const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "");
+  const worktreeRoot = options.worktreeRoot || path.join(os.homedir(), ".gtm-ide", "builds");
+  fs.mkdirSync(worktreeRoot, { recursive: true });
+
+  // With a product repo, cut an isolated git worktree from it (the microproduct
+  // is cut from the real product). Without one, build in a standalone dir.
+  let worktree;
+  let baseCommit = null;
+  let branch = null;
+  if (spec.repo) {
+    const repo = path.resolve(spec.repo);
+    git(repo, ["rev-parse", "--show-toplevel"]);
+    baseCommit = git(repo, ["rev-parse", "HEAD"]);
+    branch = `codex/gtm-build-${slug(name)}-${timestamp}`;
+    worktree = path.join(worktreeRoot, `${path.basename(repo)}-build-${timestamp}`);
+    git(repo, ["worktree", "add", "-b", branch, worktree, "HEAD"]);
+  } else {
+    worktree = path.join(worktreeRoot, `${slug(name)}-${timestamp}`);
+    fs.mkdirSync(worktree, { recursive: true });
+  }
+
+  const runCommand = options.runCommand || defaultCommandRunner;
+  const buildSteps = [];
+  let error = null;
+
+  try {
+    const written = writeArtifactFiles(worktree, files);
+
+    // install, then build — each optional, each local-only.
+    const commands = [
+      spec.install ? { label: "install", command: spec.install } : null,
+      spec.build || spec.buildCommand
+        ? { label: "build", command: spec.build || spec.buildCommand }
+        : null,
+    ].filter(Boolean);
+
+    for (const step of commands) {
+      assertLocalBuildCommand(step.command);
+      const result = await runCommand({ worktree, command: step.command, label: step.label });
+      buildSteps.push({
+        label: step.label,
+        command: Array.isArray(step.command) ? step.command.join(" ") : String(step.command),
+        ok: result?.ok !== false,
+        status: result?.status ?? null,
+        stdout: (result?.stdout || "").slice(-8_000),
+        stderr: (result?.stderr || "").slice(-8_000),
+      });
+      if (result?.ok === false) {
+        error = `Build step "${step.label}" failed`
+          + (result.status != null ? ` (exit ${result.status})` : "")
+          + ".";
+        break;
+      }
+    }
+
+    const preview = error ? null : capturePreview(worktree, spec.previewDir);
+
+    return {
+      ok: !error,
+      mode: "microproduct",
+      name,
+      baseCommit,
+      branch,
+      worktree,
+      files: written,
+      buildSteps,
+      preview,
+      // The wall, made explicit on the result of a build leg: prepared locally,
+      // never live. Deploying is a separate founder-gated leg.
+      staged: !error,
+      deployed: false,
+      error,
+    };
+  } catch (caught) {
+    return {
+      ok: false,
+      mode: "microproduct",
+      name,
+      baseCommit,
+      branch,
+      worktree,
+      files: [],
+      buildSteps,
+      preview: null,
+      staged: false,
+      deployed: false,
+      error: caught instanceof Error ? caught.message : String(caught),
+    };
+  }
+}
+
 export async function buildTrackingFix(report, options = {}) {
   const repo = path.resolve(report.repo);
   git(repo, ["rev-parse", "--show-toplevel"]);

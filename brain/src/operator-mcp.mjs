@@ -13,6 +13,13 @@
  * resolving it inside GTM IDE. `assertSafeTool` enforces that invariant so a
  * future tool addition can never silently hand outbound power to the subprocess.
  *
+ * Note on `compose_microproduct`: it BUILDS a deployable artifact, but it cannot
+ * deploy it — it only composes a graph whose deploy step sits behind a founder
+ * gate and runs it TO that gate (the artifact stages, deployed:false). Its name
+ * carries no outbound verb, so it stays exposed; shipping still happens only when
+ * the founder releases the gate inside GTM IDE, exactly like a send. A real
+ * `deploy_*`/`publish_*` tool would match FORBIDDEN_TOOL and be refused exposure.
+ *
  * The session it may touch is fixed by GTM_IDE_OPERATOR_SESSION; the store root
  * by GTM_IDE_HOME. It cannot reach any other session.
  *

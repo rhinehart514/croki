@@ -207,7 +207,7 @@ function resolveUpstream(nodeId, edges, nodeResults) {
 // ─── Run a single node ───────────────────────────────────────────────────────
 
 async function runNode(node, upstream, context, store, opts = {}) {
-  const { approvals = {}, decisions = {} } = opts;
+  const { approvals = {}, decisions = {}, deployAuthorization = null } = opts;
   // Resource nodes: declaration only, no execution
   if (node.category === "resource") {
     return { nodeId: node.id, category: node.category, ok: true, items: [], meta: { declaration: true } };
@@ -291,6 +291,11 @@ async function runNode(node, upstream, context, store, opts = {}) {
       runtime: {
         approved: approvals[node.id] === true,
         decisions: decisions[node.id] ?? null,
+        // The founder's explicit deploy confirmation, host-supplied via runGraph opts. Lives on
+        // node.runtime (rebuilt here every run from the founder's approvals), NEVER node.config, so the
+        // microproduct deploy connector reads an authorization composition can't forge. Null on a normal
+        // run — that is why an ordinary gate approval never deploys.
+        deployAuthorization,
       },
     };
     const result = await connector.run(runtimeNode, upstream, context, store);
@@ -338,6 +343,12 @@ export async function runGraph(graph, opts = {}) {
     loadLastRunItems = null,
     onEvent = null,
     authorizeRelease = null,
+    // The explicit founder deploy confirmation, threaded from the founder's gate-release payload by the
+    // host (resolveOperatorGate builds it from the authorized releaser + payload.deployConfirmed). It
+    // rides each node's runtime — which graph.mjs rebuilds from these opts every run, so composition and
+    // a model-driven run can never write it. Only the microproduct deploy connector reads it; null for a
+    // normal run, which is why a normal gate approval never deploys (the deploy connector refuses).
+    deployAuthorization = null,
   } = opts;
   const emit = typeof onEvent === "function" ? onEvent : () => {};
   const { nodes, edges, id: graphId } = graph;
@@ -452,10 +463,10 @@ export async function runGraph(graph, opts = {}) {
       // source) is a real product gap, but it must not fail an otherwise-successful run — a fully
       // approved, staged run reads "completed", and Measure reports its gap separately. Let the node
       // run on what it has (it self-labels each item attributed/blind) and flag it blind, not blocked.
-      result = await runNode(node, upstream, context, store, { approvals, decisions, stepRuntime, loadLastRunItems });
+      result = await runNode(node, upstream, context, store, { approvals, decisions, stepRuntime, loadLastRunItems, deployAuthorization });
       result = { ...result, ok: result.ok !== false, blind: true, contractAudit: inputAudit };
     } else {
-      result = await runNode(node, upstream, context, store, { approvals, decisions, stepRuntime, loadLastRunItems });
+      result = await runNode(node, upstream, context, store, { approvals, decisions, stepRuntime, loadLastRunItems, deployAuthorization });
       const outputAudit = result.ok ? auditOutput(node, result.items ?? []) : inputAudit;
       result = { ...result, contractAudit: outputAudit };
       if (result.ok && outputAudit.state === "blocked") {

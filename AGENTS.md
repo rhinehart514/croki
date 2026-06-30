@@ -211,8 +211,25 @@ fixes it.
 - Engine and node health are derived from real state (scan, run ledger, connectors, decisions), never
   seeded. A subsystem with no signal reports that honestly rather than showing a confident fake number.
 - Scanning is read-only. The build action may create a local branch and worktree, but stops before
-  commit, push, deployment, or PR. Direct patch application requires explicit confirmation, an approved
-  revision, the original base commit, a clean source worktree, and a successful patch check.
+  commit, push, deployment, or PR — EXCEPT a microproduct deploy the founder explicitly approved at the
+  gate: always gated, never silent, never set by composition or a run. The deploy execute connector
+  (`connectors/execute/deploy.mjs`) ships a built microproduct (BYO git push/hook, or a hosted Vercel
+  fallback via the Vercel MCP) ONLY when two founder authorizations both pass. GUARD 1, the real
+  structural wall, is the gate's `approved === true` stamp on the item: the gate connector overwrites
+  `approved` and sets it true only under a founder decision, and composition's only reach is `node.config`
+  (plus topology), never that run-time stamp — so an `approved` item is by construction one a founder
+  released. GUARD 2, defense-in-depth on top, is an explicit founder deploy confirmation, read from the
+  founder-input path (`node.runtime.deployAuthorization`, which graph.mjs rebuilds from the founder's
+  approvals every run and composition cannot write; secondarily the host-threaded run context), never from
+  `node.config`. With either missing the connector refuses and ships nothing. This is the wall GRADUATING
+  per item (like the autonomy ladder graduates a channel), not the wall removed. STATUS: the deploy
+  confirmation is wired end-to-end — an explicit founder confirm at the gate (`payload.deployConfirmed`)
+  is built by `resolveOperatorGate` and threaded through `runGraph` onto `node.runtime` — but the live
+  SHIP runner (a configured BYO git remote, or the Vercel MCP runner) is not yet wired into the run path,
+  so an end-to-end live deploy is deferred scaffolding like the autonomy ladder and credential store
+  below; absent a wired runner the connector returns an honest blocked no-op, never a fake deploy. Direct
+  patch application requires explicit confirmation, an approved revision, the original base commit, a clean
+  source worktree, and a successful patch check.
 - GTM flow execution stops at founder gates. The default execution connector stages actions locally and
   never sends or publishes. Gate continuation reuses the exact prepared run items; it does not rerun live
   source, enrichment, or generation work behind the founder's back. Graph changes created by a model use

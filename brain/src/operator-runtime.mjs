@@ -1,5 +1,8 @@
+import path from "node:path";
 import { getEngineState } from "./engine.mjs";
 import { liveStepRuntime } from "./agent-bridge.mjs";
+import { buildMicroproduct } from "./build.mjs";
+import { storeRoot } from "./store-fs.mjs";
 import { createClaudeComposer } from "./composition.mjs";
 import { createClaudeEvaluator } from "./eval.mjs";
 import { createClaudeProductModeler } from "./product-model-generator.mjs";
@@ -230,6 +233,19 @@ const TOOLS = [
     },
   },
   {
+    name: "compose_microproduct",
+    description: "Build a MICROPRODUCT for a goal — a working artifact cut from the real product (a landing page, a scoped demo, a calculator, a one-off tool) — build it locally into a previewable form, and STAGE it behind the founder gate. In one move it asks the producer to cut the artifact (spec + files) from the scanned product, builds it locally (never deploying), composes a graph whose deploy step is an execute node sitting behind a founder gate, and runs it to that gate. It NEVER deploys, publishes, or pushes: the artifact builds and stages locally (deployed:false) and the run stops at the gate. Deploying past the gate is a SEPARATE, founder-only act that needs an explicit founder deploy confirmation at the gate (a normal approval does not ship it); you cannot trigger it — there is no deploy/approve tool on your surface. NOTE: the live ship runner (a configured git remote / the hosted Vercel MCP) is not yet wired end-to-end, so today this builds and stages to the gate; it does not perform a real live deploy. Use when the goal is best served by building a small real artifact rather than drafting a message.",
+    input_schema: {
+      type: "object",
+      properties: {
+        goal: { type: "string", description: "The goal the microproduct serves. Defaults to the session goal." },
+        title: { type: "string", description: "Optional name for the microproduct/channel." },
+        target: { type: "string", description: "Optional deploy-target label for where the founder would later take it live. Advisory only — nothing deploys without a founder gate release." },
+      },
+      required: [],
+    },
+  },
+  {
     name: "ideate",
     description: "Generate go-to-market ideas for a goal and stop for the founder to pick. It proposes a pass/fail bar from the product and the founder's taste, runs several generators from distinct angles, regenerates wider if the batch is too clustered, then a SEPARATE critic grades each idea against the bar — you never grade your own ideas. Surviving ideas are saved and the session PAUSES with them for the founder. It never builds: choosing which idea becomes work is the founder's act, not yours. Each survivor is pre-wired so the founder's pick drops straight into compose_and_run.",
     input_schema: {
@@ -300,6 +316,7 @@ const NAKED_TOOL_NAMES = new Set([
   "inspect_shared_context",   // taste/memory — ICP, positioning, what's been tried
   "update_shared_context",    // record inferred taste/positioning rather than duplicating into graphs
   "compose_and_run",          // THE move — design the work, build behind a gate, run to the gate
+  "compose_microproduct",     // the build-and-ship door — cut a deployable artifact, STAGE it behind the gate
   "ideate",                   // generate ideas, grade with a separate critic, pause for the founder to pick
   "inspect_graph",            // inspect/repair a failed run
   "inspect_problems",
@@ -396,6 +413,19 @@ function bindComposedChannelToIdea({ projectId = null, ideaId = null, goal = "",
   } catch {
     return null;
   }
+}
+
+// The live microproduct producer, loaded LAZILY so this module imports cleanly even before the
+// microproduct-composer/agent-bridge producer legs land (they are built in parallel). The producer is
+// read-only: it cuts an artifact (spec + files) from the scanned product on the founder's subscription
+// and never deploys. A test injects options.produceMicroproduct to run keyless; this is the live default.
+async function liveProduceMicroproduct({ goal, grounding, repo, options }) {
+  const { produceMicroproduct, createClaudeMicroproductProducer } = await import("./microproduct-composer.mjs");
+  const { createClaudeMicroproductInvoker } = await import("./agent-bridge.mjs");
+  return produceMicroproduct({ goal, grounding }, {
+    ...options,
+    produce: createClaudeMicroproductProducer({ invoke: createClaudeMicroproductInvoker({ cwd: repo }) }),
+  });
 }
 
 function designStateFor(session, options) {
@@ -888,6 +918,160 @@ async function executeTool(session, tool, options = {}) {
     return { session: run.session, result: summarizeRun(run.result), pause: run.session.status === "waiting_for_gate" };
   }
 
+  // JOB 2b — the build-and-SHIP door. The deployable twin of compose_and_run: instead of staging a
+  // message, it cuts a working MICROPRODUCT from the real product and stages it behind the founder gate.
+  // The producer (a read-only, scan-grounded data producer with NO deploy path) returns the artifact's
+  // spec + files; the host composes a graph whose deploy step is an `execute` node sitting behind a
+  // founder `gate` and runs it to that gate. The wall is identical to the send wall: composeNakedGraph
+  // re-asserts assertGateWall (every execute node must have a founder gate upstream on every path, or the
+  // composition is rejected), and the deploy execute connector (deploy.mjs) ships NOTHING without BOTH the
+  // gate stamp AND an explicit founder deploy confirmation — neither of which composition or a run can
+  // forge. Deploy is the wall GRADUATING — a founder gate release plus an explicit confirm — never the wall
+  // removed, and never reachable from this tool: there is no deploy/approve tool on the agent surface.
+  if (tool.name === "compose_microproduct") {
+    const goal = firstNonEmpty(input.goal, session.goal);
+    if (!goal) throw new Error("compose_microproduct needs a goal.");
+    const project = loadProject(options);
+    const repo = options.cwd || project.sharedContext?.repository?.repo || process.cwd();
+    const workspace = latestWorkspace(session, options);
+    const grounding = compactProduct(workspace);
+
+    let working = addEvent(session, {
+      type: "operator_composing",
+      title: "Building a microproduct",
+      detail: `Cutting a deployable artifact from the product for: ${goal}`,
+      data: { goal },
+    }, options);
+
+    // 1) The producer cuts the artifact (spec + files) from the scanned product. It produces files and
+    //    never deploys. Injected (fake) in tests; live = the subscription producer, dynamically loaded.
+    const produce = options.produceMicroproduct
+      || ((args) => liveProduceMicroproduct({ ...args, repo, options }));
+    const built = await produce({ goal, grounding });
+    const artifactSpec = built?.artifactSpec ?? null;
+    const artifactFiles = Array.isArray(built?.artifactFiles)
+      ? built.artifactFiles
+      : (Array.isArray(built?.files) ? built.files : null);
+    if (!artifactFiles || artifactFiles.length === 0) {
+      throw new Error("The microproduct producer returned no files to stage — refusing to compose an empty deploy.");
+    }
+
+    // 1b) BUILD the artifact locally BEFORE the gate, so the founder approves a built, previewable
+    //     microproduct — not raw file text. buildMicroproduct writes the producer files into an isolated
+    //     build dir, runs any local install/build (assertLocalBuildCommand rejects a deploy-like command,
+    //     so the build leg can never smuggle a ship), and captures the static preview (entry file + file
+    //     list). It NEVER commits, pushes, or deploys. Injectable for tests; the live default is the real
+    //     local build leg. A build failure is surfaced but never blocks reaching the gate — the founder
+    //     still reviews the raw files, just without a rendered preview.
+    const buildLocally = options.buildMicroproduct || buildMicroproduct;
+    let preview = null;
+    let build = null;
+    try {
+      build = await buildLocally(
+        {
+          name: firstNonEmpty(input.title, artifactSpec?.name, "microproduct"),
+          files: artifactFiles,
+          install: artifactSpec?.install,
+          build: artifactSpec?.build ?? artifactSpec?.buildCommand,
+          previewDir: artifactSpec?.previewDir,
+        },
+        { worktreeRoot: path.join(storeRoot(options), "microproduct-builds") },
+      );
+      preview = build?.preview ?? null;
+    } catch {
+      build = null;
+      preview = null;
+    }
+
+    working = addEvent(working, {
+      type: "operator_microproduct_built",
+      title: "Cut a deployable microproduct",
+      detail: preview?.exists
+        ? `${artifactSpec?.kind || "artifact"} · ${artifactFiles.length} file${artifactFiles.length === 1 ? "" : "s"} · built preview (${preview.entry || "no entry"}) — staging it behind the founder gate before any deploy.`
+        : `${artifactSpec?.kind || "artifact"} · ${artifactFiles.length} file${artifactFiles.length === 1 ? "" : "s"} — staging it behind the founder gate before any deploy.`,
+      data: { kind: artifactSpec?.kind ?? null, fileCount: artifactFiles.length, previewEntry: preview?.entry ?? null, previewBuilt: Boolean(preview?.exists) },
+    }, options);
+
+    // 2) Compose the deploy graph: the built artifact (a provided source item) → founder gate → deploy
+    //    (an execute node). composeNakedGraph normalizes, binds the IO, and RE-ASSERTS the wall — the
+    //    deploy execute node must have a founder gate upstream on every path or composition is rejected.
+    const target = typeof input.target === "string" && input.target.trim() ? input.target.trim() : "staged";
+    const title = firstNonEmpty(input.title, artifactSpec?.name, `Microproduct: ${goal}`);
+    const microproductSpec = {
+      ok: true,
+      nodes: [
+        { id: "microproduct", category: "source", connector: "manual", label: "Built microproduct", config: {} },
+        { id: "deploy-gate", category: "gate", connector: "default", label: "Founder approval to deploy", config: {} },
+        { id: "deploy", category: "execute", connector: "deploy", label: `Deploy ${title}`, config: { target } },
+      ],
+      edges: [
+        { id: "data-microproduct-gate", source: "microproduct", target: "deploy-gate", edgeType: "data" },
+        { id: "data-gate-deploy", source: "deploy-gate", target: "deploy", edgeType: "data" },
+      ],
+    };
+    const composed = await composeNakedGraph({
+      title,
+      objective: goal,
+      kind: "microproduct",
+      grounding,
+      // The single artifact item the gate releases — the deploy connector reads artifactSpec/files off it
+      // and ships it ONLY after the founder approves AND supplies an explicit deploy confirmation. Nothing
+      // deploys before that, and composition/runs cannot forge either authorization (see deploy.mjs). The
+      // built preview (entry file + file list + local build dir) rides the item so the founder reviews a
+      // rendered microproduct at the gate, not raw file text.
+      input: { type: "manual", items: [{
+        artifactSpec,
+        artifactFiles,
+        files: artifactFiles,
+        microproduct: true,
+        ...(preview ? { preview } : {}),
+        ...(build?.worktree ? { buildWorktree: build.worktree } : {}),
+      }] },
+      output: { type: "local" },
+    }, { ...options, compose: async () => microproductSpec });
+
+    // bindIO stamped the deploy execute connector to the generic local stager; restore the microproduct
+    // deploy connector (the wall-graduating ship leg) and its deploy target. Topology is UNCHANGED, so the
+    // gate wall composeNakedGraph just asserted still holds; re-validate after the swap as defense in depth.
+    const graph = composed.graph;
+    const deploy = graph.nodes.find((node) => node.category === "execute");
+    if (deploy) {
+      deploy.connector = "deploy";
+      deploy.config = { ...deploy.config, target, microproduct: true };
+      graph.revision = (graph.revision ?? 1) + 1;
+      const revalidated = validateGraph(graph);
+      if (!revalidated.ok) throw new Error(`Microproduct deploy graph is invalid: ${revalidated.errors.join(" ")}`);
+      saveFlow(graph, options);
+    }
+
+    registerComposedChannel({
+      id: composed.channel.id,
+      graphId: composed.channel.graphId,
+      name: composed.channel.name,
+      objective: goal,
+    }, options);
+
+    working = addEvent({
+      ...working,
+      graphId: composed.channel.graphId,
+      graphRevision: graph.revision,
+    }, {
+      type: "operator_workflow_composed",
+      title: `Composed ${composed.channel.name}`,
+      detail: `Deploy is gated behind founder approval — running to the gate, nothing deploys.`,
+      data: { channelId: composed.channel.id, graphId: composed.channel.graphId, nodes: graph.nodes.length, kind: "microproduct" },
+    }, options);
+
+    working = addEvent(working, {
+      type: "operator_running",
+      title: "Running the microproduct to the deploy gate",
+      detail: "The artifact stages locally and the run stops at the founder gate. Nothing deploys until the founder approves.",
+    }, options);
+
+    const run = await executeGraphRun(working, { stream: true }, options);
+    return { session: run.session, result: summarizeRun(run.result), pause: run.session.status === "waiting_for_gate" };
+  }
+
   // JOB 3 — ideate, then PAUSE for the founder. This is the generate-side twin of compose_and_run, and
   // it stops at a wall of its own: the operator generates ideas but never decides which one becomes work.
   // It (1) proposes a pass/fail bar from the product + founder taste (a SEPARATE critic — idea-bar.mjs),
@@ -1284,12 +1468,22 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
   // The wall in the gate connector is unchanged; this only guards who may stand at it.
   const { actor: releasedBy } = authorizeGateRelease(session, payload, options);
   const flow = flowFor(session, options);
+  // The SECOND founder authorization for a microproduct deploy (GUARD 2), built host-side from the
+  // SAME authorized release this gate just cleared. A deploy is heavier than a send, so a normal gate
+  // approval does NOT ship a microproduct — the founder must explicitly confirm the deploy AT the gate
+  // (payload.deployConfirmed === true), mirroring revision.mjs's applyRevision(confirmation === true).
+  // It is stamped with the authorized releaser's identity and threaded onto node.runtime by runGraph,
+  // which composition cannot write — so neither a composed graph nor a model-driven run can forge it.
+  const deployAuthorization = payload.deployConfirmed === true
+    ? { confirmed: true, releasedBy: releasedBy.userId ?? null, userId: releasedBy.userId ?? null, name: releasedBy.name ?? null }
+    : null;
   const result = await runGraph(flow.graph, {
     approvals: payload.approvals && typeof payload.approvals === "object" ? payload.approvals : {},
     decisions: payload.decisions && typeof payload.decisions === "object" ? payload.decisions : {},
     memory: memoryFor(flow.runs, options, session.projectId),
     designState: designStateFor(session, options),
     resumeResult: session.pendingGate.runResult,
+    deployAuthorization,
     stepRuntime: liveStepRuntime({ cwd: options.cwd }),
     loadLastRunItems: createDerivedSourceLoader({ ...options, projectId: session.projectId || "default" }),
     // Defense-in-depth at the gate point: re-assert authority inside the runner before any approval is

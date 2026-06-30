@@ -29,6 +29,7 @@ import * as defaultGate from "./gate/default.mjs";
 import * as localExecute from "./execute/local.mjs";
 import * as httpExecute from "./execute/http.mjs";
 import * as artifactExecute from "./execute/artifact.mjs";
+import * as deployExecute from "./execute/deploy.mjs";
 
 import * as defaultMeasure from "./measure/default.mjs";
 
@@ -41,7 +42,7 @@ const REGISTRY = {
   filter:    { default: defaultScore },
   generate:  { claude: claudeDraft, openai: openaiDraft },
   gate:      { default: defaultGate },
-  execute:   { local: localExecute, http: httpExecute, artifact: artifactExecute },
+  execute:   { local: localExecute, http: httpExecute, artifact: artifactExecute, deploy: deployExecute },
   measure:   { default: defaultMeasure },
 };
 
