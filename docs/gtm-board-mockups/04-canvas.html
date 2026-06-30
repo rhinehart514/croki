@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GTM Canvas — focus &amp; extend</title>
+<style>
+  :root{
+    --bg:#fafafa; --surface:#ffffff; --ink:#18181b; --muted:#71717a; --faint:#a1a1aa;
+    --line:#e4e4e7; --line-2:#ededf0; --proven:#16a34a; --gap:#b9740a; --danger:#dc2626;
+    --blind:#a1a1aa; --link:#2563eb; --r:12px; --r-sm:8px;
+    --shadow-card:0 1px 2px rgba(0,0,0,.04); --shadow-pop:0 12px 30px -12px rgba(20,20,25,.28);
+    --ease:cubic-bezier(.22,1,.36,1); --spring:cubic-bezier(.34,1.4,.5,1);
+    --font:'Geist',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+    --mono:'Geist Mono',ui-monospace,'SF Mono',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased}
+  .app{display:flex;height:100vh}
+
+  /* ── left section rail ───────────────────────────── */
+  .rail{width:232px;flex:0 0 232px;border-right:1px solid var(--line);background:#fcfcfd;
+        display:flex;flex-direction:column;padding:18px 0;z-index:20;position:relative}
+  .rail-head{padding:0 20px 16px;border-bottom:1px solid var(--line-2);margin-bottom:8px}
+  .rail-logo{display:flex;align-items:center;gap:9px}
+  .rail-logo .mark{width:24px;height:24px;border-radius:7px;background:var(--ink);color:#fff;
+        display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px}
+  .rail-logo .name{font-weight:600;font-size:13.5px;letter-spacing:-.01em}
+  .rail-logo .name span{color:var(--faint);font-weight:500}
+  .rail-sub{font-size:11.5px;color:var(--faint);margin-top:9px;line-height:1.4}
+  .rail-scroll{overflow-y:auto;padding:6px 12px 12px;flex:1}
+  .phase{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+        color:var(--faint);padding:14px 8px 6px}
+  .sec{display:flex;align-items:center;gap:11px;width:100%;padding:8px 10px;border:none;background:none;
+        border-radius:var(--r-sm);cursor:pointer;text-align:left;color:var(--ink);transition:background .14s var(--ease)}
+  .sec:hover{background:#f4f4f5}
+  .sec.active{background:#f0f0f1}
+  .sec .num{width:21px;height:21px;flex:0 0 21px;border-radius:6px;border:1px solid var(--line);
+        background:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;
+        font-weight:600;color:var(--muted);font-family:var(--mono);transition:.16s var(--ease)}
+  .sec.active .num{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .sec .lbl{font-size:13px;font-weight:500;letter-spacing:-.01em}
+  .sec .dot{margin-left:auto;width:7px;height:7px;border-radius:50%}
+  .dot.grounded{background:var(--proven)} .dot.testing{background:var(--ink);opacity:.35}
+  .dot.stated{background:var(--faint)} .dot.blind{background:var(--blind);opacity:.5}
+
+  /* ── canvas viewport ─────────────────────────────── */
+  .stage{flex:1;position:relative;overflow:hidden;
+        background-image:radial-gradient(var(--line) 1px,transparent 1px);background-size:22px 22px}
+  .world{position:absolute;top:0;left:0;transform-origin:0 0;
+        transition:transform .62s var(--ease);will-change:transform}
+  .world.dragging{transition:none}
+  svg.wires{position:absolute;top:0;left:0;overflow:visible;pointer-events:none}
+  .wire{fill:none;stroke:var(--line);stroke-width:1.5}
+  .wire.feedback{stroke:var(--faint);stroke-dasharray:5 5;opacity:.6}
+  .wire.lit{stroke:var(--ink);opacity:.5;stroke-width:2}
+
+  /* clusters + nodes */
+  .cluster{position:absolute;transition:opacity .5s var(--ease),filter .5s var(--ease)}
+  .stage.focusing .cluster:not(.focused){opacity:.22;filter:saturate(.4)}
+  .cluster-head{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+        color:var(--faint);margin-bottom:9px;display:flex;align-items:center;gap:7px}
+  .cluster-head .cnum{font-family:var(--mono)}
+  .node{width:268px;background:var(--surface);border:1px solid var(--line-2);border-left:3px solid var(--ghost,#d4d4d8);
+        border-radius:var(--r);padding:13px 15px;box-shadow:var(--shadow-card);cursor:default;
+        transition:box-shadow .2s var(--ease),transform .2s var(--ease)}
+  .node.spine{cursor:pointer}
+  .node.spine:hover{box-shadow:var(--shadow-pop);transform:translateY(-1px)}
+  .node.grounded{border-left-color:var(--proven)} .node.testing{border-left-color:var(--ink)}
+  .node.stated{border-left-color:var(--faint)} .node.blind{border-left-color:var(--blind)}
+  .node.gate{border-left-color:var(--gap)}
+  .node-top{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+  .node-kind{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.04em;
+        text-transform:uppercase;color:var(--faint)}
+  .node-pill{margin-left:auto;font-size:11px;font-weight:500;padding:2px 9px;border-radius:999px;
+        display:inline-flex;align-items:center;gap:5px}
+  .node-pill .p{width:6px;height:6px;border-radius:50%}
+  .pill-grounded{color:var(--proven);background:#f0fdf4} .pill-grounded .p{background:var(--proven)}
+  .pill-testing{color:var(--muted);background:#f4f4f5} .pill-testing .p{background:var(--ink);opacity:.4}
+  .pill-stated{color:var(--muted);background:#f4f4f5} .pill-stated .p{background:var(--faint)}
+  .pill-blind{color:var(--faint);background:#f4f4f5} .pill-blind .p{background:var(--blind)}
+  .pill-gate{color:var(--gap);background:#fdf6ec} .pill-gate .p{background:var(--gap)}
+  .node-name{font-size:14.5px;font-weight:600;letter-spacing:-.015em;line-height:1.25}
+  .node-sub{font-size:12px;color:var(--muted);line-height:1.4;margin-top:4px}
+  .node.small{width:210px;padding:11px 13px}
+  .node.small .node-name{font-size:13px}
+
+  /* detail nodes that unfold on extend */
+  .detail{position:absolute;opacity:0;transform:translateX(-14px) scale(.96);
+        transition:opacity .42s var(--ease),transform .42s var(--spring);pointer-events:none}
+  .cluster.x1 .detail.d1,.cluster.x2 .detail.d1,.cluster.x2 .detail.d2,
+  .cluster.x3 .detail.d1,.cluster.x3 .detail.d2,.cluster.x3 .detail.d3{
+        opacity:1;transform:translateX(0) scale(1);pointer-events:auto}
+
+  /* extend hint */
+  .hint{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);z-index:15;
+        background:var(--ink);color:#fff;font-size:12.5px;font-weight:500;padding:9px 15px 9px 14px;
+        border-radius:999px;box-shadow:var(--shadow-pop);display:none;align-items:center;gap:10px;
+        opacity:0;transition:opacity .3s var(--ease)}
+  .hint.show{display:inline-flex;opacity:1}
+  .hint .swipe{display:inline-flex;align-items:center;gap:3px;color:#d4d4d8;font-size:11px}
+  .hint kbd{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.16);
+        border-radius:5px;padding:2px 6px}
+  .hint .arrow{animation:nudge 1.3s var(--ease) infinite}
+  @keyframes nudge{0%,100%{transform:translateX(0)}50%{transform:translateX(4px)}}
+
+  /* depth meter */
+  .depth{position:absolute;left:50%;bottom:74px;transform:translateX(-50%);z-index:15;
+        display:none;gap:5px;align-items:center}
+  .depth.show{display:flex}
+  .depth .seg{width:26px;height:3px;border-radius:2px;background:var(--line);transition:.3s var(--ease)}
+  .depth .seg.on{background:var(--ink)}
+
+  /* top bar */
+  .topbar{position:absolute;top:0;left:0;right:0;height:52px;display:flex;align-items:center;
+        gap:14px;padding:0 22px;z-index:18;pointer-events:none}
+  .crumb{font-size:13px;color:var(--muted);pointer-events:auto}
+  .crumb b{color:var(--ink);font-weight:600}
+  .back{margin-left:auto;pointer-events:auto;font-size:12.5px;color:var(--muted);background:var(--surface);
+        border:1px solid var(--line);border-radius:999px;padding:6px 13px;cursor:pointer;
+        display:none;align-items:center;gap:6px;transition:.14s var(--ease)}
+  .back:hover{color:var(--ink);border-color:var(--faint)}
+  .back.show{display:inline-flex}
+  .zoomwrap{position:absolute;right:22px;bottom:24px;z-index:16;display:flex;flex-direction:column;
+        gap:1px;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;
+        box-shadow:var(--shadow-card)}
+  .zoomwrap button{width:32px;height:30px;border:none;background:none;cursor:pointer;color:var(--muted);
+        font-size:15px;border-bottom:1px solid var(--line-2)}
+  .zoomwrap button:last-child{border-bottom:none}
+  .zoomwrap button:hover{background:#f4f4f5;color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- LEFT SECTION RAIL -->
+  <aside class="rail">
+    <div class="rail-head">
+      <div class="rail-logo"><div class="mark">R</div><div class="name">GTM IDE <span>/ RodentRadar</span></div></div>
+      <div class="rail-sub">One canvas. Click a section to focus it · swipe right to extend it.</div>
+    </div>
+    <div class="rail-scroll" id="rail"></div>
+  </aside>
+
+  <!-- CANVAS -->
+  <div class="stage" id="stage">
+    <div class="topbar">
+      <div class="crumb" id="crumb">The whole go-to-market — one flow</div>
+      <button class="back" id="back">↖ back to the whole</button>
+    </div>
+    <div class="world" id="world">
+      <svg class="wires" id="wires" width="6000" height="2000"></svg>
+    </div>
+    <div class="depth" id="depth"></div>
+    <div class="hint" id="hint">
+      <span><b>RodentRadar — PCO Outbound Discovery</b></span>
+      <span class="swipe">swipe <span class="arrow">→</span> to extend · or <kbd>→</kbd></span>
+    </div>
+    <div class="zoomwrap">
+      <button id="zin">+</button><button id="zout">−</button><button id="zfit">⊡</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── the GTM as one long node flow ──────────────────────────────
+// each section is a cluster placed along the flow; extend reveals detail nodes.
+const PHASES=[['Strategy',[1,2,3,4]],['Motion',[5,6]],['Loop',[7,8,9]]];
+const SEC={
+  1:{name:'Market / ICP',kind:'Strategy',status:'grounded',pill:'grounded',
+     belief:'PCO owners — won vs restaurant ops, 3:0',sub:'center of gravity',
+     details:[
+       {kind:'arm A',status:'grounded',name:'PCO Outbound',sub:'3 runs · kept'},
+       {kind:'arm B',status:'blind',name:'Restaurant Outbound',sub:'retired'},
+       {kind:'experiment',status:'grounded',name:'Which ICP @ $49 pilot',sub:'resolved · keep PCO'},
+     ]},
+  2:{name:'Problem & Trigger',kind:'Strategy',status:'stated',pill:'stated',
+     belief:'Wedge: attribution-blindness',sub:'why-now ladder',
+     details:[
+       {kind:'trigger',status:'grounded',name:'Failed health inspection',sub:'9 live · hottest'},
+       {kind:'trigger',status:'testing',name:'New commercial account',sub:'2 warming'},
+       {kind:'trigger',status:'blind',name:'EPA rodenticide limits',sub:'1 cooling'},
+     ]},
+  3:{name:'Positioning',kind:'Strategy',status:'stated',pill:'stated',
+     belief:'Proves which sensor stopped the infestation',sub:'the one-liner',
+     details:[
+       {kind:'you',status:'stated',name:'RodentRadar',sub:'proves the win'},
+       {kind:'status quo',status:'blind',name:'Manual monthly logs',sub:'no evidence'},
+       {kind:'A/B',status:'testing',name:'one-liner test',sub:'variant A leading 14% vs 6%'},
+     ]},
+  4:{name:'Offer',kind:'Strategy',status:'blind',pill:'blind',
+     belief:'Not defined yet',sub:'value escalation',
+     details:[
+       {kind:'rung',status:'stated',name:'Free demo',sub:'entry'},
+       {kind:'rung',status:'testing',name:'$49 pilot',sub:'under test'},
+       {kind:'rung',status:'blind',name:'Contract',sub:'undefined'},
+     ]},
+  5:{name:'Channels',kind:'Motion',status:'testing',pill:'testing',
+     belief:'3 channels · 2 with runs',sub:'the machinery',
+     details:[
+       {kind:'source',status:'testing',name:'Find PCOs',sub:'8 found'},
+       {kind:'draft',status:'testing',name:'Outreach Writer',sub:'6 drafted'},
+       {kind:'gate',status:'gate',name:'Founder gate',sub:'3 awaiting you'},
+     ]},
+  6:{name:'Plays & Assets',kind:'Motion',status:'testing',pill:'testing',
+     belief:'14 staged · 3-touch email play',sub:'touches & assets',
+     details:[
+       {kind:'touch 1',status:'testing',name:'Cold open',sub:'the violation hook'},
+       {kind:'touch 2',status:'testing',name:'Proof',sub:'demo link'},
+       {kind:'asset',status:'grounded',name:'$49 pilot CTA',sub:'shared'},
+     ]},
+  7:{name:'Pipeline',kind:'Loop',status:'testing',pill:'testing',
+     belief:'47 sourced → 3 pilots',sub:'survival & the pinch',
+     details:[
+       {kind:'stage',status:'testing',name:'12 conversations',sub:'of 47 sourced'},
+       {kind:'pinch',status:'gate',name:'Pinch at the gate',sub:'9 approved of 31'},
+       {kind:'person',status:'grounded',name:'Marcus Webb',sub:'in both arms · fatigue'},
+     ]},
+  8:{name:'Measurement',kind:'Loop',status:'testing',pill:'testing',
+     belief:'Attribution blind — seam severed',sub:'can we prove it?',
+     details:[
+       {kind:'touch',status:'testing',name:'Per-prospect UTM',sub:'sent'},
+       {kind:'severed',status:'blind',name:'⚠ the break',sub:'no win-event proof'},
+       {kind:'win',status:'blind',name:'pilot_requested',sub:'0 attributable'},
+     ]},
+  9:{name:'Learning',kind:'Loop',status:'grounded',pill:'grounded',
+     belief:'1 verdict · 4 kept · 2 killed',sub:'verdict ledger',
+     details:[
+       {kind:'kept',status:'grounded',name:'PCO = our ICP',sub:'→ Market, just now'},
+       {kind:'killed',status:'blind',name:'Restaurant ops ICP',sub:'2 replies to 0'},
+       {kind:'feeds',status:'testing',name:'→ sharpens Strategy',sub:'the loop closes'},
+     ]},
+};
+
+// layout: clusters along a gentle horizontal flow, slight vertical wave per phase
+const GAP=520, BASEY=190;
+const POS={}; let order=[];
+PHASES.forEach(([,ids])=>ids.forEach(id=>order.push(id)));
+order.forEach((id,i)=>{
+  const wave=[0,70,150,80,210,120,260,180,300][i]||0;
+  POS[id]={x:120+i*GAP, y:BASEY+wave};
+});
+
+const rail=document.getElementById('rail'), world=document.getElementById('world'),
+      wires=document.getElementById('wires'), stage=document.getElementById('stage'),
+      hint=document.getElementById('hint'), depthBar=document.getElementById('depth'),
+      crumb=document.getElementById('crumb'), back=document.getElementById('back');
+
+// build rail
+PHASES.forEach(([phase,ids])=>{
+  const p=document.createElement('div');p.className='phase';p.textContent=phase;rail.appendChild(p);
+  ids.forEach(id=>{
+    const s=SEC[id];
+    const b=document.createElement('button');b.className='sec';b.dataset.id=id;
+    b.innerHTML=`<span class="num">${id}</span><span class="lbl">${s.name}</span><span class="dot ${s.status}"></span>`;
+    b.onclick=()=>focusSection(id);
+    rail.appendChild(b);
+  });
+});
+
+// build clusters
+order.forEach(id=>{
+  const s=SEC[id], p=POS[id];
+  const c=document.createElement('div');c.className='cluster';c.id='c'+id;
+  c.style.left=p.x+'px';c.style.top=p.y+'px';c.dataset.id=id;
+  // spine node
+  c.innerHTML=`
+    <div class="cluster-head"><span class="cnum">${id}</span> ${s.kind}</div>
+    <div class="node spine ${s.status}" onclick="focusSection(${id})">
+      <div class="node-top"><span class="node-kind">${s.name}</span>
+        <span class="node-pill pill-${s.pill}"><span class="p"></span>${s.pill}</span></div>
+      <div class="node-name">${s.belief}</div>
+      <div class="node-sub">${s.sub}</div>
+    </div>`;
+  // detail nodes (hidden until extend) — unfold to the right & below
+  s.details.forEach((d,j)=>{
+    const dn=document.createElement('div');
+    dn.className=`detail d${j+1} node small ${d.status}`;
+    dn.style.left=(300)+'px';
+    dn.style.top=(28 + j*92)+'px';
+    dn.innerHTML=`<div class="node-top"><span class="node-kind">${d.kind}</span>
+        <span class="node-pill pill-${d.status==='gate'?'gate':d.status}"><span class="p"></span>${d.status}</span></div>
+      <div class="node-name">${d.name}</div><div class="node-sub">${d.sub}</div>`;
+    c.appendChild(dn);
+  });
+  world.appendChild(c);
+});
+
+// wires between consecutive clusters + feedback arc 9→1
+function nodeAnchor(id,side){const p=POS[id];return side==='r'?{x:p.x+268,y:p.y+58}:{x:p.x,y:p.y+58};}
+let wireHTML='';
+for(let i=0;i<order.length-1;i++){
+  const a=nodeAnchor(order[i],'r'), b=nodeAnchor(order[i+1],'l');
+  const mx=(a.x+b.x)/2;
+  wireHTML+=`<path class="wire" id="w${order[i]}" d="M ${a.x} ${a.y} C ${mx} ${a.y}, ${mx} ${b.y}, ${b.x} ${b.y}"/>`;
+}
+// feedback loop Learning(9) → Market(1), a long low arc
+const f1=nodeAnchor(9,'r'), f0=nodeAnchor(1,'l');
+wireHTML+=`<path class="wire feedback" d="M ${f1.x} ${f1.y+30} C ${f1.x+120} ${900}, ${f0.x-120} ${900}, ${f0.x} ${f0.y+30}"/>`;
+wires.innerHTML=wireHTML;
+
+// ── camera ─────────────────────────────────────────────
+let cam={x:40,y:30,scale:.62}, focused=null, extend=0;
+function apply(){world.style.transform=`translate(${cam.x}px,${cam.y}px) scale(${cam.scale})`;}
+function fitAll(){
+  focused=null;extend=0;stage.classList.remove('focusing');
+  document.querySelectorAll('.cluster').forEach(c=>c.className='cluster');
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
+  hint.classList.remove('show');depthBar.classList.remove('show');back.classList.remove('show');
+  crumb.innerHTML='The whole go-to-market — one flow';
+  cam={x:30,y:24,scale:.6};apply();
+}
+function focusSection(id){
+  focused=id;extend=0;
+  stage.classList.add('focusing');
+  document.querySelectorAll('.cluster').forEach(c=>c.classList.toggle('focused',+c.dataset.id===id));
+  document.querySelectorAll('.sec').forEach(s=>s.classList.toggle('active',+s.dataset.id===id));
+  const p=POS[id];const vw=stage.clientWidth, vh=stage.clientHeight;
+  const sc=1.0;
+  cam={x:vw*0.30 - p.x*sc, y:vh*0.42 - (p.y+40)*sc, scale:sc};apply();
+  updateExtendUI();
+  back.classList.add('show');
+  crumb.innerHTML=`<b>${SEC[id].name}</b> &nbsp;·&nbsp; ${SEC[id].sub}`;
+}
+function updateExtendUI(){
+  const c=document.getElementById('c'+focused);
+  c.classList.remove('x1','x2','x3'); if(extend>0)c.classList.add('x'+extend);
+  // camera widens as you extend so the unfolding nodes stay in frame
+  const p=POS[focused], vw=stage.clientWidth, vh=stage.clientHeight;
+  const sc=extend===0?1.0:extend===1?.92:extend===2?.82:.74;
+  const shift=extend*150;
+  cam={x:vw*0.30 - (p.x+shift)*sc, y:vh*0.42 - (p.y+40)*sc, scale:sc};apply();
+  hint.classList.toggle('show',extend<3);
+  depthBar.classList.add('show');
+  depthBar.innerHTML=[0,1,2,3].map(i=>`<span class="seg ${i<=extend?'on':''}"></span>`).join('');
+  // light the wire into this section
+  document.querySelectorAll('.wire').forEach(w=>w.classList.remove('lit'));
+  const w=document.getElementById('w'+focused);if(w)w.classList.add('lit');
+}
+back.onclick=fitAll;
+
+// ── swipe-to-extend (horizontal trackpad) + keys ───────
+let acc=0, lock=false;
+stage.addEventListener('wheel',e=>{
+  if(focused===null)return;
+  // horizontal intent: trackpad two-finger swipe gives deltaX
+  if(Math.abs(e.deltaX)>Math.abs(e.deltaY)){
+    e.preventDefault();acc+=e.deltaX;
+    if(!lock && acc>60){extend=Math.min(3,extend+1);acc=0;lock=true;updateExtendUI();setTimeout(()=>lock=false,420);}
+    if(!lock && acc<-60){extend=Math.max(0,extend-1);acc=0;lock=true;updateExtendUI();setTimeout(()=>lock=false,420);}
+  }
+},{passive:false});
+window.addEventListener('keydown',e=>{
+  if(focused===null){return;}
+  if(e.key==='ArrowRight'){extend=Math.min(3,extend+1);updateExtendUI();}
+  if(e.key==='ArrowLeft'){if(extend===0){return;}extend=Math.max(0,extend-1);updateExtendUI();}
+  if(e.key==='Escape')fitAll();
+});
+
+// drag to pan when not focused
+let drag=null;
+stage.addEventListener('pointerdown',e=>{if(e.target.closest('.node, .sec, .back, .zoomwrap'))return;
+  drag={x:e.clientX,y:e.clientY,cx:cam.x,cy:cam.y};world.classList.add('dragging');});
+window.addEventListener('pointermove',e=>{if(!drag)return;cam.x=drag.cx+(e.clientX-drag.x);cam.y=drag.cy+(e.clientY-drag.y);apply();});
+window.addEventListener('pointerup',()=>{if(drag){drag=null;world.classList.remove('dragging');}});
+
+document.getElementById('zin').onclick=()=>{cam.scale=Math.min(1.4,cam.scale+.12);apply();};
+document.getElementById('zout').onclick=()=>{cam.scale=Math.max(.4,cam.scale-.12);apply();};
+document.getElementById('zfit').onclick=fitAll;
+
+fitAll();
+</script>
+</body>
+</html>

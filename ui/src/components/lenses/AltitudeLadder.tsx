@@ -1,14 +1,13 @@
-// AltitudeLadder — the persistent left-edge minimap for the GTM board. Nine cells, one per belief
-// layer, bracketed into the three phases (Strategy 1-4 · Motion 5-6 · Loop 7-9). It is ALWAYS visible
-// at both altitudes so you never lose your place: at board altitude nothing is focused; at band
-// altitude the open band is lit. Click a cell to fly straight to that band.
+// AltitudeLadder — the persistent left SECTION RAIL for the GTM board canvas. Nine sections, one per
+// belief layer, grouped into the three phases (Strategy 1-4 · Motion 5-6 · Loop 7-9). It is ALWAYS
+// visible so you never lose your place: clicking a section FLIES THE CAMERA to that cluster on the
+// spatial canvas and lights the section here. At the whole-flow altitude nothing is active.
 //
 // Pure navigation chrome — it reads the layer list and the focused layer, and calls back on click. It
-// never gates, never triggers a run.
+// never gates, never triggers a run. (Named AltitudeLadder for history; it is the section rail now.)
 
-import { motion } from "motion/react";
 import type { LayerBelief } from "@/types";
-import { layerMeta } from "@/lib/boardModel";
+import { layerMeta, groundingBadge } from "@/lib/boardModel";
 import "./GtmBoard.css";
 
 type Phase = { key: string; label: string; layers: LayerBelief[] };
@@ -30,38 +29,37 @@ export function AltitudeLadder({
   }
 
   return (
-    <nav className="alt-ladder" aria-label="Board altitude ladder">
-      {phases.map((phase) => (
-        <div key={phase.key} className="alt-phase">
-          <span className="alt-phase-label">{phase.label}</span>
-          <div className="alt-cells">
+    <nav className="sec-rail" aria-label="Board sections">
+      <div className="sec-rail-head">
+        <div className="sec-rail-title">The board</div>
+        <div className="sec-rail-sub">One canvas. Click a section to focus it · swipe right to unfold it.</div>
+      </div>
+      <div className="sec-rail-scroll">
+        {phases.map((phase) => (
+          <div key={phase.key} className="sec-phase">
+            <span className="sec-phase-label">{phase.label}</span>
             {phase.layers.map((l) => {
               const meta = layerMeta(l.layer);
               const on = focusedLayer === l.layer;
-              const grounded = Boolean(l.belief);
+              const badge = groundingBadge(l);
               return (
                 <button
                   key={l.layer}
                   type="button"
-                  className={`alt-cell${on ? " on" : ""}${grounded ? " grounded" : " blind"}`}
+                  className={`sec${on ? " active" : ""}`}
                   onClick={() => onFly(l.layer)}
                   title={`${meta.n} · ${meta.name}`}
                   aria-current={on ? "true" : undefined}
                 >
-                  {on && (
-                    <motion.span
-                      layoutId="alt-cell-active"
-                      className="alt-cell-active"
-                      transition={{ type: "spring", stiffness: 480, damping: 34, mass: 0.7 }}
-                    />
-                  )}
-                  <span className="alt-cell-n">{meta.n}</span>
+                  <span className="sec-num">{meta.n}</span>
+                  <span className="sec-lbl">{meta.name}</span>
+                  <span className={`sec-dot tone-${badge.tone}`} aria-hidden="true" />
                 </button>
               );
             })}
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </nav>
   );
 }

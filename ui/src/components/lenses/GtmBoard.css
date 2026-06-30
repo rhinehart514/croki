@@ -1,6 +1,6 @@
-/* GtmBoard — the nine-band GTM belief board. Lifted to the real tokens from index.css; light #fafafa
-   ground, monochrome zinc, Geist, opaque surfaces. Amber (--gap) appears NOWHERE here — it is the
-   founder gate's alone. Mirrors docs/gtm-board-mockups/01-board.html. */
+/* GtmBoard — the nine-section GTM belief board as a SPATIAL NODE-FLOW CANVAS. Lifted to the real
+   tokens from index.css; light #fafafa ground, monochrome zinc, Geist, opaque surfaces. Amber (--gap)
+   appears NOWHERE here — it is the founder gate's alone. Mirrors docs/gtm-board-mockups/04-canvas.html. */
 
 .gtm-board {
   display: flex;
@@ -8,326 +8,307 @@
   height: 100%;
   min-height: 0;
   background: var(--canvas);
-  background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px);
-  background-size: 22px 22px;
-  background-position: -1px -1px;
 }
 
-/* ── Altitude ladder (persistent left gutter) ── */
-.alt-ladder {
+/* ── Left section rail (persistent) ── */
+.sec-rail {
   flex: none;
-  width: 72px;
+  width: 226px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 26px 0 26px 18px;
-  overflow: hidden;
+  border-right: 1px solid var(--line);
+  background: var(--surface);
+  padding: 16px 0;
+  z-index: 5;
 }
-.alt-phase { display: flex; flex-direction: column; gap: 7px; }
-.alt-phase-label {
-  font-size: 9px;
+.sec-rail-head { padding: 0 18px 14px; border-bottom: 1px solid var(--line-2); margin-bottom: 6px; }
+.sec-rail-title { font-size: var(--text-base); font-weight: 660; letter-spacing: var(--tracking-tight); color: var(--ink); }
+.sec-rail-sub { font-size: var(--text-xs); color: var(--faint); margin-top: 7px; line-height: 1.45; }
+.sec-rail-scroll { overflow-y: auto; padding: 4px 10px 12px; flex: 1; }
+.sec-phase { display: flex; flex-direction: column; gap: 2px; }
+.sec-phase-label {
+  font-size: 9.5px;
   font-weight: 680;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--faint);
-  padding-left: 2px;
+  padding: 13px 8px 5px;
 }
-.alt-cells {
+.sec {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding-left: 6px;
-  border-left: 1.5px solid var(--line-2);
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 0;
+  background: none;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  text-align: left;
+  color: var(--ink);
+  transition: background 0.14s var(--ease);
 }
-.alt-cell {
-  position: relative;
-  width: 22px;
-  height: 22px;
+.sec:hover { background: var(--surface-2); }
+.sec.active { background: var(--surface-2); }
+.sec-num {
+  flex: none;
+  width: 21px;
+  height: 21px;
   border-radius: 6px;
   border: 1px solid var(--line-2);
   background: var(--surface);
-  color: var(--faint);
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 600;
   display: grid;
   place-items: center;
-  cursor: pointer;
-  transition: border-color 0.14s var(--ease), color 0.14s var(--ease), background 0.14s var(--ease);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  transition: background 0.16s var(--ease), color 0.16s var(--ease), border-color 0.16s var(--ease);
 }
-.alt-cell.grounded { color: var(--ink-2); }
-.alt-cell:hover { border-color: var(--ghost); color: var(--ink); }
-.alt-cell.on { border-color: var(--ink); color: #fff; background: var(--ink); }
-.alt-cell-active {
-  position: absolute;
-  inset: 0;
-  border-radius: 6px;
-  background: var(--ink);
-  z-index: 0;
-}
-.alt-cell-n { position: relative; z-index: 1; }
+.sec.active .sec-num { background: var(--ink); color: #fff; border-color: var(--ink); }
+.sec-lbl { font-size: var(--text-sm); font-weight: 520; letter-spacing: var(--tracking-tight); }
+.sec-dot { margin-left: auto; width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.sec-dot.tone-grounded { background: var(--proven); }
+.sec-dot.tone-lean { background: var(--ink-2); }
+.sec-dot.tone-assumed { background: var(--faint); }
+.sec-dot.tone-blind { background: var(--ghost); }
 
-/* ── Stage ── */
+/* ── Canvas stage ── */
 .board-stage {
   flex: 1;
   min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 26px 26px 0;
+  position: relative;
+  overflow: hidden;
+  background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px);
+  background-size: 22px 22px;
+  background-position: -1px -1px;
+  touch-action: none;
 }
-.board-stage-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  margin: 0 auto 16px;
-  padding: 0 4px;
-  flex: none;
-  width: 100%;
-  max-width: 1180px;
+.board-world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
 }
-/* At band altitude the title row compacts — the focus is the open diagram, so the head gives back its
-   vertical space to the band that's filling the frame. */
-.alt-band .board-stage-head { margin-bottom: 10px; }
-.alt-band .board-title { font-size: var(--text-xl); }
-.alt-band .board-lede { display: none; }
-.board-title {
-  font-size: var(--text-2xl);
-  letter-spacing: var(--tracking-tight);
-  font-weight: 680;
-  color: var(--ink);
-}
-.board-lede { color: var(--muted); font-size: var(--text-sm); margin-top: 3px; max-width: 56ch; }
-.board-alt-pill {
-  font-family: var(--mono);
-  font-size: var(--text-xs);
-  color: var(--muted);
-  border: 1px solid var(--line-2);
-  background: var(--surface);
-  border-radius: 999px;
-  padding: 5px 11px;
-  white-space: nowrap;
-}
-.board-alt-pill-btn { cursor: pointer; transition: border-color 0.14s var(--ease), color 0.14s var(--ease); }
-.board-alt-pill-btn:hover { border-color: var(--ghost); color: var(--ink-2); }
+.board-world.panning { cursor: grabbing; }
+.board-wires { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
+.board-wire { fill: none; stroke: var(--line-2); stroke-width: 1.5; transition: stroke 0.4s var(--ease), opacity 0.4s var(--ease); }
+.board-wire.lit { stroke: var(--ink); opacity: 0.5; stroke-width: 2; }
+.board-wire.feedback { stroke: var(--faint); stroke-dasharray: 5 5; opacity: 0.55; }
 
-/* ── Bands column ── */
-.board-bands {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  min-height: 0;
-  /* Dense like the mockup — a calm centered column, not a full-bleed table. */
-  width: 100%;
-  max-width: 1180px;
-  margin-inline: auto;
-}
-/* The bottom gutter clears the resting/minimized composer (bottom-center) so band 9 is always
-   reachable; at board altitude the column scrolls, at band altitude the open band fills the rest. */
-.alt-board .board-bands { overflow-y: auto; padding: 2px 4px 152px; }
-.alt-band .board-bands { flex: 1; overflow: hidden; padding: 2px 4px 14px; gap: 5px; }
-
-.board-phase-head {
+/* ── Clusters + spine nodes ── */
+.board-cluster { position: absolute; transition: opacity 0.5s var(--ease), filter 0.5s var(--ease); }
+.board-cluster.dim { opacity: 0.24; filter: saturate(0.4); }
+.board-cluster-head {
+  font-size: 10.5px;
+  font-weight: 660;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 8px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 10px 2px 2px;
+  gap: 7px;
 }
-.board-phase-head:first-child { margin-top: 0; }
-.board-phase-label {
-  font-size: var(--text-xs);
-  font-weight: 680;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.board-phase-rule { flex: 1; height: 1px; background: var(--line-2); }
+.board-cluster-head .cnum { font-family: var(--mono); }
 
-/* ── A band ── */
-.band {
+.board-node {
   position: relative;
+  display: block;
+  width: 300px;
+  text-align: left;
   background: var(--surface);
   border: 1px solid var(--line-2);
+  border-left: 3px solid var(--ghost);
   border-radius: var(--r-lg);
+  padding: 13px 15px;
   box-shadow: var(--shadow-card);
-  overflow: hidden;
-}
-.band-line {
-  display: block;
-  width: 100%;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-  padding: 11px 17px;
   font: inherit;
   color: inherit;
 }
-.band-strip .band-line:hover,
-.band-rail .band-line:hover { background: var(--surface-2); }
-.band-strip { transition: box-shadow 0.16s var(--ease), border-color 0.16s var(--ease); }
-.band-strip:hover { box-shadow: var(--shadow-pop); border-color: var(--ghost); }
+.board-node.spine { cursor: pointer; transition: box-shadow 0.2s var(--ease), transform 0.2s var(--ease); }
+.board-node.spine:hover { box-shadow: var(--shadow-pop); transform: translateY(-1px); }
+.board-node.tone-grounded { border-left-color: var(--proven); }
+.board-node.tone-lean { border-left-color: var(--ink); }
+.board-node.tone-assumed { border-left-color: var(--faint); }
+.board-node.tone-blind { border-left-color: var(--ghost); }
 
-.band-line-inner {
-  display: grid;
-  grid-template-columns: 208px 1fr auto;
-  align-items: center;
-  gap: 18px;
-  min-height: 36px;
+.board-node-top { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+.board-node-kind {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
 }
-
-/* left id cell */
-.band-id { display: flex; align-items: center; gap: 11px; min-width: 0; }
-.band-num {
-  flex: none;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
+.board-node-pill {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  font-weight: 540;
+  padding: 2px 9px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   background: var(--surface-2);
+  color: var(--muted);
+}
+.board-node-pill .p { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+.board-node-pill.tone-grounded { color: var(--proven); background: var(--proven-soft); }
+.board-node-pill.tone-grounded .p { background: var(--proven); }
+.board-node-pill.tone-lean { color: var(--ink-2); }
+.board-node-pill.tone-lean .p { background: var(--ink-2); }
+.board-node-pill.tone-blind { color: var(--blind); }
+.board-node-pill.tone-blind .p { background: var(--blind); }
+
+.board-node-name {
+  font-size: var(--text-base);
+  font-weight: 620;
+  letter-spacing: var(--tracking-tight);
+  line-height: 1.28;
+  color: var(--ink);
+}
+.board-node-name.small { font-size: var(--text-sm); }
+.board-node-foot { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.board-node-sub { font-size: var(--text-xs); color: var(--muted); line-height: 1.4; }
+.board-node-conf { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; flex: none; }
+.board-node-conf-track { width: 36px; height: 4px; border-radius: 999px; background: var(--line-2); overflow: hidden; }
+.board-node-conf-fill { display: block; height: 100%; border-radius: 999px; background: var(--ink-2); }
+.conf-low .board-node-conf-fill { background: var(--faint); }
+.conf-mid .board-node-conf-fill { background: var(--ink-2); }
+.conf-high .board-node-conf-fill { background: var(--ink); }
+.board-node-conf-n { font-family: var(--mono); font-size: var(--text-xs); color: var(--muted); }
+
+.board-node.small { width: 218px; padding: 11px 13px; box-shadow: var(--shadow-card); }
+.board-node.small .board-node-top { margin-bottom: 5px; }
+
+.band-belief-blind { color: var(--blind); font-style: italic; font-weight: 500; }
+
+/* ── Top bar ── */
+.board-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 20px;
+  z-index: 8;
+  pointer-events: none;
+}
+.board-crumb { font-size: var(--text-sm); color: var(--muted); pointer-events: auto; }
+.board-crumb b { color: var(--ink); font-weight: 620; }
+.board-back {
+  margin-left: auto;
+  pointer-events: auto;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  background: var(--surface);
   border: 1px solid var(--line-2);
+  border-radius: 999px;
+  padding: 6px 13px;
+  cursor: pointer;
+  transition: color 0.14s var(--ease), border-color 0.14s var(--ease);
+}
+.board-back:hover { color: var(--ink); border-color: var(--ghost); }
+
+/* ── Depth meter + swipe hint ── */
+.board-depth {
+  position: absolute;
+  left: 50%;
+  bottom: 72px;
+  transform: translateX(-50%);
+  z-index: 9;
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+.board-depth .seg { width: 26px; height: 3px; border-radius: 2px; background: var(--line-2); transition: background 0.3s var(--ease); }
+.board-depth .seg.on { background: var(--ink); }
+.board-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 9;
+  background: var(--ink);
+  color: #fff;
+  font-size: var(--text-sm);
+  font-weight: 520;
+  padding: 9px 15px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-pop);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.board-hint .swipe { display: inline-flex; align-items: center; gap: 4px; color: var(--ghost); font-size: var(--text-xs); }
+.board-hint kbd { font-family: var(--mono); font-size: 11px; background: rgba(255, 255, 255, 0.16); border-radius: 5px; padding: 2px 6px; }
+.board-hint .arrow { animation: board-nudge 1.3s var(--ease) infinite; }
+@keyframes board-nudge { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(4px); } }
+
+/* ── The full unfolded diagram (mounts in place at full extend) ── */
+.board-unfold {
+  position: absolute;
+  top: 56px;
+  left: 18px;
+  right: 18px;
+  bottom: 16px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+  transform-origin: 30% 46%;
+}
+.board-unfold-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.board-unfold-id { display: flex; align-items: center; gap: 12px; }
+.board-unfold-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: #fff;
   display: grid;
   place-items: center;
   font-family: var(--mono);
   font-size: var(--text-sm);
   font-weight: 600;
-  color: var(--ink-2);
 }
-.band-name {
-  font-size: var(--text-base);
-  font-weight: 620;
-  letter-spacing: var(--tracking-tight);
-  line-height: 1.15;
-  color: var(--ink);
-}
-.band-sub {
-  display: block;
-  font-size: var(--text-xs);
-  font-weight: 500;
-  color: var(--faint);
-  letter-spacing: 0.01em;
-  margin-top: 1px;
-}
-
-/* belief cell */
-.band-belief {
-  font-size: var(--text-sm);
-  color: var(--ink-2);
-  line-height: 1.42;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.band-belief-blind { color: var(--blind); font-style: italic; }
-
-/* right markers */
-.band-markers { display: flex; align-items: center; justify-content: flex-end; gap: 11px; }
-.band-exp { color: var(--ink-2); display: inline-flex; }
-.band-fork { display: block; }
-
-.band-conf { display: inline-flex; align-items: center; gap: 7px; }
-.band-conf-track {
-  width: 40px;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--line-2);
-  overflow: hidden;
-}
-.band-conf-fill { display: block; height: 100%; border-radius: 999px; background: var(--ink-2); }
-.band-conf-none .band-conf-fill { background: var(--ghost); }
-.band-conf-low .band-conf-fill { background: var(--faint); }
-.band-conf-mid .band-conf-fill { background: var(--ink-2); }
-.band-conf-high .band-conf-fill { background: var(--ink); }
-.band-conf-n {
-  font-family: var(--mono);
+.board-unfold-name { font-size: var(--text-md); font-weight: 640; letter-spacing: var(--tracking-tight); color: var(--ink); }
+.board-unfold-sub { font-size: var(--text-xs); color: var(--muted); margin-top: 1px; }
+.board-unfold-collapse {
   font-size: var(--text-xs);
   color: var(--muted);
-  min-width: 20px;
-  text-align: right;
-}
-
-/* The badge sits in a fixed-width slot so the verdict-flip pop (an AnimatePresence swap) never nudges
-   the markers row as one badge label replaces another. */
-.band-badge-slot { display: inline-flex; justify-content: flex-end; min-width: 78px; }
-.band-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--text-xs);
-  font-weight: 620;
-  white-space: nowrap;
-  padding: 4px 9px;
-  border-radius: 999px;
+  background: var(--surface);
   border: 1px solid var(--line-2);
-  background: var(--surface-2);
-  transform-origin: center right;
+  border-radius: 999px;
+  padding: 6px 13px;
+  cursor: pointer;
+  transition: color 0.14s var(--ease), border-color 0.14s var(--ease);
 }
-.badge-dot { width: 7px; height: 7px; border-radius: 50%; }
-.badge-grounded { color: var(--proven); background: var(--proven-soft); border-color: #bbf7d0; }
-.badge-grounded .badge-dot { background: var(--proven); }
-.badge-lean { color: var(--ink-2); }
-.badge-lean .badge-dot { background: var(--ink-2); }
-.badge-assumed { color: var(--muted); }
-.badge-assumed .badge-dot { background: var(--faint); }
-.badge-blind { color: var(--blind); }
-.badge-blind .badge-dot { background: var(--blind); }
+.board-unfold-collapse:hover { color: var(--ink); border-color: var(--ghost); }
+.board-unfold-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 
-/* ── Rail mode (collapsed peek-rail at band altitude) ──
-   Genuinely thin: a single compact label line so the eight collapsed bands give nearly all their
-   height back to the band that's open. The number + name stay; everything secondary recedes. */
-.band-rail { flex: none; box-shadow: none; opacity: 0.86; }
-.band-rail:hover { opacity: 1; }
-.band-rail .band-line { padding: 4px 16px; }
-.band-rail .band-line-inner { min-height: 17px; grid-template-columns: 200px 1fr auto; gap: 14px; }
-.band-rail .band-num { width: 19px; height: 19px; border-radius: 5px; font-size: 10px; }
-.band-rail .band-name { font-size: var(--text-sm); font-weight: 580; }
-.band-rail .band-sub { display: none; }
-.band-rail .band-belief { -webkit-line-clamp: 1; line-clamp: 1; font-size: var(--text-xs); color: var(--muted); }
-.band-rail .band-conf-track { display: none; }
-.band-rail .band-conf-n { display: none; }
-.band-rail .band-exp { display: none; }
-.band-rail .band-badge { padding: 2px 7px; font-size: 10px; }
-
-/* ── Open mode (the focused band fills the frame) ── */
-.band-open {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  box-shadow: var(--shadow-pop);
-  border-color: var(--ghost);
-}
-.band-open .band-line { flex: none; border-bottom: 1px solid var(--line); }
-.band-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .band-body-engine { flex: 1; min-height: 0; overflow: auto; }
 .band-body-diagram { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-/* The diagram scroll areas carry a bottom safe-area so their last row clears the resting composer
-   (which floats over the bottom of the frame) — nothing important hides behind the dock. */
-.band-body-diagram > * { scroll-padding-bottom: 132px; }
-.band-body-diagram .band-diagram,
-.band-body-diagram .armcmp { padding-bottom: 132px; }
 
-/* Focus-to-trace: the Channels rail is the bottom of the staple from a selected Market/ICP experiment.
-   Ink accent only — no amber (amber is the gate's alone). */
-.band-traced {
-  border-color: var(--ink-2);
-  box-shadow: inset 3px 0 0 var(--ink);
-}
-.band-traced .band-line:hover { background: var(--surface-2); }
-
-/* Verdict-flip — when a belief grounds (status → validated), the band settles once with a soft proven
-   ring that fades out. THE moment, restrained: one pass, never looping, reduced-motion-skipped. */
-.band-flip { animation: band-grounded-settle 1.05s var(--ease) 1; }
-@keyframes band-grounded-settle {
-  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--proven) 0%, transparent), var(--shadow-card); }
-  22%  { box-shadow: 0 0 0 4px color-mix(in srgb, var(--proven) 26%, transparent), var(--shadow-pop); }
-  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--proven) 0%, transparent), var(--shadow-card); }
-}
-@media (prefers-reduced-motion: reduce) { .band-flip { animation: none; } }
-
-/* placeholder body */
+/* ── Honest placeholder body (a layer with no registered diagram) ── */
 .band-placeholder {
   flex: 1;
   min-height: 0;
@@ -350,12 +331,7 @@
 .band-exp-list { display: flex; flex-direction: column; gap: 8px; }
 .band-exp-eyebrow { font-size: var(--text-xs); font-weight: 680; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
 .band-exp-list ul { list-style: none; display: flex; flex-direction: column; gap: 5px; }
-.band-exp-list li {
-  font-size: var(--text-sm);
-  color: var(--ink-2);
-  padding-left: 16px;
-  position: relative;
-}
+.band-exp-list li { font-size: var(--text-sm); color: var(--ink-2); padding-left: 16px; position: relative; }
 .band-exp-list li::before {
   content: "";
   position: absolute;
@@ -374,6 +350,35 @@
   padding-top: 10px;
   border-top: 1px dashed var(--line-2);
 }
+
+/* ── Zoom controls ── */
+.board-zoom {
+  position: absolute;
+  right: 18px;
+  bottom: 20px;
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+.board-zoom button {
+  width: 32px;
+  height: 30px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 15px;
+  border-bottom: 1px solid var(--line-2);
+  transition: background 0.12s var(--ease), color 0.12s var(--ease);
+}
+.board-zoom button:last-child { border-bottom: 0; }
+.board-zoom button:hover { background: var(--surface-2); color: var(--ink); }
 
 /* ── Status states ── */
 .board-status {
@@ -400,6 +405,8 @@
 @keyframes board-spin { to { transform: rotate(360deg); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .alt-cell, .board-alt-pill-btn, .band-strip { transition: none; }
+  .sec, .sec-num, .board-back, .board-unfold-collapse, .board-zoom button,
+  .board-cluster, .board-wire, .board-node.spine { transition: none; }
+  .board-hint .arrow { animation: none; }
   .board-status-spin { animation-duration: 1.4s; }
 }
