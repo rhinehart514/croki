@@ -8,8 +8,6 @@ export type LensMeta = { id: string; label: string };
 export const GTM_LENS_META: LensMeta[] = [
   { id: "channel-flow", label: "Channel flow" },
   { id: "engine", label: "Engine" },
-  { id: "people", label: "People" },
-  { id: "experiment-matrix", label: "Experiment matrix" },
 ];
 
 export const PRODUCT_LENS_META: LensMeta[] = [

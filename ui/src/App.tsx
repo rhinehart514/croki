@@ -59,8 +59,7 @@ import { convexEnabled, loadTeamIdentity, type TeamIdentity } from "@/lib/convex
 import { GoalLauncher } from "@/components/GoalLauncher";
 import { OperatorDriveState } from "@/components/OperatorDriveState";
 const TeamSpace = lazy(() => import("@/components/TeamSpace").then((m) => ({ default: m.TeamSpace })));
-const GoPanel = lazy(() => import("@/components/GoPanel").then((m) => ({ default: m.GoPanel })));
-import { getMe, canApprove as canApproveApi, operatorGo } from "@/api";
+import { getMe, canApprove as canApproveApi } from "@/api";
 import { getIdentity, FOUNDER_USER_ID, type ActingIdentity } from "@/lib/identity";
 import type { Me } from "@/types";
 import { NodeEditor } from "@/components/NodeEditor";
@@ -81,13 +80,17 @@ import { PeopleLens } from "@/components/lenses/PeopleLens";
 import { ExperimentMatrixLens } from "@/components/lenses/ExperimentMatrixLens";
 import { ReferencesPanel, type ReferenceKind } from "@/components/ReferencesPanel";
 import { ToolForge } from "@/components/ToolForge";
+import { IssuesCard } from "@/components/IssuesCard";
 
 // The views you can summon onto the GTM canvas as draggable cards — the agentic replacement for
 // lens tabs. You pop one up, drag it, dismiss it; Claude can summon the same cards.
+// Only canvas-work surfaces summon now. The admin surfaces (workspace, team, self-built tools) moved
+// out of this junk drawer into a single Settings overlay reached from the dock's gear.
 const SUMMON_GTM = [
-  { id: "people", label: "People", desc: "Everyone your channels have touched, across the portfolio." },
+  { id: "terminal", label: "Terminal", desc: "A live shell on the canvas — run commands by hand, pipe the output into the graph." },
+  { id: "query", label: "Query", desc: "Interrogate your own data — everyone your channels touched, filtered and sorted live." },
+  { id: "web", label: "Web", desc: "A research browser on the canvas — pull up a prospect's site while you work." },
   { id: "experiments", label: "Experiment matrix", desc: "ICP × claim × channel — the live hypotheses." },
-  { id: "tools", label: "Self-built tools", desc: "Repeated procedures crystallized into reusable, founder-approved tools." },
 ];
 import { ProjectPicker } from "@/components/ProjectPicker";
 import { ProductEntry } from "@/components/ProductEntry";
@@ -135,7 +138,10 @@ export default function App() {
   // shows a calm "loading your workspace" instead of flashing the cold-start goal launcher for the
   // 1–2s before the project's graph arrives.
   const [booting, setBooting] = useState(true);
-  const [overlay, setOverlay] = useState<"understand" | "product" | "capabilities" | null>(null);
+  const [overlay, setOverlay] = useState<"understand" | "product" | "capabilities" | "settings" | null>(null);
+  // Which Settings section is showing — the three admin surfaces (workspace index, team + release
+  // roles, self-built tools) live behind one overlay now, switched by these tabs.
+  const [settingsTab, setSettingsTab] = useState<"workspace" | "team" | "tools">("workspace");
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [activeProject, setActiveProjectState] = useState<GTMProject | null>(null);
@@ -160,9 +166,9 @@ export default function App() {
   const [composerFocus, setComposerFocus] = useState(0);
   // The Approvals panel — the founder gate's first-class home. Opens from the toolbar badge.
   const [approvalsOpen, setApprovalsOpen] = useState(false);
-  // The team space (members + roles) and the one-click autonomous "Go" entry — wave-2 Lane C.
-  const [teamOpen, setTeamOpen] = useState(false);
-  const [goOpen, setGoOpen] = useState(false);
+  // The Issues panel — the system's problem list, now a first-class always-present indicator on the
+  // dock (no longer a summoned card). Opens from its toolbar badge, mutually exclusive with Approvals.
+  const [issuesOpen, setIssuesOpen] = useState(false);
   // "Propose the whole GTM system" — the portfolio composer overlay (compose-only, never sends).
   // Who I am + my teams, and the space I'm acting in (stamped on requests via lib/identity). The
   // founder personal space is the default; switching in TeamSpace re-scopes my release authority.
@@ -175,21 +181,15 @@ export default function App() {
   // The summoned Library palette — opened from the canvas "+ Add step" control, replacing the old
   // left-rail Library now that the rail is dissolved.
   const [libraryPaletteOpen, setLibraryPaletteOpen] = useState(false);
-  // The three-lane workspace overlay (workflows / skills / agents). Full-bleed over the canvas.
-  const [workspaceOpen, setWorkspaceOpen] = useState(false);
   // The Problems popover — the engine's investigations, surfaced as a compact toolbar chip now that
-  // the Problems rail section is gone with the explorer.
-  const [problemsOpen, setProblemsOpen] = useState(false);
-  // The active lens per mode — lifted out of the canvas shell so the ONE command dock owns the
-  // switcher (one bar, not two). GTM defaults to engine on the overview and channel-flow with a
-  // channel open; Product defaults to conceptual.
+  // the Problems rail section is gone with the explorer. The Issues indicator (its own dock button +
+  // the issuesOpen panel) is the visible home for these now; this setter is kept because several
+  // handlers still defensively close the legacy popover state.
+  const [, setProblemsOpen] = useState(false);
   // The base canvas per mode (no lens taxonomy): GTM shows the engine on the overview and a channel's
-  // flow when one is open; Product shows the one object map. Everything else is summoned as a card.
-  const [gtmLensId, setGtmLensId] = useState("engine");
+  // flow when one is open, chosen by channel state alone (no GTM lens state); Product drives its one
+  // lens from the command dock. Everything else is summoned as a card.
   const [productLensId] = useState("conceptual");
-  useEffect(() => {
-    setGtmLensId(activeChannelId ? "channel-flow" : "engine");
-  }, [activeChannelId]);
   // Summoned cards on the canvas — one per kind (summoning an open view is a no-op). Claude or the
   // composer + pops these up; they're draggable and dismissible.
   const [summoned, setSummoned] = useState<string[]>([]);
@@ -360,23 +360,6 @@ export default function App() {
     setActing(identity);
     getMe().then(setMe).catch(() => {});
   }, []);
-
-  // The one-click autonomous drive. Launches a primed session that composes (if needed) and runs to
-  // the shared founder gate, then stops — never sends. The launched session becomes the live operator
-  // session the dock and stream already track.
-  const handleGo = useCallback(async (goal: string) => {
-    const projectId = activeProjectIdRef.current;
-    if (!projectId) return;
-    const { session } = await operatorGo({
-      goal,
-      projectId,
-      teamId: acting.teamId ?? undefined,
-      graphId: graph?.id,
-    });
-    operatorGraphRevision.current = session.graphRevision;
-    operatorRunId.current = null;
-    setOperatorSession(session);
-  }, [acting.teamId, graph?.id]);
 
   const loadChannel = useCallback(async (channelId: string) => {
     setGraphRunning(true);
@@ -647,6 +630,15 @@ export default function App() {
   // graph in lockstep even if the panel is closed and reopened.
   const operatorSessionId = operatorSession?.id ?? null;
   const operatorSessionStatus = operatorSession?.status ?? null;
+  // The cold-start front door is showing: no overview, no channel graph, no active operator
+  // session, not mid-boot. When this is true the GoalLauncher owns the screen and the docked
+  // co-pilot must stay hidden — otherwise both inputs stack (the cancelled-session overlap bug).
+  const showGoalLauncher =
+    !(overviewActive && !activeChannelId) &&
+    !graph &&
+    !["ready", "running", "failed", "blocked"].includes(operatorSessionStatus ?? "") &&
+    !booting &&
+    !projectBusy;
   useEffect(() => {
     if (!operatorSessionId || !operatorSessionStatus
       || ["completed", "blocked", "failed", "cancelled"].includes(operatorSessionStatus)) return;
@@ -667,21 +659,6 @@ export default function App() {
       window.clearInterval(timer);
     };
   }, [activeProjectId, operatorSessionId, operatorSessionStatus, syncOperator]);
-
-  // "Watch it work in the panel on the right" only works if that panel is actually open. When a drive
-  // STARTS (the operator begins composing/running) or FAILS, pop the live work panel open once so the
-  // reasoning and brief — and any failure reason — are visible without the founder hunting for them.
-  // Only on the transition, so it never fights a founder who deliberately closed it mid-run.
-  const prevDriveStatus = useRef<string | null>(null);
-  useEffect(() => {
-    const st = operatorSessionStatus;
-    const wasActive = ["ready", "running"].includes(prevDriveStatus.current ?? "");
-    const isActive = !!st && ["ready", "running"].includes(st);
-    if ((isActive && !wasActive) || (st === "failed" && prevDriveStatus.current !== "failed")) {
-      setGoOpen(true);
-    }
-    prevDriveStatus.current = st;
-  }, [operatorSessionStatus]);
 
   // Graph actions
   const executeGraph = useCallback(async (
@@ -882,7 +859,9 @@ export default function App() {
         : { category: spec.category ?? "source", connector: spec.connector ?? "manual" }),
     } as GTMNode;
     void applyOperations([{ type: "add_node", node }]).then((next) => {
-      if (next) setSelection(newId);
+      // Workbench surfaces (terminal/query/web) are used in place — don't yank open the node-detail
+      // editor on drop. Pipeline steps still auto-select so the founder lands in their config.
+      if (next && node.kind !== "terminal" && node.kind !== "query" && node.kind !== "web") setSelection(newId);
     });
   }, [applyOperations, graph]);
 
@@ -959,8 +938,6 @@ export default function App() {
     setProblemsOpen(false);
     setApprovalsOpen(false);
     setArtifactEdit(null);
-    setTeamOpen(false);
-    setGoOpen(false);
   }, []);
 
   const handleLoadPilotRecipe = useCallback(async () => {
@@ -981,13 +958,20 @@ export default function App() {
     }
   }, [graph]);
 
+  // Set by "New channel": the next goal starts a fresh, unbound session that composes another pipeline.
+  const freshPipelineIntent = useRef(false);
+
   const handleCommandSubmit = useCallback(async (goal: string) => {
     // The composer is LOCKED to the project on screen — the project id is threaded explicitly and
     // `reuse: true` returns the project's one live thread instead of spawning a parallel conversation.
     const projectId = activeProjectIdRef.current;
     if (!projectId) return;
+    // "New channel" intent → start a FRESH, unbound session so compose_and_run builds an ADDITIONAL
+    // pipeline for the product instead of re-driving the one on screen. One-shot; reset after use.
+    const fresh = freshPipelineIntent.current;
+    freshPipelineIntent.current = false;
     // Bind the new session to the channel graph on screen so its tools target that graph.
-    const response = await createOperatorSession(projectId, goal, graph?.id);
+    const response = await createOperatorSession(projectId, goal, fresh ? undefined : graph?.id, fresh);
     operatorGraphRevision.current = response.session.graphRevision;
     operatorRunId.current = null;
     setOperatorSession(response.session);
@@ -1003,7 +987,8 @@ export default function App() {
       ? `[Ideate posture — think and discuss this with me: challenge my assumptions, surface what you know, help me get clear on the go-to-market. Do NOT compose or build a channel/workflow yet — this is thinking, not building.]\n\n${text}`
       : text;
     const s = operatorSession;
-    const resumable = s && ["waiting_for_input", "interrupted", "failed"].includes(s.status);
+    // A pending "New channel" intent must compose fresh, never resume the prior conversation.
+    const resumable = !freshPipelineIntent.current && s && ["waiting_for_input", "interrupted", "failed"].includes(s.status);
     if (resumable && s) {
       const response = await resumeOperatorSession(s.id, operatorProjectId(s), framed);
       syncOperator(response.session);
@@ -1055,8 +1040,14 @@ export default function App() {
   // "New channel" — there's no form; a channel is born from the conversation. Surface the canvas,
   // leave any open overlay, and summon the co-pilot focused.
   const handleNewChannel = useCallback(() => {
+    // Build ANOTHER pipeline for this product: detach the active pipeline + conversation so the next
+    // goal composes a fresh channel that joins the others on the overview, and focus the composer.
+    freshPipelineIntent.current = true;
     setOverlay(null);
     setView("canvas");
+    setActiveChannelId(null);
+    setGraph(null);
+    setOperatorSession(null);
     setComposerFocus((n) => n + 1);
   }, []);
 
@@ -1501,7 +1492,7 @@ export default function App() {
         <section className="loop-canvas-area">
           {/* The floating control dock — every control the old top toolbar held, in one calm bar
               floating top-center over the full-bleed canvas. */}
-          {view === "canvas" && !workspaceOpen ? (
+          {view === "canvas" ? (
             <FloatingDock
               projects={projects}
               activeProjectId={activeProject?.id ?? null}
@@ -1522,27 +1513,27 @@ export default function App() {
               productMode={overlay === "product"}
               onModeToggle={(v) => { if (v === "product") { setOverlay("product"); } else { setOverlay(null); } }}
               summonItems={overlay === "product" ? undefined : SUMMON_GTM}
-              onSummon={summonView}
-              problems={problems}
-              problemsOpen={problemsOpen}
-              onToggleProblems={() => setProblemsOpen((v) => !v)}
-              nodeForSubsystem={nodeForSubsystem}
-              onJumpToNode={jumpToNode}
+              onOpenSettings={() => { setOverlay("settings"); setProblemsOpen(false); setApprovalsOpen(false); setIssuesOpen(false); }}
+              // Summon routes by kind: Terminal drops a live workbench surface IN canvas space (it pans
+              // and zooms with the graph, and its output can feed the pipeline); the rest pop onto the
+              // canvas as draggable cards. The admin surfaces moved to the Settings overlay.
+              onSummon={(id) => {
+                if (id === "terminal") { handleAddNode({ label: "Terminal", kind: "terminal", category: "source", config: {} }); return; }
+                if (id === "query") { handleAddNode({ label: "Query", kind: "query", category: "source", config: {} }); return; }
+                if (id === "web") { handleAddNode({ label: "Web", kind: "web", category: "source", config: {} }); return; }
+                summonView(id);
+              }}
               pendingApprovals={pendingApprovals}
               approvalsOpen={approvalsOpen}
-              onToggleApprovals={() => setApprovalsOpen((v) => !v)}
+              onToggleApprovals={() => { setApprovalsOpen((v) => !v); setProblemsOpen(false); setIssuesOpen(false); }}
+              problems={problems.length}
+              issuesOpen={issuesOpen}
+              onToggleIssues={() => { setIssuesOpen((v) => !v); setApprovalsOpen(false); setProblemsOpen(false); }}
+              onCloseMenus={() => { setProblemsOpen(false); setApprovalsOpen(false); setIssuesOpen(false); }}
               graph={graph}
-              audits={contractAudits}
               running={graphRunning}
               runningNodeId={runningNodeId}
               onRun={() => void streamRun()}
-              onOpenWorkspace={() => setWorkspaceOpen(true)}
-              onOpenTeam={() => { setTeamOpen((v) => !v); setGoOpen(false); }}
-              teamLabel={teamLabel}
-              onOpenGo={overlay !== "product" && activeProject ? () => { setGoOpen((v) => !v); setTeamOpen(false); } : undefined}
-              goActive={goOpen}
-              session={operatorSession}
-              connection={connection}
             />
           ) : null}
 
@@ -1626,12 +1617,12 @@ export default function App() {
           ) : overviewActive && !activeChannelId ? (
             // One project, one canvas: every built channel as a tile on the engine/portfolio overview.
             // Clicking a tile opens that channel's flow (the channel-flow lens).
-            <GtmCanvas model={gtmCanvasModel} defaultLensId="engine" activeLensId={gtmLensId} onLensChange={setGtmLensId} chromeless onSelectObject={(lensId, id) => { if (lensId === "people") openReference("person", id); else if (lensId === "experiment-matrix") openReference("experiment", id); }} />
+            <GtmCanvas model={gtmCanvasModel} activeLensId="engine" chromeless />
           ) : graph ? (
             // The single channel, through the GTM canvas: the channel-flow lens IS the GraphCanvas
             // (single-channel behavior unchanged), with the portfolio-map lens one tab away. The
             // blank-channel-guide for an empty graph now lives inside the channel-flow lens.
-            <GtmCanvas model={gtmCanvasModel} defaultLensId="channel-flow" activeLensId={gtmLensId} onLensChange={setGtmLensId} chromeless onSelectObject={(lensId, id) => { if (lensId === "people") openReference("person", id); else if (lensId === "experiment-matrix") openReference("experiment", id); }} />
+            <GtmCanvas model={gtmCanvasModel} activeLensId="channel-flow" chromeless />
           ) : operatorSession && ["ready", "running", "failed", "blocked"].includes(operatorSession.status) ? (
             // The operator is driving the loop from the goal just given (or stopped trying). Never
             // re-ask for the goal here, and never show an opaque spinner: the operator's live
@@ -1655,8 +1646,18 @@ export default function App() {
             <GoalLauncher
               productName={activeProject?.name ?? "Your product"}
               busy={projectBusy}
+              focusSignal={composerFocus}
               onSubmitGoal={(g) => void handleComposerSend(g)}
-              onIdeate={() => setComposerPosture("ideate")}
+              // "Ideate channels for me" is a do-it action, not a mode flip on a hidden dock: kick
+              // off an ideate-framed session right now. The screen leaves the launcher for the live
+              // operator drive state, so the click has a visible result. The kickoff is self-framing
+              // because composerPosture is still "build" in this tick's closure.
+              onIdeate={() => {
+                setComposerPosture("ideate");
+                void handleComposerSend(
+                  "Ideate go-to-market channels for this product. Read what it does, then think with me: propose a few distinct channels worth running and challenge anything weak. Don't compose or build a channel yet — let's get clear first.",
+                );
+              }}
               onLoadRecipe={handleLoadPilotRecipe}
             />
           )}
@@ -1783,6 +1784,70 @@ export default function App() {
             </div>
           )}
 
+          {/* Settings — the admin surfaces evicted from the Summon junk drawer: the workspace index,
+              the team and its release roles, and the self-built tools. Three tabs in one opaque
+              overlay; it reuses the standalone admin panels, so the bar owns the title + close and the
+              panels render flush. Nothing here sends. */}
+          {overlay === "settings" && (
+            <div className="canvas-overlay settings-overlay" role="dialog" aria-modal="true" aria-label="Settings">
+              <div className="canvas-overlay-bar">
+                <div className="settings-overlay-tabs" role="tablist" aria-label="Settings sections">
+                  {([
+                    { id: "workspace", label: "Workspace" },
+                    { id: "team", label: "Team" },
+                    { id: "tools", label: "Self-built tools" },
+                  ] as const).map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={settingsTab === tab.id}
+                      className={`settings-overlay-tab ${settingsTab === tab.id ? "active" : ""}`}
+                      onClick={() => setSettingsTab(tab.id)}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+                <button className="canvas-overlay-close" onClick={() => setOverlay(null)} type="button" title="Back to the canvas">×</button>
+              </div>
+              <div className="canvas-overlay-body">
+                <div className="settings-overlay-panel">
+                  {settingsTab === "workspace" ? (
+                    <Suspense fallback={null}>
+                      <WorkspaceView
+                        channels={channels}
+                        library={library}
+                        activeChannelId={activeChannelId}
+                        onOpenWorkflow={(id) => { setOverlay(null); void loadChannel(id); }}
+                        onOpenArtifact={(type, ref) => {
+                          setOverlay(null);
+                          if (type === "agent") setAgentProfileRef(ref);
+                          else setArtifactEdit({ type, ref });
+                        }}
+                        onNewArtifact={(type) => { setOverlay(null); handleNewArtifact(type); }}
+                        onNewWorkflow={() => { setOverlay(null); setComposerPosture("ideate"); }}
+                        onClose={() => setOverlay(null)}
+                      />
+                    </Suspense>
+                  ) : null}
+                  {settingsTab === "team" ? (
+                    <Suspense fallback={null}>
+                      <TeamSpace onClose={() => setOverlay(null)} onTeamChange={handleTeamChange} />
+                    </Suspense>
+                  ) : null}
+                  {settingsTab === "tools" ? (
+                    activeProjectId ? (
+                      <ToolForge projectId={activeProjectId} />
+                    ) : (
+                      <p className="settings-overlay-empty">Open a product to see its self-built tools.</p>
+                    )
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* The summoned Library — the canvas "+ Add step" control opens this glass palette. It
               replaces the dissolved left-rail Library: the on-disk agents and skills, each draggable
               onto the canvas or added with one click. Anchored top-left near the Add control;
@@ -1814,28 +1879,36 @@ export default function App() {
             </Suspense>
           ) : null}
 
-          {/* The three-lane workspace — the "open file" index for the GTM codebase. Full-bleed over
-              the canvas; opening a workflow loads it, opening a skill/agent opens its editor. */}
-          {view === "canvas" && workspaceOpen ? (
-            <Suspense fallback={null}>
-            <WorkspaceView
-              channels={channels}
-              library={library}
-              activeChannelId={activeChannelId}
-              onOpenWorkflow={(id) => { setWorkspaceOpen(false); setOverlay(null); void loadChannel(id); }}
-              onOpenArtifact={(type, ref) => {
-                setWorkspaceOpen(false);
-                if (type === "agent") setAgentProfileRef(ref);
-                else setArtifactEdit({ type, ref });
-              }}
-              onNewArtifact={(type) => { setWorkspaceOpen(false); handleNewArtifact(type); }}
-              onNewWorkflow={() => { setWorkspaceOpen(false); setComposerPosture("ideate"); }}
-              onClose={() => setWorkspaceOpen(false)}
-            />
-            </Suspense>
-          ) : null}
-
         </section>
+
+        {/* ── Issues panel — the system's problem list, opened from the always-present dock indicator.
+            What used to be a card you had to summon yourself: every engine investigation and pipeline
+            contract gap, each row handing the problem to Claude to fix or jumping to the node that owns
+            it. Opaque, twin of the Approvals panel; the two are mutually exclusive. */}
+        {issuesOpen && view === "canvas" ? (
+          <aside className="loop-issues-panel" role="dialog" aria-label="Issues" aria-modal="false">
+            <header className="loop-issues-head">
+              <div className="loop-issues-head-title">
+                <AlertTriangle />
+                <strong>Issues</strong>
+                {problems.length > 0 ? <span className="loop-issues-count">{problems.length}</span> : null}
+              </div>
+              <button className="loop-issues-close" onClick={() => setIssuesOpen(false)} type="button" aria-label="Close issues">
+                <X />
+              </button>
+            </header>
+            <div className="loop-issues-body">
+              <IssuesCard
+                problems={problems}
+                audits={contractAudits}
+                graph={graph}
+                nodeForSubsystem={nodeForSubsystem}
+                onFix={(instruction) => { setIssuesOpen(false); void handleComposerSend(instruction); }}
+                onJump={(nodeId) => { setIssuesOpen(false); jumpToNode(nodeId); }}
+              />
+            </div>
+          </aside>
+        ) : null}
 
         {/* ── Approvals panel — the founder gate's first-class home ─────────
             Listed: every gated draft the run on screen is holding, with its evidence and a way to
@@ -1846,7 +1919,7 @@ export default function App() {
             <header className="loop-approvals-head">
               <div className="loop-approvals-head-title">
                 <ShieldCheck />
-                <strong>Team queue</strong>
+                <strong>Founder gate</strong>
                 {pendingApprovals > 0 ? <span className="loop-approvals-count">{pendingApprovals}</span> : null}
               </div>
               <button className="loop-approvals-close" onClick={() => setApprovalsOpen(false)} type="button" aria-label="Close approvals">
@@ -2019,31 +2092,10 @@ export default function App() {
           </aside>
         ) : null}
 
-        {/* ── Team space — members, roles, and which space you're acting in ── */}
-        {teamOpen && view === "canvas" ? (
-          <Suspense fallback={null}>
-            <TeamSpace onClose={() => setTeamOpen(false)} onTeamChange={handleTeamChange} />
-          </Suspense>
-        ) : null}
-
-        {/* ── Give it a goal → Go — the autonomous drive + live work stream ── */}
-        {goOpen && view === "canvas" ? (
-          <Suspense fallback={null}>
-            <GoPanel
-              session={operatorSession}
-              onGo={handleGo}
-              onClose={() => setGoOpen(false)}
-              onReviewGate={() => {
-                const gateId = operatorSession?.pendingGate?.nodeIds[0];
-                if (gateId) setSelection(gateId);
-                setApprovalsOpen(true);
-              }}
-            />
-          </Suspense>
-        ) : null}
-
-        {/* Persistent Claude co-pilot — channels + conversation + composer, always docked */}
-        {view === "canvas" ? <ComposerDock
+        {/* Persistent Claude co-pilot — channels + conversation + composer. Docked whenever a
+            channel or run is in play, but hidden behind the cold-start GoalLauncher so the two
+            input surfaces never stack. */}
+        {view === "canvas" && !showGoalLauncher ? <ComposerDock
           session={operatorSession}
           running={graphRunning}
           floating={false}

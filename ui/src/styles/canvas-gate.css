@@ -1,20 +1,8 @@
-/* CanvasGate — the founder-gate signature moment.
-   Three public class names:
-   - .cgate-card          the glass banner-card itself (owned by CanvasGate.tsx)
-   - .cgate-canvas-dimmed apply to the canvas graph plane while the gate is open
-   - .cgate-node-bloom    apply to the gate node element while the gate is open
-   Amber (--gap) is the founder-gate accent and is allowed HERE only. */
-
-@keyframes cgate-rise {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-}
+/* The founder gate — the signature moment, made of two parts, both owned by GraphCanvas.tsx:
+   - .cgate-node-bloom    the amber ring on the gate node while a run pauses there with staged drafts
+   - .loop-gate-*         the inline review on the gate node card: the REAL staged draft, read in place
+   - .loop-node-learned   the "it got smarter" beat on a generate node
+   Amber (--gap) is the founder-gate accent and is allowed HERE only; green (--proven) marks the learned beat. */
 
 /* A calm amber pulse for the blooming gate node — breathes, never strobes. */
 @keyframes cgate-bloom {
@@ -33,110 +21,131 @@
   }
 }
 
-.cgate-card {
-  position: absolute;
-  top: 76px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 40;
-
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
-
-  /* GLASS recipe — floating surface. */
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
-  backdrop-filter: blur(20px) saturate(1.5);
-  -webkit-backdrop-filter: blur(20px) saturate(1.5);
-  border: 1px solid color-mix(in srgb, var(--line-2) 72%, transparent);
-  border-radius: var(--r-lg);
-  box-shadow:
-    0 1px 2px rgba(16, 18, 27, 0.08),
-    0 24px 60px -14px rgba(16, 18, 27, 0.34);
-
-  animation: cgate-rise 0.42s var(--ease) both;
-}
-
-.cgate-glyph {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  flex-shrink: 0;
-  border-radius: var(--r-md);
-  color: var(--gap);
-  background: var(--gap-soft);
-  border: 1px solid color-mix(in srgb, var(--gap) 26%, transparent);
-}
-
-.cgate-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  line-height: 1.25;
-}
-
-.cgate-title {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--gap);
-}
-
-.cgate-sub {
-  font-size: 0.75rem;
-  color: var(--muted);
-}
-
-.cgate-review {
-  margin-left: var(--space-2);
-  flex-shrink: 0;
-  padding: var(--space-2) var(--space-4);
-  font-size: 0.8125rem;
-  font-weight: 550;
-  font-family: inherit;
-  color: var(--surface);
-  background: var(--gap);
-  border: 1px solid color-mix(in srgb, var(--gap) 80%, black 6%);
-  border-radius: var(--r-md);
-  cursor: pointer;
-  transition: filter 0.16s var(--ease), transform 0.16s var(--ease);
-}
-
-.cgate-review:hover {
-  filter: brightness(1.06);
-}
-
-.cgate-review:active {
-  transform: translateY(0.5px);
-}
-
-.cgate-review:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--gap) 60%, transparent);
-  outline-offset: 2px;
-}
-
-/* Applied by the integration to the canvas graph plane while the gate is open: the canvas recedes
-   so the gate is the only thing alive. */
-.cgate-canvas-dimmed {
-  filter: saturate(0.6) brightness(0.96);
-  opacity: 0.55;
-  transition: filter 0.4s var(--ease), opacity 0.4s var(--ease);
-}
-
-/* Applied by the integration to the gate node element while the gate is open: an amber ring that
-   breathes, pulling the eye to exactly the node the review card is about. */
+/* Applied to the gate node while the gate is open: an amber ring that breathes, pulling the eye to
+   exactly the wall the inline review is about. */
 .cgate-node-bloom {
   border-radius: inherit;
   animation: cgate-bloom 2.4s var(--ease) infinite;
 }
 
+/* ── Inline gate review — read the real draft right on the node card ─────────────
+   This is the shareable beat: the AI did the work, you read exactly what it wrote,
+   you approve, nothing sends. Opaque surface (you read in it), amber the only accent. */
+.loop-gate-review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.loop-gate-review-lead {
+  margin: 0;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  font-weight: 550;
+  color: var(--gap);
+}
+
+.loop-gate-drafts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.loop-gate-draft {
+  padding: var(--space-2);
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--gap) 22%, var(--line-2));
+  border-left: 2px solid var(--gap);
+  border-radius: var(--r-sm);
+}
+
+.loop-gate-draft-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: 2px;
+}
+
+.loop-gate-draft-to {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.loop-gate-draft-ch {
+  font-size: 0.5625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.loop-gate-draft-subj {
+  margin: 0 0 2px;
+  font-size: 0.6875rem;
+  font-weight: 550;
+  color: var(--ink);
+}
+
+.loop-gate-draft-body {
+  margin: 0;
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  color: var(--muted);
+  white-space: pre-wrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.loop-gate-more {
+  margin: 0;
+  font-size: 0.625rem;
+  color: var(--muted);
+}
+
+.loop-gate-approve {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--surface);
+  background: var(--gap);
+  border: 1px solid color-mix(in srgb, var(--gap) 80%, black 6%);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: filter 0.16s var(--ease);
+}
+
+.loop-gate-approve:hover {
+  filter: brightness(1.06);
+}
+
+.loop-gate-approve:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--gap) 60%, transparent);
+  outline-offset: 2px;
+}
+
+/* ── "It got smarter" — the taste loop as a real beat on a generate node ─────────
+   Green (--proven) because a learned signal is proven ground, not a footnote. */
+.react-flow .loop-node-learned {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: var(--space-1);
+  font-size: 9px;
+  font-weight: 680;
+  letter-spacing: 0.01em;
+  color: var(--proven);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .cgate-card {
-    animation: none;
-  }
   .cgate-node-bloom {
     animation: none;
     box-shadow:

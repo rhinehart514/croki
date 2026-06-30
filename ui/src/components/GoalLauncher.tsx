@@ -1,45 +1,55 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Lightbulb, Workflow } from "lucide-react";
 
-// The front door — a plain-language goal box, ChatGPT-style. The founder says what they want in
-// their own words; the operator inspects the product, data, and connectors, then proposes systems.
-// This is the vision's "a founder should be able to say 'Generate five qualified pilot
-// conversations…'" made literal. Goal-driven, not button-driven; understandable, not an IDE you
-// have to learn. Example goals span different GTM shapes so the product reads as horizontal.
+// The front door — a plain-language hypothesis box, ChatGPT-style. The founder names what they want
+// to LEARN; the machine reads the product, runs the experiment, and stops at the gate so nothing
+// sends. This is the "watch a go-to-market machine run experiments and get smarter" vision made
+// literal: a hypothesis in, a proven/disproven result out, taste sharpened each time. The example
+// chips are hypotheses with a visible expected outcome so the box reads as an experiment, not a wish.
 
 const EXAMPLE_GOALS = [
-  "Get 5 qualified pilot conversations without paid ads",
-  "Find developers using tools like mine and draft outreach",
-  "Turn my product's strengths into content that ranks",
-  "Find ecosystem partners and prepare an intro",
+  "Does leading with our attribution blind spot beat listing features?",
+  "Will founders reply more to a product teardown than a cold pitch?",
+  "Does a Buffalo-local angle land better than a generic one?",
+  "Which gets more yeses — a free audit or a pilot offer?",
 ];
 
 export function GoalLauncher({
-  productName, busy, onSubmitGoal, onIdeate, onLoadRecipe,
+  productName, busy, onSubmitGoal, onIdeate, onLoadRecipe, focusSignal,
 }: {
   productName: string;
   busy: boolean;
   onSubmitGoal: (goal: string) => void | Promise<void>;
   onIdeate: () => void;
   onLoadRecipe?: () => void;
+  // Bumped by the host when something asks to "start a channel" while the launcher is the visible
+  // composer (e.g. the New channel button). The launcher input IS that composer here, so it takes
+  // the focus instead of a hidden dock.
+  focusSignal?: number;
 }) {
   const [goal, setGoal] = useState("");
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const submit = () => { const g = goal.trim(); if (g && !busy) void onSubmitGoal(g); };
+
+  useEffect(() => {
+    if (focusSignal) inputRef.current?.focus();
+  }, [focusSignal]);
 
   return (
     <div className="goal-launcher">
       <div className="goal-launcher-inner">
         <span className="goal-launcher-eyebrow">{productName}</span>
-        <h1 className="goal-launcher-title">What go-to-market outcome do you want?</h1>
+        <h1 className="goal-launcher-title">What do you want to learn?</h1>
         <p className="goal-launcher-sub">
-          Say it in plain words. It reads your product, your data, and what's worked before, then
-          proposes go-to-market systems you can run — stopping at your gate before anything is sent.
+          Name a hypothesis in plain words. It reads your product, runs the experiment, and stops at
+          your gate — nothing sends until you approve. Every call you make there sharpens the next run.
         </p>
 
         <div className="goal-launcher-box">
           <textarea
+            ref={inputRef}
             className="goal-launcher-input"
-            placeholder="e.g. Land 5 pilot conversations with compliance leaders this month"
+            placeholder="e.g. Does leading with the attribution blind spot beat listing features?"
             value={goal}
             disabled={busy}
             onChange={(e) => setGoal(e.target.value)}

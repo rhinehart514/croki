@@ -570,7 +570,10 @@ export type GTMNode = {
   // path. "agent" / "skill" / "code" / "mcp" are open steps the agent composes; they carry a
   // `ref` (the subagent, skill, or transform name) instead of a connector. "switch" is a
   // conditional router — no ref, no category; it splits traffic via per-edge predicates.
-  kind?: "tool" | "agent" | "skill" | "code" | "mcp" | "switch";
+  // Workbench surfaces — human-operated, canvas-space, category "source", no ref. "terminal" = a live
+  // shell (committed output feeds the graph); "query" = reads the project's own data; "web" = a research
+  // browser. See terminal-server.mjs and the workbench node components.
+  kind?: "tool" | "agent" | "skill" | "code" | "mcp" | "switch" | "terminal" | "query" | "web";
   // What this node emits — OPEN, never a closed enum (E3.1). "message" | "artifact" | "dataset" |
   // "signal" | "none" are hints, not the limit; the composer may invent others. Engine must not
   // privilege "message".

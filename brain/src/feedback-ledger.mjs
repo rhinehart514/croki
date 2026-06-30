@@ -49,14 +49,7 @@ function signal(input) {
   };
 }
 
-function policyIdsForGraph(graph) {
-  return [...new Set((graph?.nodes ?? [])
-    .filter((node) => node.kind === "agent" && node.config?.creationPolicyId)
-    .map((node) => node.config.creationPolicyId))];
-}
-
 export function normalizeRunFeedback({ projectId = "default", graph, result } = {}) {
-  const policyIds = policyIdsForGraph(graph);
   const signals = [];
   const nodes = result?.nodes ?? {};
   for (const [nodeId, nodeResult] of Object.entries(nodes)) {
@@ -73,7 +66,6 @@ export function normalizeRunFeedback({ projectId = "default", graph, result } = 
               ? `Changed "${String(item.editedFrom).slice(0, 120)}" to "${String(item.draft || "").slice(0, 120)}"`
               : String(item.draft || item.name || "Approved gated item").slice(0, 160),
             itemId: item.id ?? null,
-            policyIds,
           }));
         } else if (item.approvalStatus === "rejected") {
           signals.push(signal({
@@ -84,7 +76,6 @@ export function normalizeRunFeedback({ projectId = "default", graph, result } = 
             type: "FounderRejection",
             summary: String(item.draft || item.name || "Rejected gated item").slice(0, 160),
             itemId: item.id ?? null,
-            policyIds,
           }));
         }
       }
@@ -101,7 +92,6 @@ export function normalizeRunFeedback({ projectId = "default", graph, result } = 
         nodeId,
         type: "RunFailure",
         summary: String(nodeResult.error).slice(0, 200),
-        policyIds,
       }));
     }
   }
@@ -228,7 +218,7 @@ export function recordFeedbackSignalsFromRun({ projectId = "default", graph, res
     crystallizationSuggestions,
     { ...options, projectId },
   );
-  return { ledger: finalLedger, signals, updatedPolicies: [], crystallizationSuggestions, toolBirthProposals };
+  return { ledger: finalLedger, signals, crystallizationSuggestions, toolBirthProposals };
 }
 
 // Read every pending tool-birth proposal banked in a ledger (insertion order). A pending proposal is a

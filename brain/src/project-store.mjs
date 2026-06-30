@@ -190,11 +190,6 @@ function defaultProject(input = {}) {
     activeChannelId: null,
     channels: [],
     sharedContext: emptySharedContext(),
-    opportunities: {
-      generatedAt: null,
-      sourceContextVersion: null,
-      items: [],
-    },
   };
 }
 
@@ -204,7 +199,6 @@ function migrateProject(project, options = {}) {
       ...project,
       teamId: project.teamId ?? null,
       sharedContext: normalizeSharedContextClaims(project.sharedContext ?? emptySharedContext()),
-      opportunities: project.opportunities ?? defaultProject().opportunities,
     };
   }
   const next = {
@@ -213,7 +207,6 @@ function migrateProject(project, options = {}) {
     schemaVersion: SCHEMA_VERSION,
     channels: Array.isArray(project?.channels) ? project.channels : [],
     sharedContext: project?.sharedContext ?? emptySharedContext(),
-    opportunities: project?.opportunities ?? defaultProject().opportunities,
   };
   if (!next.channels.length && Array.isArray(project?.channelIds)) {
     next.channels = project.channelIds.map((id) => ({
@@ -340,8 +333,7 @@ export function createProject(input = {}, options = {}) {
   const starter = catalog.projects.length === 1
     && catalog.projects[0].id === "default"
     && catalog.projects[0].channels.length === 0
-    && !catalog.projects[0].sharedContext?.repository?.repo
-    && !(catalog.projects[0].opportunities?.items?.length);
+    && !catalog.projects[0].sharedContext?.repository?.repo;
   const existingIds = starter ? [] : catalog.projects.map((project) => project.id);
   const id = projectIdFor(input.id || name, existingIds);
   const project = defaultProject({ id, name });
@@ -506,6 +498,34 @@ export function createChannel(input, options = {}) {
     objective: String(input.objective || "").trim(),
     kind: String(input.kind || "custom").trim() || "custom",
   }, options);
+}
+
+// Register an already-composed pipeline (its executable flow is ALREADY saved by composeNakedGraph) as
+// a channel on the project, so it joins the others on the overview. Idempotent by id/graphId — a
+// re-compose of the same pipeline never duplicates it. This is the wire that lets one product hold
+// MANY pipelines: the operator composes each one, then registers it here.
+export function registerComposedChannel(input, options = {}) {
+  const project = loadProject(options);
+  const existing = (project.channels ?? []).find(
+    (channel) => channel.id === input.id || channel.graphId === input.graphId,
+  );
+  if (existing) return { project, channel: getChannel(project, existing.id, options) };
+  const channel = {
+    id: input.id,
+    graphId: input.graphId,
+    name: input.name,
+    objective: String(input.objective ?? "").trim(),
+    kind: String(input.kind || "custom").trim() || "custom",
+    enabled: true,
+    createdAt: now(),
+  };
+  const channels = [...(project.channels ?? []), channel];
+  const saved = saveProject({
+    ...project,
+    channels,
+    activeChannelId: project.activeChannelId || channel.id,
+  }, options);
+  return { project: saved, channel: getChannel(saved, channel.id, options) };
 }
 
 export function duplicateChannel(channelId, input = {}, options = {}) {

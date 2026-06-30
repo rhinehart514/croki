@@ -147,10 +147,6 @@
   color: var(--muted);
 }
 
-.react-flow .loop-node-memory {
-  margin-top: var(--space-1);
-}
-
 /* ── Health badge — the one place health color lives ────────────────────────── */
 /* color/borderColor are set inline (healthHex): --proven green, --gap amber,
    --danger red. We only calm its shape so it reads as a quiet dot-pill, not a
@@ -254,3 +250,166 @@
   color: var(--ink-2); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .react-flow .loop-node-switch-empty { font-size: 11px; color: var(--faint); margin-top: 2px; }
+
+/* ── Terminal node — a live shell as a first-class canvas object ───────────────
+   The one dark surface on the warm canvas: it reads as "the metal" you drop to.
+   The header is the drag handle; the body (xterm) is nodrag/nowheel so typing and
+   scrollback don't move the canvas. */
+.term-node {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-sm, 10px);
+  overflow: hidden;
+  background: #0d0f12;
+  border: 1px solid #23262d;
+  box-shadow: var(--shadow-card, 0 8px 24px rgba(0,0,0,0.18));
+}
+.term-node-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  background: #16191e;
+  border-bottom: 1px solid #23262d;
+  color: #c9ccd2;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: grab;
+  user-select: none;
+}
+.term-node-head:active { cursor: grabbing; }
+.term-node-head svg { color: #a78bfa; flex: none; }
+.term-node-title { color: #e6e6e6; }
+.term-node-host {
+  margin-left: auto;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-weight: 500;
+  font-size: 11px;
+  color: #6b7280;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.term-node-body {
+  flex: 1;
+  min-height: 0;
+  padding: 6px 4px 6px 8px;
+  background: #0d0f12;
+}
+.term-node-body .xterm { height: 100%; }
+.term-node-handle {
+  width: 9px;
+  height: 9px;
+  background: #a78bfa;
+  border: 2px solid #0d0f12;
+}
+
+/* ── Inspector — open a node's real records in canvas space ────────────────────
+   The count badge becomes a button; clicking it pops this card just under the node,
+   listing the actual items (prospects, drafts) instead of a number you can't open. */
+.loop-node-count-open {
+  appearance: none;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+  transition: color 120ms var(--ease, ease);
+}
+.loop-node-count-open:hover { color: #7c3aed; }
+
+.rec-inspector {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 320px;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-sm, 10px);
+  background: var(--surface, #fff);
+  border: 1px solid var(--line-2, #e4e4e7);
+  box-shadow: var(--shadow-card, 0 10px 30px rgba(0,0,0,0.14));
+  overflow: hidden;
+  z-index: 5;
+}
+.rec-inspector-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--line-2, #e4e4e7);
+  background: var(--surface-2, #fafafa);
+}
+.rec-inspector-head svg { color: #7c3aed; flex: none; }
+.rec-inspector-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink, #18181b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rec-inspector-count {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted, #71717a);
+  background: var(--surface, #fff);
+  border: 1px solid var(--line-2, #e4e4e7);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.rec-inspector-close {
+  appearance: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--muted, #71717a);
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 5px;
+}
+.rec-inspector-close:hover { background: var(--line-2, #e4e4e7); color: var(--ink, #18181b); }
+.rec-inspector-body { overflow-y: auto; padding: 4px; }
+.rec-inspector-empty { padding: 14px; text-align: center; color: var(--muted, #71717a); font-size: 12px; }
+.rec-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 8px;
+  border-radius: 7px;
+}
+.rec-row:hover { background: var(--surface-2, #fafafa); }
+.rec-row + .rec-row { border-top: 1px solid var(--faint, #f4f4f5); }
+.rec-row-main { display: flex; align-items: center; gap: 6px; }
+.rec-row-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink, #18181b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rec-row-badge {
+  margin-left: auto;
+  flex: none;
+  font-size: 10px;
+  font-weight: 600;
+  color: #7c3aed;
+  background: #f3effe;
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+.rec-row-sub {
+  font-size: 11px;
+  color: var(--muted, #71717a);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

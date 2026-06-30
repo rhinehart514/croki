@@ -233,9 +233,11 @@ export const getOperatorSession = (sessionId: string, projectId?: string) =>
 // One durable conversation per project. `reuse: true` returns the project's live (non-terminal) thread
 // when one exists (`reused: true`) instead of spawning a parallel session, and only creates a fresh one
 // (`reused: false`) when there is none — so the dock can only ever talk about the project on screen.
-export const createOperatorSession = (projectId: string, goal: string, graphId?: string) =>
+// `fresh: true` (the "New channel" action) starts an unbound session so it composes an ADDITIONAL
+// pipeline for the product instead of re-driving the active one.
+export const createOperatorSession = (projectId: string, goal: string, graphId?: string, fresh?: boolean) =>
   post<{ session: OperatorSession; reused: boolean }>("/api/operator/sessions", {
-    projectId, reuse: true, goal, graphId,
+    projectId, reuse: !fresh, goal, graphId: fresh ? undefined : graphId, fresh,
   });
 
 export const resumeOperatorSession = (sessionId: string, projectId: string, input: string) =>
@@ -444,19 +446,4 @@ export const canApprove = (teamId: string, userId: string) =>
   get<{ teamId: string; userId: string; canApprove: boolean }>(
     `/api/teams/${encodeURIComponent(teamId)}/can-approve/${encodeURIComponent(userId)}`,
   );
-
-// ── Autonomous drive — one goal, the operator goes and does the work to the gate ──
-// Launches a session primed to compose (if needed) and run the workflow to the shared founder gate,
-// then stop. Never sends. The live event stream is read back via getOperatorSession polling.
-export const operatorGo = (input: {
-  goal: string;
-  projectId?: string;
-  teamId?: string;
-  graphId?: string;
-  model?: string;
-  maxSteps?: number;
-}) => post<{ session: OperatorSession; startedBy: { userId: string; name: string; email: string | null } }>(
-  "/api/operator/go",
-  input,
-);
 

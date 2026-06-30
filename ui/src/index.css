@@ -4810,7 +4810,11 @@ svg {
   border-radius: 18px;
   text-align: left;
   background: var(--surface);
-  box-shadow: var(--shadow-card);
+  /* A calm but real resting elevation: the card reads as a distinct object lifted off the canvas at
+     rest, not only on hover. Tight negative-spread drop so a dense canvas of cards stays quiet. */
+  box-shadow:
+    0 1px 2px oklch(0.21 0.006 285.9 / 0.05),
+    0 6px 16px -5px oklch(0.21 0.006 285.9 / 0.08);
   cursor: pointer;
   font: inherit;
   transition: transform 130ms var(--ease), box-shadow 130ms var(--ease), border-color 130ms var(--ease);
@@ -5005,23 +5009,22 @@ svg {
 }
 
 /* Context node */
+/* Context reads on the same monochrome system as every other card — no decorative gradient. Its
+   identity is carried by the icon and the "Context" label, not a tint that contradicts the doctrine. */
 .loop-node-context {
   min-width: 180px;
-  background: linear-gradient(145deg, #f7f7ff, #eeeffe);
-  border-color: #d4d5fc !important;
-  box-shadow: 0 4px 14px rgba(24, 24, 27, 0.1);
 }
 
 .loop-node-context.loop-node-selected {
-  border-color: var(--accent) !important;
-  box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.14), 0 6px 18px rgba(24, 24, 27, 0.14);
+  border-color: var(--ink) !important;
 }
 
-/* Node internals */
+/* Node internals — header reads left to right like the Source card: the icon and its kind-label sit
+   together (no ping-pong to a stranded top-right label), and only live state (health, status) floats
+   to the right edge. */
 .loop-node-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
 }
 
@@ -5029,21 +5032,25 @@ svg {
   display: flex;
   align-items: center;
   gap: 5px;
+  margin-left: auto;
 }
 
 .loop-node-icon {
   display: grid;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   place-items: center;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
   flex: 0 0 auto;
   background: var(--surface-2);
+  /* A hairline edge in the icon's own ink (currentColor = the category color set inline) gives the
+     tile definition against the card and quietly reinforces the gate's amber when it's the gate. */
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
 }
 
 .loop-node-icon svg {
-  width: 14px !important;
-  height: 14px !important;
+  width: 15px !important;
+  height: 15px !important;
 }
 
 .loop-node-type-label {
@@ -5051,7 +5058,7 @@ svg {
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--faint);
+  color: var(--muted);
 }
 
 .loop-node-health {
@@ -5074,12 +5081,12 @@ svg {
 }
 
 .loop-node-label {
-  margin-top: 9px;
-  font-size: 13px;
+  margin-top: 10px;
+  font-size: 14px;
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.28;
   color: var(--ink);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.012em;
 }
 
 /* The ref/connector is a technical identifier, not the headline. It rides as a faint, single-line
@@ -6172,15 +6179,6 @@ svg {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Loop memory signal (canvas) ──────────────────────────────────────────── */
-
-.loop-node-memory {
-  margin-top: 3px;
-  color: var(--accent);
-  font-size: 9px;
-  font-weight: 680;
-  letter-spacing: 0.02em;
-}
 
 .loop-memory-banner {
   display: flex;
@@ -7690,6 +7688,35 @@ svg {
 }
 .loop-approvals-review:hover { background: #c2780a; }
 
+/* ── Issues panel — the system's problem list, twin of the Approvals panel. Opened from the always-
+   present dock indicator; opaque, monochrome (no amber — that stays the gate's). The body hosts the
+   IssuesCard, whose rows already carry their own .fdock-problems-* / .issues-card styling. */
+.loop-issues-panel {
+  position: absolute; top: 8px; right: 16px; width: 380px; max-height: calc(100vh - 120px);
+  z-index: 60; display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-xl);
+  box-shadow: var(--shadow-pop); overflow: hidden;
+}
+.loop-issues-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; border-bottom: 1px solid var(--line);
+}
+.loop-issues-head-title { display: flex; align-items: center; gap: 8px; }
+.loop-issues-head-title strong { font-size: 13.5px; color: var(--ink); }
+.loop-issues-head-title svg { width: 16px; height: 16px; color: var(--muted); }
+.loop-issues-count {
+  min-width: 16px; padding: 1px 6px; border-radius: 999px;
+  background: var(--ink); color: var(--surface);
+  font-size: 10px; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums;
+}
+.loop-issues-close {
+  width: 26px; height: 26px; border: 0; border-radius: var(--r-sm); background: none; cursor: pointer;
+  color: var(--muted); display: grid; place-items: center;
+}
+.loop-issues-close:hover { background: var(--surface-2); color: var(--ink); }
+.loop-issues-close svg { width: 15px; height: 15px; }
+.loop-issues-body { padding: 10px 12px 14px; overflow-y: auto; }
+
 /* ── Operator narration (markdown-lite) ───────────────────────────────────── */
 .composer-event-detail { color: var(--ink-2); font-size: 12.5px; line-height: 1.5; }
 .composer-event-detail p { margin: 4px 0; }
@@ -7924,8 +7951,8 @@ svg {
   min-height: 0;
 }
 
-/* The canvas plane wraps GraphCanvas so the founder-gate dim (.cgate-canvas-dimmed) has a real
-   block to recede; it must fill the section or React Flow collapses. */
+/* The canvas plane wraps GraphCanvas so the gate node's bloom has a real block to sit in;
+   it must fill the section or React Flow collapses. */
 .program-graph-host {
   position: relative;
   width: 100%;
@@ -9062,6 +9089,36 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 }
 .canvas-overlay-close:hover { background: var(--surface-2); color: var(--ink); }
 .canvas-overlay-body { overflow-y: auto; overflow-x: hidden; min-height: 0; }
+
+/* ── Settings overlay — Workspace / Team / Tools, the admin surfaces evicted from the Summon junk
+   drawer. One opaque overlay with a tab strip in the bar; it reuses the standalone admin panels, so
+   it strips each panel's own frame, positioning, and header (the bar owns the title + close). ─── */
+.settings-overlay-tabs { display: flex; align-items: center; gap: 2px; }
+.settings-overlay-tab {
+  border: 0; background: none; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: var(--muted);
+  padding: 6px 12px; border-radius: var(--r-sm);
+  transition: color 0.15s var(--ease), background 0.15s var(--ease);
+}
+.settings-overlay-tab:hover { color: var(--ink); background: var(--surface-2); }
+.settings-overlay-tab.active { color: var(--ink); background: var(--surface-2); }
+.settings-overlay .canvas-overlay-body { display: flex; flex-direction: column; overflow: hidden; }
+.settings-overlay-panel { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.settings-overlay-empty { color: var(--faint); font-size: 13px; text-align: center; padding: 48px 16px; }
+/* The reused admin panels sit flush — drop their standalone framing/positioning and their own
+   header (the overlay bar carries the title and the single close). */
+.settings-overlay .wsv,
+.settings-overlay .team-space {
+  position: static; inset: auto; top: auto; right: auto; bottom: auto; left: auto;
+  width: 100%; max-width: none; max-height: none; margin: 0;
+  border: 0; border-radius: 0; box-shadow: none; background: transparent;
+}
+.settings-overlay-panel > .wsv { height: 100%; }
+.settings-overlay .wsv-head,
+.settings-overlay .team-space-head { display: none; }
+/* Team and tools are narrow reading surfaces — center them in the wide overlay. */
+.settings-overlay .team-space-body,
+.settings-overlay .tool-forge { max-width: 640px; margin: 0 auto; width: 100%; }
 
 /* ── Canvas empty state (no channel selected — still the canvas, not a page) ─ */
 .canvas-empty {
@@ -11161,7 +11218,8 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 }
 
 /* ── Panel / overlay entrance ──────────────────────────────────────────────── */
-.loop-approvals-panel        { animation: glass-pop-in   var(--dur-slow) var(--ease-spring) both; }
+.loop-approvals-panel,
+.loop-issues-panel           { animation: glass-pop-in   var(--dur-slow) var(--ease-spring) both; }
 .canvas-overlay-bar          { animation: glass-panel-in var(--dur-slow) var(--ease-out) both; }
 .composer-dock.floating,
 .composer-pill               { animation: glass-panel-in var(--dur-slow) var(--ease-out) both; }

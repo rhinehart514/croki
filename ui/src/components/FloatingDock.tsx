@@ -1,25 +1,19 @@
 import { useState } from "react";
 import { motion } from "motion/react";
-import {
-  AlertTriangle, ArrowRight, LoaderCircle, Lightbulb, LayoutGrid, Plus, Rocket, ShieldCheck, Users,
-} from "lucide-react";
+import { AlertTriangle, LoaderCircle, Lightbulb, Plus, Settings2, ShieldCheck } from "lucide-react";
 import { SPRING } from "@/lib/springs";
-import { Reveal, Stagger, StaggerItem, Pop } from "@/lib/motion";
-import { healthHex } from "@/lib/health";
+import { Reveal, Pop } from "@/lib/motion";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { ChannelSwitcher } from "@/components/ChannelSwitcher";
 import { SlidingTabs } from "@/components/SlidingTabs";
-import type { ConnectionStatus } from "@/api";
 import "@/styles/floating-dock.css";
-import type {
-  ChannelMeta, GTMContractAudit, GTMGraph, GTMNode, Investigation, OperatorSession,
-  ProjectSummary,
-} from "@/types";
+import type { ChannelMeta, GTMGraph, ProjectSummary } from "@/types";
 
-// The single floating control dock that sits top-center over the full-bleed canvas. It carries every
-// control the dissolved top toolbar used to hold, composed left → right (breadcrumb · actions). The
-// Design/Simulation/Run lenses were cut: one project is one canvas, not three modes of it. Run is its
-// own action; the run trace lives in the workbench debugger, not a lens.
+// The single floating control dock that sits top-center over the full-bleed canvas. It carries the
+// breadcrumb (product · channel), Ideate, the GTM↔Product toggle, Summon, and the first-class actions:
+// Approvals (the founder gate), Issues (the always-present problem count), and Run. Workspace and Team
+// are no longer permanent buttons here; you summon those onto the canvas instead, so the bar holds only
+// what you reach for constantly. The Design/Simulation/Run lenses were cut: one project is one canvas.
 export function FloatingDock({
   // Left — product · channel breadcrumb
   projects, activeProjectId, projectBusy, onSwitchProject, onManageProjects, onNewProduct, onDeleteProject,
@@ -31,15 +25,18 @@ export function FloatingDock({
   motionName,
   // GTM ↔ Product
   showGtmToggle, productMode, onModeToggle,
-  // Summon — the agentic replacement for lens tabs. Instead of navigating between frozen views, you
-  // summon one onto the canvas as a draggable card. The caller passes the summonable views for the
-  // current mode (the dock adapts), and onSummon pops the chosen view up on the canvas.
+  // Summon — the agentic replacement for lens tabs AND for the old toolbar sections. Instead of
+  // navigating between frozen views or hunting a dedicated button, you summon one onto the canvas as a
+  // draggable card. The caller passes the summonable views; onSummon pops the chosen one up.
   summonItems, onSummon,
-  // Right — actions
-  problems, problemsOpen, onToggleProblems, nodeForSubsystem, onJumpToNode,
+  // The admin door — opens the Settings overlay (workspace index, team + release roles, self-built
+  // tools). These moved out of the Summon menu so the bar's gear is their single home.
+  onOpenSettings,
+  // Right — the first-class actions
   pendingApprovals, approvalsOpen, onToggleApprovals,
-  graph, audits, running, onRun,
-  onOpenWorkspace, onOpenTeam, teamLabel, onOpenGo, goActive,
+  problems, issuesOpen, onToggleIssues,
+  onCloseMenus,
+  graph, running, onRun,
 }: {
   projects: ProjectSummary[];
   activeProjectId: string | null;
@@ -62,37 +59,24 @@ export function FloatingDock({
   onModeToggle: (v: "gtm" | "product") => void;
   summonItems?: { id: string; label: string; desc?: string }[];
   onSummon?: (id: string) => void;
-  problems: Investigation[];
-  problemsOpen: boolean;
-  onToggleProblems: () => void;
-  nodeForSubsystem: (subsystem: string) => GTMNode | null;
-  onJumpToNode: (nodeId: string) => void;
+  onOpenSettings?: () => void;
   pendingApprovals: number;
   approvalsOpen: boolean;
   onToggleApprovals: () => void;
+  // Issues — the count of open problems across the system, and the always-present panel it toggles.
+  problems: number;
+  issuesOpen: boolean;
+  onToggleIssues: () => void;
+  // Close the App-owned toolbar popovers (Approvals and Issues now). Used so opening the local Summon
+  // menu dismisses them — at most one toolbar popover is open at a time.
+  onCloseMenus: () => void;
   graph: GTMGraph | null;
-  audits: Record<string, GTMContractAudit>;
   running: boolean;
   runningNodeId: string | null;
   onRun: () => void;
-  // Open the three-lane workspace (workflows / skills / agents). Optional → no affordance when absent.
-  onOpenWorkspace?: () => void;
-  // Team space (members + roles) and the one-click autonomous "go" entry. Optional → no affordance.
-  onOpenTeam?: () => void;
-  teamLabel?: string | null;
-  onOpenGo?: () => void;
-  goActive?: boolean;
-  session: OperatorSession | null;
-  connection: ConnectionStatus | null;
 }) {
   const [summonOpen, setSummonOpen] = useState(false);
   const noGraph = !graph || graph.nodes.length === 0;
-  // Problems (engine investigations) + the pipeline audit (contract issues) are ONE "Issues" surface.
-  const auditIssues = (graph?.nodes ?? [])
-    .map((n) => ({ node: n, audit: audits[n.id] }))
-    .filter((x): x is { node: GTMNode; audit: GTMContractAudit } =>
-      !!x.audit && ["waiting", "blocked", "blind"].includes(x.audit.state));
-  const issueCount = problems.length + auditIssues.length;
 
   return (
     <motion.div
@@ -106,7 +90,7 @@ export function FloatingDock({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={SPRING}
     >
-      {/* Left — product · outcome breadcrumb */}
+      {/* Left — product · channel breadcrumb */}
       <div className="fdock-left">
         <ProjectSwitcher
           projects={projects}
@@ -130,7 +114,7 @@ export function FloatingDock({
             real stages (no fixed motion list). Hidden on the all-workflows overview and on an empty
             canvas, where there's no single motion to name. */}
         {motionName && !overviewActive && !noGraph && !productMode ? (
-          <span className="fdock-motion" title="The kind of go-to-market this workflow is — derived from its stages">
+          <span className="fdock-motion" title="The kind of go-to-market this channel is — derived from its stages">
             {motionName}
           </span>
         ) : null}
@@ -141,24 +125,11 @@ export function FloatingDock({
           className={`fdock-ideate ${overviewActive ? "active" : ""}`}
           onClick={onIdeate}
           type="button"
-          title="Ideate workflows from your grounded product"
+          title="Ideate channels from your grounded product"
         >
           <Lightbulb size={14} />
           <span>Ideate</span>
         </button>
-        {/* Go — the one-click autonomous entry. Say a goal; the operator composes and runs it to the
-            shared founder gate, then stops. The flagship "agents that go out and do the work" move. */}
-        {onOpenGo ? (
-          <button
-            className={`fdock-go ${goActive ? "active" : ""}`}
-            onClick={onOpenGo}
-            type="button"
-            title="Give it a goal — it composes and runs the work to your gate"
-          >
-            <Rocket size={14} />
-            <span>Go</span>
-          </button>
-        ) : null}
         {showGtmToggle ? (
           <SlidingTabs
             items={[{ value: "gtm", label: "GTM" }, { value: "product", label: "Product" }]}
@@ -168,14 +139,15 @@ export function FloatingDock({
             size="sm"
           />
         ) : null}
-        {/* Summon — the agentic replacement for lens tabs. One + opens a short menu of views you can
-            pop onto the canvas as draggable cards. You ask for what you want to see instead of
-            navigating a fixed taxonomy; Claude can summon the same cards. */}
+        {/* Summon — the agentic replacement for lens tabs and the old toolbar sections. One + opens a
+            short menu of views you can pop onto the canvas as draggable cards (the experiment matrix,
+            a terminal, a query, …). You ask for what you want to see instead of navigating a fixed
+            taxonomy; Claude can summon the same cards. */}
         {summonItems && summonItems.length && onSummon ? (
           <div className="fdock-pop-wrap">
             <button
               className={`fdock-summon ${summonOpen ? "open" : ""}`}
-              onClick={() => setSummonOpen((v) => !v)}
+              onClick={() => { if (!summonOpen) onCloseMenus(); setSummonOpen((v) => !v); }}
               type="button"
               aria-haspopup="menu"
               aria-expanded={summonOpen}
@@ -203,84 +175,24 @@ export function FloatingDock({
         ) : null}
       </div>
 
-      {/* Right — actions. Compact icon buttons for the secondaries; only Run is the one dark fill.
-          Claude's live status lives in the command dock at the bottom, so it isn't duplicated here. */}
+      {/* Right — the two first-class actions. Approvals (the founder gate) and Run. Everything that
+          used to live here is summoned now. Claude's live status lives in the command dock below. */}
       <div className="fdock-right">
-        {/* Issues — engine investigations (Problems) and contract issues (Pipeline audit) merged into
-            ONE control. Both answer "what's broken across the system"; ranked together in one popover. */}
-        <div className="fdock-pop-wrap">
-          <button
-            className={`fdock-icon-btn ${issueCount ? "has-count" : ""} ${problemsOpen ? "open" : ""}`}
-            onClick={onToggleProblems}
-            type="button"
-            aria-haspopup="dialog"
-            aria-expanded={problemsOpen}
-            title={issueCount ? `${issueCount} issue${issueCount === 1 ? "" : "s"} across your system` : "No issues — your system is healthy"}
-          >
-            <AlertTriangle size={15} />
-            {issueCount ? <Pop k={issueCount} className="fdock-count">{issueCount}</Pop> : null}
-          </button>
-          <Reveal open={problemsOpen} className="fdock-problems-pop" role="dialog" origin="top-right">
-            <div className="fdock-pop-title">
-              <strong>Issues</strong>
-              <span className={issueCount ? "issues" : ""}>{issueCount === 0 ? "Clear" : `${issueCount} issue${issueCount === 1 ? "" : "s"}`}</span>
-            </div>
-            {issueCount === 0 ? (
-              <p className="fdock-problems-empty">No issues — your system is healthy.</p>
-            ) : (
-              <Stagger>
-                {problems.map((p) => {
-                  const node = nodeForSubsystem(p.subsystem);
-                  return (
-                    <StaggerItem className="fdock-problems-item" key={`p-${p.id}`}>
-                      <div className="fdock-problems-head">
-                        <AlertTriangle size={13} />
-                        <p>{p.problem}</p>
-                      </div>
-                      <div className="fdock-problems-meta">
-                        <span className="fdock-problems-sub">{p.subsystem}</span>
-                        <span
-                          className="fdock-problems-health"
-                          style={{ color: healthHex(p.health), borderColor: healthHex(p.health) }}
-                          title={`Health ${p.health}`}
-                        >
-                          {p.health}
-                        </span>
-                      </div>
-                      {node ? (
-                        <button className="fdock-problems-fix" onClick={() => onJumpToNode(node.id)} type="button">
-                          Fix in {node.label}<ArrowRight size={12} />
-                        </button>
-                      ) : null}
-                    </StaggerItem>
-                  );
-                })}
-                {auditIssues.map(({ node, audit }) => (
-                  <StaggerItem className="fdock-problems-item" key={`a-${node.id}`}>
-                    <div className="fdock-problems-head"><AlertTriangle size={13} /><p>{node.label}</p></div>
-                    <p className="fdock-audit-msg">{audit.message}</p>
-                    <button className="fdock-problems-fix" onClick={() => onJumpToNode(node.id)} type="button">
-                      Fix in {node.label}<ArrowRight size={12} />
-                    </button>
-                  </StaggerItem>
-                ))}
-              </Stagger>
-            )}
-          </Reveal>
-        </div>
-
-        {/* Team — the team space (members, roles, and which space you're acting in). The label names
-            the current space; opening it lets you switch and see who can release a gate. */}
-        {onOpenTeam ? (
-          <button
-            className="fdock-icon-btn fdock-team-btn"
-            onClick={onOpenTeam}
-            type="button"
-            title={teamLabel ? `Team: ${teamLabel}` : "Your team space"}
-          >
-            <Users size={15} />
-            {teamLabel ? <span className="fdock-team-label">{teamLabel}</span> : null}
-          </button>
+        {/* Settings — the admin door (workspace, team, self-built tools), evicted from the Summon
+            junk drawer into one overlay. Always reachable, in GTM and Product mode alike. */}
+        {onOpenSettings ? (
+          <>
+            <button
+              className="fdock-icon-btn"
+              onClick={() => { setSummonOpen(false); onOpenSettings(); }}
+              type="button"
+              title="Settings — workspace, team, and self-built tools"
+              aria-label="Settings"
+            >
+              <Settings2 size={15} />
+            </button>
+            {!productMode ? <span className="fdock-divider" /> : null}
+          </>
         ) : null}
 
         {/* Approvals — the founder gate's first-class home. Carries the real pending-draft count.
@@ -288,7 +200,7 @@ export function FloatingDock({
         {!productMode ? (
           <button
             className={`fdock-icon-btn ${pendingApprovals > 0 ? "has-pending" : ""} ${approvalsOpen ? "open" : ""}`}
-            onClick={onToggleApprovals}
+            onClick={() => { setSummonOpen(false); onToggleApprovals(); }}
             type="button"
             aria-haspopup="dialog"
             aria-expanded={approvalsOpen}
@@ -301,15 +213,22 @@ export function FloatingDock({
           </button>
         ) : null}
 
-        {/* Workspace — the three-lane index of workflows, skills, and agents. */}
-        {onOpenWorkspace ? (
+        {/* Issues — the always-present problem indicator, promoted off the Summon menu. Carries the live
+            problem count (monochrome — amber stays the gate's alone) and toggles the inline Issues panel.
+            GTM-only: problems are derived from the GTM graph and engine. */}
+        {!productMode ? (
           <button
-            className="fdock-icon-btn"
-            onClick={onOpenWorkspace}
+            className={`fdock-icon-btn ${problems > 0 ? "has-count" : ""} ${issuesOpen ? "open" : ""}`}
+            onClick={() => { setSummonOpen(false); onToggleIssues(); }}
             type="button"
-            title="Open the workspace — every channel, skill, and agent"
+            aria-haspopup="dialog"
+            aria-expanded={issuesOpen}
+            title={problems > 0
+              ? `${problems} problem${problems === 1 ? "" : "s"} across your system`
+              : "No issues — your system is healthy"}
           >
-            <LayoutGrid size={15} />
+            <AlertTriangle size={15} />
+            {problems > 0 ? <Pop k={problems} className="fdock-count">{problems}</Pop> : null}
           </button>
         ) : null}
 

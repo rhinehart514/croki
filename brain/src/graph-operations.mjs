@@ -21,7 +21,14 @@ const EDGE_TYPES = new Set(["data", "context", "feedback"]);
 // "switch" is a routing node — it needs neither a registry category nor a ref. It carries no
 // step of its own; it routes each upstream item to a downstream branch by a per-edge predicate
 // (resolved at run time in graph.mjs). Logic is automatic, so a switch is never a founder gate.
-const NODE_KINDS = new Set(["tool", "agent", "skill", "code", "mcp", "switch"]);
+// "terminal" is a human-operated source: a live shell the founder runs ON the canvas, whose captured
+// output the founder commits (config.output) as the dataset the graph consumes. It carries category
+// "source" (no ref), and like a switch it never auto-executes work — its runner only emits what the
+// founder already produced. The wall is untouched: a terminal is not an execute node.
+// "query" and "web" are workbench surfaces like "terminal" — human-operated, canvas-space, category
+// "source", no ref, never auto-execute work. query reads the project's own data (people/ledger); web is
+// a research browser. Their runners emit committed output or nothing; the wall is untouched.
+const NODE_KINDS = new Set(["tool", "agent", "skill", "code", "mcp", "switch", "terminal", "query", "web"]);
 const OPEN_KINDS = new Set(["agent", "skill", "code", "mcp"]);
 
 // The fixed predicate op vocabulary a switch edge may use — the same set step-runners' applyPredicate

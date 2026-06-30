@@ -6,6 +6,7 @@ import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildTrackingFix } from "./build.mjs";
+import { attachTerminalServer } from "./terminal-server.mjs";
 import { getEngineState } from "./engine.mjs";
 import { loadFlow, recordFlowRun, saveFlow } from "./flow-store.mjs";
 import { listServers, getServer, recordServer, removeServer, reclassifyTool, serverView } from "./mcp-store.mjs";
@@ -53,6 +54,7 @@ import { buildRunGrounding } from "./run-grounding.mjs";
 import { loadFeedbackLedger, recordFeedbackSignalsFromRun } from "./feedback-ledger.mjs";
 import { listToolRegistry, approveToolBirth } from "./tool-registry-store.mjs";
 import { listPeople, getPerson, promoteEntrantsFromRun } from "./person-store.mjs";
+import { recordExperimentFromRun } from "./experiment-derivation.mjs";
 import { loadClarity, addClarity, removeClarity } from "./clarity-store.mjs";
 import { findReferences, deriveChannelFeeds, deriveDirectedFeeds, createDerivedSourceLoader } from "./cross-reference.mjs";
 import { compareChannelRuns } from "./run-compare.mjs";
@@ -728,7 +730,10 @@ const server = http.createServer(async (req, res) => {
           return;
         }
       }
-      const graphId = body.graphId || project.activeChannelId || null;
+      // `fresh: true` starts a session bound to NO pipeline, so compose_and_run composes a brand-new
+      // one — this is how a founder builds an ADDITIONAL pipeline for a product (the "New channel"
+      // action) without re-driving the active pipeline. Otherwise bind to the requested/active channel.
+      const graphId = body.fresh ? null : (body.graphId || project.activeChannelId || null);
       const flow = graphId ? loadFlow(graphId, null) : { graph: null };
       const session = createOperatorSession({
         goal: body.goal,
@@ -742,40 +747,6 @@ const server = http.createServer(async (req, res) => {
       });
       launchOperatorSession(session.id);
       json(res, 202, { session: publicOperatorSession(session), reused: false });
-    } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
-    }
-    return;
-  }
-
-  // "Give it a goal and go" — JOB 2. Create an operator session for the goal and launch it primed to
-  // autonomously compose the workflow and drive it to the shared founder gate in one pass. The session
-  // is stamped with the acting user (request headers, else founder) and the project's effective team so
-  // the gate becomes a shared, role-gated team queue. Returns immediately (202); the UI streams the
-  // operator_composing / operator_running / operator_node_* / operator_reached_gate events as they land.
-  if (req.method === "POST" && url.pathname === "/api/operator/go") {
-    try {
-      const body = await readBody(req);
-      const goal = String(body.goal || "").trim();
-      if (!goal) { json(res, 400, { error: "A goal is required." }); return; }
-      const project = loadProject(body.projectId ? { projectId: body.projectId } : {});
-      const user = resolveCurrentUser({ request: req });
-      const session = createOperatorSession({
-        goal,
-        projectId: project.id,
-        teamId: body.teamId ?? projectTeamId(project.id, {}),
-        graphId: body.graphId ?? null,
-        model: body.model,
-        maxSteps: body.maxSteps,
-        // Prime the conversation so the very first model turn reaches for compose_and_run, which builds
-        // the workflow (if missing) and runs it to the gate without per-step micromanagement.
-        modelMessages: [{
-          role: "user",
-          content: `${goal}\n\nDrive this goal autonomously to the founder gate in one pass: call compose_and_run to build the workflow and run it up to the shared gate, then stop. Do not send — a human releases at the gate.`,
-        }],
-      });
-      launchOperatorSession(session.id);
-      json(res, 202, { session: publicOperatorSession(session), startedBy: user });
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
@@ -1236,6 +1207,8 @@ const server = http.createServer(async (req, res) => {
       const saved = recordFlowRun(body.graph, result);
       const feedback = recordFeedbackSignalsFromRun({ projectId: project.id, graph: body.graph, result });
       promoteEntrantsFromRun({ projectId: project.id, channelId: body.graph.id, result });
+      // A run produces an experiment: derive one live hypothesis per channel from the gate decisions.
+      recordExperimentFromRun({ projectId: project.id, graph: body.graph, result });
       // Graph failures are domain results. Return the full per-node result so
       // the client can render partial success, blocked nodes, and recovery.
       json(res, 200, {
@@ -1300,6 +1273,7 @@ const server = http.createServer(async (req, res) => {
       const saved = recordFlowRun(body.graph, result);
       const feedback = recordFeedbackSignalsFromRun({ projectId: project.id, graph: body.graph, result });
       promoteEntrantsFromRun({ projectId: project.id, channelId: body.graph.id, result });
+      recordExperimentFromRun({ projectId: project.id, graph: body.graph, result });
       send({
         type: "run_done",
         result: {
@@ -1396,6 +1370,9 @@ const server = http.createServer(async (req, res) => {
 
   json(res, 405, { error: "Method not allowed." });
 });
+
+// Live terminal sessions for canvas terminal nodes (WebSocket on /api/terminal). Loopback-only.
+attachTerminalServer(server);
 
 server.listen(port, host, () => {
   console.log(`GTM IDE running at http://${host}:${port}`);

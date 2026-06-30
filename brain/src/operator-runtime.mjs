@@ -7,6 +7,7 @@ import { loadFlow, recordFlowRun, saveFlow } from "./flow-store.mjs";
 import { createDerivedSourceLoader } from "./cross-reference.mjs";
 import { recordFeedbackSignalsFromRun } from "./feedback-ledger.mjs";
 import { promoteEntrantsFromRun } from "./person-store.mjs";
+import { recordExperimentFromRun } from "./experiment-derivation.mjs";
 import { applyGraphOperations, validateGraph } from "./graph-operations.mjs";
 import { listConnectors, runGraph } from "./graph.mjs";
 import { executeDomainCommand } from "./domain-commands.mjs";
@@ -23,6 +24,7 @@ import {
   applySharedContextToGraph,
   loadProject,
   projectTeamId,
+  registerComposedChannel,
   updateSharedContext,
 } from "./project-store.mjs";
 import { canApprove, getMember, resolveCurrentUser } from "./team-store.mjs";
@@ -208,12 +210,13 @@ const TOOLS = [
   },
   {
     name: "compose_and_run",
-    description: "Autonomously drive a goal end-to-end in one move: compose the channel's workflow if this session has none yet (research/enrich/draft agents behind a founder gate), then run it through the step runtime until it reaches the shared founder gate. Use this when the founder hands a goal and wants the whole system built and run up to the gate without micromanaging each step. It never sends — it stops at the gate for a human release.",
+    description: "Autonomously drive a goal end-to-end in one move: compose the channel's workflow if this session has none yet (research/enrich/draft agents behind a founder gate), then run it through the step runtime until it reaches the shared founder gate. A product holds MANY pipelines — to build an ADDITIONAL pipeline for the same product (a new channel alongside the ones already built), call this with compose_new:true. Use this when the founder hands a goal and wants the whole system built and run up to the gate without micromanaging each step. It never sends — it stops at the gate for a human release.",
     input_schema: {
       type: "object",
       properties: {
         goal: { type: "string", description: "The goal to build and run toward. Defaults to the session goal." },
         title: { type: "string", description: "Optional channel name." },
+        compose_new: { type: "boolean", description: "Compose an ADDITIONAL pipeline for this product even though this conversation already built one. Set true when the founder asks for another channel; the new pipeline joins the others on the product's overview. Omit (or false) to drive the pipeline this session already composed." },
         agents: {
           type: "array",
           description: "Optional inline agent specs (ref/role/objective/prompt). Omit to let the composer design the agents.",
@@ -431,6 +434,7 @@ ${renderPriorSessions(priorSessions)}
 How you work:
 - One move does most of it: compose_and_run. Given the goal, it designs the agents and steps the goal needs (research, enrich, draft — whatever fits), builds the workflow behind a founder gate, and runs it to that gate. Reach for it first, not last.
 - Decide the approach freely from the real product and the goal in front of you. No fixed channel catalog, no ceremony. If the founder asks for several angles, lay them out in plain language first, then build the ones they pick.
+- A product runs MANY pipelines, not one. Once you've built the first, build the next for the same product by calling compose_and_run with compose_new:true — each new pipeline joins the others on the product's overview. Don't refuse a second channel because one already exists; that overview of all the pipelines together is the point.
 - The wall is absolute: nothing sends, publishes, deploys, or charges without the founder approving at the gate. You never approve a gate yourself. compose_and_run always stops at the gate.
 - Learn and match the founder's taste from what they've approved and rejected before; don't re-ask what you can infer.
 - Product claims come from the repository, or you label them inferred. Never invent traction, metrics, or facts.
@@ -523,6 +527,7 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
   const stored = recordFlowRun(flow.graph, result, options);
   const feedback = recordFeedbackSignalsFromRun({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
   promoteEntrantsFromRun({ projectId: session.projectId || "default", channelId: flow.graph.id, result }, options);
+  recordExperimentFromRun({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
   let next = {
     ...session,
     lastRunId: result.runId,
@@ -770,11 +775,13 @@ async function executeTool(session, tool, options = {}) {
     const goal = firstNonEmpty(input.goal, session.goal);
     let working = session;
 
-    // Compose only when this session has no executable graph yet — otherwise drive the one it has.
-    if (!working.graphId) {
+    // Compose when this session has no executable graph yet, OR when the founder asks for an additional
+    // pipeline (compose_new) — a product holds many pipelines, and each compose persists a distinct
+    // channel that joins the others on the overview. Otherwise drive the pipeline this session has.
+    if (!working.graphId || input.compose_new) {
       working = addEvent(working, {
         type: "operator_composing",
-        title: "Composing the workflow",
+        title: working.graphId ? "Composing another pipeline" : "Composing the workflow",
         detail: `Designing the channel for: ${goal}`,
         data: { goal },
       }, options);
@@ -787,6 +794,14 @@ async function executeTool(session, tool, options = {}) {
         ...options,
         compose: options.compose || createClaudeComposer({ cwd: composeRepo }),
       });
+      // Register the composed pipeline as a channel on the product so it joins the others on the
+      // overview — composeNakedGraph saved the flow but a pipeline only appears once it's a channel.
+      registerComposedChannel({
+        id: composed.channel.id,
+        graphId: composed.channel.graphId,
+        name: composed.channel.name,
+        objective: goal,
+      }, options);
       working = addEvent({
         ...working,
         graphId: composed.channel.graphId,
@@ -1123,6 +1138,7 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
   recordFlowRun(flow.graph, result, options);
   const feedback = recordFeedbackSignalsFromRun({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
   promoteEntrantsFromRun({ projectId: session.projectId || "default", channelId: flow.graph.id, result }, options);
+  recordExperimentFromRun({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
   session = addEvent({
     ...session,
     lastRunId: result.runId,

@@ -1,4 +1,5 @@
 import "@/styles/canvas-refine.css";
+import "@/styles/canvas-gate.css";
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background, Controls, Handle, MarkerType, Panel, Position, ReactFlow,
@@ -12,6 +13,9 @@ import {
   Loader, Lock, MessageSquare, MousePointer2, Pencil, Play, Search, ShieldCheck, Lightbulb, Split, Sprout, Target,
   Telescope, Trash2, TrendingUp, Wand2, X, Zap,
 } from "lucide-react";
+import TerminalNode from "@/components/TerminalNode";
+import QueryNode from "@/components/QueryNode";
+import WebNode from "@/components/WebNode";
 import { cn } from "@/lib/utils";
 import { healthHex } from "@/lib/health";
 import { agentPersona, FAMILY_TINT } from "@/lib/agentPersona";
@@ -20,7 +24,7 @@ import { BrandGlyph } from "@/components/BrandGlyph";
 import type { NodeEditorBridge } from "@/components/nodeEditorBridge";
 import type {
   ConnectorMeta, GateDecision, GTMEdge, GTMEdgeType, GTMGraph,
-  GTMContractAudit, GTMNode, GTMNodeCategory, GTMNodeResult, GTMRunResult, NodeSelection,
+  GTMContractAudit, GTMItem, GTMNode, GTMNodeCategory, GTMNodeResult, GTMRunResult, NodeSelection,
   Person, PersonAppearance,
 } from "@/types";
 
@@ -219,6 +223,11 @@ type GTMNodeData = {
   selected: boolean;
   connectors: ConnectorMeta[];
   onSelect: () => void;
+  // Open this node's real records as an Inspector card in canvas space (the workbench's read surface).
+  onInspect?: () => void;
+  // The project's durable People — threaded onto every node's data so a workbench Query node can read
+  // and filter them without importing canvas-internal context (no module cycle).
+  people?: Person[];
   // Persistent subsystem health (from the engine: scan + ledger + connectors).
   health?: number;
   healthIssue?: string;
@@ -432,6 +441,19 @@ function CardSection({ label, children }: { label: string; children: React.React
   );
 }
 
+// Pull the human-readable draft out of a staged gate item so the founder reads the REAL message at
+// the gate — not a count. Falls back across the field names the different drafters write.
+function gateDraft(item: GTMItem): { to: string; subject?: string; body: string; channel?: string } {
+  const to = String(item.name ?? item.company ?? item.org ?? item.handle ?? item.to ?? item.email ?? "Recipient");
+  const body = String(item.draft ?? item.draft_note ?? item.message ?? item.body ?? "").trim();
+  return {
+    to,
+    subject: item.subject ? String(item.subject) : undefined,
+    body: body || "(empty draft)",
+    channel: item.channel ? String(item.channel) : undefined,
+  };
+}
+
 function NodeCardEditor({ node, result, health, contractAudit }: {
   node: GTMNode;
   result?: GTMNodeResult;
@@ -553,19 +575,39 @@ function NodeCardEditor({ node, result, health, contractAudit }: {
           </div>
         </CardSection>
       ) : node.category === "gate" ? (
-        <CardSection label="Config">
+        <CardSection label="At the gate">
           {result?.pendingReview || items > 0 ? (
-            <p className="loop-node-editor-hint">{(result?.meta?.awaitingReview as number) ?? items} draft{items === 1 ? "" : "s"} waiting for your review.</p>
+            <div className="loop-gate-review">
+              <p className="loop-gate-review-lead">
+                {(result?.meta?.awaitingReview as number) ?? items} draft{items === 1 ? "" : "s"} staged — read each, then approve. Nothing sends until you do.
+              </p>
+              <div className="loop-gate-drafts">
+                {(result?.items ?? []).slice(0, 2).map((item, i) => {
+                  const d = gateDraft(item);
+                  return (
+                    <article className="loop-gate-draft" key={String(item.gtmActionId ?? i)}>
+                      <header className="loop-gate-draft-head">
+                        <span className="loop-gate-draft-to">{d.to}</span>
+                        {d.channel ? <span className="loop-gate-draft-ch">{d.channel}</span> : null}
+                      </header>
+                      {d.subject ? <p className="loop-gate-draft-subj">{d.subject}</p> : null}
+                      <p className="loop-gate-draft-body">{d.body}</p>
+                    </article>
+                  );
+                })}
+              </div>
+              {items > 2 ? <p className="loop-gate-more">+{items - 2} more staged at the gate</p> : null}
+              <button
+                className="loop-gate-approve"
+                onClick={(e) => { stop(e); bridge.onApproveGate(node.id); }}
+                type="button"
+              >
+                <ShieldCheck size={12} /> Review &amp; approve
+              </button>
+            </div>
           ) : (
             <p className="loop-node-editor-hint">Nothing waiting. A run stages sends here and stops for your approval.</p>
           )}
-          <button
-            className="loop-node-editor-link"
-            onClick={(e) => { stop(e); bridge.onApproveGate(node.id); }}
-            type="button"
-          >
-            <ShieldCheck size={12} /> Review at the gate
-          </button>
         </CardSection>
       ) : null}
 
@@ -674,8 +716,8 @@ function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
         <div className="loop-node-icon" style={{ background: `${color}18`, color }}>
           {CATEGORY_ICON[node.category]}
         </div>
+        <span className="loop-node-type-label">{CATEGORY_LABEL[node.category]}</span>
         <div className="loop-node-header-right">
-          <span className="loop-node-type-label">{CATEGORY_LABEL[node.category]}</span>
           {typeof data.health === "number" && data.health > 0 && (
             <HealthPill health={data.health} issue={data.healthIssue} />
           )}
@@ -770,8 +812,8 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
         <>
           <div className="loop-node-header">
             <div className="loop-node-icon" style={{ background: `${INK}14`, color: INK }}><Split /></div>
+            <span className="loop-node-type-label">Switch</span>
             <div className="loop-node-header-right">
-              <span className="loop-node-type-label">Switch</span>
               <span className="loop-node-status"><StatusIcon status={status} /></span>
             </div>
           </div>
@@ -832,14 +874,14 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
               {isMcp ? <BrandGlyph serverId={mcpServer} brand={selected} size={17} />
                 : persona ? persona.monogram : visual.icon}
             </div>
+            <span className="loop-node-type-label">
+              {obj === "teammate" ? "Teammate"
+                : obj === "gate" ? "Gate"
+                : obj === "measure" ? "Measure"
+                : isMcp ? (mcpGlyph?.title ?? mcpServer.replace(/^./, (c) => c.toUpperCase()))
+                : visual.label}
+            </span>
             <div className="loop-node-header-right">
-              <span className="loop-node-type-label">
-                {obj === "teammate" ? "Teammate"
-                  : obj === "gate" ? "Gate"
-                  : obj === "measure" ? "Measure"
-                  : isMcp ? (mcpGlyph?.title ?? mcpServer.replace(/^./, (c) => c.toUpperCase()))
-                  : visual.label}
-              </span>
               {verdict ? <VerdictBadge {...verdict} /> : null}
               <span className="loop-node-status"><StatusIcon status={status} /></span>
             </div>
@@ -861,12 +903,29 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
           {isOpenKind
             ? <span className="loop-node-connector" title={node.ref}>{node.ref}</span>
             : node.connector && <span className="loop-node-connector" title={node.connector}>{node.connector}</span>}
-          {summary && !hasErr && <span className="loop-node-count">{summary}</span>}
+          {summary && !hasErr && (
+            result?.items?.length
+              ? (
+                <button
+                  type="button"
+                  className="loop-node-count loop-node-count-open"
+                  title="Open these records on the canvas"
+                  onClick={(e) => { e.stopPropagation(); data.onInspect?.(); }}
+                >
+                  {summary}
+                </button>
+              )
+              : <span className="loop-node-count">{summary}</span>
+          )}
           {node.category === "generate" && (() => {
             const mem = result?.meta?.memory as { approved?: number; rejected?: number; edits?: number } | undefined;
             const learned = (mem?.approved ?? 0) + (mem?.rejected ?? 0) + (mem?.edits ?? 0);
             return learned > 0
-              ? <span className="loop-node-memory">★ learned from {learned} decision{learned !== 1 ? "s" : ""}</span>
+              ? (
+                <span className="loop-node-learned">
+                  <Sprout size={9} aria-hidden /> Learned from {learned} decision{learned !== 1 ? "s" : ""}
+                </span>
+              )
               : null;
           })()}
           {hasErr && result?.error && (
@@ -926,16 +985,72 @@ function LaneStatusNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
   );
 }
 
+// ─── Inspector — the workbench's read surface ─────────────────────────────────
+// Cracks a node open IN canvas space to show the REAL records flowing through it — the source's
+// prospects, the gate's drafts — instead of a "12 items" count you can't open. Read-only; it never
+// mutates the graph. Pairs with the terminal: run a script, watch its output land as records here.
+function inspectorRow(item: GTMItem): { title: string; sub?: string; badge?: string } {
+  const title = item.name || item.company || item.subject || item.email || item.url || item.id || item.type;
+  const sub = [item.title, item.email, item.url].filter(Boolean).join(" · ")
+    || (item.draft ? item.draft.slice(0, 140) : undefined);
+  const badge = item.approvalStatus
+    ?? (item.fit === true ? "fit" : item.fit === false ? "no fit" : undefined)
+    ?? (typeof item.score === "number" ? `score ${item.score}` : undefined);
+  return { title: String(title), sub: sub || undefined, badge: badge || undefined };
+}
+
+function InspectorCard({ node, result, onClose }: {
+  node: GTMNode; result: GTMNodeResult | undefined; onClose: () => void;
+}) {
+  const items = result?.items ?? [];
+  const x = node.position?.x ?? 0;
+  const y = (node.position?.y ?? 0) + 132; // sits just below the node card it opened from
+  return (
+    <div className="rec-inspector nodrag nowheel" style={{ transform: `translate(${x}px, ${y}px)` }}>
+      <div className="rec-inspector-head">
+        <Database size={12} />
+        <span className="rec-inspector-title" title={node.label}>{node.label}</span>
+        <span className="rec-inspector-count">{items.length}</span>
+        <button type="button" className="rec-inspector-close" onClick={onClose} title="Close"><X size={12} /></button>
+      </div>
+      <div className="rec-inspector-body">
+        {items.length === 0 ? (
+          <p className="rec-inspector-empty">No records to show.</p>
+        ) : items.map((item, i) => {
+          const row = inspectorRow(item);
+          return (
+            <div className="rec-row" key={item.id ?? i}>
+              <div className="rec-row-main">
+                <span className="rec-row-title">{row.title}</span>
+                {row.badge ? <span className="rec-row-badge">{row.badge}</span> : null}
+              </div>
+              {row.sub ? <span className="rec-row-sub">{row.sub}</span> : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 const NODE_TYPES = {
   resourceNode:   ResourceNodeComponent,
   contextNode:    ContextNodeComponent,
   workNode:       WorkNodeComponent,
   laneStatusNode: LaneStatusNodeComponent,
+  terminalNode:   TerminalNode,
+  queryNode:      QueryNode,
+  webNode:        WebNode,
 };
 
-function nodeType(category: GTMNodeCategory): string {
-  if (category === "resource") return "resourceNode";
-  if (category === "context")  return "contextNode";
+// Workbench surfaces (terminal/query/web) are human-operated sources with their own renderers, not the
+// work-card. Routed by kind, since they share the "source" category with connector-backed sources.
+function nodeType(node: GTMNode): string {
+  if (node.kind === "terminal") return "terminalNode";
+  if (node.kind === "query")    return "queryNode";
+  if (node.kind === "web")      return "webNode";
+  if (node.category === "resource") return "resourceNode";
+  if (node.category === "context")  return "contextNode";
   return "workNode";
 }
 
@@ -1035,6 +1150,8 @@ function buildFlowGraph(
   onApproveGate?: (nodeId: string) => void,
   bloomNodeId?: string | null,
   revealedNodeIds?: Set<string>,
+  onInspect?: (id: string) => void,
+  people?: Person[],
 ): { nodes: Node[]; edges: Edge[] } {
   // A node is "revealed" unless it's a still-pending proposed ghost. Committed nodes are always
   // revealed (so an edge from a committed node to the first ghost shows immediately); a proposed node
@@ -1058,7 +1175,7 @@ function buildFlowGraph(
     const appearOrder = ideation && !laneStatus ? Math.max(0, Math.round((n.position?.x ?? 0) / 248)) : undefined;
     return {
       id: n.id,
-      type: laneStatus ? "laneStatusNode" : nodeType(n.category),
+      type: laneStatus ? "laneStatusNode" : nodeType(n),
       position: n.position,
       draggable: true,
       selectable: false,
@@ -1069,7 +1186,7 @@ function buildFlowGraph(
         // the run step by step. No highlight set → no replay classes, the canvas reads normally.
         highlightedNodeId ? (highlightedNodeId === n.id ? "loop-node-replay-current" : "loop-node-replay-dim") : "",
         // Founder gate bloom: while a run pauses at this gate with staged drafts, the node breathes an
-        // amber ring (the one gate accent) so the eye lands on the wall the CanvasGate banner points to.
+        // amber ring (the one gate accent) so the eye lands on the wall where the inline review opens.
         bloomNodeId && bloomNodeId === n.id ? "cgate-node-bloom" : "",
       ].filter(Boolean).join(" ") || undefined,
       data: {
@@ -1081,6 +1198,8 @@ function buildFlowGraph(
         selected: selection === n.id,
         connectors,
         onSelect: () => onSelect(n.id),
+        onInspect: () => onInspect?.(n.id),
+        people,
         health: sub?.health,
         healthIssue: sub?.issue,
         contractAudit: contractAudits[n.id],
@@ -1096,6 +1215,17 @@ function buildFlowGraph(
   });
 
   const posX = new Map(graph.nodes.map((n) => [n.id, n.position?.x ?? 0]));
+  // Living grammar — conviction is weight. A data edge's thickness encodes how much real volume flows
+  // through it: the source node's last-run item count, normalized against the busiest node. The proven
+  // spine reads fat, a fresh experiment a thread. Derived from the run ledger, never authored; with no
+  // run yet every edge rests at its base width (honest — no fake conviction before evidence).
+  const nodeVolume = (id: string) => result?.nodes[id]?.items?.length ?? 0;
+  const maxVolume = Math.max(1, ...graph.nodes.map((n) => nodeVolume(n.id)));
+  const convictionWidth = (e: GTMEdge): number | undefined => {
+    if (e.edgeType !== "data") return undefined;
+    const c = e.conviction ?? nodeVolume(e.source) / maxVolume;
+    return c > 0 ? 1.5 + c * 3 : undefined; // 1.5px (rested) → ~4.5px (the spine)
+  };
   const edges: Edge[] = graph.edges.map((e: GTMEdge) => {
     // Animate the edge feeding the active step — data visibly flowing in.
     const active = e.edgeType === "data" && runningNodeId === e.target && !!result?.nodes[e.source]?.ok;
@@ -1122,6 +1252,7 @@ function buildFlowGraph(
     // A proposed edge holds back until both endpoints have surfaced, so a connector never dangles to a
     // node that hasn't been revealed yet.
     const edgeRevealed = isRevealed(e.source) && isRevealed(e.target);
+    const width = convictionWidth(e);
     return {
       id: e.id,
       source: e.source,
@@ -1129,6 +1260,7 @@ function buildFlowGraph(
       label: e.label,
       ...base,
       ...routing,
+      ...(width ? { style: { ...(base.style ?? {}), strokeWidth: width } } : {}),
       ...(active ? { animated: true, className: "loop-edge-data loop-edge-active" } : {}),
       ...(proposed ? { className: `${base.className ?? ""} loop-edge-proposed ${edgeRevealed ? "is-revealed" : "is-unrevealed"}`.trim(), animated: true } : {}),
     };
@@ -1395,6 +1527,19 @@ export function GraphCanvas({
   people?: Person[];
 }) {
   const handleSelect = useCallback((id: string) => onSelect(id), [onSelect]);
+  // Inspector — the workbench's read surface. A node's record-count opens its real items as a card in
+  // canvas space (pans/zooms with the graph). Local to the canvas: it reads `result`, mutates nothing.
+  const [inspecting, setInspecting] = useState<Set<string>>(() => new Set());
+  const toggleInspect = useCallback((id: string) => {
+    setInspecting((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+  const closeInspect = useCallback((id: string) => {
+    setInspecting((cur) => { if (!cur.has(id)) return cur; const next = new Set(cur); next.delete(id); return next; });
+  }, []);
   // Camera-follow break: the founder grabbed the canvas to look away from where Claude is working.
   // We pause the follow and offer a "Back to Claude" pill; the recenter nonce re-engages it.
   const [followBroken, setFollowBroken] = useState(false);
@@ -1459,8 +1604,8 @@ export function GraphCanvas({
   }, [graph, onNodePositionChange]);
 
   const { nodes, edges } = useMemo(
-    () => buildFlowGraph(laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds),
-    [laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds],
+    () => buildFlowGraph(laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people),
+    [laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people],
   );
 
   // Re-fit the viewport whenever the flow's structure changes (load, compose).
@@ -1578,6 +1723,15 @@ export function GraphCanvas({
           </div>
         </Panel>
       )}
+      {inspecting.size > 0 ? (
+        <ViewportPortal>
+          {[...inspecting].map((id) => {
+            const n = laidOutGraph.nodes.find((nd) => nd.id === id);
+            if (!n) return null;
+            return <InspectorCard key={id} node={n} result={result?.nodes[id]} onClose={() => closeInspect(id)} />;
+          })}
+        </ViewportPortal>
+      ) : null}
       <Background color="#e4e4e7" gap={26} size={1.5} />
       <Controls showInteractive={false} position="bottom-right" />
     </ReactFlow>

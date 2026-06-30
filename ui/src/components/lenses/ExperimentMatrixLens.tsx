@@ -10,6 +10,7 @@
 import { useMemo } from "react";
 import type { ChannelMeta, Claim, GtmExperiment } from "@/types";
 import { LensPanel, ProvenanceTag } from "@/components/lenses/shared";
+import { ExperimentArtifactCard } from "@/components/CanvasCard";
 import "./ExperimentMatrixLens.css";
 
 export type ExperimentMatrixLensProps = {
@@ -102,6 +103,13 @@ export function ExperimentMatrixLens({
   const icpLabel = readableIcp(icp);
   const icpHypotheses = Array.isArray(icp.hypotheses) ? (icp.hypotheses as unknown[]) : [];
 
+  // When a RESOLVED cell is selected, expand it into the shareable artifact card below the grid —
+  // the founder's log and the clip at once. Only a complete experiment with a real result resolves.
+  const resolved = useMemo(
+    () => experiments.find((e) => e.id === selected && statusTone(e.status) === "complete" && (e.result || "").trim()),
+    [experiments, selected],
+  );
+
   if (experiments.length === 0 || columns.length === 0) {
     return (
       <div className="matrix-lens matrix-lens-empty" role="region" aria-label="Experiment matrix lens">
@@ -191,6 +199,15 @@ export function ExperimentMatrixLens({
           </tbody>
         </table>
       </div>
+
+      {resolved && (
+        <div className="exp-artifact-dock">
+          <ExperimentArtifactCard
+            exp={resolved}
+            channelName={resolved.channelId ? channelName.get(resolved.channelId) : undefined}
+          />
+        </div>
+      )}
 
       <LensPanel title="Experiment matrix" className="matrix-legend lens-panel-dock">
         <div className="matrix-legend-row">

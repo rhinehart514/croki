@@ -1,0 +1,85 @@
+/* The research browser node — a light, warm card (not the terminal's dark metal).
+   The header is the drag handle; the URL bar and the iframe body are nodrag/nowheel so typing
+   and page scroll don't move the canvas. Accent #7c3aed (violet). */
+.web-node {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-sm, 10px);
+  overflow: hidden;
+  background: var(--surface, #fff);
+  border: 1px solid var(--line-2, #e4e4e7);
+  box-shadow: var(--shadow-card, 0 8px 24px rgba(0, 0, 0, 0.14));
+}
+.web-node-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  background: var(--surface-2, #fafafa);
+  border-bottom: 1px solid var(--line-2, #e4e4e7);
+  cursor: grab;
+  user-select: none;
+}
+.web-node-head:active { cursor: grabbing; }
+.web-node-head svg { color: #7c3aed; flex: none; }
+.web-node-url {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--ink, #18181b);
+  background: var(--surface, #fff);
+  border: 1px solid var(--line-2, #e4e4e7);
+  border-radius: var(--r-sm, 8px);
+  cursor: text;
+}
+.web-node-url:focus {
+  outline: none;
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.14);
+}
+.web-node-url::placeholder { color: var(--muted, #a1a1aa); }
+.web-node-go,
+.web-node-pop {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-sm, 8px);
+  border: 1px solid var(--line-2, #e4e4e7);
+  background: var(--surface, #fff);
+  color: var(--muted, #71717a);
+  cursor: pointer;
+  transition: color 120ms var(--ease, ease), border-color 120ms var(--ease, ease);
+}
+.web-node-go { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+.web-node-pop { text-decoration: none; }
+.web-node-pop:hover { color: #7c3aed; border-color: #7c3aed; }
+.web-node-body {
+  flex: 1;
+  min-height: 0;
+  border: none;
+  background: #fff;
+}
+.web-node-empty {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted, #a1a1aa);
+  font-size: 12px;
+  background: var(--surface, #fff);
+}
+.web-node-empty svg { color: var(--muted, #a1a1aa); opacity: 0.7; }
+.web-node-empty p { margin: 0; }
+.web-node-handle {
+  width: 9px;
+  height: 9px;
+  background: #7c3aed;
+  border: 2px solid var(--surface, #fff);
+}

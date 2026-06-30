@@ -1,8 +1,6 @@
 import { GraphCanvas, type OperatorCursorState } from "@/components/GraphCanvas";
 import type { NodeEditorBridge } from "@/components/nodeEditorBridge";
 import { CanvasShell, type LensDef, type LensProps } from "@/components/canvas/CanvasShell";
-import { PeopleLens } from "@/components/lenses/PeopleLens";
-import { ExperimentMatrixLens } from "@/components/lenses/ExperimentMatrixLens";
 import { EngineLens } from "@/components/lenses/EngineLens";
 import type {
   ChannelFeed, ChannelMeta, Claim, ConnectorMeta, DirectedFeed, GateDecision, GtmExperiment, GTMContractAudit, GTMGraph, GTMNode,
@@ -10,7 +8,7 @@ import type {
 } from "@/types";
 
 // GtmCanvas — GTM mode's instance of the generic CanvasShell. It projects the GTM operational object
-// model through these lenses:
+// model through two lenses, chosen by channel state alone (no in-canvas switcher):
 //   - "channel-flow" IS the existing GraphCanvas (one channel's Source → … → Gate → Measure). Single-
 //     channel behavior is unchanged — this lens just forwards the same prop bag App used to mount the
 //     bare GraphCanvas with.
@@ -18,12 +16,10 @@ import type {
 //     between them, and the shared ICP/claim context header. The earlier separate "portfolio-map"
 //     tile grid was merged into this lens (its only unique value was the context header), so there is
 //     one overview altitude, not two near-identical ones.
-//   - "people" and "experiment-matrix" project the shared People and Experiment objects.
 //
-// Every lens lives in one shell so the founder switches altitude without leaving the surface. The
-// shell's layoutId is "gtm-lens" — distinct from Product mode's "product-lens" so the SlidingTabs
-// pills never spring into each other across modes. The People and Experiment-matrix lenses, and
-// retiring the swimlane RENDERER inside GraphCanvas, wait for the Person backend (P10.3 steps 4–5).
+// People and Experiments are reached as summoned cards in App, not as lenses here. The shell's
+// layoutId is "gtm-lens" — distinct from Product mode's "product-lens" so the SlidingTabs pills never
+// spring into each other across modes.
 
 export type GtmCanvasModel = {
   // ── channel-flow: the GraphCanvas prop bag (null graph → no channel open) ──
@@ -51,7 +47,7 @@ export type GtmCanvasModel = {
   onNodePositionChange?: (nodeId: string, position: { x: number; y: number }) => void;
   onOpenLibrary?: () => void;
   nodeEditor?: NodeEditorBridge | null;
-  // ── portfolio-map / people / experiment-matrix: the channels + the shared objects they inherit ──
+  // ── engine overview + summoned cards: the channels + the shared objects they inherit ──
   channels: ChannelMeta[];
   activeChannelId: string | null;
   subsystemHealth: Record<string, { health: number; issue?: string }>;
@@ -59,8 +55,8 @@ export type GtmCanvasModel = {
   // Structured claims (sharedContext.claims) — the source of truth the experiment matrix grids by and
   // the portfolio map reads its headline claim from.
   claims: Claim[];
-  // The shared People object (promoted from real runs) and the live experiments — the data the
-  // People and Experiment-matrix lenses project.
+  // The shared People object (promoted from real runs) and the live experiments — the data App's
+  // summoned People and Experiment-matrix cards project (and that channel-flow reads people from).
   people: Person[];
   experiments: GtmExperiment[];
   // Undirected links between channels that share real entities — the feeds the engine view draws.
@@ -157,59 +153,35 @@ function EngineLensWrapper({ model: m }: GtmLensProps) {
   );
 }
 
-// ── people: the shared People object and their cross-channel appearances (find-references). ──
-// Uses the shell's cross-lens selection (selected/onSelect) so a person stays lit across lenses.
-function PeopleLensWrapper({ model: m, selected, onSelect }: GtmLensProps) {
-  return <PeopleLens people={m.people} channels={m.channels} selected={selected} onSelect={onSelect} />;
-}
-
-// ── experiment-matrix: ICP × claim × channel grid of live hypotheses. ──
-function ExperimentMatrixLensWrapper({ model: m, selected, onSelect }: GtmLensProps) {
-  return (
-    <ExperimentMatrixLens
-      experiments={m.experiments}
-      claims={m.claims}
-      icp={m.icp}
-      channels={m.channels}
-      selected={selected}
-      onSelect={onSelect}
-    />
-  );
-}
-
 const LENSES: LensDef<GtmCanvasModel, never>[] = [
   { id: "channel-flow", label: "Channel flow", Component: ChannelFlowLens },
   { id: "engine", label: "Engine", Component: EngineLensWrapper },
-  { id: "people", label: "People", Component: PeopleLensWrapper },
-  { id: "experiment-matrix", label: "Experiment matrix", Component: ExperimentMatrixLensWrapper },
 ];
 
 // Lens metadata (id + label) for the command dock's switcher lives in the sibling `lens-meta.ts`
 // (a non-component module) so this file only exports components and fast-refresh stays intact.
 
 export function GtmCanvas({
-  model, defaultLensId = "channel-flow", activeLensId, onLensChange, chromeless, onSelectObject,
+  model, activeLensId, chromeless,
 }: {
   model: GtmCanvasModel;
-  defaultLensId?: "channel-flow" | "engine";
-  activeLensId?: string;
-  onLensChange?: (id: string) => void;
+  // The altitude is CONTROLLED by channel state, derived inline by the host (engine on the overview,
+  // channel-flow with a channel open) — not stored. App reuses ONE GtmCanvas instance across both
+  // branches, so the lens must be a controlled prop: an uncontrolled default only seeds the shell's
+  // state once and would strand the reused instance on the stale lens when the branch flips.
+  activeLensId: "channel-flow" | "engine";
   chromeless?: boolean;
-  // Bubble an object selection out (lens id + object id) so the host can open find-references.
-  onSelectObject?: (lensId: string, id: string) => void;
 }) {
   return (
     <CanvasShell<GtmCanvasModel, never>
       model={model}
       lenses={LENSES}
-      defaultLensId={defaultLensId}
+      defaultLensId={activeLensId}
+      activeLensId={activeLensId}
       layoutId="gtm-lens"
       isEmpty={false}
       empty={null}
-      activeLensId={activeLensId}
-      onLensChange={onLensChange}
       chromeless={chromeless}
-      onSelectObject={onSelectObject}
     />
   );
 }

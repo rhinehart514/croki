@@ -316,5 +316,29 @@ export function createStepRuntime({ agentInvoker, skillLoader, codeTransforms = 
         return { ok: true, items: upstream ?? [], meta: { kind: "code", ref: node.ref, applied: false, error: err?.message } };
       }
     },
+    // A terminal is a human-operated source: the founder runs a real shell on the canvas and commits
+    // its captured output (config.output) as the dataset the graph consumes. The runner owns no
+    // intelligence and never re-runs the shell during an automated pass — it only emits what the
+    // founder already produced. Uncommitted → an honest empty result (applied:false), never a failure.
+    async terminal(node) {
+      const output = node.config?.output;
+      if (Array.isArray(output)) {
+        return { ok: true, items: output, meta: { kind: "terminal", applied: true, source: "committed" } };
+      }
+      if (typeof output === "string" && output.trim()) {
+        return { ok: true, items: [{ output }], meta: { kind: "terminal", applied: true, source: "committed" } };
+      }
+      return { ok: true, items: [], meta: { kind: "terminal", applied: false, source: "uncommitted" } };
+    },
+    // Workbench surfaces — human-operated, never auto-execute. A query node can emit a committed result
+    // set (config.output); a web node produces nothing into the graph. Both are honest no-ops at run time.
+    async query(node) {
+      const output = node.config?.output;
+      if (Array.isArray(output)) return { ok: true, items: output, meta: { kind: "query", applied: true } };
+      return { ok: true, items: [], meta: { kind: "query", applied: false } };
+    },
+    async web() {
+      return { ok: true, items: [], meta: { kind: "web", applied: false } };
+    },
   };
 }

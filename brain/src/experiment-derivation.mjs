@@ -1,0 +1,92 @@
+// Experiment derivation — a run actually PRODUCES a GtmExperiment.
+//
+// One live hypothesis per channel (mirrors the GtmExperiment shape in ui/src/types.ts): the channel's
+// goal is the hypothesis, the drafted approach is the variable under test, the audience source is held
+// constant, and the founder's gate decisions are the result. Derived from real run state only — any
+// field that can't be grounded is left undefined (honest blank), never fabricated. It is upserted into
+// the existing sharedContext.experiments on run completion and again on gate resolution, exactly where
+// promoteEntrantsFromRun already promotes the run's people, so the experiment-matrix lens fills with
+// real data and "watch it run experiments" becomes literally true.
+
+import { loadProject, updateSharedContext } from "./project-store.mjs";
+
+export function deriveExperimentFromRun({ graph, result, sharedContext } = {}) {
+  const channelId = graph?.id ?? result?.graphId ?? null;
+  if (!channelId) return null;
+  const graphNodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
+  const resultNodes = result?.nodes ?? {};
+
+  // Founder gate decisions are the run's real outcome signal.
+  let staged = 0, approved = 0, rejected = 0, hasGate = false;
+  for (const nodeResult of Object.values(resultNodes)) {
+    if (nodeResult?.category !== "gate") continue;
+    hasGate = true;
+    for (const item of nodeResult.items ?? []) {
+      staged += 1;
+      if (item.approvalStatus === "approved") approved += 1;
+      else if (item.approvalStatus === "rejected") rejected += 1;
+    }
+  }
+
+  const pending = Array.isArray(result?.pendingGates) && result.pendingGates.length > 0;
+  const status = pending ? "running" : "complete";
+
+  // A short, real outcome string from the gate decisions (e.g. "5 staged · 3 approved · 2 rejected").
+  let resultStr;
+  if (hasGate && staged > 0) {
+    const parts = [`${staged} staged`];
+    if (approved) parts.push(`${approved} approved`);
+    if (rejected) parts.push(`${rejected} rejected`);
+    if (pending && !approved && !rejected) parts.push("awaiting review");
+    resultStr = parts.join(" · ");
+  }
+
+  // The graph's own shape names what's being tested vs held constant.
+  const sourceNode = graphNodes.find((n) => n.category === "source");
+  const measureNode = graphNodes.find((n) => n.category === "measure");
+  const gateNode = graphNodes.find((n) => n.category === "gate");
+  const draftNode = [...graphNodes].reverse().find((n) => n.kind === "agent" || n.category === "generate");
+
+  const icpLabel = typeof sharedContext?.icp?.label === "string" ? sharedContext.icp.label
+    : typeof sharedContext?.icp?.name === "string" ? sharedContext.icp.name
+    : undefined;
+  const claimId = graphNodes.map((n) => n.config?.claimId).find((id) => typeof id === "string") || undefined;
+
+  const experiment = {
+    id: `exp-${channelId}`,
+    channelId,
+    hypothesis: (graph?.objective || graph?.name || "").trim() || undefined,
+    variable: draftNode?.label || undefined,
+    heldConstant: sourceNode?.label || undefined,
+    successSignal: measureNode?.label || (gateNode ? `Founder approval at "${gateNode.label}"` : undefined),
+    status,
+    result: resultStr ?? null,
+    claimId,
+    icp: icpLabel,
+  };
+  // Keep the persisted object honestly blank, not littered with undefined keys.
+  for (const key of Object.keys(experiment)) {
+    if (experiment[key] === undefined) delete experiment[key];
+  }
+  return experiment;
+}
+
+// Upsert the derived experiment into sharedContext.experiments (one per channel, keyed by id). A
+// re-run UPDATES the same experiment rather than piling up duplicates, so the matrix shows one live
+// hypothesis per channel evolving. Best-effort: a derivation or write failure never breaks the run.
+export function recordExperimentFromRun({ projectId = "default", graph, result } = {}, options = {}) {
+  try {
+    const opts = { ...options, projectId };
+    const project = loadProject(opts);
+    const experiment = deriveExperimentFromRun({ graph, result, sharedContext: project.sharedContext });
+    if (!experiment) return null;
+    const current = Array.isArray(project.sharedContext?.experiments) ? project.sharedContext.experiments : [];
+    const next = current.some((e) => e?.id === experiment.id)
+      ? current.map((e) => (e?.id === experiment.id ? { ...e, ...experiment } : e))
+      : [...current, experiment];
+    updateSharedContext({ experiments: next }, opts);
+    return experiment;
+  } catch {
+    return null;
+  }
+}

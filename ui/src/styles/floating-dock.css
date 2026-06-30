@@ -289,6 +289,13 @@
 }
 .fdock-problems-fix:hover { border-color: var(--ghost); background: var(--surface); }
 
+/* The Issues surface as a summoned card: a vertical list with a per-row action row. The primary
+   action (Fix with Claude) is the dark fill; opening the node is the quiet secondary. */
+.issues-card { display: flex; flex-direction: column; gap: 10px; }
+.issues-card-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.fdock-problems-fix.primary { color: var(--surface); background: var(--ink); border-color: var(--ink); }
+.fdock-problems-fix.primary:hover { background: var(--ink-2, #1a1a1a); border-color: var(--ink-2, #1a1a1a); }
+
 /* Pipeline-audit popover header (the audit moved off the canvas into the dock). */
 .fdock-pop-title {
   display: flex; align-items: center; justify-content: space-between;

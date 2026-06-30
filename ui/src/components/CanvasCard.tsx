@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { motion, useDragControls } from "motion/react";
-import { X } from "lucide-react";
+import { X, Share2, Check } from "lucide-react";
 import { SPRING } from "@/lib/springs";
+import type { GtmExperiment } from "@/types";
 import "@/styles/canvas-card.css";
 
 // CanvasCard — the unit of the agentic canvas. Nothing navigates to its own page; Claude (or the
@@ -52,5 +54,75 @@ export function CanvasCard({
       </header>
       <div className="canvas-card-body">{children}</div>
     </motion.section>
+  );
+}
+
+// ExperimentArtifactCard — THE shareable atom. A resolved experiment told as a four-beat story in
+// the proven/green state: the hypothesis, what ran, what happened, and what it tells you. It is the
+// founder's log and the clip at once — the Share button copies the same four beats as plain text so
+// posting the win is one click. Renders as a CanvasCard body, or inline in the experiment matrix.
+export function ExperimentArtifactCard({
+  exp, channelName,
+}: {
+  exp: GtmExperiment;
+  channelName?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  const hypothesis = (exp.hypothesis || exp.variable || "").trim();
+  const ran: string[] = [];
+  if (exp.variant && exp.control) ran.push(`${exp.variant} vs ${exp.control}`);
+  else if (exp.variant) ran.push(exp.variant);
+  if (exp.heldConstant) ran.push(`holding ${exp.heldConstant} constant`);
+  if (channelName) ran.push(`in ${channelName}`);
+  const ranLine = ran.join(" · ");
+  const result = (exp.result || "").trim();
+  const learned = (exp.successSignal || "").trim();
+
+  const share = () => {
+    const text = [
+      hypothesis && `Hypothesis: ${hypothesis}`,
+      ranLine && `What ran: ${ranLine}`,
+      result && `Result: ${result}`,
+      learned && `What it tells you: ${learned}`,
+    ].filter(Boolean).join("\n");
+    void navigator.clipboard?.writeText(text);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  };
+
+  return (
+    <div className="exp-artifact">
+      <div className="exp-artifact-head">
+        <span className="exp-artifact-badge">Proven</span>
+        <button className="exp-artifact-share" type="button" onClick={share} title="Copy this result to share">
+          {copied ? <Check size={13} /> : <Share2 size={13} />}
+          {copied ? "Copied" : "Share"}
+        </button>
+      </div>
+      {hypothesis && (
+        <section className="exp-artifact-section">
+          <span className="exp-artifact-label">Hypothesis</span>
+          <p className="exp-artifact-value exp-artifact-hypothesis">{hypothesis}</p>
+        </section>
+      )}
+      {ranLine && (
+        <section className="exp-artifact-section">
+          <span className="exp-artifact-label">What ran</span>
+          <p className="exp-artifact-value">{ranLine}</p>
+        </section>
+      )}
+      {result && (
+        <section className="exp-artifact-section exp-artifact-result">
+          <span className="exp-artifact-label">What happened</span>
+          <p className="exp-artifact-value">{result}</p>
+        </section>
+      )}
+      {learned && (
+        <section className="exp-artifact-section">
+          <span className="exp-artifact-label">What it tells you</span>
+          <p className="exp-artifact-value">{learned}</p>
+        </section>
+      )}
+    </div>
   );
 }
