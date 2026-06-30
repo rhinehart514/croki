@@ -272,6 +272,21 @@ export type GtmExperiment = {
   // The experiment may carry the claim/ICP it tests so the matrix can place it without guessing.
   claimId?: string | null;
   icp?: string | null;
+  // The strategic layer this experiment tests. OPEN string (never an enum); defaults to "channels".
+  targetLayer?: string;
+  // The arms under test. A channel is one arm KIND, so a single-channel run carries one channel arm.
+  arms?: { id: string; label?: string; kind: string; channelId?: string | null; value?: unknown }[];
+  // The founder's resolution. Set ONLY by the founder, NEVER derived — a re-run must never write it.
+  verdict?: {
+    decision: "keep" | "kill" | "double-down";
+    winningArmId?: string | null;
+    decidedAt: string;
+    decidedBy: string;
+  };
+  // Where a resolved verdict writes its belief back (which layer, which belief path).
+  updates?: { layer: string; beliefPath: string };
+  // Whether this experiment was derived from a run or stated by the founder.
+  origin?: "derived" | "stated";
 };
 
 export type SharedContext = {

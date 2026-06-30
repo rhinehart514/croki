@@ -308,6 +308,11 @@ async function getPerson({ personId, projectId }) {
   return brainGet(`/api/projects/${encodeURIComponent(id)}/people/${encodeURIComponent(personId)}`);
 }
 
+async function getBoard({ projectId } = {}) {
+  const id = await resolveProjectId(projectId);
+  return brainGet(`/api/projects/${encodeURIComponent(id)}/board`);
+}
+
 async function findReferences({ kind, id: refId, projectId }) {
   const id = await resolveProjectId(projectId);
   const params = new URLSearchParams({ kind: kind ?? "" });
@@ -537,6 +542,16 @@ const TOOLS = [
       required: ["personId"],
     },
     handler: getPerson,
+  },
+  {
+    name: "get_board",
+    description: "Read the GTM Board: the nine belief layers grouped Strategy (ICP, problem/trigger, positioning, offer), Motion (channels, staged work), and Loop (people, measure, learn). Each layer carries the current belief, how it is grounded (stated by the founder, gated, or derived from runs), a confidence and status (assumed/testing/validated/blind) DERIVED from real verdicts, approvals, and citations, and the experiments testing it. A layer with no signal honestly reports blind. Read-only; derived, never seeded, and never gates a run. Defaults to the active project.",
+    inputSchema: {
+      type: "object",
+      properties: { projectId: { type: "string", description: "Optional. Defaults to the active project." } },
+      required: [],
+    },
+    handler: getBoard,
   },
   {
     name: "find_references",

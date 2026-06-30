@@ -222,6 +222,59 @@ describe("anti-cage: fixed stage skeleton not re-introduced as live code", () =>
     });
   }
 
+  // GUARD D — The GTM Board never gates a run. The board (board.mjs) and belief write-back
+  // (belief-writeback.mjs) are a PURE READ + a strictly-post-gate decision record. A belief's
+  // groundingMode or status must NEVER be read by a run path to decide whether to run — the founder
+  // gate stays the only checkpoint, and relaxPreGateContracts must stay in place so a freely-composed
+  // graph still reaches that gate on whatever it produced.
+  describe("anti-cage: the GTM Board never gates a run", () => {
+    const RUN_PATH_FILES = [
+      "graph.mjs",
+      "graph-operations.mjs",
+      "step-runners.mjs",
+      "source-entry.mjs",
+      "workflow-composer.mjs",
+      "operator-runtime.mjs",
+    ];
+
+    for (const filename of RUN_PATH_FILES) {
+      it(`${filename} does not import the board or branch a run on a belief's groundingMode/status`, () => {
+        const src = stripComments(readSrc(filename));
+        assert.ok(
+          !/from\s+["']\.\/board\.mjs["']/.test(src),
+          `${filename} imports board.mjs. The board is a pure read; a run path must never depend on it.`,
+        );
+        assert.ok(
+          !/from\s+["']\.\/belief-writeback\.mjs["']/.test(src),
+          `${filename} imports belief-writeback.mjs. Belief write-back is strictly post-gate, not a run dependency.`,
+        );
+        // The run path must not even mention groundingMode — reading it to decide whether to run is the
+        // exact fourth cage this guard forbids.
+        assert.ok(
+          !src.includes("groundingMode"),
+          `${filename} references groundingMode. A belief's grounding must never decide whether a run runs.`,
+        );
+      });
+    }
+
+    it("source-entry.mjs still zeroes pre-gate contracts so the gate stays the only checkpoint", () => {
+      const src = readSrc("source-entry.mjs");
+      assert.ok(
+        src.includes("relaxPreGateContracts"),
+        "relaxPreGateContracts must remain in source-entry.mjs — every pre-gate node's contract is zeroed " +
+        "so a freely-composed graph reaches the founder gate, the ONLY contract checkpoint.",
+      );
+    });
+
+    it("board.mjs and belief-writeback.mjs exist and the board imports only pure readers", () => {
+      const board = stripComments(readSrc("board.mjs"));
+      // The board must not import the run engine or any write/execute path.
+      assert.ok(!/from\s+["']\.\/graph\.mjs["']/.test(board), "board.mjs must not import the run engine (graph.mjs).");
+      assert.ok(!/runGraph/.test(board), "board.mjs must never call runGraph — it is a pure read.");
+      readSrc("belief-writeback.mjs"); // throws if missing
+    });
+  });
+
   // Bonus check: the word "skeleton" appearing in COMPOSE_PROMPT or related runtime strings
   // would be a signal that the skeleton was brought back as an instruction to the model.
   // The current COMPOSE_PROMPT explicitly tells the model NOT to default to any fixed shape.

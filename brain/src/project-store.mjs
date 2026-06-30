@@ -91,6 +91,18 @@ function reconcileClaimList(source = [], previous = []) {
     .filter(Boolean);
 }
 
+// Idempotent default-fill for STATED shared-context fields added after a project was first written.
+// It only adds a field when it is missing, so it never churns existing claims, experiments, or any
+// other data on load — a re-load is a no-op once the field exists.
+function ensureStatedDefaults(sharedContext) {
+  if (!sharedContext) return sharedContext;
+  if (sharedContext.offer && typeof sharedContext.offer === "object") return sharedContext;
+  return {
+    ...sharedContext,
+    offer: { price: "", unit: "", terms: "", alternatives: [], status: "inferred" },
+  };
+}
+
 // Reconcile a shared context so that `claims` (structured, source of truth) and `product.claims`
 // (the flat string[] projection every legacy reader expects) are consistent. Structured claims win
 // when present; otherwise the legacy `product.claims` strings are the source. Idempotent.
@@ -153,6 +165,16 @@ function emptySharedContext() {
       alternatives: [],
       status: "inferred",
     },
+    // The offer — a founder-STATED layer (price, unit, terms, the alternatives it competes against).
+    // Stated, not derived: the founder asserts it. Trigger and Play are DERIVED elsewhere (from
+    // appearance triggers and the run ledger), so they get no stated field here.
+    offer: {
+      price: "",
+      unit: "",
+      terms: "",
+      alternatives: [],
+      status: "inferred",
+    },
     icp: {
       query: "",
       geography: "",
@@ -198,7 +220,7 @@ function migrateProject(project, options = {}) {
     return {
       ...project,
       teamId: project.teamId ?? null,
-      sharedContext: normalizeSharedContextClaims(project.sharedContext ?? emptySharedContext()),
+      sharedContext: ensureStatedDefaults(normalizeSharedContextClaims(project.sharedContext ?? emptySharedContext())),
     };
   }
   const next = {
@@ -232,7 +254,7 @@ function migrateProject(project, options = {}) {
   if (!next.channels.some((channel) => channel.id === next.activeChannelId)) {
     next.activeChannelId = next.channels[0]?.id ?? null;
   }
-  next.sharedContext = normalizeSharedContextClaims(next.sharedContext);
+  next.sharedContext = ensureStatedDefaults(normalizeSharedContextClaims(next.sharedContext));
   return next;
 }
 
@@ -617,7 +639,7 @@ export function updateSharedContext(patch, options = {}) {
   const allowed = new Set([
     "repository", "product", "positioning", "icp", "founderTaste",
     "contacts", "outcomes", "experiments", "artifacts", "productFeedback",
-    "claims",
+    "claims", "offer",
   ]);
   const unknown = Object.keys(patch ?? {}).filter((key) => !allowed.has(key));
   if (unknown.length) throw new Error(`Unsupported shared-context fields: ${unknown.join(", ")}`);

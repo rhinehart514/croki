@@ -51,10 +51,12 @@ import { getProductModel } from "./product-model-store.mjs";
 import { getDesignState } from "./design-state-store.mjs";
 import { createClaudeProductModeler } from "./product-model-generator.mjs";
 import { buildRunGrounding } from "./run-grounding.mjs";
-import { loadFeedbackLedger, recordFeedbackSignalsFromRun } from "./feedback-ledger.mjs";
+import { loadFeedbackLedger } from "./feedback-ledger.mjs";
+import { recordRunDerivations } from "./run-derivation.mjs";
+import { getBoard } from "./board.mjs";
+import { applyExperimentVerdict } from "./belief-writeback.mjs";
 import { listToolRegistry, approveToolBirth } from "./tool-registry-store.mjs";
-import { listPeople, getPerson, promoteEntrantsFromRun } from "./person-store.mjs";
-import { recordExperimentFromRun } from "./experiment-derivation.mjs";
+import { listPeople, getPerson } from "./person-store.mjs";
 import { loadClarity, addClarity, removeClarity } from "./clarity-store.mjs";
 import { findReferences, deriveChannelFeeds, deriveDirectedFeeds, createDerivedSourceLoader } from "./cross-reference.mjs";
 import { compareChannelRuns } from "./run-compare.mjs";
@@ -416,6 +418,35 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, { projectId, person });
     } catch (err) {
       json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // GTM Board — the nine belief layers (Strategy / Motion / Loop), derived purely from real state.
+  // Read-only: it never writes, never triggers a run, and never gates one.
+  const projectBoardMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/board$/);
+  if (req.method === "GET" && projectBoardMatch) {
+    try {
+      const projectId = decodeURIComponent(projectBoardMatch[1]);
+      json(res, 200, getBoard({ projectId }));
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Belief write-back — the founder resolves an experiment with a verdict. STRICTLY post-gate: this only
+  // records a decision the founder has already made; it never gates or triggers a run.
+  const projectVerdictMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/experiments\/([^/]+)\/verdict$/);
+  if (req.method === "POST" && projectVerdictMatch) {
+    try {
+      const projectId = decodeURIComponent(projectVerdictMatch[1]);
+      const experimentId = decodeURIComponent(projectVerdictMatch[2]);
+      const body = await readBody(req);
+      const saved = applyExperimentVerdict({ projectId, experimentId, verdict: body?.verdict ?? body });
+      json(res, 200, { experiments: saved.sharedContext.experiments, updatedAt: saved.updatedAt });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return;
   }
@@ -1205,10 +1236,9 @@ const server = http.createServer(async (req, res) => {
         stepRuntime: liveStepRuntime({ cwd: project.sharedContext?.repository?.repo || process.cwd() }),
       });
       const saved = recordFlowRun(body.graph, result);
-      const feedback = recordFeedbackSignalsFromRun({ projectId: project.id, graph: body.graph, result });
-      promoteEntrantsFromRun({ projectId: project.id, channelId: body.graph.id, result });
-      // A run produces an experiment: derive one live hypothesis per channel from the gate decisions.
-      recordExperimentFromRun({ projectId: project.id, graph: body.graph, result });
+      // One seam fires all three run-completion derivations: taste ledger, People promotion, and the
+      // per-channel experiment. Read-derived GTM state only — never health, never a gate.
+      const { feedback } = recordRunDerivations({ projectId: project.id, graph: body.graph, result });
       // Graph failures are domain results. Return the full per-node result so
       // the client can render partial success, blocked nodes, and recovery.
       json(res, 200, {
@@ -1271,9 +1301,7 @@ const server = http.createServer(async (req, res) => {
         onEvent: send,
       });
       const saved = recordFlowRun(body.graph, result);
-      const feedback = recordFeedbackSignalsFromRun({ projectId: project.id, graph: body.graph, result });
-      promoteEntrantsFromRun({ projectId: project.id, channelId: body.graph.id, result });
-      recordExperimentFromRun({ projectId: project.id, graph: body.graph, result });
+      const { feedback } = recordRunDerivations({ projectId: project.id, graph: body.graph, result });
       send({
         type: "run_done",
         result: {

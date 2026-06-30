@@ -63,12 +63,47 @@ export function deriveExperimentFromRun({ graph, result, sharedContext } = {}) {
     result: resultStr ?? null,
     claimId,
     icp: icpLabel,
+    // A channel run tests one strategic layer; by default the "channels" layer (which motion wins).
+    // targetLayer is an OPEN string, never an enum — the board groups experiments by it.
+    targetLayer: "channels",
+    // The arm under test. A channel is one arm KIND, so a single-channel run carries one channel arm.
+    arms: [{
+      id: `arm-${channelId}`,
+      label: draftNode?.label || graph?.name || channelId,
+      kind: "channel",
+      channelId,
+    }],
+    // This experiment was DERIVED from a run, not stated by the founder.
+    origin: "derived",
   };
+  // CRITICAL: `verdict` and `updates` are NEVER part of a derived patch. A re-run upserts via
+  // `{ ...existing, ...experiment }`; omitting these two keys here means a founder's verdict (the only
+  // hand that may set it) can never be clobbered by a later derivation. This is the founder-decision wall.
   // Keep the persisted object honestly blank, not littered with undefined keys.
   for (const key of Object.keys(experiment)) {
     if (experiment[key] === undefined) delete experiment[key];
   }
   return experiment;
+}
+
+// Read-time shim: an experiment persisted before targetLayer/arms existed is back-filled so every
+// reader (the board, the matrix) sees the full shape without a migration write. Idempotent and
+// non-destructive — it never overwrites a real targetLayer, arms, verdict, or origin already present.
+export function normalizeExperiment(exp) {
+  if (!exp || typeof exp !== "object") return exp;
+  const targetLayer = typeof exp.targetLayer === "string" && exp.targetLayer.trim()
+    ? exp.targetLayer
+    : "channels";
+  const arms = Array.isArray(exp.arms) && exp.arms.length
+    ? exp.arms
+    : [{
+        id: `arm-${exp.channelId ?? exp.id}`,
+        label: exp.variable || exp.hypothesis || exp.channelId || exp.id,
+        kind: "channel",
+        channelId: exp.channelId ?? null,
+      }];
+  const origin = exp.origin === "stated" ? "stated" : "derived";
+  return { ...exp, targetLayer, arms, origin };
 }
 
 // Upsert the derived experiment into sharedContext.experiments (one per channel, keyed by id). A

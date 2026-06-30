@@ -5,9 +5,7 @@ import { createClaudeEvaluator } from "./eval.mjs";
 import { createClaudeProductModeler } from "./product-model-generator.mjs";
 import { loadFlow, recordFlowRun, saveFlow } from "./flow-store.mjs";
 import { createDerivedSourceLoader } from "./cross-reference.mjs";
-import { recordFeedbackSignalsFromRun } from "./feedback-ledger.mjs";
-import { promoteEntrantsFromRun } from "./person-store.mjs";
-import { recordExperimentFromRun } from "./experiment-derivation.mjs";
+import { recordRunDerivations } from "./run-derivation.mjs";
 import { applyGraphOperations, validateGraph } from "./graph-operations.mjs";
 import { listConnectors, runGraph } from "./graph.mjs";
 import { executeDomainCommand } from "./domain-commands.mjs";
@@ -525,9 +523,7 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
   });
   if (stream) session = live;
   const stored = recordFlowRun(flow.graph, result, options);
-  const feedback = recordFeedbackSignalsFromRun({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
-  promoteEntrantsFromRun({ projectId: session.projectId || "default", channelId: flow.graph.id, result }, options);
-  recordExperimentFromRun({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
+  const { feedback } = recordRunDerivations({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
   let next = {
     ...session,
     lastRunId: result.runId,
@@ -1136,9 +1132,7 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
     authorizeRelease: () => authorizeGateRelease(session, payload, options),
   });
   recordFlowRun(flow.graph, result, options);
-  const feedback = recordFeedbackSignalsFromRun({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
-  promoteEntrantsFromRun({ projectId: session.projectId || "default", channelId: flow.graph.id, result }, options);
-  recordExperimentFromRun({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
+  const { feedback } = recordRunDerivations({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
   session = addEvent({
     ...session,
     lastRunId: result.runId,
