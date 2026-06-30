@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GTM Board · 7 Pipeline — RodentRadar</title>
+<style>
+  /* ── GTM IDE tokens (mirrored from ui/src/index.css) ───────────────────── */
+  :root{
+    --ink:#18181b; --ink-2:#3f3f46; --muted:#71717a; --faint:#a1a1aa; --ghost:#d4d4d8;
+    --line:#ececec; --line-2:#e4e4e7; --surface:#fff; --surface-2:#f4f4f5;
+    --canvas:#fafafa; --canvas-dot:#e4e4e7;
+    --proven:#16a34a; --proven-soft:#f0fdf4;
+    --gap:#d97706; --gap-soft:#fffbeb;
+    --danger:#dc2626; --danger-soft:#fef2f2;
+    --blind:#a1a1aa;
+    --r-sm:6px; --r-md:9px; --r-lg:12px; --r-xl:16px;
+    --shadow-card:0 1px 2px rgba(24,24,27,.04),0 1px 3px rgba(24,24,27,.06);
+    --shadow-pop:0 4px 12px rgba(24,24,27,.08),0 12px 32px rgba(24,24,27,.10);
+    --font:"Geist Variable",ui-sans-serif,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    --mono:"Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{
+    font-family:var(--font); color:var(--ink); background:var(--canvas);
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+    font-size:14px; line-height:1.5;
+  }
+
+  /* ── App shell ─────────────────────────────────────────────────────────── */
+  .app{display:grid; grid-template-columns:52px 1fr 340px; height:100vh;}
+
+  /* lens rail */
+  .lensrail{
+    background:var(--surface); border-right:1px solid var(--line);
+    display:flex; flex-direction:column; align-items:center; gap:4px; padding-top:14px;
+  }
+  .lensrail .logo{
+    width:28px;height:28px;border-radius:8px;background:var(--ink);color:#fff;
+    display:grid;place-items:center;font-weight:700;font-size:13px;margin-bottom:10px;
+  }
+  .lensbtn{
+    width:34px;height:34px;border-radius:9px;border:1px solid transparent;background:transparent;
+    color:var(--faint);display:grid;place-items:center;cursor:pointer;
+  }
+  .lensbtn svg{width:18px;height:18px;}
+  .lensbtn:hover{background:var(--surface-2);color:var(--ink-2);}
+  .lensbtn.active{background:var(--ink);color:#fff;}
+
+  /* center column */
+  .center{display:flex;flex-direction:column;min-width:0;
+    background:
+      radial-gradient(var(--canvas-dot) 1px, transparent 1px) 0 0/22px 22px,
+      var(--canvas);
+  }
+
+  /* top chrome */
+  .topbar{
+    display:flex;align-items:center;gap:14px;padding:12px 20px;
+    background:var(--surface);border-bottom:1px solid var(--line);
+  }
+  .crumb{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);}
+  .crumb b{color:var(--ink);font-weight:600;}
+  .crumb .sep{color:var(--ghost);}
+  .phasechip{
+    font-size:11px;font-weight:600;letter-spacing:.02em;color:var(--ink-2);
+    background:var(--surface-2);border:1px solid var(--line-2);border-radius:999px;
+    padding:2px 9px;
+  }
+  .spacer{flex:1;}
+  .zoom{
+    display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);
+    border:1px solid var(--line-2);border-radius:999px;padding:4px 6px 4px 12px;background:var(--surface);
+  }
+  .zoom .seg{display:flex;gap:2px;background:var(--surface-2);border-radius:999px;padding:2px;}
+  .zoom .seg span{padding:3px 10px;border-radius:999px;font-size:11px;font-weight:560;color:var(--muted);}
+  .zoom .seg span.on{background:var(--ink);color:#fff;}
+
+  /* board-altitude glyph strip (the zoomed-out line) */
+  .altstrip{
+    margin:16px 20px 0;background:var(--surface);border:1px solid var(--line-2);
+    border-radius:var(--r-lg);box-shadow:var(--shadow-card);
+    display:flex;align-items:center;gap:16px;padding:11px 16px;
+  }
+  .altstrip .tag{
+    font-size:10px;font-weight:680;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);
+    writing-mode:initial;white-space:nowrap;
+  }
+  .altstrip .cap{font-size:12.5px;color:var(--ink-2);flex:1;min-width:0;}
+  .altstrip .cap b{color:var(--ink);font-weight:600;}
+  .altstrip .cap .amberword{color:var(--gap);font-weight:600;}
+
+  /* canvas board */
+  .board{flex:1;overflow:auto;padding:18px 20px 28px;}
+  .panel{
+    background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-xl);
+    box-shadow:var(--shadow-card);padding:18px 18px 8px;
+  }
+  .panel-head{display:flex;align-items:baseline;gap:12px;margin:2px 4px 10px;}
+  .panel-head h2{font-size:15px;font-weight:600;margin:0;color:var(--ink);}
+  .panel-head .sub{font-size:12px;color:var(--muted);}
+  .runningpill{
+    margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;
+    color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line-2);border-radius:999px;padding:3px 10px;
+  }
+  .runningpill .dot{width:7px;height:7px;border-radius:50%;background:var(--proven);box-shadow:0 0 0 3px var(--proven-soft);}
+
+  /* arm row labels overlaid left of svg handled inside svg; legend below */
+  .svgwrap{width:100%;overflow-x:auto;}
+  svg.funnel{display:block;width:100%;height:auto;}
+
+  .axisnote{
+    display:flex;justify-content:space-between;color:var(--faint);font-size:10.5px;
+    padding:2px 6px 12px;border-top:1px dashed var(--line-2);margin-top:6px;
+  }
+
+  /* right inspector */
+  .inspector{
+    background:var(--surface);border-left:1px solid var(--line);overflow-y:auto;
+    display:flex;flex-direction:column;
+  }
+  .insec{padding:16px 18px;border-bottom:1px solid var(--line);}
+  .insec h3{
+    font-size:11px;font-weight:680;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);
+    margin:0 0 12px;display:flex;align-items:center;gap:7px;
+  }
+
+  /* problems rail items */
+  .leak{
+    display:flex;gap:11px;align-items:flex-start;padding:10px 11px;border-radius:var(--r-md);
+    border:1px solid var(--line-2);margin-bottom:8px;background:var(--surface);cursor:pointer;
+  }
+  .leak:hover{border-color:var(--ghost);background:var(--surface-2);}
+  .leak .sev{width:6px;align-self:stretch;border-radius:3px;flex:0 0 auto;}
+  .leak.danger .sev{background:var(--danger);}
+  .leak.gap .sev{background:var(--gap);}
+  .leak .body{min-width:0;flex:1;}
+  .leak .where{font-size:12.5px;font-weight:600;color:var(--ink);}
+  .leak .flow{font-size:11.5px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums;}
+  .leak .drop{font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums;}
+  .leak.danger .drop{color:var(--danger);}
+  .leak.gap .drop{color:var(--gap);}
+
+  /* stage roster header */
+  .rosterhead{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px;}
+  .rosterhead .stage{font-size:13px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:7px;}
+  .rosterhead .stage .gatemark{
+    font-size:10px;font-weight:680;color:var(--gap);background:var(--gap-soft);
+    border:1px solid #f3dca6;border-radius:5px;padding:1px 6px;letter-spacing:.03em;
+  }
+  .rosterhead .count{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums;}
+
+  /* person card (ObjectCard idiom) */
+  .pcard{
+    display:flex;gap:11px;align-items:flex-start;padding:10px 11px;border-radius:var(--r-md);
+    border:1px solid var(--line-2);margin-bottom:8px;background:var(--surface);cursor:pointer;
+    transition:border-color .12s,box-shadow .12s;
+  }
+  .pcard:hover{border-color:var(--ghost);box-shadow:var(--shadow-card);}
+  .pcard.sel{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink);}
+  .pglyph{
+    width:30px;height:30px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;
+    font-size:11px;font-weight:680;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line-2);
+  }
+  .pcard .pmain{min-width:0;flex:1;}
+  .pcard .pname{font-size:12.5px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:6px;}
+  .pcard .parm{font-size:9.5px;font-weight:680;letter-spacing:.03em;border-radius:5px;padding:1px 5px;text-transform:uppercase;}
+  .arm-pco{color:#1d4ed8;background:#eff6ff;border:1px solid #dbeafe;}
+  .arm-rest{color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line-2);}
+  .arm-both{color:var(--gap);background:var(--gap-soft);border:1px solid #f3dca6;}
+  .pcard .pco-name{font-size:11px;color:var(--muted);margin-top:1px;}
+  .pcard .ptrig{
+    font-size:11px;color:var(--ink-2);margin-top:6px;display:flex;gap:6px;align-items:flex-start;
+    background:var(--surface-2);border:1px solid var(--line-2);border-radius:6px;padding:5px 7px;
+  }
+  .pcard .ptrig .wlbl{font-size:9px;font-weight:700;letter-spacing:.05em;color:var(--faint);text-transform:uppercase;flex:0 0 auto;margin-top:1px;}
+
+  /* experiment legend card (ExperimentArtifactCard idiom) */
+  .expcard{border:1px solid var(--line-2);border-radius:var(--r-lg);overflow:hidden;}
+  .expcard .ehead{padding:11px 13px;display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--line);}
+  .expcard .ehead .vbadge{font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);
+    background:var(--surface-2);border:1px solid var(--line-2);border-radius:5px;padding:2px 7px;}
+  .expcard .ehead .etitle{font-size:12.5px;font-weight:600;color:var(--ink);}
+  .expcard .ehead .estatus{margin-left:auto;font-size:10.5px;font-weight:600;color:var(--proven);display:flex;align-items:center;gap:5px;}
+  .expcard .ehead .estatus .dot{width:6px;height:6px;border-radius:50%;background:var(--proven);box-shadow:0 0 0 3px var(--proven-soft);}
+  .arm-row{display:flex;align-items:center;gap:10px;padding:10px 13px;}
+  .arm-row + .arm-row{border-top:1px solid var(--line);}
+  .arm-row .swatch{width:12px;height:12px;border-radius:3px;flex:0 0 auto;}
+  .arm-row .aname{font-size:12px;font-weight:600;color:var(--ink);}
+  .arm-row .averdict{font-size:11px;color:var(--muted);margin-top:1px;}
+  .arm-row .anum{margin-left:auto;font-size:12px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .arm-row .anum small{display:block;font-size:10px;font-weight:500;color:var(--faint);text-align:right;}
+
+  .prov{
+    display:inline-flex;align-items:center;gap:6px;font-size:10.5px;color:var(--muted);
+    font-family:var(--mono);margin-top:10px;
+  }
+  .prov .pill{background:var(--surface-2);border:1px solid var(--line-2);border-radius:5px;padding:1px 6px;color:var(--ink-2);}
+
+  /* svg text helpers */
+  .s-stage{font:600 12px var(--font);fill:var(--ink);}
+  .s-stage-gate{font:600 12px var(--font);fill:var(--gap);}
+  .s-sub{font:11px var(--font);fill:var(--faint);}
+  .s-vol{font:600 11px var(--mono);}
+  .s-arm{font:600 12.5px var(--font);fill:var(--ink);}
+  .s-armsub{font:10.5px var(--font);fill:var(--muted);}
+  .s-blind{font:600 10.5px var(--font);fill:var(--blind);}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- LENS RAIL -->
+  <nav class="lensrail">
+    <div class="logo">G</div>
+    <button class="lensbtn" title="Channel flow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 6h6M7 18h6M13 6l4 5M13 18l4-5"/></svg></button>
+    <button class="lensbtn" title="People"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/><circle cx="17" cy="9" r="2.4"/></svg></button>
+    <button class="lensbtn active" title="Pipeline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h18M5 9h14M7 13h10M10 17h4M11 21h2"/></svg></button>
+    <button class="lensbtn" title="Experiments"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg></button>
+    <button class="lensbtn" title="Engine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg></button>
+  </nav>
+
+  <!-- CENTER -->
+  <div class="center">
+    <div class="topbar">
+      <div class="crumb">
+        <b>RodentRadar</b><span class="sep">/</span>
+        <span class="phasechip">Loop</span>
+        <span class="sep">›</span><b>7 · Pipeline</b>
+      </div>
+      <div class="spacer"></div>
+      <div class="zoom">
+        <span>Semantic zoom</span>
+        <div class="seg"><span>Board</span><span class="on">Pipeline band</span></div>
+      </div>
+    </div>
+
+    <!-- BOARD-ALTITUDE GLYPH (the one line you see zoomed all the way out) -->
+    <div class="altstrip">
+      <div class="tag">At board altitude</div>
+      <!-- tiny tapering pipe sparkline -->
+      <svg width="170" height="30" viewBox="0 0 170 30" aria-hidden="true">
+        <path d="M2,5 L40,7 L78,9 L100,13 L100,17 L78,21 L40,23 L2,25 Z" fill="#e9e9ec"/>
+        <path d="M100,13 L130,14.2 L168,14.6 L168,15.4 L130,15.8 L100,17 Z" fill="#f0f0f2"/>
+        <rect x="98.5" y="3" width="3" height="24" rx="1.5" fill="#d97706"/>
+      </svg>
+      <div class="cap">
+        <b>Pipeline · 47 sourced → 3 pilots</b> — biggest pinch at the
+        <span class="amberword">founder gate</span> (9 approved of 31 drafted).
+      </div>
+    </div>
+
+    <!-- ZOOMED-IN BOARD -->
+    <div class="board">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>The pipe</h2>
+          <span class="sub">distinct People surviving each stage · band thickness = headcount</span>
+          <span class="runningpill"><span class="dot"></span>ICP experiment running · 2 arms</span>
+        </div>
+
+        <div class="svgwrap">
+        <svg class="funnel" viewBox="0 0 1010 440" role="img" aria-label="Staged flow funnel, two experiment arms">
+          <defs>
+            <linearGradient id="ribbonPco" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#e7edf6"/><stop offset="1" stop-color="#eef1f5"/>
+            </linearGradient>
+            <linearGradient id="ribbonRest" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#ededf0"/><stop offset="1" stop-color="#f3f3f5"/>
+            </linearGradient>
+          </defs>
+
+          <!-- stage axis: gridlines + labels -->
+          <g>
+            <!-- vertical guides -->
+            <line x1="150" y1="80" x2="150" y2="392" stroke="#ececec"/>
+            <line x1="300" y1="80" x2="300" y2="392" stroke="#ececec"/>
+            <line x1="450" y1="80" x2="450" y2="392" stroke="#ececec"/>
+            <line x1="750" y1="80" x2="750" y2="392" stroke="#ececec"/>
+            <line x1="870" y1="80" x2="870" y2="392" stroke="#ececec"/>
+
+            <!-- stage labels (top) -->
+            <text class="s-stage" x="150" y="66" text-anchor="middle">Sourced</text>
+            <text class="s-sub"   x="150" y="80" text-anchor="middle">source · 47</text>
+            <text class="s-stage" x="300" y="66" text-anchor="middle">Qualify</text>
+            <text class="s-sub"   x="300" y="80" text-anchor="middle">filter</text>
+            <text class="s-stage" x="450" y="66" text-anchor="middle">Draft</text>
+            <text class="s-sub"   x="450" y="80" text-anchor="middle">generate · 31</text>
+            <text class="s-stage-gate" x="600" y="66" text-anchor="middle">Gate</text>
+            <text class="s-sub"   x="600" y="80" text-anchor="middle" style="fill:#d97706">founder · 9 of 31</text>
+            <text class="s-stage" x="750" y="66" text-anchor="middle">Conversation</text>
+            <text class="s-sub"   x="750" y="80" text-anchor="middle">execute</text>
+            <text class="s-stage" x="870" y="66" text-anchor="middle">Pilot</text>
+            <text class="s-sub"   x="870" y="80" text-anchor="middle">$49 · 3</text>
+          </g>
+
+          <!-- universal anchors -->
+          <text class="s-sub" x="60" y="240" text-anchor="middle" transform="rotate(-90 60 240)">from Ground (context)</text>
+
+          <!-- ── PCO ARM LANE ────────────────────────────────────────────── -->
+          <text class="s-arm"    x="150" y="118" text-anchor="start" transform="translate(-92,0)">PCO Outbound</text>
+          <text class="s-armsub" x="58" y="135">PCO owners</text>
+
+          <!-- ribbon -->
+          <path d="M150,105 L300,111.4 L450,116.3 L600,138.75 L750,142 L870,143
+                   L870,157 L750,158 L600,161.25 L450,183.7 L300,188.6 L150,195 Z"
+                fill="url(#ribbonPco)" stroke="#d7dde6" stroke-width="1"/>
+          <!-- steepest taper tint: Draft -> Gate (the leak) -->
+          <path d="M450,116.3 L600,138.75 L600,161.25 L450,183.7 Z" fill="#fef2f2" stroke="#f3c0c0" stroke-width="1"/>
+          <!-- stage band caps -->
+          <rect x="147" y="105" width="6" height="90"   rx="3" fill="#c8d2e0"/>
+          <rect x="297" y="111.4" width="6" height="77.2" rx="3" fill="#c8d2e0"/>
+          <rect x="447" y="116.3" width="6" height="67.4" rx="3" fill="#c8d2e0"/>
+          <rect x="747" y="142" width="6" height="16"   rx="3" fill="#c8d2e0"/>
+          <rect x="867" y="143" width="6" height="14"   rx="3" fill="#c8d2e0"/>
+          <!-- volume labels -->
+          <text class="s-vol" x="150" y="150" text-anchor="middle" fill="#3f3f46">28</text>
+          <text class="s-vol" x="300" y="153" text-anchor="middle" fill="#3f3f46">24</text>
+          <text class="s-vol" x="450" y="153" text-anchor="middle" fill="#3f3f46">21</text>
+          <text class="s-vol" x="600" y="153.5" text-anchor="middle" fill="#92400e">7</text>
+          <text class="s-vol" x="750" y="153" text-anchor="middle" fill="#3f3f46">5</text>
+          <text class="s-vol" x="870" y="153" text-anchor="middle" fill="#3f3f46">2</text>
+
+          <!-- ── RESTAURANT ARM LANE ─────────────────────────────────────── -->
+          <text class="s-arm"    x="58" y="312">Restaurant Outbound</text>
+          <text class="s-armsub" x="58" y="328">Restaurant ops</text>
+
+          <path d="M150,309.5 L300,324 L450,324 L600,333 L750,333 L870,333
+                   L870,347 L750,347 L600,347 L450,356 L300,356 L150,370.5 Z"
+                fill="url(#ribbonRest)" stroke="#dcdce0" stroke-width="1"/>
+          <!-- steepest taper tint: Sourced -> Qualify (dies at Qualify) -->
+          <path d="M150,309.5 L300,324 L300,356 L150,370.5 Z" fill="#fffbeb" stroke="#f0d9a5" stroke-width="1"/>
+          <rect x="147" y="309.5" width="6" height="61" rx="3" fill="#cfcfd6"/>
+          <rect x="297" y="324" width="6" height="32"  rx="3" fill="#cfcfd6"/>
+          <rect x="447" y="324" width="6" height="32"  rx="3" fill="#cfcfd6"/>
+          <rect x="747" y="333" width="6" height="14"  rx="3" fill="#cfcfd6"/>
+          <rect x="867" y="333" width="6" height="14"  rx="3" fill="#cfcfd6"/>
+          <text class="s-vol" x="150" y="344" text-anchor="middle" fill="#3f3f46">19</text>
+          <text class="s-vol" x="300" y="344" text-anchor="middle" fill="#3f3f46">10</text>
+          <text class="s-vol" x="450" y="344" text-anchor="middle" fill="#3f3f46">10</text>
+          <text class="s-vol" x="600" y="344" text-anchor="middle" fill="#92400e">2</text>
+          <text class="s-vol" x="750" y="344" text-anchor="middle" fill="#3f3f46">1</text>
+          <text class="s-vol" x="870" y="344" text-anchor="middle" fill="#3f3f46">1</text>
+
+          <!-- ── THE GATE: one amber seam cutting across both lanes = the wall ── -->
+          <line x1="600" y1="78" x2="600" y2="394" stroke="#d97706" stroke-width="2"/>
+          <line x1="600" y1="78" x2="600" y2="394" stroke="#fffbeb" stroke-width="6" opacity="0.5"/>
+          <line x1="600" y1="78" x2="600" y2="394" stroke="#d97706" stroke-width="2"/>
+          <g transform="translate(600,398)">
+            <rect x="-46" y="0" width="92" height="20" rx="6" fill="#fffbeb" stroke="#f0d9a5"/>
+            <text x="0" y="14" text-anchor="middle" style="font:600 10.5px var(--font);fill:#b45309">⌘ Founder gate</text>
+          </g>
+
+          <!-- ── COLLISION SANKEY: one proven shared identity across both arms ── -->
+          <path d="M300,188.6 C300,240 300,272 300,324" fill="none" stroke="#a1a1aa" stroke-width="1.4" stroke-dasharray="3 3" opacity="0.6"/>
+          <circle cx="300" cy="256" r="9" fill="#fff" stroke="#d97706" stroke-width="1.4"/>
+          <text x="300" y="259.5" text-anchor="middle" style="font:600 8px var(--mono);fill:#b45309">MW</text>
+          <text x="316" y="252" style="font:500 10px var(--font);fill:#71717a">shared identity</text>
+          <text x="316" y="264" style="font:600 10px var(--font);fill:#3f3f46">Marcus Webb · in both arms</text>
+
+          <!-- ── HONEST BLANK: Measure / Learn not yet run (--blind dashed tail) ── -->
+          <path d="M870,143 L965,146 L965,154 L870,157 Z" fill="none" stroke="#a1a1aa" stroke-width="1" stroke-dasharray="4 4" opacity="0.7"/>
+          <path d="M870,333 L965,336 L965,344 L870,347 Z" fill="none" stroke="#a1a1aa" stroke-width="1" stroke-dasharray="4 4" opacity="0.7"/>
+          <text class="s-blind" x="965" y="60" text-anchor="middle">Measure</text>
+          <text class="s-blind" x="965" y="74" text-anchor="middle" style="font-weight:500;fill:#a1a1aa">not yet run</text>
+        </svg>
+        </div>
+
+        <div class="axisnote">
+          <span>Ground · context</span>
+          <span>steepest taper tinted by severity · gate is the only amber · dashed = no signal yet</span>
+          <span>Learn · loop back</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT INSPECTOR -->
+  <aside class="inspector">
+
+    <!-- Problems rail: where the pipeline leaks -->
+    <section class="insec">
+      <h3><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="2.4"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>Where the pipeline leaks</h3>
+      <div class="leak danger">
+        <div class="sev"></div>
+        <div class="body">
+          <div class="where">PCO · Draft → Gate</div>
+          <div class="flow">21 drafted &nbsp;→&nbsp; 7 approved</div>
+        </div>
+        <div class="drop">−67%</div>
+      </div>
+      <div class="leak gap">
+        <div class="sev"></div>
+        <div class="body">
+          <div class="where">Restaurant · Sourced → Qualify</div>
+          <div class="flow">19 sourced &nbsp;→&nbsp; 10 qualified</div>
+        </div>
+        <div class="drop">−47%</div>
+      </div>
+      <p style="font-size:11.5px;color:var(--muted);margin:4px 2px 0;line-height:1.5;">
+        Two arms, two different deaths: PCO survives Qualify and dies at <b style="color:var(--gap)">the gate</b>;
+        Restaurant dies at Qualify. The variable they share is the read.
+      </p>
+    </section>
+
+    <!-- Stage roster: who is standing at the Gate -->
+    <section class="insec">
+      <h3>Standing at this stage</h3>
+      <div class="rosterhead">
+        <div class="stage">Gate <span class="gatemark">⌘ FOUNDER</span></div>
+        <div class="count">9 awaiting · 22 held</div>
+      </div>
+
+      <div class="pcard sel">
+        <div class="pglyph">DO</div>
+        <div class="pmain">
+          <div class="pname">Dana Okafor <span class="parm arm-pco">PCO</span></div>
+          <div class="pco-name">Owner · Tri-County Pest Solutions</div>
+          <div class="ptrig"><span class="wlbl">why now</span>Posted about a failed bait-station audit last week.</div>
+        </div>
+      </div>
+
+      <div class="pcard">
+        <div class="pglyph" style="border-color:#f0d9a5;background:var(--gap-soft);color:#b45309">MW</div>
+        <div class="pmain">
+          <div class="pname">Marcus Webb <span class="parm arm-both">both arms</span></div>
+          <div class="pco-name">Ops lead · Webb Facilities</div>
+          <div class="ptrig"><span class="wlbl">why now</span>RFP for sensor monitoring closes Friday. Appears in PCO + Restaurant — fatigue risk.</div>
+        </div>
+      </div>
+
+      <div class="pcard">
+        <div class="pglyph">LR</div>
+        <div class="pmain">
+          <div class="pname">Luis Romero <span class="parm arm-pco">PCO</span></div>
+          <div class="pco-name">Owner · ClearLine Exterminators</div>
+          <div class="ptrig"><span class="wlbl">why now</span>Hiring 2 techs — scaling routes, needs coverage proof.</div>
+        </div>
+      </div>
+
+      <div class="pcard">
+        <div class="pglyph">PS</div>
+        <div class="pmain">
+          <div class="pname">Priya Shah <span class="parm arm-rest">Restaurant</span></div>
+          <div class="pco-name">GM · Harvest Table Group</div>
+          <div class="ptrig"><span class="wlbl">why now</span>Health-code inspection cited rodent activity in March.</div>
+        </div>
+      </div>
+
+      <p style="font-size:11px;color:var(--faint);margin:6px 2px 0;">
+        Selecting a person lights them in People · selection persists across lenses.
+      </p>
+    </section>
+
+    <!-- Experiment legend: the arm comparison -->
+    <section class="insec" style="border-bottom:none;">
+      <h3>The experiment</h3>
+      <div class="expcard">
+        <div class="ehead">
+          <span class="vbadge">ICP</span>
+          <span class="etitle">PCO owners vs Restaurant ops</span>
+          <span class="estatus"><span class="dot"></span>running</span>
+        </div>
+        <div class="arm-row">
+          <span class="swatch" style="background:#1d4ed8"></span>
+          <div>
+            <div class="aname">PCO Outbound</div>
+            <div class="averdict">survives Qualify · pinches at gate</div>
+          </div>
+          <div class="anum">2<small>pilots</small></div>
+        </div>
+        <div class="arm-row">
+          <span class="swatch" style="background:#a1a1aa"></span>
+          <div>
+            <div class="aname">Restaurant Outbound</div>
+            <div class="averdict">dies at Qualify · weak fit</div>
+          </div>
+          <div class="anum">1<small>pilot</small></div>
+        </div>
+      </div>
+      <div class="prov">
+        <span class="pill">provenance</span> derive_pipeline · executionOrder × distinct People (identityKey)
+      </div>
+    </section>
+
+  </aside>
+</div>
+</body>
+</html>

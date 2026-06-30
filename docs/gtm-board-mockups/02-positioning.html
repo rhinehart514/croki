@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GTM Board · 3 Positioning — RodentRadar</title>
+<style>
+  /* ── Tokens lifted 1:1 from ui/src/index.css ───────────────────────────── */
+  :root{
+    --ink:#18181b; --ink-2:#3f3f46; --muted:#71717a; --faint:#a1a1aa; --ghost:#d4d4d8;
+    --line:#ececec; --line-2:#e4e4e7; --surface:#ffffff; --surface-2:#f4f4f5;
+    --canvas:#fafafa; --canvas-dot:#e4e4e7;
+    --link:#2563eb;
+    --proven:#16a34a; --proven-soft:#f0fdf4;
+    --gap:#d97706;    --gap-soft:#fffbeb;   /* AMBER — founder gate ONLY */
+    --danger:#dc2626; --blind:#a1a1aa;
+    --text-xs:.6875rem; --text-sm:.8125rem; --text-base:.875rem; --text-md:1rem;
+    --text-lg:1.0625rem; --text-xl:1.3125rem; --text-2xl:1.625rem;
+    --r-sm:6px; --r-md:9px; --r-lg:12px; --r-xl:16px;
+    --shadow-card:0 1px 2px rgba(24,24,27,.04), 0 1px 3px rgba(24,24,27,.06);
+    --shadow-pop:0 4px 12px rgba(24,24,27,.08), 0 12px 32px rgba(24,24,27,.10);
+    --ease-out:cubic-bezier(.16,1,.3,1);
+    --font:"Geist Variable",ui-sans-serif,-apple-system,BlinkMacSystemFont,sans-serif;
+    --mono:"Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{
+    font-family:var(--font); color:var(--ink); background:var(--canvas);
+    font-size:var(--text-base); line-height:1.5;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+    overflow:hidden;
+  }
+  .mono{font-family:var(--mono); font-feature-settings:"tnum" 1;}
+
+  /* ── App shell ─────────────────────────────────────────────────────────── */
+  .shell{display:flex; flex-direction:column; height:100vh;}
+  .toolbar{
+    height:54px; flex:0 0 54px; display:flex; align-items:center; gap:14px;
+    padding:0 18px; border-bottom:1px solid var(--line); background:var(--surface);
+  }
+  .brand{display:flex; align-items:center; gap:9px; font-weight:600; letter-spacing:-.01em;}
+  .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--ink);}
+  .crumb{display:flex; align-items:center; gap:7px; color:var(--muted); font-size:var(--text-sm);}
+  .crumb b{color:var(--ink); font-weight:600;}
+  .crumb .sep{color:var(--ghost);}
+  .toolbar .spacer{flex:1;}
+  .zoomtoggle{
+    display:flex; align-items:center; gap:0; border:1px solid var(--line-2);
+    border-radius:var(--r-md); overflow:hidden; background:var(--surface);
+  }
+  .zoomtoggle button{
+    border:0; background:transparent; padding:6px 11px; font-size:var(--text-xs);
+    color:var(--muted); cursor:pointer; font-family:var(--mono);
+  }
+  .zoomtoggle button.on{background:var(--ink); color:#fff;}
+  .pill-run{
+    display:inline-flex; align-items:center; gap:6px; padding:6px 12px;
+    border:1px solid var(--line-2); border-radius:999px; background:var(--surface);
+    font-size:var(--text-sm); color:var(--ink-2);
+  }
+  .live-dot{width:7px;height:7px;border-radius:50%;background:var(--link);
+    box-shadow:0 0 0 0 rgba(37,99,235,.45); animation:pulse 2s var(--ease-out) infinite;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(37,99,235,.40);}70%{box-shadow:0 0 0 6px rgba(37,99,235,0);}100%{box-shadow:0 0 0 0 rgba(37,99,235,0);}}
+
+  .body{flex:1; display:flex; min-height:0;}
+
+  /* ── Left: semantic-zoom band rail ─────────────────────────────────────── */
+  .rail{
+    flex:0 0 198px; border-right:1px solid var(--line); background:var(--surface);
+    padding:14px 0; display:flex; flex-direction:column; gap:2px; overflow:auto;
+  }
+  .rail-eyebrow{
+    font-family:var(--mono); font-size:var(--text-xs); letter-spacing:.06em;
+    text-transform:uppercase; color:var(--faint); padding:0 16px 6px;
+  }
+  .phase-label{
+    font-family:var(--mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--faint); padding:11px 16px 4px;
+  }
+  .band-row{
+    display:flex; align-items:center; gap:10px; padding:7px 16px; cursor:pointer;
+    border-left:2px solid transparent; color:var(--ink-2); font-size:var(--text-sm);
+  }
+  .band-row:hover{background:var(--surface-2);}
+  .band-row .num{font-family:var(--mono); font-size:var(--text-xs); color:var(--faint); width:12px;}
+  .band-row .glyph{flex:0 0 26px; height:6px; border-radius:3px; background:var(--ghost);}
+  .band-row.grounded .glyph{background:var(--proven);}
+  .band-row.assumed .glyph{background:linear-gradient(90deg,var(--ghost),var(--ghost) 60%,transparent 60%);
+    border:1px dashed var(--ghost); height:8px; background-clip:padding-box;}
+  .band-row.blind .glyph{background:repeating-linear-gradient(90deg,var(--ghost),var(--ghost) 3px,transparent 3px,transparent 6px);}
+  .band-row.active{
+    background:var(--surface-2); border-left-color:var(--ink); color:var(--ink); font-weight:600;
+  }
+  .band-row.active .num{color:var(--ink);}
+
+  /* ── Center: spine + map ───────────────────────────────────────────────── */
+  .stage{flex:1; min-width:0; position:relative; overflow:auto;
+    background:
+      radial-gradient(circle at center, var(--canvas-dot) .8px, transparent .8px) 0 0/22px 22px;
+    background-color:var(--canvas);
+    padding:26px 30px 30px;}
+
+  /* statement spine */
+  .spine{
+    background:var(--surface); border:1px solid var(--line-2); border-radius:var(--r-lg);
+    box-shadow:var(--shadow-card); padding:16px 20px; max-width:980px; margin:0 auto 22px;
+  }
+  .spine-eyebrow{
+    display:flex; align-items:center; gap:10px; margin-bottom:9px;
+    font-family:var(--mono); font-size:var(--text-xs); letter-spacing:.05em;
+    text-transform:uppercase; color:var(--faint);
+  }
+  .statement{font-size:var(--text-xl); line-height:1.45; letter-spacing:-.012em; color:var(--ink);}
+  .statement .slot{border-bottom:1.5px solid var(--line-2); padding-bottom:1px;}
+  .statement .slot-promise{color:var(--ink); font-weight:600; border-bottom-color:var(--proven);}
+  .statement .slot-problem{color:var(--ink-2);}
+  .statement .slot-alt{color:var(--muted);}
+  .statement .slot-contested{
+    position:relative; color:var(--ink); font-weight:500; cursor:help;
+    background:linear-gradient(transparent 62%, rgba(37,99,235,.12) 0); border-bottom:1.5px dashed var(--link);
+  }
+  .contest-note{
+    margin-top:10px; display:inline-flex; align-items:center; gap:7px; font-size:var(--text-xs);
+    color:var(--muted); background:var(--surface-2); border:1px solid var(--line);
+    border-radius:999px; padding:4px 10px;
+  }
+  .contest-note .c-dot{width:6px;height:6px;border-radius:50%;background:var(--link);}
+
+  /* verdict badge — grounded(green) / assumed(open zinc) / generic(dashed) / blind(gray).
+     NOTE: amber is deliberately NOT used here; it is reserved for the founder gate. */
+  .verdict{
+    display:inline-flex; align-items:center; gap:5px; font-family:var(--mono);
+    font-size:10px; letter-spacing:.04em; text-transform:uppercase;
+    padding:3px 8px; border-radius:999px; white-space:nowrap;
+  }
+  .verdict .vd{width:6px;height:6px;border-radius:50%;}
+  .verdict.grounded{background:var(--proven-soft); color:var(--proven); border:1px solid rgba(22,163,74,.25);}
+  .verdict.grounded .vd{background:var(--proven);}
+  .verdict.assumed{background:var(--surface); color:var(--ink-2); border:1px solid var(--ghost);}
+  .verdict.assumed .vd{background:transparent; border:1.5px solid var(--muted); width:7px;height:7px;}
+  .verdict.generic{background:var(--surface); color:var(--muted); border:1px dashed var(--ghost);}
+  .verdict.generic .vd{background:var(--ghost);}
+  .verdict.blind{background:var(--surface-2); color:var(--blind); border:1px solid var(--line-2);}
+  .verdict.blind .vd{background:var(--blind);}
+
+  /* map card */
+  .mapcard{
+    background:var(--surface); border:1px solid var(--line-2); border-radius:var(--r-lg);
+    box-shadow:var(--shadow-card); max-width:980px; margin:0 auto; padding:18px 20px 20px;
+  }
+  .mapcard-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;}
+  .mapcard-title{font-size:var(--text-sm); color:var(--muted); font-family:var(--mono);
+    letter-spacing:.04em; text-transform:uppercase;}
+  .mapcard-legend{display:flex; align-items:center; gap:16px; font-size:var(--text-xs); color:var(--muted);}
+  .lg{display:inline-flex; align-items:center; gap:6px;}
+  .lg .s{width:11px;height:11px;border-radius:50%;}
+  .lg .s.you{background:var(--ink);}
+  .lg .s.ghost{background:#fff; border:1.5px solid var(--ghost);}
+  .lg .s.cand{background:#fff; border:1.5px dashed var(--link);}
+
+  svg{display:block; width:100%; height:auto;}
+
+  /* ── Right: detail panel ───────────────────────────────────────────────── */
+  .panel{
+    flex:0 0 360px; border-left:1px solid var(--line); background:var(--surface);
+    overflow:auto; padding:18px 18px 26px; display:flex; flex-direction:column; gap:16px;
+  }
+  .p-section-eyebrow{
+    font-family:var(--mono); font-size:var(--text-xs); letter-spacing:.06em; text-transform:uppercase;
+    color:var(--faint); display:flex; align-items:center; justify-content:space-between;
+  }
+  .dot-card{
+    border:1px solid var(--line-2); border-radius:var(--r-md); padding:13px 14px; background:var(--surface);
+  }
+  .dot-card .dc-head{display:flex; align-items:center; gap:8px; margin-bottom:9px;}
+  .dc-glyph{width:14px;height:14px;border-radius:50%;background:var(--ink); flex:0 0 auto;
+    box-shadow:0 0 0 3px rgba(24,24,27,.08);}
+  .dc-name{font-weight:600; letter-spacing:-.01em; font-size:var(--text-md); flex:1;}
+  .dc-promise{font-size:var(--text-sm); color:var(--ink-2); margin-bottom:11px;}
+  .claims-eyebrow{font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase;
+    color:var(--faint); margin-bottom:7px;}
+  .claim{display:flex; align-items:flex-start; gap:9px; padding:8px 0; border-top:1px solid var(--line);}
+  .claim:first-of-type{border-top:0;}
+  .claim-txt{flex:1; font-size:var(--text-sm); color:var(--ink-2); line-height:1.4;}
+
+  /* experiment card */
+  .exp-card{
+    border:1px solid var(--line-2); border-radius:var(--r-md); overflow:hidden; background:var(--surface);
+  }
+  .exp-top{padding:12px 14px 11px; border-bottom:1px solid var(--line);}
+  .exp-status{display:inline-flex; align-items:center; gap:6px; font-family:var(--mono);
+    font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--link);}
+  .exp-status .ed{width:7px;height:7px;border-radius:50%;background:var(--link);}
+  .exp-hyp{font-size:var(--text-sm); color:var(--ink); margin-top:8px; line-height:1.45;}
+  .exp-hyp b{font-weight:600;}
+  .arm{display:flex; flex-direction:column; gap:6px; padding:11px 14px; border-top:1px solid var(--line);}
+  .arm-head{display:flex; align-items:center; gap:8px;}
+  .arm-tag{font-family:var(--mono); font-size:10px; letter-spacing:.04em; text-transform:uppercase;
+    padding:2px 6px; border-radius:4px;}
+  .arm-tag.variant{color:var(--link); background:rgba(37,99,235,.08); border:1px solid rgba(37,99,235,.22);}
+  .arm-tag.control{color:var(--muted); background:var(--surface-2); border:1px solid var(--line-2);}
+  .arm-leading{margin-left:auto; font-family:var(--mono); font-size:10px; letter-spacing:.04em;
+    text-transform:uppercase; color:var(--proven); display:none;}
+  .arm.is-leading .arm-leading{display:inline;}
+  .arm-line{font-size:var(--text-sm); color:var(--ink-2); line-height:1.4;}
+  .arm-metric{display:flex; align-items:center; gap:10px;}
+  .bar{flex:1; height:6px; border-radius:3px; background:var(--surface-2); overflow:hidden;}
+  .bar > i{display:block; height:100%; border-radius:3px;}
+  .bar.variant > i{background:var(--link);}
+  .bar.control > i{background:var(--ghost);}
+  .arm-num{font-family:var(--mono); font-size:var(--text-sm); color:var(--ink); width:38px; text-align:right;}
+  .exp-signal{padding:10px 14px; background:var(--surface-2); border-top:1px solid var(--line);
+    font-size:var(--text-xs); color:var(--muted); display:flex; gap:7px; align-items:flex-start;}
+  .exp-signal b{color:var(--ink-2); font-weight:600;}
+
+  /* gate row — the ONLY amber on the screen */
+  .gate-row{
+    display:flex; align-items:center; gap:9px; padding:11px 14px; border-top:1px solid var(--line);
+    background:var(--gap-soft);
+  }
+  .gate-chip{display:inline-flex; align-items:center; gap:6px; font-family:var(--mono);
+    font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--gap); font-weight:600;}
+  .gate-chip .gd{width:7px;height:7px;border-radius:2px; background:var(--gap);}
+  .gate-note{font-size:var(--text-xs); color:#92400e; line-height:1.35;}
+
+  /* verdict actions */
+  .verdicts{display:flex; gap:7px; padding:12px 14px; border-top:1px solid var(--line);}
+  .vbtn{flex:1; border:1px solid var(--line-2); background:var(--surface); border-radius:var(--r-sm);
+    padding:7px 4px; font-size:var(--text-xs); cursor:pointer; display:flex; flex-direction:column;
+    align-items:center; gap:3px; color:var(--ink-2);}
+  .vbtn:hover{background:var(--surface-2);}
+  .vbtn .vk{font-family:var(--mono); font-size:10px; letter-spacing:.03em; text-transform:uppercase;}
+  .vbtn.keep .vk{color:var(--proven);} .vbtn.kill .vk{color:var(--danger);} .vbtn.dd .vk{color:var(--ink);}
+  .vbtn small{color:var(--faint); font-size:9px; line-height:1.2; text-align:center;}
+
+  .test-btn{
+    width:100%; border:1px solid var(--line-2); background:var(--surface); border-radius:var(--r-sm);
+    padding:9px 12px; font-size:var(--text-sm); color:var(--ink); cursor:pointer; text-align:left;
+    display:flex; align-items:center; gap:9px;
+  }
+  .test-btn:hover{background:var(--surface-2);}
+  .test-btn .tk{font-family:var(--mono); font-size:var(--text-xs); color:var(--muted); margin-left:auto;}
+
+  .meta{font-size:var(--text-xs); color:var(--faint); line-height:1.5;}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- toolbar -->
+  <div class="toolbar">
+    <div class="brand"><span class="dot"></span> RodentRadar</div>
+    <div class="crumb">
+      <span>GTM Board</span><span class="sep">/</span>
+      <span>Strategy</span><span class="sep">/</span>
+      <b>3 · Positioning</b>
+    </div>
+    <span class="spacer"></span>
+    <span class="pill-run mono"><span class="live-dot"></span>A/B one-liner live</span>
+    <div class="zoomtoggle">
+      <button>Board</button>
+      <button class="on">Layer</button>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- semantic-zoom band rail -->
+    <aside class="rail">
+      <div class="rail-eyebrow">9-layer board</div>
+
+      <div class="phase-label">Strategy</div>
+      <div class="band-row assumed"><span class="num">1</span><span class="glyph"></span>Market / ICP</div>
+      <div class="band-row assumed"><span class="num">2</span><span class="glyph"></span>Problem &amp; Trigger</div>
+      <div class="band-row active assumed"><span class="num">3</span><span class="glyph"></span>Positioning</div>
+      <div class="band-row blind"><span class="num">4</span><span class="glyph"></span>Offer</div>
+
+      <div class="phase-label">Motion</div>
+      <div class="band-row grounded"><span class="num">5</span><span class="glyph"></span>Channels</div>
+      <div class="band-row assumed"><span class="num">6</span><span class="glyph"></span>Plays &amp; Assets</div>
+
+      <div class="phase-label">Loop</div>
+      <div class="band-row blind"><span class="num">7</span><span class="glyph"></span>Pipeline</div>
+      <div class="band-row blind"><span class="num">8</span><span class="glyph"></span>Measurement</div>
+      <div class="band-row blind"><span class="num">9</span><span class="glyph"></span>Learning</div>
+    </aside>
+
+    <!-- center stage -->
+    <main class="stage">
+
+      <!-- the statement spine (the single board-zoom line, lifted) -->
+      <section class="spine">
+        <div class="spine-eyebrow">
+          <span>Positioning statement · Moore template</span>
+          <span class="verdict assumed"><span class="vd"></span>assumed</span>
+        </div>
+        <div class="statement">
+          For <span class="slot slot-contested" title="Contested by the live ICP experiment in layer 1: PCO owners vs restaurant ops">PCO&nbsp;owners</span>
+          <span class="slot slot-problem">blind to which sensors stopped the infestation</span>,
+          <span class="slot">RodentRadar</span> is the only
+          <span class="slot">pest&nbsp;sensor&nbsp;monitoring</span> that
+          <span class="slot slot-promise">proves the win</span>,
+          unlike <span class="slot slot-alt">manual monthly logs</span>.
+        </div>
+        <div class="contest-note">
+          <span class="c-dot"></span>
+          audience slot contested — layer&nbsp;1 ICP experiment is still racing PCO owners vs restaurant ops
+        </div>
+      </section>
+
+      <!-- the 2x2 belief map -->
+      <section class="mapcard">
+        <div class="mapcard-head">
+          <div class="mapcard-title">Competitive belief map · founder-stated</div>
+          <div class="mapcard-legend">
+            <span class="lg"><span class="s you"></span>you</span>
+            <span class="lg"><span class="s cand"></span>A/B candidate</span>
+            <span class="lg"><span class="s ghost"></span>status quo</span>
+          </div>
+        </div>
+
+        <!-- SVG perceptual map -->
+        <svg viewBox="0 0 940 540" role="img" aria-label="Positioning 2x2 belief map">
+          <defs>
+            <marker id="arrow" markerWidth="7" markerHeight="7" refX="5.5" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" fill="#a1a1aa"/>
+            </marker>
+            <pattern id="ownfill" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+              <rect width="8" height="8" fill="#f0fdf4"/>
+              <line x1="0" y1="0" x2="0" y2="8" stroke="#16a34a" stroke-opacity="0.10" stroke-width="2"/>
+            </pattern>
+          </defs>
+
+          <!-- plot frame -->
+          <!-- owned (top-right) quadrant tint -->
+          <rect x="470" y="40" width="400" height="220" fill="url(#ownfill)"/>
+          <text x="858" y="64" text-anchor="end" font-family="'Geist Mono Variable',monospace"
+                font-size="11" letter-spacing="0.04em" fill="#16a34a" opacity="0.85">WHITE SPACE YOU OWN</text>
+
+          <!-- quadrant hairlines -->
+          <line x1="70" y1="40" x2="70" y2="480" stroke="#e4e4e7" stroke-width="1"/>
+          <line x1="70" y1="480" x2="870" y2="480" stroke="#e4e4e7" stroke-width="1"/>
+          <!-- center cross axes -->
+          <line x1="470" y1="40" x2="470" y2="480" stroke="#ececec" stroke-width="1" stroke-dasharray="3 4"/>
+          <line x1="70" y1="260" x2="870" y2="260" stroke="#ececec" stroke-width="1" stroke-dasharray="3 4"/>
+
+          <!-- axis arrows -->
+          <line x1="70" y1="500" x2="870" y2="500" stroke="#a1a1aa" stroke-width="1.25" marker-end="url(#arrow)"/>
+          <line x1="50" y1="480" x2="50" y2="40" stroke="#a1a1aa" stroke-width="1.25" marker-end="url(#arrow)"/>
+
+          <!-- X axis labels (CONFIRMED — founder-stated, solid) -->
+          <text x="92" y="518" font-family="'Geist Mono Variable',monospace" font-size="11"
+                fill="#71717a" letter-spacing="0.03em">generic IoT dashboard</text>
+          <text x="848" y="518" text-anchor="end" font-family="'Geist Mono Variable',monospace" font-size="11"
+                fill="#3f3f46" letter-spacing="0.03em">purpose-built for pest control</text>
+          <!-- Y axis labels (PROPOSED — model, ghosted/dashed until confirmed) -->
+          <g transform="translate(34,470) rotate(-90)">
+            <text x="0" y="0" font-family="'Geist Mono Variable',monospace" font-size="11"
+                  fill="#71717a" letter-spacing="0.03em">just alerts &amp; logs</text>
+          </g>
+          <g transform="translate(34,250) rotate(-90)">
+            <text x="0" y="0" font-family="'Geist Mono Variable',monospace" font-size="11"
+                  fill="#3f3f46" letter-spacing="0.03em">proves outcomes</text>
+            <rect x="-4" y="-14" width="118" height="18" fill="none" stroke="#d4d4d8"
+                  stroke-width="1" stroke-dasharray="3 3" rx="3"/>
+          </g>
+          <!-- axis confirm hint for the proposed Y axis -->
+          <text x="34" y="34" font-family="'Geist Mono Variable',monospace" font-size="10"
+                fill="#a1a1aa">↑ proposed axis — click to confirm</text>
+
+          <!-- status-quo hull (bottom-left blob) -->
+          <path d="M150,360 C120,330 130,300 180,300 C230,292 280,300 320,330
+                   C355,360 350,410 300,428 C240,448 175,420 150,360 Z"
+                fill="#f4f4f5" stroke="#d4d4d8" stroke-width="1" stroke-dasharray="2 4" opacity="0.9"/>
+          <text x="236" y="296" text-anchor="middle" font-family="'Geist Mono Variable',monospace"
+                font-size="10.5" letter-spacing="0.04em" fill="#a1a1aa">STATUS QUO</text>
+
+          <!-- ghost alternative dots -->
+          <g>
+            <circle cx="196" cy="356" r="8" fill="#fff" stroke="#d4d4d8" stroke-width="1.5"/>
+            <text x="210" y="360" font-family="'Geist Variable',sans-serif" font-size="12" fill="#71717a">manual monthly logs</text>
+            <circle cx="172" cy="392" r="8" fill="#fff" stroke="#d4d4d8" stroke-width="1.5"/>
+            <text x="186" y="396" font-family="'Geist Variable',sans-serif" font-size="12" fill="#71717a">no monitoring</text>
+            <circle cx="288" cy="346" r="8" fill="#fff" stroke="#d4d4d8" stroke-width="1.5"/>
+            <text x="302" y="350" font-family="'Geist Variable',sans-serif" font-size="12" fill="#71717a">generic IoT dashboards</text>
+          </g>
+
+          <!-- ============ YOUR DOT, split into two A/B candidates ============ -->
+          <!-- dashed "vs" tie between the two candidate positions (link blue, NOT amber) -->
+          <line x1="690" y1="120" x2="612" y2="206" stroke="#2563eb" stroke-width="1.5"
+                stroke-dasharray="4 4" opacity="0.7"/>
+          <text x="664" y="172" font-family="'Geist Mono Variable',monospace" font-size="10"
+                fill="#2563eb" opacity="0.85" transform="rotate(-47 664 172)">vs</text>
+
+          <!-- the original anchored position, faint, where the dot ghosts FROM -->
+          <circle cx="650" cy="160" r="6" fill="#fff" stroke="#a1a1aa" stroke-width="1" stroke-dasharray="2 2"/>
+
+          <!-- Variant A candidate (the new one-liner under test) -->
+          <g>
+            <circle cx="690" cy="120" r="11" fill="#fff" stroke="#2563eb" stroke-width="2" stroke-dasharray="4 3"/>
+            <circle cx="690" cy="120" r="3.5" fill="#2563eb"/>
+            <g transform="translate(706,108)">
+              <rect x="0" y="0" width="178" height="44" rx="6" fill="#ffffff" stroke="#2563eb" stroke-opacity="0.3"/>
+              <text x="10" y="16" font-family="'Geist Mono Variable',monospace" font-size="9"
+                    letter-spacing="0.04em" fill="#2563eb">VARIANT A · leading</text>
+              <text x="10" y="32" font-family="'Geist Variable',sans-serif" font-size="11.5" fill="#3f3f46">“proves which sensor</text>
+              <text x="10" y="40" font-family="'Geist Variable',sans-serif" font-size="11.5" fill="#3f3f46">stopped the infestation”</text>
+            </g>
+          </g>
+
+          <!-- Control B candidate (the current one-liner) -->
+          <g>
+            <circle cx="612" cy="206" r="11" fill="#fff" stroke="#2563eb" stroke-width="2" stroke-dasharray="4 3"/>
+            <circle cx="612" cy="206" r="3.5" fill="#71717a"/>
+            <g transform="translate(456,212)">
+              <rect x="0" y="0" width="146" height="44" rx="6" fill="#ffffff" stroke="#e4e4e7"/>
+              <text x="10" y="16" font-family="'Geist Mono Variable',monospace" font-size="9"
+                    letter-spacing="0.04em" fill="#71717a">CONTROL B · current</text>
+              <text x="10" y="32" font-family="'Geist Variable',sans-serif" font-size="11.5" fill="#71717a">“24/7 pest sensor</text>
+              <text x="10" y="40" font-family="'Geist Variable',sans-serif" font-size="11.5" fill="#71717a">monitoring for PCOs”</text>
+            </g>
+          </g>
+        </svg>
+      </section>
+    </main>
+
+    <!-- right detail panel -->
+    <aside class="panel">
+
+      <!-- your dot + its claims -->
+      <div>
+        <div class="p-section-eyebrow" style="margin-bottom:9px;">
+          <span>Your position</span>
+          <span class="verdict assumed"><span class="vd"></span>assumed</span>
+        </div>
+        <div class="dot-card">
+          <div class="dc-head">
+            <span class="dc-glyph"></span>
+            <span class="dc-name">RodentRadar</span>
+          </div>
+          <div class="dc-promise">Promise: <b>proves which sensor stopped the infestation</b> — the wedge against attribution-blindness.</div>
+
+          <div class="claims-eyebrow">Claims behind the promise</div>
+          <div class="claim">
+            <span class="verdict assumed" style="margin-top:1px;"><span class="vd"></span>assumed</span>
+            <span class="claim-txt">Proves which sensor stopped the infestation. <span class="meta">derived from product · no win-event evidence yet</span></span>
+          </div>
+          <div class="claim">
+            <span class="verdict generic" style="margin-top:1px;"><span class="vd"></span>generic</span>
+            <span class="claim-txt">Attribution-blindness is the #1 PCO pain. <span class="meta">founder guess · not validated</span></span>
+          </div>
+          <div class="claim">
+            <span class="verdict grounded" style="margin-top:1px;"><span class="vd"></span>grounded</span>
+            <span class="claim-txt">Purpose-built for pest, not generic IoT. <span class="meta">cited from product scan</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- the live A/B experiment -->
+      <div>
+        <div class="p-section-eyebrow" style="margin-bottom:9px;">
+          <span>One-liner A/B · experiment</span>
+        </div>
+        <div class="exp-card">
+          <div class="exp-top">
+            <span class="exp-status"><span class="ed"></span>running · n = 84 sent</span>
+            <div class="exp-hyp">If we lead with <b>“proves which sensor stopped the infestation”</b>, PCO owners reply more than to the generic monitoring line.</div>
+          </div>
+
+          <div class="arm variant is-leading">
+            <div class="arm-head">
+              <span class="arm-tag variant">Variant A</span>
+              <span class="arm-leading">leading</span>
+            </div>
+            <div class="arm-line">“The only pest monitoring that proves which sensor stopped the infestation.”</div>
+            <div class="arm-metric">
+              <span class="bar variant"><i style="width:70%"></i></span>
+              <span class="arm-num">14%</span>
+            </div>
+          </div>
+
+          <div class="arm control">
+            <div class="arm-head">
+              <span class="arm-tag control">Control B</span>
+            </div>
+            <div class="arm-line">“24/7 pest sensor monitoring for PCOs.”</div>
+            <div class="arm-metric">
+              <span class="bar control"><i style="width:30%"></i></span>
+              <span class="arm-num">6%</span>
+            </div>
+          </div>
+
+          <div class="exp-signal">
+            <span>◆</span>
+            <span><b>Decides it:</b> reply rate on PCO outbound. Early read favors A (~2.3×), but n is small — not yet conclusive.</span>
+          </div>
+
+          <!-- the ONLY amber on the screen: the founder gate where the motion goes out -->
+          <div class="gate-row">
+            <span class="gate-chip"><span class="gd"></span>founder gate</span>
+            <span class="gate-note">the outbound that runs this test is staged behind your approval — nothing sent until you release it.</span>
+          </div>
+
+          <!-- keep / kill / double-down verdict -->
+          <div class="verdicts">
+            <button class="vbtn keep"><span class="vk">keep</span><small>promote claim toward grounded, bump version</small></button>
+            <button class="vbtn kill"><span class="vk">kill</span><small>revert dot to control position</small></button>
+            <button class="vbtn dd"><span class="vk">double-down</span><small>spawn next A/B from the winner</small></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- spawn another test from the dot -->
+      <div>
+        <button class="test-btn">
+          <span>Test another one-liner</span>
+          <span class="tk">splits your dot</span>
+        </button>
+        <div class="meta" style="margin-top:8px;">
+          A positioning test splits your dot into candidate positions — it never drops a free-floating pin.
+          The winner snaps solid and becomes the dot's promise; the experiment is the provenance link
+          between the old position and the new one.
+        </div>
+      </div>
+
+    </aside>
+  </div>
+</div>
+</body>
+</html>

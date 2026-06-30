@@ -346,6 +346,38 @@ export function PatternGateReview({
 
 type ReviewState = Record<string, { decision?: "approve" | "reject"; draft: string; editing: boolean }>;
 
+// A staged item can be any shape the composed graph produced — an email draft, a tone-audit verdict,
+// an enriched record. The gate reviews them ALL (output kind is open), so derive a human title and a
+// readable body from the common fields, falling back to a compact key/value preview when there is no
+// prose. Without this the gate showed "no drafts staged" for any item that wasn't literally {draft}.
+const GATE_BODY_FIELDS = ["draft", "body", "message", "text", "content", "summary", "verdictWhy", "highestLeverageFix", "recommendation"];
+const GATE_TITLE_FIELDS = ["name", "title", "subject", "company", "draftId", "type"];
+const GATE_PREVIEW_SKIP = new Set([
+  "items", "meta", "source", "gated", "approved", "approvalStatus", "pendingReview", "editedFrom",
+  "sentAt", "gtmActionId", "draftId", "id", "type", ...GATE_BODY_FIELDS,
+]);
+
+function gateItemTitle(it: GTMItem, fallback: string): string {
+  const r = it as Record<string, unknown>;
+  for (const f of GATE_TITLE_FIELDS) {
+    if (typeof r[f] === "string" && (r[f] as string).trim()) return r[f] as string;
+  }
+  return fallback;
+}
+function gateItemBody(it: GTMItem): string {
+  const r = it as Record<string, unknown>;
+  for (const f of GATE_BODY_FIELDS) {
+    if (typeof r[f] === "string" && (r[f] as string).trim()) return r[f] as string;
+  }
+  // No prose field — surface the meaningful scalar fields so the founder still sees what they approve.
+  return Object.entries(r)
+    .filter(([key, v]) => !GATE_PREVIEW_SKIP.has(key) && v != null && typeof v !== "object")
+    .map(([key, v]) => `${key}: ${typeof v === "boolean" ? (v ? "yes" : "no") : v}`)
+    .join("\n");
+}
+// Only items that carry an editable prose draft can be edited in place; verdicts/records are read-only.
+const gateItemEditable = (it: GTMItem): boolean => typeof (it as Record<string, unknown>).draft === "string";
+
 export function GateReview({
   items, running, onSubmit, onApproveAll,
 }: {
@@ -354,14 +386,14 @@ export function GateReview({
   onSubmit: (decisions: Record<string, GateDecision>) => void;
   onApproveAll: () => void;
 }) {
-  const drafts = items.filter((i) => i.draft);
+  const staged = items;
   const [state, setState] = useState<ReviewState>(() => {
     const init: ReviewState = {};
-    drafts.forEach((it, i) => {
+    staged.forEach((it, i) => {
       init[itemKey(it, i)] = {
         decision: it.approvalStatus === "approved" ? "approve"
           : it.approvalStatus === "rejected" ? "reject" : undefined,
-        draft: it.draft ?? "",
+        draft: gateItemBody(it),
         editing: false,
       };
     });
@@ -374,11 +406,11 @@ export function GateReview({
 
   const submit = () => {
     const out: Record<string, GateDecision> = {};
-    drafts.forEach((it, i) => {
+    staged.forEach((it, i) => {
       const k = itemKey(it, i);
       const v = state[k];
       if (!v?.decision) return;
-      const edited = v.draft.trim() && v.draft.trim() !== (it.draft ?? "").trim();
+      const edited = gateItemEditable(it) && v.draft.trim() && v.draft.trim() !== (it.draft ?? "").trim();
       out[k] = {
         decision: v.decision,
         ...(v.decision === "approve" && edited ? { editedDraft: v.draft } : {}),
@@ -387,10 +419,10 @@ export function GateReview({
     onSubmit(out);
   };
 
-  if (drafts.length === 0) {
+  if (staged.length === 0) {
     return (
       <p className="gate-review-empty">
-        No drafts staged for review yet. Run the loop to generate drafts, then approve, reject, or edit each one.
+        Nothing staged for review yet. Run the loop to stage items, then approve, reject, or edit each one.
       </p>
     );
   }
@@ -399,34 +431,35 @@ export function GateReview({
     <div className="gate-review">
       <div className="gate-review-head">
         <span className="agent-editor-section-label" style={{ marginTop: 0 }}>
-          Review {drafts.length} draft{drafts.length !== 1 ? "s" : ""}
+          Review {staged.length} item{staged.length !== 1 ? "s" : ""}
         </span>
-        <span className="gate-review-progress">{decidedCount}/{drafts.length} decided</span>
+        <span className="gate-review-progress">{decidedCount}/{staged.length} decided</span>
       </div>
 
-      {drafts.map((it, i) => {
+      {staged.map((it, i) => {
         const k = itemKey(it, i);
         const v = state[k];
+        const editable = gateItemEditable(it);
         return (
           <div className={cn("gate-review-card", v?.decision && `gate-${v.decision}`)} key={k}>
             <div className="gate-review-card-head">
-              <span className="gate-review-name">{it.name ?? k}</span>
+              <span className="gate-review-name">{gateItemTitle(it, k)}</span>
               {v?.decision && (
                 <span className={cn("gate-review-pill", `pill-${v.decision}`)}>
                   {v.decision === "approve" ? "Approved" : "Rejected"}
                 </span>
               )}
             </div>
-            {v?.editing ? (
+            {editable && v?.editing ? (
               <textarea
                 className="gate-review-draft-edit"
                 rows={5}
                 value={v.draft}
-                aria-label={`Edit draft for ${it.name ?? k}`}
+                aria-label={`Edit draft for ${gateItemTitle(it, k)}`}
                 onChange={(e) => setItem(k, { draft: e.target.value })}
               />
             ) : (
-              <p className="gate-review-draft">{v?.draft}</p>
+              <p className="gate-review-draft" style={{ whiteSpace: "pre-wrap" }}>{v?.draft}</p>
             )}
             <div className="gate-review-actions">
               <button
@@ -443,13 +476,15 @@ export function GateReview({
               >
                 <X /> Reject
               </button>
-              <button
-                className="gate-btn gate-btn-edit"
-                onClick={() => setItem(k, { editing: !v?.editing })}
-                type="button"
-              >
-                <Pencil /> {v?.editing ? "Done editing" : "Edit"}
-              </button>
+              {editable && (
+                <button
+                  className="gate-btn gate-btn-edit"
+                  onClick={() => setItem(k, { editing: !v?.editing })}
+                  type="button"
+                >
+                  <Pencil /> {v?.editing ? "Done editing" : "Edit"}
+                </button>
+              )}
             </div>
           </div>
         );
@@ -711,6 +746,23 @@ function WorkNodeEditor({
 
   return (
     <div className="agent-editor">
+      {/* For a gate, the review queue is what the founder came here to do — it leads, the connector
+          and data-contract config sit below it. */}
+      {node.category === "gate" ? (
+        <div className="node-editor-section">
+          {result ? (() => {
+            const gateMeta = (result.meta ?? {}) as Record<string, unknown>;
+            return isPatternMeta(gateMeta) ? (
+              <PatternGateReview items={items} meta={gateMeta} running={running} onSubmit={onSubmitReview} onApproveAll={onApprove} />
+            ) : (
+              <GateReview items={items} running={running} onSubmit={onSubmitReview} onApproveAll={onApprove} />
+            );
+          })() : (
+            <p className="gate-review-empty">Run the loop to stage items for founder review.</p>
+          )}
+        </div>
+      ) : null}
+
       {(!node.kind || node.kind === "tool") ? (
         <div className="agent-editor-connector-row">
           <div>
@@ -862,36 +914,7 @@ function WorkNodeEditor({
         retriable={result?.meta?.retriable as boolean | undefined}
       />
 
-      {node.category === "gate" ? (
-        <div className="node-editor-section">
-          {result ? (() => {
-            // E4.3: if the gate meta carries mode:"pattern", render the volume approval queue.
-            // Otherwise fall back to the standard per-item GateReview.
-            const gateMeta = (result.meta ?? {}) as Record<string, unknown>;
-            if (isPatternMeta(gateMeta)) {
-              return (
-                <PatternGateReview
-                  items={items}
-                  meta={gateMeta}
-                  running={running}
-                  onSubmit={onSubmitReview}
-                  onApproveAll={onApprove}
-                />
-              );
-            }
-            return (
-              <GateReview
-                items={items}
-                running={running}
-                onSubmit={onSubmitReview}
-                onApproveAll={onApprove}
-              />
-            );
-          })() : (
-            <p className="gate-review-empty">Run the loop to stage drafts for founder review.</p>
-          )}
-        </div>
-      ) : (
+      {node.category !== "gate" && (
         <>
           {result?.pendingReview && (
             <div className="recommendation" style={{ marginTop: 12 }}>
@@ -948,7 +971,7 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
 const GATE_PATH_COLORS = ["#16a34a", "#d97706", "#2563eb", "#18181b", "#dc2626"];
 
 function NodeOverview({
-  node, graph, result, contractAudit, connectors, running, subsystem, onApprove,
+  node, graph, result, contractAudit, connectors, running, subsystem, onOpenReview,
 }: {
   node: GTMNode;
   graph: GTMGraph;
@@ -957,7 +980,7 @@ function NodeOverview({
   connectors: ConnectorMeta[];
   running: boolean;
   subsystem?: EngineSubsystem | null;
-  onApprove: () => void;
+  onOpenReview: () => void;
 }) {
   const showConnector = !["gate", "resource", "context"].includes(node.category);
   const conn  = showConnector
@@ -1090,14 +1113,15 @@ function NodeOverview({
             <div className="node-suggested-change">
               <Lightbulb className="node-suggested-icon" />
               <div>
-                <strong>{result.meta?.awaitingReview as number ?? items.length} items awaiting review</strong>
-                <p>Review the prepared artifacts before the workflow can continue.</p>
+                <strong>{(result.meta?.awaitingReview as number) ?? items.length} item{items.length === 1 ? "" : "s"} awaiting review</strong>
+                <p>Read each staged item, then approve or reject. Nothing leaves until you do.</p>
               </div>
             </div>
             <div className="node-action-row" style={{ marginTop: 10 }}>
-              <Button disabled={running} onClick={onApprove} type="button">
-                {running ? <LoaderCircle className="spin" /> : <ShieldCheck />}
-                Review and continue
+              {/* Open the actual per-item review queue — never a blind approve-all from here. */}
+              <Button disabled={running} onClick={onOpenReview} type="button">
+                <ShieldCheck />
+                Review {(result.meta?.awaitingReview as number) ?? items.length} item{items.length === 1 ? "" : "s"}
               </Button>
             </div>
           </div>
@@ -1171,7 +1195,9 @@ export function NodeEditor({
         <SlidingTabs
           items={(["overview", "rules", "signals", "history"] as DetailTab[]).map((tab) => ({
             value: tab,
-            label: tab === "rules" ? "Configuration" : tab === "history" ? "Run history" : tab.charAt(0).toUpperCase() + tab.slice(1),
+            label: tab === "rules"
+              ? (node.category === "gate" ? "Review" : "Configuration")
+              : tab === "history" ? "Run history" : tab.charAt(0).toUpperCase() + tab.slice(1),
           }))}
           value={activeTab}
           onChange={setActiveTab}
@@ -1191,7 +1217,7 @@ export function NodeEditor({
             connectors={connectors}
             running={running}
             subsystem={subsystem}
-            onApprove={() => onApproveGate(node.id)}
+            onOpenReview={() => setActiveTab("rules")}
           />
         )}
 

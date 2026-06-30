@@ -798,7 +798,7 @@ export function ComposerDock({
       >
         {!session ? (
           <div className="composer-dock-idle">
-            <p className="composer-idle-lead">Tell Claude the outcome you want. It creates the program, builds the agents that chase it, runs them, and stops at your gate.</p>
+            <p className="composer-idle-lead">Tell Claude the outcome you want. It composes the agents that chase it, runs them, and stops at your gate.</p>
             <div className="composer-idle-starters">
               {STARTERS.map((s) => (
                 <button key={s} className="composer-idle-starter" onClick={() => setInput(s)} type="button">{s}</button>

@@ -40,8 +40,11 @@ function producedChips(byCategory: Record<string, number>): { label: string; cou
 }
 
 function channelState(ch: ChannelMeta): ChannelState {
-  if (ch.status === "error" || ch.lastRunOk === false) return "blocked";
+  // The founder gate is the happy path, not a failure — a run that staged items and stopped at the
+  // wall reports lastRunOk:false (it never completed, by design). Check the gate BEFORE the error
+  // state so "your review is required" reads as amber "needs you", never red "blocked".
   if (ch.pendingGates > 0 || ch.status === "waiting") return "needs";
+  if (ch.status === "error" || ch.lastRunOk === false) return "blocked";
   if (ch.runCount > 0) return "live";
   return "idle";
 }

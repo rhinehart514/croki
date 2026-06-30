@@ -119,8 +119,8 @@ export function TeamOnboarding({
           <>
             <h1 className="onb-title">Set up your workspace</h1>
             <p className="onb-sub">
-              GTM IDE is the IDE for go-to-market. Your team shares one set of programs, graphs, runs,
-              and gate decisions — each of you drives Claude on your own machine.
+              GTM IDE is the IDE for go-to-market. Your team shares one set of channels, runs, and gate
+              decisions — each of you drives Claude on your own machine.
             </p>
             <label className="onb-field">
               <span>Your name</span>

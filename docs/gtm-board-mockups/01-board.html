@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GTM Board — RodentRadar</title>
+<style>
+  /* Tokens lifted verbatim from ui/src/index.css — the real GTM IDE design system.
+     Light #fafafa ground, monochrome zinc, Geist type, opaque surfaces.
+     AMBER (--gap) is reserved for the founder gate alone. No decorative gradients. */
+  :root{
+    --ink:#18181b; --ink-2:#3f3f46; --muted:#71717a; --faint:#a1a1aa; --ghost:#d4d4d8;
+    --line:#ececec; --line-2:#e4e4e7; --surface:#ffffff; --surface-2:#f4f4f5;
+    --canvas:#fafafa; --canvas-dot:#e4e4e7;
+    --primary:#18181b; --link:#2563eb;
+    --proven:#16a34a; --proven-soft:#f0fdf4;
+    --gap:#d97706;    --gap-soft:#fffbeb;    /* GATE ONLY */
+    --danger:#dc2626; --danger-soft:#fef2f2;
+    --blind:#a1a1aa;
+    --text-xs:.6875rem; --text-sm:.8125rem; --text-base:.875rem; --text-md:1rem;
+    --text-lg:1.0625rem; --text-xl:1.3125rem; --text-2xl:1.625rem;
+    --tracking-tight:-0.011em;
+    --r-sm:6px; --r-md:9px; --r-lg:12px; --r-xl:16px;
+    --shadow-card:0 1px 2px rgba(24,24,27,.04),0 1px 3px rgba(24,24,27,.06);
+    --shadow-pop:0 4px 12px rgba(24,24,27,.08),0 12px 32px rgba(24,24,27,.10);
+    --ease:cubic-bezier(.22,1,.36,1); --ease-spring:cubic-bezier(.34,1.56,.64,1);
+    --font:"Geist Variable",ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --mono:"Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:var(--font); color:var(--ink); background:var(--canvas);
+    background-image:radial-gradient(var(--canvas-dot) 1px,transparent 1px);
+    background-size:22px 22px; background-position:-1px -1px;
+    -webkit-font-smoothing:antialiased; line-height:1.45;
+    font-size:var(--text-base);
+  }
+
+  /* ---------- top chrome ---------- */
+  .topbar{
+    height:52px; display:flex; align-items:center; gap:16px;
+    padding:0 22px; border-bottom:1px solid var(--line-2);
+    background:rgba(255,255,255,.86); backdrop-filter:blur(8px);
+    position:sticky; top:0; z-index:20;
+  }
+  .brandmark{width:18px;height:18px;border-radius:5px;background:var(--ink);
+    display:grid;place-items:center;color:#fff;font-weight:700;font-size:11px;font-family:var(--mono)}
+  .brand{font-weight:650;font-size:var(--text-base);letter-spacing:var(--tracking-tight)}
+  .brand .sub{color:var(--faint);font-weight:450}
+  .proj{margin-left:2px;display:flex;align-items:center;gap:7px;padding:3px 9px 3px 7px;
+    border:1px solid var(--line-2);border-radius:999px;background:var(--surface);font-size:var(--text-sm);font-weight:550}
+  .proj .dot{width:7px;height:7px;border-radius:50%;background:var(--proven)}
+  .spacer{flex:1}
+  .zoomctl{display:flex;align-items:center;gap:0;border:1px solid var(--line-2);border-radius:var(--r-md);
+    background:var(--surface);overflow:hidden;height:30px}
+  .zoomctl button{border:0;background:transparent;color:var(--muted);height:100%;width:30px;font-size:15px;cursor:pointer}
+  .zoomctl .lvl{padding:0 11px;font-size:var(--text-xs);color:var(--ink-2);font-family:var(--mono);
+    border-left:1px solid var(--line);border-right:1px solid var(--line);height:100%;display:grid;place-items:center;letter-spacing:.02em}
+  .ghostbtn{border:1px solid var(--line-2);background:var(--surface);border-radius:var(--r-md);
+    height:30px;padding:0 13px;font-size:var(--text-sm);font-weight:550;color:var(--ink-2);cursor:pointer}
+
+  /* ---------- canvas frame ---------- */
+  .stage{padding:26px 26px 40px;max-width:1200px;margin:0 auto}
+  .stage-head{display:flex;align-items:flex-end;justify-content:space-between;margin:6px 4px 18px}
+  .stage-head h1{font-size:var(--text-2xl);letter-spacing:var(--tracking-tight);font-weight:680}
+  .stage-head .lede{color:var(--muted);font-size:var(--text-sm);margin-top:3px}
+  .alt-pill{font-family:var(--mono);font-size:var(--text-xs);color:var(--muted);
+    border:1px solid var(--line-2);background:var(--surface);border-radius:999px;padding:5px 11px}
+
+  /* board = ladder gutter + 9 bands */
+  .board{display:grid;grid-template-columns:124px 1fr;gap:0}
+
+  /* phase ladder gutter */
+  .ladder{position:relative}
+  .phase{position:absolute;left:0;width:108px;display:flex;flex-direction:column;align-items:flex-start;gap:7px}
+  .phase .plabel{font-size:var(--text-xs);font-weight:680;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .phase .pmeta{font-size:var(--text-xs);color:var(--faint)}
+  .phase .bracket{position:absolute;right:14px;top:2px;bottom:2px;width:9px;
+    border:1.5px solid var(--line-2);border-right:0;border-radius:5px 0 0 5px}
+  .phase .ticks{position:absolute;right:0;top:4px;bottom:4px;display:flex;flex-direction:column;justify-content:space-around}
+  .phase .tk{width:9px;height:9px;border-radius:50%;background:var(--surface);border:2px solid var(--ghost)}
+  .phase .tk.on{border-color:var(--ink);background:var(--ink)}
+
+  .bands{display:flex;flex-direction:column}
+  .group{display:flex;flex-direction:column;gap:8px}
+  .group + .group{margin-top:18px}
+
+  /* a band */
+  .band{
+    position:relative; display:grid; grid-template-columns:208px 1fr 232px;
+    align-items:center; gap:18px; min-height:66px; padding:13px 18px;
+    background:var(--surface); border:1px solid var(--line-2); border-radius:var(--r-lg);
+    box-shadow:var(--shadow-card); cursor:pointer;
+    transition:transform .16s var(--ease),box-shadow .16s var(--ease),border-color .16s var(--ease);
+  }
+  .band:hover{transform:translateY(-1px);box-shadow:var(--shadow-pop);border-color:var(--ghost)}
+  .band:hover .expand{opacity:1}
+  .expand{position:absolute;top:50%;right:-11px;transform:translateY(-50%);opacity:0;
+    width:22px;height:22px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;
+    font-size:12px;box-shadow:var(--shadow-pop);transition:opacity .15s var(--ease);z-index:3}
+
+  /* left id cell */
+  .idcell{display:flex;align-items:center;gap:11px;min-width:0}
+  .lnum{flex:none;width:26px;height:26px;border-radius:7px;background:var(--surface-2);border:1px solid var(--line-2);
+    display:grid;place-items:center;font-family:var(--mono);font-size:var(--text-sm);font-weight:600;color:var(--ink-2)}
+  .lname{font-size:var(--text-base);font-weight:620;letter-spacing:var(--tracking-tight);line-height:1.15}
+  .lname .k{display:block;font-size:var(--text-xs);font-weight:500;color:var(--faint);letter-spacing:.01em;margin-top:1px}
+
+  /* belief cell */
+  .belief{font-size:var(--text-sm);color:var(--ink-2);line-height:1.42;min-width:0}
+  .belief b{color:var(--ink);font-weight:620}
+  .belief .wedge{color:var(--ink);font-weight:620;border-bottom:1.5px solid var(--ghost)}
+  .belief .contest{color:var(--ink);font-weight:600;background:var(--surface-2);border-radius:4px;padding:0 4px}
+  .belief .blind{color:var(--blind)}
+  .belief .good{color:var(--proven);font-weight:620}
+  .belief .dead{color:var(--danger);font-weight:600;text-decoration:line-through;text-decoration-color:var(--ghost)}
+
+  /* right marker + glyph cell */
+  .mcell{display:flex;align-items:center;justify-content:flex-end;gap:14px}
+  .glyph{flex:none}
+  .marker{display:inline-flex;align-items:center;gap:6px;font-size:var(--text-xs);font-weight:620;
+    white-space:nowrap;padding:4px 9px;border-radius:999px;border:1px solid var(--line-2);background:var(--surface-2)}
+  .marker .md{width:7px;height:7px;border-radius:50%}
+  .m-grounded{color:var(--proven);background:var(--proven-soft);border-color:#bbf7d0}
+  .m-grounded .md{background:var(--proven)}
+  .m-lean{color:var(--ink-2)} .m-lean .md{background:var(--ink-2)}
+  .m-assumed{color:var(--muted)} .m-assumed .md{background:var(--faint)}
+  .m-blind{color:var(--blind)} .m-blind .md{background:var(--blind)}
+  .m-gate{color:var(--gap);background:var(--gap-soft);border-color:#fde68a} /* GATE = amber */
+  .m-gate .md{background:var(--gap)}
+
+  /* live pulse pip (non-gate motion) — ink, animated, no amber */
+  .pulse{display:inline-flex;align-items:center;gap:5px;font-size:var(--text-xs);font-weight:600;color:var(--muted)}
+  .pulse .p{width:7px;height:7px;border-radius:50%;background:var(--ink);position:relative}
+  .pulse .p::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1.5px solid var(--ink);
+    opacity:.4;animation:ping 1.8s var(--ease) infinite}
+  /* amber pulse — gate only */
+  .pulse.gate{color:var(--gap)} .pulse.gate .p{background:var(--gap)}
+  .pulse.gate .p::after{border-color:var(--gap)}
+  @keyframes ping{0%{transform:scale(.7);opacity:.5}70%,100%{transform:scale(1.7);opacity:0}}
+
+  .legend{display:flex;gap:18px;align-items:center;margin:24px 4px 0;flex-wrap:wrap;
+    font-size:var(--text-xs);color:var(--muted)}
+  .legend .li{display:inline-flex;align-items:center;gap:6px}
+  .legend .sw{width:9px;height:9px;border-radius:50%}
+  .hint{margin:14px 4px 0;font-size:var(--text-xs);color:var(--faint);display:flex;gap:8px;align-items:center}
+  kbd{font-family:var(--mono);font-size:10px;background:var(--surface);border:1px solid var(--line-2);
+    border-bottom-width:2px;border-radius:5px;padding:1px 5px;color:var(--ink-2)}
+
+  text{font-family:var(--mono)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brandmark">G</div>
+  <div class="brand">GTM IDE <span class="sub">/ board</span></div>
+  <div class="proj"><span class="dot"></span>RodentRadar</div>
+  <div class="spacer"></div>
+  <div class="zoomctl" title="Semantic zoom">
+    <button>&#8722;</button>
+    <span class="lvl">BOARD &middot; 9 bands</span>
+    <button>&#43;</button>
+  </div>
+  <button class="ghostbtn">Ask the operator</button>
+</div>
+
+<div class="stage">
+  <div class="stage-head">
+    <div>
+      <h1>The board</h1>
+      <div class="lede">Nine beliefs, one per layer. Each line is derived from real state &mdash; roll the zoom into any band to open its native diagram.</div>
+    </div>
+    <div class="alt-pill">altitude: board</div>
+  </div>
+
+  <div class="board">
+
+    <!-- ladder gutter -->
+    <div class="ladder">
+      <!-- Strategy bracket: bands 1-4 -->
+      <div class="phase" style="top:0;height:288px">
+        <div class="plabel">Strategy</div>
+        <div class="pmeta">layers 1&ndash;4</div>
+        <div class="bracket"></div>
+        <div class="ticks"><span class="tk on"></span><span class="tk on"></span><span class="tk on"></span><span class="tk on"></span></div>
+      </div>
+      <!-- Motion bracket: bands 5-6 -->
+      <div class="phase" style="top:306px;height:140px">
+        <div class="plabel">Motion</div>
+        <div class="pmeta">layers 5&ndash;6</div>
+        <div class="bracket"></div>
+        <div class="ticks"><span class="tk on"></span><span class="tk on"></span></div>
+      </div>
+      <!-- Loop bracket: bands 7-9 -->
+      <div class="phase" style="top:464px;height:214px">
+        <div class="plabel">Loop</div>
+        <div class="pmeta">layers 7&ndash;9</div>
+        <div class="bracket"></div>
+        <div class="ticks"><span class="tk on"></span><span class="tk on"></span><span class="tk on"></span></div>
+      </div>
+    </div>
+
+    <!-- bands -->
+    <div class="bands">
+
+      <!-- ================= STRATEGY ================= -->
+      <div class="group">
+
+        <!-- 1 Market / ICP -->
+        <div class="band">
+          <div class="idcell">
+            <div class="lnum">1</div>
+            <div class="lname">Market / ICP<span class="k">center of gravity</span></div>
+          </div>
+          <div class="belief">
+            Beachhead: <b>PCO owners</b> &mdash; 3 real entrants, 1 ICP test won. Contested vs
+            <span class="contest">restaurant ops</span> (untested). 2 candidates on the board.
+          </div>
+          <div class="mcell">
+            <!-- center-of-gravity glyph: two candidate tiles, marker leaning to PCO -->
+            <svg class="glyph" width="116" height="34" viewBox="0 0 116 34" fill="none">
+              <line x1="6" y1="17" x2="110" y2="17" stroke="#e4e4e7" stroke-width="1.5"/>
+              <!-- PCO tile (winning, 3 filled dots) -->
+              <rect x="6" y="4" width="42" height="26" rx="6" fill="#f0fdf4" stroke="#bbf7d0"/>
+              <circle cx="16" cy="17" r="3" fill="#16a34a"/><circle cx="25" cy="17" r="3" fill="#16a34a"/><circle cx="34" cy="17" r="3" fill="#16a34a"/>
+              <!-- restaurant tile (untested, hollow) -->
+              <rect x="68" y="6" width="42" height="22" rx="6" fill="#fff" stroke="#e4e4e7" stroke-dasharray="3 3"/>
+              <circle cx="82" cy="17" r="3" fill="none" stroke="#d4d4d8" stroke-width="1.5"/>
+              <circle cx="96" cy="17" r="3" fill="none" stroke="#d4d4d8" stroke-width="1.5"/>
+              <!-- gravity marker leaning PCO -->
+              <path d="M27 17 l4 -4 l4 4 l-4 4 z" fill="#18181b"/>
+            </svg>
+            <span class="marker m-lean"><span class="md"></span>leaning PCO</span>
+          </div>
+          <div class="expand">&#8599;</div>
+        </div>
+
+        <!-- 2 Problem & Trigger -->
+        <div class="band">
+          <div class="idcell">
+            <div class="lnum">2</div>
+            <div class="lname">Problem &amp; Trigger<span class="k">why-now ladder</span></div>
+          </div>
+          <div class="belief">
+            Wedge: <span class="wedge">attribution-blindness</span>. Hottest trigger:
+            <b>&ldquo;just failed a health inspection&rdquo;</b> &mdash; 9 live, fresh. 2 warming &middot; 1 cooling.
+          </div>
+          <div class="mcell">
+            <!-- micro-ladder: top 3 triggers, length+ink encode heat -->
+            <svg class="glyph" width="116" height="34" viewBox="0 0 116 34" fill="none">
+              <rect x="0" y="3"  width="108" height="7" rx="3.5" fill="#18181b"/>
+              <rect x="0" y="14" width="62"  height="7" rx="3.5" fill="#71717a"/>
+              <rect x="0" y="25" width="30"  height="7" rx="3.5" fill="#d4d4d8"/>
+              <text x="112" y="9.5"  font-size="7" fill="#a1a1aa" text-anchor="end" dx="0">9</text>
+            </svg>
+            <span class="marker m-grounded"><span class="md"></span>grounded</span>
+          </div>
+          <div class="expand">&#8599;</div>
+        </div>
+
+        <!-- 3 Positioning -->
+        <div class="band">
+          <div class="idcell">
+            <div class="lnum">3</div>
+            <div class="lname">Positioning<span class="k">the one-liner</span></div>
+          </div>
+          <div class="belief">
+            For <span class="contest">PCO owners</span> blind to which sensors stopped the infestation,
+            the only monitoring that <span class="wedge">proves the win</span> &mdash; unlike manual logs.
+          </div>
+          <div class="mcell">
+            <span class="pulse"><span class="p"></span>A/B one-liner live</span>
+            <span class="marker m-assumed"><span class="md"></span>assumed</span>
+          </div>
+          <div class="expand">&#8599;</div>
+        </div>
+
+        <!-- 4 Offer -->
+        <div class="band">
+          <div class="idcell">
+            <div class="lnum">4</div>
+            <div class="lname">Offer<span class="k">value escalation</span></div>
+          </div>
+          <div class="belief">
+            Defined entry, real escalation, no closed top. <b>1 rung under test</b>, 1 undefined.
+          </div>
+          <div class="mcell">
+            <!-- escalation strip: rising rungs, forked pilot, dashed blank top -->
+            <svg class="glyph" width="200" height="40" viewBox="0 0 200 40" fill="none">
+              <!-- baseline rising -->
+              <path d="M4 34 L196 10" stroke="#f4f4f5" stroke-width="1.5"/>
+              <!-- rung 1: demo / free -->
+              <rect x="2" y="22" width="52" height="15" rx="5" fill="#f4f4f5" stroke="#e4e4e7"/>
+              <text x="28" y="32" font-size="8" fill="#3f3f46" text-anchor="middle">demo&middot;free</text>
+              <path d="M55 29 l8 -4" stroke="#d4d4d8" stroke-width="1.5"/>
+              <!-- rung 2: pilot $49 (forked) -->
+              <rect x="64" y="13" width="58" height="15" rx="5" fill="#fff" stroke="#a1a1aa"/>
+              <line x1="98" y1="13" x2="98" y2="28" stroke="#e4e4e7" stroke-width="1"/>
+              <text x="81" y="23" font-size="8" fill="#18181b" text-anchor="middle" font-weight="600">$49</text>
+              <text x="110" y="23" font-size="7" fill="#a1a1aa" text-anchor="middle">free</text>
+              <path d="M123 18 l8 -3" stroke="#d4d4d8" stroke-width="1.5"/>
+              <!-- rung 3: contract — blank/dashed -->
+              <rect x="132" y="3" width="58" height="15" rx="5" fill="#fff" stroke="#d4d4d8" stroke-dasharray="3 3"/>
+              <text x="161" y="13" font-size="8" fill="#a1a1aa" text-anchor="middle">contract&middot;&mdash;</text>
+            </svg>
+            <span class="marker m-assumed"><span class="md"></span>$49 contested</span>
+          </div>
+          <div class="expand">&#8599;</div>
+        </div>
+      </div>
+
+      <!-- ================= MOTION ================= -->
+      <div class="group">
+
+        <!-- 5 Channels -->
+        <div class="band">
+          <div class="idcell">
+            <div class="lnum">5</div>
+            <div class="lname">Channels<span class="k">arms of the ICP test</span></div>
+          </div>
+          <div class="belief">
+            <b>1 ICP experiment, 2 arms running.</b> PCO 8 found &rarr; 3 staged &middot; Restaurant 4 &rarr; 2 &middot; <b>1 at gate</b>.
+          </div>
+          <div class="mcell">
+            <!-- two-arm funnel sparkline -->
+            <svg class="glyph" width="108" height="34" viewBox="0 0 108 34" fill="none">
+              <text x="0" y="9" font-size="7" fill="#71717a">PCO</text>
+              <rect x="26" y="3"  width="34" height="6" rx="3" fill="#3f3f46"/>
+              <rect x="26" y="3"  width="13" height="6" rx="3" fill="#18181b"/>
+              <text x="0" y="27" font-size="7" fill="#71717a">Rest</text>
+              <rect x="26" y="21" width="20" height="6" rx="3" fill="#a1a1aa"/>
+              <rect x="26" y="21" width="10" height="6" rx="3" fill="#71717a"/>
+            </svg>
+            <span class="pulse gate"><span class="p"></span></span>
+            <span class="marker m-gate"><span class="md"></span>1 at the Wall</span>
+          </div>
+          <div class="expand">&#8599;</div>
+        </div>
+
+        <!-- 6 Plays & Assets -->
+        <div class="band">
+          <div class="idcell">
+            <div class="lnum">6</div>
+            <div class="lname">Plays &amp; Assets<span class="k">touches &amp; shared assets</span></div>
+          </div>
+          <div class="belief">
+            PCO Outbound: <b>3-touch email play</b>, 14 drafts staged at the Wall. $49-pilot vs free-trial CTA live &middot; 6 shared assets.
+          </div>
+          <div class="mcell">
+            <!-- tick-strip: one tick per beat; the amber Wall tick stands out -->
+            <svg class="glyph" width="116" height="34" viewBox="0 0 116 34" fill="none">
+              <line x1="6" y1="17" x2="110" y2="17" stroke="#ececec" stroke-width="1.5"/>
+              <!-- beat 1 proven, beat 2 proven, beat 3 blind -->
+              <circle cx="14" cy="17" r="5" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+              <circle cx="42" cy="17" r="5" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+              <circle cx="98" cy="17" r="5" fill="#fff" stroke="#d4d4d8" stroke-width="1.5"/>
+              <!-- the Wall tick: amber, larger, ringed -->
+              <circle cx="70" cy="17" r="7.5" fill="#fffbeb" stroke="#d97706" stroke-width="2"/>
+              <circle cx="70" cy="17" r="2.5" fill="#d97706"/>
+              <text x="70" y="33" font-size="6.5" fill="#d97706" text-anchor="middle" font-weight="600">14 @ wall</text>
+            </svg>
+            <span class="marker m-gate"><span class="md"></span>at the Wall</span>
+          </div>
+          <div class="expand">&#8599;</div>
+        </div>
+      </div>
+
+      <!-- ================= LOOP ================= -->
+      <div class="group">
+
+        <!-- 7 Pipeline -->
+        <div class="band">
+          <div class="idcell">
+            <div class="lnum">7</div>
+            <div class="lname">Pipeline<span class="k">survival &amp; the pinch</span></div>
+          </div>
+          <div class="belief">
+            <b>47 sourced &rarr; 12 conversations &rarr; 3 pilots.</b> Biggest pinch at the founder gate &mdash; 9 approved of 31 drafted.
+          </div>
+          <div class="mcell">
+            <!-- tapering pipe glyph with pinch marker at the gate -->
+            <svg class="glyph" width="128" height="34" viewBox="0 0 128 34" fill="none">
+              <path d="M2 4 L2 30 L74 24 L74 10 Z" fill="#f4f4f5" stroke="#e4e4e7"/>
+              <path d="M74 10 L74 24 L126 19 L126 15 Z" fill="#f4f4f5" stroke="#e4e4e7"/>
+              <!-- pinch at the gate (geometry constriction, marked) -->
+              <line x1="74" y1="6" x2="74" y2="28" stroke="#d97706" stroke-width="1.5" stroke-dasharray="2 2"/>
+              <circle cx="74" cy="17" r="3" fill="#fffbeb" stroke="#d97706" stroke-width="1.5"/>
+              <text x="6"  y="20" font-size="8" fill="#18181b" font-weight="600">47</text>
+              <text x="118" y="19" font-size="8" fill="#18181b" font-weight="600" text-anchor="end">3</text>
+            </svg>
+            <span class="marker m-gate"><span class="md"></span>pinch @ gate</span>
+          </div>
+          <div class="expand">&#8599;</div>
+        </div>
+
+        <!-- 8 Measurement -->
+        <div class="band">
+          <div class="idcell">
+            <div class="lnum">8</div>
+            <div class="lname">Measurement<span class="k">can we prove it?</span></div>
+          </div>
+          <div class="belief">
+            <code style="font-family:var(--mono);font-size:.78rem;color:var(--ink-2)">pilot_requested</code>
+            &mdash; 2 arms staged, <span class="blind">blind seam</span>. <b>0 attributable.</b>
+          </div>
+          <div class="mcell">
+            <!-- ribbon narrows, then SEVERS at the seam (pure geometry, no color) -->
+            <svg class="glyph" width="128" height="34" viewBox="0 0 128 34" fill="none">
+              <path d="M2 8 L58 13 L58 21 L2 26 Z" fill="#e4e4e7"/>
+              <!-- the severed seam: a clean geometric break -->
+              <path d="M70 13 L126 15 L126 19 L70 21 Z" fill="#f4f4f5"/>
+              <line x1="58" y1="6" x2="58" y2="28" stroke="#a1a1aa" stroke-width="1.5"/>
+              <line x1="70" y1="6" x2="70" y2="28" stroke="#a1a1aa" stroke-width="1.5"/>
+              <path d="M61 10 L67 17 L61 24" stroke="#d4d4d8" stroke-width="1.5" fill="none"/>
+              <text x="64" y="33" font-size="6.5" fill="#a1a1aa" text-anchor="middle">severed</text>
+            </svg>
+            <span class="marker m-blind"><span class="md"></span>blind</span>
+          </div>
+          <div class="expand">&#8599;</div>
+        </div>
+
+        <!-- 9 Learning -->
+        <div class="band">
+          <div class="idcell">
+            <div class="lnum">9</div>
+            <div class="lname">Learning<span class="k">verdict ledger</span></div>
+          </div>
+          <div class="belief">
+            <span class="good">4 kept</span> &middot; <span class="dead">2 killed</span> &middot; 1 doubled-down.
+            Last: killed <b>&ldquo;Restaurant Ops = our ICP&rdquo;</b> &rarr; Layer 1, 2d ago.
+          </div>
+          <div class="mcell">
+            <!-- 6-tick verdict sparkline: proven / danger / blind dots, NO amber -->
+            <svg class="glyph" width="116" height="34" viewBox="0 0 116 34" fill="none">
+              <circle cx="10" cy="17" r="5" fill="#16a34a"/>
+              <circle cx="31" cy="17" r="5" fill="#16a34a"/>
+              <circle cx="52" cy="17" r="5" fill="#dc2626"/>
+              <circle cx="73" cy="17" r="5" fill="#16a34a"/>
+              <circle cx="94" cy="17" r="5" fill="#16a34a"/>
+              <circle cx="110" cy="17" r="4" fill="none" stroke="#d4d4d8" stroke-width="1.5"/>
+            </svg>
+            <span class="marker m-grounded"><span class="md"></span>compounding</span>
+          </div>
+          <div class="expand">&#8599;</div>
+        </div>
+      </div>
+
+    </div><!-- /bands -->
+  </div><!-- /board -->
+
+  <div class="legend">
+    <span class="li"><span class="sw" style="background:#16a34a"></span>grounded</span>
+    <span class="li"><span class="sw" style="background:#3f3f46"></span>leaning</span>
+    <span class="li"><span class="sw" style="background:#a1a1aa"></span>assumed</span>
+    <span class="li"><span class="sw" style="background:#d4d4d8"></span>blind</span>
+    <span class="li"><span class="sw" style="background:#d97706"></span>at the Wall (founder gate &mdash; the only amber)</span>
+  </div>
+  <div class="hint">
+    <span>Roll <kbd>scroll</kbd> to zoom, or click a band to spring it open into its native diagram &mdash; the stack order never changes.</span>
+  </div>
+</div>
+
+</body>
+</html>

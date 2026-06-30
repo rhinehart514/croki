@@ -1173,6 +1173,16 @@ export default function App() {
     () => (graph?.nodes.length === 0 ? [] : engine?.investigations ?? []),
     [graph, engine],
   );
+  // The Issues badge must count what the Issues panel actually shows: engine investigations PLUS
+  // failing contract audits (waiting/blocked/blind). Mirrors IssuesCard's issueCount — otherwise the
+  // badge reads "2" and opens to six. Keep this filter in sync with IssuesCard.
+  const issueCount = useMemo(() => {
+    const auditCount = (graph?.nodes ?? []).filter((n) => {
+      const a = contractAudits[n.id];
+      return !!a && ["waiting", "blocked", "blind"].includes(a.state);
+    }).length;
+    return problems.length + auditCount;
+  }, [graph, contractAudits, problems]);
   // Some subsystems (learn) have no node of their own — route to the gate, where founder decisions
   // are recorded, so a problem never dead-ends. Mirrors GtmExplorer's nodeForSubsystem.
   const nodeForSubsystem = useCallback((subsystem: string) => {
@@ -1526,7 +1536,7 @@ export default function App() {
               pendingApprovals={pendingApprovals}
               approvalsOpen={approvalsOpen}
               onToggleApprovals={() => { setApprovalsOpen((v) => !v); setProblemsOpen(false); setIssuesOpen(false); }}
-              problems={problems.length}
+              problems={issueCount}
               issuesOpen={issuesOpen}
               onToggleIssues={() => { setIssuesOpen((v) => !v); setApprovalsOpen(false); setProblemsOpen(false); }}
               onCloseMenus={() => { setProblemsOpen(false); setApprovalsOpen(false); setIssuesOpen(false); }}
@@ -1891,7 +1901,7 @@ export default function App() {
               <div className="loop-issues-head-title">
                 <AlertTriangle />
                 <strong>Issues</strong>
-                {problems.length > 0 ? <span className="loop-issues-count">{problems.length}</span> : null}
+                {issueCount > 0 ? <span className="loop-issues-count">{issueCount}</span> : null}
               </div>
               <button className="loop-issues-close" onClick={() => setIssuesOpen(false)} type="button" aria-label="Close issues">
                 <X />
@@ -1986,7 +1996,7 @@ export default function App() {
                     // real staged note shows its full subject, body, and the evidence for WHY this person.
                     const key = itemKey(item, i);
                     const subject = pickStr(item.suggested_subject_line, item.subject, item.founder_name, item.name, item.handle, item.type) ?? "Staged action";
-                    const body = pickStr(item.draft_note, item.draft, item.message, item.summary);
+                    const body = pickStr(item.draft_note, item.draft, item.message, item.summary, item.text, item.content, item.verdictWhy, item.highestLeverageFix, item.recommendation);
                     const evidence = pickStr(item.grounding_citation, item.icpFitRationale, item.fitRationale, item.nowTrigger);
                     // Discovery motions stage a prospect (no message yet); outbound stages a drafted note.
                     // The gate card adapts to whatever's staged so every motion stays reviewable.
