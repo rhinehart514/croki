@@ -12,7 +12,7 @@ import { LayerArmComparison } from "./diagrams/LayerArmComparison";
 import { TriggerStrip } from "./diagrams/TriggerStrip";
 import { PlaysStrip } from "./diagrams/PlaysStrip";
 import { PipelineDiagram } from "./diagrams/PipelineDiagram";
-import { MeasurementScoreboard } from "./diagrams/MeasurementScoreboard";
+import { AttributionRibbon } from "./diagrams/AttributionRibbon";
 import { VerdictLedger } from "./diagrams/VerdictLedger";
 
 export const LAYER_DIAGRAMS: Record<string, ComponentType<LayerDiagramProps>> = {
@@ -34,8 +34,9 @@ export const LAYER_DIAGRAMS: Record<string, ComponentType<LayerDiagramProps>> = 
   // Loop ──────────────────────────────────────────────────────────────────────
   // People / Pipeline — the durable People across channels, drawn with PeopleLens verbatim.
   people: PipelineDiagram,
-  // Measurement — a scoreboard from the derived measure signal; reads "blind" when attribution is cut.
-  measure: MeasurementScoreboard,
+  // Measurement — the attribution ribbon (touch → win event). The seam SEVERS, glowing, when the win
+  // event carries no source: it reads honestly blind, never a fabricated conversion number.
+  measure: AttributionRibbon,
   // Learning — the verdict ledger / decision feed, newest-first: the why-trail behind every belief.
   learn: VerdictLedger,
 };

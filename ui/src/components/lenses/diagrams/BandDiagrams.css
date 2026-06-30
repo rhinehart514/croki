@@ -212,6 +212,78 @@
 .ledger-when { font-size: var(--text-xs); color: var(--faint); white-space: nowrap; }
 .ledger-win { font-size: var(--text-xs); color: var(--ink-2); }
 
+/* ── Attribution ribbon (Measurement band) ──
+   A hand-laid alluvial: touches on the left flow to the win event on the right; the seam in the middle
+   is the dramatized moment. Color is rationed to the seam's status (danger when severed, proven when
+   closed, ink when provisional). Amber appears NOWHERE — the gate's alone. */
+.ribbon { gap: 14px; }
+.ribbon-head-row { display: flex; align-items: center; gap: 10px; }
+.ribbon-seam-tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface-2);
+  color: var(--muted);
+}
+.ribbon-seam-tag .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.ribbon-seam-tag.is-severed { color: var(--danger); background: var(--danger-soft); border-color: #fecaca; }
+.ribbon-seam-tag.is-severed .dot { background: var(--danger); }
+.ribbon-seam-tag.is-proven { color: var(--proven); background: var(--proven-soft); border-color: #bbf7d0; }
+.ribbon-seam-tag.is-proven .dot { background: var(--proven); }
+
+.ribbon-stage {
+  border: 1px solid var(--line-2); border-radius: var(--r-lg); background: var(--surface);
+  box-shadow: var(--shadow-card); padding: 8px 12px;
+}
+.ribbon-svg { display: block; width: 100%; height: auto; max-height: 260px; }
+
+.ribbon-eyebrow {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; fill: var(--faint);
+}
+.ribbon-source { fill: var(--ink-2); }
+
+/* the streams + trunk — a neutral ink flow until status colors it */
+.ribbon-stream, .ribbon-trunk { fill: var(--surface-2); stroke: var(--ghost); stroke-width: 1; }
+.ribbon-trunk.proven { fill: var(--proven-soft); stroke: var(--proven); }
+.ribbon-trunk.provisional { fill: var(--surface-2); stroke: var(--ink-2); }
+
+/* severed: the unreachable right half, the glowing cut, the break mark */
+.ribbon-ghost { fill: none; stroke: var(--ghost); stroke-width: 1.25; stroke-dasharray: 4 4; }
+.ribbon-cut { stroke: var(--danger); stroke-width: 2.5; stroke-linecap: round; filter: drop-shadow(0 0 5px color-mix(in srgb, var(--danger) 55%, transparent)); }
+.ribbon-cut.ghost { stroke: var(--ghost); stroke-width: 2; filter: none; }
+.ribbon-break-disc { fill: var(--danger-soft); stroke: var(--danger); stroke-width: 1.5; }
+.ribbon-break-x { stroke: var(--danger); stroke-width: 1.8; stroke-linecap: round; }
+
+/* joined: the seam node */
+.ribbon-join-dot.proven { fill: var(--proven); }
+.ribbon-join-dot.provisional { fill: var(--ink-2); }
+
+/* the win-event station */
+.ribbon-win-box { fill: var(--surface); stroke: var(--line-2); stroke-width: 1.25; }
+.ribbon-win.is-severed .ribbon-win-box { stroke: var(--ghost); stroke-dasharray: 4 4; }
+.ribbon-win.is-proven .ribbon-win-box { stroke: var(--proven); fill: var(--proven-soft); }
+.ribbon-win-name { font-family: var(--mono); font-size: 11px; font-weight: 600; fill: var(--ink); }
+
+/* the honest read-out */
+.ribbon-readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.ribbon-read {
+  display: flex; flex-direction: column; gap: 7px; padding: 13px 15px;
+  border: 1px solid var(--line-2); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-card);
+}
+.ribbon-read-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); }
+.ribbon-read-num { font-size: var(--text-2xl); font-weight: 680; letter-spacing: var(--tracking-tight); color: var(--ink); font-feature-settings: "tnum" 1; }
+.ribbon-read-num small { font-size: var(--text-sm); font-weight: 500; color: var(--muted); margin-left: 4px; }
+.ribbon-read-blind { font-size: var(--text-xl); font-weight: 640; color: var(--blind); font-style: italic; }
+.ribbon-read-tag {
+  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+  font-size: var(--text-xs); font-weight: 620; padding: 4px 9px; border-radius: 999px;
+  border: 1px solid var(--line-2); background: var(--surface-2); color: var(--ink-2); text-transform: capitalize;
+}
+.ribbon-read-tag .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.ribbon-read-status.is-severed .ribbon-read-tag { color: var(--danger); background: var(--danger-soft); border-color: #fecaca; }
+.ribbon-read-status.is-severed .ribbon-read-tag .dot { background: var(--danger); }
+.ribbon-read-status.is-proven .ribbon-read-tag { color: var(--proven); background: var(--proven-soft); border-color: #bbf7d0; }
+.ribbon-read-status.is-proven .ribbon-read-tag .dot { background: var(--proven); }
+
 /* ── Trigger heat-strip ── */
 .trigstrip { display: flex; flex-direction: column; gap: 7px; }
 .trig-row {

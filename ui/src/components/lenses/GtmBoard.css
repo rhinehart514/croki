@@ -80,9 +80,17 @@
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  margin: 0 4px 18px;
+  margin: 0 auto 16px;
+  padding: 0 4px;
   flex: none;
+  width: 100%;
+  max-width: 1180px;
 }
+/* At band altitude the title row compacts — the focus is the open diagram, so the head gives back its
+   vertical space to the band that's filling the frame. */
+.alt-band .board-stage-head { margin-bottom: 10px; }
+.alt-band .board-title { font-size: var(--text-xl); }
+.alt-band .board-lede { display: none; }
 .board-title {
   font-size: var(--text-2xl);
   letter-spacing: var(--tracking-tight);
@@ -107,11 +115,17 @@
 .board-bands {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
   min-height: 0;
+  /* Dense like the mockup — a calm centered column, not a full-bleed table. */
+  width: 100%;
+  max-width: 1180px;
+  margin-inline: auto;
 }
-.alt-board .board-bands { overflow-y: auto; padding: 2px 4px 40px; }
-.alt-band .board-bands { flex: 1; overflow: hidden; padding: 2px 4px 8px; }
+/* The bottom gutter clears the resting/minimized composer (bottom-center) so band 9 is always
+   reachable; at board altitude the column scrolls, at band altitude the open band fills the rest. */
+.alt-board .board-bands { overflow-y: auto; padding: 2px 4px 152px; }
+.alt-band .board-bands { flex: 1; overflow: hidden; padding: 2px 4px 14px; gap: 5px; }
 
 .board-phase-head {
   display: flex;
@@ -145,7 +159,7 @@
   background: transparent;
   cursor: pointer;
   text-align: left;
-  padding: 13px 18px;
+  padding: 11px 17px;
   font: inherit;
   color: inherit;
 }
@@ -156,10 +170,10 @@
 
 .band-line-inner {
   display: grid;
-  grid-template-columns: 216px 1fr auto;
+  grid-template-columns: 208px 1fr auto;
   align-items: center;
   gap: 18px;
-  min-height: 40px;
+  min-height: 36px;
 }
 
 /* left id cell */
@@ -234,6 +248,9 @@
   text-align: right;
 }
 
+/* The badge sits in a fixed-width slot so the verdict-flip pop (an AnimatePresence swap) never nudges
+   the markers row as one badge label replaces another. */
+.band-badge-slot { display: inline-flex; justify-content: flex-end; min-width: 78px; }
 .band-badge {
   display: inline-flex;
   align-items: center;
@@ -245,6 +262,7 @@
   border-radius: 999px;
   border: 1px solid var(--line-2);
   background: var(--surface-2);
+  transform-origin: center right;
 }
 .badge-dot { width: 7px; height: 7px; border-radius: 50%; }
 .badge-grounded { color: var(--proven); background: var(--proven-soft); border-color: #bbf7d0; }
@@ -256,16 +274,21 @@
 .badge-blind { color: var(--blind); }
 .badge-blind .badge-dot { background: var(--blind); }
 
-/* ── Rail mode (collapsed peek-rail at band altitude) ── */
-.band-rail .band-line { padding: 8px 18px; }
-.band-rail .band-line-inner { min-height: 24px; grid-template-columns: 216px 1fr auto; gap: 14px; }
-.band-rail .band-num { width: 20px; height: 20px; border-radius: 6px; font-size: var(--text-xs); }
-.band-rail .band-sub { display: none; }
-.band-rail .band-belief { -webkit-line-clamp: 1; line-clamp: 1; font-size: var(--text-xs); }
-.band-rail .band-conf-track { display: none; }
-.band-rail .band-exp { display: none; }
-.band-rail { box-shadow: none; opacity: 0.92; }
+/* ── Rail mode (collapsed peek-rail at band altitude) ──
+   Genuinely thin: a single compact label line so the eight collapsed bands give nearly all their
+   height back to the band that's open. The number + name stay; everything secondary recedes. */
+.band-rail { flex: none; box-shadow: none; opacity: 0.86; }
 .band-rail:hover { opacity: 1; }
+.band-rail .band-line { padding: 4px 16px; }
+.band-rail .band-line-inner { min-height: 17px; grid-template-columns: 200px 1fr auto; gap: 14px; }
+.band-rail .band-num { width: 19px; height: 19px; border-radius: 5px; font-size: 10px; }
+.band-rail .band-name { font-size: var(--text-sm); font-weight: 580; }
+.band-rail .band-sub { display: none; }
+.band-rail .band-belief { -webkit-line-clamp: 1; line-clamp: 1; font-size: var(--text-xs); color: var(--muted); }
+.band-rail .band-conf-track { display: none; }
+.band-rail .band-conf-n { display: none; }
+.band-rail .band-exp { display: none; }
+.band-rail .band-badge { padding: 2px 7px; font-size: 10px; }
 
 /* ── Open mode (the focused band fills the frame) ── */
 .band-open {
@@ -280,6 +303,11 @@
 .band-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .band-body-engine { flex: 1; min-height: 0; overflow: auto; }
 .band-body-diagram { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+/* The diagram scroll areas carry a bottom safe-area so their last row clears the resting composer
+   (which floats over the bottom of the frame) — nothing important hides behind the dock. */
+.band-body-diagram > * { scroll-padding-bottom: 132px; }
+.band-body-diagram .band-diagram,
+.band-body-diagram .armcmp { padding-bottom: 132px; }
 
 /* Focus-to-trace: the Channels rail is the bottom of the staple from a selected Market/ICP experiment.
    Ink accent only — no amber (amber is the gate's alone). */
@@ -288,6 +316,16 @@
   box-shadow: inset 3px 0 0 var(--ink);
 }
 .band-traced .band-line:hover { background: var(--surface-2); }
+
+/* Verdict-flip — when a belief grounds (status → validated), the band settles once with a soft proven
+   ring that fades out. THE moment, restrained: one pass, never looping, reduced-motion-skipped. */
+.band-flip { animation: band-grounded-settle 1.05s var(--ease) 1; }
+@keyframes band-grounded-settle {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--proven) 0%, transparent), var(--shadow-card); }
+  22%  { box-shadow: 0 0 0 4px color-mix(in srgb, var(--proven) 26%, transparent), var(--shadow-pop); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--proven) 0%, transparent), var(--shadow-card); }
+}
+@media (prefers-reduced-motion: reduce) { .band-flip { animation: none; } }
 
 /* placeholder body */
 .band-placeholder {

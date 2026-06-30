@@ -12,8 +12,8 @@
 // band) — an accordion, NOT pixel scaling, since a one-line strip and a future diagram share no
 // coordinate system.
 
-import { Fragment, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { animate, AnimatePresence, motion, useMotionValue, useMotionValueEvent, useReducedMotion, useTransform } from "motion/react";
 import type { GtmCanvasModel } from "@/components/canvas/GtmCanvas";
 import type { LensProps } from "@/components/canvas/CanvasShell";
 import type { LayerBelief } from "@/types";
@@ -59,15 +59,80 @@ function ForkGlyph() {
   );
 }
 
-// One band's confidence pill — a coarse band + the real number, never a seeded constant.
+// One band's confidence pill — a coarse band + the real number, never a seeded constant. When the
+// number actually changes (the verdict-flip moment: a belief grounds and its confidence jumps), it
+// counts up and the bar fills with it — a brief, satisfying confirmation. On first paint and under
+// reduced-motion it just shows the value; frequent/idle renders never animate.
 function ConfidencePill({ confidence }: { confidence: number }) {
+  const reduce = useReducedMotion();
   const band = confidenceBand(confidence);
+  const target = Math.max(0, Math.min(100, confidence));
+  const mv = useMotionValue(target);
+  const widthPct = useTransform(mv, (v) => `${v}%`);
+  const prev = useRef(target);
+  const [shown, setShown] = useState(target);
+  useMotionValueEvent(mv, "change", (v) => setShown(Math.round(v)));
+
+  useEffect(() => {
+    if (reduce || prev.current === target) {
+      mv.set(target);
+      setShown(target);
+      prev.current = target;
+      return;
+    }
+    // A deliberate, rare moment — let it spring up rather than tick linearly.
+    const controls = animate(mv, target, { duration: 0.72, ease: [0.22, 1, 0.36, 1] });
+    prev.current = target;
+    return () => controls.stop();
+  }, [target, reduce, mv]);
+
   return (
     <span className={`band-conf band-conf-${band}`} title={`Confidence ${confidence}`}>
-      <span className="band-conf-track"><span className="band-conf-fill" style={{ width: `${Math.max(0, Math.min(100, confidence))}%` }} /></span>
-      <span className="band-conf-n">{band === "none" ? "—" : confidence}</span>
+      <span className="band-conf-track"><motion.span className="band-conf-fill" style={{ width: widthPct }} /></span>
+      <span className="band-conf-n">{band === "none" ? "—" : shown}</span>
     </span>
   );
+}
+
+// The grounding badge — and its verdict-flip settle. When the badge's TONE changes (e.g. a belief
+// resolves testing → grounded after a founder verdict) the new badge pops in with a soft spring; the
+// first paint is silent (initial=false) so a scroll or a re-read never jiggles it.
+function GroundingBadgeView({ badge }: { badge: ReturnType<typeof groundingBadge> }) {
+  const reduce = useReducedMotion();
+  return (
+    <span className="band-badge-slot">
+      <AnimatePresence initial={false} mode="wait">
+        <motion.span
+          key={badge.tone}
+          className={`band-badge badge-${badge.tone}`}
+          initial={reduce ? false : { scale: 0.78, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={reduce ? { opacity: 0 } : { scale: 0.92, opacity: 0 }}
+          transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 18, mass: 0.7 }}
+        >
+          <span className="badge-dot" />{badge.label}
+        </motion.span>
+      </AnimatePresence>
+    </span>
+  );
+}
+
+// Briefly true when `status` transitions INTO "validated" — the cue to flash the band's grounded ring
+// once. Never fires on first paint or on an unrelated re-render.
+function useGroundedFlip(status: string): boolean {
+  const reduce = useReducedMotion();
+  const prev = useRef(status);
+  const [flip, setFlip] = useState(false);
+  useEffect(() => {
+    if (!reduce && prev.current !== "validated" && status === "validated") {
+      setFlip(true);
+      const t = setTimeout(() => setFlip(false), 1100);
+      prev.current = status;
+      return () => clearTimeout(t);
+    }
+    prev.current = status;
+  }, [status, reduce]);
+  return flip;
 }
 
 // The one-line strip — the band's line at board altitude and the header at band altitude.
@@ -104,7 +169,7 @@ function BandLine({ layer }: { layer: LayerBelief }) {
           </span>
         )}
         <ConfidencePill confidence={layer.confidence} />
-        <span className={`band-badge badge-${badge.tone}`}><span className="badge-dot" />{badge.label}</span>
+        <GroundingBadgeView badge={badge} />
       </div>
     </div>
   );
@@ -183,6 +248,78 @@ function BandBody({
   );
 }
 
+// One row of the stack: its phase break (board altitude only), the strip/rail/open band, and the
+// open body. Extracted so each row can own the verdict-flip cue (useGroundedFlip) — a hook can't run
+// inside the .map() loop. The open/close spring (ALT_SPRING) is identical for every band.
+function BandRow({
+  layer, mode, isFocused, phaseStart, traced, model, selected, onSelect, onVerdict, onOpen, onClose,
+}: {
+  layer: LayerBelief;
+  mode: "strip" | "rail" | "open";
+  isFocused: boolean;
+  phaseStart: boolean;
+  traced: boolean;
+  model: GtmCanvasModel;
+  selected: string | null;
+  onSelect: (id: string) => void;
+  onVerdict: () => void;
+  onOpen: () => void;
+  onClose: () => void;
+}) {
+  const meta = layerMeta(layer.layer);
+  const flipped = useGroundedFlip(layer.status);
+  return (
+    <Fragment>
+      <AnimatePresence>
+        {phaseStart && (
+          <motion.div
+            key={`ph-${layer.phase}`}
+            className="board-phase-head"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={FADE}
+            layout
+          >
+            <span className="board-phase-label">{layer.phase}</span>
+            <span className="board-phase-rule" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <motion.div
+        layout
+        transition={ALT_SPRING}
+        className={`band band-${mode}${layer.belief ? "" : " band-blind"}${traced ? " band-traced" : ""}${flipped ? " band-flip" : ""}`}
+      >
+        <button
+          type="button"
+          className="band-line"
+          onClick={() => (mode === "open" ? onClose() : onOpen())}
+          title={mode === "open" ? "Zoom back out" : `Open ${meta.name}`}
+        >
+          <BandLine layer={layer} />
+        </button>
+
+        <AnimatePresence>
+          {isFocused && (
+            <motion.div
+              key="body"
+              className="band-body"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={FADE}
+            >
+              <BandBody layer={layer} model={model} selected={selected} onSelect={onSelect} onVerdict={onVerdict} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </Fragment>
+  );
+}
+
 export function GtmBoardLens({ model, selected, onSelect }: LensProps<GtmCanvasModel, never>) {
   // A founder verdict (or a fresh grouping) bumps this so the board re-reads and the belief visibly
   // flips on the band. The diagram calls onVerdict() after a successful write.
@@ -250,59 +387,24 @@ export function GtmBoardLens({ model, selected, onSelect }: LensProps<GtmCanvasM
 
         <motion.div className="board-bands" data-altitude={altitude}>
           {layers.map((l, i) => {
-            const meta = layerMeta(l.layer);
             const isFocused = altitude === "band" && focusedLayer === l.layer;
             const mode = altitude === "board" ? "strip" : isFocused ? "open" : "rail";
-            const phaseStart = i === 0 || layers[i - 1].phase !== l.phase;
+            const phaseStart = altitude === "board" && (i === 0 || layers[i - 1].phase !== l.phase);
             return (
-              <Fragment key={l.layer}>
-                <AnimatePresence>
-                  {altitude === "board" && phaseStart && (
-                    <motion.div
-                      key={`ph-${l.phase}`}
-                      className="board-phase-head"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={FADE}
-                      layout
-                    >
-                      <span className="board-phase-label">{l.phase}</span>
-                      <span className="board-phase-rule" />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                <motion.div
-                  layout
-                  transition={ALT_SPRING}
-                  className={`band band-${mode}${l.belief ? "" : " band-blind"}${l.layer === "channels" && tracedChannels ? " band-traced" : ""}`}
-                >
-                  <button
-                    type="button"
-                    className="band-line"
-                    onClick={() => (mode === "open" ? toBoard() : openBand(l.layer))}
-                    title={mode === "open" ? "Zoom back out" : `Open ${meta.name}`}
-                  >
-                    <BandLine layer={l} />
-                  </button>
-
-                  <AnimatePresence>
-                    {isFocused && (
-                      <motion.div
-                        key="body"
-                        className="band-body"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={FADE}
-                      >
-                        <BandBody layer={l} model={model} selected={selected} onSelect={onSelect} onVerdict={onVerdict} />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              </Fragment>
+              <BandRow
+                key={l.layer}
+                layer={l}
+                mode={mode}
+                isFocused={isFocused}
+                phaseStart={phaseStart}
+                traced={l.layer === "channels" && tracedChannels}
+                model={model}
+                selected={selected}
+                onSelect={onSelect}
+                onVerdict={onVerdict}
+                onOpen={() => openBand(l.layer)}
+                onClose={toBoard}
+              />
             );
           })}
         </motion.div>
