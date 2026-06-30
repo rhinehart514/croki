@@ -55,6 +55,7 @@ import { loadFeedbackLedger } from "./feedback-ledger.mjs";
 import { recordRunDerivations } from "./run-derivation.mjs";
 import { getBoard } from "./board.mjs";
 import { applyExperimentVerdict } from "./belief-writeback.mjs";
+import { upsertStatedExperiment } from "./stated-experiment.mjs";
 import { listToolRegistry, approveToolBirth } from "./tool-registry-store.mjs";
 import { listPeople, getPerson } from "./person-store.mjs";
 import { loadClarity, addClarity, removeClarity } from "./clarity-store.mjs";
@@ -431,6 +432,23 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, getBoard({ projectId }));
     } catch (err) {
       json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Stated experiment — the founder (or the operator as a SUGGESTION the founder confirms) GROUPS
+  // existing motions into the arms of one belief test. Post-hoc context, never a precondition and never
+  // a gate: it records a relationship, it does not block, trigger, or shape any run, and it NEVER sets a
+  // verdict. Grouping is founder-confirmed, never auto-inferred from channel-name similarity.
+  const projectExperimentsMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/experiments$/);
+  if (req.method === "POST" && projectExperimentsMatch) {
+    try {
+      const projectId = decodeURIComponent(projectExperimentsMatch[1]);
+      const body = await readBody(req);
+      const saved = upsertStatedExperiment({ projectId, experiment: body?.experiment ?? body });
+      json(res, 200, saved);
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return;
   }

@@ -275,7 +275,16 @@ export type GtmExperiment = {
   // The strategic layer this experiment tests. OPEN string (never an enum); defaults to "channels".
   targetLayer?: string;
   // The arms under test. A channel is one arm KIND, so a single-channel run carries one channel arm.
-  arms?: { id: string; label?: string; kind: string; channelId?: string | null; value?: unknown }[];
+  // `tally` is the arm's real run result, attached by the board from that channel's run ledger (never
+  // invented) so the arm-comparison diagram races on grounded numbers.
+  arms?: {
+    id: string;
+    label?: string;
+    kind: string;
+    channelId?: string | null;
+    value?: unknown;
+    tally?: { runs: number; staged: number; approved: number; rejected: number };
+  }[];
   // The founder's resolution. Set ONLY by the founder, NEVER derived — a re-run must never write it.
   verdict?: {
     decision: "keep" | "kill" | "double-down";

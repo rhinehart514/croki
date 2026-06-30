@@ -91,20 +91,50 @@ export function getBoard({ projectId } = {}, options = {}) {
   const people = listPeople(project.id, opts);
   const ledger = loadFeedbackLedger(project.id, opts);
 
-  const experiments = (Array.isArray(sc.experiments) ? sc.experiments : []).map(normalizeExperiment);
-  const layerExp = (key) => experiments.filter((e) => (e.targetLayer || "channels") === key);
-
   // Aggregate every channel's run ledger once — the real run-derived signal the Motion and Loop layers
-  // read. Pure reads; a missing flow never throws the board.
+  // read — AND tally each channel's staged/approved/rejected gate items so an experiment ARM bound to
+  // that channel can race on its grounded result. Pure reads; a missing flow never throws the board.
   const allRuns = [];
+  const channelTally = new Map();
   for (const channel of project.channels ?? []) {
+    let runs = 0, staged = 0, approved = 0, rejected = 0;
     try {
-      const { runs } = loadFlow(channel.graphId, null, opts);
-      if (Array.isArray(runs)) allRuns.push(...runs);
+      const { runs: chRuns } = loadFlow(channel.graphId, null, opts);
+      for (const run of Array.isArray(chRuns) ? chRuns : []) {
+        runs += 1;
+        allRuns.push(run);
+        const nodes = run?.result?.nodes ?? {};
+        for (const node of Object.values(nodes)) {
+          if (node?.category !== "gate" || !Array.isArray(node.items)) continue;
+          for (const item of node.items) {
+            staged += 1;
+            if (item.approvalStatus === "approved") approved += 1;
+            else if (item.approvalStatus === "rejected") rejected += 1;
+          }
+        }
+      }
     } catch {
       // a channel without a stored flow contributes no runs
     }
+    channelTally.set(channel.id, { runs, staged, approved, rejected });
   }
+
+  // An experiment ARM bound to a channel carries that channel's real run tally, so the arm-comparison
+  // diagram races the arms on grounded numbers, never invented ones.
+  const enrichArms = (exp) => ({
+    ...exp,
+    arms: Array.isArray(exp.arms)
+      ? exp.arms.map((arm) => (arm?.channelId && channelTally.has(arm.channelId)
+          ? { ...arm, tally: channelTally.get(arm.channelId) }
+          : arm))
+      : exp.arms,
+  });
+
+  const experiments = (Array.isArray(sc.experiments) ? sc.experiments : []).map(normalizeExperiment).map(enrichArms);
+  // The Market / ICP band reads BOTH "icp" and the alias "market" (a stated ICP grouping may target
+  // either); every other band reads its own key verbatim. The targetLayer stays an OPEN string.
+  const layerKeyOf = (e) => { const t = e.targetLayer || "channels"; return t === "market" ? "icp" : t; };
+  const layerExp = (key) => experiments.filter((e) => layerKeyOf(e) === key);
 
   // The active channel's graph frames the Measure derivation (its shape decides conversion vs
   // observation measurement).

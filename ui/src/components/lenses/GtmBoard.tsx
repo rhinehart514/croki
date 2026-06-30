@@ -21,6 +21,7 @@ import { layerMeta, groundingBadge, confidenceBand } from "@/lib/boardModel";
 import { useBoard } from "@/lib/boardModel";
 import { EngineLens } from "@/components/lenses/EngineLens";
 import { AltitudeLadder } from "@/components/lenses/AltitudeLadder";
+import { LAYER_DIAGRAMS } from "@/components/lenses/LAYER_DIAGRAMS";
 import "./GtmBoard.css";
 
 type Altitude = "board" | "band";
@@ -81,9 +82,20 @@ function BandLine({ layer }: { layer: LayerBelief }) {
         <span className="band-name">{meta.name}<span className="band-sub">{meta.sub}</span></span>
       </div>
       <div className="band-belief">
-        {layer.belief
-          ? <span>{layer.belief}</span>
-          : <span className="band-belief-blind">No belief yet — runs will ground this layer.</span>}
+        {/* The belief crossfades when its status flips (e.g. testing → validated after a verdict). */}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.span
+            key={`${layer.status}:${layer.belief ?? ""}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={FADE}
+          >
+            {layer.belief
+              ? layer.belief
+              : <span className="band-belief-blind">No belief yet — runs will ground this layer.</span>}
+          </motion.span>
+        </AnimatePresence>
       </div>
       <div className="band-markers">
         {hasExp && (
@@ -98,9 +110,18 @@ function BandLine({ layer }: { layer: LayerBelief }) {
   );
 }
 
-// The open band body. Channels mounts the real EngineLens; every other layer shows the honest
-// placeholder built from its real belief + experiments — "diagram lands next".
-function BandBody({ layer, model }: { layer: LayerBelief; model: GtmCanvasModel }) {
+// The open band body. Channels mounts the real EngineLens; a band with a registered diagram (e.g.
+// Market / ICP → ArmComparison) mounts that; every other layer shows the honest placeholder built from
+// its real belief + experiments — "diagram lands next".
+function BandBody({
+  layer, model, selected, onSelect, onVerdict,
+}: {
+  layer: LayerBelief;
+  model: GtmCanvasModel;
+  selected: string | null;
+  onSelect: (id: string) => void;
+  onVerdict: () => void;
+}) {
   const meta = layerMeta(layer.layer);
 
   if (layer.layer === "channels") {
@@ -115,6 +136,23 @@ function BandBody({ layer, model }: { layer: LayerBelief; model: GtmCanvasModel 
           onOpenChannel={model.onOpenChannel}
           icpLabel={readable(model.icp)}
           claimLabel={readable(model.claims[0])}
+        />
+      </div>
+    );
+  }
+
+  const Diagram = LAYER_DIAGRAMS[layer.layer];
+  if (Diagram) {
+    return (
+      <div className="band-body-diagram">
+        <Diagram
+          layer={layer.layer}
+          belief={layer}
+          experiments={layer.experiments}
+          selected={selected}
+          onSelect={onSelect}
+          projectId={model.projectId}
+          onVerdict={onVerdict}
         />
       </div>
     );
@@ -145,8 +183,11 @@ function BandBody({ layer, model }: { layer: LayerBelief; model: GtmCanvasModel 
   );
 }
 
-export function GtmBoardLens({ model }: LensProps<GtmCanvasModel, never>) {
-  const state = useBoard(model.projectId);
+export function GtmBoardLens({ model, selected, onSelect }: LensProps<GtmCanvasModel, never>) {
+  // A founder verdict (or a fresh grouping) bumps this so the board re-reads and the belief visibly
+  // flips on the band. The diagram calls onVerdict() after a successful write.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const state = useBoard(model.projectId, refreshKey);
   const [altitude, setAltitude] = useState<Altitude>("board");
   const [focusedLayer, setFocusedLayer] = useState<string | null>(null);
 
@@ -175,6 +216,14 @@ export function GtmBoardLens({ model }: LensProps<GtmCanvasModel, never>) {
   const openBand = (layer: string) => { setFocusedLayer(layer); setAltitude("band"); };
   const toBoard = () => { setAltitude("board"); setFocusedLayer(null); };
   const flyTo = (layer: string) => { setFocusedLayer(layer); setAltitude("band"); };
+  const onVerdict = () => setRefreshKey((k) => k + 1);
+
+  // Focus-to-trace: when the selected object is a Market/ICP experiment, the Channels band is the motion
+  // it tests, so we staple them — the Channels rail lights as the bottom of the trace.
+  const selectedLayer = selected
+    ? layers.find((l) => l.experiments.some((e) => e.id === selected))?.layer ?? null
+    : null;
+  const tracedChannels = selectedLayer === "icp";
 
   return (
     <div className={`gtm-board alt-${altitude}`}>
@@ -227,7 +276,7 @@ export function GtmBoardLens({ model }: LensProps<GtmCanvasModel, never>) {
                 <motion.div
                   layout
                   transition={ALT_SPRING}
-                  className={`band band-${mode}${l.belief ? "" : " band-blind"}`}
+                  className={`band band-${mode}${l.belief ? "" : " band-blind"}${l.layer === "channels" && tracedChannels ? " band-traced" : ""}`}
                 >
                   <button
                     type="button"
@@ -248,7 +297,7 @@ export function GtmBoardLens({ model }: LensProps<GtmCanvasModel, never>) {
                         exit={{ opacity: 0 }}
                         transition={FADE}
                       >
-                        <BandBody layer={l} model={model} />
+                        <BandBody layer={l} model={model} selected={selected} onSelect={onSelect} onVerdict={onVerdict} />
                       </motion.div>
                     )}
                   </AnimatePresence>

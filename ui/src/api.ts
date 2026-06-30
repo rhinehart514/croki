@@ -7,7 +7,7 @@ import type {
   GraphOperation, GTMContractAudit,
   ProductModel, ProductModelEdit, ProductPinTargetKind,
   CapabilityServer, Person, CrossReferenceResult, ToolRegistryView, RegisteredTool, ChannelFeed, DirectedFeed,
-  ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole, BoardView,
+  ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole, BoardView, GtmExperiment,
 } from "@/types";
 import { identityHeaders } from "@/lib/identity";
 
@@ -375,6 +375,34 @@ export const getPerson = (projectId: string, personId: string) =>
 // ── GTM Board — the nine belief layers, a pure read of real state ──────────────
 export const getBoard = (projectId: string) =>
   get<BoardView>(`/api/projects/${encodeURIComponent(projectId)}/board`);
+
+// Group existing motions into the arms of one stated experiment — founder-confirmed, post-hoc context.
+// Never gates a run; never records a verdict.
+export const groupExperiment = (
+  projectId: string,
+  experiment: {
+    targetLayer: string;
+    hypothesis?: string;
+    heldConstant?: string;
+    arms: { id?: string; label: string; kind?: string; channelId?: string | null }[];
+  },
+) =>
+  post<{ experiments: GtmExperiment[]; experiment: GtmExperiment | null }>(
+    `/api/projects/${encodeURIComponent(projectId)}/experiments`,
+    { experiment },
+  );
+
+// The founder resolves an experiment — STRICTLY post-gate. keep/double-down crystallize the belief;
+// kill records the decision. winningArmId names the arm the founder is keeping.
+export const applyVerdict = (
+  projectId: string,
+  experimentId: string,
+  verdict: { decision: "keep" | "kill" | "double-down"; winningArmId?: string | null },
+) =>
+  post<{ experiments: GtmExperiment[]; updatedAt: string }>(
+    `/api/projects/${encodeURIComponent(projectId)}/experiments/${encodeURIComponent(experimentId)}/verdict`,
+    { verdict },
+  );
 
 // "Where does X appear across channels" — the cross-reference / find-references query for a
 // person / icp / claim / experiment.

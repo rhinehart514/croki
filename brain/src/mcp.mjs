@@ -320,6 +320,16 @@ async function findReferences({ kind, id: refId, projectId }) {
   return brainGet(`/api/projects/${encodeURIComponent(id)}/references?${params.toString()}`);
 }
 
+// SUGGEST a grouping of existing motions into the arms of one belief test. The founder confirms it on
+// the board; there is NO verdict tool on this surface (a verdict is the founder's hand alone). Never a
+// precondition, never a gate — post-hoc context only.
+async function groupExperiment({ projectId, targetLayer, hypothesis, heldConstant, arms }) {
+  const id = await resolveProjectId(projectId);
+  return brainPost(`/api/projects/${encodeURIComponent(id)}/experiments`, {
+    experiment: { targetLayer, hypothesis, heldConstant, arms },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Tool registry
 // ---------------------------------------------------------------------------
@@ -566,6 +576,34 @@ const TOOLS = [
       required: ["kind", "id"],
     },
     handler: findReferences,
+  },
+  {
+    name: "group_experiment",
+    description: "SUGGEST that two or more existing motions are really the ARMS of one belief test — e.g. that a PCO-outbound channel and a restaurant-outbound channel are two arms of one ICP experiment, the same pilot offer held constant. This only STATES the grouping as post-hoc context for the founder to confirm on the board; it never gates, triggers, or shapes a run, and it NEVER records a verdict (resolving the experiment is the founder's hand alone — there is no verdict tool here). Grouping must reflect a real strategic relationship, never auto-inferred from channel-name similarity. Defaults to the active project.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        targetLayer: { type: "string", description: "The belief layer the arms test, e.g. \"market\" for an ICP experiment, \"positioning\", or \"offer\"." },
+        hypothesis: { type: "string", description: "What the experiment is testing in one line (e.g. \"PCO owners convert on the pilot better than restaurants\")." },
+        heldConstant: { type: "string", description: "What stays the same across every arm (e.g. \"$49 pilot\") — the control that makes the comparison fair." },
+        arms: {
+          type: "array",
+          description: "The motions under test, one per arm.",
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string", description: "Human label for the arm (e.g. \"PCO Outbound\")." },
+              channelId: { type: "string", description: "The channel this arm runs through, when it is a channel." },
+              kind: { type: "string", description: "Arm kind; defaults to \"channel\"." },
+            },
+            required: ["label"],
+          },
+        },
+        projectId: { type: "string", description: "Optional. Defaults to the active project." },
+      },
+      required: ["targetLayer", "arms"],
+    },
+    handler: groupExperiment,
   },
 
   // ── Product picture — the founder-editable interpretation of the product ────

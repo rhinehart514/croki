@@ -65,9 +65,11 @@ export type BoardState =
   | { status: "ready"; board: BoardView; error: null }
   | { status: "error"; board: null; error: string };
 
-// Fetch the board for a project. Re-fetches when projectId changes; ignores a stale resolution after
-// the project switched out from under it. A null projectId reports empty (nothing grounded yet).
-export function useBoard(projectId: string | null): BoardState {
+// Fetch the board for a project. Re-fetches when projectId changes OR when `refreshKey` is bumped — the
+// latter is how a founder verdict (or a fresh grouping) reloads the board so a belief visibly flips
+// from testing to validated. Ignores a stale resolution after the project switched out from under it. A
+// null projectId reports empty (nothing grounded yet).
+export function useBoard(projectId: string | null, refreshKey = 0): BoardState {
   // The fetched outcome, tagged with the projectId it belongs to. setState happens ONLY inside the
   // async callbacks (never synchronously in the effect body), so loading/empty are derived in render.
   const [fetched, setFetched] = useState<{ projectId: string; state: BoardState } | null>(null);
@@ -85,7 +87,7 @@ export function useBoard(projectId: string | null): BoardState {
         if (live) setFetched({ projectId, state: { status: "error", board: null, error: err instanceof Error ? err.message : "Could not load the board." } });
       });
     return () => { live = false; };
-  }, [projectId]);
+  }, [projectId, refreshKey]);
 
   // No project open yet → honest empty. A result for a stale project (or none yet) → still loading.
   if (!projectId) return { status: "empty", board: null, error: null };
