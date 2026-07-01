@@ -751,6 +751,41 @@ const TOOLS = [
     },
     handler: approveGate,
   },
+  {
+    name: "report_friction",
+    description: "File a dogfood report about GTM IDE ITSELF — a bug, rough edge, or wish the founder hits mid-flow ('the gate card hid the citation', 'I wish the queue showed all ventures'). Use it the moment the complaint is uttered; don't make the founder switch tools. Writes an agent-readable markdown item into the product repo's dogfood/queue/ with the current project and pending-gate state auto-attached, for the nightly build loop to work into gated PRs. This is feedback about the PRODUCT and never touches GTM taste memory — judgments about a draft belong at the gate, not here.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        report: { type: "string", description: "The friction, verbatim — what got in the way or what's wished for." },
+        kind: { type: "string", enum: ["friction", "bug", "wish"], description: "Defaults to friction." },
+        context: { type: "string", description: "What was happening when it hit (one or two sentences)." },
+        projectId: { type: "string", description: "Project the founder was working in. Defaults to the active project." },
+      },
+      required: ["report"],
+    },
+    handler: (args) => brainPost("/api/friction", { ...args, source: "mcp" }),
+  },
+  {
+    name: "request_feature",
+    description: "Ask GTM IDE to BUILD a new capability for itself — usable from any codebase, any session. The request is queued instantly, then a builder agent works it in an isolated branch of the GTM IDE repo (one build at a time, tests run, work committed). The result is a dogfood/* branch WAITING for founder review — this tool can never merge, push, or ship anything. Use for 'GTM IDE should be able to…' wishes; use report_friction for plain bug notes that don't need a build now.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        report: { type: "string", description: "The feature, in the founder's words — what should GTM IDE be able to do, and for what moment?" },
+        context: { type: "string", description: "What the founder was doing when they wished for it (one or two sentences)." },
+        projectId: { type: "string", description: "Project the founder was working in. Defaults to the active project." },
+      },
+      required: ["report"],
+    },
+    handler: (args) => brainPost("/api/feature-request", { ...args, source: "mcp" }),
+  },
+  {
+    name: "get_dogfood_queue",
+    description: "Read GTM IDE's own dogfood queue — every friction report and feature request with its status (open, queued, building, ready-for-review, declined, interrupted, failed) and the dogfood/* branch when a build produced one. Use to answer 'what's in the queue / what's building / what's ready for my review'. Read-only.",
+    inputSchema: { type: "object", properties: {}, required: [] },
+    handler: () => brainGet("/api/friction"),
+  },
 ];
 
 const TOOL_MAP = new Map(TOOLS.map((t) => [t.name, t]));

@@ -27,3 +27,6 @@ output/
 
 # Convex local deployment credentials
 .env.local
+
+# Dogfood builder worktrees (feature-builder.mjs) — transient checkouts, branches survive
+.dogfood-worktrees/
