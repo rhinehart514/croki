@@ -648,7 +648,14 @@ export function getPipelineIcpGrouping({ projectId } = {}, options = {}) {
 
   // Extra grounds from EXPLICIT founder links (setChannelIcp): pipelines the founder directly bound to
   // an ICP key group under that key. One ground per distinct linked key. Additive — a linked pipeline
-  // still hangs off the base ground too.
+  // still hangs off the base ground too. Each key resolves against the named-ICP store
+  // (sharedContext.icps[]) so an ICP-discovery program renders each pipeline under its OWN stated ICP
+  // record — its query/geography/industry/keywords/hypotheses — instead of the single global icp.
+  const icpsByKey = new Map();
+  for (const record of (Array.isArray(sc.icps) ? sc.icps : [])) {
+    const key = String(record?.key ?? "").trim();
+    if (key) icpsByKey.set(key, record);
+  }
   const linkGroundsByKey = new Map();
   for (const c of channels) {
     const key = String(c.icp?.key ?? "").trim();
@@ -658,15 +665,24 @@ export function getPipelineIcpGrouping({ projectId } = {}, options = {}) {
     entry.channels.push(c);
     linkGroundsByKey.set(key, entry);
   }
-  const linkGrounds = [...linkGroundsByKey.values()].map((entry) => ({
-    icpKey: entry.key,
-    icpBelief: entry.label || `Target: ${entry.key}`,
-    grounded: true,
-    source: "explicit-link",
-    channelIds: entry.channels.map((c) => c.id),
-    channelNames: entry.channels.map((c) => c.name),
-    channelCount: entry.channels.length,
-  }));
+  const linkGrounds = [...linkGroundsByKey.values()].map((entry) => {
+    const record = icpsByKey.get(entry.key) ?? null;
+    // The stated record's belief wins (it is the honest ground the founder named); fall back to the
+    // link's own label, then the bare key. `icpRecord` carries the full resolved record (or null).
+    const recordBelief = record
+      ? firstNonEmpty(record.label, record.query, record.industry, record.geography)
+      : null;
+    return {
+      icpKey: entry.key,
+      icpBelief: recordBelief || entry.label || `Target: ${entry.key}`,
+      grounded: true,
+      source: "explicit-link",
+      icpRecord: record,
+      channelIds: entry.channels.map((c) => c.id),
+      channelNames: entry.channels.map((c) => c.name),
+      channelCount: entry.channels.length,
+    };
+  });
 
   // Race every ground's arms on their real run + People signal (honest-blind on no runs).
   const grounds = [baseGround, ...experimentGrounds, ...linkGrounds]

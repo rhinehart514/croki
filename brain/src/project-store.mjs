@@ -118,11 +118,43 @@ function reconcileClaimList(source = [], previous = []) {
 // other data on load — a re-load is a no-op once the field exists.
 function ensureStatedDefaults(sharedContext) {
   if (!sharedContext) return sharedContext;
-  if (sharedContext.offer && typeof sharedContext.offer === "object") return sharedContext;
+  const hasOffer = sharedContext.offer && typeof sharedContext.offer === "object";
+  const hasIcps = Array.isArray(sharedContext.icps);
+  if (hasOffer && hasIcps) return sharedContext;
   return {
     ...sharedContext,
-    offer: { price: "", unit: "", terms: "", alternatives: [], status: "inferred" },
+    offer: hasOffer
+      ? sharedContext.offer
+      : { price: "", unit: "", terms: "", alternatives: [], status: "inferred" },
+    // Back-fill the named-ICP store for projects written before it existed. Empty, never seeded.
+    icps: hasIcps ? sharedContext.icps : [],
   };
+}
+
+// Shape a founder-stated named-ICP record. Mirrors the `icp` field plus a linking `key`, a human
+// `label`, and a `status`. Unknown fields the founder puts on a record are preserved (never a cage);
+// the known fields are coerced to a stable shape so board resolution reads them honestly. Records with
+// no `key` are dropped — a keyless record can never be linked to a pipeline (setChannelIcp) or resolved.
+function normalizeIcps(icps) {
+  if (!Array.isArray(icps)) return [];
+  return icps
+    .map((record) => {
+      const source = record && typeof record === "object" ? structuredClone(record) : {};
+      const key = String(source.key ?? "").trim();
+      if (!key) return null;
+      return {
+        ...source,
+        key,
+        label: String(source.label ?? "").trim(),
+        query: String(source.query ?? "").trim(),
+        geography: String(source.geography ?? "").trim(),
+        industry: String(source.industry ?? "").trim(),
+        keywords: Array.isArray(source.keywords) ? source.keywords : [],
+        hypotheses: Array.isArray(source.hypotheses) ? source.hypotheses : [],
+        status: String(source.status ?? "inferred").trim() || "inferred",
+      };
+    })
+    .filter(Boolean);
 }
 
 // Reconcile a shared context so that `claims` (structured, source of truth) and `product.claims`
@@ -197,6 +229,8 @@ function emptySharedContext() {
       alternatives: [],
       status: "inferred",
     },
+    // The active / default ICP — the single stated ground kept for backward compatibility. Every reader
+    // that predates named ICPs still finds its one ICP here.
     icp: {
       query: "",
       geography: "",
@@ -204,6 +238,11 @@ function emptySharedContext() {
       keywords: [],
       hypotheses: [],
     },
+    // Named ICP records: a founder running an ICP-discovery program states several distinct segments and
+    // links each pipeline to one by `key` (setChannelIcp). Each record mirrors the `icp` shape plus a
+    // `key`/`label`/`status`. `icp` above stays the active default; these are the multi-ICP store the
+    // per-pipeline links resolve against. Empty by default so single-ICP projects are unchanged.
+    icps: [],
     founderTaste: {
       approvedPatterns: [],
       rejectedPatterns: [],
@@ -707,7 +746,15 @@ export function setChannelIcp(channelId, icp, options = {}) {
     const raw = typeof icp === "string" ? { key: icp } : icp;
     const key = String(raw?.key ?? raw?.icpKey ?? "").trim();
     if (key) {
-      const label = String(raw?.label ?? "").trim();
+      // Resolve the key against the named-ICP store: if the founder linked by bare key and a matching
+      // `sharedContext.icps[]` record exists, adopt that record's label so the stored link reads honestly.
+      // An explicit label on the input always wins; with no record and no label the link stays key-only.
+      let label = String(raw?.label ?? "").trim();
+      if (!label) {
+        const record = (project.sharedContext?.icps ?? [])
+          .find((entry) => String(entry?.key ?? "").trim() === key);
+        if (record) label = String(record.label ?? "").trim();
+      }
       link = { key, ...(label ? { label } : {}) };
     }
   }
@@ -760,7 +807,7 @@ export function updateSharedContext(patch, options = {}) {
   const project = loadProject(options);
   const current = project.sharedContext ?? emptySharedContext();
   const allowed = new Set([
-    "repository", "product", "positioning", "icp", "founderTaste",
+    "repository", "product", "positioning", "icp", "icps", "founderTaste",
     "contacts", "outcomes", "experiments", "artifacts", "productFeedback",
     "claims", "offer",
   ]);
@@ -771,6 +818,11 @@ export function updateSharedContext(patch, options = {}) {
     if (Array.isArray(value)) sharedContext[key] = structuredClone(value);
     else if (value && typeof value === "object") sharedContext[key] = { ...current[key], ...structuredClone(value) };
     else sharedContext[key] = value;
+  }
+  // Normalize the named-ICP store whenever it is patched, so every stored record carries a stable,
+  // resolvable shape (keyed, coerced fields) while the active default `icp` is left untouched.
+  if (patch && Object.prototype.hasOwnProperty.call(patch, "icps")) {
+    sharedContext.icps = normalizeIcps(sharedContext.icps);
   }
   // Reconcile claims against the structured source of truth. A top-level `claims` write is the
   // structured front door; a legacy `product.claims` write (strings) is still honored. Lineage is

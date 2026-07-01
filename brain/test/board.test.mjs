@@ -301,6 +301,43 @@ describe("getPipelineIcpGrouping — the L0 ground: which ICP each pipeline test
     assert.equal(ground2.channelCount, 1, "the reversible clear removes the pipeline from the link ground");
   });
 
+  it("renders each pipeline under its OWN stated ICP record when linked to distinct named ICPs", () => {
+    const { channel: c1 } = createChannel({ name: "Local Biz Outbound" }, options);
+    const { channel: c2 } = createChannel({ name: "Non-profit Outbound" }, options);
+    const { channel: c3 } = createChannel({ name: "Member Org Outbound" }, options);
+    // An ICP-discovery program: one experiment, three segments stated as named records.
+    updateSharedContext({
+      icp: { label: "Everyone (default)" },
+      icps: [
+        { key: "local-biz", label: "Local businesses", industry: "Retail" },
+        { key: "non-profits", query: "mission-driven orgs" },
+      ],
+    }, options);
+    setChannelIcp(c1.id, "local-biz", options);
+    setChannelIcp(c2.id, "non-profits", options);
+    // A pipeline linked to a key with NO stated record still grounds honestly off its bare key.
+    setChannelIcp(c3.id, { key: "member-orgs" }, options);
+
+    const grouping = getPipelineIcpGrouping({ projectId: "default" }, options);
+    const linkGrounds = grouping.grounds.filter((g) => g.source === "explicit-link");
+    assert.equal(linkGrounds.length, 3, "each distinct linked key is its own ground");
+
+    const local = linkGrounds.find((g) => g.icpKey === "local-biz");
+    assert.equal(local.icpBelief, "Local businesses", "resolves to the named record's belief, not the global icp");
+    assert.equal(local.icpRecord.industry, "Retail", "the ground carries the full resolved ICP record");
+    assert.deepEqual(local.channelIds, [c1.id]);
+
+    const np = linkGrounds.find((g) => g.icpKey === "non-profits");
+    assert.equal(np.icpBelief, "mission-driven orgs", "belief falls to the record's query when it has no label");
+
+    const member = linkGrounds.find((g) => g.icpKey === "member-orgs");
+    assert.equal(member.icpBelief, "Target: member-orgs", "an unresolved key is honest-blank on the bare key");
+    assert.equal(member.icpRecord, null, "no stated record ⇒ icpRecord is null, never fabricated");
+
+    // The global icp remains the base ground, unchanged by per-pipeline records.
+    assert.equal(grouping.icpBelief, "Target: Everyone (default)");
+  });
+
   it("carries a per-arm measurement rollup on every ground, honest-blind (null score, no leader) with no runs", () => {
     const { channel: c1 } = createChannel({ name: "Outbound" }, options);
     createChannel({ name: "Community" }, options);

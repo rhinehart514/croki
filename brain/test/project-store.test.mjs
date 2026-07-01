@@ -126,4 +126,50 @@ describe("multi-channel GTM project", () => {
   it("refuses to link an ICP on an unknown pipeline", () => {
     assert.throws(() => setChannelIcp("does-not-exist", { key: "x" }, options), /Channel not found/);
   });
+
+  it("holds MULTIPLE named ICP records in sharedContext.icps while icp stays the active default", () => {
+    createChannel({ name: "PCO Outbound" }, options);
+    // The active/default ICP — untouched by the named-record store.
+    updateSharedContext({ icp: { label: "Local businesses" } }, options);
+    updateSharedContext({
+      icps: [
+        { key: "local-biz", label: "Local businesses", industry: "Retail", keywords: ["shops"], status: "stated" },
+        { key: "non-profits", label: "Non-profits", geography: "US", hypotheses: ["mission-driven buyers"] },
+        // A keyless record can never be linked or resolved, so it is dropped on normalization.
+        { label: "no key here" },
+      ],
+    }, options);
+
+    const sc = loadProject(options).sharedContext;
+    assert.equal(sc.icp.label, "Local businesses", "the active default ICP is preserved for backward compatibility");
+    assert.equal(sc.icps.length, 2, "keyed records are stored; the keyless one is dropped");
+
+    const local = sc.icps.find((r) => r.key === "local-biz");
+    assert.deepEqual(local, {
+      key: "local-biz", label: "Local businesses", query: "", geography: "",
+      industry: "Retail", keywords: ["shops"], hypotheses: [], status: "stated",
+    }, "a named record is coerced to the stable ICP shape");
+    const np = sc.icps.find((r) => r.key === "non-profits");
+    assert.equal(np.status, "inferred", "status defaults to inferred when unstated");
+    assert.deepEqual(np.hypotheses, ["mission-driven buyers"]);
+  });
+
+  it("resolves a bare-key ICP link against the named-record store to enrich the stored label", () => {
+    const { channel } = createChannel({ name: "Member Orgs Outbound" }, options);
+    updateSharedContext({
+      icps: [{ key: "member-orgs", label: "Member organizations", industry: "Associations" }],
+    }, options);
+
+    // Linking by bare key adopts the record's label (honest link) without an explicit label passed.
+    const linked = setChannelIcp(channel.id, "member-orgs", options).channel;
+    assert.deepEqual(linked.icp, { key: "member-orgs", label: "Member organizations" });
+
+    // An explicit label always wins over the resolved record label.
+    const overridden = setChannelIcp(channel.id, { key: "member-orgs", label: "My own label" }, options).channel;
+    assert.deepEqual(overridden.icp, { key: "member-orgs", label: "My own label" });
+
+    // A key with no matching record stays key-only (no fabricated label).
+    const unknown = setChannelIcp(channel.id, "no-such-record", options).channel;
+    assert.deepEqual(unknown.icp, { key: "no-such-record" });
+  });
 });
