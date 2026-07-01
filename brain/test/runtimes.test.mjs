@@ -316,10 +316,52 @@ describe("claudeCodeRuntime availability + helpers", () => {
     assert.deepEqual(calls.tools, []);
     assert.equal(calls.turns, 1);
     assert.deepEqual(queryOptions.tools, []);
-    assert.deepEqual(queryOptions.allowedTools, ["mcp__gtm-operator__inspect_portfolio"]);
+    // Full harness (the default): bridge tools PLUS the founder's harness — skills, subagents,
+    // fan-out, web, read-only file tools. Never a send-shaped or write-shaped tool.
+    assert.ok(queryOptions.allowedTools.includes("mcp__gtm-operator__inspect_portfolio"));
+    for (const tool of ["Task", "Skill", "WebSearch", "Read"]) {
+      assert.ok(queryOptions.allowedTools.includes(tool), `${tool} must be granted in full-harness mode`);
+    }
+    for (const banned of ["Bash", "Write", "Edit", "NotebookEdit"]) {
+      assert.ok(!queryOptions.allowedTools.includes(banned), `${banned} must NEVER be granted to the operator`);
+    }
+    assert.deepEqual(queryOptions.settingSources, ["user"], "full harness loads the founder's skills/agents");
+    assert.match(queryOptions.systemPrompt, /full Claude harness/);
+    assert.match(queryOptions.systemPrompt, /cannot send, publish, write files, or resolve a founder gate/);
     assert.equal(queryOptions.strictMcpConfig, true);
     assert.equal(queryOptions.permissionMode, "dontAsk");
     assert.ok(queryOptions.mcpServers["gtm-operator"]);
+  });
+
+  it("caged mode restores the bridge-only operator (escape hatch)", async () => {
+    let queryOptions;
+    let status = "running";
+    const query = ({ options }) => {
+      queryOptions = options;
+      return (async function* messages() {
+        status = "waiting_for_input";
+        yield { type: "user", message: { content: [] } };
+      }());
+    };
+    await claudeCodeRuntime.drive({
+      sessionId: "op-2",
+      goal: "goal",
+      system: "Operate GTM IDE.",
+      tools: [{ name: "inspect_portfolio" }],
+      query,
+      env: {},
+      options: { root: "/tmp/gtm-test", cwd: "/tmp", harness: "caged" },
+      maxSteps: 8,
+      stepCount: 0,
+      isCancelled: () => false,
+      currentStatus: () => status,
+      onText: () => {},
+      onToolStart: () => {},
+      onTurn: () => 1,
+    });
+    assert.deepEqual(queryOptions.allowedTools, ["mcp__gtm-operator__inspect_portfolio"]);
+    assert.deepEqual(queryOptions.settingSources, []);
+    assert.equal(queryOptions.systemPrompt, "Operate GTM IDE.");
   });
 
   it("every founder wall is in PAUSE_STATUSES, so none can be talked past", () => {

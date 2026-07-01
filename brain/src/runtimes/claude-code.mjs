@@ -40,6 +40,24 @@ export function operatorAllowedTools(toolNames, server = BRIDGE_SERVER) {
   return toolNames.map((name) => `mcp__${server}__${name}`);
 }
 
+// The composer IS the Claude harness (founder decision, 2026-07-01). The operator runs as a
+// real Claude Code session — the founder's skills (/ideate, /positioning…), named subagents,
+// parallel fan-out (Task/Agent), web research, and read-only file tools — instead of a caged
+// model that can only touch the operator bridge. The wall stays structural at this boundary:
+// no Bash, no Write/Edit, no send-shaped tool is ever granted here, and gates still resolve
+// only through the founder (assertSafeTool refuses approve/send verbs on the bridge itself).
+// The honest seam this opens: a founder-owned agent definition invoked via Task may declare
+// its own tools — those definitions are the founder's files and their tool grants are the
+// founder's standing policy, the same trust boundary as the skills themselves.
+// Escape hatch: GTM_OPERATOR_HARNESS=caged (or ctx.options.harness === "caged") restores the
+// bridge-only operator.
+export const HARNESS_TOOLS = ["Task", "Agent", "Skill", "WebSearch", "WebFetch", "Read", "Glob", "Grep", "TodoWrite"];
+
+export function operatorHarnessMode(ctx = {}, env = process.env) {
+  const explicit = ctx.options?.harness ?? env.GTM_OPERATOR_HARNESS;
+  return explicit === "caged" ? "caged" : "full";
+}
+
 // Build the headless `claude` argument vector. Isolated so the exact flags are
 // trivially auditable and adjustable against the installed CLI version.
 export function buildClaudeArgs({ mcpConfigPath, allowedTools, model, maxTurns }) {
@@ -264,7 +282,9 @@ export const claudeCodeRuntime = {
   // still owns all durable state and the gate; this only restores the model's
   // working memory across the pauses GTM IDE itself imposes.
   async drive(ctx) {
+    const harness = operatorHarnessMode(ctx);
     const allowedTools = operatorAllowedTools((ctx.tools ?? []).map((tool) => tool.name));
+    if (harness === "full") allowedTools.push(...HARNESS_TOOLS);
     const sdkServer = createOperatorSdkServer(ctx);
     const runQuery = ctx.query || agentQuery;
     const reportSession = typeof ctx.onRuntimeSession === "function" ? ctx.onRuntimeSession : () => {};
@@ -302,12 +322,16 @@ export const claudeCodeRuntime = {
             model: ctx.model,
             maxTurns: Math.max(1, ctx.maxSteps - ctx.stepCount),
             maxBudgetUsd: Number(process.env.GTM_IDE_CLAUDE_CODE_MAX_BUDGET_USD) || 5,
-            systemPrompt: ctx.system,
+            systemPrompt: harness === "full"
+              ? `${ctx.system}\n\nYou are running inside the founder's full Claude harness: their skills (invoke with the Skill tool), their named subagents and parallel fan-out (Task/Agent), web research, and read-only file tools are available alongside the Drover bridge tools. Use them — fan out research, run /ideate-style generation with separate judging — but the walls hold: you cannot send, publish, write files, or resolve a founder gate from here; everything outward still stages at the gate.`
+              : ctx.system,
             tools: [],
             allowedTools,
             permissionMode: "dontAsk",
             strictMcpConfig: true,
-            settingSources: [],
+            // Full harness loads the founder's own skills/agents/CLAUDE.md ("user" settings);
+            // caged mode keeps the pre-2026-07 bridge-only behavior.
+            settingSources: harness === "full" ? ["user"] : [],
             // Persist the transcript so a later drive can resume it. This is the
             // founder's local Claude session store — the local-harness contract.
             persistSession: true,
