@@ -154,6 +154,46 @@ describe("operator ideate move", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
   });
 
+  it("directions mode: kept ideas become ICP hypotheses in the shared kernel — no pipelines composed", async () => {
+    const session = createOperatorSession({ goal: "Find the first ICP.", projectId: "default" }, options);
+    const paused = await runOperatorSession(session.id, {
+      options: { ...options, ideaGenerator: fakeGenerator(), ideaBar: fakeBar(), ideaDistinct: fakeDistinct },
+      client: fakeClient([{ content: [{ type: "tool_use", id: "i", name: "ideate", input: {} }] }]),
+    });
+    const survivors = paused.pendingIdeas.ideas;
+    const keepId = survivors[0].id;
+    const kept = survivors[0];
+
+    const resolved = resolveOperatorIdeas(session.id, {
+      build: keepId,
+      kill: survivors[1] ? [survivors[1].id] : [],
+      mode: "directions",
+    }, {
+      options,
+      client: fakeClient([{ content: [{ type: "tool_use", id: "done", name: "complete", input: { outcome: "achieved", summary: "Recommended the first probe." } }] }]),
+    });
+
+    // The resume instruction is direction-shaped: it must NOT tell the operator to compose pipelines.
+    const lastMessage = resolved.modelMessages.at(-1);
+    assert.match(lastMessage.content, /ICP DIRECTIONS/);
+    assert.match(lastMessage.content, /do NOT compose pipelines/);
+    assert.doesNotMatch(lastMessage.content, /Build each with compose_and_run/);
+
+    // The kept idea landed in the ONE shared kernel every future composition reads.
+    const { loadProject } = await import("../src/project-store.mjs");
+    const project = loadProject({ ...options, projectId: "default" });
+    const hypotheses = project.sharedContext?.icp?.hypotheses ?? [];
+    assert.ok(
+      hypotheses.some((line) => line.includes(kept.pitch)),
+      "the kept idea's pitch is recorded as an ICP hypothesis in shared context",
+    );
+
+    // No channel was created for the kept idea — the kernel holds the belief, not a per-idea object.
+    assert.equal((project.channels ?? []).length, 0, "directions mode never mints channels");
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+
   it("resolving ideas requires a session actually holding proposed ideas", () => {
     const session = createOperatorSession({ goal: "No ideas yet.", projectId: "default" }, options);
     assert.throws(() => resolveOperatorIdeas(session.id, { build: "x" }, { options }), /no proposed ideas/i);

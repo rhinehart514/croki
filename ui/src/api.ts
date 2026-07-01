@@ -266,7 +266,7 @@ export const resolveOperatorProposal = (sessionId: string, projectId: string, ac
 export const resolveOperatorIdeas = (
   sessionId: string,
   projectId: string,
-  payload: { build?: string[]; kill?: string[] },
+  payload: { build?: string[]; kill?: string[]; mode?: "directions" | "build" },
 ) => post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/ideas`, { projectId, ...payload });
 
 // The founder picks one of the candidate pipeline shapes an ambiguous goal produced. A FOUNDER act:

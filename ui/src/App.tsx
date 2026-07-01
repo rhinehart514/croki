@@ -1662,7 +1662,7 @@ export default function App() {
   // The founder resolves an ideate pause: build the strong ideas, kill the weak ones. A founder act —
   // the operator generated and graded the ideas but never decides which become work. Building resumes
   // the operator to compose+run each pick (wired back to its idea); killing teaches the next round.
-  const handleResolveIdeas = useCallback(async (payload: { build: string[]; kill: string[] }) => {
+  const handleResolveIdeas = useCallback(async (payload: { build: string[]; kill: string[]; mode?: "directions" | "build" }) => {
     if (!operatorSession) return;
     try {
       const response = await resolveOperatorIdeas(operatorSession.id, operatorProjectId(operatorSession), payload);
@@ -2033,9 +2033,15 @@ export default function App() {
             />
           ) : operatorSession?.status === "waiting_for_ideas" && operatorSession.pendingIdeas ? (
             // The operator ideated and STOPPED for the founder's call — a blocking decision, so it owns
-            // the screen (like a gate) rather than dropping back to the goal launcher. Build the strong
-            // ideas, kill the weak ones; nothing runs until you pick.
-            <IdeaReview session={operatorSession} onResolve={handleResolveIdeas} />
+            // the screen (like a gate) rather than dropping back to the goal launcher. Stage follows the
+            // project's life: a project with no pipelines yet is at its BEGINNING, so kept ideas become
+            // ICP directions in the shared kernel (no pipelines composed, no per-idea channels); a
+            // mature project's keeps compose into pipelines. Nothing runs until you pick.
+            <IdeaReview
+              session={operatorSession}
+              stage={(projects.find((p) => p.id === operatorSession.projectId)?.channelCount ?? 0) === 0 ? "directions" : "build"}
+              onResolve={handleResolveIdeas}
+            />
           ) : overviewActive && !activeChannelId ? (
             // One project, one canvas: opening a product LANDS on the board — the nine belief layers at
             // board altitude. Zoom a band to drop in; the Channels band carries the engine overview.

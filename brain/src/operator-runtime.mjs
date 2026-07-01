@@ -1891,9 +1891,35 @@ export function resolveOperatorIdeas(id, payload = {}, runtime = {}) {
     // taste capture is additive; a write failure must not interrupt the founder's pick
   }
 
-  const instruction = toBuild.length
-    ? `Founder picked ${toBuild.length} idea${toBuild.length === 1 ? "" : "s"} to build: ${toBuild.map((idea) => `"${idea.pitch}" (idea_id ${idea.id})`).join("; ")}. Build each with compose_and_run, passing its idea_id and its pre-wired goal — the first sets this session's channel, any others use compose_new:true. Passing idea_id wires the built channel back to its idea so the run's outcome closes the loop.${killed.length ? ` They killed ${killed.length} other idea${killed.length === 1 ? "" : "s"}; do not revisit those.` : ""}`
-    : `Founder reviewed the ideas${killed.length ? ` and killed ${killed.length}` : ""} but picked none to build yet. Wait for their direction; do not build on your own.`;
+  // Two resolution modes, set by where the project is in its life. "build" (the default): kept ideas
+  // compose into pipelines — the mature-project path. "directions": the project is at its BEGINNING —
+  // kept ideas are ICP directions, written into the ONE shared kernel (icp.hypotheses) that every
+  // future composition reads. No pipeline is composed and no per-idea channel object is created:
+  // the kernel holds the belief; pipelines come later as projections over it.
+  const mode = payload.mode === "directions" ? "directions" : "build";
+  if (mode === "directions" && toBuild.length) {
+    try {
+      const scoped = session.projectId ? { ...options, projectId: session.projectId } : options;
+      const project = loadProject(scoped);
+      const existing = project.sharedContext?.icp?.hypotheses ?? [];
+      const added = toBuild
+        .map((idea) => `${idea.angle ? `[${idea.angle}] ` : ""}${idea.pitch}`)
+        .filter((line) => !existing.includes(line));
+      if (added.length) {
+        updateSharedContext({ icp: { hypotheses: [...existing, ...added] } }, scoped);
+      }
+    } catch {
+      // Recording directions is additive; a write failure must not interrupt the founder's pick.
+    }
+  }
+
+  const instruction = mode === "directions"
+    ? (toBuild.length
+      ? `Founder kept ${toBuild.length} idea${toBuild.length === 1 ? "" : "s"} as ICP DIRECTIONS — recorded in the shared context's icp.hypotheses, the one kernel every future composition reads. The project is at its beginning: do NOT compose pipelines or create channels yet. Propose the single cheapest next discovery probe for the kept directions (what to test first and why), then complete the session with that recommendation.${killed.length ? ` They killed ${killed.length} other idea${killed.length === 1 ? "" : "s"}; do not revisit those.` : ""}`
+      : `Founder reviewed the ideas${killed.length ? ` and killed ${killed.length}` : ""} but kept none as directions yet. Wait for their direction; do not build on your own.`)
+    : (toBuild.length
+      ? `Founder picked ${toBuild.length} idea${toBuild.length === 1 ? "" : "s"} to build: ${toBuild.map((idea) => `"${idea.pitch}" (idea_id ${idea.id})`).join("; ")}. Build each with compose_and_run, passing its idea_id and its pre-wired goal — the first sets this session's channel, any others use compose_new:true. Passing idea_id wires the built channel back to its idea so the run's outcome closes the loop.${killed.length ? ` They killed ${killed.length} other idea${killed.length === 1 ? "" : "s"}; do not revisit those.` : ""}`
+      : `Founder reviewed the ideas${killed.length ? ` and killed ${killed.length}` : ""} but picked none to build yet. Wait for their direction; do not build on your own.`);
 
   const next = addEvent({
     ...session,
@@ -1906,9 +1932,11 @@ export function resolveOperatorIdeas(id, payload = {}, runtime = {}) {
     ],
   }, {
     type: "ideas_resolved",
-    title: toBuild.length ? "Founder picked ideas to build" : "Founder reviewed the ideas",
+    title: toBuild.length
+      ? (mode === "directions" ? "Founder kept ICP directions" : "Founder picked ideas to build")
+      : "Founder reviewed the ideas",
     detail: instruction,
-    data: { built: toBuild.map((idea) => idea.id), killed },
+    data: { mode, built: toBuild.map((idea) => idea.id), killed },
   }, options);
   launchOperatorSession(id, runtime);
   return next;
