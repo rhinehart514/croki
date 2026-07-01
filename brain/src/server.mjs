@@ -30,6 +30,7 @@ import {
   projectTeamId,
   promoteChannel,
   revokeChannel,
+  setChannelIcp,
   setActiveChannel,
   setActiveWorkflow,
   setActiveProject,
@@ -49,6 +50,8 @@ import {
   teamsForUser,
 } from "./team-store.mjs";
 import { executeDomainCommand } from "./domain-commands.mjs";
+import { reportFriction, listFrictionQueue } from "./friction.mjs";
+import { enqueueFeatureRequest, recoverStaleBuilds } from "./feature-builder.mjs";
 import { getProductModel } from "./product-model-store.mjs";
 import { getDesignState } from "./design-state-store.mjs";
 import { createClaudeProductModeler } from "./product-model-generator.mjs";
@@ -58,7 +61,7 @@ import { composeIdeas, createClaudeIdeaGenerator } from "./ideation.mjs";
 import { createClaudeIdeaBar } from "./idea-bar.mjs";
 import { createGtmIdea, getGtmIdea, saveGtmIdea, listGtmIdeas } from "./idea-store.mjs";
 import { recordRunDerivations } from "./run-derivation.mjs";
-import { getBoard } from "./board.mjs";
+import { getBoard, getPipelineBeliefSpine, getPipelineIcpGrouping } from "./board.mjs";
 import { applyExperimentVerdict } from "./belief-writeback.mjs";
 import { upsertStatedExperiment } from "./stated-experiment.mjs";
 import { listToolRegistry, approveToolBirth } from "./tool-registry-store.mjs";
@@ -66,7 +69,7 @@ import { listPeople, getPerson } from "./person-store.mjs";
 import { loadClarity, addClarity, removeClarity } from "./clarity-store.mjs";
 import { appendInput, listInputs, markRouted } from "./inputs-store.mjs";
 import { routeUnroutedInputs } from "./input-routing.mjs";
-import { findReferences, deriveChannelFeeds, deriveDirectedFeeds, createDerivedSourceLoader } from "./cross-reference.mjs";
+import { findReferences, listSharedKernel, deriveChannelFeeds, deriveDirectedFeeds, createDerivedSourceLoader } from "./cross-reference.mjs";
 import { compareChannelRuns } from "./run-compare.mjs";
 import { listConnectors } from "./connectors/registry.mjs";
 import { runGraph } from "./graph.mjs";
@@ -79,6 +82,7 @@ import {
   cancelOperatorSession,
   executeOperatorTool,
   launchOperatorSession,
+  resolveOperatorCandidates,
   resolveOperatorGate,
   resolveOperatorIdeas,
   resolveOperatorProposal,
@@ -286,6 +290,75 @@ const server = http.createServer(async (req, res) => {
   // Health
   if (req.method === "GET" && url.pathname === "/api/health") {
     json(res, 200, { ok: true }); return;
+  }
+
+  // Dogfood friction capture — feedback about GTM IDE itself (a bug, rough edge, or wish noticed
+  // mid-flow), filed into the repo's dogfood/queue/ as agent-readable markdown with the current
+  // object-model state auto-attached. This is the BUILD loop, not the taste loop: it never touches
+  // GTM memory, and nothing here approves, sends, or merges — a nightly agent works the queue into
+  // PRs that wait at founder review. Snapshot pieces that can't be read stay absent, never invented.
+  if (req.method === "POST" && url.pathname === "/api/friction") {
+    try {
+      const body = await readBody(req);
+      const report = String(body?.report || "").trim();
+      if (!report) { json(res, 400, { error: "A friction report needs the words — what got in the way?" }); return; }
+      const snapshot = {};
+      try {
+        const project = loadProject(body?.projectId ? { projectId: body.projectId } : {});
+        snapshot.project = { id: project.id, activeChannelId: project.activeChannelId ?? null };
+        try {
+          snapshot.needsFounder = listFlowsNeedingFounder({ projectId: project.id }).map((flow) => ({
+            sessionId: flow.sessionId, graphId: flow.graphId, runId: flow.runId ?? null, gateNodeIds: flow.gateNodeIds ?? [],
+          }));
+        } catch { /* gate state unreadable — leave absent */ }
+      } catch { /* no active project — leave absent */ }
+      if (body?.snapshot && typeof body.snapshot === "object") snapshot.caller = body.snapshot;
+      const record = reportFriction({
+        report,
+        kind: body?.kind,
+        context: body?.context,
+        snapshot,
+        source: body?.source ?? "api",
+      });
+      json(res, 201, record);
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/friction") {
+    try { json(res, 200, listFrictionQueue()); }
+    catch (err) { json(res, 500, { error: err instanceof Error ? err.message : String(err) }); }
+    return;
+  }
+
+  // Feature request — "the house fixes itself": the founder, from any codebase, asks GTM IDE for a
+  // new capability. The request lands in the same dogfood queue (the receipt returns immediately),
+  // then a builder agent works it headless in an ISOLATED worktree on a dogfood/* branch, one build
+  // at a time. The branch WAITS for founder review — this route can build, never merge or ship.
+  if (req.method === "POST" && url.pathname === "/api/feature-request") {
+    try {
+      const body = await readBody(req);
+      const report = String(body?.report || "").trim();
+      if (!report) { json(res, 400, { error: "A feature request needs the words — what should GTM IDE be able to do?" }); return; }
+      const snapshot = {};
+      try {
+        const project = loadProject(body?.projectId ? { projectId: body.projectId } : {});
+        snapshot.project = { id: project.id, activeChannelId: project.activeChannelId ?? null };
+      } catch { /* no active project — leave absent */ }
+      if (body?.snapshot && typeof body.snapshot === "object") snapshot.caller = body.snapshot;
+      const record = enqueueFeatureRequest({ report, context: body?.context, snapshot, source: body?.source ?? "api" });
+      json(res, 202, {
+        file: record.file,
+        status: record.status,
+        capturedAt: record.capturedAt,
+        note: "Build queued. Track it via GET /api/friction; the result is a dogfood/* branch waiting for your review — nothing merges without you.",
+      });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
   }
 
   // Native folder picker. The server runs locally, so it pops the OS folder dialog and returns the
@@ -520,7 +593,23 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && projectBoardMatch) {
     try {
       const projectId = decodeURIComponent(projectBoardMatch[1]);
-      json(res, 200, getBoard({ projectId }));
+      // The board carries the nine belief layers PLUS the L0 ground: which ICP each pipeline tests.
+      json(res, 200, { ...getBoard({ projectId }), icpGrouping: getPipelineIcpGrouping({ projectId }) });
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // L1 — one pipeline's belief spine: the five faces (Who / What you say / Who you reached / Did it
+  // work / Verdict) derived purely from THIS pipeline's real state. Read-only: never writes, never
+  // triggers or gates a run.
+  const projectPipelineSpineMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/pipelines\/([^/]+)\/spine$/);
+  if (req.method === "GET" && projectPipelineSpineMatch) {
+    try {
+      const projectId = decodeURIComponent(projectPipelineSpineMatch[1]);
+      const channelId = decodeURIComponent(projectPipelineSpineMatch[2]);
+      json(res, 200, getPipelineBeliefSpine({ projectId, channelId }));
     } catch (err) {
       json(res, 404, { error: err instanceof Error ? err.message : String(err) });
     }
@@ -908,6 +997,38 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Shared kernel — the project's real cross-pipeline object model in one read: durable People (with
+  // their pipeline appearances + fatigue), the stated + founder-linked ICPs, and the structured Claims,
+  // each pointing at the pipelines that carry it. Read-only; honest-blind on an empty project.
+  const projectSharedMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/shared$/);
+  if (req.method === "GET" && projectSharedMatch) {
+    try {
+      const projectId = decodeURIComponent(projectSharedMatch[1]);
+      json(res, 200, listSharedKernel(projectId));
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Explicit pipeline→ICP link — the founder-set counterpart to experiment-derived ICP grounds. POST
+  // sets the link ({ key, label? }); DELETE (or POST with no/blank key) clears it back to the base ICP
+  // ground. Typed and reversible; it writes ONLY the channel's `icp` link and NEVER autonomy/blessedPattern,
+  // so linking an ICP can never move a pipeline up the wall.
+  const projectChannelIcpMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/channels\/([^/]+)\/icp$/);
+  if ((req.method === "POST" || req.method === "DELETE") && projectChannelIcpMatch) {
+    try {
+      const projectId = decodeURIComponent(projectChannelIcpMatch[1]);
+      const channelId = decodeURIComponent(projectChannelIcpMatch[2]);
+      const icp = req.method === "DELETE" ? null : await readBody(req);
+      const { channel } = setChannelIcp(channelId, icp, { projectId });
+      json(res, 200, { channel });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
   // Channel feeds — undirected linkage between channels that share the same people, claims, or
   // experiment variables. One feed per channel pair, sorted by total shared entities descending.
   const projectChannelFeedsMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/channel-feeds$/);
@@ -1230,7 +1351,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const operatorActionMatch = url.pathname.match(/^\/api\/operator\/sessions\/([^/]+)\/(resume|gate|proposal|ideas|cancel)$/);
+  const operatorActionMatch = url.pathname.match(/^\/api\/operator\/sessions\/([^/]+)\/(resume|gate|proposal|ideas|candidates|cancel)$/);
   if (req.method === "POST" && operatorActionMatch) {
     try {
       const body = await readBody(req);
@@ -1247,8 +1368,11 @@ const server = http.createServer(async (req, res) => {
       // The founder kills/keeps the paused ideas — a founder act, never an agent tool. Picking ideas
       // resumes the operator to build each kept survivor through its pre-wired compose_and_run.
       else if (action === "ideas") session = resolveOperatorIdeas(sessionId, body);
+      // The founder picks ONE candidate pipeline — a founder act that builds the chosen shape through
+      // compose_and_run and drives it to the gate. Never an agent tool.
+      else if (action === "candidates") session = await resolveOperatorCandidates(sessionId, body);
       else session = cancelOperatorSession(sessionId);
-      json(res, action === "gate" || action === "proposal" || action === "ideas" ? 200 : 202, { session: publicOperatorSession(session) });
+      json(res, action === "gate" || action === "proposal" || action === "ideas" || action === "candidates" ? 200 : 202, { session: publicOperatorSession(session) });
     } catch (err) {
       const status = err?.code === "gate_release_forbidden" ? 403 : 409;
       json(res, status, { error: err instanceof Error ? err.message : String(err) });
@@ -1833,6 +1957,14 @@ export { server };
 
 server.listen(port, host, () => {
   console.log(`GTM IDE running at http://${host}:${port}`);
+  // Dogfood crash recovery: no feature build survives a restart, so flip stale queued/building
+  // items to `interrupted` and salvage any orphaned worktree work onto its branch. Best-effort.
+  try {
+    const recovered = recoverStaleBuilds();
+    if (recovered.length) console.log(`  Dogfood recovery: ${recovered.map((r) => r.item ?? r.worktree).join(", ")}`);
+  } catch (err) {
+    console.log(`  Dogfood recovery skipped: ${err instanceof Error ? err.message : err}`);
+  }
   const connectors = listConnectors();
   const ready = connectors.filter((c) => c.configured && !c.stub);
   const stubs = connectors.filter((c) => c.stub);
