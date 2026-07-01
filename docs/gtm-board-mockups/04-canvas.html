@@ -265,12 +265,13 @@ order.forEach(id=>{
   // spine node
   c.innerHTML=`
     <div class="cluster-head"><span class="cnum">${id}</span> ${s.kind}</div>
-    <div class="node spine ${s.status}" onclick="focusSection(${id})">
+    <div class="node spine ${s.status}">
       <div class="node-top"><span class="node-kind">${s.name}</span>
         <span class="node-pill pill-${s.pill}"><span class="p"></span>${s.pill}</span></div>
       <div class="node-name">${s.belief}</div>
       <div class="node-sub">${s.sub}</div>
     </div>`;
+  c.querySelector('.node.spine').onclick=()=>focusSection(id);
   // detail nodes (hidden until extend) — unfold to the right & below
   s.details.forEach((d,j)=>{
     const dn=document.createElement('div');

@@ -112,14 +112,14 @@ export function TeamOnboarding({
       <div className="onb-card" role="dialog" aria-label="Set up your team workspace">
         <div className="onb-brand">
           <span className="onb-brand-mark"><Boxes size={18} /></span>
-          <span className="onb-brand-name">GTM IDE</span>
+          <span className="onb-brand-name">Drover</span>
         </div>
 
         {step === "who" ? (
           <>
             <h1 className="onb-title">Set up your workspace</h1>
             <p className="onb-sub">
-              GTM IDE is the IDE for go-to-market. Your team shares one set of pipelines, runs, and gate
+              Drover is the go-to-market desk for founders running more than one product. Your team shares one set of pipelines, runs, and gate
               decisions — each of you drives Claude on your own machine.
             </p>
             <label className="onb-field">

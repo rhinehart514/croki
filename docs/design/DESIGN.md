@@ -1,4 +1,4 @@
-# GTM IDE — design system record
+# Drover — design system record
 
 The living index of the codebase's design system, extracted from the real code
 (`ui/src/index.css`, `ui/src/styles/*`). Refreshed as the system accretes, not rewritten.

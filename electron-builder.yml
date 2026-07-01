@@ -1,6 +1,6 @@
 appId: com.gtmide.desktop
-productName: GTM IDE
-copyright: GTM IDE
+productName: Drover
+copyright: Drover
 
 # Keep everything as plain files in Resources. The brain is a Node server that reads ui/dist off disk
 # and loads a native SQLite module (better-sqlite3); asar packing would force unpack rules for both.
@@ -42,4 +42,4 @@ mac:
   identity: null
 
 dmg:
-  title: GTM IDE
+  title: Drover

@@ -1,4 +1,4 @@
-# GTM IDE — the model, the loops, and the surface
+# Drover — the model, the loops, and the surface
 
 This is the single orienting document for what GTM IDE *is*: its conceptual model
 (the layers of objects), its workflows (what you actually do), and its interaction

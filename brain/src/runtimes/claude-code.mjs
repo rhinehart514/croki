@@ -209,7 +209,7 @@ export function createOperatorSdkServer(ctx) {
   return createSdkMcpServer({
     name: BRIDGE_SERVER,
     version: "0.3.0",
-    instructions: "Use these typed GTM IDE tools for every project, channel, graph, run, and completion action. Never narrate a tool call in text.",
+    instructions: "Use these typed Drover tools for every project, channel, graph, run, and completion action. Never narrate a tool call in text.",
     tools,
     alwaysLoad: true,
   });

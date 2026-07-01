@@ -1,4 +1,4 @@
-# GTM IDE — Product Spec
+# Drover — Product Spec
 
 *One doc. What this product is, how it works, what exists today, and what has to change to get there.*
 *Plain words on purpose — if a label needs a glossary, it's wrong.*

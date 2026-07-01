@@ -91,7 +91,7 @@ function startBrain(port) {
     // than leaving a blank window.
     if (!app.isQuiting && mainWindow) {
       dialog.showErrorBox(
-        "GTM IDE stopped",
+        "Drover stopped",
         `The local engine exited (code ${code}). Quit and relaunch the app.`
       );
     }
@@ -163,7 +163,7 @@ async function boot() {
     createWindow(brainPort);
   } catch (err) {
     dialog.showErrorBox(
-      "GTM IDE failed to start",
+      "Drover failed to start",
       `Could not start the local engine.\n\n${err?.stack || err?.message || err}`
     );
     app.quit();

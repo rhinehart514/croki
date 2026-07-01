@@ -692,7 +692,7 @@ const TOOLS = [
   },
   {
     name: "resume_operator_session",
-    description: "Resume a paused or interrupted operator session with explicit founder direction. Use after get_operator_session shows a pending question. Founder gates themselves are resolved in GTM IDE, not here.",
+    description: "Resume a paused or interrupted operator session with explicit founder direction. Use after get_operator_session shows a pending question. Founder gates themselves are resolved in Drover, not here.",
     inputSchema: {
       type: "object",
       properties: {
@@ -753,7 +753,7 @@ const TOOLS = [
   },
   {
     name: "report_friction",
-    description: "File a dogfood report about GTM IDE ITSELF — a bug, rough edge, or wish the founder hits mid-flow ('the gate card hid the citation', 'I wish the queue showed all ventures'). Use it the moment the complaint is uttered; don't make the founder switch tools. Writes an agent-readable markdown item into the product repo's dogfood/queue/ with the current project and pending-gate state auto-attached, for the nightly build loop to work into gated PRs. This is feedback about the PRODUCT and never touches GTM taste memory — judgments about a draft belong at the gate, not here.",
+    description: "File a dogfood report about Drover ITSELF — a bug, rough edge, or wish the founder hits mid-flow ('the gate card hid the citation', 'I wish the queue showed all ventures'). Use it the moment the complaint is uttered; don't make the founder switch tools. Writes an agent-readable markdown item into the product repo's dogfood/queue/ with the current project and pending-gate state auto-attached, for the nightly build loop to work into gated PRs. This is feedback about the PRODUCT and never touches GTM taste memory — judgments about a draft belong at the gate, not here.",
     inputSchema: {
       type: "object",
       properties: {
@@ -768,11 +768,11 @@ const TOOLS = [
   },
   {
     name: "request_feature",
-    description: "Ask GTM IDE to BUILD a new capability for itself — usable from any codebase, any session. The request is queued instantly, then a builder agent works it in an isolated branch of the GTM IDE repo (one build at a time, tests run, work committed). The result is a dogfood/* branch WAITING for founder review — this tool can never merge, push, or ship anything. Use for 'GTM IDE should be able to…' wishes; use report_friction for plain bug notes that don't need a build now.",
+    description: "Ask Drover to BUILD a new capability for itself — usable from any codebase, any session. The request is queued instantly, then a builder agent works it in an isolated branch of the Drover repo (one build at a time, tests run, work committed). The result is a dogfood/* branch WAITING for founder review — this tool can never merge, push, or ship anything. Use for 'Drover should be able to…' wishes; use report_friction for plain bug notes that don't need a build now.",
     inputSchema: {
       type: "object",
       properties: {
-        report: { type: "string", description: "The feature, in the founder's words — what should GTM IDE be able to do, and for what moment?" },
+        report: { type: "string", description: "The feature, in the founder's words — what should Drover be able to do, and for what moment?" },
         context: { type: "string", description: "What the founder was doing when they wished for it (one or two sentences)." },
         projectId: { type: "string", description: "Project the founder was working in. Defaults to the active project." },
       },
@@ -782,7 +782,7 @@ const TOOLS = [
   },
   {
     name: "get_dogfood_queue",
-    description: "Read GTM IDE's own dogfood queue — every friction report and feature request with its status (open, queued, building, ready-for-review, declined, interrupted, failed) and the dogfood/* branch when a build produced one. Use to answer 'what's in the queue / what's building / what's ready for my review'. Read-only.",
+    description: "Read Drover's own dogfood queue — every friction report and feature request with its status (open, queued, building, ready-for-review, declined, interrupted, failed) and the dogfood/* branch when a build produced one. Use to answer 'what's in the queue / what's building / what's ready for my review'. Read-only.",
     inputSchema: { type: "object", properties: {}, required: [] },
     handler: () => brainGet("/api/friction"),
   },
@@ -848,7 +848,7 @@ async function dispatch(message) {
     } catch (err) {
       const isBrainDown = err.message?.includes("fetch failed") || err.message?.includes("ECONNREFUSED");
       const text = isBrainDown
-        ? "GTM IDE brain not running. Start with: npm start"
+        ? "Drover brain not running. Start with: npm start"
         : String(err.message ?? err);
       return respond(id, {
         content: [{ type: "text", text }],
@@ -908,7 +908,7 @@ function main() {
     }
   });
 
-  process.stderr.write("GTM IDE MCP server ready (stdio)\n");
+  process.stderr.write("Drover MCP server ready (stdio)\n");
 }
 
 // Only start the stdio transport when run directly, so the module can be

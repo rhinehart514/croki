@@ -74,7 +74,7 @@ export function ProductEntry({ busy, onStart, onSeePortfolio }: {
   return (
     <div className="product-entry">
       <div className="product-entry-inner">
-        <span className="product-entry-eyebrow">GTM IDE</span>
+        <span className="product-entry-eyebrow">Drover</span>
 
         {/* ── Beat 1: point it at your product ───────────────────────────────── */}
         {(phase === "pick" || phase === "scanning") && (

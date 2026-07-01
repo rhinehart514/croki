@@ -132,7 +132,7 @@ Return only the message body.`;
         label: "Product context",
         position: { x: 640, y: 0 },
         config: {
-          name: "GTM IDE",
+          name: "Drover",
           description: "A local workbench that proves your GTM funnel with code evidence and runs AI-powered outreach",
           valueProps: ["attribution from code not guesswork", "founder-gated, never blasts", "runs on your machine"],
         },

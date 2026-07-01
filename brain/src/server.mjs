@@ -341,7 +341,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const body = await readBody(req);
       const report = String(body?.report || "").trim();
-      if (!report) { json(res, 400, { error: "A feature request needs the words — what should GTM IDE be able to do?" }); return; }
+      if (!report) { json(res, 400, { error: "A feature request needs the words — what should Drover be able to do?" }); return; }
       const snapshot = {};
       try {
         const project = loadProject(body?.projectId ? { projectId: body.projectId } : {});
@@ -1956,7 +1956,7 @@ attachTerminalServer(server);
 export { server };
 
 server.listen(port, host, () => {
-  console.log(`GTM IDE running at http://${host}:${port}`);
+  console.log(`Drover running at http://${host}:${port}`);
   // Dogfood crash recovery: no feature build survives a restart, so flip stale queued/building
   // items to `interrupted` and salvage any orphaned worktree work onto its branch. Best-effort.
   try {

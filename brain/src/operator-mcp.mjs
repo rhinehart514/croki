@@ -124,7 +124,7 @@ export function createDispatcher(bridge, write) {
         const { result, pause, status } = await bridge.callTool(name, args);
         // Surface a pause as plain text so the subprocess sees it stopped at a
         // founder gate (or for founder input) and ends its turn.
-        const note = pause ? `\n\n[GTM IDE paused: session status is "${status}". The founder owns what happens next; stop here.]` : "";
+        const note = pause ? `\n\n[Drover paused: session status is "${status}". The founder owns what happens next; stop here.]` : "";
         return respond(write, id, {
           content: [{ type: "text", text: `${JSON.stringify(result, null, 2)}${note}` }],
         });
@@ -171,7 +171,7 @@ function main() {
       });
     }
   });
-  process.stderr.write("GTM IDE operator MCP bridge ready (stdio)\n");
+  process.stderr.write("Drover operator MCP bridge ready (stdio)\n");
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

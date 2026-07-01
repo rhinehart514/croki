@@ -1,4 +1,4 @@
-# GTM IDE completion plan
+# Drover completion plan
 
 ## Product judgment
 

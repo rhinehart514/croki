@@ -1,4 +1,4 @@
-# GTM IDE — Vision
+# Drover — Vision
 
 **What it is:** A local Claude agent harness for GTM engineering. You open a repository, it reads what you built, and runs many pipelines — grounded in your code, powered by Claude at the intelligence nodes, with you in every gate. (A pipeline is one staged flow to your gate; "channel" was only ever the code identifier for it.)
 

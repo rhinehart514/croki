@@ -1,4 +1,4 @@
-# GOAL — Un-cage GTM IDE into an actual IDE for GTM engineering
+# GOAL — Un-cage Drover into an actual IDE for GTM engineering
 
 ## North star
 

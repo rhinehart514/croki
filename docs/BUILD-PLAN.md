@@ -1,4 +1,4 @@
-# GTM IDE — Build Plan (spec → reality)
+# Drover — Build Plan (spec → reality)
 
 *Consolidated from a grounded gap analysis of the codebase against `PRODUCT-SPEC.md`. Five areas, real files, rough sizes (S ≈ <1d, M ≈ 1–2d, L ≈ 3+d).*
 

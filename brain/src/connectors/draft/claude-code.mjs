@@ -106,7 +106,7 @@ export async function run(stage, upstream, context) {
     || product?.description
     || product?.name
     || context?.productContext
-    || "GTM IDE";
+    || "Drover";
   const promptTemplate = stage.agentPrompt || DEFAULT_PROMPT;
   const model = stage.config?.model;
 

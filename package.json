@@ -2,8 +2,8 @@
   "name": "gtm-ide",
   "private": true,
   "version": "0.3.1",
-  "description": "GTM IDE — the IDE for go-to-market.",
-  "author": "GTM IDE",
+  "description": "Drover — the go-to-market desk for founders running more than one product.",
+  "author": "Drover",
   "main": "electron/main.cjs",
   "scripts": {
     "build": "npm --prefix ui run build",
