@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  ArrowUp, BarChart3, Bot, Boxes, ChevronRight, Code, Database, Filter, LoaderCircle, Lightbulb, Maximize2,
+  ArrowUp, BarChart3, Bot, Boxes, ChevronRight, Code, Database, Filter, LayoutGrid, LoaderCircle, Lightbulb, Maximize2,
   Mic, Minimize2, PenLine, Pin, Play, Plus, Search, Send, ShieldCheck, Square, Wand2, X,
 } from "lucide-react";
 import { statusLabel } from "@/lib/status";
@@ -13,7 +13,63 @@ import { Collapse, Reveal, Stagger, StaggerItem } from "@/lib/motion";
 import { STEP_OPTIONS, type StepOption } from "@/lib/step-options";
 import "@/styles/dock-context.css";
 import "@/styles/composer-posture.css";
-import type { ClarityKind, ContextManifest, GTMGraph, GTMNode, GTMNodeCategory, GTMRunResult, OperatorEvent, OperatorSession } from "@/types";
+import "@/styles/composer-candidates.css";
+import type { ClarityKind, ContextManifest, GTMEdge, GTMGraph, GTMNode, GTMNodeCategory, GTMRunResult, OperatorEvent, OperatorSession } from "@/types";
+
+// A pipeline SKETCH the operator returns when the goal is too vague to compose one graph — a named
+// shape the founder can pick from, not a draft to approve. Mirrors the backend's ambiguous-goal
+// result: { kind: "candidates", candidates: [...] }. These never run or send; picking one is what
+// starts the build (which still stops at the founder gate downstream).
+type Candidate = { id: string; label: string; rationale: string; nodes: GTMNode[]; edges: GTMEdge[] };
+
+// ─── The ONE seam where the backend's ambiguous-goal result is read off the session ─────────────
+// The backend agent defines, in parallel, an operator capability that stages candidate pipeline
+// shapes for a vague goal. Until the exact landing field is pinned, this probes the likely spots (a
+// `pendingCandidates` field mirroring the existing `pendingIdeas`, a top-level `candidates`, or a
+// staged event whose `data.kind === "candidates"`). Returns [] when absent, so the dock degrades to
+// the normal conversation. To reconcile with the backend's real field name, change only this reader.
+function normalizeCandidates(raw: unknown): Candidate[] {
+  if (!Array.isArray(raw)) return [];
+  const out: Candidate[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const c = item as Record<string, unknown>;
+    const id = typeof c.id === "string" ? c.id : null;
+    const label = typeof c.label === "string" ? c.label : null;
+    if (!id || !label) continue;
+    const nodes = (Array.isArray(c.nodes) ? c.nodes : []).map((n) => {
+      const node = n as GTMNode;
+      // Candidate nodes may arrive un-laid-out; a missing position would crash the flow-order sort.
+      return node.position ? node : { ...node, position: { x: 0, y: 0 } };
+    });
+    out.push({
+      id,
+      label,
+      rationale: typeof c.rationale === "string" ? c.rationale : "",
+      nodes,
+      edges: Array.isArray(c.edges) ? (c.edges as GTMEdge[]) : [],
+    });
+  }
+  return out;
+}
+function candidatesFromEvents(events: OperatorEvent[]): unknown {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const data = events[i].data;
+    if (data && typeof data === "object" && (data as Record<string, unknown>).kind === "candidates") {
+      return (data as Record<string, unknown>).candidates;
+    }
+  }
+  return null;
+}
+function sessionCandidates(session: OperatorSession | null): Candidate[] {
+  if (!session) return [];
+  const bag = session as unknown as { pendingCandidates?: { candidates?: unknown } | null; candidates?: unknown };
+  const raw =
+    (Array.isArray(bag.pendingCandidates?.candidates) ? bag.pendingCandidates!.candidates : null) ??
+    (Array.isArray(bag.candidates) ? bag.candidates : null) ??
+    candidatesFromEvents(session.events);
+  return normalizeCandidates(raw);
+}
 
 // Minimal shape of the Web Speech API's SpeechRecognition we touch — the DOM lib types it behind
 // a vendor-prefixed global that isn't in our tsconfig's lib, so we declare just the surface we use.
@@ -344,6 +400,73 @@ function BuildRail({ graph, runningNodeId, proposedNodeIds, result }: {
   );
 }
 
+// ─── Candidate pipeline sketches (an ambiguous goal returns a few shapes, not a stall) ──────────
+// When the goal is too vague to compose one graph, the operator hands back a small set of concrete
+// pipeline SHAPES. The founder picks one; that pick is what starts the build. These are NOT gate
+// items: no amber, no ✓/✕ approve gesture — picking a shape is choosing a direction, not approving a
+// send. One sketch = its name, a one-line why, and its steps as the same ghost cards the build room
+// uses, so the shape reads in the product's own card language.
+function CandidateSketch({ candidate, picked, dimmed, onPick }: {
+  candidate: Candidate;
+  picked: boolean;
+  dimmed: boolean;
+  onPick: () => void;
+}) {
+  const nodes = [...candidate.nodes]
+    .filter((n) => n.category !== "context" && n.category !== "resource")
+    .sort((a, b) => (a.position.y - b.position.y) || (a.position.x - b.position.x));
+  return (
+    <div className={`cnv-cand ${picked ? "picked" : ""} ${dimmed ? "dimmed" : ""}`}>
+      <div className="cnv-cand-head">
+        <span className="cnv-cand-label">{candidate.label}</span>
+        <button className="cnv-cand-pick" type="button" onClick={onPick} disabled={dimmed || picked}>
+          {picked ? "Building…" : "Build this"}
+        </button>
+      </div>
+      {candidate.rationale ? <p className="cnv-cand-why">{candidate.rationale}</p> : null}
+      {nodes.length ? (
+        <div className="cnv-cand-flow">
+          {nodes.map((n, i) => (
+            <div className="cnv-cand-step" key={n.id}>
+              <BuildCard node={n} live={false} ghost />
+              {i < nodes.length - 1 ? <span className="dock-build-edge" aria-hidden="true" /> : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CandidateChoices({ candidates, pickedId, onPick }: {
+  candidates: Candidate[];
+  pickedId: string | null;
+  onPick: (candidate: Candidate) => void;
+}) {
+  return (
+    <div className="cnv-cands" role="group" aria-label="Pipeline shapes to choose from">
+      <div className="cnv-cands-head">
+        <Boxes size={13} aria-hidden="true" />
+        <div className="cnv-cands-head-text">
+          <strong>A few ways to shape this</strong>
+          <span>Pick one and Claude builds it. Nothing runs or sends until your gate.</span>
+        </div>
+      </div>
+      <div className="cnv-cands-list">
+        {candidates.map((c) => (
+          <CandidateSketch
+            key={c.id}
+            candidate={c}
+            picked={pickedId === c.id}
+            dimmed={!!pickedId && pickedId !== c.id}
+            onPick={() => onPick(c)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // The persistent co-pilot. Always docked, never summoned: your channels at the head, the
 // operator's live narration in the middle, one input at the foot. Talking to Claude here
 // either starts a new session (when idle) or continues the current one — one conversation.
@@ -351,12 +474,21 @@ export function ComposerDock({
   session, running, boundChannelName, onSend, onCancel, onReviewGate,
   floating = false, focusSignal = 0, recede = false,
   contextManifest = null, onOpenGrounding, onOpenPicture, onIdeate,
-  onAddNode, onAddChain, onOpenLibrary,
+  onAddNode, onAddChain, onOpenLibrary, onOpenComponents,
   posture, onExitPosture, onPin,
   graph = null, runningNodeId = null, proposedNodeIds = null, result = null,
+  subject = null, onClearSubject, isNavCommand,
+  onProposeCandidates, onBuildCandidate,
 }: {
   session: OperatorSession | null;
   running: boolean;
+  // The canvas↔chat tie: the node the founder handed to Claude from the canvas. Shown as a subject
+  // chip; the host frames the next message with its context and clears it. Null when the chat is free.
+  subject?: { id: string; label: string; kind: string } | null;
+  onClearSubject?: () => void;
+  // True when the text is a canvas navigation command ("go to the gate") — steering, not a question.
+  // These are allowed EVEN while Claude is working: they move the camera and never reach the operator.
+  isNavCommand?: (text: string) => boolean;
   // The channel the operator session is editing, shown as a quiet sub-label in the dock head. The
   // composer is locked to the project, so there is no longer a "you're viewing a different channel"
   // mismatch to warn about — this is informational only.
@@ -387,6 +519,10 @@ export function ComposerDock({
   // staged-output node already wired, so the wall holds by construction.
   onAddChain?: (specs: (Partial<GTMNode> & { label: string })[]) => void;
   onOpenLibrary?: () => void;
+  // Opens the Figma-style component library — the founder hand-picks real inventory (their leads,
+  // composed teammates, ICP/claims/experiments, raw blocks) and each pick drops a node on the canvas.
+  // It belongs to the chat: you either ask Claude or reach for the library yourself.
+  onOpenComponents?: () => void;
   // Ideate posture — the composer in a "thinking, not building" register. When "ideate", the input
   // invites discussion (who's the buyer, where's the wedge, why now) instead of eagerly composing
   // channels, and a quiet chip in the head marks the posture (× exits it via onExitPosture). The
@@ -404,11 +540,21 @@ export function ComposerDock({
   // the build room's "what would change" diff: ghost cards for proposed steps, a summary count.
   proposedNodeIds?: Set<string> | null;
   result?: GTMRunResult | null;
+  // Ambiguous-goal candidates. When the operator returns a set of pipeline SHAPES instead of one
+  // graph, the dock renders them as selectable sketches. `onProposeCandidates` fires once per new set
+  // so the host can also ghost them on the canvas — the in-dock picker stands alone without it.
+  // `onBuildCandidate` is the founder's pick reaching the host's compose_and_run build path; when it's
+  // absent the dock falls back to a concrete `onSend`, so picking works even before that wiring exists.
+  onProposeCandidates?: (candidates: Candidate[]) => void;
+  onBuildCandidate?: (candidate: Candidate) => void | Promise<void>;
 }) {
   // Rest as a pill on first paint when the dock floats over the channel workbench, OR when a FINISHED
   // session would otherwise open its full transcript over the read-only overview canvas. Either way the
   // founder lands on the work, not a panel covering it; the conversation is one click away on the peek.
-  const [collapsed, setCollapsed] = useState(floating || (!floating && !!session && TERMINAL.has(session.status)));
+  // Rest as the slim edge rail whenever there's no live work to watch — floating always opens collapsed,
+  // and docked opens collapsed unless an ACTIVE (non-terminal) session is running, so an idle or finished
+  // session hands the width back to the canvas instead of holding an open lane over it.
+  const [collapsed, setCollapsed] = useState(floating || !session || TERMINAL.has(session.status));
   const [addOpen, setAddOpen] = useState(false);
   // The "+" stages building-block MODES as chips in the composer instead of dropping a card on the
   // canvas. The card lands on SEND, built from the typed description — so "+ Input" then "a CSV of WNY
@@ -555,6 +701,40 @@ export function ComposerDock({
   const sendDisabled = running || session?.status === "running" || session?.status === "ready" || waitingGate;
   const working = running || session?.status === "running";
 
+  // Ambiguous-goal sketches, read off the session through the one isolated seam. Held as local pick
+  // state so choosing one fades the rest; a fresh set of candidates clears the pick.
+  const candidates = sessionCandidates(session);
+  const candidateSig = candidates.map((c) => c.id).join("|");
+  const [pickedCandidateId, setPickedCandidateId] = useState<string | null>(null);
+  const [trackedCandidateSig, setTrackedCandidateSig] = useState(candidateSig);
+  if (candidateSig !== trackedCandidateSig) {
+    setTrackedCandidateSig(candidateSig);
+    setPickedCandidateId(null);
+  }
+  // Announce a new set of candidates to the host exactly once (so it can ghost them on the canvas).
+  // Guarded on the id signature so it fires per-set, not per-render.
+  const proposedSigRef = useRef<string>("");
+  useEffect(() => {
+    if (candidateSig && candidateSig !== proposedSigRef.current) {
+      proposedSigRef.current = candidateSig;
+      onProposeCandidates?.(candidates);
+    } else if (!candidateSig) {
+      proposedSigRef.current = "";
+    }
+  }, [candidateSig, candidates, onProposeCandidates]);
+
+  const buildCandidate = (candidate: Candidate) => {
+    if (pickedCandidateId) return;
+    setPickedCandidateId(candidate.id);
+    setCollapsed(false);
+    // The founder's pick IS the act: build THIS shape via compose_and_run (it still stops at the
+    // gate downstream). Prefer the host's dedicated builder; fall back to a concrete send so the
+    // picker works standalone. This is the ONE place the build path is reached — a one-line swap if
+    // main names the endpoint differently.
+    if (onBuildCandidate) { void onBuildCandidate(candidate); return; }
+    void onSend(`Build this pipeline — ${candidate.label}. ${candidate.rationale} Compose it and run it to my gate.`);
+  };
+
   const send = async () => {
     if (submitting) return;
     // Chips first: an active step chip means "build this block from my words," a local graph edit —
@@ -572,7 +752,11 @@ export function ComposerDock({
       return;
     }
     const value = input.trim();
-    if (!value || sendDisabled) return;
+    if (!value) return;
+    // A navigation command ("go to the gate") steers the canvas and never reaches Claude, so it's
+    // allowed even while Claude is working. Any real turn still waits until Claude is free.
+    const nav = isNavCommand?.(value) ?? false;
+    if (sendDisabled && !nav) return;
     setSubmitting(true);
     setCollapsed(false); // sending opens the conversation above the composer
     try { await onSend(value); setInput(""); }
@@ -609,6 +793,28 @@ export function ComposerDock({
           ) : null}
         </div>
       ) : null}
+      {/* Canvas subject — the node the founder handed to Claude from the canvas. The next message is
+          framed with its context by the host, so "make this shorter" resolves to a real object. The ×
+          drops it back to a free chat. */}
+      {subject ? (
+        <div className="composer-subject">
+          <ChevronRight className="composer-subject-icon" size={13} aria-hidden="true" />
+          <span className="composer-subject-label">
+            <span className="composer-subject-re">Re:</span> {subject.label}
+          </span>
+          {onClearSubject ? (
+            <button
+              className="composer-subject-x"
+              type="button"
+              aria-label={`Stop asking about ${subject.label}`}
+              title="Clear the subject"
+              onClick={onClearSubject}
+            >
+              <X size={12} />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {/* Staged step modes. While any chip is set, the composer is in "build a step" mode — your words
           describe the block, Enter creates it on the canvas, and the chip clears. Remove a chip to drop
           back to talking to Claude. */}
@@ -634,9 +840,9 @@ export function ComposerDock({
         ref={inputRef}
         className="composer-box-input"
         aria-label={chipMode ? `Describe the ${stepChips[stepChips.length - 1].label} step` : "Message Claude"}
-        placeholder={chipMode ? `Describe the ${stepChips[stepChips.length - 1].label} step…` : sendDisabled ? "Claude is working…" : ideating ? "Think through your GTM — who's the real buyer, where's the wedge, why now" : session ? "Reply, redirect, or ask Claude to continue…" : "Ask Claude to build, run, or change anything…"}
+        placeholder={chipMode ? `Describe the ${stepChips[stepChips.length - 1].label} step…` : subject ? `Ask Claude about “${subject.label}” — make it shorter, why it's empty, run it…` : sendDisabled ? "Claude is working — you can still say “go to …” to move the canvas" : ideating ? "Think through your GTM — who's the real buyer, where's the wedge, why now" : session ? "Reply, redirect, or ask Claude to continue…" : "Ask Claude to build, run, or change anything…"}
         value={input}
-        disabled={sendDisabled && !chipMode}
+        disabled={submitting && !chipMode}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
         rows={1}
@@ -730,7 +936,7 @@ export function ComposerDock({
           ) : null}
           <button
             className="composer-box-send"
-            disabled={submitting || (chipMode ? false : (!input.trim() || sendDisabled))}
+            disabled={submitting || (chipMode ? false : (!input.trim() || (sendDisabled && !(isNavCommand?.(input.trim()) ?? false))))}
             onClick={() => void send()}
             type="button"
             aria-label={chipMode ? "Add the step" : "Send to Claude"}
@@ -823,6 +1029,14 @@ export function ComposerDock({
             <Square />
           </button>
         )}
+        {/* Add to canvas — opens the component library. Hand-pick your real leads, teammates, and
+            references instead of describing them; each pick drops a node on the current pipeline. */}
+        {onOpenComponents ? (
+          <button className="composer-dock-add" onClick={onOpenComponents} type="button" title="Add to canvas — your real leads, teammates, and references" aria-label="Add a component to the canvas">
+            <LayoutGrid size={14} />
+            <span>Add</span>
+          </button>
+        ) : null}
         <button className="composer-dock-icon" onClick={() => setExpanded((v) => !v)} type="button" title={expanded ? "Shrink" : "Expand"} aria-label={expanded ? "Shrink the panel" : "Expand the panel"} aria-pressed={expanded}>
           {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
         </button>
@@ -919,6 +1133,13 @@ export function ComposerDock({
           <BuildRail graph={graph} runningNodeId={runningNodeId} proposedNodeIds={proposedNodeIds} result={result} />
         ) : null}
       </div>
+
+      {/* ── Candidate sketches — an ambiguous goal returns a few shapes to pick from, not a stall.
+          Distinct from the gate below: no amber, no approve gesture — choosing a shape is a direction,
+          not an approval to send. Hidden while a gate is waiting so the two decisions never collide. */}
+      {candidates.length > 0 && !waitingGate ? (
+        <CandidateChoices candidates={candidates} pickedId={pickedCandidateId} onPick={buildCandidate} />
+      ) : null}
 
       {/* ── Gate prompt ────────────────────────────────────────── */}
       {waitingGate && pendingGateId && (

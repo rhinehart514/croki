@@ -269,6 +269,15 @@ export const resolveOperatorIdeas = (
   payload: { build?: string[]; kill?: string[] },
 ) => post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/ideas`, { projectId, ...payload });
 
+// The founder picks one of the candidate pipeline shapes an ambiguous goal produced. A FOUNDER act:
+// the operator sketched the candidates but never ran them — this resumes it to build the chosen shape
+// through the existing compose_and_run, still stopping at the founder gate. `pick` is the candidate id.
+export const resolveOperatorCandidates = (
+  sessionId: string,
+  projectId: string | undefined,
+  pick: string,
+) => post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/candidates`, { projectId, pick });
+
 // ── Living Product Picture — the founder-editable interpretation aggregate ─────
 // Read the current projected model; edits persist through the three domain commands (NOT a raw
 // sharedContext patch), which is what keeps the picture on its own append-only event log so edits

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { itemKey } from "@/lib/itemKey";
 import { healthHex } from "@/lib/health";
 import { SlidingTabs } from "@/components/SlidingTabs";
+import { agentOrigin, AGENT_ORIGIN_LABEL } from "@/lib/agentPersona";
 import type {
   ConnectorMeta, ContextManifest, EngineSubsystem, GateDecision, GTMContractAudit, GTMGraph, GTMItem, GTMNode,
   GTMNodeCategory, GTMNodeResult, GTMRunResult, NodeSelection,
@@ -745,7 +746,7 @@ function WorkNodeEditor({
   };
 
   return (
-    <div className="agent-editor">
+    <div className={cn("agent-editor", node.category !== "gate" && "agent-editor-grid")}>
       {/* For a gate, the review queue is what the founder came here to do — it leads, the connector
           and data-contract config sit below it. */}
       {node.category === "gate" ? (
@@ -796,7 +797,7 @@ function WorkNodeEditor({
       {showPrompt && (
         <div className="node-editor-section">
           <label className="node-overview-label">AGENT PROMPT</label>
-          <textarea className="agent-editor-prompt" rows={7} value={prompt}
+          <textarea className="agent-editor-prompt" rows={5} value={prompt}
             onChange={(e) => setPrompt(e.target.value)} />
           {node.category === "generate" && (
             <div className="agent-editor-vars">
@@ -807,7 +808,7 @@ function WorkNodeEditor({
         </div>
       )}
 
-      <div className="node-editor-section">
+      <div className="node-editor-section config-col">
         <label className="node-overview-label">INPUT OR OUTPUT SETUP</label>
         {connector === "manual" ? (
           <label className="agent-editor-field">
@@ -855,7 +856,7 @@ function WorkNodeEditor({
         )}
       </div>
 
-      <div className="node-editor-section">
+      <div className="node-editor-section config-col">
         <label className="node-overview-label">DATA CONTRACT</label>
         <p className="contract-help">Name the fields this step needs and promises. The run stops if reality does not match.</p>
         <label className="agent-editor-field">
@@ -1001,6 +1002,17 @@ function NodeOverview({
           <p className="node-overview-desc">
             {CATEGORY_DESCRIPTIONS[node.category] ?? "Processes items in the loop."}
           </p>
+          {node.kind === "agent" && node.ref ? (() => {
+            const origin = agentOrigin(node.ref);
+            const meta = AGENT_ORIGIN_LABEL[origin];
+            return (
+              <span className={cn("agent-origin-badge", `is-${origin}`)} title={meta.hint}>
+                <span className="agent-origin-dot" aria-hidden />
+                {meta.label}
+                <span className="agent-origin-ref">{node.ref}</span>
+              </span>
+            );
+          })() : null}
         </div>
 
         {showPaths && (
@@ -1140,9 +1152,15 @@ const SIGNAL_STUBS = [
   { type: "View",  icon: "👁", count: 0, last: null },
 ];
 
+// Which node categories actually accumulate real-world signals worth a tab. A source/enrich/filter/
+// code step produces no downstream signal to track — only the steps that touch the outside world
+// (execute), read outcomes back (measure), or hold the founder decision (gate) do. Everywhere else the
+// Signals tab was an empty stub, so we drop it rather than show a hollow section.
+const SIGNAL_CATEGORIES: GTMNodeCategory[] = ["gate", "execute", "measure"];
+
 export function NodeEditor({
   selection, graph, connectors, runResult, runningNodeId, flowRuns, subsystem,
-  contractAudits = {}, onUpdateGraph, onRunNode, onApproveGate, onSubmitReview, onOpenArtifact, onDeleteNode,
+  contractAudits = {}, onUpdateGraph, onRunNode, onApproveGate, onSubmitReview, onOpenArtifact, onDeleteNode, onRefine,
 }: {
   selection: NodeSelection;
   graph: GTMGraph | null;
@@ -1158,6 +1176,7 @@ export function NodeEditor({
   onSubmitReview: (nodeId: string, decisions: Record<string, GateDecision>) => void;
   onOpenArtifact?: (type: "agent" | "skill", ref: string) => void;
   onDeleteNode?: (nodeId: string) => void;
+  onRefine?: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<DetailTab>("overview");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -1190,15 +1209,17 @@ export function NodeEditor({
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Tabs — Signals only where a node actually produces one, so no hollow stub tab. */}
       <div className="node-editor-tabs">
         <SlidingTabs
-          items={(["overview", "rules", "signals", "history"] as DetailTab[]).map((tab) => ({
-            value: tab,
-            label: tab === "rules"
-              ? (node.category === "gate" ? "Review" : "Configuration")
-              : tab === "history" ? "Run history" : tab.charAt(0).toUpperCase() + tab.slice(1),
-          }))}
+          items={(["overview", "rules", "signals", "history"] as DetailTab[])
+            .filter((tab) => tab !== "signals" || SIGNAL_CATEGORIES.includes(node.category))
+            .map((tab) => ({
+              value: tab,
+              label: tab === "rules"
+                ? (node.category === "gate" ? "Review" : "Configuration")
+                : tab === "history" ? "Run history" : tab.charAt(0).toUpperCase() + tab.slice(1),
+            }))}
           value={activeTab}
           onChange={setActiveTab}
           layoutId="node-editor-tab"
@@ -1222,24 +1243,41 @@ export function NodeEditor({
         )}
 
         {activeTab === "rules" && (
-          node.category === "resource" ? (
-            <ResourceEditor node={node} connectors={connectors} />
-          ) : node.category === "context" ? (
-            <ContextEditor node={node} graph={graph} onUpdate={onUpdateGraph} />
-          ) : (
-            <WorkNodeEditor
-              key={selection}
-              node={node}
-              graph={graph}
-              connectors={connectors}
-              result={result}
-              running={running}
-              onUpdate={onUpdateGraph}
-              onRun={() => onRunNode(node.id)}
-              onApprove={() => onApproveGate(node.id)}
-              onSubmitReview={(d) => onSubmitReview(node.id, d)}
-            />
-          )
+          <div className="node-config-tab">
+            {onRefine && node.category !== "resource" && node.category !== "context" ? (
+              <div className="node-refine-bar">
+                <div className="node-refine-copy">
+                  <span className="node-refine-title">
+                    {node.category === "gate" ? "Adjust this gate with Claude" : "Refine this step with Claude"}
+                  </span>
+                  <span className="node-refine-sub">
+                    Describe the change in the chat — Claude rewrites this step's configuration for you.
+                  </span>
+                </div>
+                <button type="button" className="node-refine-btn" onClick={onRefine}>
+                  <Lightbulb size={13} /> Refine with Claude
+                </button>
+              </div>
+            ) : null}
+            {node.category === "resource" ? (
+              <ResourceEditor node={node} connectors={connectors} />
+            ) : node.category === "context" ? (
+              <ContextEditor node={node} graph={graph} onUpdate={onUpdateGraph} />
+            ) : (
+              <WorkNodeEditor
+                key={selection}
+                node={node}
+                graph={graph}
+                connectors={connectors}
+                result={result}
+                running={running}
+                onUpdate={onUpdateGraph}
+                onRun={() => onRunNode(node.id)}
+                onApprove={() => onApproveGate(node.id)}
+                onSubmitReview={(d) => onSubmitReview(node.id, d)}
+              />
+            )}
+          </div>
         )}
 
         {activeTab === "signals" && (

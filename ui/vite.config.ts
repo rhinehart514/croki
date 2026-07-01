@@ -4,10 +4,12 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
 
 // Split the heavy vendor libraries into their own chunks so the main app chunk stays small and a
-// reload only re-downloads what actually changed. The graph/canvas engine (@xyflow), the brand-icon
-// dataset (simple-icons ships every brand SVG and can't be tree-shaken because brandGlyph resolves
-// icons by runtime key), the animation runtime (motion), the team-sync client (convex) and the
-// React runtime each dominate the bundle; isolating them shrinks index-*.js from one ~6.5MB monolith.
+// reload only re-downloads what actually changed. The graph/canvas engine (@xyflow), the animation
+// runtime (motion), the team-sync client (convex) and the React runtime each dominate the bundle;
+// isolating them shrinks index-*.js from one large monolith. The brand icons (simple-icons) get
+// their own `vendor-icons` chunk too — but that chunk is now a few KB, not 5.5MB: brandGlyph.ts
+// imports only the specific `si<Name>` brands the app can surface (named imports tree-shake), so
+// the barrel of every brand SVG no longer rides along.
 function vendorChunk(id: string): string | undefined {
   if (!id.includes("node_modules")) return undefined;
   if (id.includes("@xyflow") || id.includes("d3-") || id.includes("/d3/")) return "vendor-flow";

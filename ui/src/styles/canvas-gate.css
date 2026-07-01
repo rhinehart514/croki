@@ -28,6 +28,83 @@
   animation: cgate-bloom 2.4s var(--ease) infinite;
 }
 
+/* ── Gate as a threshold — the wall, never an empty box ─────────────────────────
+   A wider gate node reading as a turnstile: a waiting|released split divided by an
+   amber seam, the autonomy ladder as posture, and an honest empty state when
+   nothing is staged. Amber (--gap) is the one privileged accent on the canvas. */
+.react-flow .loop-node-gate { min-width: 264px; }
+
+.loop-gate-mark { border-radius: var(--r-sm); }
+
+.loop-gate-threshold {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  padding: var(--space-2) 0;
+}
+.loop-gate-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  text-align: center;
+}
+.loop-gate-side b { font-size: 1.0625rem; font-weight: 680; line-height: 1; }
+.loop-gate-side span {
+  font-size: 0.5625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.loop-gate-side.is-waiting b { color: var(--gap); }
+.loop-gate-side.is-released b { color: var(--ink); }
+.loop-gate-seam {
+  width: 2px;
+  align-self: stretch;
+  min-height: 26px;
+  background: repeating-linear-gradient(to bottom, var(--gap) 0 3px, transparent 3px 6px);
+  opacity: 0.7;
+}
+
+.loop-gate-autonomy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.625rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+.loop-gate-autonomy b { color: var(--gap); font-weight: 650; }
+.loop-gate-ladder { display: inline-flex; align-items: flex-end; gap: 2px; }
+.loop-gate-ladder i { display: block; width: 3px; border-radius: 1px; background: var(--ghost); }
+.loop-gate-ladder i:nth-child(1) { height: 5px; }
+.loop-gate-ladder i:nth-child(2) { height: 8px; }
+.loop-gate-ladder i:nth-child(3) { height: 11px; }
+.loop-gate-ladder i.on { background: var(--gap); }
+
+.loop-gate-empty {
+  font-size: 0.625rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.loop-gate-open {
+  align-self: flex-start;
+  padding: 4px var(--space-2);
+  font-family: inherit;
+  font-size: 0.625rem;
+  font-weight: 650;
+  color: var(--gap);
+  background: color-mix(in srgb, var(--gap) 9%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--gap) 40%, var(--line-2));
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background 0.16s var(--ease);
+}
+.loop-gate-open:hover { background: color-mix(in srgb, var(--gap) 16%, var(--surface)); }
+
 /* ── Inline gate review — read the real draft right on the node card ─────────────
    This is the shareable beat: the AI did the work, you read exactly what it wrote,
    you approve, nothing sends. Opaque surface (you read in it), amber the only accent. */
@@ -132,6 +209,282 @@
   outline-offset: 2px;
 }
 
+/* ── Gate-on-canvas review — the drafts bloom out of the gate node, decided in place ─────
+   The product's moment. When a run pauses at the gate the staged drafts open as first-class cards
+   you read and approve/edit/reject right on the canvas — no side rail. Opaque surface (you read in
+   it), amber the only accent, decisions resolve under your hand. */
+
+/* The card grows to hold readable drafts while the review is open. */
+.react-flow .loop-node-gate:has(.cgate-review) {
+  max-width: 340px;
+}
+
+.cgate-review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  cursor: default;
+}
+
+.cgate-review-lead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.cgate-review-count {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--gap);
+}
+
+.cgate-review-taste {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9px;
+  font-weight: 680;
+  color: var(--proven);
+}
+
+.cgate-approve-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  padding: 5px var(--space-2);
+  font-family: inherit;
+  font-size: 0.625rem;
+  font-weight: 650;
+  color: var(--gap);
+  background: color-mix(in srgb, var(--gap) 9%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--gap) 40%, var(--line-2));
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background 0.16s var(--ease);
+}
+.cgate-approve-all:hover { background: color-mix(in srgb, var(--gap) 16%, var(--surface)); }
+
+.cgate-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.cgate-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-2);
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--gap) 20%, var(--line-2));
+  border-left: 2px solid var(--gap);
+  border-radius: var(--r-sm);
+}
+
+.cgate-card-to {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.cgate-card-body {
+  margin: 0;
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  color: var(--muted);
+  white-space: pre-wrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cgate-card-prospect { margin: 0; display: flex; flex-direction: column; gap: 2px; }
+.cgate-card-prospect p { margin: 0; font-size: 0.6875rem; line-height: 1.4; color: var(--muted); }
+.cgate-card-prospect .k {
+  font-size: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  color: var(--ink-3, var(--muted));
+  margin-right: 4px;
+}
+
+.cgate-card-why {
+  margin: 0;
+  font-size: 0.625rem;
+  line-height: 1.4;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.cgate-card-note {
+  margin: 0;
+  font-size: 0.625rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.cgate-card-edit {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--gap) 35%, var(--line-2));
+  border-radius: var(--r-sm);
+  padding: var(--space-2);
+  resize: vertical;
+}
+.cgate-card-edit:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--gap) 45%, transparent);
+  outline-offset: 1px;
+}
+
+.cgate-card-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: 2px;
+}
+
+.cgate-card-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px var(--space-2);
+  font-family: inherit;
+  font-size: 0.625rem;
+  font-weight: 600;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: filter 0.16s var(--ease), background 0.16s var(--ease);
+}
+
+.cgate-approve {
+  color: var(--surface);
+  background: var(--gap);
+  border-color: color-mix(in srgb, var(--gap) 80%, black 6%);
+}
+.cgate-approve:hover { filter: brightness(1.06); }
+.cgate-approve:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.cgate-edit {
+  color: var(--ink);
+  background: transparent;
+  border-color: var(--line-2);
+}
+.cgate-edit:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+
+.cgate-reject {
+  color: var(--muted);
+  background: transparent;
+  border-color: var(--line-2);
+}
+.cgate-reject:hover { color: var(--danger, #b4443a); border-color: color-mix(in srgb, var(--danger, #b4443a) 40%, var(--line-2)); }
+
+.cgate-ghost {
+  color: var(--muted);
+  background: transparent;
+  border-color: var(--line-2);
+}
+.cgate-ghost:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+
+/* Decided — the card collapses to a one-line receipt so the queue visibly shrinks under your hand. */
+.cgate-card.is-decided {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  border-left-width: 2px;
+}
+.cgate-card.is-decided.is-approve { border-left-color: var(--proven); }
+.cgate-card.is-decided.is-reject { border-left-color: var(--line-2); opacity: 0.62; }
+.cgate-card-verdict {
+  font-size: 0.5625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+.is-approve .cgate-card-verdict { color: var(--proven); }
+.is-reject .cgate-card-verdict { color: var(--muted); }
+
+.cgate-card.is-hollow {
+  border-left-color: color-mix(in srgb, var(--danger, #b4443a) 55%, var(--line-2));
+  background: color-mix(in srgb, var(--danger, #b4443a) 4%, var(--surface));
+}
+.cgate-card.is-hollow .cgate-card-to { color: var(--danger, #b4443a); }
+
+.cgate-more {
+  margin: 2px 0 0;
+  font-size: 0.625rem;
+  color: var(--muted);
+}
+
+/* An exception — the item the blessed pattern kicked back for the founder's own eyes. It reads a touch
+   louder than a plain draft (a firmer amber edge), and carries the reason it deviated. */
+.cgate-card.is-exception {
+  border-left-width: 3px;
+  border-color: color-mix(in srgb, var(--gap) 34%, var(--line-2));
+}
+.cgate-card.is-exception .cgate-card-to { color: var(--gap); }
+
+/* The provenance note — a quiet, mono line under the recipient saying where this staged draft came
+   from (the tool that fetched them, tagged observed/inferred/blind). Data, so it's monospaced. */
+.cgate-card-prov {
+  font-family: var(--font-mono);
+  font-size: 0.5625rem;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+}
+
+/* The "hold for your eyes" annotation on an exception — why the pattern couldn't clear it. Opaque
+   inset surface (you read in it), never amber (amber is the gate accent, not the reason text). */
+.cgate-card-annot {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  font-size: 0.625rem;
+  line-height: 1.4;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 4%, var(--surface));
+  border-radius: var(--r-sm);
+}
+.cgate-card-annot-plus {
+  font-family: var(--font-mono);
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+/* Pattern-cleared receipt — the clean items the founder's standing approval already released. One
+   green (--proven) line, never a bloomed card: the wall held, the pattern cleared them, done. */
+.cgate-cleared {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 4px var(--space-2);
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--proven);
+  border-top: 1px solid var(--line);
+}
+.cgate-cleared svg { color: var(--proven); }
+
 /* ── "It got smarter" — the taste loop as a real beat on a generate node ─────────
    Green (--proven) because a learned signal is proven ground, not a footnote. */
 .react-flow .loop-node-learned {
@@ -145,6 +498,242 @@
   color: var(--proven);
 }
 
+/* ── Evidence in the draft — tap a claim, see the line it traces to ──────────────
+   The truth layer made visible on the card. A grounded claim reads at full ink and unfolds its
+   scan ref (path:line) in mono; an ungrounded sentence recedes so the eye separates asserted from
+   proven. No evidence on the item → the plain body renders, none of this shows. */
+.cgate-card-body-evi {
+  /* The evidence pass renders per-sentence spans, so the plain-body line clamp can't apply cleanly;
+     let it grow instead of truncating mid-claim. */
+  display: block;
+  -webkit-line-clamp: none;
+  overflow: visible;
+}
+.cgate-evi-plain { color: color-mix(in srgb, var(--muted) 70%, transparent); }
+.cgate-evi-claim-wrap { display: inline; }
+.cgate-evi-claim {
+  display: inline;
+  font: inherit;
+  line-height: inherit;
+  white-space: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-decoration: underline dotted color-mix(in srgb, var(--ink) 35%, transparent);
+  text-underline-offset: 2px;
+}
+.cgate-evi-claim:hover { text-decoration-color: var(--ink); }
+.cgate-evi-claim.is-open { text-decoration-style: solid; }
+.cgate-evi-ref {
+  display: block;
+  margin: 2px 0 3px;
+  font-family: var(--font-mono);
+  font-size: 0.5625rem;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+}
+
+/* ── The cleared pile — a receipt you can audit, never a hiding place ────────────
+   The clean items the standing approval already released. Collapsed it's one green line; tapped it
+   fans open to show the pattern that released them and each item it cleared. The wall still holds
+   every exception above. */
+.cgate-cleared-pile { display: flex; flex-direction: column; }
+.cgate-cleared {
+  border: none;
+  background: none;
+  font-family: inherit;
+  width: 100%;
+}
+.cgate-cleared[aria-expanded] { justify-content: flex-start; }
+.cgate-cleared:hover { color: color-mix(in srgb, var(--proven) 80%, var(--ink)); }
+.cgate-cleared-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+  padding: var(--space-2);
+  background: color-mix(in srgb, var(--proven) 4%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--proven) 20%, var(--line-2));
+  border-radius: var(--r-sm);
+}
+.cgate-cleared-basis {
+  margin: 0 0 3px;
+  font-size: 0.625rem;
+  line-height: 1.4;
+  color: var(--ink);
+}
+.cgate-cleared-row {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 0.625rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.cgate-cleared-row svg { color: var(--proven); flex: none; align-self: center; }
+.cgate-cleared-subj { color: var(--ink); font-weight: 550; }
+.cgate-cleared-prov { font-family: var(--font-mono); font-size: 0.5rem; color: var(--muted); }
+
+/* ── Promote by Replay — the autonomy ladder, on the gate ────────────────────────
+   Promoting is a gate act, so it carries the one amber accent. Engaging it replays the founder's
+   last real gate calls as the basis, then a press-and-hold banks the standing approval. Revoke is a
+   quiet neutral control, always one click back to hold-everything. */
+.cgate-promote {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: 2px;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--line);
+}
+.cgate-promote-rung {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.625rem;
+  color: var(--muted);
+}
+.cgate-promote-rung b { color: var(--gap); font-weight: 650; }
+.cgate-promote-rung-blurb { color: var(--muted); }
+.cgate-promote-ladder { display: inline-flex; align-items: flex-end; gap: 2px; }
+.cgate-promote-ladder i { display: block; width: 3px; border-radius: 1px; background: var(--ghost); }
+.cgate-promote-ladder i:nth-child(1) { height: 5px; }
+.cgate-promote-ladder i:nth-child(2) { height: 8px; }
+.cgate-promote-ladder i:nth-child(3) { height: 11px; }
+.cgate-promote-ladder i.on { background: var(--gap); }
+
+.cgate-promote-controls { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.cgate-promote-thin { font-size: 0.5625rem; line-height: 1.4; color: var(--muted); }
+.cgate-promote-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px var(--space-2);
+  font-family: inherit;
+  font-size: 0.625rem;
+  font-weight: 650;
+  color: var(--gap);
+  background: color-mix(in srgb, var(--gap) 9%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--gap) 40%, var(--line-2));
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background 0.16s var(--ease);
+}
+.cgate-promote-open:hover { background: color-mix(in srgb, var(--gap) 16%, var(--surface)); }
+.cgate-promote-revoke {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px var(--space-2);
+  font-family: inherit;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.cgate-promote-revoke:hover:not(:disabled) { color: var(--ink); }
+.cgate-promote-revoke:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.cgate-promote-replay { display: flex; flex-direction: column; gap: 5px; }
+.cgate-promote-replay-lead { margin: 0; font-size: 0.625rem; line-height: 1.4; color: var(--muted); }
+.cgate-promote-strip { display: flex; flex-wrap: wrap; gap: 3px; }
+.cgate-replay-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  opacity: 0;
+  animation: cgate-replay-in 0.24s var(--ease) forwards;
+}
+.cgate-replay-chip.is-approve { color: var(--proven); background: color-mix(in srgb, var(--proven) 12%, var(--surface)); }
+.cgate-replay-chip.is-reject { color: var(--muted); background: color-mix(in srgb, var(--ink) 6%, var(--surface)); }
+@keyframes cgate-replay-in {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: scale(1); }
+}
+.cgate-promote-band {
+  font-size: 0.625rem;
+  line-height: 1.4;
+  color: var(--ink);
+  padding: var(--space-1) var(--space-2);
+  background: color-mix(in srgb, var(--gap) 8%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--gap) 30%, var(--line-2));
+  border-radius: var(--r-sm);
+}
+.cgate-promote-note {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 0.625rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--gap) 30%, var(--line-2));
+  border-radius: var(--r-sm);
+  padding: 5px var(--space-2);
+}
+.cgate-promote-note:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--gap) 45%, transparent);
+  outline-offset: 1px;
+}
+.cgate-promote-actions { display: flex; align-items: center; gap: var(--space-1); }
+.cgate-promote-hold {
+  position: relative;
+  overflow: hidden;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px var(--space-2);
+  font-family: inherit;
+  border-radius: var(--r-sm);
+  border: 1px solid color-mix(in srgb, var(--gap) 55%, var(--line-2));
+  background: color-mix(in srgb, var(--gap) 9%, var(--surface));
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+}
+.cgate-promote-hold:disabled { opacity: 0.6; cursor: default; }
+.cgate-promote-hold-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: color-mix(in srgb, var(--gap) 24%, var(--surface));
+}
+.cgate-promote-hold.is-holding .cgate-promote-hold-fill {
+  width: 100%;
+  transition: width 0.75s linear;
+}
+.cgate-promote-hold-label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.625rem;
+  font-weight: 650;
+  color: var(--gap);
+}
+.cgate-promote-cancel {
+  padding: 6px var(--space-2);
+  font-family: inherit;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.cgate-promote-cancel:hover:not(:disabled) { color: var(--ink); }
+
 @media (prefers-reduced-motion: reduce) {
   .cgate-node-bloom {
     animation: none;
@@ -152,4 +741,6 @@
       0 0 0 1px color-mix(in srgb, var(--gap) 65%, transparent),
       0 0 0 5px color-mix(in srgb, var(--gap) 18%, transparent);
   }
+  .cgate-replay-chip { animation: none; opacity: 1; }
+  .cgate-promote-hold.is-holding .cgate-promote-hold-fill { transition: none; }
 }

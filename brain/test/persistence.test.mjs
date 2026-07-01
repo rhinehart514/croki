@@ -81,6 +81,37 @@ describe("persistence provider", () => {
     });
   }
 
+  // The document cache lives in the provider and is shared per-root across separate persistence()
+  // calls (the real request shape: a board request re-derives the provider and re-reads the same flow
+  // 8+ times). Write-through invalidation must keep a SECOND provider's reads current after the FIRST
+  // provider writes — the cache must never serve a value older than the last write in this process.
+  for (const backend of ["sqlite", "json"]) {
+    it(`${backend}: a second provider sees writes/overwrites/deletes made through the first (cache stays current)`, () => {
+      const a = persistence({ ...options, backend });
+      const b = persistence({ ...options, backend });
+
+      a.set("flows", "g1", { id: "g1", revision: 1 });
+      assert.equal(b.get("flows", "g1").revision, 1, "second provider sees the first's write");
+
+      a.set("flows", "g1", { id: "g1", revision: 2 });
+      assert.equal(b.get("flows", "g1").revision, 2, "second provider sees the overwrite, not a stale cache");
+
+      assert.equal(a.delete("flows", "g1"), true);
+      assert.equal(b.get("flows", "g1"), null, "second provider sees the delete, not a stale cache");
+    });
+
+    it(`${backend}: get returns an isolated copy — mutating it never bleeds into a later read`, () => {
+      const p = persistence({ ...options, backend });
+      p.set("flows", "g1", { id: "g1", nodes: [{ id: "n1" }] });
+      const first = p.get("flows", "g1");
+      first.nodes.push({ id: "INJECTED" });
+      first.id = "MUTATED";
+      const second = p.get("flows", "g1");
+      assert.equal(second.id, "g1");
+      assert.deepEqual(second.nodes, [{ id: "n1" }], "a caller mutation must not corrupt the cached document");
+    });
+  }
+
   it("the json backend writes the legacy on-disk layout (project.json + per-collection dirs)", () => {
     const p = jsonPersistence(options);
     p.set(PROJECT_COLLECTION, PROJECT_KEY, { catalogSchemaVersion: 1, projects: [] });

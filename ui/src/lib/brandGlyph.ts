@@ -1,17 +1,69 @@
 // Resolve an external MCP server id to its real brand logo. An `mcp` node calls a real service
-// (Notion, Gmail, Slack, Salesforce…); the card shows that service's actual logo so a glance tells
-// you what it talks to. Logos come from `simple-icons` (the canonical brand-SVG set) resolved by the
-// server id, so any service the founder connects is covered without enumerating them here — an
-// unknown id resolves to null and the renderer falls back to a neutral plug.
+// (Notion, Gmail, GitHub, HubSpot…); the card shows that service's actual logo so a glance tells
+// you what it talks to. Logos come from `simple-icons` (the canonical brand-SVG set).
 //
-// `simple-icons` ships every brand SVG (~5.5MB) and can't be tree-shaken, because brandGlyph resolves
-// the icon by a runtime-built key, not a static import. So the whole dataset is loaded LAZILY on its
-// own chunk the first time a brand glyph is needed: the dataset is dynamically imported and cached,
-// and `useBrandGlyph` re-renders the caller once it lands. Until then a glyph resolves to null and the
-// renderer shows its neutral-plug fallback — the same fallback an unrecognized service already gets.
-import { useEffect, useState } from "react";
+// Why a curated map instead of the whole set: `simple-icons` ships ~3,400 brand SVGs (~5.5MB). The
+// previous version resolved an icon by a RUNTIME-built key against a dynamic `import("simple-icons")`,
+// which forced the entire barrel into one chunk — it can't be tree-shaken, so the moment any brand
+// glyph rendered, all 5.5MB downloaded. Instead we import BY NAME the specific brands the app can
+// surface (below). Named static imports ARE tree-shaken, so the bundle carries only these few KB.
+//
+// Coverage is an explicit, extensible list, not "every brand that exists". This is a deliberate
+// trade: universal resolution cost 5.5MB and was already only partial anyway — many well-known
+// services (Salesforce, Slack, LinkedIn, Twilio…) are trademark-excluded from `simple-icons` and
+// already fell back to the neutral plug. Any service not in this map resolves to null and the
+// renderer shows that same neutral plug — no regression for the unlisted, and TO ADD A BRAND you
+// import its `si<Name>` export and drop it into the `ICONS` array below (one line).
+import {
+  // Google workspace + cloud
+  siGmail, siGoogledrive, siGooglecalendar, siGooglesheets, siGoogledocs,
+  siGoogleforms, siGoogleads, siGoogleanalytics, siGooglemeet, siGooglebigquery,
+  siGooglecloud, siGooglechrome, siGoogleplay, siLooker,
+  // CRM / GTM / marketing / scheduling
+  siHubspot, siZapier, siMake, siN8n, siMailchimp, siBrevo, siBuffer,
+  siTypeform, siCalendly, siIntercom, siZendesk,
+  // Productivity / project management / docs
+  siNotion, siLinear, siAsana, siJira, siTrello, siClickup, siConfluence,
+  siMiro, siLoom, siAirtable,
+  // Dev / data / infra
+  siGithub, siGitlab, siStripe, siPostgresql, siMongodb, siSnowflake,
+  siSupabase, siVercel, siNetlify, siCloudflare, siRetool, siAirbyte,
+  siMixpanel, siPosthog,
+  // Comms / social
+  siDiscord, siTelegram, siWhatsapp, siX, siZoom,
+  // Design / sites / commerce / finance
+  siFigma, siFramer, siWebflow, siWordpress, siWix, siDropbox, siBox,
+  siShopify, siQuickbooks, siXero,
+  // AI
+  siAnthropic, siClaude, siPerplexity,
+} from "simple-icons";
 
 export type BrandIcon = { title: string; slug: string; hex: string; path: string };
+
+// The curated brand set. Keyed by each icon's own canonical `simple-icons` slug (e.g. "googledrive",
+// "github"), which is exactly what `slugFor` normalizes a server id down to — so lookup is a direct
+// map hit. To add a brand: import its `si<Name>` export above and add it to this array.
+const ICON_LIST = [
+  siGmail, siGoogledrive, siGooglecalendar, siGooglesheets, siGoogledocs,
+  siGoogleforms, siGoogleads, siGoogleanalytics, siGooglemeet, siGooglebigquery,
+  siGooglecloud, siGooglechrome, siGoogleplay, siLooker,
+  siHubspot, siZapier, siMake, siN8n, siMailchimp, siBrevo, siBuffer,
+  siTypeform, siCalendly, siIntercom, siZendesk,
+  siNotion, siLinear, siAsana, siJira, siTrello, siClickup, siConfluence,
+  siMiro, siLoom, siAirtable,
+  siGithub, siGitlab, siStripe, siPostgresql, siMongodb, siSnowflake,
+  siSupabase, siVercel, siNetlify, siCloudflare, siRetool, siAirbyte,
+  siMixpanel, siPosthog,
+  siDiscord, siTelegram, siWhatsapp, siX, siZoom,
+  siFigma, siFramer, siWebflow, siWordpress, siWix, siDropbox, siBox,
+  siShopify, siQuickbooks, siXero,
+  siAnthropic, siClaude, siPerplexity,
+];
+
+const BRAND_ICONS: Record<string, BrandIcon> = {};
+for (const ic of ICON_LIST) {
+  BRAND_ICONS[ic.slug] = { title: ic.title, slug: ic.slug, hex: ic.hex, path: ic.path };
+}
 
 // Server ids that don't map 1:1 to the brand's simple-icons slug.
 const SLUG_ALIASES: Record<string, string> = {
@@ -37,46 +89,18 @@ function slugFor(serverId: string): string {
   return SLUG_ALIASES[token] ?? token.replace(/[^a-z0-9]/g, "");
 }
 
-// The dataset, once loaded. Null until the lazy chunk resolves.
-let iconSet: Record<string, BrandIcon> | null = null;
-let loadPromise: Promise<Record<string, BrandIcon>> | null = null;
-// Components that asked for a glyph before the dataset arrived — re-rendered once it does.
-const waiters = new Set<() => void>();
-
-function loadIconSet(): Promise<Record<string, BrandIcon>> {
-  if (iconSet) return Promise.resolve(iconSet);
-  if (!loadPromise) {
-    loadPromise = import("simple-icons").then((mod) => {
-      iconSet = mod as unknown as Record<string, BrandIcon>;
-      for (const notify of waiters) notify();
-      waiters.clear();
-      return iconSet;
-    });
-  }
-  return loadPromise;
-}
-
-// Synchronous resolve against the loaded cache. Returns null until the dataset lands (the caller's
-// neutral-plug fallback covers that window) — and null for a genuinely unrecognized service.
+// Synchronous resolve against the curated map. Returns null for a service not in the map — the
+// caller's neutral-plug fallback covers that, the same as for a genuinely unrecognized service.
 export function brandGlyph(serverId: string | undefined | null): BrandIcon | null {
-  if (!serverId || !iconSet) return null;
+  if (!serverId) return null;
   const slug = slugFor(serverId);
   if (!slug) return null;
-  const key = `si${slug.charAt(0).toUpperCase()}${slug.slice(1)}`;
-  return iconSet[key] ?? null;
+  return BRAND_ICONS[slug] ?? null;
 }
 
-// React-aware resolver: triggers the lazy load and re-renders the caller when the dataset is ready,
-// so a brand glyph blooms in the moment its chunk arrives instead of staying a plug forever.
+// React-facing resolver, kept for API compatibility with the previous lazy-loading version. The
+// curated map is bundled statically now, so resolution is synchronous — no chunk to wait on, no
+// re-render to trigger. Callers keep calling this unconditionally as a hook.
 export function useBrandGlyph(serverId: string | undefined | null): BrandIcon | null {
-  const [, force] = useState(0);
-  useEffect(() => {
-    if (!serverId || iconSet) return;
-    let live = true;
-    const notify = () => { if (live) force((n) => n + 1); };
-    waiters.add(notify);
-    void loadIconSet();
-    return () => { live = false; waiters.delete(notify); };
-  }, [serverId]);
   return brandGlyph(serverId);
 }

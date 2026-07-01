@@ -31,6 +31,8 @@ import {
 } from "./project-store.mjs";
 import { canApprove, getMember, resolveCurrentUser } from "./team-store.mjs";
 import { composeNakedGraph } from "./workflow-composer.mjs";
+import { composeCandidates, createClaudeCandidateComposer } from "./candidate-composer.mjs";
+import { annotateRunEvidence } from "./evidence-lines.mjs";
 import { composeIdeas, createClaudeIdeaGenerator } from "./ideation.mjs";
 import { createClaudeIdeaBar } from "./idea-bar.mjs";
 import { attachBuildWiring, createGtmIdea, getGtmIdea, listGtmIdeas, saveGtmIdea } from "./idea-store.mjs";
@@ -234,6 +236,17 @@ const TOOLS = [
     },
   },
   {
+    name: "propose_candidates",
+    description: "When the founder's goal genuinely FORKS into several distinct go-to-market shapes — for example an outbound pipeline that contacts owners directly, a content/community play that earns inbound, or a referral loop through existing users — sketch 2–3 candidate pipelines and PAUSE for the founder to pick, instead of assuming one. It NEVER runs, sends, or builds: each candidate is a shape only. If the goal points at ONE clear shape, do not call this — go straight to compose_and_run. When the founder picks a candidate, that pick builds the chosen shape through compose_and_run and stops at the gate. There is no channel catalog; judge the fork freely from the real product and the goal.",
+    input_schema: {
+      type: "object",
+      properties: {
+        goal: { type: "string", description: "The goal to sketch distinct pipeline shapes for. Defaults to the session goal." },
+      },
+      required: [],
+    },
+  },
+  {
     name: "compose_microproduct",
     description: "Build a MICROPRODUCT for a goal — a working artifact cut from the real product (a landing page, a scoped demo, a calculator, a one-off tool) — build it locally into a previewable form, and STAGE it behind the founder gate. In one move it asks the producer to cut the artifact (spec + files) from the scanned product, builds it locally (never deploying), composes a graph whose deploy step is an execute node sitting behind a founder gate, and runs it to that gate. It NEVER deploys, publishes, or pushes: the artifact builds and stages locally (deployed:false) and the run stops at the gate. Deploying past the gate is a SEPARATE, founder-only act that needs an explicit founder deploy confirmation at the gate (a normal approval does not ship it); you cannot trigger it — there is no deploy/approve tool on your surface. NOTE: the live ship runner (a configured git remote / the hosted Vercel MCP) is not yet wired end-to-end, so today this builds and stages to the gate; it does not perform a real live deploy. Use when the goal is best served by building a small real artifact rather than drafting a message.",
     input_schema: {
@@ -317,6 +330,7 @@ const NAKED_TOOL_NAMES = new Set([
   "inspect_shared_context",   // taste/memory — ICP, positioning, what's been tried
   "update_shared_context",    // record inferred taste/positioning rather than duplicating into graphs
   "compose_and_run",          // THE move — design the work, build behind a gate, run to the gate
+  "propose_candidates",       // an ambiguous goal forks — sketch 2-3 shapes and pause for the founder's pick
   "compose_microproduct",     // the build-and-ship door — cut a deployable artifact, STAGE it behind the gate
   "ideate",                   // generate ideas, grade with a separate critic, pause for the founder to pick
   "inspect_graph",            // inspect/repair a failed run
@@ -510,7 +524,7 @@ function systemPrompt(session, workspace, priorSessions = []) {
 ${objective}`
     : `Founder goal:
 ${objective}`;
-  return `You are the go-to-market operator inside GTM IDE. A founder hands you a goal; you build the work and run it up to their approval gate. That is the whole job — there is no required setup, no program or policy or template to stand up first.
+  return `You are the go-to-market operator inside Drover. A founder hands you a goal; you build the work and run it up to their approval gate. That is the whole job — there is no required setup, no program or policy or template to stand up first.
 
 ${objectiveBlock}
 
@@ -523,6 +537,7 @@ ${renderPriorSessions(priorSessions)}
 How you work:
 - One move does most of it: compose_and_run. Given the goal, it designs the agents and steps the goal needs (research, enrich, draft — whatever fits), builds the workflow behind a founder gate, and runs it to that gate. Reach for it first, not last.
 - Decide the approach freely from the real product and the goal in front of you. No fixed channel catalog, no ceremony. If the founder asks for several angles, lay them out in plain language first, then build the ones they pick.
+- When the goal genuinely FORKS into distinct shapes (an outbound pipeline vs a content play vs a referral loop) and you'd otherwise be guessing which one the founder wants, call propose_candidates first: it sketches 2–3 shapes and pauses for the founder to pick, and their pick builds the chosen shape through compose_and_run. If the goal points at one clear shape, skip it and compose_and_run directly. Choosing among real go-to-market shapes is the founder's call, not yours.
 - A product runs MANY pipelines, not one. Once you've built the first, build the next for the same product by calling compose_and_run with compose_new:true — each new pipeline joins the others on the product's overview. Don't refuse a second channel because one already exists; that overview of all the pipelines together is the point.
 - The wall is absolute: nothing sends, publishes, deploys, or charges without the founder approving at the gate. You never approve a gate yourself. compose_and_run always stops at the gate.
 - Learn and match the founder's taste from what they've approved and rejected before; don't re-ask what you can infer.
@@ -617,6 +632,13 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
     onEvent,
   });
   if (stream) session = live;
+  // Ground the drafts the founder is about to review: attach evidence_lines to any item whose claim
+  // names a real scanned fact (file:line), drawn straight from the active scan report. Honest by
+  // construction — a ref is never fabricated, and an item with nothing grounded gets no field. A run
+  // with no product grounding is left exactly as-is. Runs before persistence so the stored run and the
+  // pending-gate artifacts both carry the evidence the gate renders.
+  const evidenceWorkspace = latestWorkspace(session, options);
+  if (evidenceWorkspace?.report) annotateRunEvidence(result, evidenceWorkspace.report);
   const stored = recordFlowRun(flow.graph, result, options);
   const { feedback } = recordRunDerivations({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
   let next = {
@@ -866,6 +888,14 @@ async function executeTool(session, tool, options = {}) {
     const goal = firstNonEmpty(input.goal, session.goal);
     let working = session;
 
+    // A founder-picked candidate SHAPE to build (nodes/edges), passed by resolveOperatorCandidates or a
+    // UI build call. When present, the model already sketched it and the founder chose it — build that
+    // exact shape instead of composing fresh. It re-enters the SAME composeNakedGraph path (normalize,
+    // bind IO, re-assert the wall, validate), so a seeded shape gets no weaker safety than a fresh one.
+    const seededShape = input.candidate && typeof input.candidate === "object" && Array.isArray(input.candidate.nodes)
+      ? input.candidate
+      : null;
+
     // Compose when this session has no executable graph yet, OR when the founder asks for an additional
     // pipeline (compose_new) — a product holds many pipelines, and each compose persists a distinct
     // channel that joins the others on the overview. Otherwise drive the pipeline this session has.
@@ -873,17 +903,20 @@ async function executeTool(session, tool, options = {}) {
       working = addEvent(working, {
         type: "operator_composing",
         title: working.graphId ? "Composing another pipeline" : "Composing the workflow",
-        detail: `Designing the channel for: ${goal}`,
+        detail: seededShape ? `Building the founder's chosen shape for: ${goal}` : `Designing the channel for: ${goal}`,
         data: { goal },
       }, options);
       const composeRepo = options.cwd || loadProject(options).sharedContext?.repository?.repo || process.cwd();
+      const composeFn = seededShape
+        ? async () => ({ ok: true, nodes: seededShape.nodes, edges: Array.isArray(seededShape.edges) ? seededShape.edges : [] })
+        : (options.compose || createClaudeComposer({ cwd: composeRepo }));
       const composed = await composeNakedGraph({
-        title: firstNonEmpty(input.title, goal),
+        title: firstNonEmpty(input.title, seededShape?.label, goal),
         objective: goal,
         agents: Array.isArray(input.agents) ? input.agents : [],
       }, {
         ...options,
-        compose: options.compose || createClaudeComposer({ cwd: composeRepo }),
+        compose: composeFn,
       });
       // Register the composed pipeline as a channel on the product so it joins the others on the
       // overview — composeNakedGraph saved the flow but a pipeline only appears once it's a channel.
@@ -929,6 +962,80 @@ async function executeTool(session, tool, options = {}) {
 
     const run = await executeGraphRun(working, { stream: true }, options);
     return { session: run.session, result: summarizeRun(run.result), pause: run.session.status === "waiting_for_gate" };
+  }
+
+  // JOB 2c — the FORK. When a goal admits several genuinely distinct go-to-market shapes, the operator
+  // does not guess one — it sketches 2–3 candidate pipelines and PAUSES for the founder to pick, exactly
+  // like ideate pauses with ideas and a gate pauses with drafts. NOTHING runs, sends, or builds here: a
+  // candidate is a shape only. composeCandidates is the one place that both judges ambiguity (the model's
+  // call) and returns normalized, wall-checked shapes (the host's guarantee). Picking one is the founder's
+  // act (resolveOperatorCandidates), which builds the chosen shape through compose_and_run to the gate.
+  if (tool.name === "propose_candidates") {
+    const goal = firstNonEmpty(input.goal, session.goal);
+    if (!goal) throw new Error("propose_candidates needs a goal.");
+    const project = loadProject(options);
+    const repo = options.cwd || project.sharedContext?.repository?.repo || process.cwd();
+    const workspace = latestWorkspace(session, options);
+    const grounding = compactProduct(workspace);
+    const compose = options.composeCandidates || createClaudeCandidateComposer({ cwd: repo });
+
+    let working = addEvent(session, {
+      type: "operator_composing",
+      title: "Weighing candidate pipelines",
+      detail: `Judging whether the goal forks, and sketching distinct shapes: ${goal}`,
+      data: { goal },
+    }, options);
+
+    const { ambiguous, candidates } = await composeCandidates({ goal, grounding, compose });
+
+    // Not a genuine fork — one clear shape. Don't pause; tell the operator to build it directly.
+    if (!ambiguous) {
+      const next = addEvent(working, {
+        type: "operator_note",
+        title: "The goal points at one clear shape",
+        detail: "No real fork to offer — build it directly with compose_and_run.",
+        data: { goal },
+      }, options);
+      return {
+        session: next,
+        result: { kind: "single", ambiguous: false, note: "One clear shape; call compose_and_run to build and run it to the gate." },
+        pause: false,
+      };
+    }
+
+    // A real fork — PAUSE with the candidate shapes, mirroring pendingIdeas/pendingGate: durable,
+    // founder-resolved. Each candidate carries its full shape so the pick can build it verbatim.
+    const next = addEvent({
+      ...working,
+      status: "waiting_for_candidates",
+      pendingCandidates: {
+        goal,
+        candidates: candidates.map((c) => ({
+          id: c.id,
+          label: c.label,
+          rationale: c.rationale,
+          nodeCount: c.nodes.length,
+          edgeCount: c.edges.length,
+          nodes: c.nodes,
+          edges: c.edges,
+        })),
+      },
+      error: null,
+    }, {
+      type: "candidates_proposed",
+      title: `Proposed ${candidates.length} candidate pipeline${candidates.length === 1 ? "" : "s"}`,
+      detail: `${candidates.map((c) => c.label).join(" · ")} — pick one to build.`,
+      data: { goal, candidateIds: candidates.map((c) => c.id) },
+    }, options);
+    return {
+      session: next,
+      result: {
+        kind: "candidates",
+        paused: true,
+        candidates: candidates.map((c) => ({ id: c.id, label: c.label, rationale: c.rationale, nodes: c.nodes, edges: c.edges })),
+      },
+      pause: true,
+    };
   }
 
   // JOB 2b — the build-and-SHIP door. The deployable twin of compose_and_run: instead of staging a
@@ -1268,7 +1375,7 @@ function latestResumeInstruction(session) {
 export async function runOperatorSession(id, runtime = {}) {
   const options = runtime.options ?? {};
   let session = getOperatorSession(id, options);
-  if (["waiting_for_gate", "waiting_for_proposal", "waiting_for_input", "waiting_for_ideas", "completed", "cancelled", "blocked"].includes(session.status)) {
+  if (["waiting_for_gate", "waiting_for_proposal", "waiting_for_input", "waiting_for_ideas", "waiting_for_candidates", "completed", "cancelled", "blocked"].includes(session.status)) {
     return session;
   }
   if (session.stepCount >= session.maxSteps) {
@@ -1452,6 +1559,9 @@ export function resumeOperatorSession(id, input, runtime = {}) {
   if (session.status === "waiting_for_ideas") {
     throw new Error("Pick or kill the proposed ideas before resuming the operator.");
   }
+  if (session.status === "waiting_for_candidates") {
+    throw new Error("Pick one of the proposed candidate pipelines before resuming the operator.");
+  }
   if (["completed", "cancelled"].includes(session.status)) throw new Error(`Session is already ${session.status}.`);
   const text = String(input || "").trim();
   if (!text) throw new Error("A founder response is required.");
@@ -1481,6 +1591,7 @@ const AMBIENT_WAKE_BLOCKING_STATUSES = new Set([
   "waiting_for_gate",
   "waiting_for_proposal",
   "waiting_for_ideas",
+  "waiting_for_candidates",
 ]);
 
 // The AMBIENT wake — the event-triggered / standing-brief twin of resumeOperatorSession. An
@@ -1803,6 +1914,55 @@ export function resolveOperatorIdeas(id, payload = {}, runtime = {}) {
   return next;
 }
 
+// The founder picks ONE candidate pipeline to build. This is a FOUNDER act — never an agent/MCP tool —
+// exactly like resolving a gate, a proposal, or ideas. The operator sketched the shapes; only the founder
+// chooses which becomes work. The pick re-enters compose_and_run seeded with the chosen shape, so it is
+// built and driven to the founder gate through the same normalize → bind IO → wall → validate path —
+// nothing sends, and a picked shape gets no weaker safety than a freshly composed one.
+export async function resolveOperatorCandidates(id, payload = {}, runtime = {}) {
+  const options = runtime.options ?? {};
+  const session = getOperatorSession(id, options);
+  if (!session.pendingCandidates) {
+    throw new Error("This session has no proposed candidate pipelines waiting for the founder.");
+  }
+  const pickId = typeof payload.pick === "string"
+    ? payload.pick
+    : (typeof payload.candidateId === "string" ? payload.candidateId : null);
+  const candidates = Array.isArray(session.pendingCandidates.candidates) ? session.pendingCandidates.candidates : [];
+  const chosen = pickId ? candidates.find((c) => c.id === pickId) : null;
+  if (!chosen) {
+    throw new Error(pickId ? `No candidate pipeline "${pickId}" is waiting for review.` : "A candidate pick is required.");
+  }
+  const goal = firstNonEmpty(session.pendingCandidates.goal, session.goal);
+
+  // Clear the pause and record the founder's choice, then build the chosen shape through the SAME
+  // compose_and_run door (seeded with the candidate), which composes it, runs it to the founder gate,
+  // and stops. Building is the founder's pick made concrete — done host-side, no model turn needed.
+  const working = addEvent({
+    ...session,
+    status: "ready",
+    pendingCandidates: null,
+    error: null,
+  }, {
+    type: "candidates_resolved",
+    title: "Founder picked a candidate pipeline",
+    detail: `${chosen.label}${chosen.rationale ? ` — ${chosen.rationale}` : ""}`,
+    data: { pick: chosen.id, goal },
+  }, options);
+
+  const execution = await executeTool(working, {
+    id: `candidate-${Date.now()}`,
+    name: "compose_and_run",
+    input: {
+      goal,
+      title: chosen.label,
+      candidate: { label: chosen.label, nodes: chosen.nodes, edges: chosen.edges },
+      compose_new: Boolean(working.graphId),
+    },
+  }, options);
+  return execution.session;
+}
+
 export function cancelOperatorSession(id, options = {}) {
   const session = getOperatorSession(id, options);
   return addEvent({
@@ -1813,6 +1973,7 @@ export function cancelOperatorSession(id, options = {}) {
     pendingGate: null,
     pendingProposal: null,
     pendingIdeas: null,
+    pendingCandidates: null,
   }, {
     type: "session_cancelled",
     title: "Operator session cancelled",

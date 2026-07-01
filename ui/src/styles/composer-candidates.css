@@ -1,0 +1,140 @@
+/* composer-candidates.css — the ambiguous-goal picker. When a vague goal returns several pipeline
+   SHAPES instead of one graph, the dock renders them here as selectable sketches. Calm, monochrome,
+   opaque. Amber is reserved for the founder gate; these are NOT gate items — choosing a shape is a
+   direction, not an approval to send — so nothing here borrows the gate's signature. */
+
+.cnv-cands {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 12px 10px;
+  padding: 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.cnv-cands-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.cnv-cands-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cnv-cands-head-text strong {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.cnv-cands-head-text span {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.cnv-cands-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* One sketch — a named shape with a one-line why and its steps as ghost cards. */
+.cnv-cand {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 11px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--surface-2);
+  transition: opacity 0.15s ease, border-color 0.12s ease, background 0.12s ease;
+}
+
+.cnv-cand:hover {
+  border-color: color-mix(in srgb, var(--line-2) 80%, var(--ink) 20%);
+}
+
+/* Once one is picked, the others recede — the choice is made, they're no longer on offer. */
+.cnv-cand.dimmed {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.cnv-cand.picked {
+  border-color: color-mix(in srgb, var(--ink) 45%, var(--line-2));
+  background: var(--surface);
+}
+
+.cnv-cand-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cnv-cand-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.011em;
+  color: var(--ink);
+}
+
+.cnv-cand-pick {
+  flex: 0 0 auto;
+  padding: 5px 11px;
+  border: 1px solid color-mix(in srgb, var(--ink) 20%, var(--line-2));
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 11.5px;
+  font-weight: 550;
+  line-height: 1;
+  cursor: pointer;
+  transition: opacity 0.12s ease, background 0.12s ease;
+}
+
+.cnv-cand-pick:hover {
+  background: color-mix(in srgb, var(--ink) 88%, transparent);
+}
+
+.cnv-cand-pick:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ink) 40%, transparent);
+  outline-offset: 1px;
+}
+
+.cnv-cand-pick:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.cnv-cand-why {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--ink-2);
+}
+
+/* The steps of the shape, top-down, in the same ghost-card language as the build room. */
+.cnv-cand-flow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 2px;
+}
+
+.cnv-cand-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}

@@ -175,11 +175,10 @@
   color: var(--gap);
 }
 
-/* Run/result accent borders stay meaningful (done/error/pending) but lose the
-   heavy fills — a thin colored border is enough on a calm card. */
-.react-flow .loop-node-error {
-  background: var(--surface);
-}
+/* Run/result status is reconciled against the stage silhouettes at the BOTTOM of this
+   file ("Status × silhouette"), where the loud full-card status borders are demoted so
+   the silhouette stays the primary read. (This is where the old surface-fill reset for
+   .loop-node-error used to live.) */
 
 /* ── Focus-expand: a node rises into focus while the field recedes ─────────────
    The card is a two-state object — a glance card on the map (icon+kind / title /
@@ -412,4 +411,176 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ═══ Stage silhouettes — read the pipeline from shape (Direction B) ══════════════
+   Each GTM stage becomes a distinct OBJECT so a founder reads find → enrich → draft →
+   gate → send → measure from silhouette alone, before a single label. Strictly
+   monochrome; amber (--gap) stays the founder GATE's alone. NO width changes — the
+   differentiation is fill / header / border / type, so the graph layout is untouched.
+   Keyed on loop-node-obj-*, loop-node-cat-*, loop-node-kind-* (set in GraphCanvas). */
+
+/* SOURCE — the entry point: a filled ink header band reads as "where the world comes
+   in." The header goes full-bleed and its contents flip to light; the body keeps the
+   card's own padding. */
+.react-flow .loop-node-obj-source { padding: 0; overflow: hidden; }
+.react-flow .loop-node-obj-source .loop-node-srchead {
+  margin: 0;
+  padding: 10px 13px 9px;
+  background: var(--ink);
+  color: var(--surface);
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+}
+.react-flow .loop-node-obj-source .loop-node-srchead .loop-node-type-label,
+.react-flow .loop-node-obj-source .loop-node-srchead .loop-node-mode,
+.react-flow .loop-node-obj-source .loop-node-srchead .loop-node-mark { color: var(--surface); }
+.react-flow .loop-node-obj-source .loop-node-srchead .loop-node-mode { opacity: 0.68; }
+.react-flow .loop-node-obj-source .loop-node-headline { padding: 11px 14px 0; }
+.react-flow .loop-node-obj-source .loop-node-trigger { padding: 0 14px; }
+.react-flow .loop-node-obj-source .loop-node-enter { padding: 0 14px 12px; }
+
+/* TEAMMATE — a person: rounder card, a larger round monogram. (The monogram itself is
+   already circular via inline style; we just give it presence.) */
+.react-flow .loop-node-obj-teammate { border-radius: var(--r-xl); }
+.react-flow .loop-node-obj-teammate .loop-node-icon { width: 30px; height: 30px; }
+
+/* CODE / SKILL — the machinery: a dense monospace chip on a recessed fill, so
+   deterministic/tool steps read as "the wiring," not the work. The recessed fill
+   alone read weak against a plain step, so the machinery signal is firmed up: the
+   icon becomes an explicitly BORDERED mono chip (a component, not a person's round
+   avatar), and BOTH the eyebrow and the title are set in Geist Mono — the letterform
+   itself is the strongest at-a-glance "this is code" cue. */
+.react-flow .loop-node-kind-code,
+.react-flow .loop-node-kind-skill { background: var(--surface-2); }
+.react-flow .loop-node-kind-code .loop-node-icon,
+.react-flow .loop-node-kind-skill .loop-node-icon {
+  background: var(--surface);
+  border: 1px solid var(--line-2);   /* a bordered chip reads as a wired component, not a filled tile */
+  color: var(--ink-2);
+}
+.react-flow .loop-node-kind-code .loop-node-type-label,
+.react-flow .loop-node-kind-skill .loop-node-type-label { font-family: var(--font-mono); letter-spacing: 0.04em; }
+.react-flow .loop-node-kind-code .loop-node-label,
+.react-flow .loop-node-kind-skill .loop-node-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.01em;   /* mono optical tightening — reads as a code identifier, not prose */
+  color: var(--ink-2);
+}
+
+/* CONTEXT / RESOURCE — grounding that recedes: a quiet inset chip, no lift. It's the
+   background the work stands on, not a step. */
+.react-flow .loop-node-cat-resource { background: var(--surface-2); box-shadow: none; }
+.react-flow .loop-node-cat-resource .loop-node-icon { background: var(--surface); }
+
+/* SEND / EXECUTE — the action: a heavier ink border and a filled-ink icon, so the one
+   node that acts on the world (post-gate) reads as weight about to move. */
+.react-flow .loop-node-cat-execute { border-color: var(--ink-2); }
+.react-flow .loop-node-cat-execute .loop-node-icon { background: var(--ink); color: var(--surface); }
+
+/* MEASURE — the readout: flat and dashed, no shadow, so the scoreboard reads as a
+   panel you glance at, not a step that produces. Opaque (never glass). */
+.react-flow .loop-node-obj-measure {
+  background: var(--surface);
+  box-shadow: none;
+  border-style: dashed;
+  border-color: var(--line-2);
+}
+.react-flow .loop-node-obj-measure .loop-node-icon { background: transparent; border: 1px solid var(--line-2); }
+
+/* GATE — the wall stays the signature: keep its amber left rule + tint (canvas-gate.css
+   owns the bloom + inline review), just firm the border so it's unmistakably the loudest
+   object among the new silhouettes. Amber is spent HERE and nowhere else. */
+.react-flow .loop-node-gate { border-color: color-mix(in oklch, var(--gap) 30%, var(--line-2)); }
+
+/* ═══ Status × silhouette — status is the SECONDARY read, the shape is primary ════
+   The run-status classes (index.css) used to REPAINT the whole card border with
+   !important: done → full green ring, error → full red ring, pending → full AMBER
+   ring. Two problems: (1) a full colored border overpowered the stage silhouette —
+   a "done" teammate showed a green ring that fought its person-shape, an execute
+   node lost its heavy-ink silhouette to a green ring; (2) the amber pending border
+   on a NON-gate node broke the rule that amber (--gap) is the founder gate's alone.
+   Fix: the silhouette's OWN border always wins; run status is demoted to the quiet
+   header StatusIcon glyph (already colored) plus, for error, a faint tint — never a
+   full-card color repaint. Amber is never emitted here.
+
+   §1 Neutralize the loud status border repaint. index.css forces it with !important,
+      so these must be !important too; scoping under .react-flow raises specificity so
+      the tie resolves in our favor. A plain step/teammate/context/code card falls back
+      to the calm card line; a silhouette card gets its own border re-asserted in §2. */
+.react-flow .loop-node-done,
+.react-flow .loop-node-pending { border-color: var(--line-2) !important; }
+/* Error keeps a faint danger wash — the one status that warrants a card-level tell —
+   but drops the full red border; the red AlertCircle glyph + error text carry the rest. */
+.react-flow .loop-node-error { border-color: var(--line-2) !important; background: var(--danger-soft); }
+
+/* §2 Re-assert the silhouette borders so a card that is BOTH a silhouette AND a run
+      state keeps its shape. Declared AFTER §1 at equal specificity + !important, so the
+      source-order tie resolves here. The gate re-asserts its amber (it is the ONE node
+      that owns amber), including its left rule which §1's border-color would otherwise
+      overwrite on a pending/awaiting-review gate. */
+.react-flow .loop-node-cat-execute { border-color: var(--ink-2) !important; }
+.react-flow .loop-node-obj-switch { border-left: 2px solid var(--ink) !important; }
+.react-flow .loop-node-gate {
+  border-color: color-mix(in oklch, var(--gap) 30%, var(--line-2)) !important;
+  border-left: 2px solid var(--gap) !important;
+}
+
+/* ═══ Blocking alert vs grounding grade — two marks, not one overloaded pill ═══════
+   The top-right badge slot carries two unrelated things. A grounding verdict
+   (grounded / assumed / generic / blind) is a quiet GRADE — the recessive dot-pill
+   (.loop-verdict, styled in index.css). A blocking gap ("Needs operatorName") is an
+   ALERT — the thing that makes a pipeline blocked — and gets its own mark class so it
+   reads as ATTENTION, not a grade: a squared danger tag with an alert glyph, heavier,
+   with a firmer border. Danger (--danger) is an existing semantic token; no amber, no
+   new hue. Subtle enough to sit in a calm header, distinct enough to never be mistaken
+   for a grounding grade. */
+.react-flow .loop-alert {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  padding: 2px 7px 2px 5px;
+  border-radius: var(--r-sm);   /* a squared tag ≠ the fully-rounded grade pill */
+  border: 1px solid color-mix(in oklch, var(--danger) 45%, transparent);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 9.5px;
+  font-weight: 700;             /* louder than the 640 grade pill — it's an alert */
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.react-flow .loop-alert-ico { width: 11px; height: 11px; flex: 0 0 auto; }
+
+/* On-card "Ask Claude" — hand this step to the chat as its subject. Quiet until you hover or select
+   the card, so the canvas stays calm; the canvas↔chat tie without routing through the node modal. */
+.react-flow .loop-node-ask {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+.react-flow .loop-node:hover .loop-node-ask,
+.react-flow .loop-node-selected .loop-node-ask,
+.react-flow .loop-node-ask:focus-visible {
+  opacity: 1;
+}
+.react-flow .loop-node-ask:hover {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
+}
+.react-flow .loop-node-ask:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--line-2) 80%, transparent);
+  outline-offset: 1px;
 }

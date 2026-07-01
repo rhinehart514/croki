@@ -9,9 +9,9 @@ import {
 import "@xyflow/react/dist/style.css";
 import { motion } from "motion/react";
 import {
-  AlertCircle, Ban, Bot, Check, CheckCircle2, Circle, Code, CornerDownLeft, Database, FileText, GitMerge,
+  AlertCircle, AlertTriangle, Ban, Bot, Check, CheckCircle2, ChevronDown, ChevronRight, Circle, Code, CornerDownLeft, Database, FileText, GitMerge,
   Loader, Lock, MessageSquare, MousePointer2, Pencil, Play, Search, ShieldCheck, Lightbulb, Split, Sprout, Target,
-  Telescope, Trash2, TrendingUp, Wand2, X, Zap,
+  Telescope, Trash2, TrendingUp, Undo2, Wand2, X, Zap,
 } from "lucide-react";
 import TerminalNode from "@/components/TerminalNode";
 import QueryNode from "@/components/QueryNode";
@@ -23,10 +23,17 @@ import { useBrandGlyph } from "@/lib/brandGlyph";
 import { BrandGlyph } from "@/components/BrandGlyph";
 import type { NodeEditorBridge } from "@/components/nodeEditorBridge";
 import type {
-  ConnectorMeta, GateDecision, GTMEdge, GTMEdgeType, GTMGraph,
+  ChannelMeta, ConnectorMeta, GateDecision, GTMEdge, GTMEdgeType, GTMGraph,
   GTMContractAudit, GTMItem, GTMNode, GTMNodeCategory, GTMNodeResult, GTMRunResult, NodeSelection,
   Person, PersonAppearance,
 } from "@/types";
+import { computeChannelLanes, type ChannelLane } from "@/lib/channelLanes";
+import { itemKey } from "@/lib/itemKey";
+import {
+  gateItemView, gateItemPatternCleared, gateItemIsException, gateItemExceptionReasons, gateItemProvenance,
+  gateItemEvidenceLines,
+} from "@/lib/gateItem";
+import type { GateEvidenceLine, GatePromote } from "@/lib/gateItem";
 
 // The in-card editor needs the same handler bag the old right rail held (run a step, save the
 // graph, open an artifact, delete, review a gate) plus the live graph (to clone-and-save a notes
@@ -206,6 +213,19 @@ function nodeVerdict(
 }
 
 function VerdictBadge({ verdict, label, title }: { verdict: Verdict; label: string; title: string }) {
+  // Two DIFFERENT classes of mark share this top-right slot, so a founder learns two grammars, not one
+  // overloaded pill. A blocking gap ("Needs operatorName") is an ALERT — the thing that makes a pipeline
+  // blocked — so it renders as a squared danger tag with an alert glyph (attention, "fix me"). Every
+  // other verdict is a quiet GRADE of grounding (grounded/assumed/generic/blind) and stays the recessive
+  // dot-pill (a judgment you glance at). Danger is an existing semantic token; no amber is used here.
+  if (verdict === "blocked") {
+    return (
+      <span className="loop-alert" title={title}>
+        <AlertTriangle className="loop-alert-ico" aria-hidden />
+        {label}
+      </span>
+    );
+  }
   return (
     <span className={`loop-verdict v-${verdict}`} title={title}>
       <span className="loop-verdict-dot" aria-hidden />
@@ -244,10 +264,26 @@ type GTMNodeData = {
   // Gate review (slice 5): for a founder gate node, resolve its staged drafts inline on the canvas.
   onSubmitReview?: (decisions: Record<string, GateDecision>) => void;
   onApproveGate?: () => void;
+  // The autonomy ladder relocated onto the gate bloom — the Promote-by-Replay gesture and revoke,
+  // bound to this pipeline. Set only on the FOCUSED gate (the host wires it, matching onSubmitReview's
+  // single-channel scope); absent on every other lane's gate, which then shows no promote affordance.
+  gatePromote?: GatePromote;
+  // This gate is the one a run is paused at (staged drafts awaiting review). The node breathes an amber
+  // ring AND blooms its GateReview cards open without needing selection — the review comes to the founder.
+  bloomed?: boolean;
+  // Hand this node to Claude as the chat subject, straight from the card — the canvas→chat tie without
+  // routing through the node-detail modal.
+  onAskClaude?: () => void;
   // Ideation build animation: this node's left-to-right rank in its lane. When set, the card springs
   // in with a delay proportional to the rank, so a freshly composed workflow builds out node by node
   // instead of popping in whole. Unset on the main canvas (no entrance animation there).
   appearOrder?: number;
+  // Set only on the merged multi-pipeline canvas (buildMergedFlowGraph): which pipeline this node
+  // really belongs to, and that pipeline's own graph id. A few reads happen for EVERY rendered card
+  // regardless of selection (e.g. a source card's entrant count) and must resolve against the card's
+  // OWN pipeline, not whichever one happens to be centered — see WorkNodeComponent's entrant lookup.
+  channelId?: string;
+  graphId?: string;
 };
 
 // A lane that hasn't composed yet: the model is reasoning, or the compose failed. Carried on the
@@ -775,22 +811,441 @@ function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
 
 // ─── Work node ────────────────────────────────────────────────────────────────
 
+// Split a draft body into sentences for the evidence pass, keeping each sentence's own trailing
+// punctuation and whitespace so re-joining them renders the original text verbatim.
+function splitSentences(text: string): string[] {
+  const parts = text.match(/[^.!?]+[.!?]*\s*/g);
+  return parts && parts.length ? parts : [text];
+}
+
+const normalizeClaim = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+
+// The draft body with its claims made tappable against the scan. When the item carries evidence_lines,
+// each sentence that matches a grounded claim reads at full ink and unfolds its ref (path:line) inline
+// on tap; sentences with no evidence recede to a lighter weight, so the eye separates what's grounded
+// from what's asserted. No evidence_lines → the plain body, nothing to unfold (the common case).
+function EvidenceBody({ text, evidence }: { text: string; evidence: GateEvidenceLine[] }) {
+  const [openIdx, setOpenIdx] = useState<number | null>(null);
+  if (!evidence.length) return <p className="cgate-card-body">{text}</p>;
+  const sentences = splitSentences(text);
+  return (
+    <p className="cgate-card-body cgate-card-body-evi">
+      {sentences.map((raw, i) => {
+        const norm = normalizeClaim(raw);
+        const hit = evidence.find((e) => {
+          const c = normalizeClaim(e.claim);
+          return c.length > 0 && (norm.includes(c) || c.includes(norm));
+        });
+        if (!hit) return <span key={i} className="cgate-evi-plain">{raw}</span>;
+        const isOpen = openIdx === i;
+        return (
+          <span key={i} className="cgate-evi-claim-wrap">
+            <button
+              type="button"
+              className={cn("cgate-evi-claim", isOpen && "is-open")}
+              title={isOpen ? "Hide the line this traces to" : `Grounded at ${hit.ref}`}
+              onClick={(e) => { e.stopPropagation(); setOpenIdx(isOpen ? null : i); }}
+            >
+              {raw}
+            </button>
+            {isOpen ? <span className="cgate-evi-ref">{hit.ref}</span> : null}
+          </span>
+        );
+      })}
+    </p>
+  );
+}
+
+// The autonomy ladder, relocated from the Approvals panel onto the gate bloom. Promoting is a founder
+// act done in place: "Promote…" replays the pipeline's last real gate calls — the ✓/✕ the founder
+// actually gave — as the evidence basis, then a press-and-hold commits the standing approval so the
+// gate auto-clears clean items and still stops the exceptions. Autonomy moves ONLY by this explicit
+// hold; nothing here is triggered by a run or by composition. Revoke stays one quiet click back to
+// hold-everything. Degrades honestly: a pipeline with too thin a decision history isn't promotable yet.
+const REPLAY_CAP = 12;
+const PROMOTE_MIN_HISTORY = 3;
+const HOLD_MS = 750;
+function GatePromotePanel({ promote, cleanCount, exceptionCount }: {
+  promote: GatePromote;
+  cleanCount: number;
+  exceptionCount: number;
+}) {
+  const { channel, canRelease, replayDecisions, onPromote, onRevoke } = promote;
+  const level = (["draft", "trusted", "autonomous"].includes(channel.autonomy ?? "draft") ? channel.autonomy : "draft") as "draft" | "trusted" | "autonomous";
+  const target: "trusted" | "autonomous" | null = level === "draft" ? "trusted" : level === "trusted" ? "autonomous" : null;
+  const targetLabel = target === "autonomous" ? "autonomous" : "trusted";
+  const history = replayDecisions.slice(-REPLAY_CAP);
+  const promotable = canRelease && !!target && history.length >= PROMOTE_MIN_HISTORY;
+
+  const [engaged, setEngaged] = useState(false);
+  const [note, setNote] = useState("");
+  const [holding, setHolding] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const holdTimer = useRef<number | null>(null);
+
+  const clearHold = () => {
+    if (holdTimer.current != null) { window.clearTimeout(holdTimer.current); holdTimer.current = null; }
+    setHolding(false);
+  };
+  useEffect(() => () => { if (holdTimer.current != null) window.clearTimeout(holdTimer.current); }, []);
+
+  const commit = async () => {
+    if (!target || busy) return;
+    setBusy(true);
+    try {
+      await onPromote(target, note.trim() || `Approve drafts like the ${history.length} you just cleared by hand`);
+      setEngaged(false);
+      setNote("");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const startHold = () => {
+    if (busy || holding) return;
+    setHolding(true);
+    holdTimer.current = window.setTimeout(() => { holdTimer.current = null; setHolding(false); void commit(); }, HOLD_MS);
+  };
+  const revoke = async () => {
+    if (busy) return;
+    setBusy(true);
+    try { await onRevoke(); } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="cgate-promote" onClick={(e) => e.stopPropagation()}>
+      <div className="cgate-promote-rung" title="Autonomy moves only by an explicit founder hold — never by a run or by composition.">
+        <span className="cgate-promote-ladder" aria-hidden>
+          <i className="on" />
+          <i className={cn((level === "trusted" || level === "autonomous") && "on")} />
+          <i className={cn(level === "autonomous" && "on")} />
+        </span>
+        <b>{level === "draft" ? "Draft" : level === "trusted" ? "Trusted" : "Autonomous"}</b>
+        <span className="cgate-promote-rung-blurb">
+          {level === "draft" ? "the gate holds every item" : level === "trusted" ? "clean items auto-clear, exceptions stop" : "standing approval runs it, exceptions stop"}
+        </span>
+      </div>
+
+      {!engaged ? (
+        <div className="cgate-promote-controls">
+          {target ? (
+            promotable ? (
+              <button type="button" className="cgate-promote-open" onClick={() => setEngaged(true)}>
+                <ShieldCheck size={11} aria-hidden /> Promote to {targetLabel}…
+              </button>
+            ) : (
+              <span className="cgate-promote-thin">
+                {canRelease
+                  ? `Decide ${PROMOTE_MIN_HISTORY - history.length > 0 ? PROMOTE_MIN_HISTORY - history.length : "a few"} more by hand to promote — not enough of your calls to replay yet.`
+                  : "Only an owner or approver can promote a pipeline."}
+              </span>
+            )
+          ) : (
+            <span className="cgate-promote-thin">This pipeline is at the top of the ladder.</span>
+          )}
+          {level !== "draft" ? (
+            <button type="button" className="cgate-promote-revoke" disabled={!canRelease || busy} onClick={() => void revoke()}>
+              <Undo2 size={11} aria-hidden /> Drop to draft
+            </button>
+          ) : null}
+        </div>
+      ) : (
+        <div className="cgate-promote-replay">
+          <p className="cgate-promote-replay-lead">Your last {history.length} calls on this pipeline — the pattern you're about to bank:</p>
+          <div className="cgate-promote-strip" role="list" aria-label="Your recent gate decisions">
+            {history.map((d, i) => (
+              <span
+                key={i}
+                role="listitem"
+                className={cn("cgate-replay-chip", d.decision === "approve" ? "is-approve" : "is-reject")}
+                style={{ animationDelay: `${i * 0.07}s` }}
+                title={d.subject ? `${d.decision === "approve" ? "You approved" : "You returned"}: ${d.subject}` : undefined}
+              >
+                {d.decision === "approve" ? <Check size={10} aria-hidden /> : <X size={10} aria-hidden />}
+              </span>
+            ))}
+          </div>
+          <div className="cgate-promote-band">
+            Once banked, {cleanCount} clean draft{cleanCount === 1 ? "" : "s"} would release on your standing approval
+            {exceptionCount > 0 ? `; ${exceptionCount} exception${exceptionCount === 1 ? "" : "s"} would still stop for your eyes.` : "; exceptions still stop for your eyes."}
+          </div>
+          <input
+            className="cgate-promote-note"
+            value={note}
+            placeholder={`What are you blessing? e.g. ${target === "autonomous" ? "this play is proven — run it" : "approve any draft to a vetted founder"}`}
+            onChange={(e) => setNote(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+          />
+          <div className="cgate-promote-actions">
+            <button
+              type="button"
+              className={cn("cgate-promote-hold", holding && "is-holding")}
+              disabled={busy}
+              onPointerDown={startHold}
+              onPointerUp={clearHold}
+              onPointerLeave={clearHold}
+              onPointerCancel={clearHold}
+            >
+              <span className="cgate-promote-hold-fill" aria-hidden />
+              <span className="cgate-promote-hold-label">
+                {busy ? <Loader size={11} className="spin" aria-hidden /> : <ShieldCheck size={11} aria-hidden />}
+                {busy ? "Banking…" : holding ? "Hold to bless…" : `Hold to promote to ${targetLabel}`}
+              </span>
+            </button>
+            <button type="button" className="cgate-promote-cancel" disabled={busy} onClick={() => { clearHold(); setEngaged(false); }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The founder gate, ON the canvas. When a run pauses at a gate, its staged drafts bloom out of the
+// gate node as first-class cards you read and decide in place — approve / edit-then-approve / reject —
+// instead of bouncing to a side rail. Each decision calls onSubmit (the node-bound onSubmitReview),
+// which banks the per-item call into the run ledger and resumes; the decision also lands optimistically
+// so the card resolves instantly under your hand. This is the product's moment: reviewing real work
+// where the work lives. Never renders a hollow item as approvable — an empty draft only offers Reject.
+const GATE_CARD_CAP = 6;
+function GateReview({ items, onSubmit, learned, promote }: {
+  items: GTMItem[];
+  onSubmit?: (decisions: Record<string, GateDecision>) => void;
+  learned: number;
+  promote?: GatePromote;
+}) {
+  const [clearedOpen, setClearedOpen] = useState(false);
+  const [decided, setDecided] = useState<Record<string, "approve" | "reject">>({});
+  const [editing, setEditing] = useState<{ key: string; text: string } | null>(null);
+  // The review panel is a container, not a control — it only swallows clicks so reviewing a draft
+  // doesn't deselect the gate node underneath. Attach that via a ref so the wrapper stays a plain
+  // region (a JSX onClick on a div reads as a fake button; this keeps it honest and a11y-clean).
+  const reviewRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = reviewRef.current;
+    if (!el) return;
+    const stop = (e: MouseEvent) => e.stopPropagation();
+    el.addEventListener("click", stop);
+    return () => el.removeEventListener("click", stop);
+  }, []);
+  const decide = (key: string, decision: "approve" | "reject", editedDraft?: string) => {
+    setDecided((d) => ({ ...d, [key]: decision }));
+    setEditing((e) => (e?.key === key ? null : e));
+    onSubmit?.({ [key]: editedDraft != null ? { decision, editedDraft } : { decision } });
+  };
+  // The blessed pattern already released the clean items (viaPattern) — they collapse into one receipt
+  // line, they never bloom. Only the items still needing the founder's own eyes open as cards. Each row
+  // keeps its ORIGINAL index so itemKey's fallback stays aligned with the brain's draftKey — a filtered
+  // index would map a banked decision to the wrong draft. On a plain draft gate nothing is viaPattern,
+  // so every item blooms exactly as before.
+  const rows = items.map((it, i) => ({ it, i }));
+  const clearedRows = rows.filter(({ it }) => gateItemPatternCleared(it));
+  const clearedCount = clearedRows.length;
+  const bloom = rows.filter(({ it }) => !gateItemPatternCleared(it));
+  const exceptionCount = bloom.reduce((n, { it }) => n + (gateItemIsException(it) ? 1 : 0), 0);
+  // The clean drafts a promotion would auto-clear — every staged item the pattern could vouch for
+  // (has a body, not flagged, not already cleared). Drives the promote panel's "what will release" band.
+  const cleanTotal = bloom.reduce((n, { it }) => n + (!gateItemView(it).hollow && !gateItemIsException(it) ? 1 : 0), 0);
+  // The standing approval that released the cleared pile — surfaced as the audit basis when it's fanned.
+  const clearedBasis = promote?.channel.blessedPattern?.note?.trim() || null;
+  // Batch approve every clean, still-undecided draft at once — the pattern-approval the gate is built
+  // for, so a volume run doesn't demand per-item clicks. Exceptions are excluded by definition: each
+  // one needs an individual call.
+  const approveAllClean = () => {
+    const batch: Record<string, GateDecision> = {};
+    const nextDecided: Record<string, "approve" | "reject"> = {};
+    bloom.forEach(({ it, i }) => {
+      const key = itemKey(it, i);
+      if (!gateItemView(it).hollow && !gateItemIsException(it) && !decided[key]) { batch[key] = { decision: "approve" }; nextDecided[key] = "approve"; }
+    });
+    if (!Object.keys(batch).length) return;
+    setDecided((d) => ({ ...d, ...nextDecided }));
+    onSubmit?.(batch);
+  };
+  const cleanUndecided = bloom.reduce((n, { it, i }) => n + (!gateItemView(it).hollow && !gateItemIsException(it) && !decided[itemKey(it, i)] ? 1 : 0), 0);
+  const shown = bloom.slice(0, GATE_CARD_CAP);
+  return (
+    <div ref={reviewRef} className="cgate-review">
+      <div className="cgate-review-lead">
+        <span className="cgate-review-count">
+          {exceptionCount > 0
+            ? `${exceptionCount} exception${exceptionCount === 1 ? "" : "s"} for your eyes · nothing sends until you approve`
+            : `${bloom.length} staged · nothing sends until you approve`}
+        </span>
+        {learned > 0 ? (
+          <span className="cgate-review-taste" title="Drafted from your past gate decisions">
+            <Sprout size={9} aria-hidden /> tuned by {learned} of your calls
+          </span>
+        ) : null}
+      </div>
+      {cleanUndecided > 1 && onSubmit ? (
+        <button className="cgate-approve-all" type="button" onClick={(e) => { e.stopPropagation(); approveAllClean(); }}>
+          <Check size={12} aria-hidden /> Approve all {cleanUndecided} clean drafts
+        </button>
+      ) : null}
+      <div className="cgate-cards">
+        {shown.map(({ it: item, i }) => {
+          const key = itemKey(item, i);
+          const v = gateItemView(item);
+          const state = decided[key];
+          const isEditing = editing?.key === key;
+          if (state) {
+            return (
+              <div className={cn("cgate-card", "is-decided", `is-${state}`)} key={key}>
+                <span className="cgate-card-to">{v.subject}</span>
+                <span className="cgate-card-verdict">{state === "approve" ? "Approved" : "Returned"}</span>
+              </div>
+            );
+          }
+          if (v.hollow) {
+            return (
+              <div className="cgate-card is-hollow" key={key}>
+                <span className="cgate-card-to"><AlertTriangle size={11} aria-hidden /> Empty draft</span>
+                <p className="cgate-card-note">This item produced nothing to send — the source likely came up empty. Return it, or fix the step upstream.</p>
+                <div className="cgate-card-actions">
+                  <button className="cgate-reject" type="button" onClick={() => decide(key, "reject")}>
+                    <CornerDownLeft size={11} aria-hidden /> Return as draft
+                  </button>
+                </div>
+              </div>
+            );
+          }
+          const isException = gateItemIsException(item);
+          const reasons = isException ? gateItemExceptionReasons(item) : [];
+          const provenance = gateItemProvenance(item);
+          const evidence = gateItemEvidenceLines(item);
+          return (
+            <div className={cn("cgate-card", isException && "is-exception")} key={key}>
+              <span className="cgate-card-to">
+                {isException ? <AlertTriangle size={11} aria-hidden /> : null}
+                {v.subject}
+              </span>
+              {provenance ? <span className="cgate-card-prov">{provenance}</span> : null}
+              {/* An exception carries the reason it deviated from the pattern — the "hold for your eyes"
+                  note, so the founder knows why this one bloomed instead of clearing. */}
+              {reasons.length > 0 && !isEditing ? (
+                <p className="cgate-card-annot"><span className="cgate-card-annot-plus" aria-hidden>+</span>{reasons.join(" · ")}</p>
+              ) : null}
+              {isEditing ? (
+                <textarea
+                  className="cgate-card-edit"
+                  value={editing.text}
+                  rows={5}
+                  autoFocus
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => setEditing({ key, text: e.target.value })}
+                />
+              ) : v.body ? (
+                <EvidenceBody text={v.body} evidence={evidence} />
+              ) : (
+                <div className="cgate-card-prospect">
+                  {v.trigger ? <p><span className="k">Now</span> {v.trigger}</p> : null}
+                  {v.who ? <p><span className="k">Who</span> {v.who}</p> : null}
+                  {v.sourceUrl ? <p><span className="k">Source</span> {v.sourceUrl}</p> : null}
+                </div>
+              )}
+              {v.evidence && !isEditing ? <p className="cgate-card-why">Why them: {v.evidence}</p> : null}
+              <div className="cgate-card-actions">
+                {isEditing ? (
+                  <>
+                    <button className="cgate-approve" type="button" disabled={!editing.text.trim()}
+                      onClick={() => decide(key, "approve", editing.text)}>Save &amp; approve</button>
+                    <button className="cgate-ghost" type="button" onClick={() => setEditing(null)}>Cancel</button>
+                  </>
+                ) : (
+                  <>
+                    <button className="cgate-approve" type="button" onClick={() => decide(key, "approve")}>
+                      <Check size={11} aria-hidden /> Approve &amp; release
+                    </button>
+                    <button className="cgate-reject" type="button" onClick={() => decide(key, "reject")}>
+                      <CornerDownLeft size={11} aria-hidden /> Return as draft
+                    </button>
+                    <button className="cgate-edit" type="button" onClick={() => setEditing({ key, text: v.body ?? "" })}>
+                      <Pencil size={11} aria-hidden /> Edit
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {bloom.length > GATE_CARD_CAP ? (
+        <p className="cgate-more">+{bloom.length - GATE_CARD_CAP} more staged</p>
+      ) : null}
+      {/* Pattern-cleared pile — the founder's standing approval already released these clean items, so
+          they collapse into one green line instead of blooming. It's a receipt you can audit, never a
+          hiding place: tap it to fan the cleared items and the pattern that released each. Exceptions
+          still bloom above and demand eyes. */}
+      {clearedCount > 0 ? (
+        <div className="cgate-cleared-pile">
+          <button
+            type="button"
+            className="cgate-cleared"
+            aria-expanded={clearedOpen}
+            onClick={(e) => { e.stopPropagation(); setClearedOpen((o) => !o); }}
+          >
+            <Check size={11} aria-hidden />
+            <span>{clearedCount} cleared by your pattern</span>
+            {clearedOpen ? <ChevronDown size={11} aria-hidden /> : <ChevronRight size={11} aria-hidden />}
+          </button>
+          {clearedOpen ? (
+            <div className="cgate-cleared-list">
+              {clearedBasis ? (
+                <p className="cgate-cleared-basis">Released on your standing approval: “{clearedBasis}”</p>
+              ) : (
+                <p className="cgate-cleared-basis">Released on your standing approval for this pipeline.</p>
+              )}
+              {clearedRows.map(({ it, i }) => {
+                const cv = gateItemView(it);
+                const prov = gateItemProvenance(it);
+                return (
+                  <div className="cgate-cleared-row" key={itemKey(it, i)}>
+                    <Check size={10} aria-hidden />
+                    <span className="cgate-cleared-subj">{cv.subject}</span>
+                    {prov ? <span className="cgate-cleared-prov">{prov}</span> : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Promote by Replay — the autonomy ladder, on the gate. Present only for the focused pipeline
+          (the host wires it), so the founder promotes standing approval right where the wall lives. */}
+      {promote ? (
+        <GatePromotePanel promote={promote} cleanCount={cleanTotal} exceptionCount={exceptionCount} />
+      ) : null}
+    </div>
+  );
+}
+
 function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
   const { node, result, running, selected, onSelect } = data;
   const ctx = useContext(NodeEditorContext);
+  // A gate with staged drafts opens its inline review right here on the canvas — auto when a run pauses
+  // on it (bloomed), and on demand from its own count when it's a completed/idle gate you want to revisit.
+  const [reviewOpen, setReviewOpen] = useState(false);
   const status  = getStatus(node, result, running);
   const summary = result ? itemSummary(result) : null;
   const hasErr  = status === "error" || status === "blocked";
-  const visual  = nodeVisual(node);
+  const visual  = useMemo(() => nodeVisual(node), [node]);
   const color   = visual.color;
   const isOpenKind = !!node.kind && node.kind !== "tool";
   // The card is typed by its GTM object, not its mechanical kind — the headline is the job.
-  const obj = cardObject(node);
+  const obj = useMemo(() => cardObject(node), [node]);
   const mode = obj === "source" ? sourceMode(node) : null;
   const trigger = obj === "source" ? sourceTrigger(node) : null;
-  // The real entrants for this source's channel (read off context — empty on preview canvases). The
-  // collapsed card shows the count; the opened card (editor) lists each with their own trigger.
-  const entrants = obj === "source" ? sourceEntrants(ctx?.people, ctx?.graph.id ?? null, node) : [];
+  // The real entrants for this source's channel (read off context — empty on preview canvases). Every
+  // card computes this unconditionally (for the collapsed count), including cards in a lane that ISN'T
+  // the focused one on the merged canvas — data.graphId (stamped per-lane by buildMergedFlowGraph) is
+  // this card's OWN pipeline; ctx.graph is only ever the focused one, so it's the single-channel
+  // fallback. The opened card (editor) lists each entrant with their own trigger.
+  const entrants = useMemo(
+    () => (obj === "source" ? sourceEntrants(ctx?.people, data.graphId ?? ctx?.graph?.id ?? null, node) : []),
+    [obj, ctx, data.graphId, node],
+  );
   // The judgment verdict replaces the bare health number — derived from real signals only.
   const verdict = nodeVerdict(data.health, data.contractAudit, mode);
   // An agent node reads as a person: the role name is the headline and a family-tinted monogram is the
@@ -807,15 +1262,38 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
 
   // A switch reads its branches off its OUTGOING data edges: each carries the routing predicate (the
   // rule) and points at the branch it feeds. Read from the live graph on context, not node data.
-  const switchBranches = obj === "switch" && ctx
-    ? ctx.graph.edges
-        .filter((e) => e.source === node.id && e.edgeType === "data")
-        .map((e) => ({
-          id: e.id,
-          rule: formatPredicate(e.predicate),
-          target: ctx.graph.nodes.find((n) => n.id === e.target)?.label ?? e.target,
-        }))
-    : [];
+  const switchBranches = useMemo(
+    () => (obj === "switch" && ctx
+      ? ctx.graph.edges
+          .filter((e) => e.source === node.id && e.edgeType === "data")
+          .map((e) => ({
+            id: e.id,
+            rule: formatPredicate(e.predicate),
+            target: ctx.graph.nodes.find((n) => n.id === e.target)?.label ?? e.target,
+          }))
+      : []),
+    [obj, ctx, node.id],
+  );
+
+  // ── Gate as a threshold ── the Wall reads its own state so it's never an empty box. Waiting =
+  // staged-but-undecided, released = founder-approved. Autonomy is founder-owned durable state (never
+  // composed, never set by a run); absent means draft — the wall holds every item. We surface the
+  // ladder as posture even while it's backend-only, so the card states where the wall actually stands.
+  const isGate = obj === "gate";
+  const gateItems = isGate ? (result?.items ?? []) : [];
+  const gateReleased = gateItems.filter((it) => it.approvalStatus === "approved" || it.approved === true).length;
+  const gateWaiting = gateItems.filter((it) => it.approvalStatus !== "approved" && it.approvalStatus !== "rejected" && it.approved !== true).length;
+  const gateAutonomy = String((node.config?.autonomy as string | undefined) ?? "draft");
+  const gateAutonomyLabel = gateAutonomy === "autonomous" ? "Autonomous" : gateAutonomy === "trusted" ? "Trusted" : "Draft";
+  const gateAutonomyPosture = gateAutonomy === "autonomous"
+    ? "auto-clears clean items, escalates exceptions"
+    : gateAutonomy === "trusted"
+    ? "auto-clears clean items, holds exceptions"
+    : "holds every item for your review";
+  const gateLearned = (() => {
+    const mem = result?.meta?.memory as { approved?: number; rejected?: number; edits?: number } | undefined;
+    return (mem?.approved ?? 0) + (mem?.rejected ?? 0) + (mem?.edits ?? 0);
+  })();
 
   return (
     <>
@@ -827,6 +1305,11 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       className={cn(
         "loop-node",
         `loop-node-obj-${obj}`,
+        // Stage silhouette keys: the object class is coarse (code/skill/execute all collapse to
+        // "step"), so also carry category + kind so the canvas CSS can give each GTM stage its own
+        // shape — find→enrich→draft→gate→send→measure readable from silhouette alone. Purely additive.
+        node.category && `loop-node-cat-${node.category}`,
+        node.kind && node.kind !== "tool" && `loop-node-kind-${node.kind}`,
         // The founder gate is the product's spine — the one place anything reaches the world. It
         // carries the single amber accent at full weight so the wall reads at a glance in an
         // otherwise monochrome canvas.
@@ -896,8 +1379,63 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
               : (summary ?? "No entrants yet — run to populate")}
           </span>
         </>
+      ) : obj === "gate" ? (
+        // ── Gate ── the Wall, drawn as a threshold that is never empty. Even with nothing staged it
+        // states the posture: this is where work meets the world and nothing crosses without you.
+        // Amber (--gap) is the one privileged accent on the canvas. When a run pauses here, the real
+        // staged drafts bloom below to be decided in place — approve / edit / reject — nothing sends.
+        <>
+          <div className="loop-node-header">
+            <div className="loop-node-icon loop-gate-mark" style={{ background: `${color}1c`, color }}>{visual.icon}</div>
+            <span className="loop-node-type-label">Gate · the wall</span>
+            <div className="loop-node-header-right">
+              {data.onAskClaude ? (
+                <button
+                  type="button"
+                  className="loop-node-ask"
+                  title="Ask Claude about this gate"
+                  aria-label="Ask Claude about this gate"
+                  onClick={(e) => { e.stopPropagation(); data.onAskClaude!(); }}
+                >
+                  <MessageSquare size={12} />
+                </button>
+              ) : null}
+              <span className="loop-node-status"><StatusIcon status={status} /></span>
+            </div>
+          </div>
+          <span className="loop-node-label">{node.label}</span>
+          <div className="loop-gate-threshold" role="group" aria-label="Gate throughput">
+            <span className="loop-gate-side is-waiting"><b>{gateWaiting}</b><span>waiting</span></span>
+            <span className="loop-gate-seam" aria-hidden />
+            <span className="loop-gate-side is-released"><b>{gateReleased}</b><span>released</span></span>
+          </div>
+          <span
+            className={cn("loop-gate-autonomy", `is-${gateAutonomy}`)}
+            title="Autonomy is set only by an explicit founder promotion — never by composition or a run."
+          >
+            <span className="loop-gate-ladder" aria-hidden>
+              <i className="on" />
+              <i className={cn((gateAutonomy === "trusted" || gateAutonomy === "autonomous") && "on")} />
+              <i className={cn(gateAutonomy === "autonomous" && "on")} />
+            </span>
+            <b>{gateAutonomyLabel}</b> — {gateAutonomyPosture}
+          </span>
+          {gateItems.length === 0 ? (
+            <span className="loop-gate-empty">Nothing staged yet. Nothing reaches the world until you approve it here.</span>
+          ) : (data.bloomed || selected || reviewOpen) ? (
+            <GateReview items={result!.items} onSubmit={data.onSubmitReview} learned={gateLearned} promote={data.gatePromote} />
+          ) : (
+            <button
+              type="button"
+              className="loop-gate-open"
+              onClick={(e) => { e.stopPropagation(); setReviewOpen(true); }}
+            >
+              Review {gateWaiting} staged →
+            </button>
+          )}
+        </>
       ) : (
-        // ── Teammate / Gate / Measure / Step ── job-first header: an icon (a persona monogram for a
+        // ── Teammate / Measure / Step ── job-first header: an icon (a persona monogram for a
         // Teammate, the brand mark for an MCP step), the quiet object label, the verdict, and status.
         <>
           <div className="loop-node-header">
@@ -913,12 +1451,22 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
             </div>
             <span className="loop-node-type-label">
               {obj === "teammate" ? "Teammate"
-                : obj === "gate" ? "Gate"
                 : obj === "measure" ? "Measure"
                 : isMcp ? (mcpGlyph?.title ?? mcpServer.replace(/^./, (c) => c.toUpperCase()))
                 : visual.label}
             </span>
             <div className="loop-node-header-right">
+              {data.onAskClaude ? (
+                <button
+                  type="button"
+                  className="loop-node-ask"
+                  title="Ask Claude about this step"
+                  aria-label="Ask Claude about this step"
+                  onClick={(e) => { e.stopPropagation(); data.onAskClaude!(); }}
+                >
+                  <MessageSquare size={12} />
+                </button>
+              ) : null}
               {verdict ? <VerdictBadge {...verdict} /> : null}
               <span className="loop-node-status"><StatusIcon status={status} /></span>
             </div>
@@ -947,7 +1495,10 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
                   type="button"
                   className="loop-node-count loop-node-count-open"
                   title="Open these records on the canvas"
-                  onClick={(e) => { e.stopPropagation(); data.onInspect?.(); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    data.onInspect?.();
+                  }}
                 >
                   {summary}
                 </button>
@@ -1070,14 +1621,18 @@ function InspectorCard({ node, result, onClose }: {
   );
 }
 
+// Every custom node is wrapped in React.memo so a parent re-render (or a rebuilt flow where most
+// nodes are unchanged) doesn't re-render all ~40+ cards — React Flow passes stable data/selected
+// props, so the default shallow comparison is correct. Memoizing at the registry keeps one stable
+// component type per node kind (React.memo must not be recreated per render).
 const NODE_TYPES = {
-  resourceNode:   ResourceNodeComponent,
-  contextNode:    ContextNodeComponent,
-  workNode:       WorkNodeComponent,
-  laneStatusNode: LaneStatusNodeComponent,
-  terminalNode:   TerminalNode,
-  queryNode:      QueryNode,
-  webNode:        WebNode,
+  resourceNode:   React.memo(ResourceNodeComponent),
+  contextNode:    React.memo(ContextNodeComponent),
+  workNode:       React.memo(WorkNodeComponent),
+  laneStatusNode: React.memo(LaneStatusNodeComponent),
+  terminalNode:   React.memo(TerminalNode),
+  queryNode:      React.memo(QueryNode),
+  webNode:        React.memo(WebNode),
 };
 
 // Workbench surfaces (terminal/query/web) are human-operated sources with their own renderers, not the
@@ -1189,6 +1744,8 @@ function buildFlowGraph(
   revealedNodeIds?: Set<string>,
   onInspect?: (id: string) => void,
   people?: Person[],
+  onAskClaude?: (node: GTMNode) => void,
+  gatePromote?: GatePromote,
 ): { nodes: Node[]; edges: Edge[] } {
   // A node is "revealed" unless it's a still-pending proposed ghost. Committed nodes are always
   // revealed (so an edge from a committed node to the first ghost shows immediately); a proposed node
@@ -1210,6 +1767,14 @@ function buildFlowGraph(
     const sub = subsystemHealth[n.category];
     const laneStatus = ideation && !!(n.config as Record<string, unknown>)?.laneStatus;
     const appearOrder = ideation && !laneStatus ? Math.max(0, Math.round((n.position?.x ?? 0) / 248)) : undefined;
+    // A gate blooms when a run has paused on it with drafts to review — that's derivable from the
+    // gate's own result (pendingReview / awaitingReview), so both the single-channel and merged canvases
+    // bloom on pause without the host threading a pending-gate id. An explicit bloomNodeId still forces it.
+    const nodeResult = result?.nodes[n.id];
+    const gatePending = n.category === "gate" && !!nodeResult
+      && (nodeResult.pendingReview === true
+        || (typeof nodeResult.meta?.awaitingReview === "number" && nodeResult.meta.awaitingReview > 0));
+    const bloomed = (!!bloomNodeId && bloomNodeId === n.id) || gatePending;
     return {
       id: n.id,
       type: laneStatus ? "laneStatusNode" : nodeType(n),
@@ -1224,7 +1789,7 @@ function buildFlowGraph(
         highlightedNodeId ? (highlightedNodeId === n.id ? "loop-node-replay-current" : "loop-node-replay-dim") : "",
         // Founder gate bloom: while a run pauses at this gate with staged drafts, the node breathes an
         // amber ring (the one gate accent) so the eye lands on the wall where the inline review opens.
-        bloomNodeId && bloomNodeId === n.id ? "cgate-node-bloom" : "",
+        bloomed ? "cgate-node-bloom" : "",
       ].filter(Boolean).join(" ") || undefined,
       data: {
         node: n,
@@ -1246,6 +1811,10 @@ function buildFlowGraph(
         onResolveProposal,
         onSubmitReview: onSubmitReview ? (decisions: Record<string, GateDecision>) => onSubmitReview(n.id, decisions) : undefined,
         onApproveGate: onApproveGate ? () => onApproveGate(n.id) : undefined,
+        // The promote gesture rides only the gate node, and only when the host passed one (focused lane).
+        gatePromote: n.category === "gate" ? gatePromote : undefined,
+        bloomed,
+        onAskClaude: onAskClaude ? () => onAskClaude(n) : undefined,
         appearOrder,
       } as GTMNodeData,
     };
@@ -1306,7 +1875,120 @@ function buildFlowGraph(
   return { nodes, edges };
 }
 
+// ─── Merge every pipeline into one coordinate space ───────────────────────────
+// The literal unification: every pipeline's full graph, coexisting in ONE React Flow instance,
+// stacked as lanes (computeChannelLanes) instead of one graph swapped in and out. Reuses
+// buildFlowGraph verbatim per channel — zero changes to single-channel rendering logic — then
+// namespaces the OUTPUT ids (React Flow's rendering-layer identity only; the real GTMNode/GTMEdge
+// objects inside `data` keep their real, unprefixed ids, since node ids and edge ids are only
+// unique WITHIN one pipeline's graph, not across all of them) and shifts each lane's y by its offset.
+//
+// Only ONE channel at a time can be "active" (running, selected, mid-proposal, mid-gate-review) —
+// the operator session and the founder's own focus are both single-threaded — so `focus` carries
+// those params once, scoped to `focus.channelId`; every other lane renders as a plain committed
+// graph (running/selected forced false/null) so a bare node id can never collide across lanes.
+type MergedFlowFocus = {
+  channelId: string | null;
+  running: boolean;
+  runningNodeId: string | null;
+  selection: NodeSelection;
+  proposedNodeIds?: Set<string>;
+  proposedEdgeIds?: Set<string>;
+  proposalActive?: boolean;
+  onResolveProposal?: (accept: boolean) => void;
+  onSubmitReview?: (nodeId: string, decisions: Record<string, GateDecision>) => void;
+  onApproveGate?: (nodeId: string) => void;
+  gatePromote?: GatePromote;
+  revealedNodeIds?: Set<string>;
+  onInspect?: (id: string) => void;
+};
 
+function buildMergedFlowGraph(
+  channels: ChannelMeta[],
+  channelGraphs: Map<string, GTMGraph>,
+  runResults: Map<string, GTMRunResult | null>,
+  connectors: ConnectorMeta[],
+  subsystemHealth: Record<string, { health: number; issue?: string }>,
+  contractAudits: Record<string, GTMContractAudit>,
+  // Same shape as buildFlowGraph's own onSelect — receives the namespaced `channelId::nodeId` id (the
+  // node's real React-Flow-layer id below), so a merged canvas is a drop-in for any single-graph
+  // onSelect caller as long as it unpacks the `::` when present.
+  onSelect: (id: string) => void,
+  focus: MergedFlowFocus,
+  people?: Person[],
+  onAskClaude?: (node: GTMNode) => void,
+): { nodes: Node[]; edges: Edge[]; lanes: Map<string, ChannelLane> } {
+  // The single-channel canvas overrides EVERY node's position at render time with a DAG-rank
+  // auto-layout (computeLayout, above) — the domain object's stored position is a fallback, not what
+  // actually paints. Lane math has to run against those same laid-out positions, or a lane's bounding
+  // box (and the offset every other lane stacks on) would be computed against numbers nobody sees.
+  // v1 scope cut: unlike the single-channel canvas, a manual drag inside a lane doesn't yet "stick"
+  // across renders (no per-channel draggedIds tracking) — every lane re-lays out on each render.
+  const laidOutGraphs = new Map<string, GTMGraph>();
+  for (const [channelId, g] of channelGraphs) {
+    const autoPos = g.id === "ideation-preview" ? null : computeLayout(g);
+    laidOutGraphs.set(channelId, autoPos ? { ...g, nodes: g.nodes.map((n) => ({ ...n, position: autoPos.get(n.id) ?? n.position })) } : g);
+  }
+  const lanes = computeChannelLanes(channels, laidOutGraphs);
+  const nodes: Node[] = [];
+  const edges: Edge[] = [];
+  for (const channel of channels) {
+    const g = laidOutGraphs.get(channel.id);
+    const lane = lanes.get(channel.id);
+    if (!g || !lane) continue;
+    const isFocused = focus.channelId === channel.id;
+    // `focus.selection` is App's raw selection state — a bare node id in single-channel use, but a
+    // `channelId::nodeId` id once ANY merged canvas exists (handleCanvasSelect stores it verbatim so
+    // NodeFocuser's getNode(selection) resolves against React Flow's actual rendered ids). buildFlowGraph
+    // itself only ever compares against a BARE id (`selection === n.id`) — strip the prefix here, once,
+    // or the focused card would never read as selected and its inline editor would never open.
+    const prefix = `${channel.id}::`;
+    const localSelection = isFocused && focus.selection
+      ? (focus.selection.startsWith(prefix) ? focus.selection.slice(prefix.length) : focus.selection)
+      : null;
+    const built = buildFlowGraph(
+      g,
+      runResults.get(channel.id) ?? null,
+      isFocused ? focus.running : false,
+      isFocused ? focus.runningNodeId : null,
+      localSelection,
+      connectors,
+      subsystemHealth,
+      contractAudits,
+      (nodeId) => onSelect(`${channel.id}::${nodeId}`),
+      isFocused ? focus.proposedNodeIds : undefined,
+      isFocused ? focus.proposedEdgeIds : undefined,
+      null, // highlightedNodeId — the run-replay scrubber; not part of the merged canvas
+      isFocused ? focus.proposalActive : false,
+      isFocused ? focus.onResolveProposal : undefined,
+      isFocused ? focus.onSubmitReview : undefined,
+      isFocused ? focus.onApproveGate : undefined,
+      null, // bloomNodeId — folded into per-node data below via the gate's own pendingReview state
+      isFocused ? focus.revealedNodeIds : undefined,
+      isFocused ? focus.onInspect : undefined,
+      people,
+      onAskClaude, // every pipeline's nodes can hand themselves to Claude, focused or not
+      isFocused ? focus.gatePromote : undefined, // promote gesture only on the focused pipeline's gate
+    );
+    for (const n of built.nodes) {
+      nodes.push({
+        ...n,
+        id: `${channel.id}::${n.id}`,
+        position: { x: n.position.x, y: n.position.y + lane.offsetY },
+        data: { ...(n.data as GTMNodeData), channelId: channel.id, graphId: g.id },
+      });
+    }
+    for (const e of built.edges) {
+      edges.push({
+        ...e,
+        id: `${channel.id}::${e.id}`,
+        source: `${channel.id}::${e.source}`,
+        target: `${channel.id}::${e.target}`,
+      });
+    }
+  }
+  return { nodes, edges, lanes };
+}
 
 // ─── Auto-center on selection ─────────────────────────────────────────────────
 
@@ -1330,6 +2012,35 @@ function NodeFocuser({ selection, panelOpen, active }: { selection: NodeSelectio
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selection]);
 
+  return null;
+}
+
+// ─── Pan to a pipeline's lane on the merged canvas ─────────────────────────────
+// "Open this pipeline" (ChannelSwitcher, a board tile) is navigation, not a node pick — it must NOT
+// touch `selection` (that pops the node detail modal open). A separate signal, a separate camera
+// move: pans to the lane's center the same way NodeFocuser pans to a node, at a wider zoom so the
+// whole lane frames in view.
+function LanePanner({ panTo, lanes }: { panTo: { channelId: string; token: number; nodeId?: string } | null; lanes: Map<string, ChannelLane> | null }) {
+  const { setCenter, getNode } = useReactFlow();
+  useEffect(() => {
+    if (!panTo) return;
+    // A nodeId flies to that specific step (rendered ids are namespaced on the merged canvas), close
+    // enough to read, WITHOUT selecting it — no modal. Falls back to the lane if the node isn't found.
+    if (panTo.nodeId) {
+      const n = getNode(`${panTo.channelId}::${panTo.nodeId}`) ?? getNode(panTo.nodeId);
+      if (n) {
+        const w = n.measured?.width ?? n.width ?? 220;
+        const h = n.measured?.height ?? n.height ?? 110;
+        setCenter(n.position.x + w / 2, n.position.y + h / 2, { zoom: 0.9, duration: 480 });
+        return;
+      }
+    }
+    if (!lanes) return;
+    const lane = lanes.get(panTo.channelId);
+    if (!lane) return;
+    setCenter(lane.centerX, lane.centerY, { zoom: 0.7, duration: 480 });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panTo, lanes]);
   return null;
 }
 
@@ -1507,10 +2218,12 @@ export function GraphCanvas({
   onSelect, onNodePositionChange, onConnectNodes, onDeleteEdges, onAddNode, panelOpen, variant,
   proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, refitNonce, highlightedNodeId = null,
   bloomNodeId = null, nodeEditor = null, revealedNodeIds, onPaneClick, operatorCursor = null, people = [],
+  multiPipeline = null, panTo = null, onAskClaude, gatePromote,
 }: {
   graph: GTMGraph;
   result: GTMRunResult | null;
   running: boolean;
+  onAskClaude?: (node: GTMNode) => void;
   runningNodeId?: string | null;
   selection: NodeSelection;
   connectors: ConnectorMeta[];
@@ -1541,6 +2254,11 @@ export function GraphCanvas({
   // quick-review at the wall). Same handlers the right-panel node editor uses.
   onSubmitReview?: (nodeId: string, decisions: Record<string, GateDecision>) => void;
   onApproveGate?: (nodeId: string) => void;
+  // The autonomy ladder, relocated onto the focused gate's bloom: the Promote-by-Replay gesture and
+  // revoke, bound to the focused pipeline. The host sources the channel meta, the release-role check,
+  // and the founder's last real gate decisions, and passes the same promote/revoke handlers the
+  // Approvals panel used. Absent → the gate shows no promote affordance (the wall is unchanged).
+  gatePromote?: GatePromote;
   // Bump to re-fit the viewport after the container resizes (debugger drawer open/close).
   refitNonce?: number;
   // The run scrubber's current step — this node glows, the rest dim, so a replay reads node-by-node.
@@ -1563,6 +2281,16 @@ export function GraphCanvas({
   // The durable, project-scoped People (P10.3) — promoted from real run entrants. A Source card reads
   // its channel's entrants out of this to show who actually entered, each with their own trigger.
   people?: Person[];
+  // The literal one-coordinate-space unification: when present, every OTHER pipeline in the project
+  // renders alongside `graph` as its own lane in the SAME React Flow instance (buildMergedFlowGraph),
+  // instead of `graph` being the only thing on screen. `graph` stays "the focused pipeline" — the one
+  // OperatorCursor/gate-review/proposal state applies to; everything else renders as a plain committed
+  // lane. Absent or containing only one pipeline, behavior is identical to today's single-channel canvas.
+  multiPipeline?: { channels: ChannelMeta[]; channelGraphs: Map<string, GTMGraph>; channelRunResults: Map<string, GTMRunResult | null> } | null;
+  // "Open this pipeline" — pans the camera to that lane's center on the merged canvas. Navigation
+  // only; unlike `selection` it never opens a node's editor. A fresh token re-pans even to the SAME
+  // channel (e.g. re-picking it after drifting away). No-op outside merged mode.
+  panTo?: { channelId: string; token: number; nodeId?: string } | null;
 }) {
   const handleSelect = useCallback((id: string) => onSelect(id), [onSelect]);
   // Inspector — the workbench's read surface. A node's record-count opens its real items as a card in
@@ -1641,22 +2369,57 @@ export function GraphCanvas({
     }
   }, [graph, onNodePositionChange]);
 
-  const { nodes, edges } = useMemo(
-    () => buildFlowGraph(laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people),
-    [laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people],
+  // The merged multi-pipeline build — every other pipeline as its own lane alongside `graph` (the
+  // focused one, which carries all the "active" state: running/selection/proposal/gate-review). Built
+  // unconditionally alongside the single-channel flow below (cheap — one channel's worth of nodes) so
+  // both memos stay unconditional hooks; only the RENDERED nodes/edges pick one or the other.
+  const merged = useMemo(
+    () => (multiPipeline ? buildMergedFlowGraph(
+      multiPipeline.channels,
+      multiPipeline.channelGraphs,
+      multiPipeline.channelRunResults,
+      connectors,
+      subsystemHealth,
+      contractAudits,
+      handleSelect,
+      {
+        channelId: graph.id,
+        running, runningNodeId, selection,
+        proposedNodeIds, proposedEdgeIds, proposalActive,
+        onResolveProposal, onSubmitReview, onApproveGate, gatePromote,
+        revealedNodeIds, onInspect: toggleInspect,
+      },
+      people,
+      onAskClaude,
+    ) : null),
+    [
+      multiPipeline, connectors, subsystemHealth, contractAudits, handleSelect, graph.id, running,
+      runningNodeId, selection, proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal,
+      onSubmitReview, onApproveGate, gatePromote, revealedNodeIds, toggleInspect, people, onAskClaude,
+    ],
   );
 
-  // Re-fit the viewport whenever the flow's structure changes (load, compose).
+  const singleFlow = useMemo(
+    () => buildFlowGraph(laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote),
+    [laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote],
+  );
+
+  const nodes = merged ? merged.nodes : singleFlow.nodes;
+  const edges = merged ? merged.edges : singleFlow.edges;
+
+  // Re-fit the viewport whenever the flow's structure changes (load, compose) — the merged canvas
+  // reacts to every lane's topology, not just the focused one, so a newly loaded/composed pipeline
+  // gets framed too.
   const fitSignature = useMemo(
-    () => topologySignature(graph),
-    [graph],
+    () => (merged ? `${merged.nodes.map((n) => n.id).sort().join(",")}|${merged.edges.map((e) => e.id).sort().join(",")}` : topologySignature(graph)),
+    [merged, graph],
   );
 
   // Stable list of node ids for the measure guard — recomputed only when the set of nodes changes,
   // not on every layout-position round-trip, so the guard effect doesn't churn.
-  const nodeIdSignature = useMemo(() => graph.nodes.map((n) => n.id).sort().join(","), [graph.nodes]);
+  const nodeIdSignature = useMemo(() => nodes.map((n) => n.id).sort().join(","), [nodes]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const measureNodeIds = useMemo(() => graph.nodes.map((n) => n.id), [nodeIdSignature]);
+  const measureNodeIds = useMemo(() => nodes.map((n) => n.id), [nodeIdSignature]);
 
   // Where the nodes ACTUALLY are — changes as the async auto-layout settles, which is the signal
   // FitOnGraph debounces on (topology alone is stable before the layout round-trips into place).
@@ -1702,6 +2465,15 @@ export function GraphCanvas({
     [nodeEditor, graph, people],
   );
 
+  // OperatorCursor positions itself off a plain GTMGraph's node positions (nodeById lookup, not React
+  // Flow's rendered node store) — on the merged canvas the focused channel's real nodes sit in a lane,
+  // so the cursor needs those same y-shifted positions or it'd point at the wrong spot on screen.
+  const cursorGraph = useMemo(() => {
+    const offsetY = merged?.lanes.get(graph.id)?.offsetY;
+    if (!offsetY) return graph;
+    return { ...graph, nodes: graph.nodes.map((n) => ({ ...n, position: { x: n.position.x, y: n.position.y + offsetY } })) };
+  }, [graph, merged]);
+
   return (
     <NodeEditorContext.Provider value={editorContext}>
     <ReactFlow
@@ -1729,8 +2501,9 @@ export function GraphCanvas({
       className={cn(variant === "ideation" && "ideation-canvas", selection && "loop-pane-focus")}
     >
       <NodeFocuser selection={selection} panelOpen={!!panelOpen} active={!running && !operatorCursor} />
+      {merged ? <LanePanner panTo={panTo} lanes={merged.lanes} /> : null}
       {operatorCursor ? (
-        <OperatorCursor graph={graph} state={operatorCursor} followBroken={followBroken} recenterSignal={recenterSignal} />
+        <OperatorCursor graph={cursorGraph} state={operatorCursor} followBroken={followBroken} recenterSignal={recenterSignal} />
       ) : null}
       {operatorCursor && followBroken ? (
         <Panel position="top-right">

@@ -691,6 +691,34 @@ export function revokeChannel(channelId, options = {}) {
   return setChannelAutonomy(project, current, "draft", null, options);
 }
 
+// Link a pipeline (channel) to an ICP ground it tests — the EXPLICIT founder-set counterpart to the
+// experiment-derived ICP grounds. The founder says "this pipeline targets THIS ICP" directly, by key
+// (with an optional human label). Typed and reversible: passing null — or an empty/blank key — CLEARS
+// the link, dropping the pipeline back to the project's base ICP ground. It writes ONLY the channel's
+// `icp` link; it NEVER touches `autonomy` or `blessedPattern` (those move ONLY through promoteChannel /
+// revokeChannel behind an explicit promotion), so linking an ICP can never move a pipeline up the wall.
+export function setChannelIcp(channelId, icp, options = {}) {
+  const project = loadProject(options);
+  const current = getChannel(project, channelId, options);
+  const record = (project.channels ?? []).find((channel) => channel.id === current.id);
+  if (!record) throw new Error(`Channel not found: ${channelId}`);
+  let link = null;
+  if (icp != null) {
+    const raw = typeof icp === "string" ? { key: icp } : icp;
+    const key = String(raw?.key ?? raw?.icpKey ?? "").trim();
+    if (key) {
+      const label = String(raw?.label ?? "").trim();
+      link = { key, ...(label ? { label } : {}) };
+    }
+  }
+  const nextRecord = { ...record };
+  if (link) nextRecord.icp = link;
+  else delete nextRecord.icp;
+  const channels = (project.channels ?? []).map((channel) => (channel.id === current.id ? nextRecord : channel));
+  const saved = saveProject({ ...project, channels }, options);
+  return { project: saved, channel: getChannel(saved, current.id, options) };
+}
+
 // A channel is a flow: a stored channel record in project.channels plus its executable graph in the
 // flow store. No outcome program, no domain events — just the system the founder builds.
 function createFlowChannel(project, input = {}, options = {}) {

@@ -3,11 +3,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { createChannel, updateSharedContext, getProjectChannels, loadProject } from "../src/project-store.mjs";
+import { createChannel, updateSharedContext, setChannelIcp, getProjectChannels, loadProject } from "../src/project-store.mjs";
 import { promoteEntrants } from "../src/person-store.mjs";
 import { loadFlow, saveFlow } from "../src/flow-store.mjs";
 import { applyGraphOperations } from "../src/graph-operations.mjs";
-import { findReferences, deriveChannelFeeds, deriveDirectedFeeds, createDerivedSourceLoader } from "../src/cross-reference.mjs";
+import { findReferences, listSharedKernel, deriveChannelFeeds, deriveDirectedFeeds, createDerivedSourceLoader } from "../src/cross-reference.mjs";
 
 describe("cross-reference index — where does X appear across channels", () => {
   let parent;
@@ -242,5 +242,77 @@ describe("directed feeds — channels wired to pull another channel's output", (
     const load = createDerivedSourceLoader(options);
     assert.deepEqual(await load(channelByName("Source Channel").id), []);
     assert.deepEqual(await load("nonexistent"), []);
+  });
+});
+
+describe("listSharedKernel — the project's cross-pipeline object model in one read", () => {
+  let parent;
+  let options;
+  const projectId = "default";
+
+  beforeEach(() => {
+    parent = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-kernel-"));
+    options = { root: parent };
+    createChannel({ name: "Outbound", objective: "Reach operators who value attribution clarity." }, options);
+    createChannel({ name: "Events", objective: "Show up where buyers gather." }, options);
+  });
+
+  afterEach(() => fs.rmSync(parent, { recursive: true, force: true }));
+
+  it("is honest-blank on an empty project: people [], one base ICP entry, claims []", () => {
+    const kernel = listSharedKernel(projectId, options);
+    assert.equal(kernel.projectId, "default");
+    assert.deepEqual(kernel.people, []);
+    assert.deepEqual(kernel.claims, []);
+    assert.equal(kernel.icps.length, 1, "the base ICP entry is always present");
+    assert.equal(kernel.icps[0].id, null);
+    assert.equal(kernel.icps[0].label, null, "no stated ICP ⇒ null label, never a fake");
+  });
+
+  it("lists each Person with its pipeline appearances and cross-pipeline fatigue", () => {
+    promoteEntrants(projectId, "outbound", "run-1", [{ name: "Jane Roe", email: "jane@acme.com", nowTrigger: "hiring" }], options);
+    promoteEntrants(projectId, "events", "run-2", [{ name: "Jane Roe", email: "jane@acme.com", nowTrigger: "spoke" }], options);
+    promoteEntrants(projectId, "outbound", "run-3", [{ name: "Al Solo", email: "al@one.com" }], options);
+
+    const kernel = listSharedKernel(projectId, options);
+    assert.equal(kernel.people.length, 2);
+    const jane = kernel.people.find((p) => p.email === "jane@acme.com");
+    assert.deepEqual([...jane.channelIds].sort(), ["events", "outbound"]);
+    assert.deepEqual([...jane.channelNames].sort(), ["Events", "Outbound"]);
+    assert.equal(jane.channelCount, 2);
+    assert.equal(jane.appearanceCount, 2);
+    assert.equal(jane.fatigue, 2, "in two pipelines ⇒ fatigue 2");
+    assert.equal(jane.name, "Jane Roe");
+    const al = kernel.people.find((p) => p.email === "al@one.com");
+    assert.equal(al.fatigue, 1, "one pipeline ⇒ fatigue 1");
+  });
+
+  it("lists the stated ICP as the base plus a distinct entry per founder-linked key", () => {
+    updateSharedContext({ icp: { label: "Dev-tool founders", query: "devtools", industry: "SaaS" } }, options);
+    setChannelIcp("outbound", { key: "smb", label: "SMB owners" }, options);
+
+    const kernel = listSharedKernel(projectId, options);
+    const base = kernel.icps.find((i) => i.id === null);
+    assert.equal(base.label, "Dev-tool founders");
+    assert.equal(base.industry, "SaaS");
+    const linked = kernel.icps.find((i) => i.id === "smb");
+    assert.ok(linked, "a founder-linked ICP surfaces as its own entry");
+    assert.equal(linked.label, "SMB owners");
+    assert.deepEqual(linked.channelIds, ["outbound"]);
+    assert.deepEqual(linked.channelNames, ["Outbound"]);
+  });
+
+  it("lists each structured Claim with its provenance, evidence count, and referencing pipelines", () => {
+    updateSharedContext({
+      claims: [{ text: "attribution clarity", provenance: "founder", evidence: [{ cite: "x.mjs:1" }] }],
+    }, options);
+    const kernel = listSharedKernel(projectId, options);
+    assert.equal(kernel.claims.length, 1);
+    const claim = kernel.claims[0];
+    assert.equal(claim.text, "attribution clarity");
+    assert.equal(claim.provenance, "founder");
+    assert.equal(claim.evidenceCount, 1);
+    assert.deepEqual(claim.channelIds, ["outbound"], "the Outbound objective carries 'attribution clarity'");
+    assert.deepEqual(claim.channelNames, ["Outbound"]);
   });
 });

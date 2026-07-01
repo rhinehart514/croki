@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>One canvas — the altitude ladder</title>
+<style>
+  /* Real tokens, lifted from ui/src/index.css (default skin) */
+  :root{
+    --ink:#18181b; --ink-2:#3f3f46; --muted:#71717a; --faint:#a1a1aa; --ghost:#d4d4d8;
+    --line:#ececec; --line-2:#e4e4e7; --surface:#fff; --surface-2:#f4f4f5;
+    --canvas:#fafafa; --canvas-dot:#e4e4e7;
+    --proven:#16a34a; --proven-soft:#f0fdf4;
+    --gap:#d97706; --gap-soft:#fffbeb;
+    --danger:#dc2626; --danger-soft:#fef2f2;
+    --blind:#a1a1aa;
+    --r-sm:6px; --r-md:9px; --r-lg:12px; --r-xl:16px; --r-2xl:24px;
+    --shadow-card:0 1px 2px rgba(24,24,27,.04), 0 1px 3px rgba(24,24,27,.06);
+    --shadow-pop:0 4px 12px rgba(24,24,27,.08), 0 12px 32px rgba(24,24,27,.10);
+    --font:"Geist","Geist Variable",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --mono:"Geist Mono","Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--surface-2);color:var(--ink);font-family:var(--font);
+    font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+    padding:40px 32px 80px}
+  .wrap{max-width:1180px;margin:0 auto}
+  h1.page{font-size:26px;letter-spacing:-.011em;margin:0 0 4px;font-weight:600}
+  .sub{color:var(--muted);margin:0 0 32px;font-size:14px}
+  .ladder{display:flex;flex-direction:column;gap:28px}
+  .frame{background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-xl);
+    overflow:hidden;box-shadow:var(--shadow-card)}
+  .frame-head{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line)}
+  .lod{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--ink);
+    background:var(--surface-2);border:1px solid var(--line-2);border-radius:999px;padding:3px 9px}
+  .frame-head .name{font-weight:600;font-size:14px}
+  .frame-head .what{color:var(--muted);font-size:13px;margin-left:auto;text-align:right;max-width:52%}
+  /* the canvas stage each altitude sits on */
+  .stage{position:relative;height:340px;
+    background:
+      radial-gradient(circle at 1px 1px, var(--canvas-dot) 1px, transparent 0) 0 0/22px 22px,
+      var(--canvas);
+    overflow:hidden}
+  .stage.tall{height:420px}
+  /* zoom rail on the right */
+  .zoomrail{position:absolute;right:14px;top:14px;bottom:14px;width:34px;
+    display:flex;flex-direction:column;align-items:center;justify-content:space-between;
+    background:var(--surface);border:1px solid var(--line-2);border-radius:999px;padding:8px 0;
+    box-shadow:var(--shadow-card);font-family:var(--mono);font-size:10px;color:var(--faint)}
+  .zoomrail .dotcur{width:8px;height:8px;border-radius:999px;background:var(--ink)}
+  .zoomrail .tick{width:5px;height:5px;border-radius:999px;background:var(--ghost)}
+  /* minimap */
+  .minimap{position:absolute;left:14px;bottom:14px;width:120px;height:74px;border-radius:var(--r-md);
+    background:var(--surface);border:1px solid var(--line-2);box-shadow:var(--shadow-card);
+    overflow:hidden}
+  .minimap .mm-line{position:absolute;height:2px;background:var(--ghost);border-radius:2px}
+  .minimap .mm-view{position:absolute;border:1.5px solid var(--ink);border-radius:3px;
+    background:rgba(24,24,27,.04)}
+  .chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;
+    padding:2px 8px;border-radius:999px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2)}
+  .chip .d{width:6px;height:6px;border-radius:999px}
+  .d.proven{background:var(--proven)} .d.testing{background:var(--gap)}
+  .d.assumed{background:var(--faint)} .d.blind{background:var(--blind)} .d.danger{background:var(--danger)}
+  .needs{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;
+    color:var(--gap);background:var(--gap-soft);border:1px solid #f6e2b8;border-radius:999px;padding:3px 9px}
+  .needs .pulse{width:7px;height:7px;border-radius:999px;background:var(--gap);
+    box-shadow:0 0 0 0 rgba(217,119,6,.5);animation:pulse 1.8s ease-out infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(217,119,6,.45)}70%{box-shadow:0 0 0 7px rgba(217,119,6,0)}100%{box-shadow:0 0 0 0 rgba(217,119,6,0)}}
+
+  /* ---------- L0 : the ground (transit) ---------- */
+  .ground-hdr{position:absolute;left:20px;top:16px;right:170px}
+  .ground-hdr .icp{font-size:15px;font-weight:600;letter-spacing:-.01em}
+  .ground-hdr .pos{color:var(--muted);font-size:12px;margin-top:2px}
+  .lane{position:absolute;height:2px;border-radius:2px}
+  .lane.strong{height:3px;background:var(--ink)}
+  .lane.mid{height:2px;background:var(--ink-2)}
+  .lane.faint{height:1.5px;background:var(--ghost)}
+  .lane-label{position:absolute;font-size:11px;font-weight:600;color:var(--ink);
+    background:var(--surface);border:1px solid var(--line-2);border-radius:999px;padding:2px 9px;box-shadow:var(--shadow-card)}
+  .lane-label small{color:var(--muted);font-weight:500;margin-left:6px}
+  .junction{position:absolute;width:11px;height:11px;border-radius:999px;background:var(--surface);
+    border:2px solid var(--ink);transform:translate(-50%,-50%)}
+  .junction.claim{border-radius:2px}
+  .jlabel{position:absolute;font-family:var(--mono);font-size:9.5px;color:var(--muted);transform:translate(-50%,0)}
+  .nowdot{position:absolute;width:7px;height:7px;border-radius:999px;background:var(--ink);
+    transform:translate(-50%,-50%);animation:travel 3.4s linear infinite}
+  @keyframes travel{0%{left:16%}100%{left:83%}}
+
+  /* ---------- L1 : belief spine ---------- */
+  .spine{position:absolute;left:22px;right:22px;top:64px;display:flex;gap:14px}
+  .bcard{flex:1;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-lg);
+    padding:12px 13px;box-shadow:var(--shadow-card);position:relative;min-height:150px}
+  .bcard .role{font-family:var(--mono);font-size:9.5px;letter-spacing:.03em;text-transform:uppercase;color:var(--faint)}
+  .bcard .belief{font-size:12.5px;font-weight:500;color:var(--ink);margin-top:7px;line-height:1.4}
+  .bcard .foot{position:absolute;left:13px;right:13px;bottom:11px;display:flex;align-items:center;justify-content:space-between}
+  .conf{font-family:var(--mono);font-size:10px;color:var(--muted)}
+  .spinehdr{position:absolute;left:22px;top:20px;display:flex;align-items:center;gap:10px}
+  .spinehdr .t{font-size:15px;font-weight:600}
+  .arrowrow{position:absolute;left:22px;right:22px;top:132px;height:1px}
+  .barfill{height:3px;border-radius:2px;background:var(--surface-2);margin-top:9px;overflow:hidden}
+  .barfill i{display:block;height:100%;border-radius:2px}
+
+  /* ---------- L2 : the flow ---------- */
+  .node{position:absolute;width:150px;background:var(--surface);border:1px solid var(--line-2);
+    border-radius:var(--r-md);padding:10px 11px;box-shadow:var(--shadow-card)}
+  .node .kind{font-family:var(--mono);font-size:9px;letter-spacing:.04em;text-transform:uppercase;color:var(--faint)}
+  .node .ttl{font-size:12.5px;font-weight:600;margin-top:4px;letter-spacing:-.006em}
+  .node .meta{font-size:10.5px;color:var(--muted);margin-top:5px}
+  .node.gate{border-color:#f0d9a8;box-shadow:0 0 0 1px #f6e2b8, var(--shadow-card)}
+  .node.gate::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:2px;background:var(--gap);border-radius:2px}
+  .node.agent::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:2px;background:var(--ink);border-radius:2px}
+  .edge{position:absolute;height:1.5px;background:var(--ghost);top:50%}
+  .edge.live{background:var(--ink);height:2px}
+  .edge .runner{position:absolute;top:-3px;width:6px;height:6px;border-radius:999px;background:var(--ink);animation:run 2.2s linear infinite}
+  @keyframes run{0%{left:0}100%{left:100%}}
+  .flowhdr{position:absolute;left:22px;top:18px;display:flex;gap:10px;align-items:center}
+
+  /* ---------- L3 : gate bloom ---------- */
+  .bloom{position:absolute;left:50%;top:26px;transform:translateX(-50%);width:560px;
+    background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-xl);
+    box-shadow:var(--shadow-pop);overflow:hidden}
+  .bloom-head{display:flex;align-items:center;gap:9px;padding:13px 16px;border-bottom:1px solid var(--line);
+    background:var(--gap-soft)}
+  .bloom-head .gt{font-weight:600;font-size:13px;color:var(--ink)}
+  .bloom-head .gt b{color:var(--gap)}
+  .bloom-head .count{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--ink-2)}
+  .item{padding:14px 16px}
+  .item .who{display:flex;align-items:center;gap:9px}
+  .item .who .nm{font-weight:600;font-size:13px}
+  .item .who .tg{font-family:var(--mono);font-size:10px;color:var(--muted)}
+  .annot{display:flex;gap:8px;align-items:flex-start;margin:10px 0 0;padding:8px 10px;
+    background:var(--surface-2);border-radius:var(--r-sm);font-size:11.5px;color:var(--ink-2)}
+  .annot .plus{font-family:var(--mono);color:var(--muted)}
+  .draft{font-size:12.5px;color:var(--ink-2);line-height:1.55;margin-top:11px;
+    padding-left:11px;border-left:2px solid var(--line-2)}
+  .acts{display:flex;gap:8px;margin-top:13px}
+  .btn{font-size:12px;font-weight:600;border-radius:var(--r-sm);padding:7px 13px;cursor:pointer;border:1px solid var(--line-2)}
+  .btn.approve{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .btn.return{background:var(--surface);color:var(--ink-2)}
+  .btn.edit{background:var(--surface);color:var(--muted)}
+  .orig{margin-top:12px;font-size:11px;color:var(--faint)}
+  .pattern{padding:11px 16px;border-top:1px solid var(--line);display:flex;align-items:center;gap:9px;
+    font-size:12px;color:var(--ink-2);background:var(--surface)}
+  .pattern .rule{font-family:var(--mono);font-size:11px;color:var(--ink)}
+  .cleared{margin-left:auto;font-size:11px;color:var(--proven);font-weight:600}
+  .cap{font-size:12px;color:var(--muted);margin:9px 2px 0}
+  .cap b{color:var(--ink-2);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="page">One canvas — the altitude ladder</h1>
+  <p class="sub">Same coordinate space, four zoom levels. Belief is the high-altitude face of a pipeline; the mechanical step is its low-altitude face. No lens switch — you fly closer. Real tokens: <span style="font-family:var(--mono);font-size:12px">#fafafa · zinc ink · Geist · amber = gate only</span>.</p>
+
+  <div class="ladder">
+
+    <!-- L0 -->
+    <section class="frame">
+      <div class="frame-head"><span class="lod">L0 · 20%</span><span class="name">The ground</span>
+        <span class="what">Every pipeline as a weighted line on your ICP. Shared people & claims are the junctions between them. A lane glows amber when it needs your call.</span></div>
+      <div class="stage">
+        <div class="ground-hdr">
+          <div class="icp">Technical B2B SaaS founders · shipped in last 30 days</div>
+          <div class="pos">“The IDE that reads your product and runs your go-to-market up to your gate.”</div>
+        </div>
+
+        <!-- lanes -->
+        <div class="lane strong" style="left:12%;right:8%;top:150px"></div>
+        <div class="lane-label" style="left:12%;top:138px">Show HN <small>testing · 62</small></div>
+        <div class="nowdot" style="top:151px"></div>
+
+        <div class="lane mid" style="left:12%;right:20%;top:210px"></div>
+        <div class="lane-label" style="left:12%;top:198px">Founder outreach <small>testing · 48</small></div>
+
+        <div class="lane faint" style="left:12%;right:34%;top:262px"></div>
+        <div class="lane-label" style="left:12%;top:250px">Community seed <small>assumed · 21</small></div>
+
+        <!-- junctions (shared entities) -->
+        <div class="junction" style="left:47%;top:150px"></div>
+        <div class="junction" style="left:47%;top:210px"></div>
+        <div class="jlabel" style="left:47%;top:222px">@dctrl · person</div>
+        <div class="junction claim" style="left:66%;top:150px"></div>
+        <div class="jlabel" style="left:66%;top:126px">attribution-gap · claim</div>
+
+        <!-- needs-you marker on Show HN -->
+        <div style="position:absolute;right:9%;top:139px"><span class="needs"><span class="pulse"></span>7 need you</span></div>
+
+        <div class="zoomrail"><span>+</span><span class="dotcur"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span>−</span></div>
+        <div class="minimap">
+          <div class="mm-line" style="left:10%;right:14%;top:34%"></div>
+          <div class="mm-line" style="left:10%;right:30%;top:52%"></div>
+          <div class="mm-line" style="left:10%;right:44%;top:70%"></div>
+          <div class="mm-view" style="left:6%;top:22%;width:64%;height:60%"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- L1 -->
+    <section class="frame">
+      <div class="frame-head"><span class="lod">L1 · 55%</span><span class="name">Belief spine — one pipeline</span>
+        <span class="what">The old 9-layer board, scoped to “Show HN.” Who → what you say → who you reached → did it work → the verdict. Each face carries confidence + status.</span></div>
+      <div class="stage tall">
+        <div class="spinehdr"><span class="t">Show HN</span><span class="chip"><span class="d testing"></span>testing</span><span class="needs"><span class="pulse"></span>7 need you</span></div>
+        <div class="spine">
+          <div class="bcard">
+            <div class="role">Who · trigger</div>
+            <div class="belief">Founders who shipped a dev-tool in the last 30 days and have a live “now” moment worth a post.</div>
+            <div class="foot"><span class="chip"><span class="d testing"></span>testing</span><span class="conf">71</span></div>
+            <div class="barfill" style="position:absolute;left:13px;right:13px;bottom:34px"><i style="width:71%;background:var(--gap)"></i></div>
+          </div>
+          <div class="bcard">
+            <div class="role">What you say · positioning</div>
+            <div class="belief">Lead on the attribution blind spot — the story a technical founder already feels.</div>
+            <div class="foot"><span class="chip"><span class="d proven"></span>validated</span><span class="conf">84</span></div>
+            <div class="barfill" style="position:absolute;left:13px;right:13px;bottom:34px"><i style="width:84%;background:var(--proven)"></i></div>
+          </div>
+          <div class="bcard">
+            <div class="role">Who you reached · people</div>
+            <div class="belief">41 founders surfaced, 12 qualified A-tier. 7 drafts staged and waiting at your gate.</div>
+            <div class="foot"><span class="chip"><span class="d testing"></span>at gate</span><span class="conf">—</span></div>
+            <div class="barfill" style="position:absolute;left:13px;right:13px;bottom:34px"><i style="width:52%;background:var(--gap)"></i></div>
+          </div>
+          <div class="bcard">
+            <div class="role">Did it work · measure</div>
+            <div class="belief">No sends yet — can’t attribute. Measurement is blind until the first batch releases.</div>
+            <div class="foot"><span class="chip"><span class="d blind"></span>blind</span><span class="conf">0</span></div>
+            <div class="barfill" style="position:absolute;left:13px;right:13px;bottom:34px"><i style="width:6%;background:var(--blind)"></i></div>
+          </div>
+          <div class="bcard">
+            <div class="role">Verdict · learn</div>
+            <div class="belief">Too early to call. The loop closes once measure sees the first release.</div>
+            <div class="foot"><span class="chip"><span class="d assumed"></span>open</span><span class="conf">—</span></div>
+            <div class="barfill" style="position:absolute;left:13px;right:13px;bottom:34px"><i style="width:12%;background:var(--faint)"></i></div>
+          </div>
+        </div>
+        <div class="zoomrail"><span>+</span><span class="tick"></span><span class="dotcur"></span><span class="tick"></span><span class="tick"></span><span>−</span></div>
+      </div>
+    </section>
+
+    <!-- L2 -->
+    <section class="frame">
+      <div class="frame-head"><span class="lod">L2 · 90%</span><span class="name">The flow — executable</span>
+        <span class="what">The belief spine unfolds into the real graph. The ink “now” dot travels the live edge. The gate is the only amber on the canvas.</span></div>
+      <div class="stage">
+        <div class="flowhdr"><span class="chip">Show HN</span><span style="font-size:12px;color:var(--muted)">running · qualify → draft</span></div>
+
+        <div class="node" style="left:24px;top:120px">
+          <div class="kind">Source</div><div class="ttl">Find founders</div><div class="meta">41 found · public</div>
+        </div>
+        <div class="edge live" style="left:174px;width:44px;top:143px"><span class="runner"></span></div>
+
+        <div class="node agent" style="left:218px;top:120px">
+          <div class="kind">Agent · qualify</div><div class="ttl">Qualifier</div><div class="meta">12 A-tier</div>
+        </div>
+        <div class="edge" style="left:368px;width:44px;top:143px"></div>
+
+        <div class="node agent" style="left:412px;top:120px">
+          <div class="kind">Agent · draft</div><div class="ttl">First contact</div><div class="meta">7 staged</div>
+        </div>
+        <div class="edge" style="left:562px;width:44px;top:143px"></div>
+
+        <div class="node gate" style="left:606px;top:112px">
+          <div class="kind" style="color:var(--gap)">Gate · founder</div><div class="ttl">Your call</div><div class="meta">7 waiting · 5 clear</div>
+        </div>
+        <div class="edge" style="left:756px;width:40px;top:143px"></div>
+
+        <div class="node" style="left:796px;top:120px;width:132px">
+          <div class="kind">Measure</div><div class="ttl" style="color:var(--muted)">Blind</div><div class="meta">no signal yet</div>
+        </div>
+
+        <div class="zoomrail"><span>+</span><span class="tick"></span><span class="tick"></span><span class="dotcur"></span><span class="tick"></span><span>−</span></div>
+        <div class="minimap">
+          <div class="mm-line" style="left:12%;right:12%;top:50%;background:var(--ink)"></div>
+          <div class="mm-view" style="left:44%;top:30%;width:34%;height:44%"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- L3 -->
+    <section class="frame">
+      <div class="frame-head"><span class="lod">L3 · 130%</span><span class="name">Gate bloom — decide in place</span>
+        <span class="what">The gate node opens the staged drafts right where it sits. Approve / return-as-draft / edit, in reading order. Clean items pre-cleared under your pattern; exceptions bloom for your eyes.</span></div>
+      <div class="stage tall">
+        <div class="bloom">
+          <div class="bloom-head"><span class="gt"><b>Gate</b> · Show HN · first contact</span><span class="count">exception 1 / 2</span></div>
+          <div class="item">
+            <div class="who"><span class="nm">Dana Reyes</span><span class="tg">@dctrl · shipped ship-cli 6d ago · A-tier</span></div>
+            <div class="annot"><span class="plus">+</span><span>Flagged: draft references her funding round — not in the verified scan. Hold for your eyes.</span></div>
+            <div class="draft">Hey Dana — saw ship-cli land last week, the zero-config deploy is sharp. Quick one: once folks start using it, can you actually tell which channel sent them? That blind spot is the thing I’ve been chewing on…</div>
+            <div class="acts">
+              <button class="btn approve">✓ Approve &amp; release</button>
+              <button class="btn return">↩ Return as draft</button>
+              <button class="btn edit">Edit</button>
+            </div>
+            <div class="orig">Original draft ⌄</div>
+          </div>
+          <div class="pattern">
+            <span class="chip"><span class="d proven"></span>pattern</span>
+            <span>Auto-approve when <span class="rule">tier = A · confidence ≥ 80 · no flag</span></span>
+            <span class="cleared">5 cleared ✓</span>
+          </div>
+        </div>
+        <div class="zoomrail"><span>+</span><span class="dotcur"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span>−</span></div>
+      </div>
+    </section>
+
+  </div>
+  <p class="cap"><b>The fold:</b> L0→L1 the lane you fly into cross-fades from a chip into its belief cards; L1→L2 the belief cards cross-fade into the node graph that produces them; L2→L3 the gate node blooms its items in place. One gesture — scroll — carries you from believing to building to deciding. <b>The seam is gone</b> because there are no separate lenses left to switch between.</p>
+</div>
+</body>
+</html>

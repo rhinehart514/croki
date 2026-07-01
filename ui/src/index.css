@@ -4117,14 +4117,19 @@ svg {
   overflow: hidden;
   border: 1px solid rgba(23, 30, 46, 0.14);
   border-radius: 16px;
-  background: #f7f8fa;
-  box-shadow: 0 30px 80px rgba(20, 24, 33, 0.28), 0 4px 18px rgba(20, 24, 33, 0.12);
-  animation: node-workspace-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  box-shadow:
+    0 30px 80px rgba(20, 24, 33, 0.28),
+    0 4px 18px rgba(20, 24, 33, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  animation: node-workspace-in 300ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes node-workspace-in {
-  from { opacity: 0; transform: translateY(8px) scale(0.985); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(14px) scale(0.965); filter: blur(3px); }
+  to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
 }
 
 .node-detail-workspace-header {
@@ -4132,9 +4137,9 @@ svg {
   align-items: flex-start;
   justify-content: space-between;
   gap: 28px;
-  padding: 24px clamp(24px, 4vw, 52px) 20px;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
+  padding: 18px clamp(24px, 4vw, 52px) 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  background: color-mix(in srgb, var(--surface) 66%, transparent);
 }
 
 .node-detail-heading {
@@ -4293,7 +4298,7 @@ svg {
 
 .node-detail-workspace .node-editor-wrap {
   overflow: hidden;
-  background: #f7f8fa;
+  background: transparent;
 }
 
 .node-editor-tabs {
@@ -4307,8 +4312,95 @@ svg {
 .node-detail-workspace .node-editor-tabs {
   gap: 4px;
   padding: 0 clamp(24px, 4vw, 52px);
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+}
+
+/* ── Refine-with-Claude bar, agent provenance, and glass-modal motion ────────────
+   Configuration opens with a way to hand this step back to Claude; agent nodes show
+   whether they're the broad GTM IDE toolkit or authored for this project; the tab
+   body rises in on switch. Legible fields stay opaque — glass is on the frame. */
+.node-config-tab { display: flex; flex-direction: column; gap: 18px; }
+
+.node-refine-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent, var(--ink)) 22%, var(--line));
+  border-radius: 14px;
+  background:
+    linear-gradient(120deg,
+      color-mix(in srgb, var(--accent, var(--ink)) 8%, var(--surface)) 0%,
+      color-mix(in srgb, var(--surface) 88%, transparent) 60%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+.node-refine-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.node-refine-title { font-size: 13px; font-weight: 660; color: var(--ink); letter-spacing: -0.01em; }
+.node-refine-sub { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+
+.node-refine-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 620;
+  color: var(--surface);
+  background: var(--ink);
+  border: 1px solid color-mix(in srgb, var(--ink) 82%, black 8%);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 160ms var(--ease), box-shadow 160ms var(--ease), filter 160ms var(--ease);
+  box-shadow: 0 1px 2px rgba(20, 24, 33, 0.14);
+}
+.node-refine-btn:hover { transform: translateY(-1px); filter: brightness(1.08); box-shadow: 0 6px 18px rgba(20, 24, 33, 0.18); }
+.node-refine-btn:active { transform: translateY(0); }
+.node-refine-btn svg { transform: translateY(-0.5px); }
+
+.agent-origin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  padding: 5px 10px 5px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+.agent-origin-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--muted); }
+.agent-origin-badge.is-gtm-ide { border-color: color-mix(in srgb, #4f46e5 34%, var(--line-2)); background: #eef2ff; color: #3730a3; }
+.agent-origin-badge.is-gtm-ide .agent-origin-dot { background: #4f46e5; }
+.agent-origin-badge.is-project { border-color: color-mix(in srgb, #0e7490 30%, var(--line-2)); background: #ecfeff; color: #155e75; }
+.agent-origin-badge.is-project .agent-origin-dot { background: #0e7490; }
+.agent-origin-ref {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  padding-left: 7px;
+  margin-left: 1px;
+  border-left: 1px solid currentColor;
+  opacity: 0.62;
+}
+
+/* The tab body rises in on every switch — the strong-motion beat, kept to one clean gesture. */
+.node-detail-workspace .node-editor-body > * {
+  animation: node-tab-in 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes node-tab-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .node-detail-workspace { animation: none; }
+  .node-detail-workspace .node-editor-body > * { animation: none; }
+  .node-refine-btn:hover { transform: none; }
 }
 
 .node-editor-tab {
@@ -4350,7 +4442,7 @@ svg {
   width: 100%;
   max-width: 1180px;
   margin: 0 auto;
-  padding: 30px clamp(24px, 4vw, 52px) 56px;
+  padding: 18px clamp(24px, 4vw, 52px) 24px;
 }
 
 .node-editor-placeholder {
@@ -4479,7 +4571,7 @@ svg {
 }
 
 .node-detail-workspace .artifact-door {
-  margin: 18px clamp(24px, 4vw, 52px) 0;
+  margin: 12px clamp(24px, 4vw, 52px) 0;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   background: var(--surface);
@@ -4539,8 +4631,21 @@ svg {
 }
 
 .node-detail-workspace .node-editor-section {
-  padding: 20px 0;
+  padding: 14px 0;
 }
+
+/* Configuration as two columns so it fits the modal without scrolling. Every section spans both
+   columns by default; the two medium sections (input/output + data contract) are tagged .config-col
+   and pair onto one row, halving the tallest run of the form. */
+.node-detail-workspace .agent-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 32px;
+  align-items: start;
+  max-width: 100%;
+}
+.node-detail-workspace .agent-editor-grid > * { grid-column: 1 / -1; }
+.node-detail-workspace .agent-editor-grid > .config-col { grid-column: auto; }
 
 .node-detail-workspace .node-delete-row {
   padding: 14px clamp(24px, 4vw, 52px);
@@ -7632,7 +7737,8 @@ svg {
 .program-inspect-toggle svg { flex-shrink: 0; }
 
 .loop-approvals-panel {
-  position: absolute; top: 8px; right: 16px; width: 380px; max-height: calc(100vh - 120px);
+  /* Same clearance as its twin Issues panel — start below the FloatingDock, never over its controls. */
+  position: absolute; top: 64px; right: 16px; width: 380px; max-height: calc(100vh - 84px);
   z-index: 60; display: flex; flex-direction: column;
   background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-xl);
   box-shadow: var(--shadow-pop); overflow: hidden;
@@ -7695,7 +7801,9 @@ svg {
    present dock indicator; opaque, monochrome (no amber — that stays the gate's). The body hosts the
    IssuesCard, whose rows already carry their own .fdock-problems-* / .issues-card styling. */
 .loop-issues-panel {
-  position: absolute; top: 8px; right: 16px; width: 380px; max-height: calc(100vh - 120px);
+  /* Clear the FloatingDock (top: 14px, ~56px tall — the same clearance react-flow panels use) so the
+     "Issues" title never paints over the Run button and the header pills. */
+  position: absolute; top: 64px; right: 16px; width: 380px; max-height: calc(100vh - 84px);
   z-index: 60; display: flex; flex-direction: column;
   background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-xl);
   box-shadow: var(--shadow-pop); overflow: hidden;
@@ -9390,6 +9498,19 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .goal-launcher-secondary button:hover:not(:disabled) { color: var(--ink); }
 .goal-launcher-secondary button:disabled { opacity: 0.5; cursor: default; }
 
+/* Scan framing: the muted "· read from your code" tail on the eyebrow, and the grounded facts row. */
+.goal-launcher-eyebrow-suffix { color: var(--muted); opacity: 0.7; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.goal-launcher-grounded { font-size: 12px; color: var(--muted); margin: -14px 0 22px; letter-spacing: 0.01em; }
+
+/* TEMPORARY pick-the-winner switcher — remove with the switcher in GoalLauncher.tsx once a framing wins. */
+.goal-launcher-framing-switch { display: inline-flex; gap: 2px; margin-top: 40px; padding: 3px; background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 999px; }
+.goal-launcher-framing-switch button {
+  padding: 5px 12px; font-size: 12px; color: var(--muted); background: none; border: 0; border-radius: 999px; cursor: pointer;
+  transition: color 120ms var(--ease), background 120ms var(--ease);
+}
+.goal-launcher-framing-switch button:hover { color: var(--ink); }
+.goal-launcher-framing-switch button.active { color: var(--ink); background: var(--surface); box-shadow: var(--shadow-card); }
+
 /* ── Claude as a bottom-center GLASS command dock floating over the canvas ──── */
 /* The new shell: the canvas IS the interface, and Claude is its command line — a glass bar anchored
    bottom-center that expands UP into a conversation panel. Absolutely positioned, so it's out of the
@@ -9429,15 +9550,22 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
    Collapsed, it becomes a slim edge rail so an idle/finished session hands the width back to the canvas. */
 .composer-dock.docked {
   position: relative;
+  /* Inset the lane so the dock reads as the FloatingDock's rounded card — a floating panel that sits
+     IN its own grid column (the canvas reflows around it), not a flush sidebar and not a slab over the
+     board. align-self: stretch + vertical margins size it to the row minus the gutter. Opaque (you read
+     in it), tokens only. */
   align-self: stretch;
-  height: 100%;
   min-height: 0;
+  margin: var(--space-3) var(--space-3) var(--space-3) 0;
+  box-sizing: border-box;
   width: clamp(360px, 30vw, 460px);
   flex: none;
   display: flex;
   flex-direction: column;
   background: var(--surface);
-  border-left: 1px solid var(--line);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-pop);
   z-index: 30;
   overflow: hidden;
   transition: width var(--dur-slow) var(--ease);
@@ -9810,6 +9938,18 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 }
 .composer-dock-icon:hover { background: var(--surface-2); color: var(--ink); }
 
+/* "Add" — the component-library launcher in the dock head. A quiet labelled pill (not a bare icon):
+   it's the founder's entry into hand-picking real inventory, so it reads as an action, not chrome. */
+.composer-dock-add {
+  display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
+  height: 28px; padding: 0 10px; border: 1px solid var(--line-2); background: var(--surface);
+  color: var(--ink-2); border-radius: var(--r-sm); cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 540;
+  transition: background 120ms var(--ease), color 120ms var(--ease), border-color 120ms var(--ease);
+}
+.composer-dock-add:hover { background: var(--surface-2); color: var(--ink); border-color: var(--line); }
+.composer-dock-add svg { width: 14px; height: 14px; }
+
 /* Collapsed = a glass command BAR, bottom-center — reads as the canvas's command line, not a tiny
    assistant bubble. Click anywhere to expand up into the conversation (cursor: text sells the input). */
 .composer-pill {
@@ -9868,6 +10008,11 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .appr-reject{color:var(--danger);border-color:#e7c9c2}
 .loop-approvals-item.is-approve{border-left:3px solid var(--proven)}
 .loop-approvals-item.is-reject{border-left:3px solid var(--danger);opacity:.7}
+/* Hollow (empty) staged draft: reads as "don't approve" — danger-toned, no green Approve offered. */
+.loop-approvals-item.is-empty{background:var(--danger-soft);border-color:color-mix(in srgb,var(--danger) 30%,var(--line));border-left:3px solid var(--danger)}
+.loop-approvals-empty-title{display:inline-flex!important;align-items:center;gap:6px;color:var(--danger)}
+.loop-approvals-empty-note{color:var(--muted)}
+.loop-approvals-item-actions button:disabled{opacity:.45;cursor:not-allowed}
 .loop-approvals-decided{margin-top:8px;font-size:12px;font-weight:600}
 .loop-approvals-decided.is-approve{color:var(--proven)}
 .loop-approvals-decided.is-reject{color:var(--danger)}
@@ -11467,3 +11612,116 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
   opacity: 0.5;
   cursor: default;
 }
+
+/* ─── ComponentLibrary — the Figma-style inventory picker (prefix: clib-) ────────────────────────
+   A floating panel summoned from the co-pilot dock's "Add", anchored just left of the 340px dock so
+   it opens OVER the canvas next to the chat it belongs to. Per the founder's design call: the panel
+   CHROME is frosted glass (Stitch/Langdock register), the ROWS stay opaque so the content you read
+   never bleeds through. Monochrome, one search, quiet section heads, a thin keyboard-hint foot —
+   less is more. No amber (that's the gate's alone). */
+.clib-panel {
+  position: fixed;
+  right: 356px;   /* 340px dock + 16px gap — sits beside the chat, over the canvas */
+  bottom: 96px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  width: 340px;
+  max-height: min(520px, calc(100vh - 160px));
+  overflow: hidden;
+  border-radius: var(--r-xl);
+  /* Frosted glass chrome — the panel floats on the light canvas. */
+  background: color-mix(in oklch, var(--surface) 86%, transparent);
+  backdrop-filter: blur(20px) saturate(1.05);
+  -webkit-backdrop-filter: blur(20px) saturate(1.05);
+  border: 1px solid var(--line-2);
+  box-shadow: var(--shadow-pop);
+  animation: clib-in 150ms var(--ease);
+}
+@keyframes clib-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Header — one search field + close. */
+.clib-head {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border-bottom: 1px solid color-mix(in srgb, var(--line-2) 55%, transparent);
+}
+.clib-search { position: relative; flex: 1; display: flex; align-items: center; }
+.clib-search-icon { position: absolute; left: 0; color: var(--faint); pointer-events: none; }
+.clib-search-input {
+  flex: 1; width: 100%; border: 0; background: none; color: var(--ink);
+  font: inherit; font-size: 13px;
+  padding: var(--space-1) 0 var(--space-1) calc(var(--space-4) + var(--space-2));
+}
+.clib-search-input::placeholder { color: var(--faint); }
+.clib-search-input:focus { outline: none; }
+.clib-close {
+  width: 26px; height: 26px; flex-shrink: 0; border: 0; background: none; cursor: pointer;
+  color: var(--muted); border-radius: var(--r-sm); display: grid; place-items: center;
+}
+.clib-close:hover { background: var(--surface-2); color: var(--ink); }
+
+/* The grouped list — scrolls; groups separated by quiet heads. */
+.clib-list { overflow-y: auto; padding: var(--space-2); display: flex; flex-direction: column; gap: 2px; }
+.clib-empty { padding: var(--space-4); text-align: center; color: var(--muted); font-size: 13px; }
+.clib-group { display: flex; flex-direction: column; gap: 1px; }
+.clib-group + .clib-group { margin-top: var(--space-2); }
+.clib-group-head {
+  display: flex; align-items: baseline; gap: var(--space-2);
+  padding: var(--space-1) var(--space-2) 3px;
+}
+.clib-group-label {
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--muted);
+}
+.clib-group-note { font-size: 10.5px; color: var(--faint); }
+
+/* A row — opaque, so the content reads cleanly over the glass panel. Small mark + name + faint desc,
+   with an "Insert" cue that firms up on hover/highlight. */
+.clib-row {
+  display: flex; align-items: center; gap: var(--space-2); width: 100%; text-align: left;
+  padding: 7px var(--space-2); border: 0; border-radius: var(--r-md); cursor: pointer;
+  background: var(--surface); color: var(--ink);
+  transition: background 100ms var(--ease);
+}
+.clib-row.active, .clib-row:hover { background: var(--surface-2); }
+.clib-row.added { background: color-mix(in srgb, var(--surface-2) 70%, var(--surface)); }
+.clib-mark {
+  width: 26px; height: 26px; flex-shrink: 0; border-radius: var(--r-sm);
+  display: grid; place-items: center; background: var(--surface-2); color: var(--ink-2);
+}
+.clib-mark svg { width: 15px; height: 15px; }
+.clib-mark.mono { font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; }
+.clib-row-text { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 1px; }
+.clib-row-name {
+  font-size: 12.5px; font-weight: 520; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.clib-row-desc {
+  font-size: 11px; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.clib-row-cue {
+  flex-shrink: 0; font-size: 10.5px; font-weight: 540; color: var(--faint);
+  opacity: 0; transition: opacity 100ms var(--ease);
+}
+.clib-row.active .clib-row-cue, .clib-row:hover .clib-row-cue { opacity: 1; color: var(--muted); }
+.clib-row.added .clib-row-cue { opacity: 1; color: var(--ink-2); }
+
+/* Foot — the thin keyboard hint. */
+.clib-foot {
+  display: flex; align-items: center; gap: 6px;
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid color-mix(in srgb, var(--line-2) 55%, transparent);
+  font-size: 11px; color: var(--muted);
+}
+.clib-kbd {
+  font-family: var(--font-mono); font-size: 10.5px;
+  padding: 1px 5px; border-radius: 4px; background: var(--surface-2);
+  border: 1px solid var(--line-2); color: var(--ink-2);
+}
+.clib-foot-sep { color: var(--faint); }
+.clib-foot-target { margin-left: auto; color: var(--faint); }

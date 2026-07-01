@@ -13,6 +13,7 @@ import {
   listProjects,
   setActiveProject,
   setActiveChannel,
+  setChannelIcp,
   updateChannel,
   updateSharedContext,
 } from "../src/project-store.mjs";
@@ -100,5 +101,29 @@ describe("multi-channel GTM project", () => {
     assert.equal(getProjectWithChannels(options).channels[0].name, "Community proof");
     catalog = listProjects(options);
     assert.equal(catalog.activeProjectId, buffalo.id);
+  });
+
+  it("links a pipeline to an ICP and reverses the link, never touching autonomy/blessedPattern", () => {
+    const { channel } = createChannel({ name: "PCO Outbound" }, options);
+    assert.equal(channel.autonomy, "draft");
+
+    const linked = setChannelIcp(channel.id, { key: "smb-owners", label: "SMB owners" }, options).channel;
+    assert.deepEqual(linked.icp, { key: "smb-owners", label: "SMB owners" });
+    assert.equal(linked.autonomy, "draft", "linking an ICP never promotes the pipeline");
+    assert.equal(linked.blessedPattern, null, "linking an ICP never forges a blessed pattern");
+
+    // A bare string key is accepted; the label is optional.
+    const relinked = setChannelIcp(channel.id, "series-a", options).channel;
+    assert.deepEqual(relinked.icp, { key: "series-a" });
+
+    // Passing null — or a blank key — clears the link (reversible).
+    const cleared = setChannelIcp(channel.id, null, options).channel;
+    assert.equal(cleared.icp, undefined);
+    const blanked = setChannelIcp(channel.id, { key: "  " }, options).channel;
+    assert.equal(blanked.icp, undefined);
+  });
+
+  it("refuses to link an ICP on an unknown pipeline", () => {
+    assert.throws(() => setChannelIcp("does-not-exist", { key: "x" }, options), /Channel not found/);
   });
 });

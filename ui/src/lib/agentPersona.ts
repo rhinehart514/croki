@@ -79,6 +79,20 @@ export function agentPersona(ref: string, job?: string): AgentPersona {
   return { role, family, monogram: monogramOf(role) };
 }
 
+// Where an agent came from. GTM IDE ships a broad toolkit of agents, all prefixed `gtm-` by
+// convention (gtm-find-prospects, gtm-enrich, gtm-compose-workflow…). Everything else was authored
+// for THIS project (outreach-drafter, rodentradar-outreach…). This is a naming-convention read until
+// the agent artifact carries a real origin field from the backend — centralized here so every surface
+// classifies the same way and it swaps in one place.
+export type AgentOrigin = "gtm-ide" | "project";
+export function agentOrigin(ref: string): AgentOrigin {
+  return /^gtm-/.test(ref) ? "gtm-ide" : "project";
+}
+export const AGENT_ORIGIN_LABEL: Record<AgentOrigin, { label: string; hint: string }> = {
+  "gtm-ide": { label: "Drover agent", hint: "A broad agent Drover supplies — reusable across every project." },
+  project:   { label: "Project agent", hint: "Authored for this project. Refine it freely; it won't touch other projects." },
+};
+
 // Family → the one tint, by meaning. Soft, low-chroma backgrounds in the existing status-soft register
 // (not new loud accents) so a team scans by function without breaking the product's monochrome calm.
 // Strip to all-neutral by pointing every family at "general" if the founder wants it fully monochrome.

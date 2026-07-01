@@ -10,6 +10,20 @@ import { useEffect, useState } from "react";
 import { getBoard } from "@/api";
 import type { BoardView, LayerBelief } from "@/types";
 
+// ── Board layer, extended with the run-state fields board.mjs derives ──────────
+// The base LayerBelief type mirrors board.mjs's core shape; these two fields are the run-derived
+// extras the board reads live (still a pure read — derived, never seeded). `moving` marks a
+// run-derived layer that currently has live run signal behind it; `tiers` is the pipelines layer's
+// operational split (needs-you / live / at-gate), null when there are no pipelines.
+export type PipelineTiers = { needsYou: number; live: number; atGate: number };
+export type BoardLayer = LayerBelief & { moving?: boolean; tiers?: PipelineTiers | null };
+
+// Is this a run-derived layer (motion / loop), as opposed to a founder-stated strategy layer? The
+// "moving vs static" marker only shows on these — a stated belief is never "moving".
+export function isRunDerived(layer: LayerBelief): boolean {
+  return layer.groundingMode !== "stated";
+}
+
 // ── Display metadata, keyed by the real `layer` field getBoard() returns ───────
 // Number + name + one-line sublabel for each band, in board order (Strategy 1-4, Motion 5-6,
 // Loop 7-9). Faithful to the approved 01-board.html names; the keys are board.mjs's real layers.

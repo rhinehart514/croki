@@ -52,7 +52,7 @@ function outputBinding(output = {}, channelTitle) {
 // Normalize the model's graph spec into valid nodes/edges. The model owns topology, kinds, and
 // ordering; the host fills defaults, drops malformed nodes, lays out anything unpositioned, and
 // keeps only edges that connect real nodes.
-function normalizeComposedGraph(spec) {
+export function normalizeComposedGraph(spec) {
   const rawNodes = Array.isArray(spec?.nodes) ? spec.nodes : [];
   const usedIds = new Set();
   const nodes = [];
@@ -102,7 +102,7 @@ function normalizeComposedGraph(spec) {
 
 // The wall, owned by the host: anything that reaches the world (an execute node) must have a
 // founder gate upstream of it on every path. The model is told this; the host enforces it.
-function assertGateWall(nodes, edges) {
+export function assertGateWall(nodes, edges) {
   const executes = nodes.filter((n) => n.category === "execute");
   if (executes.length === 0) return;
   const gates = new Set(nodes.filter((n) => n.category === "gate").map((n) => n.id));

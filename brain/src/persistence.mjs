@@ -296,6 +296,71 @@ function createSqliteBackend(root) {
   };
 }
 
+// ── In-process document cache ─────────────────────────────────────────────────────────────────────
+//
+// Every get(collection, key) below re-reads and JSON.parses the whole document blob. Within a SINGLE
+// board request the same flow blob is parsed 8+ times; this cache parses it once. Correctness rests on
+// total write-through invalidation: because the persistence() provider is the ONLY runtime write path
+// (the migrator and boot hydration use it too — createConvexBackend's local base IS persistence({backend:
+// "sqlite"})), every set/delete updates or evicts the entry in lockstep, so the cache can never serve a
+// value older than the last write in this process.
+//
+// The cache is keyed by root (the physical store location); all backends for one root — sqlite, its
+// legacy-json read-through, the convex wrapper, the explicit json backend — address the SAME logical
+// documents, so one map per root is coherent. Values are stored PARSED. The current behavior already
+// returns a fresh JSON.parse object on every get, so callers freely mutate what they receive; the cache
+// preserves that exact contract by handing back a structuredClone on every get and storing a
+// structuredClone on every set. The cached copy is therefore pristine and never shares a reference with
+// any caller — a mutation downstream cannot bleed into the cache or across reads.
+const docCache = new Map(); // root -> Map(`${collection} ${key}` -> parsed value | null)
+
+function cacheMapFor(root) {
+  let map = docCache.get(root);
+  if (!map) {
+    map = new Map();
+    docCache.set(root, map);
+  }
+  return map;
+}
+
+function withDocumentCache(backend, root) {
+  const cache = cacheMapFor(root);
+  return {
+    // Preserve any extra surface a backend exposes (e.g. convex's `mirror` / `hydrate`).
+    ...backend,
+    name: backend.name,
+    get(collection, key) {
+      const ck = `${collection} ${key}`;
+      if (cache.has(ck)) {
+        const hit = cache.get(ck);
+        return hit == null ? null : structuredClone(hit);
+      }
+      const value = backend.get(collection, key);
+      // The backend just produced this object (a fresh JSON.parse); no one else references it, so it is
+      // safe to hold as the pristine cached copy. The caller gets a clone.
+      cache.set(ck, value == null ? null : value);
+      return value == null ? null : structuredClone(value);
+    },
+    set(collection, key, data) {
+      const stored = backend.set(collection, key, data);
+      // Store a pristine copy so a later mutation of `data` by the caller cannot bleed into the cache.
+      cache.set(`${collection} ${key}`, stored == null ? null : structuredClone(stored));
+      return stored;
+    },
+    list(collection) {
+      // Not cached: list() unions in legacy on-disk keys and its result changes on any set/delete within
+      // the collection. Left as a fresh read so it is never stale; the per-key get() cache is untouched.
+      return backend.list(collection);
+    },
+    delete(collection, key) {
+      const removed = backend.delete(collection, key);
+      // Negative-cache the now-absent key so a subsequent get() short-circuits to null without a read.
+      cache.set(`${collection} ${key}`, null);
+      return removed;
+    },
+  };
+}
+
 // ── The provider — one interface over the selected backend ──────────────────────────────────────
 
 // get(collection, key)        → the stored document, or null when absent.
@@ -304,9 +369,14 @@ function createSqliteBackend(root) {
 // delete(collection, key)     → true when a document was removed, false when none existed.
 //
 // Created per call from the resolved root so { root } in tests is fully isolated. Cheap: the SQLite
-// handle is cached per root, and the JSON backend is stateless.
+// handle is cached per root, the JSON backend is stateless, and the per-root document cache is shared
+// across calls so repeated reads within one request are served from memory.
 export function persistence(options = {}) {
   const root = storeRoot(options);
+  return withDocumentCache(selectBackend(options, root), root);
+}
+
+function selectBackend(options, root) {
   const backendName = resolveBackendName(options);
   // The explicitly-selected JSON backend is a primary store, so it mirrors team writes through the one
   // seam. (The JSON backend embedded inside the SQLite backend, below, is read-through legacy only and
@@ -355,6 +425,8 @@ export function sqlitePersistence(options = {}) {
 // file (used when a test deletes its temp home between runs).
 export function closePersistence(options = {}) {
   const root = storeRoot(options);
+  // Drop the in-process document cache for this root too, so a fresh provider re-reads from disk.
+  docCache.delete(root);
   const db = dbCache.get(root);
   if (db) {
     try { db.close(); } catch { /* already closed */ }

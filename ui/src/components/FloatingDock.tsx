@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "motion/react";
-import { AlertTriangle, LoaderCircle, Lightbulb, Plus, Settings2, ShieldCheck } from "lucide-react";
+import { AlertTriangle, LoaderCircle, Lightbulb, Plus, Settings2 } from "lucide-react";
 import { SPRING } from "@/lib/springs";
 import { Reveal, Pop } from "@/lib/motion";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
@@ -11,7 +11,7 @@ import type { ChannelMeta, GTMGraph, ProjectSummary } from "@/types";
 
 // The single floating control dock that sits top-center over the full-bleed canvas. It carries the
 // breadcrumb (product · channel), Ideate, the GTM↔Product toggle, Summon, and the first-class actions:
-// Approvals (the founder gate), Issues (the always-present problem count), and Run. Workspace and Team
+// Issues (the always-present problem count) and Run. Workspace and Team
 // are no longer permanent buttons here; you summon those onto the canvas instead, so the bar holds only
 // what you reach for constantly. The Design/Simulation/Run lenses were cut: one project is one canvas.
 export function FloatingDock({
@@ -33,7 +33,6 @@ export function FloatingDock({
   // tools). These moved out of the Summon menu so the bar's gear is their single home.
   onOpenSettings,
   // Right — the first-class actions
-  pendingApprovals, approvalsOpen, onToggleApprovals,
   problems, issuesOpen, onToggleIssues,
   onCloseMenus,
   graph, running, onRun,
@@ -60,14 +59,11 @@ export function FloatingDock({
   summonItems?: { id: string; label: string; desc?: string }[];
   onSummon?: (id: string) => void;
   onOpenSettings?: () => void;
-  pendingApprovals: number;
-  approvalsOpen: boolean;
-  onToggleApprovals: () => void;
   // Issues — the count of open problems across the system, and the always-present panel it toggles.
   problems: number;
   issuesOpen: boolean;
   onToggleIssues: () => void;
-  // Close the App-owned toolbar popovers (Approvals and Issues now). Used so opening the local Summon
+  // Close the App-owned toolbar popovers (Issues now). Used so opening the local Summon
   // menu dismisses them — at most one toolbar popover is open at a time.
   onCloseMenus: () => void;
   graph: GTMGraph | null;
@@ -175,8 +171,8 @@ export function FloatingDock({
         ) : null}
       </div>
 
-      {/* Right — the two first-class actions. Approvals (the founder gate) and Run. Everything that
-          used to live here is summoned now. Claude's live status lives in the command dock below. */}
+      {/* Right — the first-class actions. Issues and Run; the founder gate now blooms on the canvas.
+          Everything else is summoned now. Claude's live status lives in the command dock below. */}
       <div className="fdock-right">
         {/* Settings — the admin door (workspace, team, self-built tools), evicted from the Summon
             junk drawer into one overlay. Always reachable, in GTM and Product mode alike. */}
@@ -193,24 +189,6 @@ export function FloatingDock({
             </button>
             {!productMode ? <span className="fdock-divider" /> : null}
           </>
-        ) : null}
-
-        {/* Approvals — the founder gate's first-class home. Carries the real pending-draft count.
-            GTM-only: the gate is a go-to-market concept, so it's hidden in Product mode. */}
-        {!productMode ? (
-          <button
-            className={`fdock-icon-btn ${pendingApprovals > 0 ? "has-pending" : ""} ${approvalsOpen ? "open" : ""}`}
-            onClick={() => { setSummonOpen(false); onToggleApprovals(); }}
-            type="button"
-            aria-haspopup="dialog"
-            aria-expanded={approvalsOpen}
-            title={pendingApprovals > 0
-              ? `${pendingApprovals} draft${pendingApprovals === 1 ? "" : "s"} waiting for your approval`
-              : "No drafts waiting — nothing has reached the gate"}
-          >
-            <ShieldCheck size={15} />
-            {pendingApprovals > 0 ? <Pop k={pendingApprovals} className="fdock-count gate">{pendingApprovals}</Pop> : null}
-          </button>
         ) : null}
 
         {/* Issues — the always-present problem indicator, promoted off the Summon menu. Carries the live

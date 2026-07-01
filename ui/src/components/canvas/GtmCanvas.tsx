@@ -1,8 +1,11 @@
 import { GraphCanvas, type OperatorCursorState } from "@/components/GraphCanvas";
 import type { NodeEditorBridge } from "@/components/nodeEditorBridge";
+import type { GatePromote } from "@/lib/gateItem";
 import { CanvasShell, type LensDef, type LensProps } from "@/components/canvas/CanvasShell";
-import { EngineLens } from "@/components/lenses/EngineLens";
-import { GtmBoardLens } from "@/components/lenses/GtmBoard";
+import { GroundLens } from "@/components/lenses/GroundLens";
+import { BeliefSpine } from "@/components/lenses/BeliefSpine";
+import { useGround, type IcpGrouping } from "@/lib/groundModel";
+import { useBoard } from "@/lib/boardModel";
 import type {
   ChannelFeed, ChannelMeta, Claim, ConnectorMeta, DirectedFeed, GateDecision, GtmExperiment, GTMContractAudit, GTMGraph, GTMNode,
   GTMRunResult, NodeSelection, Person,
@@ -43,6 +46,10 @@ export type GtmCanvasModel = {
   operatorCursor?: OperatorCursorState | null;
   onResolveProposal?: (accept: boolean) => void;
   onSubmitReview?: (nodeId: string, decisions: Record<string, GateDecision>) => void;
+  // Promote-by-Replay on the focused pipeline's gate — the autonomy ladder, relocated onto the canvas
+  // gate bloom. Absent when no pipeline is focused.
+  gatePromote?: GatePromote;
+  onAskClaude?: (node: GTMNode) => void;
   onApproveGate?: (nodeId: string) => void;
   onAddNode?: (spec: Partial<GTMNode> & { label: string }) => void;
   onConnectNodes?: (source: string, target: string) => void;
@@ -51,6 +58,13 @@ export type GtmCanvasModel = {
   onNodePositionChange?: (nodeId: string, position: { x: number; y: number }) => void;
   onOpenLibrary?: () => void;
   nodeEditor?: NodeEditorBridge | null;
+  // The literal one-coordinate-space unification: every other pipeline's graph, so channel-flow
+  // renders ALL of them as lanes in one canvas instead of swapping which one is on screen. Absent
+  // (or a single channel) behaves exactly like today's single-pipeline canvas.
+  multiPipeline?: { channels: ChannelMeta[]; channelGraphs: Map<string, GTMGraph>; channelRunResults: Map<string, GTMRunResult | null> } | null;
+  // "Open this pipeline" (ChannelSwitcher, a board tile) pans the merged canvas to that lane without
+  // touching node selection. A fresh token still re-pans even to the SAME channel.
+  panTo?: { channelId: string; token: number; nodeId?: string } | null;
   // ── engine overview + summoned cards: the channels + the shared objects they inherit ──
   channels: ChannelMeta[];
   activeChannelId: string | null;
@@ -75,7 +89,10 @@ export type GtmCanvasModel = {
 type GtmLensProps = LensProps<GtmCanvasModel, never>;
 
 // ── channel-flow: GraphCanvas, unchanged. Forwards App's prop bag straight through. ──
-function ChannelFlowLens({ model: m }: GtmLensProps) {
+// Exported so GtmBoard's Channels cluster can mount the SAME merged canvas — arriving via a click on
+// the Channels cluster or the direct top-level pipeline entry lands you in the identical component,
+// never a different page.
+export function ChannelFlowLens({ model: m }: GtmLensProps) {
   if (!m.graph) {
     return (
       <div className="canvas-empty">
@@ -84,85 +101,82 @@ function ChannelFlowLens({ model: m }: GtmLensProps) {
       </div>
     );
   }
+  // L1 above L2 in one column: the pipeline's belief spine (the folded-in board, scoped to this one
+  // pipeline) rides above its executable flow. The spine is a pure read; it only mounts when a project
+  // and a focused channel exist. This is the interim composition until the continuous-zoom LOD backbone
+  // replaces the stack with a true altitude transition.
   return (
-    <>
-      <GraphCanvas
-        connectors={m.connectors}
-        contractAudits={m.contractAudits}
-        graph={m.graph}
-        proposedNodeIds={m.proposedNodeIds}
-        proposedEdgeIds={m.proposedEdgeIds}
-        revealedNodeIds={m.revealedNodeIds}
-        proposalActive={m.proposalActive}
-        onResolveProposal={m.onResolveProposal}
-        onSubmitReview={m.onSubmitReview}
-        onApproveGate={m.onApproveGate}
-        onAddNode={m.onAddNode}
-        onConnectNodes={m.onConnectNodes}
-        onDeleteEdges={m.onDeleteEdges}
-        onLoadRecipe={m.onLoadRecipe}
-        onNodePositionChange={m.onNodePositionChange}
-        onOpenLibrary={m.onOpenLibrary}
-        onSelect={m.onSelect}
-        onPaneClick={m.onPaneClick}
-        operatorCursor={m.operatorCursor}
-        nodeEditor={m.nodeEditor}
-        people={m.people}
-        panelOpen={false}
-        result={m.result}
-        running={m.running}
-        runningNodeId={m.runningNodeId}
-        selection={m.selection}
-        subsystemHealth={m.subsystemHealth}
-      />
-      {m.graph.nodes.length === 0 ? (
-        <div className="blank-channel-guide">
-          <strong>Shape this pipeline from the outcome backward</strong>
-          <span>Tell Claude what this motion should accomplish, or add the first node yourself. Nothing has been chosen for you.</span>
+    <div className="channel-flow-stack" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+      {m.projectId && m.activeChannelId ? (
+        <div className="l1-spine-band" style={{ flex: "0 0 auto", borderBottom: "1px solid var(--line)", overflow: "auto", maxHeight: "42%" }}>
+          <BeliefSpine projectId={m.projectId} channelId={m.activeChannelId} />
         </div>
       ) : null}
-    </>
+      <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
+        <GraphCanvas
+          connectors={m.connectors}
+          contractAudits={m.contractAudits}
+          graph={m.graph}
+          proposedNodeIds={m.proposedNodeIds}
+          proposedEdgeIds={m.proposedEdgeIds}
+          revealedNodeIds={m.revealedNodeIds}
+          proposalActive={m.proposalActive}
+          onResolveProposal={m.onResolveProposal}
+          onSubmitReview={m.onSubmitReview}
+          gatePromote={m.gatePromote}
+          onAskClaude={m.onAskClaude}
+          onApproveGate={m.onApproveGate}
+          onAddNode={m.onAddNode}
+          onConnectNodes={m.onConnectNodes}
+          onDeleteEdges={m.onDeleteEdges}
+          onLoadRecipe={m.onLoadRecipe}
+          onNodePositionChange={m.onNodePositionChange}
+          onOpenLibrary={m.onOpenLibrary}
+          onSelect={m.onSelect}
+          onPaneClick={m.onPaneClick}
+          operatorCursor={m.operatorCursor}
+          nodeEditor={m.nodeEditor}
+          multiPipeline={m.multiPipeline}
+          panTo={m.panTo}
+          people={m.people}
+          panelOpen={false}
+          result={m.result}
+          running={m.running}
+          runningNodeId={m.runningNodeId}
+          selection={m.selection}
+          subsystemHealth={m.subsystemHealth}
+        />
+        {m.graph.nodes.length === 0 ? (
+          <div className="blank-channel-guide">
+            <strong>Shape this pipeline from the outcome backward</strong>
+            <span>Tell Claude what this motion should accomplish, or add the first node yourself. Nothing has been chosen for you.</span>
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
-// Pull a readable line out of the loosely-typed shared ICP / claim bags so a tile shows real words,
-// never "[object Object]". Tries the common label keys in priority order; returns null if nothing fits.
-function readable(value: unknown): string | null {
-  if (typeof value === "string") return value.trim() || null;
-  if (value && typeof value === "object") {
-    const obj = value as Record<string, unknown>;
-    for (const k of ["label", "name", "segment", "title", "who", "summary", "statement", "claim", "text", "description"]) {
-      const v = obj[k];
-      if (typeof v === "string" && v.trim()) return v.trim();
-    }
-  }
-  return null;
-}
-
-// ── engine: the whole go-to-market as one canvas — channels as nodes, feeds between them, and the
-// shared ICP/claim context header folded in. The single GTM overview (a former channel-grid tile
-// view was merged in: its only unique value was this context header). ──
-function EngineLensWrapper({ model: m }: GtmLensProps) {
-  return (
-    <EngineLens
-      channels={m.channels}
-      channelFeeds={m.channelFeeds}
-      directedFeeds={m.directedFeeds}
-      activeChannelId={m.activeChannelId}
-      onDeriveChannel={m.onDeriveChannel}
-      onOpenChannel={m.onOpenChannel}
-      icpLabel={readable(m.icp)}
-      claimLabel={readable(m.claims[0])}
-    />
-  );
+// ── L0 ground: the overview landing. The former nine-layer belief board folds INTO the flow — its
+// beliefs now surface as each pipeline's state here (L0) and as the per-pipeline spine when a pipeline
+// opens (L1, BeliefSpine in ChannelFlowLens). Pipelines are grouped under the ICP they test (one honest
+// primary ground today; the ICPs[] shape is already plural for real per-ICP experiments). Conviction is
+// ink weight, never hue; the only accent is the amber needs-you pill. ──
+function GroundLensWrapper({ model: m }: GtmLensProps) {
+  // Read the board for its ICP grouping (the backend embeds icpGrouping on the board payload); this is
+  // what splits the ground into real per-ICP bands + arm races instead of one flat primary ground.
+  const board = useBoard(m.projectId);
+  const boardView = board.status === "ready" ? board.board : null;
+  const icpGrouping = (boardView as { icpGrouping?: IcpGrouping } | null)?.icpGrouping ?? null;
+  const ground = useGround(m.projectId, m.channels, m.people, m.claims, boardView, icpGrouping);
+  return <GroundLens model={ground.model} onOpenChannel={m.onOpenChannel} />;
 }
 
 const LENSES: LensDef<GtmCanvasModel, never>[] = [
-  // The board is the LANDING surface — semantic-zoom home of the nine belief layers. The other GTM
-  // lenses stay reachable (channel state still drives channel-flow); full tab removal lands later.
-  { id: "board", label: "Board", Component: GtmBoardLens },
+  // The ground is the LANDING surface (id kept as "board" so the host's controlled altitude prop is
+  // unchanged). The nine-layer board is folded in — GtmBoard.tsx stays on disk, no longer the landing.
+  { id: "board", label: "Ground", Component: GroundLensWrapper },
   { id: "channel-flow", label: "Pipeline flow", Component: ChannelFlowLens },
-  { id: "engine", label: "Engine", Component: EngineLensWrapper },
 ];
 
 // Lens metadata (id + label) for the command dock's switcher lives in the sibling `lens-meta.ts`
@@ -176,7 +190,7 @@ export function GtmCanvas({
   // channel-flow with a channel open) — not stored. App reuses ONE GtmCanvas instance across both
   // branches, so the lens must be a controlled prop: an uncontrolled default only seeds the shell's
   // state once and would strand the reused instance on the stale lens when the branch flips.
-  activeLensId: "board" | "channel-flow" | "engine";
+  activeLensId: "board" | "channel-flow";
   chromeless?: boolean;
 }) {
   return (
