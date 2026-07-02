@@ -1631,23 +1631,30 @@ function buildMergedFlowGraph(
 
 // ─── Auto-center on selection ─────────────────────────────────────────────────
 
-function NodeFocuser({ selection, panelOpen, active }: { selection: NodeSelection; panelOpen: boolean; active: boolean }) {
-  const { getZoom, setCenter, getNode } = useReactFlow();
+function NodeFocuser({ selection, active }: { selection: NodeSelection; panelOpen: boolean; active: boolean }) {
+  const { getZoom, setCenter, getNode, fitView } = useReactFlow();
+  const prev = React.useRef<NodeSelection>(selection);
 
   useEffect(() => {
     // Don't yank the canvas while a run is streaming and auto-selecting each step.
-    if (!active) return;
-    if (!selection) return;
+    if (!active) { prev.current = selection; return; }
+    if (!selection) {
+      // Closing a card zooms the view back out to the lanes it came from.
+      if (prev.current) fitView({ padding: 0.16, maxZoom: 1, duration: 460 });
+      prev.current = selection;
+      return;
+    }
+    prev.current = selection;
     const node = getNode(selection);
     if (!node) return;
     const w = (node.measured?.width ?? node.width ?? 200);
     const h = (node.measured?.height ?? node.height ?? 110);
     const cx = node.position.x + w / 2;
     const cy = node.position.y + h / 2;
-    // When panel is open, shift the visual center left so the node doesn't hide behind it
-    const zoom = getZoom();
-    const panelShift = panelOpen ? -(160 / zoom) : 0;
-    setCenter(cx + panelShift, cy, { zoom: Math.min(zoom, 0.95), duration: 380 });
+    // Clicking a card FLIES THE VIEW INTO it: center on the card and zoom in so it fills the view and
+    // becomes the editor. Never zoom out on select — only in (so a click from close-up doesn't recede).
+    const target = Math.max(getZoom(), 1.45);
+    setCenter(cx, cy, { zoom: target, duration: 460 });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selection]);
 

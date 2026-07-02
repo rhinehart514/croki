@@ -4112,10 +4112,10 @@ svg {
   inset: 0;
   z-index: 100;
   display: grid;
-  /* Dock the step editor to the BOTTOM so the node diagram stays visible above it — you work a
-     step while still seeing the flow, instead of a modal swallowing the canvas. */
-  place-items: end center;
-  padding: 0;
+  place-items: center;
+  padding: clamp(20px, 4vh, 56px);
+  /* Transparent: the canvas has flown INTO the clicked card behind this, so the editor grows out of
+     that card instead of dropping over a dimmed, separate overlay. */
   background: transparent;
   animation: node-backdrop-in 150ms ease-out;
 }
@@ -4140,23 +4140,25 @@ svg {
 .node-detail-workspace {
   position: relative;     /* sit above the absolute click-outside scrim */
   z-index: 1;
-  width: min(1180px, 100%);
-  height: min(48vh, 600px);
+  width: min(1180px, calc(100vw - 40px));
+  height: min(88vh, 920px);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
   border: 1px solid rgba(23, 30, 46, 0.14);
-  border-bottom: 0;
-  border-radius: 18px 18px 0 0;
+  border-radius: 20px;
   /* OPAQUE — an editor you read and type in is never glass (opaque-content-surfaces rule). */
   background: var(--surface);
   box-shadow:
-    0 -22px 60px rgba(20, 24, 33, 0.22),
-    0 -3px 14px rgba(20, 24, 33, 0.10),
+    0 40px 100px rgba(20, 24, 33, 0.30),
+    0 6px 22px rgba(20, 24, 33, 0.14),
     inset 0 1px 0 rgba(255, 255, 255, 0.55);
-  animation: node-dock-in 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  /* Grows out of the card the view just zoomed into (which is now screen-centered) — scale from
+     center reads as the card opening up into the editor. */
+  transform-origin: center center;
+  animation: node-zoom-in 320ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes node-workspace-in {
@@ -4164,10 +4166,10 @@ svg {
   to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
 }
 
-/* The step editor slides up from the bottom edge as a dock. */
-@keyframes node-dock-in {
-  from { opacity: 0; transform: translateY(28px); }
-  to { opacity: 1; transform: translateY(0); }
+/* The editor grows out of the card the view zoomed into — scale up from center. */
+@keyframes node-zoom-in {
+  from { opacity: 0; transform: scale(0.72); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 .node-detail-workspace-header {
@@ -11288,15 +11290,14 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
   border: 1px solid var(--st-glass-brd);
   border-radius: var(--st-r);
 }
-/* The step editor is a bottom DOCK, and an editor you read/type in must be opaque — override the
-   glass skin's frost for this panel only (the shared artifact-editor/sim-drawer stay frosted). */
+/* An editor you read/type in must be opaque — override the glass skin's frost for this panel only
+   (the shared artifact-editor/sim-drawer stay frosted). */
 [data-skin="glass"] .node-detail-workspace {
   background: #fbfaf8;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   border: 1px solid rgba(23, 30, 46, 0.14);
-  border-bottom: 0;
-  border-radius: 18px 18px 0 0;
+  border-radius: 20px;
 }
 /* Avoid double-frost seams inside the frosted modal */
 [data-skin="glass"] .node-detail-workspace .node-editor-wrap,
