@@ -1,6 +1,10 @@
 # Drover — GTM Engine Rebuild (plan of record)
 
-Status: SPEC — approved direction, not yet built. Authored 2026-07-01.
+Status: PARTIALLY BUILT. Authored 2026-07-01; updated 2026-07-02. Phases 0–6 have landed as
+code — evidence graph, gtm-store, market-research, path-portfolio, outcome-ingest,
+run-compile, and promote-motion all exist with tests and are on origin/main. Not yet
+exercised end-to-end on a live founder goal; the alpha bet (a first attributable win)
+remains open. For the honest current snapshot see docs/STATE.md.
 This supersedes the pre-redefinition framing in VISION.md, GOAL.md, BUILD-PLAN.md,
 PRODUCT-SPEC.md, CANVAS.md, and MODEL.md where they conflict (those describe the
 IDE-metaphor product; see "Supersedes" at the end).

@@ -1,5 +1,9 @@
 # Drover
 
+**Stage: Alpha** (v0.3.1) — the spine runs and the suite is green, but no real founder has
+driven a real go-to-market win to the gate yet. See `docs/STATE.md` for the honest current
+snapshot.
+
 Drover (formerly GTM IDE) is the go-to-market desk for founders running more than one
 product. It is local-first: point it at a product's codebase and it reads what the product
 actually does; state a go-to-market goal in plain words and a frontier model composes the

@@ -1,3 +1,12 @@
+> **SUPERSEDED — 2026-07-01.** These evals were written against the earlier "IDE for GTM"
+> (repository-evidence → reviewed change) framing. The product was redefined as a GTM engine;
+> the current direction is **docs/GTM-ENGINE-REBUILD.md** and the honest state is **docs/STATE.md**.
+> The `npm test` release gate below still holds; the completion criterion above does not. Kept
+> for history — new evals should target the engine (scan → market research → path → gated run →
+> measured result → promotion).
+
+---
+
 # Product evals
 
 GTM IDE is complete only when the user can move from repository evidence to a

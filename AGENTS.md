@@ -32,6 +32,17 @@ Everything below is engineering register — file names, identifiers, data-flow 
 
 The product's name is **Drover** — the go-to-market desk for founders running more than one product (renamed 2026-07-01; display strings say Drover, while package names, the MCP server key `gtm-ide`, storage paths like `~/.gtm-ide`, and provenance markers deliberately keep the old identifier — do not "fix" them). Drover is the IDE for go-to-market. Point it at a product's codebase; it reads what the product does and where wins enter; the founder states a GTM goal in plain words; it composes the agents and steps the goal needs behind a founder approval gate and runs to that gate. Nothing sends, publishes, or charges until the founder approves. Every gate decision trains taste for the next run. There is no required setup — no program to stand up, no policy, no template.
 
+## Stage: Alpha
+
+Drover is in **alpha** (v0.3.1). The three-rail spine runs and `npm test` is green, but no real founder has driven a real go-to-market win to the gate yet — that first attributable win is the alpha bet. Treat "built" as "built and tested," never "validated in the market." The honest, dated snapshot lives in `docs/STATE.md`; keep it current when something material changes.
+
+## The bar for product & design work
+
+Every surface, feature, and copy change is held to two standards on top of the harness rules — a build is not done when it merely functions:
+
+1. **Market-first.** The test is not "does it work," it is "does it matter, would a founder choose it, is it positioned clearly enough to decide on." A strong build with a weak position is unfinished work — make it understandable and well-positioned before calling it done.
+2. **Beautiful by default.** Reference-grade craft held to a frontier-lab bar, not generic startup or template output. Design inside the product's real system (light ground, monochrome zinc, Geist, semantic color only, no decorative gradients). Apply the substitutability test: if a stranger could guess the design before the screen finishes loading, it is still the mean — ship the specific instead. Route non-trivial UI through the `/design` craft layer and audit it against that bar before it ships.
+
 ## Canonical commands
 
 - Run: `npm start` (builds UI, then serves API + client from `brain/src/server.mjs`)
