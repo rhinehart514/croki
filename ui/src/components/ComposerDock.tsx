@@ -1,16 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import {
   ArrowUp, BarChart3, Bot, Boxes, ChevronRight, Code, Database, Filter, LayoutGrid, LoaderCircle, Lightbulb, Maximize2,
-  Mic, Minimize2, PenLine, Pin, Play, Plus, Search, Send, ShieldCheck, Square, Wand2, X,
+  Mic, Minimize2, PenLine, Pin, Play, Search, Send, ShieldCheck, Square, Wand2, X,
 } from "lucide-react";
 import { statusLabel } from "@/lib/status";
 import { AgentPicker } from "@/components/AgentPicker";
 import { DEFAULT_MODEL, modelById } from "@/components/agent-picker-models";
 import { DockContext } from "@/components/DockContext";
 import { SlidingTabs } from "@/components/SlidingTabs";
-import { Collapse, Reveal, Stagger, StaggerItem } from "@/lib/motion";
-import { STEP_OPTIONS, type StepOption } from "@/lib/step-options";
+import { Collapse, Stagger, StaggerItem } from "@/lib/motion";
 import "@/styles/dock-context.css";
 import "@/styles/composer-posture.css";
 import "@/styles/composer-candidates.css";
@@ -474,11 +472,12 @@ export function ComposerDock({
   session, running, boundChannelName, onSend, onCancel, onReviewGate,
   floating = false, focusSignal = 0, recede = false,
   contextManifest = null, onOpenGrounding, onOpenPicture, onIdeate,
-  onAddNode, onAddChain, onOpenLibrary, onOpenComponents,
+  onOpenComponents,
   posture, onExitPosture, onPin,
   graph = null, runningNodeId = null, proposedNodeIds = null, result = null,
   subject = null, onClearSubject, isNavCommand,
   onProposeCandidates, onBuildCandidate,
+  seed = null,
 }: {
   session: OperatorSession | null;
   running: boolean;
@@ -502,6 +501,11 @@ export function ComposerDock({
   // Bumped by the host to summon the chat — e.g. "New channel" opens and focuses it, since a
   // channel is created by telling Claude the goal, not by filling a form.
   focusSignal?: number;
+  // A message the founder started from the canvas — asking why a GTM path ranks, requesting variants,
+  // challenging a bet, editing a belief, or advancing a path to the gate. The host pre-fills the input
+  // with it (and opens the dock) but NEVER sends it: the founder reads, edits, and presses send. The
+  // token makes an identical re-ask re-seed. Pure steering language; nothing runs until the founder acts.
+  seed?: { text: string; token: number } | null;
   // While Claude is staging a graph change, the cursor builds it onto the canvas and the inline
   // ✓/✕/note carry the decision — so the dock RECEDES to its peek to leave the watch beat
   // unobstructed. It re-opens itself the moment the founder resolves the proposal (recede → false).
@@ -512,13 +516,6 @@ export function ComposerDock({
   onOpenGrounding?: () => void;
   onOpenPicture?: () => void;
   onIdeate?: () => void;
-  // The composer's "+" is the canvas's ONE add affordance now (the separate canvas "Add step" was
-  // collapsed into it): add a building-block step, or open the library for your real agents/skills.
-  onAddNode?: (spec: Partial<GTMNode> & { label: string }) => void;
-  // Drop a connected chain of steps at once — "Review & stage" uses it to place the gate and the
-  // staged-output node already wired, so the wall holds by construction.
-  onAddChain?: (specs: (Partial<GTMNode> & { label: string })[]) => void;
-  onOpenLibrary?: () => void;
   // Opens the Figma-style component library — the founder hand-picks real inventory (their leads,
   // composed teammates, ICP/claims/experiments, raw blocks) and each pick drops a node on the canvas.
   // It belongs to the chat: you either ask Claude or reach for the library yourself.
@@ -555,34 +552,6 @@ export function ComposerDock({
   // and docked opens collapsed unless an ACTIVE (non-terminal) session is running, so an idle or finished
   // session hands the width back to the canvas instead of holding an open lane over it.
   const [collapsed, setCollapsed] = useState(floating || !session || TERMINAL.has(session.status));
-  const [addOpen, setAddOpen] = useState(false);
-  // The "+" stages building-block MODES as chips in the composer instead of dropping a card on the
-  // canvas. The card lands on SEND, built from the typed description — so "+ Input" then "a CSV of WNY
-  // operators" + Enter creates the Input node labeled from your words. Library stays a palette (you
-  // pick a real agent, you don't describe one), so it isn't chipped.
-  const [stepChips, setStepChips] = useState<StepOption[]>([]);
-  // The add menu renders in a body portal so the dock's `overflow: hidden` (the rounded glass card)
-  // can't clip it when it opens upward. We anchor it to the live "+" button rect, fixed to the viewport.
-  const [addPos, setAddPos] = useState<{ left: number; bottom: number } | null>(null);
-  const addBtnRef = useRef<HTMLButtonElement>(null);
-  const toggleAdd = () => {
-    if (addOpen) { setAddOpen(false); return; }
-    const r = addBtnRef.current?.getBoundingClientRect();
-    if (r) setAddPos({ left: r.left, bottom: window.innerHeight - r.top + 8 });
-    setAddOpen(true);
-  };
-  useEffect(() => {
-    if (!addOpen) return;
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as HTMLElement;
-      if (t.closest(".composer-add-portal") || t.closest(".composer-add-wrap")) return;
-      setAddOpen(false);
-    };
-    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") setAddOpen(false); };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onEsc);
-    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onEsc); };
-  }, [addOpen]);
   const [expanded, setExpanded] = useState(false);
   // The dock leads with the THREAD — the whole conversation in one scroll (your messages, Claude's
   // work folded into a step receipt, the answer, the gate). Focus (just the latest answer/state) is
@@ -659,6 +628,19 @@ export function ComposerDock({
   useEffect(() => {
     if (focusSignal) inputRef.current?.focus();
   }, [focusSignal]);
+
+  // A canvas-started message pre-fills the input, opens the dock, and focuses it — but is never sent for
+  // the founder. Tracked by token so re-asking the same question re-seeds. setState-during-render is the
+  // sanctioned pattern for a changed prop; the focus is a DOM call in an effect, not more state.
+  const [trackedSeed, setTrackedSeed] = useState(seed?.token ?? 0);
+  if (seed && seed.token !== trackedSeed) {
+    setTrackedSeed(seed.token);
+    setInput(seed.text);
+    if (!terminalOverview) setCollapsed(false);
+  }
+  useEffect(() => {
+    if (seed?.token) inputRef.current?.focus();
+  }, [seed?.token]);
 
   // Recede while a proposal stages onto the canvas; rise again once it's resolved. Adjusting state
   // during render from a changed prop is React's sanctioned pattern — no effect, no extra render.
@@ -737,20 +719,6 @@ export function ComposerDock({
 
   const send = async () => {
     if (submitting) return;
-    // Chips first: an active step chip means "build this block from my words," a local graph edit —
-    // not a message to Claude. It runs even while the operator is working (adding a node is design-time
-    // and reversible), so it bypasses sendDisabled. The card lands here, on send, never on the +click.
-    if (stepChips.length) {
-      const value = input.trim();
-      for (const chip of stepChips) {
-        const spec = value ? { ...chip.spec, label: value } : chip.spec;
-        if (chip.then && onAddChain) onAddChain([spec, chip.then]);
-        else onAddNode?.(spec);
-      }
-      setStepChips([]);
-      setInput("");
-      return;
-    }
     const value = input.trim();
     if (!value) return;
     // A navigation command ("go to the gate") steers the canvas and never reaches Claude, so it's
@@ -767,9 +735,8 @@ export function ComposerDock({
   // textarea over a control row (context on the left, the live model/state, a dark send on the right).
   // Enter sends, Shift+Enter newlines. Shared by the resting state and the active conversation so the
   // input never changes shape as you move between them.
-  const chipMode = stepChips.length > 0;
   const composer = (
-    <div className={`composer-box ${chipMode ? "has-chips" : ""} ${voiceOn ? "voice" : ""}`}>
+    <div className={`composer-box ${voiceOn ? "voice" : ""}`}>
       {/* The aurora — a faint monochrome graphite drift at rest; on voice it swells into the rainbow.
           aria-hidden: pure ambience, no semantics. */}
       <div className="composer-aurora" aria-hidden="true" />
@@ -815,34 +782,13 @@ export function ComposerDock({
           ) : null}
         </div>
       ) : null}
-      {/* Staged step modes. While any chip is set, the composer is in "build a step" mode — your words
-          describe the block, Enter creates it on the canvas, and the chip clears. Remove a chip to drop
-          back to talking to Claude. */}
-      {chipMode ? (
-        <div className="composer-chips">
-          {stepChips.map((chip, i) => (
-            <span key={chip.label} className="composer-chip">
-              <span className="composer-chip-icon">{chip.icon}</span>
-              <span className="composer-chip-label">{chip.label}</span>
-              <button
-                className="composer-chip-x"
-                type="button"
-                aria-label={`Remove ${chip.label}`}
-                onClick={() => setStepChips((chips) => chips.filter((_, j) => j !== i))}
-              >
-                <X size={12} />
-              </button>
-            </span>
-          ))}
-        </div>
-      ) : null}
       <textarea
         ref={inputRef}
         className="composer-box-input"
-        aria-label={chipMode ? `Describe the ${stepChips[stepChips.length - 1].label} step` : "Message Claude"}
-        placeholder={chipMode ? `Describe the ${stepChips[stepChips.length - 1].label} step…` : subject ? `Ask Claude about “${subject.label}” — make it shorter, why it's empty, run it…` : sendDisabled ? "Claude is working — you can still say “go to …” to move the canvas" : ideating ? "Think through your GTM — who's the real buyer, where's the wedge, why now" : session ? "Reply, redirect, or ask Claude to continue…" : "Ask Claude to build, run, or change anything…"}
+        aria-label="Message Claude"
+        placeholder={subject ? `Ask Claude about “${subject.label}” — make it shorter, why it's empty, run it…` : sendDisabled ? "Claude is working — you can still say “go to …” to move the canvas" : ideating ? "Think through your GTM — who's the real buyer, where's the wedge, why now" : session ? "Reply, redirect, or ask Claude to continue…" : "Ask Claude to build, run, or change anything…"}
         value={input}
-        disabled={submitting && !chipMode}
+        disabled={submitting}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
         rows={1}
@@ -853,95 +799,32 @@ export function ComposerDock({
       </div>
       <div className="composer-box-bar">
         <div className="composer-box-tools">
-          {/* The ONE add affordance. Opens upward from the "+": your library (real agents/skills) and
-              the building blocks. The separate canvas "Add step" was collapsed into this. */}
-          {onAddNode ? (
-            <div className="composer-add-wrap">
-              <button
-                ref={addBtnRef}
-                className={`composer-box-tool ${addOpen ? "open" : ""}`}
-                onClick={toggleAdd}
-                type="button"
-                aria-haspopup="menu"
-                aria-expanded={addOpen}
-                title="Add a step — your library, or a building block"
-              >
-                <Plus size={16} />
-              </button>
-              {addPos ? createPortal(
-                <div className="composer-add-portal" style={{ left: addPos.left, bottom: addPos.bottom }}>
-                  <Reveal open={addOpen} className="menu composer-add-menu" role="menu" origin="bottom-left">
-                    {/* The wedge action, elevated: your REAL agents and skills, ranked above the generic
-                        building blocks. The one place boldness is spent — a filled row with a trailing chevron. */}
-                    {onOpenLibrary ? (
-                      <button className="menu-item menu-primary" onClick={() => { onOpenLibrary(); setAddOpen(false); }} role="menuitem" type="button">
-                        <Boxes className="menu-item-icon" />
-                        <span className="menu-item-body">
-                          <span className="menu-item-label">Browse the library</span>
-                          <span className="menu-item-meta">Your real agents and skills</span>
-                        </span>
-                        <ChevronRight className="menu-primary-chev" size={15} aria-hidden="true" />
-                      </button>
-                    ) : null}
-                    {/* The building blocks — the deterministic spine the Library and the vibe path
-                        don't hand you, in flow order (in → transform → ship → measure). No eyebrows:
-                        at four rows the order carries the anatomy. "Review & stage" drops the gate
-                        and the staged-output node as one wired pair. */}
-                    {STEP_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.label}
-                        className="menu-item"
-                        onClick={() => {
-                          // Stage the mode as a chip — the card is created on send, not here.
-                          setStepChips((chips) => chips.some((c) => c.label === opt.label) ? chips : [...chips, opt]);
-                          setAddOpen(false);
-                          inputRef.current?.focus();
-                        }}
-                        role="menuitem"
-                        type="button"
-                      >
-                        <span className="menu-item-icon">{opt.icon}</span>
-                        <span className="menu-item-body">
-                          <span className="menu-item-label">{opt.label}</span>
-                          <span className="menu-item-meta">{opt.detail}</span>
-                        </span>
-                      </button>
-                    ))}
-                  </Reveal>
-                </div>,
-                document.body,
-              ) : null}
-            </div>
-          ) : null}
           <AgentPicker value={model} onChange={pickModel} />
-          <span className="composer-box-model" title={sessionActive ? `${engineName} is on this outcome` : "The engine and model that drive the operator"}>
+          <span className="composer-box-model" title={sessionActive ? `${engineName} is on this outcome` : "The engine and model working this outcome"}>
             <span className={`composer-box-dot ${sessionActive ? "live" : ""}`} />
             {working ? "Working…" : session ? statusLabel(session.status) : "Ready"}
           </span>
         </div>
         <div className="composer-box-actions">
-          {/* Voice — toggles the rainbow eruption and (where supported) dictates into the input. Hidden
-              in chip mode, where the input is building a step, not talking to Claude. */}
-          {!chipMode ? (
-            <button
-              className={`composer-box-mic ${voiceOn ? "active" : ""}`}
-              onClick={toggleVoice}
-              type="button"
-              aria-label={voiceOn ? "Stop voice" : "Talk to Claude"}
-              aria-pressed={voiceOn}
-              title={voiceOn ? "Listening… tap to stop" : "Voice"}
-            >
-              <Mic size={16} />
-            </button>
-          ) : null}
+          {/* Voice — toggles the rainbow eruption and (where supported) dictates into the input. */}
+          <button
+            className={`composer-box-mic ${voiceOn ? "active" : ""}`}
+            onClick={toggleVoice}
+            type="button"
+            aria-label={voiceOn ? "Stop voice" : "Talk to Claude"}
+            aria-pressed={voiceOn}
+            title={voiceOn ? "Listening… tap to stop" : "Voice"}
+          >
+            <Mic size={16} />
+          </button>
           <button
             className="composer-box-send"
-            disabled={submitting || (chipMode ? false : (!input.trim() || (sendDisabled && !(isNavCommand?.(input.trim()) ?? false))))}
+            disabled={submitting || !input.trim() || (sendDisabled && !(isNavCommand?.(input.trim()) ?? false))}
             onClick={() => void send()}
             type="button"
-            aria-label={chipMode ? "Add the step" : "Send to Claude"}
+            aria-label="Send to Claude"
           >
-            {submitting ? <LoaderCircle className="spin" /> : chipMode ? <Plus size={18} /> : <ArrowUp size={18} />}
+            {submitting ? <LoaderCircle className="spin" /> : <ArrowUp size={18} />}
           </button>
         </div>
       </div>

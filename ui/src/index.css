@@ -3865,6 +3865,36 @@ svg {
   font-size: 13px;
 }
 
+/* The GTM map as the default full-bleed canvas. The map itself is position:absolute inset:0, so this
+   host just needs to fill the canvas area and be the positioned frame it insets to. */
+.gtm-map-host {
+  position: absolute;
+  inset: 0;
+}
+
+/* The ideation pause, demoted from a full-screen takeover to a foreground overlay: it dims and sits
+   over the GTM map (still the canvas behind) rather than replacing the whole surface. Opaque panel —
+   it's read in and decided in. */
+.idea-pause-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background: oklch(0.21 0.006 285.9 / 0.28);
+}
+.idea-pause-panel {
+  width: min(720px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-modal);
+}
+
 /* Overlay actions (save chip, run count) */
 .loop-graph-actions {
   position: absolute;
@@ -4925,6 +4955,23 @@ svg {
   cursor: pointer;
   font: inherit;
   transition: transform 130ms var(--ease), box-shadow 130ms var(--ease), border-color 130ms var(--ease);
+}
+/* ── Node LOD: far-zoom coin ── at overview altitude a work card collapses to a compact token so many
+   lanes stay readable at once; it grows back into the full card on zoom-in or selection. Same handles,
+   same gate accent (via .loop-node-gate cascade), so edges and the wall read at every altitude. */
+.loop-node.loop-node-coin {
+  min-width: 0;
+  max-width: 208px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+}
+.loop-node-coin-dot { width: 9px; height: 9px; border-radius: 999px; flex: 0 0 auto; }
+.loop-node-coin-label {
+  font-size: 13px; font-weight: 550; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .loop-node:hover { border-color: var(--ghost); box-shadow: var(--shadow-pop); }
 
@@ -11732,3 +11779,14 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 }
 .clib-foot-sep { color: var(--faint); }
 .clib-foot-target { margin-left: auto; color: var(--faint); }
+
+/* Pipeline strip (BeliefSpine) — the step's real output quoted under its card body, e.g. how the
+   drafted post actually reads. Complements BeliefSpine.css; tokens only. */
+.spine-detail {
+  margin-top: 6px;
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  font-style: italic;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
