@@ -4112,9 +4112,11 @@ svg {
   inset: 0;
   z-index: 100;
   display: grid;
-  place-items: center;
-  padding: 38px;
-  background: rgba(20, 24, 33, 0.34);
+  /* Dock the step editor to the BOTTOM so the node diagram stays visible above it — you work a
+     step while still seeing the flow, instead of a modal swallowing the canvas. */
+  place-items: end center;
+  padding: 0;
+  background: transparent;
   animation: node-backdrop-in 150ms ease-out;
 }
 
@@ -4138,28 +4140,34 @@ svg {
 .node-detail-workspace {
   position: relative;     /* sit above the absolute click-outside scrim */
   z-index: 1;
-  width: min(1120px, calc(100vw - 76px));
-  height: min(820px, calc(100vh - 76px));
+  width: min(1180px, 100%);
+  height: min(48vh, 600px);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
   border: 1px solid rgba(23, 30, 46, 0.14);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
-  backdrop-filter: blur(24px) saturate(1.5);
-  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  border-bottom: 0;
+  border-radius: 18px 18px 0 0;
+  /* OPAQUE — an editor you read and type in is never glass (opaque-content-surfaces rule). */
+  background: var(--surface);
   box-shadow:
-    0 30px 80px rgba(20, 24, 33, 0.28),
-    0 4px 18px rgba(20, 24, 33, 0.12),
+    0 -22px 60px rgba(20, 24, 33, 0.22),
+    0 -3px 14px rgba(20, 24, 33, 0.10),
     inset 0 1px 0 rgba(255, 255, 255, 0.55);
-  animation: node-workspace-in 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: node-dock-in 300ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes node-workspace-in {
   from { opacity: 0; transform: translateY(14px) scale(0.965); filter: blur(3px); }
   to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+/* The step editor slides up from the bottom edge as a dock. */
+@keyframes node-dock-in {
+  from { opacity: 0; transform: translateY(28px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .node-detail-workspace-header {
@@ -11280,6 +11288,16 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
   border: 1px solid var(--st-glass-brd);
   border-radius: var(--st-r);
 }
+/* The step editor is a bottom DOCK, and an editor you read/type in must be opaque — override the
+   glass skin's frost for this panel only (the shared artifact-editor/sim-drawer stay frosted). */
+[data-skin="glass"] .node-detail-workspace {
+  background: #fbfaf8;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border: 1px solid rgba(23, 30, 46, 0.14);
+  border-bottom: 0;
+  border-radius: 18px 18px 0 0;
+}
 /* Avoid double-frost seams inside the frosted modal */
 [data-skin="glass"] .node-detail-workspace .node-editor-wrap,
 [data-skin="glass"] .node-detail-workspace-header,
@@ -11289,7 +11307,9 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 }
 /* Warm/neutralize the cold scrim behind the modal */
 [data-skin="glass"] .node-detail-modal-backdrop {
-  background: rgba(20, 20, 25, 0.34);
+  /* The step editor docks to the bottom now — no full-canvas dim in any skin, so the diagram
+     stays visible above it. */
+  background: transparent;
 }
 
 /* Frosted plane for floating canvases (de-white the hard #fff plane start) */
