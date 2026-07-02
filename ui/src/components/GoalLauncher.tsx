@@ -1,31 +1,42 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Lightbulb, Workflow } from "lucide-react";
+import { ArrowUp, Lightbulb } from "lucide-react";
 import type { SharedContext } from "@/types";
 
-// The front door — a plain-language box, ChatGPT-style. The founder names a pipeline to run;
-// the machine builds it and stops at the gate so nothing sends.
-//
-// The framing is pipeline-first: you name (or ideate) a pipeline — a flow that moves work to your
-// gate (find → draft → gate) — and build on what's already running, not on a fresh read of the
-// product code. The sub-line and facts row are grounded in the current GTM SYSTEM state (how many
-// pipelines exist, how many people are tracked), which is the founder's real starting point.
+// The front door — a plain-language box, deliberately AMBIGUOUS about altitude. The founder says
+// whatever they're actually wondering: an ICP question, a positioning doubt, a draft they need, a
+// measurement gap, or a whole pipeline. The operator — running on the founder's full Claude harness
+// (their skills, their agents, fan-out research) — decides what shape the work takes: ideate and
+// pause for verdicts, research and report, or compose a pipeline that stops at the gate. Nothing
+// sends without the founder. The box never forces the pipeline frame; a pipeline is one possible
+// answer, not the question.
 
-const CHIPS = [
-  "Find operators → draft first contact",
-  "Re-engage last quarter's non-replies",
-  "Turn GitHub stargazers → warm intros",
-  "Research 10 target accounts → draft teardowns",
+// Chips skew by stage: a project with no pipelines is at its BEGINNING — the honest questions are
+// direction-shaped. A running project mixes altitudes: work the system, question the system. The
+// quick-starts deliberately span motions (a post carrying an offer, a note to existing users, an
+// outreach run) — no single motion is the enshrined answer, and nothing product-specific hides
+// behind a generic label.
+const BEGINNING_CHIPS = [
+  "Which customers should we chase first?",
+  "Ideate ICPs and pause for my verdicts",
+  "What's the cheapest test of real demand?",
+  "What should this cost?",
+];
+const RUNNING_CHIPS = [
+  "What's working and what should we kill?",
+  "Draft a post that carries an offer — stop at my gate",
+  "Write a launch note to our existing users",
+  "Set up an outreach run that stops at my gate",
+  "Sharpen the positioning",
 ];
 
 export function GoalLauncher({
-  productName, busy, onSubmitGoal, onIdeate, onLoadRecipe, focusSignal,
+  productName, busy, onSubmitGoal, onIdeate, focusSignal,
   peopleCount = 0, pipelineCount = 0,
 }: {
   productName: string;
   busy: boolean;
   onSubmitGoal: (goal: string) => void | Promise<void>;
   onIdeate: () => void;
-  onLoadRecipe?: () => void;
   // Bumped by the host when something asks to "start a channel" while the launcher is the visible
   // composer (e.g. the New channel button). The launcher input IS that composer here, so it takes
   // the focus instead of a hidden dock.
@@ -44,11 +55,14 @@ export function GoalLauncher({
     if (focusSignal) inputRef.current?.focus();
   }, [focusSignal]);
 
-  // Ground the sub-line in the current system state: build on the pipelines you already run, or
-  // start the first one. Falls back to a neutral line when there's nothing running yet.
-  const sub = pipelineCount > 0
-    ? "Name the next pipeline — a flow that moves work to your gate: find the people, draft the outreach, then you approve before anything sends. Build on what you already run, or start a new one."
-    : "Name your first pipeline — a flow that moves work to your gate: find the people, draft the outreach, then you approve before anything sends. Say it in plain words, or start from a recipe.";
+  const beginning = pipelineCount === 0;
+  const chips = beginning ? BEGINNING_CHIPS : RUNNING_CHIPS;
+
+  // Ground the sub-line in the current system state. Either way the promise is the same: any
+  // altitude in, the right shape of work out, every outward step stopping at the founder.
+  const sub = beginning
+    ? "Ask anything — which customers to chase, what to test first, what to charge, or a pipeline to run. Claude works it with your skills and agents, and stops wherever your call is needed. Nothing sends without you."
+    : "Any altitude — question what's running, sharpen the strategy, or start the next pipeline. Claude works it with your skills and agents and stops at your gate. Nothing sends without you.";
 
   // Grounded facts row — shown only when the numbers are real, so it reflects the live system.
   const facts: string[] = [];
@@ -60,7 +74,7 @@ export function GoalLauncher({
     <div className="goal-launcher">
       <div className="goal-launcher-inner">
         <span className="goal-launcher-eyebrow">{productName}</span>
-        <h1 className="goal-launcher-title">What pipeline do you want to run?</h1>
+        <h1 className="goal-launcher-title">What should we work on?</h1>
         <p className="goal-launcher-sub">{sub}</p>
         {showFacts ? <p className="goal-launcher-grounded">{facts.join(" · ")}</p> : null}
 
@@ -68,7 +82,7 @@ export function GoalLauncher({
           <textarea
             ref={inputRef}
             className="goal-launcher-input"
-            placeholder="e.g. Find operators, draft first contact"
+            placeholder={beginning ? "e.g. Which customers should we chase first?" : "e.g. What's working — and what's the next pipeline?"}
             value={goal}
             disabled={busy}
             onChange={(e) => setGoal(e.target.value)}
@@ -81,16 +95,15 @@ export function GoalLauncher({
         </div>
 
         <div className="goal-launcher-examples">
-          {CHIPS.map((g) => (
+          {chips.map((g) => (
             <button key={g} className="goal-example" disabled={busy} onClick={() => setGoal(g)} type="button">{g}</button>
           ))}
         </div>
 
         <div className="goal-launcher-secondary">
-          <button onClick={onIdeate} disabled={busy} type="button"><Lightbulb size={13} /> Or just ideate pipelines for me</button>
-          {onLoadRecipe ? (
-            <button onClick={onLoadRecipe} disabled={busy} type="button"><Workflow size={13} /> Start from the pilot-outreach recipe</button>
-          ) : null}
+          <button onClick={onIdeate} disabled={busy} type="button">
+            <Lightbulb size={13} /> {beginning ? "Ideate directions for me" : "Ideate what's next for me"}
+          </button>
         </div>
       </div>
     </div>

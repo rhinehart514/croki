@@ -1,3 +1,11 @@
+> **SUPERSEDED — 2026-07-01.** This describes the build-your-own canvas of the earlier
+> "IDE for GTM" version of the product. The current plan of record is
+> **docs/GTM-ENGINE-REBUILD.md**, where the canvas is repurposed into a phased read-only
+> then interactive reasoning surface (Phases 3 and 7). Where this doc conflicts with
+> that spec, the spec wins. Kept for history only.
+
+---
+
 # CANVAS — the object-model canvas (P10)
 
 ## North star

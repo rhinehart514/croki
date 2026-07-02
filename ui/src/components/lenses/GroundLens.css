@@ -215,19 +215,6 @@
 }
 
 .gc-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.gc-conf {
-  font-family: var(--mono);
-  font-size: var(--text-md);
-  font-weight: 600;
-  color: var(--ink);
-  display: inline-flex; align-items: baseline; gap: 5px;
-}
-.gc-conf small {
-  font-size: var(--text-xs);
-  font-weight: 500;
-  color: var(--faint);
-  letter-spacing: .02em;
-}
 .gc-needs {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: var(--text-xs);

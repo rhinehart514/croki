@@ -20,6 +20,7 @@ export async function run(node) {
         product: node.config.product ?? {},
         positioning: node.config.positioning ?? {},
         icp: node.config.icp ?? {},
+        offer: node.config.offer ?? {},
         founderTaste: node.config.founderTaste ?? {},
         outcomes: node.config.outcomes ?? [],
         experiments: node.config.experiments ?? [],

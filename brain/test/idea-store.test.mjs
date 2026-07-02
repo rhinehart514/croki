@@ -42,6 +42,33 @@ describe("idea-store — durable GtmIdea", () => {
     assert.equal(read.angle, "asset-first");
   });
 
+  it("persists the decidable texture — what / upside / risk / take and a cut idea's reason", () => {
+    const options = freshRoot();
+    const cut = createGtmIdea({
+      projectId: "p1",
+      pitch: "Sponsor a conference booth",
+      what: "a paid placement",
+      upside: "puts the product in front of the exact crowd",
+      risk: "costs real money before any signal",
+      take: "Too expensive a first probe for this goal.",
+      killReason: "Needs budget the goal explicitly rules out.",
+      killed: true,
+    }, options);
+
+    const read = getGtmIdea(cut.id, options);
+    assert.equal(read.what, "a paid placement");
+    assert.equal(read.upside, "puts the product in front of the exact crowd");
+    assert.equal(read.risk, "costs real money before any signal");
+    assert.equal(read.take, "Too expensive a first probe for this goal.");
+    assert.equal(read.killReason, "Needs budget the goal explicitly rules out.");
+    assert.equal(read.killed, true);
+
+    // Absent texture stays honestly null — never an empty string pretending to be content.
+    const bare = createGtmIdea({ pitch: "bare idea" }, options);
+    assert.equal(bare.what, null);
+    assert.equal(bare.killReason, null);
+  });
+
   it("requires a pitch", () => {
     const options = freshRoot();
     assert.throws(() => createGtmIdea({ projectId: "p1", pitch: "   " }, options), /pitch is required/);

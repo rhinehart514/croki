@@ -59,9 +59,11 @@ function verdictCounts(layerExperiments) {
 
 function makeLayer({ layer, phase, groundingMode, belief, stated = false, validated = 0, tested = 0, citations = 0, moving = false, experiments = [], evidence = [] }) {
   // A live experiment IS a belief at this layer even when nothing else is stated yet — fall back to its
-  // hypothesis so a resolved/running experiment is never invisible (a verdict with no other signal would
-  // otherwise read blind).
-  const resolved = String(belief ?? "").trim() || String(experiments.find((e) => e?.hypothesis)?.hypothesis ?? "").trim();
+  // hypothesis (or the variable it tests, for run-derived experiments that carry no stated hypothesis)
+  // so a resolved/running experiment is never invisible (a verdict with no other signal would otherwise
+  // read blind).
+  const resolved = String(belief ?? "").trim()
+    || String(experiments.map((e) => firstNonEmpty(e?.hypothesis, e?.variable)).find(Boolean) ?? "").trim();
   const confidence = resolved ? signalConfidence({ validated, tested, citations, stated }) : 0;
   return {
     layer,
@@ -85,6 +87,19 @@ function firstNonEmpty(...values) {
     if (s) return s;
   }
   return "";
+}
+
+// Founder-facing count: "1 run", "3 runs" — real plural words, never the "(s)" shorthand.
+function countOf(n, singular, plural = `${singular}s`) {
+  return `${n} ${n === 1 ? singular : plural}`;
+}
+
+// An experiment's board layer, read OPEN: whatever string the experiment carries ("market" aliases to
+// the ICP band). No default — an experiment with no layer is NOT force-filed under channels; getBoard
+// surfaces it on the Learn band so it stays visible instead of vanishing.
+function layerKeyOf(e) {
+  const t = String(e?.targetLayer ?? "").trim();
+  return t === "market" ? "icp" : (t || null);
 }
 
 export function getBoard({ projectId } = {}, options = {}) {
@@ -136,9 +151,12 @@ export function getBoard({ projectId } = {}, options = {}) {
 
   const experiments = (Array.isArray(sc.experiments) ? sc.experiments : []).map(normalizeExperiment).map(enrichArms);
   // The Market / ICP band reads BOTH "icp" and the alias "market" (a stated ICP grouping may target
-  // either); every other band reads its own key verbatim. The targetLayer stays an OPEN string.
-  const layerKeyOf = (e) => { const t = e.targetLayer || "channels"; return t === "market" ? "icp" : t; };
+  // either); every other band reads its own key verbatim. The targetLayer stays an OPEN string, and an
+  // experiment whose layer matches none of the nine bands (or that carries no layer at all) surfaces on
+  // the Learn band below — visible somewhere, never vanished by an unknown key.
   const layerExp = (key) => experiments.filter((e) => layerKeyOf(e) === key);
+  const bandKeys = new Set(["icp", "trigger", "positioning", "offer", "channels", "artifacts", "people", "measure", "learn"]);
+  const strayExperiments = experiments.filter((e) => !bandKeys.has(layerKeyOf(e)));
 
   // The active channel's graph frames the Measure derivation (its shape decides conversion vs
   // observation measurement).
@@ -168,7 +186,7 @@ export function getBoard({ projectId } = {}, options = {}) {
     validated: icpVerdicts.validated,
     tested: icpVerdicts.testing + (people.length ? 1 : 0),
     experiments: layerExp("icp"),
-    evidence: people.length ? [`${people.length} real entrant(s) matched this ICP`] : [],
+    evidence: people.length ? [`${countOf(people.length, "real entrant")} matched this ICP`] : [],
   });
 
   // 2. Problem / Trigger — the stated problem, plus the why-now triggers People carry from real runs.
@@ -177,7 +195,7 @@ export function getBoard({ projectId } = {}, options = {}) {
   const triggerVerdicts = verdictCounts(layerExp("trigger"));
   const triggerBelief = problem
     ? `Problem: ${problem}`
-    : (triggers.length ? `${triggers.length} why-now trigger(s) observed` : "");
+    : (triggers.length ? `${countOf(triggers.length, "why-now trigger")} observed` : "");
   const triggerLayer = makeLayer({
     layer: "trigger",
     phase: "Strategy",
@@ -246,12 +264,12 @@ export function getBoard({ projectId } = {}, options = {}) {
     layer: "channels",
     phase: "Motion",
     groundingMode: "gated",
-    belief: channels.length ? `${channels.length} pipeline(s) · ${ranChannels.length} with runs` : "",
+    belief: channels.length ? `${countOf(channels.length, "pipeline")} · ${ranChannels.length} ${ranChannels.length === 1 ? "has" : "have"} run` : "",
     validated: channelVerdicts.validated,
     tested: channelVerdicts.testing + ranChannels.length,
     moving: ranChannels.length > 0,
     experiments: layerExp("channels"),
-    evidence: ranChannels.slice(0, 4).map((c) => `${c.name}: ${c.runCount} run(s)`),
+    evidence: ranChannels.slice(0, 4).map((c) => `${c.name}: ${countOf(c.runCount, "run")}`),
   });
   channelLayer.tiers = pipelineTiers;
 
@@ -268,12 +286,17 @@ export function getBoard({ projectId } = {}, options = {}) {
     layer: "artifacts",
     phase: "Motion",
     groundingMode: "gated",
-    belief: (stagedItems || artifactCount) ? `${stagedItems} staged item(s) · ${artifactCount} artifact(s)` : "",
+    belief: (stagedItems || artifactCount)
+      ? [
+          stagedItems ? `${countOf(stagedItems, "item")} staged for your review` : "",
+          artifactCount ? countOf(artifactCount, "artifact") : "",
+        ].filter(Boolean).join(" · ")
+      : "",
     validated: artifactVerdicts.validated,
     tested: artifactVerdicts.testing + stagedItems + artifactCount,
     moving: stagedItems > 0,
     experiments: layerExp("artifacts"),
-    evidence: stagedItems ? [`${stagedItems} item(s) reached a founder gate`] : [],
+    evidence: stagedItems ? [`${countOf(stagedItems, "item")} reached your gate`] : [],
   });
 
   // ── Loop ──────────────────────────────────────────────────────────────────
@@ -284,7 +307,7 @@ export function getBoard({ projectId } = {}, options = {}) {
     layer: "people",
     phase: "Loop",
     groundingMode: "derived",
-    belief: people.length ? `${people.length} durable person/people across pipelines` : "",
+    belief: people.length ? `${countOf(people.length, "person", "people")} reached across pipelines` : "",
     validated: peopleVerdicts.validated,
     tested: peopleVerdicts.testing + people.length,
     moving: people.length > 0,
@@ -308,14 +331,23 @@ export function getBoard({ projectId } = {}, options = {}) {
     evidence: measure.activeIssues.slice(0, 2),
   });
 
-  // 9. Learn — founder decisions, the feedback ledger, and resolved verdicts: what the loop has banked.
+  // 9. Learn — founder decisions, the feedback ledger, and resolved verdicts: what the loop has banked,
+  // stated as what the founder actually did — never a bookkeeping tally. Experiments whose layer matches
+  // no band also live here, so nothing the loop produced can vanish behind an unknown key.
   const decisions = extractDecisions(allRuns);
   const decisionTotal = decisions.approved.length + decisions.rejected.length + decisions.edits.length;
   const resolvedVerdicts = experiments.filter((e) => e.verdict?.decision).length;
   const ledgerSignals = Array.isArray(ledger.signals) ? ledger.signals.length : 0;
-  const learnBelief = (decisionTotal || resolvedVerdicts || ledgerSignals)
-    ? `${decisionTotal} gate decision(s) · ${resolvedVerdicts} verdict(s) · ${ledgerSignals} signal(s)`
-    : "";
+  const gateActs = [
+    decisions.approved.length ? `approved ${decisions.approved.length}` : "",
+    decisions.rejected.length ? `rejected ${decisions.rejected.length}` : "",
+    decisions.edits.length ? `edited ${decisions.edits.length}` : "",
+  ].filter(Boolean);
+  const learnBelief = [
+    gateActs.length ? `You ${gateActs.join(", ")} at your gate` : "",
+    resolvedVerdicts ? `${countOf(resolvedVerdicts, "experiment")} settled` : "",
+    ledgerSignals ? `${countOf(ledgerSignals, "piece", "pieces")} of feedback banked` : "",
+  ].filter(Boolean).join(" · ");
   const learnLayer = makeLayer({
     layer: "learn",
     phase: "Loop",
@@ -324,7 +356,7 @@ export function getBoard({ projectId } = {}, options = {}) {
     validated: resolvedVerdicts,
     tested: decisionTotal + ledgerSignals,
     moving: (decisionTotal + resolvedVerdicts + ledgerSignals) > 0,
-    experiments: layerExp("learn"),
+    experiments: [...layerExp("learn"), ...strayExperiments],
     evidence: [
       decisions.approved.length ? `${decisions.approved.length} approved` : "",
       decisions.rejected.length ? `${decisions.rejected.length} rejected` : "",
@@ -350,22 +382,178 @@ export function getBoard({ projectId } = {}, options = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// L1 — the belief spine of ONE pipeline (channel). The same PURE-READ, never-seeded discipline as
-// getBoard, but SCOPED to a single pipeline and folded down to five faces the founder reads at mid
-// zoom: Who (the why-now trigger), What you say (positioning + offer), Who you reached (the People
-// who entered THIS pipeline), Did it work (this pipeline's Measure health), Verdict (what this
-// pipeline's runs banked). Every number is derived from this pipeline's real state; a face with no
-// signal reports belief=null, confidence=0, status="blind" — never a confident fake.
+// The strip over ONE open pipeline — derived from that pipeline's OWN composed graph and its real
+// run/gate state, never from a fixed face skeleton. One card per composed step, titled in the
+// pipeline's own words (the labels the composition chose), each stating in plain words what actually
+// happened there: what came in, what was drafted (plus the offer this pipeline carries, read
+// defensively off channel.offer), what waits at the founder gate, what moved after approval, what came
+// back. Honest-derivation discipline holds: a step where nothing has happened says so in plain words
+// and names what would fill it — never a seeded signal. A closing "What you've decided" card appears
+// ONLY when real conclusions exist (founder gate decisions, experiment verdicts bound to this
+// pipeline) — result language, never the founder's goal echoed back, never a bookkeeping tally.
 // ─────────────────────────────────────────────────────────────────────────────
+
+function clipLine(value, max = 140) {
+  const t = String(value ?? "").replace(/\s+/g, " ").trim();
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+}
+
+// A short readable line out of whatever shape a run item took — a drafted post, an email, a reply, a
+// person. Purely defensive over open item shapes; empty when nothing legible is there.
+function itemExcerpt(item) {
+  if (item == null) return "";
+  if (typeof item === "string") return clipLine(item);
+  if (typeof item !== "object") return "";
+  for (const key of ["title", "subject", "headline", "text", "body", "content", "message", "draft", "summary", "preview", "name"]) {
+    const v = item[key];
+    if (typeof v === "string" && v.trim()) return clipLine(v);
+  }
+  return "";
+}
+
+// The offer THIS pipeline carries, read defensively — channel.offer is normally { statement } (see
+// project-store normalizeChannelOffer) but may be a plain string from another writer, or absent
+// entirely (honest: no offer line).
+function channelOfferLine(channel) {
+  const offer = channel?.offer;
+  if (!offer) return "";
+  if (typeof offer === "string") return offer.trim();
+  if (typeof offer === "object") {
+    const parts = [offer.price, offer.unit, offer.terms].map((v) => String(v ?? "").trim()).filter(Boolean);
+    return firstNonEmpty(offer.statement, parts.join(" / "), offer.label, offer.name, offer.text, offer.summary);
+  }
+  return "";
+}
+
+// The graph's own steps in flow order (Kahn over its edges); nodes a cycle strands still come last
+// rather than vanishing. Whatever categories and kinds the composition chose — no fixed list.
+function flowOrder(graph) {
+  const nodes = Array.isArray(graph?.nodes) ? graph.nodes.filter(Boolean) : [];
+  const edges = Array.isArray(graph?.edges) ? graph.edges : [];
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const indegree = new Map(nodes.map((n) => [n.id, 0]));
+  const outgoing = new Map(nodes.map((n) => [n.id, []]));
+  for (const edge of edges) {
+    if (!byId.has(edge?.source) || !byId.has(edge?.target)) continue;
+    indegree.set(edge.target, (indegree.get(edge.target) ?? 0) + 1);
+    outgoing.get(edge.source).push(edge.target);
+  }
+  const queue = nodes.filter((n) => (indegree.get(n.id) ?? 0) === 0).map((n) => n.id);
+  const seen = new Set();
+  const order = [];
+  while (queue.length) {
+    const id = queue.shift();
+    if (seen.has(id)) continue;
+    seen.add(id);
+    order.push(byId.get(id));
+    for (const target of outgoing.get(id) ?? []) {
+      indegree.set(target, (indegree.get(target) ?? 0) - 1);
+      if ((indegree.get(target) ?? 0) <= 0) queue.push(target);
+    }
+  }
+  for (const n of nodes) if (!seen.has(n.id)) order.push(n);
+  return order;
+}
+
+// One composed step → one strip card, in plain words about what really happened there. `res` is the
+// step's node result from the pipeline's latest run (absent when it never ran or was skipped).
+function cardForStep(node, res, { hasRun, isDraftStep, offerLine }) {
+  const category = String(node.category ?? "").trim();
+  const title = String(node.label ?? "").trim() || firstNonEmpty(category, node.kind, "step");
+  const items = Array.isArray(res?.items) ? res.items : [];
+  const card = { id: node.id, title, body: "", empty: false };
+
+  if (res && (res.ok === false || res.blocked)) {
+    card.body = "This step hit a problem on the last run — the run stopped here.";
+    return card;
+  }
+
+  if (category === "gate") {
+    const approved = items.filter((i) => i?.approvalStatus === "approved").length;
+    const rejected = items.filter((i) => i?.approvalStatus === "rejected").length;
+    const waiting = items.length - approved - rejected;
+    const decidedBits = [approved ? `approved ${approved}` : "", rejected ? `rejected ${rejected}` : ""].filter(Boolean);
+    if (waiting > 0) {
+      card.needsYou = waiting;
+      card.body = decidedBits.length
+        ? `${waiting} waiting on your decision — you've ${decidedBits.join(" and ")} so far.`
+        : `${waiting} waiting on your decision.`;
+    } else if (decidedBits.length) {
+      card.body = `You ${decidedBits.join(" and ")} on the last run.`;
+    } else {
+      card.empty = true;
+      card.body = hasRun
+        ? "Nothing reached your gate on the last run."
+        : "Everything stops here for your say-so — nothing has reached it yet.";
+    }
+    return card;
+  }
+
+  if (category === "execute") {
+    if (items.length > 0) {
+      card.body = `${countOf(items.length, "item")} moved through here after your approval.`;
+    } else {
+      card.empty = true;
+      card.body = "Nothing has gone out yet — approve what's at your gate and it moves from here.";
+    }
+    return card;
+  }
+
+  if (category === "measure") {
+    if (items.length > 0) {
+      card.body = `${countOf(items.length, "result")} came back.`;
+      const excerpt = itemExcerpt(items[0]);
+      if (excerpt) card.detail = excerpt;
+    } else {
+      card.empty = true;
+      card.body = "Nothing has come back yet — once something goes out, what happens lands here.";
+    }
+    return card;
+  }
+
+  if (category === "source") {
+    if (items.length > 0) {
+      card.body = `${countOf(items.length, "item")} came in here on the last run.`;
+      const excerpt = itemExcerpt(items[0]);
+      if (excerpt) card.detail = excerpt;
+    } else {
+      card.empty = true;
+      card.body = hasRun
+        ? "Nothing came in here on the last run."
+        : "Where this pipeline starts — nothing has come in yet.";
+    }
+    return card;
+  }
+
+  // Any other step the composition chose — generate, enrich, an agent, a skill, code, whatever.
+  if (items.length > 0) {
+    card.body = `Produced ${countOf(items.length, "item")} on the last run.`;
+    const excerpt = itemExcerpt(items[0]);
+    if (excerpt) card.detail = excerpt;
+    if (isDraftStep && offerLine) card.body += ` It carries your offer: ${offerLine}.`;
+  } else {
+    card.empty = true;
+    card.body = hasRun
+      ? "This step hasn't produced anything yet."
+      : "Nothing here yet — run the pipeline and this step's work shows up.";
+    if (isDraftStep && offerLine) card.body += ` It will carry your offer: ${offerLine}.`;
+  }
+  return card;
+}
+
+function joinAnd(parts) {
+  if (parts.length <= 1) return parts.join("");
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
 export function getPipelineBeliefSpine({ projectId, channelId } = {}, options = {}) {
   const opts = projectId ? { ...options, projectId } : options;
   const project = loadProject(opts);
   const sc = project.sharedContext ?? {};
   const channel = getChannel(project, channelId, opts);
-  const people = listPeople(project.id, opts);
 
-  // This pipeline's own run ledger + executable graph — the run-derived signal the reached/worked/
-  // verdict faces read. A missing flow never throws; it just yields no runs.
+  // This pipeline's own run ledger + executable graph. A missing flow never throws; it just yields an
+  // empty strip (the pipeline has no composed steps yet — the UI says so in plain words).
   let runs = [];
   let graph = null;
   try {
@@ -377,125 +565,69 @@ export function getPipelineBeliefSpine({ projectId, channelId } = {}, options = 
     graph = null;
   }
 
+  const hasRun = runs.length > 0;
+  const lastRun = hasRun ? runs[runs.length - 1] : null;
+  const lastNodes = lastRun?.result?.nodes ?? {};
+
+  // Context/declaration nodes carry project background into the run — they are not a stage of the
+  // pipeline's motion, so the strip doesn't card them.
+  const steps = flowOrder(graph).filter((n) => String(n.category ?? "") !== "context");
+  // The pipeline's own offer leads; with none stated, the project-level offer (sharedContext.offer)
+  // is the standing default this pipeline's drafts carry.
+  const offerLine = channelOfferLine(channel) || channelOfferLine({ offer: sc.offer });
+  // The drafting step — the last agent/skill/generate step in flow order — is where what this pipeline
+  // actually says gets staged; the offer it carries rides on that card.
+  const draftStep = [...steps].reverse().find((n) => n?.kind === "agent" || n?.kind === "skill" || n?.category === "generate") ?? null;
+
+  const cards = steps.map((node) =>
+    cardForStep(node, lastNodes[node.id], { hasRun, isDraftStep: node === draftStep, offerLine }));
+
+  // The closing card: real conclusions only. Founder gate decisions across every run of this pipeline,
+  // plus the verdicts the founder rendered on experiments bound to it — each stated as what was decided.
+  // Rendered ONLY when something was actually decided; a fresh pipeline simply has no card here.
   const experiments = (Array.isArray(sc.experiments) ? sc.experiments : []).map(normalizeExperiment);
-  const layerKeyOf = (e) => { const t = e.targetLayer || "channels"; return t === "market" ? "icp" : t; };
-  // An experiment belongs to THIS pipeline when it is bound to it directly or races it as an arm.
   const matchesChannel = (id) => id === channel.id || id === channel.graphId;
-  const scopedToChannel = (e) =>
-    matchesChannel(e.channelId) || (Array.isArray(e.arms) && e.arms.some((arm) => matchesChannel(arm?.channelId)));
-  const faceExp = (...keys) => experiments.filter((e) => keys.includes(layerKeyOf(e)) && scopedToChannel(e));
-
-  // People (and their why-now triggers) scoped to THIS pipeline's appearances only.
-  const appearedHere = (p) => (p.appearances ?? []).filter((a) => matchesChannel(a.channelId));
-  const scopedPeople = people.filter((p) => appearedHere(p).length > 0);
-  const triggers = scopedPeople.flatMap((p) => appearedHere(p).map((a) => a.trigger).filter(Boolean));
-
-  const citedClaims = (Array.isArray(sc.claims) ? sc.claims : []).filter((c) => (c?.evidence?.length ?? 0) > 0);
-
-  // Face 1 — WHO: the why-now trigger observed on this pipeline's real entrants.
-  const whoExp = faceExp("trigger");
-  const whoV = verdictCounts(whoExp);
-  const whoFace = makeLayer({
-    layer: "who",
-    phase: "Who",
-    groundingMode: "derived",
-    belief: triggers.length ? `${triggers.length} why-now trigger(s) observed in this pipeline` : "",
-    validated: whoV.validated,
-    tested: whoV.testing + triggers.length,
-    moving: triggers.length > 0,
-    experiments: whoExp,
-    evidence: triggers.slice(0, 3),
-  });
-
-  // Face 2 — WHAT YOU SAY: the stated positioning + offer this pipeline carries, grounded by cited claims.
-  const pos = sc.positioning ?? {};
-  const offer = sc.offer ?? {};
-  const posParts = [pos.category, pos.audience, pos.promise].map((v) => String(v ?? "").trim()).filter(Boolean);
-  const offerParts = [offer.price, offer.unit, offer.terms].map((v) => String(v ?? "").trim()).filter(Boolean);
-  const sayExp = faceExp("positioning", "offer");
-  const sayV = verdictCounts(sayExp);
-  const sayBelief = [posParts.join(" · "), offerParts.join(" / ")].filter(Boolean).join(" — ");
-  const sayFace = makeLayer({
-    layer: "say",
-    phase: "What you say",
-    groundingMode: "stated",
-    belief: sayBelief,
-    stated: pos.status === "stated" || posParts.length > 0 || offer.status === "stated" || offerParts.length > 0,
-    validated: sayV.validated,
-    tested: sayV.testing,
-    citations: citedClaims.length,
-    experiments: sayExp,
-    evidence: citedClaims.slice(0, 3).map((c) => c.text),
-  });
-
-  // Face 3 — WHO YOU REACHED: the durable People who actually entered THIS pipeline.
-  const reachedExp = faceExp("people");
-  const reachedV = verdictCounts(reachedExp);
-  const reachedFace = makeLayer({
-    layer: "reached",
-    phase: "Who you reached",
-    groundingMode: "derived",
-    belief: scopedPeople.length ? `${scopedPeople.length} person/people reached in this pipeline` : "",
-    validated: reachedV.validated,
-    tested: reachedV.testing + scopedPeople.length,
-    moving: scopedPeople.length > 0,
-    experiments: reachedExp,
-    evidence: scopedPeople.slice(0, 3).map((p) => p.name || p.org || p.identityKey),
-  });
-
-  // Face 4 — DID IT WORK: this pipeline's Measure health, read straight off the engine derivation over
-  // THIS pipeline's runs and graph.
-  const measure = deriveMeasure(null, runs, [], graph);
-  const measureTested = measure.health > 50 ? 2 : measure.health > 0 ? 1 : 0;
-  const workedExp = faceExp("measure");
-  const workedV = verdictCounts(workedExp);
-  const workedFace = makeLayer({
-    layer: "worked",
-    phase: "Did it work",
-    groundingMode: "derived",
-    belief: measure.health > 0 ? (measure.activeIssues[0] || "Outcomes are observable") : "",
-    validated: workedV.validated,
-    tested: workedV.testing + measureTested,
-    moving: measure.health > 0,
-    experiments: workedExp,
-    evidence: measure.activeIssues.slice(0, 2),
-  });
-
-  // Face 5 — VERDICT: what THIS pipeline's runs banked — founder gate decisions + resolved experiment
-  // verdicts bound to this pipeline.
-  const decisions = extractDecisions(runs);
-  const decisionTotal = decisions.approved.length + decisions.rejected.length + decisions.edits.length;
-  const verdictExp = faceExp("channels", "learn");
-  const resolvedVerdicts = verdictExp.filter((e) => e.verdict?.decision).length;
-  const verdictFace = makeLayer({
-    layer: "verdict",
-    phase: "Verdict",
-    groundingMode: "derived",
-    belief: (decisionTotal || resolvedVerdicts)
-      ? `${decisionTotal} gate decision(s) · ${resolvedVerdicts} verdict(s)`
-      : "",
-    validated: resolvedVerdicts,
-    tested: decisionTotal,
-    moving: (decisionTotal + resolvedVerdicts) > 0,
-    experiments: verdictExp,
-    evidence: [
-      decisions.approved.length ? `${decisions.approved.length} approved` : "",
-      decisions.rejected.length ? `${decisions.rejected.length} rejected` : "",
-      decisions.edits.length ? `${decisions.edits.length} edited` : "",
-    ].filter(Boolean),
-  });
+  const settled = experiments.filter((e) =>
+    e.verdict?.decision
+    && (matchesChannel(e.channelId) || (Array.isArray(e.arms) && e.arms.some((arm) => matchesChannel(arm?.channelId)))));
+  let approvedAll = 0;
+  let rejectedAll = 0;
+  for (const run of runs) {
+    for (const node of Object.values(run?.result?.nodes ?? {})) {
+      if (node?.category !== "gate" || !Array.isArray(node.items)) continue;
+      for (const item of node.items) {
+        if (item?.approvalStatus === "approved") approvedAll += 1;
+        else if (item?.approvalStatus === "rejected") rejectedAll += 1;
+      }
+    }
+  }
+  const conclusionLines = [];
+  const gateActs = [
+    approvedAll ? `approved ${approvedAll}` : "",
+    rejectedAll ? `rejected ${rejectedAll}` : "",
+  ].filter(Boolean);
+  if (gateActs.length) {
+    conclusionLines.push(`Across ${countOf(runs.length, "run")} you ${joinAnd(gateActs)}.`);
+  }
+  for (const exp of settled) {
+    const decision = exp.verdict.decision;
+    const word =
+      decision === "keep" ? "kept"
+      : decision === "kill" ? "killed"
+      : decision === "double-down" ? "doubled down on"
+      : decision;
+    const name = firstNonEmpty(exp.hypothesis, exp.variable) || "an experiment on this pipeline";
+    conclusionLines.push(`You ${word} “${name}”.`);
+  }
+  if (conclusionLines.length) {
+    cards.push({ id: "decided", title: "What you've decided", body: conclusionLines.join(" "), empty: false });
+  }
 
   return {
     projectId: project.id,
     channelId: channel.id,
     channelName: channel.name,
-    faces: {
-      who: whoFace,
-      say: sayFace,
-      reached: reachedFace,
-      worked: workedFace,
-      verdict: verdictFace,
-    },
+    cards,
   };
 }
 
@@ -601,7 +733,6 @@ export function getPipelineIcpGrouping({ projectId } = {}, options = {}) {
   const channels = getProjectChannels(project, opts);
   const people = listPeople(project.id, opts);
   const experiments = (Array.isArray(sc.experiments) ? sc.experiments : []).map(normalizeExperiment);
-  const layerKeyOf = (e) => { const t = e.targetLayer || "channels"; return t === "market" ? "icp" : t; };
 
   const icp = sc.icp ?? {};
   const icpKey = firstNonEmpty(icp.label, icp.query, icp.industry, icp.geography) || null;

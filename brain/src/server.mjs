@@ -13,7 +13,6 @@ import { listServers, getServer, recordServer, removeServer, reclassifyTool, ser
 import { connectStdioServer } from "./mcp-client.mjs";
 import { applyGraphOperations, validateGraph } from "./graph-operations.mjs";
 import { auditGraphContracts } from "./contracts.mjs";
-import { pilotOutreachRecipe } from "./workflow-recipes.mjs";
 import { extractDecisions, buildDraftMemory } from "./memory.mjs";
 import { assembleContext } from "./context/assembler.mjs";
 import { providersFromContext } from "./context/providers.mjs";
@@ -56,12 +55,31 @@ import { getProductModel } from "./product-model-store.mjs";
 import { getDesignState } from "./design-state-store.mjs";
 import { createClaudeProductModeler } from "./product-model-generator.mjs";
 import { buildRunGrounding } from "./run-grounding.mjs";
+import {
+  runMarketResearch,
+  createClaudeMarketResearcher,
+  buildMarketContext,
+  founderInputsFromSharedContext,
+} from "./market-research.mjs";
+import {
+  composePathPortfolio,
+  createClaudePathGenerator,
+  createClaudePathGrader,
+} from "./path-portfolio.mjs";
+import { outcomeReport } from "./outcome-ingest.mjs";
 import { ideaTasteForProject, recordIdeaDecisions } from "./feedback-ledger.mjs";
-import { composeIdeas, createClaudeIdeaGenerator } from "./ideation.mjs";
+import { composeIdeas, createClaudeAngleProposer, createClaudeIdeaGenerator } from "./ideation.mjs";
 import { createClaudeIdeaBar } from "./idea-bar.mjs";
 import { createGtmIdea, getGtmIdea, saveGtmIdea, listGtmIdeas } from "./idea-store.mjs";
 import { recordRunDerivations } from "./run-derivation.mjs";
 import { getBoard, getPipelineBeliefSpine, getPipelineIcpGrouping } from "./board.mjs";
+import {
+  productTruthStore,
+  marketObjectStore,
+  gtmPathStore,
+  measurementContractStore,
+  persistProductTruthsFromScan,
+} from "./gtm-store.mjs";
 import { applyExperimentVerdict } from "./belief-writeback.mjs";
 import { upsertStatedExperiment } from "./stated-experiment.mjs";
 import { listToolRegistry, approveToolBirth } from "./tool-registry-store.mjs";
@@ -106,6 +124,7 @@ import {
   reviewRevision,
   revertRevision,
 } from "./revision.mjs";
+import { runDueMotions, promoteRun } from "./promote-motion.mjs";
 import { execFile } from "node:child_process";
 import { scanRepo } from "./scan.mjs";
 import {
@@ -179,6 +198,63 @@ function readBody(req) {
     });
     req.on("error", reject);
   });
+}
+
+// ── Founder-register summaries for the rebuilt GTM-engine rituals ─────────────────────────────────
+// Plain-language one-liners the founder reads after invoking a ritual. No engine word (solidity,
+// composite, joinKey) reaches these — the store's labels are translated to how-solid English here.
+function plural(n, word) {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+function marketResearchSummary(project, objects, meta = {}) {
+  const name = project?.name || "your product";
+  if (!objects.length) {
+    return meta.blank
+      ? `No live research ran, so nothing was added to the buyer picture for ${name} yet. Connect Claude and run it again.`
+      : `Research ran but found nothing solid to add to the buyer picture for ${name} yet.`;
+  }
+  const backed = objects.filter((o) => ["observed", "researched"].includes(String(o.solidity))).length;
+  const guesses = objects.filter((o) => String(o.solidity) === "speculative").length;
+  const parts = [`Built the buyer picture for ${name}: ${plural(objects.length, "thing")} now known about who buys, why, and where they are`];
+  if (backed) parts.push(`${backed} backed by a real source`);
+  if (guesses) parts.push(`${guesses} still a hypothesis to confirm`);
+  return `${parts.join(" — ")}.`;
+}
+
+function pathPortfolioSummary(result) {
+  const n = result?.paths?.length ?? 0;
+  if (!n) {
+    return "No paths were generated yet — research the buyer picture first, then generate the portfolio with Claude connected.";
+  }
+  const strongest = result.portfolio?.[0]?.path?.summary ?? null;
+  const tail = strongest ? ` The strongest bet right now: ${strongest}.` : "";
+  return `Mapped ${plural(n, "way")} to go to market, ranked strongest-first.${tail}`;
+}
+
+// Ground the ProductTruth side from the project's own scanned repo, so the GTM map and the path
+// portfolio rest on BOTH truths (product facts + market objects) instead of "0 product facts". Runs
+// the same read-only scan the front door uses, adapts its cited claims into ProductTruth records, and
+// persists any not already stored. Best-effort and idempotent: no configured repo, or a scan error,
+// leaves the store as it was — grounding must never block or slow the research/generate ritual.
+function groundProductTruthsForProject(project, projectId) {
+  const repoPath = project?.sharedContext?.repository?.repo;
+  if (!repoPath) return { created: [], skipped: 0, scanned: false };
+  try {
+    const winEvent = project.sharedContext.repository.outcome || "project_created";
+    const report = scanRepo(expandHome(repoPath), { winEvent });
+    return { ...persistProductTruthsFromScan(report, { projectId }), scanned: true };
+  } catch {
+    return { created: [], skipped: 0, scanned: false };
+  }
+}
+
+function promoteSummary(motion) {
+  const cadence = (motion?.cadence ?? "").trim();
+  if (cadence) {
+    return `Turned this run into a repeating motion — it re-stages ${cadence} and still stops at your gate every time. Nothing sends on its own.`;
+  }
+  return "Turned this run into a repeatable motion. It keeps score, but only re-runs when you ask — nothing fires on its own.";
 }
 
 // Read a request body as RAW text (no JSON.parse), for the CSV drop route where the body is a
@@ -266,6 +342,15 @@ function expandHome(v) {
   if (v === "~") return process.env.HOME || v;
   if (v.startsWith("~/")) return path.join(process.env.HOME || "", v.slice(2));
   return v;
+}
+
+// The pipeline's own offer/deal for a graph, when the graph belongs to a channel that carries one.
+// Passed into applySharedContextToGraph so a run's drafting steps honor the pipeline's deal without
+// the founder restating it; null falls back to the project-level sharedContext.offer there.
+function channelOfferFor(project, graphId) {
+  if (!graphId) return null;
+  const channel = (project?.channels ?? []).find((c) => c.graphId === graphId || c.id === graphId);
+  return channel?.offer ?? null;
 }
 
 function serveFile(reqPath, res) {
@@ -601,6 +686,137 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // GTM map — the read-only portfolio projection (the rebuilt engine's four record lists).
+  // Returns product truths, market objects, GTM paths, and measurement contracts for the project;
+  // the UI derives the ranked portfolio, its buckets, and each path's weak links in code. Pure read:
+  // it lists already-persisted records, never writes, never triggers or gates a run.
+  const projectGtmMapMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/gtm-map$/);
+  if (req.method === "GET" && projectGtmMapMatch) {
+    try {
+      const projectId = decodeURIComponent(projectGtmMapMatch[1]);
+      json(res, 200, {
+        projectId,
+        productTruths: productTruthStore.list({ projectId }),
+        marketObjects: marketObjectStore.list({ projectId }),
+        paths: gtmPathStore.list({ projectId }),
+        contracts: measurementContractStore.list({ projectId }),
+      });
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Market research ritual — the buyer-side twin of scanning the repo (GTM-ENGINE-REBUILD Phase 1).
+  // The founder invokes it for a project; rented intelligence host-side (like derive_product_model)
+  // researches who buys and where they gather and persists the MarketObjects, then a plain-language
+  // summary comes back. Honest-blank when no live Claude is connected — it never fabricates a buyer.
+  // Read-only against the outside world: it researches and stores; it never sends, publishes, or charges.
+  const projectMarketResearchMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/market-research$/);
+  if (req.method === "POST" && projectMarketResearchMatch) {
+    try {
+      const projectId = decodeURIComponent(projectMarketResearchMatch[1]);
+      const project = loadProject({ projectId });
+      const repo = project.sharedContext?.repository?.repo || process.cwd();
+      // Ground the PRODUCT-truth side from the scan while researching the buyer side, so the map rests
+      // on both truths (product facts + market objects), not "0 product facts". Best-effort, idempotent.
+      groundProductTruthsForProject(project, projectId);
+      const grounding = buildRunGrounding(project);
+      const founderInputs = founderInputsFromSharedContext(project.sharedContext);
+      const connected = !!selectRuntime({}).adapter;
+      const { ok, objects, meta } = await runMarketResearch({
+        // Live generator when Claude is connected; the module's honest-blank default otherwise.
+        generator: connected ? createClaudeMarketResearcher({ cwd: repo }) : undefined,
+        projectId,
+        grounding,
+        founderInputs,
+      });
+      json(res, 200, {
+        projectId,
+        ok,
+        objects,
+        count: objects.length,
+        summary: marketResearchSummary(project, objects, meta),
+        meta: { ...meta, connected },
+      });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Path portfolio generation — turn the two truth sides (ProductTruth + MarketObjects) into a ranked
+  // portfolio of 20-30 GTM paths (GTM-ENGINE-REBUILD Phase 2). Generation is rented (a lean generate +
+  // a SEPARATE grade); ranking is deterministic code inside composePathPortfolio. The GTMPaths persist,
+  // so the read-only reasoning canvas (GET .../gtm-map) renders them. Honest-blank when Claude is not
+  // connected. It composes and stores paths; it never runs one and never reaches the outside world.
+  const projectPathPortfolioMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/path-portfolio$/);
+  if (req.method === "POST" && projectPathPortfolioMatch) {
+    try {
+      const projectId = decodeURIComponent(projectPathPortfolioMatch[1]);
+      const project = loadProject({ projectId });
+      const repo = project.sharedContext?.repository?.repo || process.cwd();
+      // Make sure the product-truth side exists before paths are generated, so every bet can rest on
+      // real product facts even if the founder generates without researching first. Idempotent — a
+      // no-op when research already grounded them.
+      groundProductTruthsForProject(project, projectId);
+      const connected = !!selectRuntime({}).adapter;
+      // LEAN by default: ONE generate call (it spreads across the GTM-angle palette and self-tags each
+      // path) plus ONE separate batched grade call — no angle-proposer fan-out, so a portfolio returns
+      // in well under a minute instead of the multi-minute per-angle/per-path fleet.
+      const generators = connected
+        ? {
+            generate: createClaudePathGenerator({ cwd: repo }),
+            grade: createClaudePathGrader({ cwd: repo }),
+          }
+        : {};
+      // composePathPortfolio reads the project's persisted ProductTruth + MarketObjects itself.
+      const result = await composePathPortfolio({ projectId, ...generators });
+      json(res, 200, {
+        projectId,
+        paths: result.paths,
+        count: result.paths.length,
+        summary: pathPortfolioSummary(result),
+        meta: { ...result.meta, connected },
+      });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Outcomes — the Result-based report (GTM-ENGINE-REBUILD Phase 5). Replaces the legacy
+  // systems/channels outcome view: it folds the run ledger and the joined Results into a per-path
+  // picture in plain language, honest about what is unmeasured. Pure read: never writes, never sends.
+  const projectOutcomesMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/outcomes$/);
+  if (req.method === "GET" && projectOutcomesMatch) {
+    try {
+      const projectId = decodeURIComponent(projectOutcomesMatch[1]);
+      json(res, 200, outcomeReport({ projectId }));
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Promote a proven run into a repeatable motion (GTM-ENGINE-REBUILD Phase 6) — the founder's one
+  // light touch. THE WALL IS UNTOUCHED: a promoted motion re-stages fresh runs at the founder gate on
+  // cadence and never sends. An absent/unparseable cadence leaves the motion manual (fires only when
+  // asked). This wraps a run that already worked; it never composes or sends anything.
+  const projectRunPromoteMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/runs\/([^/]+)\/promote$/);
+  if (req.method === "POST" && projectRunPromoteMatch) {
+    try {
+      const projectId = decodeURIComponent(projectRunPromoteMatch[1]);
+      const runId = decodeURIComponent(projectRunPromoteMatch[2]);
+      const body = await readBody(req);
+      const { motion, learning } = promoteRun(runId, { cadence: body?.cadence ?? null }, { projectId });
+      json(res, 200, { motion, learning, summary: promoteSummary(motion) });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
   // L1 — one pipeline's belief spine: the five faces (Who / What you say / Who you reached / Did it
   // work / Verdict) derived purely from THIS pipeline's real state. Read-only: never writes, never
   // triggers or gates a run.
@@ -822,9 +1038,10 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Trigger an ideation round for a goal — delegates to the ideate path (composeIdeas): generate wide
-  // across the angle anchors, measure distinctiveness, then a SEPARATE bar grades the survivors. Each
-  // graded idea is persisted as a durable GtmIdea. Nothing sends; this only generates and grades.
+  // Trigger an ideation round for a goal — delegates to the ideate path (composeIdeas): derive this
+  // goal's own angles, generate wide across them, measure distinctiveness, then a SEPARATE bar grades
+  // the survivors. Each graded idea is persisted as a durable GtmIdea (cut ideas keep their plain cut
+  // reason). Nothing sends; this only generates and grades.
   const projectIdeaRoundMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/ideas\/round$/);
   if (req.method === "POST" && projectIdeaRoundMatch) {
     try {
@@ -837,6 +1054,7 @@ const server = http.createServer(async (req, res) => {
       const result = await composeIdeas({
         goal,
         grounding: buildRunGrounding(project),
+        proposeAngles: createClaudeAngleProposer({ cwd: repo }),
         generate: createClaudeIdeaGenerator({ cwd: repo }),
         bar: createClaudeIdeaBar({ cwd: repo }),
       });
@@ -845,6 +1063,11 @@ const server = http.createServer(async (req, res) => {
         goal,
         angle: graded.angle,
         pitch: graded.pitch,
+        what: graded.what,
+        upside: graded.upside,
+        risk: graded.risk,
+        take: graded.take,
+        killReason: graded.killReason,
         barScore: graded.barScore,
         axes: graded.axes,
         verdict: graded.verdict,
@@ -1208,7 +1431,7 @@ const server = http.createServer(async (req, res) => {
       const flow = loadFlow(channel.graphId, null);
       json(res, 200, {
         channel,
-        graph: applySharedContextToGraph(flow.graph, project.sharedContext),
+        graph: applySharedContextToGraph(flow.graph, project.sharedContext, { channelOffer: channel.offer ?? null }),
         runs: flow.runs.slice(-10).map((run) => run.result),
       });
     } catch (err) {
@@ -1310,14 +1533,17 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // The ambient standing-brief tick — the server-callable scheduler HOOK (an external cron/scheduler POSTs
-  // here on its interval; there is deliberately NO module-scope setInterval, so importing the server never
-  // spins a live timer). It wakes every ambient session whose standing brief is DUE and drives each to the
-  // founder gate. It only DRIVES — never sends — and leaves an in-flight or gate-paused session untouched.
+  // The scheduler heartbeat — the ONE server-callable hook (an external cron/scheduler POSTs here on its
+  // interval; there is deliberately NO module-scope setInterval, so importing the server never spins a
+  // live timer). It drives BOTH standing work off the same real caller: it wakes every ambient session
+  // whose standing brief is DUE, and it re-stages every promoted motion whose cadence is DUE (Phase 6).
+  // Both only DRIVE/STAGE — never send — and each due item that throws is skipped, never breaking the
+  // tick. A re-staged motion stops at the founder gate exactly like a first run.
   if (req.method === "POST" && url.pathname === "/api/operator/ambient/tick") {
     try {
       const woken = runDueAmbientTicks();
-      json(res, 200, { woken });
+      const motions = runDueMotions();
+      json(res, 200, { woken, motions });
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
@@ -1699,7 +1925,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     json(res, 200, {
-      graph: applySharedContextToGraph(graph, project.sharedContext),
+      graph: applySharedContextToGraph(graph, project.sharedContext, { channelOffer: channelOfferFor(project, graphId) }),
       runs: saved.runs.slice(-10).map((run) => run.result),
     }); return;
   }
@@ -1742,11 +1968,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "GET" && url.pathname === "/api/graph/recipes/pilot-outreach") {
-    json(res, 200, { graph: pilotOutreachRecipe() });
-    return;
-  }
-
   // GTM Graph — run
   if (req.method === "POST" && url.pathname === "/api/graph/run") {
     try {
@@ -1758,7 +1979,7 @@ const server = http.createServer(async (req, res) => {
       // recorded gate decisions back into this run as memory.
       const prior = loadFlow(body.graph.id, body.graph);
       const project = loadProject();
-      const runtimeGraph = applySharedContextToGraph(body.graph, project.sharedContext);
+      const runtimeGraph = applySharedContextToGraph(body.graph, project.sharedContext, { channelOffer: channelOfferFor(project, body.graph.id) });
       const memory = buildDraftMemory(extractDecisions(prior.runs), { ideaTaste: ideaTasteForProject(project.id) });
       const resumeRecord = typeof body.resumeRunId === "string"
         ? prior.runs.find((run) => run.id === body.resumeRunId)
@@ -1773,6 +1994,9 @@ const server = http.createServer(async (req, res) => {
         memory,
         designState: getDesignState(project.id),
         grounding: buildRunGrounding(project),
+        // The researched buyer picture — the run grounds on real MarketObjects, not just founder-typed
+        // guesses. A projection over the stored objects; null (an honest blank) when none are researched.
+        market: buildMarketContext(marketObjectStore.list({ projectId: project.id })),
         // A derived source pulls another channel's last-run output (read-only, behind the gate).
         loadLastRunItems: createDerivedSourceLoader({ projectId: project.id }),
         // Feed the context substrate: prior runs become the "what's been tried" state layer.
@@ -1825,7 +2049,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const prior = loadFlow(body.graph.id, body.graph);
       const project = loadProject();
-      const runtimeGraph = applySharedContextToGraph(body.graph, project.sharedContext);
+      const runtimeGraph = applySharedContextToGraph(body.graph, project.sharedContext, { channelOffer: channelOfferFor(project, body.graph.id) });
       const memory = buildDraftMemory(extractDecisions(prior.runs), { ideaTaste: ideaTasteForProject(project.id) });
       const resumeRecord = typeof body.resumeRunId === "string"
         ? prior.runs.find((run) => run.id === body.resumeRunId)
@@ -1840,6 +2064,9 @@ const server = http.createServer(async (req, res) => {
         memory,
         designState: getDesignState(project.id),
         grounding: buildRunGrounding(project),
+        // The researched buyer picture — same projection the non-streaming run uses; honest blank when
+        // nothing has been researched yet.
+        market: buildMarketContext(marketObjectStore.list({ projectId: project.id })),
         // A derived source pulls another channel's last-run output (read-only, behind the gate).
         loadLastRunItems: createDerivedSourceLoader({ projectId: project.id }),
         // Feed the context substrate: prior runs become the "what's been tried" state layer.

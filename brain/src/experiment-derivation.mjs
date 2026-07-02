@@ -1,8 +1,10 @@
 // Experiment derivation — a run actually PRODUCES a GtmExperiment.
 //
-// One live hypothesis per channel (mirrors the GtmExperiment shape in ui/src/types.ts): the channel's
-// goal is the hypothesis, the drafted approach is the variable under test, the audience source is held
-// constant, and the founder's gate decisions are the result. Derived from real run state only — any
+// One live experiment per channel (mirrors the GtmExperiment shape in ui/src/types.ts): the drafted
+// approach is the variable under test, the audience source is held constant, and the founder's gate
+// decisions are the result. A derived experiment carries NO hypothesis — the variable names what is
+// being tested in the pipeline's own words; the founder's typed goal is a goal, not a hypothesis, and
+// echoing it back as one dressed the goal up as learning. Derived from real run state only — any
 // field that can't be grounded is left undefined (honest blank), never fabricated. It is upserted into
 // the existing sharedContext.experiments on run completion and again on gate resolution, exactly where
 // promoteEntrantsFromRun already promotes the run's people, so the experiment-matrix lens fills with
@@ -55,7 +57,9 @@ export function deriveExperimentFromRun({ graph, result, sharedContext } = {}) {
   const experiment = {
     id: `exp-${channelId}`,
     channelId,
-    hypothesis: (graph?.objective || graph?.name || "").trim() || undefined,
+    // No hypothesis: a derived experiment never stores the founder's typed goal as its hypothesis.
+    // `variable` (the drafting step's own label) names the real thing under test; readers fall back to
+    // it. A hypothesis is the founder's to state, or nobody's.
     variable: draftNode?.label || undefined,
     heldConstant: sourceNode?.label || undefined,
     successSignal: measureNode?.label || (gateNode ? `Founder approval at "${gateNode.label}"` : undefined),
@@ -63,9 +67,10 @@ export function deriveExperimentFromRun({ graph, result, sharedContext } = {}) {
     result: resultStr ?? null,
     claimId,
     icp: icpLabel,
-    // A channel run tests one strategic layer; by default the "channels" layer (which motion wins).
-    // targetLayer is an OPEN string, never an enum — the board groups experiments by it.
-    targetLayer: "channels",
+    // No targetLayer: a run does not know which strategic layer it tests, and force-filing every
+    // derived experiment under "channels" misfiled all of them. targetLayer stays an OPEN string the
+    // founder (or a stated grouping) sets; the board surfaces layerless experiments on the Learn band
+    // so they never vanish.
     // The arm under test. A channel is one arm KIND, so a single-channel run carries one channel arm.
     arms: [{
       id: `arm-${channelId}`,
@@ -86,14 +91,13 @@ export function deriveExperimentFromRun({ graph, result, sharedContext } = {}) {
   return experiment;
 }
 
-// Read-time shim: an experiment persisted before targetLayer/arms existed is back-filled so every
-// reader (the board, the matrix) sees the full shape without a migration write. Idempotent and
-// non-destructive — it never overwrites a real targetLayer, arms, verdict, or origin already present.
+// Read-time shim: an experiment persisted before arms/origin existed is back-filled so every reader
+// (the board, the matrix) sees the full shape without a migration write. Idempotent and
+// non-destructive — it never overwrites a real targetLayer, arms, verdict, or origin already present,
+// and it never INVENTS a targetLayer: an experiment without one stays layerless (open on read; the
+// board surfaces it on the Learn band) instead of being force-filed under "channels".
 export function normalizeExperiment(exp) {
   if (!exp || typeof exp !== "object") return exp;
-  const targetLayer = typeof exp.targetLayer === "string" && exp.targetLayer.trim()
-    ? exp.targetLayer
-    : "channels";
   const arms = Array.isArray(exp.arms) && exp.arms.length
     ? exp.arms
     : [{
@@ -103,7 +107,7 @@ export function normalizeExperiment(exp) {
         channelId: exp.channelId ?? null,
       }];
   const origin = exp.origin === "stated" ? "stated" : "derived";
-  return { ...exp, targetLayer, arms, origin };
+  return { ...exp, arms, origin };
 }
 
 // Upsert the derived experiment into sharedContext.experiments (one per channel, keyed by id). A

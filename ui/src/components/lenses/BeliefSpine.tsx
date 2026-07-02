@@ -1,35 +1,14 @@
-// BeliefSpine — the L1 belief-spine lens: the nine-layer board folded to ONE pipeline's five faces.
+// BeliefSpine — the strip over one open pipeline: its OWN composed steps as a row of cards, each in
+// plain words about what actually happened there (what came in, what was drafted, what waits at your
+// gate, what moved after approval, what came back), closed by "What you've decided" when real
+// conclusions exist. Derived entirely from the pipeline's graph and run state — no fixed face
+// skeleton, no internal vocabulary, no bare scores. A pure read — no edits, no gate, no run.
 //
-// Renders the five faces (Who · trigger → What you say · positioning → Who you reached · people →
-// Did it work · measure → the Verdict · learn) as a row of cards, matching L1 in
-// docs/mockups/one-canvas-altitudes.html. A pure read — no edits, no gate, no run. Honest blind /
-// empty / error states; conviction is ink darkness + stroke, never hue; amber never appears here
-// (amber is the gate alone, which lives at L3).
-//
-// ─── INTEGRATOR WIRING ─────────────────────────────────────────────────────────
-// API: the fetch is currently self-contained in beliefSpine.ts (`getSpine`, mirroring api.ts's
-// `get<T>`) so this lens builds without touching api.ts. To consolidate, add this one line to
-// ui/src/api.ts and swap beliefSpine.ts's local getSpine for the import (behaviour is identical):
-//
-//   export const getSpine = (projectId: string, channelId: string) =>
-//     get<SpineView>(
-//       `/api/projects/${encodeURIComponent(projectId)}/pipelines/${encodeURIComponent(channelId)}/spine`,
-//     );
-//
-// (SpineView is exported from "@/lib/beliefSpine"; import the type in api.ts alongside the others.)
-//
-// Backend contract — GET /api/projects/:id/pipelines/:channelId/spine returns:
-//   { projectId, channelId, spine: { who, say, reached, worked, verdict } }
-// where each face is { belief: string|null; confidence: 0-100; status:
-//   "blind"|"assumed"|"testing"|"validated"; groundingMode: "stated"|"gated"|"derived" }.
-//
-// MOUNT (one line, wherever the L1 pipeline unfold renders — e.g. GtmBoard / GtmCanvas):
-//
+// Mount (wherever the open pipeline renders — e.g. GtmCanvas):
 //   <BeliefSpine projectId={model.projectId} channelId={activeChannelId} />
-//
-// Props are pure read inputs; no callbacks. ────────────────────────────────────
+// Props are pure read inputs; no callbacks.
 
-import { useSpine, faceMeta, faceBadge, confidenceLabel, FACE_ORDER } from "@/lib/beliefSpine";
+import { useSpine } from "@/lib/beliefSpine";
 import "./BeliefSpine.css";
 
 interface BeliefSpineProps {
@@ -43,53 +22,54 @@ export function BeliefSpine({ projectId, channelId }: BeliefSpineProps) {
   if (state.status === "loading") {
     return (
       <div className="spine-state" role="status" aria-live="polite">
-        Reading the spine…
+        Reading this pipeline…
       </div>
     );
   }
   if (state.status === "empty") {
     return (
       <div className="spine-state spine-state-muted">
-        No pipeline chosen yet — pick a pipeline to read its belief spine.
+        No pipeline chosen yet — pick one to see where its work stands.
       </div>
     );
   }
   if (state.status === "error") {
     return (
       <div className="spine-state spine-state-error" role="alert">
-        Couldn't read the spine. {state.error}
+        Couldn't read this pipeline. {state.error}
       </div>
     );
   }
 
-  const { spine } = state;
+  const { cards } = state;
+
+  if (cards.length === 0) {
+    return (
+      <div className="spine-state spine-state-muted">
+        This pipeline has no steps yet — describe the goal in the composer and its steps land here.
+      </div>
+    );
+  }
 
   return (
-    <div className="spine-row" role="list" aria-label="Belief spine — one pipeline">
-      {FACE_ORDER.map((key) => {
-        const face = spine[key];
-        const meta = faceMeta(key);
-        const badge = faceBadge(face);
-        const width = Math.max(0, Math.min(100, face.confidence));
-        return (
-          <div className="spine-card" role="listitem" key={key} aria-label={meta.label}>
-            <div className="spine-role">{meta.role}</div>
-            <div className={`spine-belief${face.belief ? "" : " spine-belief-blind"}`}>
-              {face.belief ?? "No signal yet — blind at this face."}
-            </div>
-            <div className="spine-barfill">
-              <i className={`tone-${badge.tone}`} style={{ width: `${width}%` }} />
-            </div>
+    <div className="spine-row" role="list" aria-label="This pipeline, step by step">
+      {cards.map((card) => (
+        <div className="spine-card" role="listitem" key={card.id} aria-label={card.title}>
+          <div className="spine-role">{card.title}</div>
+          <div className={`spine-belief${card.empty ? " spine-belief-blind" : ""}`}>
+            {card.body}
+          </div>
+          {card.detail ? <div className="spine-detail">“{card.detail}”</div> : null}
+          {card.needsYou ? (
             <div className="spine-foot">
               <span className="spine-chip">
-                <span className={`spine-dot tone-${badge.tone}`} />
-                {badge.label}
+                <span className="spine-dot tone-testing" />
+                {card.needsYou} waiting on you
               </span>
-              <span className="spine-conf">{confidenceLabel(face.confidence)}</span>
             </div>
-          </div>
-        );
-      })}
+          ) : null}
+        </div>
+      ))}
     </div>
   );
 }

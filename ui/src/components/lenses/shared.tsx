@@ -52,32 +52,35 @@ export function kindVisual(kind: string): { icon: React.ReactNode; label: string
 }
 
 // ─── ProvenanceTag ──────────────────────────────────────────────────────────────
-// Provenance is load-bearing in EVERY lens: green "derived" = grounded/proven; amber "guess" =
+// Provenance is load-bearing in EVERY lens: the green pill = grounded/proven; amber "guess" =
 // speculative. The same pill the original canvas used (.product-prov), generalized to any layer.
-// When citations are known and the element is derived, it counts them ("3 cited"); otherwise it
-// reads "derived" / "guess".
+// When citations are known and the element is grounded, it counts them ("3 cited"); otherwise it
+// says where the fact comes from in plain words ("from your code" by default — a caller whose facts
+// come from somewhere else, e.g. the run ledger, passes its own `label`). Never the word "derived"
+// on a founder surface — that's engine vocabulary.
 
 export function ProvenanceTag({
-  provenance, citationCount, className, title,
+  provenance, citationCount, className, title, label,
 }: {
   provenance: ProductModelProvenance;
   citationCount?: number;
   className?: string;
   title?: string;
+  label?: string;
 }) {
   const speculative = provenance === "speculative";
   const count = citationCount ?? 0;
-  const label = speculative ? "guess" : count > 0 ? `${count} cited` : "derived";
+  const text = speculative ? "guess" : count > 0 ? `${count} cited` : (label ?? "from your code");
   return (
     <span
       className={cn("product-prov", speculative ? "product-prov-spec" : "product-prov-derived", className)}
       title={title ?? (speculative
         ? "Speculative — a model or founder guess, not proven from code"
         : count > 0
-          ? `Derived — grounded in ${count} code citation${count === 1 ? "" : "s"}`
-          : "Derived — grounded in the product code")}
+          ? `Grounded in ${count} code citation${count === 1 ? "" : "s"}`
+          : "Grounded in the product code")}
     >
-      {label}
+      {text}
     </span>
   );
 }

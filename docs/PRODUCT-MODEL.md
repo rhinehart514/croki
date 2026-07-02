@@ -1,3 +1,11 @@
+> **SUPERSEDED — 2026-07-01.** This describes the "Living Product Picture" feature of
+> the earlier "IDE for GTM" version of the product. The current plan of record is
+> **docs/GTM-ENGINE-REBUILD.md**, which reframes Drover as a GTM engine and compiler;
+> the product-truth idea here survives as the Evidence-wrapped ProductTruth record in
+> that spec. Where this doc conflicts with the spec, the spec wins. Kept for history only.
+
+---
+
 # Living Product Picture — build spec
 
 ## What this feature is, in one breath

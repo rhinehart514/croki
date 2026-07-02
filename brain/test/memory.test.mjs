@@ -72,6 +72,31 @@ describe("memory — extractDecisions", () => {
     assert.deepEqual(d.edits[0], { from: "the model draft", to: "the founder rewrite" });
   });
 
+  // Regression: composition is free-form, so a staged item may carry its content under ANY field
+  // names — a scheduled X post as { post_text, offer, scheduled_for }, a note as { note }. Gate
+  // decisions on those shapes must train taste like any outreach draft; before the fix only the
+  // outreach aliases banked and every other pipeline's decisions taught nothing.
+  it("banks decisions on non-outreach-shaped items (open fields, e.g. post_text)", () => {
+    const runs = [
+      runWithGate([
+        { gtmActionId: "post-1", post_text: "Shipped the Drover morning queue today.", offer: "50% off", scheduled_for: "2026-07-02T09:00:00Z", approvalStatus: "approved" },
+        { gtmActionId: "post-2", post_text: "Buy my thing!!! Link in bio!!!", approvalStatus: "rejected" },
+      ]),
+    ];
+    const d = extractDecisions(runs);
+    assert.equal(d.approved.length, 1);
+    assert.equal(d.approved[0].draft, "Shipped the Drover morning queue today.");
+    assert.equal(d.rejected.length, 1);
+    assert.equal(d.rejected[0].draft, "Buy my thing!!! Link in bio!!!");
+    const memory = buildDraftMemory(d);
+    assert.match(renderDraftMemory(memory), /morning queue/);
+  });
+
+  it("still banks nothing from an item with only identity fields (a name is not a voice)", () => {
+    const runs = [runWithGate([{ name: "A", url: "https://x.com/a", approvalStatus: "approved" }])];
+    assert.equal(extractDecisions(runs).approved.length, 0);
+  });
+
   it("keys an agent-drafted item (no email/url/name) by a founder fallback so decisions match", () => {
     assert.equal(draftKey({ founder_github_or_url: "github.com/x", gtmActionId: "act-9" }), "github.com/x");
     assert.equal(draftKey({ gtmActionId: "act-9" }), "act-9");
@@ -141,6 +166,32 @@ describe("gate — per-item founder decisions", () => {
     assert.equal(result.pendingReview, true);
     assert.equal(result.meta.approved, 2);
     assert.equal(result.meta.rejected, 1);
+  });
+
+  it("writes an inline edit back onto the field the reviewable content came from (open shapes)", async () => {
+    // A staged X post carries its content as post_text, not draft. The founder's rewrite must land
+    // on post_text too — a downstream executor reading the item's own shape would otherwise send
+    // the pre-edit text — and editedFrom must capture the original so the edit banks into taste.
+    const node = {
+      runtime: {
+        decisions: {
+          "post-1": { decision: "approve", editedDraft: "the founder's rewritten post" },
+        },
+      },
+    };
+    const upstream = [
+      { id: "post-1", type: "x-post", post_text: "the model's original post text", scheduled_for: "tomorrow 9am" },
+    ];
+    const result = await gateRun(node, upstream);
+    const item = result.items[0];
+    assert.equal(item.approvalStatus, "approved");
+    assert.equal(item.post_text, "the founder's rewritten post");
+    assert.equal(item.editedFrom, "the model's original post text");
+    // legacy readers still see the rewrite under the draft aliases
+    assert.equal(item.draft, "the founder's rewritten post");
+    assert.equal(item.draft_note, "the founder's rewritten post");
+    // untouched fields survive
+    assert.equal(item.scheduled_for, "tomorrow 9am");
   });
 
   it("falls back to node-level approve-all for backward compatibility", async () => {

@@ -5,7 +5,7 @@
 // The per-item decisions captured here are the loop's real learning signal:
 // they are stamped onto items, recorded in the run ledger, and read back into
 // the next run by memory.mjs. See brain/src/memory.mjs.
-import { draftKey } from "../../memory.mjs";
+import { draftKey, itemReviewField, itemReviewText } from "../../memory.mjs";
 import { applyPatternApproval } from "../../gate-pattern.mjs";
 import crypto from "node:crypto";
 
@@ -103,15 +103,31 @@ export async function run(node, upstream, context) {
         return { ...item, gtmActionId, gated: true, approved: false, approvalStatus: "rejected" };
       }
       const edited = typeof d.editedDraft === "string" && d.editedDraft.trim();
+      // The original reviewable content may live under ANY field (draft, draft_note, post_text, …) —
+      // composition is free-form. Capture whatever it actually was as the "before" (so the edit banks
+      // as a before/after pair in taste memory even on non-outreach shapes), write the founder's
+      // rewrite back onto that SAME field (so a downstream executor reading the item's own shape
+      // sends the founder's words, never the pre-edit text), and keep draft/draft_note in sync for
+      // legacy readers.
+      let editPatch = {};
+      if (edited) {
+        const sourceField = itemReviewField(item);
+        editPatch = {
+          editedFrom: itemReviewText(item) || null,
+          draft: d.editedDraft,
+          draft_note: d.editedDraft,
+          ...(sourceField && sourceField !== "draft" && sourceField !== "draft_note"
+            ? { [sourceField]: d.editedDraft }
+            : {}),
+        };
+      }
       return {
         ...item,
         gtmActionId,
         gated: true,
         approved: true,
         approvalStatus: "approved",
-        // The original lives in draft (legacy) or draft_note (agent drafter) — capture whichever as
-        // the "before" and write the founder's rewrite to both so the edit banks as a before/after pair.
-        ...(edited ? { editedFrom: item.draft ?? item.draft_note ?? null, draft: d.editedDraft, draft_note: d.editedDraft } : {}),
+        ...editPatch,
       };
     });
     return {

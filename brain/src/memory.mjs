@@ -9,6 +9,73 @@
 // Connector-agnostic: it reads decisions off any gate node and shapes them into
 // a memory object. Which connectors consume that memory is their choice.
 
+// ── Open item content (shared by memory, gate-pattern, eval) ──────────────────
+// Composition is free-form: a step may stage an item under ANY field names (a post as
+// { post_text, scheduled_for }, a page as { headline, sections }…). Taste learning and gate
+// patterning must key off whatever fields the item actually has, or decisions on non-outreach
+// shapes train nothing. These are NOT a content taxonomy — content stays open. The only closed
+// list is the bookkeeping the host itself stamps onto items, which is never reviewable content.
+const BOOKKEEPING_KEYS = new Set([
+  "id", "gtmActionId", "type", "approvalStatus", "approved", "viaPattern", "isException",
+  "reasons", "exception", "needsReview", "confidence", "editedFrom", "evidence_lines", "source",
+  "score", "fit", "enriched", "gated", "sentAt", "channel",
+]);
+
+// Known draft aliases, preferred when present so legacy shapes read exactly as before.
+const DRAFT_ALIASES = ["draft", "draft_note", "message", "body", "summary", "text", "content"];
+
+// Known identity / evidence aliases — who an item is about, where it came from, why it fits. The
+// gate surfaces these in their own named slots; they are not the item's sendable content, so the
+// open fallback never mistakes a bare name or URL for a draft (a prospect-only item is reviewable
+// at the gate but teaches no voice). UNKNOWN keys stay open and DO count as content.
+const NON_CONTENT_KEYS = new Set([
+  "name", "founder_name", "handle", "subject", "suggested_subject_line",
+  "email", "linkedin", "linkedinUrl", "url", "sourceUrl", "founder_github_or_url",
+  "role", "title", "company", "nowTrigger", "now_trigger",
+  "grounding_citation", "icpFitRationale", "fitRationale", "fitReasons",
+]);
+
+// Coerce one field value to reviewable text: a string as-is, a STRUCTURED draft object
+// ({subject, body}) joined — an object draft was once silently skipped, so every approval banked
+// nothing and taste stayed empty forever despite the gate working end to end.
+function asText(value) {
+  if (typeof value === "string") return value.trim();
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return [value.subject, value.body ?? value.message ?? value.text]
+      .filter((s) => typeof s === "string" && s.trim()).join("\n").trim();
+  }
+  return "";
+}
+
+// The reviewable text of a staged item AND the field it came from, whatever the item's shape: the
+// known draft aliases when present, otherwise the most substantial text the item's own fields carry.
+// Both empty only when the item truly has no reviewable text of any shape.
+function reviewSource(item) {
+  if (!item || typeof item !== "object") return { field: null, text: "" };
+  for (const key of DRAFT_ALIASES) {
+    const text = asText(item[key]);
+    if (text) return { field: key, text };
+  }
+  let best = { field: null, text: "" };
+  for (const [key, value] of Object.entries(item)) {
+    if (BOOKKEEPING_KEYS.has(key) || NON_CONTENT_KEYS.has(key)) continue;
+    const text = asText(value);
+    if (text.length > best.text.length) best = { field: key, text };
+  }
+  return best;
+}
+
+export function itemReviewText(item) {
+  return reviewSource(item).text;
+}
+
+// The field name the reviewable text was read from (e.g. "draft", "post_text"), or null for an item
+// with nothing reviewable. The gate connector writes a founder's inline rewrite back onto this same
+// field, so a downstream executor reading the item's own shape sends the founder's words.
+export function itemReviewField(item) {
+  return reviewSource(item).field;
+}
+
 // Stable per-item key for matching a founder's gate decision to the right draft across runs.
 // The legacy contact fields (email/url/name/id) come first so existing flows key exactly as before;
 // the founder_* and gtmActionId fallbacks cover agent-drafted items that carry none of those, which
@@ -37,16 +104,10 @@ export function extractDecisions(runs = [], { limit = 5 } = {}) {
       for (const item of node.items) {
         const status = item?.approvalStatus;
         if (status !== "approved" && status !== "rejected") continue;
-        // The draft may be a plain string (legacy `draft`), an agent `draft_note`, or a STRUCTURED
-        // object `{subject, body}` (the agent drafter's real shape). Coerce any of them to reviewable
-        // text — an object draft was silently skipped, so every approval banked nothing and taste
-        // stayed empty forever despite the gate working end to end.
-        const rawDraft = item?.draft ?? item?.draft_note ?? item?.message ?? item?.body;
-        const draft = typeof rawDraft === "string" ? rawDraft
-          : (rawDraft && typeof rawDraft === "object")
-            ? [rawDraft.subject, rawDraft.body ?? rawDraft.message ?? rawDraft.text]
-                .filter((s) => typeof s === "string" && s.trim()).join("\n").trim()
-            : null;
+        // Open content: the known draft aliases when present, else whatever reviewable text the
+        // item's own fields carry — so a decision on a staged post, note, or page trains taste the
+        // same as an outreach draft. Only an item with truly no reviewable text banks nothing.
+        const draft = itemReviewText(item) || null;
         if (!draft) continue;
         const personName = item?.name ?? item?.founder_name ?? null;
 

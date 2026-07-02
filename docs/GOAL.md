@@ -1,3 +1,10 @@
+> **SUPERSEDED — 2026-07-01.** This describes the earlier "IDE for GTM" version of
+> the product (a build-your-own canvas of boxes and wires). The current plan of record
+> is **docs/GTM-ENGINE-REBUILD.md**, which reframes Drover as a GTM engine and compiler.
+> Where this doc conflicts with that spec, the spec wins. Kept for history only.
+
+---
+
 # GOAL — Un-cage Drover into an actual IDE for GTM engineering
 
 ## North star

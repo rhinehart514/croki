@@ -1,3 +1,10 @@
+> **SUPERSEDED — 2026-07-01.** This describes the earlier "IDE for GTM" version of
+> the product (a build-your-own canvas of boxes and wires). The current plan of record
+> is **docs/GTM-ENGINE-REBUILD.md**, which reframes Drover as a GTM engine and compiler.
+> Where this doc conflicts with that spec, the spec wins. Kept for history only.
+
+---
+
 # Drover — Vision
 
 **What it is:** A local Claude agent harness for GTM engineering. You open a repository, it reads what you built, and runs many pipelines — grounded in your code, powered by Claude at the intelligence nodes, with you in every gate. (A pipeline is one staged flow to your gate; "channel" was only ever the code identifier for it.)

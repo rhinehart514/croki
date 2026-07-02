@@ -2,10 +2,12 @@
 // kernel made visible — the project owns ONE ICP (plus any ICP-targeted experiments), and every pipeline
 // is an activation over it. Pipelines land as cards grouped under the ICP they test; where a ground holds
 // two or more, its header races them as arms on real throughput (ink bars, the leader called out, a
-// founder-validated arm in green, honest-blind when nothing has run). Each card carries its belief-state,
-// a conviction track that reads the pipeline as a flow toward its founder gate (the amber notch — the only
-// accent here), a loud "needs you" count when items wait at that gate, a kernel chip naming the ICP it
-// tests, and the People it shares with its siblings — the connective tissue of the shared kernel.
+// founder-validated arm in green, honest-blind when nothing has run). Each card states its pipeline in
+// plain words ("built — hasn't run yet", "ran clean — work is moving through"; internal conviction only
+// drives the track's ink, never a number the founder reads), a conviction track that reads the pipeline
+// as a flow toward its founder gate (the amber notch — the only accent here), a loud "waiting on you"
+// count when items wait at that gate, a chip naming the ICP it tests, and the People it shares with its
+// siblings — the connective tissue of the shared kernel.
 //
 // ── Integrator mount (in GtmCanvas) ───────────────────────────────────────────────
 //   <GroundLens model={useGround(projectId, channels, people, claims, board, board?.icpGrouping).model} onOpenChannel={...} />
@@ -13,19 +15,13 @@
 
 import { useMemo } from "react";
 import { ArrowRight, Crosshair, ShieldCheck, Users } from "lucide-react";
-import type { GroundBeliefState, GroundICP, GroundMeasurement, GroundModel, GroundPipeline } from "@/lib/groundModel";
+import { pipelineStatusLine } from "@/lib/groundModel";
+import type { GroundMeasurement, GroundModel, GroundPipeline } from "@/lib/groundModel";
 import "./GroundLens.css";
 
 type GroundLensProps = {
   model: GroundModel | null;
   onOpenChannel: (channelId: string) => void;
-};
-
-const BELIEF_LABEL: Record<GroundBeliefState, string> = {
-  validated: "validated",
-  testing: "testing",
-  assumed: "assumed",
-  blind: "blind",
 };
 
 // Conviction 0–1 → the width of the filled portion of the track (%). A committed pipeline reads as a
@@ -54,7 +50,7 @@ function ArmRace({ measurement }: { measurement: GroundMeasurement }) {
   const total = arms.reduce((sum, a) => sum + a.value, 0);
   const unit = signal === "staged" ? "staged" : "runs";
   const head = !decided
-    ? "no runs yet — arms untested"
+    ? "no runs yet — nothing to compare"
     : leader
       ? `${leader.label} leads · ${total} ${unit} across ${arms.length} arms`
       : `${total} ${unit} across ${arms.length} arms`;
@@ -102,17 +98,13 @@ function PipelineCard({
     <button type="button" className={`gc-card gc-${beliefState}`} onClick={onOpen}>
       <div className="gc-head">
         <span className="gc-name">{name}</span>
-        <span className={`gc-status gc-${beliefState}`}>
-          <span className="gc-dot" />
-          {BELIEF_LABEL[beliefState]}
-        </span>
       </div>
 
       <div className="gc-meta">
         {steps > 0 ? `${steps} step${steps === 1 ? "" : "s"}` : "not shaped yet"}
         <ArrowRight size={11} aria-hidden />
         <ShieldCheck size={11} aria-hidden className="gc-meta-gate" />
-        gate
+        your gate
       </div>
 
       <div className="gc-track">
@@ -123,9 +115,12 @@ function PipelineCard({
       </div>
 
       <div className="gc-foot">
-        <span className="gc-conf">{Math.round(conviction * 100)}<small>conviction</small></span>
+        <span className={`gc-status gc-${beliefState}`}>
+          <span className="gc-dot" />
+          {pipelineStatusLine(pipeline)}
+        </span>
         {needsYouCount > 0 ? (
-          <span className="gc-needs"><span className="gc-needs-dot" />{needsYouCount} need you</span>
+          <span className="gc-needs"><span className="gc-needs-dot" />{needsYouCount} waiting on you</span>
         ) : null}
       </div>
 
@@ -152,10 +147,14 @@ function PipelineCard({
   );
 }
 
-const BAND_EYEBROW: Record<GroundICP["source"], string> = {
-  stated: "ICP · stated ground",
-  experiment: "ICP · experiment ground",
-};
+// The band's eyebrow in plain words — where this audience grouping came from. Open on source: an
+// unknown source still reads as an audience rather than dropping the eyebrow.
+function bandEyebrow(source: string): string {
+  if (source === "experiment") return "An audience you're testing";
+  if (source === "explicit-link") return "An audience you linked";
+  if (source === "stated") return "Your audience";
+  return "Audience";
+}
 
 export function GroundLens({ model, onOpenChannel }: GroundLensProps) {
   // For each pipeline: the sibling pipelines it shares a real Person with (names, for the junction tie)
@@ -212,13 +211,13 @@ export function GroundLens({ model, onOpenChannel }: GroundLensProps) {
         <div className="ground-top-stats">
           <span><b>{totals.pipelines}</b> pipeline{totals.pipelines === 1 ? "" : "s"}</span>
           <span className="ground-sep" />
-          <span><b>{model.icps.length}</b> ICP ground{model.icps.length === 1 ? "" : "s"}</span>
+          <span><b>{model.icps.length}</b> audience{model.icps.length === 1 ? "" : "s"}</span>
           <span className="ground-sep" />
-          <span><b>{totals.testing}</b> in test</span>
+          <span><b>{totals.testing}</b> running</span>
           {totals.needsYou > 0 ? (
             <>
               <span className="ground-sep" />
-              <span className="ground-top-needs"><span className="gc-needs-dot" /><b>{totals.needsYou}</b> need you</span>
+              <span className="ground-top-needs"><span className="gc-needs-dot" /><b>{totals.needsYou}</b> waiting on you</span>
             </>
           ) : null}
         </div>
@@ -238,7 +237,7 @@ export function GroundLens({ model, onOpenChannel }: GroundLensProps) {
         <section className={`ground-band ground-band--${icp.source}`} key={icp.id}>
           <div className="ground-band-rail" />
           <div className="ground-band-head">
-            <div className="ground-band-eyebrow">{BAND_EYEBROW[icp.source]}</div>
+            <div className="ground-band-eyebrow">{bandEyebrow(icp.source)}</div>
             <h2 className="ground-band-title">{icp.label}</h2>
             {icp.positioning && icp.positioning !== icp.label ? (
               <p className="ground-band-pos">{icp.positioning}</p>

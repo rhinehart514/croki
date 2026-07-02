@@ -48,6 +48,15 @@ export function createGtmIdea(input = {}, options = {}) {
     pitch,
     barScore: Number.isFinite(input.barScore) ? input.barScore : null,
     axes: input.axes && typeof input.axes === "object" ? input.axes : null,
+    // The decidable parts of the idea in the generator's/critic's own words: what kind of move it
+    // is, why it could work, why it might not, the critic's one-line take, and — for a cut idea —
+    // the plain reason it was cut. All optional free text; persisted so a cut idea's reason stays
+    // inspectable after the pause resolves and idea-derivation/feedback can read them later.
+    what: String(input.what ?? "").trim() || null,
+    upside: String(input.upside ?? "").trim() || null,
+    risk: String(input.risk ?? "").trim() || null,
+    take: String(input.take ?? "").trim() || null,
+    killReason: String(input.killReason ?? "").trim() || null,
     verdict,
     killed,
     // How a survived idea wired into a real build (e.g. a composed graph / channel id), set when the

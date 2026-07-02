@@ -75,8 +75,30 @@ describe("resolveEntry — decides the mode visibly at compose time", () => {
     const a = nodes.find((n) => n.id === "a");
     assert.equal(sourceMode(a), SOURCE_MODES.DISCOVERED);
     assert.equal(a.contract.minItems, 0, "the promoted entry runs on zero upstream items");
-    assert.match(a.agentPrompt, /DISCOVERY entry/);
     assert.ok(!edges.some((e) => e.source === "s" && e.target === "a"), "the dead source→agent edge is gone");
+  });
+
+  it("no input: the promoted agent KEEPS its own instruction — never rewritten into a prospect finder", () => {
+    // The reproduced bug: a "Draft the X post" agent had its whole prompt replaced by a hardwired
+    // find-3-5-ICP-people template. The agent's own job must survive verbatim; only a short
+    // goal-derived note about the missing seed list may be added alongside it.
+    const ownPrompt = "Draft the X post announcing the redeem-code launch, in the founder's voice.";
+    const nodesIn = [
+      provided("s", []),
+      { id: "a", kind: "agent", ref: "gtm-draft-x-post", label: "Draft the X post", config: {}, agentPrompt: ownPrompt, contract: { accepts: ["seed"], minItems: 1 } },
+      gate("g"),
+    ];
+    const edgesIn = [
+      { id: "e1", source: "s", target: "a", edgeType: "data" },
+      { id: "e2", source: "a", target: "g", edgeType: "data" },
+    ];
+    const goal = "Announce the launch on X with a redeem code";
+    const { nodes } = resolveEntry({ nodes: nodesIn, edges: edgesIn, agents: [], hasInput: false, goal });
+    const a = nodes.find((n) => n.id === "a");
+    assert.ok(a.agentPrompt.includes(ownPrompt), "the agent's own instruction survives verbatim");
+    assert.ok(a.agentPrompt.includes(goal), "the added note is derived from the pipeline's goal");
+    assert.ok(!/FIND 3-5/i.test(a.agentPrompt), "no hardwired find-3-5 template");
+    assert.ok(!/ICP/.test(a.agentPrompt), "no hardwired ICP-prospecting template");
   });
 
   it("no input + no downstream agent: converts the source node itself into a discovered agent source", () => {
@@ -86,6 +108,32 @@ describe("resolveEntry — decides the mode visibly at compose time", () => {
     assert.equal(s.ref, "gtm-find-prospects");
     assert.equal(s.connector, undefined, "the connector is stripped");
     assert.equal(sourceMode(s), SOURCE_MODES.DISCOVERED);
+  });
+
+  it("the converted entry's gathering instruction is derived from the goal and carries the agent's own role alongside", () => {
+    const goal = "Get pest-control operators to book a RodentRadar demo";
+    const roleAgents = [{ ref: "gtm-find-prospects", title: "Find", objective: "find pest-control operators", prompt: "Research pest-control operators in the northeast." }];
+    const { nodes } = resolveEntry({
+      nodes: [provided("s", []), gate("g")],
+      edges: [{ id: "e", source: "s", target: "g", edgeType: "data" }],
+      agents: roleAgents,
+      hasInput: false,
+      goal,
+    });
+    const s = nodes.find((n) => n.id === "s");
+    assert.ok(s.agentPrompt.includes(goal), "what to look for follows the pipeline's goal");
+    assert.ok(s.agentPrompt.includes(roleAgents[0].prompt), "the picked agent's own role rides alongside");
+    assert.ok(!/FIND 3-5/i.test(s.agentPrompt), "no hardwired find-3-5 template");
+    assert.ok(!/fit this product's ICP/.test(s.agentPrompt), "no hardwired ICP template");
+  });
+
+  it("no input + an empty source nothing consumes: no self-sourcing is injected (nothing needs a list)", () => {
+    // The source feeds nothing, so the graph does not genuinely consume a list it lacks — the
+    // pipeline runs as composed and the dangling source stays an honest provided source.
+    const { nodes } = resolveEntry({ nodes: [provided("s", []), gate("g")], edges: [], agents, hasInput: false });
+    const s = nodes.find((n) => n.id === "s");
+    assert.equal(sourceMode(s), SOURCE_MODES.PROVIDED);
+    assert.equal(s.kind ?? "tool", "tool", "the source is not converted into an agent");
   });
 
   it("no input, nothing to discover with: leaves it provided (the founder will configure the seed)", () => {

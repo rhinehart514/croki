@@ -28,7 +28,9 @@ describe("deriveExperimentFromRun", () => {
     assert.equal(exp.id, "exp-cold-outbound");
     assert.equal(exp.channelId, "cold-outbound");
     assert.equal(exp.status, "running");
-    assert.equal(exp.hypothesis, "Get 5 pilot conversations without paid ads");
+    // The founder's typed goal is a goal, not a hypothesis — a derived experiment never echoes it back.
+    // The variable (the drafting step's own label) names what is really under test.
+    assert.ok(!("hypothesis" in exp), "a derived experiment carries no hypothesis, never the goal text");
     assert.equal(exp.variable, "Draft personalized opener");
     assert.equal(exp.heldConstant, "Founder list");
     assert.equal(exp.claimId, "claim-1");
@@ -62,10 +64,11 @@ describe("deriveExperimentFromRun", () => {
     assert.equal(deriveExperimentFromRun({ graph: {}, result: {} }), null);
   });
 
-  it("carries the new open shape: targetLayer, a single channel arm, and origin", () => {
+  it("carries the open shape: a single channel arm and origin — and NO force-filed targetLayer", () => {
     const result = { graphId: "cold-outbound", pendingGates: [], nodes: {} };
     const exp = deriveExperimentFromRun({ graph, result, sharedContext: {} });
-    assert.equal(exp.targetLayer, "channels");
+    // A run does not know which strategic layer it tests — force-filing "channels" misfiled everything.
+    assert.ok(!("targetLayer" in exp), "a derived experiment carries no invented layer");
     assert.equal(exp.origin, "derived");
     assert.equal(exp.arms.length, 1);
     assert.equal(exp.arms[0].kind, "channel");
@@ -77,9 +80,9 @@ describe("deriveExperimentFromRun", () => {
 });
 
 describe("normalizeExperiment — read-time back-fill", () => {
-  it("back-fills targetLayer and a single channel arm on a legacy experiment", () => {
+  it("back-fills a single channel arm on a legacy experiment without inventing a targetLayer", () => {
     const norm = normalizeExperiment({ id: "exp-x", channelId: "x", variable: "Opener A" });
-    assert.equal(norm.targetLayer, "channels");
+    assert.ok(!("targetLayer" in norm) || !norm.targetLayer, "no layer is invented on read — layers stay open");
     assert.equal(norm.origin, "derived");
     assert.equal(norm.arms.length, 1);
     assert.equal(norm.arms[0].channelId, "x");

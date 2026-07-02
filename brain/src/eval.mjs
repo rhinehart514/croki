@@ -16,6 +16,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { runClaudeQuery, parseAgentObject } from "./agent-bridge.mjs";
+import { itemReviewText } from "./memory.mjs";
 
 // The shared grader both rigs call. Configurable so a machine without the crucible skill, or a
 // test, can point elsewhere; resilient when absent (gradeRun then reports oracle-only).
@@ -97,13 +98,10 @@ function gateNodes(result) {
     .map(([id, n]) => ({ id, items: Array.isArray(n.items) ? n.items : [] }));
 }
 
+// Open content: shared with memory/gate-pattern, so grading recognizes a staged post, note, or
+// page — whatever field names composition chose — not just outreach draft aliases.
 function itemText(item) {
-  const raw = item?.draft ?? item?.draft_note ?? item?.message ?? item?.body;
-  if (typeof raw === "string") return raw.trim();
-  if (raw && typeof raw === "object") {
-    return [raw.subject, raw.body ?? raw.message ?? raw.text].filter((s) => typeof s === "string" && s.trim()).join("\n").trim();
-  }
-  return "";
+  return itemReviewText(item);
 }
 
 // Every execute node sits behind a gate on every path (the wall, checked at run time too). Returns

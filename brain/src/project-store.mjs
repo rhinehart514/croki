@@ -37,6 +37,27 @@ function normalizeBlessedPattern(input) {
   return pattern;
 }
 
+// A pipeline-scoped offer/deal — the founder's own words for what this one pipeline puts on the
+// table ("50% off, this post only, through Friday"). An OPEN shape: at minimum a plain-words
+// `statement`, plus whatever extra fields the composer chooses to attach — no promo schema, no
+// closed vocabulary. The project-level sharedContext.offer stays the standing default; a channel
+// offer speaks for that pipeline only. Passing null (or nothing usable) clears it.
+function normalizeChannelOffer(input) {
+  if (input == null) return null;
+  if (typeof input === "string") {
+    const statement = input.trim();
+    return statement ? { statement } : null;
+  }
+  if (typeof input !== "object" || Array.isArray(input)) {
+    throw new Error("A pipeline offer is stated in plain words — pass a statement string or an object carrying one.");
+  }
+  const statement = String(input.statement ?? "").trim();
+  const rest = structuredClone(input);
+  if (!statement && Object.keys(rest).length === 0) return null;
+  if (!statement) throw new Error("A pipeline offer needs a plain-words statement of the deal.");
+  return { ...rest, statement };
+}
+
 function slug(value) {
   return String(value || "")
     .toLowerCase()
@@ -469,7 +490,10 @@ export function getChannel(project, channelId, options = {}) {
   return channel;
 }
 
-export function applySharedContextToGraph(graph, sharedContext) {
+// `channelOffer` (optional) is the pipeline's own offer/deal in the founder's words — when the run
+// belongs to a channel that carries one, it rides into the run context ahead of the project-level
+// sharedContext.offer, so a drafting step honors the pipeline's deal without the founder restating it.
+export function applySharedContextToGraph(graph, sharedContext, { channelOffer = null } = {}) {
   if (!graph) return graph;
   const next = structuredClone(graph);
   const product = sharedContext?.product ?? {};
@@ -485,6 +509,7 @@ export function applySharedContextToGraph(graph, sharedContext) {
           product: sharedContext?.product ?? {},
           positioning: sharedContext?.positioning ?? {},
           icp: sharedContext?.icp ?? {},
+          offer: channelOffer ?? sharedContext?.offer ?? {},
           founderTaste: sharedContext?.founderTaste ?? {},
           outcomes: sharedContext?.outcomes ?? [],
           experiments: sharedContext?.experiments ?? [],
@@ -545,6 +570,7 @@ export function createChannel(input, options = {}) {
     name,
     objective: String(input.objective || "").trim(),
     kind: String(input.kind || "custom").trim() || "custom",
+    offer: input.offer,
   }, options);
 }
 
@@ -558,12 +584,14 @@ export function registerComposedChannel(input, options = {}) {
     (channel) => channel.id === input.id || channel.graphId === input.graphId,
   );
   if (existing) return { project, channel: getChannel(project, existing.id, options) };
+  const offer = normalizeChannelOffer(input.offer ?? null);
   const channel = {
     id: input.id,
     graphId: input.graphId,
     name: input.name,
     objective: String(input.objective ?? "").trim(),
     kind: String(input.kind || "custom").trim() || "custom",
+    ...(offer ? { offer } : {}),
     enabled: true,
     // A freshly composed channel starts at the bottom of the autonomy ladder: draft, no standing
     // pattern. The founder promotes it deliberately once a run has earned trust.
@@ -608,10 +636,15 @@ export function duplicateChannel(channelId, input = {}, options = {}) {
 export function updateChannel(channelId, patch, options = {}) {
   const project = loadProject(options);
   const current = getChannel(project, channelId, options);
-  const allowed = new Set(["name", "objective", "kind", "enabled"]);
+  const allowed = new Set(["name", "objective", "kind", "enabled", "offer"]);
   const unknown = Object.keys(patch ?? {}).filter((key) => !allowed.has(key));
   if (unknown.length) throw new Error(`Unsupported channel fields: ${unknown.join(", ")}`);
   const channel = { ...current, ...structuredClone(patch ?? {}) };
+  if (patch && Object.prototype.hasOwnProperty.call(patch, "offer")) {
+    const offer = normalizeChannelOffer(patch.offer);
+    if (offer) channel.offer = offer;
+    else delete channel.offer;
+  }
   if (!String(channel.name || "").trim()) throw new Error("Channel name is required.");
   const flow = loadFlow(current.graphId, null, options);
   const workflowGraph = flow.graph ? {
@@ -734,12 +767,14 @@ function createFlowChannel(project, input = {}, options = {}) {
     kind,
   };
   saveFlow(workflowGraph, options);
+  const offer = normalizeChannelOffer(input.offer ?? null);
   const channel = {
     id: input.id,
     graphId,
     name,
     objective,
     kind,
+    ...(offer ? { offer } : {}),
     enabled: input.enabled !== false,
     // New channels start at the bottom of the autonomy ladder: draft, no standing pattern. The gate
     // holds everything until the founder explicitly promotes the channel (promoteChannel).

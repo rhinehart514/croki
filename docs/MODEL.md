@@ -1,3 +1,12 @@
+> **SUPERSEDED — 2026-07-01.** This describes the object model, loops, and surface of
+> the earlier "IDE for GTM" version of the product. The current plan of record is
+> **docs/GTM-ENGINE-REBUILD.md**, which defines a new record model (Evidence,
+> ProductTruth, MarketObject, GTMPath, MeasurementContract, Run, Result,
+> RepeatableMotion, Learning). Where this doc conflicts with that spec, the spec wins.
+> Kept for history only.
+
+---
+
 # Drover — the model, the loops, and the surface
 
 This is the single orienting document for what GTM IDE *is*: its conceptual model

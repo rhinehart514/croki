@@ -1,3 +1,11 @@
+> **SUPERSEDED — 2026-07-01.** This describes the canvas-first surface of the earlier
+> "IDE for GTM" version of the product (an editable execution graph as the one surface).
+> The current plan of record is **docs/GTM-ENGINE-REBUILD.md**, which reframes Drover as
+> a GTM engine and compiler. Where this doc conflicts with that spec, the spec wins. Kept
+> for history only.
+
+---
+
 # Product Experience Architecture
 
 The decision: GTM IDE is a **canvas-first IDE**. The editable execution graph is the one

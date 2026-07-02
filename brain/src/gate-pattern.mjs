@@ -9,21 +9,24 @@
 // they never send. The gate connector wires them in behind an explicit pattern decision, so the
 // proven per-item path is untouched.
 
-const DRAFT_KEYS = ["draft", "draft_note", "message", "text", "body"];
+import { itemReviewText } from "./memory.mjs";
 
-function hasDraftBody(item) {
-  return DRAFT_KEYS.some((k) => typeof item?.[k] === "string" && item[k].trim());
+// Open content: composition is free-form, so a staged item may carry its work under ANY field
+// names (a post as { post_text }, a page as { headline }…), not just the outreach draft aliases.
+// The pattern can vouch for anything the founder could actually read at the gate.
+function hasReviewableContent(item) {
+  return itemReviewText(item) !== "";
 }
 
 // An item is an exception when the founder genuinely needs to look at it individually: the model
-// was unsure, it was explicitly flagged, or it has no draft body the pattern can vouch for.
+// was unsure, it was explicitly flagged, or it carries nothing the pattern can vouch for.
 export function classifyExceptions(items = [], { confidenceThreshold = 0.5 } = {}) {
   return (Array.isArray(items) ? items : []).map((item, index) => {
     const reasons = [];
     const confidence = typeof item?.confidence === "number" ? item.confidence : null;
     if (confidence !== null && confidence < confidenceThreshold) reasons.push(`low confidence (${confidence})`);
     if (item?.needsReview === true || item?.exception === true) reasons.push("flagged for review");
-    if (!hasDraftBody(item)) reasons.push("no draft body");
+    if (!hasReviewableContent(item)) reasons.push("nothing to review");
     return { index, item, isException: reasons.length > 0, reasons };
   });
 }

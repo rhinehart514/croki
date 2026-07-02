@@ -3,7 +3,33 @@ import { describe, it } from "node:test";
 import { auditGraphContracts, auditInput, auditOutput } from "../src/contracts.mjs";
 import { runGraph } from "../src/graph.mjs";
 import { applyGraphOperations, validateGraph } from "../src/graph-operations.mjs";
-import { pilotOutreachRecipe } from "../src/workflow-recipes.mjs";
+
+// A generic founder-gated workflow fixture (no product-specific recipe): research → draft → gate →
+// stage → measure. Used to exercise the contract auditor, typed operations, and gate/execute ordering.
+// The stage step deliberately does NOT emit "source", so the measure step audits as blind on it.
+function gatedWorkflowGraph() {
+  return {
+    id: "gated-workflow",
+    name: "Gated workflow",
+    version: "1.0",
+    revision: 0,
+    nodes: [
+      { id: "input", category: "source", connector: "manual", label: "Targets", position: { x: 0, y: 0 }, config: { items: [] }, contract: { emits: ["target"] } },
+      { id: "research", category: "enrich", kind: "agent", ref: "test-researcher", label: "Research", position: { x: 300, y: 0 }, config: {}, contract: { accepts: ["target"], emits: ["company", "personalFact"], minItems: 1 } },
+      { id: "draft-outreach", category: "generate", kind: "agent", ref: "test-drafter", label: "Draft", position: { x: 600, y: 0 }, config: {}, contract: { accepts: ["company", "personalFact"], emits: ["draft"], minItems: 1 } },
+      { id: "gate", category: "gate", connector: "default", label: "Founder review", position: { x: 900, y: 0 }, config: {}, contract: { accepts: ["draft"], emits: ["draft", "approved", "gtmActionId"], minItems: 1 } },
+      { id: "stage", category: "execute", connector: "local", label: "Stage approved", position: { x: 1200, y: 0 }, config: {}, contract: { accepts: ["draft", "approved", "gtmActionId"], emits: ["draft", "gtmActionId", "executionStatus"] } },
+      { id: "measure", category: "measure", connector: "default", label: "Measure", position: { x: 1500, y: 0 }, config: { joinKey: "gtmActionId" }, contract: { accepts: ["gtmActionId", "source"], emits: ["attribution"] } },
+    ],
+    edges: [
+      { id: "input-research", source: "input", target: "research", edgeType: "data" },
+      { id: "research-draft", source: "research", target: "draft-outreach", edgeType: "data" },
+      { id: "draft-gate", source: "draft-outreach", target: "gate", edgeType: "data" },
+      { id: "gate-stage", source: "gate", target: "stage", edgeType: "data" },
+      { id: "stage-measure", source: "stage", target: "measure", edgeType: "data" },
+    ],
+  };
+}
 
 function graphWith(items, draftContract = { accepts: ["personalFact"], emits: ["draft"], minItems: 1 }) {
   return {
@@ -104,10 +130,10 @@ describe("workflow data contracts", () => {
   });
 
   it("marks measurement blind when upstream does not promise attribution source", () => {
-    const graph = pilotOutreachRecipe();
+    const graph = gatedWorkflowGraph();
     const audits = auditGraphContracts(graph);
-    assert.equal(audits["measure-pilot"].state, "blind");
-    assert.deepEqual(audits["measure-pilot"].missingFields, ["source"]);
+    assert.equal(audits["measure"].state, "blind");
+    assert.deepEqual(audits["measure"].missingFields, ["source"]);
   });
 
   it("distinguishes waiting, satisfied, and zero-result output states", () => {
@@ -118,7 +144,7 @@ describe("workflow data contracts", () => {
   });
 
   it("preserves contracts through validated typed operations", () => {
-    const graph = pilotOutreachRecipe();
+    const graph = gatedWorkflowGraph();
     const result = applyGraphOperations(graph, [{
       type: "update_node",
       nodeId: "draft-outreach",
@@ -130,8 +156,8 @@ describe("workflow data contracts", () => {
     });
   });
 
-  it("ships a valid, founder-gated pilot recipe", () => {
-    const graph = pilotOutreachRecipe();
+  it("ships a valid, founder-gated workflow with the gate before execute", () => {
+    const graph = gatedWorkflowGraph();
     assert.equal(validateGraph(graph).ok, true);
     const gateIndex = graph.nodes.findIndex((node) => node.category === "gate");
     const executeIndex = graph.nodes.findIndex((node) => node.category === "execute");

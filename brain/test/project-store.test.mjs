@@ -5,12 +5,14 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { recordFlowRun } from "../src/flow-store.mjs";
 import {
+  applySharedContextToGraph,
   createChannel,
   createProject,
   duplicateChannel,
   getProjectWithChannels,
   loadProject,
   listProjects,
+  registerComposedChannel,
   setActiveProject,
   setActiveChannel,
   setChannelIcp,
@@ -125,5 +127,65 @@ describe("multi-channel GTM project", () => {
 
   it("refuses to link an ICP on an unknown pipeline", () => {
     assert.throws(() => setChannelIcp("does-not-exist", { key: "x" }, options), /Channel not found/);
+  });
+
+  it("a pipeline carries its own offer in the founder's words — an open shape, cleared reversibly", () => {
+    const { channel } = createChannel({ name: "Launch post" }, options);
+    assert.equal(channel.offer, undefined, "no offer until the founder or composer states one");
+
+    // A bare statement string is enough — no promo schema required.
+    const stated = updateChannel(channel.id, { offer: "50% off, this post only, through Friday" }, options).channel;
+    assert.deepEqual(stated.offer, { statement: "50% off, this post only, through Friday" });
+
+    // The composer may attach whatever extra fields it chooses; they persist untouched.
+    const shaped = updateChannel(channel.id, {
+      offer: { statement: "First 10 signups get onboarding free", expires: "2026-07-04", code: "LAUNCH10" },
+    }, options).channel;
+    assert.equal(shaped.offer.statement, "First 10 signups get onboarding free");
+    assert.equal(shaped.offer.expires, "2026-07-04");
+    assert.equal(shaped.offer.code, "LAUNCH10");
+
+    // Persisted on the channel and readable back off the project.
+    const readBack = getProjectWithChannels(options).channels.find((c) => c.id === channel.id);
+    assert.equal(readBack.offer.statement, "First 10 signups get onboarding free");
+
+    // The project-level offer stays the standing default, untouched by a pipeline deal.
+    const project = loadProject(options);
+    assert.deepEqual(project.sharedContext.offer.price, "", "the project offer is not overwritten");
+
+    // Clearing is one call; an offer needs a plain-words statement.
+    const cleared = updateChannel(channel.id, { offer: null }, options).channel;
+    assert.equal(cleared.offer, undefined);
+    assert.throws(() => updateChannel(channel.id, { offer: { code: "NOPE" } }, options), /plain-words statement/);
+  });
+
+  it("a channel created or registered with an offer keeps it", () => {
+    const created = createChannel({ name: "Demo push", offer: "Free migration for the first 5 teams" }, options).channel;
+    assert.deepEqual(created.offer, { statement: "Free migration for the first 5 teams" });
+
+    const registered = registerComposedChannel({
+      id: "x-launch", graphId: "x-launch", name: "X launch",
+      offer: { statement: "Redeem DROVER50 for half off" },
+    }, options).channel;
+    assert.equal(registered.offer.statement, "Redeem DROVER50 for half off");
+  });
+
+  it("the pipeline's offer rides into the run context, falling back to the project-level offer", () => {
+    const project = loadProject(options);
+    const graph = {
+      id: "g1",
+      nodes: [{ id: "ctx-learning", category: "context", connector: "product", label: "Learning", config: {} }],
+      edges: [],
+    };
+
+    // With a channel offer, the run's context node carries the pipeline's own deal.
+    const withChannel = applySharedContextToGraph(graph, project.sharedContext, {
+      channelOffer: { statement: "50% off the first month" },
+    });
+    assert.equal(withChannel.nodes[0].config.offer.statement, "50% off the first month");
+
+    // Without one, the project-level sharedContext.offer is the standing default.
+    const withoutChannel = applySharedContextToGraph(graph, project.sharedContext);
+    assert.deepEqual(withoutChannel.nodes[0].config.offer, project.sharedContext.offer);
   });
 });

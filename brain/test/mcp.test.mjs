@@ -8,9 +8,10 @@ describe("MCP tool IA — canonical surface", () => {
   it("keeps the tool count in a reasonable range", () => {
     // Ceiling raised from 30→36 when the Living Product Picture added its four-tool object family
     // (get/derive/revise/signal), then 36→39 when the Person keystone added its read tools
-    // (list_people/get_person/find_references). The bound still guards IA hygiene; it just admits the
-    // new objects.
-    assert.ok(TOOLS.length >= 10 && TOOLS.length <= 39, `expected 10–39 tools, got ${TOOLS.length}`);
+    // (list_people/get_person/find_references), then 39→42 when the rebuilt GTM engine added its three
+    // founder rituals (run_market_research / compose_path_portfolio / promote_run). The bound still
+    // guards IA hygiene; it just admits the new objects.
+    assert.ok(TOOLS.length >= 10 && TOOLS.length <= 42, `expected 10–42 tools, got ${TOOLS.length}`);
   });
 
   it("has unique tool names", () => {

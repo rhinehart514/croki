@@ -1,3 +1,10 @@
+> **SUPERSEDED — 2026-07-01.** This build plan targets the earlier "IDE for GTM"
+> version of the product. The current plan of record is **docs/GTM-ENGINE-REBUILD.md**,
+> which reframes Drover as a GTM engine and compiler and lists its own phased build.
+> Where this doc conflicts with that spec, the spec wins. Kept for history only.
+
+---
+
 # Drover — Build Plan (spec → reality)
 
 *Consolidated from a grounded gap analysis of the codebase against `PRODUCT-SPEC.md`. Five areas, real files, rough sizes (S ≈ <1d, M ≈ 1–2d, L ≈ 3+d).*

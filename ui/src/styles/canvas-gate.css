@@ -251,6 +251,15 @@
   color: var(--proven);
 }
 
+/* The deal the staged work carries — this pipeline's own offer, or the project's standing one. */
+.cgate-review-offer {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.625rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
 .cgate-approve-all {
   display: inline-flex;
   align-items: center;

@@ -4,8 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { getBoard, getPipelineBeliefSpine, getPipelineIcpGrouping } from "../src/board.mjs";
-import { createChannel, updateSharedContext, setChannelIcp } from "../src/project-store.mjs";
-import { appendAppearance, upsertPerson } from "../src/person-store.mjs";
+import { createChannel, loadProject, saveProject, updateSharedContext, setChannelIcp } from "../src/project-store.mjs";
+import { saveFlow, recordFlowRun } from "../src/flow-store.mjs";
 
 describe("getBoard — nine belief layers derived purely from real state", () => {
   let parent;
@@ -89,9 +89,48 @@ describe("getBoard — nine belief layers derived purely from real state", () =>
     assert.ok(channels.confidence >= 45, "a founder verdict is the strongest confidence signal");
     assert.equal(channels.experiments.length, 1);
   });
+
+  it("surfaces an experiment with an unknown or missing layer on the Learn band instead of vanishing it", () => {
+    updateSharedContext({
+      experiments: [
+        // A layer none of the nine bands claims — must land somewhere visible.
+        { id: "exp-pricing", channelId: "site", targetLayer: "pricing-page", variable: "Annual toggle" },
+        // A run-derived experiment carries NO layer at all — it must not be force-filed under channels.
+        { id: "exp-derived", channelId: "outbound", variable: "Draft personalized opener" },
+      ],
+    }, options);
+    const board = getBoard({ projectId: "default" }, options);
+    const channels = board.layers.find((l) => l.layer === "channels");
+    const learn = board.layers.find((l) => l.layer === "learn");
+    assert.equal(channels.experiments.length, 0, "nothing is force-filed under the pipelines band");
+    assert.deepEqual(
+      learn.experiments.map((e) => e.id).sort(),
+      ["exp-derived", "exp-pricing"],
+      "both stray experiments surface on the Learn band",
+    );
+  });
+
+  it("states the Learn belief as what the founder decided, never a tally string or '(s)' shorthand", () => {
+    updateSharedContext({
+      experiments: [{
+        id: "exp-x",
+        channelId: "x",
+        targetLayer: "channels",
+        hypothesis: "Personalized openers beat templates",
+        verdict: { decision: "keep", decidedAt: "2026-06-29T00:00:00Z", decidedBy: "founder" },
+      }],
+    }, options);
+    const board = getBoard({ projectId: "default" }, options);
+    const learn = board.layers.find((l) => l.layer === "learn");
+    assert.equal(learn.belief, "1 experiment settled");
+    for (const layer of board.layers) {
+      assert.ok(!/\(s\)/.test(layer.belief ?? ""), `${layer.layer} belief never uses the "(s)" shorthand`);
+      assert.ok(!/gate decision\(s\)|verdict\(s\)|signal\(s\)/.test(layer.belief ?? ""), `${layer.layer} belief is not a tally`);
+    }
+  });
 });
 
-describe("getPipelineBeliefSpine — one pipeline's five belief faces, derived purely from real state", () => {
+describe("getPipelineBeliefSpine — the strip over one pipeline, derived from ITS composed graph", () => {
   let parent;
   let options;
 
@@ -102,100 +141,166 @@ describe("getPipelineBeliefSpine — one pipeline's five belief faces, derived p
 
   afterEach(() => fs.rmSync(parent, { recursive: true, force: true }));
 
-  it("returns the five faces with the full LayerBelief shape for one pipeline", () => {
-    const { channel } = createChannel({ name: "Cold outbound", objective: "Book pilots" }, options);
-    const spine = getPipelineBeliefSpine({ projectId: "default", channelId: channel.id }, options);
+  // The canonical broadcast pipeline — the shape the old fixed five-face skeleton read as permanently
+  // blank (no per-person trigger step, no durable-People step). Its strip must instead show ITS stages.
+  const broadcastGraph = (graphId) => ({
+    id: graphId,
+    name: "X launch post",
+    revision: 1,
+    nodes: [
+      { id: "followers", category: "source", label: "Your X followers", position: { x: 0, y: 0 } },
+      { id: "post", category: "generate", kind: "agent", label: "Write the launch post", position: { x: 1, y: 0 } },
+      { id: "gate", category: "gate", label: "Your approval", position: { x: 2, y: 0 } },
+      { id: "send", category: "execute", label: "Post to X", position: { x: 3, y: 0 } },
+      { id: "replies", category: "measure", label: "Replies and clicks", position: { x: 4, y: 0 } },
+    ],
+    edges: [
+      { id: "e1", source: "followers", target: "post", edgeType: "data" },
+      { id: "e2", source: "post", target: "gate", edgeType: "data" },
+      { id: "e3", source: "gate", target: "send", edgeType: "data" },
+      { id: "e4", source: "send", target: "replies", edgeType: "data" },
+    ],
+  });
 
+  it("cards come from the pipeline's own composed steps, in flow order and its own words", () => {
+    const { channel } = createChannel({ name: "X launch post" }, options);
+    saveFlow(broadcastGraph(channel.graphId), options);
+
+    const spine = getPipelineBeliefSpine({ projectId: "default", channelId: channel.id }, options);
     assert.equal(spine.projectId, "default");
     assert.equal(spine.channelId, channel.id);
-    assert.equal(spine.channelName, "Cold outbound");
-    assert.deepEqual(Object.keys(spine.faces), ["who", "say", "reached", "worked", "verdict"]);
-
-    for (const [key, face] of Object.entries(spine.faces)) {
-      assert.ok(typeof face.belief === "string" || face.belief === null, `${key}.belief is string|null`);
-      assert.ok(
-        typeof face.confidence === "number" && face.confidence >= 0 && face.confidence <= 100,
-        `${key}.confidence is 0-100`,
-      );
-      assert.ok(["validated", "testing", "assumed", "blind"].includes(face.status), `${key}.status is valid`);
-      assert.ok(typeof face.groundingMode === "string", `${key}.groundingMode is a string`);
-      assert.ok(Array.isArray(face.experiments), `${key}.experiments is an array`);
-      assert.ok(Array.isArray(face.evidence), `${key}.evidence is an array`);
+    assert.equal(spine.channelName, "X launch post");
+    assert.deepEqual(
+      spine.cards.map((c) => c.title),
+      ["Your X followers", "Write the launch post", "Your approval", "Post to X", "Replies and clicks"],
+      "one card per composed step, titled by the step's own label — no fixed who/say/reached skeleton",
+    );
+    // Never run: every card is honestly empty and says in plain words what would fill it.
+    for (const card of spine.cards) {
+      assert.equal(card.empty, true, `${card.title} is honestly empty before any run`);
+      assert.ok(card.body.length > 0, `${card.title} explains what would fill it`);
     }
+    assert.match(spine.cards[3].body, /Nothing has gone out yet — approve/);
   });
 
-  it("is honest-blank for the faces with no signal (who/say/reached/verdict): null / 0 / blind", () => {
-    const { channel } = createChannel({ name: "Empty pipeline" }, options);
-    const spine = getPipelineBeliefSpine({ projectId: "default", channelId: channel.id }, options);
+  it("a broadcast run fills the strip with what really happened — drafted words, gate outcome, what went out, what came back", () => {
+    const { channel } = createChannel({ name: "X launch post" }, options);
+    const graph = broadcastGraph(channel.graphId);
+    saveFlow(graph, options);
+    // The pipeline carries its own offer (written by another surface as { statement }); read defensively.
+    const project = loadProject(options);
+    const channels = project.channels.map((c) =>
+      c.id === channel.id ? { ...c, offer: { statement: "50% off the first month" } } : c);
+    saveProject({ ...project, channels }, options);
 
-    // These four faces read founder-stated + run-derived signal, of which a brand-new pipeline has
-    // none — so they honestly report blind rather than a confident fake.
-    for (const key of ["who", "say", "reached", "verdict"]) {
-      const face = spine.faces[key];
-      assert.equal(face.belief, null, `${key} belief is null with no signal`);
-      assert.equal(face.confidence, 0, `${key} confidence is 0 with no signal`);
-      assert.equal(face.status, "blind", `${key} status is blind with no signal`);
-      assert.equal(face.moving, false, `${key} is not moving with no signal`);
-    }
-    // The WORKED face reads real Measure signal off the pipeline's GRAPH shape — a blank graph with no
-    // measure stage is itself derived signal (health 40), so this face is honestly non-blind, exactly
-    // as the board's measure layer behaves. Never a seeded number.
-    assert.ok(spine.faces.worked.belief, "worked reflects the graph's real measure state, not a fake blank");
-    assert.equal(spine.faces.worked.groundingMode, "derived");
-  });
-
-  it("scopes the reached + who faces to People (and triggers) that entered THIS pipeline only", () => {
-    const { channel } = createChannel({ name: "Outbound" }, options);
-    const { channel: other } = createChannel({ name: "Community" }, options);
-
-    // A person who entered THIS pipeline carrying a why-now trigger.
-    const inHere = upsertPerson("default", { name: "Dana", email: "dana@acme.com" }, options);
-    appendAppearance("default", inHere.id, { channelId: channel.id, trigger: "raised a seed round" }, options);
-    // A person who entered a DIFFERENT pipeline — must not bleed in.
-    const elsewhere = upsertPerson("default", { name: "Uri", email: "uri@else.com" }, options);
-    appendAppearance("default", elsewhere.id, { channelId: other.id, trigger: "hiring spike" }, options);
-
-    const spine = getPipelineBeliefSpine({ projectId: "default", channelId: channel.id }, options);
-    assert.match(spine.faces.reached.belief, /1 person/);
-    assert.equal(spine.faces.reached.status, "testing");
-    assert.ok(spine.faces.reached.moving, "a reached person makes the face live");
-    assert.ok(spine.faces.reached.evidence.includes("Dana"));
-    assert.ok(spine.faces.who.evidence.includes("raised a seed round"));
-    assert.ok(!spine.faces.who.evidence.includes("hiring spike"), "another pipeline's trigger never bleeds in");
-  });
-
-  it("reads the stated positioning + offer into the WHAT-YOU-SAY face", () => {
-    const { channel } = createChannel({ name: "Outbound" }, options);
-    updateSharedContext({
-      positioning: { category: "GTM IDE", audience: "dev-tool founders", promise: "vibe your GTM", status: "stated" },
-      offer: { price: "200", unit: "per month", status: "stated" },
+    recordFlowRun(graph, {
+      runId: "run-1",
+      ok: true,
+      pendingGates: [],
+      nodes: {
+        followers: { nodeId: "followers", category: "source", ok: true, items: [{ id: "aud", name: "Your X followers" }] },
+        post: { nodeId: "post", category: "generate", ok: true, items: [{ id: "p1", text: "Drover is live — 50% off the first month for multi-product founders." }] },
+        gate: { nodeId: "gate", category: "gate", ok: true, items: [{ id: "p1", approvalStatus: "approved", draft: "Drover is live — 50% off the first month for multi-product founders." }] },
+        send: { nodeId: "send", category: "execute", ok: true, items: [{ id: "p1" }] },
+        replies: { nodeId: "replies", category: "measure", ok: true, items: [{ id: "r1", text: "12 replies, 3 signups" }] },
+      },
     }, options);
 
     const spine = getPipelineBeliefSpine({ projectId: "default", channelId: channel.id }, options);
-    const say = spine.faces.say;
-    assert.equal(say.groundingMode, "stated");
-    assert.match(say.belief, /GTM IDE/);
-    assert.match(say.belief, /200 \/ per month/);
-    assert.ok(say.confidence > 0, "a stated positioning + offer earns real confidence");
+    const byTitle = new Map(spine.cards.map((c) => [c.title, c]));
+
+    // What you say = what THIS pipeline actually drafted, plus the offer it carries — never the
+    // project positioning paragraph echoed back.
+    const draft = byTitle.get("Write the launch post");
+    assert.match(draft.detail, /Drover is live/);
+    assert.match(draft.body, /It carries your offer: 50% off the first month/);
+    assert.equal(draft.empty, false);
+
+    assert.match(byTitle.get("Your approval").body, /You approved 1 on the last run\./);
+    assert.match(byTitle.get("Post to X").body, /1 item moved through here after your approval\./);
+    const replies = byTitle.get("Replies and clicks");
+    assert.match(replies.body, /1 result came back\./);
+    assert.match(replies.detail, /12 replies, 3 signups/);
+
+    // Real founder decisions close the strip in result language — never a "N gate decision(s)" tally.
+    const decided = spine.cards[spine.cards.length - 1];
+    assert.equal(decided.title, "What you've decided");
+    assert.match(decided.body, /Across 1 run you approved 1\./);
+
+    // Founder register: nothing on the strip speaks engine vocabulary or "(s)" shorthand.
+    const serialized = JSON.stringify(spine.cards);
+    for (const banned of ["(s)", "blind", "derived", "groundingMode", "confidence", "signal"]) {
+      assert.ok(!serialized.includes(banned), `the strip never says "${banned}"`);
+    }
   });
 
-  it("scopes an experiment verdict to the target pipeline in the VERDICT face", () => {
+  it("falls back to the project-level offer when the pipeline states none of its own", () => {
+    const { channel } = createChannel({ name: "X launch post" }, options);
+    const graph = broadcastGraph(channel.graphId);
+    saveFlow(graph, options);
+    // No channel.offer — the standing default is the project-level sharedContext.offer.
+    updateSharedContext({ offer: { price: "200", unit: "per month", status: "stated" } }, options);
+    recordFlowRun(graph, {
+      runId: "run-1",
+      ok: true,
+      pendingGates: [],
+      nodes: {
+        post: { nodeId: "post", category: "generate", ok: true, items: [{ id: "p1", text: "Launch post text" }] },
+      },
+    }, options);
+
+    const spine = getPipelineBeliefSpine({ projectId: "default", channelId: channel.id }, options);
+    const draft = spine.cards.find((c) => c.title === "Write the launch post");
+    assert.match(draft.body, /It carries your offer: 200 \/ per month/);
+  });
+
+  it("counts drafts waiting at the gate as the founder-actionable number", () => {
+    const { channel } = createChannel({ name: "X launch post" }, options);
+    const graph = broadcastGraph(channel.graphId);
+    saveFlow(graph, options);
+    recordFlowRun(graph, {
+      runId: "run-1",
+      ok: true,
+      pendingGates: ["gate"],
+      nodes: {
+        post: { nodeId: "post", category: "generate", ok: true, items: [{ id: "p1", text: "Draft A" }, { id: "p2", text: "Draft B" }] },
+        gate: { nodeId: "gate", category: "gate", ok: true, items: [
+          { id: "p1", approvalStatus: "pending", draft: "Draft A" },
+          { id: "p2", approvalStatus: "pending", draft: "Draft B" },
+        ] },
+      },
+    }, options);
+
+    const spine = getPipelineBeliefSpine({ projectId: "default", channelId: channel.id }, options);
+    const gateCard = spine.cards.find((c) => c.title === "Your approval");
+    assert.equal(gateCard.needsYou, 2, "the waiting count is the number the founder acts on");
+    assert.match(gateCard.body, /2 waiting on your decision\./);
+    // Downstream stages stay honestly empty — approving is what moves them.
+    assert.equal(spine.cards.find((c) => c.title === "Post to X").empty, true);
+  });
+
+  it("closes with a founder experiment verdict named by the real variable — never the typed goal", () => {
     const { channel } = createChannel({ name: "Outbound" }, options);
     updateSharedContext({
       experiments: [{
         id: "exp-outbound",
         channelId: channel.id,
-        targetLayer: "channels",
-        hypothesis: "Personalized openers beat templates",
+        variable: "Personalized openers",
         status: "complete",
         verdict: { decision: "keep", decidedAt: "2026-06-29T00:00:00Z", decidedBy: "founder" },
       }],
     }, options);
 
     const spine = getPipelineBeliefSpine({ projectId: "default", channelId: channel.id }, options);
-    assert.equal(spine.faces.verdict.status, "validated");
-    assert.equal(spine.faces.verdict.experiments.length, 1);
-    assert.ok(spine.faces.verdict.confidence >= 45, "a founder verdict is the strongest signal");
+    const decided = spine.cards.find((c) => c.title === "What you've decided");
+    assert.ok(decided, "a settled experiment is a real conclusion");
+    assert.match(decided.body, /You kept “Personalized openers”\./);
+  });
+
+  it("has no decisions card when nothing has been decided — honest emptiness, not a fake conclusion", () => {
+    const { channel } = createChannel({ name: "Outbound" }, options);
+    const spine = getPipelineBeliefSpine({ projectId: "default", channelId: channel.id }, options);
+    assert.ok(!spine.cards.some((c) => c.title === "What you've decided"));
   });
 
   it("throws for an unknown pipeline id", () => {

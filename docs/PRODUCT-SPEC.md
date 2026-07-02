@@ -1,3 +1,10 @@
+> **SUPERSEDED — 2026-07-01.** This spec describes the earlier "IDE for GTM" version
+> of the product (a living canvas as cockpit). The current plan of record is
+> **docs/GTM-ENGINE-REBUILD.md**, which reframes Drover as a GTM engine and compiler.
+> Where this doc conflicts with that spec, the spec wins. Kept for history only.
+
+---
+
 # Drover — Product Spec
 
 *One doc. What this product is, how it works, what exists today, and what has to change to get there.*

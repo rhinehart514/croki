@@ -337,6 +337,10 @@ export async function runGraph(graph, opts = {}) {
     memory = null,
     grounding = null,
     designState = null,
+    // The researched buyer picture (market-research.buildMarketContext output). Injected onto each
+    // node's context as `context.market` so the market provider grounds an agent/skill step on who the
+    // buyer really is — the same push as grounding/designState. Null (an honest blank) leaves it unset.
+    market = null,
     runs = null,
     resumeResult = null,
     stepRuntime = defaultStepRuntime,
@@ -451,6 +455,9 @@ export async function runGraph(graph, opts = {}) {
     // base layer for agent/skill steps. The assembler only renders a summary into the prompt, so
     // the full ledger never bloats the model call — just the cited product map and "what's tried".
     if (grounding) context.grounding = grounding;
+    // The researched buyer picture, so the market provider renders who buys and where they gather (each
+    // record labelled by how solid) into the base layer, instead of the run guessing the buyer.
+    if (market) context.market = market;
     if (Array.isArray(runs)) context.__state = runs;
 
     // Stream the step lifecycle so the UI can animate the flow and reveal content

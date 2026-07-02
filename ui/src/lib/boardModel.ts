@@ -2,9 +2,8 @@
 //
 // It fetches GET /api/projects/:id/board (the nine LayerBelief bands, derived from real state in
 // brain/src/board.mjs) and hands the lens a typed, loading/empty/error-aware view. It also owns the
-// pure display vocabulary the board renders with: each layer's name + sublabel, and the mapping from
-// a belief's real groundingMode / status into the board's grounded / leaning / assumed / blind
-// badge. NOTHING here writes, gates, or triggers a run — the board is a pure read.
+// pure display vocabulary the board renders with: each layer's name + sublabel. NOTHING here writes,
+// gates, or triggers a run — the board is a pure read.
 
 import { useEffect, useState } from "react";
 import { getBoard } from "@/api";
@@ -45,32 +44,9 @@ export function layerMeta(layer: string): LayerMeta {
   return LAYER_META[layer] ?? { n: 0, name: layer, sub: "" };
 }
 
-// ── The grounding badge ────────────────────────────────────────────────────────
-// One belief's real groundingMode + status → the board's badge vocabulary. Amber is NEVER produced
-// here: amber belongs to the founder gate alone, and the board carries no gate-pending signal, so it
-// stays grounded / leaning / assumed / blind. (See 01-board.html's marker legend.)
-export type BadgeTone = "grounded" | "lean" | "assumed" | "blind";
-export type GroundingBadge = { tone: BadgeTone; label: string };
-
-export function groundingBadge(layer: LayerBelief): GroundingBadge {
-  if (!layer.belief) return { tone: "blind", label: "blind" };
-  if (layer.status === "validated") return { tone: "grounded", label: "grounded" };
-  if (layer.status === "testing") return { tone: "lean", label: "testing" };
-  // assumed — surface HOW it's grounded (founder-stated, gate-produced, or run-derived).
-  const label =
-    layer.groundingMode === "derived" ? "derived"
-    : layer.groundingMode === "gated" ? "staged"
-    : "stated";
-  return { tone: "assumed", label };
-}
-
-// A coarse confidence band for the pill — keeps the number honest while reading at a glance.
-export function confidenceBand(confidence: number): "high" | "mid" | "low" | "none" {
-  if (confidence <= 0) return "none";
-  if (confidence >= 67) return "high";
-  if (confidence >= 34) return "mid";
-  return "low";
-}
+// (The old groundingBadge / confidenceBand display helpers were removed: nothing rendered them
+// anymore, and their "blind" / "derived" badge words are engine vocabulary a founder surface must
+// not speak. A future badge derives its words in plain language from the same real fields.)
 
 // ── The fetch hook ──────────────────────────────────────────────────────────────
 export type BoardState =

@@ -1,18 +1,24 @@
 import { useMemo, useState } from "react";
-import { Lightbulb, Hammer, Trash2, LoaderCircle, Compass, ChevronDown, ChevronUp } from "lucide-react";
-import type { OperatorSession } from "@/types";
+import { Lightbulb, Hammer, Trash2, LoaderCircle, Compass, ChevronDown, ChevronUp, Undo2 } from "lucide-react";
+import type { OperatorSession, PendingIdea } from "@/types";
 
-// The founder's door onto an ideate pause. The operator generated ideas, graded them with a separate
-// bar, and STOPPED — it never decides which become work. Two stages, set by where the project is in
-// its life. "directions" (a project's beginning): kept ideas become ICP directions written into the ONE
-// shared kernel — no pipelines composed, no per-idea channels created. "build" (a mature project):
-// kept ideas compose into pipelines through compose_and_run. Either way nothing runs until you choose,
-// and a kill teaches the next ideation round. This is the wall for the generate side.
+// The founder's door onto an ideate pause. The operator generated ideas, had a separate check grade
+// them against what the goal needs, and STOPPED — it never decides which become work. Each card is a
+// decidable pitch: the idea in plain words, the strongest reason it could work for this goal, and the
+// strongest reason it might not. Ideas that were cut before reaching the founder stay one tap away,
+// each with the plain reason it was cut, and any of them can be brought back and built — the founder's
+// call beats the check's. Two stages, set by where the project is in its life: "directions" (a
+// project's beginning) keeps ideas as starting directions with nothing composed yet; "build" (a
+// mature project) composes kept ideas into pipelines that stop at the founder's gate.
 
 type Verdict = "build" | "kill" | undefined;
 
-// The generators lead each pitch with its segment ("Home services: …"). Split that prefix into a
-// scannable title so the card reads as a decision, not a paragraph. Fallback: first clause.
+// A cut idea in the pause payload: the pitch, what kind of move it is, and the plain reason it was
+// set aside. Mirrors OperatorSession.pendingIdeas.cut in types.ts.
+type CutIdea = { id: string; pitch: string; what?: string | null; reason?: string | null };
+
+// Ideas often lead with a segment ("Home services: …"). Split that prefix into a scannable title so
+// the card reads as a decision, not a paragraph. Fallback: first clause.
 function splitPitch(pitch: string): { title: string; rest: string } {
   const colon = pitch.indexOf(":");
   if (colon > 2 && colon <= 60) {
@@ -32,7 +38,8 @@ export function IdeaReview({ session, stage = "build", onResolve }: {
 }) {
   const pending = session.pendingIdeas;
   const [verdicts, setVerdicts] = useState<Record<string, Verdict>>({});
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [revivedIds, setRevivedIds] = useState<string[]>([]);
+  const [showCut, setShowCut] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const directions = stage === "directions";
 
@@ -46,20 +53,33 @@ export function IdeaReview({ session, stage = "build", onResolve }: {
     return { build: b, kill: k };
   }, [verdicts]);
 
-  // Strongest first — the founder compares scores, not paragraphs.
-  const ideas = useMemo(() => {
+  const cut = useMemo<CutIdea[]>(() => pending?.cut ?? [], [pending]);
+
+  // The deck the founder decides on: the ideas that cleared the check (strongest first — ordered,
+  // never numbered) plus any cut idea the founder brought back.
+  const ideas = useMemo<PendingIdea[]>(() => {
     const list = [...(pending?.ideas ?? [])];
     list.sort((a, b) => (b.barScore ?? 0) - (a.barScore ?? 0));
+    for (const id of revivedIds) {
+      const entry = cut.find((c) => c.id === id);
+      // A revived idea carries the reason it was cut as its honest "might not" line.
+      if (entry) list.push({ id: entry.id, pitch: entry.pitch, what: entry.what ?? null, risk: entry.reason ?? null });
+    }
     return list;
-  }, [pending]);
+  }, [pending, cut, revivedIds]);
 
   if (!pending) return null;
   const decided = build.length + kill.length;
   const keepLabel = directions ? "Keep" : "Build";
   const KeepIcon = directions ? Compass : Hammer;
+  const stillCut = cut.filter((c) => !revivedIds.includes(c.id));
 
   const set = (id: string, v: Verdict) =>
     setVerdicts((prev) => ({ ...prev, [id]: prev[id] === v ? undefined : v }));
+
+  const revive = (id: string) => {
+    setRevivedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  };
 
   const submit = async () => {
     if (!decided || submitting) return;
@@ -78,39 +98,33 @@ export function IdeaReview({ session, stage = "build", onResolve }: {
         <strong>{directions ? "Pick the directions worth exploring" : "Pick the ideas worth building"}</strong>
         <span className="idea-review-sub">
           {directions
-            ? "This project is at its beginning. Kept ideas become ICP directions in the shared kernel — no pipelines yet; the operator comes back with the cheapest first probe."
-            : "Kept ideas compose into pipelines that stop at your gate."}
-          {" "}Killed ideas teach the next round.
-          {pending.killedCount ? ` ${pending.killedCount} already fell below the bar.` : ""}
+            ? "This project is just starting. What you keep is saved as a starting direction — nothing runs yet, and you'll get back the cheapest way to test it."
+            : "What you keep gets built into work that stops at your gate."}
+          {" "}What you kill stays killed and won't come back next round.
         </span>
       </div>
 
-      <div className="idea-review-list" aria-label="Surviving ideas">
+      <div className="idea-review-list" aria-label="Ideas waiting for your call">
         {ideas.map((idea) => {
           const v = verdicts[idea.id];
           const { title, rest } = splitPitch(idea.pitch);
-          const open = Boolean(expanded[idea.id]);
           return (
             <div key={idea.id} className={`idea-card ${v ? `is-${v}` : ""}`}>
               <div className="idea-card-body">
                 <div className="idea-card-top">
                   <strong className="idea-card-title">{title}</strong>
-                  {typeof idea.barScore === "number" ? (
-                    <span className="idea-card-score" title="Graded by a separate critic, 0–10">
-                      {idea.barScore.toFixed(1)}
-                    </span>
-                  ) : null}
                 </div>
-                {idea.angle ? <span className="idea-card-angle">{idea.angle}</span> : null}
-                <p className={`idea-card-pitch ${open ? "" : "is-clamped"}`}>{rest}</p>
-                <button
-                  type="button"
-                  className="idea-card-more"
-                  onClick={() => setExpanded((prev) => ({ ...prev, [idea.id]: !open }))}
-                  aria-expanded={open}
-                >
-                  {open ? <><ChevronUp size={12} /> less</> : <><ChevronDown size={12} /> more</>}
-                </button>
+                {idea.what ? <span className="idea-card-angle">{idea.what}</span> : null}
+                <p className="idea-card-pitch">{rest}</p>
+                {idea.upside ? (
+                  <p className="idea-card-pitch"><strong>Why it could work:</strong> {idea.upside}</p>
+                ) : null}
+                {idea.risk ? (
+                  <p className="idea-card-pitch"><strong>Why it might not:</strong> {idea.risk}</p>
+                ) : null}
+                {idea.take ? (
+                  <p className="idea-card-pitch"><strong>The check's read:</strong> {idea.take}</p>
+                ) : null}
               </div>
               <div className="idea-card-actions">
                 <button
@@ -134,6 +148,35 @@ export function IdeaReview({ session, stage = "build", onResolve }: {
           );
         })}
       </div>
+
+      {stillCut.length ? (
+        <div className="idea-review-list" aria-label="Ideas set aside before they reached you">
+          <button
+            type="button"
+            className="idea-card-more"
+            onClick={() => setShowCut((open) => !open)}
+            aria-expanded={showCut}
+          >
+            {showCut ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            {stillCut.length === 1
+              ? "1 idea was set aside before it reached you — see why"
+              : `${stillCut.length} ideas were set aside before they reached you — see why`}
+          </button>
+          {showCut ? stillCut.map((entry) => (
+            <div key={entry.id} className="idea-card is-kill">
+              <div className="idea-card-body">
+                <p className="idea-card-pitch">{entry.pitch}</p>
+                <p className="idea-card-pitch"><strong>Why it was cut:</strong> {entry.reason || "Fell short of what this goal needs."}</p>
+              </div>
+              <div className="idea-card-actions">
+                <button type="button" className="idea-card-btn build" onClick={() => revive(entry.id)}>
+                  <Undo2 size={13} /> Bring it back
+                </button>
+              </div>
+            </div>
+          )) : null}
+        </div>
+      ) : null}
 
       <div className="idea-review-foot">
         <span className="idea-review-tally">

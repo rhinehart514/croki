@@ -8,7 +8,7 @@ import type {
   ProductModel, ProductModelEdit, ProductPinTargetKind,
   CapabilityServer, Person, CrossReferenceResult, ToolRegistryView, RegisteredTool, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole, BoardView, GtmExperiment,
-  ChannelMeta, Input,
+  ChannelMeta, Input, GtmMapView,
 } from "@/types";
 import { identityHeaders } from "@/lib/identity";
 
@@ -143,9 +143,6 @@ export const applyGraphOperations = (graph: GTMGraph, operations: GraphOperation
 
 export const auditGraph = (graph: GTMGraph, runResult?: GTMRunResult | null) =>
   post<{ audits: Record<string, GTMContractAudit> }>("/api/graph/audit", { graph, runResult });
-
-export const getPilotOutreachRecipe = () =>
-  get<{ graph: GTMGraph }>("/api/graph/recipes/pilot-outreach");
 
 // ── Artifacts — subagents & skills as real, fully-editable .md files ─────────
 export type ArtifactType = "agent" | "skill";
@@ -395,6 +392,29 @@ export const getPerson = (projectId: string, personId: string) =>
 // ── GTM Board — the nine belief layers, a pure read of real state ──────────────
 export const getBoard = (projectId: string) =>
   get<BoardView>(`/api/projects/${encodeURIComponent(projectId)}/board`);
+
+// ── GTM map — the read-only portfolio projection (the rebuilt engine's records) ──
+// Returns the four record lists (product truths, market objects, GTM paths, measurement contracts)
+// for the project; the UI derives the ranked portfolio, its buckets and weak links from these in code.
+export const getGtmMap = (projectId: string) =>
+  get<GtmMapView>(`/api/projects/${encodeURIComponent(projectId)}/gtm-map`);
+
+// ── The rebuilt GTM-engine rituals the founder invokes on the active project ──
+// Research the buyer picture (Phase 1): persists the MarketObjects the map and the paths rest on, then
+// returns a plain-language summary. Nothing sends.
+export const runMarketResearch = (projectId: string) =>
+  post<{ projectId: string; ok: boolean; count: number; summary: string; meta: Record<string, unknown> }>(
+    `/api/projects/${encodeURIComponent(projectId)}/market-research`,
+    {},
+  );
+
+// Generate the ranked path portfolio (Phase 2) from the product truth + buyer picture. Persists the
+// paths so the reasoning canvas renders them. Composes and stores only — it never runs a path.
+export const generatePathPortfolio = (projectId: string) =>
+  post<{ projectId: string; count: number; summary: string; meta: Record<string, unknown> }>(
+    `/api/projects/${encodeURIComponent(projectId)}/path-portfolio`,
+    {},
+  );
 
 // Group existing motions into the arms of one stated experiment — founder-confirmed, post-hoc context.
 // Never gates a run; never records a verdict.

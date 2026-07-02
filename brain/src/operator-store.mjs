@@ -110,7 +110,7 @@ export function createOperatorSession(input, options = {}) {
     // Convex sync layer can attribute the conversation. Never gates anything on its own.
     teamId: input.teamId || null,
     workspaceId: input.workspaceId || null,
-    model: input.model || process.env.GTM_IDE_OPERATOR_MODEL || "claude-sonnet-4-6",
+    model: input.model || process.env.GTM_IDE_OPERATOR_MODEL || "claude-opus-4-8",
     runtime: null,
     status: "ready",
     createdAt,

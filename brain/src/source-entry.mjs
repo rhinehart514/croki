@@ -65,23 +65,51 @@ export function pickDiscoveryAgent(agents = []) {
   return agents.find((a) => re.test(`${a.ref} ${a.objective ?? ""} ${a.title ?? ""}`)) ?? agents[0] ?? null;
 }
 
-const DISCOVERY_PROMPT = (role) =>
-  `You are the DISCOVERY entry for this go-to-market loop and you were given NO seed list. Using the product grounding and ICP in your context plus WebSearch/WebFetch on real public sources, FIND 3-5 real, currently-active people or organizations that fit this product's ICP and have a recent public now-trigger.${
-    role && role.trim() ? ` Then apply your role: ${role.trim()}` : ""
-  } Return ONLY a JSON array of real, source-traceable candidates — each with a name/handle, a source url, and one line on why them. Invent nothing; if you can only verify 2, return 2.`;
+// Prompt additions for an unseeded entry. Both are DERIVED from the pipeline's goal — what to look
+// for follows the goal, never a hardwired find-N-ICP-people template — and both are ADDED alongside
+// the agent's own instruction, never in place of it. A drafting agent stays a drafting agent.
+function unseededEntryNote(goal) {
+  const objective = String(goal ?? "").trim();
+  return [
+    "You are the first step of this pipeline and no seed list was provided for this run.",
+    `Proceed from the product grounding, the shared context, and the goal${objective ? `: ${objective}` : "."}`,
+    "If your instructions genuinely need real outside people, places, or things, find them yourself from real public sources (WebSearch/WebFetch) and note where each came from. Invent nothing; leave out anything you cannot verify.",
+  ].join(" ");
+}
+
+function selfSourcingInstruction(goal, role) {
+  const objective = String(goal ?? "").trim();
+  const ownRole = String(role ?? "").trim();
+  return [
+    "This step opens the pipeline: no starting list was provided for this run, and the steps after this one work through real items, so gather them first.",
+    objective ? `The pipeline's goal, in the founder's words: ${objective}` : "",
+    "Let that goal decide what to look for and how many. Work from the product grounding and shared context, and use WebSearch/WebFetch on real public sources when the goal needs things from outside the product. Note where each item came from. Invent nothing; return fewer items rather than padding.",
+    ownRole ? `Alongside that, keep doing your own job: ${ownRole}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+// Prepend a derived note to an agent's own prompt without ever displacing it.
+function withEntryNote(agentPrompt, goal) {
+  const own = typeof agentPrompt === "string" ? agentPrompt.trim() : "";
+  const note = unseededEntryNote(goal);
+  return own ? `${note}\n\n${own}` : note;
+}
 
 // Compose-time entry resolution. Decides the source mode VISIBLY in the graph the founder
-// persists — never a silent run-time rewrite. Three honest outcomes:
+// persists — never a silent run-time rewrite. Four honest outcomes:
 //   1. The founder gave concrete input  → keep the provided source, mark it provided.
-//   2. No input, a discovery agent feeds the source → drop the empty connector source and let
-//      that agent be the discovered entry (the agent already self-sources; promoting it keeps
-//      the topology the model designed minus a dead node).
-//   3. No input, no downstream agent but an accepted discovery agent exists → convert the source
-//      node itself into a discovered (agent) source.
+//   2. No input, an agent consumes the source → drop the dead empty connector source and let that
+//      agent be the entry. The agent runs AS COMPOSED: it proceeds from the product, the goal, and
+//      shared context, so its own instruction is kept in full — only a short goal-derived note is
+//      prepended telling it no seed list exists (a drafting agent stays a drafting agent).
+//   3. No input, the source's consumers are deterministic steps (or the gate itself) that genuinely
+//      consume a list of items the graph does not have → convert the source node into a discovered
+//      (agent) entry whose gathering instruction is DERIVED from the pipeline's goal, added
+//      alongside the picked agent's own role — never a hardwired template, never replacing the role.
 //   4. No input, nothing to discover with → leave it a provided source; the run will honestly ask
 //      the founder to configure the seed (they are in control).
 // Returns { nodes, edges } and never throws. Idempotent: a graph already resolved passes through.
-export function resolveEntry({ nodes, edges, agents = [], hasInput = false } = {}) {
+export function resolveEntry({ nodes, edges, agents = [], hasInput = false, goal = "" } = {}) {
   const source = nodes.find((n) => isSourceNode(n) && n.kind !== "agent");
   if (!source) return { nodes, edges }; // already discovered, or no source at all
 
@@ -91,7 +119,8 @@ export function resolveEntry({ nodes, edges, agents = [], hasInput = false } = {
     return { nodes: nodes.map((n) => (n.id === source.id ? withMode(n, sourceMode(n)) : n)), edges };
   }
 
-  // Outcome 2: a downstream agent can be the self-sourcing entry.
+  // Outcome 2: a downstream agent proceeds from the product, the goal, and shared context — the
+  // pipeline runs as composed, minus the one dead node. Its own instruction is never replaced.
   const downstreamAgent = edges
     .filter((e) => e.source === source.id)
     .map((e) => nodes.find((n) => n.id === e.target))
@@ -108,16 +137,20 @@ export function resolveEntry({ nodes, edges, agents = [], hasInput = false } = {
               ...n,
               mode: SOURCE_MODES.DISCOVERED,
               contract: { ...(n.contract ?? {}), accepts: [], minItems: 0 },
-              agentPrompt: DISCOVERY_PROMPT(typeof n.agentPrompt === "string" ? n.agentPrompt : ""),
+              agentPrompt: withEntryNote(n.agentPrompt, goal),
             }
           : n,
       );
     return { nodes: newNodes, edges: newEdges };
   }
 
-  // Outcome 3: convert the source node itself into a discovered agent source.
+  // Outcome 3: the source's consumers cannot invent items (deterministic steps, or the gate itself
+  // reviewing what flows in) — the graph genuinely consumes a list it does not have. Convert the
+  // source node into a discovered agent entry with a goal-derived gathering instruction that carries
+  // the picked agent's own role alongside.
+  const feedsAnything = edges.some((e) => e.source === source.id && (e.edgeType ?? "data") === "data");
   const discovery = pickDiscoveryAgent(agents);
-  if (discovery?.ref) {
+  if (feedsAnything && discovery?.ref) {
     const newNodes = nodes.map((n) =>
       n.id === source.id
         ? {
@@ -127,7 +160,7 @@ export function resolveEntry({ nodes, edges, agents = [], hasInput = false } = {
             mode: SOURCE_MODES.DISCOVERED,
             label: n.label || "Find candidates",
             contract: { ...(n.contract ?? {}), accepts: [], minItems: 0 },
-            agentPrompt: DISCOVERY_PROMPT(typeof n.agentPrompt === "string" ? n.agentPrompt : ""),
+            agentPrompt: selfSourcingInstruction(goal, discovery.prompt ?? discovery.objective ?? ""),
           }
         : n,
     );

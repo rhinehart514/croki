@@ -18,8 +18,8 @@
 //
 //   GUARD B — No output-kind-only-email/message assumption in the graph engine.
 //     The graph model and validation must not treat "email" or "message" as the ONLY
-//     allowed output kind. A recipe's config value like { channel: "email" } is a
-//     data value in a specific workflow — that's fine; workflow-recipes.mjs is not the
+//     allowed output kind. A workflow's config value like { channel: "email" } is a
+//     data value in a specific pipeline — that's fine, it is not the
 //     engine. But if the engine starts doing `outputKind === "email"` or
 //     `node.config.channel === "message"` as a validation gate, that cages the model.
 //
@@ -39,6 +39,17 @@ import { loadFlow, saveFlow } from "../src/flow-store.mjs";
 import { createChannel, getChannel, loadProject, promoteChannel, registerComposedChannel } from "../src/project-store.mjs";
 import * as deploy from "../src/connectors/execute/deploy.mjs";
 import { runGraph } from "../src/graph.mjs";
+import { deriveExperimentFromRun, normalizeExperiment } from "../src/experiment-derivation.mjs";
+import { UNIVERSAL_FLOORS, normalizeBarAxes, withUniversalFloors } from "../src/idea-bar.mjs";
+import { composeIdeas, normalizeAngles } from "../src/ideation.mjs";
+import {
+  marketObjectStore,
+  gtmPathStore,
+  measurementContractStore,
+  resultStore,
+  learningStore,
+} from "../src/gtm-store.mjs";
+import { effectiveSolidity } from "../src/evidence.mjs";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -59,9 +70,9 @@ function stripComments(src) {
 }
 
 // ─── Files under guard ────────────────────────────────────────────────────────
-// These are the core engine files that must stay open. workflow-recipes.mjs and
-// connectors/ are intentionally excluded: recipes are individual workflow data (not
-// validation rules), and connectors/ is the tool-kind label bucket by design.
+// These are the core engine files that must stay open. connectors/ is intentionally
+// excluded: it is the tool-kind label bucket by design, individual workflow data (not
+// a validation rule).
 
 const CORE_ENGINE_FILES = [
   "graph.mjs",
@@ -133,8 +144,8 @@ describe("anti-cage: no output-kind hardcoded to email/message in engine validat
     /if\s*\([^)]*channel[^)]*===\s*["']message["']/,
   ];
 
-  // The engine files where this would be a real violation. workflow-recipes.mjs is
-  // intentionally excluded — recipe data values are not engine constraints.
+  // The engine files where this would be a real violation. Individual workflow data
+  // values (a config with channel:"email") are not engine constraints.
   const ENGINE_VALIDATION_FILES = [
     "graph.mjs",
     "graph-operations.mjs",
@@ -484,5 +495,227 @@ describe("anti-cage: a microproduct deploys only after an explicit founder gate 
     assert.equal(result.ok, true);
     assert.equal(runner.calls, 1);
     assert.equal(result.items[0].deployed, true);
+  });
+});
+
+// ─── GUARD G — read models and stores stay open (agnostic within GTM) ─────────
+//
+// The last four cages did NOT regrow in the five core engine files this suite already scans — they
+// grew in the READ MODELS and stores the earlier guards never looked at: the five-face strip skeleton
+// (board.mjs), the forced targetLayer:"channels" backfill that misfiled every derived experiment
+// (experiment-derivation.mjs), the idea bar's fixed house rubric (idea-bar.mjs), and a house angle
+// list (ideation.mjs). All shipped with this suite green. Guard G extends the same three checks —
+// no closed GTM enum, no fixed stage skeleton, no forced taxonomy backfill — to those files, plus
+// behavioral proofs that the open shapes stay open. Doctrine: "agnostic within GTM" — any plain-words
+// GTM intent must flow through; a fixed vocabulary anywhere in the read path re-cages the model.
+
+describe("anti-cage: read models and stores carry no closed GTM taxonomy", () => {
+  const READ_MODEL_FILES = [
+    "board.mjs",
+    "experiment-derivation.mjs",
+    "idea-bar.mjs",
+    "ideation.mjs",
+    "project-store.mjs",
+    "idea-store.mjs",
+    "operator-store.mjs",
+  ];
+
+  const CAGE_CHANNEL_STRINGS = [
+    "cold-email", "cold_email", "linkedin", "outbound", "cold-outbound", "cold_outbound",
+    "twitter", "inmail", "sms",
+  ];
+
+  // The signature of a fixed stage skeleton re-baked as data: an ordered array literal walking
+  // source → gate/measure. (Same signature Guard C bans in the engine; a read model projecting a
+  // fixed journey is the same cage one layer up — the five-face strip skeleton shipped exactly here.)
+  const SKELETON_PATTERNS = [
+    /\[\s*["']source["'][^\]]*["']gate["'][^\]]*["']measure["']/,
+    /\[\s*["']source["'][^\]]*["']enrich["'][^\]]*["']generate["'][^\]]*["']gate["']/,
+    /\[\s*["']ground["'][^\]]*["']draft["'][^\]]*["']gate["'][^\]]*["']measure["']/i,
+  ];
+
+  for (const filename of READ_MODEL_FILES) {
+    it(`${filename} carries no closed GTM channel enum and no fixed stage-skeleton array`, () => {
+      const src = stripComments(readSrc(filename));
+
+      const channelHits = CAGE_CHANNEL_STRINGS.filter((name) =>
+        src.includes(`"${name}"`) || src.includes(`'${name}'`));
+      assert.ok(
+        channelHits.length < 2,
+        `${filename} contains what looks like a closed GTM channel enum: [${channelHits.join(", ")}]. ` +
+        `Read models must stay agnostic within GTM — derive labels from the graph/run, never a fixed list.`,
+      );
+
+      const skeleton = SKELETON_PATTERNS.filter((p) => p.test(src));
+      assert.equal(
+        skeleton.length, 0,
+        `${filename} re-encodes a fixed stage skeleton as an ordered array (${skeleton.map((p) => p.toString()).join(", ")}). ` +
+        `The five-face strip skeleton shipped exactly this way with tests green. A read model projects ` +
+        `the graph's OWN composed steps — never a permanent journey. Doctrine: agnostic within GTM.`,
+      );
+    });
+  }
+
+  it("no read model force-backfills targetLayer with a hardcoded layer name", () => {
+    // The exact regression: `targetLayer: exp.targetLayer ?? "channels"` misfiled every derived
+    // experiment under one band. A layerless experiment stays layerless (the board surfaces it on
+    // Learn); only the founder (or a stated grouping) names a layer. `?? ""` read-defaults are fine —
+    // it is the non-empty hardcoded layer NAME that cages.
+    const FORCED_BACKFILL = [
+      /targetLayer\s*:\s*["'][A-Za-z]/,
+      /targetLayer\s*(?:\?\?|\|\|)\s*["'][A-Za-z]/,
+    ];
+    for (const filename of ["board.mjs", "experiment-derivation.mjs", "project-store.mjs", "idea-store.mjs"]) {
+      const src = stripComments(readSrc(filename));
+      const hits = FORCED_BACKFILL.filter((p) => p.test(src));
+      assert.equal(
+        hits.length, 0,
+        `${filename} force-backfills targetLayer with a hardcoded layer name (${hits.map((p) => p.toString()).join(", ")}). ` +
+        `A derived experiment must stay layerless until the founder files it — force-filing misfiled ` +
+        `every derived experiment once already. Doctrine: agnostic within GTM.`,
+      );
+    }
+  });
+
+  it("a derived experiment never invents a targetLayer, and normalizeExperiment keeps layerless/open vocab intact", () => {
+    const graph = {
+      id: "chan-open",
+      name: "Open pipeline",
+      nodes: [
+        { id: "s", category: "source", label: "People who starred the repo" },
+        { id: "d", kind: "agent", label: "Draft the note" },
+        { id: "g", category: "gate", label: "Founder review" },
+      ],
+      edges: [],
+    };
+    const result = { nodes: { g: { category: "gate", items: [{ approvalStatus: "approved" }] } }, pendingGates: [] };
+    const derived = deriveExperimentFromRun({ graph, result, sharedContext: {} });
+    assert.ok(derived, "a run with a gate must derive an experiment");
+    assert.ok(!("targetLayer" in derived), "a derivation must NOT invent a targetLayer — the run does not know the layer it tests");
+    assert.equal(derived.origin, "derived");
+
+    // Layerless stays layerless on read — the shim must not file it anywhere.
+    const layerless = normalizeExperiment({ id: "e1", channelId: "c1" });
+    assert.ok(!("targetLayer" in layerless), "normalizeExperiment must not backfill a targetLayer");
+
+    // And an OPEN founder vocabulary survives verbatim — no closed layer enum on read.
+    const openVocab = normalizeExperiment({ id: "e2", channelId: "c2", targetLayer: "community-trust" });
+    assert.equal(openVocab.targetLayer, "community-trust", "an open targetLayer vocabulary must pass through untouched");
+    assert.equal(normalizeExperiment({ id: "e3", origin: "stated" }).origin, "stated");
+  });
+
+  it("the idea bar stays derived-per-goal: universal floors stay tiny and axis vocabulary stays open", () => {
+    // The fixed house rubric shipped as a hardcoded axis list every goal was graded on. The ONLY
+    // fixed part allowed is the tiny universal floor set; everything else derives from the goal.
+    assert.ok(
+      UNIVERSAL_FLOORS.length <= 3,
+      `UNIVERSAL_FLOORS has grown to ${UNIVERSAL_FLOORS.length} axes — that is a house rubric reforming. ` +
+      `Only floors honestly universal for ANY go-to-market idea may be fixed; per-goal judgment is derived.`,
+    );
+
+    // Any per-goal vocabulary is legal — shape is validated, the WORDS are not.
+    const novel = normalizeBarAxes({ axes: [
+      { key: "Meme Velocity!", question: "Would this spread on its own?", weight: 2 },
+      { key: "night_market_fit", question: "Does it land where these buyers already gather?", weight: 1, killBelow: 3 },
+    ] });
+    assert.deepEqual(novel.map((a) => a.key), ["meme_velocity", "night_market_fit"],
+      "normalizeBarAxes must accept novel per-goal axis vocabulary — no closed axis enum");
+
+    // Merging in the floors must never drop the goal's own axes.
+    const merged = withUniversalFloors(novel);
+    for (const key of ["meme_velocity", "night_market_fit"]) {
+      assert.ok(merged.some((a) => a.key === key), `withUniversalFloors dropped the derived axis "${key}"`);
+    }
+  });
+
+  it("ideation angles are open vocabulary, and with no angle source one unconstrained pass runs", async () => {
+    // No house angle list may shape every run.
+    const src = stripComments(readSrc("ideation.mjs"));
+    assert.ok(
+      !/(?:DEFAULT_|HOUSE_)?ANGLES\s*=\s*\[/.test(src),
+      "ideation.mjs hardcodes an angle list — angles are derived per goal or absent, never a house list",
+    );
+
+    // Arbitrary angle vocabulary flows through untouched.
+    const angles = normalizeAngles(["barter economies", { angle: "pigeon racing clubs", lens: "who already gathers there" }]);
+    assert.deepEqual(angles.map((a) => a.angle), ["barter economies", "pigeon racing clubs"]);
+
+    // With NO angles and NO proposer, the generator runs ONE unconstrained pass (angle null) —
+    // never a fallback house list.
+    const seenAngles = [];
+    const generate = async ({ angle }) => { seenAngles.push(angle); return { ideas: [{ pitch: "Trade a teardown for a testimonial." }] }; };
+    const out = await composeIdeas({
+      goal: "get one paying customer",
+      generate,
+      distinct: () => ({ available: false, batch_distinctiveness: null, verdict: null, huddled: false }),
+    });
+    assert.deepEqual(seenAngles, [null], "with no angle source the generator must get angle=null, not a house angle");
+    assert.equal(out.ideas.length, 1);
+
+    // And injected open vocabulary becomes the lanes verbatim.
+    const laneAngles = [];
+    await composeIdeas({
+      goal: "get one paying customer",
+      angles: ["barter economies", "pigeon racing clubs"],
+      generate: async ({ angle }) => { laneAngles.push(angle); return { ideas: [] }; },
+      distinct: () => ({ available: false, batch_distinctiveness: null, verdict: null, huddled: false }),
+    });
+    assert.deepEqual(laneAngles, ["barter economies", "pigeon racing clubs"]);
+  });
+});
+
+// ─── Guard D: The Phase 0 GTM record model stays open ─────────────────────────
+// The rebuild spine (gtm-store.mjs) adds MarketObject, GTMPath, MeasurementContract, Result, and
+// Learning. Their kind/label/bet fields are OPEN strings by invariant (§2.2) — never a closed enum
+// that rejects a value, never a fixed GTM stage skeleton. And evidence discipline (§2.3) is
+// structural, not advisory: a claim with no sourced evidence is demoted to speculative in code.
+
+describe("anti-cage: the Phase 0 GTM record model is open, evidence-disciplined shapes", () => {
+  function freshRoot() {
+    return { root: fs.mkdtempSync(path.join(os.tmpdir(), "anti-cage-gtm-")) };
+  }
+
+  it("a MarketObject accepts an entirely novel kind — no closed kind enum", () => {
+    const options = freshRoot();
+    const wild = "midnight_barter_ritual";
+    const obj = marketObjectStore.create({ kind: wild, statement: "buyers swap tools at a weekly meetup", evidence: [{ claim: "seen", source: "eventbrite://x" }] }, options);
+    assert.equal(obj.kind, wild, "MarketObject.kind must pass a novel value through untouched");
+  });
+
+  it("a GTMPath bet and status take open fields — no fixed stage skeleton", () => {
+    const options = freshRoot();
+    const p = gtmPathStore.create({
+      summary: "reach buyers where they already gather",
+      bet: { buyer: "ops lead", nonstandard_stage: "swap-at-meetup", another_open_field: "x" },
+      status: "an_open_status_label",
+    }, options);
+    assert.equal(p.bet.nonstandard_stage, "swap-at-meetup", "path bet fields are open, not a fixed pipeline");
+    assert.equal(p.bet.another_open_field, "x");
+    assert.equal(p.status, "an_open_status_label", "path status is an open label, not a closed enum");
+  });
+
+  it("outcome kinds and result kinds are open — no closed reply/meeting/signup enum", () => {
+    const options = freshRoot();
+    const mc = measurementContractStore.create({ outcomeKinds: ["reply", "wildcard_outcome_kind"], sources: ["a_novel_source"] }, options);
+    assert.deepEqual(mc.outcomeKinds, ["reply", "wildcard_outcome_kind"]);
+    assert.deepEqual(mc.sources, ["a_novel_source"]);
+    const r = resultStore.create({ joinKey: "k1", outcomeKind: "a_totally_new_outcome" }, options);
+    assert.equal(r.outcomeKind, "a_totally_new_outcome");
+  });
+
+  it("a Learning captures open structural signal and never rejects a novel channel/shape", () => {
+    const options = freshRoot();
+    const learning = learningStore.create({ productShape: "some_new_shape", channel: "a_channel_that_did_not_exist_yesterday", runType: "novel_run_type" }, options);
+    assert.equal(learning.structural.channel, "a_channel_that_did_not_exist_yesterday");
+    assert.equal(learning.structural.productShape, "some_new_shape");
+  });
+
+  it("evidence discipline is structural: a claim with no sourced evidence is speculative, not gated away", () => {
+    // The demotion is a label change, never a rejection — the record still exists, it just cannot
+    // present as grounded. (An enum would REJECT; the ladder DEMOTES.)
+    assert.equal(effectiveSolidity("observed", [{ claim: "hunch, no source" }]), "speculative");
+    const options = freshRoot();
+    const obj = marketObjectStore.create({ kind: "buyer", statement: "a guess", solidity: "observed" }, options);
+    assert.equal(obj.solidity, "speculative", "declared solidity cannot outrun missing evidence");
   });
 });

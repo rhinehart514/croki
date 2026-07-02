@@ -38,7 +38,10 @@ export type IcpGround = {
   icpKey: string | null;
   icpBelief: string | null;
   grounded: boolean;
-  source: "stated" | "experiment";
+  // Where this ground came from: "stated" (the project's ICP), "experiment" (an ICP-targeted
+  // experiment racing its arms), "explicit-link" (pipelines the founder bound to one ICP key). Open
+  // string — the backend may grow new sources and the lens must not drop them.
+  source: string;
   experimentId?: string | null;
   channelIds: string[];
   channelNames: string[];
@@ -95,11 +98,13 @@ export type GroundMeasurement = {
 export type GroundICP = {
   id: string;
   label: string;
-  // A one-line positioning read for this ground (board positioning belief → first claim → null).
+  // A one-line positioning read — project-level BASELINE context, carried only on the stated base
+  // ground (once), never parroted onto every band.
   positioning: string | null;
   // "stated" — the project's single stated ICP (base ground). "experiment" — an ICP-targeted
-  // experiment racing its grouped pipelines as arms.
-  source: "stated" | "experiment";
+  // experiment racing its grouped pipelines as arms. "explicit-link" — pipelines the founder bound to
+  // one ICP key. Open string; unknown sources still render.
+  source: string;
   experimentId: string | null;
   // Whether the ICP is actually stated/grounded (false = honest-blank "Your ICP" placeholder ground).
   grounded: boolean;
@@ -173,6 +178,17 @@ function pipelineOf(channel: ChannelMeta): GroundPipeline {
     produced: channel.lastRunResult?.produced ?? 0,
     runs: channel.runCount,
   };
+}
+
+// The pipeline's state in plain words, for the overview card — what happened, never internal
+// vocabulary or a bare score. Gate-waiting is deliberately NOT repeated here: the amber "waiting on
+// you" count next to it is the founder-actionable number. Every line derives from real state.
+export function pipelineStatusLine(p: GroundPipeline): string {
+  if (p.beliefState === "validated") return "promoted — runs your approved pattern";
+  if (p.live) return "ran clean — work is moving through";
+  if (p.runs > 0) return "has run";
+  if (p.steps > 0) return "built — hasn't run yet";
+  return "not shaped yet";
 }
 
 // The arm race for a ground: pick the honest signal (staged items if any arm produced, else runs if
@@ -281,14 +297,18 @@ export function buildGroundModel(
           .map((id) => channelById.get(id))
           .filter((c): c is ChannelMeta => Boolean(c))
           .map(pipelineOf);
+        // The source joins the key so two grounds can never collide (a founder may explicitly link
+        // pipelines to the SAME key as the stated ICP — both bands render, each under its own id).
         const id =
           g.source === "experiment" && g.experimentId ? `exp:${g.experimentId}`
-          : g.icpKey ? `icp:${g.icpKey}`
+          : g.icpKey ? `${g.source}:icp:${g.icpKey}`
           : `ground-${i}`;
         return {
           id,
           label: g.icpBelief || g.icpKey || "Your ICP",
-          positioning,
+          // Project positioning is baseline context at most: it rides the stated base ground once,
+          // never every band — repeated on each it would just parrot the settings paragraph back.
+          positioning: g.source === "stated" ? positioning : null,
           source: g.source,
           experimentId: g.experimentId ?? null,
           grounded: g.grounded,

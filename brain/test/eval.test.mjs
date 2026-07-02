@@ -81,6 +81,22 @@ describe("eval — checkRun (the oracle tier, deterministic)", () => {
     assert.equal(judge.pass, null, "judgment checks are left for the founder, not machine-graded");
   });
 
+  // Regression: composition is free-form, so gated items may carry content under ANY field names
+  // (a post as { post_text }), not just the outreach draft aliases. Grading must see that content,
+  // or every non-outreach run reads as "emitted nothing" no matter what it staged.
+  it("recognizes content on non-outreach-shaped items (open fields, e.g. post_text)", () => {
+    const graph = graphWithEval([
+      { id: "field", kind: "has_field", field: "draft", label: "every item carries content" },
+    ]);
+    const result = resultWithGate([
+      { post_text: "Shipped the Drover morning queue today — one place to clear every venture's calls.", scheduled_for: "2026-07-02T09:00:00Z", approvalStatus: "approved" },
+    ]);
+    const oracle = checkRun({ graph, result });
+    assert.equal(oracle.axes.contract_emitted, 10, "open-shaped content counts as emitted");
+    const field = oracle.evalChecks.find((c) => c.id === "field");
+    assert.equal(field.pass, true, "the draft-field check reads the item's open content");
+  });
+
   it("flags the wall when an execute node has no gate upstream", () => {
     const graph = {
       nodes: [{ id: "send", category: "execute" }],

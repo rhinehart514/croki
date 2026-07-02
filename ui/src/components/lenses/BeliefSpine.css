@@ -1,8 +1,9 @@
-/* BeliefSpine — L1 belief-spine lens. Tokens only (index.css :root); no hardcoded hex, no gradients,
-   no glass. Conviction is ink darkness + stroke weight, never hue. Amber never appears here — the gate
-   (amber) lives at L3. Semantic color only, on the confidence bar + status dot. */
+/* BeliefSpine — the strip over one open pipeline: one card per composed step, derived from the
+   pipeline's own graph and run state. Tokens only (index.css :root); no hardcoded hex, no gradients,
+   no glass. Amber never appears here — the gate (amber) lives on the canvas gate itself; the strip's
+   only accent is the waiting-count dot. */
 
-/* The row of five faces, left → right in journey order. */
+/* The row of step cards, left → right in the pipeline's own flow order. */
 .spine-row {
   display: flex;
   gap: 14px;
@@ -10,20 +11,20 @@
   align-items: stretch;
 }
 
-/* One face card. Opaque surface, hairline border, room at the bottom for the bar + footer. */
+/* One step card. Opaque surface, hairline border. */
 .spine-card {
   position: relative;
   flex: 1 1 0;
   min-width: 0;
   min-height: 150px;
-  padding: var(--space-3) 13px 44px;
+  padding: var(--space-3) 13px;
   background: var(--surface);
   border: 1px solid var(--line-2);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-card);
 }
 
-/* Mono role label — "Who · trigger", uppercase, faint. */
+/* Mono step label — the step's own name, uppercase, faint. */
 .spine-role {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -32,7 +33,7 @@
   color: var(--faint);
 }
 
-/* The belief text — ink body, medium weight. */
+/* The step's plain-words body — ink, medium weight. */
 .spine-belief {
   margin-top: 7px;
   font-size: 12.5px;
@@ -41,37 +42,16 @@
   color: var(--ink);
 }
 
-/* Blind face — no signal yet; reads muted, honest. */
+/* Nothing has happened at this step yet — reads muted, honest. */
 .spine-belief-blind {
   font-weight: 400;
   font-style: italic;
   color: var(--muted);
 }
 
-/* Confidence bar, pinned above the footer. The track is an inset fill; the inner <i> is the read. */
-.spine-barfill {
-  position: absolute;
-  left: 13px;
-  right: 13px;
-  bottom: 34px;
-  height: 3px;
-  background: var(--surface-2);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.spine-barfill i {
-  display: block;
-  height: 100%;
-  border-radius: 2px;
-}
-
-/* Footer — status chip on the left, confidence read on the right. */
+/* Footer — the waiting-count chip, only on a gate step with drafts waiting. */
 .spine-foot {
-  position: absolute;
-  left: 13px;
-  right: 13px;
-  bottom: 11px;
+  margin-top: 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -97,22 +77,8 @@
   flex: none;
 }
 
-.spine-conf {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--muted);
-}
-
-/* Semantic tones — the only color on the lens. Green proven / amber testing / gray blind / faint
-   assumed. Applied to both the bar fill and the chip dot. */
-.spine-barfill i.tone-proven,
-.spine-dot.tone-proven { background: var(--proven); }
-.spine-barfill i.tone-testing,
+/* The one semantic tone left on the strip: work waiting on the founder. */
 .spine-dot.tone-testing { background: var(--gap); }
-.spine-barfill i.tone-blind,
-.spine-dot.tone-blind { background: var(--blind); }
-.spine-barfill i.tone-assumed,
-.spine-dot.tone-assumed { background: var(--faint); }
 
 /* State messages — loading / empty / error. */
 .spine-state {

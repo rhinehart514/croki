@@ -194,6 +194,10 @@ export type ChannelMeta = {
   // The standing approval the gate applies once a channel is promoted — a one-line recipe banked by the
   // founder. Null/absent while the channel is at draft.
   blessedPattern?: { note?: string; [key: string]: unknown } | null;
+  // This pipeline's own offer/deal in the founder's words — an open shape carrying at minimum a
+  // plain-words statement, plus whatever extra fields the composer attached. Absent when the pipeline
+  // states none; the project-level shared offer is then the standing default.
+  offer?: { statement: string; [key: string]: unknown } | null;
 };
 
 // ─── Input — one captured world-signal in the ambient inbox ───────────────────
@@ -330,6 +334,9 @@ export type SharedContext = {
   product: { name: string; description: string; valueProps: string[]; claims: string[] };
   positioning: Record<string, unknown>;
   icp: Record<string, unknown>;
+  // The project-level standing offer (price / unit / terms) — the default deal every pipeline's
+  // drafts carry unless the pipeline states its own (ChannelMeta.offer).
+  offer?: { price?: string; unit?: string; terms?: string; alternatives?: string[]; status?: string };
   founderTaste: FounderTaste;
   contacts: Record<string, unknown>;
   // Structured claims — the source of truth `product.claims` projects from.
@@ -877,11 +884,16 @@ export type OperatorStatus =
   | "cancelled";
 
 // One surviving idea the operator paused with, awaiting the founder's kill/keep verdict. Pre-wired so a
-// pick drops straight into compose_and_run.
+// pick drops straight into compose_and_run. what/upside/risk are the generator's own free words for
+// what kind of move it is and the honest for/against; take is the critic's one plain sentence.
 export type PendingIdea = {
   id: string;
   angle?: string | null;
   pitch: string;
+  what?: string | null;
+  upside?: string | null;
+  risk?: string | null;
+  take?: string | null;
   barScore?: number | null;
   buildWiring?: { kind?: string; goal?: string; title?: string } | null;
 };
@@ -939,10 +951,12 @@ export type OperatorSession = OperatorSessionSummary & {
     preview: GTMGraph;
   } | null;
   // The surviving ideas the operator paused with for the founder to kill/keep (the ideate move). Present
-  // only while status is "waiting_for_ideas".
+  // only while status is "waiting_for_ideas". `cut` is the ideas the bar set aside, each with its plain
+  // cut reason — nothing is culled out of sight, and the founder can bring one back.
   pendingIdeas?: {
     goal: string;
     ideas: PendingIdea[];
+    cut?: Array<{ id: string; pitch: string; what?: string | null; reason?: string | null }>;
     killedCount?: number;
     distinctiveness?: unknown;
     regenerated?: boolean;
@@ -1137,4 +1151,93 @@ export type BoardView = {
   projectId: string;
   layers: LayerBelief[];
   groups: Record<BoardPhase, LayerBelief[]>;
+};
+
+// ── The GTM map (read-only projection over the rebuilt engine's records) ───────────────────────────
+// These mirror the persisted records in brain/src/gtm-store.mjs (ProductTruth, MarketObject, GTMPath,
+// MeasurementContract). Kinds, bet facets, outcome labels and solidity are OPEN strings — never a
+// closed enum on the UI side either (anti-cage invariant). The founder-facing surface translates
+// every one of these to plain words; the raw record just carries the data.
+
+// How solid a claim is, on the shared evidence ladder (strongest first). An open label — the UI must
+// treat an unknown value gracefully, never reject it.
+export type Solidity = "observed" | "researched" | "inferred" | "speculative" | (string & {});
+
+export type EvidenceRecord = {
+  claim: string | null;
+  source: string | null;
+  solidity: Solidity | null;
+  capturedAt?: string | null;
+  notes?: string | null;
+};
+
+export type ProductTruthRecord = {
+  id: string;
+  projectId: string | null;
+  statement: string;
+  evidence: EvidenceRecord[];
+  solidity: Solidity | null;
+  source: string | null;
+  scanRef?: { repo?: string | null; scannedAt?: string | null } | null;
+  notes?: string | null;
+};
+
+export type MarketObjectRecord = {
+  id: string;
+  projectId: string | null;
+  kind: string; // open: buyer / pain / job / trigger / workaround / valueProp / offer / channel / message / proof / conversionPath / anything
+  statement: string;
+  evidence: EvidenceRecord[];
+  solidity: Solidity | null;
+  confidence: number | null;
+  source: string | null;
+  openQuestions: string[];
+};
+
+// The seven ranking signals + the composite, all computed in code on the brain side (0..1). Open
+// object — extra keys are tolerated, missing keys read as absent.
+export type PathRankingSignals = {
+  evidenceStrength?: number | null;
+  productReadiness?: number | null;
+  channelReachability?: number | null;
+  measurementReadiness?: number | null;
+  speedToTest?: number | null;
+  upside?: number | null;
+  founderFit?: number | null;
+  composite?: number | null;
+  [key: string]: number | null | undefined;
+};
+
+export type GtmPathRecord = {
+  id: string;
+  projectId: string | null;
+  summary: string;
+  restsOn: { type: string | null; id: string }[];
+  bet: Record<string, string>; // open facets: buyer → pain → trigger → offer → channel → message → proof → conversionPath
+  risk: string | null;
+  confidence: number | null;
+  rankingSignals: PathRankingSignals;
+  measurementContractId: string | null;
+  status: string; // open label: proposed / selected / running / …
+};
+
+export type MeasurementContractRecord = {
+  id: string;
+  projectId: string | null;
+  pathId: string | null;
+  outcomeKinds: string[];
+  sources: string[];
+  joinKey: string | null;
+  successCriteria: string | null;
+  notes: string | null;
+};
+
+// The read payload GET /api/projects/:id/gtm-map returns: the four record lists for the project. The
+// UI derives the portfolio buckets, ranking order and weak links from these — all in code.
+export type GtmMapView = {
+  projectId: string;
+  productTruths: ProductTruthRecord[];
+  marketObjects: MarketObjectRecord[];
+  paths: GtmPathRecord[];
+  contracts: MeasurementContractRecord[];
 };

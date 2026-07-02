@@ -1,6 +1,6 @@
 ---
 kind: bug
-status: open
+status: done
 captured_at: 2026-07-01T22:44:53.099Z
 git_sha: bfce4ffa85dc6576a95b6130fe7fb847fbf72b09
 source: founder-live
@@ -23,3 +23,7 @@ Founder reviewing the 18 paused Strelva ICP ideas in the browser; verbatim react
   "needsFounder": []
 }
 ```
+
+## Resolution
+
+Fixed directly: decidable cards (derived title, score chip, clamp+expand, strongest-first) and stage-aware resolution — beginning-stage projects keep ideas as ICP directions into the shared kernel instead of composing pipelines. Committed on main.

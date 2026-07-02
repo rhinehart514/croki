@@ -239,6 +239,12 @@ export function createSignalProvider(signal) {
 // go-to-market non-generic. Sourced from the founder's stored ICP/positioning when present; an
 // honest blank otherwise (the ideator is told to research it live). This is a base layer because
 // matching the real buyer is as load-bearing as matching the real product.
+//
+// As of Phase 1 the market context is a PROJECTION over researched MarketObjects
+// (market-research.buildMarketContext): the flat single-value fields below stay, and `market.objects`
+// carries the full labelled record set. When that set is present, each record is rendered WITH its
+// honest solidity so a reading agent can never mistake a flagged hypothesis for a researched fact —
+// the same one-directional discipline the product-model provider applies to `speculative` elements.
 export function createMarketProvider(market) {
   return {
     name: "market",
@@ -253,8 +259,25 @@ export function createMarketProvider(market) {
       if (market.positioning?.category) lines.push(`Category: ${market.positioning.category}`);
       if (market.positioning?.promise) lines.push(`Promise: ${market.positioning.promise}`);
       if (Array.isArray(market.competitors) && market.competitors.length) lines.push(`Competing with: ${market.competitors.join(", ")}`);
+
+      // The researched record set, each labelled by how solid. A `speculative` record is marked as an
+      // unconfirmed hypothesis so it reads as a question, never a fact.
+      const objects = Array.isArray(market.objects) ? market.objects.filter((o) => o && o.kind && o.statement) : [];
+      let researched = 0;
+      if (objects.length) {
+        lines.push("Researched buyer-side records (labelled by how solid — verify a hypothesis before betting on it):");
+        for (const obj of objects) {
+          const solidity = String(obj.solidity ?? "speculative");
+          const label = solidity === "speculative"
+            ? "hypothesis — unconfirmed, no source"
+            : solidity;
+          if (solidity !== "speculative") researched += 1;
+          lines.push(`- [${obj.kind}] ${obj.statement} [${label}]`);
+        }
+      }
+
       if (!lines.length) return null;
-      return { text: lines.join("\n"), meta: { fields: lines.length } };
+      return { text: lines.join("\n"), meta: { fields: lines.length, objects: objects.length, researched } };
     },
   };
 }

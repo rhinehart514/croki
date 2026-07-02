@@ -1,3 +1,10 @@
+> **SUPERSEDED — 2026-07-01.** This UX/completion plan targets the earlier "IDE for
+> GTM" version of the product. The current plan of record is
+> **docs/GTM-ENGINE-REBUILD.md**, which reframes Drover as a GTM engine and compiler.
+> Where this doc conflicts with that spec, the spec wins. Kept for history only.
+
+---
+
 # Drover completion plan
 
 ## Product judgment

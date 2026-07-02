@@ -32,7 +32,9 @@ function slug(value) {
   return String(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "step";
 }
 
-const OPEN_KINDS = new Set(["agent", "skill", "code"]);
+// The open step kinds the composer may use — must match graph-operations.mjs's OPEN_KINDS, or
+// normalization silently deletes nodes the runtime fully supports (the mcp-node regression).
+const OPEN_KINDS = new Set(["agent", "skill", "code", "mcp"]);
 const CATEGORIES = new Set(["context", "source", "gate", "execute", "measure", "enrich", "filter", "generate", "resource"]);
 const DEFAULT_CONNECTOR = { context: "product", source: "manual", gate: "default", execute: "local", measure: "default" };
 
@@ -75,16 +77,46 @@ export function normalizeComposedGraph(spec) {
       });
       return;
     }
+    if (raw.kind === "switch") {
+      // A routing node: no ref, no category. Its outgoing edges carry the predicates.
+      usedIds.add(id);
+      nodes.push({
+        id, kind: "switch", label: raw.label || "Route", position,
+        config: raw.config && typeof raw.config === "object" ? raw.config : {},
+        ...(raw.contract && typeof raw.contract === "object" ? { contract: raw.contract } : {}),
+      });
+      return;
+    }
     const category = CATEGORIES.has(raw.category) ? raw.category : null;
-    if (!category) return; // neither a known kind nor a known category
-    usedIds.add(id);
-    nodes.push({
-      id, category, connector: raw.connector || DEFAULT_CONNECTOR[category] || "default",
-      label: raw.label || category, position,
-      config: raw.config && typeof raw.config === "object" ? raw.config : {},
-      ...(raw.contract && typeof raw.contract === "object" ? { contract: raw.contract } : {}),
-      ...(Array.isArray(raw.sourceOfTruth) ? { sourceOfTruth: raw.sourceOfTruth } : {}),
-    });
+    if (category) {
+      usedIds.add(id);
+      nodes.push({
+        id, category, connector: raw.connector || DEFAULT_CONNECTOR[category] || "default",
+        label: raw.label || category, position,
+        config: raw.config && typeof raw.config === "object" ? raw.config : {},
+        ...(raw.contract && typeof raw.contract === "object" ? { contract: raw.contract } : {}),
+        ...(Array.isArray(raw.sourceOfTruth) ? { sourceOfTruth: raw.sourceOfTruth } : {}),
+      });
+      return;
+    }
+    if (typeof raw.kind === "string" && raw.kind.trim()) {
+      // A kind this runtime does not know how to run. Keep the node and its edges — never silently
+      // delete work the model designed — shaped as a declaration-only node (category "resource",
+      // which the engine never executes), carrying what was asked for and a plain-words note.
+      usedIds.add(id);
+      nodes.push({
+        id, category: "resource", label: raw.label || raw.kind, position,
+        config: {
+          ...(raw.config && typeof raw.config === "object" ? raw.config : {}),
+          declaredKind: raw.kind,
+          ...(raw.ref && typeof raw.ref === "string" ? { declaredRef: raw.ref } : {}),
+          unrunnable: `This step asks for a kind of work ("${raw.kind}") this runtime does not know how to run yet. It stays on the canvas with its connections, but it will not run.`,
+        },
+        ...(raw.contract && typeof raw.contract === "object" ? { contract: raw.contract } : {}),
+      });
+      return;
+    }
+    // Neither a kind nor a known category — nothing usable to keep.
   });
   const ids = new Set(nodes.map((n) => n.id));
   const seenEdges = new Set();
@@ -95,7 +127,14 @@ export function normalizeComposedGraph(spec) {
     const id = raw.id || `${edgeType}-${raw.source}-${raw.target}`;
     if (seenEdges.has(id)) continue;
     seenEdges.add(id);
-    edges.push({ id, source: raw.source, target: raw.target, edgeType, ...(raw.label ? { label: raw.label } : {}) });
+    edges.push({
+      id, source: raw.source, target: raw.target, edgeType,
+      ...(raw.label ? { label: raw.label } : {}),
+      // A switch's routing rule lives on its outgoing edge — stripping it would silently turn a
+      // conditional branch into a take-everything branch. Kept as the model wrote it; the typed
+      // graph validation still checks its shape.
+      ...(raw.predicate && typeof raw.predicate === "object" && !Array.isArray(raw.predicate) ? { predicate: raw.predicate } : {}),
+    });
   }
   return { nodes, edges };
 }
@@ -138,13 +177,15 @@ export function assertGateWall(nodes, edges) {
 
 // Bind the founder's concrete input/output onto the model's source/execute nodes. The model
 // picked where they go; the founder's real data lands here. Runs after resolveEntry, so a source
-// still present here is a provided (connector-backed) source — stamp its connector and mark the
-// mode explicit so the persisted graph carries it.
+// still present here is a provided (connector-backed) source. The founder's input binds ONLY when
+// they actually provided some — with nothing provided, the composed source keeps doing what it was
+// designed to do (an api source pulling releases stays an api source, never an empty paste-a-list stub).
 function bindIO(nodes, channel, inputAdapter, outputAdapter) {
   // An agent-kind entry self-sources (discovered mode), so never stamp a connector onto it.
   const source = nodes.find((n) => n.category === "source" && n.kind !== "agent");
-  if (source) {
-    const bound = inputBinding(inputAdapter ?? channel.input ?? {});
+  const founderInput = inputAdapter ?? channel.input ?? null;
+  if (source && hasConcreteInput(founderInput)) {
+    const bound = inputBinding(founderInput);
     source.connector = bound.connector;
     source.config = { ...bound.config, ...source.config };
     source.mode = SOURCE_MODES.PROVIDED;
@@ -180,7 +221,13 @@ export async function composeGraphForChannel({ channel, agents = [], grounding =
   // the first node can run unaided — no empty-source dead-end, and no silent run-time rewrite. The
   // founder sees and persists the mode this picks.
   const hasInput = hasConcreteInput(input ?? channel.input);
-  const { nodes, edges } = resolveEntry({ nodes: normalized.nodes, edges: normalized.edges, agents, hasInput });
+  const { nodes, edges } = resolveEntry({
+    nodes: normalized.nodes,
+    edges: normalized.edges,
+    agents,
+    hasInput,
+    goal: input?.objective || channel.objective || "",
+  });
   bindIO(nodes, channel, input ?? channel.input, output ?? channel.output);
   assertGateWall(nodes, edges);
   return { nodes, edges };

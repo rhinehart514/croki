@@ -49,12 +49,14 @@ export type GtmCanvasModel = {
   // Promote-by-Replay on the focused pipeline's gate — the autonomy ladder, relocated onto the canvas
   // gate bloom. Absent when no pipeline is focused.
   gatePromote?: GatePromote;
+  // The deal the focused pipeline's staged work carries, in plain words — its own offer, or the
+  // project's standing one. Shown on the gate's inline review.
+  gateOffer?: string | null;
   onAskClaude?: (node: GTMNode) => void;
   onApproveGate?: (nodeId: string) => void;
   onAddNode?: (spec: Partial<GTMNode> & { label: string }) => void;
   onConnectNodes?: (source: string, target: string) => void;
   onDeleteEdges?: (edgeIds: string[]) => void;
-  onLoadRecipe?: () => void;
   onNodePositionChange?: (nodeId: string, position: { x: number; y: number }) => void;
   onOpenLibrary?: () => void;
   nodeEditor?: NodeEditorBridge | null;
@@ -89,9 +91,8 @@ export type GtmCanvasModel = {
 type GtmLensProps = LensProps<GtmCanvasModel, never>;
 
 // ── channel-flow: GraphCanvas, unchanged. Forwards App's prop bag straight through. ──
-// Exported so GtmBoard's Channels cluster can mount the SAME merged canvas — arriving via a click on
-// the Channels cluster or the direct top-level pipeline entry lands you in the identical component,
-// never a different page.
+// The ground overview's Channels cluster and the direct top-level pipeline entry both mount this SAME
+// merged canvas — either path lands you in the identical component, never a different page.
 export function ChannelFlowLens({ model: m }: GtmLensProps) {
   if (!m.graph) {
     return (
@@ -124,12 +125,12 @@ export function ChannelFlowLens({ model: m }: GtmLensProps) {
           onResolveProposal={m.onResolveProposal}
           onSubmitReview={m.onSubmitReview}
           gatePromote={m.gatePromote}
+          gateOffer={m.gateOffer}
           onAskClaude={m.onAskClaude}
           onApproveGate={m.onApproveGate}
           onAddNode={m.onAddNode}
           onConnectNodes={m.onConnectNodes}
           onDeleteEdges={m.onDeleteEdges}
-          onLoadRecipe={m.onLoadRecipe}
           onNodePositionChange={m.onNodePositionChange}
           onOpenLibrary={m.onOpenLibrary}
           onSelect={m.onSelect}
@@ -148,8 +149,8 @@ export function ChannelFlowLens({ model: m }: GtmLensProps) {
         />
         {m.graph.nodes.length === 0 ? (
           <div className="blank-channel-guide">
-            <strong>Shape this pipeline from the outcome backward</strong>
-            <span>Tell Claude what this motion should accomplish, or add the first node yourself. Nothing has been chosen for you.</span>
+            <strong>Tell Claude what this pipeline should accomplish</strong>
+            <span>Describe the outcome you want and Claude composes the steps that reach it, stopping at your gate. Nothing has been chosen for you, and nothing sends without you.</span>
           </div>
         ) : null}
       </div>
@@ -174,7 +175,8 @@ function GroundLensWrapper({ model: m }: GtmLensProps) {
 
 const LENSES: LensDef<GtmCanvasModel, never>[] = [
   // The ground is the LANDING surface (id kept as "board" so the host's controlled altitude prop is
-  // unchanged). The nine-layer board is folded in — GtmBoard.tsx stays on disk, no longer the landing.
+  // unchanged). The former nine-layer belief board is gone as a surface; its confidence signal survives
+  // only as the plain per-pipeline state the ground shows.
   { id: "board", label: "Ground", Component: GroundLensWrapper },
   { id: "channel-flow", label: "Pipeline flow", Component: ChannelFlowLens },
 ];

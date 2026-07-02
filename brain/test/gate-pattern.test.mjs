@@ -18,7 +18,30 @@ test("classifyExceptions flags low confidence, explicit review flags, and missin
   assert.equal(byId.c.isException, true);
   assert.match(byId.c.reasons.join(" "), /low confidence/);
   assert.equal(byId.d.isException, true);
-  assert.match(byId.d.reasons.join(" "), /flagged|no draft body/);
+  assert.match(byId.d.reasons.join(" "), /flagged|nothing to review/);
+});
+
+// Regression: composition is free-form, so a staged item may carry its content under ANY field
+// names — a scheduled X post as { post_text, offer, scheduled_for }, not an outreach draft. The
+// pattern must recognize that content (not flag it "nothing to review"), and an approved pattern
+// must clear it, or every non-outreach pipeline dead-ends at the wall.
+test("a non-outreach-shaped item (post_text) counts as reviewable and clears an approved pattern", () => {
+  const posts = [
+    { id: "p1", post_text: "Shipped the Drover morning queue today — one place to clear every venture's calls.", offer: "50% off for the first ten", scheduled_for: "2026-07-02T09:00:00Z", confidence: 0.9 },
+    { id: "p2", confidence: 0.9 }, // truly nothing to read (only run bookkeeping) → exception
+  ];
+  const classified = classifyExceptions(posts);
+  const byId = Object.fromEntries(classified.map((c) => [c.item.id, c]));
+  assert.equal(byId.p1.isException, false, "a post with real text is not an exception");
+  assert.equal(byId.p2.isException, true);
+  assert.match(byId.p2.reasons.join(" "), /nothing to review/);
+
+  const result = applyPatternApproval(posts, { decision: "approve" });
+  const p1 = result.items.find((i) => i.id === "p1");
+  assert.equal(p1.approvalStatus, "approved");
+  assert.equal(p1.viaPattern, true);
+  const p2 = result.items.find((i) => i.id === "p2");
+  assert.equal(p2.approvalStatus, "pending", "the empty item still waits for the founder");
 });
 
 test("approving the pattern auto-approves clean items and holds only the exceptions", () => {

@@ -245,28 +245,13 @@ async function recordProductSignal(input = {}) {
 // canvas: each has a goal, a system, and a founder gate.
 // ---------------------------------------------------------------------------
 
-// The active project's systems come from GET /api/project. Each channel is one outcome.
-async function standaloneSystems(projectId) {
-  try {
-    const proj = await brainGet("/api/project");
-    if ((proj.project?.id ?? projectId) !== projectId) return []; // channels are the active project's
-    return (proj.project?.channels ?? [])
-      .map((ch) => ({
-        id: ch.id, name: ch.name, form: "system", objective: ch.objective ?? null,
-        status: ch.status, graphId: ch.graphId, runCount: ch.runCount ?? 0, pendingGates: ch.pendingGates ?? 0,
-      }));
-  } catch {
-    return [];
-  }
-}
-
 /**
- * list_outcomes — every outcome in the project: the systems (channels/flows) the founder has built.
+ * list_outcomes — the Result-based outcome report (Phase 5): what actually happened, joined back to
+ * the runs that produced it, folded into a per-path picture. Honest about what is still unmeasured.
  */
 async function listOutcomes({ projectId } = {}) {
   const id = await resolveProjectId(projectId);
-  const systems = await standaloneSystems(id);
-  return { projectId: id, outcomes: systems, systems };
+  return brainGet(`/api/projects/${encodeURIComponent(id)}/outcomes`);
 }
 
 /**
@@ -280,17 +265,48 @@ async function listToolProposals({ projectId } = {}) {
 }
 
 /**
- * get_outcome — one outcome by id (or name): a system (channel/flow) the founder built.
+ * get_outcome — one path's outcome readout (by path id or its plain-language summary) from the
+ * Result-based report: how much was staged, how much drew a real outcome, and the count per kind.
  */
 async function getOutcome({ outcomeId, projectId }) {
   const id = await resolveProjectId(projectId);
-  const systems = await standaloneSystems(id);
-  const system = systems.find((s) => s.id === outcomeId || s.name === outcomeId);
-  if (system) return { projectId: id, form: "system", system };
+  const report = await brainGet(`/api/projects/${encodeURIComponent(id)}/outcomes`);
+  const paths = Array.isArray(report.paths) ? report.paths : [];
+  const one = paths.find((p) => p.pathId === outcomeId || p.pathSummary === outcomeId);
+  if (one) return { projectId: id, path: one, totals: report.totals };
   return {
-    error: `No outcome "${outcomeId}" in project ${id}.`,
-    available: systems.map((s) => ({ id: s.id, name: s.name, form: "system" })),
+    error: `No outcome for "${outcomeId}" in project ${id}.`,
+    available: paths.map((p) => ({ pathId: p.pathId, summary: p.pathSummary })),
   };
+}
+
+// ── The rebuilt GTM engine's founder rituals — thin HTTP clients to the brain routes ────────────────
+
+/**
+ * run_market_research — the buyer-side research ritual (Phase 1). Researches who buys, why, and where
+ * they gather, persists the MarketObjects, and returns a plain-language summary. Never sends.
+ */
+async function runMarketResearchTool({ projectId } = {}) {
+  const id = await resolveProjectId(projectId);
+  return brainPost(`/api/projects/${encodeURIComponent(id)}/market-research`, {});
+}
+
+/**
+ * compose_path_portfolio — generate the ranked portfolio of GTM paths (Phase 2) from the project's
+ * product truth + buyer picture, persisting the paths so the reasoning canvas renders them.
+ */
+async function composePathPortfolioTool({ projectId } = {}) {
+  const id = await resolveProjectId(projectId);
+  return brainPost(`/api/projects/${encodeURIComponent(id)}/path-portfolio`, {});
+}
+
+/**
+ * promote_run — turn a proven run into a repeatable motion (Phase 6). Still stops at the founder gate
+ * on every re-run; never auto-sends. An absent cadence leaves the motion manual.
+ */
+async function promoteRunTool({ runId, cadence, projectId } = {}) {
+  const id = await resolveProjectId(projectId);
+  return brainPost(`/api/projects/${encodeURIComponent(id)}/runs/${encodeURIComponent(runId)}/promote`, { cadence });
 }
 
 // ---------------------------------------------------------------------------
@@ -374,10 +390,10 @@ const TOOLS = [
     handler: activateProject,
   },
 
-  // ── Outcome programs — the domain center (OutcomeProgram) ───────────────────
+  // ── Outcomes — the Result-based report (Phase 5): what actually happened ─────
   {
     name: "list_outcomes",
-    description: "List every outcome in a project: compiled outcome programs (the declared domain center, with their agent-creation policies, personalized agents, feedback signals, and domain-event trail) AND the standalone systems (channels) the founder has built that no program wraps yet — each is a real outcome with a goal, a system, and a gate. The unified set is returned in `outcomes`. Defaults to the active project; pass projectId to target another. Read this first to orient on what the product is actually chasing before touching workflows. Read-only; does not create or run anything.",
+    description: "Read the project's real outcomes: the report that folds the run ledger and the outcomes joined back to it into a per-path picture — how much was staged, how much drew a real outcome (reply/meeting/signup/… — an open set), and which path actually produced results, in plain language. Honest about what is still unmeasured; never a fabricated rate. Defaults to the active project; pass projectId to target another. Read-only.",
     inputSchema: {
       type: "object",
       properties: { projectId: { type: "string", description: "Optional. Defaults to the active project." } },
@@ -387,16 +403,50 @@ const TOOLS = [
   },
   {
     name: "get_outcome",
-    description: "Get one outcome by id (or name): a compiled program plus its agent-creation policies, or — failing that — a standalone system (channel) the founder built before any program wrapped it. The response's `form` field says which. Use after list_outcomes for the full detail of a single outcome. Defaults to the active project. Read-only; to run the outcome's workflow use run_workflow.",
+    description: "Get one path's outcome readout — by its path id or its plain-language summary — from the Result-based report: how much was staged under that path, how much was measured, the count per outcome kind, and one plain sentence. Use after list_outcomes for a single path's detail. Defaults to the active project. Read-only.",
     inputSchema: {
       type: "object",
       properties: {
-        outcomeId: { type: "string", description: "Outcome program id or name." },
+        outcomeId: { type: "string", description: "A path id, or the path's plain-language summary." },
         projectId: { type: "string", description: "Optional. Defaults to the active project." },
       },
       required: ["outcomeId"],
     },
     handler: getOutcome,
+  },
+  {
+    name: "run_market_research",
+    description: "Invoke the buyer-side research ritual for a project — the twin of scanning the repo. It researches who buys, the pain they feel, the now-trigger, where they gather, the message that lands, and the proof they need, cites each to a real source, labels each by how solid, and persists them as the project's buyer picture. Never invents buyer behavior; an unsourced claim is a flagged hypothesis. Defaults to the active project. Researches and stores only — it never sends, publishes, or charges.",
+    inputSchema: {
+      type: "object",
+      properties: { projectId: { type: "string", description: "Optional. Defaults to the active project." } },
+      required: [],
+    },
+    handler: runMarketResearchTool,
+  },
+  {
+    name: "compose_path_portfolio",
+    description: "Generate the project's portfolio of go-to-market paths — a ranked set of distinct strategic bets built from the product truth (the scan) and the buyer picture (run_market_research first). Each path carries its bet, what it rests on, its risk, and its own measurement plan; ranking is deterministic code over the evidence each rests on. The paths persist, so the reasoning canvas renders them. Defaults to the active project. Composes and stores paths only — it never runs one and never reaches the outside world.",
+    inputSchema: {
+      type: "object",
+      properties: { projectId: { type: "string", description: "Optional. Defaults to the active project." } },
+      required: [],
+    },
+    handler: composePathPortfolioTool,
+  },
+  {
+    name: "promote_run",
+    description: "Turn a proven run into a repeatable motion: it re-stages the run that worked on a cadence, keeps score, and STILL STOPS AT THE FOUNDER GATE every time — it never auto-sends. An absent or unparseable cadence leaves the motion manual (it keeps score but only re-runs when asked). Autonomy is never granted here. Defaults to the active project.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        runId: { type: "string", description: "The id of the proven run to promote." },
+        cadence: { type: "string", description: "Optional open cadence, e.g. 'weekly' or 'every 3 days'. Absent = manual." },
+        projectId: { type: "string", description: "Optional. Defaults to the active project." },
+      },
+      required: ["runId"],
+    },
+    handler: promoteRunTool,
   },
   {
     name: "list_tool_proposals",

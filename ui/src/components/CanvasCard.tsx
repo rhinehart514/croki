@@ -68,7 +68,11 @@ export function ExperimentArtifactCard({
   channelName?: string;
 }) {
   const [copied, setCopied] = useState(false);
-  const hypothesis = (exp.hypothesis || exp.variable || "").trim();
+  // A run-derived experiment carries no hypothesis (the founder never stated one — his typed goal is
+  // never echoed back as learning); its variable names what was really tested, labeled honestly.
+  const statedHypothesis = (exp.hypothesis || "").trim();
+  const hypothesis = statedHypothesis || (exp.variable || "").trim();
+  const hypothesisLabel = statedHypothesis ? "Hypothesis" : "What was tested";
   const ran: string[] = [];
   if (exp.variant && exp.control) ran.push(`${exp.variant} vs ${exp.control}`);
   else if (exp.variant) ran.push(exp.variant);
@@ -80,7 +84,7 @@ export function ExperimentArtifactCard({
 
   const share = () => {
     const text = [
-      hypothesis && `Hypothesis: ${hypothesis}`,
+      hypothesis && `${hypothesisLabel}: ${hypothesis}`,
       ranLine && `What ran: ${ranLine}`,
       result && `Result: ${result}`,
       learned && `What it tells you: ${learned}`,
@@ -101,7 +105,7 @@ export function ExperimentArtifactCard({
       </div>
       {hypothesis && (
         <section className="exp-artifact-section">
-          <span className="exp-artifact-label">Hypothesis</span>
+          <span className="exp-artifact-label">{hypothesisLabel}</span>
           <p className="exp-artifact-value exp-artifact-hypothesis">{hypothesis}</p>
         </section>
       )}

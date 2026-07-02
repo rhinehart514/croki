@@ -9,6 +9,8 @@ import { createClaudeProductModeler } from "./product-model-generator.mjs";
 import { loadFlow, recordFlowRun, saveFlow } from "./flow-store.mjs";
 import { createDerivedSourceLoader } from "./cross-reference.mjs";
 import { recordRunDerivations } from "./run-derivation.mjs";
+import { buildMarketContext } from "./market-research.mjs";
+import { marketObjectStore } from "./gtm-store.mjs";
 import { applyGraphOperations, validateGraph } from "./graph-operations.mjs";
 import { listConnectors, runGraph } from "./graph.mjs";
 import { executeDomainCommand } from "./domain-commands.mjs";
@@ -33,7 +35,7 @@ import { canApprove, getMember, resolveCurrentUser } from "./team-store.mjs";
 import { composeNakedGraph } from "./workflow-composer.mjs";
 import { composeCandidates, createClaudeCandidateComposer } from "./candidate-composer.mjs";
 import { annotateRunEvidence } from "./evidence-lines.mjs";
-import { composeIdeas, createClaudeIdeaGenerator } from "./ideation.mjs";
+import { composeIdeas, createClaudeAngleProposer, createClaudeIdeaGenerator } from "./ideation.mjs";
 import { createClaudeIdeaBar } from "./idea-bar.mjs";
 import { attachBuildWiring, createGtmIdea, getGtmIdea, listGtmIdeas, saveGtmIdea } from "./idea-store.mjs";
 import { ideaTasteForProject, recordIdeaDecisions } from "./feedback-ledger.mjs";
@@ -261,7 +263,7 @@ const TOOLS = [
   },
   {
     name: "ideate",
-    description: "Generate go-to-market ideas for a goal and stop for the founder to pick. It proposes a pass/fail bar from the product and the founder's taste, runs several generators from distinct angles, regenerates wider if the batch is too clustered, then a SEPARATE critic grades each idea against the bar — you never grade your own ideas. Surviving ideas are saved and the session PAUSES with them for the founder. It never builds: choosing which idea becomes work is the founder's act, not yours. Each survivor is pre-wired so the founder's pick drops straight into compose_and_run.",
+    description: "Generate go-to-market ideas for a goal and stop for the founder to pick. The grading bar is DERIVED from the founder's stated goal (an offer idea is judged on whether the offer moves buyers, a content idea on reach); only floors that hold for any GTM idea stay fixed. The angles are likewise chosen fresh per goal. Several generators run wide, regenerating if the batch is too clustered, then a SEPARATE critic grades each idea against the derived bar — you never grade your own ideas. EVERY graded idea is saved: survivors pause for the founder's pick, and cut ideas stay inspectable with the plain reason each was cut, so the founder can revive one. It never builds: choosing which idea becomes work is the founder's act, not yours. Each survivor is pre-wired so the founder's pick drops straight into compose_and_run.",
     input_schema: {
       type: "object",
       properties: {
@@ -383,9 +385,12 @@ function flowFor(session, options = {}) {
   const flow = loadFlow(graphId, null, options);
   if (!flow.graph) throw new Error(`Graph not found: ${graphId}`);
   const project = loadProject(options);
+  // The pipeline's own offer (when this graph belongs to a channel that carries one) rides into the
+  // run context so a drafting step honors the pipeline's deal without the founder restating it.
+  const channel = (project.channels ?? []).find((c) => c.graphId === graphId || c.id === graphId) ?? null;
   return {
     ...flow,
-    graph: applySharedContextToGraph(flow.graph, project.sharedContext),
+    graph: applySharedContextToGraph(flow.graph, project.sharedContext, { channelOffer: channel?.offer ?? null }),
   };
 }
 
@@ -621,6 +626,9 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
     targetNodeId,
     memory: memoryFor(flow.runs, options, session.projectId),
     designState: designStateFor(session, options),
+    // Ground the run on the researched buyer picture (the persisted MarketObjects), not just
+    // founder-typed guesses — a projection over the stored objects; null when none are researched.
+    market: buildMarketContext(marketObjectStore.list({ ...options, projectId: session.projectId || "default" })),
     // The live subscription-backed step runtime by default; a test injects a fake through
     // options.stepRuntime so the open agent/skill/code steps run keyless.
     stepRuntime: options.stepRuntime || liveStepRuntime({ cwd: options.cwd }),
@@ -1194,12 +1202,14 @@ async function executeTool(session, tool, options = {}) {
 
   // JOB 3 — ideate, then PAUSE for the founder. This is the generate-side twin of compose_and_run, and
   // it stops at a wall of its own: the operator generates ideas but never decides which one becomes work.
-  // It (1) proposes a pass/fail bar from the product + founder taste (a SEPARATE critic — idea-bar.mjs),
-  // (2) runs N angle generators with distinct.mjs regen on a clustered batch and grades survivors with
-  // that separate bar (ideation.composeIdeas refuses to let the generator grade itself), (3) persists
-  // every graded idea durably (idea-store), pre-wiring each SURVIVOR to compose_and_run, then (4) pauses
-  // with the survivors. Killing a survivor or picking one to build is the founder's act — resolved off
-  // the agent surface by resolveOperatorIdeas, never by a tool the model (or the MCP door) can call.
+  // It (1) derives the goal's angles and the goal's grading bar (a SEPARATE critic — idea-bar.mjs — whose
+  // axes and kill-floors are proposed per goal, only the universal floors fixed), (2) generates wide with
+  // distinct.mjs regen on a clustered batch and grades EVERY idea with that separate bar
+  // (ideation.composeIdeas refuses to let the generator grade itself), (3) persists every graded idea
+  // durably (idea-store), pre-wiring each SURVIVOR to compose_and_run, then (4) pauses with the survivors
+  // PLUS the cut list — each cut carrying its plain-line reason so the founder can inspect and revive.
+  // Killing, keeping, or reviving is the founder's act — resolved off the agent surface by
+  // resolveOperatorIdeas, never by a tool the model (or the MCP door) can call.
   if (tool.name === "ideate") {
     const goal = firstNonEmpty(input.goal, session.goal);
     if (!goal) throw new Error("ideate needs a goal.");
@@ -1216,11 +1226,19 @@ async function executeTool(session, tool, options = {}) {
     const generate = options.ideaGenerator || createClaudeIdeaGenerator({ cwd: ideateRepo });
     const bar = options.ideaBar || createClaudeIdeaBar({ cwd: ideateRepo });
     const distinct = options.ideaDistinct;
+    // The angles for THIS goal: an injected list or function (tests), or — fully live — the Claude
+    // angle proposer. When a fake generator is injected without an angle source, one unconstrained
+    // pass runs rather than spawning a live subprocess mid-test.
+    const angleOpt = options.ideaAngles;
+    const angles = Array.isArray(angleOpt) ? angleOpt : null;
+    const proposeAngles = typeof angleOpt === "function"
+      ? angleOpt
+      : (angles || options.ideaGenerator ? null : createClaudeAngleProposer({ cwd: ideateRepo }));
 
     let working = addEvent(session, {
       type: "operator_ideating",
-      title: "Ideating against the goal",
-      detail: `Generating across distinct angles, then grading survivors with a separate critic: ${goal}`,
+      title: "Coming up with ideas",
+      detail: `Coming up with a few genuinely different ways to get there: ${goal}. Each one gets checked against what this goal needs before it reaches you.`,
       data: { goal },
     }, options);
 
@@ -1230,6 +1248,8 @@ async function executeTool(session, tool, options = {}) {
       taste,
       generate,
       bar,
+      ...(angles ? { angles } : {}),
+      ...(proposeAngles ? { proposeAngles } : {}),
       ...(distinct ? { distinct } : {}),
     });
 
@@ -1237,11 +1257,19 @@ async function executeTool(session, tool, options = {}) {
     // is not silently re-proposed next time; only a survivor carries buildWiring (a dead idea is never
     // wired into a build). The wiring pre-loads compose_and_run with the surviving idea as its goal, so
     // the founder's pick drops straight into the existing build-and-run door.
+    // The decision-facing texture (what kind of move it is, the for/against, the critic's one plain
+    // sentence, why a cut was cut) is persisted ON the durable GtmIdea too — so a cut idea's reason
+    // stays inspectable after the pause resolves — and rides the pause payload for the founder's pick.
     const persisted = composed.ideas.map((idea) => createGtmIdea({
       projectId: session.projectId ?? null,
       goal,
       angle: idea.angle,
       pitch: idea.pitch,
+      what: idea.what,
+      upside: idea.upside,
+      risk: idea.risk,
+      take: idea.take,
+      killReason: idea.killReason,
       barScore: idea.barScore,
       axes: idea.axes,
       verdict: idea.killed ? "killed" : "survived",
@@ -1251,9 +1279,11 @@ async function executeTool(session, tool, options = {}) {
         : { kind: "compose_and_run", goal: idea.pitch, title: idea.pitch.slice(0, 80) },
     }, options));
     const survivors = persisted.filter((idea) => !idea.killed);
+    const cut = persisted.filter((idea) => idea.killed);
 
-    // PAUSE with the survivors — the founder reviews and picks, exactly like a gate. The operator does
-    // not build; it stops here. pendingIdeas mirrors pendingGate/pendingProposal: durable, founder-resolved.
+    // PAUSE with the survivors AND the cut list — the founder reviews, picks, and may bring a cut idea
+    // back; nothing is culled out of sight. The operator does not build; it stops here. pendingIdeas
+    // mirrors pendingGate/pendingProposal: durable, founder-resolved.
     const next = addEvent({
       ...working,
       status: "waiting_for_ideas",
@@ -1263,10 +1293,20 @@ async function executeTool(session, tool, options = {}) {
           id: idea.id,
           angle: idea.angle,
           pitch: idea.pitch,
+          what: idea.what,
+          upside: idea.upside,
+          risk: idea.risk,
+          take: idea.take,
           barScore: idea.barScore,
           buildWiring: idea.buildWiring,
         })),
-        killedCount: persisted.length - survivors.length,
+        cut: cut.map((idea) => ({
+          id: idea.id,
+          pitch: idea.pitch,
+          what: idea.what,
+          reason: idea.killReason || idea.take || "Fell short of what this goal needs.",
+        })),
+        killedCount: cut.length,
         distinctiveness: composed.distinctiveness ?? null,
         regenerated: composed.regenerated === true,
       },
@@ -1274,13 +1314,19 @@ async function executeTool(session, tool, options = {}) {
     }, {
       type: "ideas_proposed",
       title: survivors.length
-        ? `Proposed ${survivors.length} surviving idea${survivors.length === 1 ? "" : "s"}`
-        : "No ideas cleared the bar",
-      detail: `${persisted.length - survivors.length} killed by the bar · ${survivors.length} cleared the floor — pick which to build.`,
+        ? `Found ${survivors.length} idea${survivors.length === 1 ? "" : "s"} worth your look`
+        : "No ideas made the cut this round",
+      detail: survivors.length
+        ? (cut.length
+          ? `Found ${survivors.length} worth your look; ${cut.length} weaker one${cut.length === 1 ? "" : "s"} set aside — you can see them, each with the reason, and bring one back.`
+          : `Found ${survivors.length} worth your look — pick which to keep.`)
+        : (cut.length
+          ? `Everything this round fell short — each idea is set aside with the reason it was cut. Say the word and I'll come at the goal from another side.`
+          : `Nothing came back this round. Say the word and I'll come at the goal from another side.`),
       data: {
         goal,
         surviving: survivors.length,
-        killed: persisted.length - survivors.length,
+        killed: cut.length,
         ideaIds: survivors.map((idea) => idea.id),
       },
     }, options);
@@ -1289,7 +1335,7 @@ async function executeTool(session, tool, options = {}) {
       result: {
         paused: true,
         survivors: survivors.map((idea) => ({ id: idea.id, angle: idea.angle, pitch: idea.pitch, barScore: idea.barScore })),
-        killed: persisted.length - survivors.length,
+        killed: cut.length,
       },
       pause: true,
     };
@@ -1718,6 +1764,8 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
     decisions: payload.decisions && typeof payload.decisions === "object" ? payload.decisions : {},
     memory: memoryFor(flow.runs, options, session.projectId),
     designState: designStateFor(session, options),
+    // Same researched buyer picture on the gate-resume run, so re-drafted descendants stay grounded.
+    market: buildMarketContext(marketObjectStore.list({ ...options, projectId: session.projectId || "default" })),
     resumeResult: session.pendingGate.runResult,
     deployAuthorization,
     stepRuntime: liveStepRuntime({ cwd: options.cwd }),
@@ -1836,8 +1884,10 @@ export function resolveOperatorProposal(id, payload = {}, runtime = {}) {
 // The founder reviews the surviving ideas and decides: kill the weak ones, pick the strong ones to
 // build. This is a FOUNDER act — never an agent/MCP tool — exactly like resolving a gate or a proposal.
 // `kill` marks ideas dead in the store (a killed idea never gets wired into a build); `build` resumes
-// the operator with an instruction to drive each kept idea through its pre-wired compose_and_run. The
-// operator generated the ideas; the founder alone decides which become work.
+// the operator with an instruction to drive each kept idea through its pre-wired compose_and_run.
+// A `build` id that names one of THIS pause's cut ideas is an explicit founder REVIVE — the founder's
+// call reverses the bar's, the idea comes back to life and gets wired. The operator generated the
+// ideas; the founder alone decides which become work.
 export function resolveOperatorIdeas(id, payload = {}, runtime = {}) {
   const options = runtime.options ?? {};
   const session = getOperatorSession(id, options);
@@ -1848,6 +1898,15 @@ export function resolveOperatorIdeas(id, payload = {}, runtime = {}) {
   const buildIds = Array.isArray(payload.build)
     ? payload.build
     : (payload.build ? [payload.build] : []);
+  // The ids the bar cut in THIS pause — the only killed ideas a build id may revive. A founder kill
+  // from an earlier round stays dead.
+  const cutIds = new Set((session.pendingIdeas.cut ?? []).map((entry) => entry.id));
+  // What each idea said it was (the generator's own free words) — read off the pause payload so the
+  // founder's keeps can be recorded as what they actually are.
+  const pendingById = new Map([
+    ...(session.pendingIdeas.ideas ?? []).map((entry) => [entry.id, entry]),
+    ...(session.pendingIdeas.cut ?? []).map((entry) => [entry.id, entry]),
+  ]);
 
   // Founder kills: mark each dead in the durable store so it is never re-proposed or wired.
   const killed = [];
@@ -1863,12 +1922,23 @@ export function resolveOperatorIdeas(id, payload = {}, runtime = {}) {
     }
   }
 
-  // Founder keeps: the ideas to build. A killed idea cannot be built, even if also listed to build.
+  // Founder keeps: the ideas to build. A founder-killed idea cannot be built, even if also listed to
+  // build — but a BAR-cut idea from this pause can: building it is the founder's explicit revive.
   const toBuild = [];
+  const revived = [];
   for (const ideaId of buildIds) {
     if (killed.includes(ideaId)) continue;
     try {
-      const idea = getGtmIdea(ideaId, options);
+      let idea = getGtmIdea(ideaId, options);
+      if (idea.killed && cutIds.has(ideaId)) {
+        idea = saveGtmIdea({
+          ...idea,
+          verdict: "survived",
+          killed: false,
+          buildWiring: { kind: "compose_and_run", goal: idea.pitch, title: idea.pitch.slice(0, 80) },
+        }, options);
+        revived.push(ideaId);
+      }
       if (!idea.killed) toBuild.push(idea);
     } catch {
       // Unknown id ignored.
@@ -1893,9 +1963,11 @@ export function resolveOperatorIdeas(id, payload = {}, runtime = {}) {
 
   // Two resolution modes, set by where the project is in its life. "build" (the default): kept ideas
   // compose into pipelines — the mature-project path. "directions": the project is at its BEGINNING —
-  // kept ideas are ICP directions, written into the ONE shared kernel (icp.hypotheses) that every
-  // future composition reads. No pipeline is composed and no per-idea channel object is created:
-  // the kernel holds the belief; pipelines come later as projections over it.
+  // kept ideas are starting directions, written into the ONE shared kernel (icp.hypotheses) that every
+  // future composition reads. Each direction is recorded as what the idea actually IS — the generator's
+  // own free words ("an offer", "an audience to chase") lead the line; no generator slug or internal
+  // label ever enters stored belief text. No pipeline is composed and no per-idea channel object is
+  // created: the kernel holds the belief; pipelines come later as projections over it.
   const mode = payload.mode === "directions" ? "directions" : "build";
   if (mode === "directions" && toBuild.length) {
     try {
@@ -1903,7 +1975,10 @@ export function resolveOperatorIdeas(id, payload = {}, runtime = {}) {
       const project = loadProject(scoped);
       const existing = project.sharedContext?.icp?.hypotheses ?? [];
       const added = toBuild
-        .map((idea) => `${idea.angle ? `[${idea.angle}] ` : ""}${idea.pitch}`)
+        .map((idea) => {
+          const what = String(pendingById.get(idea.id)?.what || "").trim();
+          return what ? `${what[0].toUpperCase()}${what.slice(1)}: ${idea.pitch}` : idea.pitch;
+        })
         .filter((line) => !existing.includes(line));
       if (added.length) {
         updateSharedContext({ icp: { hypotheses: [...existing, ...added] } }, scoped);
@@ -1913,13 +1988,25 @@ export function resolveOperatorIdeas(id, payload = {}, runtime = {}) {
     }
   }
 
+  // The model-steering instruction. It goes ONLY into modelMessages (the model's channel) — the
+  // founder-visible event below narrates the same decision in the founder's terms instead.
   const instruction = mode === "directions"
     ? (toBuild.length
-      ? `Founder kept ${toBuild.length} idea${toBuild.length === 1 ? "" : "s"} as ICP DIRECTIONS — recorded in the shared context's icp.hypotheses, the one kernel every future composition reads. The project is at its beginning: do NOT compose pipelines or create channels yet. Propose the single cheapest next discovery probe for the kept directions (what to test first and why), then complete the session with that recommendation.${killed.length ? ` They killed ${killed.length} other idea${killed.length === 1 ? "" : "s"}; do not revisit those.` : ""}`
+      ? `Founder kept ${toBuild.length} idea${toBuild.length === 1 ? "" : "s"} as starting DIRECTIONS — each recorded in the shared context's icp.hypotheses in its own words (an audience guess, an offer idea, a channel idea, ...), the one kernel every future composition reads. The project is at its beginning: do NOT compose pipelines or create channels yet. Propose the single cheapest next discovery probe for the kept directions (what to test first and why), then complete the session with that recommendation.${killed.length ? ` They killed ${killed.length} other idea${killed.length === 1 ? "" : "s"}; do not revisit those.` : ""}`
       : `Founder reviewed the ideas${killed.length ? ` and killed ${killed.length}` : ""} but kept none as directions yet. Wait for their direction; do not build on your own.`)
     : (toBuild.length
       ? `Founder picked ${toBuild.length} idea${toBuild.length === 1 ? "" : "s"} to build: ${toBuild.map((idea) => `"${idea.pitch}" (idea_id ${idea.id})`).join("; ")}. Build each with compose_and_run, passing its idea_id and its pre-wired goal — the first sets this session's channel, any others use compose_new:true. Passing idea_id wires the built channel back to its idea so the run's outcome closes the loop.${killed.length ? ` They killed ${killed.length} other idea${killed.length === 1 ? "" : "s"}; do not revisit those.` : ""}`
       : `Founder reviewed the ideas${killed.length ? ` and killed ${killed.length}` : ""} but picked none to build yet. Wait for their direction; do not build on your own.`);
+
+  // What the founder sees: their decision as a happening, in plain words. Never the steering prompt.
+  const plural = (n) => (n === 1 ? "" : "s");
+  const setAside = killed.length ? `; ${killed.length} killed and remembered` : "";
+  const broughtBack = revived.length ? ` (${revived.length} of them brought back from the cut)` : "";
+  const founderDetail = toBuild.length
+    ? (mode === "directions"
+      ? `Kept ${toBuild.length} direction${plural(toBuild.length)}${broughtBack}${setAside}. Next you'll get the cheapest way to test what you kept — nothing runs yet.`
+      : `Building ${toBuild.length} idea${plural(toBuild.length)} now${broughtBack} — each stops at your gate${setAside}.`)
+    : `Nothing kept this round${killed.length ? ` — ${killed.length} killed and remembered` : ""}. Nothing moves until you point at the next step.`;
 
   const next = addEvent({
     ...session,
@@ -1933,10 +2020,10 @@ export function resolveOperatorIdeas(id, payload = {}, runtime = {}) {
   }, {
     type: "ideas_resolved",
     title: toBuild.length
-      ? (mode === "directions" ? "Founder kept ICP directions" : "Founder picked ideas to build")
-      : "Founder reviewed the ideas",
-    detail: instruction,
-    data: { mode, built: toBuild.map((idea) => idea.id), killed },
+      ? (mode === "directions" ? "You kept starting directions" : "You picked ideas to build")
+      : "You reviewed the ideas",
+    detail: founderDetail,
+    data: { mode, built: toBuild.map((idea) => idea.id), killed, revived },
   }, options);
   launchOperatorSession(id, runtime);
   return next;
