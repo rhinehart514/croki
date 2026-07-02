@@ -13,7 +13,6 @@ import {
   getContext,
   getLibrary,
   getGraphTemplate,
-  getPilotOutreachRecipe,
   getOperatorSession,
   getProject,
   getClarity,
@@ -47,6 +46,8 @@ import {
   composeMicroproduct,
   promoteChannel,
   revokeChannel,
+  runMarketResearch,
+  generatePathPortfolio,
 } from "@/api";
 // Heavy overlay/panel components are split into their own chunks and loaded on demand the first time
 // the founder opens them, so they stay out of the initial app chunk. Each is named-exported, so the
@@ -77,7 +78,7 @@ const LibraryPalette = lazy(() => import("@/components/LibraryPalette").then((m)
 import { statusLabel } from "@/lib/status";
 import { healthHex } from "@/lib/health";
 import { itemKey } from "@/lib/itemKey";
-import { gateItemView, type GatePromote, type GateReplayDecision } from "@/lib/gateItem";
+import { gateItemView, channelOfferLine, type GatePromote, type GateReplayDecision } from "@/lib/gateItem";
 import { agentPersona } from "@/lib/agentPersona";
 const ProductUnderstanding = lazy(() => import("@/components/ProductUnderstanding").then((m) => ({ default: m.ProductUnderstanding })));
 const ProductCanvas = lazy(() => import("@/components/ProductCanvas").then((m) => ({ default: m.ProductCanvas })));
@@ -86,6 +87,7 @@ import { CanvasCard } from "@/components/CanvasCard";
 import { ClarityCard } from "@/components/ClarityCard";
 import { PeopleLens } from "@/components/lenses/PeopleLens";
 import { ExperimentMatrixLens } from "@/components/lenses/ExperimentMatrixLens";
+import { GtmMapLens, type GateBag } from "@/components/lenses/GtmMapLens";
 import { ReferencesPanel, type ReferenceKind } from "@/components/ReferencesPanel";
 import { ToolForge } from "@/components/ToolForge";
 import { IssuesCard } from "@/components/IssuesCard";
@@ -97,6 +99,7 @@ import { MicroproductFace, type Microproduct } from "@/components/MicroproductFa
 // Only canvas-work surfaces summon now. The admin surfaces (workspace, team, self-built tools) moved
 // out of this junk drawer into a single Settings overlay reached from the dock's gear.
 const SUMMON_GTM = [
+  { id: "gtm-map", label: "GTM map", desc: "The ranked portfolio of ways to go to market — read each bet's reasoning, compare bets, ask Claude why one ranks or to challenge it, and stage one to your gate." },
   { id: "terminal", label: "Terminal", desc: "A live shell on the canvas — run commands by hand, pipe the output into the graph." },
   { id: "query", label: "Query", desc: "Interrogate your own data — everyone your pipelines touched, filtered and sorted live." },
   { id: "web", label: "Web", desc: "A research browser on the canvas — pull up a prospect's site while you work." },
@@ -158,7 +161,7 @@ import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { Button } from "@/components/ui/button";
 import type {
   ChannelMeta, ConnectorMeta, ContextManifest, Decisions, EngineState, GateDecision, GraphOperation, GtmLibrary, GTMContractAudit, GTMGraph, GTMNode, GTMNodeCategory,
-  GTMProject, GTMRunResult, NodeSelection, OperatorSession, ProjectSummary,
+  GTMProject, GTMNodeResult, GTMRunResult, NodeSelection, OperatorSession, ProjectSummary,
   ProductModel, ProductModelEdit,
   CapabilityServer, CapabilityTool, Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, ComposerPosture,
@@ -226,6 +229,11 @@ export default function App() {
   // shows it as the subject chip and the next message is framed with that node's context, so "make this
   // shorter" / "why did this come up empty" resolves to a real canvas object — no describing it by hand.
   const [composerSubject, setComposerSubject] = useState<{ id: string; label: string; kind: string } | null>(null);
+  // A message the founder started from the GTM map — "why does this rank here", "show me variants",
+  // "challenge this bet", "swap this belief", "stage this path to my gate". The composer pre-fills with
+  // it and the founder sends (or edits first); nothing runs on its own. Token-bumped so an identical
+  // re-ask re-seeds the input.
+  const [composerSeed, setComposerSeed] = useState<{ text: string; token: number } | null>(null);
   // The Issues panel — the system's problem list, now a first-class always-present indicator on the
   // dock (no longer a summoned card). Opens from its toolbar badge, mutually exclusive with Approvals.
   const [issuesOpen, setIssuesOpen] = useState(false);
@@ -614,6 +622,28 @@ export default function App() {
     setComposerFocus((f) => f + 1);
   }, []);
 
+  // Hand a GTM-map decision to Claude: the founder clicked an action on a path (why it ranks, variants,
+  // challenge a bet, swap a belief, stage it to the gate). We pre-fill the composer with the plain-words
+  // ask and mark the path as the subject — the founder reads and sends. This is how the map's decisions
+  // reach the harness: the composer IS the Claude harness, and the wall still owns anything outward.
+  const askClaudeFromMap = useCallback((text: string, subject?: { id: string; label: string }) => {
+    if (subject) setComposerSubject({ id: subject.id, label: subject.label, kind: "path" });
+    setComposerSeed({ text, token: Date.now() });
+    setComposerFocus((f) => f + 1);
+  }, []);
+
+  // The two GTM-map rituals, invoked from the map card for the active project. Each persists records
+  // server-side and returns a plain-language summary; the GtmMapLens refetches on resolve so the
+  // portfolio (or the buyer picture under it) updates in place. Neither sends — the wall is untouched.
+  const researchMarketForActive = useCallback(async () => {
+    if (!activeProjectId) return;
+    await runMarketResearch(activeProjectId);
+  }, [activeProjectId]);
+  const generatePortfolioForActive = useCallback(async () => {
+    if (!activeProjectId) return;
+    await generatePathPortfolio(activeProjectId);
+  }, [activeProjectId]);
+
   // Zoom out to the one-canvas overview: show the GTM canvas's engine-overview lens — every built
   // channel as a tile — instead of a single focused workflow. Returns false when there's nothing to
   // show (no channels with nodes), so callers fall back to focusing a single workflow. The assembled
@@ -879,11 +909,13 @@ export default function App() {
   // graph in lockstep even if the panel is closed and reopened.
   const operatorSessionId = operatorSession?.id ?? null;
   const operatorSessionStatus = operatorSession?.status ?? null;
-  // The cold-start front door is showing: no overview, no channel graph, no active operator
-  // session, not mid-boot. When this is true the GoalLauncher owns the screen and the docked
-  // co-pilot must stay hidden — otherwise both inputs stack (the cancelled-session overlap bug).
+  // The cold-start front door is showing: no project open at all, no channel graph, no active operator
+  // session, not mid-boot. When this is true the GoalLauncher owns the screen and the docked co-pilot
+  // must stay hidden — otherwise both inputs stack (the cancelled-session overlap bug). Now that the GTM
+  // map is the default canvas for ANY open project, the launcher only owns the screen when no project is
+  // open; on the map the composer (the harness) stays docked, so this keys off activeProjectId.
   const showGoalLauncher =
-    !(overviewActive && !activeChannelId) &&
+    !activeProjectId &&
     !graph &&
     !["ready", "running", "failed", "blocked"].includes(operatorSessionStatus ?? "") &&
     !booting &&
@@ -1188,24 +1220,6 @@ export default function App() {
     setProblemsOpen(false);
     setArtifactEdit(null);
   }, []);
-
-  const handleLoadPilotRecipe = useCallback(async () => {
-    if (!graph) return;
-    try {
-      const response = await getPilotOutreachRecipe();
-      setGraph({
-        ...response.graph,
-        id: graph.id,
-        name: graph.name,
-        revision: (graph.revision ?? 0) + 1,
-        store: graph.store,
-      });
-      setGraphSavedAt(null);
-      selectInGraph("input-metros", graph.id);
-    } catch (error) {
-      setGraphError(error instanceof Error ? error.message : String(error));
-    }
-  }, [graph, setGraph, selectInGraph]);
 
   // Set by "New channel": the next goal starts a fresh, unbound session that composes another pipeline.
   const freshPipelineIntent = useRef(false);
@@ -1550,6 +1564,17 @@ export default function App() {
     [gateChannel, canReleaseGate, gateReplayDecisions, handlePromoteChannel, handleRevokeChannel],
   );
 
+  // The deal the focused pipeline's staged work carries, shown on the gate's inline review: the
+  // pipeline's own offer statement (plus any extra fields the composer attached), else the project's
+  // standing offer as the default. Null when neither states one — the gate then shows no deal line.
+  const gateOffer = useMemo<string | null>(() => {
+    const own = channelOfferLine(gateChannel);
+    if (own) return own;
+    const shared = activeProject?.sharedContext?.offer;
+    const parts = [shared?.price, shared?.unit, shared?.terms].map((v) => String(v ?? "").trim()).filter(Boolean);
+    return parts.length ? parts.join(" / ") : null;
+  }, [gateChannel, activeProject]);
+
   // The microproduct build door — a goal cuts a working artifact that STAGES behind the founder gate
   // (pause:true). Nothing deploys; the live ship happens only at the gate. Held in App state so the
   // summon card can show the staged face after composing.
@@ -1594,6 +1619,44 @@ export default function App() {
   const displayGraph = proposalActive && pendingProposal
     ? pendingProposal.preview
     : graph;
+
+  // The gate, re-homed onto the GTM map. When a staged run pauses at its founder gate, this resolves the
+  // real gate node id + its staged items + the taste count, and hands them to GtmMapLens so the review
+  // blooms INSIDE the map (its Run zoom) instead of the old build canvas. Two honest sources, never a
+  // synthesized id: an operator-driven run carries its paused gate on the session; a manually-run graph
+  // carries it on the focused channel's run result (the same pendingReview/awaitingReview signal the old
+  // canvas bloomed on). Null when nothing is paused — the map then shows the portfolio. The wall is
+  // untouched: onSubmitReview still banks each decision into the run ledger and resumes, nothing sends.
+  const gtmMapGate = useMemo<GateBag | null>(() => {
+    const bag = (gateNodeId: string, nr: GTMNodeResult | undefined): GateBag => {
+      const items = nr?.items ?? [];
+      const mem = nr?.meta?.memory as { approved?: number; rejected?: number; edits?: number } | undefined;
+      const learned = (mem?.approved ?? 0) + (mem?.rejected ?? 0) + (mem?.edits ?? 0);
+      return {
+        gateNodeId, items, learned, offer: gateOffer, promote: gatePromote,
+        onSubmitReview: (id, d) => void submitGateReview(id, d),
+      };
+    };
+    // Primary: an operator run paused at its gate — the session carries the staged run + its gate node ids.
+    const pg = operatorSession?.status === "waiting_for_gate" ? operatorSession.pendingGate : null;
+    if (pg?.runResult && pg.nodeIds?.length) {
+      const gateNodeId = pg.nodeIds[0];
+      return bag(gateNodeId, pg.runResult.nodes[gateNodeId]);
+    }
+    // Secondary: a manually-run graph paused at a gate node, on the focused channel's run result.
+    const g = displayGraph ?? graph;
+    if (g && runResult) {
+      for (const n of g.nodes) {
+        if (n.category !== "gate") continue;
+        const nr = runResult.nodes[n.id];
+        if (!nr) continue;
+        const pending = nr.pendingReview === true
+          || (typeof nr.meta?.awaitingReview === "number" && (nr.meta.awaitingReview as number) > 0);
+        if (pending) return bag(n.id, nr);
+      }
+    }
+    return null;
+  }, [operatorSession, displayGraph, graph, runResult, gateOffer, gatePromote, submitGateReview]);
   const proposedNodeIds = useMemo(() => {
     if (proposalActive && pendingProposal && graph) {
       const current = new Set(graph.nodes.map((node) => node.id));
@@ -1751,9 +1814,21 @@ export default function App() {
     setSelection(id);
   }, [activeChannelId]);
 
+  // The founder chose the node-flow diagram as Drover's primary canvas. It renders whenever there's a
+  // graph to show: the explicitly focused pipeline, an ideation preview, or — when nothing is focused
+  // yet (the landing/overview) — the first built pipeline, so opening a product lands you straight on
+  // your pipelines as a merged node canvas instead of an empty board.
+  const firstBuiltGraph = useMemo(() => {
+    for (const c of channels) {
+      if (c.nodeCount > 0) { const g = channelGraphs.get(c.id); if (g) return g; }
+    }
+    return null;
+  }, [channels, channelGraphs]);
+  const canvasGraph = displayGraph ?? graph ?? firstBuiltGraph;
+
   const gtmCanvasModel = useMemo<GtmCanvasModel>(() => ({
     projectId: activeProject?.id ?? null,
-    graph: displayGraph ?? graph,
+    graph: canvasGraph,
     connectors,
     contractAudits,
     result: runResult,
@@ -1770,12 +1845,12 @@ export default function App() {
     onResolveProposal: (accept) => void handleResolveProposal(accept),
     onSubmitReview: (id, d) => void submitGateReview(id, d),
     gatePromote,
+    gateOffer,
     onApproveGate: (id) => void approveGate(id),
     onAskClaude: askClaudeAbout,
     onAddNode: handleAddNode,
     onConnectNodes: handleGraphConnect,
     onDeleteEdges: handleDeleteEdges,
-    onLoadRecipe: handleLoadPilotRecipe,
     onNodePositionChange: handleNodePositionChange,
     onOpenLibrary: () => setLibraryPaletteOpen(true),
     multiPipeline: { channels, channelGraphs, channelRunResults },
@@ -1792,10 +1867,10 @@ export default function App() {
     onDeriveChannel: handleDeriveChannel,
     onOpenChannel: focusChannel,
   }), [
-    displayGraph, graph, connectors, contractAudits, runResult, graphRunning, runningNodeId, selection,
+    canvasGraph, connectors, contractAudits, runResult, graphRunning, runningNodeId, selection,
     dismissOverlays, proposedNodeIds, proposedEdgeIds, revealedNodeIds, proposalActive, operatorCursor,
     handleResolveProposal, submitGateReview, approveGate, handleAddNode, handleGraphConnect, handleDeleteEdges,
-    handleLoadPilotRecipe, handleNodePositionChange, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote,
+    handleNodePositionChange, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer,
   ]);
 
   // First-run team setup. Gated on Convex being configured AND no team chosen yet, so a local/solo
@@ -1928,9 +2003,17 @@ export default function App() {
                 title={item?.label ?? kind}
                 onDismiss={() => dismissCard(kind)}
                 initial={{ x: 150 + i * 46, y: 92 + i * 46 }}
-                width={kind === "experiments" ? 640 : 440}
-                height={kind === "experiments" ? 460 : 520}
+                width={kind === "experiments" || kind === "gtm-map" ? 640 : 440}
+                height={kind === "experiments" ? 460 : kind === "gtm-map" ? 620 : 520}
               >
+                {kind === "gtm-map" && activeProjectId ? (
+                  <GtmMapLens
+                    projectId={activeProjectId}
+                    onAsk={askClaudeFromMap}
+                    onResearchMarket={researchMarketForActive}
+                    onGeneratePortfolio={generatePortfolioForActive}
+                  />
+                ) : null}
                 {kind === "people" ? (
                   <PeopleLens people={gtmCanvasModel.people} channels={gtmCanvasModel.channels} selected={reference?.kind === "person" ? reference.id : null} onSelect={(id) => openReference("person", id)} />
                 ) : null}
@@ -2031,26 +2114,20 @@ export default function App() {
               onOpen={handleProjectOpen}
               projects={projects}
             />
-          ) : operatorSession?.status === "waiting_for_ideas" && operatorSession.pendingIdeas ? (
-            // The operator ideated and STOPPED for the founder's call — a blocking decision, so it owns
-            // the screen (like a gate) rather than dropping back to the goal launcher. Stage follows the
-            // project's life: a project with no pipelines yet is at its BEGINNING, so kept ideas become
-            // ICP directions in the shared kernel (no pipelines composed, no per-idea channels); a
-            // mature project's keeps compose into pipelines. Nothing runs until you pick.
-            <IdeaReview
-              session={operatorSession}
-              stage={(projects.find((p) => p.id === operatorSession.projectId)?.channelCount ?? 0) === 0 ? "directions" : "build"}
-              onResolve={handleResolveIdeas}
-            />
-          ) : overviewActive && !activeChannelId ? (
-            // One project, one canvas: opening a product LANDS on the board — the nine belief layers at
-            // board altitude. Zoom a band to drop in; the Channels band carries the engine overview.
-            <GtmCanvas model={gtmCanvasModel} activeLensId="board" chromeless />
-          ) : graph ? (
-            // The single channel, through the GTM canvas: the channel-flow lens IS the GraphCanvas
-            // (single-channel behavior unchanged), with the engine-overview lens one tab away. The
-            // blank-channel-guide for an empty graph now lives inside the channel-flow lens.
-            <GtmCanvas model={gtmCanvasModel} activeLensId="channel-flow" chromeless />
+          ) : gtmMapGate && activeProjectId ? (
+            // THE WALL, re-homed onto the map. A staged run paused at its founder gate blooms and is
+            // decided INSIDE the GTM map's Run zoom — approve / edit-then-approve / return, the batch
+            // clear, the autonomy ladder. Highest priority: a run waiting on the founder must always have
+            // a home. Nothing sends until you approve here (the wall's semantics are unchanged).
+            <div className="gtm-map-host">
+              <GtmMapLens
+                projectId={activeProjectId}
+                onAsk={askClaudeFromMap}
+                onResearchMarket={researchMarketForActive}
+                onGeneratePortfolio={generatePortfolioForActive}
+                gate={gtmMapGate}
+              />
+            </div>
           ) : operatorSession && ["ready", "running", "failed", "blocked"].includes(operatorSession.status) ? (
             // The operator is driving the loop from the goal just given (or stopped trying). Never
             // re-ask for the goal here, and never show an opaque spinner: the operator's live
@@ -2062,6 +2139,26 @@ export default function App() {
               onResume={() => void handleComposerSend("Continue.")}
               onStartOver={() => void handleOperatorCancel()}
             />
+          ) : canvasGraph ? (
+            // THE DEFAULT CANVAS = the node-flow diagram (founder chose the wired-steps canvas over the
+            // bets-map). Opening a product lands straight on your pipelines as one merged node canvas —
+            // every built pipeline a lane, clicking a node focuses its pipeline. The wall is intact: a
+            // staged run still homes on the founder gate above (the gate branch), and this canvas also
+            // blooms the gate in place on a paused run. The bets-map stays reachable as the overview for
+            // a product with nothing wired yet (the branch below).
+            <GtmCanvas model={gtmCanvasModel} activeLensId="channel-flow" chromeless />
+          ) : activeProjectId ? (
+            // No pipeline wired yet — the map's empty state offers the research-the-buyer /
+            // generate-the-paths rituals so a blank product is never a dead canvas, and the ranked
+            // bets-map lives on here as the high-altitude overview until a pipeline exists.
+            <div className="gtm-map-host">
+              <GtmMapLens
+                projectId={activeProjectId}
+                onAsk={askClaudeFromMap}
+                onResearchMarket={researchMarketForActive}
+                onGeneratePortfolio={generatePortfolioForActive}
+              />
+            </div>
           ) : (booting || projectBusy) ? (
             // Still resolving the workspace (initial boot, or switching products) — a calm loading
             // state, never the cold-start goal launcher flashing before the real graph arrives.
@@ -2089,9 +2186,26 @@ export default function App() {
                   "Ideate go-to-market pipelines for this product. Read what it does, then think with me: propose a few distinct pipelines worth running and challenge anything weak. Don't compose or build a pipeline yet — let's get clear first.",
                 );
               }}
-              onLoadRecipe={handleLoadPilotRecipe}
             />
           )}
+
+          {/* The ideation pause, DEMOTED from a full-screen takeover to an overlay over the map. The
+              operator ideated and stopped for the founder's call — still a blocking decision that owns
+              the foreground, but the GTM map stays the canvas behind it instead of the pause replacing
+              the whole surface. Stage follows the project's life: a project with no pipelines yet is at
+              its BEGINNING, so kept ideas become ICP directions; a mature project's keeps compose into
+              pipelines. Nothing runs until you pick. */}
+          {view === "canvas" && operatorSession?.status === "waiting_for_ideas" && operatorSession.pendingIdeas ? (
+            <div className="idea-pause-overlay" role="dialog" aria-modal="true" aria-label="Pick the directions worth exploring">
+              <div className="idea-pause-panel">
+                <IdeaReview
+                  session={operatorSession}
+                  stage={(projects.find((p) => p.id === operatorSession.projectId)?.channelCount ?? 0) === 0 ? "directions" : "build"}
+                  onResolve={handleResolveIdeas}
+                />
+              </div>
+            </div>
+          ) : null}
 
           {/* Toolbar overlay: zoom controls at top-left */}
           {view === "canvas" && graph && (
@@ -2122,15 +2236,15 @@ export default function App() {
             </div>
           )}
 
-          {/* No live Claude — a soft, dismissible nudge, not a wall. Composing/ideating/the operator need
-              a signed-in subscription, so we name the path; but you can dismiss this and keep looking
-              around the canvas, library, and any existing product meanwhile. */}
+          {/* No live Claude — a soft, dismissible nudge, not a wall. Composing/ideating/running goals
+              need a signed-in subscription, so we name the path; but you can dismiss this and keep
+              looking around the canvas, library, and any existing product meanwhile. */}
           {connection && !connection.connected && !connectBannerDismissed && (
             <div className="loop-connect-banner" role="status">
               <AlertTriangle />
               <div className="loop-connect-text">
                 <strong>Connect Claude to build</strong>
-                <span>Composing, ideating, and the operator run on your Claude subscription. Run <code>claude</code> in your terminal to sign in, or set <code>CLAUDE_CODE_OAUTH_TOKEN</code>. You can keep exploring the canvas, library, and any existing product meanwhile.</span>
+                <span>Composing, ideating, and running goals happen on your Claude subscription. Run <code>claude</code> in your terminal to sign in, or set <code>CLAUDE_CODE_OAUTH_TOKEN</code>. You can keep exploring the canvas, library, and any existing product meanwhile.</span>
               </div>
               <button
                 className="loop-connect-dismiss"
@@ -2372,6 +2486,7 @@ export default function App() {
           // it an absolutely-positioned card over the middle/right of the board — the occlusion bug.
           floating={false}
           focusSignal={composerFocus}
+          seed={composerSeed}
           recede={proposalActive}
           boundChannelName={boundChannel?.name ?? null}
           subject={composerSubject}
@@ -2388,9 +2503,10 @@ export default function App() {
           posture={composerPosture}
           onExitPosture={() => setComposerPosture("build")}
           onPin={(kind, text) => { void pinClarity(kind, text); }}
-          onAddNode={graph ? handleAddNode : undefined}
-          onAddChain={graph ? handleAddChain : undefined}
-          onOpenLibrary={() => setLibraryPaletteOpen(true)}
+          // Build-your-own-workflow retired: the composer no longer offers the "+" step library / manual
+          // node-add. The GTM map is the surface now — you state a goal and Claude composes to the gate,
+          // rather than wiring steps by hand. (onAddNode/onAddChain/onOpenLibrary withheld → the "+"
+          // add-step collapses. onOpenComponents stays: adding real leads/teammates is not build-your-own.)
           onOpenComponents={graph ? () => setComponentsOpen(true) : undefined}
           graph={graph}
           runningNodeId={runningNodeId}
