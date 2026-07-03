@@ -5,12 +5,16 @@ import {
   measurementContractStore,
   runStore,
   resultStore,
+  persistProductTruthsFromScan,
 } from "./gtm-store.mjs";
-import { objectGraphStore, normalizeObjectEdge, normalizeObjectNode, genObjectGraphId } from "./object-graph-store.mjs";
+import { scanRepo } from "./scan.mjs";
+import { objectGraphLayoutStore, objectGraphStore, normalizeObjectEdge, normalizeObjectNode, genObjectGraphId } from "./object-graph-store.mjs";
 import { marketObjectToNode } from "./graph-intelligence/spray.mjs";
 import { deriveWeaknessForGraph } from "./graph-intelligence/weakness.mjs";
 import { recommend } from "./graph-intelligence/path-ranking.mjs";
 import { now } from "./store-fs.mjs";
+
+const RETIRED_SOURCE_STATUSES = new Set(["cancelled", "canceled", "superseded"]);
 
 function sourceRef(kind, ref, preview) {
   return { kind, ref, preview: preview || ref, at: now() };
@@ -99,6 +103,7 @@ function pathToNode(path, { projectId }) {
 }
 
 function runToNode(run, { projectId }) {
+  const status = String(run.status || "staged").toLowerCase();
   return normalizeObjectNode({
     id: objectIdForRecord(run.id),
     projectId,
@@ -122,6 +127,7 @@ function runToNode(run, { projectId }) {
       runPlan: run.runPlan ?? null,
       itemCount: Array.isArray(run.items) ? run.items.length : 0,
     },
+    ...(RETIRED_SOURCE_STATUSES.has(status) ? { retiredAt: run.updatedAt || now() } : {}),
   });
 }
 
@@ -181,6 +187,12 @@ function itemNodeForRunItem(run, item, index, { projectId }) {
       item,
     },
   });
+}
+
+function expandedRunId(value) {
+  const id = String(value ?? "").trim();
+  if (!id) return null;
+  return id.startsWith("obj-") ? id.slice(4) : id;
 }
 
 const CUSTOMER_OUTCOME_KINDS = new Set(["activation", "usage", "retention", "expansion", "churn", "testimonial"]);
@@ -353,6 +365,63 @@ function mergeEdges(existing, projected) {
   return [...byTriple.values()];
 }
 
+function isRetiredNode(node) {
+  if (node?.retiredAt) return true;
+  const status = String(node?.payload?.status ?? node?.payload?.gateState?.status ?? node?.status ?? "").toLowerCase();
+  return RETIRED_SOURCE_STATUSES.has(status) || Boolean(node?.payload?.supersededBy);
+}
+
+function visibleGraph({ projectId, nodes, edges, includeRetired = false }) {
+  const visibleNodes = includeRetired ? nodes : nodes.filter((node) => !isRetiredNode(node));
+  const ids = new Set(visibleNodes.map((node) => node.id));
+  return {
+    schemaVersion: 1,
+    projectId,
+    nodes: visibleNodes,
+    edges: edges.filter((edge) =>
+      ids.has(edge.source) &&
+      ids.has(edge.target) &&
+      edge.status !== "removed" &&
+      (includeRetired || edge.status !== "suppressed")),
+  };
+}
+
+function latestProductScanAt(productTruths = []) {
+  const times = productTruths
+    .map((truth) => Date.parse(truth?.scanRef?.scannedAt ?? ""))
+    .filter(Number.isFinite);
+  return times.length ? Math.max(...times) : 0;
+}
+
+function projectRepository(project) {
+  return String(project?.sharedContext?.repository?.repo ?? "").trim() || null;
+}
+
+function projectWinEvent(project) {
+  return String(project?.sharedContext?.repository?.outcome ?? "").trim() || "project_created";
+}
+
+export function objectGraphNeedsScan(project, { projectId = "default", options = {}, staleAfterMs = 6 * 60 * 60 * 1000 } = {}) {
+  const repo = projectRepository(project);
+  if (!repo) return false;
+  const truths = productTruthStore.list({ ...options, projectId });
+  if (!truths.length) return true;
+  const latest = latestProductScanAt(truths);
+  if (!latest) return true;
+  return Date.now() - latest > staleAfterMs;
+}
+
+export function ensureObjectGraphProductScan(project, { projectId = project?.id ?? "default", options = {}, force = false } = {}) {
+  const repo = projectRepository(project);
+  if (!repo) return { scanned: false, reason: "no repository", created: [], skipped: 0, report: null };
+  if (!force && !objectGraphNeedsScan(project, { projectId, options })) {
+    return { scanned: false, reason: "current", created: [], skipped: 0, report: null };
+  }
+  const report = scanRepo(repo, { winEvent: projectWinEvent(project) });
+  const persisted = persistProductTruthsFromScan(report, { projectId, options });
+  return { scanned: true, reason: "scan-on-open", report, ...persisted };
+}
+
 export function objectGraphForProject(projectId = "default", options = {}) {
   const stored = objectGraphStore.load(projectId, options);
   const productNodes = productTruthStore.list({ ...options, projectId }).map((truth) => productTruthToNode(truth, { projectId }));
@@ -362,21 +431,34 @@ export function objectGraphForProject(projectId = "default", options = {}) {
   const runs = runStore.list({ ...options, projectId });
   const runNodes = runs.map((run) => runToNode(run, { projectId }));
   const gateNodes = runs.flatMap((run) => gateNodesForRun(run, { projectId }));
-  const itemNodes = runs.flatMap((run) => (run.items ?? []).map((item, index) => itemNodeForRunItem(run, item, index, { projectId })));
+  const runToExpand = expandedRunId(options.expandRun);
+  const itemNodes = runToExpand
+    ? runs
+        .filter((run) => run.id === runToExpand)
+        .flatMap((run) => (run.items ?? []).map((item, index) => itemNodeForRunItem(run, item, index, { projectId })))
+    : [];
   const outcomeNodes = resultStore.list({ ...options, projectId }).map((result) => resultToNode(result, { projectId }));
   const projectedNodes = [...productNodes, ...marketNodes, ...pathNodes, ...contractNodes, ...runNodes, ...gateNodes, ...itemNodes, ...outcomeNodes];
   const nodes = mergeNodes(stored.nodes ?? [], projectedNodes);
-  const edges = mergeEdges(stored.edges ?? [], projectedEdges(nodes, { projectId }));
-  const graph = deriveWeaknessForGraph({
-    schemaVersion: 1,
+  const visible = visibleGraph({
     projectId,
     nodes,
-    edges,
+    edges: mergeEdges(stored.edges ?? [], projectedEdges(nodes, { projectId })),
+    includeRetired: options.includeRetired === true,
+  });
+  const graph = deriveWeaknessForGraph({
+    ...visible,
     revision: stored.revision ?? 0,
     updatedAt: now(),
   });
+  const layout = objectGraphLayoutStore.load(projectId, options);
   return {
     graph,
+    positions: layout.positions,
+    expandedRun: runToExpand ? {
+      runId: runToExpand,
+      itemCount: itemNodes.length,
+    } : null,
     recommendation: recommend(graph),
   };
 }

@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { objectGraphStore, normalizeObjectNode, normalizeObjectEdge } from "../src/object-graph-store.mjs";
+import { objectGraphLayoutStore, objectGraphStore, normalizeObjectNode, normalizeObjectEdge } from "../src/object-graph-store.mjs";
 import { applyObjectGraphOperations, validateObjectGraph } from "../src/object-graph-operations.mjs";
 
 function freshRoot() {
@@ -48,6 +48,22 @@ describe("object graph store", () => {
       () => normalizeObjectNode({ maturity: "typed", statement: "missing type", domain: "market" }),
       /type/i,
     );
+  });
+
+  it("persists founder-arranged node positions separately from graph knowledge", () => {
+    const options = freshRoot();
+    objectGraphStore.save({
+      projectId: "drover",
+      nodes: [{ id: "node-1", maturity: "loose", statement: "A card" }],
+      edges: [],
+    }, options);
+    const layout = objectGraphLayoutStore.merge("drover", {
+      "node-1": { x: 12, y: -4 },
+      "bad-node": { x: "nope", y: 1 },
+    }, options);
+    assert.deepEqual(layout.positions, { "node-1": { x: 12, y: -4 } });
+    assert.equal(objectGraphStore.load("drover", options).nodes[0].payload.x, undefined);
+    assert.deepEqual(objectGraphLayoutStore.load("drover", options).positions["node-1"], { x: 12, y: -4 });
   });
 
   it("keeps edge type as a closed union and requires a basis receipt", () => {

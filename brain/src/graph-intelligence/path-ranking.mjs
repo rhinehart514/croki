@@ -33,6 +33,29 @@ function pathKey(nodeIds) {
   return [...new Set(nodeIds)].sort().join("\0");
 }
 
+function compactWords(text, limit = 4) {
+  const stop = new Set(["the", "a", "an", "to", "for", "with", "and", "or", "of", "in", "on", "this", "that"]);
+  const words = String(text ?? "")
+    .replace(/[^a-z0-9\s-]/gi, " ")
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter(Boolean)
+    .filter((word) => !stop.has(word.toLowerCase()));
+  const selected = words.slice(0, limit);
+  return selected.length ? selected.map((word) => word[0].toUpperCase() + word.slice(1)).join(" ") : null;
+}
+
+function candidateName(candidate, nodes) {
+  const storedPath = nodes.find((node) => node.domain === "runs" && node.type === "path");
+  const bet = storedPath?.payload?.bet ?? {};
+  const betName = compactWords([bet.buyer, bet.channel || bet.offer || bet.message].filter(Boolean).join(" "), 5);
+  if (betName) return betName;
+  const preferred = nodes.find((node) => node.domain === "strategy" && ["wedge", "positioning", "offer", "channel", "message", "value_prop"].includes(node.type))
+    ?? nodes.find((node) => node.domain === "market")
+    ?? nodes[0];
+  return compactWords(preferred?.statement, 5) || "Testable Path";
+}
+
 function dedupeCandidates(candidates) {
   const out = [];
   for (const candidate of candidates) {
@@ -143,7 +166,7 @@ export function scorePath(candidate, graph = {}) {
     .map((node) => ({ nodeId: node.id, weakness: primaryWeakness(node.weaknesses ?? []), signal: Math.min(strength(node.solidity), Number(node.confidence ?? 0) / 100 || 0) }))
     .filter((item) => item.weakness)
     .sort((a, b) => a.signal - b.signal)[0] ?? null;
-  return { ...candidate, score, signals, weakestLink };
+  return { ...candidate, name: candidateName(candidate, nodes), score, signals, weakestLink };
 }
 
 export function recommend(graph = {}, { limit = 8 } = {}) {

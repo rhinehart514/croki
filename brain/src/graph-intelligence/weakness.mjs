@@ -58,7 +58,10 @@ function isFounderOnlyEvidence(node) {
 }
 
 function detectEvidence(node) {
+  if (["runs", "pipeline", "customer", "measurement"].includes(node?.domain)) return { status: "unmeasured" };
   const evidence = Array.isArray(node?.evidence) ? node.evidence : [];
+  const sources = Array.isArray(node?.sources) ? node.sources : [];
+  if (!evidence.length && !sources.length) return { status: "unmeasured" };
   const effective = node?.solidity ?? null;
   if (effective && effective !== "speculative" && hasSourcedEvidence(evidence) && !isFounderOnlyEvidence(node)) {
     return { status: "clear" };
@@ -97,9 +100,11 @@ function observedProductSupport(node, graph) {
 }
 
 function detectProduct(node, graph) {
+  const restsOnProduct = Array.isArray(node?.payload?.restsOn)
+    && node.payload.restsOn.some((ref) => String(ref?.type ?? ref?.kind ?? "").toLowerCase().includes("product"));
   const isStrategyClaim =
     node?.domain === "strategy" &&
-    (node?.payload?.claimsProduct === true || ["value_prop", "message", "proof_point", "positioning"].includes(node?.type));
+    (node?.payload?.claimsProduct === true || restsOnProduct);
   const isWinGap = node?.domain === "product" && ["product_gap", "measurement_gap"].includes(node?.type);
   if (!isStrategyClaim && !isWinGap) return { status: "unmeasured" };
   const support = observedProductSupport(node, graph);
@@ -150,8 +155,8 @@ export function missingContractQuarters(contract) {
 
 function detectMeasurement(node, graph) {
   const shouldMeasure =
-    node?.domain === "runs" ||
-    (node?.domain === "strategy" && ["conversion_path", "value_prop", "offer", "channel"].includes(node?.type)) ||
+    (node?.domain === "runs" && ["path", "run", "success_criteria"].includes(node?.type)) ||
+    (node?.domain === "strategy" && node?.payload?.requiresMeasurement === true) ||
     (node?.domain === "product" && node?.type === "measurement_gap");
   if (!shouldMeasure) return { status: "unmeasured" };
   if (node?.domain === "product" && node?.type === "measurement_gap") {
@@ -252,8 +257,8 @@ function hasSourceableList(node, graph) {
 function detectExecution(node, graph) {
   const needsList =
     (node?.domain === "audience" && node?.type === "list") ||
-    (node?.domain === "strategy" && ["channel", "message", "conversion_path"].includes(node?.type)) ||
-    (node?.domain === "runs" && ["path", "run"].includes(node?.type));
+    (node?.domain === "strategy" && node?.payload?.requiresAudienceList === true) ||
+    (node?.domain === "runs" && ["path", "run"].includes(node?.type) && node?.payload?.requiresAudienceList === true);
   if (!needsList) return { status: "unmeasured" };
   const stands = node?.domain === "audience" && node?.type === "list" ? listSourceStands(node) : hasSourceableList(node, graph);
   if (stands) return { status: "clear" };

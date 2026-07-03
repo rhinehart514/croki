@@ -67,8 +67,8 @@ import {
   createClaudePathGrader,
 } from "./path-portfolio.mjs";
 import { compileRunFromPath } from "./run-compile.mjs";
-import { objectGraphForProject } from "./object-graph-projection.mjs";
-import { objectGraphStore } from "./object-graph-store.mjs";
+import { ensureObjectGraphProductScan, objectGraphForProject } from "./object-graph-projection.mjs";
+import { objectGraphLayoutStore, objectGraphStore } from "./object-graph-store.mjs";
 import { applyObjectGraphOperations } from "./object-graph-operations.mjs";
 import { outcomeReport } from "./outcome-ingest.mjs";
 import { ideaTasteForProject, recordIdeaDecisions } from "./feedback-ledger.mjs";
@@ -251,6 +251,25 @@ function groundProductTruthsForProject(project, projectId) {
   } catch {
     return { created: [], skipped: 0, scanned: false };
   }
+}
+
+const objectGraphMarketFills = new Set();
+
+function scheduleObjectGraphMarketFill(project, scanReport = null) {
+  const projectId = project?.id;
+  const repo = project?.sharedContext?.repository?.repo;
+  if (!projectId || !repo) return;
+  if (marketObjectStore.list({ projectId }).length) return;
+  if (objectGraphMarketFills.has(projectId)) return;
+  objectGraphMarketFills.add(projectId);
+  runMarketResearch({
+    projectId,
+    grounding: scanReport,
+    founderInputs: founderInputsFromSharedContext(project.sharedContext),
+    generator: createClaudeMarketResearcher({ cwd: repo }),
+  })
+    .catch(() => null)
+    .finally(() => objectGraphMarketFills.delete(projectId));
 }
 
 function promoteSummary(motion) {
@@ -713,14 +732,46 @@ const server = http.createServer(async (req, res) => {
 
   // Object graph — the phase-1 GTM graph projection. It reads the new object-graph store plus the
   // existing durable GTM records, derives weakness from real signals, and highlights exactly one
-  // strongest current testable path. Pure read: no scan, send, publish, or run is triggered here.
+  // strongest current testable path. Opening a project may run the read-only product scan so the
+  // graph is populated with cited product cards immediately; market research is scheduled behind it.
   const projectObjectGraphMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/object-graph$/);
   if (req.method === "GET" && projectObjectGraphMatch) {
     try {
       const projectId = decodeURIComponent(projectObjectGraphMatch[1]);
-      json(res, 200, { projectId, ...objectGraphForProject(projectId) });
+      const project = loadProject({ projectId });
+      const scan = ensureObjectGraphProductScan(project, { projectId });
+      if (scan.scanned || marketObjectStore.list({ projectId }).length === 0) {
+        scheduleObjectGraphMarketFill(project, scan.report);
+      }
+      json(res, 200, {
+        projectId,
+        scanOnOpen: {
+          scanned: scan.scanned,
+          reason: scan.reason,
+          created: scan.created?.length ?? 0,
+          skipped: scan.skipped ?? 0,
+        },
+        ...objectGraphForProject(projectId, {
+          expandRun: url.searchParams.get("expandRun"),
+          includeRetired: url.searchParams.get("includeRetired") === "true",
+        }),
+      });
     } catch (err) {
       json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  const projectObjectGraphPositionsMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/object-graph\/positions$/);
+  if (req.method === "POST" && projectObjectGraphPositionsMatch) {
+    try {
+      const projectId = decodeURIComponent(projectObjectGraphPositionsMatch[1]);
+      loadProject({ projectId });
+      const body = await readBody(req);
+      const layout = objectGraphLayoutStore.merge(projectId, body?.positions ?? body ?? {});
+      json(res, 200, { projectId, positions: layout.positions, savedAt: layout.updatedAt });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return;
   }

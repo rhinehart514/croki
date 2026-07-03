@@ -46,6 +46,7 @@ export const OBJECT_EDGE_STATUSES = [
 ];
 
 const COLLECTION = "object-graph";
+const LAYOUT_COLLECTION = "object-graph-layout";
 
 export function genObjectGraphId(prefix = "obj") {
   const stamp = now().replace(/\D/g, "").slice(0, 14);
@@ -187,6 +188,26 @@ export function emptyObjectGraph(projectId = null) {
   };
 }
 
+function normalizePosition(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  const x = Number(input.x);
+  const y = Number(input.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return { x, y };
+}
+
+export function normalizeObjectGraphPositions(input = {}) {
+  const raw = input.positions && typeof input.positions === "object" && !Array.isArray(input.positions)
+    ? input.positions
+    : input;
+  const positions = {};
+  for (const [nodeId, value] of Object.entries(raw ?? {})) {
+    const position = normalizePosition(value);
+    if (nodeId && position) positions[nodeId] = position;
+  }
+  return positions;
+}
+
 export function normalizeObjectGraph(input = {}, projectId = input.projectId ?? null) {
   return {
     schemaVersion: OBJECT_GRAPH_SCHEMA_VERSION,
@@ -212,5 +233,33 @@ export const objectGraphStore = {
   },
   delete(projectId = "default", options = {}) {
     return persistence(options).delete(COLLECTION, safeId(projectId));
+  },
+};
+
+export const objectGraphLayoutStore = {
+  collection: LAYOUT_COLLECTION,
+  load(projectId = "default", options = {}) {
+    const stored = persistence(options).get(LAYOUT_COLLECTION, safeId(projectId));
+    return {
+      projectId,
+      positions: normalizeObjectGraphPositions(stored?.positions ?? {}),
+      updatedAt: stored?.updatedAt ?? null,
+    };
+  },
+  save(projectId = "default", positions = {}, options = {}) {
+    const normalized = {
+      projectId,
+      positions: normalizeObjectGraphPositions(positions),
+      updatedAt: now(),
+    };
+    persistence(options).set(LAYOUT_COLLECTION, safeId(projectId), normalized);
+    return normalized;
+  },
+  merge(projectId = "default", positions = {}, options = {}) {
+    const current = this.load(projectId, options);
+    return this.save(projectId, { ...current.positions, ...normalizeObjectGraphPositions(positions) }, options);
+  },
+  delete(projectId = "default", options = {}) {
+    return persistence(options).delete(LAYOUT_COLLECTION, safeId(projectId));
   },
 };

@@ -35,6 +35,15 @@ describe("graph intelligence — weakness", () => {
     assert.equal(result.weaknesses[0].detectedFrom.length, 1, "weakness carries a real receipt");
   });
 
+  it("reports thin no-signal data as unmeasured instead of flagging every card", () => {
+    const thin = node("thin", { evidence: [], sources: [] });
+    const report = weaknessReport(thin, { nodes: [thin], edges: [] });
+    assert.equal(report.evidence, "unmeasured");
+    assert.equal(report.product, "unmeasured");
+    assert.equal(report.measurement, "unmeasured");
+    assert.equal(report.execution, "unmeasured");
+  });
+
   it("fires and clears product weakness from observed Product support", () => {
     const claim = node("claim", { payload: { claimsProduct: true } });
     const proof = node("proof", {
@@ -147,6 +156,8 @@ describe("graph intelligence — strongest current testable path", () => {
     const rec = recommend(graph);
     assert.equal(rec.highlighted.length, 1);
     assert.ok(rec.highlighted[0].nodeIds.length >= 1);
+    assert.ok(rec.highlighted[0].name);
+    assert.ok(rec.highlighted[0].name.split(/\s+/).length <= 5);
     assert.equal(rec.highlighted[0].pathId, rec.rankedPaths[0].pathId, "phase 1 lights the deterministic top path only");
     assert.ok(rec.rankedPaths[0].score <= 1);
   });
