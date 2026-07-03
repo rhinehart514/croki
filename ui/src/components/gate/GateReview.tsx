@@ -8,7 +8,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle, Check, ChevronDown, ChevronRight, CornerDownLeft, Loader, Pencil, ShieldCheck, Sprout, Undo2, X,
+  AlertTriangle, Check, ChevronDown, ChevronRight, CircleDot, CornerDownLeft, Loader, Pencil, ShieldCheck, Sprout, Undo2, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { itemKey } from "@/lib/itemKey";
@@ -210,6 +210,89 @@ function GatePromotePanel({ promote, cleanCount, exceptionCount }: {
   );
 }
 
+// The outcome door on an approved card. Once the founder releases an item, the real result comes back
+// later — a reply, a meeting, a signup, a purchase. This records THAT, keyed off the item's joinKey, so
+// the outcome joins back to the run + path that produced it. It records what already happened; it never
+// sends. Common kinds are one tap; anything else is free text. A recorded outcome collapses to a receipt.
+const OUTCOME_QUICK_KINDS = ["reply", "meeting", "signup", "purchase", "no-response"];
+function RecordOutcome({ item, onRecord }: {
+  item: GTMItem;
+  onRecord: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState("");
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [recorded, setRecorded] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (outcomeKind: string) => {
+    const k = outcomeKind.trim();
+    if (!k || busy) return;
+    setBusy(true);
+    setError(null);
+    const num = value.trim() ? Number(value.trim()) : undefined;
+    try {
+      await onRecord(item, { outcomeKind: k, ...(num != null && !Number.isNaN(num) ? { value: num } : {}) });
+      setRecorded(k);
+      setOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "That didn't record — try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (recorded) {
+    return (
+      <div className="cgate-outcome is-recorded">
+        <Check size={10} aria-hidden /> Recorded: {recorded}
+      </div>
+    );
+  }
+  if (!open) {
+    return (
+      <button type="button" className="cgate-outcome-open" onClick={() => setOpen(true)}>
+        <CircleDot size={10} aria-hidden /> Record what happened
+      </button>
+    );
+  }
+  return (
+    <div className="cgate-outcome" onClick={(e) => e.stopPropagation()}>
+      <div className="cgate-outcome-chips">
+        {OUTCOME_QUICK_KINDS.map((k) => (
+          <button key={k} type="button" className="cgate-outcome-chip" disabled={busy} onClick={() => void submit(k)}>
+            {k}
+          </button>
+        ))}
+      </div>
+      <div className="cgate-outcome-custom">
+        <input
+          className="cgate-outcome-kind"
+          value={kind}
+          placeholder="or type what happened"
+          disabled={busy}
+          onChange={(e) => setKind(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") void submit(kind); }}
+        />
+        <input
+          className="cgate-outcome-value"
+          value={value}
+          placeholder="value"
+          inputMode="decimal"
+          disabled={busy}
+          onChange={(e) => setValue(e.target.value)}
+        />
+        <button type="button" className="cgate-outcome-save" disabled={busy || !kind.trim()} onClick={() => void submit(kind)}>
+          {busy ? <Loader size={10} className="spin" aria-hidden /> : "Save"}
+        </button>
+        <button type="button" className="cgate-outcome-cancel" disabled={busy} onClick={() => setOpen(false)}>Cancel</button>
+      </div>
+      {error ? <p className="cgate-outcome-error" role="alert">{error}</p> : null}
+    </div>
+  );
+}
+
 // The founder gate, ON the canvas. When a run pauses at a gate, its staged drafts bloom out of the
 // gate node as first-class cards you read and decide in place — approve / edit-then-approve / reject —
 // instead of bouncing to a side rail. Each decision calls onSubmit (the node-bound onSubmitReview),
@@ -217,17 +300,29 @@ function GatePromotePanel({ promote, cleanCount, exceptionCount }: {
 // so the card resolves instantly under your hand. This is the product's moment: reviewing real work
 // where the work lives. Never renders a hollow item as approvable — an empty draft only offers Reject.
 const GATE_CARD_CAP = 6;
-export function GateReview({ items, onSubmit, learned, promote, offer }: {
+export function GateReview({ items, onSubmit, learned, promote, offer, onRecordOutcome }: {
   items: GTMItem[];
-  onSubmit?: (decisions: Record<string, GateDecision>) => void;
+  // May be async — GateReview awaits it so a failed release/return reverts the optimistic verdict and
+  // surfaces the error instead of silently losing the founder's decision.
+  onSubmit?: (decisions: Record<string, GateDecision>) => void | Promise<void>;
   learned: number;
   promote?: GatePromote;
   // The deal the staged work carries — shown so the founder reviews drafts against the offer they ride.
   offer?: string | null;
+  // The outcome door: after an item is approved, the founder records what actually happened (a reply, a
+  // meeting, a purchase) keyed off the item's joinKey. Records what ALREADY happened — never sends.
+  // Absent when the host has no project context to post against.
+  onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
 }) {
   const [clearedOpen, setClearedOpen] = useState(false);
   const [decided, setDecided] = useState<Record<string, "approve" | "reject">>({});
   const [editing, setEditing] = useState<{ key: string; text: string } | null>(null);
+  // Busy + error, mirroring GatePromotePanel: a decision is optimistic AND awaited. While a submit is in
+  // flight the actions lock; if it rejects, the optimistic verdict reverts and the error shows — the
+  // founder never loses a decision to a silent failure.
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const submitFailed = "That decision didn't go through — nothing was released. Try again.";
   // The review panel is a container, not a control — it only swallows clicks so reviewing a draft
   // doesn't deselect the gate node underneath. Attach that via a ref so the wrapper stays a plain
   // region (a JSX onClick on a div reads as a fake button; this keeps it honest and a11y-clean).
@@ -239,10 +334,27 @@ export function GateReview({ items, onSubmit, learned, promote, offer }: {
     el.addEventListener("click", stop);
     return () => el.removeEventListener("click", stop);
   }, []);
-  const decide = (key: string, decision: "approve" | "reject", editedDraft?: string) => {
+  const decide = async (key: string, decision: "approve" | "reject", editedDraft?: string) => {
+    if (busy) return;
+    const prev = decided[key];
     setDecided((d) => ({ ...d, [key]: decision }));
     setEditing((e) => (e?.key === key ? null : e));
-    onSubmit?.({ [key]: editedDraft != null ? { decision, editedDraft } : { decision } });
+    setError(null);
+    if (!onSubmit) return;
+    setBusy(true);
+    try {
+      await onSubmit({ [key]: editedDraft != null ? { decision, editedDraft } : { decision } });
+    } catch (e) {
+      // The submit didn't land — put the card back to its actionable state so the founder can retry.
+      setDecided((d) => {
+        const next = { ...d };
+        if (prev) next[key] = prev; else delete next[key];
+        return next;
+      });
+      setError(e instanceof Error ? e.message : submitFailed);
+    } finally {
+      setBusy(false);
+    }
   };
   // The blessed pattern already released the clean items (viaPattern) — they collapse into one receipt
   // line, they never bloom. Only the items still needing the founder's own eyes open as cards. Each row
@@ -262,16 +374,33 @@ export function GateReview({ items, onSubmit, learned, promote, offer }: {
   // Batch approve every clean, still-undecided draft at once — the pattern-approval the gate is built
   // for, so a volume run doesn't demand per-item clicks. Exceptions are excluded by definition: each
   // one needs an individual call.
-  const approveAllClean = () => {
+  const approveAllClean = async () => {
+    if (busy) return;
     const batch: Record<string, GateDecision> = {};
     const nextDecided: Record<string, "approve" | "reject"> = {};
     bloom.forEach(({ it, i }) => {
       const key = itemKey(it, i);
       if (!gateItemView(it).hollow && !gateItemIsException(it) && !decided[key]) { batch[key] = { decision: "approve" }; nextDecided[key] = "approve"; }
     });
-    if (!Object.keys(batch).length) return;
+    const keys = Object.keys(batch);
+    if (!keys.length) return;
     setDecided((d) => ({ ...d, ...nextDecided }));
-    onSubmit?.(batch);
+    setError(null);
+    if (!onSubmit) return;
+    setBusy(true);
+    try {
+      await onSubmit(batch);
+    } catch (e) {
+      // Roll back the whole batch so none of the drafts read as released when the submit failed.
+      setDecided((d) => {
+        const next = { ...d };
+        for (const k of keys) delete next[k];
+        return next;
+      });
+      setError(e instanceof Error ? e.message : submitFailed);
+    } finally {
+      setBusy(false);
+    }
   };
   const cleanUndecided = bloom.reduce((n, { it, i }) => n + (!gateItemView(it).hollow && !gateItemIsException(it) && !decided[itemKey(it, i)] ? 1 : 0), 0);
   const shown = bloom.slice(0, GATE_CARD_CAP);
@@ -291,9 +420,10 @@ export function GateReview({ items, onSubmit, learned, promote, offer }: {
         {offer ? (
           <p className="cgate-review-offer">The deal this work carries: {offer}</p>
         ) : null}
+        {error ? <p className="cgate-review-error" role="alert">{error}</p> : null}
       </div>
       {cleanUndecided > 1 && onSubmit ? (
-        <button className="cgate-approve-all" type="button" onClick={(e) => { e.stopPropagation(); approveAllClean(); }}>
+        <button className="cgate-approve-all" type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); void approveAllClean(); }}>
           <Check size={12} aria-hidden /> Approve all {cleanUndecided} clean drafts
         </button>
       ) : null}
@@ -304,10 +434,14 @@ export function GateReview({ items, onSubmit, learned, promote, offer }: {
           const state = decided[key];
           const isEditing = editing?.key === key;
           if (state) {
+            // An approved item can carry a real outcome back — the founder records what happened here,
+            // keyed off the item's joinKey. Only when the host wired the door AND the item has a join key.
+            const canRecord = state === "approve" && !!onRecordOutcome && !!(item as { joinKey?: unknown }).joinKey;
             return (
               <div className={cn("cgate-card", "is-decided", `is-${state}`)} key={key}>
                 <span className="cgate-card-to">{v.subject}</span>
                 <span className="cgate-card-verdict">{state === "approve" ? "Approved" : "Returned"}</span>
+                {canRecord ? <RecordOutcome item={item} onRecord={onRecordOutcome!} /> : null}
               </div>
             );
           }
@@ -317,7 +451,7 @@ export function GateReview({ items, onSubmit, learned, promote, offer }: {
                 <span className="cgate-card-to"><AlertTriangle size={11} aria-hidden /> Nothing to review</span>
                 <p className="cgate-card-note">This item reached your review with nothing in it — no text and no details to read. Return it, or look at the step that produced it.</p>
                 <div className="cgate-card-actions">
-                  <button className="cgate-reject" type="button" onClick={() => decide(key, "reject")}>
+                  <button className="cgate-reject" type="button" disabled={busy} onClick={() => void decide(key, "reject")}>
                     <CornerDownLeft size={11} aria-hidden /> Return as draft
                   </button>
                 </div>
@@ -377,19 +511,19 @@ export function GateReview({ items, onSubmit, learned, promote, offer }: {
               <div className="cgate-card-actions">
                 {isEditing ? (
                   <>
-                    <button className="cgate-approve" type="button" disabled={!editing.text.trim()}
-                      onClick={() => decide(key, "approve", editing.text)}>Save &amp; approve</button>
-                    <button className="cgate-ghost" type="button" onClick={() => setEditing(null)}>Cancel</button>
+                    <button className="cgate-approve" type="button" disabled={busy || !editing.text.trim()}
+                      onClick={() => void decide(key, "approve", editing.text)}>Save &amp; approve</button>
+                    <button className="cgate-ghost" type="button" disabled={busy} onClick={() => setEditing(null)}>Cancel</button>
                   </>
                 ) : (
                   <>
-                    <button className="cgate-approve" type="button" onClick={() => decide(key, "approve")}>
+                    <button className="cgate-approve" type="button" disabled={busy} onClick={() => void decide(key, "approve")}>
                       <Check size={11} aria-hidden /> Approve &amp; release
                     </button>
-                    <button className="cgate-reject" type="button" onClick={() => decide(key, "reject")}>
+                    <button className="cgate-reject" type="button" disabled={busy} onClick={() => void decide(key, "reject")}>
                       <CornerDownLeft size={11} aria-hidden /> Return as draft
                     </button>
-                    <button className="cgate-edit" type="button" onClick={() => setEditing({ key, text: v.body ?? "" })}>
+                    <button className="cgate-edit" type="button" disabled={busy} onClick={() => setEditing({ key, text: v.body ?? "" })}>
                       <Pencil size={11} aria-hidden /> Edit
                     </button>
                   </>

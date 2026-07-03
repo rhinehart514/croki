@@ -277,6 +277,21 @@
   transition: background 0.16s var(--ease);
 }
 .cgate-approve-all:hover { background: color-mix(in srgb, var(--gap) 16%, var(--surface)); }
+.cgate-approve-all:disabled { opacity: 0.55; cursor: default; }
+
+/* A failed approve/reject didn't land — the founder must see it, not silently lose the decision. The
+   optimistic verdict reverts to its actionable buttons and this banner names what went wrong. */
+.cgate-review-error {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 5px var(--space-2);
+  font-size: 0.625rem;
+  line-height: 1.4;
+  color: var(--danger, #b4443a);
+  background: color-mix(in srgb, var(--danger, #b4443a) 6%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--danger, #b4443a) 35%, var(--line-2));
+  border-radius: var(--r-sm);
+}
 
 .cgate-cards {
   display: flex;
@@ -428,6 +443,104 @@
 }
 .is-approve .cgate-card-verdict { color: var(--proven); }
 .is-reject .cgate-card-verdict { color: var(--muted); }
+
+/* The outcome door on an approved receipt — the founder records the real result that came back. It
+   drops onto its own line below the verdict, so recording never fights the collapsed row. */
+.cgate-card.is-decided { flex-wrap: wrap; }
+.cgate-outcome-open {
+  flex-basis: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px var(--space-2);
+  margin-top: 4px;
+  font-family: inherit;
+  font-size: 0.5625rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: color 0.16s var(--ease), border-color 0.16s var(--ease);
+}
+.cgate-outcome-open:hover { color: var(--ink); border-color: var(--muted); }
+.cgate-outcome {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: 4px;
+}
+.cgate-outcome.is-recorded {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  color: var(--proven);
+}
+.cgate-outcome-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.cgate-outcome-chip {
+  padding: 3px var(--space-2);
+  font-family: inherit;
+  font-size: 0.5625rem;
+  font-weight: 600;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.16s var(--ease);
+}
+.cgate-outcome-chip:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.cgate-outcome-chip:disabled { opacity: 0.5; cursor: default; }
+.cgate-outcome-custom { display: flex; align-items: center; gap: 4px; }
+.cgate-outcome-kind {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px var(--space-2);
+  font-family: inherit;
+  font-size: 0.625rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+}
+.cgate-outcome-value {
+  flex: 0 0 3.5rem;
+  width: 3.5rem;
+  padding: 4px var(--space-1);
+  font-family: inherit;
+  font-size: 0.625rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+}
+.cgate-outcome-save {
+  padding: 4px var(--space-2);
+  font-family: inherit;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  color: var(--surface);
+  background: var(--gap);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.cgate-outcome-save:disabled { opacity: 0.5; cursor: not-allowed; }
+.cgate-outcome-cancel {
+  padding: 4px var(--space-1);
+  font-family: inherit;
+  font-size: 0.5625rem;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.cgate-outcome-error { font-size: 0.5625rem; color: var(--danger, #b4443a); margin: 0; }
 
 .cgate-card.is-hollow {
   border-left-color: color-mix(in srgb, var(--danger, #b4443a) 55%, var(--line-2));

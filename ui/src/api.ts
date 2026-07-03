@@ -8,7 +8,7 @@ import type {
   ProductModel, ProductModelEdit, ProductPinTargetKind,
   CapabilityServer, Person, CrossReferenceResult, ToolRegistryView, RegisteredTool, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole, BoardView, GtmExperiment,
-  ChannelMeta, Input, GtmMapView, ObjectGraphView,
+  ChannelMeta, Input, GtmMapView, ObjectGraphView, GTMItem,
 } from "@/types";
 import { identityHeaders } from "@/lib/identity";
 
@@ -275,6 +275,19 @@ export const resolveOperatorCandidates = (
   pick: string,
 ) => post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/candidates`, { projectId, pick });
 
+// ── The outcome door — record what actually happened ──────────────────────────
+// After the gate releases work, the founder records the real result (a reply, a meeting, a purchase)
+// keyed off the staged item's joinKey. The server joins it back to the run + path that produced it and
+// lands a Result the outcome report then reads. This records what ALREADY happened — it never sends,
+// publishes, or runs anything, so the wall is untouched. `source` defaults to a founder-entered note.
+export const recordOutcome = (
+  projectId: string,
+  outcome: { joinKey: string; outcomeKind: string; value?: number | null; source?: string; observedAt?: string },
+) => post<{ result: { id: string; joinKey: string; outcomeKind: string | null }; joined: boolean }>(
+  `/api/projects/${encodeURIComponent(projectId)}/outcomes`,
+  outcome,
+);
+
 // ── Living Product Picture — the founder-editable interpretation aggregate ─────
 // Read the current projected model; edits persist through the three domain commands (NOT a raw
 // sharedContext patch), which is what keeps the picture on its own append-only event log so edits
@@ -412,12 +425,40 @@ export const saveObjectGraphPositions = (
   { positions },
 );
 
+// The compiled run and its staged gate. `gate.items` each wrap the raw staged item under `.item` (which
+// carries a stable `gtmActionId`), plus a stable `actionId` and its current approval status.
+export type CompiledRun = { id: string; status: string; gateState?: { status?: string } };
+export type CompiledGate = {
+  runId: string | null;
+  status: string;
+  awaitingReview: number;
+  measurementWeakness?: unknown;
+  items: Array<{ actionId: string; joinKey: string | null; approvalStatus: string; item: GTMItem }>;
+};
+
 export const compileObjectGraphPath = (
   projectId: string,
   input: { pathId?: string; runPlan?: Record<string, unknown>; input?: Record<string, unknown>; output?: Record<string, unknown> },
-) => post<{ projectId: string; run: unknown; gate: unknown; measurementWeakness?: unknown; runPlan?: unknown }>(
+) => post<{ projectId: string; run: CompiledRun; gate: CompiledGate; measurementWeakness?: unknown; runPlan?: unknown }>(
   `/api/projects/${encodeURIComponent(projectId)}/object-graph/compile`,
   input,
+);
+
+// Reopen a staged compiled run's founder gate (pure read — approves nothing, sends nothing).
+export const getRunGate = (projectId: string, runId: string) =>
+  get<{ projectId: string } & CompiledGate>(
+    `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/gate`,
+  );
+
+// Approve a staged compiled run at the founder gate: the per-item decisions release it through the same
+// engine, staging the approved items locally. Nothing sends. Returns the resolved run + refreshed gate.
+export const approveRun = (
+  projectId: string,
+  runId: string,
+  decisions: Record<string, { decision: "approve" | "reject"; editedDraft?: string }>,
+) => post<{ projectId: string; run: CompiledRun; gate: CompiledGate; ok: boolean; pendingGates: string[] }>(
+  `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/approve`,
+  { decisions },
 );
 
 // ── The rebuilt GTM-engine rituals the founder invokes on the active project ──

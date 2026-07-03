@@ -66,11 +66,11 @@ import {
   createClaudePathGenerator,
   createClaudePathGrader,
 } from "./path-portfolio.mjs";
-import { compileRunFromPath } from "./run-compile.mjs";
+import { compileRunFromPath, gateReviewForRun, approveCompiledRun } from "./run-compile.mjs";
 import { ensureObjectGraphProductScan, objectGraphForProject } from "./object-graph-projection.mjs";
 import { objectGraphLayoutStore, objectGraphStore } from "./object-graph-store.mjs";
 import { applyObjectGraphOperations } from "./object-graph-operations.mjs";
-import { outcomeReport } from "./outcome-ingest.mjs";
+import { outcomeReport, ingestOutcome, ingestBatch, OUTCOME_SOURCES } from "./outcome-ingest.mjs";
 import { ideaTasteForProject, recordIdeaDecisions } from "./feedback-ledger.mjs";
 import { composeIdeas, createClaudeAngleProposer, createClaudeIdeaGenerator } from "./ideation.mjs";
 import { createClaudeIdeaBar } from "./idea-bar.mjs";
@@ -83,8 +83,9 @@ import {
   gtmPathStore,
   measurementContractStore,
   persistProductTruthsFromScan,
+  runStore,
 } from "./gtm-store.mjs";
-import { applyExperimentVerdict } from "./belief-writeback.mjs";
+import { applyExperimentVerdict, suggestVerdictFromOutcomes } from "./belief-writeback.mjs";
 import { upsertStatedExperiment } from "./stated-experiment.mjs";
 import { listToolRegistry, approveToolBirth } from "./tool-registry-store.mjs";
 import { listPeople, getPerson } from "./person-store.mjs";
@@ -847,6 +848,56 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Reopen a staged compiled run's founder gate. Pure read: projects the run's staged items into the
+  // review cards the UI reopens (same gateReviewForRun the compile route returns), so a founder can come
+  // back to a run staged earlier and decide it. It approves nothing and sends nothing.
+  const projectRunGateMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/runs\/([^/]+)\/gate$/);
+  if (req.method === "GET" && projectRunGateMatch) {
+    try {
+      const projectId = decodeURIComponent(projectRunGateMatch[1]);
+      const runId = decodeURIComponent(projectRunGateMatch[2]);
+      const run = runStore.get(runId, { projectId });
+      json(res, 200, { projectId, ...gateReviewForRun(run) });
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Approve a staged compiled run at the founder gate and RELEASE it through the same engine (not a
+  // parallel runtime). The founder's per-item decisions (approve / reject / edit) drive the gate; the
+  // approved items continue downstream to the execute node, which stages them LOCALLY by default and
+  // never sends. The wall is untouched — only items the founder approved carry `approved`, and the run
+  // is persisted back onto the runStore record while recordRunDerivations fires the taste / people /
+  // experiment / idea / outcome loop exactly as an operator run does.
+  const projectRunApproveMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/runs\/([^/]+)\/approve$/);
+  if (req.method === "POST" && projectRunApproveMatch) {
+    try {
+      const projectId = decodeURIComponent(projectRunApproveMatch[1]);
+      const runId = decodeURIComponent(projectRunApproveMatch[2]);
+      const body = (await readBody(req)) ?? {};
+      const project = loadProject({ projectId });
+      const repo = project.sharedContext?.repository?.repo || process.cwd();
+      const { run, gate, result } = await approveCompiledRun({
+        projectId,
+        runId,
+        decisions: body.decisions && typeof body.decisions === "object" ? body.decisions : {},
+        approvals: body.approvals && typeof body.approvals === "object" ? body.approvals : {},
+        // The same runtime dependencies executeGraphRun assembles for an operator run, so a released
+        // compiled run grounds on the researched buyer picture and product truths and runs its open steps.
+        stepRuntime: liveStepRuntime({ cwd: repo }),
+        market: buildMarketContext(marketObjectStore.list({ projectId })),
+        grounding: buildRunGrounding(project),
+        loadLastRunItems: createDerivedSourceLoader({ projectId }),
+        options: { projectId },
+      });
+      json(res, 200, { projectId, run, gate, ok: result.ok, pendingGates: result.pendingGates });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
   // Market research ritual — the buyer-side twin of scanning the repo (GTM-ENGINE-REBUILD Phase 1).
   // The founder invokes it for a project; rented intelligence host-side (like derive_product_model)
   // researches who buys and where they gather and persists the MarketObjects, then a plain-language
@@ -939,6 +990,37 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // The outcome door — record what actually happened (GTM-ENGINE-REBUILD Phase 5, the write route).
+  // A founder (or a connected source) posts one outcome or a batch; it JOINS on the item's joinKey back
+  // to the run + path that produced it and lands a Result the GET report then reads. This records what
+  // ALREADY happened — it never sends, publishes, or runs anything, so the wall is untouched. A single
+  // outcome is `{ joinKey, outcomeKind, value, source, observedAt }`; a batch is either
+  // `{ outcomes: [...] }` (each stamped founder-entered unless it names its own source) or
+  // `{ sources: { <label>: [...] } }`.
+  if (req.method === "POST" && projectOutcomesMatch) {
+    try {
+      const projectId = decodeURIComponent(projectOutcomesMatch[1]);
+      const body = (await readBody(req)) ?? {};
+      let result;
+      if (body.sources && typeof body.sources === "object") {
+        result = ingestBatch({ projectId, sources: body.sources }, { projectId });
+      } else if (Array.isArray(body.outcomes)) {
+        // A flat list defaults to the founder-entered source; any outcome naming its own source wins.
+        result = ingestBatch(
+          { projectId, sources: { [OUTCOME_SOURCES.founderEntered]: body.outcomes } },
+          { projectId },
+        );
+      } else {
+        const source = body.source ?? OUTCOME_SOURCES.founderEntered;
+        result = ingestOutcome({ ...body, source, projectId }, { projectId });
+      }
+      json(res, 200, result);
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
   // Promote a proven run into a repeatable motion (GTM-ENGINE-REBUILD Phase 6) — the founder's one
   // light touch. THE WALL IS UNTOUCHED: a promoted motion re-stages fresh runs at the founder gate on
   // cadence and never sends. An absent/unparseable cadence leaves the motion manual (fires only when
@@ -985,6 +1067,23 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, saved);
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Suggested verdict — a deterministic READ of the outcome ledger that PROPOSES a verdict from observed
+  // results against the experiment's success criteria. It never writes: the founder accepts by POSTing to
+  // the verdict route below (with provenance "derived"). This is the "3 signups observed — keep?" prompt.
+  const projectSuggestVerdictMatch = url.pathname.match(
+    /^\/api\/projects\/([^/]+)\/experiments\/([^/]+)\/suggested-verdict$/,
+  );
+  if (req.method === "GET" && projectSuggestVerdictMatch) {
+    try {
+      const projectId = decodeURIComponent(projectSuggestVerdictMatch[1]);
+      const experimentId = decodeURIComponent(projectSuggestVerdictMatch[2]);
+      json(res, 200, suggestVerdictFromOutcomes({ experimentId, projectId }));
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
     }
     return;
   }

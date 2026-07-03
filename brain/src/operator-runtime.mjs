@@ -42,6 +42,7 @@ import { ideaTasteForProject, recordIdeaDecisions } from "./feedback-ledger.mjs"
 import { compareChannelRuns } from "./run-compare.mjs";
 import { getWorkspace, listWorkspaces } from "./workspace.mjs";
 import { authModeLabel, selectRuntime } from "./runtimes/index.mjs";
+import { filterSafeTools } from "./tool-safety.mjs";
 
 const activeSessions = new Map();
 
@@ -1484,7 +1485,10 @@ export async function runOperatorSession(id, runtime = {}) {
     system: systemPrompt(session, workspace, recallPriorSessions(session, options)),
     // The model is handed ONLY the naked toolset (truth + compose_and_run + repair loop + gate + chat).
     // executeOperatorTool below still routes every tool name for direct API/MCP callers and tests.
-    tools: NAKED_TOOLS,
+    // filterSafeTools re-asserts the outbound/approval guard over the list the model actually sees, so
+    // the direct-Anthropic runtime path gets the SAME refusal the MCP bridge already applies — a future
+    // tool named like send/approve/deploy can never reach the model on either door.
+    tools: filterSafeTools(NAKED_TOOLS),
     client: selection.client ?? null,
     query: runtime.query ?? null,
     options,
@@ -1747,6 +1751,13 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
   // team member (owner/approver) may do it. Throws gate_release_forbidden (403) for a viewer/member.
   // The wall in the gate connector is unchanged; this only guards who may stand at it.
   const { actor: releasedBy } = authorizeGateRelease(session, payload, options);
+  // ATOMICALLY CLAIM the transition before any async work. Two concurrent resolves both read
+  // status === "waiting_for_gate" above, but that check and this save are SYNCHRONOUS with no await
+  // between them, so under Node's single-threaded loop only the first call reaches here; it flips the
+  // status off "waiting_for_gate" (persisted immediately) and the second call re-reads the claimed
+  // status and is rejected by the guard above — the gated action (runGraph release) fires exactly once.
+  // authorizeGateRelease runs BEFORE the claim so a forbidden actor never strands the session mid-claim.
+  session = saveOperatorSession({ ...session, status: "resolving_gate" }, options);
   const flow = flowFor(session, options);
   // The SECOND founder authorization for a microproduct deploy (GUARD 2), built host-side from the
   // SAME authorized release this gate just cleared. A deploy is heavier than a send, so a normal gate

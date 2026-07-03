@@ -22,6 +22,8 @@
 import { composeGraphForChannel, assertGateWall } from "./workflow-composer.mjs";
 import { gtmPathStore, measurementContractStore, runStore, productTruthStore, marketObjectStore } from "./gtm-store.mjs";
 import { normalizeRunPlan } from "./graph-intelligence/compile-decompose.mjs";
+import { runGraph } from "./graph.mjs";
+import { recordRunDerivations } from "./run-derivation.mjs";
 
 function slug(value) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "path";
@@ -256,6 +258,14 @@ function stageItemsForRun({ path, input, runPlan, measurementWeakness }) {
 // from the run id + the item's durable joinKey, so the same staged item always reviews under the same
 // id) and a pending approval status. This proves the gate renders whatever was staged — it never
 // inspects or requires a fixed field. It is a pure read; it approves nothing and sends nothing.
+// A stable identity for a staged item, derived from the run id + the item's durable joinKey. Both the
+// gate view (below) and the approval resume use it so the founder's per-item decision — keyed exactly
+// the way the item rendered — resolves against the same item at the gate. Exported so the approve path
+// stamps the identical id it reviews under.
+export function stableActionId(run, item) {
+  return `gtm-${slug(run?.id)}-${slug(item?.joinKey)}`;
+}
+
 export function gateReviewForRun(run) {
   const items = Array.isArray(run?.items) ? run.items : [];
   return {
@@ -267,16 +277,116 @@ export function gateReviewForRun(run) {
     measurementContract: run?.measurementContract ?? null,
     measurementWeakness: run?.measurementWeakness ?? null,
     gates: run?.gateBindings ?? [],
-    items: items.map((item) => ({
-      actionId: `gtm-${slug(run?.id)}-${slug(item?.joinKey)}`,
-      joinKey: item?.joinKey ?? null,
-      approvalStatus: "pending",
-      protects: item?.protects ?? "stage_locally",
-      reviewPayload: reviewPayloadForItem(item),
-      item, // whatever shape was staged, carried through untouched
-    })),
-    awaitingReview: items.length,
+    items: items.map((item) => {
+      const actionId = stableActionId(run, item);
+      return {
+        actionId,
+        joinKey: item?.joinKey ?? null,
+        // The item's already-decided status (if the run was resumed) wins; a fresh staged item is pending.
+        approvalStatus: item?.approvalStatus ?? "pending",
+        protects: item?.protects ?? "stage_locally",
+        reviewPayload: reviewPayloadForItem(item),
+        // Whatever shape was staged, carried through untouched, plus a stable gtmActionId so the founder
+        // gate keys their decision to the same identity the UI renders it under (draftKey/itemKey read it).
+        item: { ...item, gtmActionId: item?.gtmActionId ?? actionId },
+      };
+    }),
+    awaitingReview: items.filter((item) => (item?.approvalStatus ?? "pending") === "pending").length,
   };
+}
+
+// ── Approve → run: release a staged compiled run through the SAME engine ─────────────────────────────
+// A compiled run stages at the founder gate (compileRunFromPath). This is the other half: the founder's
+// per-item decisions (approve / reject / edit) release it. It reuses runGraph — NOT a parallel runtime —
+// resuming the founder gate on the exact reviewed items, so the approved ones continue downstream to the
+// execute node, which stages them LOCALLY by default and never sends. The wall is untouched: only items
+// the founder approved carry `approved === true`, runGraph re-asserts release authority when a guard is
+// supplied, and the default execute connector stages, never sends. It persists the resolved run back onto
+// the runStore record and fires recordRunDerivations, so taste, people, experiment, idea, and outcome
+// derivations run exactly as they do for an operator run.
+export async function approveCompiledRun({
+  projectId = "default",
+  runId = null,
+  run = null,
+  decisions = {},
+  approvals = {},
+  stepRuntime,
+  market = null,
+  grounding = null,
+  designState = null,
+  memory = null,
+  loadLastRunItems = null,
+  authorizeRelease = null,
+  options = {},
+} = {}) {
+  const staged = run ?? runStore.get(runId, { ...options, projectId });
+  const nodes = Array.isArray(staged.steps) ? staged.steps : [];
+  const edges = Array.isArray(staged.edges) ? staged.edges : [];
+  const gateNodes = nodes.filter((node) => node && node.category === "gate");
+  if (!gateNodes.length) {
+    throw new Error("This staged run has no founder gate, so there is nothing to approve.");
+  }
+
+  // Stamp every staged item with its stable id so a per-item founder decision — keyed exactly the way the
+  // gate view rendered the item — resolves against it at the gate. These become the gate's upstream via
+  // resumeResult, so the founder releases the EXACT artifacts they reviewed, not a re-drafted variant.
+  const reviewedItems = (Array.isArray(staged.items) ? staged.items : []).map((item) => ({
+    ...item,
+    gtmActionId: item?.gtmActionId ?? stableActionId(staged, item),
+  }));
+
+  // The founder gate resumes on the exact reviewed items. Every gate node in the compiled topology
+  // receives them (a compiled run carries one). Nothing else is restored, so any upstream step re-runs
+  // live — but its output is DISCARDED at the gate's upstream override; the reviewed items are what
+  // continue downstream, which is what keeps the approved content identical to what was reviewed.
+  const resumeResult = {
+    runId: staged.id,
+    nodes: Object.fromEntries(gateNodes.map((node) => [node.id, { items: reviewedItems }])),
+  };
+  // Per-item decisions apply at each gate node the same way the operator gate applies them.
+  const gateDecisions = Object.fromEntries(gateNodes.map((node) => [node.id, decisions ?? {}]));
+
+  const graph = { nodes, edges, id: staged.id };
+  const result = await runGraph(graph, {
+    resumeResult,
+    decisions: gateDecisions,
+    approvals,
+    stepRuntime,
+    market,
+    grounding,
+    designState,
+    memory,
+    loadLastRunItems,
+    projectId,
+    credentialOptions: options,
+    authorizeRelease,
+  });
+
+  // Persist the resolved run. Undecided items keep it staged (the gate still holds them); a fully
+  // resolved run moves OFF staged — completed when it ran clean, blocked when a step failed.
+  const stillPending = result.pendingGates.length > 0;
+  const status = stillPending ? "staged" : result.ok ? "completed" : "blocked";
+  const gateStatus = stillPending ? "pending" : result.ok ? "approved" : "blocked";
+  const primaryGate = gateNodes[0];
+  const gateResult = result.nodes[primaryGate.id];
+  // The gate's stamped items (each now approved / rejected) become the run's items so a re-open shows the
+  // decided state; fall back to the reviewed items if the gate produced none.
+  const decidedItems = Array.isArray(gateResult?.items) ? gateResult.items : reviewedItems;
+  const awaitingReview = stillPending
+    ? (typeof gateResult?.meta?.awaitingReview === "number"
+        ? gateResult.meta.awaitingReview
+        : decidedItems.filter((item) => item?.approvalStatus === "pending").length)
+    : 0;
+  const savedRun = runStore.save(
+    { ...staged, items: decidedItems, status, gateState: { status: gateStatus, awaitingReview } },
+    { ...options, projectId },
+  );
+
+  // Fire the SAME run-completion derivations an operator run fires (taste, people, experiment, idea,
+  // outcomes). Best-effort and side-effect-only — it can never block, re-run, or send.
+  const derivations = recordRunDerivations({ projectId, graph, result }, { ...options, projectId });
+
+  return { run: savedRun, result, gate: gateReviewForRun(savedRun), derivations };
 }
 
 // ── The compile ────────────────────────────────────────────────────────────────────────────────────

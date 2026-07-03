@@ -1609,7 +1609,8 @@ export default function App() {
       const learned = (mem?.approved ?? 0) + (mem?.rejected ?? 0) + (mem?.edits ?? 0);
       return {
         gateNodeId, items, learned, offer: gateOffer, promote: gatePromote,
-        onSubmitReview: (id, d) => void submitGateReview(id, d),
+        // Return the promise (no `void`) so GateReview can await the release and surface a failure.
+        onSubmitReview: (id, d) => submitGateReview(id, d),
       };
     };
     // Primary: an operator run paused at its gate — the session carries the staged run + its gate node ids.
@@ -1818,7 +1819,8 @@ export default function App() {
     proposalActive,
     operatorCursor,
     onResolveProposal: (accept) => void handleResolveProposal(accept),
-    onSubmitReview: (id, d) => void submitGateReview(id, d),
+    // Return the promise (no `void`) so the canvas GateReview can await the release and surface a failure.
+    onSubmitReview: (id, d) => submitGateReview(id, d),
     gatePromote,
     gateOffer,
     onApproveGate: (id) => void approveGate(id),

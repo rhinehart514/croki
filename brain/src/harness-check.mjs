@@ -36,8 +36,8 @@ const INVARIANTS = [
   },
   {
     id: "no_send_tool",
-    label: "The model is given no approve/send/publish tool — a runtime guard rejects them.",
-    file: "operator-mcp.mjs",
+    label: "The model is given no approve/send/publish tool — a shared runtime guard rejects them on both the MCP and the direct-Anthropic door.",
+    file: "tool-safety.mjs",
     test: (s) => s.includes("FORBIDDEN_TOOL") && /approve\|send\|publish/.test(s),
   },
   {

@@ -6,8 +6,8 @@ import {
   Background, Controls, Handle, MarkerType, Position, ReactFlow, useReactFlow, type Edge, type Node, type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { compileObjectGraphPath, getObjectGraph, saveObjectGraphPositions } from "@/api";
-import type { ObjectGraphEdge, ObjectGraphNode, ObjectGraphPathRecommendation, ObjectGraphView } from "@/types";
+import { approveRun, compileObjectGraphPath, getObjectGraph, recordOutcome, saveObjectGraphPositions, type CompiledGate } from "@/api";
+import type { GateDecision, GTMItem, ObjectGraphEdge, ObjectGraphNode, ObjectGraphPathRecommendation, ObjectGraphView } from "@/types";
 import { layoutObjectGraph, type PositionMap } from "@/lib/objectGraphLayout";
 import { GateReview } from "@/components/gate/GateReview";
 import type { GateBag } from "@/lib/gateItem";
@@ -190,6 +190,10 @@ export function ObjectGraphCanvas({ projectId, gate }: { projectId: string | nul
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [compileState, setCompileState] = useState<{ status: "idle" | "running" | "done" | "error"; message: string }>({ status: "idle", message: "" });
+  // The staged compiled run's own founder gate. compile stages a run and blooms its gate here; the
+  // founder's per-item decisions hit the approve route, which releases the run through the same engine
+  // (staging approved items locally — nothing sends). Separate from the operator-session `gate` prop.
+  const [runGate, setRunGate] = useState<CompiledGate | null>(null);
   const [placed, setPlaced] = useState<PositionMap>({});
   const reduceMotion = useMemo(
     () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,
@@ -294,11 +298,31 @@ export function ObjectGraphCanvas({ projectId, gate }: { projectId: string | nul
         ? " Measurement needs repair before this run is easy to judge."
         : "";
       setCompileState({ status: "done", message: `Run staged at the founder gate.${weakness}` });
+      // Bloom the staged run's gate so the founder can decide it in place — the approve action releases
+      // it through the engine, staging locally. Nothing sends until they approve here.
+      setRunGate(result.gate ?? null);
       void load();
     } catch (err) {
       setCompileState({ status: "error", message: err instanceof Error ? err.message : String(err) });
     }
   }, [projectId, highlightedPath, load]);
+
+  // Release the staged compiled run: the founder's per-item decisions hit the approve route, which runs
+  // the exact reviewed items through the gate to the execute node (staged locally, never sent). On a
+  // fully-resolved run the gate closes; if items remain undecided the refreshed gate stays open.
+  const approveRunItems = useCallback(async (decisions: Record<string, GateDecision>) => {
+    if (!projectId || !runGate?.runId) return;
+    const resolved = await approveRun(projectId, runGate.runId, decisions);
+    if (resolved.gate.awaitingReview > 0) {
+      setRunGate(resolved.gate);
+    } else {
+      setRunGate(null);
+      setCompileState({ status: "done", message: "Released — approved items staged locally. Nothing was sent." });
+    }
+    void load();
+  }, [projectId, runGate, load]);
+
+  const runGateItems = useMemo<GTMItem[]>(() => (runGate?.items ?? []).map((entry) => entry.item), [runGate]);
 
   const softCount = view?.graph.nodes.filter((node) => primaryWeakness(node)).length ?? 0;
   const grounded = highlightedPath
@@ -446,6 +470,48 @@ export function ObjectGraphCanvas({ projectId, gate }: { projectId: string | nul
             offer={gate.offer}
             promote={gate.promote}
             onSubmit={(decisions) => gate.onSubmitReview(gate.gateNodeId, decisions)}
+            onRecordOutcome={
+              projectId
+                ? async (item, outcome) => {
+                    await recordOutcome(projectId, {
+                      joinKey: String((item as { joinKey?: unknown }).joinKey ?? ""),
+                      outcomeKind: outcome.outcomeKind,
+                      value: outcome.value,
+                    });
+                  }
+                : undefined
+            }
+          />
+        </aside>
+      ) : null}
+
+      {/* The staged compiled run's own gate — blooms after "Compile run" and, unlike the operator gate
+          above, releases through the approve route (staging locally, never sending). Shown only when the
+          operator gate isn't already up, so the two never fight for the same corner. */}
+      {runGate && runGateItems.length > 0 && !(gate && gatePending) ? (
+        <aside className="object-gate-bloom">
+          <div className="object-gate-bloom-head">
+            <Shield aria-hidden="true" />
+            <div>
+              <strong>Your review</strong>
+              <span>{runGate.awaitingReview} staged · nothing leaves until you approve</span>
+            </div>
+          </div>
+          <GateReview
+            items={runGateItems}
+            learned={0}
+            onSubmit={approveRunItems}
+            onRecordOutcome={
+              projectId
+                ? async (item, outcome) => {
+                    await recordOutcome(projectId, {
+                      joinKey: String((item as { joinKey?: unknown }).joinKey ?? ""),
+                      outcomeKind: outcome.outcomeKind,
+                      value: outcome.value,
+                    });
+                  }
+                : undefined
+            }
           />
         </aside>
       ) : null}
