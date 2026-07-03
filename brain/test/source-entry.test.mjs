@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { runGraph } from "../src/graph.mjs";
 import { makeStepRuntime } from "../src/step-runners.mjs";
+import { validateGraph } from "../src/graph-operations.mjs";
 import {
   SOURCE_MODES,
   sourceMode,
@@ -76,6 +77,38 @@ describe("resolveEntry — decides the mode visibly at compose time", () => {
     assert.equal(sourceMode(a), SOURCE_MODES.DISCOVERED);
     assert.equal(a.contract.minItems, 0, "the promoted entry runs on zero upstream items");
     assert.ok(!edges.some((e) => e.source === "s" && e.target === "a"), "the dead source→agent edge is gone");
+  });
+
+  it("no input + a source that ALSO feeds parallel branches: re-points them onto the entry, never leaves a dangling edge", () => {
+    // The reproduced bug: the composer wired one source feeding a fan-out — the entry agent PLUS
+    // parallel steps (a code step, a second agent). Dropping the source rewired only the one edge to
+    // the promoted entry and deleted the node, leaving the parallel edges pointing at a node that no
+    // longer existed. validateGraph then rejected the whole plan with "unknown source", and the run
+    // never reached the founder gate. The fix moves every parallel branch onto the new entry.
+    const nodesIn = [
+      provided("s", []),
+      { id: "a", kind: "agent", ref: "gtm-find-prospects", label: "Find", position: { x: 100, y: 0 }, config: {}, contract: { accepts: ["seed"], minItems: 1 } },
+      { id: "c", kind: "code", ref: "code-readiness", label: "Readiness", position: { x: 100, y: 100 }, config: {} },
+      { id: "b", kind: "agent", ref: "gtm-enrich", label: "Enrich", position: { x: 100, y: 200 }, config: {} },
+      gate("g"),
+    ];
+    const edgesIn = [
+      { id: "e-sa", source: "s", target: "a", edgeType: "data" },
+      { id: "e-sc", source: "s", target: "c", edgeType: "data" },
+      { id: "e-sb", source: "s", target: "b", edgeType: "data" },
+      { id: "e-ag", source: "a", target: "g", edgeType: "data" },
+      { id: "e-cg", source: "c", target: "g", edgeType: "data" },
+      { id: "e-bg", source: "b", target: "g", edgeType: "data" },
+    ];
+    const { nodes, edges } = resolveEntry({ nodes: nodesIn, edges: edgesIn, agents, hasInput: false });
+
+    assert.equal(nodes.find((n) => n.id === "s"), undefined, "the empty source is dropped");
+    assert.ok(!edges.some((e) => e.source === "s" || e.target === "s"), "no edge is left pointing at the deleted source");
+    assert.ok(edges.some((e) => e.source === "a" && e.target === "c"), "the parallel code branch now flows from the entry");
+    assert.ok(edges.some((e) => e.source === "a" && e.target === "b"), "the parallel agent branch now flows from the entry");
+
+    const result = validateGraph({ nodes, edges });
+    assert.ok(result.ok, `the composed plan validates instead of dangling: ${result.errors.join("; ")}`);
   });
 
   it("no input: the promoted agent KEEPS its own instruction — never rewritten into a prospect finder", () => {

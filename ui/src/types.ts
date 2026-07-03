@@ -1302,6 +1302,7 @@ export type ObjectGraphEdge = {
 
 export type ObjectGraphPathRecommendation = {
   pathId: string;
+  name?: string;
   nodeIds: string[];
   edgeIds: string[];
   score: number;
@@ -1311,6 +1312,7 @@ export type ObjectGraphPathRecommendation = {
 
 export type ObjectGraphView = {
   projectId: string;
+  positions?: Record<string, { x: number; y: number }>;
   graph: {
     schemaVersion: number;
     projectId: string;

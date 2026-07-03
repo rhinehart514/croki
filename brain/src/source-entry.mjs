@@ -126,9 +126,29 @@ export function resolveEntry({ nodes, edges, agents = [], hasInput = false, goal
     .map((e) => nodes.find((n) => n.id === e.target))
     .find((n) => n && n.kind === "agent");
   if (downstreamAgent) {
+    // The source node is dropped and the downstream agent becomes the entry, so every edge that still
+    // touches the source must move onto the agent or nothing would hold it: the edge source→agent
+    // collapses away, any OTHER outgoing edge (source→X — a parallel branch the source also fed) now
+    // flows from the agent, and any incoming edge (X→source) now targets the agent. Without moving the
+    // parallel source→X edges the source node is deleted out from under them and the graph fails
+    // validation with "unknown source". Drop the collapsed edge and any self-loop the re-point creates,
+    // and de-dupe so a re-pointed edge can't collide with one that already exists.
+    const seen = new Set();
     const newEdges = edges
       .filter((e) => !(e.source === source.id && e.target === downstreamAgent.id))
-      .map((e) => (e.target === source.id ? { ...e, target: downstreamAgent.id } : e));
+      .map((e) => {
+        let next = e;
+        if (next.source === source.id) next = { ...next, source: downstreamAgent.id };
+        if (next.target === source.id) next = { ...next, target: downstreamAgent.id };
+        return next;
+      })
+      .filter((e) => {
+        if (e.source === e.target) return false; // the re-point folded a node onto itself
+        const key = `${e.source} ${e.target} ${e.edgeType ?? "data"}`;
+        if (seen.has(key)) return false; // a re-pointed edge duplicated an existing one
+        seen.add(key);
+        return true;
+      });
     const newNodes = nodes
       .filter((n) => n.id !== source.id)
       .map((n) =>

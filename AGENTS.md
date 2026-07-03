@@ -10,11 +10,12 @@ Rankings, higher = better. Cost reflects what I actually pay (OpenAI has really 
 | fable-5  | 2    | 9              | 9     |
 
 How to apply:
+- **Fable-5 is opt-in only — never a default.** Use fable-5 ONLY when I explicitly call for it (I name fable). Do not reach for it on your own — not for spec-writing, not for reviews, not for anything. When a task would otherwise point to fable, use opus-4.8 instead.
 - These are defaults, not limits. You have standing permission to override them: if a cheaper model's output doesn't meet the bar, rerun or redo the work with a smarter model without asking. Judge the output, not the price tag. Escalating costs less than shipping mediocre work.
 - Cost is a tie-breaker only; when axes conflict for anything that ships, intelligence > taste > cost.
 - Bulk/mechanical work (clear-spec implementation, data analysis, migrations): gpt-5.5 — it's effectively free.
 - Anything user-facing (UI, copy, API design) needs taste ≥ 7.
-- Reviews of plans/implementations: fable-5 or opus-4.8, optionally gpt-5.5 as an extra independent perspective.
+- Reviews of plans/implementations: opus-4.8 (fable-5 only if I explicitly call for it), optionally gpt-5.5 as an extra independent perspective.
 - Never use Haiku.
 - Mechanics: gpt-5.5 is only reachable through the Codex CLI — `codex exec` / `codex review` (my ~/.codex/config.toml defaults to gpt-5.5). Use the codex-implementation, codex-review, and codex-computer-use skills; for work they don't cover (investigation, data analysis), run `codex exec -s read-only` directly with a self-contained prompt.
 - Claude models (sonnet-5, opus-4.8, fable-5) run via the Agent/Workflow model parameter.
@@ -34,7 +35,11 @@ The product's name is **Drover** — the go-to-market desk for founders running 
 
 ## Stage: Alpha
 
+STAGE: alpha
+
 Drover is in **alpha** (v0.3.1). The three-rail spine runs and `npm test` is green, but no real founder has driven a real go-to-market win to the gate yet — that first attributable win is the alpha bet. Treat "built" as "built and tested," never "validated in the market." The honest, dated snapshot lives in `docs/STATE.md`; keep it current when something material changes.
+
+Per-stage behavior rules live in the global DOCTRINE.md ("Stages"): at alpha — speed over ceremony, rewrite freely, no polish that doesn't unblock understanding or trust, and the weekly question is what gets this in front of a stranger sooner. Exit test: feature-complete and a stranger Jacob didn't recruit survives it.
 
 ## The bar for product & design work
 

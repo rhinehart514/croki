@@ -477,7 +477,7 @@ export function ComposerDock({
   graph = null, runningNodeId = null, proposedNodeIds = null, result = null,
   subject = null, onClearSubject, isNavCommand,
   onProposeCandidates, onBuildCandidate,
-  seed = null,
+  seed = null, startOpen = false,
 }: {
   session: OperatorSession | null;
   running: boolean;
@@ -501,6 +501,10 @@ export function ComposerDock({
   // Bumped by the host to summon the chat — e.g. "New channel" opens and focuses it, since a
   // channel is created by telling Claude the goal, not by filling a form.
   focusSignal?: number;
+  // The cold landing of an empty product (no pipelines, no run yet): the composer opens instead of
+  // resting as a slim edge rail, so "State a go-to-market goal" points at a visible input the founder
+  // can read and type into. Only forces open on the rising edge, so a manual collapse still sticks.
+  startOpen?: boolean;
   // A message the founder started from the canvas — asking why a GTM path ranks, requesting variants,
   // challenging a bet, editing a belief, or advancing a path to the gate. The host pre-fills the input
   // with it (and opens the dock) but NEVER sends it: the founder reads, edits, and presses send. The
@@ -551,7 +555,9 @@ export function ComposerDock({
   // Rest as the slim edge rail whenever there's no live work to watch — floating always opens collapsed,
   // and docked opens collapsed unless an ACTIVE (non-terminal) session is running, so an idle or finished
   // session hands the width back to the canvas instead of holding an open lane over it.
-  const [collapsed, setCollapsed] = useState(floating || !session || TERMINAL.has(session.status));
+  const [collapsed, setCollapsed] = useState(
+    startOpen ? false : (floating || !session || TERMINAL.has(session.status)),
+  );
   const [expanded, setExpanded] = useState(false);
   // The dock leads with the THREAD — the whole conversation in one scroll (your messages, Claude's
   // work folded into a step receipt, the answer, the gate). Focus (just the latest answer/state) is
@@ -606,6 +612,14 @@ export function ComposerDock({
     setCollapsed(floating);
   }
 
+  // Cold landing of an empty product: open the composer so its goal input is visible. Rising edge only
+  // (React's sanctioned setState-during-render), so a founder who collapses it back keeps it collapsed.
+  const [trackedStartOpen, setTrackedStartOpen] = useState(startOpen);
+  if (startOpen !== trackedStartOpen) {
+    setTrackedStartOpen(startOpen);
+    if (startOpen) setCollapsed(false);
+  }
+
   // A FINISHED session on the read-only overview (the dock is not floating over a channel there) rests
   // as a pill, so a completed transcript never covers the engine the founder came to see. The thread is
   // one click away on the peek bar. An ACTIVE session, or any session in the focused channel view,
@@ -617,13 +631,16 @@ export function ComposerDock({
     if (terminalOverview) setCollapsed(true);
   }
 
-  // When the host bumps focusSignal (e.g. "New channel"), open the dock in the same render so the
-  // input is mounted, then focus it in an effect (a DOM call, not setState — no cascading render). A
-  // finished session over the overview is the one case we don't auto-open: it would re-cover the engine.
+  // When the host bumps focusSignal the founder has EXPLICITLY asked for the composer — stated a goal
+  // from the empty canvas, handed Claude a node, started another pipeline. Every bump is a deliberate
+  // user act (never an automatic on-completion signal), so always open the dock in the same render (so
+  // the input is mounted) and focus it in an effect. This must override the rest-as-a-pill state a
+  // finished session leaves behind: a terminal session auto-collapses on its own (above), but if an
+  // explicit "state a goal" click were swallowed here the empty-canvas button would read as dead.
   const [trackedFocus, setTrackedFocus] = useState(focusSignal);
   if (focusSignal !== trackedFocus) {
     setTrackedFocus(focusSignal);
-    if (!terminalOverview) setCollapsed(false);
+    setCollapsed(false);
   }
   useEffect(() => {
     if (focusSignal) inputRef.current?.focus();
@@ -636,7 +653,7 @@ export function ComposerDock({
   if (seed && seed.token !== trackedSeed) {
     setTrackedSeed(seed.token);
     setInput(seed.text);
-    if (!terminalOverview) setCollapsed(false);
+    setCollapsed(false); // a seed is an explicit user act too — open over a finished session
   }
   useEffect(() => {
     if (seed?.token) inputRef.current?.focus();

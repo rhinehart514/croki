@@ -115,9 +115,48 @@
   border-style: dashed;
 }
 
+/* Cold-open reveal: cards start hidden and materialize in waves via a per-card --reveal-delay set on
+   each node, then settle. Once ignited we drop the delay so hover/recede feel instant. */
+.object-card {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 460ms ease, transform 460ms ease, box-shadow 160ms ease;
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+.object-graph-shell.cards-in .object-card {
+  opacity: 1;
+  transform: none;
+}
+
+.object-graph-shell.path-ignited .object-card {
+  transition-delay: 0ms;
+  transition-duration: 200ms;
+}
+
 .object-card.lit {
   border-color: var(--ink);
+  border-width: 1.5px;
   box-shadow: var(--shadow-pop);
+}
+
+/* The finale: the recommended route pulses once as it ignites. */
+@keyframes object-path-ignite {
+  40% { filter: drop-shadow(0 0 7px rgba(0, 0, 0, 0.32)); }
+}
+.object-graph-shell.path-ignited .object-edge.lit {
+  animation: object-path-ignite 900ms ease 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .object-card { opacity: 1; transform: none; transition: box-shadow 160ms ease; }
+  .object-graph-shell.path-ignited .object-edge.lit { animation: none; }
+}
+
+/* Path as hero: in the default view, the recommended route stays full-strength while everything
+   else recedes — so the spine reads through the crowd. The weakness lens keeps its own emphasis. */
+.object-graph-shell.lens-default.has-path .object-card:not(.lit):not(.selected) {
+  opacity: 0.58;
 }
 
 .object-card.role-gate {
@@ -164,6 +203,25 @@
 
 .lens-weakness .object-card:not(.weak) {
   opacity: 0.42;
+}
+
+/* Level-of-detail: zoomed out, cards collapse to compact coins showing just their type, so the whole
+   map reads as a constellation. The lit path keeps its border, so the spine stays legible at any zoom. */
+.object-graph-shell.zoomed-out .object-card {
+  width: auto;
+  min-height: 0;
+  padding: 7px 11px;
+}
+.object-graph-shell.zoomed-out .object-card-statement,
+.object-graph-shell.zoomed-out .object-card-foot,
+.object-graph-shell.zoomed-out .object-outward-band,
+.object-graph-shell.zoomed-out .object-weakest-pill {
+  display: none;
+}
+.object-graph-shell.zoomed-out .object-card.role-outward,
+.object-graph-shell.zoomed-out .object-card.role-gate,
+.object-graph-shell.zoomed-out .object-card.role-outcome {
+  padding-top: 7px;
 }
 
 .object-card.selected {
@@ -246,11 +304,17 @@
 .object-edge {
   stroke: var(--ghost);
   stroke-width: 1;
+  transition: opacity 160ms ease;
+}
+
+.object-graph-shell.has-path .object-edge:not(.lit) {
+  opacity: 0.18;
 }
 
 .object-edge.lit {
   stroke: var(--ink);
-  stroke-width: 1.75;
+  stroke-width: 2.5;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.18));
 }
 
 .object-edge.gate {
@@ -260,6 +324,14 @@
 
 .object-edge.gate.lit {
   stroke-dasharray: 0;
+}
+
+/* Feedback / loop edge (results updating belief): a muted, dotted return stroke so a backward edge
+   reads as feedback, never forward causality. `lit` overrides the color when the loop is on-path. */
+.object-edge.feedback:not(.lit) {
+  stroke: var(--gap);
+  stroke-dasharray: 2 5;
+  opacity: 0.55;
 }
 
 .object-edge.lit .react-flow__edge-textbg {
@@ -401,6 +473,47 @@
   place-items: center;
   color: var(--muted);
   font-size: var(--text-sm);
+}
+
+/* The gate blooms on the canvas: when a run pauses at its founder gate, the decidable drafts open here,
+   the gate node pulses to connect them, and nothing leaves until the founder decides. Reuses the same
+   GateReview component the map and old build-canvas use — the wall is one component, not three. */
+.object-gate-bloom {
+  position: absolute;
+  z-index: 18;
+  top: 86px;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  width: min(430px, 44%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md, 12px);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+  padding: var(--space-4);
+}
+.object-gate-bloom-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.object-gate-bloom-head svg { width: 18px; height: 18px; color: var(--gap); flex: 0 0 auto; }
+.object-gate-bloom-head strong { display: block; color: var(--ink); font-size: var(--text-md); }
+.object-gate-bloom-head span { display: block; color: var(--muted); font-size: var(--text-sm); }
+
+@keyframes object-gate-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--gap-soft); }
+  50% { box-shadow: 0 0 0 6px var(--gap-soft); }
+}
+.object-graph-shell.gate-pending .object-card.role-gate {
+  border-color: var(--gap);
+  animation: object-gate-pulse 1700ms ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .object-graph-shell.gate-pending .object-card.role-gate { animation: none; }
 }
 
 @media (max-width: 760px) {

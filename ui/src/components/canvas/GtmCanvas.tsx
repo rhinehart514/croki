@@ -3,6 +3,7 @@ import type { NodeEditorBridge } from "@/components/nodeEditorBridge";
 import type { GatePromote } from "@/lib/gateItem";
 import { CanvasShell, type LensDef, type LensProps } from "@/components/canvas/CanvasShell";
 import { ObjectGraphCanvas } from "@/components/ObjectGraphCanvas";
+import type { GateBag } from "@/components/lenses/GtmMapLens";
 import { GroundLens } from "@/components/lenses/GroundLens";
 import { BeliefSpine } from "@/components/lenses/BeliefSpine";
 import { useGround, type IcpGrouping } from "@/lib/groundModel";
@@ -87,26 +88,33 @@ export type GtmCanvasModel = {
   // Drag-to-connect on the engine canvas: wire toChannel to pull fromChannel's output.
   onDeriveChannel: (toChannelId: string, fromChannelId: string) => void;
   onOpenChannel: (channelId: string) => void;
+  // A product with nothing wired yet lands on this same canvas — an empty node ground with a compose
+  // invitation instead of a separate ranked-bets page. This focuses the goal composer so the founder
+  // states the outcome and Claude composes the first pipeline.
+  onComposeFirst?: () => void;
+  // A run paused at its founder gate — its decidable items bloom on the gate node in the object graph.
+  gate?: GateBag | null;
 };
 
 type GtmLensProps = LensProps<GtmCanvasModel, never>;
 
 function ObjectGraphLens({ model: m }: GtmLensProps) {
-  return <ObjectGraphCanvas projectId={m.projectId} />;
+  return <ObjectGraphCanvas projectId={m.projectId} gate={m.gate} />;
 }
 
 // ── channel-flow: GraphCanvas, unchanged. Forwards App's prop bag straight through. ──
 // The ground overview's Channels cluster and the direct top-level pipeline entry both mount this SAME
 // merged canvas — either path lands you in the identical component, never a different page.
+// A stable empty graph for the landing of a product with nothing wired yet: the same node canvas
+// renders its dotted ground so the founder never lands on a separate page — just an empty flow with a
+// compose invitation. A fixed id keeps GraphCanvas's layout memo from thrashing.
+const LANDING_EMPTY_GRAPH: GTMGraph = { id: "__landing-empty__", name: "New pipeline", version: "0", nodes: [], edges: [] };
+
 export function ChannelFlowLens({ model: m }: GtmLensProps) {
-  if (!m.graph) {
-    return (
-      <div className="canvas-empty">
-        <strong>No pipeline open</strong>
-        <span>Pick a pipeline from the overview to open its flow.</span>
-      </div>
-    );
-  }
+  // No pipeline wired yet (the landing/overview of a fresh product) → render the empty node canvas with
+  // a compose invitation, NOT a ranked-bets page. Once anything is built, the real graph takes over.
+  const landing = !m.graph;
+  const graph = m.graph ?? LANDING_EMPTY_GRAPH;
   // L1 above L2 in one column: the pipeline's belief spine (the folded-in board, scoped to this one
   // pipeline) rides above its executable flow. The spine is a pure read; it only mounts when a project
   // and a focused channel exist. This is the interim composition until the continuous-zoom LOD backbone
@@ -122,7 +130,7 @@ export function ChannelFlowLens({ model: m }: GtmLensProps) {
         <GraphCanvas
           connectors={m.connectors}
           contractAudits={m.contractAudits}
-          graph={m.graph}
+          graph={graph}
           proposedNodeIds={m.proposedNodeIds}
           proposedEdgeIds={m.proposedEdgeIds}
           revealedNodeIds={m.revealedNodeIds}
@@ -152,10 +160,15 @@ export function ChannelFlowLens({ model: m }: GtmLensProps) {
           selection={m.selection}
           subsystemHealth={m.subsystemHealth}
         />
-        {m.graph.nodes.length === 0 ? (
+        {graph.nodes.length === 0 ? (
           <div className="blank-channel-guide">
-            <strong>Tell Claude what this pipeline should accomplish</strong>
+            <strong>{landing ? "Start your first pipeline" : "Tell Claude what this pipeline should accomplish"}</strong>
             <span>Describe the outcome you want and Claude composes the steps that reach it, stopping at your gate. Nothing has been chosen for you, and nothing sends without you.</span>
+            {landing && m.onComposeFirst ? (
+              <button type="button" className="blank-channel-compose" onClick={m.onComposeFirst}>
+                State a go-to-market goal
+              </button>
+            ) : null}
           </div>
         ) : null}
       </div>

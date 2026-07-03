@@ -402,6 +402,16 @@ export const getGtmMap = (projectId: string) =>
 export const getObjectGraph = (projectId: string) =>
   get<ObjectGraphView>(`/api/projects/${encodeURIComponent(projectId)}/object-graph`);
 
+// Persist the founder's canvas layout (per-project sidecar keyed by node id — projection state,
+// never knowledge). Merged server-side, so partial position maps are fine.
+export const saveObjectGraphPositions = (
+  projectId: string,
+  positions: Record<string, { x: number; y: number }>,
+) => post<{ ok: boolean }>(
+  `/api/projects/${encodeURIComponent(projectId)}/object-graph/positions`,
+  { positions },
+);
+
 export const compileObjectGraphPath = (
   projectId: string,
   input: { pathId?: string; runPlan?: Record<string, unknown>; input?: Record<string, unknown>; output?: Record<string, unknown> },

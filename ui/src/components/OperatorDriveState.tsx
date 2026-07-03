@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, LoaderCircle, RotateCcw } from "lucide-react";
 import type { OperatorSession } from "@/types";
 
@@ -29,6 +29,32 @@ export function OperatorDriveState({ session, productName, onResume, onStartOver
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [events.length]);
 
+  // A live elapsed clock while the drive is working. The longest step (composing the plan) can sit for
+  // a minute or two with little to stream, so an honest running time plus an expectation keeps that wait
+  // from ever reading as hung — the founder always knows it's still going and roughly how long is normal.
+  // Count from the CURRENT run's start, not the session's first-ever event: a resumed session that sat
+  // idle for a while should read "Working for 0:12", not the wall-clock age of the whole conversation.
+  // The most recent start/resume boundary is that run's beginning; fall back to the first event.
+  const startedAtMs = (() => {
+    const evs = session.events ?? [];
+    for (let i = evs.length - 1; i >= 0; i--) {
+      if (evs[i].type === "session_created" || /start|resum/i.test(evs[i].type)) {
+        return new Date(evs[i].createdAt).getTime();
+      }
+    }
+    return evs[0]?.createdAt ? new Date(evs[0].createdAt).getTime() : null;
+  })();
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (stopped) return;
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [stopped]);
+  const elapsedSec = startedAtMs != null ? Math.max(0, Math.floor((nowMs - startedAtMs) / 1000)) : null;
+  const elapsedLabel = elapsedSec != null ? `${Math.floor(elapsedSec / 60)}:${String(elapsedSec % 60).padStart(2, "0")}` : null;
+  // Past a few minutes the "usually a minute or two" reassurance turns into a lie — switch to honesty.
+  const takingLong = elapsedSec != null && elapsedSec > 180;
+
   return (
     <div className={`operator-drive ${stopped ? "is-stopped" : ""}`}>
       <div className="operator-drive-head">
@@ -46,6 +72,11 @@ export function OperatorDriveState({ session, productName, onResume, onStartOver
                 || "The drive stopped before composing a workflow. Here's what it got through.")
             : `Reading ${productName} and composing the system to chase your goal — it'll stop at your gate. Watch it think below.`}
         </span>
+        {!stopped && elapsedLabel ? (
+          <span className="operator-drive-elapsed">
+            Working for {elapsedLabel} · {takingLong ? "taking longer than usual" : "usually a minute or two"}
+          </span>
+        ) : null}
         {stopped ? (
           <div className="operator-drive-actions">
             <button type="button" className="operator-drive-resume" onClick={onResume}>

@@ -36,7 +36,7 @@ function pathKey(nodeIds) {
 function compactWords(text, limit = 4) {
   const stop = new Set(["the", "a", "an", "to", "for", "with", "and", "or", "of", "in", "on", "this", "that"]);
   const words = String(text ?? "")
-    .replace(/[^a-z0-9\s-]/gi, " ")
+    .replace(/[^a-z0-9\s'’-]/gi, " ") // keep apostrophes so "you're" doesn't split into "You Re"
     .split(/\s+/)
     .map((word) => word.trim())
     .filter(Boolean)
@@ -187,9 +187,15 @@ export function recommend(graph = {}, { limit = 8 } = {}) {
       String(a.pathId).localeCompare(String(b.pathId)),
     )
     .slice(0, limit);
+  // Highlight an actual ROUTE, not a lone high-evidence card. A single node scores well on evidence
+  // but is not "a path to revenue" — the founder needs a spine to trace. Prefer the best-scored path
+  // that spans at least a few nodes, falling back only when no real route exists.
+  // Highest-scored path that is an actual route (≥2 nodes), not a lone card — respect score, just skip
+  // the single-node "paths" that aren't a spine to trace.
+  const highlighted = rankedPaths.find((path) => new Set(path.nodeIds).size >= 2) ?? rankedPaths[0];
   return {
     rankedPaths,
-    highlighted: rankedPaths.slice(0, 1),
+    highlighted: highlighted ? [highlighted] : [],
     weights: SIGNAL_WEIGHTS,
   };
 }

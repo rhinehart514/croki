@@ -5952,6 +5952,24 @@ svg {
   line-height: 1.5;
 }
 
+.blank-channel-compose {
+  pointer-events: auto;
+  align-self: center;
+  margin-top: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--foreground);
+  border-radius: 8px;
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 120ms ease;
+}
+
+.blank-channel-compose:hover { opacity: 0.85; }
+.blank-channel-compose:focus-visible { outline: 2px solid var(--foreground); outline-offset: 2px; }
+
 .channel-create {
   display: grid;
   grid-template-columns: minmax(180px, 0.8fr) minmax(170px, 0.7fr) minmax(260px, 1.3fr) auto auto;
@@ -10219,6 +10237,7 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .operator-drive-head strong{font-size:18px;color:var(--ink)}
 .operator-drive-sub{color:var(--muted);font-size:14px;max-width:520px;line-height:1.5}
 .operator-drive.is-stopped .operator-drive-sub{color:var(--ink-2,var(--ink))}
+.operator-drive-elapsed{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;letter-spacing:.01em}
 .operator-drive-actions{display:flex;gap:8px;margin-top:4px}
 .operator-drive-resume{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--r-md,10px);
   border:1px solid var(--ink);background:var(--ink);color:var(--surface,#fff);font:inherit;font-size:13px;font-weight:600;cursor:pointer}

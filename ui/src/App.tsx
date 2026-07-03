@@ -76,6 +76,7 @@ import { NodeEditor } from "@/components/NodeEditor";
 // all live in FloatingDock now, so App no longer imports them directly.
 const LibraryPalette = lazy(() => import("@/components/LibraryPalette").then((m) => ({ default: m.LibraryPalette })));
 import { statusLabel } from "@/lib/status";
+import { humanizeOperatorSession } from "@/lib/operatorLanguage";
 import { healthHex } from "@/lib/health";
 import { itemKey } from "@/lib/itemKey";
 import { gateItemView, channelOfferLine, type GatePromote, type GateReplayDecision } from "@/lib/gateItem";
@@ -788,7 +789,7 @@ export default function App() {
         if (!active) { setOperatorSession(null); return; }
         const response = await getOperatorSession(active.id, activeProjectId);
         if (!live) return;
-        setOperatorSession(response.session);
+        setOperatorSession(humanizeOperatorSession(response.session));
         operatorGraphRevision.current = response.session.graphRevision;
       })
       .catch(() => {});
@@ -883,7 +884,8 @@ export default function App() {
     }
   }, [activeProject]);
 
-  const syncOperator = useCallback((next: OperatorSession) => {
+  const syncOperator = useCallback((raw: OperatorSession) => {
+    const next = humanizeOperatorSession(raw); // one seam: run state becomes founder language here
     setOperatorSession(next);
     if (operatorGraphRevision.current !== next.graphRevision) {
       operatorGraphRevision.current = next.graphRevision;
@@ -1866,11 +1868,15 @@ export default function App() {
     directedFeeds,
     onDeriveChannel: handleDeriveChannel,
     onOpenChannel: focusChannel,
+    // Empty-canvas landing: focus the goal composer so a fresh product starts by stating an outcome.
+    onComposeFirst: () => setComposerFocus((f) => f + 1),
+    // A run paused at its founder gate blooms its decidable items on the object-graph gate node.
+    gate: gtmMapGate,
   }), [
     canvasGraph, connectors, contractAudits, runResult, graphRunning, runningNodeId, selection,
     dismissOverlays, proposedNodeIds, proposedEdgeIds, revealedNodeIds, proposalActive, operatorCursor,
     handleResolveProposal, submitGateReview, approveGate, handleAddNode, handleGraphConnect, handleDeleteEdges,
-    handleNodePositionChange, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer,
+    handleNodePositionChange, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, gtmMapGate,
   ]);
 
   // First-run team setup. Gated on Convex being configured AND no team chosen yet, so a local/solo
@@ -2114,20 +2120,6 @@ export default function App() {
               onOpen={handleProjectOpen}
               projects={projects}
             />
-          ) : gtmMapGate && activeProjectId ? (
-            // THE WALL, re-homed onto the map. A staged run paused at its founder gate blooms and is
-            // decided INSIDE the GTM map's Run zoom — approve / edit-then-approve / return, the batch
-            // clear, the autonomy ladder. Highest priority: a run waiting on the founder must always have
-            // a home. Nothing sends until you approve here (the wall's semantics are unchanged).
-            <div className="gtm-map-host">
-              <GtmMapLens
-                projectId={activeProjectId}
-                onAsk={askClaudeFromMap}
-                onResearchMarket={researchMarketForActive}
-                onGeneratePortfolio={generatePortfolioForActive}
-                gate={gtmMapGate}
-              />
-            </div>
           ) : operatorSession && ["ready", "running", "failed", "blocked"].includes(operatorSession.status) ? (
             // The operator is driving the loop from the goal just given (or stopped trying). Never
             // re-ask for the goal here, and never show an opaque spinner: the operator's live
@@ -2471,6 +2463,9 @@ export default function App() {
           // it an absolutely-positioned card over the middle/right of the board — the occlusion bug.
           floating={false}
           focusSignal={composerFocus}
+          // Cold landing of an empty product (no pipeline built yet, no run going): open the composer so
+          // the "State a go-to-market goal" invitation points at a visible input, not a slim edge rail.
+          startOpen={!canvasGraph && !operatorSession}
           seed={composerSeed}
           recede={proposalActive}
           boundChannelName={boundChannel?.name ?? null}

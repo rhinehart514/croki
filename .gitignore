@@ -30,3 +30,6 @@ output/
 
 # Dogfood builder worktrees (feature-builder.mjs) — transient checkouts, branches survive
 .dogfood-worktrees/
+
+# Playwright MCP screenshot scratch
+.playwright-mcp/
