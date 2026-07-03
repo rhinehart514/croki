@@ -3,8 +3,7 @@
 // What this proves:
 //   - A selected GTM path compiles into a real, reviewable Run that STAGES at the founder gate:
 //     status "staged", gate pending, compiled-steps snapshot persisted, nothing sent.
-//   - The MeasurementContract MUST exist before the run is runnable (the guard, amendment 2): a path
-//     with no contract, or a hollow one, is refused loudly at compile time — no run is staged.
+//   - Missing or hollow measurement is a repairable Measurement weakness, not a compile block.
 //   - The contract is BOUND at compile time (it travels on the run and in the gate view), so the run
 //     is measurable before, not after, it reaches the founder.
 //   - The wall is UNTOUCHED: a compiled topology whose execute node is not behind a founder gate is
@@ -165,30 +164,28 @@ describe("run-compile — a selected path stages a reviewable run at the gate", 
   });
 });
 
-describe("run-compile — the measurement contract MUST exist before the run is runnable", () => {
-  it("refuses to compile a path with no measurement contract", async () => {
+describe("run-compile — missing measurement becomes a repairable weakness", () => {
+  it("stages a path with no measurement contract and carries the Measurement weakness", async () => {
     const options = freshRoot();
     const projectId = "strelva";
     const path = gtmPathStore.create({ projectId, summary: "a path with no measurement plan" }, options);
-    await assert.rejects(
-      compileRunFromPath({ projectId, pathId: path.id, compose: gatedComposer(), options }),
-      /measurement plan/i,
-    );
-    // No run was staged.
-    assert.equal(runStore.list({ ...options, projectId }).length, 0);
+    const { run, gate, measurementWeakness } = await compileRunFromPath({ projectId, pathId: path.id, compose: gatedComposer(), options });
+    assert.equal(run.status, "staged");
+    assert.equal(measurementWeakness.kind, "measurement");
+    assert.deepEqual(measurementWeakness.signal.missing, ["contract"]);
+    assert.equal(gate.measurementWeakness.kind, "measurement");
+    assert.equal(runStore.list({ ...options, projectId }).length, 1);
   });
 
-  it("refuses to compile a path whose contract is hollow (nothing to measure)", async () => {
+  it("stages a path whose contract is hollow and names the missing quarters", async () => {
     const options = freshRoot();
     const { projectId, path, contract } = seedPath(options, {
       contractFields: { outcomeKinds: [], sources: [], joinKey: "", successCriteria: "" },
     });
     assert.equal(isBindableContract(contract), false, "an empty contract is not bindable");
-    await assert.rejects(
-      compileRunFromPath({ projectId, pathId: path.id, compose: gatedComposer(), options }),
-      /measurement plan is empty/i,
-    );
-    assert.equal(runStore.list({ ...options, projectId }).length, 0);
+    const { run, measurementWeakness } = await compileRunFromPath({ projectId, pathId: path.id, compose: gatedComposer(), options });
+    assert.equal(run.status, "staged");
+    assert.deepEqual(measurementWeakness.signal.missing, ["outcomeKinds", "sources", "joinKey", "successCriteria"]);
   });
 
   it("compiles once a founder-edited contract is passed in, even if the stored one was hollow", async () => {
@@ -205,6 +202,32 @@ describe("run-compile — the measurement contract MUST exist before the run is 
     });
     assert.equal(run.status, "staged");
     assert.equal(run.measurementContractId, "mc-edited");
+  });
+});
+
+describe("run-compile — RunPlan decomposition", () => {
+  it("stages audience, asset, patch, and execution sections with derived gate payload labels", async () => {
+    const options = freshRoot();
+    const { projectId, path } = seedPath(options);
+    const { run, gate, runPlan } = await compileRunFromPath({
+      projectId,
+      pathId: path.id,
+      compose: gatedComposer(),
+      runPlan: {
+        audience: { items: [{ email: "a@example.com" }] },
+        assets: [{ kind: "email", subject: "Quick idea", body: "Hello" }],
+        patch: { diff: "diff --git a/app.ts b/app.ts" },
+        execution: [{ protects: "send_emails", summary: "stage sends" }],
+      },
+      options,
+    });
+    assert.equal(run.runPlan.assets.length, 1);
+    assert.equal(runPlan.patch.diff, "diff --git a/app.ts b/app.ts");
+    assert.ok(run.items.some((item) => item.reviewPayload === "list"));
+    assert.ok(run.items.some((item) => item.reviewPayload === "copy"));
+    assert.ok(run.items.some((item) => item.reviewPayload === "diff"));
+    assert.ok(gate.items.some((item) => item.protects === "apply_patch"));
+    assert.ok(gate.gates.some((item) => item.requiredApproval === "founder"));
   });
 });
 

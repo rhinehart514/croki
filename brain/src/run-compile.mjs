@@ -9,10 +9,9 @@
 //   - The wall is UNTOUCHED. Compilation reuses the proven compose-to-gate engine
 //     (composeGraphForChannel), which asserts the founder gate on every path to an execute node; this
 //     module re-asserts it on the compiled topology and never adds a send. A run stages, it never sends.
-//   - The MeasurementContract MUST exist before the run is runnable (amendment 2). A path whose
-//     contract is missing or hollow (nothing to watch, no way to judge success) cannot compile — the
-//     refusal is loud, in code, so an unmeasurable run is impossible to stage rather than silently
-//     produced.
+//   - A MeasurementContract binds when possible. A missing or hollow contract is a repairable
+//     Measurement weakness carried on the staged run, not a compile block — the founder gate stays the
+//     only checkpoint.
 //   - Deterministic code for everything but judgment (§2.4). Resolving the path, resolving its
 //     contract, building grounding, staging the execution actions, and projecting the gate view are
 //     all plain functions. The only fuzzy work — designing the executable topology — is the injected
@@ -22,15 +21,15 @@
 
 import { composeGraphForChannel, assertGateWall } from "./workflow-composer.mjs";
 import { gtmPathStore, measurementContractStore, runStore, productTruthStore, marketObjectStore } from "./gtm-store.mjs";
+import { normalizeRunPlan } from "./graph-intelligence/compile-decompose.mjs";
 
 function slug(value) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "path";
 }
 
-// ── The measurement-contract gate (Phase 4 guard, amendment 2) ─────────────────────────────────────
-// A run is runnable ONLY once it can be measured. "Exists" is necessary but not sufficient: a contract
-// record that names no outcome to watch, no source, no join key, and no success criterion is hollow —
-// it exists as bytes but measures nothing. Both cases refuse, loudly, before any run is staged.
+// ── The measurement-contract read ─────────────────────────────────────────────────────────────────
+// The graph redesign makes unmeasurability loud without making it a second checkpoint. Compile reads
+// the contract, binds it when useful, and carries a repairable Measurement weakness when missing.
 export function isBindableContract(contract) {
   if (!contract || typeof contract !== "object") return false;
   const hasOutcomes = Array.isArray(contract.outcomeKinds) && contract.outcomeKinds.length > 0;
@@ -40,22 +39,36 @@ export function isBindableContract(contract) {
   return hasOutcomes || hasSources || hasJoinKey || hasCriteria;
 }
 
-function assertBindableContract(contract) {
+export function measurementWeaknessForContract(contract) {
+  const missing = [];
   if (!contract || typeof contract !== "object") {
-    throw new Error(
-      "This path has no measurement plan yet — set what outcome to watch and how success is judged before it can run.",
-    );
+    missing.push("contract");
+  } else {
+    if (!Array.isArray(contract.outcomeKinds) || contract.outcomeKinds.length === 0) missing.push("outcomeKinds");
+    if (!Array.isArray(contract.sources) || contract.sources.length === 0) missing.push("sources");
+    if (!String(contract.joinKey ?? "").trim()) missing.push("joinKey");
+    if (!String(contract.successCriteria ?? "").trim()) missing.push("successCriteria");
   }
-  if (!isBindableContract(contract)) {
-    throw new Error(
-      "This path's measurement plan is empty — name at least one outcome to watch, a place it comes from, or how success is judged before it can run.",
-    );
-  }
+  return {
+    kind: "measurement",
+    status: "open",
+    statement: missing.includes("contract")
+      ? "This path has no measurement plan yet."
+      : `This path's measurement plan is missing ${missing.join(", ")}.`,
+    signal: { missing },
+    threshold: "Compile stages the run and carries this repairable weakness; the gate remains the only checkpoint.",
+    repair: {
+      verb: "patch_measurement",
+      statement: "Bind an outcome, source, join key, and success criterion.",
+      targetNodeId: null,
+      compilable: true,
+    },
+  };
 }
 
 // Resolve the contract for a path: an injected contract wins (tests / a founder-edited plan), else the
 // path's own linked MeasurementContract is read from the store. A missing link resolves to null so the
-// bindable check below refuses honestly, never throws an opaque store error.
+// compile can carry a repairable Measurement weakness instead of throwing an opaque store error.
 function resolveContract({ path, contract, options }) {
   if (contract && typeof contract === "object") return contract;
   const id = String(path?.measurementContractId ?? "").trim();
@@ -125,13 +138,52 @@ function channelForPath(path) {
   };
 }
 
+function reviewPayloadForItem(item) {
+  if (item?.reviewPayload) return item.reviewPayload;
+  if (item?.kind === "audience-list") return "list";
+  if (item?.kind === "patch") return "diff";
+  if (item?.body || item?.subject || item?.draft) return "copy";
+  return "action-summary";
+}
+
+function actionLabelForExecute(node) {
+  const connector = String(node?.connector || node?.kind || node?.label || "local").toLowerCase();
+  if (connector.includes("gmail") || connector.includes("email")) return "send_emails";
+  if (connector.includes("deploy")) return "publish_page";
+  if (connector.includes("crm")) return "update_crm";
+  if (connector.includes("patch")) return "apply_patch";
+  return connector || "stage_locally";
+}
+
+function gateBindingsForGraph(nodes, edges, items) {
+  const executes = nodes.filter((node) => node.category === "execute");
+  const incomingByTarget = new Map();
+  for (const edge of edges) {
+    if (!incomingByTarget.has(edge.target)) incomingByTarget.set(edge.target, []);
+    incomingByTarget.get(edge.target).push(edge.source);
+  }
+  const gateIds = new Set(nodes.filter((node) => node.category === "gate").map((node) => node.id));
+  const byProtects = new Map();
+  for (const execute of executes) {
+    const protects = actionLabelForExecute(execute);
+    const upstreamGate = (incomingByTarget.get(execute.id) ?? []).find((id) => gateIds.has(id)) ?? null;
+    const reviewPayload = items.find((item) => item.protects === protects)?.reviewPayload || items[0]?.reviewPayload || "action-summary";
+    if (!byProtects.has(protects)) {
+      byProtects.set(protects, {
+        gateNodeId: upstreamGate,
+        protects,
+        requiredApproval: "founder",
+        reviewPayload,
+      });
+    }
+  }
+  return [...byProtects.values()];
+}
+
 // ── Staging the execution actions ──────────────────────────────────────────────────────────────────
-// What the founder reviews at the gate. Compilation happens BEFORE execution, so we do not fabricate
-// per-buyer drafts or invented customer data — we stage the compiled PLAN: the bet's own fields (the
-// channel, the buyer, the offer, the message the bet already carries from Phase 2) as one reviewable
-// action, plus any concrete items the founder handed in (each carrying the plan). Every staged item's
-// joinKey is minted by the run store so a Phase 5 result can join back to exactly what was staged.
-function stageItemsForRun({ path, input }) {
+// What the founder reviews at the gate. The old spine staged one planned-action item; the graph path
+// compile generalizes that into RunPlan sections while preserving the open item shape and joinKey rule.
+function stageItemsForRun({ path, input, runPlan, measurementWeakness }) {
   const bet = path?.bet ?? {};
   const plan = {
     kind: "planned-action",
@@ -143,12 +195,60 @@ function stageItemsForRun({ path, input }) {
     ...(bet.proof ? { proof: bet.proof } : {}),
     pathId: path?.id ?? null,
   };
+  const staged = [];
+  if (runPlan?.audience) {
+    staged.push({
+      kind: "audience-list",
+      reviewPayload: "list",
+      protects: "send_emails",
+      pathId: path?.id ?? null,
+      audience: runPlan.audience,
+      items: runPlan.audience.items ?? runPlan.audience.contacts ?? [],
+    });
+  }
+  for (const asset of runPlan?.assets ?? []) {
+    staged.push({
+      kind: asset.kind || asset.type || "asset",
+      reviewPayload: asset.reviewPayload || "copy",
+      protects: asset.protects || "send_emails",
+      pathId: path?.id ?? null,
+      ...asset,
+    });
+  }
+  if (runPlan?.patch) {
+    staged.push({
+      kind: "patch",
+      reviewPayload: "diff",
+      protects: "apply_patch",
+      pathId: path?.id ?? null,
+      ...runPlan.patch,
+    });
+  }
+  for (const step of runPlan?.execution ?? []) {
+    staged.push({
+      kind: "execution",
+      reviewPayload: step.reviewPayload || "action-summary",
+      protects: step.protects || step.action || "stage_locally",
+      pathId: path?.id ?? null,
+      ...step,
+    });
+  }
   const founderItems = Array.isArray(input?.items) ? input.items.filter((i) => i && typeof i === "object") : [];
   if (founderItems.length) {
     // Carry the compiled plan onto each concrete item the founder supplied (their fields win).
-    return founderItems.map((item) => ({ ...plan, ...item }));
+    return founderItems.map((item) => ({
+      ...plan,
+      reviewPayload: reviewPayloadForItem(item),
+      ...(measurementWeakness ? { measurementWeakness } : {}),
+      ...item,
+    }));
   }
-  return [plan];
+  if (!staged.length) staged.push(plan);
+  return staged.map((item) => ({
+    ...item,
+    reviewPayload: reviewPayloadForItem(item),
+    ...(measurementWeakness ? { measurementWeakness } : {}),
+  }));
 }
 
 // The gate view: project a staged Run's items into review cards regardless of their shape (§2.2 open
@@ -165,10 +265,14 @@ export function gateReviewForRun(run) {
     // The bound measurement contract travels with the review, so the founder sees how this run will be
     // measured at the moment they approve it — measurement is set before, not after, the send.
     measurementContract: run?.measurementContract ?? null,
+    measurementWeakness: run?.measurementWeakness ?? null,
+    gates: run?.gateBindings ?? [],
     items: items.map((item) => ({
       actionId: `gtm-${slug(run?.id)}-${slug(item?.joinKey)}`,
       joinKey: item?.joinKey ?? null,
       approvalStatus: "pending",
+      protects: item?.protects ?? "stage_locally",
+      reviewPayload: reviewPayloadForItem(item),
       item, // whatever shape was staged, carried through untouched
     })),
     awaitingReview: items.length,
@@ -176,11 +280,10 @@ export function gateReviewForRun(run) {
 }
 
 // ── The compile ────────────────────────────────────────────────────────────────────────────────────
-// Compile a selected GTM path into a staged Run. In order: resolve the path, resolve + REFUSE without a
-// bindable measurement contract, ground on both truths, reuse the compose-to-gate engine to design the
-// executable topology (which asserts the wall), re-assert the wall, then persist a Run holding the
-// compiled-steps snapshot, the bound contract, its staged execution actions, and a pending gate. The
-// run's status is "staged": it reaches the founder gate and stops. Returns { run, graph, contract, gate }.
+// Compile a selected GTM path into a staged Run. In order: resolve the path, resolve measurement as a
+// bound contract or repairable weakness, ground on both truths, normalize the RunPlan decomposition,
+// reuse the compose-to-gate engine to design the executable topology, re-assert the wall, then persist.
+// The run's status is "staged": it reaches the founder gate and stops. Returns { run, graph, contract, gate }.
 export async function compileRunFromPath({
   projectId = "default",
   pathId = null,
@@ -190,6 +293,8 @@ export async function compileRunFromPath({
   marketObjects = null,
   input = null,
   output = null,
+  runPlan = null,
+  decompose = null,
   compose,
   options = {},
 } = {}) {
@@ -199,12 +304,18 @@ export async function compileRunFromPath({
     throw new Error("compileRunFromPath needs a path or a pathId to compile.");
   }
 
-  // 2. The measurement contract MUST exist before the run is runnable (Phase 4 guard, amendment 2).
+  // 2. Bind measurement when possible; otherwise carry a repairable weakness, never a refusal.
   const resolvedContract = resolveContract({ path: resolvedPath, contract, options });
-  assertBindableContract(resolvedContract);
+  const measurementWeakness = isBindableContract(resolvedContract) ? null : measurementWeaknessForContract(resolvedContract);
 
   // 3. Ground the compile on BOTH truth sides — the records the bet actually rests on.
   const grounding = buildCompileGrounding({ path: resolvedPath, projectId, productTruths, marketObjects, options });
+  const normalizedRunPlan = normalizeRunPlan(
+    runPlan ?? (typeof decompose === "function"
+      ? await decompose({ path: resolvedPath, grounding, contract: resolvedContract, measurementWeakness })
+      : {}),
+    { pathId: resolvedPath.id, contract: resolvedContract },
+  );
 
   // 4. Reuse the proven compose-to-gate engine to design the executable steps. It asserts the founder
   //    gate on every path to an execute node; a run that could send without a gate never compiles.
@@ -216,7 +327,8 @@ export async function compileRunFromPath({
 
   // 6. Stage the run: compiled-steps snapshot + the contract bound BEFORE execution + a pending gate.
   //    Nothing sends — the status is "staged" and the gate awaits the founder.
-  const items = stageItemsForRun({ path: resolvedPath, input });
+  const items = stageItemsForRun({ path: resolvedPath, input, runPlan: normalizedRunPlan, measurementWeakness });
+  const gateBindings = gateBindingsForGraph(nodes, edges, items);
   const run = runStore.create(
     {
       projectId,
@@ -224,13 +336,16 @@ export async function compileRunFromPath({
       steps: nodes,
       edges,
       gateState: { status: "pending", awaitingReview: items.length },
+      gateBindings,
       measurementContract: resolvedContract,
-      measurementContractId: resolvedContract.id ?? null,
+      measurementContractId: resolvedContract?.id ?? null,
+      measurementWeakness,
+      runPlan: normalizedRunPlan,
       items,
       status: "staged",
     },
     { ...options, projectId },
   );
 
-  return { run, graph: { nodes, edges }, contract: resolvedContract, gate: gateReviewForRun(run) };
+  return { run, graph: { nodes, edges }, contract: resolvedContract, measurementWeakness, runPlan: normalizedRunPlan, gate: gateReviewForRun(run) };
 }

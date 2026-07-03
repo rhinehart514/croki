@@ -349,8 +349,11 @@ function normalizeRun(input, prefix) {
     // round-trips as a full graph a later phase can re-run or promote. Additive; empty when unset.
     edges: Array.isArray(input.edges) ? input.edges : [],
     gateState: input.gateState && typeof input.gateState === "object" ? input.gateState : { status: "pending" },
+    gateBindings: Array.isArray(input.gateBindings) ? input.gateBindings : [],
     measurementContract: input.measurementContract ?? null,
     measurementContractId: trimOrNull(input.measurementContractId),
+    measurementWeakness: input.measurementWeakness && typeof input.measurementWeakness === "object" ? input.measurementWeakness : null,
+    runPlan: input.runPlan && typeof input.runPlan === "object" ? input.runPlan : null,
     items: normalizeRunItems(input.items),
     status: trimOrNull(input.status) || "staged",
     startedAt: input.startedAt || b.createdAt,
