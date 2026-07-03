@@ -1,4 +1,4 @@
-import type { ChannelMeta, GTMItem } from "@/types";
+import type { ChannelMeta, GateDecision, GTMItem } from "@/types";
 
 // First non-empty string among loosely-typed item fields. Staged gate items carry free-form keys
 // depending on which connector/agent produced them, so every reader coalesces across the aliases.
@@ -178,6 +178,22 @@ export type GatePromote = {
   replayDecisions: GateReplayDecision[];
   onPromote: (level: "trusted" | "autonomous", note: string) => Promise<void>;
   onRevoke: () => Promise<void>;
+};
+
+// ─── The staged run bag the on-canvas gate blooms from ─────────────────────────
+// When a staged run pauses at its founder gate, App resolves the real gate node id, its staged
+// items, the taste count learned so far, the pipeline's offer, and (when the pipeline is promoted)
+// the promote/revoke control, and hands this bag to the canvas so the gate review blooms in place.
+// The wall is untouched: onSubmitReview banks each decision into the run ledger and resumes; nothing
+// here sends. Absent when no run is paused — the canvas then renders normally.
+export type GateBag = {
+  // The gate node the staged items belong to — App resolves the real id from the run, never synthesized.
+  gateNodeId: string;
+  items: GTMItem[];
+  learned: number;
+  offer: string | null;
+  promote?: GatePromote;
+  onSubmitReview: (nodeId: string, decisions: Record<string, GateDecision>) => void;
 };
 
 // ─── The pipeline's offer, on the gate card ────────────────────────────────────

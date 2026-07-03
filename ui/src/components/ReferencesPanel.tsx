@@ -1,7 +1,7 @@
 // ReferencesPanel — the canvas moat made reachable: "where does this person / claim / experiment /
 // ICP appear across the whole go-to-market?"
 //
-// PeopleLens and ExperimentMatrixLens hand up a selected object id; the host resolves it through the
+// The experiment matrix and other object surfaces hand up a selected object id; the host resolves it through the
 // cross-reference query (findReferences, plus getPerson for a person) and renders the answer here. It
 // is the dedup / fatigue / "who is this and where have we touched them" surface: the entity's
 // identity up top, then every place it surfaced — grouped by the channel it appears in, so a person
@@ -35,7 +35,7 @@ export type ReferencesPanelProps = {
   onOpenChannel?: (channelId: string) => void;
 };
 
-// A short, stable day label — no relative-time machinery, just the day (mirrors PeopleLens).
+// A short, stable day label — no relative-time machinery, just the day.
 function dayLabel(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);

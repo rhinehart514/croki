@@ -321,10 +321,9 @@ const TOOLS = [
 
 // The naked harness. The model the founder drives sees ONLY these tools: read the product (truth),
 // one build-and-run door (compose_and_run), the inspect/repair loop for a failed run, the founder-input
-// channel, and complete — plus the light shared-context (taste/memory) read+write. Everything else the
-// operator CAN do (programs, policies, the capability foundry, portfolio/channel CRUD, experiments,
-// product-model derivation) is removed from what the model can reach, so it builds and runs instead of
-// navigating an ontology. `executeOperatorTool` still routes every tool name, so direct API/MCP callers
+// channel, and complete — plus the light shared-context (taste/memory) read+write. The remaining
+// non-naked tools (channel/workflow CRUD, product-model derivation) are removed from what the model
+// can reach, so it builds and runs instead of navigating an ontology. `executeOperatorTool` still routes every tool name, so direct API/MCP callers
 // and tests are unaffected — this only narrows what the autonomous model is offered. The wall (founder
 // gate) and taste (shared context) are the only constraints that remain on the model's hands.
 const NAKED_TOOL_NAMES = new Set([
@@ -946,7 +945,6 @@ async function executeTool(session, tool, options = {}) {
         ...working,
         graphId: composed.channel.graphId,
         graphRevision: composed.graph.revision,
-        programId: composed.program?.id ?? working.programId,
       }, {
         type: "operator_workflow_composed",
         title: `Composed ${composed.channel.name}`,

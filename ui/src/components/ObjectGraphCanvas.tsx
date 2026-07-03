@@ -10,7 +10,7 @@ import { compileObjectGraphPath, getObjectGraph, saveObjectGraphPositions } from
 import type { ObjectGraphEdge, ObjectGraphNode, ObjectGraphPathRecommendation, ObjectGraphView } from "@/types";
 import { layoutObjectGraph, type PositionMap } from "@/lib/objectGraphLayout";
 import { GateReview } from "@/components/gate/GateReview";
-import type { GateBag } from "@/components/lenses/GtmMapLens";
+import type { GateBag } from "@/lib/gateItem";
 import "@/styles/object-graph.css";
 
 function labelForType(type: string | null) {

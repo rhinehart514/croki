@@ -252,8 +252,8 @@ function normalizeGeneratedBy(value) {
 }
 
 // Pure builder. Stamps the stable id + lineage triplet, projectId, timestamps, the grounding
-// snapshot, and the normalized bags. Mirrors buildOutcomeProgram (program-store.mjs:140-176): id is
-// stable across revisions (lineage continuity), lineageId === id at birth.
+// snapshot, and the normalized bags. Id is stable across revisions (lineage continuity),
+// lineageId === id at birth.
 export function buildProductModel(input = {}, options = {}) {
   const projectId = input.projectId || options.projectId || "default";
   const store = loadProductModelStore(projectId, options);
@@ -333,7 +333,7 @@ export function getProductModel(projectId = "default", options = {}) {
   return models.length ? models[models.length - 1] : null;
 }
 
-// Revise along the lineage, mirroring reviseOutcomeProgram (program-store.mjs:254-280). The record
+// Revise along the lineage. The record
 // keeps the same id for continuity; version is bumped, previousModelId points at the prior id,
 // lineageId is preserved. Whitelist the editable bags + generatedBy; re-run the pollution guard so
 // an edited element claiming "derived" without evidence is demoted, exactly as on derive.

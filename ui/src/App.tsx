@@ -46,8 +46,6 @@ import {
   composeMicroproduct,
   promoteChannel,
   revokeChannel,
-  runMarketResearch,
-  generatePathPortfolio,
 } from "@/api";
 // Heavy overlay/panel components are split into their own chunks and loaded on demand the first time
 // the founder opens them, so they stay out of the initial app chunk. Each is named-exported, so the
@@ -86,9 +84,8 @@ const ProductCanvas = lazy(() => import("@/components/ProductCanvas").then((m) =
 import { GtmCanvas, type GtmCanvasModel } from "@/components/canvas/GtmCanvas";
 import { CanvasCard } from "@/components/CanvasCard";
 import { ClarityCard } from "@/components/ClarityCard";
-import { PeopleLens } from "@/components/lenses/PeopleLens";
 import { ExperimentMatrixLens } from "@/components/lenses/ExperimentMatrixLens";
-import { GtmMapLens, type GateBag } from "@/components/lenses/GtmMapLens";
+import type { GateBag } from "@/lib/gateItem";
 import { ReferencesPanel, type ReferenceKind } from "@/components/ReferencesPanel";
 import { ToolForge } from "@/components/ToolForge";
 import { IssuesCard } from "@/components/IssuesCard";
@@ -100,7 +97,6 @@ import { MicroproductFace, type Microproduct } from "@/components/MicroproductFa
 // Only canvas-work surfaces summon now. The admin surfaces (workspace, team, self-built tools) moved
 // out of this junk drawer into a single Settings overlay reached from the dock's gear.
 const SUMMON_GTM = [
-  { id: "gtm-map", label: "GTM map", desc: "The ranked portfolio of ways to go to market — read each bet's reasoning, compare bets, ask Claude why one ranks or to challenge it, and stage one to your gate." },
   { id: "terminal", label: "Terminal", desc: "A live shell on the canvas — run commands by hand, pipe the output into the graph." },
   { id: "query", label: "Query", desc: "Interrogate your own data — everyone your pipelines touched, filtered and sorted live." },
   { id: "web", label: "Web", desc: "A research browser on the canvas — pull up a prospect's site while you work." },
@@ -234,7 +230,7 @@ export default function App() {
   // "challenge this bet", "swap this belief", "stage this path to my gate". The composer pre-fills with
   // it and the founder sends (or edits first); nothing runs on its own. Token-bumped so an identical
   // re-ask re-seeds the input.
-  const [composerSeed, setComposerSeed] = useState<{ text: string; token: number } | null>(null);
+  const [composerSeed] = useState<{ text: string; token: number } | null>(null);
   // The Issues panel — the system's problem list, now a first-class always-present indicator on the
   // dock (no longer a summoned card). Opens from its toolbar badge, mutually exclusive with Approvals.
   const [issuesOpen, setIssuesOpen] = useState(false);
@@ -622,28 +618,6 @@ export default function App() {
     setSelection(null);
     setComposerFocus((f) => f + 1);
   }, []);
-
-  // Hand a GTM-map decision to Claude: the founder clicked an action on a path (why it ranks, variants,
-  // challenge a bet, swap a belief, stage it to the gate). We pre-fill the composer with the plain-words
-  // ask and mark the path as the subject — the founder reads and sends. This is how the map's decisions
-  // reach the harness: the composer IS the Claude harness, and the wall still owns anything outward.
-  const askClaudeFromMap = useCallback((text: string, subject?: { id: string; label: string }) => {
-    if (subject) setComposerSubject({ id: subject.id, label: subject.label, kind: "path" });
-    setComposerSeed({ text, token: Date.now() });
-    setComposerFocus((f) => f + 1);
-  }, []);
-
-  // The two GTM-map rituals, invoked from the map card for the active project. Each persists records
-  // server-side and returns a plain-language summary; the GtmMapLens refetches on resolve so the
-  // portfolio (or the buyer picture under it) updates in place. Neither sends — the wall is untouched.
-  const researchMarketForActive = useCallback(async () => {
-    if (!activeProjectId) return;
-    await runMarketResearch(activeProjectId);
-  }, [activeProjectId]);
-  const generatePortfolioForActive = useCallback(async () => {
-    if (!activeProjectId) return;
-    await generatePathPortfolio(activeProjectId);
-  }, [activeProjectId]);
 
   // Zoom out to the one-canvas overview: show the GTM canvas's engine-overview lens — every built
   // channel as a tile — instead of a single focused workflow. Returns false when there's nothing to
@@ -1622,12 +1596,11 @@ export default function App() {
     ? pendingProposal.preview
     : graph;
 
-  // The gate, re-homed onto the GTM map. When a staged run pauses at its founder gate, this resolves the
-  // real gate node id + its staged items + the taste count, and hands them to GtmMapLens so the review
-  // blooms INSIDE the map (its Run zoom) instead of the old build canvas. Two honest sources, never a
-  // synthesized id: an operator-driven run carries its paused gate on the session; a manually-run graph
-  // carries it on the focused channel's run result (the same pendingReview/awaitingReview signal the old
-  // canvas bloomed on). Null when nothing is paused — the map then shows the portfolio. The wall is
+  // The gate on the canvas. When a staged run pauses at its founder gate, this resolves the real gate
+  // node id + its staged items + the taste count, and hands them to the canvas so the review blooms in
+  // place. Two honest sources, never a synthesized id: an operator-driven run carries its paused gate on
+  // the session; a manually-run graph carries it on the focused channel's run result (the same
+  // pendingReview/awaitingReview signal the canvas blooms on). Null when nothing is paused. The wall is
   // untouched: onSubmitReview still banks each decision into the run ledger and resumes, nothing sends.
   const gtmMapGate = useMemo<GateBag | null>(() => {
     const bag = (gateNodeId: string, nr: GTMNodeResult | undefined): GateBag => {
@@ -2009,20 +1982,9 @@ export default function App() {
                 title={item?.label ?? kind}
                 onDismiss={() => dismissCard(kind)}
                 initial={{ x: 150 + i * 46, y: 92 + i * 46 }}
-                width={kind === "experiments" || kind === "gtm-map" ? 640 : 440}
-                height={kind === "experiments" ? 460 : kind === "gtm-map" ? 620 : 520}
+                width={kind === "experiments" ? 640 : 440}
+                height={kind === "experiments" ? 460 : 520}
               >
-                {kind === "gtm-map" && activeProjectId ? (
-                  <GtmMapLens
-                    projectId={activeProjectId}
-                    onAsk={askClaudeFromMap}
-                    onResearchMarket={researchMarketForActive}
-                    onGeneratePortfolio={generatePortfolioForActive}
-                  />
-                ) : null}
-                {kind === "people" ? (
-                  <PeopleLens people={gtmCanvasModel.people} channels={gtmCanvasModel.channels} selected={reference?.kind === "person" ? reference.id : null} onSelect={(id) => openReference("person", id)} />
-                ) : null}
                 {kind === "experiments" ? (
                   <ExperimentMatrixLens experiments={gtmCanvasModel.experiments} claims={gtmCanvasModel.claims} icp={gtmCanvasModel.icp} channels={gtmCanvasModel.channels} selected={reference?.kind === "experiment" ? reference.id : null} onSelect={(id) => openReference("experiment", id)} />
                 ) : null}

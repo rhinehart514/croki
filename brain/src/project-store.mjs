@@ -420,8 +420,8 @@ export function setActiveProject(projectId, options = {}) {
   return loadProject({ ...options, projectId });
 }
 
-// Remove a project from the catalog only — the durable per-project stores (programs, policies,
-// foundry, …) are purged separately by project-merge.mjs so this stays a pure catalog edit with no
+// Remove a project from the catalog only — the durable per-project stores are purged
+// separately by project-merge.mjs so this stays a pure catalog edit with no
 // cross-store imports. A merge calls it to drop each source once its records have moved; a plain
 // delete calls it after purging. The active project never dangles: if the removed one was active,
 // the first survivor takes over. The catalog always keeps at least one project.

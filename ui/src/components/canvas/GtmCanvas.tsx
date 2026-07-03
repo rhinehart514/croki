@@ -3,7 +3,7 @@ import type { NodeEditorBridge } from "@/components/nodeEditorBridge";
 import type { GatePromote } from "@/lib/gateItem";
 import { CanvasShell, type LensDef, type LensProps } from "@/components/canvas/CanvasShell";
 import { ObjectGraphCanvas } from "@/components/ObjectGraphCanvas";
-import type { GateBag } from "@/components/lenses/GtmMapLens";
+import type { GateBag } from "@/lib/gateItem";
 import { GroundLens } from "@/components/lenses/GroundLens";
 import { BeliefSpine } from "@/components/lenses/BeliefSpine";
 import { useGround, type IcpGrouping } from "@/lib/groundModel";

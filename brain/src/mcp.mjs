@@ -351,7 +351,7 @@ async function groupExperiment({ projectId, targetLayer, hypothesis, heldConstan
 // ---------------------------------------------------------------------------
 
 // One workflow-id schema, shared by canonical tools. The canonical noun is
-// "workflow" (the OutcomeProgram's execution plan); "channel" is workflow
+// "workflow" (a channel's execution plan); "channel" is workflow
 // metadata, not a second object. Channel-named tools below are thin
 // backward-compatible aliases that delegate to the same handlers.
 const WORKFLOW_ID = { type: "string", description: "Workflow id." };
@@ -458,7 +458,7 @@ const TOOLS = [
   // ── Workflows — author (the channel's execution plan) ──────────────────────
   {
     name: "list_workflows",
-    description: "List every outcome-program workflow in the active project, with id, program id, status, run history, and graph-shape metadata. Use to find a workflow id before getting, running, or editing one. Read-only.",
+    description: "List every workflow in the active project, with id, status, run history, and graph-shape metadata. Use to find a workflow id before getting, running, or editing one. Read-only.",
     inputSchema: { type: "object", properties: {}, required: [] },
     handler: listWorkflows,
   },
@@ -478,7 +478,7 @@ const TOOLS = [
   },
   {
     name: "duplicate_workflow",
-    description: "Copy an existing outcome-program workflow and its graph into a new, independently editable workflow. Use to fork a working workflow before experimenting. Does not run either workflow.",
+    description: "Copy an existing workflow and its graph into a new, independently editable workflow. Use to fork a working workflow before experimenting. Does not run either workflow.",
     inputSchema: {
       type: "object",
       properties: {
