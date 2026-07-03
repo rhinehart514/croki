@@ -32,3 +32,36 @@ Date: 2026-07-03
 
 - The specs say compile the highlighted path. Some highlighted paths are graph walks rather than stored `GtmPath` records. I implemented a transient path fallback so graph-walk highlights still compile through the existing wall instead of blocking on the old path store.
 - Gate nodes are rendered as a projection node for readability, while the gate remains backed by the existing execution-graph gate primitive. No new approval mechanism was introduced.
+
+## Backend Tier-1/2
+
+Landed in commit `2ee4b11`:
+
+- Default graph altitude now hides staged run item nodes. A compiled run projects as one `runs.run` card with `payload.itemCount`; pass `expandRun` to fetch that run's item cards on demand.
+- `GET /api/projects/:projectId/object-graph` runs the fast read-only product scan when the project has no current scan-derived product cards or the scan is stale. It returns product cards immediately and schedules market research in the background when market cards are empty.
+- Weakness detection is less noisy. Thin/no-signal nodes report `unmeasured`; product, measurement, and execution flags now require an actual scan/run/list signal or explicit payload marker.
+- Recommended paths now include `name`, a short human label, alongside the full `nodeIds`, `signals`, and score details.
+- Retired sources are hidden from the default graph without deleting source records. Rule: `retiredAt`, `payload.supersededBy`, or source status `cancelled` / `canceled` / `superseded` excludes the node and dependent edges unless `includeRetired=true`.
+- Founder-dragged positions persist in a per-project layout sidecar, not in derived graph nodes.
+
+API shape for frontend:
+
+- `GET /api/projects/:projectId/object-graph`
+  - Optional query: `expandRun=<runId-or-obj-runId>` adds only that run's staged item nodes.
+  - Optional query: `includeRetired=true` includes retired nodes/edges for inspectors.
+  - Response fields: `projectId`, `scanOnOpen`, `graph`, `positions`, `expandedRun`, `recommendation`.
+  - `scanOnOpen`: `{ scanned, reason, created, skipped }`.
+  - `graph.nodes`: default graph nodes; run summary nodes carry `payload.runId`, `payload.status`, `payload.itemCount`, gate metadata, and measurement metadata.
+  - `positions`: `{ [nodeId]: { x, y } }`.
+  - `expandedRun`: `null` or `{ runId, itemCount }`.
+  - `recommendation.highlighted[0].name` and `recommendation.rankedPaths[].name` are the short labels.
+
+- `POST /api/projects/:projectId/object-graph/positions`
+  - Body: `{ "positions": { "node-id": { "x": 120, "y": 240 } } }`. A raw map is also accepted.
+  - Response: `{ projectId, positions, savedAt }`.
+
+Verification:
+
+- Passed: `node --check src/object-graph-projection.mjs src/object-graph-store.mjs src/graph-intelligence/weakness.mjs src/graph-intelligence/path-ranking.mjs src/server.mjs`
+- Passed: `node --test test/object-graph-store.test.mjs test/object-graph-projection.test.mjs test/graph-intelligence.test.mjs test/run-compile.test.mjs`
+- Full `npm --prefix brain test` is blocked in this sandbox by pre-existing environment issues: `better-sqlite3` was compiled for `NODE_MODULE_VERSION 127` while this Node requires `141`, and route tests cannot bind `127.0.0.1` (`listen EPERM`). I did not rebuild native modules per the guardrail.
