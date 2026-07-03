@@ -1241,3 +1241,88 @@ export type GtmMapView = {
   paths: GtmPathRecord[];
   contracts: MeasurementContractRecord[];
 };
+
+export type ObjectGraphSourceRef = {
+  kind: string;
+  ref: string;
+  preview: string;
+  at: string;
+};
+
+export type ObjectGraphWeakness = {
+  id: string;
+  kind: string;
+  statement: string;
+  detectedFrom: ObjectGraphSourceRef[];
+  detectedAt: string;
+  signal: Record<string, unknown>;
+  threshold: string;
+  severity: number | null;
+  status: "open" | "repairing" | "repaired" | "dismissed";
+  repair: { verb: string; statement: string; targetNodeId: string | null; compilable: boolean } | null;
+  resolution: { at: string; by: string; ref: string | null } | null;
+};
+
+export type ObjectGraphNode = {
+  schemaVersion: number;
+  id: string;
+  projectId: string | null;
+  domain: string | null;
+  type: string | null;
+  maturity: "loose" | "typed" | "execution" | "outcome";
+  statement: string;
+  evidence: EvidenceRecord[];
+  solidity: string | null;
+  confidence: number | null;
+  weaknesses: ObjectGraphWeakness[];
+  weaknessReport?: Record<string, "fired" | "clear" | "unmeasured">;
+  sources: ObjectGraphSourceRef[];
+  origin: string;
+  originRef: string | null;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  revision: number;
+};
+
+export type ObjectGraphEdge = {
+  schemaVersion: number;
+  id: string;
+  projectId: string | null;
+  source: string;
+  target: string;
+  type: string;
+  status: "proposed" | "confirmed" | "swapped" | "challenged" | "suppressed" | "removed";
+  basis: ObjectGraphSourceRef[];
+  confidence: number;
+  label?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ObjectGraphPathRecommendation = {
+  pathId: string;
+  nodeIds: string[];
+  edgeIds: string[];
+  score: number;
+  signals: Record<string, number>;
+  weakestLink: { nodeId: string; weakness: ObjectGraphWeakness; signal: number } | null;
+};
+
+export type ObjectGraphView = {
+  projectId: string;
+  graph: {
+    schemaVersion: number;
+    projectId: string;
+    nodes: ObjectGraphNode[];
+    edges: ObjectGraphEdge[];
+    revision: number;
+    updatedAt: string;
+  };
+  recommendation: {
+    rankedPaths: ObjectGraphPathRecommendation[];
+    highlighted: ObjectGraphPathRecommendation[];
+    reason?: string;
+    weights?: Record<string, number>;
+  };
+};

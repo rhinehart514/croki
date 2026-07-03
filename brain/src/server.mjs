@@ -751,15 +751,39 @@ const server = http.createServer(async (req, res) => {
       const requestedPathId = String(body?.pathId || recommendation.highlighted?.[0]?.pathId || "").trim();
       const pathNode = graph.nodes.find((node) => node.id === requestedPathId || node.payload?.gtmPathId === requestedPathId);
       const gtmPathId = pathNode?.payload?.gtmPathId || (requestedPathId.startsWith("path-") ? requestedPathId : null);
-      if (!gtmPathId) {
-        json(res, 400, { error: "Compile needs a stored path from the highlighted graph." });
-        return;
-      }
+      const recommendedPath = recommendation.rankedPaths?.find((path) => path.pathId === requestedPathId)
+        || recommendation.highlighted?.[0]
+        || null;
+      const recommendedNodes = (recommendedPath?.nodeIds ?? [])
+        .map((id) => graph.nodes.find((node) => node.id === id))
+        .filter(Boolean);
+      const injectedPath = gtmPathId ? null : {
+        id: requestedPathId || `graph-${Date.now()}`,
+        projectId,
+        summary: recommendedNodes.map((node) => node.statement).filter(Boolean).slice(0, 3).join(" → ") || "Highlighted graph path",
+        bet: {
+          buyer: recommendedNodes.find((node) => node.domain === "market" && ["buyer", "icp"].includes(node.type))?.statement,
+          channel: recommendedNodes.find((node) => node.type === "channel")?.statement,
+          offer: recommendedNodes.find((node) => node.type === "offer" || node.type === "value_prop")?.statement,
+          message: recommendedNodes.find((node) => node.type === "message" || node.type === "positioning")?.statement,
+          proof: recommendedNodes.find((node) => node.domain === "product" || node.type === "proof_point")?.statement,
+        },
+        restsOn: recommendedNodes
+          .map((node) => {
+            const sourceId = node.payload?.productTruthId || node.payload?.marketObjectId || node.originRef;
+            if (!sourceId) return null;
+            const type = node.domain === "product" ? "productTruth" : node.domain === "market" || node.domain === "strategy" ? "marketObject" : null;
+            return type ? { type, id: sourceId } : null;
+          })
+          .filter(Boolean),
+        status: "selected",
+      };
       const project = loadProject({ projectId });
       const repo = project.sharedContext?.repository?.repo || process.cwd();
       const result = await compileRunFromPath({
         projectId,
         pathId: gtmPathId,
+        path: injectedPath,
         runPlan: body?.runPlan ?? null,
         input: body?.input ?? null,
         output: body?.output ?? null,

@@ -3,6 +3,8 @@ import {
   marketObjectStore,
   gtmPathStore,
   measurementContractStore,
+  runStore,
+  resultStore,
 } from "./gtm-store.mjs";
 import { objectGraphStore, normalizeObjectEdge, normalizeObjectNode, genObjectGraphId } from "./object-graph-store.mjs";
 import { marketObjectToNode } from "./graph-intelligence/spray.mjs";
@@ -16,6 +18,18 @@ function sourceRef(kind, ref, preview) {
 
 function objectIdForRecord(id) {
   return `obj-${id}`;
+}
+
+function slug(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 64) || "item";
+}
+
+function evidenceForStored(kind, id, claim) {
+  return [{ claim, source: `${kind}:${id}`, solidity: "observed", capturedAt: now() }];
 }
 
 function productTruthToNode(truth, { projectId }) {
@@ -84,6 +98,120 @@ function pathToNode(path, { projectId }) {
   });
 }
 
+function runToNode(run, { projectId }) {
+  return normalizeObjectNode({
+    id: objectIdForRecord(run.id),
+    projectId,
+    domain: "runs",
+    type: "run",
+    maturity: "execution",
+    statement: `Run ${run.status || "staged"} for ${run.pathId}`,
+    evidence: evidenceForStored("run", run.id, "Compiled run is staged in the run ledger"),
+    sources: [sourceRef("run", run.id, `run ledger · ${run.status || "staged"}`)],
+    origin: "run",
+    originRef: run.id,
+    payload: {
+      runId: run.id,
+      pathId: run.pathId,
+      status: run.status,
+      gateState: run.gateState ?? null,
+      gateBindings: run.gateBindings ?? [],
+      measurementContractId: run.measurementContractId ?? null,
+      measurementContract: run.measurementContract ?? null,
+      measurementWeakness: run.measurementWeakness ?? null,
+      runPlan: run.runPlan ?? null,
+      itemCount: Array.isArray(run.items) ? run.items.length : 0,
+    },
+  });
+}
+
+function gateNodesForRun(run, { projectId }) {
+  const bindings = Array.isArray(run.gateBindings) && run.gateBindings.length
+    ? run.gateBindings
+    : [{ protects: "stage_locally", requiredApproval: "founder", reviewPayload: "action-summary", gateNodeId: null }];
+  return bindings.map((binding, index) => {
+    const protects = binding.protects || "stage_locally";
+    return normalizeObjectNode({
+      id: objectIdForRecord(`${run.id}:gate:${binding.gateNodeId || slug(protects) || index}`),
+      projectId,
+      domain: "runs",
+      type: "gate",
+      maturity: "execution",
+      statement: `Founder approval for ${protects.replace(/_/g, " ")}`,
+      evidence: evidenceForStored("run", run.id, "Gate binding is derived from the compiled execution graph"),
+      sources: [sourceRef("run", run.id, `gate protects ${protects}`)],
+      origin: "run",
+      originRef: run.id,
+      payload: {
+        runId: run.id,
+        gateNodeId: binding.gateNodeId ?? null,
+        protects,
+        requiredApproval: binding.requiredApproval || "founder",
+        reviewPayload: binding.reviewPayload || "action-summary",
+        gateState: run.gateState ?? null,
+      },
+    });
+  });
+}
+
+function itemNodeForRunItem(run, item, index, { projectId }) {
+  const reviewPayload = item?.reviewPayload || "action-summary";
+  const isList = reviewPayload === "list" || item?.kind === "audience-list";
+  const isPatch = reviewPayload === "diff" || item?.kind === "patch";
+  const domain = isList ? "audience" : isPatch ? "assets" : "assets";
+  const type = isList ? "list" : isPatch ? "patch" : item?.kind || "action";
+  const subject = item?.subject || item?.summary || item?.plan || item?.message || item?.draft || item?.body;
+  return normalizeObjectNode({
+    id: objectIdForRecord(`${run.id}:item:${item?.joinKey || index}`),
+    projectId,
+    domain,
+    type,
+    maturity: "execution",
+    statement: subject ? String(subject).slice(0, 140) : `Staged ${reviewPayload.replace(/_/g, " ")}`,
+    evidence: evidenceForStored("run", run.id, `Staged ${reviewPayload} item exists in the run ledger`),
+    sources: [sourceRef("run", run.id, `staged ${reviewPayload} · ${item?.joinKey || index}`)],
+    origin: "run",
+    originRef: run.id,
+    payload: {
+      runId: run.id,
+      pathId: run.pathId,
+      joinKey: item?.joinKey ?? null,
+      protects: item?.protects ?? "stage_locally",
+      reviewPayload,
+      item,
+    },
+  });
+}
+
+const CUSTOMER_OUTCOME_KINDS = new Set(["activation", "usage", "retention", "expansion", "churn", "testimonial"]);
+
+function resultToNode(result, { projectId }) {
+  const kind = result.outcomeKind || "outcome";
+  const domain = CUSTOMER_OUTCOME_KINDS.has(kind) ? "customer" : "pipeline";
+  const value = result.value === null || result.value === undefined ? null : String(result.value);
+  return normalizeObjectNode({
+    id: objectIdForRecord(result.id),
+    projectId,
+    domain,
+    type: kind,
+    maturity: "outcome",
+    statement: value ? `${kind}: ${value}` : kind,
+    evidence: evidenceForStored("outcome", result.id, `Founder-entered outcome ${kind}`),
+    sources: [sourceRef(result.source || "outcome", result.joinKey, `outcome ${kind} · ${result.joinKey}`)],
+    origin: "ingest",
+    originRef: result.id,
+    payload: {
+      resultId: result.id,
+      runId: result.runId ?? null,
+      pathId: result.pathId ?? null,
+      joinKey: result.joinKey,
+      value: result.value ?? null,
+      observedAt: result.observedAt ?? null,
+      source: result.source ?? null,
+    },
+  });
+}
+
 function addEdge(edges, seen, input) {
   const key = `${input.source}\0${input.target}\0${input.type}`;
   if (seen.has(key)) return;
@@ -144,6 +272,70 @@ function projectedEdges(nodes, { projectId }) {
       });
     }
   }
+  for (const runNode of nodes.filter((node) => node.domain === "runs" && node.type === "run")) {
+    const runId = runNode.payload?.runId;
+    const pathObjectId = objectIdForRecord(runNode.payload?.pathId);
+    if (ids.has(pathObjectId)) {
+      addEdge(edges, seen, {
+        projectId,
+        source: pathObjectId,
+        target: runNode.id,
+        type: "produced",
+        basis: [sourceRef("run", runId, "path compiled into this staged run")],
+      });
+    }
+    const contractObjectId = objectIdForRecord(runNode.payload?.measurementContractId || runNode.payload?.measurementContract?.id);
+    if (ids.has(contractObjectId)) {
+      addEdge(edges, seen, {
+        projectId,
+        source: runNode.id,
+        target: contractObjectId,
+        type: "measured_by",
+        basis: [sourceRef("run", runId, "run measurement contract")],
+      });
+    }
+    const gateNodes = nodes.filter((node) => node.domain === "runs" && node.type === "gate" && node.payload?.runId === runId);
+    const actionNodes = nodes.filter((node) => node.payload?.runId === runId && node.payload?.joinKey);
+    for (const gateNode of gateNodes) {
+      addEdge(edges, seen, {
+        projectId,
+        source: runNode.id,
+        target: gateNode.id,
+        type: "produced",
+        basis: [sourceRef("run", runId, "run pauses at this founder gate")],
+      });
+      for (const actionNode of actionNodes.filter((node) => (node.payload?.protects || "stage_locally") === gateNode.payload?.protects)) {
+        addEdge(edges, seen, {
+          projectId,
+          source: gateNode.id,
+          target: actionNode.id,
+          type: "produced",
+          basis: [sourceRef("run", runId, "gate protects this staged action")],
+        });
+      }
+    }
+    for (const actionNode of actionNodes) {
+      addEdge(edges, seen, {
+        projectId,
+        source: runNode.id,
+        target: actionNode.id,
+        type: actionNode.domain === "audience" ? "targets" : "uses",
+        basis: [sourceRef("run", runId, "run staged this review item")],
+      });
+    }
+  }
+  for (const outcomeNode of nodes.filter((node) => node.maturity === "outcome")) {
+    const runObjectId = outcomeNode.payload?.runId ? objectIdForRecord(outcomeNode.payload.runId) : null;
+    if (runObjectId && ids.has(runObjectId)) {
+      addEdge(edges, seen, {
+        projectId,
+        source: runObjectId,
+        target: outcomeNode.id,
+        type: "produced",
+        basis: [sourceRef("outcome", outcomeNode.originRef, "outcome joined to this run")],
+      });
+    }
+  }
   return edges;
 }
 
@@ -167,7 +359,12 @@ export function objectGraphForProject(projectId = "default", options = {}) {
   const marketNodes = marketObjectStore.list({ ...options, projectId }).map((object) => marketObjectToNode(object, { projectId }));
   const pathNodes = gtmPathStore.list({ ...options, projectId }).map((path) => pathToNode(path, { projectId }));
   const contractNodes = measurementContractStore.list({ ...options, projectId }).map((contract) => measurementContractToNode(contract, { projectId }));
-  const projectedNodes = [...productNodes, ...marketNodes, ...pathNodes, ...contractNodes];
+  const runs = runStore.list({ ...options, projectId });
+  const runNodes = runs.map((run) => runToNode(run, { projectId }));
+  const gateNodes = runs.flatMap((run) => gateNodesForRun(run, { projectId }));
+  const itemNodes = runs.flatMap((run) => (run.items ?? []).map((item, index) => itemNodeForRunItem(run, item, index, { projectId })));
+  const outcomeNodes = resultStore.list({ ...options, projectId }).map((result) => resultToNode(result, { projectId }));
+  const projectedNodes = [...productNodes, ...marketNodes, ...pathNodes, ...contractNodes, ...runNodes, ...gateNodes, ...itemNodes, ...outcomeNodes];
   const nodes = mergeNodes(stored.nodes ?? [], projectedNodes);
   const edges = mergeEdges(stored.edges ?? [], projectedEdges(nodes, { projectId }));
   const graph = deriveWeaknessForGraph({

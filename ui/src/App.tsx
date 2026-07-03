@@ -2139,26 +2139,11 @@ export default function App() {
               onResume={() => void handleComposerSend("Continue.")}
               onStartOver={() => void handleOperatorCancel()}
             />
-          ) : canvasGraph ? (
-            // THE DEFAULT CANVAS = the node-flow diagram (founder chose the wired-steps canvas over the
-            // bets-map). Opening a product lands straight on your pipelines as one merged node canvas —
-            // every built pipeline a lane, clicking a node focuses its pipeline. The wall is intact: a
-            // staged run still homes on the founder gate above (the gate branch), and this canvas also
-            // blooms the gate in place on a paused run. The bets-map stays reachable as the overview for
-            // a product with nothing wired yet (the branch below).
-            <GtmCanvas model={gtmCanvasModel} activeLensId="channel-flow" chromeless />
-          ) : activeProjectId ? (
-            // No pipeline wired yet — the map's empty state offers the research-the-buyer /
-            // generate-the-paths rituals so a blank product is never a dead canvas, and the ranked
-            // bets-map lives on here as the high-altitude overview until a pipeline exists.
-            <div className="gtm-map-host">
-              <GtmMapLens
-                projectId={activeProjectId}
-                onAsk={askClaudeFromMap}
-                onResearchMarket={researchMarketForActive}
-                onGeneratePortfolio={generatePortfolioForActive}
-              />
-            </div>
+          ) : (canvasGraph || activeProjectId) ? (
+            // Phase-1 GTM graph: one object graph, one strongest path lit, weak cards marked. Existing
+            // pipeline and map surfaces remain in the codebase; this branch is only the additive center
+            // projection for an opened product.
+            <GtmCanvas model={gtmCanvasModel} activeLensId="object-graph" chromeless />
           ) : (booting || projectBusy) ? (
             // Still resolving the workspace (initial boot, or switching products) — a calm loading
             // state, never the cold-start goal launcher flashing before the real graph arrives.

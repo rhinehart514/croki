@@ -110,7 +110,7 @@ export function marketObjectToNode(object, { projectId = object?.projectId ?? "d
     sources: (object.evidence ?? []).map((item) => sourceRef({ kind: object.source || "web", ref: item.source || object.id, preview: item.notes || item.claim || object.statement, at: item.capturedAt })),
     origin: object.source === "founder-stated" ? "founder" : "spray",
     originRef: object.id,
-    payload: { sourceKind: rawKind, openQuestions: object.openQuestions ?? [] },
+    payload: { marketObjectId: object.id, sourceKind: rawKind, openQuestions: object.openQuestions ?? [] },
   });
 }
 

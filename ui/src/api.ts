@@ -8,7 +8,7 @@ import type {
   ProductModel, ProductModelEdit, ProductPinTargetKind,
   CapabilityServer, Person, CrossReferenceResult, ToolRegistryView, RegisteredTool, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole, BoardView, GtmExperiment,
-  ChannelMeta, Input, GtmMapView,
+  ChannelMeta, Input, GtmMapView, ObjectGraphView,
 } from "@/types";
 import { identityHeaders } from "@/lib/identity";
 
@@ -399,6 +399,17 @@ export const getBoard = (projectId: string) =>
 export const getGtmMap = (projectId: string) =>
   get<GtmMapView>(`/api/projects/${encodeURIComponent(projectId)}/gtm-map`);
 
+export const getObjectGraph = (projectId: string) =>
+  get<ObjectGraphView>(`/api/projects/${encodeURIComponent(projectId)}/object-graph`);
+
+export const compileObjectGraphPath = (
+  projectId: string,
+  input: { pathId?: string; runPlan?: Record<string, unknown>; input?: Record<string, unknown>; output?: Record<string, unknown> },
+) => post<{ projectId: string; run: unknown; gate: unknown; measurementWeakness?: unknown; runPlan?: unknown }>(
+  `/api/projects/${encodeURIComponent(projectId)}/object-graph/compile`,
+  input,
+);
+
 // ── The rebuilt GTM-engine rituals the founder invokes on the active project ──
 // Research the buyer picture (Phase 1): persists the MarketObjects the map and the paths rest on, then
 // returns a plain-language summary. Nothing sends.
@@ -597,4 +608,3 @@ export const routeInput = (
     `/api/projects/${encodeURIComponent(projectId)}/inputs/route`,
     body,
   );
-

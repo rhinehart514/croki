@@ -2,6 +2,7 @@ import { GraphCanvas, type OperatorCursorState } from "@/components/GraphCanvas"
 import type { NodeEditorBridge } from "@/components/nodeEditorBridge";
 import type { GatePromote } from "@/lib/gateItem";
 import { CanvasShell, type LensDef, type LensProps } from "@/components/canvas/CanvasShell";
+import { ObjectGraphCanvas } from "@/components/ObjectGraphCanvas";
 import { GroundLens } from "@/components/lenses/GroundLens";
 import { BeliefSpine } from "@/components/lenses/BeliefSpine";
 import { useGround, type IcpGrouping } from "@/lib/groundModel";
@@ -90,6 +91,10 @@ export type GtmCanvasModel = {
 
 type GtmLensProps = LensProps<GtmCanvasModel, never>;
 
+function ObjectGraphLens({ model: m }: GtmLensProps) {
+  return <ObjectGraphCanvas projectId={m.projectId} />;
+}
+
 // ── channel-flow: GraphCanvas, unchanged. Forwards App's prop bag straight through. ──
 // The ground overview's Channels cluster and the direct top-level pipeline entry both mount this SAME
 // merged canvas — either path lands you in the identical component, never a different page.
@@ -174,6 +179,7 @@ function GroundLensWrapper({ model: m }: GtmLensProps) {
 }
 
 const LENSES: LensDef<GtmCanvasModel, never>[] = [
+  { id: "object-graph", label: "GTM graph", Component: ObjectGraphLens },
   // The ground is the LANDING surface (id kept as "board" so the host's controlled altitude prop is
   // unchanged). The former nine-layer belief board is gone as a surface; its confidence signal survives
   // only as the plain per-pipeline state the ground shows.
@@ -192,7 +198,7 @@ export function GtmCanvas({
   // channel-flow with a channel open) — not stored. App reuses ONE GtmCanvas instance across both
   // branches, so the lens must be a controlled prop: an uncontrolled default only seeds the shell's
   // state once and would strand the reused instance on the stale lens when the branch flips.
-  activeLensId: "board" | "channel-flow";
+  activeLensId: "object-graph" | "board" | "channel-flow";
   chromeless?: boolean;
 }) {
   return (
