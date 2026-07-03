@@ -66,6 +66,10 @@ import {
   createClaudePathGenerator,
   createClaudePathGrader,
 } from "./path-portfolio.mjs";
+import { compileRunFromPath } from "./run-compile.mjs";
+import { objectGraphForProject } from "./object-graph-projection.mjs";
+import { objectGraphStore } from "./object-graph-store.mjs";
+import { applyObjectGraphOperations } from "./object-graph-operations.mjs";
 import { outcomeReport } from "./outcome-ingest.mjs";
 import { ideaTasteForProject, recordIdeaDecisions } from "./feedback-ledger.mjs";
 import { composeIdeas, createClaudeAngleProposer, createClaudeIdeaGenerator } from "./ideation.mjs";
@@ -703,6 +707,67 @@ const server = http.createServer(async (req, res) => {
       });
     } catch (err) {
       json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Object graph — the phase-1 GTM graph projection. It reads the new object-graph store plus the
+  // existing durable GTM records, derives weakness from real signals, and highlights exactly one
+  // strongest current testable path. Pure read: no scan, send, publish, or run is triggered here.
+  const projectObjectGraphMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/object-graph$/);
+  if (req.method === "GET" && projectObjectGraphMatch) {
+    try {
+      const projectId = decodeURIComponent(projectObjectGraphMatch[1]);
+      json(res, 200, { projectId, ...objectGraphForProject(projectId) });
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && projectObjectGraphMatch) {
+    try {
+      const projectId = decodeURIComponent(projectObjectGraphMatch[1]);
+      const body = await readBody(req);
+      const current = objectGraphStore.load(projectId);
+      const applied = applyObjectGraphOperations(current, body?.operations ?? []);
+      objectGraphStore.save(applied.graph, { projectId });
+      json(res, 200, { projectId, changes: applied.changes, ...objectGraphForProject(projectId) });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Compile a highlighted object-graph path through the existing run compiler and Wall. This route
+  // translates the object path node back to the stored GTMPath id; a graph walk with no stored path is
+  // not compiled in phase 1 because compile needs the existing run spine and gate primitive.
+  const projectObjectGraphCompileMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/object-graph\/compile$/);
+  if (req.method === "POST" && projectObjectGraphCompileMatch) {
+    try {
+      const projectId = decodeURIComponent(projectObjectGraphCompileMatch[1]);
+      const body = await readBody(req);
+      const { graph, recommendation } = objectGraphForProject(projectId);
+      const requestedPathId = String(body?.pathId || recommendation.highlighted?.[0]?.pathId || "").trim();
+      const pathNode = graph.nodes.find((node) => node.id === requestedPathId || node.payload?.gtmPathId === requestedPathId);
+      const gtmPathId = pathNode?.payload?.gtmPathId || (requestedPathId.startsWith("path-") ? requestedPathId : null);
+      if (!gtmPathId) {
+        json(res, 400, { error: "Compile needs a stored path from the highlighted graph." });
+        return;
+      }
+      const project = loadProject({ projectId });
+      const repo = project.sharedContext?.repository?.repo || process.cwd();
+      const result = await compileRunFromPath({
+        projectId,
+        pathId: gtmPathId,
+        runPlan: body?.runPlan ?? null,
+        input: body?.input ?? null,
+        output: body?.output ?? null,
+        compose: createClaudeComposer({ cwd: repo }),
+      });
+      json(res, 200, { projectId, ...result });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return;
   }
