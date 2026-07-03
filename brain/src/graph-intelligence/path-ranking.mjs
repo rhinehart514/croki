@@ -1,4 +1,5 @@
-import { compositeRank, SIGNAL_WEIGHTS } from "../path-portfolio.mjs";
+import { compositeRank } from "../path-portfolio.mjs";
+import { getSignalWeights } from "../signal-weights-store.mjs";
 import { solidityRank, SOLIDITY_LADDER } from "../evidence.mjs";
 import { primaryWeakness } from "./weakness.mjs";
 
@@ -47,6 +48,11 @@ function compactWords(text, limit = 4) {
 
 function candidateName(candidate, nodes) {
   const storedPath = nodes.find((node) => node.domain === "runs" && node.type === "path");
+  // Prefer the model-authored summary the path generator already wrote (carried as the path node's
+  // statement) over hand-picking words — the strategist named the bet, so use its name. Only a
+  // BFS-discovered candidate with no stored path (no model name) falls through to the word-picker.
+  const summary = String(storedPath?.statement ?? "").trim();
+  if (summary) return summary;
   const bet = storedPath?.payload?.bet ?? {};
   const betName = compactWords([bet.buyer, bet.channel || bet.offer || bet.message].filter(Boolean).join(" "), 5);
   if (betName) return betName;
@@ -125,7 +131,7 @@ export function enumerateCandidates(graph = {}) {
   return dedupeCandidates(candidates);
 }
 
-export function computeObjectPathSignals(candidate, graph = {}) {
+export function computeObjectPathSignals(candidate, graph = {}, weights) {
   const nodesById = new Map((graph.nodes ?? []).map((node) => [node.id, node]));
   const nodes = candidate.nodeIds.map((id) => nodesById.get(id)).filter(Boolean);
   const productNodes = nodes.filter((node) => node.domain === "product");
@@ -151,12 +157,12 @@ export function computeObjectPathSignals(candidate, graph = {}) {
     upside: clamp01(upside),
     founderFit: clamp01(founderFit),
   };
-  signals.composite = compositeRank(signals);
+  signals.composite = compositeRank(signals, weights);
   return signals;
 }
 
-export function scorePath(candidate, graph = {}) {
-  const signals = computeObjectPathSignals(candidate, graph);
+export function scorePath(candidate, graph = {}, weights) {
+  const signals = computeObjectPathSignals(candidate, graph, weights);
   const nodesById = new Map((graph.nodes ?? []).map((node) => [node.id, node]));
   const nodes = candidate.nodeIds.map((id) => nodesById.get(id)).filter(Boolean);
   const firedWeaknesses = nodes.flatMap((node) => (node.weaknesses ?? []).filter((item) => item.status === "open"));
@@ -169,18 +175,22 @@ export function scorePath(candidate, graph = {}) {
   return { ...candidate, name: candidateName(candidate, nodes), score, signals, weakestLink };
 }
 
-export function recommend(graph = {}, { limit = 8 } = {}) {
+export function recommend(graph = {}, { limit = 8, ...options } = {}) {
+  // The founder-tunable ranking weights: the store lookup resolves the seed defaults out of the box
+  // and a gate-tuned table once one is saved. Scoped to this graph's project, honoring any test root
+  // passed through options so an isolated run never reads the real store.
+  const weights = getSignalWeights({ ...options, projectId: options.projectId ?? graph.projectId });
   const candidates = enumerateCandidates(graph);
   if (!candidates.length) {
     return {
       rankedPaths: [],
       highlighted: [],
       reason: "scan found no product truths and research returned nothing",
-      weights: SIGNAL_WEIGHTS,
+      weights,
     };
   }
   const rankedPaths = candidates
-    .map((candidate) => scorePath(candidate, graph))
+    .map((candidate) => scorePath(candidate, graph, weights))
     .sort((a, b) =>
       b.score - a.score ||
       b.signals.evidenceStrength - a.signals.evidenceStrength ||
@@ -196,6 +206,6 @@ export function recommend(graph = {}, { limit = 8 } = {}) {
   return {
     rankedPaths,
     highlighted: highlighted ? [highlighted] : [],
-    weights: SIGNAL_WEIGHTS,
+    weights,
   };
 }

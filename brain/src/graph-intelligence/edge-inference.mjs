@@ -28,7 +28,16 @@ const TYPE_ALIASES = new Map([
 export function routeEdgeType(raw) {
   const type = String(raw ?? "").trim().toLowerCase();
   if (OBJECT_EDGE_TYPES.includes(type)) return type;
-  return TYPE_ALIASES.get(type) ?? "derived_from";
+  const aliased = TYPE_ALIASES.get(type);
+  if (aliased) return aliased;
+  // A non-empty type we neither recognize nor have an alias for gets parked on the generic
+  // derived_from mechanic. Log it so a future mislabeling (a model inventing an edge kind that
+  // should have a real mechanic) is VISIBLE instead of silently flattened. An empty/absent type is
+  // not mislabeling, so it falls through quietly.
+  if (type) {
+    console.warn(`[edge-inference] unrecognized edge type "${type}" → routed to derived_from`);
+  }
+  return "derived_from";
 }
 
 function toSourceRef(ref, nodeById, clause) {

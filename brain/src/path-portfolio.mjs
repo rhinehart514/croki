@@ -29,6 +29,7 @@ import { runClaudeQuery, parseAgentItems, parseAgentObject } from "./agent-bridg
 import { gtmPathStore, measurementContractStore, productTruthStore, marketObjectStore } from "./gtm-store.mjs";
 import { SOLIDITY_LADDER, solidityRank } from "./evidence.mjs";
 import { defaultDistinct } from "./ideation.mjs";
+import { DEFAULT_SIGNAL_WEIGHTS, getSignalWeights } from "./signal-weights-store.mjs";
 
 // Generation runs LEAN, exactly like ideation (GTM-ENGINE-REBUILD §6): the two truth sides are packed
 // into the prompt as DATA (deterministic code fetched them), so the model reasons over what it was
@@ -106,18 +107,13 @@ function resolveRests(restsOn, truthById, marketById) {
   return { truths, markets };
 }
 
-// The weights that combine the seven signals into one composite rank. Code constants, tuned so the
-// two hard-evidence signals (is this grounded / is the product ready) lead, and the softer proxies
-// (upside / founder fit) trail — the ranking leans on what is provable over what is hoped.
-export const SIGNAL_WEIGHTS = {
-  evidenceStrength: 0.22,
-  productReadiness: 0.15,
-  channelReachability: 0.15,
-  measurementReadiness: 0.13,
-  speedToTest: 0.13,
-  upside: 0.12,
-  founderFit: 0.1,
-};
+// The weights that combine the seven signals into one composite rank. The VALUES are now a
+// founder-tunable table (signal-weights-store) rather than a frozen constant — HOW the signals trade
+// off is a strategic judgment that belongs to the taste layer, while the weighted-sum ARITHMETIC
+// (compositeRank) stays deterministic code. This export is the seed-default table (the exact numbers
+// ranking has always used): the two hard-evidence signals lead and the softer proxies trail, so out
+// of the box behavior is identical. A gate promote / keep / kill can later persist a tuned table.
+export const SIGNAL_WEIGHTS = DEFAULT_SIGNAL_WEIGHTS;
 
 // The market facets that stand for "how big is the prize" — used only to derive the upside proxy.
 const PRIZE_FACETS = new Set(["buyer", "offer", "valueProp"]);
@@ -134,7 +130,7 @@ const PRIZE_FACETS = new Set(["buyer", "offer", "valueProp"]);
 //                         evidence strength as the fallback when confidence was never recorded.
 //   founderFit          — fraction of the market records it rests on that the founder stated
 //                         themselves (a bet aligned with the founder's own read fits their taste).
-export function computeRankingSignals({ path, truthById, marketById, contract } = {}) {
+export function computeRankingSignals({ path, truthById, marketById, contract, weights } = {}) {
   const { truths, markets } = resolveRests(path?.restsOn, truthById ?? new Map(), marketById ?? new Map());
 
   const evidenceStrength = mean([...truths, ...markets].map((r) => strength(r.solidity)));
@@ -166,7 +162,7 @@ export function computeRankingSignals({ path, truthById, marketById, contract } 
     upside: clamp01(upside),
     founderFit: clamp01(founderFit),
   };
-  signals.composite = compositeRank(signals);
+  signals.composite = compositeRank(signals, weights);
   return signals;
 }
 
@@ -183,11 +179,13 @@ export function contractCompleteness(contract) {
   return score;
 }
 
-// The weighted composite of the seven signals — the single number the portfolio ranks on. Pure code.
-export function compositeRank(signals = {}) {
+// The weighted composite of the seven signals — the single number the portfolio ranks on. Pure code:
+// the arithmetic is deterministic and stays here; only the weight VALUES are injectable (defaulting
+// to the seed table) so a founder-tuned table can shift the ranking without touching this math.
+export function compositeRank(signals = {}, weights = SIGNAL_WEIGHTS) {
   let total = 0;
-  for (const [key, weight] of Object.entries(SIGNAL_WEIGHTS)) {
-    total += weight * clamp01(Number(signals[key]));
+  for (const [key, weight] of Object.entries(weights ?? SIGNAL_WEIGHTS)) {
+    total += Number(weight) * clamp01(Number(signals[key]));
   }
   return clamp01(total);
 }
@@ -411,6 +409,11 @@ export async function composePathPortfolio({
   const truthById = new Map(truths.filter((t) => t && t.id).map((t) => [t.id, t]));
   const marketById = new Map(markets.filter((m) => m && m.id).map((m) => [m.id, m]));
 
+  // The founder-tunable ranking weights for this project — the seed defaults out of the box, a gate-
+  // tuned table once one is saved. Resolved ONCE here and threaded into every path's ranking so the
+  // whole portfolio ranks on the same weights.
+  const weights = getSignalWeights({ ...options, projectId });
+
   // 0. The strategic angles: injected, derived by the proposer, or one unconstrained pass.
   let lanes = normalizeAngles(angles);
   if (!lanes.length && typeof proposeAngles === "function") {
@@ -480,7 +483,7 @@ export async function composePathPortfolio({
     );
 
     // Ranking runs AFTER the contract exists so measurementReadiness reads the real contract.
-    const rankingSignals = computeRankingSignals({ path, truthById, marketById, contract });
+    const rankingSignals = computeRankingSignals({ path, truthById, marketById, contract, weights });
     const ranked = gtmPathStore.save(
       { ...path, measurementContractId: contract.id, rankingSignals },
       options,

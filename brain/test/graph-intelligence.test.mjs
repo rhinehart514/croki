@@ -1,13 +1,22 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 import { deriveWeaknessForGraph, detectWeakness, weaknessReport } from "../src/graph-intelligence/weakness.mjs";
-import { recommend } from "../src/graph-intelligence/path-ranking.mjs";
+import { recommend, scorePath } from "../src/graph-intelligence/path-ranking.mjs";
 import { routeEdgeType, validateInferredEdges } from "../src/graph-intelligence/edge-inference.mjs";
 import { sprayGraph } from "../src/graph-intelligence/spray.mjs";
 
 const at = "2026-07-02T00:00:00.000Z";
 const source = (ref) => ({ kind: "scan", ref, preview: ref, at });
+
+// An isolated store root so recommend()'s signal-weights lookup reads a fresh (empty → default) store
+// instead of the real ~/.gtm-ide — the weights are the seed defaults, exactly as before.
+function freshRoot() {
+  return { root: fs.mkdtempSync(path.join(os.tmpdir(), "graph-intelligence-")) };
+}
 
 function node(id, fields = {}) {
   return {
@@ -153,7 +162,7 @@ describe("graph intelligence — strongest current testable path", () => {
         { id: "e3", source: "channel", target: "list", type: "targets", status: "proposed", basis: [source("channel")], confidence: 100 },
       ],
     });
-    const rec = recommend(graph);
+    const rec = recommend(graph, freshRoot());
     assert.equal(rec.highlighted.length, 1);
     assert.ok(rec.highlighted[0].nodeIds.length >= 1);
     assert.ok(rec.highlighted[0].name);
@@ -163,8 +172,30 @@ describe("graph intelligence — strongest current testable path", () => {
   });
 
   it("returns an honest empty reason instead of a fake path", () => {
-    const rec = recommend({ projectId: "empty", nodes: [], edges: [] });
+    const rec = recommend({ projectId: "empty", nodes: [], edges: [] }, freshRoot());
     assert.deepEqual(rec.highlighted, []);
     assert.match(rec.reason, /scan found no product truths/i);
+  });
+
+  it("names a stored path from the model-authored summary, not hand-picked bet words", () => {
+    const summary = "Indie founders adopt RodentRadar via a Show HN launch";
+    const pathNode = node("p1", {
+      domain: "runs",
+      type: "path",
+      statement: summary, // pathToNode carries path.summary as the node statement
+      payload: { bet: { buyer: "indie founders", channel: "Show HN" } },
+    });
+    const graph = { projectId: "drover", nodes: [pathNode], edges: [] };
+    const scored = scorePath({ pathId: "p1", nodeIds: ["p1"], edgeIds: [], source: "stored" }, graph);
+    assert.equal(scored.name, summary, "the strategist's own summary names the path");
+  });
+
+  it("falls back to the word-picker only when no stored path names the candidate", () => {
+    // A BFS-discovered walk candidate has no runs/path node, so no model name — pick a few words.
+    const strat = node("s1", { domain: "strategy", type: "channel", statement: "Sourced community channel on Reddit" });
+    const graph = { projectId: "drover", nodes: [strat], edges: [] };
+    const scored = scorePath({ pathId: "walk:s1", nodeIds: ["s1"], edgeIds: [], source: "walk" }, graph);
+    assert.ok(scored.name && scored.name.split(/\s+/).length <= 5, "fallback name stays compact");
+    assert.notEqual(scored.name, "");
   });
 });

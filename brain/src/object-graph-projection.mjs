@@ -459,6 +459,6 @@ export function objectGraphForProject(projectId = "default", options = {}) {
       runId: runToExpand,
       itemCount: itemNodes.length,
     } : null,
-    recommendation: recommend(graph),
+    recommendation: recommend(graph, { ...options, projectId }),
   };
 }

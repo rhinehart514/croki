@@ -8,6 +8,11 @@ export const WEAKNESS_KINDS = ["evidence", "specificity", "product", "measuremen
 export const PHASE1_WEAKNESS_KINDS = ["evidence", "product", "measurement", "execution"];
 export const DEFERRED_WEAKNESS_KINDS = ["specificity", "performance"];
 
+// These frozen SEVERITY numbers (the `severity: ... ? 80 : 50` calls below) and this kind ORDER are
+// the hardcoded JUDGMENT that weakness-critic.mjs replaces with a model call. They remain the LIVE
+// source the canvas renders; flipping the render source to the critic is a deliberate, deferred
+// follow-up (a canvas latency/UX call — see the note at the end of weakness-critic.mjs). Detection
+// itself (does a node have sourced evidence, is a contract complete) stays deterministic here.
 export const PRIMARY_WEAKNESS_PRECEDENCE = [
   "performance",
   "execution",
