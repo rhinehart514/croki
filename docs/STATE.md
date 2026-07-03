@@ -1,6 +1,6 @@
 # STATE — Drover (Alpha)
 
-**Stage: Alpha.** Logged 2026-07-02. This is the front-door snapshot of where the
+**Stage: Alpha.** Logged 2026-07-03. This is the front-door snapshot of where the
 product actually stands. When something material changes, update this file and re-date it.
 For the product pitch read `README.md`; for how the system works read `AGENTS.md`; for the
 current build direction read `docs/GTM-ENGINE-REBUILD.md`. Everything else in `docs/` is
@@ -47,22 +47,32 @@ measured result.
 | The three-rail harness | **Real** | Truth scan, founder gate, taste memory — the spine works. |
 | Goal → composed pipeline → gate | **Real** | A goal composes a graph that runs to the wall; the wall is enforced on every path. |
 | Node-flow canvas (primary surface) | **Real** | The wired-steps diagram is the default landing; card detail-on-zoom shipped. |
-| GTM engine rebuild | **Landed, unexercised** | Evidence graph, market research, path portfolio, outcome ingest, promotion, run-compile — merged and tested, not yet run end-to-end on a live goal. |
+| Living GTM graph (ordered canvas) | **Building** | The reimagined surface: one map of the whole go-to-market picture, arranged left-to-right, the strongest path lit as the spine, drag / reorganize. Ordered layout landed on main 07-03; verified on one dogfood product, not a live founder. |
+| GTM engine rebuild | **Landed, unexercised** | Evidence graph, market research, path portfolio, outcome ingest, promotion, run-compile — merged and tested, not yet run end-to-end on a live goal. Note: this is fuzzy work; by doctrine it belongs in rented agents behind open steps, not hosted modules — keep it thin and collapse toward agents, never grow it into a subsystem. |
 | Dogfood loop | **Landed, unexercised** | Drover files and builds its own improvements to gated branches that wait for review. |
 | A first attributable win | **Unproven** | The alpha bet. No real founder outcome has closed the loop yet. |
 
 ---
 
-## Build health (2026-07-02)
+## How we build (the standing rule)
 
-- **Tests:** full suite green (`npm test` — brain tests, lint, build all pass). 112 test files.
+Less is more. The harness — truth, the gate, taste — is the only thing we host. Every fuzzy
+capability (research, enrich, rank, ideate, draft) is a rented agent reached through an open
+step, never a new hosted subsystem. A new feature is an agent plus a step, not new plumbing.
+When something starts looking like an engine of modules, that's the smell — collapse it to
+agents. This is the anti-cage rule in `AGENTS.md`, restated because it's easy to drift off.
+
+## Build health (2026-07-03)
+
+- **Tests:** full suite green (`npm test` — brain tests, lint, build all pass). 1091 pass / 0 fail.
 - **Backend:** 89 modules. New GTM-engine modules present and tested: evidence, gtm-store,
   market-research, path-portfolio, outcome-ingest, promote-motion, run-compile.
 - **Interface:** 37 components, 9 canvas lenses, node-flow diagram as the default canvas.
 - **Agent front door:** 40 tools over the MCP server (`npm run mcp`).
 - **Run:** `npm start` (builds the interface, serves API + client on port 4317).
 - **Version:** 0.3.1 (root), pre-1.0 by design.
-- **On origin/main:** the GTM engine rebuild and the two-surface canvas landed today.
+- **On origin/main:** the ordered left-to-right living-graph canvas landed 07-03, on top of
+  the GTM engine rebuild and two-surface canvas from 07-02.
 
 ---
 
