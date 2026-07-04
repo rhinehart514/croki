@@ -323,17 +323,12 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const submitFailed = "That decision didn't go through — nothing was released. Try again.";
-  // The review panel is a container, not a control — it only swallows clicks so reviewing a draft
-  // doesn't deselect the gate node underneath. Attach that via a ref so the wrapper stays a plain
-  // region (a JSX onClick on a div reads as a fake button; this keeps it honest and a11y-clean).
-  const reviewRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = reviewRef.current;
-    if (!el) return;
-    const stop = (e: MouseEvent) => e.stopPropagation();
-    el.addEventListener("click", stop);
-    return () => el.removeEventListener("click", stop);
-  }, []);
+  // The review panel only swallows clicks so reviewing a draft doesn't deselect the gate node
+  // underneath. This MUST be a React onClick (matching GatePromotePanel / RecordOutcome in this same
+  // file), not a native addEventListener: a native bubble-phase stopPropagation on the wrapper never
+  // reaches React's delegated root listener, so it would silently kill the Approve/Reject/Edit
+  // buttons' own onClick handlers. React's stopPropagation stops React-level bubbling only AFTER the
+  // descendant handlers have run — so the buttons fire and the gate node still isn't deselected.
   const decide = async (key: string, decision: "approve" | "reject", editedDraft?: string) => {
     if (busy) return;
     const prev = decided[key];
@@ -405,7 +400,7 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
   const cleanUndecided = bloom.reduce((n, { it, i }) => n + (!gateItemView(it).hollow && !gateItemIsException(it) && !decided[itemKey(it, i)] ? 1 : 0), 0);
   const shown = bloom.slice(0, GATE_CARD_CAP);
   return (
-    <div ref={reviewRef} className="cgate-review">
+    <div className="cgate-review" onClick={(e) => e.stopPropagation()}>
       <div className="cgate-review-lead">
         <span className="cgate-review-count">
           {exceptionCount > 0

@@ -8,7 +8,7 @@
   "scripts": {
     "build": "npm --prefix ui run build",
     "lint": "npm --prefix ui run lint",
-    "test": "npm --prefix brain test && npm run lint && npm run build",
+    "test": "npm --prefix brain test && npm --prefix ui run test:unit && npm run lint && npm run build",
     "start": "npm run build && node brain/src/server.mjs",
     "mcp": "node brain/src/mcp.mjs",
     "app:rebuild": "electron-rebuild --module-dir brain --only better-sqlite3 && codesign -s - -f brain/node_modules/better-sqlite3/build/Release/better_sqlite3.node",

@@ -19,7 +19,15 @@ import pty from "node-pty";
 const MAX_SESSIONS = 24;        // a runaway-tabs backstop, not a real limit
 const RING_BYTES = 256 * 1024;  // recent output kept per session for output capture
 
-const sessions = new Map(); // id -> { term, ring, sockets:Set }
+// Idle-reaper bounds. A pty is intentionally kept alive after its last client drops so a remount
+// (pan/zoom, lens switch, page reload) reconnects to its history — but without a reaper those orphaned
+// shells accumulate up to MAX_SESSIONS on reconnect churn. So a client-less session is reaped once it
+// has had no connected socket for IDLE_REAP_MS. Overridable via env for ops; the sweep runs on an
+// interval armed by attachTerminalServer.
+const IDLE_REAP_MS = Number(process.env.GTM_TERMINAL_IDLE_MS) || 15 * 60 * 1000;
+const REAP_SWEEP_MS = 60 * 1000;
+
+const sessions = new Map(); // id -> { term, ring, sockets:Set, lastEmptyAt:number|null }
 
 function defaultShell() {
   if (process.platform === "win32") return process.env.COMSPEC || "powershell.exe";
@@ -49,7 +57,9 @@ function spawnSession(id, { cwd, cols, rows }) {
     cwd: cwd || os.homedir(),
     env: process.env,
   });
-  const session = { term, ring: [], sockets: new Set() };
+  // lastEmptyAt: when the session last dropped to zero clients (null while a client is attached). The
+  // reaper reads it to decide when an orphaned shell has been idle long enough to kill.
+  const session = { term, ring: [], sockets: new Set(), lastEmptyAt: null };
   term.onData((data) => {
     pushRing(session, data);
     const frame = Buffer.from(data, "utf8");
@@ -67,6 +77,24 @@ function spawnSession(id, { cwd, cols, rows }) {
   return session;
 }
 
+// Reap sessions that have had no connected client for at least idleMs. A client-less pty otherwise
+// lingers (by design, for reconnect) until MAX_SESSIONS, so reconnect/reload churn slowly fills the cap
+// with dead shells. Killing the pty triggers its onExit, which also removes it; the synchronous delete
+// here keeps the map correct immediately. Exported so a test can drive it deterministically rather than
+// waiting real minutes. Returns the ids reaped.
+export function reapIdleSessions(now = Date.now(), idleMs = IDLE_REAP_MS) {
+  const reaped = [];
+  for (const [id, session] of sessions) {
+    if (session.sockets.size > 0) continue;      // a client is attached — not idle
+    if (session.lastEmptyAt == null) continue;   // never went client-less — nothing to reap
+    if (now - session.lastEmptyAt < idleMs) continue;
+    try { session.term.kill(); } catch { /* already gone */ }
+    sessions.delete(id);
+    reaped.push(id);
+  }
+  return reaped;
+}
+
 // The captured recent output for a session, as one string. Used by the terminal step runner and the
 // "pipe output" action so the graph consumes what the founder actually ran.
 export function readSessionBuffer(id) {
@@ -80,6 +108,11 @@ export function readSessionBuffer(id) {
 // so we never steal upgrades a future endpoint wants.
 export function attachTerminalServer(httpServer) {
   const wss = new WebSocketServer({ noServer: true });
+
+  // Sweep for orphaned (client-less, idle) shells on an interval so they don't pile up to MAX_SESSIONS.
+  // Unref'd so this timer never keeps the process alive by itself.
+  const sweep = setInterval(() => reapIdleSessions(), REAP_SWEEP_MS);
+  if (typeof sweep.unref === "function") sweep.unref();
 
   httpServer.on("upgrade", (req, socket, head) => {
     let url;
@@ -105,6 +138,7 @@ export function attachTerminalServer(httpServer) {
       const fresh = !session;
       if (!session) session = spawnSession(id, { cwd, cols, rows });
       session.sockets.add(ws);
+      session.lastEmptyAt = null; // a client is attached again — cancel any pending idle reap
       if (!fresh && session.ring.length) ws.send(Buffer.concat(session.ring));
 
       ws.on("message", (raw) => {
@@ -116,11 +150,26 @@ export function attachTerminalServer(httpServer) {
       });
       ws.on("close", () => {
         session.sockets.delete(ws);
-        // Keep the pty alive when the last socket drops so the session survives a remount; reap it on
-        // an explicit kill or shell exit only. (A future idle-reaper can sweep orphans.)
+        // Keep the pty alive when the last socket drops so the session survives a remount — but stamp
+        // the moment it went client-less so the idle-reaper can sweep it if no one reconnects in time.
+        if (session.sockets.size === 0) session.lastEmptyAt = Date.now();
       });
     });
   });
 
   return wss;
+}
+
+// ─── Test seams ──────────────────────────────────────────────────────────────
+// The sessions map is module-private on purpose (it holds live ptys). These let a test seed a fake
+// session and inspect the map to exercise the idle-reaper without spawning a real shell. Names are
+// underscore-prefixed to mark them as not part of the runtime surface.
+export function __registerTestSession(id, session) {
+  sessions.set(id, { ring: [], sockets: new Set(), lastEmptyAt: null, ...session });
+}
+export function __hasSession(id) {
+  return sessions.has(id);
+}
+export function __clearTestSessions() {
+  sessions.clear();
 }

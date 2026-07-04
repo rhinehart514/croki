@@ -218,6 +218,43 @@ function resolveUpstream(nodeId, edges, nodeResults) {
 
 // ─── Run a single node ───────────────────────────────────────────────────────
 
+// A generous wall-clock ceiling on any single node's execution. It exists so one hanging connector or
+// stuck fetch fails HONESTLY instead of hanging the whole run forever — not to rush real work. Ten
+// minutes is far past any legitimate step; callers can override via runGraph({ nodeTimeoutMs }), and a
+// non-positive value disables the ceiling entirely (unbounded, the pre-watchdog behavior).
+const DEFAULT_NODE_TIMEOUT_MS = 10 * 60 * 1000;
+
+// Run one node under that ceiling. The node's own promise cannot be force-cancelled in JS, but the run
+// stops WAITING on it: on timeout this resolves to an honest failure result (ok:false + timedOut + a
+// plain note), which flows through exactly like any other node failure — downstream is blocked, the run
+// finishes, and final `ok` is false. The timer is always cleared so a fast node never leaves one armed.
+async function runNodeWithTimeout(node, upstream, context, store, opts, timeoutMs) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return runNode(node, upstream, context, store, opts);
+  }
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      resolve({
+        nodeId: node.id,
+        category: node.category,
+        kind: node.kind ?? "tool",
+        ok: false,
+        timedOut: true,
+        items: [],
+        error: `Step "${node.label ?? node.id}" ran longer than ${Math.round(timeoutMs / 1000)}s and was stopped so the run could finish instead of hanging.`,
+      });
+    }, timeoutMs);
+    // Don't let a pending node-timeout timer keep the process alive on its own.
+    if (typeof timer?.unref === "function") timer.unref();
+  });
+  try {
+    return await Promise.race([runNode(node, upstream, context, store, opts), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function runNode(node, upstream, context, store, opts = {}) {
   const { approvals = {}, decisions = {}, deployAuthorization = null } = opts;
   // Resource nodes: declaration only, no execution
@@ -385,6 +422,9 @@ export async function runGraph(graph, opts = {}) {
     // env-only, the prior behavior — so existing runs are unchanged.
     projectId = null,
     credentialOptions = {},
+    // Per-node wall-clock ceiling (ms). A stuck connector/fetch fails honestly at this bound instead of
+    // hanging the whole run. Generous by default; a non-positive value disables it (unbounded).
+    nodeTimeoutMs = DEFAULT_NODE_TIMEOUT_MS,
   } = opts;
   const emit = typeof onEvent === "function" ? onEvent : () => {};
   const { nodes, edges, id: graphId } = graph;
@@ -445,7 +485,7 @@ export async function runGraph(graph, opts = {}) {
     const node = nodeMap.get(nodeId);
     if (!node || node.category !== "context" || !allowedNodes.has(nodeId)) continue;
     if (nodeResults.has(nodeId)) continue;
-    const result = await runNode(node, [], {}, store, { approvals, decisions, stepRuntime, loadLastRunItems });
+    const result = await runNodeWithTimeout(node, [], {}, store, { approvals, decisions, stepRuntime, loadLastRunItems }, nodeTimeoutMs);
     nodeResults.set(nodeId, result);
   }
 
@@ -506,10 +546,14 @@ export async function runGraph(graph, opts = {}) {
       // source) is a real product gap, but it must not fail an otherwise-successful run — a fully
       // approved, staged run reads "completed", and Measure reports its gap separately. Let the node
       // run on what it has (it self-labels each item attributed/blind) and flag it blind, not blocked.
-      result = await runNode(node, upstream, context, store, { approvals, decisions, stepRuntime, loadLastRunItems, deployAuthorization });
-      result = { ...result, ok: result.ok !== false, blind: true, contractAudit: inputAudit };
+      result = await runNodeWithTimeout(node, upstream, context, store, { approvals, decisions, stepRuntime, loadLastRunItems, deployAuthorization }, nodeTimeoutMs);
+      // A timeout is an honest failure, never "blind" — blind swallows into the run's ok, a stuck node
+      // must not. Only a node that actually ran gets the blind (measurement-can't-attribute) treatment.
+      result = result.timedOut
+        ? { ...result, contractAudit: inputAudit }
+        : { ...result, ok: result.ok !== false, blind: true, contractAudit: inputAudit };
     } else {
-      result = await runNode(node, upstream, context, store, { approvals, decisions, stepRuntime, loadLastRunItems, deployAuthorization });
+      result = await runNodeWithTimeout(node, upstream, context, store, { approvals, decisions, stepRuntime, loadLastRunItems, deployAuthorization }, nodeTimeoutMs);
       const outputAudit = result.ok ? auditOutput(node, result.items ?? []) : inputAudit;
       result = { ...result, contractAudit: outputAudit };
       if (result.ok && outputAudit.state === "blocked") {

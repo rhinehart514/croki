@@ -59,7 +59,7 @@ const EMPTY_MODEL = { things: [], relationships: [], userGoals: [], states: [], 
 
 // Coerce whatever the agent returned into the full layer shape, dropping anything that is not an
 // array so a malformed bag becomes empty rather than crashing the pollution guard downstream.
-function toModel(parsed) {
+export function toModel(parsed) {
   if (!parsed || typeof parsed !== "object") return { ...EMPTY_MODEL };
   const bag = (key) => (Array.isArray(parsed[key]) ? parsed[key] : []);
   return {
