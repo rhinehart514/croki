@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "motion/react";
-import { AlertTriangle, LoaderCircle, Lightbulb, Plus, Settings2 } from "lucide-react";
+import { AlertTriangle, LoaderCircle, Plus, Settings2 } from "lucide-react";
 import { SPRING } from "@/lib/springs";
 import { Reveal, Pop } from "@/lib/motion";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
@@ -18,7 +18,7 @@ export function FloatingDock({
   // Left — product · channel breadcrumb
   projects, activeProjectId, projectBusy, onSwitchProject, onManageProjects, onNewProduct, onDeleteProject,
   channels, activeChannelId,
-  onOpenChannel, onNewChannel, onIdeate,
+  onOpenChannel, onNewChannel,
   onShowOverview, overviewActive,
   // The focused channel's emergent motion identity ("Outbound loop", "Content loop") — what KIND of
   // go-to-market this is, derived from its real stages. Null on the all-channels overview.
@@ -49,7 +49,6 @@ export function FloatingDock({
   activeChannelId: string | null;
   onOpenChannel: (id: string) => void;
   onNewChannel: () => void;
-  onIdeate: () => void;
   onShowOverview?: () => void;
   overviewActive?: boolean;
   motionName?: string | null;
@@ -114,18 +113,9 @@ export function FloatingDock({
             {motionName}
           </span>
         ) : null}
-        {/* Ideate — pulled out of the flows dropdown into its own top-bar action. It streams the
-            ideation board (workflows composed from grounded reality). Also reachable from the command
-            dock, so it's never buried in a menu. */}
-        <button
-          className={`fdock-ideate ${overviewActive ? "active" : ""}`}
-          onClick={onIdeate}
-          type="button"
-          title="Ideate pipelines from your grounded product"
-        >
-          <Lightbulb size={14} />
-          <span>Ideate</span>
-        </button>
+        {/* Ideate lives in the composer — the one "say things to Claude" home — not here. This bar is
+            the canvas's own controls (navigate, summon, run); asking Claude to think is a conversational
+            action, so it belongs with the conversation, not duplicated in the top chrome. */}
         {showGtmToggle ? (
           <SlidingTabs
             items={[{ value: "gtm", label: "GTM" }, { value: "product", label: "Product" }]}

@@ -1947,7 +1947,6 @@ export default function App() {
               activeChannelId={activeChannelId}
               onOpenChannel={focusChannel}
               onNewChannel={handleNewChannel}
-              onIdeate={() => setComposerPosture("ideate")}
               onShowOverview={overviewActive ? () => { void loadProjectOverview(channels); } : undefined}
               overviewActive={overviewActive && !activeChannelId}
               motionName={engine?.motion?.name ?? null}
