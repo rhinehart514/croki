@@ -1,5 +1,6 @@
-import { ArrowRight, Check, EyeOff, FileCode2, Layers, ScanSearch, Target } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
 import type { ScanPreview as ScanPreviewData } from "@/types";
+import { ProductReadout, type ProductEvidence } from "@/components/ProductReadout";
 
 // What the product learned about your code, shown before you commit a goal. The pitch is "it knows
 // your product" — this is where that becomes visible: the headline it read, the stack it detected,
@@ -32,56 +33,23 @@ export function ScanPreview({
   const legacyCites = (rawWin && typeof rawWin === "object" && "citations" in rawWin
     ? (rawWin as { citations?: unknown }).citations
     : undefined);
-  const evidence = (report.winEventEvidence ?? (Array.isArray(legacyCites) ? legacyCites : []))
-    .filter((c): c is NonNullable<typeof c> => !!c && typeof c === "object" && "file" in c);
-  const blind = report.blindAttribution?.blind === true;
+  const evidence = ((report.winEventEvidence ?? (Array.isArray(legacyCites) ? legacyCites : [])) as ProductEvidence[])
+    .filter((c): c is ProductEvidence => !!c && typeof c === "object" && "file" in c);
 
   return (
     <div className="scan-preview">
-      <div className="scan-preview-head">
-        <span className="scan-preview-eyebrow"><ScanSearch size={14} /> What it read in your product</span>
-        <h2 className="scan-preview-headline">{report.headline?.trim() || "Read your code, but couldn't summarize it yet."}</h2>
-        {report.productLine?.trim() ? <p className="scan-preview-line">{report.productLine.trim()}</p> : null}
-        <p className="scan-preview-repo"><FileCode2 size={12} /> {repoPath}</p>
-      </div>
-
-      <div className="scan-preview-facts">
-        <section className="scan-preview-fact">
-          <span className="scan-preview-fact-label"><Layers size={13} /> Stack</span>
-          {stack.length ? (
-            <div className="scan-preview-chips">
-              {stack.map((tech) => <span className="scan-preview-chip" key={tech}>{tech}</span>)}
-            </div>
-          ) : <span className="scan-preview-empty">No stack detected.</span>}
-        </section>
-
-        <section className="scan-preview-fact">
-          <span className="scan-preview-fact-label"><Target size={13} /> Win event</span>
-          {winEvent ? (
-            <>
-              <code className="scan-preview-win">{winEvent}</code>
-              {evidence.length ? (
-                <ul className="scan-preview-evidence">
-                  {evidence.map((cite, i) => (
-                    <li key={`${cite.file}:${cite.line}:${i}`}>
-                      <span className="scan-preview-cite-file">{cite.file}:{cite.line}</span>
-                      {cite.text ? <span className="scan-preview-cite-text">{cite.text}</span> : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : <span className="scan-preview-empty">Found the event, but no line citation.</span>}
-            </>
-          ) : <span className="scan-preview-empty">No win event detected. You can name one on the next step.</span>}
-        </section>
-
-        {blind ? (
-          <section className="scan-preview-blind">
-            <span className="scan-preview-blind-label"><EyeOff size={13} /> Attribution is blind</span>
-            <p>{report.blindAttribution?.reason?.trim()
-              || "The win event fires, but nothing in the code records where it came from — so this product can't yet tell which pipeline earned a win. That's a real gap, not a bug in the scan."}</p>
-          </section>
-        ) : null}
-      </div>
+      <ProductReadout
+        data={{
+          headline: report.headline,
+          productLine: report.productLine,
+          repoPath,
+          stack,
+          // Onboarding-specific nudge: a missing win event here can still be named on the next step.
+          winEvent: winEvent ?? undefined,
+          evidence,
+          blind: report.blindAttribution ?? null,
+        }}
+      />
 
       <div className="scan-preview-actions">
         <button className="scan-preview-confirm" disabled={busy} onClick={onConfirm} type="button">

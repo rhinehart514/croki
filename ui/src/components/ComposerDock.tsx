@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowUp, BarChart3, Bot, Boxes, ChevronRight, Code, Database, Filter, LayoutGrid, LoaderCircle, Lightbulb, Maximize2,
+  ArrowUp, BarChart3, Bot, Boxes, ChevronRight, Code, Database, Filter, LoaderCircle, Lightbulb, Maximize2,
   Mic, Minimize2, PenLine, Pin, Play, Search, Send, ShieldCheck, Square, Wand2, X,
 } from "lucide-react";
 import { statusLabel } from "@/lib/status";
@@ -472,7 +472,6 @@ export function ComposerDock({
   session, running, boundChannelName, onSend, onCancel, onReviewGate,
   floating = false, focusSignal = 0, recede = false,
   contextManifest = null, onOpenGrounding, onOpenPicture, onIdeate,
-  onOpenComponents,
   posture, onExitPosture, onPin,
   graph = null, runningNodeId = null, proposedNodeIds = null, result = null,
   subject = null, onClearSubject, isNavCommand,
@@ -520,10 +519,6 @@ export function ComposerDock({
   onOpenGrounding?: () => void;
   onOpenPicture?: () => void;
   onIdeate?: () => void;
-  // Opens the Figma-style component library — the founder hand-picks real inventory (their leads,
-  // composed teammates, ICP/claims/experiments, raw blocks) and each pick drops a node on the canvas.
-  // It belongs to the chat: you either ask Claude or reach for the library yourself.
-  onOpenComponents?: () => void;
   // Ideate posture — the composer in a "thinking, not building" register. When "ideate", the input
   // invites discussion (who's the buyer, where's the wedge, why now) instead of eagerly composing
   // channels, and a quiet chip in the head marks the posture (× exits it via onExitPosture). The
@@ -929,14 +924,6 @@ export function ComposerDock({
             <Square />
           </button>
         )}
-        {/* Add to canvas — opens the component library. Hand-pick your real leads, teammates, and
-            references instead of describing them; each pick drops a node on the current pipeline. */}
-        {onOpenComponents ? (
-          <button className="composer-dock-add" onClick={onOpenComponents} type="button" title="Add to canvas — your real leads, teammates, and references" aria-label="Add a component to the canvas">
-            <LayoutGrid size={14} />
-            <span>Add</span>
-          </button>
-        ) : null}
         <button className="composer-dock-icon" onClick={() => setExpanded((v) => !v)} type="button" title={expanded ? "Shrink" : "Expand"} aria-label={expanded ? "Shrink the panel" : "Expand the panel"} aria-pressed={expanded}>
           {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
         </button>

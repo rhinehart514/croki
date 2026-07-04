@@ -6,7 +6,6 @@ import {
   applyGraphOperations as applyGraphOperationsApi,
   auditGraph,
   getConnectors,
-  getCapabilities,
   getEngineState,
   getConnection,
   type ConnectionStatus,
@@ -56,7 +55,6 @@ const AgentProfile = lazy(() => import("@/components/AgentProfile").then((m) => 
 const ConnectCapability = lazy(() => import("@/components/ConnectCapability").then((m) => ({ default: m.ConnectCapability })));
 import type { AgentProfileView, TeammateView } from "@/components/AgentProfile";
 import { ComposerDock } from "@/components/ComposerDock";
-import { ComponentLibrary } from "@/components/ComponentLibrary";
 import { FloatingDock } from "@/components/FloatingDock";
 import { type OperatorCursorState } from "@/components/GraphCanvas";
 import { TeamOnboarding } from "@/components/TeamOnboarding";
@@ -69,10 +67,9 @@ import { canApprove as canApproveApi } from "@/api";
 import { getIdentity, FOUNDER_USER_ID, type ActingIdentity } from "@/lib/identity";
 import { NodeEditor } from "@/components/NodeEditor";
 // GtmExplorer (the old left rail) is intentionally no longer rendered — channel navigation moved to
-// the FloatingDock's channel switcher, the Library to LibraryPalette, the feeds into ComposerDock,
-// Problems to the dock. The breadcrumb switchers, mode lenses, Problems, Approvals, Simulate and Run
-// all live in FloatingDock now, so App no longer imports them directly.
-const LibraryPalette = lazy(() => import("@/components/LibraryPalette").then((m) => ({ default: m.LibraryPalette })));
+// the FloatingDock's channel switcher, the feeds into ComposerDock, Problems to the dock. The
+// breadcrumb switchers, mode lenses, Problems, Approvals, Simulate and Run all live in FloatingDock
+// now. The hand-pick pickers were removed — Claude composes what a pipeline needs.
 import { statusLabel } from "@/lib/status";
 import { humanizeOperatorSession } from "@/lib/operatorLanguage";
 import { healthHex } from "@/lib/health";
@@ -162,7 +159,7 @@ import type {
   ChannelMeta, ConnectorMeta, ContextManifest, Decisions, EngineState, GateDecision, GraphOperation, GtmLibrary, GTMContractAudit, GTMGraph, GTMNode, GTMNodeCategory,
   GTMProject, GTMNodeResult, GTMRunResult, NodeSelection, OperatorSession, ProjectSummary,
   ProductModel, ProductModelEdit,
-  CapabilityServer, CapabilityTool, Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
+  Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, ComposerPosture,
 } from "@/types";
 
@@ -243,12 +240,6 @@ export default function App() {
   // member no). Drives the role-gated release control in the approval queue. Defaults true for the
   // solo founder (personal space) so nothing changes for a single-player install.
   const [canReleaseGate, setCanReleaseGate] = useState(true);
-  // The summoned Library palette — opened from the canvas "+ Add step" control, replacing the old
-  // left-rail Library now that the rail is dissolved.
-  const [libraryPaletteOpen, setLibraryPaletteOpen] = useState(false);
-  // The Figma-style component library, opened from the co-pilot dock's "Add" button. Hand-picks real
-  // inventory (leads, composed teammates, ICP/claims/experiments, blocks) onto the current pipeline.
-  const [componentsOpen, setComponentsOpen] = useState(false);
   // The Problems popover — the engine's investigations, surfaced as a compact toolbar chip now that
   // the Problems rail section is gone with the explorer. The Issues indicator (its own dock button +
   // the issuesOpen panel) is the visible home for these now; this setter is kept because several
@@ -403,7 +394,6 @@ export default function App() {
   // teammate lands straight in the workspace, not back through onboarding.
   const [teamIdentity, setTeamIdentity] = useState<TeamIdentity | null>(() => loadTeamIdentity());
   const [connectors, setConnectors] = useState<ConnectorMeta[]>([]);
-  const [capabilities, setCapabilities] = useState<CapabilityServer[]>([]);
   const [approvals, setApprovals] = useState<Record<string, boolean>>({});
   const [decisions, setDecisions] = useState<Decisions>({});
   const [graphSavedAt, setGraphSavedAt] = useState<string | null>(null);
@@ -704,7 +694,6 @@ export default function App() {
       const channelId = projectResponse.project.activeChannelId
         || projectResponse.project.channels[0]?.id;
       setConnectors(connectorResponse.connectors);
-      getCapabilities().then((r) => { if (live) setCapabilities(r.servers); }).catch(() => null);
       setChannels(projectResponse.project.channels);
       setActiveProjectState(projectResponse.project);
       setProjects(catalog.projects);
@@ -1124,57 +1113,6 @@ export default function App() {
     });
   }, [applyOperations, graph, selectInGraph]);
 
-  // Drop several connected steps at once. "Review & stage" uses it to place the founder gate and the
-  // staged-output node already wired in sequence, so the wall (every execute needs a gate upstream)
-  // holds by construction instead of leaving the founder to add — and order — two blocks by hand.
-  const handleAddChain = useCallback((specs: (Partial<GTMNode> & { label: string })[]) => {
-    if (!graph || !specs.length) return;
-    const startX = graph.nodes.reduce((maximum, node) => Math.max(maximum, node.position?.x ?? 0), 0) + 264;
-    const stamp = Date.now().toString(36);
-    const nodes = specs.map((spec, i) => {
-      const base = spec.kind && spec.kind !== "tool" ? spec.kind : spec.category ?? "step";
-      return {
-        id: `${base}-${stamp}-${i}`, label: spec.label, position: { x: startX + i * 264, y: 0 },
-        config: spec.config ?? {}, contract: spec.contract,
-        ...(spec.kind && spec.kind !== "tool"
-          ? { kind: spec.kind, category: spec.category ?? "generate", ref: spec.ref ?? "" }
-          : { category: spec.category ?? "source", connector: spec.connector ?? "manual" }),
-      } as GTMNode;
-    });
-    const ops: GraphOperation[] = [
-      ...nodes.map((node) => ({ type: "add_node" as const, node })),
-      ...nodes.slice(1).map((node, i) => ({
-        type: "connect_nodes" as const,
-        edge: { id: `e-${nodes[i].id}-${node.id}`, source: nodes[i].id, target: node.id, edgeType: "data" as const },
-      })),
-    ];
-    void applyOperations(ops).then((next) => {
-      if (next) selectInGraph(nodes[0].id, graph.id);
-    });
-  }, [applyOperations, graph, selectInGraph]);
-
-  const refreshCapabilities = useCallback(() => {
-    getCapabilities().then((r) => setCapabilities(r.servers)).catch(() => null);
-  }, []);
-
-  // Drop a connected MCP tool onto the canvas as a step. A read tool runs free (a single
-  // enrich node). A write tool acts on the world, so it lands WITH a founder gate upstream —
-  // the wall holds by construction, the same way "Review & stage" does, never a lone sender.
-  const handleAddTool = useCallback((serverId: string, tool: CapabilityTool) => {
-    const ref = `${serverId}/${tool.name}`;
-    const config = { server: serverId, tool: tool.name, toolClass: tool.effectiveClass };
-    if (tool.effectiveClass === "read") {
-      handleAddNode({
-        label: tool.name, kind: "mcp", category: "enrich", ref, config,
-        contract: { accepts: [], emits: [] },
-      });
-      return;
-    }
-    handleAddChain([
-      { label: "Founder review", category: "gate", connector: "default", config: {}, contract: { accepts: [], emits: ["approved", "gtmActionId"] } },
-      { label: tool.name, kind: "mcp", category: "execute", ref, config, contract: { accepts: ["approved"], emits: ["gtmActionId", "executionStatus"] } },
-    ]);
-  }, [handleAddNode, handleAddChain]);
 
   const handleDeleteNode = useCallback((nodeId: string) => {
     void applyOperations([{ type: "remove_node", nodeId }]).then((next) => {
@@ -1187,13 +1125,11 @@ export default function App() {
     void applyOperations(edgeIds.map((edgeId) => ({ type: "disconnect_nodes", edgeId })));
   }, [applyOperations]);
 
-  // Clicking the empty canvas dismisses whatever's open — the in-card editor, the library picker, the
-  // agent profile sheet, the Problems/Approvals popovers, the artifact editor. One gesture clears the
-  // surface so the canvas is never left cluttered behind a thing you've moved on from.
+  // Clicking the empty canvas dismisses whatever's open — the in-card editor, the agent profile
+  // sheet, the Problems/Approvals popovers, the artifact editor. One gesture clears the surface so
+  // the canvas is never left cluttered behind a thing you've moved on from.
   const dismissOverlays = useCallback(() => {
     setSelection(null);
-    setLibraryPaletteOpen(false);
-    setComponentsOpen(false);
     setAgentProfileRef(null);
     setProblemsOpen(false);
     setArtifactEdit(null);
@@ -1831,7 +1767,6 @@ export default function App() {
     onConnectNodes: handleGraphConnect,
     onDeleteEdges: handleDeleteEdges,
     onNodePositionChange: handleNodePositionChange,
-    onOpenLibrary: () => setLibraryPaletteOpen(true),
     multiPipeline: { channels, channelGraphs, channelRunResults },
     panTo: panSignal,
     channels,
@@ -2243,11 +2178,11 @@ export default function App() {
             <div className="canvas-overlay" role="dialog" aria-modal="true">
               <div className="canvas-overlay-bar">
                 <span className="canvas-overlay-title">Capabilities</span>
-                <button className="canvas-overlay-close" onClick={() => { setOverlay(null); refreshCapabilities(); }} type="button" title="Back to the canvas">×</button>
+                <button className="canvas-overlay-close" onClick={() => setOverlay(null)} type="button" title="Back to the canvas">×</button>
               </div>
               <div className="canvas-overlay-body">
                 <Suspense fallback={null}>
-                  <ConnectCapability onChange={refreshCapabilities} />
+                  <ConnectCapability onChange={() => {}} />
                 </Suspense>
               </div>
             </div>
@@ -2338,56 +2273,9 @@ export default function App() {
             </div>
           )}
 
-          {/* The summoned Library — the canvas "+ Add step" control opens this glass palette. It
-              replaces the dissolved left-rail Library: the on-disk agents and skills, each draggable
-              onto the canvas or added with one click. Anchored top-left near the Add control;
-              self-closes on Escape / outside-click. */}
-          {view === "canvas" && libraryPaletteOpen ? (
-            <Suspense fallback={null}>
-            <LibraryPalette
-              open={libraryPaletteOpen}
-              onClose={() => setLibraryPaletteOpen(false)}
-              library={library}
-              graph={graph}
-              capabilities={capabilities}
-              onAddCapability={(type, ref, label) => {
-                handleAddNode({ label, kind: type, category: "generate", ref, contract: { accepts: [], emits: [] } });
-                setLibraryPaletteOpen(false);
-              }}
-              onAddTool={(serverId, tool) => {
-                handleAddTool(serverId, tool);
-                setLibraryPaletteOpen(false);
-              }}
-              onManageTools={() => { setLibraryPaletteOpen(false); setOverlay("capabilities"); }}
-              onOpenArtifact={(type, ref) => {
-                // Opening an agent shows the teammate profile (the person); skills still open their file.
-                if (type === "agent") { setLibraryPaletteOpen(false); setAgentProfileRef(ref); }
-                else setArtifactEdit({ type, ref });
-              }}
-              onNewArtifact={handleNewArtifact}
-            />
-            </Suspense>
-          ) : null}
-
-          {/* The component library — the Figma-style inventory picker opened from the co-pilot dock's
-              "Add". Hand-pick your real leads, composed teammates, and stated ICP/claims/experiments,
-              or a raw block; each pick drops a node on the current pipeline via the same typed graph
-              mutation as "+ Add step". Frosted-glass chrome near the dock; Esc / outside-click closes. */}
-          {view === "canvas" && componentsOpen && graph ? (
-            <ComponentLibrary
-              open={componentsOpen}
-              onClose={() => setComponentsOpen(false)}
-              people={people}
-              channels={channels}
-              channelGraphs={channelGraphs}
-              graph={graph}
-              library={library}
-              icp={activeProject?.sharedContext.icp ?? {}}
-              claims={activeProject?.sharedContext.claims ?? []}
-              experiments={activeProject?.sharedContext.experiments ?? []}
-              onInsertNode={handleAddNode}
-            />
-          ) : null}
+          {/* The hand-pick pickers were removed — Claude composes what a pipeline needs and you approve
+              at the gate, rather than wiring steps by hand. The objects you'd have inserted (your
+              people, teammates, references) live on the canvas as summoned objects. */}
 
         </section>
 
@@ -2451,11 +2339,8 @@ export default function App() {
           posture={composerPosture}
           onExitPosture={() => setComposerPosture("build")}
           onPin={(kind, text) => { void pinClarity(kind, text); }}
-          // Build-your-own-workflow retired: the composer no longer offers the "+" step library / manual
-          // node-add. The GTM map is the surface now — you state a goal and Claude composes to the gate,
-          // rather than wiring steps by hand. (onAddNode/onAddChain/onOpenLibrary withheld → the "+"
-          // add-step collapses. onOpenComponents stays: adding real leads/teammates is not build-your-own.)
-          onOpenComponents={graph ? () => setComponentsOpen(true) : undefined}
+          // Build-your-own-workflow retired: the composer composes via Claude, not a hand-pick picker.
+          // You state a goal and Claude composes to the gate rather than wiring steps by hand.
           graph={graph}
           runningNodeId={runningNodeId}
           proposedNodeIds={proposedNodeIds}

@@ -60,7 +60,6 @@ export type GtmCanvasModel = {
   onConnectNodes?: (source: string, target: string) => void;
   onDeleteEdges?: (edgeIds: string[]) => void;
   onNodePositionChange?: (nodeId: string, position: { x: number; y: number }) => void;
-  onOpenLibrary?: () => void;
   nodeEditor?: NodeEditorBridge | null;
   // The literal one-coordinate-space unification: every other pipeline's graph, so channel-flow
   // renders ALL of them as lanes in one canvas instead of swapping which one is on screen. Absent
@@ -145,7 +144,6 @@ export function ChannelFlowLens({ model: m }: GtmLensProps) {
           onConnectNodes={m.onConnectNodes}
           onDeleteEdges={m.onDeleteEdges}
           onNodePositionChange={m.onNodePositionChange}
-          onOpenLibrary={m.onOpenLibrary}
           onSelect={m.onSelect}
           onPaneClick={m.onPaneClick}
           operatorCursor={m.operatorCursor}

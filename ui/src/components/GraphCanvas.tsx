@@ -1914,9 +1914,6 @@ export function GraphCanvas({
   // The gate node to bloom (amber breathing ring) while a run pauses at the founder gate. The host
   // sets this to the pending gate id when drafts are staged; null clears the bloom.
   bloomNodeId?: string | null;
-  // Opens the summoned LibraryPalette from the "+ Add step" control — the replacement for the old
-  // left-rail Library. Adds a "Browse full library" entry to the step menu when provided.
-  onOpenLibrary?: () => void;
   // The editor bridge for the in-card guided editor. When a node is selected, its card expands and
   // mounts NodeCardEditor, which reads this off context — no prop-drilling into node data.
   nodeEditor?: NodeEditorBridge | null;
