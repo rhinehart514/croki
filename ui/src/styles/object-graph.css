@@ -177,7 +177,7 @@
   border-color: var(--proven-soft);
 }
 
-.object-card.role-outcome .object-card-statement {
+.object-card.role-outcome .obj-text {
   font-variant-numeric: tabular-nums;
 }
 
@@ -230,7 +230,7 @@
 .object-graph-shell.zoomed-out .object-card-type {
   color: var(--ink-2);
 }
-.object-graph-shell.zoomed-out .object-card-statement,
+.object-graph-shell.zoomed-out .obj-body,
 .object-graph-shell.zoomed-out .object-card-foot,
 .object-graph-shell.zoomed-out .object-outward-band,
 .object-graph-shell.zoomed-out .object-weakest-pill {
@@ -260,17 +260,136 @@
   height: 13px;
 }
 
-.object-card-statement {
+/* Every kind's body sits in this slot; it fills the space between the type row and the evidence foot. */
+.obj-body {
   flex: 1;
   min-height: 0;
+  overflow: hidden;
+}
+/* The clamped statement text. Kept to four lines by default so a long statement can't push the card
+   past its fixed height; the full text is one click away in the inspector. Per-kind bodies tighten it. */
+.obj-text {
+  color: var(--ink);
   font-size: var(--text-base);
   line-height: 1.35;
-  /* Clamp to four lines so a long statement can't grow the card past its fixed height and overlap the
-     card below it. The full statement is one click away in the inspector. */
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 4;
   overflow: hidden;
+}
+
+/* ── Per-kind object bodies ──────────────────────────────────────────────────────────────────────
+   Each node reads as the THING it is by surfacing its own defining field, on the shared card skeleton.
+   Monochrome throughout; the only hues are semantic — the gate's amber barrier, the outcome's green. */
+
+/* persona (buyer): a who, fronted by an avatar token */
+.obj-persona { display: flex; align-items: center; gap: var(--space-2); }
+.obj-avatar {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line-2);
+  background: var(--canvas);
+  color: var(--ink-2);
+}
+.obj-avatar svg { width: 17px; height: 17px; }
+
+/* offer: a price sheet — the tiers become the object */
+.obj-offer { display: flex; flex-direction: column; gap: 6px; justify-content: flex-start; }
+.obj-price-row { display: flex; flex-wrap: wrap; gap: 5px; }
+.obj-price {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  padding: 2px 7px;
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+.obj-price em {
+  font-style: normal;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+.obj-offer-tail {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* message: a literal quote — the copy itself, marked as speech */
+.obj-message {
+  position: relative;
+  padding-left: 17px;
+  -webkit-line-clamp: 3;
+}
+.obj-message::before {
+  content: "\201C";
+  position: absolute;
+  left: 0;
+  top: 1px;
+  color: var(--faint);
+  font-size: 22px;
+  line-height: 1;
+}
+
+/* value prop: a positioning claim, weighted and set off by a solid rule */
+.obj-value {
+  padding-left: 11px;
+  border-left: 2px solid var(--ink);
+  font-weight: 500;
+  -webkit-line-clamp: 3;
+}
+
+/* proof point: evidence, framed like a citation */
+.obj-proof {
+  padding-left: 11px;
+  border-left: 3px double var(--line-2);
+  color: var(--ink-2);
+}
+
+/* trigger: a now-condition, led by a timing pill */
+.obj-trigger { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.obj-now {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  padding: 1px 8px;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.obj-trigger-when { -webkit-line-clamp: 2; }
+
+/* channel: a route to a venue */
+.obj-channel { display: flex; flex-direction: column; gap: 3px; }
+.obj-via {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.obj-channel-venue { font-weight: 500; -webkit-line-clamp: 2; }
+
+/* gate: the wall — a hazard-striped barrier over the action it protects */
+.obj-gate { display: flex; flex-direction: column; gap: var(--space-2); }
+.obj-gate-bar {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: repeating-linear-gradient(-45deg, var(--gap) 0 5px, transparent 5px 10px);
 }
 
 .object-card-foot {

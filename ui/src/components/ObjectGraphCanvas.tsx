@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
-  AlertTriangle, CheckCircle2, FileSearch, Mail, Network, Play, Shield, ShieldCheck,
+  AlertTriangle, CheckCircle2, FileSearch, Mail, Network, Play, Shield, ShieldCheck, Users,
 } from "lucide-react";
 import {
   Background, Controls, Handle, MarkerType, Position, ReactFlow, useReactFlow, useStore, type Edge, type Node, type NodeProps,
@@ -81,14 +81,112 @@ function revealDelayFor(node: ObjectGraphNode) {
   return wave * 240 + jitter;
 }
 
+// The canvas is a projection over an object model, so a node should read as the THING it is — a buyer,
+// an offer, a message, a gate — not one card template repeated. `objectKind` sorts each node to a body
+// that surfaces its own defining field; every kind keeps the shared skeleton (type row + evidence foot)
+// so the map stays one family, differentiated but not chaotic.
+type ObjectKind = "persona" | "offer" | "message" | "value" | "proof" | "trigger" | "channel" | "gate" | "outcome" | "default";
+function objectKind(node: ObjectGraphNode): ObjectKind {
+  const role = nodeRole(node);
+  if (role === "gate") return "gate";
+  if (role === "outcome") return "outcome";
+  switch (node.type) {
+    case "buyer": return "persona";
+    case "offer": return "offer";
+    case "message": return "message";
+    case "value_prop": return "value";
+    case "proof_point": return "proof";
+    case "trigger": return "trigger";
+    case "channel": return "channel";
+    default: return "default";
+  }
+}
+
+// An offer states its own price sheet ("Presence $99 / Growth $199 / Scale $499 · per month"); pull the
+// tiers out so the object reads as prices, and keep the trailing qualifier as a subline.
+// A price is "$" + digits with optional thousands separators ($99, $1,000) — a comma only counts when
+// it sits between digit groups, so a list separator ("$99, Growth") never gets swallowed into the price.
+const PRICE = String.raw`\$\d{1,3}(?:,\d{3})*`;
+function parseOfferTiers(statement: string): { name?: string; price: string }[] {
+  const paired = [...statement.matchAll(new RegExp(`([A-Z][A-Za-z]+)\\s+(${PRICE})`, "g"))].map((m) => ({ name: m[1], price: m[2] }));
+  if (paired.length) return paired;
+  return [...statement.matchAll(new RegExp(PRICE, "g"))].map((m) => ({ price: m[0] }));
+}
+function offerTail(statement: string): string {
+  const idx = statement.lastIndexOf("$");
+  if (idx < 0) return "";
+  return statement.slice(idx).replace(new RegExp(`^${PRICE}`), "").replace(/^[\s·,/-]+/, "").trim();
+}
+
+function ObjectBody({ node, kind }: { node: ObjectGraphNode; kind: ObjectKind }) {
+  const statement = node.statement;
+  if (kind === "offer") {
+    const tiers = parseOfferTiers(statement);
+    if (tiers.length) {
+      const tail = offerTail(statement);
+      return (
+        <div className="obj-body obj-offer">
+          <div className="obj-price-row">
+            {tiers.map((t) => (
+              <span className="obj-price" key={`${t.name ?? ""}-${t.price}`}>
+                {t.name ? <em>{t.name}</em> : null}
+                {t.price}
+              </span>
+            ))}
+          </div>
+          {tail ? <div className="obj-offer-tail">{tail}</div> : null}
+        </div>
+      );
+    }
+  }
+  if (kind === "persona") {
+    return (
+      <div className="obj-body obj-persona">
+        <span className="obj-avatar" aria-hidden="true"><Users /></span>
+        <span className="obj-text obj-persona-who">{statement}</span>
+      </div>
+    );
+  }
+  if (kind === "trigger") {
+    return (
+      <div className="obj-body obj-trigger">
+        <span className="obj-now">now</span>
+        <span className="obj-text obj-trigger-when">{statement}</span>
+      </div>
+    );
+  }
+  if (kind === "channel") {
+    return (
+      <div className="obj-body obj-channel">
+        <span className="obj-via">via</span>
+        <span className="obj-text obj-channel-venue">{statement}</span>
+      </div>
+    );
+  }
+  if (kind === "gate") {
+    return (
+      <div className="obj-body obj-gate">
+        <span className="obj-gate-bar" aria-hidden="true" />
+        <span className="obj-text">{statement}</span>
+      </div>
+    );
+  }
+  // message (a literal quote), value (a positioning claim), proof (evidence), and the plain default all
+  // render the statement, but each with its own frame in CSS via the kind class.
+  return <div className={`obj-body obj-text obj-${kind}`}>{statement}</div>;
+}
+
 function ObjectCard({ data, selected }: NodeProps<Node<CardData>>) {
   const weakness = primaryWeakness(data.object);
+  const kind = objectKind(data.object);
   return (
     <button
       type="button"
+      data-kind={kind}
       style={{ "--reveal-delay": `${data.revealDelay}ms` } as CSSProperties}
       className={[
         "object-card",
+        `kind-${kind}`,
         `role-${nodeRole(data.object)}`,
         data.object.maturity,
         data.lit && "lit",
@@ -105,7 +203,7 @@ function ObjectCard({ data, selected }: NodeProps<Node<CardData>>) {
         {cardIcon(data.object)}
         <span>{labelForType(data.object.type)}</span>
       </div>
-      <div className="object-card-statement">{data.object.statement}</div>
+      <ObjectBody node={data.object} kind={kind} />
       <div className="object-card-foot">
         <span className={`object-evidence ${data.object.solidity || "unsupported"}`}>{evidenceLabel(data.object)}</span>
         {weakness ? (
