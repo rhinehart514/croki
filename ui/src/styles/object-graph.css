@@ -20,7 +20,9 @@
   gap: var(--space-4);
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--line);
-  background: var(--surface);
+  /* Opaque, not the translucent glass --surface — the header sits directly over the node canvas, and a
+     see-through header let card text bleed up through the title band. A content bar you read is opaque. */
+  background: var(--surface-2);
 }
 
 .object-path-header strong {
@@ -211,11 +213,22 @@
   width: auto;
   height: auto;
   min-height: 0;
-  padding: 6px 12px;
+  padding: 7px 13px;
   border-radius: 999px;
+  background: var(--surface);
   /* Pulled back, a card shrinks to a pill. Drop the shadow: downscaled to a few pixels it smears into
      an illegible dark bar. A clean bordered pill reads as a node in the constellation. */
   box-shadow: none;
+}
+/* At distance the glyph is what you actually read — a buyer, an offer, a gate by shape. Give it more
+   presence than the kind word beside it, so the constellation is recognizable even when the text blurs. */
+.object-graph-shell.zoomed-out .object-card-type {
+  gap: 7px;
+  color: var(--ink-2);
+}
+.object-graph-shell.zoomed-out .object-card-type svg {
+  width: 16px;
+  height: 16px;
 }
 /* The recommended path reads as a line of solid ink chips at any zoom, so the spine stays legible when
    the whole map is pulled back — the crisp fill replaces the old accidental shadow smear. */
@@ -451,8 +464,10 @@
   transition: opacity 160ms ease;
 }
 
+/* Off-spine edges recede but stay readable as flow — at 0.18 they vanished and the map read as floating
+   dots joined by nothing. A third of full strength keeps the structure legible under the lit spine. */
 .object-graph-shell.has-path .object-edge:not(.lit) {
-  opacity: 0.18;
+  opacity: 0.34;
 }
 
 .object-edge.lit {

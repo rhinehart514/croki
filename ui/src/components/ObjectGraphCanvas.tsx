@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
-  AlertTriangle, CheckCircle2, FileSearch, Mail, Network, Play, Shield, ShieldCheck, Users,
+  AlertTriangle, BadgeCheck, Box, CheckCircle2, Circle, FileSearch, Flame, Gem, Mail, Milestone,
+  Network, Play, Quote, Radio, Route, Shield, ShieldCheck, Tag, Target, Users, Wrench, Zap,
+  type LucideIcon,
 } from "lucide-react";
 import {
   Background, Controls, Handle, MarkerType, Position, ReactFlow, useReactFlow, useStore, type Edge, type Node, type NodeProps,
@@ -51,12 +53,33 @@ function nodeRole(node: ObjectGraphNode) {
   return "object";
 }
 
+// Every object kind gets its own glyph, so the node reads as the THING it is at any zoom — the n8n move:
+// pulled back to a coin, you recognize a buyer / offer / channel / gate by its shape, not by squinting at
+// 8px text. Stays monochrome (the icon is currentColor); hue is reserved for the semantic roles only
+// (gate amber, outcome green), set in CSS via the role class — never a rainbow per kind.
+const KIND_ICON: Record<string, LucideIcon> = {
+  buyer: Users,
+  pain: Flame,
+  job: Target,
+  offer: Tag,
+  value_prop: Gem,
+  message: Quote,
+  proof_point: BadgeCheck,
+  trigger: Zap,
+  channel: Radio,
+  conversion_path: Route,
+  workaround: Wrench,
+  capability: Box,
+  path: Milestone,
+  run: Play,
+};
 function cardIcon(node: ObjectGraphNode) {
   const role = nodeRole(node);
   if (role === "gate") return <Shield aria-hidden="true" />;
   if (role === "outward") return <Mail aria-hidden="true" />;
   if (role === "outcome") return <CheckCircle2 aria-hidden="true" />;
-  return null; // plain object cards carry no icon — the type label already says what they are
+  const Icon = (node.type && KIND_ICON[node.type]) || Circle;
+  return <Icon aria-hidden="true" />;
 }
 
 type CardData = {
@@ -140,12 +163,8 @@ function ObjectBody({ node, kind }: { node: ObjectGraphNode; kind: ObjectKind })
     }
   }
   if (kind === "persona") {
-    return (
-      <div className="obj-body obj-persona">
-        <span className="obj-avatar" aria-hidden="true"><Users /></span>
-        <span className="obj-text obj-persona-who">{statement}</span>
-      </div>
-    );
+    // The type row already carries the buyer glyph — the body is just the who, no second avatar.
+    return <div className="obj-body obj-text obj-persona-who">{statement}</div>;
   }
   if (kind === "trigger") {
     return (
@@ -263,9 +282,15 @@ function layoutEdges(edges: ObjectGraphEdge[], highlighted: Set<string>): Edge[]
       // pile up at convergence points into an illegible dark smear. The lit STROKE carries the spine;
       // each edge's verb is listed in the node inspector, one click away.
       type: feedback ? "smoothstep" : "default",
-      markerEnd: lit || feedback
-        ? { type: MarkerType.ArrowClosed, width: 16, height: 16, color: feedback && !lit ? "var(--gap)" : "var(--ink)" }
-        : undefined,
+      // Every edge carries an arrowhead so direction reads at a glance (the n8n move — flow you can see,
+      // not floating dots joined by faint threads). The lit spine gets a bold ink arrow; forward edges a
+      // small muted one; the feedback loop its own amber return marker.
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        width: lit ? 17 : 12,
+        height: lit ? 17 : 12,
+        color: lit ? "var(--ink)" : feedback ? "var(--gap)" : "var(--faint)",
+      },
       className: ["object-edge", gateEdge && "gate", feedback && "feedback", lit && "lit"].filter(Boolean).join(" "),
       data: { object: edge },
     };
@@ -485,6 +510,9 @@ export function ObjectGraphCanvas({ projectId, gate }: { projectId: string | nul
         nodesDraggable
         nodesConnectable={false}
         elementsSelectable
+        // A selected node must not leap above the path header and bleed over it — keep every node in the
+        // same stacking plane, under the header.
+        elevateNodesOnSelect={false}
         onNodeClick={(_, node) => setSelectedId(node.id)}
         onNodeDragStop={(_, node) => {
           const pos = { x: Math.round(node.position.x), y: Math.round(node.position.y) };
