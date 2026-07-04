@@ -1,246 +1,83 @@
-> **SUPERSEDED — 2026-07-01.** This describes the earlier "IDE for GTM" version of
-> the product (a build-your-own canvas of boxes and wires). The current plan of record
-> is **docs/GTM-ENGINE-REBUILD.md**, which reframes Drover as a GTM engine and compiler.
-> Where this doc conflicts with that spec, the spec wins. Kept for history only.
+# VISION — Drover
+
+Logged 2026-07-03. This is the north star: what Drover is for, and the shape it's being built toward.
+It supersedes the earlier "IDE for go-to-market" framing. For where the build actually stands today
+read `docs/STATE.md`; for how the system is constrained read `AGENTS.md`.
 
 ---
 
-# Drover — Vision
+## The one sentence
 
-**What it is:** A local Claude agent harness for GTM engineering. You open a repository, it reads what you built, and runs many pipelines — grounded in your code, powered by Claude at the intelligence nodes, with you in every gate. (A pipeline is one staged flow to your gate; "channel" was only ever the code identifier for it.)
+**Drover makes Claude smart at your go-to-market — so that you get smart at it too.**
 
-Built for Jacob first. Proven on real projects before it touches anyone else.
-
----
-
-## The core insight
-
-Every other GTM tool starts from a list you bring.
-
-GTM IDE starts from your repo. It reads your product copy, extracts your ICP, maps your conversion flow — from the JSX, the metadata, the FAQ blocks, the schema markup already in the code. The context that powers GTM (who you're targeting, what you built, what the win event is) is the same context that informs product strategy. There's no separate mode — it bleeds in naturally.
+A general model is already decent at go-to-market in the abstract. It falls short in four specific
+places: it doesn't know your product's real truth, it reverts to generic advice, it forgets what
+you've already decided, and it can't safely act. Drover is the thing that closes those four gaps —
+and it does it in a way where the founder ends up understanding their own go-to-market, not just
+receiving an answer they have to take on faith.
 
 ---
 
-## What makes it a GTM IDE (not just a diagram tool)
+## Five pillars
 
-An IDE is defined by its loop — write → run → see result → write again. Cursor without code execution is a text editor. GTM IDE without pipeline execution is a diagram tool.
+The whole product is these five, and they are really one thing.
 
-**The minimum runnable loop:**
+1. **Smart at go-to-market.** Grounded in your real product (a cited, read-only scan) and your
+   accumulated taste (every decision you make at the gate). The test is concrete: on your own
+   product, does Drover's output beat raw Claude? If a feature doesn't widen that gap, it isn't
+   earning its place. The judgment lives in the model with good context — never frozen into code,
+   because every hardcoded go-to-market rule makes the model dumber.
 
-```
-open repo  →  context node reads it  →  source finds real people
-    →  generate drafts real messages  →  gate shows you the drafts
-    →  you approve  →  something observable happens
-    →  ledger records it  →  next run is smarter
-```
+2. **Comprehension, not convergence.** A founder who has never done this should come to understand
+   every layer and every option — the product reveals the space and teaches, it never funnels you to
+   one hidden answer. It guides without converging: it shows a strong path so a beginner isn't
+   drowning, while keeping the whole space visible and the reasoning one hover away. The output isn't
+   a recommendation; it's a founder who can now decide with their eyes open.
 
-Every step in that chain has to fire. The current build has the repository scan, executable DAG, founder gate, run ledger, learning memory, and durable resident operator working. The remaining frontier is at the world's edge: one approved action must reach a real connector and return a real attributable outcome.
+3. **The learning loop.** Product and market teach each other, with the founder and Claude both
+   getting smarter inside the loop. You start from the ICP, take a path to market, and what comes
+   back — who responded, what they wanted, what they ignored — flows two ways at once: it sharpens
+   the next go-to-market, and it feeds back into what you build. Drover is the one tool sitting at
+   both ends of that loop, because it reads your code and runs your go-to-market.
 
-**What each step requires:**
+4. **Labor versus judgment.** Claude does the work and lays the whole field in front of you; you make
+   every call. This isn't politeness — it's structural: your calls are the only signal that teaches
+   it your taste, so a Drover that "does it all" could never get smart at you. Claude is the operator
+   who never decides but makes every decision easy and fully sighted.
 
-| Step | What's needed |
-|---|---|
-| Context reads repo | HTML/JSX copy scan → extracts ICP and product |
-| Source finds people | buffalo-projects MCP (live) or Exa API key |
-| Generate drafts | `ANTHROPIC_API_KEY` in env |
-| Gate shows real drafts | already built |
-| Something observable | local file write or draft log |
-| Ledger records it | append to `~/.gtm-ide/ledger/` |
-
-**The other thing that makes it feel like an IDE:**
-
-Instant feedback. You change the ICP → the filter scores update. You change the product context → the generate node shows a revised draft inline. The canvas responds to edits without requiring a full re-run. That's what Cursor feels like — the environment reacts to you.
-
-Without the loop, it's a wireframe. With the loop and instant feedback, it's an IDE.
-
----
-
-## What the product is not
-
-- Not a CRM replacement
-- Not rebuilding Clay, Apollo, or Exa — it pulls from them via MCP
-- Not a marketing dashboard with charts
-- Not two separate tools (workspace scan + flow library) — the workspace tab is gone; the repo scan lives inside the context node
+5. **Refine your crew.** You don't generate a pipeline once — you keep a living, tunable set of
+   agents (reusable teammates) and plays, and refine them together over time. Each agent has a face
+   that shows what it has become: what it's learned from your edits, its track record, how it writes
+   for you now. Refinement is visible and founder-approved, never silent drift.
 
 ---
 
-## Architecture: a harness, not a chatbot
+## The harness — the only three things the host constrains
 
-The DAG is the deterministic orchestration layer. Claude agents fire only at specific nodes where judgment is needed. Everything else is code.
+Everything above runs on a deliberately thin harness. The host holds the rented model on a short
+leash for exactly three things and lets it run free on everything else:
 
-```
-CONTEXT NODE    Claude agent reads repo + HTML/JSX copy
-                → extracts product name, ICP, value props, conversion flow
-                → auto-populates without manual config
+- **Truth.** A read-only scan cites what the product does to real evidence, or labels it inferred.
+  The model cannot invent product facts.
+- **The Wall.** Every step that reaches the outside world needs a founder gate upstream, on every
+  path. Nothing sends, publishes, or charges without explicit approval. The gate graduates by
+  explicit founder promotion; it never disappears.
+- **Taste.** Every approve, reject, and edit at the gate becomes durable memory that shapes the next
+  run.
 
-SOURCE NODE     Claude agent + MCP/web search tools
-                → finds prospects matching the ICP
-                → returns structured items for downstream nodes
-
-ENRICH NODE     Claude agent + browser/MCP tools
-                → researches each prospect
-                → fills in signal, company context, fit signals
-
-FILTER NODE     Deterministic code — scoring against ICP
-                → no agent (scoring is math, not judgment)
-
-GENERATE NODE   Claude agent + all upstream context + ledger history
-                → drafts outreach grounded in what it read
-                → gets sharper each run as the ledger fills
-
-GATE            You. Read, redirect, approve.
-                → nothing executes without explicit approval
-                → conversation with Claude inline to adjust before approving
-
-EXECUTE NODE    Claude agent + MCP tools (Gmail, LinkedIn)
-                → sends only after gate
-                → logs every action to the ledger
-
-MEASURE NODE    Deterministic — captures replies, outcomes, attribution
-                → feeds back into context for next run
-```
-
-**The venture doctrine that applies:** Complete structure. Partial activation. Local state. Founder in every gate.
+The failure mode to guard against forever: re-growing a fourth layer of hosted go-to-market judgment.
+Fuzzy work — research, ideation, ranking, drafting — is a rented agent behind an open step, never a
+hosted module. A feature is an agent plus a step, not new plumbing. Less is more.
 
 ---
 
-## The canvas
+## What's built toward this (2026-07-03)
 
-### Entry point: two modes, both first-class
+The vision buildout is complete and verified on the `lean-rebuild` branch (see `docs/STATE.md`): the
+learning loop closes end to end (an outcome can flow back and reshape the next run), the go-to-market
+judgment has moved into agents and taste, and the two surfaces the vision turns on — the agent face
+and the market picture you build one layer at a time — are built. The gate wall is hardened and
+tested end to end.
 
-**Vibe mode** — describe the goal in plain language, Claude builds the DAG:
-```
-> find 10 SaaS founders in WNY who just shipped something
-  and reach out about Buffalo Projects cohorts
-```
-Claude reads the repo, reads the prompt, assembles nodes, connects edges. The diagram is the output of the conversation.
-
-**Node builder** — construct and refine the pipeline directly. Every node is configurable via conversation in the right panel — no forms.
-
-### The canvas is alive
-
-- Nodes show real numbers on their face: "47 found · 12 qualified · 4 approved"
-- Data particles flow along edges in real time as a run progresses
-- Claude agents show their active tool calls in the run log while working
-- Gate nodes pulse waiting for you — not a modal, a live state
-
-### The right panel is a conversation
-
-Click any node. Claude explains what it's doing, what it found, what it's uncertain about. You redirect in plain language. The node reconfigures from the conversation. No forms.
-
-### The operator session is durable
-
-A command creates a real operation session, not a one-shot graph rewrite. The operator can inspect product evidence, inspect problems, patch through typed operations, validate, run, diagnose, and rerun. Its event trail remains available after closing the panel or reloading the app. If the process stops, the session becomes resumable rather than disappearing.
-
-When a run reaches a founder gate, the operator pauses. Approval continues from the exact prepared run items, so live sourcing and generation do not silently change between review and execution.
-
-### The gate is a reading session
-
-Drafts appear as cards. Each one shows:
-- The message
-- Why Claude wrote it this way
-- What context it used
-- What it's uncertain about
-
-`A` approve · `R` reject · `E` redirect inline with Claude
-
-After repeated edits, Claude asks: *"You consistently move the CTA to the end — want that as the default?"* It learns your style.
-
-### Commit-style run history
-
-Every run is a commit:
-```
-run-7  · 3 replies ↑   · opened hook changed to product-specific angle
-run-6  · 0 replies     · same messaging, new segment
-run-5  · 1 reply       · first signal
-```
-
-`diff run-4 run-7` shows exactly what changed in messaging between runs and what drove the difference.
-
----
-
-## The ledger
-
-Local file at `~/.gtm-ide/ledger/<workspace-id>.jsonl`. Append-only.
-
-Every run records:
-- Who was in the pipeline and where they came from
-- What was drafted and what context Claude had
-- What the gate decision was and why
-- What was sent
-- What came back (reply, click, ignore)
-- What changed in the context node between runs
-
-The ledger is what makes the feedback edge real. It's not just an arrow on a diagram — it's the accumulated signal that Claude reads before every generate pass. Run 10 is meaningfully smarter than run 1 because the ledger says what worked.
-
----
-
-## MCP integration
-
-Resource nodes declare MCP connections — not API keys for external services. The tool calls the MCP endpoint; the data comes back as structured items into the pipeline.
-
-Connections in scope first:
-- `buffalo-projects-mcp` — source node, already live in Claude Code sessions
-- Browser MCP — enrich node, research prospects via real pages
-- Gmail MCP — execute node, after gate approval
-- Exa — source node, web-native prospect finding
-
-The pattern: GTM IDE orchestrates. MCP tools provide the data. Claude reasons over it.
-
----
-
-## Multi-pipeline
-
-The project can hold the set of pipelines the founder actually chooses to run.
-It does not ship a catalog of six assumed motions. A pipeline begins as a blank,
-durable graph; the founder or resident Claude operator shapes its nodes and
-edges around the intended outcome. Pipelines share product, positioning, ICP,
-founder taste, contacts, outcomes, experiments, and proof artifacts while
-keeping their executable graphs and run histories independent.
-
-The top of the canvas shows mission control:
-```
-EMAIL      ████████░░  8 in pipeline · 1 reply  · gate waiting
-LINKEDIN   ██░░░░░░░░  2 approved    · running
-CONTENT    ████░░░░░░  building      · Claude drafting
-```
-
-Click any pipeline to expand into full DAG view.
-
----
-
-## What "done" looks like after each run
-
-1. Drafted messages staged at the gate
-2. Approved messages sent (or logged locally if execute node is in review mode)
-3. Run recorded in the ledger
-4. Context node updated with what worked
-5. `diff` available against the prior run
-
-Not a report. Not a dashboard. A ledger entry and a sharper starting point for the next run.
-
----
-
-## Build order
-
-1. **Context node from repo scan** — HTML/JSX copy extraction, no API key, auto-populates ICP and product from the codebase. Everything downstream gets better.
-
-2. **Source node via buffalo-projects MCP** — first working source, no new API key, real data.
-
-3. **Generate node via Claude** — `ANTHROPIC_API_KEY`, full context from upstream nodes. First end-to-end run that produces real output.
-
-4. **Ledger** — append-only local file. Without it every run is isolated; with it every run compounds.
-
-5. **Gate UX** — card-based review, inline conversation, `A/R/E` keyboard shortcuts.
-
-6. **Vibe mode** — describe the goal, bundled Claude Code builds the DAG through typed operations. Natural language is the primary entry point.
-
-7. **Multi-pipeline view** — parallel branches, mission control header.
-
----
-
-## Version
-
-v0.3.0 — durable resident operator wired end to end: founder-defined pipelines, bundled Claude Code Agent SDK, typed graph patches, live event history, exact founder-gate continuation, interruption recovery, dashboard polling, and MCP session controls. The remaining product proof is one approved action through a live destination and one attributable observed outcome.
-
-Last updated: 2026-06-21
+What remains is not more building: it's the one thing that earns the next stage — a real founder
+driving this whole loop to a real, measured outcome, once.

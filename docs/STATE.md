@@ -100,13 +100,14 @@ This is doctrine now — see the same bar in `AGENTS.md`.
 
 **Current (read these):**
 - `README.md` — the product, plainly.
+- `docs/VISION.md` — the north star: what Drover is for and the shape it's built toward.
 - `AGENTS.md` — how the system works and its guardrails.
 - `docs/GTM-ENGINE-REBUILD.md` — the current build direction (Phases 0–6 have landed as code).
 - `docs/STATE.md` — this file.
 
 **History (kept for the record, superseded — do not treat as current):**
 `PRODUCT-SPEC.md`, `BUILD-PLAN.md`, `CANVAS.md`, `DDD.md`, `EXPERIENCE.md`, `GOAL.md`,
-`MODEL.md`, `PRODUCT-MODEL.md`, `VISION.md`, `CURSOR_GTM_UX_PLAN.md`, `EVALS.md`. These
+`MODEL.md`, `PRODUCT-MODEL.md`, `CURSOR_GTM_UX_PLAN.md`, `EVALS.md`. These
 describe the earlier "IDE for GTM" framing and, in several cases, two machinery layers that
 were deliberately deleted — the outcome-program / policy / capability-foundry / portfolio
 layer, and the opportunity accept-list. If any of these read as load-bearing, the doc is
