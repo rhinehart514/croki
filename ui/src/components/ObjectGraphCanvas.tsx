@@ -383,6 +383,26 @@ function FitOnLoad({ ready, refitSignal }: { ready: boolean; refitSignal: number
   return null;
 }
 
+// Stages fit: never zoom out to fit the whole map (that shrinks cards to unreadable coins). Instead fit
+// the bands to the width so the left-to-right stages all show, at a zoom where cards stay readable, and
+// anchor to the top — the founder reads a band top-to-bottom and scrolls down through it.
+function StagesFit({ bounds, ready, refitSignal }: { bounds: { minX: number; width: number } | null; ready: boolean; refitSignal: number }) {
+  const rf = useReactFlow();
+  const vw = useStore((s) => s.width);
+  useEffect(() => {
+    if (!ready || !bounds || !vw) return;
+    const t = window.setTimeout(() => {
+      const zoom = Math.min(0.9, Math.max(0.4, (vw - 120) / bounds.width));
+      // band-header row sits at BAND_TOP-54; land it just below the path header, left margin ~60px.
+      const x = 60 - bounds.minX * zoom;
+      const y = 190 - (BAND_TOP - 54) * zoom;
+      rf.setViewport({ x, y, zoom }, { duration: 420 });
+    }, 60);
+    return () => window.clearTimeout(t);
+  }, [ready, bounds, vw, refitSignal, rf]);
+  return null;
+}
+
 // Compact (coin) mode must track the LIVE zoom, not just user drags: the auto-fit can land the whole
 // wide graph at a deep zoom where full cards downscale into illegible dark smears. Subscribing to the
 // store's zoom flips to coins whenever the graph is pulled back — on fit, wheel, buttons, or a drag.
@@ -500,6 +520,13 @@ export function ObjectGraphCanvas({ projectId, gate }: { projectId: string | nul
     };
   }, [view, highlightedNodes]);
   const banded = useMemo(() => layoutBandedPositions(visible.nodes), [visible]);
+  const stagesBounds = useMemo(() => {
+    const pts = Object.values(banded.positions);
+    if (!pts.length) return null;
+    const minX = Math.min(...pts.map((p) => p.x));
+    const maxX = Math.max(...pts.map((p) => p.x)) + 214; // + card width
+    return { minX, width: Math.max(maxX - minX, 1) };
+  }, [banded]);
   const positions = useMemo(
     () => (arrange === "stages" ? banded.positions : layoutObjectGraph(visible.nodes, visible.edges, placed)),
     [arrange, banded, visible, placed],
@@ -632,7 +659,9 @@ export function ObjectGraphCanvas({ projectId, gate }: { projectId: string | nul
       >
         <Background color="var(--canvas-dot)" gap={22} size={1} />
         <Controls showInteractive={false} />
-        <FitOnLoad ready={Boolean(view && nodes.length)} refitSignal={refitSignal} />
+        {arrange === "stages"
+          ? <StagesFit bounds={stagesBounds} ready={Boolean(view && nodes.length)} refitSignal={refitSignal} />
+          : <FitOnLoad ready={Boolean(view && nodes.length)} refitSignal={refitSignal} />}
         <ZoomWatch onZoom={onZoomCompact} />
         {arrange === "stages" ? <BandHeaders cols={banded.cols} /> : null}
       </ReactFlow>
