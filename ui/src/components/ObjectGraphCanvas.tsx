@@ -157,11 +157,17 @@ function stageBandKey(node: ObjectGraphNode): BandKey {
 // picture can carry 20+) wraps into sub-columns so no column runs off the bottom of the screen. Bands
 // are separated by a wider gap than the sub-columns inside them, so each still reads as one region.
 const BAND_MAX_ROWS = 6;
-const CARD_STEP_X = 236; // card (214) + gap, between sub-columns inside a band
+const CARD_STEP_X = 252; // card (214) + gap, between sub-columns inside a band
 const BAND_ROW_H = 172;
 const BAND_TOP = 156;
 const BAND_LEFT = 48;
-const BAND_GAP = 60; // extra separation between bands
+const BAND_GAP = 64; // extra separation between bands
+// Stable per-card hash so the "loose" offsets stay put across renders (a card must not jump each frame).
+function hashId(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (Math.imul(h, 31) + id.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
 function layoutBandedPositions(nodes: ObjectGraphNode[]): { positions: PositionMap; cols: { key: BandKey; label: string; x: number; index: number }[] } {
   const byBand = new Map<BandKey, ObjectGraphNode[]>();
   for (const n of nodes) {
@@ -181,7 +187,14 @@ function layoutBandedPositions(nodes: ObjectGraphNode[]): { positions: PositionM
     list.forEach((n, i) => {
       const sc = Math.floor(i / BAND_MAX_ROWS);
       const row = i % BAND_MAX_ROWS;
-      positions[n.id] = { x: x + sc * CARD_STEP_X, y: BAND_TOP + row * BAND_ROW_H };
+      // Loose, not laned: a half-row stagger on alternate sub-columns plus a small deterministic
+      // per-card offset, so a band reads like a well-kept desk rather than a spreadsheet — while the
+      // bands themselves still flow strictly left to right.
+      const h = hashId(n.id);
+      const jx = ((h % 5) - 2) * 7; // ~ -14..14
+      const jy = ((Math.floor(h / 8) % 5) - 2) * 4; // ~ -8..8 (kept small so stacked rows never touch)
+      const stagger = (sc % 2) * (BAND_ROW_H * 0.42);
+      positions[n.id] = { x: x + sc * CARD_STEP_X + jx, y: BAND_TOP + row * BAND_ROW_H + stagger + jy };
     });
     x += subCols * CARD_STEP_X + BAND_GAP;
   }
