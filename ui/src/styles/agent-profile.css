@@ -154,3 +154,41 @@
   .agentp-body { grid-column: 1; grid-row: 2; }
   .agentp-contract { grid-template-columns: 1fr; }
 }
+
+/* ── What I've become — derived track record, edits, and voice (real run history only) ── */
+.agentp-quiet { font-size: 13.5px; line-height: 1.55; color: var(--muted); max-width: 52ch; }
+.agentp-stats { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.agentp-stat {
+  display: flex; flex-direction: column; gap: 1px; align-items: flex-start;
+  padding: 9px 14px 8px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); min-width: 62px;
+}
+.agentp-stat b { font-size: 19px; font-weight: 650; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.agentp-stat span { font-size: 11px; color: var(--muted); }
+
+.agentp-edits { display: flex; flex-direction: column; gap: 9px; margin-bottom: 16px; }
+.agentp-edits-h, .agentp-voice-h {
+  display: flex; align-items: center; gap: 6px; font-size: 11px; font-family: var(--font-mono);
+  letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px;
+}
+.agentp-edit {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1px; border: 1px solid var(--line);
+  border-radius: var(--r-md); overflow: hidden; background: var(--line);
+}
+.agentp-edit-side { padding: 10px 12px; background: var(--surface); }
+.agentp-edit-side.from { background: var(--surface-2); }
+.agentp-edit-side.to { background: var(--proven-soft); }
+.agentp-edit-side span {
+  display: block; font-size: 10px; font-family: var(--font-mono); letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 4px;
+}
+.agentp-edit-side.to span { color: var(--proven); }
+.agentp-edit-side p { font-size: 13px; line-height: 1.5; color: var(--ink-2); margin: 0; }
+.agentp-edit-side.to p { color: var(--ink); }
+
+.agentp-voice { margin-top: 2px; }
+.agentp-voice-body {
+  font-size: 12.5px; line-height: 1.55; color: var(--ink-2); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px 14px; margin: 0;
+  white-space: pre-wrap; font-family: inherit; max-height: 220px; overflow-y: auto;
+}
+@media (max-width: 640px) { .agentp-edit { grid-template-columns: 1fr; } }

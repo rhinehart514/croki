@@ -415,6 +415,21 @@ export const getGtmMap = (projectId: string) =>
 export const getObjectGraph = (projectId: string) =>
   get<ObjectGraphView>(`/api/projects/${encodeURIComponent(projectId)}/object-graph`);
 
+// The agent's face — what a teammate has BECOME, all derived from real run history. A fresh agent
+// reads honestly (hasRuns false, "no runs yet"), never a fabricated number.
+export type AgentLearning = {
+  hasRuns: boolean;
+  runCount: number;
+  counts: { approved: number; rejected: number; edits: number };
+  lastEdits: { from: string; to: string }[];
+  voice: string;
+  note: string | null;
+};
+export const getAgentLearning = (projectId: string, ref: string) =>
+  get<{ profile: AgentLearning }>(
+    `/api/projects/${encodeURIComponent(projectId)}/agents/${encodeURIComponent(ref)}/profile`,
+  );
+
 // Persist the founder's canvas layout (per-project sidecar keyed by node id — projection state,
 // never knowledge). Merged server-side, so partial position maps are fine.
 export const saveObjectGraphPositions = (

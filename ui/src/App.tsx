@@ -2584,6 +2584,7 @@ export default function App() {
             open={!!agentProfileView}
             view={agentProfileView}
             team={agentTeam}
+            projectId={activeProjectId}
             onClose={() => setAgentProfileRef(null)}
             onEditSource={(ref) => { setAgentProfileRef(null); setArtifactEdit({ type: "agent", ref }); }}
             onAddToCanvas={graph ? (ref) => {
