@@ -3,7 +3,7 @@ import {
   AlertTriangle, CheckCircle2, FileSearch, Mail, Network, Play, Shield, ShieldCheck,
 } from "lucide-react";
 import {
-  Background, Controls, Handle, MarkerType, Position, ReactFlow, useReactFlow, type Edge, type Node, type NodeProps,
+  Background, Controls, Handle, MarkerType, Position, ReactFlow, useReactFlow, useStore, type Edge, type Node, type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { approveRun, compileObjectGraphPath, getObjectGraph, recordOutcome, saveObjectGraphPositions, type CompiledGate } from "@/api";
@@ -161,7 +161,9 @@ function layoutEdges(edges: ObjectGraphEdge[], highlighted: Set<string>): Edge[]
       id: edge.id,
       source: edge.source,
       target: edge.target,
-      label: lit ? edge.type.replace(/_/g, " ") : undefined,
+      // No on-canvas edge-type label: the recommended path lights many edges at once and their labels
+      // pile up at convergence points into an illegible dark smear. The lit STROKE carries the spine;
+      // each edge's verb is listed in the node inspector, one click away.
       type: feedback ? "smoothstep" : "default",
       markerEnd: lit || feedback
         ? { type: MarkerType.ArrowClosed, width: 16, height: 16, color: feedback && !lit ? "var(--gap)" : "var(--ink)" }
@@ -176,9 +178,19 @@ function FitOnLoad({ ready, refitSignal }: { ready: boolean; refitSignal: number
   const rf = useReactFlow();
   useEffect(() => {
     if (!ready) return;
-    const t = window.setTimeout(() => rf.fitView({ padding: 0.16, duration: 420 }), 50);
+    const t = window.setTimeout(() => rf.fitView({ padding: 0.2, duration: 420 }), 50);
     return () => window.clearTimeout(t);
   }, [ready, rf, refitSignal]);
+  return null;
+}
+
+// Compact (coin) mode must track the LIVE zoom, not just user drags: the auto-fit can land the whole
+// wide graph at a deep zoom where full cards downscale into illegible dark smears. Subscribing to the
+// store's zoom flips to coins whenever the graph is pulled back — on fit, wheel, buttons, or a drag.
+const COMPACT_BELOW = 0.5;
+function ZoomWatch({ onZoom }: { onZoom: (compact: boolean) => void }) {
+  const zoom = useStore((s) => s.transform[2]);
+  useEffect(() => { onZoom(zoom < COMPACT_BELOW); }, [zoom, onZoom]);
   return null;
 }
 
@@ -207,6 +219,7 @@ export function ObjectGraphCanvas({ projectId, gate }: { projectId: string | nul
   // Level-of-detail: pulled back, full cards collapse to coins so the whole map reads as a constellation;
   // zoom in and the detail returns. Only flips the boolean at the threshold, not on every wheel tick.
   const [compact, setCompact] = useState(false);
+  const onZoomCompact = useCallback((c: boolean) => setCompact((prev) => (prev === c ? prev : c)), []);
   // Bumped by Reorganize so the view re-fits after the graph snaps back to order.
   const [refitSignal, setRefitSignal] = useState(0);
 
@@ -371,7 +384,6 @@ export function ObjectGraphCanvas({ projectId, gate }: { projectId: string | nul
         fitView
         minZoom={0.12}
         maxZoom={1.4}
-        onMove={(_, vp) => { const c = vp.zoom < 0.5; setCompact((prev) => (prev === c ? prev : c)); }}
         nodesDraggable
         nodesConnectable={false}
         elementsSelectable
@@ -386,6 +398,7 @@ export function ObjectGraphCanvas({ projectId, gate }: { projectId: string | nul
         <Background color="var(--canvas-dot)" gap={22} size={1} />
         <Controls showInteractive={false} />
         <FitOnLoad ready={Boolean(view && nodes.length)} refitSignal={refitSignal} />
+        <ZoomWatch onZoom={onZoomCompact} />
       </ReactFlow>
 
       {loading ? <div className="object-graph-status">Reading the graph…</div> : null}

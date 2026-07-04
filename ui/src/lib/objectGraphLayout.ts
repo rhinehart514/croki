@@ -17,11 +17,13 @@
 import dagre from "@dagrejs/dagre";
 import type { ObjectGraphEdge, ObjectGraphNode } from "@/types";
 
-// Real card is 214×112; +8 vertical room for the weakest-pill overlay that hangs below the box.
+// Card render size is fixed (214×152, statement clamped) so the reserved slot matches what actually
+// draws — an unbounded card would overflow its slot and overlap its neighbor. NODE_SEP leaves room for
+// the weakest-pill (~28px) that hangs below the box.
 const NODE_W = 214;
-const NODE_H = 120;
+const NODE_H = 152;
 const RANK_SEP = 96; // horizontal gap between causal ranks
-const NODE_SEP = 38; // vertical gap between nodes sharing a rank (room for the pill)
+const NODE_SEP = 52; // vertical gap between nodes sharing a rank (room for the pill)
 const MARGIN = 48;
 
 export type PositionMap = Record<string, { x: number; y: number }>;

@@ -97,7 +97,7 @@
 .object-card {
   position: relative;
   width: 214px;
-  min-height: 112px;
+  height: 152px;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -156,7 +156,7 @@
 /* Path as hero: in the default view, the recommended route stays full-strength while everything
    else recedes — so the spine reads through the crowd. The weakness lens keeps its own emphasis. */
 .object-graph-shell.lens-default.has-path .object-card:not(.lit):not(.selected) {
-  opacity: 0.58;
+  opacity: 0.74;
 }
 
 .object-card.role-gate {
@@ -209,8 +209,26 @@
    map reads as a constellation. The lit path keeps its border, so the spine stays legible at any zoom. */
 .object-graph-shell.zoomed-out .object-card {
   width: auto;
+  height: auto;
   min-height: 0;
-  padding: 7px 11px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  /* Pulled back, a card shrinks to a pill. Drop the shadow: downscaled to a few pixels it smears into
+     an illegible dark bar. A clean bordered pill reads as a node in the constellation. */
+  box-shadow: none;
+}
+/* The recommended path reads as a line of solid ink chips at any zoom, so the spine stays legible when
+   the whole map is pulled back — the crisp fill replaces the old accidental shadow smear. */
+.object-graph-shell.zoomed-out .object-card.lit {
+  background: var(--ink);
+  border-color: var(--ink);
+  box-shadow: none;
+}
+.object-graph-shell.zoomed-out .object-card.lit .object-card-type {
+  color: var(--surface);
+}
+.object-graph-shell.zoomed-out .object-card-type {
+  color: var(--ink-2);
 }
 .object-graph-shell.zoomed-out .object-card-statement,
 .object-graph-shell.zoomed-out .object-card-foot,
@@ -221,7 +239,7 @@
 .object-graph-shell.zoomed-out .object-card.role-outward,
 .object-graph-shell.zoomed-out .object-card.role-gate,
 .object-graph-shell.zoomed-out .object-card.role-outcome {
-  padding-top: 7px;
+  padding-top: 6px;
 }
 
 .object-card.selected {
@@ -244,8 +262,15 @@
 
 .object-card-statement {
   flex: 1;
+  min-height: 0;
   font-size: var(--text-base);
   line-height: 1.35;
+  /* Clamp to four lines so a long statement can't grow the card past its fixed height and overlap the
+     card below it. The full statement is one click away in the inspector. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
 }
 
 .object-card-foot {
