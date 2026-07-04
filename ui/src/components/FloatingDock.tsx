@@ -172,7 +172,7 @@ export function FloatingDock({
               className="fdock-icon-btn"
               onClick={() => { setSummonOpen(false); onOpenSettings(); }}
               type="button"
-              title="Settings — workspace, team, and self-built tools"
+              title="Settings — workspace, team, and tools"
               aria-label="Settings"
             >
               <Settings2 size={15} />

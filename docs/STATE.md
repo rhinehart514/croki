@@ -66,15 +66,41 @@ agents. This is the anti-cage rule in `AGENTS.md`, restated because it's easy to
 
 ## Build health (2026-07-03)
 
-- **Tests:** full suite green. Branch `lean-rebuild`: 1170 backend pass / 0 fail, plus a new front-end unit-test harness (vitest + testing-library) at 12 pass / 0 fail, chained into `npm test`. `main` is at the 1091-pass state; the vision buildout lives on the branch, unpushed, awaiting review.
+- **Tests:** full suite green — 1170 backend pass / 0 fail, plus the front-end unit-test harness
+  (vitest + testing-library) at 12 pass / 0 fail, chained into `npm test`.
 - **Backend:** 89 modules. New GTM-engine modules present and tested: evidence, gtm-store,
   market-research, path-portfolio, outcome-ingest, promote-motion, run-compile.
-- **Interface:** 37 components, 9 canvas lenses, node-flow diagram as the default canvas.
+- **Interface:** node-flow diagram as the default canvas. The IA was collapsed toward the
+  vision's "one canvas + a composer" shape (see the note below) — the two hand-pick pickers are
+  gone and the full-screen overlays dropped from four to three.
 - **Agent front door:** 40 tools over the MCP server (`npm run mcp`).
 - **Run:** `npm start` (builds the interface, serves API + client on port 4317).
 - **Version:** 0.3.1 (root), pre-1.0 by design.
 - **On origin/main:** the ordered left-to-right living-graph canvas landed 07-03, on top of
   the GTM engine rebuild and two-surface canvas from 07-02.
+
+## The IA collapse (2026-07-03)
+
+The interface had drifted far from the vision's own shape — a founder faced dozens of surfaces
+(views, overlays, lenses, pop-over cards, modals) to run a product whose whole idea rests on four
+ideas: a pipeline, a gate, an agent, a run. This pass pulled it back toward "one canvas you work on,
+plus one composer you talk to," mostly by deletion:
+
+- **The two hand-pick pickers are gone.** The founder no longer opens a panel to hand-drop an agent,
+  a lead, or a reference onto a pipeline. Claude composes what a pipeline needs and the founder
+  approves at the gate; the objects live on the canvas. (One of the two pickers was already dead
+  code — its only opener was a control the canvas never invoked.)
+- **The "Ideate" button now lives in one place.** It was duplicated in the top control bar and the
+  composer; the composer is the one place you talk to Claude, so the top-bar copy was removed.
+- **One product read-out.** The onboarding scan preview and the "Product grounding" panel now render
+  the same read-out component, so they can't drift into two different pictures of the product.
+- **Full-screen overlays: four → three.** Connecting external tools was its own takeover overlay
+  (and, after the pickers were deleted, unreachable); it folded into Settings › Tools.
+
+Deferred by design, as its own later pass: folding the Product-view vs. GTM-view switch into a zoom
+level of one canvas (the two project different object models and that is a real rebuild). Known
+pre-existing polish issue observed during this pass: the Settings/grounding overlays let the canvas
+path-header bleed through at the top — a z-index cleanup for a future design pass, not introduced here.
 
 ---
 
