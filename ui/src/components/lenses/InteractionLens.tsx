@@ -20,7 +20,7 @@ import type { ProductInteraction, ProductModel, ProductModelEdit } from "@/types
 import { LensPanel, ObjectCard, computeLayout, type LayoutEdge } from "@/components/lenses/shared";
 import "./InteractionLens.css";
 
-export type LensProps = {
+type LensProps = {
   model: ProductModel;
   selected: string | null;
   onSelect: (id: string) => void;

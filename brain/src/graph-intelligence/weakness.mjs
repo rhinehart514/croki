@@ -6,7 +6,6 @@ import { now } from "../store-fs.mjs";
 
 export const WEAKNESS_KINDS = ["evidence", "specificity", "product", "measurement", "execution", "performance"];
 export const PHASE1_WEAKNESS_KINDS = ["evidence", "product", "measurement", "execution"];
-export const DEFERRED_WEAKNESS_KINDS = ["specificity", "performance"];
 
 // These frozen SEVERITY numbers (the `severity: ... ? 80 : 50` calls below) and this kind ORDER are
 // the hardcoded JUDGMENT that weakness-critic.mjs replaces with a model call. They remain the LIVE

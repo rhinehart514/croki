@@ -1,6 +1,6 @@
 // ─── Funnel scan types ───────────────────────────────────────────────────────
 
-export type EvidenceState = "proven" | "gap" | "blind" | "inferred";
+type EvidenceState = "proven" | "gap" | "blind" | "inferred";
 
 export type Citation = {
   label: string;
@@ -10,7 +10,7 @@ export type Citation = {
   key?: string;
 };
 
-export type FunnelStage = {
+type FunnelStage = {
   id: string;
   label: string;
   state: EvidenceState;
@@ -18,7 +18,7 @@ export type FunnelStage = {
   citations: Citation[];
 };
 
-export type TrackingGap = {
+type TrackingGap = {
   id: string;
   title: string;
   severity: "high" | "medium" | "low";
@@ -63,108 +63,6 @@ export type ScanPreview = {
   productLine?: string;
   // The full unflattened scanRepo() output rides along for any field the lane also needs.
   report?: ScanReport;
-};
-
-export type BuildResult = {
-  ok: boolean; branch: string; worktree: string;
-  baseCommit?: string;
-  status: string; diffStat: string; diff: string; summary: string;
-  error?: string | null;
-};
-
-// ─── Durable repository-backed GTM workspace ────────────────────────────────
-
-export type WorkflowStatus = "ready" | "waiting" | "complete" | "blocked" | "failed";
-
-export type WorkspaceStep = {
-  id: "inspect" | "diagnose" | "propose" | "review" | "apply" | "verify";
-  label: string;
-  status: WorkflowStatus;
-  description: string;
-};
-
-export type RevisionStatus =
-  | "proposed"
-  | "approved"
-  | "rejected"
-  | "applied"
-  | "reverted"
-  | "failed";
-
-export type GTMRevision = {
-  id: string;
-  createdAt: string;
-  updatedAt: string;
-  status: RevisionStatus;
-  reportScannedAt: string;
-  gapId: string | null;
-  evidence: Citation[];
-  baseCommit?: string;
-  branch: string;
-  worktree: string;
-  worktreeStatus: string;
-  diffStat: string;
-  diff: string;
-  summary: string;
-  error?: string | null;
-  review?: {
-    decision: "approve" | "reject";
-    note: string;
-    decidedAt: string;
-  };
-  appliedAt?: string;
-  revertedAt?: string;
-};
-
-export type WorkspaceDecision = {
-  id: string;
-  createdAt: string;
-  type: string;
-  revisionId?: string;
-  decision?: string;
-  note?: string;
-  summary: string;
-};
-
-export type WorkspaceRun = {
-  id: string;
-  type: "inspection" | "verification";
-  createdAt: string;
-  headline: string;
-  report: ScanReport;
-};
-
-export type GTMWorkspace = {
-  schemaVersion: number;
-  id: string;
-  name: string;
-  repo: string;
-  outcome: string;
-  createdAt: string;
-  updatedAt: string;
-  report: ScanReport;
-  revisions: GTMRevision[];
-  decisions: WorkspaceDecision[];
-  runs: WorkspaceRun[];
-  workflow: WorkspaceStep[];
-};
-
-export type WorkspaceSummary = {
-  id: string;
-  name: string;
-  repo: string;
-  outcome: string;
-  updatedAt: string;
-  headline: string;
-  revisionCount: number;
-};
-
-export type ApplyReadiness = {
-  ready: boolean;
-  sourceHead: string;
-  sourceStatus: string;
-  sameBase: boolean;
-  reasons: string[];
 };
 
 // ─── Channel meta (project endpoint) ─────────────────────────────────────────
@@ -486,7 +384,7 @@ export type ProductIaNode = {
 };
 
 // Workflow layer — a named flow of ordered steps.
-export type ProductWorkflowStep = {
+type ProductWorkflowStep = {
   id: string;
   label: string;
   summary: string;
@@ -521,7 +419,7 @@ export type ProductTransition = {
   provenance: ProductModelProvenance;
 };
 
-export type ProductPinTargetKind = "thing" | "relationship" | "goal" | "state" | "model";
+type ProductPinTargetKind = "thing" | "relationship" | "goal" | "state" | "model";
 
 export type ProductPinnedSignal = {
   id: string;
@@ -571,20 +469,6 @@ export type ProductModelEdit = {
   interactions?: ProductInteraction[];
   transitions?: ProductTransition[];
   generatedBy?: "claude" | "blank" | "founder";
-};
-
-export type ChannelRunDiff = {
-  beforeRunId: string;
-  afterRunId: string;
-  beforeRevision: number | null;
-  afterRevision: number | null;
-  graphChanges: Array<Record<string, unknown>>;
-  resultChanges: Array<{
-    nodeId: string;
-    before: { ok: boolean; itemCount: number; pendingReview: boolean; error: string | null } | null;
-    after: { ok: boolean; itemCount: number; pendingReview: boolean; error: string | null } | null;
-  }>;
-  summary: string;
 };
 
 // ─── GTM Graph — node categories ─────────────────────────────────────────────
@@ -663,7 +547,7 @@ export type GTMContractAudit = {
 };
 
 // The fixed op vocabulary a switch edge predicate may use (mirrors the engine's applyPredicate).
-export type GTMEdgePredicateOp =
+type GTMEdgePredicateOp =
   | "exists" | "missing" | "eq" | "ne" | "gt" | "gte" | "lt" | "lte" | "contains" | "in";
 
 // A routing rule carried by a data edge leaving a "switch" node: only items where
@@ -1018,7 +902,7 @@ export type SubsystemId =
   | "generate" | "gate" | "execute" | "measure" | "learn";
 
 export type AgentStatus = "idle" | "investigating" | "monitoring" | "running";
-export type FindingType = "opportunity" | "regression" | "finding";
+type FindingType = "opportunity" | "regression" | "finding";
 export type ImpactLevel = "high" | "medium" | "low";
 
 export type AgentFinding = {
@@ -1131,8 +1015,8 @@ export type CapabilityServer = {
 // rather than a confident fake. The board never gates or triggers a run.
 
 export type BoardPhase = "Strategy" | "Motion" | "Loop";
-export type BoardGroundingMode = "stated" | "gated" | "derived";
-export type BoardLayerStatus = "blind" | "assumed" | "testing" | "validated";
+type BoardGroundingMode = "stated" | "gated" | "derived";
+type BoardLayerStatus = "blind" | "assumed" | "testing" | "validated";
 
 export type LayerBelief = {
   // The layer key (icp, trigger, positioning, offer, channels, artifacts, people, measure, learn).
@@ -1153,15 +1037,9 @@ export type BoardView = {
   groups: Record<BoardPhase, LayerBelief[]>;
 };
 
-// ── The GTM map (read-only projection over the rebuilt engine's records) ───────────────────────────
-// These mirror the persisted records in brain/src/gtm-store.mjs (ProductTruth, MarketObject, GTMPath,
-// MeasurementContract). Kinds, bet facets, outcome labels and solidity are OPEN strings — never a
-// closed enum on the UI side either (anti-cage invariant). The founder-facing surface translates
-// every one of these to plain words; the raw record just carries the data.
-
 // How solid a claim is, on the shared evidence ladder (strongest first). An open label — the UI must
 // treat an unknown value gracefully, never reject it.
-export type Solidity = "observed" | "researched" | "inferred" | "speculative" | (string & {});
+type Solidity = "observed" | "researched" | "inferred" | "speculative" | (string & {});
 
 export type EvidenceRecord = {
   claim: string | null;
@@ -1169,77 +1047,6 @@ export type EvidenceRecord = {
   solidity: Solidity | null;
   capturedAt?: string | null;
   notes?: string | null;
-};
-
-export type ProductTruthRecord = {
-  id: string;
-  projectId: string | null;
-  statement: string;
-  evidence: EvidenceRecord[];
-  solidity: Solidity | null;
-  source: string | null;
-  scanRef?: { repo?: string | null; scannedAt?: string | null } | null;
-  notes?: string | null;
-};
-
-export type MarketObjectRecord = {
-  id: string;
-  projectId: string | null;
-  kind: string; // open: buyer / pain / job / trigger / workaround / valueProp / offer / channel / message / proof / conversionPath / anything
-  statement: string;
-  evidence: EvidenceRecord[];
-  solidity: Solidity | null;
-  confidence: number | null;
-  source: string | null;
-  openQuestions: string[];
-};
-
-// The seven ranking signals + the composite, all computed in code on the brain side (0..1). Open
-// object — extra keys are tolerated, missing keys read as absent.
-export type PathRankingSignals = {
-  evidenceStrength?: number | null;
-  productReadiness?: number | null;
-  channelReachability?: number | null;
-  measurementReadiness?: number | null;
-  speedToTest?: number | null;
-  upside?: number | null;
-  founderFit?: number | null;
-  composite?: number | null;
-  [key: string]: number | null | undefined;
-};
-
-export type GtmPathRecord = {
-  id: string;
-  projectId: string | null;
-  summary: string;
-  restsOn: { type: string | null; id: string }[];
-  bet: Record<string, string>; // open facets: buyer → pain → trigger → offer → channel → message → proof → conversionPath
-  risk: string | null;
-  confidence: number | null;
-  rankingSignals: PathRankingSignals;
-  measurementContractId: string | null;
-  status: string; // open label: proposed / selected / running / …
-};
-
-export type MeasurementContractRecord = {
-  id: string;
-  projectId: string | null;
-  pathId: string | null;
-  outcomeKinds: string[];
-  sources: string[];
-  joinKey: string | null;
-  successCriteria: string | null;
-  notes: string | null;
-};
-
-// The read payload GET /api/projects/:id/gtm-map returns: the four record lists for the project. The
-// UI derives the portfolio buckets, ranking order and weak links from these — all in code.
-export type GtmMapView = {
-  projectId: string;
-  productTruths: ProductTruthRecord[];
-  marketObjects: MarketObjectRecord[];
-  paths: GtmPathRecord[];
-  contracts: MeasurementContractRecord[];
 };
 
 export type ObjectGraphSourceRef = {

@@ -73,5 +73,3 @@ export function BeliefSpine({ projectId, channelId }: BeliefSpineProps) {
     </div>
   );
 }
-
-export default BeliefSpine;

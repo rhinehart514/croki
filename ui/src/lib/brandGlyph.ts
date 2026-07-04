@@ -38,7 +38,7 @@ import {
   siAnthropic, siClaude, siPerplexity,
 } from "simple-icons";
 
-export type BrandIcon = { title: string; slug: string; hex: string; path: string };
+type BrandIcon = { title: string; slug: string; hex: string; path: string };
 
 // The curated brand set. Keyed by each icon's own canonical `simple-icons` slug (e.g. "googledrive",
 // "github"), which is exactly what `slugFor` normalizes a server id down to — so lookup is a direct
@@ -91,7 +91,7 @@ function slugFor(serverId: string): string {
 
 // Synchronous resolve against the curated map. Returns null for a service not in the map — the
 // caller's neutral-plug fallback covers that, the same as for a genuinely unrecognized service.
-export function brandGlyph(serverId: string | undefined | null): BrandIcon | null {
+function brandGlyph(serverId: string | undefined | null): BrandIcon | null {
   if (!serverId) return null;
   const slug = slugFor(serverId);
   if (!slug) return null;

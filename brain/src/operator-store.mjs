@@ -10,10 +10,6 @@ const COLLECTION = "operator-sessions";
 // resumeOperatorSession, which only refuses completed/cancelled.
 const TERMINAL_OPERATOR_STATUSES = new Set(["completed", "cancelled"]);
 
-export function isTerminalOperatorSession(session) {
-  return TERMINAL_OPERATOR_STATUSES.has(session?.status);
-}
-
 // A session is one of two KINDS, and the per-project lock is scoped by it (see
 // getActiveSessionForProject). A "goal" session is the founder-driven dock thread: it is opened with a
 // concrete goal and there is at most one live one per project. An "ambient" session is a standing-brief

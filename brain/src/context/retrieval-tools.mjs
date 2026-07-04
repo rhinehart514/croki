@@ -133,7 +133,6 @@ export const RETRIEVAL_SOURCES = TOOL_SPECS.map((spec) => spec.source);
 // Map a canonical source name (provider identity) to its retrieval tool name, and the inverse.
 // The per-provider cutover speaks "market"/"taste"; the SDK and pre-pack toggles need both forms.
 export const SOURCE_TO_TOOL = Object.fromEntries(TOOL_SPECS.map((spec) => [spec.source, spec.name]));
-export const TOOL_TO_SOURCE = Object.fromEntries(TOOL_SPECS.map((spec) => [spec.name, spec.source]));
 
 // Build the callable tool set bound to one run's context object. Mirrors providersFromContext's
 // key vocabulary so the two access patterns can never drift on what a source is called.

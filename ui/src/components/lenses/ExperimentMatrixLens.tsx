@@ -13,7 +13,7 @@ import { LensPanel, ProvenanceTag } from "@/components/lenses/shared";
 import { ExperimentArtifactCard } from "@/components/CanvasCard";
 import "./ExperimentMatrixLens.css";
 
-export type ExperimentMatrixLensProps = {
+type ExperimentMatrixLensProps = {
   experiments: GtmExperiment[];
   claims: Claim[];
   icp: Record<string, unknown>;

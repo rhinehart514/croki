@@ -16,7 +16,7 @@ import { identityHeaders } from "@/lib/identity";
 
 // ── The card shape (mirrors the backend /spine contract) ────────────────────────
 // One composed step of the pipeline, in plain words about what really happened there.
-export type SpineCard = {
+type SpineCard = {
   id: string;
   // The step in the pipeline's own words — the label its composition chose.
   title: string;
@@ -31,7 +31,7 @@ export type SpineCard = {
 };
 
 // The fetch response from GET /api/projects/:id/pipelines/:channelId/spine.
-export type SpineView = {
+type SpineView = {
   projectId: string;
   channelId: string;
   channelName?: string;
@@ -41,7 +41,7 @@ export type SpineView = {
 // ── The fetch ───────────────────────────────────────────────────────────────────
 // Self-contained so this lens builds without an api.ts edit (file ownership keeps api.ts untouched).
 // Mirrors api.ts's `get<T>` exactly — same identity headers, same error shape.
-export async function getSpine(projectId: string, channelId: string): Promise<SpineView> {
+async function getSpine(projectId: string, channelId: string): Promise<SpineView> {
   const path = `/api/projects/${encodeURIComponent(projectId)}/pipelines/${encodeURIComponent(channelId)}/spine`;
   const res = await fetch(path, { headers: { ...identityHeaders() } });
   if (!res.ok) throw new Error(`${path} failed (${res.status}).`);
@@ -49,7 +49,7 @@ export async function getSpine(projectId: string, channelId: string): Promise<Sp
 }
 
 // ── The fetch hook ──────────────────────────────────────────────────────────────
-export type SpineState =
+type SpineState =
   | { status: "loading"; cards: null; error: null }
   | { status: "empty"; cards: null; error: null }
   | { status: "ready"; cards: SpineCard[]; error: null }

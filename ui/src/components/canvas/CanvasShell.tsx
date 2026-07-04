@@ -26,7 +26,7 @@ export type LensDef<TModel, TEdit> = {
   Component: (props: LensProps<TModel, TEdit>) => React.ReactNode;
 };
 
-export type CanvasShellProps<TModel, TEdit> = {
+type CanvasShellProps<TModel, TEdit> = {
   model: TModel;
   lenses: LensDef<TModel, TEdit>[];
   defaultLensId: string;

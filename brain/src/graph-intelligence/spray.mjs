@@ -3,10 +3,6 @@ import { normalizeEvidenceList } from "../evidence.mjs";
 import { normalizeObjectEdge, normalizeObjectNode, genObjectGraphId } from "../object-graph-store.mjs";
 import { now } from "../store-fs.mjs";
 
-export const SPRAY_STRATEGY_PROMPT = `Generate shallow Strategy cards for a GTM object graph.
-Return ONLY JSON: [{ "type": "wedge|positioning|value_prop|offer|channel|message|proof_point|conversion_path|<open>", "statement": "one plain sentence", "restsOn": ["node id"], "evidence": [{ "claim": "...", "source": "...", "solidity": "inferred" }], "confidence": 0.0, "claimsProduct": false }].
-Every card must rest on supplied Product or Market node ids when possible. Do not rank. Do not invent traction.`;
-
 const MARKET_TYPES = new Set(["buyer", "icp", "pain", "job", "trigger", "workaround", "competitor", "objection"]);
 const STRATEGY_KIND_MAP = new Map([
   ["valueProp", "value_prop"],

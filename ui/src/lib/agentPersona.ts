@@ -7,12 +7,12 @@
 // persists a model-given name on a composed agent node, this becomes the fallback for agents that
 // carry no such name — humanizing the ref instead of guessing a role.
 
-export type AgentFamily =
+type AgentFamily =
   | "research" | "qualify" | "write"
   | "content" | "community" | "growth"
   | "general";
 
-export type AgentPersona = {
+type AgentPersona = {
   role: string;        // the human role name shown everywhere — "Prospect Researcher"
   family: AgentFamily;  // the function family — drives the one tint, by meaning
   monogram: string;     // two letters for the round identity mark — "PR"
@@ -84,7 +84,7 @@ export function agentPersona(ref: string, job?: string): AgentPersona {
 // for THIS project (outreach-drafter, rodentradar-outreach…). This is a naming-convention read until
 // the agent artifact carries a real origin field from the backend — centralized here so every surface
 // classifies the same way and it swaps in one place.
-export type AgentOrigin = "gtm-ide" | "project";
+type AgentOrigin = "gtm-ide" | "project";
 export function agentOrigin(ref: string): AgentOrigin {
   return /^gtm-/.test(ref) ? "gtm-ide" : "project";
 }

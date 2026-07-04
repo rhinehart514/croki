@@ -14,7 +14,7 @@ import { getToolProposals, approveToolBirth } from "@/api";
 import type { ToolBirthProposal, RegisteredTool } from "@/types";
 import "@/styles/tool-forge.css";
 
-export type ToolForgeProps = {
+type ToolForgeProps = {
   projectId: string;
 };
 

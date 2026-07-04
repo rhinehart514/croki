@@ -130,7 +130,7 @@ export type GroundModel = {
   junctions: GroundJunction[];
 };
 
-export type GroundState =
+type GroundState =
   | { status: "loading"; model: null; error: null }
   | { status: "empty"; model: null; error: null }
   | { status: "ready"; model: GroundModel; error: null }
@@ -140,7 +140,7 @@ export type GroundState =
 
 // One channel's real state → its belief on the ground. Autonomy is a founder act, so a promoted
 // pipeline reads validated; otherwise run/graph presence decides.
-export function beliefStateOf(channel: ChannelMeta): GroundBeliefState {
+function beliefStateOf(channel: ChannelMeta): GroundBeliefState {
   if (channel.autonomy === "trusted" || channel.autonomy === "autonomous") return "validated";
   if (channel.runCount > 0) return "testing";
   if (channel.nodeCount > 0) return "assumed";
@@ -149,7 +149,7 @@ export function beliefStateOf(channel: ChannelMeta): GroundBeliefState {
 
 // Conviction 0–1 from honest signals: a floor per belief state, lifted by real throughput (items the
 // last run produced) and by a founder promotion. Clamped. Never random, never seeded.
-export function convictionOf(channel: ChannelMeta): number {
+function convictionOf(channel: ChannelMeta): number {
   const belief = beliefStateOf(channel);
   const floor =
     belief === "validated" ? 0.7
@@ -195,7 +195,7 @@ export function pipelineStatusLine(p: GroundPipeline): string {
 // any ran, else nothing has run → decided:false, no leader). Value = the real number; the leader is
 // the single strongest; `proven` (green-eligible) is reserved for a founder-validated pipeline. Never
 // invents a winner — a tie leaves the first arm as leader, a blind ground leaves none.
-export function measurementOf(pipelines: GroundPipeline[]): GroundMeasurement | null {
+function measurementOf(pipelines: GroundPipeline[]): GroundMeasurement | null {
   if (pipelines.length < 2) return null;
   const staged = pipelines.map((p) => p.produced);
   const runs = pipelines.map((p) => p.runs);
@@ -278,7 +278,7 @@ function personJunctions(people: Person[], channelIds: Set<string>): GroundJunct
 // its arms). When it is absent (or resolves to nothing), it falls back to a single honest "primary"
 // ground over the shared-context ICP. Junctions are scoped per ground so a shared-people tie only links
 // cards in the same band.
-export function buildGroundModel(
+function buildGroundModel(
   channels: ChannelMeta[],
   people: Person[],
   claims: Claim[],

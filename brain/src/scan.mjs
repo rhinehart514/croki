@@ -370,7 +370,3 @@ export function scanRepo(inputRoot, options = {}) {
     gaps,
   };
 }
-
-export function headline(report) {
-  return report.headline;
-}

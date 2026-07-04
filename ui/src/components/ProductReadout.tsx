@@ -10,7 +10,7 @@ import { EyeOff, FileCode2, Layers, ScanSearch, Target } from "lucide-react";
 // blind-attribution stored), and the read-out says so rather than inventing it.
 export type ProductEvidence = { file: string; line?: number | string; text?: string };
 
-export type ProductReadoutData = {
+type ProductReadoutData = {
   headline?: string | null;
   productLine?: string | null;
   repoPath?: string | null;

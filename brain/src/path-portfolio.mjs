@@ -41,34 +41,6 @@ const LEAN_TURNS = 2;
 // HINT in the prompt and a configurable option (targetCount), never a hard cap that rejects a path.
 export const DEFAULT_PORTFOLIO_TARGET = 8;
 
-// The canonical bet facets — a HINT to the generator of the shape of a full GTM bet, never a closed
-// enum. A path may fill any subset and add a facet nobody named; the store accepts open bet fields.
-export const PATH_BET_FACET_HINTS = [
-  "buyer",
-  "pain",
-  "trigger",
-  "offer",
-  "channel",
-  "message",
-  "proof",
-  "conversionPath",
-];
-
-// The go-to-market angles a focused portfolio spreads across — an OPEN palette the generator draws
-// from so the bets differ in KIND, not just wording. This is a hint the prompt hands the model, never
-// a closed enum: the model may name an angle nobody listed, and each path is tagged with whatever
-// angle it took as a free-text label. (§2.2 open shapes.)
-export const GTM_ANGLE_PALETTE = [
-  "audience",
-  "offer",
-  "pricing",
-  "channel",
-  "message",
-  "partnership",
-  "content",
-  "motion",
-];
-
 // ── The deterministic ranking layer (§4 Phase 2 guard: code over stored data) ─────────────────────
 // The seven signals from §3, each a plain function of the STORED records a path rests on. No model
 // call, no guessed number: the generator says what the bet is and cites the records it rests on;
@@ -213,12 +185,6 @@ export function buildPathGrounding(productTruths = [], marketObjects = []) {
   };
 }
 
-// The angle-derivation doctrine (reused from ideation): the sides a portfolio should spread across
-// come from THIS product's real buyer picture — segments, channels, triggers — not a house list.
-export const PROPOSE_PATH_ANGLES_PROMPT = `You are choosing the ANGLES a set of GTM-path generators will take on ONE product, so the resulting portfolio spreads across genuinely different strategic bets instead of clustering on one. Derive the angles from THIS product's real buyer picture (below): different buyer segments, different now-triggers, different channels where these buyers already gather, different offers or wedges. Do not reuse a generic list; name the real strategic sides this product has. 5 to 8 angles so the portfolio is wide.
-
-Return ONLY JSON: { "angles": [ { "angle": "short-name", "lens": "one sentence telling a generator which strategic side of this product to bet on" } ] }`;
-
 // The generation doctrine. Each path is a full strategic bet, resting on named evidence (the record
 // ids from the grounding), with its own measurement plan. TERSE by construction — a founder reads
 // these fast, so a bet is one punchy line and its chain is short phrases, never paragraphs. The
@@ -254,20 +220,6 @@ export const GRADE_PATH_PROMPT = `You are a SEPARATE critic reviewing an already
 The paths are given as a numbered list. Return a verdict for EVERY path, in the same order, each carrying the path's "index".
 
 Return ONLY JSON: { "verdicts": [ { "index": 0, "coherent": true|false, "weakestLink": "a few plain words naming the shakiest part, or null if it is sound" } ] }`;
-
-// Live angle proposer — derives the portfolio's strategic angles on the founder's subscription. Lean:
-// no tools, low turn budget; it reasons over the handed-in grounding, it does not go research. Kept
-// injectable for callers that want an explicit angle fan-out; the default live run skips it and lets
-// ONE lean generate call spread across the palette itself, so a portfolio is two calls, not a fleet.
-export function createClaudePathAngleProposer({ cwd = process.cwd(), model, maxTurns = LEAN_TURNS, onText } = {}) {
-  return async function proposeAngles({ grounding } = {}) {
-    const prompt = `${PROPOSE_PATH_ANGLES_PROMPT}\n\nThe product's buyer picture and grounded truth:\n${JSON.stringify(grounding ?? {}, null, 2)}`;
-    const { text, error } = await runClaudeQuery({ prompt, cwd, model, maxTurns, onText, allowedTools: LEAN_TOOLS });
-    if (error) return { angles: [] };
-    const parsed = parseAgentObject(text);
-    return { angles: Array.isArray(parsed?.angles) ? parsed.angles : [] };
-  };
-}
 
 // Live path generator — returns { paths: [...] }. LEAN: no tools, low turn budget. With no angle
 // assigned (the default), ONE call produces the whole focused set, spreading across the GTM-angle

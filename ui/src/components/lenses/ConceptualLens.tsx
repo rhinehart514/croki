@@ -26,7 +26,7 @@ import type { ProductModel, ProductModelEdit, ProductStateElement, ProductThing 
 import { ObjectCard, computeLayout, kindVisual, type LayoutEdge, type LayoutPos } from "@/components/lenses/shared";
 import "./ConceptualLens.css";
 
-export type LensProps = {
+type LensProps = {
   model: ProductModel;
   selected: string | null;
   onSelect: (id: string) => void;

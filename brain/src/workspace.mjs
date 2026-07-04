@@ -241,7 +241,3 @@ export function addDecision(id, decision, options = {}) {
     decisions: [...workspace.decisions, entry],
   }, options);
 }
-
-export function getWorkspaceOptions(options = {}) {
-  return { root: stateRoot(options) };
-}

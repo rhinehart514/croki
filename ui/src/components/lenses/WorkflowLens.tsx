@@ -14,7 +14,7 @@ import type { ProductModel, ProductModelEdit } from "@/types";
 import { cn } from "@/lib/utils";
 import "./WorkflowLens.css";
 
-export type LensProps = {
+type LensProps = {
   model: ProductModel;
   selected: string | null;
   onSelect: (id: string) => void;

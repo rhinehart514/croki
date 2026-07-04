@@ -7,49 +7,14 @@
 
 import { useEffect, useState } from "react";
 import { getBoard } from "@/api";
-import type { BoardView, LayerBelief } from "@/types";
-
-// ── Board layer, extended with the run-state fields board.mjs derives ──────────
-// The base LayerBelief type mirrors board.mjs's core shape; these two fields are the run-derived
-// extras the board reads live (still a pure read — derived, never seeded). `moving` marks a
-// run-derived layer that currently has live run signal behind it; `tiers` is the pipelines layer's
-// operational split (needs-you / live / at-gate), null when there are no pipelines.
-export type PipelineTiers = { needsYou: number; live: number; atGate: number };
-export type BoardLayer = LayerBelief & { moving?: boolean; tiers?: PipelineTiers | null };
-
-// Is this a run-derived layer (motion / loop), as opposed to a founder-stated strategy layer? The
-// "moving vs static" marker only shows on these — a stated belief is never "moving".
-export function isRunDerived(layer: LayerBelief): boolean {
-  return layer.groundingMode !== "stated";
-}
-
-// ── Display metadata, keyed by the real `layer` field getBoard() returns ───────
-// Number + name + one-line sublabel for each band, in board order (Strategy 1-4, Motion 5-6,
-// Loop 7-9). Faithful to the approved 01-board.html names; the keys are board.mjs's real layers.
-export type LayerMeta = { n: number; name: string; sub: string };
-
-export const LAYER_META: Record<string, LayerMeta> = {
-  icp: { n: 1, name: "Market / ICP", sub: "center of gravity" },
-  trigger: { n: 2, name: "Problem & Trigger", sub: "why-now ladder" },
-  positioning: { n: 3, name: "Positioning", sub: "the one-liner" },
-  offer: { n: 4, name: "Offer", sub: "value escalation" },
-  channels: { n: 5, name: "Pipelines", sub: "arms of the ICP test" },
-  artifacts: { n: 6, name: "Plays & Assets", sub: "touches & shared assets" },
-  people: { n: 7, name: "People", sub: "survival & the pinch" },
-  measure: { n: 8, name: "Measurement", sub: "can we prove it?" },
-  learn: { n: 9, name: "Learning", sub: "verdict ledger" },
-};
-
-export function layerMeta(layer: string): LayerMeta {
-  return LAYER_META[layer] ?? { n: 0, name: layer, sub: "" };
-}
+import type { BoardView } from "@/types";
 
 // (The old groundingBadge / confidenceBand display helpers were removed: nothing rendered them
 // anymore, and their "blind" / "derived" badge words are engine vocabulary a founder surface must
 // not speak. A future badge derives its words in plain language from the same real fields.)
 
 // ── The fetch hook ──────────────────────────────────────────────────────────────
-export type BoardState =
+type BoardState =
   | { status: "loading"; board: null; error: null }
   | { status: "empty"; board: null; error: null }
   | { status: "ready"; board: BoardView; error: null }

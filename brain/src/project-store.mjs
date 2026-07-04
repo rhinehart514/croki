@@ -440,10 +440,6 @@ export function deleteProjectFromCatalog(projectId, options = {}) {
   return { activeProjectId, deletedId: projectId };
 }
 
-export function projectStoreRoot(options = {}) {
-  return root(options);
-}
-
 // The team that effectively owns a project. Returns the stored teamId when set, otherwise the founder's
 // personal team (created lazily) so a project is never team-less — without forcing every existing
 // single-user project to have written a teamId. Backward-compatible: a stored null resolves to the
@@ -451,13 +447,6 @@ export function projectStoreRoot(options = {}) {
 export function projectTeamId(projectId, options = {}) {
   const project = loadProject({ ...options, projectId });
   return project.teamId ?? defaultTeamId(options);
-}
-
-// Set (or clear) the team that owns a project. The Convex sync lane calls this to make a project
-// multiplayer; passing null restores the personal-team default.
-export function setProjectTeam(projectId, teamId, options = {}) {
-  const project = loadProject({ ...options, projectId });
-  return saveProject({ ...project, teamId: teamId ?? null }, options);
 }
 
 function channelFromLegacy(project, channel, options = {}) {

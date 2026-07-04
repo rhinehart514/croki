@@ -17,7 +17,7 @@ import { getInputs, routeInput } from "@/api";
 import type { Input, ChannelMeta } from "@/types";
 import "@/styles/inputs-inbox.css";
 
-export type InputsInboxProps = {
+type InputsInboxProps = {
   projectId: string;
   channels?: ChannelMeta[];
 };

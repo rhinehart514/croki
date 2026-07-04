@@ -2,7 +2,7 @@ import type { ChannelMeta, GateDecision, GTMItem } from "@/types";
 
 // First non-empty string among loosely-typed item fields. Staged gate items carry free-form keys
 // depending on which connector/agent produced them, so every reader coalesces across the aliases.
-export function pickStr(...vals: unknown[]): string | null {
+function pickStr(...vals: unknown[]): string | null {
   for (const v of vals) if (typeof v === "string" && v.trim()) return v;
   return null;
 }
@@ -54,7 +54,7 @@ function renderFieldValue(value: unknown): string | null {
 }
 
 // One open field of a staged item, rendered for the card: a plain-words label and a readable value.
-export type GateItemField = { label: string; value: string };
+type GateItemField = { label: string; value: string };
 
 // The one normalized view of a staged gate item. The founder gate's rail AND the on-canvas gate
 // review both render from this, so the two surfaces can never disagree about what a draft says or
@@ -62,7 +62,7 @@ export type GateItemField = { label: string; value: string };
 // draft_note / suggested_subject_line / founder_name / grounding_citation; older connectors emit
 // draft / subject / name — and everything ELSE the item carries lands in `fields`, so a staged
 // item of ANY shape (a post, a note, a page) shows the actual thing about to reach the world.
-export type GateItemView = {
+type GateItemView = {
   subject: string;
   body: string | null;
   evidence: string | null;
@@ -108,14 +108,6 @@ export function gateItemView(item: GTMItem): GateItemView {
   }
   const hollow = !body && !realSubject && !evidence && !trigger && !who && !sourceUrl && !fields.length;
   return { subject, body, evidence, trigger, who, sourceUrl, fields, hollow };
-}
-
-// A staged gate item is "hollow" ONLY when the run produced nothing reviewable for it of ANY
-// shape: no body, no open content fields, no prospect fields (now-trigger / who / source), no
-// evidence, and no real subject — only the bare output-kind label and run bookkeeping. The gate
-// shows a hollow item as empty and refuses a one-click approve, never as an approvable draft.
-export function isHollowGateItem(item: GTMItem): boolean {
-  return gateItemView(item).hollow;
 }
 
 // ─── Pattern / exception split — the gate-bloom's two faces ───────────────────

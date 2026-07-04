@@ -109,7 +109,7 @@ function ObjectGraphLens({ model: m }: GtmLensProps) {
 // compose invitation. A fixed id keeps GraphCanvas's layout memo from thrashing.
 const LANDING_EMPTY_GRAPH: GTMGraph = { id: "__landing-empty__", name: "New pipeline", version: "0", nodes: [], edges: [] };
 
-export function ChannelFlowLens({ model: m }: GtmLensProps) {
+function ChannelFlowLens({ model: m }: GtmLensProps) {
   // No pipeline wired yet (the landing/overview of a fresh product) → render the empty node canvas with
   // a compose invitation, NOT a ranked-bets page. Once anything is built, the real graph takes over.
   const landing = !m.graph;

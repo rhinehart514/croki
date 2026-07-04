@@ -56,7 +56,7 @@ function rewriteDetail(detail: string): { text: string; rewritten: boolean } {
   return { text: detail, rewritten: false };
 }
 
-export function humanizeOperatorEvent(ev: OperatorEvent): OperatorEvent {
+function humanizeOperatorEvent(ev: OperatorEvent): OperatorEvent {
   const rawTitle = ev.title ?? "";
   const rawDetail = ev.detail ?? "";
 

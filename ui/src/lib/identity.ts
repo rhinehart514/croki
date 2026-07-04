@@ -43,7 +43,7 @@ export function getIdentity(): ActingIdentity {
   return current;
 }
 
-export function setIdentity(next: ActingIdentity): ActingIdentity {
+function setIdentity(next: ActingIdentity): ActingIdentity {
   current = next;
   try { localStorage.setItem(KEY, JSON.stringify(next)); } catch { /* best-effort */ }
   return current;

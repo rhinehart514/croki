@@ -17,7 +17,7 @@ import type { ProductModel, ProductModelEdit, ProductThing, ProductUserGoal } fr
 import { ObjectCard, FlowArrow, LensPanel, ProvenanceTag } from "@/components/lenses/shared";
 import "./JobsLens.css";
 
-export type LensProps = {
+type LensProps = {
   model: ProductModel;
   selected: string | null;
   onSelect: (id: string) => void;

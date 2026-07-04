@@ -1,7 +1,3 @@
-export const COMPILE_DECOMPOSE_PROMPT = `Decompose one highlighted GTM object-graph path into a staged RunPlan.
-Return ONLY JSON with optional sections: audience, assets, tasks, patch, measurement, gates, execution.
-Place one founder gate per outward action kind. Nothing sends, publishes, patches, updates CRM, charges, or deploys before a founder gate.`;
-
 function isBindableMeasurement(contract) {
   if (!contract || typeof contract !== "object") return false;
   return Boolean(

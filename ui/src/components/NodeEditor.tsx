@@ -120,7 +120,7 @@ function isPatternMeta(meta: Record<string, unknown>): meta is PatternGateMeta {
 
 type ExceptionState = Record<string, "approve" | "reject" | undefined>;
 
-export function PatternGateReview({
+function PatternGateReview({
   items,
   meta,
   running,
@@ -379,7 +379,7 @@ function gateItemBody(it: GTMItem): string {
 // Only items that carry an editable prose draft can be edited in place; verdicts/records are read-only.
 const gateItemEditable = (it: GTMItem): boolean => typeof (it as Record<string, unknown>).draft === "string";
 
-export function GateReview({
+function GateReview({
   items, running, onSubmit, onApproveAll,
 }: {
   items: GTMItem[];

@@ -70,15 +70,6 @@ export function listConnectors() {
   return result;
 }
 
-export function connectorsForCategory(category) {
-  const bucket = REGISTRY[category];
-  if (!bucket) return [];
-  return Object.values(bucket).map(({ meta }) => ({
-    ...meta,
-    configured: meta.envKey ? !!process.env[meta.envKey] : true,
-  }));
-}
-
 // ─── Default graph template — Cold Outbound ───────────────────────────────────
 // Venture doctrine: complete structure, partial activation, local state.
 // Feedback edges: measure → context/source (output over time feeds input).

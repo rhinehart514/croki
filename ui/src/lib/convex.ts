@@ -8,7 +8,7 @@
 import { ConvexReactClient } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 
-export const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined;
+const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined;
 export const convexClient = convexUrl ? new ConvexReactClient(convexUrl) : null;
 export const convexEnabled = !!convexClient;
 
@@ -19,18 +19,6 @@ export const teamsApi = {
   listForIdentity: makeFunctionReference<"query">("teams:listForIdentity"),
   get: makeFunctionReference<"query">("teams:get"),
   listMembers: makeFunctionReference<"query">("teams:listMembers"),
-};
-
-// approvals.ts — the reactive gate queue
-export const approvalsApi = {
-  pending: makeFunctionReference<"query">("approvals:pending"),
-  decide: makeFunctionReference<"mutation">("approvals:decide"),
-};
-
-// documents.ts — the generic mirror (the UI rarely reads these directly; the brain owns them)
-export const documentsApi = {
-  list: makeFunctionReference<"query">("documents:list"),
-  get: makeFunctionReference<"query">("documents:get"),
 };
 
 // ── The locally-remembered team identity ──────────────────────────────────────────────────────
@@ -63,10 +51,3 @@ export function saveTeamIdentity(value: TeamIdentity): void {
   }
 }
 
-export function clearTeamIdentity(): void {
-  try {
-    localStorage.removeItem(KEY);
-  } catch {
-    /* ignore */
-  }
-}

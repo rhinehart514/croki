@@ -19,7 +19,7 @@ import "@/styles/references-panel.css";
 
 export type ReferenceKind = "person" | "icp" | "claim" | "experiment";
 
-export type ReferencesPanelProps = {
+type ReferencesPanelProps = {
   kind: ReferenceKind;
   // The resolved cross-reference answer. Null while the host is still fetching (with loading) or when
   // nothing resolved.

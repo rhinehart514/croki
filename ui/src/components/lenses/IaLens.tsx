@@ -17,7 +17,7 @@ import type { ProductIaNode, ProductModel, ProductModelEdit } from "@/types";
 import { LensPanel, ObjectCard } from "@/components/lenses/shared";
 import "./IaLens.css";
 
-export type LensProps = {
+type LensProps = {
   model: ProductModel;
   selected: string | null;
   onSelect: (id: string) => void;

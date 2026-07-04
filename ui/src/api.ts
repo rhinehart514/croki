@@ -1,14 +1,14 @@
 import type {
-  ApplyReadiness, BuildResult, ConnectorMeta, Decisions, EngineState, GTMGraph, GTMProject, GTMRunResult,
-  GTMRevision, GTMWorkspace, OperatorSession, OperatorSessionSummary,
-  ScanReport, ScanPreview, ChannelRunDiff,
-  WorkspaceSummary, ProjectSummary,
+  ConnectorMeta, Decisions, EngineState, GTMGraph, GTMProject, GTMRunResult,
+  OperatorSession, OperatorSessionSummary,
+  ScanPreview,
+  ProjectSummary,
   ContextManifest, GtmLibrary,
   GraphOperation, GTMContractAudit,
-  ProductModel, ProductModelEdit, ProductPinTargetKind,
+  ProductModel, ProductModelEdit,
   CapabilityServer, Person, CrossReferenceResult, ToolRegistryView, RegisteredTool, ChannelFeed, DirectedFeed,
-  ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole, BoardView, GtmExperiment,
-  ChannelMeta, Input, GtmMapView, ObjectGraphView, GTMItem,
+  ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole, BoardView,
+  ChannelMeta, Input, ObjectGraphView, GTMItem,
 } from "@/types";
 import { identityHeaders } from "@/lib/identity";
 
@@ -43,9 +43,6 @@ export const getContext = (channelId?: string) =>
 export const getLibrary = () => get<GtmLibrary>("/api/library");
 
 // ── Funnel ──────────────────────────────────────────────────────────────────
-export const scanRepository   = (repoPath: string, winEvent: string) =>
-  post<ScanReport>("/api/scan", { repoPath, winEvent });
-
 // The front-door scan preview: read the product, hand back the headline / stack / detected win event
 // (with its file:line evidence) and an honest blind-attribution callout — what the founder sees BEFORE
 // committing a goal. Returns the lightweight preview shape; degrades if the backend omits a field.
@@ -55,52 +52,6 @@ export const scanPreview = (repoPath: string, winEvent?: string) =>
 // Native folder picker — the local server pops the OS folder dialog and returns the real path.
 export const pickFolder = () =>
   post<{ path?: string; cancelled?: boolean; unsupported?: boolean; error?: string }>("/api/pick-folder", {});
-
-export const buildTrackingFix = (report: ScanReport) =>
-  post<BuildResult>("/api/build", { report });
-
-// ── Durable workspace ───────────────────────────────────────────────────────
-export const listWorkspaces = () =>
-  get<{ workspaces: WorkspaceSummary[] }>("/api/workspaces");
-
-export const openWorkspace = (repoPath: string, outcome: string) =>
-  post<{ workspace: GTMWorkspace }>("/api/workspaces/open", { repoPath, outcome });
-
-export const getWorkspace = (workspaceId: string) =>
-  get<{ workspace: GTMWorkspace }>(`/api/workspaces/${workspaceId}`);
-
-export const rescanWorkspace = (workspaceId: string) =>
-  post<{ workspace: GTMWorkspace }>(`/api/workspaces/${workspaceId}/rescan`, {});
-
-export const createWorkspaceRevision = (workspaceId: string) =>
-  post<{ workspace: GTMWorkspace; revision: GTMRevision }>(
-    `/api/workspaces/${workspaceId}/revisions`,
-    {},
-  );
-
-export const reviewWorkspaceRevision = (
-  workspaceId: string,
-  revisionId: string,
-  decision: "approve" | "reject",
-  note = "",
-) => post<{ workspace: GTMWorkspace; revision: GTMRevision }>(
-  `/api/workspaces/${workspaceId}/revisions/${revisionId}/review`,
-  { decision, note },
-);
-
-export const getRevisionReadiness = (workspaceId: string, revisionId: string) =>
-  get<{ readiness: ApplyReadiness }>(
-    `/api/workspaces/${workspaceId}/revisions/${revisionId}/readiness`,
-  );
-
-export const applyWorkspaceRevision = (
-  workspaceId: string,
-  revisionId: string,
-  action: "apply" | "revert",
-) => post<{ workspace: GTMWorkspace; revision: GTMRevision }>(
-  `/api/workspaces/${workspaceId}/revisions/${revisionId}/${action}`,
-  { confirm: true },
-);
 
 // ── Connector registry ──────────────────────────────────────────────────────
 export const getConnectors = () =>
@@ -146,15 +97,9 @@ export const auditGraph = (graph: GTMGraph, runResult?: GTMRunResult | null) =>
 
 // ── Artifacts — subagents & skills as real, fully-editable .md files ─────────
 export type ArtifactType = "agent" | "skill";
-export type ArtifactSummary = {
-  type: ArtifactType; ref: string; name: string; description: string; tools: string; model: string;
-};
-export type ArtifactFile = {
+type ArtifactFile = {
   type: ArtifactType; ref: string; exists: boolean; content: string; meta: Record<string, string>;
 };
-
-export const listArtifacts = () =>
-  get<{ agents: ArtifactSummary[]; skills: ArtifactSummary[] }>("/api/artifacts");
 
 export const getArtifact = (type: ArtifactType, ref: string) =>
   get<ArtifactFile>(`/api/artifact?type=${type}&ref=${encodeURIComponent(ref)}`);
@@ -175,7 +120,7 @@ export const runGraph = (
 ) => post<GTMRunResult>("/api/graph/run", { graph, ...options });
 
 // Streaming run events — one per step, so the flow animates and content reveals live.
-export type RunStreamEvent =
+type RunStreamEvent =
   | { type: "run_start"; nodeIds: string[] }
   | { type: "node_start"; nodeId: string; category?: string; kind?: string; label?: string }
   | { type: "node_done"; nodeId: string; result: GTMRunResult["nodes"][string] }
@@ -305,14 +250,6 @@ export const reviseProductModel = (edit: ProductModelEdit) =>
   post<{ productModel: ProductModel | null }>("/api/product-model/revise", edit);
 
 // The "living" stroke: pin an already-persisted FeedbackSignal onto a specific element.
-export const recordProductSignal = (input: {
-  signalId: string;
-  target: { kind: ProductPinTargetKind; id?: string | null };
-  type?: string;
-  summary?: string;
-  observedAt?: string;
-}) => post<{ productModel: ProductModel | null }>("/api/product-model/signal", input);
-
 // ── Connection status — is a live Claude available for compose/ideate/operator ──
 export type ConnectionStatus = { connected: boolean; label: string | null; reason: string | null };
 export const getConnection = () => get<ConnectionStatus>("/api/connection");
@@ -345,12 +282,6 @@ export async function deleteProject(projectId: string) {
   if (!res.ok) throw new Error(payload.error || `Delete failed (${res.status}).`);
   return payload as { activeProjectId: string | null; projects: ProjectSummary[] };
 }
-
-export const mergeProjects = (sourceIds: string[], targetId: string) =>
-  post<{ activeProjectId: string | null; projects: ProjectSummary[] }>(
-    "/api/projects/merge",
-    { sourceIds, targetId },
-  );
 
 // ── People — the keystone shared object (read-only; promoted from real runs) ──
 export const listPeople = (projectId: string) =>
@@ -406,12 +337,6 @@ export const getPerson = (projectId: string, personId: string) =>
 export const getBoard = (projectId: string) =>
   get<BoardView>(`/api/projects/${encodeURIComponent(projectId)}/board`);
 
-// ── GTM map — the read-only portfolio projection (the rebuilt engine's records) ──
-// Returns the four record lists (product truths, market objects, GTM paths, measurement contracts)
-// for the project; the UI derives the ranked portfolio, its buckets and weak links from these in code.
-export const getGtmMap = (projectId: string) =>
-  get<GtmMapView>(`/api/projects/${encodeURIComponent(projectId)}/gtm-map`);
-
 export const getObjectGraph = (projectId: string) =>
   get<ObjectGraphView>(`/api/projects/${encodeURIComponent(projectId)}/object-graph`);
 
@@ -464,7 +389,7 @@ export const saveObjectGraphPositions = (
 
 // The compiled run and its staged gate. `gate.items` each wrap the raw staged item under `.item` (which
 // carries a stable `gtmActionId`), plus a stable `actionId` and its current approval status.
-export type CompiledRun = { id: string; status: string; gateState?: { status?: string } };
+type CompiledRun = { id: string; status: string; gateState?: { status?: string } };
 export type CompiledGate = {
   runId: string | null;
   status: string;
@@ -481,12 +406,6 @@ export const compileObjectGraphPath = (
   input,
 );
 
-// Reopen a staged compiled run's founder gate (pure read — approves nothing, sends nothing).
-export const getRunGate = (projectId: string, runId: string) =>
-  get<{ projectId: string } & CompiledGate>(
-    `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/gate`,
-  );
-
 // Approve a staged compiled run at the founder gate: the per-item decisions release it through the same
 // engine, staging the approved items locally. Nothing sends. Returns the resolved run + refreshed gate.
 export const approveRun = (
@@ -499,50 +418,6 @@ export const approveRun = (
 );
 
 // ── The rebuilt GTM-engine rituals the founder invokes on the active project ──
-// Research the buyer picture (Phase 1): persists the MarketObjects the map and the paths rest on, then
-// returns a plain-language summary. Nothing sends.
-export const runMarketResearch = (projectId: string) =>
-  post<{ projectId: string; ok: boolean; count: number; summary: string; meta: Record<string, unknown> }>(
-    `/api/projects/${encodeURIComponent(projectId)}/market-research`,
-    {},
-  );
-
-// Generate the ranked path portfolio (Phase 2) from the product truth + buyer picture. Persists the
-// paths so the reasoning canvas renders them. Composes and stores only — it never runs a path.
-export const generatePathPortfolio = (projectId: string) =>
-  post<{ projectId: string; count: number; summary: string; meta: Record<string, unknown> }>(
-    `/api/projects/${encodeURIComponent(projectId)}/path-portfolio`,
-    {},
-  );
-
-// Group existing motions into the arms of one stated experiment — founder-confirmed, post-hoc context.
-// Never gates a run; never records a verdict.
-export const groupExperiment = (
-  projectId: string,
-  experiment: {
-    targetLayer: string;
-    hypothesis?: string;
-    heldConstant?: string;
-    arms: { id?: string; label: string; kind?: string; channelId?: string | null }[];
-  },
-) =>
-  post<{ experiments: GtmExperiment[]; experiment: GtmExperiment | null }>(
-    `/api/projects/${encodeURIComponent(projectId)}/experiments`,
-    { experiment },
-  );
-
-// The founder resolves an experiment — STRICTLY post-gate. keep/double-down crystallize the belief;
-// kill records the decision. winningArmId names the arm the founder is keeping.
-export const applyVerdict = (
-  projectId: string,
-  experimentId: string,
-  verdict: { decision: "keep" | "kill" | "double-down"; winningArmId?: string | null },
-) =>
-  post<{ experiments: GtmExperiment[]; updatedAt: string }>(
-    `/api/projects/${encodeURIComponent(projectId)}/experiments/${encodeURIComponent(experimentId)}/verdict`,
-    { verdict },
-  );
-
 // "Where does X appear across channels" — the cross-reference / find-references query for a
 // person / icp / claim / experiment.
 export const findReferences = (
@@ -578,28 +453,10 @@ export const approveToolBirth = (
 export const setActiveWorkflow = (workflowId: string) =>
   post<{ activeWorkflowId: string; activeChannelId?: string }>("/api/project/active-workflow", { workflowId });
 
-export const setActiveChannel = (channelId: string) =>
-  setActiveWorkflow(channelId).then((result) => ({ activeChannelId: result.activeWorkflowId }));
-
-export const compareChannelRuns = (channelId: string, before?: string, after?: string) => {
-  const params = new URLSearchParams();
-  if (before) params.set("before", before);
-  if (after) params.set("after", after);
-  const query = params.size ? `?${params.toString()}` : "";
-  return get<{ diff: ChannelRunDiff }>(
-    `/api/channels/${encodeURIComponent(channelId)}/runs/compare${query}`,
-  );
-};
-
 // ── Identity + teams — the team space, members, and the release authority ──────
 // Who am I and which teams am I in (personal team always exists). Identity rides on request headers
 // from lib/identity; the server defaults to the founder when none are stamped.
 export const getMe = () => get<Me>("/api/me");
-
-export const listTeams = () =>
-  get<{ teams: Array<{ id: string; name: string; memberCount: number; createdAt: string; updatedAt: string }> }>(
-    "/api/teams",
-  );
 
 export const createTeam = (input: { name: string; members?: Array<{ userId: string; name?: string; email?: string; role?: TeamRole }> }) =>
   post<{ team: Team }>("/api/teams", input);
@@ -640,24 +497,6 @@ export const revokeChannel = (projectId: string, channelId: string) =>
   post<{ channel: ChannelMeta }>(
     `/api/projects/${encodeURIComponent(projectId)}/channels/${encodeURIComponent(channelId)}/revoke`,
     {},
-  );
-
-// ── The Wall, read side — which flows are paused waiting on the founder ─────────
-// Every operator session paused at a founder gate across this project. Read-only — it never approves;
-// it only says where the founder's approval is the blocker (the NeedsYouStrip's source).
-export type FounderFlow = {
-  sessionId: string;
-  kind: string;
-  projectId: string | null;
-  graphId: string | null;
-  label: string | null;
-  runId: string | null;
-  gateNodeIds: string[];
-  updatedAt: string;
-};
-export const getNeedsYou = (projectId: string) =>
-  get<{ projectId: string; flows: FounderFlow[] }>(
-    `/api/projects/${encodeURIComponent(projectId)}/needs-you`,
   );
 
 // ── Microproduct build-and-ship door — the deployable twin of compose_and_run ───

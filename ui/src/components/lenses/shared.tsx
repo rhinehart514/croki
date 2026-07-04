@@ -95,7 +95,7 @@ export function ProvenanceTag({
 // so the SAME card works both inside a React-Flow node wrapper and in a plain DOM list (IA tree,
 // jobs column). Lenses choose the context; the card stays identical.
 
-export type StateChip = { id: string; label: string };
+type StateChip = { id: string; label: string };
 
 export function ObjectCard({
   kind, name, summary, provenance, citationCount, states, hasSignal, selected,
