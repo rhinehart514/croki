@@ -9,6 +9,7 @@ import {
   createChannel,
   createProject,
   duplicateChannel,
+  getAgentProfile,
   getProjectWithChannels,
   loadProject,
   listProjects,
@@ -86,6 +87,35 @@ describe("multi-channel GTM project", () => {
 
     const after = getProjectWithChannels(options).channels.find((channel) => channel.id === created.channel.id);
     assert.deepEqual(after.lastRunResult, { produced: 5, byCategory: { source: 3, generate: 2 } });
+  });
+
+  it("derives a per-agent taste profile from the project's run ledger, and reads honest zeros for an unseen agent", () => {
+    createChannel({ name: "Founder outbound", objective: "Reach technical founders." }, options);
+    const projectId = loadProject(options).id;
+    const channel = getProjectWithChannels(options).channels[0];
+    const graph = { id: channel.graphId, name: channel.name, nodes: [], edges: [] };
+    recordFlowRun(graph, {
+      runId: "run-1", ok: true, pendingGates: [], nodes: {
+        gate: {
+          nodeId: "gate", category: "gate", ok: true, items: [
+            { name: "A", email: "a@x.com", draft: "warm note from Ada", approvalStatus: "approved", agentRef: "ada" },
+            { name: "B", email: "b@x.com", draft: "stiff pitch from Boone", approvalStatus: "rejected", agentRef: "boone" },
+          ],
+        },
+      },
+    }, options);
+
+    const ada = getAgentProfile(projectId, "ada", options);
+    assert.equal(ada.hasRuns, true);
+    assert.equal(ada.runCount, 1);
+    assert.deepEqual(ada.counts, { approved: 1, rejected: 0, edits: 0 });
+    assert.match(ada.voice, /warm note from Ada/);
+
+    const ghost = getAgentProfile(projectId, "never-composed", options);
+    assert.equal(ghost.hasRuns, false);
+    assert.equal(ghost.runCount, 0);
+    assert.deepEqual(ghost.counts, { approved: 0, rejected: 0, edits: 0 });
+    assert.equal(ghost.note, "no runs yet");
   });
 
   it("persists and switches independent product projects", () => {

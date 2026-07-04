@@ -19,6 +19,7 @@
 
 import { runClaudeQuery, parseAgentItems } from "./agent-bridge.mjs";
 import { marketObjectStore } from "./gtm-store.mjs";
+import { effectiveSolidity, normalizeEvidenceList } from "./evidence.mjs";
 
 // The canonical buyer-side kinds. This is a HINT to the research agent of the picture worth
 // filling, never a closed enum: the store accepts any kind string, and the agent may return a kind
@@ -116,6 +117,150 @@ export function createClaudeMarketResearcher({ cwd = process.cwd(), model, maxTu
     }
     return { ok: true, objects: toCandidates(parseAgentItems(text)), meta: { parsed: true } };
   };
+}
+
+// ── Per-layer research: build the buyer picture ONE facet at a time ───────────────────────────────
+// run_market_research asks for the WHOLE picture at once — fast, but the model guesses every facet
+// with no chance for the founder to steer between them. The per-layer path is the slow, steerable
+// twin: it takes the kinds already SETTLED (the founder's picks so far) as grounding and researches
+// candidates for ONE next kind only. The founder picks one, it persists, and its pick grounds the
+// next layer. Nothing here persists — the route returns candidates and the founder's pick persists
+// through the same marketObjectStore path run_market_research already uses.
+
+// Which facet to fill next, given what is already settled. A HINT off the canonical order, never a
+// fixed pipeline: the founder may pass any kind (jump ahead, skip, or revisit). Returns the first
+// hint kind not yet settled, or null when every hinted facet is covered (the founder can still ask
+// for a novel kind by naming it). settledKinds is whatever kinds the founder has already picked.
+export function nextKindHint(settledKinds = []) {
+  const settled = new Set((Array.isArray(settledKinds) ? settledKinds : []).map((k) => String(k ?? "").trim()).filter(Boolean));
+  return MARKET_OBJECT_KIND_HINTS.find((kind) => !settled.has(kind)) ?? null;
+}
+
+// The per-layer research doctrine. Same evidence discipline as the whole-picture prompt, narrowed to
+// ONE kind and grounded on the settled upstream picks. Edit ~/.claude/agents/gtm-research-market.md
+// for the whole-picture doctrine; this focused instruction lives beside it as host-shipped text.
+export const MARKET_LAYER_PROMPT = `You are the MARKET RESEARCHER for ONE specific product, working ONE layer of the buyer picture at a time. You are given the kinds the founder has ALREADY SETTLED (their picks so far, treated as fixed grounding) and asked to research ONE next kind only. Do NOT re-open the settled kinds and do NOT research any other kind — return candidates for the requested kind alone, each consistent with the settled picks upstream.
+
+EVIDENCE DISCIPLINE IS THE ENTIRE POINT. Never invent buyer behavior, customers, traction, or research findings. For every candidate:
+- Do REAL research. Use WebSearch and WebFetch to find real, current sources — competitor pages, category reports, community/forum threads where these buyers actually talk, pricing pages, review sites. Read the product's own repo docs (Read/Glob/Grep) for what the founder already knows.
+- Attach the real source (a URL, or a cited repo file:line for a founder-known fact) to each piece of evidence. A claim with a real source is "researched" (found externally) or "observed" (a directly seen fact).
+- If you reason a conclusion FROM other evidence without a direct source for the conclusion itself, mark it "inferred" and still cite what you reasoned from.
+- If you genuinely cannot find a source, you MAY still record a candidate as a HYPOTHESIS — set solidity "speculative", leave evidence empty, and put the question that would settle it in openQuestions. NEVER dress a guess as a fact; NEVER fabricate a URL or a citation. The host demotes any record with no sourced evidence to speculative regardless of the label you claim.
+
+Return 3-4 candidates for the requested kind — a real spread of distinct options the founder can choose between, not one answer restated. Prefer well-sourced candidates over guesses, but a flagged hypothesis is honest and welcome when that is genuinely all the evidence supports.
+
+Return ONLY a JSON array (the host stamps ids and recomputes effective solidity):
+[
+  {
+    "kind": "<the requested kind>",
+    "statement": "one plain-English sentence stating the fact or hypothesis",
+    "evidence": [ { "claim": "what this source supports", "source": "https://... or repo/path.ts:line", "solidity": "observed" | "researched" | "inferred", "notes": "optional" } ],
+    "solidity": "observed" | "researched" | "inferred" | "speculative",
+    "confidence": 0.0-1.0,
+    "source": "short origin label, e.g. 'web-research'",
+    "openQuestions": [ "what would raise this candidate's solidity" ]
+  }
+]
+Return an empty array only if you truly found nothing to say for this kind.`;
+
+// Honest-blank per-layer default: no generator wired → no candidates, never a fabricated facet.
+export const blankLayerGenerate = async () => ({ ok: true, candidates: [], meta: { blank: true } });
+
+// Compute a candidate's HONEST solidity without persisting it. Mirrors the store's normalize
+// boundary (normalizeEvidenceList + effectiveSolidity) so a candidate the founder previews carries
+// the same demotion discipline it would get on save: an unsourced candidate reads as speculative
+// BEFORE it is ever stored, never a claimed-but-unearned label. `declaredSolidity` keeps the intent.
+function labelCandidate(candidate) {
+  const evidence = normalizeEvidenceList(candidate.evidence);
+  const declaredSolidity = String(candidate.solidity ?? "").trim() || null;
+  return {
+    ...candidate,
+    evidence,
+    declaredSolidity,
+    solidity: effectiveSolidity(declaredSolidity, evidence),
+  };
+}
+
+// Live per-layer generator: researches ONE next kind on the founder's subscription, grounded on the
+// settled upstream picks. Same injectable, OAuth-first, read-only seam as the whole-picture
+// researcher — an open research step, never a hardwired connector. Returns { ok, candidates, meta }.
+export function createClaudeMarketLayerResearcher({ cwd = process.cwd(), model, maxTurns = 20, onText } = {}) {
+  return async function generateLayer({ kind, upstream, grounding, founderInputs } = {}) {
+    const contextBlock = [
+      `\nThe kind to research NOW (return candidates for this kind only): ${JSON.stringify(kind)}`,
+      Array.isArray(upstream) && upstream.length
+        ? `\nThe kinds the founder has ALREADY SETTLED (fixed grounding — stay consistent with these, do not re-open them):\n${JSON.stringify(upstream, null, 2)}`
+        : "\nNo kinds are settled yet — this is the first layer.",
+      grounding
+        ? `\nThe product's grounded reality (cited code facts):\n${JSON.stringify(grounding, null, 2)}`
+        : "",
+      founderInputs
+        ? `\nThe founder's own stated inputs (VERIFY and enrich, do not take as settled):\n${JSON.stringify(founderInputs, null, 2)}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+    const prompt = `${MARKET_LAYER_PROMPT}${contextBlock}`;
+    const { text: out, error } = await runClaudeQuery({
+      prompt,
+      cwd,
+      model,
+      maxTurns,
+      onText,
+      allowedTools: ["WebSearch", "WebFetch", "Read", "Glob", "Grep"],
+    });
+    if (error) {
+      return {
+        ok: false,
+        candidates: [],
+        meta: { error: error.message, errorKind: error.kind, retriable: error.retriable },
+      };
+    }
+    return { ok: true, candidates: toCandidates(parseAgentItems(out)), meta: { parsed: true } };
+  };
+}
+
+// The per-layer ritual: research candidates for ONE next kind, grounded on the settled upstream
+// picks, and return them WITHOUT persisting. This is the deliberate difference from
+// runMarketResearch, which persists the whole set: here the founder previews a spread and PICKS,
+// and only the pick persists (through the existing marketObjectStore path). Each returned candidate
+// carries its honest, already-demoted solidity so a hypothesis reads as a hypothesis in the preview.
+// `kind` defaults to the next hinted facet given `upstream` (the settled kinds), but stays open — a
+// caller may name any kind, on or off the hint list.
+export async function researchMarketLayer({
+  generator = blankLayerGenerate,
+  projectId = "default",
+  kind = null,
+  upstream = [],
+  grounding = null,
+  founderInputs = null,
+} = {}) {
+  const settledKinds = (Array.isArray(upstream) ? upstream : [])
+    .map((o) => (typeof o === "string" ? o : o?.kind))
+    .map((k) => String(k ?? "").trim())
+    .filter(Boolean);
+  const targetKind = String(kind ?? "").trim() || nextKindHint(settledKinds);
+  if (!targetKind) {
+    // Every hinted facet is settled and the caller named no kind — nothing to research, honestly.
+    return { ok: true, kind: null, candidates: [], meta: { exhausted: true } };
+  }
+
+  const { ok, candidates: raw = [], meta = {} } = await generator({
+    kind: targetKind,
+    upstream,
+    grounding,
+    founderInputs,
+    projectId,
+  });
+
+  // Keep only candidates the store would accept (kind + statement), force the requested kind so a
+  // stray element cannot smuggle in a different facet, and label each with its honest solidity. No
+  // persistence — the founder's pick is what reaches marketObjectStore, elsewhere.
+  const candidates = toCandidates(raw)
+    .map((c) => ({ ...c, kind: targetKind }))
+    .map(labelCandidate);
+
+  return { ok: ok !== false, kind: targetKind, candidates, meta: { ...meta, count: candidates.length } };
 }
 
 // ── Founder-typed inputs as an OVERRIDE layer ────────────────────────────────────────────────────

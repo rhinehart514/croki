@@ -90,7 +90,10 @@ export function draftKey(item) {
 // A run's gate node stamps each reviewed item with approvalStatus
 // ('approved' | 'rejected') and, for edits, editedFrom (the original draft)
 // alongside the founder's rewritten draft.
-export function extractDecisions(runs = [], { limit = 5 } = {}) {
+// `agentRef` (optional) filters to decisions on items a SPECIFIC agent produced — the per-agent
+// slice the agent face reads. Items carry item.agentRef when an agent step stamped them (graph.mjs).
+// Null/absent = every gate item, the prior behavior, so existing callers are unchanged.
+export function extractDecisions(runs = [], { limit = 5, agentRef = null } = {}) {
   const approved = [];
   const rejected = [];
   const edits = [];
@@ -102,6 +105,7 @@ export function extractDecisions(runs = [], { limit = 5 } = {}) {
     for (const node of Object.values(nodes)) {
       if (node?.category !== "gate" || !Array.isArray(node.items)) continue;
       for (const item of node.items) {
+        if (agentRef != null && item?.agentRef !== agentRef) continue;
         const status = item?.approvalStatus;
         if (status !== "approved" && status !== "rejected") continue;
         // Open content: the known draft aliases when present, else whatever reviewable text the
@@ -127,6 +131,63 @@ export function extractDecisions(runs = [], { limit = 5 } = {}) {
     }
   }
   return { approved, rejected, edits };
+}
+
+// The per-agent slice of the taste ledger: the same extraction as extractDecisions, but only over
+// items the named agent produced (item.agentRef === agentRef). This is what powers the agent face —
+// "what has THIS agent learned from the founder." A blank agentRef returns an honest empty rather than
+// falling back to every agent's decisions, so an unstamped/unknown agent never borrows another's taste.
+export function extractDecisionsForAgent(runs = [], agentRef, options = {}) {
+  if (!agentRef) return { approved: [], rejected: [], edits: [] };
+  return extractDecisions(runs, { ...options, agentRef });
+}
+
+// How many distinct runs this agent produced a gate item in — derived purely from stamped items in the
+// run ledger, never seeded. A run counts once if any of its gate nodes holds an item this agent
+// produced, regardless of the founder's decision on it (a rejected draft is still a run the agent ran).
+function runCountForAgent(runs = [], agentRef) {
+  if (!agentRef) return 0;
+  let count = 0;
+  for (const run of runs) {
+    const nodes = run?.result?.nodes;
+    if (!nodes) continue;
+    let produced = false;
+    for (const node of Object.values(nodes)) {
+      if (node?.category !== "gate" || !Array.isArray(node.items)) continue;
+      if (node.items.some((item) => item?.agentRef === agentRef)) { produced = true; break; }
+    }
+    if (produced) count += 1;
+  }
+  return count;
+}
+
+// The agent's derived profile — the "how it learned" panel behind the agent face, computed entirely
+// from real run state. Nothing is seeded: an agent with no runs reads honestly (hasRuns false, zero
+// counts, empty edits, blank voice, a "no runs yet" note) rather than a fabricated 0-dressed-as-data.
+// `editLimit` caps the before/after edits carried (the strongest learning signal); `voiceExamples`
+// caps how many approved/rejected/edit examples the rendered current-voice summary shows.
+export function buildAgentProfile(runs = [], agentRef, { editLimit = 5, voiceExamples = 3 } = {}) {
+  const decisions = extractDecisionsForAgent(runs, agentRef, { limit: Infinity });
+  const runCount = runCountForAgent(runs, agentRef);
+  const counts = {
+    approved: decisions.approved.length,
+    rejected: decisions.rejected.length,
+    edits: decisions.edits.length,
+  };
+  const hasRuns = runCount > 0 || counts.approved > 0 || counts.rejected > 0 || counts.edits > 0;
+  const voice = hasRuns
+    ? renderDraftMemory(buildDraftMemory(decisions, { maxExamples: voiceExamples })).replace(/^\n+/, "")
+    : "";
+  return {
+    agentRef: agentRef ?? null,
+    hasRuns,
+    runCount,
+    counts,
+    // Newest-first; extractDecisions already orders runs newest → oldest.
+    lastEdits: decisions.edits.slice(0, editLimit),
+    voice,
+    note: hasRuns ? null : "no runs yet",
+  };
 }
 
 // Idea taste — the founder's kills/keeps on GENERATED ideas, read off the feedback ledger's

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
-import { extractDecisions, buildDraftMemory, renderDraftMemory, draftKey } from "../src/memory.mjs";
+import { extractDecisions, buildDraftMemory, renderDraftMemory, draftKey, extractDecisionsForAgent, buildAgentProfile } from "../src/memory.mjs";
 import { run as gateRun } from "../src/connectors/gate/default.mjs";
 import { run as draftRun } from "../src/connectors/draft/claude.mjs";
 import { runGraph } from "../src/graph.mjs";
@@ -243,5 +243,81 @@ describe("memory — draftKey", () => {
     assert.equal(draftKey({ url: "u", name: "n" }), "u");
     assert.equal(draftKey({ name: "n" }), "n");
     assert.equal(draftKey({}), null);
+  });
+});
+
+describe("memory — per-agent taste", () => {
+  // Two agents' decisions sitting side by side in one gate node, each item stamped with its producer.
+  const mixedRuns = [
+    runWithGate([
+      { name: "A", email: "a@x.com", draft: "warm note from Ada", approvalStatus: "approved", agentRef: "ada" },
+      { name: "B", email: "b@x.com", draft: "stiff pitch from Boone", approvalStatus: "rejected", agentRef: "boone" },
+      { name: "C", email: "c@x.com", draft: "Ada rewrite", editedFrom: "Ada first draft", approvalStatus: "approved", agentRef: "ada" },
+    ]),
+  ];
+
+  it("isolates one agent's decisions from another's", () => {
+    const ada = extractDecisionsForAgent(mixedRuns, "ada");
+    assert.equal(ada.approved.length, 2);
+    assert.equal(ada.rejected.length, 0, "Boone's rejection must not leak into Ada's taste");
+    assert.equal(ada.edits.length, 1);
+    assert.deepEqual(ada.edits[0], { from: "Ada first draft", to: "Ada rewrite" });
+
+    const boone = extractDecisionsForAgent(mixedRuns, "boone");
+    assert.equal(boone.approved.length, 0);
+    assert.equal(boone.rejected.length, 1);
+    assert.equal(boone.rejected[0].draft, "stiff pitch from Boone");
+  });
+
+  it("returns an honest empty for a blank agent ref rather than every agent's decisions", () => {
+    const none = extractDecisionsForAgent(mixedRuns, null);
+    assert.deepEqual(none, { approved: [], rejected: [], edits: [] });
+  });
+
+  it("builds a derived profile: run count, approve/reject/edit counts, last edits, and a voice summary", () => {
+    const profile = buildAgentProfile(mixedRuns, "ada");
+    assert.equal(profile.agentRef, "ada");
+    assert.equal(profile.hasRuns, true);
+    assert.equal(profile.runCount, 1);
+    assert.deepEqual(profile.counts, { approved: 2, rejected: 0, edits: 1 });
+    assert.equal(profile.lastEdits.length, 1);
+    assert.deepEqual(profile.lastEdits[0], { from: "Ada first draft", to: "Ada rewrite" });
+    assert.match(profile.voice, /Ada rewrite/, "the rendered voice summary reflects Ada's approved words");
+    assert.equal(profile.note, null);
+  });
+
+  it("reads honestly for an agent that has never run — zeros, empties, and a 'no runs yet' note", () => {
+    const profile = buildAgentProfile(mixedRuns, "never-ran");
+    assert.equal(profile.hasRuns, false);
+    assert.equal(profile.runCount, 0);
+    assert.deepEqual(profile.counts, { approved: 0, rejected: 0, edits: 0 });
+    assert.deepEqual(profile.lastEdits, []);
+    assert.equal(profile.voice, "");
+    assert.equal(profile.note, "no runs yet");
+  });
+});
+
+describe("memory — agentRef stamping through the run", () => {
+  it("stamps an agent step's items with its ref and carries it through the founder gate approval", async () => {
+    const graph = {
+      id: "agent-stamp-graph",
+      name: "Agent stamp",
+      nodes: [
+        { id: "gen", category: "generate", kind: "agent", ref: "drafter", label: "Draft", outputKind: "signal", config: {}, position: { x: 0, y: 0 } },
+        { id: "gate", category: "gate", connector: "default", label: "Review", config: {}, position: { x: 1, y: 0 } },
+      ],
+      edges: [{ id: "e", source: "gen", target: "gate", edgeType: "data" }],
+    };
+    const result = await runGraph(graph, {
+      approvals: { gate: true },
+      stepRuntime: {
+        async agent() {
+          return { ok: true, items: [{ note: "hi there" }] };
+        },
+      },
+    });
+    assert.equal(result.nodes.gen.items[0].agentRef, "drafter", "the producing agent stamps its own items");
+    assert.equal(result.nodes.gate.items[0].agentRef, "drafter", "the ref survives the gate approval onto the ledger");
+    assert.equal(result.nodes.gate.items[0].approvalStatus, "approved");
   });
 });

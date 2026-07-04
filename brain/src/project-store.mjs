@@ -7,6 +7,7 @@ import { persistence, storeRoot, PROJECT_COLLECTION, PROJECT_KEY } from "./persi
 import "./migrate-to-sqlite.mjs";
 import { loadFlow, saveFlow, summarizeRunResult } from "./flow-store.mjs";
 import { defaultTeamId } from "./team-store.mjs";
+import { buildAgentProfile } from "./memory.mjs";
 
 const SCHEMA_VERSION = 4;
 const CATALOG_SCHEMA_VERSION = 1;
@@ -488,6 +489,33 @@ export function getChannel(project, channelId, options = {}) {
   const channel = getProjectChannels(project, options).find((item) => item.id === channelId || item.graphId === channelId);
   if (!channel) throw new Error(`Channel not found: ${channelId}`);
   return channel;
+}
+
+// Every persisted run across a project's pipelines, oldest → newest, concatenated in channel order.
+// The taste ledger a project's agents learned from lives spread across its channels' flows; this
+// gathers them so a per-agent read sees the whole history. Reads only — never runs anything.
+export function loadProjectRuns(projectId, options = {}) {
+  const project = loadProject({ ...options, projectId });
+  const runs = [];
+  for (const channel of getProjectChannels(project, options)) {
+    if (!channel.graphId) continue;
+    const { runs: flowRuns } = loadFlow(channel.graphId, null, options);
+    if (Array.isArray(flowRuns)) runs.push(...flowRuns);
+  }
+  return runs;
+}
+
+// The agent face's profile: how a single agent has learned from the founder, derived only from real
+// run state. Reads the project's whole run ledger, filters to the items THIS agent produced (stamped
+// item.agentRef), and returns derived counts + last edits + a rendered current-voice summary. An agent
+// with no runs returns an honest empty (hasRuns false, "no runs yet") — never a faked number. Tests
+// can inject a run set via options.runs to bypass disk.
+export function getAgentProfile(projectId, agentRef, options = {}) {
+  const runs = Array.isArray(options.runs) ? options.runs : loadProjectRuns(projectId, options);
+  return buildAgentProfile(runs, agentRef, {
+    ...(Number.isFinite(options.editLimit) ? { editLimit: options.editLimit } : {}),
+    ...(Number.isFinite(options.voiceExamples) ? { voiceExamples: options.voiceExamples } : {}),
+  });
 }
 
 // `channelOffer` (optional) is the pipeline's own offer/deal in the founder's words — when the run

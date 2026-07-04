@@ -24,6 +24,10 @@ import {
   buildMarketContext,
   founderInputsFromSharedContext,
   createClaudeMarketResearcher,
+  researchMarketLayer,
+  blankLayerGenerate,
+  nextKindHint,
+  createClaudeMarketLayerResearcher,
   MARKET_OBJECT_KIND_HINTS,
 } from "../src/market-research.mjs";
 import { marketObjectStore } from "../src/gtm-store.mjs";
@@ -204,6 +208,117 @@ describe("market-research — the context projection and provider", () => {
   it("the provider is an honest blank on no market context", () => {
     assert.equal(createMarketProvider(null).contribute(), null);
     assert.equal(createMarketProvider({}).contribute(), null);
+  });
+});
+
+describe("market-research — per-layer research builds the picture one facet at a time", () => {
+  // A fake per-layer generator: records the args it was called with and returns a fixed candidate set.
+  function fakeLayerGenerator(candidates, spy = {}) {
+    return async (args) => {
+      spy.args = args;
+      return { ok: true, candidates, meta: { fake: true } };
+    };
+  }
+
+  it("nextKindHint offers the next unfilled hinted facet, and null once all are settled", () => {
+    assert.equal(nextKindHint([]), "buyer", "first layer is the head of the hint order");
+    assert.equal(nextKindHint(["buyer"]), "pain");
+    assert.equal(nextKindHint(["buyer", "pain"]), "job");
+    // Skipping is allowed — the hint just returns the first not-yet-settled facet.
+    assert.equal(nextKindHint(["buyer", "job"]), "pain");
+    assert.equal(nextKindHint(MARKET_OBJECT_KIND_HINTS), null, "all hinted facets settled → no hint");
+  });
+
+  it("returns candidates for the NEXT kind, grounded in the upstream picks, each with a solidity label", async () => {
+    const options = freshRoot();
+    const spy = {};
+    // Upstream: the founder has already SETTLED buyer + pain. The next hinted facet is "job".
+    const upstream = [
+      { kind: "buyer", statement: "local business owners", solidity: "researched" },
+      { kind: "pain", statement: "their website rots after launch", solidity: "researched" },
+    ];
+    const generate = fakeLayerGenerator(
+      [
+        // Sourced → keeps its declared solidity.
+        { kind: "job", statement: "keep the site current without hiring an agency", evidence: [{ claim: "forum", source: "https://x/thread", solidity: "researched" }], solidity: "researched" },
+        // Unsourced → honestly demoted to speculative in the PREVIEW, before any persist.
+        { kind: "job", statement: "look credible to new customers", solidity: "researched", openQuestions: ["is credibility the hired job?"] },
+      ],
+      spy,
+    );
+
+    const { ok, kind, candidates, meta } = await researchMarketLayer({
+      generator: generate,
+      projectId: "strelva",
+      upstream,
+      options,
+    });
+
+    assert.equal(ok, true);
+    assert.equal(kind, "job", "the next kind is the first unfilled hinted facet given the upstream picks");
+    assert.equal(meta.count, 2);
+    // The generator was grounded on the settled upstream picks and the target kind.
+    assert.equal(spy.args.kind, "job");
+    assert.deepEqual(spy.args.upstream, upstream);
+    // Every candidate carries an honest, already-demoted solidity label.
+    assert.equal(candidates[0].solidity, "researched", "a sourced candidate keeps its declared solidity");
+    assert.equal(candidates[1].solidity, "speculative", "an unsourced candidate reads as a hypothesis in the preview");
+    assert.ok(candidates.every((c) => c.kind === "job"), "every candidate is the requested kind");
+
+    // NOTHING is persisted — the founder's pick reaches the store elsewhere, not this preview.
+    assert.equal(marketObjectStore.list({ ...options, projectId: "strelva" }).length, 0);
+  });
+
+  it("honors an explicitly named kind (open — jump or skip the hint order)", async () => {
+    const spy = {};
+    const generate = fakeLayerGenerator(
+      [{ kind: "channel", statement: "these buyers gather in local Facebook groups", evidence: [{ claim: "seen", source: "https://x" }] }],
+      spy,
+    );
+    // Buyer settled, but the founder jumps straight to channel — a valid steer, not the next hint.
+    const { kind, candidates } = await researchMarketLayer({
+      generator: generate,
+      projectId: "p",
+      kind: "channel",
+      upstream: [{ kind: "buyer", statement: "b" }],
+    });
+    assert.equal(kind, "channel");
+    assert.equal(spy.args.kind, "channel");
+    assert.equal(candidates[0].kind, "channel");
+  });
+
+  it("accepts a novel kind off the hint list (no closed enum)", async () => {
+    const generate = fakeLayerGenerator([
+      { kind: "ritual_gathering", statement: "buyers swap referrals at a weekly breakfast", evidence: [{ claim: "seen", source: "https://x" }] },
+    ]);
+    const { kind, candidates } = await researchMarketLayer({ generator: generate, projectId: "p", kind: "ritual_gathering" });
+    assert.equal(kind, "ritual_gathering");
+    assert.equal(candidates[0].kind, "ritual_gathering");
+  });
+
+  it("the honest-blank per-layer default returns no candidates and persists nothing", async () => {
+    const options = freshRoot();
+    const { candidates, meta } = await researchMarketLayer({ generator: blankLayerGenerate, projectId: "p", kind: "buyer", options });
+    assert.equal(candidates.length, 0);
+    assert.equal(meta.blank, true);
+    assert.equal(marketObjectStore.list({ ...options, projectId: "p" }).length, 0);
+  });
+
+  it("reports honestly when every hinted facet is settled and no kind is named", async () => {
+    const generate = fakeLayerGenerator([{ kind: "buyer", statement: "should never be asked", evidence: [{ claim: "c", source: "https://x" }] }]);
+    const { kind, candidates, meta } = await researchMarketLayer({
+      generator: generate,
+      projectId: "p",
+      upstream: MARKET_OBJECT_KIND_HINTS.map((k) => ({ kind: k, statement: `${k} settled` })),
+    });
+    assert.equal(kind, null);
+    assert.equal(candidates.length, 0);
+    assert.equal(meta.exhausted, true);
+  });
+
+  it("createClaudeMarketLayerResearcher builds a per-layer generator (an open step, not a hardwired connector)", () => {
+    const generate = createClaudeMarketLayerResearcher({ cwd: process.cwd(), maxTurns: 1 });
+    assert.equal(typeof generate, "function");
   });
 });
 

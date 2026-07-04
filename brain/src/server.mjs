@@ -21,6 +21,7 @@ import {
   createChannel,
   createProject,
   duplicateChannel,
+  getAgentProfile,
   getChannel,
   getProjectWithChannels,
   listProjects,
@@ -58,6 +59,8 @@ import { buildRunGrounding } from "./run-grounding.mjs";
 import {
   runMarketResearch,
   createClaudeMarketResearcher,
+  researchMarketLayer,
+  createClaudeMarketLayerResearcher,
   buildMarketContext,
   founderInputsFromSharedContext,
 } from "./market-research.mjs";
@@ -928,6 +931,51 @@ const server = http.createServer(async (req, res) => {
         objects,
         count: objects.length,
         summary: marketResearchSummary(project, objects, meta),
+        meta: { ...meta, connected },
+      });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Per-layer market research — the steerable twin of the whole-picture ritual above. Instead of the
+  // model guessing every buyer facet at once, the founder builds the picture ONE kind at a time: this
+  // researches candidates for the NEXT kind only, grounded on the kinds already settled (their picks so
+  // far). It returns a spread the founder chooses between and PERSISTS NOTHING — the pick alone reaches
+  // the store, through the same market-research persistence path, and shows up as a domain:"market" node.
+  // Read-only against the outside world, exactly like run_market_research: it researches, never sends.
+  const projectMarketLayerMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/market-layer$/);
+  if (req.method === "POST" && projectMarketLayerMatch) {
+    try {
+      const projectId = decodeURIComponent(projectMarketLayerMatch[1]);
+      const body = await readBody(req);
+      const project = loadProject({ projectId });
+      const repo = project.sharedContext?.repository?.repo || process.cwd();
+      // The founder's already-settled picks ground the next layer. Default to what is stored when the
+      // caller sends nothing, so the next facet rests on the picture built so far. `kind` is optional —
+      // omit it to take the next hinted facet, or name any kind (on or off the hint list) to steer.
+      const upstream = Array.isArray(body?.upstream)
+        ? body.upstream
+        : marketObjectStore.list({ projectId });
+      const grounding = buildRunGrounding(project);
+      const founderInputs = founderInputsFromSharedContext(project.sharedContext);
+      const connected = !!selectRuntime({}).adapter;
+      const { ok, kind, candidates, meta } = await researchMarketLayer({
+        // Live per-layer generator when Claude is connected; the module's honest-blank default otherwise.
+        generator: connected ? createClaudeMarketLayerResearcher({ cwd: repo }) : undefined,
+        projectId,
+        kind: body?.kind ?? null,
+        upstream,
+        grounding,
+        founderInputs,
+      });
+      json(res, 200, {
+        projectId,
+        ok,
+        kind,
+        candidates,
+        count: candidates.length,
         meta: { ...meta, connected },
       });
     } catch (err) {
@@ -1841,6 +1889,23 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       const status = err?.code === "gate_release_forbidden" ? 403 : 409;
       json(res, status, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Per-agent taste profile — the "how it learned" panel behind an agent's face. DERIVED-ONLY from
+  // this project's run ledger: how many runs the agent produced items in, the founder's approve/reject/
+  // edit counts on those items, the last few before/after edits (the strongest learning signal), and a
+  // rendered current-voice summary. An agent the founder has never run reads honestly ("no runs yet"),
+  // never a fabricated zero. Read-only.
+  const agentProfileMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/agents\/([^/]+)\/profile$/);
+  if (req.method === "GET" && agentProfileMatch) {
+    try {
+      const projectId = decodeURIComponent(agentProfileMatch[1]);
+      const agentRef = decodeURIComponent(agentProfileMatch[2]);
+      json(res, 200, { profile: getAgentProfile(projectId, agentRef) });
+    } catch (err) {
+      json(res, 500, { error: err instanceof Error ? err.message : String(err) });
     }
     return;
   }

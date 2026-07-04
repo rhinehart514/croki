@@ -163,6 +163,18 @@ function collectConsultViolations(gateId, edges, nodeMap, nodeResults) {
   return violations;
 }
 
+// Attach the producing agent's ref to each item it produced, without disturbing any other shape.
+// First producer wins (an item that already carries an agentRef from an upstream agent keeps it), and
+// only plain objects are stamped — a primitive or array item passes through untouched.
+function stampAgentRef(items, agentRef) {
+  if (!agentRef || !Array.isArray(items)) return items;
+  return items.map((item) =>
+    item && typeof item === "object" && !Array.isArray(item) && item.agentRef == null
+      ? { ...item, agentRef }
+      : item,
+  );
+}
+
 // ─── Resolve context inputs for a node ───────────────────────────────────────
 
 function resolveContext(nodeId, edges, nodeResults) {
@@ -224,6 +236,19 @@ async function runNode(node, upstream, context, store, opts = {}) {
     }
     try {
       const result = await runner(node, upstream, context, store, opts);
+      // Per-agent provenance: stamp each item an AGENT step produced with the producing agent's ref,
+      // so it rides through downstream steps and the founder gate onto the run ledger. That link is what
+      // lets taste memory be read back per agent (extractDecisionsForAgent / getAgentProfile) — the
+      // agent face's "how it learned" signal. Additive: existing item shapes are untouched, the first
+      // producer wins (a re-stamp never overwrites an upstream agent's ref), and only plain objects are
+      // stamped. A tool/skill/code step is not an agent, so it is never stamped.
+      if (kind === "agent" && result?.ok !== false && Array.isArray(result?.items)) {
+        const agentRef = node.ref ?? node.config?.ref ?? null;
+        if (agentRef) {
+          const items = stampAgentRef(result.items, agentRef);
+          return { nodeId: node.id, category: node.category, kind, ...result, items };
+        }
+      }
       return { nodeId: node.id, category: node.category, kind, ...result };
     } catch (err) {
       return { nodeId: node.id, category: node.category, kind, ok: false, items: [], error: err.message };
