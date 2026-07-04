@@ -984,6 +984,24 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Persist ONE picked market-layer candidate. The per-layer flow above researches a spread and stores
+  // nothing; when the founder picks (or sharpens) one facet, this is the door that commits just that one
+  // to the store, so it lands as a domain:"market" node on the graph. Research only — it never sends.
+  const projectMarketObjectMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/market-object$/);
+  if (req.method === "POST" && projectMarketObjectMatch) {
+    try {
+      const projectId = decodeURIComponent(projectMarketObjectMatch[1]);
+      const body = await readBody(req);
+      const object = body?.object;
+      if (!object || typeof object !== "object") { json(res, 400, { error: "a picked market object is required" }); return; }
+      const stored = marketObjectStore.create({ ...object, projectId }, {});
+      json(res, 200, { projectId, object: stored });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
   // Path portfolio generation — turn the two truth sides (ProductTruth + MarketObjects) into a ranked
   // portfolio of 20-30 GTM paths (GTM-ENGINE-REBUILD Phase 2). Generation is rented (a lean generate +
   // a SEPARATE grade); ranking is deterministic code inside composePathPortfolio. The GTMPaths persist,

@@ -91,6 +91,7 @@ import { ToolForge } from "@/components/ToolForge";
 import { IssuesCard } from "@/components/IssuesCard";
 import { InputsInbox } from "@/components/InputsInbox";
 import { MicroproductFace, type Microproduct } from "@/components/MicroproductFace";
+import { MarketLayers } from "@/components/MarketLayers";
 
 // The views you can summon onto the GTM canvas as draggable cards — the agentic replacement for
 // lens tabs. You pop one up, drag it, dismiss it; Claude can summon the same cards.
@@ -103,6 +104,7 @@ const SUMMON_GTM = [
   { id: "experiments", label: "Experiment matrix", desc: "ICP × claim × pipeline — the live hypotheses." },
   { id: "inbox", label: "Inbox", desc: "Every world-signal that came in — a commit, a signup, a reply — captured, waiting for you to route or set aside." },
   { id: "microproduct", label: "Microproduct", desc: "Cut a working artifact from your product for a goal — it stages behind your gate, nothing deploys until you approve." },
+  { id: "market", label: "Market picture", desc: "Build your buyer picture one layer at a time — ICP, pain, trigger, offer — picking from real alternatives at each." },
 ];
 
 // Pull the built microproduct preview out of the staged run the compose door returns. The producer's
@@ -1984,8 +1986,8 @@ export default function App() {
                 title={item?.label ?? kind}
                 onDismiss={() => dismissCard(kind)}
                 initial={{ x: 150 + i * 46, y: 92 + i * 46 }}
-                width={kind === "experiments" ? 640 : 440}
-                height={kind === "experiments" ? 460 : 520}
+                width={kind === "experiments" ? 640 : kind === "market" ? 468 : 440}
+                height={kind === "experiments" ? 460 : kind === "market" ? 580 : 520}
               >
                 {kind === "experiments" ? (
                   <ExperimentMatrixLens experiments={gtmCanvasModel.experiments} claims={gtmCanvasModel.claims} icp={gtmCanvasModel.icp} channels={gtmCanvasModel.channels} selected={reference?.kind === "experiment" ? reference.id : null} onSelect={(id) => openReference("experiment", id)} />
@@ -1995,6 +1997,9 @@ export default function App() {
                 ) : null}
                 {kind === "inbox" && activeProjectId ? (
                   <InputsInbox projectId={activeProjectId} channels={channels} />
+                ) : null}
+                {kind === "market" && activeProjectId ? (
+                  <MarketLayers projectId={activeProjectId} />
                 ) : null}
                 {kind === "microproduct" ? (
                   microproduct ? (

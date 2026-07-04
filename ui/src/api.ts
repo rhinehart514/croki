@@ -430,6 +430,28 @@ export const getAgentLearning = (projectId: string, ref: string) =>
     `/api/projects/${encodeURIComponent(projectId)}/agents/${encodeURIComponent(ref)}/profile`,
   );
 
+// The market picture, built one layer at a time. researchMarketLayer returns a spread of real
+// alternatives for the NEXT buyer facet, grounded in what's already settled — and persists nothing.
+// The founder picks (or writes) one; saveMarketObject commits just that one to the graph.
+export type MarketCandidate = {
+  kind: string;
+  statement: string;
+  solidity?: string | null;
+  declaredSolidity?: string | null;
+  evidence?: unknown[];
+  [k: string]: unknown;
+};
+export const researchMarketLayer = (projectId: string, kind?: string | null, upstream?: unknown[]) =>
+  post<{ projectId: string; ok: boolean; kind: string; candidates: MarketCandidate[]; count: number; meta: { connected?: boolean } & Record<string, unknown> }>(
+    `/api/projects/${encodeURIComponent(projectId)}/market-layer`,
+    { kind: kind ?? null, ...(upstream ? { upstream } : {}) },
+  );
+export const saveMarketObject = (projectId: string, object: MarketCandidate) =>
+  post<{ projectId: string; object: MarketCandidate }>(
+    `/api/projects/${encodeURIComponent(projectId)}/market-object`,
+    { object },
+  );
+
 // Persist the founder's canvas layout (per-project sidecar keyed by node id — projection state,
 // never knowledge). Merged server-side, so partial position maps are fine.
 export const saveObjectGraphPositions = (
