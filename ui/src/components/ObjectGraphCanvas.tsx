@@ -392,7 +392,10 @@ function StagesFit({ bounds, ready, refitSignal }: { bounds: { minX: number; wid
   useEffect(() => {
     if (!ready || !bounds || !vw) return;
     const t = window.setTimeout(() => {
-      const zoom = Math.min(0.9, Math.max(0.4, (vw - 120) / bounds.width));
+      // Land at a comfortably readable zoom. If the bands are wider than the frame, we don't shrink
+      // to fit them all — cards stay legible and the founder pans right to the later stages (still one
+      // canvas). Narrow maps can zoom in further.
+      const zoom = Math.min(0.9, Math.max(0.62, (vw - 90) / bounds.width));
       // band-header row sits at BAND_TOP-54; land it just below the path header, left margin ~60px.
       const x = 60 - bounds.minX * zoom;
       const y = 190 - (BAND_TOP - 54) * zoom;
