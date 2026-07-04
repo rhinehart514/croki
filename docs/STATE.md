@@ -50,7 +50,9 @@ measured result.
 | Living GTM graph (ordered canvas) | **Building** | The reimagined surface: one map of the whole go-to-market picture, arranged left-to-right, the strongest path lit as the spine, drag / reorganize. Ordered layout landed on main 07-03; verified on one dogfood product, not a live founder. |
 | GTM engine rebuild | **Landed, unexercised** | Evidence graph, market research, path portfolio, outcome ingest, promotion, run-compile — merged and tested, not yet run end-to-end on a live goal. Note: this is fuzzy work; by doctrine it belongs in rented agents behind open steps, not hosted modules — keep it thin and collapse toward agents, never grow it into a subsystem. |
 | Dogfood loop | **Landed, unexercised** | Drover files and builds its own improvements to gated branches that wait for review. |
-| A first attributable win | **Unproven** | The alpha bet. No real founder outcome has closed the loop yet. |
+| The learning loop closes (machinery) | **Built & verified** | On branch `lean-rebuild`: outcome-door, compile→approve→run, outcome-proposed verdicts — a real outcome can now flow back and shape the next run. Audited alpha-loop-ready; not yet exercised by a real founder. |
+| The two new surfaces | **Built & browser-verified** | The agent face (derived per-agent record, honest "no runs yet") and the market picture built layer by layer (co-construct picker) — both on `lean-rebuild`. |
+| A first attributable win | **Unproven** | The alpha bet. The machinery is in place and verified; no real founder outcome has closed the loop yet. This is what earns "alpha". |
 
 ---
 
@@ -64,7 +66,7 @@ agents. This is the anti-cage rule in `AGENTS.md`, restated because it's easy to
 
 ## Build health (2026-07-03)
 
-- **Tests:** full suite green (`npm test` — brain tests, lint, build all pass). 1091 pass / 0 fail.
+- **Tests:** full suite green. Branch `lean-rebuild`: 1170 backend pass / 0 fail, plus a new front-end unit-test harness (vitest + testing-library) at 12 pass / 0 fail, chained into `npm test`. `main` is at the 1091-pass state; the vision buildout lives on the branch, unpushed, awaiting review.
 - **Backend:** 89 modules. New GTM-engine modules present and tested: evidence, gtm-store,
   market-research, path-portfolio, outcome-ingest, promote-motion, run-compile.
 - **Interface:** 37 components, 9 canvas lenses, node-flow diagram as the default canvas.
