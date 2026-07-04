@@ -7412,3 +7412,107 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
   color: var(--ink-2);
   overflow-wrap: anywhere;
 }
+
+/* ── Operating overview — the portfolio of products, each with its live operating signal ────────
+   Real per-product data only (the win it's chasing, its derived status headline, pipelines, last
+   active). Layout + the one state chip; the glass skin still paints the card background. */
+.project-picker {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-5) var(--space-8);
+}
+.project-picker-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+.project-picker-head h1 {
+  font-size: var(--text-2xl);
+  letter-spacing: -0.02em;
+  margin: 6px 0 8px;
+}
+.project-picker-head p {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  max-width: 62ch;
+  margin: 0;
+}
+.project-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-3);
+}
+.project-choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  text-align: left;
+  padding: var(--space-4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+.project-choice:hover { border-color: var(--ink-2); transform: translateY(-1px); }
+.project-choice.active { border-color: var(--ink); }
+.project-choice-top { display: flex; align-items: center; gap: var(--space-2); }
+.project-choice-icon {
+  width: 30px; height: 30px; flex: 0 0 auto;
+  display: grid; place-items: center;
+  border-radius: var(--r-sm);
+  background: var(--surface-2); border: 1px solid var(--line-2);
+  color: var(--muted);
+}
+.project-choice-icon svg { width: 15px; height: 15px; }
+.project-choice-name { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+.project-choice-name strong { font-size: var(--text-md); letter-spacing: -0.01em; }
+.project-choice-name em {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-style: normal; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--muted);
+}
+.project-choice-name em svg { width: 11px; height: 11px; }
+.project-state {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: var(--text-xs);
+  padding: 3px 8px; border-radius: 999px;
+  border: 1px solid var(--line-2); color: var(--muted);
+  white-space: nowrap;
+}
+.project-state .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+.project-state-grounded { color: var(--proven); border-color: var(--proven-soft); background: var(--proven-soft); }
+.project-state-grounded .dot { background: var(--proven); }
+.project-state-blind { color: var(--gap); border-color: var(--gap-soft); background: var(--gap-soft); }
+.project-state-blind .dot { background: var(--gap); }
+.project-choice-chasing { font-size: var(--text-sm); color: var(--ink-2); }
+.project-choice-chasing strong { font-weight: 600; }
+.project-choice-headline {
+  font-size: var(--text-sm); line-height: 1.4; color: var(--muted);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.project-choice-meta {
+  margin-top: 2px; padding-top: var(--space-2); border-top: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between;
+  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--faint);
+}
+
+/* Operating-overview header controls */
+.studio-eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.project-picker .studio-primary-action {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 34px; padding: 0 14px;
+  border: 1px solid var(--line-2); border-radius: var(--r-sm);
+  background: var(--surface); color: var(--ink);
+  font-size: var(--text-sm); font-weight: 500; white-space: nowrap;
+}
+.project-picker .studio-primary-action:hover { border-color: var(--ink-2); }
+.project-picker .studio-primary-action svg { width: 15px; height: 15px; }
