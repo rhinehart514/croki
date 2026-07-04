@@ -102,6 +102,27 @@ level of one canvas (the two project different object models and that is a real 
 pre-existing polish issue observed during this pass: the Settings/grounding overlays let the canvas
 path-header bleed through at the top — a z-index cleanup for a future design pass, not introduced here.
 
+## Hardening pass (2026-07-03)
+
+A production-focused subtraction pass on top of the IA collapse: reduce lines of code and organize
+the codebase technically, without changing behavior. Net effect: about **5,300 lines removed**, the
+full test suite still green, verified in the browser.
+
+- **Dead code removed.** Six unreferenced files, four genuinely-unused dependencies (kept the ones a
+  JS-only scanner can't see are used in CSS), one undeclared dependency (`zod`) properly declared.
+- **Dead CSS purged.** `ui/src/index.css` went from 11,721 to 7,415 lines — more than half its
+  selectors were debris from long-deleted features. Removed with a PostCSS pass that only drops
+  selectors whose class never appears in any component, with runtime-injected library classes held
+  back; browser-verified.
+- **Unused exports removed.** ~600 lines across the frontend (a whole abandoned "workspace/revision"
+  feature) and backend, driven by the `knip` dead-code scanner, each sweep gated by its test suite.
+- **A standing dead-code check** (`knip.json` + `npx knip`) is now committed, so this debris can't
+  silently re-accumulate.
+
+Not done, flagged as follow-ups: the seven files over 1,000 lines (splitting them is real risk, needs
+its own scoped pass); the one backend "cage" smell (`curation-engine`) that belongs in a rented
+agent; and a couple of `.mjs` files with non-ASCII em-dash bytes worth normalizing.
+
 ---
 
 ## The standing bar for product & design
