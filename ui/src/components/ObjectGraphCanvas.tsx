@@ -125,6 +125,69 @@ function objectKind(node: ObjectGraphNode): ObjectKind {
   }
 }
 
+// Stage bands — a LENS that arranges the graph into the founder's operating story so the whole
+// go-to-market reads left to right: what you believe → what you'll do → what came back. Derived
+// from each node's own type/domain/maturity/role, NOT a fixed backend skeleton — it only decides
+// where a card sits, and the "Flow" view restores the free causal graph. This keeps the anti-cage
+// line: the stages are a way of seeing, never a track a run is forced onto.
+const STAGE_BANDS = [
+  { key: "truth", label: "Product truth", family: "belief" },
+  { key: "market", label: "Market picture", family: "belief" },
+  { key: "paths", label: "GTM paths", family: "move" },
+  { key: "run_gate", label: "Run + gate", family: "move" },
+  { key: "outcomes", label: "Outcomes", family: "result" },
+] as const;
+type BandKey = (typeof STAGE_BANDS)[number]["key"];
+const MARKET_BAND_TYPES = new Set([
+  "buyer", "icp", "pain", "job", "trigger", "workaround", "competitor", "objection",
+  "offer", "value_prop", "message", "proof_point", "channel", "positioning",
+]);
+function stageBandKey(node: ObjectGraphNode): BandKey {
+  const role = nodeRole(node);
+  const d = node.domain || "";
+  const t = node.type || "";
+  if (role === "outcome" || node.maturity === "outcome" || d === "measurement" || d === "learning") return "outcomes";
+  if (role === "gate" || d === "runs" || d === "pipeline" || node.maturity === "execution") return "run_gate";
+  if (t === "path" || t === "conversion_path") return "paths";
+  if (d === "market" || d === "strategy" || MARKET_BAND_TYPES.has(t)) return "market";
+  return "truth"; // product facts / external / anything unclassified
+}
+
+// Banded-layout geometry. A band is a region, not a single column: a band with many cards (a market
+// picture can carry 20+) wraps into sub-columns so no column runs off the bottom of the screen. Bands
+// are separated by a wider gap than the sub-columns inside them, so each still reads as one region.
+const BAND_MAX_ROWS = 6;
+const CARD_STEP_X = 236; // card (214) + gap, between sub-columns inside a band
+const BAND_ROW_H = 172;
+const BAND_TOP = 156;
+const BAND_LEFT = 48;
+const BAND_GAP = 60; // extra separation between bands
+function layoutBandedPositions(nodes: ObjectGraphNode[]): { positions: PositionMap; cols: { key: BandKey; label: string; x: number; index: number }[] } {
+  const byBand = new Map<BandKey, ObjectGraphNode[]>();
+  for (const n of nodes) {
+    const key = stageBandKey(n);
+    (byBand.get(key) ?? byBand.set(key, []).get(key)!).push(n);
+  }
+  const positions: PositionMap = {};
+  const cols: { key: BandKey; label: string; x: number; index: number }[] = [];
+  let x = BAND_LEFT;
+  let index = 0;
+  for (const band of STAGE_BANDS) {
+    const list = byBand.get(band.key);
+    if (!list || !list.length) continue; // an empty band claims no space — the lens shows only what's real
+    index += 1;
+    cols.push({ key: band.key, label: band.label, x, index });
+    const subCols = Math.ceil(list.length / BAND_MAX_ROWS);
+    list.forEach((n, i) => {
+      const sc = Math.floor(i / BAND_MAX_ROWS);
+      const row = i % BAND_MAX_ROWS;
+      positions[n.id] = { x: x + sc * CARD_STEP_X, y: BAND_TOP + row * BAND_ROW_H };
+    });
+    x += subCols * CARD_STEP_X + BAND_GAP;
+  }
+  return { positions, cols };
+}
+
 // An offer states its own price sheet ("Presence $99 / Growth $199 / Scale $499 · per month"); pull the
 // tiers out so the object reads as prices, and keep the trailing qualifier as a subline.
 // A price is "$" + digits with optional thousands separators ($99, $1,000) — a comma only counts when
@@ -317,11 +380,35 @@ function ZoomWatch({ onZoom }: { onZoom: (compact: boolean) => void }) {
   return null;
 }
 
+// Band header labels for the stages lens. They ride the canvas transform so each label stays over
+// its column as you pan and zoom, but the text itself keeps a constant size so it never blurs out.
+function BandHeaders({ cols }: { cols: { key: string; label: string; x: number; index: number }[] }) {
+  const [tx, ty, zoom] = useStore((s) => s.transform);
+  const family = (key: string) => (key === "outcomes" ? "result" : key === "paths" || key === "run_gate" ? "move" : "belief");
+  return (
+    <div className="band-headers" aria-hidden="true">
+      {cols.map((c) => (
+        <div
+          key={c.key}
+          className={`band-header fam-${family(c.key)}`}
+          style={{ transform: `translate(${tx + c.x * zoom}px, ${ty + (BAND_TOP - 54) * zoom}px)` }}
+        >
+          <span className="bn">{c.index}</span>
+          <span className="bt">{c.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ObjectGraphCanvas({ projectId, gate }: { projectId: string | null; gate?: GateBag | null }) {
   const gatePending = !!gate?.items.length;
   const [view, setView] = useState<ObjectGraphView | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [lens, setLens] = useState<"default" | "weakness">("default");
+  // Arrangement is a LENS, not a layout the data is locked into: "stages" arranges cards into the
+  // operating-story bands; "flow" restores the free causal graph (founder drags persist there).
+  const [arrange, setArrange] = useState<"stages" | "flow">("stages");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [compileState, setCompileState] = useState<{ status: "idle" | "running" | "done" | "error"; message: string }>({ status: "idle", message: "" });
@@ -399,18 +486,21 @@ export function ObjectGraphCanvas({ projectId, gate }: { projectId: string | nul
       edges: (view?.graph.edges ?? []).filter((e) => ids.has(e.source) && ids.has(e.target)),
     };
   }, [view, highlightedNodes]);
+  const banded = useMemo(() => layoutBandedPositions(visible.nodes), [visible]);
   const positions = useMemo(
-    () => layoutObjectGraph(visible.nodes, visible.edges, placed),
-    [visible, placed],
+    () => (arrange === "stages" ? banded.positions : layoutObjectGraph(visible.nodes, visible.edges, placed)),
+    [arrange, banded, visible, placed],
   );
   const nodes = useMemo(
     () => layoutNodes(visible.nodes, positions, highlightedNodes, weakestNodeId),
     [visible, positions, highlightedNodes, weakestNodeId],
   );
-  const edges = useMemo(
-    () => layoutEdges(visible.edges, highlightedEdges),
-    [visible, highlightedEdges],
-  );
+  const edges = useMemo(() => {
+    // In Stages mode the card's column already carries the structure, so the full causal web is just
+    // noise — draw only the strongest-path spine through the bands. Flow mode keeps every edge.
+    const src = arrange === "stages" ? visible.edges.filter((e) => highlightedEdges.has(e.id)) : visible.edges;
+    return layoutEdges(src, highlightedEdges);
+  }, [arrange, visible, highlightedEdges]);
 
   // Reorganize: clear founder placements so the whole graph snaps back to the ordered left→right
   // pass, and persist that fresh layout so the tidy sticks across reloads (the server merge overwrites
@@ -485,14 +575,20 @@ export function ObjectGraphCanvas({ projectId, gate }: { projectId: string | nul
           </span>
         </div>
         <div className="object-path-actions">
+          <div className="arrange-toggle" role="group" aria-label="Arrange the map">
+            <button type="button" className={arrange === "stages" ? "active" : ""} onClick={() => { setArrange("stages"); setRefitSignal((s) => s + 1); }}>Stages</button>
+            <button type="button" className={arrange === "flow" ? "active" : ""} onClick={() => { setArrange("flow"); setRefitSignal((s) => s + 1); }}>Flow</button>
+          </div>
           <button type="button" className={lens === "default" ? "active" : ""} onClick={() => setLens("default")}>Default</button>
           <button type="button" className={lens === "weakness" ? "active" : ""} onClick={() => setLens("weakness")}>
             Weakness · {softCount}
           </button>
-          <button type="button" className="reorganize" onClick={reorganize} disabled={!nodes.length}>
-            <Network aria-hidden="true" />
-            Reorganize
-          </button>
+          {arrange === "flow" ? (
+            <button type="button" className="reorganize" onClick={reorganize} disabled={!nodes.length}>
+              <Network aria-hidden="true" />
+              Reorganize
+            </button>
+          ) : null}
           <button type="button" className="compile" onClick={() => void compile()} disabled={!highlightedPath || compileState.status === "running"}>
             {compileState.status === "running" ? <FileSearch aria-hidden="true" /> : <Play aria-hidden="true" />}
             Compile run
@@ -507,7 +603,7 @@ export function ObjectGraphCanvas({ projectId, gate }: { projectId: string | nul
         fitView
         minZoom={0.12}
         maxZoom={1.4}
-        nodesDraggable
+        nodesDraggable={arrange === "flow"}
         nodesConnectable={false}
         elementsSelectable
         // A selected node must not leap above the path header and bleed over it — keep every node in the
@@ -525,6 +621,7 @@ export function ObjectGraphCanvas({ projectId, gate }: { projectId: string | nul
         <Controls showInteractive={false} />
         <FitOnLoad ready={Boolean(view && nodes.length)} refitSignal={refitSignal} />
         <ZoomWatch onZoom={onZoomCompact} />
+        {arrange === "stages" ? <BandHeaders cols={banded.cols} /> : null}
       </ReactFlow>
 
       {loading ? <div className="object-graph-status">Reading the graph…</div> : null}

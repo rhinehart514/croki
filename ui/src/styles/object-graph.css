@@ -96,6 +96,64 @@
   cursor: default;
 }
 
+/* Stages ⇄ Flow — the arrangement lens toggle. A segmented control so it reads as a way of viewing,
+   not a destructive action. */
+.arrange-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.object-path-actions .arrange-toggle button {
+  height: 26px;
+  border: 0;
+  border-radius: calc(var(--r-sm) - 2px);
+  padding: 0 11px;
+  background: transparent;
+  color: var(--muted);
+}
+.object-path-actions .arrange-toggle button.active {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-xs);
+}
+
+/* Stage-band headers: labels that ride the canvas transform to sit over their column. Constant text
+   size (positioned, not scaled) so they never blur out when the map is pulled back. */
+.band-headers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+  overflow: hidden;
+}
+.band-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+}
+.band-header .bn {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.band-header .bt {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+
 .object-card {
   position: relative;
   width: 214px;
