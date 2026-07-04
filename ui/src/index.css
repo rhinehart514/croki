@@ -9291,6 +9291,7 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .settings-overlay .canvas-overlay-body { display: flex; flex-direction: column; overflow: hidden; }
 .settings-overlay-panel { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .settings-overlay-empty { color: var(--faint); font-size: 13px; text-align: center; padding: 48px 16px; }
+.settings-tools-stack { display: flex; flex-direction: column; gap: 28px; }
 /* The reused admin panels sit flush — drop their standalone framing/positioning and their own
    header (the overlay bar carries the title and the single close). */
 .settings-overlay .wsv,

@@ -195,7 +195,7 @@ export default function App() {
   // shows a calm "loading your workspace" instead of flashing the cold-start goal launcher for the
   // 1–2s before the project's graph arrives.
   const [booting, setBooting] = useState(true);
-  const [overlay, setOverlay] = useState<"understand" | "product" | "capabilities" | "settings" | null>(null);
+  const [overlay, setOverlay] = useState<"understand" | "product" | "settings" | null>(null);
   // Which Settings section is showing — the three admin surfaces (workspace index, team + release
   // roles, self-built tools) live behind one overlay now, switched by these tabs.
   const [settingsTab, setSettingsTab] = useState<"workspace" | "team" | "tools">("workspace");
@@ -2172,22 +2172,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Capabilities — connect external MCP servers; the wall sorts each tool
-              read (runs free) / write (behind your gate). Replaces the connector picker. */}
-          {overlay === "capabilities" && (
-            <div className="canvas-overlay" role="dialog" aria-modal="true">
-              <div className="canvas-overlay-bar">
-                <span className="canvas-overlay-title">Capabilities</span>
-                <button className="canvas-overlay-close" onClick={() => setOverlay(null)} type="button" title="Back to the canvas">×</button>
-              </div>
-              <div className="canvas-overlay-body">
-                <Suspense fallback={null}>
-                  <ConnectCapability onChange={() => {}} />
-                </Suspense>
-              </div>
-            </div>
-          )}
-
           {/* Product mode — the living picture as a full React Flow canvas, the same visual language
               as the GTM graph. It fills the workspace (the explorer + assistant frame stay), so
               flipping GTM↔Product swaps the canvas, not the whole page. The editable INTERPRETATION
@@ -2209,8 +2193,8 @@ export default function App() {
             </div>
           )}
 
-          {/* Settings — the admin surfaces evicted from the Summon junk drawer: the workspace index,
-              the team and its release roles, and the self-built tools. Three tabs in one opaque
+          {/* Settings — the utility drawer: the workspace index, the team and its release roles, and
+              Tools (connect external MCP servers + the self-built tools). Three tabs in one opaque
               overlay; it reuses the standalone admin panels, so the bar owns the title + close and the
               panels render flush. Nothing here sends. */}
           {overlay === "settings" && (
@@ -2220,7 +2204,7 @@ export default function App() {
                   {([
                     { id: "workspace", label: "Workspace" },
                     { id: "team", label: "Team" },
-                    { id: "tools", label: "Self-built tools" },
+                    { id: "tools", label: "Tools" },
                   ] as const).map((tab) => (
                     <button
                       key={tab.id}
@@ -2262,11 +2246,18 @@ export default function App() {
                     </Suspense>
                   ) : null}
                   {settingsTab === "tools" ? (
-                    activeProjectId ? (
-                      <ToolForge projectId={activeProjectId} />
-                    ) : (
-                      <p className="settings-overlay-empty">Open a product to see its self-built tools.</p>
-                    )
+                    <div className="settings-tools-stack">
+                      {/* Connect external MCP servers; the wall sorts each tool read (runs free) /
+                          write (behind your gate). Was its own takeover overlay — folded in here. */}
+                      <Suspense fallback={null}>
+                        <ConnectCapability onChange={() => {}} />
+                      </Suspense>
+                      {activeProjectId ? (
+                        <ToolForge projectId={activeProjectId} />
+                      ) : (
+                        <p className="settings-overlay-empty">Open a product to see its self-built tools.</p>
+                      )}
+                    </div>
                   ) : null}
                 </div>
               </div>
