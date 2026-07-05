@@ -832,6 +832,11 @@
   border-top: 1px solid var(--line);
 }
 .object-receipt-claim {
+  /* Clamp long research quotes to a scannable few lines; the source link carries the full context. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   margin: 0;
   color: var(--ink-2);
   font-size: var(--text-sm);
@@ -876,6 +881,12 @@
   text-transform: lowercase;
 }
 .object-related-name {
+  /* Two lines, clamped — a related card is a scannable list entry, not a paragraph to read; the full
+     statement is one click away (the row re-targets the inspector to that card). */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   color: var(--ink);
   font-size: var(--text-sm);
   line-height: var(--leading-snug, 1.4);
