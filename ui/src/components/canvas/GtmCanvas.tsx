@@ -93,12 +93,15 @@ export type GtmCanvasModel = {
   onComposeFirst?: () => void;
   // A run paused at its founder gate — its decidable items bloom on the gate node in the object graph.
   gate?: GateBag | null;
+  // The attached-composer tie for the object graph: selecting a block hands its identity up so the
+  // composer docks to it. Null on deselect.
+  onObjectSelect?: (subject: { id: string; label: string; kind: string } | null) => void;
 };
 
 type GtmLensProps = LensProps<GtmCanvasModel, never>;
 
 function ObjectGraphLens({ model: m }: GtmLensProps) {
-  return <ObjectGraphCanvas projectId={m.projectId} gate={m.gate} />;
+  return <ObjectGraphCanvas projectId={m.projectId} gate={m.gate} onSubjectChange={m.onObjectSelect} />;
 }
 
 // ── channel-flow: GraphCanvas, unchanged. Forwards App's prop bag straight through. ──

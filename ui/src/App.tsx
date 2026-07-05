@@ -1827,6 +1827,9 @@ export default function App() {
     onComposeFirst: () => setComposerFocus((f) => f + 1),
     // A run paused at its founder gate blooms its decidable items on the object-graph gate node.
     gate: gtmMapGate,
+    // Selecting a block on the object graph docks the composer to it (same subject seam the node
+    // graph already uses). setComposerSubject is a stable state setter, so this never re-runs the memo.
+    onObjectSelect: setComposerSubject,
   }), [
     canvasGraph, connectors, contractAudits, runResult, graphRunning, runningNodeId, selection,
     dismissOverlays, proposedNodeIds, proposedEdgeIds, revealedNodeIds, proposalActive, operatorCursor,

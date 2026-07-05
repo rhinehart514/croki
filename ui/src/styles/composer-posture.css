@@ -126,6 +126,85 @@
   outline-offset: 1px;
 }
 
+/* ── Attached composer ─────────────────────────────────────────────────────
+   When a block or edge is selected on the canvas, the dock docks to it: a titled block that names
+   what it's editing, shows the object's own words, and offers plain-English moves. Same calm,
+   ink-forward register as the old subject chip, grown into a small panel with a hairline accent edge
+   so the physical tie between what you're looking at and what you're asking about reads at a glance. */
+.composer-attached {
+  position: relative;
+  z-index: 1;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 8px 10px 0;
+  padding: 8px 9px 9px 10px;
+  border: 1px solid var(--line-2);
+  border-left: 2px solid color-mix(in srgb, var(--ink) 45%, var(--line-2));
+  border-radius: 9px;
+  background: var(--surface-2);
+}
+
+.composer-attached-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.composer-attached-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--ink-2);
+}
+
+.composer-attached-title span {
+  color: var(--muted);
+  margin: 0 2px;
+}
+
+.composer-attached-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.35;
+  color: var(--ink);
+}
+
+.composer-attached-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.composer-attached-action {
+  padding: 3px 9px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.composer-attached-action:hover {
+  background: color-mix(in srgb, var(--ink) 6%, var(--surface));
+  border-color: color-mix(in srgb, var(--ink) 30%, var(--line-2));
+  color: var(--ink);
+}
+
+.composer-attached-action:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ink) 30%, transparent);
+  outline-offset: 1px;
+}
+
 /* ── Pin affordance on a Claude paragraph ──────────────────────────────────
    Lives inside the .cnv-say block. Hidden until the message is hovered (or the
    menu is open, or the trigger is keyboard-focused), so the conversation stays

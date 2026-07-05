@@ -465,6 +465,38 @@ function CandidateChoices({ candidates, pickedId, onPick }: {
   );
 }
 
+// A canvas object's type, in founder words — "value_prop" → "value prop", so the attached header
+// reads "Claude · editing value prop", never an internal token.
+function humanizeKind(kind: string): string {
+  return (kind || "block").replace(/_/g, " ");
+}
+
+// The plain-English moves offered on whatever the founder has selected. Every block gets the three
+// universal ones; a handful of kinds add a move that only makes sense for them. These are the
+// suggestions from the vision — "Sharpen this", "Turn it into a paid pilot" — phrased as things the
+// founder asks for, never as system verbs. Clicking one drops the phrasing into the input, editable,
+// so the founder can adjust before it's sent (never fires on its own).
+const SUBJECT_ACTIONS: Record<string, string[]> = {
+  offer: ["Make it lower-friction", "Turn it into a paid pilot"],
+  buyer: ["Narrow this buyer", "What's their trigger?"],
+  pain: ["Who feels this most?"],
+  job: ["Who feels this most?"],
+  channel: ["Draft the first message", "Who do I send this to?"],
+  message: ["Make it shorter", "Make it feel personal"],
+  proof_point: ["Where's the real evidence?"],
+  value_prop: ["Where's the real evidence?"],
+  trigger: ["Why is now the moment?"],
+  gate: ["Stage this to review"],
+  run: ["What changed after this run?"],
+};
+function subjectActions(kind: string): string[] {
+  const universal = ["Sharpen this", "Find evidence", "Give me 3 variants"];
+  const extra = SUBJECT_ACTIONS[kind] ?? [];
+  // Keep it to at most four chips so the attached header stays scannable, extras first (they're the
+  // most specific to what's selected), then fill from the universal set.
+  return [...extra, ...universal].slice(0, 4);
+}
+
 // The persistent co-pilot. Always docked, never summoned: your channels at the head, the
 // operator's live narration in the middle, one input at the foot. Talking to Claude here
 // either starts a new session (when idle) or continues the current one — one conversation.
@@ -772,26 +804,42 @@ export function ComposerDock({
           ) : null}
         </div>
       ) : null}
-      {/* Canvas subject — the node the founder handed to Claude from the canvas. The next message is
-          framed with its context by the host, so "make this shorter" resolves to a real object. The ×
-          drops it back to a free chat. */}
+      {/* The attached composer — when the founder selects a block or edge on the canvas, the dock docks
+          to it: it says what it's editing, shows the object's own words, and offers plain-English moves.
+          Clicking a move drops its phrasing into the input (editable — it never sends on its own). The
+          host frames the next message with this object's context, so "make it shorter" resolves to the
+          real thing. The × lets go and returns to free chat. */}
       {subject ? (
-        <div className="composer-subject">
-          <ChevronRight className="composer-subject-icon" size={13} aria-hidden="true" />
-          <span className="composer-subject-label">
-            <span className="composer-subject-re">Re:</span> {subject.label}
-          </span>
-          {onClearSubject ? (
-            <button
-              className="composer-subject-x"
-              type="button"
-              aria-label={`Stop asking about ${subject.label}`}
-              title="Clear the subject"
-              onClick={onClearSubject}
-            >
-              <X size={12} />
-            </button>
-          ) : null}
+        <div className="composer-attached">
+          <div className="composer-attached-head">
+            <span className="composer-attached-title">
+              Claude <span aria-hidden="true">·</span> editing {humanizeKind(subject.kind)}
+            </span>
+            {onClearSubject ? (
+              <button
+                className="composer-subject-x"
+                type="button"
+                aria-label={`Stop editing ${subject.label}`}
+                title="Let go of this object"
+                onClick={onClearSubject}
+              >
+                <X size={12} />
+              </button>
+            ) : null}
+          </div>
+          <div className="composer-attached-label" title={subject.label}>{subject.label}</div>
+          <div className="composer-attached-actions">
+            {subjectActions(subject.kind).map((action) => (
+              <button
+                key={action}
+                type="button"
+                className="composer-attached-action"
+                onClick={() => { setInput(action); inputRef.current?.focus(); }}
+              >
+                {action}
+              </button>
+            ))}
+          </div>
         </div>
       ) : null}
       <textarea

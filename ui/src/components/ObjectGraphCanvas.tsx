@@ -441,7 +441,14 @@ function BandHeaders({ cols }: { cols: { key: string; label: string; sub: string
   );
 }
 
-export function ObjectGraphCanvas({ projectId, gate }: { projectId: string | null; gate?: GateBag | null }) {
+export function ObjectGraphCanvas({ projectId, gate, onSubjectChange }: {
+  projectId: string | null;
+  gate?: GateBag | null;
+  // The attached-composer tie: whenever the founder selects (or deselects) a block on the canvas, we
+  // hand its identity up so the composer can dock to it — "Claude · editing offer" — and frame the
+  // next message with it. Fired only from selection events, never during render, so it can't loop.
+  onSubjectChange?: (subject: { id: string; label: string; kind: string } | null) => void;
+}) {
   const gatePending = !!gate?.items.length;
   const [view, setView] = useState<ObjectGraphView | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -483,13 +490,19 @@ export function ObjectGraphCanvas({ projectId, gate }: { projectId: string | nul
       // Seed founder placements from the saved layout sidecar; the server is the source of truth for
       // where cards sit. Nodes without a saved position fall through to the ordered dagre pass.
       setPlaced((next.positions ?? {}) as PositionMap);
-      setSelectedId((current) => current && next.graph.nodes.some((node) => node.id === current) ? current : null);
+      setSelectedId((current) => {
+        const keep = current && next.graph.nodes.some((node) => node.id === current);
+        // A refresh that drops the selected block detaches the composer too, so it never claims to be
+        // editing something no longer on the canvas.
+        if (!keep && current) onSubjectChange?.(null);
+        return keep ? current : null;
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, onSubjectChange]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void load(); }, 0);
@@ -623,7 +636,7 @@ export function ObjectGraphCanvas({ projectId, gate }: { projectId: string | nul
         </div>
         <div className="object-path-actions">
           <div className="arrange-toggle" role="group" aria-label="Arrange the map">
-            <button type="button" className={arrange === "stages" ? "active" : ""} onClick={() => { setArrange("stages"); setRefitSignal((s) => s + 1); }}>Stages</button>
+            <button type="button" className={arrange === "stages" ? "active" : ""} onClick={() => { setArrange("stages"); setRefitSignal((s) => s + 1); }}>Why this move</button>
             <button type="button" className={arrange === "flow" ? "active" : ""} onClick={() => { setArrange("flow"); setRefitSignal((s) => s + 1); }}>Flow</button>
           </div>
           <button type="button" className={lens === "default" ? "active" : ""} onClick={() => setLens("default")}>Default</button>
@@ -638,7 +651,7 @@ export function ObjectGraphCanvas({ projectId, gate }: { projectId: string | nul
           ) : null}
           <button type="button" className="compile" onClick={() => void compile()} disabled={!highlightedPath || compileState.status === "running"}>
             {compileState.status === "running" ? <FileSearch aria-hidden="true" /> : <Play aria-hidden="true" />}
-            Compile run
+            Prepare this move
           </button>
         </div>
       </div>
@@ -656,13 +669,19 @@ export function ObjectGraphCanvas({ projectId, gate }: { projectId: string | nul
         // A selected node must not leap above the path header and bleed over it — keep every node in the
         // same stacking plane, under the header.
         elevateNodesOnSelect={false}
-        onNodeClick={(_, node) => setSelectedId(node.id)}
+        onNodeClick={(_, node) => {
+          setSelectedId(node.id);
+          // Dock the composer to what was just selected — its own words and type, so the header reads
+          // "Claude · editing offer" and the next message resolves to this block.
+          const obj = view?.graph.nodes.find((n) => n.id === node.id) ?? null;
+          onSubjectChange?.(obj ? { id: obj.id, label: obj.statement, kind: obj.type ?? "block" } : null);
+        }}
         onNodeDragStop={(_, node) => {
           const pos = { x: Math.round(node.position.x), y: Math.round(node.position.y) };
           setPlaced((prev) => ({ ...prev, [node.id]: pos }));
           if (projectId) void saveObjectGraphPositions(projectId, { [node.id]: pos });
         }}
-        onPaneClick={() => { setSelectedId(null); finishReveal(); }}
+        onPaneClick={() => { setSelectedId(null); onSubjectChange?.(null); finishReveal(); }}
       >
         <Background color="var(--canvas-dot)" gap={22} size={1} />
         <Controls showInteractive={false} />
