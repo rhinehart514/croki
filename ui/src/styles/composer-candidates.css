@@ -189,6 +189,29 @@
   .obj-ideate-orb { animation: none; opacity: 0.9; }
 }
 
+/* Live reasoning — Claude thinking out loud in the chat as it ideates, streamed word by word. A calm
+   say-beat: the blue-violet "working" eyebrow (color is STATE) over plain prose that reads as Claude
+   talking. Reuses .cnv-say-body for the body type. */
+.obj-ideate-reasoning {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 0 4px;
+}
+.obj-ideate-reasoning-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: oklch(0.5 0.19 285.5);
+}
+.obj-ideate-reasoning .cnv-say-body {
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
 .obj-ideate-error {
   margin: 0;
   font-size: 11.5px;

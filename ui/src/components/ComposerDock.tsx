@@ -485,14 +485,22 @@ type ObjectIdeationState = {
   target: string;
   status: "loading" | "done" | "error";
   candidates: ObjectCandidate[];
+  // Claude's plain-language reasoning, streamed live as it ideates (empty until the first delta lands).
+  reasoning: string;
   error?: string | null;
 };
+
+// Strip a trailing partial JSON fence (backticks the stream cut mid-write) so no code marker flickers in.
+function cleanReasoning(text: string) {
+  return text.replace(/`+\s*$/, "").trim();
+}
 function ObjectIdeationChoices({ ideation, onAdd, onDismiss }: {
   ideation: ObjectIdeationState;
   onAdd: (candidate: ObjectCandidate) => void;
   onDismiss: () => void;
 }) {
   const { target, sourceLabel, status, candidates } = ideation;
+  const reasoning = cleanReasoning(ideation.reasoning || "");
   return (
     <div className="cnv-cands obj-ideate" role="group" aria-label={`Ideas for ${target}`}>
       <div className="cnv-cands-head">
@@ -505,10 +513,21 @@ function ObjectIdeationChoices({ ideation, onAdd, onDismiss }: {
           <X size={13} />
         </button>
       </div>
-      {status === "loading" ? (
+      {/* Live reasoning: the founder watches Claude think, in plain words, as it ideates. Rendered as a
+          Claude say-beat with the blue-violet "working" accent while streaming. Once the first delta
+          lands this replaces the pulsing orb; when done it stays visible above the candidates. */}
+      {reasoning ? (
+        <div className="obj-ideate-reasoning" role="status">
+          <span className="obj-ideate-reasoning-eyebrow">
+            {status === "loading" ? <span className="obj-ideate-orb" aria-hidden="true" /> : null}
+            Claude{status === "loading" ? " · thinking" : ""}
+          </span>
+          <div className="cnv-say-body"><MarkdownLite text={reasoning} /></div>
+        </div>
+      ) : status === "loading" ? (
         <div className="obj-ideate-working" role="status">
           <span className="obj-ideate-orb" aria-hidden="true" />
-          <span>Ideating {target} off this card…</span>
+          <span>Claude is thinking through {target}…</span>
         </div>
       ) : null}
       {status === "error" || ideation.error ? (

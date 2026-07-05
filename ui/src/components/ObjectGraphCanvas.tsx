@@ -828,7 +828,7 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId 
           <strong>{highlightedPath ? (highlightedPath.name || pathHeadline(highlightedPath, view)) : "No testable path yet"}</strong>
           <span>
             {highlightedPath
-              ? `grounded ${grounded} of ${highlightedPath.nodeIds.length} · weakest: ${weakestNodeId ? nodeStatement(view, weakestNodeId) : "none found"}`
+              ? `grounded ${grounded}/${highlightedPath.nodeIds.length} · weakest link: ${weakestNodeId ? `“${nodeStatement(view, weakestNodeId)}”` : "none found"}`
               : view?.recommendation.reason ?? "Spray the product and market picture to light a path."}
           </span>
         </div>

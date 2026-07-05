@@ -389,13 +389,50 @@ export const applyObjectGraphOperations = (
 // it (via applyObjectGraphOperations above). Each candidate is a founder-language statement plus the
 // object type the target (or the idea's own words) implies (null is fine — a loose, untyped draft).
 export type ObjectCandidate = { id: string; statement: string; type: string | null; rationale: string | null };
-export const ideateObjectCandidates = (
+
+// The founder watches Claude think: the streaming per-card ideate. `reasoning` events carry the model's
+// plain-language text deltas as it writes; the single `candidates` event lands the ideas at the end.
+// Mirrors runGraphStream's SSE reader. Returns when the stream ends. (The one-shot POST .../ideate route
+// still exists on the server for non-streaming callers; the canvas "+" uses this streaming path.)
+type ObjectIdeateStreamEvent =
+  | { type: "reasoning"; text: string }
+  | { type: "candidates"; candidates: ObjectCandidate[] }
+  | { type: "ideate_error"; error: string };
+
+export async function ideateObjectCandidatesStream(
   projectId: string,
   body: { target: string; sourceNodeId?: string },
-) => post<{ candidates: ObjectCandidate[] }>(
-  `/api/projects/${encodeURIComponent(projectId)}/object-graph/ideate`,
-  body,
-);
+  onEvent: (event: ObjectIdeateStreamEvent) => void,
+): Promise<void> {
+  const res = await fetch(
+    `/api/projects/${encodeURIComponent(projectId)}/object-graph/ideate/stream`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+  if (!res.ok || !res.body) {
+    const payload = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error || `Ideation stream failed (${res.status}).`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const frames = buf.split("\n\n");
+    buf = frames.pop() ?? "";
+    for (const frame of frames) {
+      const line = frame.split("\n").find((l) => l.startsWith("data: "));
+      if (line) {
+        try { onEvent(JSON.parse(line.slice(6)) as ObjectIdeateStreamEvent); } catch { /* skip malformed frame */ }
+      }
+    }
+  }
+}
 
 // ── The five-primitive cockpit — Goal, Bet, Move, Run, Learning, all in founder language ───────────
 // Derived read-only from real state; every part is honest-empty (null / []) where there is no signal,

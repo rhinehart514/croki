@@ -507,13 +507,52 @@ export function getAgentProfile(projectId, agentRef, options = {}) {
   });
 }
 
-// The bench: every roster agent's compact track record over the SAME project run ledger, loaded once.
-// The caller passes the on-disk agent list (`{ ref, description }[]`) it already reads for the library;
-// the run set defaults to the whole project ledger but can be injected in tests. Pure derivation on top
-// of buildAgentBench — honest empties for never-run agents, no seeded numbers.
+// The agents THIS product actually uses — its real crew. Each pipeline composes its own project-
+// specific agents into its graph (an agent node carries a `ref` and a `label` that reads as the job);
+// this gathers them, ref + label, plus any agent seen in the run ledger. That is a different, narrower
+// set than the cross-venture agent library on disk (`gtm-*`, shared across products), so the bench reads
+// as "Strelva's crew" rather than every agent that happens to exist. Deduped by ref, first label wins.
+// Empty means nothing scopes it yet (a fresh project with no pipelines); the caller then falls back to
+// the library roster so the bench still shows the specialists available, never a mysterious blank.
+export function projectAgents(projectId, options = {}) {
+  const byRef = new Map();
+  let project;
+  try { project = loadProject({ ...options, projectId }); } catch { return []; }
+  for (const channel of getProjectChannels(project, options)) {
+    if (!channel.graphId) continue;
+    let flow;
+    try { flow = loadFlow(channel.graphId, null, options); } catch { continue; }
+    for (const node of flow.graph?.nodes ?? []) {
+      if (node?.kind !== "agent") continue;
+      const ref = node.ref ?? node.config?.ref ?? null;
+      if (!ref || byRef.has(ref)) continue;
+      byRef.set(ref, { ref, description: typeof node.label === "string" ? node.label : "" });
+    }
+    for (const run of flow.runs ?? []) {
+      const nodes = run?.result?.nodes;
+      if (!nodes) continue;
+      for (const runNode of Object.values(nodes)) {
+        if (!Array.isArray(runNode?.items)) continue;
+        for (const item of runNode.items) {
+          if (item?.agentRef && !byRef.has(item.agentRef)) byRef.set(item.agentRef, { ref: item.agentRef, description: "" });
+        }
+      }
+    }
+  }
+  return [...byRef.values()];
+}
+
+// The bench: every crew agent's compact track record over the SAME project run ledger, loaded once. The
+// roster is THIS product's composed crew (see projectAgents) so the bench reads as the specialists this
+// product actually uses, not the whole cross-venture library on disk. When nothing scopes it yet (a
+// fresh project with no pipelines) it falls back to the library roster the caller passes. The run set
+// defaults to the whole project ledger but can be injected in tests. Pure derivation on top of
+// buildAgentBench — honest empties for never-run agents, no seeded numbers.
 export function getAgentBench(projectId, { agents = [], runs } = {}, options = {}) {
   const runSet = Array.isArray(runs) ? runs : loadProjectRuns(projectId, options);
-  return buildAgentBench(runSet, agents);
+  const crew = projectAgents(projectId, options);
+  const roster = crew.length ? crew : agents;
+  return buildAgentBench(runSet, roster);
 }
 
 // `channelOffer` (optional) is the pipeline's own offer/deal in the founder's words — when the run

@@ -78,7 +78,7 @@ import { outcomeReport, ingestOutcome, ingestBatch, OUTCOME_SOURCES } from "./ou
 import { deriveCockpitState, proposeMoves } from "./five-primitives.mjs";
 import { recordFounderOutcome } from "./outcome-capture.mjs";
 import { ideaTasteForProject, recordIdeaDecisions } from "./feedback-ledger.mjs";
-import { composeIdeas, createClaudeAngleProposer, createClaudeIdeaGenerator, ideateObjectCandidates } from "./ideation.mjs";
+import { composeIdeas, createClaudeAngleProposer, createClaudeIdeaGenerator, createClaudeObjectIdeaGenerator, ideateObjectCandidates } from "./ideation.mjs";
 import { createClaudeIdeaBar } from "./idea-bar.mjs";
 import { createGtmIdea, getGtmIdea, saveGtmIdea, listGtmIdeas } from "./idea-store.mjs";
 import { recordRunDerivations } from "./run-derivation.mjs";
@@ -947,6 +947,56 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, { candidates });
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Streaming twin of the ideate route: the founder WATCHES Claude think. Same live grounded generator,
+  // but the object-ideate variant narrates its reasoning in plain words first, and we stream those text
+  // deltas to the chat as `reasoning` events before emitting the `candidates` at the end. Real streaming
+  // off the founder's subscription — no fake ticker. Persists nothing, sends nothing.
+  const projectObjectGraphIdeateStreamMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/object-graph\/ideate\/stream$/);
+  if (req.method === "POST" && projectObjectGraphIdeateStreamMatch) {
+    let body;
+    try {
+      body = await readBody(req);
+    } catch (err) { json(res, 400, { error: err instanceof Error ? err.message : String(err) }); return; }
+    const target = String(body?.target || "").trim();
+    if (!target) { json(res, 400, { error: "Ideation needs a target — what kind of new card to explore." }); return; }
+
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+    });
+    const send = (event) => { res.write(`data: ${JSON.stringify(event)}\n\n`); };
+
+    try {
+      const projectId = decodeURIComponent(projectObjectGraphIdeateStreamMatch[1]);
+      const project = loadProject({ projectId });
+      const repo = project.sharedContext?.repository?.repo || process.cwd();
+      const sourceNodeId = String(body?.sourceNodeId || "").trim() || null;
+      const source = sourceNodeId
+        ? (objectGraphStore.load(projectId).nodes.find((node) => node.id === sourceNodeId) || null)
+        : null;
+      // The generator's onText forwards each model text delta straight into the chat as it writes — this
+      // is the real "watch it think" stream. The frontend stops appending at the JSON fence so only the
+      // plain reasoning shows; the candidates are parsed from the fenced block by ideateObjectCandidates.
+      const generate = createClaudeObjectIdeaGenerator({
+        cwd: repo,
+        onText: (delta) => send({ type: "reasoning", text: delta }),
+      });
+      const candidates = await ideateObjectCandidates({
+        target,
+        source,
+        grounding: buildRunGrounding(project),
+        generate,
+      });
+      send({ type: "candidates", candidates });
+    } catch (err) {
+      send({ type: "ideate_error", error: err instanceof Error ? err.message : String(err) });
+    } finally {
+      res.end();
     }
     return;
   }

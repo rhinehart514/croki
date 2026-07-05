@@ -279,6 +279,48 @@ export function resolveObjectType(text) {
   return null;
 }
 
+// The object-ideate generation doctrine. Unlike GENERATE_PROMPT (which returns ONLY JSON, because the
+// /ideas/round route reads its raw stream as data), this prompt makes the model NARRATE first in plain
+// words — the founder is watching it work in the chat — and only THEN emit the ideas as a fenced JSON
+// block. So the streamed text is readable reasoning up to the fence, and the machine-readable ideas ride
+// in the block after it, parsed by parseAgentObject (which reads the fenced JSON, prose and all).
+export const OBJECT_IDEATE_GENERATE_PROMPT = `You are ideating NEW cards off a founder's selected card, grounded in a real product. The founder is WATCHING you work in a chat, so think out loud for them.
+
+First, in 1 to 3 short plain sentences, say what angles you'll explore for these cards and why — talk to the founder in plain language. No jargon, no code, no JSON in this part. This is you thinking aloud.
+
+Then produce 2 to 4 concrete ideas that fit the live edge and push past the average. Each idea is a real move, not a category. Never invent traction, numbers, customers, or quotes.
+
+For each idea:
+- "pitch": one or two plain sentences naming the move and why it bites.
+- "what": in a few of your own words, what kind of move it is (an offer, a post, an audience to chase, a partnership, a pricing change, ...).
+- "upside": the single strongest reason it could work.
+- "risk": the single strongest reason it might not.
+
+After your plain-language thinking, output the ideas as ONE fenced JSON block and nothing after it:
+\`\`\`json
+{ "ideas": [ { "pitch": "...", "what": "...", "upside": "...", "risk": "..." } ] }
+\`\`\``;
+
+// Live object-ideate generator: the streaming twin of createClaudeIdeaGenerator, aimed at the per-card
+// "+" path. It narrates its reasoning as plain prose (streamed through onText delta by delta so the
+// founder watches it think), then returns the ideas parsed from the fenced JSON at the end. Lean — no
+// tools, low turn budget — the grounding is handed in. runQuery is injectable so a test can drive the
+// stream offline; it defaults to the real read-only subscription call.
+export function createClaudeObjectIdeaGenerator({ cwd = process.cwd(), model, maxTurns = LEAN_TURNS, onText, runQuery = runClaudeQuery } = {}) {
+  return async function generate({ goal, grounding } = {}) {
+    const prompt = [
+      OBJECT_IDEATE_GENERATE_PROMPT,
+      `\nGoal:\n${goal || ""}`,
+      `\nProduct grounding:\n${JSON.stringify(grounding ?? {}, null, 2)}`,
+    ].join("\n");
+    const { text, error } = await runQuery({ prompt, cwd, model, maxTurns, onText, allowedTools: LEAN_TOOLS });
+    if (error) return { ideas: [] };
+    const parsed = parseAgentObject(text);
+    const ideas = Array.isArray(parsed?.ideas) ? parsed.ideas : [];
+    return { ideas: ideas.map(normalizeIdea).filter(Boolean) };
+  };
+}
+
 // ideateObjectCandidates — one live grounded generate() call, mapped to decidable candidate objects.
 // Injectable exactly like composeIdeas: a stub generate() in tests, createClaudeIdeaGenerator() live.
 // Each candidate is { id, statement, type, rationale } — a founder-language card and the object type the

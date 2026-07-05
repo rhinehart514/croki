@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { ideateObjectCandidates, resolveObjectType } from "../src/ideation.mjs";
+import { ideateObjectCandidates, resolveObjectType, createClaudeObjectIdeaGenerator } from "../src/ideation.mjs";
 
 // A stub generator standing in for the live createClaudeIdeaGenerator — same { ideas: [...] } shape,
 // so the test is offline and deterministic while exercising the real mapping path.
@@ -62,6 +62,36 @@ describe("object ideation — ideateObjectCandidates", () => {
   it("refuses without a target or a generator", async () => {
     await assert.rejects(() => ideateObjectCandidates({ target: "   ", generate: async () => ({ ideas: [] }) }));
     await assert.rejects(() => ideateObjectCandidates({ target: "new buyers", generate: null }));
+  });
+
+  it("streams plain reasoning deltas, then parses candidates from the prose-plus-fenced-JSON reply", async () => {
+    const deltas = [];
+    // A fake subscription call standing in for runClaudeQuery: it streams the model's narration through
+    // onText delta by delta (what the founder watches), then returns the full prose + fenced JSON reply.
+    const fakeRunQuery = async ({ prompt, onText }) => {
+      // The object-ideate generator uses the narrate-first prompt, not the JSON-only GENERATE_PROMPT.
+      assert.match(prompt, /watching you work/i);
+      const proseDeltas = ["I'll start with who already buys, ", "then who sits one step adjacent.\n"];
+      for (const chunk of proseDeltas) onText(chunk);
+      const reply = proseDeltas.join("")
+        + "```json\n"
+        + JSON.stringify({ ideas: [{ pitch: "Chase adjacent RevOps leads who already own the budget.", what: "an audience to chase", upside: "Warm and fast.", risk: "Small segment." }] })
+        + "\n```";
+      onText("```json …```"); // the fence + JSON also stream; the frontend cuts at the fence
+      return { text: reply };
+    };
+
+    const generate = createClaudeObjectIdeaGenerator({ onText: (d) => deltas.push(d), runQuery: fakeRunQuery });
+    const candidates = await ideateObjectCandidates({ target: "new buyers", generate });
+
+    // Reasoning streamed as plain-prose deltas — the founder watches Claude think before ideas land.
+    assert.ok(deltas.length >= 2, "reasoning deltas streamed through onText");
+    assert.equal(deltas.slice(0, 2).join(""), "I'll start with who already buys, then who sits one step adjacent.\n");
+    // Candidates are still parsed from the fenced JSON at the end of the same reply.
+    assert.equal(candidates.length, 1);
+    assert.equal(candidates[0].statement, "Chase adjacent RevOps leads who already own the budget.");
+    assert.equal(candidates[0].type, "buyer");
+    assert.equal(candidates[0].rationale, "Warm and fast.");
   });
 
   it("resolves plain targets to real palette object types", () => {

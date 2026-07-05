@@ -49,7 +49,7 @@ import {
   composeMicroproduct,
   promoteChannel,
   revokeChannel,
-  ideateObjectCandidates,
+  ideateObjectCandidatesStream,
   applyObjectGraphOperations,
 } from "@/api";
 import type { ObjectCandidate } from "@/api";
@@ -251,7 +251,10 @@ export default function App() {
   // object-graph canvas reloads and the fresh draft appears joined to its source.
   const [objectIdeation, setObjectIdeation] = useState<{
     sourceId: string; sourceLabel: string; target: string;
-    status: "loading" | "done" | "error"; candidates: ObjectCandidate[]; error?: string | null;
+    status: "loading" | "done" | "error"; candidates: ObjectCandidate[];
+    // Claude's plain-language reasoning, streamed live into the chat as it ideates — the founder watches
+    // it think, then the candidates land. Trimmed at the JSON fence so only prose ever shows.
+    reasoning: string; error?: string | null;
   } | null>(null);
   const [objectGraphReload, setObjectGraphReload] = useState(0);
   // A message the founder started from the GTM map — "why does this rank here", "show me variants",
@@ -685,14 +688,31 @@ export default function App() {
     if (!projectId) return;
     setComposerSubject({ id: source.id, label: source.label, kind: source.type });
     setComposerFocus((f) => f + 1);
-    setObjectIdeation({ sourceId: source.id, sourceLabel: source.label, target, status: "loading", candidates: [] });
+    setObjectIdeation({ sourceId: source.id, sourceLabel: source.label, target, status: "loading", candidates: [], reasoning: "" });
+    const matches = (cur: typeof objectIdeation) => !!cur && cur.sourceId === source.id && cur.target === target;
+    // Stop appending reasoning once the JSON fence appears, so only Claude's plain prose shows in the chat.
+    let fenceReached = false;
     try {
-      const { candidates } = await ideateObjectCandidates(projectId, { target, sourceNodeId: source.id });
-      setObjectIdeation((cur) => (cur && cur.sourceId === source.id && cur.target === target
-        ? { ...cur, status: "done", candidates } : cur));
+      await ideateObjectCandidatesStream(projectId, { target, sourceNodeId: source.id }, (event) => {
+        if (event.type === "reasoning") {
+          setObjectIdeation((cur) => {
+            if (!matches(cur) || fenceReached) return cur;
+            let next = cur!.reasoning + event.text;
+            const fence = next.indexOf("```");
+            if (fence !== -1) { fenceReached = true; next = next.slice(0, fence); }
+            return { ...cur!, reasoning: next };
+          });
+        } else if (event.type === "candidates") {
+          setObjectIdeation((cur) => (matches(cur) ? { ...cur!, status: "done", candidates: event.candidates } : cur));
+        } else if (event.type === "ideate_error") {
+          setObjectIdeation((cur) => (matches(cur) ? { ...cur!, status: "error", error: event.error } : cur));
+        }
+      });
+      // Stream closed without a candidates event (defensive): settle out of the loading state.
+      setObjectIdeation((cur) => (matches(cur) && cur!.status === "loading" ? { ...cur!, status: "done" } : cur));
     } catch (err) {
-      setObjectIdeation((cur) => (cur && cur.sourceId === source.id && cur.target === target
-        ? { ...cur, status: "error", error: err instanceof Error ? err.message : String(err) } : cur));
+      setObjectIdeation((cur) => (matches(cur)
+        ? { ...cur!, status: "error", error: err instanceof Error ? err.message : String(err) } : cur));
     }
   }, []);
 
