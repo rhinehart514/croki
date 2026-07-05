@@ -608,13 +608,13 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, desiredArr
 
   const compile = useCallback(async () => {
     if (!projectId || !highlightedPath) return;
-    setCompileState({ status: "running", message: "Compiling the highlighted path to the gate." });
+    setCompileState({ status: "running", message: "Staging this move for your review." });
     try {
       const result = await compileObjectGraphPath(projectId, { pathId: highlightedPath.pathId });
       const weakness = result.measurementWeakness && typeof result.measurementWeakness === "object"
-        ? " Measurement needs repair before this run is easy to judge."
+        ? " Measurement needs repair before this move is easy to judge."
         : "";
-      setCompileState({ status: "done", message: `Run staged at the founder gate.${weakness}` });
+      setCompileState({ status: "done", message: `Staged and waiting for your approval — nothing sends until you approve.${weakness}` });
       // Bloom the staged run's gate so the founder can decide it in place — the approve action releases
       // it through the engine, staging locally. Nothing sends until they approve here.
       setRunGate(result.gate ?? null);
@@ -682,7 +682,7 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, desiredArr
           ) : null}
           <button type="button" className="compile" onClick={() => void compile()} disabled={!highlightedPath || compileState.status === "running"}>
             {compileState.status === "running" ? <FileSearch aria-hidden="true" /> : <Play aria-hidden="true" />}
-            Prepare this move
+            Stage this move
           </button>
         </div>
       </div>

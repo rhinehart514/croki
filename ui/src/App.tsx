@@ -1955,17 +1955,37 @@ export default function App() {
                   Log what happened →
                 </button>
               ) : null}
-              {outcomeOpen && activeProjectId ? (
-                <Suspense fallback={null}>
-                  <OutcomeCapture
-                    projectId={activeProjectId}
-                    runId={activeChannelId ?? ""}
-                    onDone={() => { setOutcomeOpen(false); refreshCockpit(); }}
-                  />
-                </Suspense>
-              ) : null}
             </div>
           )}
+
+          {/* Log what happened, reachable straight from the map — a quiet chip in Learn mode once a run
+              has happened, so the founder closes the loop without leaving the canvas for the cockpit. */}
+          {view === "canvas" && overlay !== "product" && activeMode === "learn" && cockpit?.latestRun ? (
+            <button type="button" className="cockpit-log-outcome canvas-log-outcome" onClick={() => setOutcomeOpen(true)}>
+              Log what happened →
+            </button>
+          ) : null}
+
+          {/* One shared loop-closer for both the cockpit and the map. It floats as an opaque panel over a
+              soft scrim; recording an outcome refreshes the cockpit so the Best Next Move and the Learn
+              lens reflect the new result and sharper next move at once. Records only — nothing sends. */}
+          {outcomeOpen && activeProjectId ? (
+            <div
+              className="outcome-float"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Log what happened"
+              onClick={(e) => { if (e.target === e.currentTarget) setOutcomeOpen(false); }}
+            >
+              <Suspense fallback={null}>
+                <OutcomeCapture
+                  projectId={activeProjectId}
+                  runId={activeChannelId ?? ""}
+                  onDone={() => { setOutcomeOpen(false); refreshCockpit(); }}
+                />
+              </Suspense>
+            </div>
+          ) : null}
 
           {/* The canvas is home; the Best Next Move floats over it as one elevated hero card. Same data,
               same styling as the cockpit hero — read-only, dismissable, and clear of the path header up

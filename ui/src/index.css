@@ -7534,6 +7534,20 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
   box-shadow: 0 8px 24px -12px rgba(0,0,0,0.35);
 }
 .cockpit-log-outcome:hover { background: #000; }
+/* On the map (Learn mode) the composer holds the right edge, so the log chip sits bottom-left, stacked
+   just above the "Full view" chip — clear of the composer and the mode pill. */
+.canvas-log-outcome { right: auto; left: 20px; bottom: 62px; }
+/* The loop-closer floated over the map: a soft scrim centers the opaque outcome panel so the founder can
+   log what happened without leaving the canvas. Scrim click (outside the panel) dismisses. */
+.outcome-float {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+  animation: outcome-float-in 140ms var(--ease);
+}
+@keyframes outcome-float-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .outcome-float { animation: none; } }
 .back-to-cockpit {
   position: absolute; bottom: 20px; left: 20px; z-index: 30;
   display: inline-flex; align-items: center; gap: 6px;
