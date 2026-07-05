@@ -53,7 +53,6 @@
 .object-weakness,
 .object-graph-status,
 .object-inspector-head,
-.object-inspector-row,
 .object-inspector-weakness {
   display: flex;
   align-items: center;
@@ -328,9 +327,15 @@
   padding-top: 6px;
 }
 
+/* The selected card wears a 2px STATE-colored ring (semantic only), so the detail dock's subject is
+   unmistakable on the map. A card with an open weakness rings amber — the same warning the inspector's
+   amber banner carries — so the weak link reads at a glance whether or not the dock is open. */
 .object-card.selected {
   outline: 2px solid var(--link);
   outline-offset: 2px;
+}
+.object-card.selected.weak {
+  outline-color: var(--gap);
 }
 
 /* The per-card "+" — a calm, monochrome affordance that appears on hover (Langdock's on-node shape).
@@ -679,62 +684,101 @@
   color: var(--proven);
 }
 
+/* Card detail as a RIGHT DOCK: an opaque zinc panel that slides in from the right while the buyer story
+   stays fully visible (never a center modal, never a dim scrim). It sits inside the canvas shell, and the
+   Claude co-pilot is a separate grid column beyond the shell's right edge, so the two never fight for the
+   same pixels. Opaque #ffffff ground — NOT var(--surface), which is translucent under the glass skin and
+   would let the canvas bleed through a read surface. */
 .object-inspector {
   position: absolute;
-  z-index: 14;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  max-height: 42%;
-  overflow: auto;
-  border-top: 1px solid var(--line);
-  background: var(--surface);
+  z-index: 15;
+  top: 86px;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  width: min(372px, 40%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md, 12px);
+  background: #ffffff;
   box-shadow: var(--shadow-pop);
+  animation: object-inspector-in 160ms ease;
+}
+
+/* Slide in from the right — opacity + a short translate, no scale, no bounce. */
+@keyframes object-inspector-in {
+  from { opacity: 0; transform: translateX(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* When a run is paused at its gate, the founder gate bloom takes the same right corner — the wall wins,
+   so the inspector steps left of it (both stay readable, neither overlaps the other). */
+.object-graph-shell.gate-pending .object-inspector {
+  right: calc(var(--space-4) + min(430px, 44%) + var(--space-3));
+}
+
+/* The body scrolls; the Claude actions stay pinned at the foot. */
+.object-inspector-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
   padding: var(--space-4);
 }
 
 .object-inspector-head {
   justify-content: space-between;
   gap: var(--space-3);
-  color: var(--muted);
+}
+
+/* The type chip carries the card's STATE color (semantic only): amber = needs review, green = observed,
+   gray = an unproven draft, zinc = the grounded middle. */
+.object-inspector-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px 3px 7px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
-  text-transform: uppercase;
+  text-transform: lowercase;
 }
+.object-inspector-chip svg { width: 13px; height: 13px; }
+.object-inspector-chip.tone-amber { border-color: var(--gap); background: var(--gap-soft); color: var(--gap); }
+.object-inspector-chip.tone-green { border-color: color-mix(in srgb, var(--proven) 40%, var(--line-2)); background: color-mix(in srgb, var(--proven) 12%, #fff); color: var(--proven); }
+.object-inspector-chip.tone-gray { border-style: dashed; }
 
-.object-inspector-head button {
+.object-inspector-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
   border: 1px solid var(--line-2);
   border-radius: var(--r-sm);
-  background: var(--surface);
-  color: var(--ink);
-  padding: 5px 8px;
+  background: #ffffff;
+  color: var(--muted);
   cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
 }
+.object-inspector-close:hover { color: var(--ink); border-color: var(--ink); }
+.object-inspector-close svg { width: 15px; height: 15px; }
 
 .object-inspector h3 {
-  margin: var(--space-2) 0 var(--space-4);
-  max-width: 760px;
-  font-size: var(--text-xl);
+  margin: var(--space-3) 0 var(--space-4);
+  font-size: var(--text-lg);
   line-height: var(--leading-tight);
   letter-spacing: 0;
-}
-
-.object-inspector-row {
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
-  color: var(--muted);
-  font-size: var(--text-sm);
-}
-
-.object-inspector-row strong {
-  color: var(--ink);
 }
 
 .object-inspector-weakness {
   align-items: flex-start;
   gap: var(--space-2);
-  max-width: 760px;
-  border: 1px solid var(--gap-soft);
+  border: 1px solid var(--gap);
   border-radius: var(--r-sm);
   background: var(--gap-soft);
   padding: var(--space-3);
@@ -744,10 +788,10 @@
 .object-inspector-weakness svg {
   color: var(--gap);
   margin-top: 2px;
+  flex: 0 0 auto;
 }
 
-.object-inspector-weakness span,
-.object-inspector-clean {
+.object-inspector-weakness span {
   display: block;
   margin-top: 4px;
   color: var(--muted);
@@ -756,7 +800,6 @@
 
 .object-inspector-section {
   margin-top: var(--space-4);
-  max-width: 820px;
 }
 
 .object-inspector-section > span {
@@ -774,6 +817,96 @@
   border-top: 1px solid var(--line);
   color: var(--ink-2);
   font-size: var(--text-sm);
+}
+
+.object-inspector-empty {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* A receipt names its claim and its source, and its provenance shows: a grounded line (observed /
+   researched) reads full-strength; an inferred / speculative one reads softer and italic, so a guess
+   never passes for a fact. */
+.object-receipt {
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+.object-receipt-claim {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug, 1.4);
+}
+.object-receipt-src {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+.object-receipt.soft .object-receipt-claim {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* Related cards — a clickable list that re-targets the SAME dock (walk the graph without it closing). */
+.object-related-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.object-related-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.object-related-card:hover { border-color: var(--ink); background: var(--surface-2); }
+.object-related-card:focus-visible { outline: 2px solid var(--link); outline-offset: 1px; }
+.object-related-verb {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: lowercase;
+}
+.object-related-name {
+  color: var(--ink);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug, 1.4);
+}
+
+/* Claude actions pinned at the foot — the same phrasings the composer's attached header offers, routed
+   into the composer input (editable, never a bare fire). */
+.object-inspector-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.object-inspector-action {
+  padding: 6px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--ink-2);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+.object-inspector-action:hover { border-color: var(--ink); color: var(--ink); }
+.object-inspector-action:focus-visible { outline: 2px solid var(--link); outline-offset: 1px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .object-inspector { animation: none; }
 }
 
 .object-graph-empty {
@@ -836,7 +969,16 @@
     overflow-x: auto;
   }
 
+  /* On a narrow frame the right dock spans the width (there's no room for a side panel), still opaque
+     and still sliding in — the buyer story is behind it, one tap on the canvas away. */
   .object-inspector {
-    max-height: 55%;
+    left: var(--space-3);
+    right: var(--space-3);
+    width: auto;
+    top: auto;
+    max-height: 60%;
+  }
+  .object-graph-shell.gate-pending .object-inspector {
+    right: var(--space-3);
   }
 }

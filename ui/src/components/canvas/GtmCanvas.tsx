@@ -108,6 +108,9 @@ export type GtmCanvasModel = {
   ideatingNodeId?: string | null;
   ideatingTarget?: string | null;
   objectGraphReload?: number;
+  // The inspector's Claude-action chips route their phrasing into the composer input, editable — same
+  // as the composer's own attached chips, triggered from the card detail instead of the dock header.
+  onSubjectAction?: (action: string) => void;
   // The mode switcher drives the object graph's arrangement: Move → the story bands ("stages"),
   // Trace → the free causal graph ("flow"). Steers only on change (see ObjectGraphCanvas).
   desiredArrange?: "stages" | "flow";
@@ -121,7 +124,7 @@ export type GtmCanvasModel = {
 type GtmLensProps = LensProps<GtmCanvasModel, never>;
 
 function ObjectGraphLens({ model: m }: GtmLensProps) {
-  return <ObjectGraphCanvas projectId={m.projectId} gate={m.gate} onSubjectChange={m.onObjectSelect} subjectId={m.subjectId ?? null} desiredArrange={m.desiredArrange} modeControlled={m.modeControlled} onIdeateObject={m.onIdeateObject} ideatingNodeId={m.ideatingNodeId ?? null} ideatingTarget={m.ideatingTarget ?? null} reloadSignal={m.objectGraphReload ?? 0} />;
+  return <ObjectGraphCanvas projectId={m.projectId} gate={m.gate} onSubjectChange={m.onObjectSelect} subjectId={m.subjectId ?? null} desiredArrange={m.desiredArrange} modeControlled={m.modeControlled} onIdeateObject={m.onIdeateObject} ideatingNodeId={m.ideatingNodeId ?? null} ideatingTarget={m.ideatingTarget ?? null} reloadSignal={m.objectGraphReload ?? 0} onSubjectAction={m.onSubjectAction} />;
 }
 
 // The Learn lens — the loop closing, read off the same cockpit state the map is built on.

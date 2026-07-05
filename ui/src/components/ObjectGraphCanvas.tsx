@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import {
-  AlertTriangle, CheckCircle2, FileSearch, LoaderCircle, Mail, Network, Play, Plus, Shield, ShieldCheck,
+  AlertTriangle, CheckCircle2, FileSearch, LoaderCircle, Mail, Network, Play, Plus, Shield, ShieldCheck, X,
 } from "lucide-react";
 import {
   Background, Controls, Handle, MarkerType, Position, ReactFlow, useReactFlow, useStore, type Edge, type Node, type NodeProps, type ReactFlowInstance,
@@ -12,6 +12,7 @@ import { layoutObjectGraph, type PositionMap } from "@/lib/objectGraphLayout";
 import { GateReview } from "@/components/gate/GateReview";
 import { ObjectGraphPalette } from "@/components/ObjectGraphPalette";
 import { PALETTE_BLOCK_LABEL, PALETTE_DRAG_MIME } from "@/lib/objectPalette";
+import { subjectActions } from "@/lib/subjectActions";
 import { kindIcon } from "@/lib/objectKindIcons";
 import type { GateBag } from "@/lib/gateItem";
 import "@/styles/object-graph.css";
@@ -28,6 +29,16 @@ function evidenceLabel(node: ObjectGraphNode) {
   if (!node.solidity) return "unsupported";
   const n = node.sources.length || node.evidence.length || 0;
   return n > 1 ? `${node.solidity} ·${n}` : node.solidity;
+}
+
+// The card's honest STATE tone, driving the selected ring + the inspector's type chip. Semantic color
+// only: amber = a weakness needs review, green = observed/worked, gray = an unproven draft, zinc = the
+// plain grounded middle. Weakness wins the ring so the amber warning always shows through.
+function cardTone(node: ObjectGraphNode): "amber" | "green" | "gray" | "neutral" {
+  if (primaryWeakness(node)) return "amber";
+  if (node.solidity === "observed") return "green";
+  if (!node.solidity || node.maturity === "loose") return "gray";
+  return "neutral";
 }
 
 function primaryWeakness(node: ObjectGraphNode) {
@@ -502,7 +513,7 @@ function BandHeaders({ cols }: { cols: { key: string; label: string; sub: string
   );
 }
 
-export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId = null, desiredArrange, modeControlled = false, onIdeateObject, ideatingNodeId = null, ideatingTarget = null, reloadSignal = 0 }: {
+export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId = null, desiredArrange, modeControlled = false, onIdeateObject, ideatingNodeId = null, ideatingTarget = null, reloadSignal = 0, onSubjectAction }: {
   projectId: string | null;
   gate?: GateBag | null;
   // The attached-composer tie: whenever the founder selects (or deselects) a block on the canvas, we
@@ -528,6 +539,9 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId 
   ideatingNodeId?: string | null;
   ideatingTarget?: string | null;
   reloadSignal?: number;
+  // The inspector's Claude-action chips route their phrasing into the composer input, editable (the host
+  // seeds the composer + focuses it) — never a bare fire. Absent → the inspector hides its action row.
+  onSubjectAction?: (action: string) => void;
 }) {
   const gatePending = !!gate?.items.length;
   const [view, setView] = useState<ObjectGraphView | null>(null);
@@ -691,6 +705,39 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId 
   }, [projectId, visible]);
   const selected = view?.graph.nodes.find((node) => node.id === selectedId) ?? null;
   const selectedWeakness = selected ? primaryWeakness(selected) : null;
+  // Related cards for the inspector: every card this one is wired to, one hop out, with the edge's verb.
+  // The list re-targets the SAME dock (a click just re-selects) so the founder walks the graph without
+  // the panel closing and reopening. Deduped by the other card's id, capped so the list stays scannable.
+  const relatedCards = useMemo(() => {
+    if (!selected || !view) return [] as { node: ObjectGraphNode; verb: string }[];
+    const seen = new Set<string>();
+    const out: { node: ObjectGraphNode; verb: string }[] = [];
+    for (const edge of view.graph.edges) {
+      if (edge.source !== selected.id && edge.target !== selected.id) continue;
+      const otherId = edge.source === selected.id ? edge.target : edge.source;
+      if (otherId === selected.id || seen.has(otherId)) continue;
+      const other = view.graph.nodes.find((n) => n.id === otherId);
+      if (!other) continue;
+      seen.add(otherId);
+      out.push({ node: other, verb: edge.type });
+    }
+    return out.slice(0, 8);
+  }, [selected, view]);
+  // Re-target the inspector to a related card without closing it: re-select and re-dock the composer.
+  const retargetInspector = useCallback((node: ObjectGraphNode) => {
+    setSelectedId(node.id);
+    onSubjectChange?.({ id: node.id, label: node.statement, kind: node.type ?? "block" });
+  }, [onSubjectChange]);
+  // Esc closes the inspector (empty-canvas click already does, via onPaneClick). The card keeps nothing
+  // open, and the composer detaches so it never claims to edit a card no longer in focus.
+  useEffect(() => {
+    if (!selectedId) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { setSelectedId(null); onSubjectChange?.(null); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedId, onSubjectChange]);
 
   // Drag-to-create: the react-flow instance (captured on init) turns the drop's screen point into a graph
   // coordinate; the drop posts one add_node op for a fresh loose card, then selects it and docks the
@@ -863,60 +910,104 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId 
       ) : null}
 
       {selected ? (
-        <aside className="object-inspector">
-          <div className="object-inspector-head">
-            <span>{labelForType(selected.type)}</span>
-            <button type="button" onClick={() => setSelectedId(null)}>Close</button>
-          </div>
-          <h3>{selected.statement}</h3>
-          <div className="object-inspector-row">
-            <span>Evidence</span>
-            <strong>{evidenceLabel(selected)}</strong>
-          </div>
-          {selectedWeakness ? (
-            <div className="object-inspector-weakness">
-              <AlertTriangle aria-hidden="true" />
-              <div>
-                <strong>{selectedWeakness.statement}</strong>
-                <span>{selectedWeakness.repair?.statement ?? "Repair suggested from the detector."}</span>
+        <aside className={`object-inspector tone-${cardTone(selected)}`} aria-label={`Details for ${selected.statement}`}>
+          <div className="object-inspector-body">
+            <header className="object-inspector-head">
+              <span className={`object-inspector-chip tone-${cardTone(selected)}`}>
+                {cardIcon(selected)}
+                {labelForType(selected.type)}
+              </span>
+              <button type="button" className="object-inspector-close" aria-label="Close details" onClick={() => { setSelectedId(null); onSubjectChange?.(null); }}>
+                <X aria-hidden="true" />
+              </button>
+            </header>
+            <h3>{selected.statement}</h3>
+
+            {selectedWeakness ? (
+              <div className="object-inspector-weakness">
+                <AlertTriangle aria-hidden="true" />
+                <div>
+                  <strong>{selectedWeakness.statement}</strong>
+                  <span>{selectedWeakness.repair?.statement ?? "Repair suggested from the detector."}</span>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="object-inspector-clean">No phase-1 weakness fired for this card.</div>
-          )}
-          {nodeRole(selected) === "gate" ? (
+            ) : null}
+
             <div className="object-inspector-section">
-              <span>Gate</span>
-              <p><b>Protects</b> {String(selected.payload?.protects || "staged action")}</p>
-              <p><b>Review</b> {String(selected.payload?.reviewPayload || "action-summary")}</p>
-              <p><b>Status</b> {String((selected.payload?.gateState as { status?: string } | undefined)?.status || "pending")}</p>
+              <span>Evidence · {evidenceLabel(selected)}</span>
+              {(() => {
+                // Receipts grounded in the real node: prefer the scan sources (each with its ref +
+                // provenance), fall back to the evidence ledger. Inferred/speculative lines read visibly
+                // softer than observed/researched ones, so grounded never looks the same as a guess.
+                const receipts = selected.sources.length
+                  ? selected.sources
+                  : selected.evidence.map((item) => ({ ref: item.source || "evidence", preview: item.claim || item.notes || "Evidence", kind: item.solidity, at: item.capturedAt }));
+                if (!receipts.length) return <p className="object-inspector-empty">No receipt captured yet — this card is unsupported.</p>;
+                return receipts.slice(0, 6).map((receipt) => {
+                  const soft = receipt.kind === "inferred" || receipt.kind === "speculative";
+                  return (
+                    <div className={`object-receipt prov-${receipt.kind ?? "unsupported"} ${soft ? "soft" : "grounded"}`} key={`${receipt.kind}-${receipt.ref}-${receipt.preview}`}>
+                      <p className="object-receipt-claim">{receipt.preview}</p>
+                      <span className="object-receipt-src">{receipt.kind ?? "unsupported"} · {receipt.ref}</span>
+                    </div>
+                  );
+                });
+              })()}
             </div>
-          ) : null}
-          {selected.payload?.joinKey ? (
-            <div className="object-inspector-section">
-              <span>Attribution</span>
-              <p><b>Join key</b> {String(selected.payload.joinKey)}</p>
-              {selected.payload?.reviewPayload ? <p><b>Review payload</b> {String(selected.payload.reviewPayload)}</p> : null}
-            </div>
-          ) : null}
-          <div className="object-inspector-section">
-            <span>Receipts</span>
-            {(selected.sources.length ? selected.sources : selected.evidence.map((item) => ({ ref: item.source || "evidence", preview: item.claim || item.notes || "Evidence", kind: item.solidity, at: item.capturedAt }))).slice(0, 6).map((receipt) => (
-              <p key={`${receipt.kind}-${receipt.ref}-${receipt.preview}`}>{receipt.preview}</p>
-            ))}
+
+            {nodeRole(selected) === "gate" ? (
+              <div className="object-inspector-section">
+                <span>Gate</span>
+                <p><b>Protects</b> {String(selected.payload?.protects || "staged action")}</p>
+                <p><b>Review</b> {String(selected.payload?.reviewPayload || "action-summary")}</p>
+                <p><b>Status</b> {String((selected.payload?.gateState as { status?: string } | undefined)?.status || "pending")}</p>
+              </div>
+            ) : null}
+            {selected.payload?.joinKey ? (
+              <div className="object-inspector-section">
+                <span>Attribution</span>
+                <p><b>Join key</b> {String(selected.payload.joinKey)}</p>
+                {selected.payload?.reviewPayload ? <p><b>Review payload</b> {String(selected.payload.reviewPayload)}</p> : null}
+              </div>
+            ) : null}
+
+            {relatedCards.length ? (
+              <div className="object-inspector-section">
+                <span>Related</span>
+                <div className="object-related-list">
+                  {relatedCards.map(({ node, verb }) => (
+                    <button
+                      type="button"
+                      className="object-related-card"
+                      key={node.id}
+                      onClick={() => retargetInspector(node)}
+                    >
+                      <span className="object-related-verb">{verb.replace(/_/g, " ")}</span>
+                      <span className="object-related-name">{node.statement}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
-          <div className="object-inspector-section">
-            <span>Edges</span>
-            {view?.graph.edges
-              .filter((edge) => edge.source === selected.id || edge.target === selected.id)
-              .slice(0, 8)
-              .map((edge) => (
-                <p key={edge.id}>
-                  <b>{edge.type.replace(/_/g, " ")}</b>{" "}
-                  {edge.source === selected.id ? nodeStatement(view, edge.target) : nodeStatement(view, edge.source)}
-                </p>
+
+          {/* Claude actions pinned at the foot — the same phrasings the composer's attached header offers,
+              routed into the composer input, editable. Approve-before-run: a chip fills the composer, it
+              never fires on its own. */}
+          {onSubjectAction ? (
+            <div className="object-inspector-actions">
+              {subjectActions(selected.type ?? "block").map((action) => (
+                <button
+                  type="button"
+                  className="object-inspector-action"
+                  key={action}
+                  onClick={() => onSubjectAction(action)}
+                >
+                  {action}
+                </button>
               ))}
-          </div>
+            </div>
+          ) : null}
         </aside>
       ) : null}
 

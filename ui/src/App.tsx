@@ -258,7 +258,7 @@ export default function App() {
   // "challenge this bet", "swap this belief", "stage this path to my gate". The composer pre-fills with
   // it and the founder sends (or edits first); nothing runs on its own. Token-bumped so an identical
   // re-ask re-seeds the input.
-  const [composerSeed] = useState<{ text: string; token: number } | null>(null);
+  const [composerSeed, setComposerSeed] = useState<{ text: string; token: number } | null>(null);
   // The Issues panel — the system's problem list, now a first-class always-present indicator on the
   // dock (no longer a summoned card). Opens from its toolbar badge, mutually exclusive with Approvals.
   const [issuesOpen, setIssuesOpen] = useState(false);
@@ -694,6 +694,16 @@ export default function App() {
       setObjectIdeation((cur) => (cur && cur.sourceId === source.id && cur.target === target
         ? { ...cur, status: "error", error: err instanceof Error ? err.message : String(err) } : cur));
     }
+  }, []);
+
+  // The inspector's Claude-action chips (Sharpen / Find evidence / a per-kind move): drop the phrasing
+  // into the composer input, editable, and focus it — the founder edits or sends, nothing fires on its
+  // own. Same behavior as the composer's own attached chips; the inspector just triggers it from the
+  // card detail instead of the dock header. The composer is already scoped to this card (selecting it
+  // docked it), so the action resolves against the right object.
+  const handleSubjectAction = useCallback((action: string) => {
+    setComposerSeed({ text: action, token: Date.now() });
+    setComposerFocus((f) => f + 1);
   }, []);
 
   // The founder's explicit pick: write a REAL gray DRAFT card (loose, founder-origin, the candidate's own
@@ -1946,13 +1956,16 @@ export default function App() {
     ideatingNodeId: objectIdeation?.status === "loading" ? objectIdeation.sourceId : null,
     ideatingTarget: objectIdeation?.status === "loading" ? objectIdeation.target : null,
     objectGraphReload,
+    // The inspector's Claude-action chips route their phrasing into the composer input, editable —
+    // same as the composer's own attached chips, triggered from the card detail.
+    onSubjectAction: handleSubjectAction,
     // The Learn lens reads the loop off the same cockpit state the map is built on.
     cockpit,
   }), [
     canvasGraph, connectors, contractAudits, runResult, graphRunning, runningNodeId, selection,
     dismissOverlays, proposedNodeIds, proposedEdgeIds, revealedNodeIds, proposalActive, operatorCursor,
     handleResolveProposal, submitGateReview, approveGate, handleAddNode, handleGraphConnect, handleDeleteEdges,
-    handleNodePositionChange, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, gtmMapGate, activeMode, cockpit, composerSubject, ideateObjectFromCard, objectIdeation, objectGraphReload,
+    handleNodePositionChange, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, gtmMapGate, activeMode, cockpit, composerSubject, ideateObjectFromCard, objectIdeation, objectGraphReload, handleSubjectAction,
   ]);
 
   // First-run team setup. Gated on Convex being configured AND no team chosen yet, so a local/solo

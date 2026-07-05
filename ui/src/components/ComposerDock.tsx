@@ -4,6 +4,7 @@ import {
   Mic, Minimize2, PenLine, Pin, Play, Search, Send, ShieldCheck, Square, Wand2, X,
 } from "lucide-react";
 import { statusLabel } from "@/lib/status";
+import { subjectActions } from "@/lib/subjectActions";
 import type { ObjectCandidate } from "@/api";
 import { AgentPicker } from "@/components/AgentPicker";
 import { DEFAULT_MODEL, modelById } from "@/components/agent-picker-models";
@@ -534,32 +535,6 @@ function ObjectIdeationChoices({ ideation, onAdd, onDismiss }: {
       ) : null}
     </div>
   );
-}
-
-// The plain-English moves offered on whatever the founder has selected. Every block gets the three
-// universal ones; a handful of kinds add a move that only makes sense for them. These are the
-// suggestions from the vision — "Sharpen this", "Turn it into a paid pilot" — phrased as things the
-// founder asks for, never as system verbs. Clicking one drops the phrasing into the input, editable,
-// so the founder can adjust before it's sent (never fires on its own).
-const SUBJECT_ACTIONS: Record<string, string[]> = {
-  offer: ["Make it lower-friction", "Turn it into a paid pilot"],
-  buyer: ["Narrow this buyer", "What's their trigger?"],
-  pain: ["Who feels this most?"],
-  job: ["Who feels this most?"],
-  channel: ["Draft the first message", "Who do I send this to?"],
-  message: ["Make it shorter", "Make it feel personal"],
-  proof_point: ["Where's the real evidence?"],
-  value_prop: ["Where's the real evidence?"],
-  trigger: ["Why is now the moment?"],
-  gate: ["Stage this to review"],
-  run: ["What changed after this run?"],
-};
-function subjectActions(kind: string): string[] {
-  const universal = ["Sharpen this", "Find evidence", "Give me 3 variants"];
-  const extra = SUBJECT_ACTIONS[kind] ?? [];
-  // Keep it to at most four chips so the attached header stays scannable, extras first (they're the
-  // most specific to what's selected), then fill from the universal set.
-  return [...extra, ...universal].slice(0, 4);
 }
 
 // The persistent co-pilot. Always docked, never summoned: your channels at the head, the
