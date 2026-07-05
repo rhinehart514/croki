@@ -105,7 +105,7 @@ export function BestNextMove({
   );
 }
 
-function GoalBar({ goal }: { goal: CockpitState["goal"] }) {
+export function GoalBar({ goal }: { goal: CockpitState["goal"] }) {
   if (!goal) {
     return (
       <div className="ck-goal ck-goal-empty">
@@ -131,7 +131,7 @@ function GoalBar({ goal }: { goal: CockpitState["goal"] }) {
   );
 }
 
-function Beliefs({ bets }: { bets: CockpitState["bets"] }) {
+export function Beliefs({ bets }: { bets: CockpitState["bets"] }) {
   return (
     <section className="ck-card">
       <h2 className="ck-card-title">What we believe</h2>
@@ -165,7 +165,7 @@ function fmt(n: number | null): string {
   return n.toLocaleString();
 }
 
-function WhatHappened({ run }: { run: CockpitState["latestRun"] }) {
+export function WhatHappened({ run }: { run: CockpitState["latestRun"] }) {
   return (
     <section className="ck-card">
       <h2 className="ck-card-title">What happened</h2>
@@ -206,7 +206,7 @@ function WhatHappened({ run }: { run: CockpitState["latestRun"] }) {
   );
 }
 
-function Learnings({ learnings }: { learnings: CockpitState["learnings"] }) {
+export function Learnings({ learnings }: { learnings: CockpitState["learnings"] }) {
   return (
     <section className="ck-card">
       <h2 className="ck-card-title">What the market taught us</h2>
@@ -235,7 +235,7 @@ function Learnings({ learnings }: { learnings: CockpitState["learnings"] }) {
   );
 }
 
-function Upgrades({ upgrades }: { upgrades: string[] }) {
+export function Upgrades({ upgrades }: { upgrades: string[] }) {
   if (upgrades.length === 0) return null;
   return (
     <section className="ck-card">

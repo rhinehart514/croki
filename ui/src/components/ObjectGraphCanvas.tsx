@@ -422,13 +422,17 @@ function BandHeaders({ cols }: { cols: { key: string; label: string; sub: string
   );
 }
 
-export function ObjectGraphCanvas({ projectId, gate, onSubjectChange }: {
+export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, desiredArrange }: {
   projectId: string | null;
   gate?: GateBag | null;
   // The attached-composer tie: whenever the founder selects (or deselects) a block on the canvas, we
   // hand its identity up so the composer can dock to it — "Claude · editing offer" — and frame the
   // next message with it. Fired only from selection events, never during render, so it can't loop.
   onSubjectChange?: (subject: { id: string; label: string; kind: string } | null) => void;
+  // The mode switcher above the canvas drives the arrangement: Move re-projects the story bands
+  // ("stages"), Trace opens the free causal graph ("flow"). It only steers when it CHANGES, so the
+  // in-header toggle and the drop-to-flow behavior still move the map freely within a mode.
+  desiredArrange?: "stages" | "flow";
 }) {
   const gatePending = !!gate?.items.length;
   const [view, setView] = useState<ObjectGraphView | null>(null);
@@ -436,7 +440,7 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange }: {
   const [lens, setLens] = useState<"default" | "weakness">("default");
   // Arrangement is a LENS, not a layout the data is locked into: "stages" arranges cards into the
   // operating-story bands; "flow" restores the free causal graph (founder drags persist there).
-  const [arrange, setArrange] = useState<"stages" | "flow">("stages");
+  const [arrange, setArrange] = useState<"stages" | "flow">(desiredArrange ?? "stages");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [compileState, setCompileState] = useState<{ status: "idle" | "running" | "done" | "error"; message: string }>({ status: "idle", message: "" });
@@ -500,6 +504,18 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange }: {
     const t = window.setTimeout(() => setIgnited(true), 1500);
     return () => { cancelAnimationFrame(raf); window.clearTimeout(t); };
   }, [hasNodes, reduceMotion]);
+
+  // The mode pill above the canvas steers the arrangement, but only on an actual change — so flipping
+  // to Move snaps to the story bands and Trace opens the causal graph, while the in-canvas toggle and
+  // the drop-to-flow still move the map freely inside a mode without being yanked back. This is React's
+  // adjust-state-during-render pattern (not an effect): compare the incoming mode to the last one we
+  // acted on and re-project only on the transition.
+  const [appliedArrange, setAppliedArrange] = useState(desiredArrange);
+  if (desiredArrange && desiredArrange !== appliedArrange) {
+    setAppliedArrange(desiredArrange);
+    setArrange(desiredArrange);
+    setRefitSignal((s) => s + 1);
+  }
 
   const highlightedPath = view?.recommendation.highlighted[0] ?? null;
   const highlightedNodes = useMemo(() => new Set(highlightedPath?.nodeIds ?? []), [highlightedPath]);

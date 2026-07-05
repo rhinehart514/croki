@@ -88,6 +88,7 @@ import { agentPersona } from "@/lib/agentPersona";
 const ProductUnderstanding = lazy(() => import("@/components/ProductUnderstanding").then((m) => ({ default: m.ProductUnderstanding })));
 const ProductCanvas = lazy(() => import("@/components/ProductCanvas").then((m) => ({ default: m.ProductCanvas })));
 import { GtmCanvas, type GtmCanvasModel } from "@/components/canvas/GtmCanvas";
+import { SlidingTabs } from "@/components/SlidingTabs";
 import { CanvasCard } from "@/components/CanvasCard";
 import { ClarityCard } from "@/components/ClarityCard";
 import { ExperimentMatrixLens } from "@/components/lenses/ExperimentMatrixLens";
@@ -199,6 +200,13 @@ export default function App() {
   // the canvas out; they float OVER it as dismissable overlays (set via `overlay`), so the IDE is
   // never replaced. Channels live in the explorer, not a page.
   const [view, setView] = useState<"projects" | "canvas" | "start" | "cockpit">("canvas");
+  // The canvas frames the SAME product data four ways, chosen by one segmented pill over the map:
+  //   move  — the story bands with the Best Next Move floated over them (the doing surface)
+  //   flow  — the executable pipeline lane (Find targets → draft → gate → measure)
+  //   trace — the free causal graph, the reasoning laid bare
+  //   learn — the loop closing: goal, beliefs, last run, what the market taught
+  // Switching a mode re-projects the same data in place; it never navigates away.
+  const [activeMode, setActiveMode] = useState<"move" | "flow" | "trace" | "learn">("move");
   const [booted, setBooted] = useState(false);
   // True until the initial boot load resolves. Guards the canvas empty-state so a deep-link / reload
   // shows a calm "loading your workspace" instead of flashing the cold-start goal launcher for the
@@ -1837,11 +1845,16 @@ export default function App() {
     // Selecting a block on the object graph docks the composer to it (same subject seam the node
     // graph already uses). setComposerSubject is a stable state setter, so this never re-runs the memo.
     onObjectSelect: setComposerSubject,
+    // The mode pill steers the object graph's arrangement: Trace opens the free causal graph, every
+    // other mode reads the story bands.
+    desiredArrange: activeMode === "trace" ? "flow" : "stages",
+    // The Learn lens reads the loop off the same cockpit state the map is built on.
+    cockpit,
   }), [
     canvasGraph, connectors, contractAudits, runResult, graphRunning, runningNodeId, selection,
     dismissOverlays, proposedNodeIds, proposedEdgeIds, revealedNodeIds, proposalActive, operatorCursor,
     handleResolveProposal, submitGateReview, approveGate, handleAddNode, handleGraphConnect, handleDeleteEdges,
-    handleNodePositionChange, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, gtmMapGate,
+    handleNodePositionChange, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, gtmMapGate, activeMode, cockpit,
   ]);
 
   // First-run team setup. Gated on Convex being configured AND no team chosen yet, so a local/solo
@@ -1863,6 +1876,12 @@ export default function App() {
       />
     );
   }
+
+  // The map is on screen (not the cold-start picker, the operator drive state, or an empty boot) — the
+  // one condition under which the mode pill and the floated hero belong. Operator PAUSES
+  // (waiting_for_ideas / waiting_for_gate) still show the map behind their overlay, so they keep it.
+  const operatorDriving = !!operatorSession && ["ready", "running", "failed", "blocked"].includes(operatorSession.status);
+  const gtmCanvasVisible = view === "canvas" && overlay !== "product" && !operatorDriving && !!(canvasGraph || activeProjectId);
 
   return (
     <main className={`loop-shell ${view === "canvas" ? "canvas-bleed" : ""}`}>
@@ -1952,7 +1971,7 @@ export default function App() {
               same styling as the cockpit hero — read-only, dismissable, and clear of the path header up
               top and the dock in the center. When the projection is empty it renders its own honest
               empty hero; while cockpit data is still null it renders nothing rather than a fake. */}
-          {view === "canvas" && overlay !== "product" && cockpit && !moveHeroDismissed ? (
+          {view === "canvas" && overlay !== "product" && activeMode === "move" && cockpit && !moveHeroDismissed ? (
             <div className="move-hero">
               <button
                 type="button"
@@ -1977,6 +1996,27 @@ export default function App() {
             <button type="button" className="back-to-cockpit" onClick={() => setView("cockpit")} title="Open the full Best Next Move view">
               ← Full view
             </button>
+          ) : null}
+
+          {/* The mode switcher — one segmented pill over the map that frames the SAME product four ways
+              (do it · run it · trace the reasoning · read the loop). It re-projects in place; it never
+              navigates away, and it reads lighter than the Run button so it's a lens, not an action. */}
+          {gtmCanvasVisible ? (
+            <div className="canvas-mode-switch">
+              <SlidingTabs
+                items={[
+                  { value: "move", label: "Move" },
+                  { value: "flow", label: "Flow" },
+                  { value: "trace", label: "Trace" },
+                  { value: "learn", label: "Learn" },
+                ]}
+                value={activeMode}
+                onChange={setActiveMode}
+                layoutId="canvas-mode"
+                size="sm"
+                className="mode-switch"
+              />
+            </div>
           ) : null}
 
           {/* The floating control dock — every control the old top toolbar held, in one calm bar
@@ -2151,7 +2191,11 @@ export default function App() {
             // Phase-1 GTM graph: one object graph, one strongest path lit, weak cards marked. Existing
             // pipeline and map surfaces remain in the codebase; this branch is only the additive center
             // projection for an opened product.
-            <GtmCanvas model={gtmCanvasModel} activeLensId="object-graph" chromeless />
+            <GtmCanvas
+              model={gtmCanvasModel}
+              activeLensId={activeMode === "flow" ? "channel-flow" : activeMode === "learn" ? "learnings" : "object-graph"}
+              chromeless
+            />
           ) : (booting || projectBusy) ? (
             // Still resolving the workspace (initial boot, or switching products) — a calm loading
             // state, never the cold-start goal launcher flashing before the real graph arrives.

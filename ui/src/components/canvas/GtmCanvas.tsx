@@ -5,7 +5,9 @@ import { CanvasShell, type LensDef, type LensProps } from "@/components/canvas/C
 import { ObjectGraphCanvas } from "@/components/ObjectGraphCanvas";
 import type { GateBag } from "@/lib/gateItem";
 import { GroundLens } from "@/components/lenses/GroundLens";
+import { LearningsLens } from "@/components/lenses/LearningsLens";
 import { BeliefSpine } from "@/components/lenses/BeliefSpine";
+import type { CockpitState } from "@/api";
 import { useGround, type IcpGrouping } from "@/lib/groundModel";
 import { useBoard } from "@/lib/boardModel";
 import type {
@@ -96,12 +98,23 @@ export type GtmCanvasModel = {
   // The attached-composer tie for the object graph: selecting a block hands its identity up so the
   // composer docks to it. Null on deselect.
   onObjectSelect?: (subject: { id: string; label: string; kind: string } | null) => void;
+  // The mode switcher drives the object graph's arrangement: Move → the story bands ("stages"),
+  // Trace → the free causal graph ("flow"). Steers only on change (see ObjectGraphCanvas).
+  desiredArrange?: "stages" | "flow";
+  // The five-primitive founder state (goal, beliefs, last run, learnings) the Learn lens reads to
+  // project the loop closing. Null before a product is open — the lens shows its honest empty state.
+  cockpit?: CockpitState | null;
 };
 
 type GtmLensProps = LensProps<GtmCanvasModel, never>;
 
 function ObjectGraphLens({ model: m }: GtmLensProps) {
-  return <ObjectGraphCanvas projectId={m.projectId} gate={m.gate} onSubjectChange={m.onObjectSelect} />;
+  return <ObjectGraphCanvas projectId={m.projectId} gate={m.gate} onSubjectChange={m.onObjectSelect} desiredArrange={m.desiredArrange} />;
+}
+
+// The Learn lens — the loop closing, read off the same cockpit state the map is built on.
+function LearningsLensWrapper({ model: m }: GtmLensProps) {
+  return <LearningsLens cockpit={m.cockpit ?? null} />;
 }
 
 // ── channel-flow: GraphCanvas, unchanged. Forwards App's prop bag straight through. ──
@@ -199,6 +212,8 @@ const LENSES: LensDef<GtmCanvasModel, never>[] = [
   // only as the plain per-pipeline state the ground shows.
   { id: "board", label: "Ground", Component: GroundLensWrapper },
   { id: "channel-flow", label: "Pipeline flow", Component: ChannelFlowLens },
+  // The loop-close read-out — goal, beliefs, last run, learnings — projected over the same cockpit data.
+  { id: "learnings", label: "Learn", Component: LearningsLensWrapper },
 ];
 
 // Lens metadata (id + label) for the command dock's switcher lives in the sibling `lens-meta.ts`
@@ -212,7 +227,7 @@ export function GtmCanvas({
   // channel-flow with a channel open) — not stored. App reuses ONE GtmCanvas instance across both
   // branches, so the lens must be a controlled prop: an uncontrolled default only seeds the shell's
   // state once and would strand the reused instance on the stale lens when the branch flips.
-  activeLensId: "object-graph" | "board" | "channel-flow";
+  activeLensId: "object-graph" | "board" | "channel-flow" | "learnings";
   chromeless?: boolean;
 }) {
   return (

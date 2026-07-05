@@ -7579,3 +7579,27 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
   transition: color 120ms var(--ease), border-color 120ms var(--ease);
 }
 .move-hero-dismiss:hover { color: var(--ink); border-color: color-mix(in srgb, var(--ink) 20%, var(--line)); }
+
+/* The canvas mode switcher — one segmented pill floated top-center over the map, just below the full-
+   width path header. It frames the same product data four ways (Move / Flow / Trace / Learn) and
+   re-projects in place. A distinct white floating chip; the ACTIVE segment fills near-black so the
+   chosen frame is unmistakable, but the whole control stays quieter than the Run action beside it. */
+.canvas-mode-switch {
+  position: absolute;
+  z-index: 15;
+  top: 84px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.stabs.mode-switch {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-card);
+}
+.stabs.mode-switch .stab-pill { background: var(--ink); box-shadow: none; }
+.stabs.mode-switch .stab.active { color: #fff; }
+
+/* Learn lens: its content is a centered read-column that would otherwise sit under the floated mode
+   pill. Drop its top in so the goal bar clears the switcher. Scoped to the lens — the full cockpit
+   scroll (no floating pill) keeps its own padding. */
+.lens-frame .ck.learn-lens { padding-top: 116px; }
