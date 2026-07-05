@@ -125,78 +125,80 @@ function objectKind(node: ObjectGraphNode): ObjectKind {
   }
 }
 
-// Stage bands — a LENS that arranges the graph into the founder's operating story so the whole
-// go-to-market reads left to right: what you believe → what you'll do → what came back. Derived
-// from each node's own type/domain/maturity/role, NOT a fixed backend skeleton — it only decides
-// where a card sits, and the "Flow" view restores the free causal graph. This keeps the anti-cage
-// line: the stages are a way of seeing, never a track a run is forced onto.
-const STAGE_BANDS = [
-  { key: "truth", label: "Product truth", family: "belief" },
-  { key: "market", label: "Market picture", family: "belief" },
-  { key: "paths", label: "GTM paths", family: "move" },
-  { key: "run_gate", label: "Run + gate", family: "move" },
-  { key: "outcomes", label: "Outcomes", family: "result" },
+// Stage columns — the LENS that lays the graph out as the buyer story: one column per object TYPE,
+// left to right in the order a market picture is actually told (who we help → what hurts → … → what we
+// say → the play → the gate → what came back). Each column names itself AND says in plain words what it
+// holds, so the founder can read what every stage IS. This is the fix for the old "Market picture" band,
+// which crammed ten different types into one unlabelled blob. Still a way of SEEING, never a track a run
+// is forced onto — the "Flow" view restores the free causal graph, and an empty type claims no column,
+// so the lens only ever shows the stages that are real. Types are grouped, not hard-coded per node: a
+// node lands in the first column whose `types` list matches, so a new object kind just needs a home here.
+const STAGE_COLUMNS = [
+  { key: "product", label: "Product", sub: "What it does", types: [] },
+  { key: "buyer", label: "Buyer", sub: "Who we help", types: ["buyer", "icp"] },
+  { key: "pain", label: "Pain", sub: "What hurts", types: ["pain"] },
+  { key: "job", label: "Job", sub: "What they want", types: ["job"] },
+  { key: "trigger", label: "Trigger", sub: "What kicks it off", types: ["trigger"] },
+  { key: "workaround", label: "Workaround", sub: "What they do now", types: ["workaround", "competitor"] },
+  { key: "value", label: "Value Prop", sub: "Why we're different", types: ["value_prop", "positioning"] },
+  { key: "proof", label: "Proof", sub: "Why believe us", types: ["proof_point"] },
+  { key: "offer", label: "Offer", sub: "What we offer", types: ["offer"] },
+  { key: "channel", label: "Channel", sub: "Where we reach them", types: ["channel"] },
+  { key: "message", label: "Message", sub: "What we say", types: ["message", "objection"] },
+  { key: "path", label: "Path", sub: "The play", types: ["path", "conversion_path"] },
+  { key: "run", label: "Run", sub: "Staged to the gate", types: ["run"] },
+  { key: "gate", label: "Gate", sub: "Founder approval", types: [] },
+  { key: "outcome", label: "Outcome", sub: "What came back", types: [] },
 ] as const;
-type BandKey = (typeof STAGE_BANDS)[number]["key"];
-const MARKET_BAND_TYPES = new Set([
-  "buyer", "icp", "pain", "job", "trigger", "workaround", "competitor", "objection",
-  "offer", "value_prop", "message", "proof_point", "channel", "positioning",
-]);
-function stageBandKey(node: ObjectGraphNode): BandKey {
+type StageColKey = (typeof STAGE_COLUMNS)[number]["key"];
+function stageColumnKey(node: ObjectGraphNode): StageColKey {
   const role = nodeRole(node);
   const d = node.domain || "";
   const t = node.type || "";
-  if (role === "outcome" || node.maturity === "outcome" || d === "measurement" || d === "learning") return "outcomes";
-  if (role === "gate" || d === "runs" || d === "pipeline" || node.maturity === "execution") return "run_gate";
-  if (t === "path" || t === "conversion_path") return "paths";
-  if (d === "market" || d === "strategy" || MARKET_BAND_TYPES.has(t)) return "market";
-  return "truth"; // product facts / external / anything unclassified
+  // The result/execution columns are decided by role/domain, not type: an outcome, a gate, and a staged
+  // run each read from where they sit in the loop, so they land in their own column even when their raw
+  // type is generic.
+  if (role === "outcome" || node.maturity === "outcome" || d === "measurement" || d === "learning") return "outcome";
+  if (role === "gate") return "gate";
+  if (t === "path" || t === "conversion_path") return "path";
+  if (t === "run" || (d === "runs" && node.maturity === "execution")) return "run";
+  for (const col of STAGE_COLUMNS) {
+    if ((col.types as readonly string[]).includes(t)) return col.key;
+  }
+  return "product"; // product facts / capabilities / anything unclassified grounds the picture
 }
 
-// Banded-layout geometry. A band is a region, not a single column: a band with many cards (a market
-// picture can carry 20+) wraps into sub-columns so no column runs off the bottom of the screen. Bands
-// are separated by a wider gap than the sub-columns inside them, so each still reads as one region.
-const BAND_MAX_ROWS = 6;
-const CARD_STEP_X = 252; // card (214) + gap, between sub-columns inside a band
-const BAND_ROW_H = 172;
-const BAND_TOP = 156;
+// Typed-column geometry. Every column is one object type, evenly pitched left to right, cards stacked
+// straight down in a clean grid (no stagger — the reference the founder chose reads as aligned columns,
+// not a loose desk). A pathologically tall column (many of one type) wraps into a second sub-column at the
+// same pitch so it never runs off the bottom; the common case is one stack per type.
+const COL_STEP_X = 258; // card (214) + gap, one type-column to the next
+const COL_ROW_H = 176; // one card to the next within a column
+const COL_MAX_ROWS = 8; // a very tall column wraps into a second sub-column past this
+const BAND_TOP = 168;
 const BAND_LEFT = 48;
-const BAND_GAP = 64; // extra separation between bands
-// Stable per-card hash so the "loose" offsets stay put across renders (a card must not jump each frame).
-function hashId(id: string): number {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (Math.imul(h, 31) + id.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}
-function layoutBandedPositions(nodes: ObjectGraphNode[]): { positions: PositionMap; cols: { key: BandKey; label: string; x: number; index: number }[] } {
-  const byBand = new Map<BandKey, ObjectGraphNode[]>();
+function layoutBandedPositions(nodes: ObjectGraphNode[]): { positions: PositionMap; cols: { key: StageColKey; label: string; sub: string; x: number; index: number }[] } {
+  const byCol = new Map<StageColKey, ObjectGraphNode[]>();
   for (const n of nodes) {
-    const key = stageBandKey(n);
-    (byBand.get(key) ?? byBand.set(key, []).get(key)!).push(n);
+    const key = stageColumnKey(n);
+    (byCol.get(key) ?? byCol.set(key, []).get(key)!).push(n);
   }
   const positions: PositionMap = {};
-  const cols: { key: BandKey; label: string; x: number; index: number }[] = [];
+  const cols: { key: StageColKey; label: string; sub: string; x: number; index: number }[] = [];
   let x = BAND_LEFT;
   let index = 0;
-  for (const band of STAGE_BANDS) {
-    const list = byBand.get(band.key);
-    if (!list || !list.length) continue; // an empty band claims no space — the lens shows only what's real
+  for (const col of STAGE_COLUMNS) {
+    const list = byCol.get(col.key);
+    if (!list || !list.length) continue; // an empty type claims no column — the lens shows only what's real
     index += 1;
-    cols.push({ key: band.key, label: band.label, x, index });
-    const subCols = Math.ceil(list.length / BAND_MAX_ROWS);
+    cols.push({ key: col.key, label: col.label, sub: col.sub, x, index });
+    const subCols = Math.ceil(list.length / COL_MAX_ROWS);
     list.forEach((n, i) => {
-      const sc = Math.floor(i / BAND_MAX_ROWS);
-      const row = i % BAND_MAX_ROWS;
-      // Loose, not laned: a half-row stagger on alternate sub-columns plus a small deterministic
-      // per-card offset, so a band reads like a well-kept desk rather than a spreadsheet — while the
-      // bands themselves still flow strictly left to right.
-      const h = hashId(n.id);
-      const jx = ((h % 5) - 2) * 7; // ~ -14..14
-      const jy = ((Math.floor(h / 8) % 5) - 2) * 4; // ~ -8..8 (kept small so stacked rows never touch)
-      const stagger = (sc % 2) * (BAND_ROW_H * 0.42);
-      positions[n.id] = { x: x + sc * CARD_STEP_X + jx, y: BAND_TOP + row * BAND_ROW_H + stagger + jy };
+      const sc = Math.floor(i / COL_MAX_ROWS);
+      const row = i % COL_MAX_ROWS;
+      positions[n.id] = { x: x + sc * COL_STEP_X, y: BAND_TOP + row * COL_ROW_H };
     });
-    x += subCols * CARD_STEP_X + BAND_GAP;
+    x += subCols * COL_STEP_X;
   }
   return { positions, cols };
 }
@@ -396,9 +398,9 @@ function StagesFit({ bounds, ready, refitSignal }: { bounds: { minX: number; wid
       // to fit them all — cards stay legible and the founder pans right to the later stages (still one
       // canvas). Narrow maps can zoom in further.
       const zoom = Math.min(0.9, Math.max(0.62, (vw - 90) / bounds.width));
-      // band-header row sits at BAND_TOP-54; land it just below the path header, left margin ~60px.
+      // band-header row sits at BAND_TOP-76; land it just below the path header, left margin ~60px.
       const x = 60 - bounds.minX * zoom;
-      const y = 190 - (BAND_TOP - 54) * zoom;
+      const y = 188 - (BAND_TOP - 76) * zoom;
       rf.setViewport({ x, y, zoom }, { duration: 420 });
     }, 60);
     return () => window.clearTimeout(t);
@@ -418,19 +420,21 @@ function ZoomWatch({ onZoom }: { onZoom: (compact: boolean) => void }) {
 
 // Band header labels for the stages lens. They ride the canvas transform so each label stays over
 // its column as you pan and zoom, but the text itself keeps a constant size so it never blurs out.
-function BandHeaders({ cols }: { cols: { key: string; label: string; x: number; index: number }[] }) {
+function BandHeaders({ cols }: { cols: { key: string; label: string; sub: string; x: number; index: number }[] }) {
   const [tx, ty, zoom] = useStore((s) => s.transform);
-  const family = (key: string) => (key === "outcomes" ? "result" : key === "paths" || key === "run_gate" ? "move" : "belief");
   return (
     <div className="band-headers" aria-hidden="true">
       {cols.map((c) => (
         <div
           key={c.key}
-          className={`band-header fam-${family(c.key)}`}
-          style={{ transform: `translate(${tx + c.x * zoom}px, ${ty + (BAND_TOP - 54) * zoom}px)` }}
+          className="band-header"
+          style={{ transform: `translate(${tx + c.x * zoom}px, ${ty + (BAND_TOP - 76) * zoom}px)` }}
         >
-          <span className="bn">{c.index}</span>
-          <span className="bt">{c.label}</span>
+          <span className="band-header-top">
+            <span className="bn">{c.index}</span>
+            <span className="bl">{c.label}</span>
+          </span>
+          <span className="bs">{c.sub}</span>
         </div>
       ))}
     </div>
