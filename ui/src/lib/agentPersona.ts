@@ -72,8 +72,14 @@ function monogramOf(role: string): string {
 }
 
 export function agentPersona(ref: string, job?: string): AgentPersona {
-  const haystack = `${ref} ${job ?? ""}`.toLowerCase();
-  const match = RULES.find((r) => r.test.test(haystack));
+  // Match on the agent's own ref FIRST — its identity — so a specific agent is never relabeled by an
+  // incidental keyword in its job text. A discovery DRAFTER whose job mentions "qualified", or a claim
+  // AUDITOR whose job mentions "first-contact", used to collide onto "Qualification Analyst" /
+  // "First-Contact Writer" and show a duplicate name on the bench. Only when the ref matches no rule do
+  // we fall back to ref + job, so a vague ref still lands by what the job says it does.
+  const refHay = ref.toLowerCase();
+  const match = RULES.find((r) => r.test.test(refHay))
+    ?? RULES.find((r) => r.test.test(`${refHay} ${(job ?? "").toLowerCase()}`));
   const role = match ? match.role : humanizeRef(ref);
   const family: AgentFamily = match ? match.family : "general";
   return { role, family, monogram: monogramOf(role) };
