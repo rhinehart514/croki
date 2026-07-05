@@ -55,14 +55,18 @@ const RULES: { test: RegExp; role: string; family: AgentFamily }[] = [
 
 // Strip the gtm- prefix, the -agent suffix, and any -<name>-voice tail, then Title Case — the honest
 // fallback when no rule matches, so even an unknown agent reads as words, never a kebab id.
-function humanizeRef(ref: string): string {
+export function humanizeRef(ref: string): string {
   const cleaned = ref
     .replace(/^gtm-/, "")
     .replace(/-agent$/, "")
     .replace(/-[a-z]+-voice$/, "")
     .replace(/-/g, " ")
     .trim();
-  return cleaned.replace(/\b\w/g, (c) => c.toUpperCase()) || ref;
+  const titled = cleaned.replace(/\b\w/g, (c) => c.toUpperCase());
+  // Restore common acronyms the blind title-case would soften ("Ai Visibility" → "AI Visibility",
+  // "Wny Dental" → "WNY Dental"), so a humanized ref reads like a name, not a typo.
+  const ACRONYMS = /\b(Ai|Wny|Gtm|Icp|Seo|Pco|Hn|Mcp|Url)\b/g;
+  return titled.replace(ACRONYMS, (m) => m.toUpperCase()) || ref;
 }
 
 function monogramOf(role: string): string {

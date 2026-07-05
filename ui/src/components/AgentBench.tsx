@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Users, Check, X as XIcon, PencilLine } from "lucide-react";
-import { agentPersona, FAMILY_TINT } from "@/lib/agentPersona";
+import { agentPersona, humanizeRef, FAMILY_TINT } from "@/lib/agentPersona";
 import { getAgentBench, type AgentBenchRow } from "@/api";
 import "@/styles/agent-bench.css";
 
@@ -71,6 +71,27 @@ export function AgentBench({
     };
   }, [rows]);
 
+  // Names are unique per card. The persona role vocabulary is coarser than a product's crew, so two
+  // distinct agents (a dental prospector and a home-services one) can map to the same role — which reads
+  // as an accidental duplicate. When a role name is shared, fall back to each agent's own descriptive
+  // name (humanized from its ref), which is both unique and more specific than the shared role.
+  const nameByRef = useMemo(() => {
+    const list = rows ?? [];
+    const roleCount = new Map<string, number>();
+    const roleByRef = new Map<string, string>();
+    for (const r of list) {
+      const { role } = agentPersona(r.ref, r.job);
+      roleByRef.set(r.ref, role);
+      roleCount.set(role, (roleCount.get(role) ?? 0) + 1);
+    }
+    const out = new Map<string, string>();
+    for (const r of list) {
+      const role = roleByRef.get(r.ref) ?? r.ref;
+      out.set(r.ref, (roleCount.get(role) ?? 0) > 1 ? humanizeRef(r.ref) : role);
+    }
+    return out;
+  }, [rows]);
+
   if (!open) return null;
 
   return (
@@ -99,7 +120,7 @@ export function AgentBench({
               <section className="bench-section">
                 <div className="bench-shead">Proven · decided at your gate</div>
                 <div className="bench-grid">
-                  {proven.map((row) => <BenchRow key={row.ref} row={row} onOpen={onOpenAgent} />)}
+                  {proven.map((row) => <BenchRow key={row.ref} row={row} name={nameByRef.get(row.ref)} onOpen={onOpenAgent} />)}
                 </div>
               </section>
             )}
@@ -107,7 +128,7 @@ export function AgentBench({
               <section className="bench-section">
                 <div className="bench-shead">On the bench · not yet run</div>
                 <div className="bench-grid">
-                  {waiting.map((row) => <BenchRow key={row.ref} row={row} onOpen={onOpenAgent} />)}
+                  {waiting.map((row) => <BenchRow key={row.ref} row={row} name={nameByRef.get(row.ref)} onOpen={onOpenAgent} />)}
                 </div>
               </section>
             )}
@@ -118,14 +139,14 @@ export function AgentBench({
   );
 }
 
-function BenchRow({ row, onOpen }: { row: AgentBenchRow; onOpen: (ref: string) => void }) {
+function BenchRow({ row, name, onOpen }: { row: AgentBenchRow; name?: string; onOpen: (ref: string) => void }) {
   const { role } = agentPersona(row.ref, row.job);
   const decided = row.counts.approved + row.counts.rejected;
   return (
     <button className="bench-card" type="button" onClick={() => onOpen(row.ref)}>
       <Mark agentRef={row.ref} job={row.job} />
       <div className="bench-card-main">
-        <div className="bench-card-role">{role}</div>
+        <div className="bench-card-role">{name ?? role}</div>
         {row.job ? <div className="bench-card-job">{row.job}</div> : null}
         {row.hasRuns ? (
           <>
