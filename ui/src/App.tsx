@@ -49,7 +49,10 @@ import {
   composeMicroproduct,
   promoteChannel,
   revokeChannel,
+  ideateObjectCandidates,
+  applyObjectGraphOperations,
 } from "@/api";
+import type { ObjectCandidate } from "@/api";
 // Heavy overlay/panel components are split into their own chunks and loaded on demand the first time
 // the founder opens them, so they stay out of the initial app chunk. Each is named-exported, so the
 // dynamic import maps the named export onto the default React.lazy expects.
@@ -242,6 +245,15 @@ export default function App() {
   // shows it as the subject chip and the next message is framed with that node's context, so "make this
   // shorter" / "why did this come up empty" resolves to a real canvas object — no describing it by hand.
   const [composerSubject, setComposerSubject] = useState<{ id: string; label: string; kind: string } | null>(null);
+  // Per-card ideation (the on-card "+"): the source card, the plain target, the returning candidate
+  // OBJECTS, and the call's status. The composer renders these as a decidable list; adding one writes a
+  // real draft card. Null when no ideation is running. objectGraphReload is bumped after an add so the
+  // object-graph canvas reloads and the fresh draft appears joined to its source.
+  const [objectIdeation, setObjectIdeation] = useState<{
+    sourceId: string; sourceLabel: string; target: string;
+    status: "loading" | "done" | "error"; candidates: ObjectCandidate[]; error?: string | null;
+  } | null>(null);
+  const [objectGraphReload, setObjectGraphReload] = useState(0);
   // A message the founder started from the GTM map — "why does this rank here", "show me variants",
   // "challenge this bet", "swap this belief", "stage this path to my gate". The composer pre-fills with
   // it and the founder sends (or edits first); nothing runs on its own. Token-bumped so an identical
@@ -663,6 +675,81 @@ export default function App() {
     setSelection(null);
     setComposerFocus((f) => f + 1);
   }, []);
+
+  // The on-card "+": scope the composer to the card, open it, and run the REAL grounded ideate for the
+  // plain target (the endpoint drives the same live Claude generator the ideas round uses). The
+  // candidates land in the composer as a decidable list; the source card lights blue-violet while the
+  // call runs. Nothing is persisted here — a candidate becomes a real draft only when the founder adds it.
+  const ideateObjectFromCard = useCallback(async (source: { id: string; label: string; type: string }, target: string) => {
+    const projectId = activeProjectIdRef.current;
+    if (!projectId) return;
+    setComposerSubject({ id: source.id, label: source.label, kind: source.type });
+    setComposerFocus((f) => f + 1);
+    setObjectIdeation({ sourceId: source.id, sourceLabel: source.label, target, status: "loading", candidates: [] });
+    try {
+      const { candidates } = await ideateObjectCandidates(projectId, { target, sourceNodeId: source.id });
+      setObjectIdeation((cur) => (cur && cur.sourceId === source.id && cur.target === target
+        ? { ...cur, status: "done", candidates } : cur));
+    } catch (err) {
+      setObjectIdeation((cur) => (cur && cur.sourceId === source.id && cur.target === target
+        ? { ...cur, status: "error", error: err instanceof Error ? err.message : String(err) } : cur));
+    }
+  }, []);
+
+  // The founder's explicit pick: write a REAL gray DRAFT card (loose, founder-origin, the candidate's own
+  // statement + type) PLUS a provenance link from the source card, then bump the reload so the object
+  // graph re-reads and the new draft appears joined. The added candidate drops out of the list. Nothing
+  // sends — a draft card is inert until it's built into a path and taken to the gate.
+  const addObjectCandidate = useCallback(async (candidate: ObjectCandidate) => {
+    const projectId = activeProjectIdRef.current;
+    const ideation = objectIdeation;
+    if (!projectId || !ideation) return;
+    const newId = `obj-founder-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const draftOp = {
+      type: "add_node" as const,
+      node: {
+        id: newId,
+        // A typed idea lands with its type; an untyped one stays a genuinely loose draft card.
+        ...(candidate.type ? { type: candidate.type } : {}),
+        maturity: "loose" as const,
+        statement: candidate.statement,
+        origin: "founder",
+      },
+    };
+    const edgeOp = {
+      type: "add_edge" as const,
+      edge: {
+        source: ideation.sourceId,
+        target: newId,
+        type: "leads_to",
+        basis: [{ ref: `ideated-from:${ideation.sourceId}`, preview: `Ideated from “${ideation.sourceLabel}”`, kind: "founder" }],
+      },
+    };
+    try {
+      try {
+        // The join lands directly when the source is already a writable card in the store.
+        await applyObjectGraphOperations(projectId, [draftOp, edgeOp]);
+      } catch {
+        // The source is a PROJECTED card (a scanned product fact, a researched market object) that isn't
+        // in the writable store yet, so the edge has nothing to attach to. Anchor it as a loose stored
+        // node under the same id — the projection still overrides this anchor in the view (same id, no
+        // duplicate), it just gives the provenance edge a real home — then land the draft joined to it.
+        const anchorOp = {
+          type: "add_node" as const,
+          node: { id: ideation.sourceId, maturity: "loose" as const, statement: ideation.sourceLabel, origin: "founder" },
+        };
+        await applyObjectGraphOperations(projectId, [anchorOp, draftOp, edgeOp]);
+      }
+      setObjectGraphReload((n) => n + 1);
+      setObjectIdeation((cur) => (cur && cur.sourceId === ideation.sourceId
+        ? { ...cur, error: null, candidates: cur.candidates.filter((c) => c.id !== candidate.id) } : cur));
+    } catch (err) {
+      setObjectIdeation((cur) => (cur && cur.sourceId === ideation.sourceId
+        ? { ...cur, error: err instanceof Error ? err.message : String(err) } : cur));
+    }
+  }, [objectIdeation]);
+
+  const dismissObjectIdeation = useCallback(() => setObjectIdeation(null), []);
 
   // Zoom out to the one-canvas overview: show the GTM canvas's engine-overview lens — every built
   // channel as a tile — instead of a single focused workflow. Returns false when there's nothing to
@@ -1852,13 +1939,20 @@ export default function App() {
     modeControlled: true,
     // Feed the composer's subject back down so selecting a card and detaching the composer stay in sync.
     subjectId: composerSubject?.id ?? null,
+    // The on-card "+" hands its card + a plain target up; the host runs the real ideate and renders the
+    // candidates in the composer. While the call runs the source card lights blue-violet; after an add,
+    // objectGraphReload bumps so the canvas re-reads and the fresh draft appears joined.
+    onIdeateObject: ideateObjectFromCard,
+    ideatingNodeId: objectIdeation?.status === "loading" ? objectIdeation.sourceId : null,
+    ideatingTarget: objectIdeation?.status === "loading" ? objectIdeation.target : null,
+    objectGraphReload,
     // The Learn lens reads the loop off the same cockpit state the map is built on.
     cockpit,
   }), [
     canvasGraph, connectors, contractAudits, runResult, graphRunning, runningNodeId, selection,
     dismissOverlays, proposedNodeIds, proposedEdgeIds, revealedNodeIds, proposalActive, operatorCursor,
     handleResolveProposal, submitGateReview, approveGate, handleAddNode, handleGraphConnect, handleDeleteEdges,
-    handleNodePositionChange, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, gtmMapGate, activeMode, cockpit, composerSubject,
+    handleNodePositionChange, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, gtmMapGate, activeMode, cockpit, composerSubject, ideateObjectFromCard, objectIdeation, objectGraphReload,
   ]);
 
   // First-run team setup. Gated on Convex being configured AND no team chosen yet, so a local/solo
@@ -2525,6 +2619,9 @@ export default function App() {
           isNavCommand={isCanvasCommand}
           onSend={handleComposerSend}
           onBuildCandidate={(c) => void resolveCandidatesAndSync(c.id)}
+          objectIdeation={objectIdeation}
+          onAddObjectCandidate={(c) => void addObjectCandidate(c)}
+          onDismissObjectIdeation={dismissObjectIdeation}
           onCancel={handleOperatorCancel}
           onReviewGate={(nodeId) => selectInGraph(nodeId, operatorSession?.graphId ?? null)}
           contextManifest={contextManifest}

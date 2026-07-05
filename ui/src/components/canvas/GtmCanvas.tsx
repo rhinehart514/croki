@@ -100,6 +100,14 @@ export type GtmCanvasModel = {
   onObjectSelect?: (subject: { id: string; label: string; kind: string } | null) => void;
   // The composer's current subject id, fed back so selection and the attached composer clear together.
   subjectId?: string | null;
+  // The per-card "+" seam: the object graph hands up which card the founder wants the next move off (and
+  // a plain target); the host runs the real ideate and renders the decidable candidates in the composer.
+  // `ideatingNodeId` lights that card blue-violet while the call runs; `objectGraphReload` bumps after a
+  // candidate is added so the fresh draft card appears joined to its source.
+  onIdeateObject?: (source: { id: string; label: string; type: string }, target: string) => void;
+  ideatingNodeId?: string | null;
+  ideatingTarget?: string | null;
+  objectGraphReload?: number;
   // The mode switcher drives the object graph's arrangement: Move → the story bands ("stages"),
   // Trace → the free causal graph ("flow"). Steers only on change (see ObjectGraphCanvas).
   desiredArrange?: "stages" | "flow";
@@ -113,7 +121,7 @@ export type GtmCanvasModel = {
 type GtmLensProps = LensProps<GtmCanvasModel, never>;
 
 function ObjectGraphLens({ model: m }: GtmLensProps) {
-  return <ObjectGraphCanvas projectId={m.projectId} gate={m.gate} onSubjectChange={m.onObjectSelect} subjectId={m.subjectId ?? null} desiredArrange={m.desiredArrange} modeControlled={m.modeControlled} />;
+  return <ObjectGraphCanvas projectId={m.projectId} gate={m.gate} onSubjectChange={m.onObjectSelect} subjectId={m.subjectId ?? null} desiredArrange={m.desiredArrange} modeControlled={m.modeControlled} onIdeateObject={m.onIdeateObject} ideatingNodeId={m.ideatingNodeId ?? null} ideatingTarget={m.ideatingTarget ?? null} reloadSignal={m.objectGraphReload ?? 0} />;
 }
 
 // The Learn lens — the loop closing, read off the same cockpit state the map is built on.

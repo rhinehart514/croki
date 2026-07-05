@@ -138,3 +138,109 @@
   align-items: center;
   width: 100%;
 }
+
+/* ── Per-card ideation (the on-card "+") ─────────────────────────────────────────────────────────
+   The same calm, opaque, monochrome candidate shell as above. These are OBJECTS to add as draft cards,
+   so the accent is the blue-violet "Claude working" state while ideas load, never the gate's amber. */
+.cnv-cands.obj-ideate .cnv-cands-head {
+  align-items: center;
+}
+
+.obj-ideate-x {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.obj-ideate-x:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+/* Blue-violet working beat while ideas load — color is STATE, the pulsing orb is the "now". */
+.obj-ideate-working {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 2px 2px 0;
+  font-size: 11.5px;
+  color: oklch(0.5 0.19 285.5);
+}
+.obj-ideate-orb {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: oklch(0.55 0.2 285.5);
+  animation: obj-ideate-pulse 1.2s ease-in-out infinite;
+}
+@keyframes obj-ideate-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.82); }
+  50% { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .obj-ideate-orb { animation: none; opacity: 0.9; }
+}
+
+.obj-ideate-error {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--gap);
+}
+
+/* A candidate object: its statement + a quiet type chip, an optional why, and the add action. */
+.cnv-cand.obj-ideate-cand {
+  gap: 6px;
+}
+.obj-ideate-cand-body {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.obj-ideate-cand-body .cnv-cand-label {
+  white-space: normal;
+}
+.obj-ideate-cand-type {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.obj-ideate-add {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border: 1px solid color-mix(in srgb, var(--ink) 20%, var(--line-2));
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 11.5px;
+  font-weight: 550;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.obj-ideate-add:hover {
+  background: color-mix(in srgb, var(--ink) 88%, transparent);
+}
+.obj-ideate-add:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ink) 40%, transparent);
+  outline-offset: 1px;
+}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import {
-  AlertTriangle, CheckCircle2, FileSearch, Mail, Network, Play, Shield, ShieldCheck,
+  AlertTriangle, CheckCircle2, FileSearch, LoaderCircle, Mail, Network, Play, Plus, Shield, ShieldCheck,
 } from "lucide-react";
 import {
   Background, Controls, Handle, MarkerType, Position, ReactFlow, useReactFlow, useStore, type Edge, type Node, type NodeProps, type ReactFlowInstance,
@@ -69,7 +69,34 @@ type CardData = {
   weak: boolean;
   weakest: boolean;
   revealDelay: number;
+  // The per-card "+" that ideates the NEXT move off this card. Fired with the card's own identity and
+  // a plain target (see ideateTargetFor); the host scopes the composer to the card and runs the real
+  // grounded ideate. Absent when the canvas isn't wired for ideation.
+  onIdeate?: (source: { id: string; label: string; type: string }, target: string) => void;
+  // Blue-violet "Claude working" state while THIS card is the one being ideated off of — watchable,
+  // with the step named ("ideating triggers…"), never an anonymous spinner.
+  ideating: boolean;
+  ideatingTarget: string | null;
 };
+
+// The plain target the "+" ideates off a card — the NEXT beat in the buyer story, keyed by the card's
+// type so the move reads as forward motion (a buyer → its triggers, an offer → its channels). Founder
+// words only, and the server still classifies each idea's own type; this is just the framing noun.
+const IDEATE_TARGET: Record<string, string> = {
+  buyer: "triggers", icp: "triggers",
+  pain: "value props", job: "value props",
+  trigger: "messages",
+  workaround: "value props", competitor: "value props",
+  value_prop: "proof", positioning: "proof",
+  proof_point: "messages",
+  offer: "channels",
+  channel: "messages",
+  message: "variations", objection: "answers",
+  path: "next moves", conversion_path: "next moves",
+};
+function ideateTargetFor(type: string | null): string {
+  return IDEATE_TARGET[String(type || "")] ?? "related cards";
+}
 
 // The cold-open materializes the graph in WAVES, not one card at a time: the product cards land first,
 // then market, then strategy, then the run/gate/outcome layer — so it reads as Drover laying out its
@@ -257,6 +284,11 @@ function ObjectBody({ node, kind }: { node: ObjectGraphNode; kind: ObjectKind })
 function ObjectCard({ data, selected }: NodeProps<Node<CardData>>) {
   const weakness = primaryWeakness(data.object);
   const kind = objectKind(data.object);
+  const role = nodeRole(data.object);
+  // The "+" ideates the next move off this card; a gate/outcome node has no "next card" to seed, so
+  // it doesn't offer one. The target is the plain next-beat noun for this card's type.
+  const canIdeate = Boolean(data.onIdeate) && role !== "gate" && role !== "outcome";
+  const target = ideateTargetFor(data.object.type);
   return (
     <button
       type="button"
@@ -265,11 +297,12 @@ function ObjectCard({ data, selected }: NodeProps<Node<CardData>>) {
       className={[
         "object-card",
         `kind-${kind}`,
-        `role-${nodeRole(data.object)}`,
+        `role-${role}`,
         data.object.maturity,
         data.lit && "lit",
         data.weak && "weak",
         data.weakest && "weakest",
+        data.ideating && "ideating",
         selected && "selected",
       ].filter(Boolean).join(" ")}
     >
@@ -294,6 +327,39 @@ function ObjectCard({ data, selected }: NodeProps<Node<CardData>>) {
       {data.weakest && weakness ? (
         <div className="object-weakest-pill">weakest link · {weaknessShort(weakness.kind)}</div>
       ) : null}
+      {/* The per-card "+" — hover-revealed, calm, monochrome (Langdock's on-node shape). Clicking it
+          asks Claude to ideate the next move off this card in the composer. A span (not a nested
+          button — the card root is already a button) with full keyboard access. */}
+      {canIdeate ? (
+        <span
+          className="object-card-plus"
+          role="button"
+          tabIndex={0}
+          title={`Ideate ${target}`}
+          aria-label={`Ideate ${target} off ${data.object.statement}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            data.onIdeate?.({ id: data.object.id, label: data.object.statement, type: data.object.type ?? "block" }, target);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              event.stopPropagation();
+              data.onIdeate?.({ id: data.object.id, label: data.object.statement, type: data.object.type ?? "block" }, target);
+            }
+          }}
+        >
+          <Plus aria-hidden="true" />
+        </span>
+      ) : null}
+      {/* Blue-violet "Claude working" beat while this card is being ideated off of — the step named,
+          never an anonymous spinner. */}
+      {data.ideating ? (
+        <span className="object-card-ideating" aria-hidden="true">
+          <LoaderCircle className="spin" />
+          ideating {data.ideatingTarget ?? target}…
+        </span>
+      ) : null}
       <Handle type="source" position={Position.Right} className="object-handle" />
     </button>
   );
@@ -306,6 +372,9 @@ function layoutNodes(
   positions: PositionMap,
   highlighted: Set<string>,
   weakestNodeId: string | null,
+  onIdeate: CardData["onIdeate"],
+  ideatingNodeId: string | null,
+  ideatingTarget: string | null,
 ): Node<CardData>[] {
   return nodes.map((object) => {
     const weak = Boolean(primaryWeakness(object));
@@ -319,6 +388,9 @@ function layoutNodes(
         weak,
         weakest: object.id === weakestNodeId,
         revealDelay: revealDelayFor(object),
+        onIdeate,
+        ideating: object.id === ideatingNodeId,
+        ideatingTarget,
       },
     };
   });
@@ -430,7 +502,7 @@ function BandHeaders({ cols }: { cols: { key: string; label: string; sub: string
   );
 }
 
-export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId = null, desiredArrange, modeControlled = false }: {
+export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId = null, desiredArrange, modeControlled = false, onIdeateObject, ideatingNodeId = null, ideatingTarget = null, reloadSignal = 0 }: {
   projectId: string | null;
   gate?: GateBag | null;
   // The attached-composer tie: whenever the founder selects (or deselects) a block on the canvas, we
@@ -447,6 +519,15 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId 
   // When the mode pill (Move/Trace) owns the arrangement, the in-header arrange toggle is redundant —
   // hide it so there's one control for the same job, not two.
   modeControlled?: boolean;
+  // The per-card "+" seam: the host owns the ideation (it runs the real endpoint and renders the
+  // candidate list in the composer, an App-level surface), so the canvas just hands up which card the
+  // founder wants the next move off and the plain target. `ideatingNodeId` lights that card in the
+  // blue-violet "Claude working" state while the call runs; `reloadSignal` bumps after the founder
+  // adds a candidate so the fresh draft card appears joined to its source.
+  onIdeateObject?: (source: { id: string; label: string; type: string }, target: string) => void;
+  ideatingNodeId?: string | null;
+  ideatingTarget?: string | null;
+  reloadSignal?: number;
 }) {
   const gatePending = !!gate?.items.length;
   const [view, setView] = useState<ObjectGraphView | null>(null);
@@ -523,6 +604,16 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId 
     return () => window.clearTimeout(timer);
   }, [load]);
 
+  // The host bumps reloadSignal after the founder adds an ideated candidate (it does the real add_node
+  // + provenance add_edge write from the composer), so the fresh draft card appears joined to its
+  // source without a full remount. Skips the initial 0 so it never double-loads on mount.
+  const reloadedRef = useRef(reloadSignal);
+  useEffect(() => {
+    if (reloadSignal === reloadedRef.current) return;
+    reloadedRef.current = reloadSignal;
+    void load();
+  }, [reloadSignal, load]);
+
   // Cold-open reveal: once the graph first arrives, materialize the cards in waves, then ignite the
   // path. Plays once per mount; reduced-motion drops straight to the finished state.
   const hasNodes = (view?.graph.nodes.length ?? 0) > 0;
@@ -578,8 +669,8 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId 
     [arrange, banded, visible, placed],
   );
   const nodes = useMemo(
-    () => layoutNodes(visible.nodes, positions, highlightedNodes, weakestNodeId),
-    [visible, positions, highlightedNodes, weakestNodeId],
+    () => layoutNodes(visible.nodes, positions, highlightedNodes, weakestNodeId, onIdeateObject, ideatingNodeId, ideatingTarget),
+    [visible, positions, highlightedNodes, weakestNodeId, onIdeateObject, ideatingNodeId, ideatingTarget],
   );
   const edges = useMemo(() => {
     // In Stages mode the card's column already carries the structure, so the full causal web is just

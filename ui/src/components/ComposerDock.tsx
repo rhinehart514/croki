@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowUp, BarChart3, Bot, Boxes, ChevronRight, Code, Database, Filter, LoaderCircle, Lightbulb, Maximize2,
+  ArrowRight, ArrowUp, BarChart3, Bot, Boxes, ChevronRight, Code, Database, Filter, LoaderCircle, Lightbulb, Maximize2,
   Mic, Minimize2, PenLine, Pin, Play, Search, Send, ShieldCheck, Square, Wand2, X,
 } from "lucide-react";
 import { statusLabel } from "@/lib/status";
+import type { ObjectCandidate } from "@/api";
 import { AgentPicker } from "@/components/AgentPicker";
 import { DEFAULT_MODEL, modelById } from "@/components/agent-picker-models";
 import { DockContext } from "@/components/DockContext";
@@ -471,6 +472,70 @@ function humanizeKind(kind: string): string {
   return (kind || "block").replace(/_/g, " ");
 }
 
+// ─── Per-card ideation (the on-card "+" seam) ───────────────────────────────────────────────────
+// When the founder clicks a card's "+", the host runs the real grounded ideate and hands the returning
+// candidate cards down here. This renders them as a decidable list — nothing is added until the founder
+// clicks "add to canvas" on a specific one, at which point the host writes a real draft card joined to
+// the source. Distinct from the pipeline candidates above: these are OBJECTS (a message, a trigger),
+// not pipeline shapes, and adding one lands a gray DRAFT card, never a send.
+type ObjectIdeationState = {
+  sourceId: string;
+  sourceLabel: string;
+  target: string;
+  status: "loading" | "done" | "error";
+  candidates: ObjectCandidate[];
+  error?: string | null;
+};
+function ObjectIdeationChoices({ ideation, onAdd, onDismiss }: {
+  ideation: ObjectIdeationState;
+  onAdd: (candidate: ObjectCandidate) => void;
+  onDismiss: () => void;
+}) {
+  const { target, sourceLabel, status, candidates } = ideation;
+  return (
+    <div className="cnv-cands obj-ideate" role="group" aria-label={`Ideas for ${target}`}>
+      <div className="cnv-cands-head">
+        <Lightbulb size={13} aria-hidden="true" />
+        <div className="cnv-cands-head-text">
+          <strong>Claude <span aria-hidden="true">·</span> ideating {target}</strong>
+          <span>for “{sourceLabel}”. Add the ones you like — each lands a draft card. Nothing sends.</span>
+        </div>
+        <button className="obj-ideate-x" type="button" aria-label="Dismiss these ideas" title="Dismiss" onClick={onDismiss}>
+          <X size={13} />
+        </button>
+      </div>
+      {status === "loading" ? (
+        <div className="obj-ideate-working" role="status">
+          <span className="obj-ideate-orb" aria-hidden="true" />
+          <span>Ideating {target} off this card…</span>
+        </div>
+      ) : null}
+      {status === "error" || ideation.error ? (
+        <p className="obj-ideate-error">{ideation.error || "Couldn't ideate right now — try again."}</p>
+      ) : null}
+      {status === "done" && candidates.length === 0 ? (
+        <p className="cnv-cand-why">No ideas came back for this card. Try a different card or ask in the composer.</p>
+      ) : null}
+      {candidates.length ? (
+        <div className="cnv-cands-list">
+          {candidates.map((c) => (
+            <div className="cnv-cand obj-ideate-cand" key={c.id}>
+              <div className="obj-ideate-cand-body">
+                <span className="cnv-cand-label">{c.statement}</span>
+                {c.type ? <span className="obj-ideate-cand-type">{humanizeKind(c.type)}</span> : null}
+              </div>
+              {c.rationale ? <p className="cnv-cand-why">{c.rationale}</p> : null}
+              <button className="obj-ideate-add" type="button" onClick={() => onAdd(c)}>
+                <ArrowRight size={13} aria-hidden="true" /> add to canvas
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 // The plain-English moves offered on whatever the founder has selected. Every block gets the three
 // universal ones; a handful of kinds add a move that only makes sense for them. These are the
 // suggestions from the vision — "Sharpen this", "Turn it into a paid pilot" — phrased as things the
@@ -508,6 +573,7 @@ export function ComposerDock({
   graph = null, runningNodeId = null, proposedNodeIds = null, result = null,
   subject = null, onClearSubject, isNavCommand,
   onProposeCandidates, onBuildCandidate,
+  objectIdeation = null, onAddObjectCandidate, onDismissObjectIdeation,
   seed = null, startOpen = false,
 }: {
   session: OperatorSession | null;
@@ -575,6 +641,12 @@ export function ComposerDock({
   // absent the dock falls back to a concrete `onSend`, so picking works even before that wiring exists.
   onProposeCandidates?: (candidates: Candidate[]) => void;
   onBuildCandidate?: (candidate: Candidate) => void | Promise<void>;
+  // Per-card ideation, driven by the on-card "+". The host runs the real ideate and passes the state
+  // (target, source card, the returning candidates) here; `onAddObjectCandidate` is the founder's pick
+  // reaching the host's real add_node + provenance add_edge write; `onDismissObjectIdeation` clears it.
+  objectIdeation?: ObjectIdeationState | null;
+  onAddObjectCandidate?: (candidate: ObjectCandidate) => void | Promise<void>;
+  onDismissObjectIdeation?: () => void;
 }) {
   // Rest as a pill on first paint when the dock floats over the channel workbench, OR when a FINISHED
   // session would otherwise open its full transcript over the read-only overview canvas. Either way the
@@ -694,6 +766,16 @@ export function ComposerDock({
     setCollapsed(recede);
   }
 
+  // A new per-card ideation ("+") is an explicit user act — open the dock so its candidate list is
+  // visible, not buried on the edge rail. Keyed by source+target so a fresh ideation re-opens; the same
+  // sanctioned setState-during-render pattern. Dismissing (key → "") never re-collapses on its own.
+  const objectIdeationKey = objectIdeation ? `${objectIdeation.sourceId}|${objectIdeation.target}` : "";
+  const [trackedObjectIdeation, setTrackedObjectIdeation] = useState(objectIdeationKey);
+  if (objectIdeationKey !== trackedObjectIdeation) {
+    setTrackedObjectIdeation(objectIdeationKey);
+    if (objectIdeationKey) setCollapsed(false);
+  }
+
   // Opening the command bar drops you straight into the input — it reads as a command line, so a
   // click should land the cursor, not just reveal a panel you then have to click again.
   const [openFocus, setOpenFocus] = useState(0);
@@ -808,8 +890,9 @@ export function ComposerDock({
           to it: it says what it's editing, shows the object's own words, and offers plain-English moves.
           Clicking a move drops its phrasing into the input (editable — it never sends on its own). The
           host frames the next message with this object's context, so "make it shorter" resolves to the
-          real thing. The × lets go and returns to free chat. */}
-      {subject ? (
+          real thing. The × lets go and returns to free chat. When a per-card ideation is running, the
+          ideation block below carries the framing instead, so the two never stack on the same card. */}
+      {subject && !objectIdeation ? (
         <div className="composer-attached">
           <div className="composer-attached-head">
             <span className="composer-attached-title">
@@ -1068,6 +1151,17 @@ export function ComposerDock({
           <BuildRail graph={graph} runningNodeId={runningNodeId} proposedNodeIds={proposedNodeIds} result={result} />
         ) : null}
       </div>
+
+      {/* ── Per-card ideation — the on-card "+" hands back candidate OBJECTS (a message, a trigger) to
+          add as draft cards. Decidable, never auto-applied; adding one lands a gray draft joined to its
+          source. Hidden while a gate is waiting so the two decisions never collide. */}
+      {objectIdeation && !waitingGate && onAddObjectCandidate ? (
+        <ObjectIdeationChoices
+          ideation={objectIdeation}
+          onAdd={onAddObjectCandidate}
+          onDismiss={() => onDismissObjectIdeation?.()}
+        />
+      ) : null}
 
       {/* ── Candidate sketches — an ambiguous goal returns a few shapes to pick from, not a stall.
           Distinct from the gate below: no amber, no approve gesture — choosing a shape is a direction,

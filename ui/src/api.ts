@@ -348,7 +348,10 @@ export type ObjectGraphNodeOperation = {
   type: "add_node";
   node: {
     id?: string;
-    type: string;
+    // Optional: a loose (draft) card can be genuinely untyped — the backend only requires a type on
+    // typed/execution/outcome nodes. Drag-to-create always passes a palette type; an ideated draft may
+    // land with none until the founder types it.
+    type?: string;
     domain?: string;
     maturity?: "loose" | "typed" | "execution" | "outcome";
     statement: string;
@@ -356,12 +359,42 @@ export type ObjectGraphNodeOperation = {
     payload?: Record<string, unknown>;
   };
 };
+// A provenance link joining two cards (source → target). Every edge carries a `basis` receipt (the
+// server rejects a basis-less edge), so a founder-drawn join records why it exists, in plain words.
+export type ObjectGraphEdgeOperation = {
+  type: "add_edge";
+  edge: {
+    id?: string;
+    source: string;
+    target: string;
+    type: string;
+    status?: string;
+    basis?: { ref: string; preview?: string; kind?: string }[];
+    confidence?: number;
+    label?: string;
+  };
+};
+export type ObjectGraphOperation = ObjectGraphNodeOperation | ObjectGraphEdgeOperation;
 export const applyObjectGraphOperations = (
   projectId: string,
-  operations: ObjectGraphNodeOperation[],
+  operations: ObjectGraphOperation[],
 ) => post<{ projectId: string; changes: { type: string; detail: string }[] } & ObjectGraphView>(
   `/api/projects/${encodeURIComponent(projectId)}/object-graph`,
   { operations },
+);
+
+// Per-card ideation: given a source card and a plain target ("triggers", "messages"), the server runs
+// the SAME live grounded Claude generator the /ideas/round route uses and hands back a few decidable
+// candidate cards. Persists nothing — a candidate becomes a real draft card only when the founder adds
+// it (via applyObjectGraphOperations above). Each candidate is a founder-language statement plus the
+// object type the target (or the idea's own words) implies (null is fine — a loose, untyped draft).
+export type ObjectCandidate = { id: string; statement: string; type: string | null; rationale: string | null };
+export const ideateObjectCandidates = (
+  projectId: string,
+  body: { target: string; sourceNodeId?: string },
+) => post<{ candidates: ObjectCandidate[] }>(
+  `/api/projects/${encodeURIComponent(projectId)}/object-graph/ideate`,
+  body,
 );
 
 // ── The five-primitive cockpit — Goal, Bet, Move, Run, Learning, all in founder language ───────────

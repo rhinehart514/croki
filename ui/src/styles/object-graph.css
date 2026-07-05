@@ -333,6 +333,83 @@
   outline-offset: 2px;
 }
 
+/* The per-card "+" — a calm, monochrome affordance that appears on hover (Langdock's on-node shape).
+   It sits just off the card's right edge so it never crowds the body; keyboard focus reveals it too. */
+.object-card-plus {
+  position: absolute;
+  top: 50%;
+  right: -12px;
+  transform: translateY(-50%) scale(0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: #ffffff;
+  color: var(--muted);
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 140ms ease, transform 140ms ease, color 140ms ease, border-color 140ms ease;
+  z-index: 3;
+}
+.object-card:hover .object-card-plus,
+.object-card.selected .object-card-plus,
+.object-card-plus:focus-visible {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+}
+.object-card-plus:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+.object-card-plus:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+.object-card-plus svg {
+  width: 14px;
+  height: 14px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .object-card-plus { transition: opacity 140ms ease; transform: translateY(-50%); }
+  .object-card:hover .object-card-plus,
+  .object-card.selected .object-card-plus,
+  .object-card-plus:focus-visible { transform: translateY(-50%); }
+}
+
+/* Blue-violet "Claude working" state — color is STATE, not decoration. While a card is being ideated
+   off of, its border takes the working hue and a small named beat rides the top ("ideating triggers…"),
+   so the founder watches the work rather than staring at an anonymous spinner. */
+.object-card.ideating {
+  --claude-working: oklch(0.55 0.2 285.5);
+  border-color: var(--claude-working);
+  box-shadow: 0 0 0 1px var(--claude-working), var(--shadow-card);
+}
+.object-card-ideating {
+  position: absolute;
+  top: -11px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: oklch(0.55 0.2 285.5);
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.4;
+  white-space: nowrap;
+  z-index: 3;
+}
+.object-card-ideating svg {
+  width: 11px;
+  height: 11px;
+}
+
 .object-card-type {
   gap: 6px;
   color: var(--muted);
