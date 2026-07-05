@@ -1,0 +1,205 @@
+/* Outcome capture — the manual loop-closer that appears after a run.
+   Drover system: opaque white surface, monochrome zinc ink, Geist, semantic color only.
+   Green (--proven) is the one privileged accent here — this panel is where a real result lands. */
+
+.oc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 420px;
+  padding: var(--space-5);
+  background: var(--surface); /* opaque — a panel you read in, never glass */
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-pop);
+}
+
+.oc-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.oc-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 640;
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--ink);
+}
+.oc-sub {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--muted);
+}
+
+/* Chips — quick multi-select. Selected reads as a filled, ink-bordered pill with a green tick. */
+.oc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.oc-chip-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.oc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: 520;
+  line-height: 1;
+  color: var(--ink-2);
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.oc-chip:hover {
+  background: var(--surface);
+  border-color: var(--faint);
+}
+.oc-chip.is-on {
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--ink);
+  font-weight: 580;
+}
+.oc-chip:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+
+/* The tick reserves its slot so selecting a chip doesn't shift the label. */
+.oc-chip-tick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  color: var(--proven);
+}
+.oc-chip-tick svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 3;
+}
+
+/* Optional count — a small, forgiving number field revealed only when its chip is on. */
+.oc-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+}
+.oc-count-input {
+  width: 3.25rem;
+  padding: calc(var(--space-1) + 1px) var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+}
+.oc-count-input:focus-visible {
+  outline: none;
+  border-color: var(--ink);
+}
+.oc-count-input::placeholder {
+  color: var(--faint);
+}
+.oc-count-unit {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+/* Free-text lesson. */
+.oc-learned {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.oc-learned-label {
+  font-size: var(--text-sm);
+  font-weight: 560;
+  color: var(--ink);
+}
+.oc-learned-input {
+  width: 100%;
+  padding: var(--space-3);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  resize: vertical;
+}
+.oc-learned-input:focus-visible {
+  outline: none;
+  border-color: var(--ink);
+}
+.oc-learned-input::placeholder {
+  color: var(--faint);
+}
+
+.oc-error {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--danger);
+}
+
+.oc-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+.oc-skip {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: 520;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.oc-skip:hover:not(:disabled) {
+  color: var(--ink);
+}
+.oc-save {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 580;
+  color: var(--on-primary);
+  background: var(--primary);
+  border: 1px solid var(--primary);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.oc-save:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+.oc-save:disabled,
+.oc-skip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.oc-save:focus-visible,
+.oc-skip:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}

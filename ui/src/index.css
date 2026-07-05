@@ -7516,3 +7516,29 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 }
 .project-picker .studio-primary-action:hover { border-color: var(--ink-2); }
 .project-picker .studio-primary-action svg { width: 15px; height: 15px; }
+
+/* ── Cockpit surface (the five-primitive founder landing) ─────────────────────
+   The Cockpit component carries its own styling (cockpit.css); these are only the
+   App-level wrappers: the scroll container, the loop-outcome affordance, and the
+   calm "back to Best Next Move" chip that keeps the map an aside, never home. */
+/* Opaque and elevated: the stages/object-graph board is not view-gated, so the cockpit must cover it,
+   and an ancestor scopes --surface to glass — force it solid here (and for any child reading --surface). */
+.cockpit-surface {
+  position: absolute; inset: 0; z-index: 45; overflow-y: auto; overflow-x: hidden;
+  --surface: #ffffff; --surface-2: #f4f4f5; background: #ffffff;
+}
+.cockpit-log-outcome {
+  position: fixed; right: 22px; bottom: 22px; z-index: 30;
+  padding: 10px 16px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--ink); color: #fff; font: inherit; font-size: 13px; font-weight: 560; cursor: pointer;
+  box-shadow: 0 8px 24px -12px rgba(0,0,0,0.35);
+}
+.cockpit-log-outcome:hover { background: #000; }
+.back-to-cockpit {
+  position: absolute; bottom: 20px; left: 20px; z-index: 30;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 13px; border: 1px solid var(--line); border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(6px);
+  font: inherit; font-size: 12.5px; font-weight: 540; color: var(--ink); cursor: pointer;
+}
+.back-to-cockpit:hover { border-color: color-mix(in srgb, var(--ink) 22%, var(--line)); background: var(--surface-2); }

@@ -10,7 +10,7 @@
 // normalizer owns ids/timestamps/provenance and demotes evidence-free "derived" elements to
 // "speculative" (a one-directional valve so an interpretive guess can never launder itself back
 // as cited fact), atomic temp-file writes, and syncProductModelStoreFromEvents diffs the snapshot
-// against the projection so the event log stays authoritative (DDD.md:125-127).
+// against the projection so the event log stays authoritative (docs/history/DDD.md:125-127).
 
 import crypto from "node:crypto";
 import { rebuildProjectState } from "./program-projection.mjs";

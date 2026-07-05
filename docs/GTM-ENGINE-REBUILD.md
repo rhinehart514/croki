@@ -5,7 +5,7 @@ code — evidence graph, gtm-store, market-research, path-portfolio, outcome-ing
 run-compile, and promote-motion all exist with tests and are on origin/main. Not yet
 exercised end-to-end on a live founder goal; the alpha bet (a first attributable win)
 remains open. For the honest current snapshot see docs/STATE.md.
-This supersedes the pre-redefinition framing in VISION.md, GOAL.md, BUILD-PLAN.md,
+This supersedes the pre-redefinition framing in VISION.md, GOAL.md, docs/history/BUILD-PLAN.md,
 PRODUCT-SPEC.md, CANVAS.md, and MODEL.md where they conflict (those describe the
 IDE-metaphor product; see "Supersedes" at the end).
 
@@ -256,6 +256,6 @@ Each phase: **Goal / Builds / Done when / Depends on / Out of scope / Guard.**
 ## 7. Supersedes
 
 Where they conflict with this spec, treat as historical: docs/VISION.md, docs/GOAL.md,
-docs/BUILD-PLAN.md, docs/PRODUCT-SPEC.md, docs/PRODUCT-MODEL.md, docs/CANVAS.md,
-docs/MODEL.md, docs/CURSOR_GTM_UX_PLAN.md. Memory: [[drover-redefinition-2026-07-01]]
+docs/history/BUILD-PLAN.md, docs/PRODUCT-SPEC.md, docs/PRODUCT-MODEL.md, docs/CANVAS.md,
+docs/MODEL.md, docs/history/CURSOR_GTM_UX_PLAN.md. Memory: [[drover-redefinition-2026-07-01]]
 is the durable summary; [[agnostic-within-gtm]] is the anti-cage doctrine this obeys.

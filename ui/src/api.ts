@@ -340,6 +340,67 @@ export const getBoard = (projectId: string) =>
 export const getObjectGraph = (projectId: string) =>
   get<ObjectGraphView>(`/api/projects/${encodeURIComponent(projectId)}/object-graph`);
 
+// ── The five-primitive cockpit — Goal, Bet, Move, Run, Learning, all in founder language ───────────
+// Derived read-only from real state; every part is honest-empty (null / []) where there is no signal,
+// and bestMove is null when there is not enough signal to name one. "How sure we are" is the four-word
+// solidity scale (guessed / researched / observed / gated); the move-proposal evidence scale is the
+// three market-evidence words (no "gated").
+export type Solidity = "guessed" | "researched" | "observed" | "gated";
+export type Sureness = "low" | "medium" | "high";
+
+export type CockpitBet = {
+  statement: string;
+  solidity: Solidity;
+  sure: Sureness;
+  basis: string | null;
+};
+
+export type CockpitState = {
+  goal: { text: string; metric: string | null; target: string | null; timeframe: string | null } | null;
+  bets: CockpitBet[];
+  bestMove: {
+    headline: string;
+    why: string;
+    doToday: string;
+    winIf: string;
+    killIf: string;
+    upgrade: string;
+  } | null;
+  latestRun: {
+    sent: number | null;
+    replies: number | null;
+    calls: number | null;
+    paid: number | null;
+    revenue: number | null;
+    note: string | null;
+  } | null;
+  learnings: { statement: string; sure: Sureness; action: string | null }[];
+  upgrades: string[];
+};
+
+export type MoveProposal = {
+  statement: string;
+  bet: string;
+  evidence: "guessed" | "researched" | "observed";
+  risk: string;
+  action: string;
+};
+
+export const getCockpit = (projectId: string) =>
+  get<{ state: CockpitState }>(`/api/projects/${encodeURIComponent(projectId)}/cockpit`);
+
+export const getMoves = (projectId: string) =>
+  get<{ moves: MoveProposal[] }>(`/api/projects/${encodeURIComponent(projectId)}/moves`);
+
+// Record what actually happened on a run, in the founder's own words. `happened` is a plain label
+// (optionally an object with a count); `learned` is the lesson. Writes a Result + Learning; never sends.
+// Named distinctly from recordOutcome (the joinKey-keyed result above) — this is the founder's plain
+// post-run "what happened / what did we learn" loop-closer.
+export const recordFounderOutcome = (
+  projectId: string,
+  body: { runId?: string | null; happened: string | { label: string; count?: number }; learned?: string },
+) => post<{ ok: boolean }>(`/api/projects/${encodeURIComponent(projectId)}/outcome`, body);
+
 // The agent's face — what a teammate has BECOME, all derived from real run history. A fresh agent
 // reads honestly (hasRuns false, "no runs yet"), never a fabricated number.
 export type AgentLearning = {

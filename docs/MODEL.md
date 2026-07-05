@@ -11,11 +11,11 @@
 
 This is the single orienting document for what GTM IDE *is*: its conceptual model
 (the layers of objects), its workflows (what you actually do), and its interaction
-model (the one surface you do it on). It sits above the two deeper docs — `DDD.md`
+model (the one surface you do it on). It sits above the two deeper docs — `docs/history/DDD.md`
 (the system layer in detail) and `EXPERIENCE.md` (the canvas in detail) — and ties
 them to the truth and interpretation layers neither one fully draws.
 
-It supersedes the parts of `VISION.md` and `CURSOR_GTM_UX_PLAN.md` that contradict it
+It supersedes the parts of `VISION.md` and `docs/history/CURSOR_GTM_UX_PLAN.md` that contradict it
 (see "What this retires" at the end).
 
 ---
@@ -66,7 +66,7 @@ OutcomeProgram          one business attempt (the outcome you want)
 ```
 
 There are many programs per product; each is one attempt. The graph is the *execution
-plan*, never the business object. Owns: `DDD.md` documents this layer in full.
+plan*, never the business object. Owns: `docs/history/DDD.md` documents this layer in full.
 
 **The layers stack:** truth grounds interpretation; interpretation grounds the system.
 A founder edit to the Picture ripples into every downstream agent prompt because every
@@ -156,12 +156,12 @@ every attempt on.
   removed across `GOAL.md` phases P1–P9 and replaced by the open node model (tool/agent/
   skill/code). VISION's insight (start from the repo; the canvas is alive; the ledger makes
   feedback real) survives; its architecture section does not. Rewrite or retire it.
-- **`CURSOR_GTM_UX_PLAN.md` framed the product as debugger-*only*** ("do not ask users to
+- **`docs/history/CURSOR_GTM_UX_PLAN.md` framed the product as debugger-*only*** ("do not ask users to
   draw an abstract automation graph"). That's now the *second* loop, not the only one. Build
   is the primary loop; debug shares the canvas. The plan's workspace/revision/diff machinery
   is real and kept — it's how the debug loop's code-fix path works — but its claim to be the
   whole product is superseded.
 
-The deeper docs stay authoritative for their layer: `DDD.md` for the system layer,
+The deeper docs stay authoritative for their layer: `docs/history/DDD.md` for the system layer,
 `EXPERIENCE.md` for the canvas, `PRODUCT-MODEL.md` for the Picture's build spec (with the
 one promotion noted above).

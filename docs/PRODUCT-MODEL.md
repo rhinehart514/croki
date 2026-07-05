@@ -163,7 +163,7 @@ is referenced, never absorbed and re-shaped).
 
 ## Commands → events → projection (reusing the existing machinery)
 
-The DDD.md invariant (DDD.md:125-127) is that **the domain event log is authoritative**:
+The docs/history/DDD.md invariant (docs/history/DDD.md:125-127) is that **the domain event log is authoritative**:
 every state-changing command records an append-only event carrying the full aggregate, and
 `program-projection.mjs` folds events back into current state, proven equal to the stores by
 `program-projection.test.mjs`. The product model reuses this exact machinery. Three commands,
@@ -181,7 +181,7 @@ full `ProductModel` aggregate, appends one event, returns the projected record.
   `speculative`.
 - **Event** — `type: "ProductModelDerived"`, `aggregateType: "ProductModel"`,
   `aggregateId: model.id`, `data: <FULL model>`. The full-aggregate-in-`data` rule is
-  load-bearing (DDD.md:125, program-projection.mjs:142-146): a stub breaks rebuild.
+  load-bearing (docs/history/DDD.md:125, program-projection.mjs:142-146): a stub breaks rebuild.
 - **Return** — `syncProductModelStoreFromEvents(projectId).find(m => m.id === model.id)`.
 
 Pattern source: `CreateOutcomeProgram` (domain-commands.mjs:66-75).
@@ -507,7 +507,7 @@ mounted; the surface floats over `loop-canvas-area`. No change to the canvas/gra
   is what makes edits accumulate — a raw `sharedContext` patch would overwrite, not version.
 - **The picture is its own aggregate, not the execution graph.** Do not reuse
   `applyGraphOperations` / `GTMGraph` — that is the execution plan; conflating them would
-  break the DDD.md:116 invariant "the graph is the execution plan, not the business object."
+  break the docs/history/DDD.md:116 invariant "the graph is the execution plan, not the business object."
 
 ---
 
@@ -522,7 +522,7 @@ coverage (AGENTS.md Verification, AGENTS.md:206-207).
   sets `previousModelId`; blank default returns an empty, non-fabricated model.
 - **`brain/test/program-projection.test.mjs`** (extend) — the reconciliation contract: derive
   → revise → record-signal, then assert `rebuildProjectState(projectId).productModels` equals
-  the stored snapshot (the DDD.md:127 guarantee). Assert a `ProductSignalRecorded` event folds
+  the stored snapshot (the docs/history/DDD.md:127 guarantee). Assert a `ProductSignalRecorded` event folds
   the pin onto the model and survives rebuild. This is the test that proves the event log is
   authoritative for the new aggregate.
 - **`brain/test/engine.test.mjs`** (extend — required for the derivation change). **This is

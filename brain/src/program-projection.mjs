@@ -1,7 +1,7 @@
 // The proof that the domain event log is authoritative, not decorative: a pure left-fold of the
 // events back into current state. If `rebuildProjectState` does not equal the stored snapshots, one
 // of two things is true — an event is lossy, or a command mutated state without recording it. The
-// reconciliation test asserts they match, so this function is the executable guarantee behind DDD.md's
+// reconciliation test asserts they match, so this function is the executable guarantee behind docs/history/DDD.md's
 // claim that the system can "explain what changed without relying on a saved snapshot."
 //
 // State is keyed by aggregate id. This now projects the ProductModel aggregate (the Living Product
@@ -24,7 +24,7 @@ export function applyDomainEvent(state, event) {
   switch (event?.type) {
     case "ProductModelDerived":
     case "ProductModelRevised":
-      // The full aggregate rides in data (DDD.md:125). A revision keeps the same id, so it
+      // The full aggregate rides in data (docs/history/DDD.md:125). A revision keeps the same id, so it
       // overwrites the single current record; the event log still holds the prior version.
       state.productModels.set(data.id, { ...data });
       break;

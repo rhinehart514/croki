@@ -10,23 +10,19 @@ import type { SharedContext } from "@/types";
 // sends without the founder. The box never forces the pipeline frame; a pipeline is one possible
 // answer, not the question.
 
-// Chips skew by stage: a project with no pipelines is at its BEGINNING — the honest questions are
-// direction-shaped. A running project mixes altitudes: work the system, question the system. The
-// quick-starts deliberately span motions (a post carrying an offer, a note to existing users, an
-// outreach run) — no single motion is the enshrined answer, and nothing product-specific hides
-// behind a generic label.
-const BEGINNING_CHIPS = [
-  "Which customers should we chase first?",
-  "Ideate ICPs and pause for my verdicts",
-  "What's the cheapest test of real demand?",
-  "What should this cost?",
-];
-const RUNNING_CHIPS = [
-  "What's working and what should we kill?",
-  "Draft a post that carries an offer — stop at my gate",
-  "Write a launch note to our existing users",
-  "Set up an outreach run that stops at my gate",
-  "Sharpen the positioning",
+// The quick-starts teach ALTITUDE, not templates. Each one is a plain-words goal at the right height
+// — a commercial outcome the founder actually wants — so a first-timer learns what to aim the box at.
+// Clicking one only seeds the box; the founder edits it or types anything else, and Claude generates
+// the expert structure (goal, bet, move, why, do-today, what to measure) from whatever they land on.
+// They deliberately span motions — money now, calls, segment, offer, recovery, a small run — so no
+// single motion is the enshrined answer.
+const ALTITUDE_MODES = [
+  "Get money this week",
+  "Book buyer calls",
+  "Find the first real customer segment",
+  "Sharpen the offer",
+  "Recover stalled leads",
+  "Launch a small GTM run",
 ];
 
 export function GoalLauncher({
@@ -56,13 +52,13 @@ export function GoalLauncher({
   }, [focusSignal]);
 
   const beginning = pipelineCount === 0;
-  const chips = beginning ? BEGINNING_CHIPS : RUNNING_CHIPS;
+  const chips = ALTITUDE_MODES;
 
   // Ground the sub-line in the current system state. Either way the promise is the same: any
   // altitude in, the right shape of work out, every outward step stopping at the founder.
   const sub = beginning
-    ? "Ask anything — which customers to chase, what to test first, what to charge, or a pipeline to run. Claude works it with your skills and agents, and stops wherever your call is needed. Nothing sends without you."
-    : "Any altitude — question what's running, sharpen the strategy, or start the next pipeline. Claude works it with your skills and agents and stops at your gate. Nothing sends without you.";
+    ? "Say it in plain words — which customers to chase, what to test first, what to charge, or a small run to launch. Claude works it with your skills and agents, and stops wherever your call is needed. Nothing sends without you."
+    : "Any altitude — question what's working, sharpen the offer, or launch the next move. Claude works it with your skills and agents and stops at your gate. Nothing sends without you.";
 
   // Grounded facts row — shown only when the numbers are real, so it reflects the live system.
   const facts: string[] = [];
@@ -74,7 +70,7 @@ export function GoalLauncher({
     <div className="goal-launcher">
       <div className="goal-launcher-inner">
         <span className="goal-launcher-eyebrow">{productName}</span>
-        <h1 className="goal-launcher-title">What should we work on?</h1>
+        <h1 className="goal-launcher-title">What are you trying to make happen?</h1>
         <p className="goal-launcher-sub">{sub}</p>
         {showFacts ? <p className="goal-launcher-grounded">{facts.join(" · ")}</p> : null}
 
@@ -82,7 +78,7 @@ export function GoalLauncher({
           <textarea
             ref={inputRef}
             className="goal-launcher-input"
-            placeholder={beginning ? "e.g. Which customers should we chase first?" : "e.g. What's working — and what's the next pipeline?"}
+            placeholder={beginning ? "e.g. Get the first paying customer this week" : "e.g. What's working — and what should we do next?"}
             value={goal}
             disabled={busy}
             onChange={(e) => setGoal(e.target.value)}

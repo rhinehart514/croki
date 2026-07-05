@@ -13,6 +13,8 @@ import {
   getLibrary,
   getAgentBench,
   type AgentBenchRow,
+  getCockpit,
+  type CockpitState,
   getGraphTemplate,
   getOperatorSession,
   getProject,
@@ -55,6 +57,8 @@ const ArtifactEditor = lazy(() => import("@/components/ArtifactEditor").then((m)
 const WorkspaceView = lazy(() => import("@/components/WorkspaceView").then((m) => ({ default: m.WorkspaceView })));
 const AgentProfile = lazy(() => import("@/components/AgentProfile").then((m) => ({ default: m.AgentProfile })));
 const AgentBench = lazy(() => import("@/components/AgentBench").then((m) => ({ default: m.AgentBench })));
+const Cockpit = lazy(() => import("@/components/Cockpit").then((m) => ({ default: m.Cockpit })));
+const OutcomeCapture = lazy(() => import("@/components/OutcomeCapture"));
 const ConnectCapability = lazy(() => import("@/components/ConnectCapability").then((m) => ({ default: m.ConnectCapability })));
 import type { AgentProfileView, TeammateView } from "@/components/AgentProfile";
 import { CrewStrip } from "@/components/CrewStrip";
@@ -193,7 +197,7 @@ export default function App() {
   // before any product exists. Understand and Ideas are no longer destinations that swap
   // the canvas out; they float OVER it as dismissable overlays (set via `overlay`), so the IDE is
   // never replaced. Channels live in the explorer, not a page.
-  const [view, setView] = useState<"projects" | "canvas" | "start">("canvas");
+  const [view, setView] = useState<"projects" | "canvas" | "start" | "cockpit">("canvas");
   const [booted, setBooted] = useState(false);
   // True until the initial boot load resolves. Guards the canvas empty-state so a deep-link / reload
   // shows a calm "loading your workspace" instead of flashing the cold-start goal launcher for the
@@ -410,6 +414,11 @@ export default function App() {
   // The bench — every agent's track record derived from the run ledger. Loaded once per project and
   // reused by both the bench surface and the crew strip's approved-count badges.
   const [bench, setBench] = useState<AgentBenchRow[] | null>(null);
+  // The cockpit — the five-primitive founder surface (Goal / Bet / Best Next Move / Run / Learning),
+  // derived read-only from the engine. This is the DEFAULT surface a founder lands on; the map (canvas)
+  // is one click away. `outcomeOpen` gates the manual "what happened / what did we learn" loop-closer.
+  const [cockpit, setCockpit] = useState<CockpitState | null>(null);
+  const [outcomeOpen, setOutcomeOpen] = useState(false);
   const [operatorSession, setOperatorSession] = useState<OperatorSession | null>(null);
   // The shared People object — durable identities promoted from real run entrants, read-only. Feeds
   // the GTM canvas's People lens (find-references / dedup) and is refreshed after each run promotes
@@ -479,6 +488,19 @@ export default function App() {
     getAgentBench(activeProjectId).then((r) => { if (live) setBench(r.bench); }).catch(() => { if (live) setBench(null); });
     return () => { live = false; };
   }, [activeProjectId]);
+
+  // The cockpit state, fetched whenever the founder is on the cockpit surface (and after an outcome is
+  // logged, so the loop visibly compounds). Honest null when the projection has nothing yet.
+  const refreshCockpit = useCallback(() => {
+    if (!activeProjectId) return;
+    getCockpit(activeProjectId).then((r) => setCockpit(r.state)).catch(() => setCockpit(null));
+  }, [activeProjectId]);
+  useEffect(() => {
+    if (view !== "cockpit" || !activeProjectId) return;
+    let live = true;
+    getCockpit(activeProjectId).then((r) => { if (live) setCockpit(r.state); }).catch(() => { if (live) setCockpit(null); });
+    return () => { live = false; };
+  }, [view, activeProjectId]);
 
   // Resolve whether the acting user may release the gate on the session's owning team. The team is the
   // session's stored teamId; the personal team (solo founder) always returns canApprove=true server-side.
@@ -720,7 +742,7 @@ export default function App() {
         // move); only a total cold start (no workspace) shows the product picker.
         // A founder with no scanned product lands on the one-prompt front door (point at your
         // product, say your goal), not the dense cockpit — the project-aware stranger entry.
-        setView(projectResponse.project.sharedContext.repository.workspaceId ? "canvas" : "start");
+        setView(projectResponse.project.sharedContext.repository.workspaceId ? "cockpit" : "start");
         const engineResponse = await getEngineState();
         if (live) setEngine(engineResponse.engine);
         return;
@@ -732,6 +754,9 @@ export default function App() {
       if (wentOverview) {
         const engineResponse = await getEngineState();
         if (live) setEngine(engineResponse.engine);
+        // Land on the cockpit (Best Next Move), not the map. The overview data is loaded underneath, so
+        // the map is one click away and ready; the graph never greets a founder on boot.
+        if (live && projectResponse.project.sharedContext.repository.workspaceId) setView("cockpit");
         return;
       }
       const [graphResponse, engineResponse] = await Promise.all([
@@ -747,6 +772,8 @@ export default function App() {
       // (node results, staged drafts) without needing a manual click to re-open it.
       setChannelRunResult(channelId, bootRuns.length ? bootRuns[bootRuns.length - 1] : null);
       setEngine(engineResponse.engine);
+      // Land on the cockpit, with the focused channel's map loaded underneath and ready.
+      if (projectResponse.project.sharedContext.repository.workspaceId) setView("cockpit");
     }).catch(console.error).finally(() => { if (live) setBooting(false); });
     return () => { live = false; };
     // Boot runs once on mount; loadProjectOverview/setChannelGraph are stable callbacks, listed to
@@ -1883,6 +1910,41 @@ export default function App() {
       <div className={`loop-body canvas-full ${view !== "canvas" ? "studio-mode" : ""}`}>
         {/* Center — the canvas IS the workspace. Only the cold-start picker replaces it. */}
         <section className="loop-canvas-area">
+          {/* The cockpit — the default founder surface. Best Next Move is the hero; the map (canvas) is
+              one click away via onOpenMap. The graph never greets a first-timer; this does. */}
+          {view === "cockpit" && (
+            <div className="cockpit-surface">
+              <Suspense fallback={null}>
+                <Cockpit
+                  state={cockpit}
+                  onOpenMap={() => setView("canvas")}
+                  onDoMove={() => setView("canvas")}
+                />
+              </Suspense>
+              {cockpit?.latestRun ? (
+                <button type="button" className="cockpit-log-outcome" onClick={() => setOutcomeOpen(true)}>
+                  Log what happened →
+                </button>
+              ) : null}
+              {outcomeOpen && activeProjectId ? (
+                <Suspense fallback={null}>
+                  <OutcomeCapture
+                    projectId={activeProjectId}
+                    runId={activeChannelId ?? ""}
+                    onDone={() => { setOutcomeOpen(false); refreshCockpit(); }}
+                  />
+                </Suspense>
+              ) : null}
+            </div>
+          )}
+
+          {/* Back to the cockpit from the map — a calm chip, so the graph is always an aside, never home. */}
+          {view === "canvas" && overlay !== "product" ? (
+            <button type="button" className="back-to-cockpit" onClick={() => setView("cockpit")} title="Back to Best Next Move">
+              ← Best Next Move
+            </button>
+          ) : null}
+
           {/* The floating control dock — every control the old top toolbar held, in one calm bar
               floating top-center over the full-bleed canvas. */}
           {view === "canvas" ? (

@@ -75,6 +75,8 @@ import { ensureObjectGraphProductScan, objectGraphForProject } from "./object-gr
 import { objectGraphLayoutStore, objectGraphStore } from "./object-graph-store.mjs";
 import { applyObjectGraphOperations } from "./object-graph-operations.mjs";
 import { outcomeReport, ingestOutcome, ingestBatch, OUTCOME_SOURCES } from "./outcome-ingest.mjs";
+import { deriveCockpitState, proposeMoves } from "./five-primitives.mjs";
+import { recordFounderOutcome } from "./outcome-capture.mjs";
 import { ideaTasteForProject, recordIdeaDecisions } from "./feedback-ledger.mjs";
 import { composeIdeas, createClaudeAngleProposer, createClaudeIdeaGenerator } from "./ideation.mjs";
 import { createClaudeIdeaBar } from "./idea-bar.mjs";
@@ -733,6 +735,49 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, { ...getBoard({ projectId }), icpGrouping: getPipelineIcpGrouping({ projectId }) });
     } catch (err) {
       json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // The five-primitive cockpit — the founder-facing projection (Goal, Bets, Best Next Move, latest Run,
+  // Learnings, upgrades), derived purely from real state and honest-empty where a signal is absent.
+  // Read-only: it never writes, never triggers a run, never gates one.
+  const projectCockpitMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/cockpit$/);
+  if (req.method === "GET" && projectCockpitMatch) {
+    try {
+      const projectId = decodeURIComponent(projectCockpitMatch[1]);
+      json(res, 200, { state: deriveCockpitState(projectId) });
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Up to three concrete move proposals derived from the project's bets, framed by the harness.
+  // Read-only: it composes plain-words suggestions over stored bets and never runs or sends anything.
+  const projectMovesMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/moves$/);
+  if (req.method === "GET" && projectMovesMatch) {
+    try {
+      const projectId = decodeURIComponent(projectMovesMatch[1]);
+      json(res, 200, { moves: proposeMoves(projectId) });
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // The founder's manual outcome door — record what actually happened on a run plus the lesson, through
+  // the existing outcome-ingest path (a Result + its Learning). Records what ALREADY happened; it never
+  // sends, publishes, or runs anything, so the wall is untouched. Body: { runId, happened, learned }.
+  const projectOutcomeMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/outcome$/);
+  if (req.method === "POST" && projectOutcomeMatch) {
+    try {
+      const projectId = decodeURIComponent(projectOutcomeMatch[1]);
+      const body = (await readBody(req)) ?? {};
+      recordFounderOutcome(projectId, { runId: body.runId ?? null, happened: body.happened, learned: body.learned }, { projectId });
+      json(res, 200, { ok: true });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return;
   }
