@@ -422,21 +422,40 @@ function BandHeaders({ cols }: { cols: { key: string; label: string; sub: string
   );
 }
 
-export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, desiredArrange }: {
+export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId = null, desiredArrange, modeControlled = false }: {
   projectId: string | null;
   gate?: GateBag | null;
   // The attached-composer tie: whenever the founder selects (or deselects) a block on the canvas, we
   // hand its identity up so the composer can dock to it — "Claude · editing offer" — and frame the
   // next message with it. Fired only from selection events, never during render, so it can't loop.
   onSubjectChange?: (subject: { id: string; label: string; kind: string } | null) => void;
+  // The composer's current subject id, fed BACK down so the tie is two-way: when the founder detaches
+  // the composer (its ×, or by sending a message), the selected card lets go too — no orphaned
+  // selection with the detail panel stuck open.
+  subjectId?: string | null;
   // The mode switcher above the canvas drives the arrangement: Move re-projects the story bands
-  // ("stages"), Trace opens the free causal graph ("flow"). It only steers when it CHANGES, so the
-  // in-header toggle and the drop-to-flow behavior still move the map freely within a mode.
+  // ("stages"), Trace opens the free causal graph ("flow"). It only steers when it CHANGES.
   desiredArrange?: "stages" | "flow";
+  // When the mode pill (Move/Trace) owns the arrangement, the in-header arrange toggle is redundant —
+  // hide it so there's one control for the same job, not two.
+  modeControlled?: boolean;
 }) {
   const gatePending = !!gate?.items.length;
   const [view, setView] = useState<ObjectGraphView | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // A ref mirror of the selection so `load` (a stable callback) can read the current value without
+  // taking selectedId as a dependency (which would rebuild the loader on every click).
+  const selectedIdRef = useRef<string | null>(null);
+  useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
+  // Two-way composer tie: when the composer detaches (subjectId → null from the ×/send in App), the
+  // selected card lets go too, so a detached composer never leaves an orphaned selection + open panel.
+  // Adjusted during render (React's endorsed "reset state when a prop changes" pattern), not in an
+  // effect, so there's no extra paint and no set-state-in-effect.
+  const [lastSubjectId, setLastSubjectId] = useState<string | null>(subjectId);
+  if (subjectId !== lastSubjectId) {
+    setLastSubjectId(subjectId);
+    if (subjectId === null) setSelectedId(null);
+  }
   const [lens, setLens] = useState<"default" | "weakness">("default");
   // Arrangement is a LENS, not a layout the data is locked into: "stages" arranges cards into the
   // operating-story bands; "flow" restores the free causal graph (founder drags persist there).
@@ -475,13 +494,11 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, desiredArr
       // Seed founder placements from the saved layout sidecar; the server is the source of truth for
       // where cards sit. Nodes without a saved position fall through to the ordered dagre pass.
       setPlaced((next.positions ?? {}) as PositionMap);
-      setSelectedId((current) => {
-        const keep = current && next.graph.nodes.some((node) => node.id === current);
-        // A refresh that drops the selected block detaches the composer too, so it never claims to be
-        // editing something no longer on the canvas.
-        if (!keep && current) onSubjectChange?.(null);
-        return keep ? current : null;
-      });
+      // A refresh that drops the selected block detaches the composer too, so it never claims to be
+      // editing something no longer on the canvas. Decided outside the state updater (updaters must be
+      // pure — StrictMode double-invokes them, and this notifies another component).
+      const dropped = selectedIdRef.current && !next.graph.nodes.some((node) => node.id === selectedIdRef.current);
+      if (dropped) { setSelectedId(null); onSubjectChange?.(null); }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -666,10 +683,12 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, desiredArr
           </span>
         </div>
         <div className="object-path-actions">
-          <div className="arrange-toggle" role="group" aria-label="Arrange the map">
-            <button type="button" className={arrange === "stages" ? "active" : ""} onClick={() => { setArrange("stages"); setRefitSignal((s) => s + 1); }}>Why this move</button>
-            <button type="button" className={arrange === "flow" ? "active" : ""} onClick={() => { setArrange("flow"); setRefitSignal((s) => s + 1); }}>Flow</button>
-          </div>
+          {modeControlled ? null : (
+            <div className="arrange-toggle" role="group" aria-label="Arrange the map">
+              <button type="button" className={arrange === "stages" ? "active" : ""} onClick={() => { setArrange("stages"); setRefitSignal((s) => s + 1); }}>Why this move</button>
+              <button type="button" className={arrange === "flow" ? "active" : ""} onClick={() => { setArrange("flow"); setRefitSignal((s) => s + 1); }}>Flow</button>
+            </div>
+          )}
           <button type="button" className={lens === "default" ? "active" : ""} onClick={() => setLens("default")}>Default</button>
           <button type="button" className={lens === "weakness" ? "active" : ""} onClick={() => setLens("weakness")}>
             Weakness · {softCount}

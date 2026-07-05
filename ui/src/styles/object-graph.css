@@ -26,7 +26,13 @@
 }
 
 .object-path-header strong {
-  display: block;
+  /* One line, clamped — a wrapping headline grew the header past its band and pushed the floating mode
+     pill and hero into a collision. The full move story lives in the hero card and the inspector. */
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-width: 44ch;
   margin-top: 2px;
   font-size: var(--text-md);
   line-height: var(--leading-tight);

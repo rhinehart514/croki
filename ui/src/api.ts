@@ -359,7 +359,7 @@ export type ObjectGraphNodeOperation = {
 export const applyObjectGraphOperations = (
   projectId: string,
   operations: ObjectGraphNodeOperation[],
-) => post<{ projectId: string; changes: string[] } & ObjectGraphView>(
+) => post<{ projectId: string; changes: { type: string; detail: string }[] } & ObjectGraphView>(
   `/api/projects/${encodeURIComponent(projectId)}/object-graph`,
   { operations },
 );

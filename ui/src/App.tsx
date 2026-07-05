@@ -1848,13 +1848,17 @@ export default function App() {
     // The mode pill steers the object graph's arrangement: Trace opens the free causal graph, every
     // other mode reads the story bands.
     desiredArrange: activeMode === "trace" ? "flow" : "stages",
+    // The mode pill owns arrangement, so the object graph drops its redundant in-header toggle.
+    modeControlled: true,
+    // Feed the composer's subject back down so selecting a card and detaching the composer stay in sync.
+    subjectId: composerSubject?.id ?? null,
     // The Learn lens reads the loop off the same cockpit state the map is built on.
     cockpit,
   }), [
     canvasGraph, connectors, contractAudits, runResult, graphRunning, runningNodeId, selection,
     dismissOverlays, proposedNodeIds, proposedEdgeIds, revealedNodeIds, proposalActive, operatorCursor,
     handleResolveProposal, submitGateReview, approveGate, handleAddNode, handleGraphConnect, handleDeleteEdges,
-    handleNodePositionChange, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, gtmMapGate, activeMode, cockpit,
+    handleNodePositionChange, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, gtmMapGate, activeMode, cockpit, composerSubject,
   ]);
 
   // First-run team setup. Gated on Convex being configured AND no team chosen yet, so a local/solo

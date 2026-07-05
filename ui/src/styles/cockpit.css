@@ -9,7 +9,7 @@
 .ck {
   --surface: #ffffff;
   --surface-2: #f4f4f5;
-  --ck-accent: var(--link); /* the one accent — a single blue, used only on the move action */
+  --ck-accent: var(--primary); /* the primary action reads near-black, like every other commit action — blue is reserved for the "Claude working" state, never a static CTA */
   background: #fafafa;
   min-height: 100%;
   overflow-y: auto;
@@ -109,8 +109,8 @@
 .ck-outcome-body { font-size: 13px; line-height: 1.45; color: var(--ink-2); margin-top: 5px; }
 .ck-outcome-win { background: var(--proven-soft); border-color: color-mix(in srgb, var(--proven) 22%, var(--line)); }
 .ck-outcome-win .ck-outcome-head { color: var(--proven); }
-.ck-outcome-kill { background: var(--gap-soft); border-color: color-mix(in srgb, var(--gap) 24%, var(--line)); }
-.ck-outcome-kill .ck-outcome-head { color: var(--gap); }
+.ck-outcome-kill { background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 24%, var(--line)); }
+.ck-outcome-kill .ck-outcome-head { color: var(--danger); }
 
 .ck-hero-upgrade {
   display: flex; align-items: flex-start; gap: 7px;
@@ -194,7 +194,7 @@
   padding: 11px 0; border-top: 1px solid var(--line);
 }
 .ck-learning:first-child { border-top: none; padding-top: 0; }
-.ck-learning-icon { color: var(--gap); flex: none; margin-top: 1px; }
+.ck-learning-icon { color: var(--muted); flex: none; margin-top: 1px; }
 .ck-learning-main { min-width: 0; }
 .ck-learning-statement { font-size: 13.5px; line-height: 1.45; color: var(--ink); }
 .ck-learning-meta {

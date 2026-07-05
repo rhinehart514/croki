@@ -77,7 +77,7 @@
 .object-palette-group {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
 }
 .object-palette-group-label {
   padding: var(--space-1) var(--space-2);

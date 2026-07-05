@@ -98,9 +98,13 @@ export type GtmCanvasModel = {
   // The attached-composer tie for the object graph: selecting a block hands its identity up so the
   // composer docks to it. Null on deselect.
   onObjectSelect?: (subject: { id: string; label: string; kind: string } | null) => void;
+  // The composer's current subject id, fed back so selection and the attached composer clear together.
+  subjectId?: string | null;
   // The mode switcher drives the object graph's arrangement: Move → the story bands ("stages"),
   // Trace → the free causal graph ("flow"). Steers only on change (see ObjectGraphCanvas).
   desiredArrange?: "stages" | "flow";
+  // The mode pill owns the arrangement, so the object graph hides its redundant in-header toggle.
+  modeControlled?: boolean;
   // The five-primitive founder state (goal, beliefs, last run, learnings) the Learn lens reads to
   // project the loop closing. Null before a product is open — the lens shows its honest empty state.
   cockpit?: CockpitState | null;
@@ -109,7 +113,7 @@ export type GtmCanvasModel = {
 type GtmLensProps = LensProps<GtmCanvasModel, never>;
 
 function ObjectGraphLens({ model: m }: GtmLensProps) {
-  return <ObjectGraphCanvas projectId={m.projectId} gate={m.gate} onSubjectChange={m.onObjectSelect} desiredArrange={m.desiredArrange} />;
+  return <ObjectGraphCanvas projectId={m.projectId} gate={m.gate} onSubjectChange={m.onObjectSelect} subjectId={m.subjectId ?? null} desiredArrange={m.desiredArrange} modeControlled={m.modeControlled} />;
 }
 
 // The Learn lens — the loop closing, read off the same cockpit state the map is built on.
