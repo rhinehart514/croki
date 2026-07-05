@@ -1,0 +1,74 @@
+/* The bench — the roster as one lens over the run ledger. Opaque, calm, monochrome; the only color is
+   the family tint on each monogram and the proven-green of real approvals. Reads as a considered team
+   roster, never a dashboard of vanity metrics. */
+
+/* The bench is READ, not glanced — force its surfaces opaque even where an ancestor scopes --surface to
+   a glass value (the stages / object-graph canvas does exactly that). Redefining the vars here fixes the
+   overlay's own background AND every card that reads var(--surface), since a custom property resolves on
+   the element it's set on. */
+.bench-overlay {
+  --surface: #ffffff;
+  --surface-2: #f4f4f5;
+  background: #ffffff;
+}
+
+.bench-overlay .canvas-overlay-bar { padding: 0 20px; height: 56px; background: #ffffff; }
+
+.bench-title { display: flex; align-items: center; gap: 12px; }
+.bench-title-icon {
+  display: grid; place-items: center; width: 30px; height: 30px;
+  border-radius: var(--r-md); background: var(--surface-2); color: var(--ink); flex: none;
+}
+.bench-title h1 { font-size: 15px; font-weight: 620; color: var(--ink); margin: 0; line-height: 1.2; }
+.bench-title p { font-size: 12px; color: var(--muted); margin: 1px 0 0; }
+
+.bench-body { padding: 24px 20px 64px; }
+.bench-empty { color: var(--muted); font-size: 13.5px; max-width: 52ch; margin: 24px auto; text-align: center; }
+
+.bench-section { max-width: 920px; margin: 0 auto 28px; }
+.bench-shead {
+  font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600;
+  color: var(--muted); margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line);
+}
+
+.bench-grid {
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.bench-card {
+  display: flex; gap: 12px; align-items: flex-start; text-align: left;
+  padding: 14px; border: 1px solid var(--line); border-radius: var(--r-lg);
+  background: var(--surface); cursor: pointer; font: inherit; color: inherit;
+  transition: border-color 120ms var(--ease), background 120ms var(--ease), transform 120ms var(--ease);
+}
+.bench-card:hover { border-color: color-mix(in srgb, var(--ink) 22%, var(--line)); background: var(--surface-2); }
+.bench-card:active { transform: translateY(0.5px); }
+.bench-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.bench-mark {
+  flex: none; width: 38px; height: 38px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 13px; font-weight: 640; letter-spacing: 0.02em;
+}
+
+.bench-card-main { min-width: 0; flex: 1; }
+.bench-card-role { font-size: 14px; font-weight: 600; color: var(--ink); line-height: 1.25; }
+.bench-card-job {
+  font-size: 12px; color: var(--muted); margin-top: 2px; line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.bench-card-quiet { font-size: 12px; color: var(--muted); margin-top: 8px; font-style: italic; }
+
+.bench-card-stats { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.bench-stat {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; font-weight: 560; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.bench-stat.good { color: var(--proven); }
+.bench-stat.bad { color: var(--danger); }
+.bench-stat-runs { margin-left: auto; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.bench-proof {
+  height: 3px; border-radius: 3px; background: var(--surface-2); overflow: hidden; margin-top: 8px;
+}
+.bench-proof-fill { height: 100%; background: var(--proven); border-radius: 3px; }

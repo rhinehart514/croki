@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
-import { extractDecisions, buildDraftMemory, renderDraftMemory, draftKey, extractDecisionsForAgent, buildAgentProfile } from "../src/memory.mjs";
+import { extractDecisions, buildDraftMemory, renderDraftMemory, draftKey, extractDecisionsForAgent, buildAgentProfile, buildAgentBench } from "../src/memory.mjs";
 import { run as gateRun } from "../src/connectors/gate/default.mjs";
 import { run as draftRun } from "../src/connectors/draft/claude.mjs";
 import { runGraph } from "../src/graph.mjs";
@@ -294,6 +294,54 @@ describe("memory — per-agent taste", () => {
     assert.deepEqual(profile.lastEdits, []);
     assert.equal(profile.voice, "");
     assert.equal(profile.note, "no runs yet");
+  });
+});
+
+describe("memory — buildAgentBench (the roster as one lens)", () => {
+  const mixedRuns = [
+    runWithGate([
+      { name: "A", email: "a@x.com", draft: "warm note from Ada", approvalStatus: "approved", agentRef: "ada" },
+      { name: "B", email: "b@x.com", draft: "stiff pitch from Boone", approvalStatus: "rejected", agentRef: "boone" },
+      { name: "C", email: "c@x.com", draft: "Ada rewrite", editedFrom: "Ada first draft", approvalStatus: "approved", agentRef: "ada" },
+    ]),
+  ];
+  const agents = [
+    { ref: "boone", description: "Cold outreach writer" },
+    { ref: "never-ran", description: "A brand-new specialist" },
+    { ref: "ada", description: "Discovery researcher" },
+  ];
+
+  it("derives one compact row per agent over the shared run set, carrying the job description", () => {
+    const bench = buildAgentBench(mixedRuns, agents);
+    assert.equal(bench.length, 3);
+    const ada = bench.find((r) => r.ref === "ada");
+    assert.equal(ada.hasRuns, true);
+    assert.equal(ada.runCount, 1);
+    assert.deepEqual(ada.counts, { approved: 2, rejected: 0, edits: 1 });
+    assert.equal(ada.job, "Discovery researcher");
+    assert.equal(ada.note, null);
+  });
+
+  it("reads an unrun agent honestly — zeros and a 'no runs yet' note, never a seeded number", () => {
+    const bench = buildAgentBench(mixedRuns, agents);
+    const fresh = bench.find((r) => r.ref === "never-ran");
+    assert.equal(fresh.hasRuns, false);
+    assert.equal(fresh.runCount, 0);
+    assert.deepEqual(fresh.counts, { approved: 0, rejected: 0, edits: 0 });
+    assert.equal(fresh.note, "no runs yet");
+  });
+
+  it("orders by real signal: track record first (most-approved on top), then never-run in ref order", () => {
+    const bench = buildAgentBench(mixedRuns, agents);
+    assert.deepEqual(bench.map((r) => r.ref), ["ada", "boone", "never-ran"]);
+  });
+
+  it("returns an empty bench when there are no agents, and tolerates a bare string ref", () => {
+    assert.deepEqual(buildAgentBench(mixedRuns, []), []);
+    const bench = buildAgentBench(mixedRuns, ["ada"]);
+    assert.equal(bench.length, 1);
+    assert.equal(bench[0].ref, "ada");
+    assert.equal(bench[0].job, "");
   });
 });
 

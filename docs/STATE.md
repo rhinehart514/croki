@@ -52,6 +52,7 @@ measured result.
 | Dogfood loop | **Landed, unexercised** | Drover files and builds its own improvements to gated branches that wait for review. |
 | The learning loop closes (machinery) | **Built & verified** | On branch `lean-rebuild`: outcome-door, compile→approve→run, outcome-proposed verdicts — a real outcome can now flow back and shape the next run. Audited alpha-loop-ready; not yet exercised by a real founder. |
 | The two new surfaces | **Built & browser-verified** | The agent face (derived per-agent record, honest "no runs yet") and the market picture built layer by layer (co-construct picker) — both on `lean-rebuild`. |
+| Agent bench + crew view | **Built & browser-verified** | Added 2026-07-05. The bench is the whole roster as one lens over the run ledger — every specialist with a track record derived from real gate decisions, honest "no runs yet" when unrun; reached from the dock. The crew strip shows a focused pipeline's agents left-to-right, ending on the gate. Both are projections over data the host already keeps, not new stored objects. `get_bench` MCP tool mirrors `get_board`. |
 | A first attributable win | **Unproven** | The alpha bet. The machinery is in place and verified; no real founder outcome has closed the loop yet. This is what earns "alpha". |
 
 ---

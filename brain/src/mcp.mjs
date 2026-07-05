@@ -329,6 +329,11 @@ async function getBoard({ projectId } = {}) {
   return brainGet(`/api/projects/${encodeURIComponent(id)}/board`);
 }
 
+async function getBench({ projectId } = {}) {
+  const id = await resolveProjectId(projectId);
+  return brainGet(`/api/projects/${encodeURIComponent(id)}/bench`);
+}
+
 async function findReferences({ kind, id: refId, projectId }) {
   const id = await resolveProjectId(projectId);
   const params = new URLSearchParams({ kind: kind ?? "" });
@@ -612,6 +617,16 @@ const TOOLS = [
       required: [],
     },
     handler: getBoard,
+  },
+  {
+    name: "get_bench",
+    description: "Read the agent bench: the whole roster of specialist agents as one lens over the run ledger. Each agent carries a role, its one-line job, and a track record DERIVED from real gate decisions — how many runs it produced a gated item in, and how many the founder approved, rejected, or edited. An agent that has never run reads honestly ('no runs yet'), never a seeded number. Agents with a track record sort first, most-approved on top. Read-only; derived, never seeded, and never gates a run. Defaults to the active project.",
+    inputSchema: {
+      type: "object",
+      properties: { projectId: { type: "string", description: "Optional. Defaults to the active project." } },
+      required: [],
+    },
+    handler: getBench,
   },
   {
     name: "find_references",

@@ -22,6 +22,7 @@ import {
   createProject,
   duplicateChannel,
   getAgentProfile,
+  getAgentBench,
   getChannel,
   getProjectWithChannels,
   listProjects,
@@ -183,6 +184,29 @@ const TYPES = {
   ".svg": "image/svg+xml",
   ".png": "image/png",
 };
+
+// The on-disk agent roster — every subagent definition with the one-line description from its
+// frontmatter. Shared by the library listing and the bench so the two never drift on which agents
+// exist or how they're named. Read-only; returns [] when there is no agents directory.
+function listLibraryAgents() {
+  const agentsDir = path.join(os.homedir(), ".claude", "agents");
+  const firstDescription = (text) => {
+    const m = text.match(/^description:\s*(.+)$/m);
+    return m ? m[1].trim().replace(/^["']|["']$/g, "").slice(0, 160) : "";
+  };
+  try {
+    return fs.readdirSync(agentsDir)
+      .filter((f) => f.endsWith(".md"))
+      .map((f) => {
+        let description = "";
+        try { description = firstDescription(fs.readFileSync(path.join(agentsDir, f), "utf8")); } catch { /* name only */ }
+        return { ref: f.replace(/\.md$/, ""), description };
+      })
+      .sort((a, b) => a.ref.localeCompare(b.ref));
+  } catch {
+    return [];
+  }
+}
 
 function json(res, status, payload) {
   res.writeHead(status, {
@@ -1996,6 +2020,20 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // The agent bench — the whole roster as ONE lens over the run ledger: every on-disk agent with its
+  // real, derived track record (runs, approvals, rejections). A never-run agent reads honestly ("no
+  // runs yet"), never a seeded number. Mirrors the board route: read-only, derived, never gates a run.
+  const benchMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/bench$/);
+  if (req.method === "GET" && benchMatch) {
+    try {
+      const projectId = decodeURIComponent(benchMatch[1]);
+      json(res, 200, { bench: getAgentBench(projectId, { agents: listLibraryAgents() }) });
+    } catch (err) {
+      json(res, 500, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
   // The library — the real artifacts of GTM engineering on disk (subagents and skills), so the
   // explorer can show the parts of the system, not just channels. Read-only listing; names plus
   // the one-line description from each file's frontmatter.
@@ -2006,19 +2044,8 @@ const server = http.createServer(async (req, res) => {
         const m = text.match(/^description:\s*(.+)$/m);
         return m ? m[1].trim().replace(/^["']|["']$/g, "").slice(0, 160) : "";
       };
-      const agentsDir = path.join(home, ".claude", "agents");
       const skillsDir = path.join(home, ".claude", "skills");
-      let agents = [];
-      try {
-        agents = fs.readdirSync(agentsDir)
-          .filter((f) => f.endsWith(".md"))
-          .map((f) => {
-            let description = "";
-            try { description = firstDescription(fs.readFileSync(path.join(agentsDir, f), "utf8")); } catch { /* name only */ }
-            return { ref: f.replace(/\.md$/, ""), description };
-          })
-          .sort((a, b) => a.ref.localeCompare(b.ref));
-      } catch { /* no agents dir */ }
+      const agents = listLibraryAgents();
       let skills = [];
       try {
         skills = fs.readdirSync(skillsDir, { withFileTypes: true })

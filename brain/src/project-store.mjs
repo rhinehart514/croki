@@ -7,7 +7,7 @@ import { persistence, storeRoot, PROJECT_COLLECTION, PROJECT_KEY } from "./persi
 import "./migrate-to-sqlite.mjs";
 import { loadFlow, saveFlow, summarizeRunResult } from "./flow-store.mjs";
 import { defaultTeamId } from "./team-store.mjs";
-import { buildAgentProfile } from "./memory.mjs";
+import { buildAgentProfile, buildAgentBench } from "./memory.mjs";
 
 const SCHEMA_VERSION = 4;
 const CATALOG_SCHEMA_VERSION = 1;
@@ -505,6 +505,15 @@ export function getAgentProfile(projectId, agentRef, options = {}) {
     ...(Number.isFinite(options.editLimit) ? { editLimit: options.editLimit } : {}),
     ...(Number.isFinite(options.voiceExamples) ? { voiceExamples: options.voiceExamples } : {}),
   });
+}
+
+// The bench: every roster agent's compact track record over the SAME project run ledger, loaded once.
+// The caller passes the on-disk agent list (`{ ref, description }[]`) it already reads for the library;
+// the run set defaults to the whole project ledger but can be injected in tests. Pure derivation on top
+// of buildAgentBench — honest empties for never-run agents, no seeded numbers.
+export function getAgentBench(projectId, { agents = [], runs } = {}, options = {}) {
+  const runSet = Array.isArray(runs) ? runs : loadProjectRuns(projectId, options);
+  return buildAgentBench(runSet, agents);
 }
 
 // `channelOffer` (optional) is the pipeline's own offer/deal in the founder's words — when the run

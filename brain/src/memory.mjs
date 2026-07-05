@@ -190,6 +190,39 @@ export function buildAgentProfile(runs = [], agentRef, { editLimit = 5, voiceExa
   };
 }
 
+// The agent bench — the whole roster as ONE lens over the same run ledger, not a stored table. Each
+// row is the COMPACT face of buildAgentProfile (the profile sheet still fetches the full record with
+// edits and voice), so nothing is derived twice or seeded: an agent that has never produced a gated
+// item reads honestly (hasRuns false, "no runs yet", zero counts). `agents` is the on-disk roster the
+// caller already lists (`{ ref, description }`); the run set is loaded ONCE by the caller and shared
+// across every agent here rather than re-read per agent.
+//
+// Ordering encodes the founder's real signal, never alphabetical vanity: agents with a track record
+// come first, most-approved on top, ties broken by total runs then ref; never-run agents follow in
+// stable ref order so the roster reads the same every load.
+export function buildAgentBench(runs = [], agents = []) {
+  const rows = (Array.isArray(agents) ? agents : []).map((agent) => {
+    const ref = typeof agent === "string" ? agent : agent?.ref;
+    const job = typeof agent === "string" ? "" : (agent?.description ?? "");
+    const profile = buildAgentProfile(runs, ref, { editLimit: 0, voiceExamples: 0 });
+    return {
+      ref: ref ?? null,
+      job,
+      hasRuns: profile.hasRuns,
+      runCount: profile.runCount,
+      counts: profile.counts,
+      note: profile.note,
+    };
+  }).filter((row) => row.ref);
+  rows.sort((a, b) => {
+    if (a.hasRuns !== b.hasRuns) return a.hasRuns ? -1 : 1;
+    if (a.counts.approved !== b.counts.approved) return b.counts.approved - a.counts.approved;
+    if (a.runCount !== b.runCount) return b.runCount - a.runCount;
+    return String(a.ref).localeCompare(String(b.ref));
+  });
+  return rows;
+}
+
 // Idea taste — the founder's kills/keeps on GENERATED ideas, read off the feedback ledger's
 // IdeaKill/IdeaKeep signals and shaped into killed/kept ANGLES so the next ideation round avoids the
 // angles the founder has already thrown out. This is the ideation half of loop memory: gate decisions

@@ -1,0 +1,55 @@
+/* The crew strip — the focused pipeline read as a team, left to right, ending on the gate. A quiet
+   floating rail on the canvas: opaque chips, one family tint per teammate, an approved count when it's
+   been earned. Never competes with the canvas; it names what's already there. */
+
+.crew-strip-mount {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: 92px; z-index: 30; pointer-events: none;
+  display: flex; justify-content: center; max-width: 100%;
+}
+.crew-strip-mount > * { pointer-events: auto; }
+
+.crew-strip {
+  display: inline-flex; align-items: center; gap: 12px; max-width: calc(100vw - 48px);
+  padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-xl);
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 8px 24px -12px rgba(0,0,0,0.12);
+}
+
+.crew-label {
+  font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 620;
+  color: var(--muted); flex: none;
+}
+
+.crew-flow { display: flex; align-items: center; gap: 2px; overflow-x: auto; min-width: 0; }
+.crew-flow::-webkit-scrollbar { height: 0; }
+
+.crew-item { display: flex; align-items: center; gap: 2px; flex: none; }
+.crew-arrow { color: var(--muted); font-size: 13px; opacity: 0.55; padding: 0 2px; }
+
+.crew-chip {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  padding: 4px 9px 4px 4px; border: 1px solid var(--line); border-radius: 999px;
+  background: #ffffff; cursor: pointer; font: inherit; color: var(--ink);
+  transition: border-color 120ms var(--ease), background 120ms var(--ease);
+}
+button.crew-chip:hover { border-color: color-mix(in srgb, var(--ink) 24%, var(--line)); background: var(--surface-2); }
+button.crew-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.crew-mono {
+  flex: none; width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 10px; font-weight: 660; letter-spacing: 0.02em;
+}
+.crew-role { font-size: 12.5px; font-weight: 540; white-space: nowrap; }
+.crew-approved {
+  font-size: 11px; font-weight: 640; color: var(--proven);
+  font-variant-numeric: tabular-nums; padding-left: 2px;
+}
+
+.crew-gate { cursor: default; padding-left: 9px; border-color: color-mix(in srgb, var(--ink) 18%, var(--line)); }
+.crew-gate-mark { font-size: 13px; color: var(--ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  .crew-chip, .bench-card { transition: none; }
+}

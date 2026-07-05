@@ -355,6 +355,20 @@ export const getAgentLearning = (projectId: string, ref: string) =>
     `/api/projects/${encodeURIComponent(projectId)}/agents/${encodeURIComponent(ref)}/profile`,
   );
 
+// The bench — the whole roster as one lens over the run ledger. Each row is the compact face of an
+// agent's real track record; a never-run agent reads honestly (hasRuns false, "no runs yet"). The
+// profile sheet still fetches the full record (edits + voice) on click.
+export type AgentBenchRow = {
+  ref: string;
+  job: string;
+  hasRuns: boolean;
+  runCount: number;
+  counts: { approved: number; rejected: number; edits: number };
+  note: string | null;
+};
+export const getAgentBench = (projectId: string) =>
+  get<{ bench: AgentBenchRow[] }>(`/api/projects/${encodeURIComponent(projectId)}/bench`);
+
 // The market picture, built one layer at a time. researchMarketLayer returns a spread of real
 // alternatives for the NEXT buyer facet, grounded in what's already settled — and persists nothing.
 // The founder picks (or writes) one; saveMarketObject commits just that one to the graph.

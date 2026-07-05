@@ -11,6 +11,8 @@ import {
   type ConnectionStatus,
   getContext,
   getLibrary,
+  getAgentBench,
+  type AgentBenchRow,
   getGraphTemplate,
   getOperatorSession,
   getProject,
@@ -52,8 +54,10 @@ import {
 const ArtifactEditor = lazy(() => import("@/components/ArtifactEditor").then((m) => ({ default: m.ArtifactEditor })));
 const WorkspaceView = lazy(() => import("@/components/WorkspaceView").then((m) => ({ default: m.WorkspaceView })));
 const AgentProfile = lazy(() => import("@/components/AgentProfile").then((m) => ({ default: m.AgentProfile })));
+const AgentBench = lazy(() => import("@/components/AgentBench").then((m) => ({ default: m.AgentBench })));
 const ConnectCapability = lazy(() => import("@/components/ConnectCapability").then((m) => ({ default: m.ConnectCapability })));
 import type { AgentProfileView, TeammateView } from "@/components/AgentProfile";
+import { CrewStrip } from "@/components/CrewStrip";
 import { ComposerDock } from "@/components/ComposerDock";
 import { FloatingDock } from "@/components/FloatingDock";
 import { type OperatorCursorState } from "@/components/GraphCanvas";
@@ -195,7 +199,7 @@ export default function App() {
   // shows a calm "loading your workspace" instead of flashing the cold-start goal launcher for the
   // 1–2s before the project's graph arrives.
   const [booting, setBooting] = useState(true);
-  const [overlay, setOverlay] = useState<"understand" | "product" | "settings" | null>(null);
+  const [overlay, setOverlay] = useState<"understand" | "product" | "settings" | "bench" | null>(null);
   // Which Settings section is showing — the three admin surfaces (workspace index, team + release
   // roles, self-built tools) live behind one overlay now, switched by these tabs.
   const [settingsTab, setSettingsTab] = useState<"workspace" | "team" | "tools">("workspace");
@@ -403,6 +407,9 @@ export default function App() {
   const [engine, setEngine] = useState<EngineState | null>(null);
   const [contextManifest, setContextManifest] = useState<ContextManifest | null>(null);
   const [library, setLibrary] = useState<GtmLibrary | null>(null);
+  // The bench — every agent's track record derived from the run ledger. Loaded once per project and
+  // reused by both the bench surface and the crew strip's approved-count badges.
+  const [bench, setBench] = useState<AgentBenchRow[] | null>(null);
   const [operatorSession, setOperatorSession] = useState<OperatorSession | null>(null);
   // The shared People object — durable identities promoted from real run entrants, read-only. Feeds
   // the GTM canvas's People lens (find-references / dedup) and is refreshed after each run promotes
@@ -463,6 +470,15 @@ export default function App() {
     getLibrary().then(setLibrary).catch(console.error);
     getConnection().then(setConnection).catch(() => {});
   }, []);
+
+  // The bench's derived track record, per project, for the crew strip's approved-count badges. The
+  // bench SURFACE fetches its own fresh copy on open; this is the always-available copy for the canvas.
+  useEffect(() => {
+    if (!activeProjectId) { setBench(null); return; }
+    let live = true;
+    getAgentBench(activeProjectId).then((r) => { if (live) setBench(r.bench); }).catch(() => { if (live) setBench(null); });
+    return () => { live = false; };
+  }, [activeProjectId]);
 
   // Resolve whether the acting user may release the gate on the session's owning team. The team is the
   // session's stored teamId; the personal team (solo founder) always returns canApprove=true server-side.
@@ -1890,6 +1906,7 @@ export default function App() {
               onModeToggle={(v) => { if (v === "product") { setOverlay("product"); } else { setOverlay(null); } }}
               summonItems={overlay === "product" ? undefined : SUMMON_GTM}
               onOpenSettings={() => { setOverlay("settings"); setProblemsOpen(false); setIssuesOpen(false); }}
+              onOpenBench={() => { setOverlay("bench"); setProblemsOpen(false); setIssuesOpen(false); }}
               // Summon routes by kind: Terminal drops a live workbench surface IN canvas space (it pans
               // and zooms with the graph, and its output can feed the pipeline); the rest pop onto the
               // canvas as draggable cards. The admin surfaces moved to the Settings overlay.
@@ -2087,6 +2104,14 @@ export default function App() {
             </div>
           ) : null}
 
+          {/* The crew strip — the focused pipeline read as a team, bottom-centered above the composer.
+              Only on a focused pipeline (never the overview), and never over the product-mode canvas. */}
+          {view === "canvas" && graph && !overviewActive && overlay !== "product" && (
+            <div className="crew-strip-mount">
+              <CrewStrip graph={graph} bench={bench} onOpenAgent={(ref) => setAgentProfileRef(ref)} />
+            </div>
+          )}
+
           {/* Toolbar overlay: zoom controls at top-left */}
           {view === "canvas" && graph && (
             <div className="loop-graph-actions">
@@ -2262,6 +2287,19 @@ export default function App() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* The bench — the roster as one lens over the run ledger, a first-class surface reached from
+              the dock. Clicking a teammate opens their full record in the profile sheet. */}
+          {overlay === "bench" && (
+            <Suspense fallback={null}>
+              <AgentBench
+                open
+                projectId={activeProjectId}
+                onClose={() => setOverlay(null)}
+                onOpenAgent={(ref) => { setOverlay(null); setAgentProfileRef(ref); }}
+              />
+            </Suspense>
           )}
 
           {/* The hand-pick pickers were removed — Claude composes what a pipeline needs and you approve

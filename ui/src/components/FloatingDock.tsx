@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "motion/react";
-import { AlertTriangle, LoaderCircle, Plus, Settings2 } from "lucide-react";
+import { AlertTriangle, LoaderCircle, Plus, Settings2, Users } from "lucide-react";
 import { SPRING } from "@/lib/springs";
 import { Reveal, Pop } from "@/lib/motion";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
@@ -32,6 +32,8 @@ export function FloatingDock({
   // The admin door — opens the Settings overlay (workspace index, team + release roles, self-built
   // tools). These moved out of the Summon menu so the bar's gear is their single home.
   onOpenSettings,
+  // The bench door — opens the agent roster (every specialist and its gate track record).
+  onOpenBench,
   // Right — the first-class actions
   problems, issuesOpen, onToggleIssues,
   onCloseMenus,
@@ -58,6 +60,7 @@ export function FloatingDock({
   summonItems?: { id: string; label: string; desc?: string }[];
   onSummon?: (id: string) => void;
   onOpenSettings?: () => void;
+  onOpenBench?: () => void;
   // Issues — the count of open problems across the system, and the always-present panel it toggles.
   problems: number;
   issuesOpen: boolean;
@@ -166,6 +169,20 @@ export function FloatingDock({
       <div className="fdock-right">
         {/* Settings — the admin door (workspace, team, self-built tools), evicted from the Summon
             junk drawer into one overlay. Always reachable, in GTM and Product mode alike. */}
+        {/* Bench — the agent roster and each specialist's gate track record. GTM-only; a first-class
+            surface alongside the canvas and the pipelines, not a summoned card. */}
+        {onOpenBench && !productMode ? (
+          <button
+            className="fdock-icon-btn"
+            onClick={() => { setSummonOpen(false); onOpenBench(); }}
+            type="button"
+            title="Bench — your agents and what they've earned at the gate"
+            aria-label="Agent bench"
+          >
+            <Users size={15} />
+          </button>
+        ) : null}
+
         {onOpenSettings ? (
           <>
             <button
