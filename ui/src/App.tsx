@@ -58,6 +58,7 @@ const WorkspaceView = lazy(() => import("@/components/WorkspaceView").then((m) =
 const AgentProfile = lazy(() => import("@/components/AgentProfile").then((m) => ({ default: m.AgentProfile })));
 const AgentBench = lazy(() => import("@/components/AgentBench").then((m) => ({ default: m.AgentBench })));
 const Cockpit = lazy(() => import("@/components/Cockpit").then((m) => ({ default: m.Cockpit })));
+const BestNextMove = lazy(() => import("@/components/Cockpit").then((m) => ({ default: m.BestNextMove })));
 const OutcomeCapture = lazy(() => import("@/components/OutcomeCapture"));
 const ConnectCapability = lazy(() => import("@/components/ConnectCapability").then((m) => ({ default: m.ConnectCapability })));
 import type { AgentProfileView, TeammateView } from "@/components/AgentProfile";
@@ -419,6 +420,10 @@ export default function App() {
   // is one click away. `outcomeOpen` gates the manual "what happened / what did we learn" loop-closer.
   const [cockpit, setCockpit] = useState<CockpitState | null>(null);
   const [outcomeOpen, setOutcomeOpen] = useState(false);
+  // The Best Next Move hero floats over the canvas home; the founder can flick it away for the session.
+  // It re-appears when they switch products (the move is product-specific).
+  const [moveHeroDismissed, setMoveHeroDismissed] = useState(false);
+  useEffect(() => { setMoveHeroDismissed(false); }, [activeProjectId]);
   const [operatorSession, setOperatorSession] = useState<OperatorSession | null>(null);
   // The shared People object — durable identities promoted from real run entrants, read-only. Feeds
   // the GTM canvas's People lens (find-references / dedup) and is refreshed after each run promotes
@@ -496,7 +501,9 @@ export default function App() {
     getCockpit(activeProjectId).then((r) => setCockpit(r.state)).catch(() => setCockpit(null));
   }, [activeProjectId]);
   useEffect(() => {
-    if (view !== "cockpit" || !activeProjectId) return;
+    // Load on the cockpit scroll AND on the canvas — the canvas floats the same Best Next Move as a
+    // hero card, so it needs the projection too.
+    if ((view !== "cockpit" && view !== "canvas") || !activeProjectId) return;
     let live = true;
     getCockpit(activeProjectId).then((r) => { if (live) setCockpit(r.state); }).catch(() => { if (live) setCockpit(null); });
     return () => { live = false; };
@@ -742,7 +749,7 @@ export default function App() {
         // move); only a total cold start (no workspace) shows the product picker.
         // A founder with no scanned product lands on the one-prompt front door (point at your
         // product, say your goal), not the dense cockpit — the project-aware stranger entry.
-        setView(projectResponse.project.sharedContext.repository.workspaceId ? "cockpit" : "start");
+        setView(projectResponse.project.sharedContext.repository.workspaceId ? "canvas" : "start");
         const engineResponse = await getEngineState();
         if (live) setEngine(engineResponse.engine);
         return;
@@ -754,9 +761,9 @@ export default function App() {
       if (wentOverview) {
         const engineResponse = await getEngineState();
         if (live) setEngine(engineResponse.engine);
-        // Land on the cockpit (Best Next Move), not the map. The overview data is loaded underneath, so
-        // the map is one click away and ready; the graph never greets a founder on boot.
-        if (live && projectResponse.project.sharedContext.repository.workspaceId) setView("cockpit");
+        // Land on the canvas — the map IS home now. The Best Next Move floats over it as a hero card,
+        // so the founder still gets one thing to do next without the graph being hidden behind a scroll.
+        if (live && projectResponse.project.sharedContext.repository.workspaceId) setView("canvas");
         return;
       }
       const [graphResponse, engineResponse] = await Promise.all([
@@ -772,8 +779,8 @@ export default function App() {
       // (node results, staged drafts) without needing a manual click to re-open it.
       setChannelRunResult(channelId, bootRuns.length ? bootRuns[bootRuns.length - 1] : null);
       setEngine(engineResponse.engine);
-      // Land on the cockpit, with the focused channel's map loaded underneath and ready.
-      if (projectResponse.project.sharedContext.repository.workspaceId) setView("cockpit");
+      // Land on the canvas, the focused channel's map already loaded, the Best Next Move floating over it.
+      if (projectResponse.project.sharedContext.repository.workspaceId) setView("canvas");
     }).catch(console.error).finally(() => { if (live) setBooting(false); });
     return () => { live = false; };
     // Boot runs once on mount; loadProjectOverview/setChannelGraph are stable callbacks, listed to
@@ -1941,10 +1948,34 @@ export default function App() {
             </div>
           )}
 
+          {/* The canvas is home; the Best Next Move floats over it as one elevated hero card. Same data,
+              same styling as the cockpit hero — read-only, dismissable, and clear of the path header up
+              top and the dock in the center. When the projection is empty it renders its own honest
+              empty hero; while cockpit data is still null it renders nothing rather than a fake. */}
+          {view === "canvas" && overlay !== "product" && cockpit && !moveHeroDismissed ? (
+            <div className="move-hero">
+              <button
+                type="button"
+                className="move-hero-dismiss"
+                onClick={() => setMoveHeroDismissed(true)}
+                aria-label="Dismiss best next move"
+                title="Dismiss"
+              >
+                <X size={13} />
+              </button>
+              <Suspense fallback={null}>
+                <BestNextMove
+                  move={cockpit.bestMove}
+                  onDoMove={() => setComposerFocus((f) => f + 1)}
+                />
+              </Suspense>
+            </div>
+          ) : null}
+
           {/* Back to the cockpit from the map — a calm chip, so the graph is always an aside, never home. */}
           {view === "canvas" && overlay !== "product" ? (
-            <button type="button" className="back-to-cockpit" onClick={() => setView("cockpit")} title="Back to Best Next Move">
-              ← Best Next Move
+            <button type="button" className="back-to-cockpit" onClick={() => setView("cockpit")} title="Open the full Best Next Move view">
+              ← Full view
             </button>
           ) : null}
 

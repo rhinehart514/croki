@@ -43,7 +43,9 @@ function SolidityTag({ solidity }: { solidity: Solidity }) {
 
 // The hero. If there isn't enough state to propose a next action, say so plainly rather than inventing
 // one — the honest null is itself information the founder can act on (point Drover at more truth).
-function BestNextMove({
+// Exported so the canvas home can float the same Best Next Move as a hero card over the map, reusing
+// the identical styling and data — one hero, two placements.
+export function BestNextMove({
   move,
   onDoMove,
 }: {
