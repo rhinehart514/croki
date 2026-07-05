@@ -1,17 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import {
-  AlertTriangle, BadgeCheck, Box, CheckCircle2, Circle, FileSearch, Flame, Gem, Mail, Milestone,
-  Network, Play, Quote, Radio, Route, Shield, ShieldCheck, Tag, Target, Users, Wrench, Zap,
-  type LucideIcon,
+  AlertTriangle, CheckCircle2, FileSearch, Mail, Network, Play, Shield, ShieldCheck,
 } from "lucide-react";
 import {
-  Background, Controls, Handle, MarkerType, Position, ReactFlow, useReactFlow, useStore, type Edge, type Node, type NodeProps,
+  Background, Controls, Handle, MarkerType, Position, ReactFlow, useReactFlow, useStore, type Edge, type Node, type NodeProps, type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { approveRun, compileObjectGraphPath, getObjectGraph, recordOutcome, saveObjectGraphPositions, type CompiledGate } from "@/api";
+import { applyObjectGraphOperations, approveRun, compileObjectGraphPath, getObjectGraph, recordOutcome, saveObjectGraphPositions, type CompiledGate } from "@/api";
 import type { GateDecision, GTMItem, ObjectGraphEdge, ObjectGraphNode, ObjectGraphPathRecommendation, ObjectGraphView } from "@/types";
 import { layoutObjectGraph, type PositionMap } from "@/lib/objectGraphLayout";
 import { GateReview } from "@/components/gate/GateReview";
+import { ObjectGraphPalette } from "@/components/ObjectGraphPalette";
+import { PALETTE_BLOCK_LABEL, PALETTE_DRAG_MIME } from "@/lib/objectPalette";
+import { kindIcon } from "@/lib/objectKindIcons";
 import type { GateBag } from "@/lib/gateItem";
 import "@/styles/object-graph.css";
 
@@ -53,32 +54,12 @@ function nodeRole(node: ObjectGraphNode) {
   return "object";
 }
 
-// Every object kind gets its own glyph, so the node reads as the THING it is at any zoom — the n8n move:
-// pulled back to a coin, you recognize a buyer / offer / channel / gate by its shape, not by squinting at
-// 8px text. Stays monochrome (the icon is currentColor); hue is reserved for the semantic roles only
-// (gate amber, outcome green), set in CSS via the role class — never a rainbow per kind.
-const KIND_ICON: Record<string, LucideIcon> = {
-  buyer: Users,
-  pain: Flame,
-  job: Target,
-  offer: Tag,
-  value_prop: Gem,
-  message: Quote,
-  proof_point: BadgeCheck,
-  trigger: Zap,
-  channel: Radio,
-  conversion_path: Route,
-  workaround: Wrench,
-  capability: Box,
-  path: Milestone,
-  run: Play,
-};
 function cardIcon(node: ObjectGraphNode) {
   const role = nodeRole(node);
   if (role === "gate") return <Shield aria-hidden="true" />;
   if (role === "outward") return <Mail aria-hidden="true" />;
   if (role === "outcome") return <CheckCircle2 aria-hidden="true" />;
-  const Icon = (node.type && KIND_ICON[node.type]) || Circle;
+  const Icon = kindIcon(node.type);
   return <Icon aria-hidden="true" />;
 }
 
@@ -575,6 +556,40 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange }: {
   const selected = view?.graph.nodes.find((node) => node.id === selectedId) ?? null;
   const selectedWeakness = selected ? primaryWeakness(selected) : null;
 
+  // Drag-to-create: the react-flow instance (captured on init) turns the drop's screen point into a graph
+  // coordinate; the drop posts one add_node op for a fresh loose card, then selects it and docks the
+  // composer so the founder can tell Claude what the block should be. Nothing outward happens.
+  const rfRef = useRef<ReactFlowInstance<Node<CardData>, Edge> | null>(null);
+  const onCanvasDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes(PALETTE_DRAG_MIME)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }, []);
+  const onCanvasDrop = useCallback(async (event: DragEvent<HTMLDivElement>) => {
+    const type = event.dataTransfer.getData(PALETTE_DRAG_MIME);
+    if (!type || !projectId) return;
+    event.preventDefault();
+    const point = rfRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY }) ?? { x: 0, y: 0 };
+    const pos = { x: Math.round(point.x), y: Math.round(point.y) };
+    const id = `obj-founder-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const statement = `New ${(PALETTE_BLOCK_LABEL[type] ?? "block").toLowerCase()}`;
+    try {
+      await applyObjectGraphOperations(projectId, [
+        { type: "add_node", node: { id, type, maturity: "loose", statement, origin: "founder" } },
+      ]);
+      // Land the card where the founder let go: persist the drop point and switch to the free Flow
+      // arrangement so it stays under the cursor instead of snapping into a Stages column.
+      await saveObjectGraphPositions(projectId, { [id]: pos });
+      setPlaced((prev) => ({ ...prev, [id]: pos }));
+      setArrange("flow");
+      await load();
+      setSelectedId(id);
+      onSubjectChange?.({ id, label: statement, kind: type });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [projectId, load, onSubjectChange]);
+
   const compile = useCallback(async () => {
     if (!projectId || !highlightedPath) return;
     setCompileState({ status: "running", message: "Compiling the highlighted path to the gate." });
@@ -656,6 +671,8 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange }: {
         </div>
       </div>
 
+      <ObjectGraphPalette />
+
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -663,6 +680,9 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange }: {
         fitView
         minZoom={0.12}
         maxZoom={1.4}
+        onInit={(instance) => { rfRef.current = instance; }}
+        onDrop={onCanvasDrop}
+        onDragOver={onCanvasDragOver}
         nodesDraggable={arrange === "flow"}
         nodesConnectable={false}
         elementsSelectable

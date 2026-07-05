@@ -340,6 +340,30 @@ export const getBoard = (projectId: string) =>
 export const getObjectGraph = (projectId: string) =>
   get<ObjectGraphView>(`/api/projects/${encodeURIComponent(projectId)}/object-graph`);
 
+// Apply typed, validated graph mutations (add / promote / update / retire a block). The host normalizes
+// each op, re-asserts the Wall, saves, and hands back the refreshed graph + recommendation — the same
+// shape getObjectGraph returns, so callers can drop the response straight back into the canvas. Used by
+// drag-to-create: dropping a block posts a single `add_node` op for a fresh loose card Claude can fill.
+export type ObjectGraphNodeOperation = {
+  type: "add_node";
+  node: {
+    id?: string;
+    type: string;
+    domain?: string;
+    maturity?: "loose" | "typed" | "execution" | "outcome";
+    statement: string;
+    origin?: string;
+    payload?: Record<string, unknown>;
+  };
+};
+export const applyObjectGraphOperations = (
+  projectId: string,
+  operations: ObjectGraphNodeOperation[],
+) => post<{ projectId: string; changes: string[] } & ObjectGraphView>(
+  `/api/projects/${encodeURIComponent(projectId)}/object-graph`,
+  { operations },
+);
+
 // ── The five-primitive cockpit — Goal, Bet, Move, Run, Learning, all in founder language ───────────
 // Derived read-only from real state; every part is honest-empty (null / []) where there is no signal,
 // and bestMove is null when there is not enough signal to name one. "How sure we are" is the four-word
