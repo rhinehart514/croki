@@ -105,13 +105,13 @@ import { MarketLayers } from "@/components/MarketLayers";
 // Only canvas-work surfaces summon now. The admin surfaces (workspace, team, self-built tools) moved
 // out of this junk drawer into a single Settings overlay reached from the dock's gear.
 const SUMMON_GTM = [
-  { id: "terminal", label: "Terminal", desc: "A live shell on the canvas — run commands by hand, pipe the output into the graph." },
-  { id: "query", label: "Query", desc: "Interrogate your own data — everyone your pipelines touched, filtered and sorted live." },
-  { id: "web", label: "Web", desc: "A research browser on the canvas — pull up a prospect's site while you work." },
-  { id: "experiments", label: "Experiment matrix", desc: "ICP × claim × pipeline — the live hypotheses." },
-  { id: "inbox", label: "Inbox", desc: "Every world-signal that came in — a commit, a signup, a reply — captured, waiting for you to route or set aside." },
-  { id: "microproduct", label: "Microproduct", desc: "Cut a working artifact from your product for a goal — it stages behind your gate, nothing deploys until you approve." },
-  { id: "market", label: "Market picture", desc: "Build your buyer picture one layer at a time — ICP, pain, trigger, offer — picking from real alternatives at each." },
+  { id: "terminal", label: "Terminal", desc: "A live shell on the canvas. Run commands by hand and pipe the output into the graph." },
+  { id: "query", label: "Query", desc: "Interrogate your own data: everyone your pipelines touched, filtered and sorted live." },
+  { id: "web", label: "Web", desc: "A research browser on the canvas. Pull up a prospect's site while you work." },
+  { id: "experiments", label: "Experiment matrix", desc: "ICP × claim × pipeline: your live hypotheses." },
+  { id: "inbox", label: "Inbox", desc: "Every world-signal that came in (a commit, a signup, a reply), captured and waiting for you to route or set aside." },
+  { id: "microproduct", label: "Microproduct", desc: "Cut a working artifact from your product for a goal. It stages behind your gate; nothing deploys until you approve." },
+  { id: "market", label: "Market picture", desc: "Build your buyer picture one layer at a time (ICP, pain, trigger, offer), picking from real alternatives at each." },
 ];
 
 // Pull the built microproduct preview out of the staged run the compose door returns. The producer's
@@ -1885,7 +1885,7 @@ export default function App() {
   // one condition under which the mode pill and the floated hero belong. Operator PAUSES
   // (waiting_for_ideas / waiting_for_gate) still show the map behind their overlay, so they keep it.
   const operatorDriving = !!operatorSession && ["ready", "running", "failed", "blocked"].includes(operatorSession.status);
-  const gtmCanvasVisible = view === "canvas" && overlay !== "product" && !operatorDriving && !!(canvasGraph || activeProjectId);
+  const gtmCanvasVisible = view === "canvas" && !overlay && !operatorDriving && !!(canvasGraph || activeProjectId);
 
   return (
     <main className={`loop-shell ${view === "canvas" ? "canvas-bleed" : ""}`}>
@@ -1964,7 +1964,7 @@ export default function App() {
 
           {/* Log what happened, reachable straight from the map — a quiet chip in Learn mode once a run
               has happened, so the founder closes the loop without leaving the canvas for the cockpit. */}
-          {view === "canvas" && overlay !== "product" && activeMode === "learn" && cockpit?.latestRun ? (
+          {view === "canvas" && !overlay && activeMode === "learn" && cockpit?.latestRun ? (
             <button type="button" className="cockpit-log-outcome canvas-log-outcome" onClick={() => setOutcomeOpen(true)}>
               Log what happened →
             </button>
@@ -1995,7 +1995,7 @@ export default function App() {
               same styling as the cockpit hero — read-only, dismissable, and clear of the path header up
               top and the dock in the center. When the projection is empty it renders its own honest
               empty hero; while cockpit data is still null it renders nothing rather than a fake. */}
-          {view === "canvas" && overlay !== "product" && activeMode === "move" && cockpit && !moveHeroDismissed ? (
+          {view === "canvas" && !overlay && activeMode === "move" && cockpit && !moveHeroDismissed ? (
             <div className="move-hero">
               <button
                 type="button"
@@ -2016,7 +2016,7 @@ export default function App() {
           ) : null}
 
           {/* Back to the cockpit from the map — a calm chip, so the graph is always an aside, never home. */}
-          {view === "canvas" && overlay !== "product" ? (
+          {view === "canvas" && !overlay ? (
             <button type="button" className="back-to-cockpit" onClick={() => setView("cockpit")} title="Open the full Best Next Move view">
               ← Full view
             </button>
@@ -2044,8 +2044,10 @@ export default function App() {
           ) : null}
 
           {/* The floating control dock — every control the old top toolbar held, in one calm bar
-              floating top-center over the full-bleed canvas. */}
-          {view === "canvas" ? (
+              floating top-center over the full-bleed canvas. Kept over the canvas and Product mode
+              (it owns the GTM↔Product toggle); hidden under the utility takeovers (Settings, Bench,
+              Understand), which carry their own header + close, so the dock never collides with them. */}
+          {view === "canvas" && (!overlay || overlay === "product") ? (
             <FloatingDock
               projects={projects}
               activeProjectId={activeProject?.id ?? null}

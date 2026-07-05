@@ -1,11 +1,11 @@
-import { useRef, useState, type DragEvent } from "react";
+import { useRef, type DragEvent } from "react";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { kindIcon } from "@/lib/objectKindIcons";
 import { PALETTE_ALL_BLOCKS, PALETTE_BLOCK_LABEL, PALETTE_DRAG_MIME, PALETTE_FAMILIES } from "@/lib/objectPalette";
 import "@/styles/object-palette.css";
 
-export function ObjectGraphPalette() {
-  const [collapsed, setCollapsed] = useState(false);
+// Collapsed state is lifted to the canvas so the fit can clear the rail's width (it floats over the map).
+export function ObjectGraphPalette({ collapsed, onToggle }: { collapsed: boolean; onToggle: (next: boolean) => void }) {
   // One hidden 1:1 preview per block, used as the drag image — so the thing under the cursor reads as the
   // actual white card it becomes, faded, not a generic browser chip.
   const ghostRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -24,7 +24,7 @@ export function ObjectGraphPalette() {
         <button
           type="button"
           className="object-palette-reopen"
-          onClick={() => setCollapsed(false)}
+          onClick={() => onToggle(false)}
           aria-label="Show blocks"
           title="Show blocks"
         >
@@ -41,7 +41,7 @@ export function ObjectGraphPalette() {
         <button
           type="button"
           className="object-palette-collapse"
-          onClick={() => setCollapsed(true)}
+          onClick={() => onToggle(true)}
           aria-label="Hide blocks"
           title="Hide blocks"
         >

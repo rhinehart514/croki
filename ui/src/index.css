@@ -5393,13 +5393,16 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .canvas-overlay {
   position: absolute; inset: 0; z-index: 40;
   display: grid; grid-template-rows: 48px 1fr;
-  background: var(--surface);
+  /* A full-page takeover — must be OPAQUE. Under the glass skin --surface is
+     translucent (52% white), which leaked the canvas behind Settings/Understand;
+     the ground token is solid in both skins. Glass stays only on floating cards. */
+  background: var(--canvas);
   animation: overlay-in 180ms var(--ease);
 }
 @keyframes overlay-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .canvas-overlay-bar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 16px; border-bottom: 1px solid var(--line); background: var(--surface);
+  padding: 0 16px; border-bottom: 1px solid var(--line); background: var(--canvas);
 }
 .canvas-overlay-title { font-size: 13px; font-weight: 600; color: var(--ink); }
 .canvas-overlay-close {

@@ -356,36 +356,44 @@ function layoutEdges(edges: ObjectGraphEdge[], highlighted: Set<string>): Edge[]
   });
 }
 
-function FitOnLoad({ ready, refitSignal }: { ready: boolean; refitSignal: number }) {
+function FitOnLoad({ ready, refitSignal, leftInset }: { ready: boolean; refitSignal: number; leftInset: number }) {
   const rf = useReactFlow();
   useEffect(() => {
     if (!ready) return;
-    const t = window.setTimeout(() => rf.fitView({ padding: 0.2, duration: 420 }), 50);
+    const t = window.setTimeout(() => {
+      // Fit instantly, then pan right so the left edge clears the Blocks rail (which floats OVER the
+      // canvas) — otherwise the first column lands under it. Collapsed rail → no shift.
+      void rf.fitView({ padding: 0.2, duration: 0 });
+      const vp = rf.getViewport();
+      const shift = leftInset > 80 ? leftInset - 60 : 0;
+      rf.setViewport({ x: vp.x + shift, y: vp.y, zoom: vp.zoom }, { duration: 420 });
+    }, 50);
     return () => window.clearTimeout(t);
-  }, [ready, rf, refitSignal]);
+  }, [ready, rf, refitSignal, leftInset]);
   return null;
 }
 
 // Stages fit: never zoom out to fit the whole map (that shrinks cards to unreadable coins). Instead fit
 // the bands to the width so the left-to-right stages all show, at a zoom where cards stay readable, and
 // anchor to the top — the founder reads a band top-to-bottom and scrolls down through it.
-function StagesFit({ bounds, ready, refitSignal }: { bounds: { minX: number; width: number } | null; ready: boolean; refitSignal: number }) {
+function StagesFit({ bounds, ready, refitSignal, leftInset }: { bounds: { minX: number; width: number } | null; ready: boolean; refitSignal: number; leftInset: number }) {
   const rf = useReactFlow();
   const vw = useStore((s) => s.width);
   useEffect(() => {
     if (!ready || !bounds || !vw) return;
     const t = window.setTimeout(() => {
-      // Land at a comfortably readable zoom. If the bands are wider than the frame, we don't shrink
-      // to fit them all — cards stay legible and the founder pans right to the later stages (still one
-      // canvas). Narrow maps can zoom in further.
-      const zoom = Math.min(0.9, Math.max(0.62, (vw - 90) / bounds.width));
-      // band-header row sits at BAND_TOP-76; land it just below the path header, left margin ~60px.
-      const x = 60 - bounds.minX * zoom;
+      // Land at a comfortably readable zoom. The Blocks rail floats OVER the left of the canvas, so the
+      // usable width and the left margin both subtract its width — otherwise the first stage column
+      // lands under the rail. If the bands are wider than the frame, we don't shrink to fit them all —
+      // cards stay legible and the founder pans right to the later stages (still one canvas).
+      const zoom = Math.min(0.9, Math.max(0.62, (vw - leftInset - 40) / bounds.width));
+      // band-header row sits at BAND_TOP-76; land it just below the path header, clear of the rail.
+      const x = leftInset - bounds.minX * zoom;
       const y = 188 - (BAND_TOP - 76) * zoom;
       rf.setViewport({ x, y, zoom }, { duration: 420 });
     }, 60);
     return () => window.clearTimeout(t);
-  }, [ready, bounds, vw, refitSignal, rf]);
+  }, [ready, bounds, vw, refitSignal, rf, leftInset]);
   return null;
 }
 
@@ -472,6 +480,10 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId 
     () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,
     [],
   );
+  // The Blocks rail owns its collapsed state up here so the fit can clear its width (it floats over the
+  // canvas): expanded → 224px left margin, collapsed → a slim 64px. Toggling it re-fits.
+  const [paletteCollapsed, setPaletteCollapsed] = useState(false);
+  const paletteInset = paletteCollapsed ? 64 : 224;
   // Reduced-motion starts already-revealed (no animation); otherwise the effect below plays the waves.
   const [cardsIn, setCardsIn] = useState(reduceMotion);
   const [ignited, setIgnited] = useState(reduceMotion);
@@ -706,7 +718,10 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId 
         </div>
       </div>
 
-      <ObjectGraphPalette />
+      <ObjectGraphPalette
+        collapsed={paletteCollapsed}
+        onToggle={(next) => { setPaletteCollapsed(next); setRefitSignal((s) => s + 1); }}
+      />
 
       <ReactFlow
         nodes={nodes}
@@ -741,8 +756,8 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId 
         <Background color="var(--canvas-dot)" gap={22} size={1} />
         <Controls showInteractive={false} />
         {arrange === "stages"
-          ? <StagesFit bounds={stagesBounds} ready={Boolean(view && nodes.length)} refitSignal={refitSignal} />
-          : <FitOnLoad ready={Boolean(view && nodes.length)} refitSignal={refitSignal} />}
+          ? <StagesFit bounds={stagesBounds} ready={Boolean(view && nodes.length)} refitSignal={refitSignal} leftInset={paletteInset} />
+          : <FitOnLoad ready={Boolean(view && nodes.length)} refitSignal={refitSignal} leftInset={paletteInset} />}
         <ZoomWatch onZoom={onZoomCompact} />
         {arrange === "stages" ? <BandHeaders cols={banded.cols} /> : null}
       </ReactFlow>
