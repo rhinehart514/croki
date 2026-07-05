@@ -22,6 +22,7 @@ import os from "node:os";
 import path from "node:path";
 import { runClaudeQuery, parseAgentObject } from "./agent-bridge.mjs";
 import { blankIdeaBar } from "./idea-bar.mjs";
+import { genObjectGraphId } from "./object-graph-store.mjs";
 
 // Ideation is a PROMPT, not a fleet of tool-using agents (GTM-ENGINE-REBUILD §6). Generating and
 // grading ideas is fuzzy judgment worked off grounding that is ALREADY handed in (the product summary
@@ -244,4 +245,84 @@ export async function composeIdeas({
     regenerated,
     regenCount,
   };
+}
+
+// ── Per-card object ideation ────────────────────────────────────────────────────────────────────
+// Ideating NEW cards off one selected card is the same live generator, aimed narrow: a founder picks a
+// card and says in plain words what kind of new card to explore ("new buyers", "new offers", a free
+// prompt). Deterministic code frames the goal and resolves the object type; the model does only the
+// fuzzy part — generating the moves. Nothing here persists or sends; candidates stay provisional until
+// the founder accepts one on the canvas.
+
+// A plain founder target (or an idea's own self-description) → the real object type a card should become.
+// Deterministic keyword resolution over the live palette types — code answers this, never a model call.
+// Returns a known type, or null (a null-typed candidate stays a loose card the founder can still accept).
+const OBJECT_TYPE_KEYWORDS = [
+  [/\bbuyer|audience|icp|segment|persona|customer|prospect|account\b/i, "buyer"],
+  [/\bpain|problem|frustrat|struggl\b/i, "pain"],
+  [/\bjob to|jobs? to|task they|job\b/i, "job"],
+  [/\btrigger|moment|catalyst|event that\b/i, "trigger"],
+  [/\bworkaround|alternative|status quo|today they\b/i, "workaround"],
+  [/\boffer|deal|package|bundle|pricing|price|discount|plan\b/i, "offer"],
+  [/\bvalue prop|value|benefit|payoff\b/i, "value_prop"],
+  [/\bchannel|distribution|where.*(gather|hang|reach)|placement\b/i, "channel"],
+  [/\bangle|message|messaging|positioning|hook|story|narrative|pitch line\b/i, "message"],
+  [/\bproof|evidence|testimonial|case stud|reference\b/i, "proof_point"],
+  [/\bpath|play|motion|funnel|sequence\b/i, "path"],
+];
+
+export function resolveObjectType(text) {
+  const value = String(text || "");
+  for (const [pattern, type] of OBJECT_TYPE_KEYWORDS) {
+    if (pattern.test(value)) return type;
+  }
+  return null;
+}
+
+// ideateObjectCandidates — one live grounded generate() call, mapped to decidable candidate objects.
+// Injectable exactly like composeIdeas: a stub generate() in tests, createClaudeIdeaGenerator() live.
+// Each candidate is { id, statement, type, rationale } — a founder-language card and the object type the
+// target (or the idea's own words) implies. Returns up to `max`; persists nothing.
+export async function ideateObjectCandidates({
+  target,
+  source = null,
+  grounding = null,
+  generate = blankGenerate,
+  max = 5,
+} = {}) {
+  if (typeof generate !== "function") {
+    throw new Error("ideateObjectCandidates needs a generate function.");
+  }
+  const cleanTarget = String(target || "").trim();
+  if (!cleanTarget) throw new Error("ideateObjectCandidates needs a target.");
+
+  const sourceStatement = String(source?.statement || "").trim();
+  const sourceType = String(source?.type || "").trim();
+  const targetType = resolveObjectType(cleanTarget);
+
+  const goal = [
+    `Generate ${cleanTarget} for this product.`,
+    sourceStatement
+      ? `Build them off this existing card${sourceType ? ` (a ${sourceType})` : ""}: "${sourceStatement}". Each idea should connect to it — extend it, serve it, reach it, or follow from it.`
+      : `Ground every idea in what the product actually does.`,
+    `Each idea is one concrete, plain-language card a founder could act on. Never invent traction, numbers, customers, or quotes.`,
+  ].join("\n");
+
+  const out = await generate({ goal, grounding });
+  const rawIdeas = Array.isArray(out?.ideas) ? out.ideas : [];
+
+  const candidates = [];
+  for (const raw of rawIdeas) {
+    const idea = normalizeIdea(raw);
+    if (!idea) continue;
+    candidates.push({
+      id: genObjectGraphId("cand"),
+      statement: idea.pitch,
+      // Per-idea type: prefer the type the idea names about itself, else the target-implied type.
+      type: resolveObjectType(idea.what) || targetType,
+      rationale: idea.upside || idea.what || null,
+    });
+    if (candidates.length >= max) break;
+  }
+  return candidates;
 }

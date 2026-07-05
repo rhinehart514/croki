@@ -78,7 +78,7 @@ import { outcomeReport, ingestOutcome, ingestBatch, OUTCOME_SOURCES } from "./ou
 import { deriveCockpitState, proposeMoves } from "./five-primitives.mjs";
 import { recordFounderOutcome } from "./outcome-capture.mjs";
 import { ideaTasteForProject, recordIdeaDecisions } from "./feedback-ledger.mjs";
-import { composeIdeas, createClaudeAngleProposer, createClaudeIdeaGenerator } from "./ideation.mjs";
+import { composeIdeas, createClaudeAngleProposer, createClaudeIdeaGenerator, ideateObjectCandidates } from "./ideation.mjs";
 import { createClaudeIdeaBar } from "./idea-bar.mjs";
 import { createGtmIdea, getGtmIdea, saveGtmIdea, listGtmIdeas } from "./idea-store.mjs";
 import { recordRunDerivations } from "./run-derivation.mjs";
@@ -914,6 +914,37 @@ const server = http.createServer(async (req, res) => {
         compose: createClaudeComposer({ cwd: repo }),
       });
       json(res, 200, { projectId, ...result });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Ideate provisional object candidates off one selected card + a plain founder target ("new buyers",
+  // "new offers", a free prompt). This calls the SAME live grounded generator the ideas/round route uses
+  // (createClaudeIdeaGenerator on the founder's subscription), frames a goal from the selected card's
+  // statement and the product grounding, and maps each returned idea to a decidable candidate object.
+  // It persists NOTHING and sends nothing — candidates stay provisional until the founder accepts one.
+  const projectObjectGraphIdeateMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/object-graph\/ideate$/);
+  if (req.method === "POST" && projectObjectGraphIdeateMatch) {
+    try {
+      const projectId = decodeURIComponent(projectObjectGraphIdeateMatch[1]);
+      const body = await readBody(req);
+      const target = String(body?.target || "").trim();
+      if (!target) { json(res, 400, { error: "Ideation needs a target — what kind of new card to explore." }); return; }
+      const project = loadProject({ projectId });
+      const repo = project.sharedContext?.repository?.repo || process.cwd();
+      const sourceNodeId = String(body?.sourceNodeId || "").trim() || null;
+      const source = sourceNodeId
+        ? (objectGraphStore.load(projectId).nodes.find((node) => node.id === sourceNodeId) || null)
+        : null;
+      const candidates = await ideateObjectCandidates({
+        target,
+        source,
+        grounding: buildRunGrounding(project),
+        generate: createClaudeIdeaGenerator({ cwd: repo }),
+      });
+      json(res, 200, { candidates });
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
