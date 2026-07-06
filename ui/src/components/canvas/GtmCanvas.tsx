@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { GraphCanvas, type OperatorCursorState } from "@/components/GraphCanvas";
 import type { NodeEditorBridge } from "@/components/nodeEditorBridge";
 import type { GatePromote } from "@/lib/gateItem";
@@ -6,7 +5,6 @@ import { CanvasShell, type LensDef, type LensProps } from "@/components/canvas/C
 import { ObjectGraphCanvas } from "@/components/ObjectGraphCanvas";
 import type { GateBag } from "@/lib/gateItem";
 import type { CanvasSubject } from "@/lib/cardDetail";
-import { BeliefSpine } from "@/components/lenses/BeliefSpine";
 import type {
   ChannelFeed, ChannelMeta, Claim, ConnectorMeta, DirectedFeed, GateDecision, GtmExperiment, GTMContractAudit, GTMGraph, GTMNode,
   GTMRunResult, NodeSelection, Person,
@@ -118,109 +116,81 @@ function ObjectGraphLens({ model: m }: GtmLensProps) {
   return <ObjectGraphCanvas projectId={m.projectId} gate={m.gate} onSubjectChange={m.onObjectSelect} subjectId={m.subjectId ?? null} desiredArrange={m.desiredArrange} modeControlled={m.modeControlled} onIdeateObject={m.onIdeateObject} ideatingNodeId={m.ideatingNodeId ?? null} ideatingTarget={m.ideatingTarget ?? null} reloadSignal={m.objectGraphReload ?? 0} />;
 }
 
-// ENGINEER — the deeper of the two founder modes. Its primary face is the causal reasoning graph: the
-// same object graph in its free "flow" arrangement (driven by the mode's desiredArrange="flow"), where
-// the founder reads WHY the recommended move follows from the product and market picture, with each
-// connection labelled by its verb so a stroke reads as a claim. A quiet Reasoning / Steps switch reveals
-// the same work as its executable step chain (the old top-level "Flow" view, the cleanest per the
-// audit) folded in here — so the runnable machinery lives one click from the reasoning instead of in a
-// third redundant tab.
-function EngineerLens(props: GtmLensProps) {
-  const [face, setFace] = useState<"reasoning" | "steps">("reasoning");
-  return (
-    <div className="engineer-lens">
-      <div className="engineer-face-switch" role="group" aria-label="Engineer view">
-        <button type="button" className={face === "reasoning" ? "active" : ""} onClick={() => setFace("reasoning")}>
-          Reasoning
-        </button>
-        <button type="button" className={face === "steps" ? "active" : ""} onClick={() => setFace("steps")}>
-          Steps
-        </button>
-      </div>
-      {face === "reasoning" ? <ObjectGraphLens {...props} /> : <ChannelFlowLens {...props} />}
-    </div>
-  );
-}
-
-// ── channel-flow: GraphCanvas, unchanged. Forwards App's prop bag straight through. ──
-// The ground overview's Channels cluster and the direct top-level pipeline entry both mount this SAME
-// merged canvas — either path lands you in the identical component, never a different page.
-// A stable empty graph for the landing of a product with nothing wired yet: the same node canvas
-// renders its dotted ground so the founder never lands on a separate page — just an empty flow with a
-// compose invitation. A fixed id keeps GraphCanvas's layout memo from thrashing.
+// ENGINEER — the pipeline builder. This is where the founder drops agents, tools, and data sources and
+// wires them into an executable pipeline: the node canvas (GraphCanvas), one pipeline's Source → … →
+// Gate → Measure, full-bleed and laid out left-to-right by causal depth. No story bands and no belief
+// spine here — the "why" lives in Move; Engineer is the machinery, where every input and data source
+// reads as its own node with its own grounding. A focused pipeline fills the canvas so you can build it;
+// the All-pipelines overview stacks every pipeline as a lane so you can organize the whole set.
+// A stable empty graph for the landing of a product with nothing wired yet: the same node canvas renders
+// its dotted ground so the founder never lands on a separate page — just an empty flow with a compose
+// invitation. A fixed id keeps GraphCanvas's layout memo from thrashing.
 const LANDING_EMPTY_GRAPH: GTMGraph = { id: "__landing-empty__", name: "New pipeline", version: "0", nodes: [], edges: [] };
 
-function ChannelFlowLens({ model: m }: GtmLensProps) {
-  // No pipeline wired yet (the landing/overview of a fresh product) → render the empty node canvas with
-  // a compose invitation, NOT a ranked-bets page. Once anything is built, the real graph takes over.
+function EngineerLens({ model: m }: GtmLensProps) {
+  // No pipeline wired yet (the landing of a fresh product) → render the empty node canvas with a compose
+  // invitation, NOT a ranked-bets page. Once anything is built, the real graph takes over.
   const landing = !m.graph;
   const graph = m.graph ?? LANDING_EMPTY_GRAPH;
-  // L1 above L2 in one column: the pipeline's belief spine (the folded-in board, scoped to this one
-  // pipeline) rides above its executable flow. The spine is a pure read; it only mounts when a project
-  // and a focused channel exist. This is the interim composition until the continuous-zoom LOD backbone
-  // replaces the stack with a true altitude transition.
+  // Merge every pipeline into stacked lanes ONLY at the overview (no pipeline focused). Once a pipeline
+  // is focused, drop the merge so that ONE pipeline fills the canvas at a readable size — the old
+  // always-merged mount rendered a focused pipeline as a cramped lane crushed among the others.
+  const multiPipeline = m.activeChannelId ? null : m.multiPipeline;
   return (
-    <div className="channel-flow-stack" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      {m.projectId && m.activeChannelId ? (
-        <div className="l1-spine-band" style={{ flex: "0 0 auto", borderBottom: "1px solid var(--line)", overflow: "auto", maxHeight: "42%" }}>
-          <BeliefSpine projectId={m.projectId} channelId={m.activeChannelId} />
+    <div className="engineer-lens" style={{ position: "relative", height: "100%", minHeight: 0 }}>
+      <GraphCanvas
+        connectors={m.connectors}
+        contractAudits={m.contractAudits}
+        graph={graph}
+        proposedNodeIds={m.proposedNodeIds}
+        proposedEdgeIds={m.proposedEdgeIds}
+        revealedNodeIds={m.revealedNodeIds}
+        proposalActive={m.proposalActive}
+        onResolveProposal={m.onResolveProposal}
+        onSubmitReview={m.onSubmitReview}
+        gatePromote={m.gatePromote}
+        gateOffer={m.gateOffer}
+        onAskClaude={m.onAskClaude}
+        onApproveGate={m.onApproveGate}
+        onAddNode={m.onAddNode}
+        onConnectNodes={m.onConnectNodes}
+        onDeleteEdges={m.onDeleteEdges}
+        onNodePositionChange={m.onNodePositionChange}
+        onSelect={m.onSelect}
+        onPaneClick={m.onPaneClick}
+        operatorCursor={m.operatorCursor}
+        nodeEditor={m.nodeEditor}
+        multiPipeline={multiPipeline}
+        panTo={m.panTo}
+        people={m.people}
+        panelOpen={false}
+        result={m.result}
+        running={m.running}
+        runningNodeId={m.runningNodeId}
+        selection={m.selection}
+        subsystemHealth={m.subsystemHealth}
+      />
+      {graph.nodes.length === 0 ? (
+        <div className="blank-channel-guide">
+          <strong>{landing ? "Start your first pipeline" : "Tell Claude what this pipeline should accomplish"}</strong>
+          <span>Describe the outcome you want and Claude composes the steps that reach it, stopping at your gate. Nothing has been chosen for you, and nothing sends without you.</span>
+          {landing && m.onComposeFirst ? (
+            <button type="button" className="blank-channel-compose" onClick={m.onComposeFirst}>
+              State a go-to-market goal
+            </button>
+          ) : null}
         </div>
       ) : null}
-      <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
-        <GraphCanvas
-          connectors={m.connectors}
-          contractAudits={m.contractAudits}
-          graph={graph}
-          proposedNodeIds={m.proposedNodeIds}
-          proposedEdgeIds={m.proposedEdgeIds}
-          revealedNodeIds={m.revealedNodeIds}
-          proposalActive={m.proposalActive}
-          onResolveProposal={m.onResolveProposal}
-          onSubmitReview={m.onSubmitReview}
-          gatePromote={m.gatePromote}
-          gateOffer={m.gateOffer}
-          onAskClaude={m.onAskClaude}
-          onApproveGate={m.onApproveGate}
-          onAddNode={m.onAddNode}
-          onConnectNodes={m.onConnectNodes}
-          onDeleteEdges={m.onDeleteEdges}
-          onNodePositionChange={m.onNodePositionChange}
-          onSelect={m.onSelect}
-          onPaneClick={m.onPaneClick}
-          operatorCursor={m.operatorCursor}
-          nodeEditor={m.nodeEditor}
-          multiPipeline={m.multiPipeline}
-          panTo={m.panTo}
-          people={m.people}
-          panelOpen={false}
-          result={m.result}
-          running={m.running}
-          runningNodeId={m.runningNodeId}
-          selection={m.selection}
-          subsystemHealth={m.subsystemHealth}
-        />
-        {graph.nodes.length === 0 ? (
-          <div className="blank-channel-guide">
-            <strong>{landing ? "Start your first pipeline" : "Tell Claude what this pipeline should accomplish"}</strong>
-            <span>Describe the outcome you want and Claude composes the steps that reach it, stopping at your gate. Nothing has been chosen for you, and nothing sends without you.</span>
-            {landing && m.onComposeFirst ? (
-              <button type="button" className="blank-channel-compose" onClick={m.onComposeFirst}>
-                State a go-to-market goal
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
     </div>
   );
 }
 
-// Two founder modes, not four: MOVE (the object graph in its story bands, the doing surface) and
-// ENGINEER (the causal reasoning graph, with the executable step chain folded in behind a Reasoning /
-// Steps switch). The former "Trace" and "Flow" tabs are subsumed into Engineer; "Learn" is retired as a
-// selectable mode (it re-rendered the cockpit read-only and could contradict Move on confidence — the
-// LearningsLens component is left in the tree for reuse, just not mounted here). The old "Ground"
-// overview lens was likewise retired from the pill; GroundLens.tsx is kept in the tree for reuse.
+// Two founder modes: MOVE (the object graph in its story bands — the reasoning, the doing surface) and
+// ENGINEER (the executable pipeline node canvas — where agents, tools, and data sources are dropped,
+// wired, and organized). Move answers "why this move"; Engineer is the machinery that runs it. The old
+// "Trace"/"Flow" tabs and the reasoning/steps split inside Engineer are gone — Engineer is now just the
+// node canvas. "Learn" is retired as a selectable mode (LearningsLens is left in the tree for reuse);
+// the old "Ground" overview lens was likewise retired from the pill (GroundLens.tsx kept for reuse).
 const LENSES: LensDef<GtmCanvasModel, never>[] = [
   { id: "object-graph", label: "Move", Component: ObjectGraphLens },
   { id: "engineer", label: "Engineer", Component: EngineerLens },
