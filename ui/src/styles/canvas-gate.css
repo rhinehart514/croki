@@ -332,7 +332,18 @@
 }
 
 .cgate-card-prospect { margin: 0; display: flex; flex-direction: column; gap: 2px; }
-.cgate-card-prospect p { margin: 0; font-size: 0.6875rem; line-height: 1.4; color: var(--muted); }
+.cgate-card-prospect p {
+  margin: 0; font-size: 0.6875rem; line-height: 1.4; color: var(--muted);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.cgate-card-more { margin-top: 2px; }
+.cgate-card-more > summary {
+  cursor: pointer; list-style: none; font-size: 0.625rem; font-weight: 600;
+  color: var(--ink-3, var(--muted)); padding: 2px 0; user-select: none;
+}
+.cgate-card-more > summary::before { content: "▸ "; }
+.cgate-card-more[open] > summary::before { content: "▾ "; }
+.cgate-card-more[open] { display: flex; flex-direction: column; gap: 2px; }
 .cgate-card-prospect .k {
   font-size: 0.5rem;
   text-transform: uppercase;

@@ -519,9 +519,17 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
                       renders as labeled lines — the item's own shape, no outreach template imposed. */}
                   {v.fields.length > 0 ? (
                     <div className="cgate-card-prospect">
-                      {v.fields.map((f) => (
+                      {v.fields.slice(0, 3).map((f) => (
                         <p key={f.label}><span className="k">{f.label}</span> {f.value}</p>
                       ))}
+                      {v.fields.length > 3 ? (
+                        <details className="cgate-card-more" onClick={(e) => e.stopPropagation()}>
+                          <summary>{v.fields.length - 3} more details</summary>
+                          {v.fields.slice(3).map((f) => (
+                            <p key={f.label}><span className="k">{f.label}</span> {f.value}</p>
+                          ))}
+                        </details>
+                      ) : null}
                     </div>
                   ) : null}
                 </>
