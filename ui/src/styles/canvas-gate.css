@@ -225,6 +225,11 @@
   gap: var(--space-2);
   margin-top: var(--space-2);
   cursor: default;
+  /* Never let a paused gate run off the canvas — cap it and scroll the stack internally,
+     so the node stays a readable object instead of a tall wall. */
+  max-height: 440px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .cgate-review-lead {

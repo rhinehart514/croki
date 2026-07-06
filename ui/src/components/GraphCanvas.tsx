@@ -2,9 +2,9 @@ import "@/styles/canvas-refine.css";
 import "@/styles/canvas-gate.css";
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Background, Controls, Handle, MarkerType, Panel, Position, ReactFlow,
+  Background, BaseEdge, Controls, Handle, MarkerType, Panel, Position, ReactFlow,
   useReactFlow, useStore, useNodesInitialized, useUpdateNodeInternals, ViewportPortal,
-  type Connection, type Edge, type Node, type NodeProps,
+  type Connection, type Edge, type EdgeProps, type Node, type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { motion } from "motion/react";
@@ -1399,6 +1399,16 @@ const NODE_TYPES = {
   webNode:        React.memo(WebNode),
 };
 
+// ─── Feedback edge ── a return/learning edge (measure → context, switch → architect) routes UNDER the
+// node band and loops around, instead of a bezier that cuts back across the forward wiring. A clean
+// downward U from the source out to the target, dipping below everything so it never overlaps the flow.
+function FeedbackEdge({ sourceX, sourceY, targetX, targetY, markerEnd, style }: EdgeProps) {
+  const midY = Math.max(sourceY, targetY) + 104;
+  const path = `M ${sourceX},${sourceY} C ${sourceX},${midY} ${targetX},${midY} ${targetX},${targetY}`;
+  return <BaseEdge path={path} markerEnd={markerEnd} style={style} className="loop-edge-feedback" />;
+}
+const EDGE_TYPES = { feedback: React.memo(FeedbackEdge) };
+
 // Workbench surfaces (terminal/query/web) are human-operated sources with their own renderers, not the
 // work-card. Routed by kind, since they share the "source" category with connector-backed sources.
 function nodeType(node: GTMNode): string {
@@ -1414,7 +1424,7 @@ function nodeType(node: GTMNode): string {
 
 function edgeStyle(type: GTMEdgeType): Partial<Edge> {
   if (type === "context")  return { className: "loop-edge-context", type: "smoothstep" };
-  if (type === "feedback") return { className: "loop-edge-feedback", type: "default", animated: true, style: { strokeDasharray: "5 5" } };
+  if (type === "feedback") return { className: "loop-edge-feedback", type: "feedback", animated: true, style: { strokeDasharray: "5 5" } };
   return { className: "loop-edge-data", type: "smoothstep" };
 }
 
@@ -2259,6 +2269,7 @@ export function GraphCanvas({
       nodes={nodes}
       edges={edges}
       nodeTypes={NODE_TYPES}
+      edgeTypes={EDGE_TYPES}
       onNodeDragStop={handleNodeDragStop}
       onConnect={handleConnect}
       onEdgesDelete={(deleted) => onDeleteEdges?.(deleted.map((edge) => edge.id))}
