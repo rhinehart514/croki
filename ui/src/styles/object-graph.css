@@ -231,6 +231,36 @@
   opacity: 0.74;
 }
 
+/* ── Grounding weight ─────────────────────────────────────────────────────────────────────────────
+   A belief card's whole weight derives from how solidly it's established, so a founder scanning the
+   map SEES which parts of the story are load-bearing and which are still a guess — no need to read a
+   single foot badge. This rides on background-alpha + border + text contrast, a SEPARATE axis from the
+   element-opacity used for path-hero recede / weakness lens / cold-open reveal, so the two layers
+   compose instead of clobbering each other. The lit spine is the hero and always stays solid, so
+   grounding only shapes the surrounding crowd (every rule is scoped :not(.lit)). Applied to belief
+   cards only — the component withholds the ground-* class from gate/outcome/outward nodes. */
+.object-card.ground-reasoned:not(.lit) {
+  /* inferred — reasoned from evidence, plausible but not proven. Still opaque and solid-bordered, just
+     one contrast step down from the grounded backbone. */
+  border-color: var(--line);
+  box-shadow: var(--shadow-xs);
+}
+.object-card.ground-reasoned:not(.lit) .obj-text {
+  color: var(--ink-2);
+}
+.object-card.ground-provisional:not(.lit) {
+  /* speculative / founder-asserted / unsupported — a hunch, not yet grounded. The card goes translucent
+     so the dotted canvas reads through it (literally not-yet-solid), dashes and lightens its border, and
+     drops its shadow — so it visibly recedes as "guessed" beside the grounded cards around it. */
+  background: color-mix(in oklch, var(--surface) 74%, transparent);
+  border-style: dashed;
+  border-color: var(--ghost);
+  box-shadow: none;
+}
+.object-card.ground-provisional:not(.lit) .obj-text {
+  color: var(--muted);
+}
+
 .object-card.role-gate {
   min-height: 92px;
   border-color: var(--ink);

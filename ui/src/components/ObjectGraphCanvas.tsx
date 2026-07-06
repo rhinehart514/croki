@@ -52,6 +52,28 @@ function evidenceLabel(node: ObjectGraphNode) {
   return n > 1 ? `${node.solidity} ·${n}` : node.solidity;
 }
 
+// The card's GROUNDING weight — how solidly the belief is established, compressed from the six-rung
+// evidence ladder to three visual tiers. This is what lets a founder scan the board and SEE which
+// beliefs are load-bearing versus guessed, instead of reading every foot badge:
+//   solid       — observed / researched: grounded in real outside evidence, the backbone.
+//   reasoned    — inferred: reasoned from evidence, plausible but not proven.
+//   provisional — speculative / founder-asserted / unsupported: a hunch, not yet grounded.
+// The big visual break sits at the grounded/not-grounded line (reasoned→provisional), where it
+// belongs. Belief cards only — a gate/outcome/outward node isn't a "guessed belief", so it keeps its
+// own role styling and gets no grounding tier (see the className guard on nodeRole === "object").
+function groundingTier(node: ObjectGraphNode): "solid" | "reasoned" | "provisional" {
+  if (node.origin === "founder") return "provisional"; // the founder's own claim is unverified, not evidence
+  switch (node.solidity) {
+    case "observed":
+    case "researched":
+      return "solid";
+    case "inferred":
+      return "reasoned";
+    default: // speculative, unsupported, or no solidity at all
+      return "provisional";
+  }
+}
+
 // The card's honest STATE tone, driving the selected ring + the inspector's type chip. Semantic color
 // only: amber = a weakness needs review, green = observed/worked, gray = an unproven draft, zinc = the
 // plain grounded middle. Weakness wins the ring so the amber warning always shows through.
@@ -370,6 +392,9 @@ function ObjectCard({ data, selected }: NodeProps<Node<CardData>>) {
         "object-card",
         `kind-${kind}`,
         `role-${role}`,
+        // Grounding weight is a belief property — only the object cards carry it; a gate/outcome/outward
+        // node keeps its role styling untouched.
+        role === "object" && `ground-${groundingTier(data.object)}`,
         data.object.maturity,
         data.lit && "lit",
         data.weak && "weak",
