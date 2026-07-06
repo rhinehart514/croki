@@ -918,7 +918,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
       >
         <Handle type="target" position={Position.Left} id="t-l" />
-        <span className="loop-node-coin-dot" style={{ background: color }} aria-hidden />
+        <span className="loop-node-coin-icon" style={{ color }} aria-hidden>{visual.icon}</span>
         <span className="loop-node-coin-label">{node.label}</span>
         <Handle type="source" position={Position.Right} id="s-r" />
       </motion.div>
@@ -1790,15 +1790,20 @@ function RunZoom({ running }: { running: boolean }) {
 // ─── Re-fit — re-frame the graph when its container resizes (e.g. the debugger drawer toggles) ──
 // React Flow only auto-fits on mount; a CSS grid resize around it leaves the old viewport. Bumping
 // the nonce re-frames after the layout settles so the pipeline fills the reclaimed space.
-function Refitter({ nonce }: { nonce?: number }) {
+// Shared framing options. On the merged overview the fit is allowed to shrink to hold every lane; on a
+// single FOCUSED pipeline (Engineer's default landing) a `minZoom` floor keeps the fit above the coin
+// threshold so the founder lands on full-size, legible node cards instead of unreadable specks.
+type FitOpts = { padding: number; maxZoom: number; minZoom?: number };
+
+function Refitter({ nonce, fitOptions }: { nonce?: number; fitOptions: FitOpts }) {
   const { fitView } = useReactFlow();
   const seen = useRef(nonce);
   useEffect(() => {
     if (nonce === undefined || nonce === seen.current) return;
     seen.current = nonce;
-    const t = setTimeout(() => fitView({ padding: 0.14, maxZoom: 1, duration: 420 }), 90);
+    const t = setTimeout(() => fitView({ ...fitOptions, duration: 420 }), 90);
     return () => clearTimeout(t);
-  }, [nonce, fitView]);
+  }, [nonce, fitView, fitOptions]);
   return null;
 }
 
@@ -1842,7 +1847,7 @@ function MeasureGuard({ nodeIds }: { nodeIds: string[] }) {
 // which keeps changing until the layout lands, and debounce: each settle render resets the timer,
 // so the fit fires once the positions stop moving, on the REAL bounds. We fit once per topology
 // (fittedTopology) so a later manual drag doesn't yank the viewport back.
-function FitOnGraph({ topology, bounds, running, suspended }: { topology: string; bounds: string; running: boolean; suspended?: boolean }) {
+function FitOnGraph({ topology, bounds, running, suspended, fitOptions }: { topology: string; bounds: string; running: boolean; suspended?: boolean; fitOptions: FitOpts }) {
   const { fitView } = useReactFlow();
   const fittedTopology = useRef<string | null>(null);
   useEffect(() => {
@@ -1850,10 +1855,10 @@ function FitOnGraph({ topology, bounds, running, suspended }: { topology: string
     if (fittedTopology.current === topology) return;  // already framed this graph; leave drags alone
     const t = setTimeout(() => {
       fittedTopology.current = topology;
-      fitView({ padding: 0.14, maxZoom: 1, duration: 360 });
+      fitView({ ...fitOptions, duration: 360 });
     }, 140);
     return () => clearTimeout(t);
-  }, [topology, bounds, running, suspended, fitView]);
+  }, [topology, bounds, running, suspended, fitView, fitOptions]);
   return null;
 }
 
@@ -2052,6 +2057,16 @@ export function GraphCanvas({
   const nodes = merged ? merged.nodes : singleFlow.nodes;
   const edges = merged ? merged.edges : singleFlow.edges;
 
+  // Framing: a MULTI-lane overview (All pipelines) fits every lane, shrinking as needed to the zoomed-out
+  // map. A single FOCUSED pipeline — whether rendered on its own (activeChannelId) or as the lone lane of
+  // a one-pipeline product's overview — instead lands at a readable zoom: a `minZoom` floor keeps a wide
+  // pipeline above the coin threshold (full-size cards, ~0.7–1.0) rather than fitting all of it to specks.
+  const singlePipeline = !merged || merged.lanes.size <= 1;
+  const fitOptions = useMemo<FitOpts>(
+    () => (singlePipeline ? { padding: 0.16, maxZoom: 1, minZoom: 0.72 } : { padding: 0.14, maxZoom: 1 }),
+    [singlePipeline],
+  );
+
   // Re-fit the viewport whenever the flow's structure changes (load, compose) — the merged canvas
   // reacts to every lane's topology, not just the focused one, so a newly loaded/composed pipeline
   // gets framed too.
@@ -2135,7 +2150,7 @@ export function GraphCanvas({
       // camera-follow so the founder can look away from Claude's work without being yanked back.
       onMoveStart={(event) => { if (event && operatorCursor) setFollowBroken(true); }}
       fitView
-      fitViewOptions={{ padding: 0.14, maxZoom: 1 }}
+      fitViewOptions={fitOptions}
       minZoom={0.15}
       maxZoom={1.8}
       nodesConnectable={editable && !running}
@@ -2163,8 +2178,8 @@ export function GraphCanvas({
       ) : null}
       <MeasureGuard nodeIds={measureNodeIds} />
       <RunZoom running={running} />
-      <FitOnGraph topology={fitSignature} bounds={boundsSignature} running={running} suspended={!!operatorCursor} />
-      <Refitter nonce={refitNonce} />
+      <FitOnGraph topology={fitSignature} bounds={boundsSignature} running={running} suspended={!!operatorCursor} fitOptions={fitOptions} />
+      <Refitter nonce={refitNonce} fitOptions={fitOptions} />
       {result?.memoryApplied
         && (result.memoryApplied.approved + result.memoryApplied.rejected + result.memoryApplied.edits) > 0 && (
         <Panel position="top-center">

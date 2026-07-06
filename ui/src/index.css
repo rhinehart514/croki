@@ -3065,14 +3065,23 @@ svg {
    same gate accent (via .loop-node-gate cascade), so edges and the wall read at every altitude. */
 .loop-node.loop-node-coin {
   min-width: 0;
-  max-width: 208px;
+  max-width: 216px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border-radius: 999px;
+  gap: 9px;
+  padding: 7px 13px 7px 8px;
+  /* A rounded object, not a pill — even at overview altitude a node reads as a tangible block. */
+  border-radius: 13px;
 }
-.loop-node-coin-dot { width: 9px; height: 9px; border-radius: 999px; flex: 0 0 auto; }
+/* The coin carries the node's real icon in a small tinted chip so the map reads as objects, not dots.
+   The chip's color is set inline to the node's family/category color; the tint derives from it. */
+.loop-node-coin-icon {
+  width: 24px; height: 24px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+  background: color-mix(in oklab, currentColor 13%, #fff);
+}
+.loop-node-coin-icon svg { width: 14px; height: 14px; }
 .loop-node-coin-label {
   font-size: 13px; font-weight: 550; color: var(--ink);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
