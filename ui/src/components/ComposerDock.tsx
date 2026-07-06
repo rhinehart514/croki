@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowRight, ArrowUp, BarChart3, Bot, Boxes, ChevronRight, Code, Database, Filter, LoaderCircle, Lightbulb, Maximize2,
+  AlertTriangle, ArrowRight, ArrowUp, BarChart3, Bot, Boxes, ChevronRight, Code, Database, Filter, LoaderCircle, Lightbulb, Maximize2,
   Mic, Minimize2, PenLine, Pin, Play, Search, Send, ShieldCheck, Square, Wand2, X,
 } from "lucide-react";
 import { statusLabel } from "@/lib/status";
 import { subjectActions } from "@/lib/subjectActions";
+import { kindIcon } from "@/lib/objectKindIcons";
+import type { CanvasSubject, CardDetail } from "@/lib/cardDetail";
 import type { ObjectCandidate } from "@/api";
 import { AgentPicker } from "@/components/AgentPicker";
 import { DEFAULT_MODEL, modelById } from "@/components/agent-picker-models";
@@ -556,6 +558,97 @@ function ObjectIdeationChoices({ ideation, onAdd, onDismiss }: {
   );
 }
 
+// ─── The card face (a selected object graph card, folded into the top of the composer) ──────────
+// When the founder selects a card on the object graph, the composer BECOMES that card: this face sits
+// pinned at the top of the panel and the conversation/ideation/input scope to it below. It's the retired
+// right-dock inspector, moved here whole — the state-colored type chip + maturity, the statement, the
+// evidence receipts (a guess reads softer than a grounded fact), a clickable Related list that re-targets
+// the composer to that card, a weakness line when present, and the Claude action chips (each drops its
+// phrasing into the input, editable — never a bare fire). Everything is clamped so it stays scannable.
+// The kind glyph for a card face. A plain helper (not a component) so the icon lookup stays out of
+// render — the same shape as ObjectGraphCanvas's cardIcon.
+function cardFaceIcon(type: string) {
+  const Icon = kindIcon(type);
+  return <Icon size={13} aria-hidden="true" />;
+}
+
+function SubjectCardFace({ detail, onClose, onAction, onRelated }: {
+  detail: CardDetail;
+  onClose?: () => void;
+  onAction: (action: string) => void;
+  onRelated: (rel: { id: string; name: string }) => void;
+}) {
+  const receipts = detail.receipts.slice(0, 3);
+  const related = detail.related.slice(0, 5);
+  return (
+    <div className={`composer-card tone-${detail.tone}`}>
+      <div className="composer-card-head">
+        <span className={`composer-card-chip tone-${detail.tone}`}>
+          {cardFaceIcon(detail.type)}
+          <span className="composer-card-kind">{humanizeKind(detail.type)}</span>
+          <span className="composer-card-maturity">· {detail.maturity}</span>
+        </span>
+        {onClose ? (
+          <button className="composer-card-close" type="button" aria-label="Close this card" title="Deselect" onClick={onClose}>
+            <X size={15} />
+          </button>
+        ) : null}
+      </div>
+      <p className="composer-card-statement">{detail.statement}</p>
+
+      <div className="composer-card-section">
+        <span className="composer-card-eyebrow">Evidence <span aria-hidden="true">·</span> {detail.evidenceLabel}</span>
+        {receipts.length ? (
+          receipts.map((r) => {
+            const soft = r.kind === "inferred" || r.kind === "speculative";
+            return (
+              <div className={`composer-card-receipt ${soft ? "soft" : "grounded"}`} key={`${r.kind}-${r.ref}-${r.preview}`}>
+                <p className="composer-card-receipt-claim">{r.preview}</p>
+                <span className="composer-card-receipt-src">{r.kind ?? "unsupported"} <span aria-hidden="true">·</span> {r.ref}</span>
+              </div>
+            );
+          })
+        ) : (
+          <p className="composer-card-empty">No receipt captured yet — this card is unsupported.</p>
+        )}
+      </div>
+
+      {related.length ? (
+        <div className="composer-card-section">
+          <span className="composer-card-eyebrow">Related</span>
+          <div className="composer-card-related">
+            {related.map((rel) => (
+              <button className="composer-card-related-row" type="button" key={rel.id} onClick={() => onRelated({ id: rel.id, name: rel.name })}>
+                <span className="composer-card-related-verb">{rel.verb.replace(/_/g, " ")}</span>
+                <span className="composer-card-related-name">{rel.name}</span>
+                <ChevronRight size={13} aria-hidden="true" className="composer-card-related-chev" />
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {detail.weakness ? (
+        <div className="composer-card-weakness">
+          <AlertTriangle size={14} aria-hidden="true" />
+          <div>
+            <strong>{detail.weakness.statement}</strong>
+            <span>{detail.weakness.repair}</span>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="composer-card-actions">
+        {subjectActions(detail.type).map((action) => (
+          <button className="composer-card-action" type="button" key={action} onClick={() => onAction(action)}>
+            {action}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // The persistent co-pilot. Always docked, never summoned: your channels at the head, the
 // operator's live narration in the middle, one input at the foot. Talking to Claude here
 // either starts a new session (when idle) or continues the current one — one conversation.
@@ -565,17 +658,22 @@ export function ComposerDock({
   contextManifest = null, onOpenGrounding, onOpenPicture, onIdeate,
   posture, onExitPosture, onPin,
   graph = null, runningNodeId = null, proposedNodeIds = null, result = null,
-  subject = null, onClearSubject, isNavCommand,
+  subject = null, onClearSubject, onRetargetSubject, isNavCommand,
   onProposeCandidates, onBuildCandidate,
   objectIdeation = null, onAddObjectCandidate, onDismissObjectIdeation,
   seed = null, startOpen = false,
 }: {
   session: OperatorSession | null;
   running: boolean;
-  // The canvas↔chat tie: the node the founder handed to Claude from the canvas. Shown as a subject
-  // chip; the host frames the next message with its context and clears it. Null when the chat is free.
-  subject?: { id: string; label: string; kind: string } | null;
+  // The canvas↔chat tie: the object the founder handed to Claude from the canvas. A node-graph step
+  // shows the lightweight header; an object-graph card carries `detail`, and the composer BECOMES that
+  // card — its face pinned at the top. The host frames the next message with its context and clears it.
+  subject?: CanvasSubject | null;
   onClearSubject?: () => void;
+  // A Related row on the card face re-targets the composer to that card. The host points the subject at
+  // it, which flips the canvas selection and emits the new card's full detail back — the panel never
+  // closes. Absent → the Related rows still render but don't re-target.
+  onRetargetSubject?: (rel: { id: string; name: string }) => void;
   // True when the text is a canvas navigation command ("go to the gate") — steering, not a question.
   // These are allowed EVEN while Claude is working: they move the camera and never reach the operator.
   isNavCommand?: (text: string) => boolean;
@@ -770,6 +868,16 @@ export function ComposerDock({
     if (objectIdeationKey) setCollapsed(false);
   }
 
+  // Selecting a card on the object graph is the founder pointing at it — open the dock so the composer
+  // BECOMES that card (its face pinned at the top) instead of staying a slim edge rail. Keyed by the
+  // card's id so re-targeting to another card keeps it open; the same setState-during-render pattern.
+  const subjectCardKey = subject?.detail ? subject.id : "";
+  const [trackedSubjectCard, setTrackedSubjectCard] = useState(subjectCardKey);
+  if (subjectCardKey !== trackedSubjectCard) {
+    setTrackedSubjectCard(subjectCardKey);
+    if (subjectCardKey) setCollapsed(false);
+  }
+
   // Opening the command bar drops you straight into the input — it reads as a command line, so a
   // click should land the cursor, not just reveal a panel you then have to click again.
   const [openFocus, setOpenFocus] = useState(0);
@@ -885,8 +993,10 @@ export function ComposerDock({
           Clicking a move drops its phrasing into the input (editable — it never sends on its own). The
           host frames the next message with this object's context, so "make it shorter" resolves to the
           real thing. The × lets go and returns to free chat. When a per-card ideation is running, the
-          ideation block below carries the framing instead, so the two never stack on the same card. */}
-      {subject && !objectIdeation ? (
+          ideation block below carries the framing instead, so the two never stack on the same card.
+          Object-graph cards (subject.detail set) render the full card face at the top of the dock
+          instead — this lightweight header stays for node-graph steps, which carry no detail. */}
+      {subject && !subject.detail && !objectIdeation ? (
         <div className="composer-attached">
           <div className="composer-attached-head">
             <span className="composer-attached-title">
@@ -1065,6 +1175,18 @@ export function ComposerDock({
           onOpenGrounding={onOpenGrounding}
           onOpenPicture={onOpenPicture}
           onIdeate={onIdeate}
+        />
+      ) : null}
+
+      {/* ── The card face — a selected object-graph card, pinned at the top: the composer BECOMES that
+          card. Its conversation / ideation / input scope to it below. Node-graph steps carry no detail
+          and keep the lightweight header above the input instead. */}
+      {subject?.detail ? (
+        <SubjectCardFace
+          detail={subject.detail}
+          onClose={onClearSubject}
+          onAction={(action) => { setInput(action); inputRef.current?.focus(); }}
+          onRelated={(rel) => onRetargetSubject?.(rel)}
         />
       ) : null}
 

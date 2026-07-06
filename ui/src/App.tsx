@@ -96,6 +96,7 @@ import { CanvasCard } from "@/components/CanvasCard";
 import { ClarityCard } from "@/components/ClarityCard";
 import { ExperimentMatrixLens } from "@/components/lenses/ExperimentMatrixLens";
 import type { GateBag } from "@/lib/gateItem";
+import type { CanvasSubject } from "@/lib/cardDetail";
 import { ReferencesPanel, type ReferenceKind } from "@/components/ReferencesPanel";
 import { ToolForge } from "@/components/ToolForge";
 import { IssuesCard } from "@/components/IssuesCard";
@@ -244,7 +245,7 @@ export default function App() {
   // The canvas↔chat tie: a node the founder handed to Claude from the canvas. While set, the composer
   // shows it as the subject chip and the next message is framed with that node's context, so "make this
   // shorter" / "why did this come up empty" resolves to a real canvas object — no describing it by hand.
-  const [composerSubject, setComposerSubject] = useState<{ id: string; label: string; kind: string } | null>(null);
+  const [composerSubject, setComposerSubject] = useState<CanvasSubject | null>(null);
   // Per-card ideation (the on-card "+"): the source card, the plain target, the returning candidate
   // OBJECTS, and the call's status. The composer renders these as a decidable list; adding one writes a
   // real draft card. Null when no ideation is running. objectGraphReload is bumped after an add so the
@@ -257,11 +258,6 @@ export default function App() {
     reasoning: string; error?: string | null;
   } | null>(null);
   const [objectGraphReload, setObjectGraphReload] = useState(0);
-  // A message the founder started from the GTM map — "why does this rank here", "show me variants",
-  // "challenge this bet", "swap this belief", "stage this path to my gate". The composer pre-fills with
-  // it and the founder sends (or edits first); nothing runs on its own. Token-bumped so an identical
-  // re-ask re-seeds the input.
-  const [composerSeed, setComposerSeed] = useState<{ text: string; token: number } | null>(null);
   // The Issues panel — the system's problem list, now a first-class always-present indicator on the
   // dock (no longer a summoned card). Opens from its toolbar badge, mutually exclusive with Approvals.
   const [issuesOpen, setIssuesOpen] = useState(false);
@@ -716,14 +712,12 @@ export default function App() {
     }
   }, []);
 
-  // The inspector's Claude-action chips (Sharpen / Find evidence / a per-kind move): drop the phrasing
-  // into the composer input, editable, and focus it — the founder edits or sends, nothing fires on its
-  // own. Same behavior as the composer's own attached chips; the inspector just triggers it from the
-  // card detail instead of the dock header. The composer is already scoped to this card (selecting it
-  // docked it), so the action resolves against the right object.
-  const handleSubjectAction = useCallback((action: string) => {
-    setComposerSeed({ text: action, token: Date.now() });
-    setComposerFocus((f) => f + 1);
+  // Re-target the composer to a Related card from the composer's own card face: point composerSubject at
+  // that card (light identity only). Flipping subjectId makes the object graph select that card and emit
+  // its full detail back up, which re-scopes the card face — the founder walks the graph without the
+  // composer closing. The panel is already open, so this never collapses it.
+  const handleRetargetSubject = useCallback((rel: { id: string; name: string }) => {
+    setComposerSubject({ id: rel.id, label: rel.name, kind: "block", detail: null });
   }, []);
 
   // The founder's explicit pick: write a REAL gray DRAFT card (loose, founder-origin, the candidate's own
@@ -1976,16 +1970,13 @@ export default function App() {
     ideatingNodeId: objectIdeation?.status === "loading" ? objectIdeation.sourceId : null,
     ideatingTarget: objectIdeation?.status === "loading" ? objectIdeation.target : null,
     objectGraphReload,
-    // The inspector's Claude-action chips route their phrasing into the composer input, editable —
-    // same as the composer's own attached chips, triggered from the card detail.
-    onSubjectAction: handleSubjectAction,
     // The Learn lens reads the loop off the same cockpit state the map is built on.
     cockpit,
   }), [
     canvasGraph, connectors, contractAudits, runResult, graphRunning, runningNodeId, selection,
     dismissOverlays, proposedNodeIds, proposedEdgeIds, revealedNodeIds, proposalActive, operatorCursor,
     handleResolveProposal, submitGateReview, approveGate, handleAddNode, handleGraphConnect, handleDeleteEdges,
-    handleNodePositionChange, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, gtmMapGate, activeMode, cockpit, composerSubject, ideateObjectFromCard, objectIdeation, objectGraphReload, handleSubjectAction,
+    handleNodePositionChange, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, gtmMapGate, activeMode, cockpit, composerSubject, ideateObjectFromCard, objectIdeation, objectGraphReload,
   ]);
 
   // First-run team setup. Gated on Convex being configured AND no team chosen yet, so a local/solo
@@ -2644,11 +2635,11 @@ export default function App() {
           // Cold landing of an empty product (no pipeline built yet, no run going): open the composer so
           // the "State a go-to-market goal" invitation points at a visible input, not a slim edge rail.
           startOpen={!canvasGraph && !operatorSession}
-          seed={composerSeed}
           recede={proposalActive}
           boundChannelName={boundChannel?.name ?? null}
           subject={composerSubject}
           onClearSubject={() => setComposerSubject(null)}
+          onRetargetSubject={handleRetargetSubject}
           isNavCommand={isCanvasCommand}
           onSend={handleComposerSend}
           onBuildCandidate={(c) => void resolveCandidatesAndSync(c.id)}

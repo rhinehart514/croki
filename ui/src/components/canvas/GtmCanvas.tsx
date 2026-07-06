@@ -4,6 +4,7 @@ import type { GatePromote } from "@/lib/gateItem";
 import { CanvasShell, type LensDef, type LensProps } from "@/components/canvas/CanvasShell";
 import { ObjectGraphCanvas } from "@/components/ObjectGraphCanvas";
 import type { GateBag } from "@/lib/gateItem";
+import type { CanvasSubject } from "@/lib/cardDetail";
 import { GroundLens } from "@/components/lenses/GroundLens";
 import { LearningsLens } from "@/components/lenses/LearningsLens";
 import { BeliefSpine } from "@/components/lenses/BeliefSpine";
@@ -95,9 +96,9 @@ export type GtmCanvasModel = {
   onComposeFirst?: () => void;
   // A run paused at its founder gate — its decidable items bloom on the gate node in the object graph.
   gate?: GateBag | null;
-  // The attached-composer tie for the object graph: selecting a block hands its identity up so the
-  // composer docks to it. Null on deselect.
-  onObjectSelect?: (subject: { id: string; label: string; kind: string } | null) => void;
+  // The attached-composer tie for the object graph: selecting a block hands its identity — and its full
+  // card face (tone, evidence, related, weakness) — up so the composer BECOMES that card. Null on deselect.
+  onObjectSelect?: (subject: CanvasSubject | null) => void;
   // The composer's current subject id, fed back so selection and the attached composer clear together.
   subjectId?: string | null;
   // The per-card "+" seam: the object graph hands up which card the founder wants the next move off (and
@@ -108,9 +109,6 @@ export type GtmCanvasModel = {
   ideatingNodeId?: string | null;
   ideatingTarget?: string | null;
   objectGraphReload?: number;
-  // The inspector's Claude-action chips route their phrasing into the composer input, editable — same
-  // as the composer's own attached chips, triggered from the card detail instead of the dock header.
-  onSubjectAction?: (action: string) => void;
   // The mode switcher drives the object graph's arrangement: Move → the story bands ("stages"),
   // Trace → the free causal graph ("flow"). Steers only on change (see ObjectGraphCanvas).
   desiredArrange?: "stages" | "flow";
@@ -124,7 +122,7 @@ export type GtmCanvasModel = {
 type GtmLensProps = LensProps<GtmCanvasModel, never>;
 
 function ObjectGraphLens({ model: m }: GtmLensProps) {
-  return <ObjectGraphCanvas projectId={m.projectId} gate={m.gate} onSubjectChange={m.onObjectSelect} subjectId={m.subjectId ?? null} desiredArrange={m.desiredArrange} modeControlled={m.modeControlled} onIdeateObject={m.onIdeateObject} ideatingNodeId={m.ideatingNodeId ?? null} ideatingTarget={m.ideatingTarget ?? null} reloadSignal={m.objectGraphReload ?? 0} onSubjectAction={m.onSubjectAction} />;
+  return <ObjectGraphCanvas projectId={m.projectId} gate={m.gate} onSubjectChange={m.onObjectSelect} subjectId={m.subjectId ?? null} desiredArrange={m.desiredArrange} modeControlled={m.modeControlled} onIdeateObject={m.onIdeateObject} ideatingNodeId={m.ideatingNodeId ?? null} ideatingTarget={m.ideatingTarget ?? null} reloadSignal={m.objectGraphReload ?? 0} />;
 }
 
 // The Learn lens — the loop closing, read off the same cockpit state the map is built on.
