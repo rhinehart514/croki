@@ -59,13 +59,13 @@ import type { ObjectCandidate } from "@/api";
 const ArtifactEditor = lazy(() => import("@/components/ArtifactEditor").then((m) => ({ default: m.ArtifactEditor })));
 const WorkspaceView = lazy(() => import("@/components/WorkspaceView").then((m) => ({ default: m.WorkspaceView })));
 const AgentProfile = lazy(() => import("@/components/AgentProfile").then((m) => ({ default: m.AgentProfile })));
-const AgentBench = lazy(() => import("@/components/AgentBench").then((m) => ({ default: m.AgentBench })));
 const OutcomeCapture = lazy(() => import("@/components/OutcomeCapture"));
 const ConnectCapability = lazy(() => import("@/components/ConnectCapability").then((m) => ({ default: m.ConnectCapability })));
 import type { AgentProfileView, TeammateView } from "@/components/AgentProfile";
 import { CrewStrip } from "@/components/CrewStrip";
 import { ComposerDock } from "@/components/ComposerDock";
 import { FloatingDock } from "@/components/FloatingDock";
+import { LeftRail } from "@/components/LeftRail";
 import { type OperatorCursorState } from "@/components/GraphCanvas";
 import { TeamOnboarding } from "@/components/TeamOnboarding";
 import { convexEnabled, loadTeamIdentity, type TeamIdentity } from "@/lib/convex";
@@ -214,7 +214,7 @@ export default function App() {
   // shows a calm "loading your workspace" instead of flashing the cold-start goal launcher for the
   // 1–2s before the project's graph arrives.
   const [booting, setBooting] = useState(true);
-  const [overlay, setOverlay] = useState<"understand" | "product" | "settings" | "bench" | null>(null);
+  const [overlay, setOverlay] = useState<"understand" | "product" | "settings" | null>(null);
   // Which Settings section is showing — the three admin surfaces (workspace index, team + release
   // roles, self-built tools) live behind one overlay now, switched by these tabs.
   const [settingsTab, setSettingsTab] = useState<"workspace" | "team" | "tools">("workspace");
@@ -1994,6 +1994,11 @@ export default function App() {
   const operatorDriving = !!operatorSession && ["ready", "running", "failed", "blocked"].includes(operatorSession.status);
   const gtmCanvasVisible = view === "canvas" && !overlay && !operatorDriving && !!(canvasGraph || activeProjectId);
 
+  // The "your stuff" rail sits beside the canvas whenever a product is open on the GTM canvas and no
+  // full-screen overlay (Settings, Product mode, Understand) has taken over. It never covers the map;
+  // it holds its own grid column, so the canvas reflows around it.
+  const showLeftRail = view === "canvas" && !overlay && !!activeProjectId;
+
   return (
     <main className={`loop-shell ${view === "canvas" ? "canvas-bleed" : ""}`}>
       {/* ── Toolbar ──────────────────────────────────────────────────────────
@@ -2047,7 +2052,22 @@ export default function App() {
           the ChannelSwitcher in the top bar, the Library to a summoned palette on the canvas, the
           "what Claude reads" feeds into the dock, and Problems to a toolbar chip. The canvas now fills
           the body. */}
-      <div className={`loop-body canvas-full ${view !== "canvas" ? "studio-mode" : ""}`}>
+      <div className={`loop-body canvas-full ${view !== "canvas" ? "studio-mode" : ""} ${showLeftRail ? "has-rail" : ""}`}>
+        {/* The "your stuff" rail — pipelines, crew, and skills in one opaque index beside the canvas.
+            It holds the leading grid column so the canvas reflows around it and is never covered. */}
+        {showLeftRail ? (
+          <LeftRail
+            channels={channels}
+            activeChannelId={activeChannelId}
+            bench={bench}
+            library={library}
+            onLoadChannel={(id) => void loadChannel(id)}
+            onNewChannel={handleNewChannel}
+            onOpenAgent={(ref) => setAgentProfileRef(ref)}
+            onOpenSkill={(name) => setArtifactEdit({ type: "skill", ref: name })}
+            onNewSkill={() => handleNewArtifact("skill")}
+          />
+        ) : null}
         {/* Center — the canvas IS the workspace. Only the cold-start picker replaces it. */}
         <section className="loop-canvas-area">
           {/* What happened — the one organ kept from the retired cockpit, folded onto the canvas (its
@@ -2150,7 +2170,6 @@ export default function App() {
               onModeToggle={(v) => { if (v === "product") { setOverlay("product"); } else { setOverlay(null); } }}
               summonItems={overlay === "product" ? undefined : SUMMON_GTM}
               onOpenSettings={() => { setOverlay("settings"); setProblemsOpen(false); setIssuesOpen(false); }}
-              onOpenBench={() => { setOverlay("bench"); setProblemsOpen(false); setIssuesOpen(false); }}
               // Summon routes by kind: Terminal drops a live workbench surface IN canvas space (it pans
               // and zooms with the graph, and its output can feed the pipeline); the rest pop onto the
               // canvas as draggable cards. The admin surfaces moved to the Settings overlay.
@@ -2506,17 +2525,13 @@ export default function App() {
                   {settingsTab === "workspace" ? (
                     <Suspense fallback={null}>
                       <WorkspaceView
-                        channels={channels}
                         library={library}
-                        activeChannelId={activeChannelId}
-                        onOpenWorkflow={(id) => { setOverlay(null); void loadChannel(id); }}
                         onOpenArtifact={(type, ref) => {
                           setOverlay(null);
                           if (type === "agent") setAgentProfileRef(ref);
                           else setArtifactEdit({ type, ref });
                         }}
                         onNewArtifact={(type) => { setOverlay(null); handleNewArtifact(type); }}
-                        onNewWorkflow={() => { setOverlay(null); setComposerPosture("ideate"); }}
                         onClose={() => setOverlay(null)}
                       />
                     </Suspense>
@@ -2545,18 +2560,8 @@ export default function App() {
             </div>
           )}
 
-          {/* The bench — the roster as one lens over the run ledger, a first-class surface reached from
-              the dock. Clicking a teammate opens their full record in the profile sheet. */}
-          {overlay === "bench" && (
-            <Suspense fallback={null}>
-              <AgentBench
-                open
-                projectId={activeProjectId}
-                onClose={() => setOverlay(null)}
-                onOpenAgent={(ref) => { setOverlay(null); setAgentProfileRef(ref); }}
-              />
-            </Suspense>
-          )}
+          {/* The bench moved into the always-present left rail's Crew section — no longer a takeover
+              overlay. Clicking a teammate there opens the same profile sheet. */}
 
           {/* The hand-pick pickers were removed — Claude composes what a pipeline needs and you approve
               at the gate, rather than wiring steps by hand. The objects you'd have inserted (your

@@ -1957,6 +1957,13 @@ svg {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+/* With the "your stuff" rail mounted, a leading auto column holds it (its own width, expanded or
+   collapsed) so the canvas (the 1fr column) reflows beside it and is never covered; the trailing auto
+   column stays the Claude co-pilot dock. */
+.loop-body.canvas-full.has-rail {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
 .loop-body.portfolio-mode {
   grid-template-columns: minmax(0, 1fr) auto;
 }
