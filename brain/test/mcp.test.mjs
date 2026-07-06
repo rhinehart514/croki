@@ -10,7 +10,8 @@ describe("MCP tool IA — canonical surface", () => {
     // (get/derive/revise/signal), then 36→39 when the Person keystone added its read tools
     // (list_people/get_person/find_references), then 39→42 when the rebuilt GTM engine added its three
     // founder rituals (run_market_research / compose_path_portfolio / promote_run), then 42→45 when the
-    // five-primitive founder loop added its front door (get_cockpit / propose_moves / record_outcome).
+    // five-primitive founder loop added its front door (record_outcome plus the since-removed get_cockpit
+    // and propose_moves — the cockpit projection was cut back to the run summary the canvas reads).
     // The bound still guards IA hygiene; it just admits the new objects.
     assert.ok(TOOLS.length >= 10 && TOOLS.length <= 45, `expected 10–45 tools, got ${TOOLS.length}`);
   });

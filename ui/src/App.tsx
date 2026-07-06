@@ -13,8 +13,8 @@ import {
   getLibrary,
   getAgentBench,
   type AgentBenchRow,
-  getCockpit,
-  type CockpitState,
+  getRunSummary,
+  type RunSummary,
   getGraphTemplate,
   getOperatorSession,
   getProject,
@@ -60,8 +60,6 @@ const ArtifactEditor = lazy(() => import("@/components/ArtifactEditor").then((m)
 const WorkspaceView = lazy(() => import("@/components/WorkspaceView").then((m) => ({ default: m.WorkspaceView })));
 const AgentProfile = lazy(() => import("@/components/AgentProfile").then((m) => ({ default: m.AgentProfile })));
 const AgentBench = lazy(() => import("@/components/AgentBench").then((m) => ({ default: m.AgentBench })));
-const Cockpit = lazy(() => import("@/components/Cockpit").then((m) => ({ default: m.Cockpit })));
-const BestNextMove = lazy(() => import("@/components/Cockpit").then((m) => ({ default: m.BestNextMove })));
 const OutcomeCapture = lazy(() => import("@/components/OutcomeCapture"));
 const ConnectCapability = lazy(() => import("@/components/ConnectCapability").then((m) => ({ default: m.ConnectCapability })));
 import type { AgentProfileView, TeammateView } from "@/components/AgentProfile";
@@ -203,7 +201,7 @@ export default function App() {
   // before any product exists. Understand and Ideas are no longer destinations that swap
   // the canvas out; they float OVER it as dismissable overlays (set via `overlay`), so the IDE is
   // never replaced. Channels live in the explorer, not a page.
-  const [view, setView] = useState<"projects" | "canvas" | "start" | "cockpit">("canvas");
+  const [view, setView] = useState<"projects" | "canvas" | "start">("canvas");
   // The canvas frames the SAME product data two ways, chosen by one segmented pill over the map:
   //   move     — the story bands with the Best Next Move floated over them (the doing surface)
   //   engineer — the causal reasoning graph, the "why this move" laid bare, with the executable step
@@ -434,26 +432,11 @@ export default function App() {
   // The bench — every agent's track record derived from the run ledger. Loaded once per project and
   // reused by both the bench surface and the crew strip's approved-count badges.
   const [bench, setBench] = useState<AgentBenchRow[] | null>(null);
-  // The cockpit — the five-primitive founder surface (Goal / Bet / Best Next Move / Run / Learning),
-  // derived read-only from the engine. This is the DEFAULT surface a founder lands on; the map (canvas)
-  // is one click away. `outcomeOpen` gates the manual "what happened / what did we learn" loop-closer.
-  const [cockpit, setCockpit] = useState<CockpitState | null>(null);
+  // "What happened" — the latest run's real numbers, derived read-only from the engine. It folds onto
+  // the canvas (the single home) as a compact strip; there is no separate cockpit surface anymore.
+  // `outcomeOpen` gates the manual "what happened / what did we learn" loop-closer.
+  const [runSummary, setRunSummary] = useState<RunSummary | null>(null);
   const [outcomeOpen, setOutcomeOpen] = useState(false);
-  // The Best Next Move hero floats over the canvas home. Once the founder flicks it away it STAYS away —
-  // the dismissal persists per product in local storage, so landing on Move again (or reopening the app)
-  // doesn't re-cover the first columns. The move is product-specific, so the dismissal is keyed per
-  // product; a fresh product starts with the hero shown.
-  const moveHeroKey = activeProjectId ? `drover.moveHeroDismissed.${activeProjectId}` : null;
-  const [moveHeroDismissed, setMoveHeroDismissed] = useState(false);
-  useEffect(() => {
-    if (!moveHeroKey) { setMoveHeroDismissed(false); return; }
-    try { setMoveHeroDismissed(localStorage.getItem(moveHeroKey) === "1"); }
-    catch { setMoveHeroDismissed(false); }
-  }, [moveHeroKey]);
-  const dismissMoveHero = () => {
-    setMoveHeroDismissed(true);
-    if (moveHeroKey) { try { localStorage.setItem(moveHeroKey, "1"); } catch { /* storage may be unavailable */ } }
-  };
   const [operatorSession, setOperatorSession] = useState<OperatorSession | null>(null);
   // The shared People object — durable identities promoted from real run entrants, read-only. Feeds
   // the GTM canvas's People lens (find-references / dedup) and is refreshed after each run promotes
@@ -523,18 +506,16 @@ export default function App() {
     return () => { live = false; };
   }, [activeProjectId]);
 
-  // The cockpit state, fetched whenever the founder is on the cockpit surface (and after an outcome is
-  // logged, so the loop visibly compounds). Honest null when the projection has nothing yet.
-  const refreshCockpit = useCallback(() => {
+  // The run summary, fetched whenever the founder is on the canvas (and after an outcome is logged, so
+  // the loop visibly compounds). Honest null when no run has happened yet.
+  const refreshRunSummary = useCallback(() => {
     if (!activeProjectId) return;
-    getCockpit(activeProjectId).then((r) => setCockpit(r.state)).catch(() => setCockpit(null));
+    getRunSummary(activeProjectId).then((r) => setRunSummary(r.run)).catch(() => setRunSummary(null));
   }, [activeProjectId]);
   useEffect(() => {
-    // Load on the cockpit scroll AND on the canvas — the canvas floats the same Best Next Move as a
-    // hero card, so it needs the projection too.
-    if ((view !== "cockpit" && view !== "canvas") || !activeProjectId) return;
+    if (view !== "canvas" || !activeProjectId) return;
     let live = true;
-    getCockpit(activeProjectId).then((r) => { if (live) setCockpit(r.state); }).catch(() => { if (live) setCockpit(null); });
+    getRunSummary(activeProjectId).then((r) => { if (live) setRunSummary(r.run); }).catch(() => { if (live) setRunSummary(null); });
     return () => { live = false; };
   }, [view, activeProjectId]);
 
@@ -1980,13 +1961,11 @@ export default function App() {
     ideatingNodeId: objectIdeation?.status === "loading" ? objectIdeation.sourceId : null,
     ideatingTarget: objectIdeation?.status === "loading" ? objectIdeation.target : null,
     objectGraphReload,
-    // The Learn lens reads the loop off the same cockpit state the map is built on.
-    cockpit,
   }), [
     canvasGraph, connectors, contractAudits, runResult, graphRunning, runningNodeId, selection,
     dismissOverlays, proposedNodeIds, proposedEdgeIds, revealedNodeIds, proposalActive, operatorCursor,
     handleResolveProposal, submitGateReview, approveGate, handleAddNode, handleGraphConnect, handleDeleteEdges,
-    handleNodePositionChange, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, gtmMapGate, activeMode, cockpit, composerSubject, ideateObjectFromCard, objectIdeation, objectGraphReload,
+    handleNodePositionChange, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, gtmMapGate, activeMode, composerSubject, ideateObjectFromCard, objectIdeation, objectGraphReload,
   ]);
 
   // First-run team setup. Gated on Convex being configured AND no team chosen yet, so a local/solo
@@ -2071,36 +2050,43 @@ export default function App() {
       <div className={`loop-body canvas-full ${view !== "canvas" ? "studio-mode" : ""}`}>
         {/* Center — the canvas IS the workspace. Only the cold-start picker replaces it. */}
         <section className="loop-canvas-area">
-          {/* The cockpit — the default founder surface. Best Next Move is the hero; the map (canvas) is
-              one click away via onOpenMap. The graph never greets a first-timer; this does. */}
-          {view === "cockpit" && (
-            <div className="cockpit-surface">
-              <Suspense fallback={null}>
-                <Cockpit
-                  state={cockpit}
-                  onOpenMap={() => setView("canvas")}
-                  onDoMove={() => setView("canvas")}
-                />
-              </Suspense>
-              {cockpit?.latestRun ? (
-                <button type="button" className="cockpit-log-outcome" onClick={() => setOutcomeOpen(true)}>
-                  Log what happened →
-                </button>
-              ) : null}
+          {/* What happened — the one organ kept from the retired cockpit, folded onto the canvas (its
+              single home). A compact opaque strip that shows the latest run's real numbers and the
+              loop-closer. It appears only once a run has happened; every cell with no signal is left out
+              rather than shown as a fake zero. */}
+          {view === "canvas" && !overlay && runSummary ? (
+            <div className="run-strip" aria-label="What happened on your last run">
+              <div className="run-strip-head">What happened</div>
+              {(() => {
+                const cells = [
+                  { label: "Sent", value: runSummary.sent as number | string | null },
+                  { label: "Replies", value: runSummary.replies },
+                  { label: "Calls", value: runSummary.calls },
+                  { label: "Paid", value: runSummary.paid },
+                  { label: "Revenue", value: runSummary.revenue == null ? null : `$${runSummary.revenue.toLocaleString()}` },
+                ].filter((c) => c.value != null);
+                return cells.length ? (
+                  <div className="run-strip-nums">
+                    {cells.map((c) => (
+                      <div key={c.label} className="run-strip-cell">
+                        <span className="run-strip-num">{c.value}</span>
+                        <span className="run-strip-lbl">{c.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : runSummary.note ? (
+                  <div className="run-strip-note">{runSummary.note}</div>
+                ) : null;
+              })()}
+              <button type="button" className="run-strip-log" onClick={() => setOutcomeOpen(true)}>
+                Log what happened →
+              </button>
             </div>
-          )}
-
-          {/* Log what happened, reachable straight from the map — a quiet chip in Engineer mode once a
-              run has happened, so the founder closes the loop without leaving the canvas for the cockpit. */}
-          {view === "canvas" && !overlay && activeMode === "engineer" && cockpit?.latestRun ? (
-            <button type="button" className="cockpit-log-outcome canvas-log-outcome" onClick={() => setOutcomeOpen(true)}>
-              Log what happened →
-            </button>
           ) : null}
 
-          {/* One shared loop-closer for both the cockpit and the map. It floats as an opaque panel over a
-              soft scrim; recording an outcome refreshes the cockpit so the Best Next Move and the Learn
-              lens reflect the new result and sharper next move at once. Records only — nothing sends. */}
+          {/* The loop-closer, floated over the map: an opaque panel over a soft scrim. Recording an
+              outcome refreshes the run summary so the strip reflects the new result. Records only —
+              nothing sends. */}
           {outcomeOpen && activeProjectId ? (
             <div
               className="outcome-float"
@@ -2113,41 +2099,10 @@ export default function App() {
                 <OutcomeCapture
                   projectId={activeProjectId}
                   runId={activeChannelId ?? ""}
-                  onDone={() => { setOutcomeOpen(false); refreshCockpit(); }}
+                  onDone={() => { setOutcomeOpen(false); refreshRunSummary(); }}
                 />
               </Suspense>
             </div>
-          ) : null}
-
-          {/* The canvas is home; the Best Next Move floats over it as one elevated hero card. Same data,
-              same styling as the cockpit hero — read-only, dismissable, and clear of the path header up
-              top and the dock in the center. When the projection is empty it renders its own honest
-              empty hero; while cockpit data is still null it renders nothing rather than a fake. */}
-          {view === "canvas" && !overlay && activeMode === "move" && cockpit && !moveHeroDismissed ? (
-            <div className="move-hero">
-              <button
-                type="button"
-                className="move-hero-dismiss"
-                onClick={dismissMoveHero}
-                aria-label="Dismiss best next move"
-                title="Dismiss"
-              >
-                <X size={13} />
-              </button>
-              <Suspense fallback={null}>
-                <BestNextMove
-                  move={cockpit.bestMove}
-                  onDoMove={() => setComposerFocus((f) => f + 1)}
-                />
-              </Suspense>
-            </div>
-          ) : null}
-
-          {/* Back to the cockpit from the map — a calm chip, so the graph is always an aside, never home. */}
-          {view === "canvas" && !overlay ? (
-            <button type="button" className="back-to-cockpit" onClick={() => setView("cockpit")} title="Open the full Best Next Move view">
-              ← Full view
-            </button>
           ) : null}
 
           {/* The mode switcher — one segmented pill over the map that frames the SAME product two ways:

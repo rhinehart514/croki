@@ -334,16 +334,6 @@ async function getBench({ projectId } = {}) {
   return brainGet(`/api/projects/${encodeURIComponent(id)}/bench`);
 }
 
-async function getCockpit({ projectId } = {}) {
-  const id = await resolveProjectId(projectId);
-  return brainGet(`/api/projects/${encodeURIComponent(id)}/cockpit`);
-}
-
-async function proposeMovesTool({ projectId } = {}) {
-  const id = await resolveProjectId(projectId);
-  return brainGet(`/api/projects/${encodeURIComponent(id)}/moves`);
-}
-
 async function recordOutcomeTool({ projectId, runId, happened, learned } = {}) {
   const id = await resolveProjectId(projectId);
   return brainPost(`/api/projects/${encodeURIComponent(id)}/outcome`, { runId, happened, learned });
@@ -632,26 +622,6 @@ const TOOLS = [
       required: [],
     },
     handler: getBoard,
-  },
-  {
-    name: "get_cockpit",
-    description: "Read the founder cockpit — the five-primitive projection of the whole GTM state in plain language: the Goal (what you're trying to make happen), the Bets (what you currently believe, each with how sure — guessed / researched / observed / gated), the single Best Next Move (what to do, why, do-today, win-if, kill-if, and the upgrade), the latest Run (what happened — sent, replies, calls, paid), the Learnings (what the market taught), and a few upgrades. Every number is DERIVED from real state; a part with no signal reads null, and the move is null when there is not enough signal to name one. Read-only; never seeded, never gates a run. Defaults to the active project.",
-    inputSchema: {
-      type: "object",
-      properties: { projectId: { type: "string", description: "Optional. Defaults to the active project." } },
-      required: [],
-    },
-    handler: getCockpit,
-  },
-  {
-    name: "propose_moves",
-    description: "Propose up to three concrete next moves derived from the project's bets, each framed by the go-to-market harness: the move to make, the bet it tests, how strong the market evidence is (guessed / researched / observed), the risk if the bet is wrong, and the literal action to take today. Honest-empty when there are no bets to move on. Read-only; it drafts suggestions over stored state and never runs or sends anything. Defaults to the active project.",
-    inputSchema: {
-      type: "object",
-      properties: { projectId: { type: "string", description: "Optional. Defaults to the active project." } },
-      required: [],
-    },
-    handler: proposeMovesTool,
   },
   {
     name: "record_outcome",

@@ -75,7 +75,7 @@ import { ensureObjectGraphProductScan, objectGraphForProject } from "./object-gr
 import { objectGraphLayoutStore, objectGraphStore } from "./object-graph-store.mjs";
 import { applyObjectGraphOperations } from "./object-graph-operations.mjs";
 import { outcomeReport, ingestOutcome, ingestBatch, OUTCOME_SOURCES } from "./outcome-ingest.mjs";
-import { deriveCockpitState, proposeMoves } from "./five-primitives.mjs";
+import { deriveRunSummary } from "./run-summary.mjs";
 import { recordFounderOutcome } from "./outcome-capture.mjs";
 import { ideaTasteForProject, recordIdeaDecisions } from "./feedback-ledger.mjs";
 import { composeIdeas, createClaudeAngleProposer, createClaudeIdeaGenerator, createClaudeObjectIdeaGenerator, ideateObjectCandidates } from "./ideation.mjs";
@@ -739,27 +739,14 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // The five-primitive cockpit — the founder-facing projection (Goal, Bets, Best Next Move, latest Run,
-  // Learnings, upgrades), derived purely from real state and honest-empty where a signal is absent.
-  // Read-only: it never writes, never triggers a run, never gates one.
-  const projectCockpitMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/cockpit$/);
-  if (req.method === "GET" && projectCockpitMatch) {
+  // "What happened" — the latest run's real numbers (what went out, and what joined back to it),
+  // derived purely from real state and null where no run has happened. Read-only: it never writes,
+  // never triggers a run, never gates one.
+  const projectRunSummaryMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/run-summary$/);
+  if (req.method === "GET" && projectRunSummaryMatch) {
     try {
-      const projectId = decodeURIComponent(projectCockpitMatch[1]);
-      json(res, 200, { state: deriveCockpitState(projectId) });
-    } catch (err) {
-      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
-    }
-    return;
-  }
-
-  // Up to three concrete move proposals derived from the project's bets, framed by the harness.
-  // Read-only: it composes plain-words suggestions over stored bets and never runs or sends anything.
-  const projectMovesMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/moves$/);
-  if (req.method === "GET" && projectMovesMatch) {
-    try {
-      const projectId = decodeURIComponent(projectMovesMatch[1]);
-      json(res, 200, { moves: proposeMoves(projectId) });
+      const projectId = decodeURIComponent(projectRunSummaryMatch[1]);
+      json(res, 200, { run: deriveRunSummary(projectId) });
     } catch (err) {
       json(res, 404, { error: err instanceof Error ? err.message : String(err) });
     }

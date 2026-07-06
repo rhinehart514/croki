@@ -7,7 +7,6 @@ import { ObjectGraphCanvas } from "@/components/ObjectGraphCanvas";
 import type { GateBag } from "@/lib/gateItem";
 import type { CanvasSubject } from "@/lib/cardDetail";
 import { BeliefSpine } from "@/components/lenses/BeliefSpine";
-import type { CockpitState } from "@/api";
 import type {
   ChannelFeed, ChannelMeta, Claim, ConnectorMeta, DirectedFeed, GateDecision, GtmExperiment, GTMContractAudit, GTMGraph, GTMNode,
   GTMRunResult, NodeSelection, Person,
@@ -111,10 +110,6 @@ export type GtmCanvasModel = {
   desiredArrange?: "stages" | "flow";
   // The mode pill owns the arrangement, so the object graph hides its redundant in-header toggle.
   modeControlled?: boolean;
-  // The five-primitive founder state (goal, beliefs, last run, learnings). Retained on the model for
-  // reuse; no lens mounts it now that Learn is retired as a mode (the host reads the same cockpit for
-  // its floating Best Next Move hero and the "log what happened" chip). Null before a product is open.
-  cockpit?: CockpitState | null;
 };
 
 type GtmLensProps = LensProps<GtmCanvasModel, never>;

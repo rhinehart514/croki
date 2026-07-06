@@ -434,46 +434,20 @@ export async function ideateObjectCandidatesStream(
   }
 }
 
-// ── The five-primitive cockpit — Goal, Bet, Move, Run, Learning, all in founder language ───────────
-// Derived read-only from real state; every part is honest-empty (null / []) where there is no signal,
-// and bestMove is null when there is not enough signal to name one. "How sure we are" is the four-word
-// solidity scale (guessed / researched / observed / gated); the move-proposal evidence scale is the
-// three market-evidence words (no "gated").
-export type Solidity = "guessed" | "researched" | "observed" | "gated";
-export type Sureness = "low" | "medium" | "high";
-
-export type CockpitBet = {
-  statement: string;
-  solidity: Solidity;
-  sure: Sureness;
-  basis: string | null;
+// ── What happened — the latest run's real numbers, in founder language ─────────────────────────────
+// Derived read-only from real state; null when no run has happened, and every outcome bucket stays null
+// where nothing joined back (never a fake zero). Revenue is not tracked at this layer, so it is null.
+export type RunSummary = {
+  sent: number | null;
+  replies: number | null;
+  calls: number | null;
+  paid: number | null;
+  revenue: number | null;
+  note: string | null;
 };
 
-export type CockpitState = {
-  goal: { text: string; metric: string | null; target: string | null; timeframe: string | null } | null;
-  bets: CockpitBet[];
-  bestMove: {
-    headline: string;
-    why: string;
-    doToday: string;
-    winIf: string;
-    killIf: string;
-    upgrade: string;
-  } | null;
-  latestRun: {
-    sent: number | null;
-    replies: number | null;
-    calls: number | null;
-    paid: number | null;
-    revenue: number | null;
-    note: string | null;
-  } | null;
-  learnings: { statement: string; sure: Sureness; action: string | null }[];
-  upgrades: string[];
-};
-
-export const getCockpit = (projectId: string) =>
-  get<{ state: CockpitState }>(`/api/projects/${encodeURIComponent(projectId)}/cockpit`);
+export const getRunSummary = (projectId: string) =>
+  get<{ run: RunSummary | null }>(`/api/projects/${encodeURIComponent(projectId)}/run-summary`);
 
 // Record what actually happened on a run, in the founder's own words. `happened` is a plain label
 // (optionally an object with a count); `learned` is the lesson. Writes a Result + Learning; never sends.
