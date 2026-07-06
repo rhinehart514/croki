@@ -286,3 +286,30 @@ describe("derived source — a channel pulls another channel's output at run tim
     assert.match(result.nodes.src.error, /another channel/i);
   });
 });
+
+describe("run summary: paused vs failed", () => {
+  it("a gate left waiting on zero input reads as paused, not failed", async () => {
+    // A gate whose upstream routed everything elsewhere (or produced nothing) receives 0 items and is
+    // BLOCKED — a legitimate paused state. The run must not surface this as "One or more nodes failed".
+    const graph = {
+      id: "empty-gate-flow",
+      nodes: [
+        {
+          id: "gate",
+          category: "gate",
+          connector: "default",
+          label: "Founder approval",
+          config: {},
+          contract: { accepts: ["draft"], minItems: 1, emits: [] },
+        },
+      ],
+      edges: [],
+    };
+    const result = await runGraph(graph);
+    assert.equal(result.ok, false);
+    assert.equal(result.nodes.gate.blocked, true);
+    assert.doesNotMatch(result.error ?? "", /one or more nodes failed/i);
+    assert.match(result.error ?? "", /paused|waiting/i);
+    assert.match(result.error ?? "", /Founder approval/); // names what is waiting
+  });
+});

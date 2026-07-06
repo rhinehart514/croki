@@ -626,13 +626,32 @@ export async function runGraph(graph, opts = {}) {
   const feedbackEdges = edges.filter((e) => e.edgeType === "feedback");
 
   const results = Object.fromEntries(nodeResults.entries());
+  const values = Array.from(nodeResults.values());
   // A blind node (measurement that can't attribute yet) is an honest gap, not a failure — it never
   // counts against the run. A pending gate does (the run isn't done until the founder decides). A gate
   // carrying a required-consult violation also does: a draft that skipped the founder's taste signal
   // must not let the run read "clean", even after approval — the violation is a blocking issue.
-  const ok = Array.from(nodeResults.values()).every(
+  const ok = values.every(
     (r) => (r.ok || r.blind) && !r.pendingReview && !r.consultBlocked,
   );
+  // A run can be not-ok for two very different reasons, and conflating them made an honest pause read
+  // as "broken" to the founder. A GENUINE failure is a node that actually errored. A merely BLOCKED
+  // node is one waiting on input it never received — e.g. a gate whose upstream switch routed every
+  // item down a "revise" branch, so nothing reached it. That is an honest paused state, not a failure,
+  // and must not surface as "One or more nodes failed" (the scary false alarm). Name what's waiting.
+  const genuineFailure = values.some(
+    (r) => r.ok === false && !r.blocked && !r.blind && !r.pendingReview,
+  );
+  const firstBlocked = values.find((r) => r.blocked && r.ok === false);
+  const labelOf = (id) => nodes.find((n) => n.id === id)?.label ?? id;
+  let error;
+  if (ok) {
+    error = undefined;
+  } else if (genuineFailure || !firstBlocked) {
+    error = "One or more nodes failed. See individual node results.";
+  } else {
+    error = `The run paused before finishing — "${labelOf(firstBlocked.nodeId)}" is waiting for input and nothing reached it (${firstBlocked.error ?? "an upstream step routed items down another branch"}). Nothing failed.`;
+  }
 
   return {
     runId,
@@ -644,7 +663,7 @@ export async function runGraph(graph, opts = {}) {
     targetNodeId: targetNodeId ?? null,
     resumedFromRunId: resumeResult?.runId ?? null,
     feedbackEdges: feedbackEdges.map((e) => ({ source: e.source, target: e.target, label: e.label })),
-    error: ok ? undefined : "One or more nodes failed. See individual node results.",
+    error,
   };
 }
 

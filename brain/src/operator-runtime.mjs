@@ -1588,9 +1588,55 @@ export async function runOperatorSession(id, runtime = {}) {
   }
 }
 
+// A driving session that goes SILENT for longer than this has almost certainly hung inside the
+// runtime's model turn — the SDK drive can stall without ever resolving or throwing, which used to
+// leave the session "running" forever behind an infinite spinner (a real 40-minute hang was observed
+// after a run completed with a blocked gate). The signal is silence, not duration: a legitimately long
+// step still emits node/turn events as it progresses, so only true silence trips this. The window is
+// generous so a single slow research node (which can run several minutes) is never mistaken for a hang.
+const OPERATOR_STALL_MS = 12 * 60 * 1000;
+const OPERATOR_WATCHDOG_INTERVAL_MS = 60 * 1000;
+
+// Pure, testable: is a session hung? Only a session actively DRIVING can stall — a waiting_for_* pause
+// is a legitimate wait on the founder and may sit for hours. `updatedAt` is stamped on every event and
+// save, so it is the last-progress clock.
+export function operatorSessionStalled(session, nowMs, thresholdMs = OPERATOR_STALL_MS) {
+  if (!session || session.status !== "running") return false;
+  const last = Date.parse(session.updatedAt || session.startedAt || session.createdAt || "");
+  if (!Number.isFinite(last)) return false;
+  return nowMs - last > thresholdMs;
+}
+
 export function launchOperatorSession(id, runtime = {}) {
   if (activeSessions.has(id)) return activeSessions.get(id);
-  const work = runOperatorSession(id, runtime).finally(() => activeSessions.delete(id));
+  const options = runtime.options ?? {};
+  // Watchdog: end a stalled drive honestly so the founder is never stuck behind an infinite spinner.
+  // It never aborts a legitimately long turn — it acts only on silence past the stall window.
+  const watchdog = setInterval(() => {
+    try {
+      const current = getOperatorSession(id, options);
+      if (operatorSessionStalled(current, Date.now())) {
+        clearInterval(watchdog);
+        addEvent({
+          ...current,
+          status: "failed",
+          error: "This run stalled — it stopped making progress for several minutes and was ended so you are not left waiting. Nothing was sent. You can retry the goal.",
+        }, {
+          type: "session_failed",
+          title: "Operator stalled",
+          detail: "No progress for several minutes; ended so you are not stuck waiting.",
+        }, options);
+        activeSessions.delete(id);
+      }
+    } catch {
+      // Session gone or a transient store read — the finally cleanup below is the backstop.
+    }
+  }, OPERATOR_WATCHDOG_INTERVAL_MS);
+  if (typeof watchdog.unref === "function") watchdog.unref();
+  const work = runOperatorSession(id, runtime).finally(() => {
+    clearInterval(watchdog);
+    activeSessions.delete(id);
+  });
   activeSessions.set(id, work);
   return work;
 }

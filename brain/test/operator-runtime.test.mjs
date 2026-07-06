@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import { defaultGraphTemplate } from "../src/graph.mjs";
 import { saveFlow } from "../src/flow-store.mjs";
 import { createOperatorSession, getOperatorSession, saveOperatorSession } from "../src/operator-store.mjs";
-import { operatorTools, resolveOperatorGate, resolveOperatorProposal, runOperatorSession } from "../src/operator-runtime.mjs";
+import { operatorTools, resolveOperatorGate, resolveOperatorProposal, runOperatorSession, operatorSessionStalled } from "../src/operator-runtime.mjs";
 import { loadFlow } from "../src/flow-store.mjs";
 import { createProject, loadProject } from "../src/project-store.mjs";
 
@@ -302,4 +302,25 @@ describe("resident GTM operator runtime", () => {
     assert.ok(resolved.events.some((event) => event.type === "graph_proposal_discarded"));
   });
 
+});
+
+describe("operatorSessionStalled (hang watchdog)", () => {
+  const T = 12 * 60 * 1000;
+  const now = Date.parse("2026-07-06T01:00:00.000Z");
+  it("flags a driving session silent past the window", () => {
+    const s = { status: "running", updatedAt: "2026-07-06T00:40:00.000Z" }; // 20 min silent
+    assert.equal(operatorSessionStalled(s, now, T), true);
+  });
+  it("leaves a recently-active driving session alone", () => {
+    const s = { status: "running", updatedAt: "2026-07-06T00:56:00.000Z" }; // 4 min ago
+    assert.equal(operatorSessionStalled(s, now, T), false);
+  });
+  it("never stalls a legitimate founder-wait pause", () => {
+    const s = { status: "waiting_for_gate", updatedAt: "2026-07-05T12:00:00.000Z" }; // hours ago
+    assert.equal(operatorSessionStalled(s, now, T), false);
+  });
+  it("is safe when the timestamp is missing", () => {
+    assert.equal(operatorSessionStalled({ status: "running" }, now, T), false);
+    assert.equal(operatorSessionStalled(null, now, T), false);
+  });
 });
