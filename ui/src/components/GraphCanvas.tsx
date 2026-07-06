@@ -9,7 +9,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { motion } from "motion/react";
 import {
-  AlertCircle, AlertTriangle, Ban, Bot, Check, CheckCircle2, Circle, Code, CornerDownLeft, Database, FileText, GitMerge,
+  AlertCircle, AlertTriangle, Ban, Bot, Check, CheckCircle2, Circle, Code, CornerDownLeft, Database, Download, FileText, GitMerge,
   Loader, Lock, MessageSquare, MousePointer2, Pencil, Play, Search, ShieldCheck, Lightbulb, Split, Sprout, Target,
   Telescope, Trash2, TrendingUp, Wand2, X, Zap,
 } from "lucide-react";
@@ -622,6 +622,26 @@ function ProducedPreview({ items }: { items: GTMItem[] }) {
   );
 }
 
+// Pull a node's captured output down as a CSV — the union of every item's keys becomes the header,
+// nested values are JSON-stringified, and quotes/commas/newlines are escaped. Runs entirely client-side
+// on what the last run actually produced; captures nothing new.
+function downloadItemsCsv(items: Array<Record<string, unknown>>, label: string) {
+  if (!items.length) return;
+  const keys = Array.from(new Set(items.flatMap((it) => Object.keys(it ?? {}))));
+  const esc = (v: unknown) => {
+    const s = v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const rows = [keys.join(","), ...items.map((it) => keys.map((k) => esc(it?.[k])).join(","))];
+  const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${(label || "output").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 40) || "output"}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function NodeCardEditor({ node, result, health, contractAudit, running }: {
   node: GTMNode;
   result?: GTMNodeResult;
@@ -801,7 +821,17 @@ function NodeCardEditor({ node, result, health, contractAudit, running }: {
               {result.error ? result.error.slice(0, 120) : "This step failed."}
             </span>
           ) : items > 0 ? (
-            <ProducedPreview items={result?.items ?? []} />
+            <>
+              <ProducedPreview items={result?.items ?? []} />
+              <button
+                type="button"
+                className="loop-node-editor-csv"
+                onClick={(e) => { e.stopPropagation(); downloadItemsCsv((result?.items ?? []) as Array<Record<string, unknown>>, node.label); }}
+                title="Download what this step captured as a CSV"
+              >
+                <Download size={11} /> Download CSV · {items} row{items === 1 ? "" : "s"}
+              </button>
+            </>
           ) : result ? (
             <p className="loop-node-editor-hint">Ran — produced nothing.</p>
           ) : (

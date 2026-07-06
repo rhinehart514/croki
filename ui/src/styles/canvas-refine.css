@@ -226,6 +226,23 @@
 .react-flow .loop-node-editor-stat,
 .react-flow .loop-node-editor-filelabel,
 .react-flow .loop-node-editor-hint { font-size: 11.5px; }
+.react-flow .loop-node-editor-csv {
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm, 8px);
+  cursor: pointer;
+  transition: border-color 0.14s var(--ease), color 0.14s var(--ease);
+}
+.react-flow .loop-node-editor-csv:hover { border-color: var(--ink-3, var(--muted)); color: var(--ink); }
 
 /* ── Switch — conditional logic as a card ───────────────────────────────────────
    Mirrors the gate's left-accent grammar, but in INK, not amber: a switch is automatic
