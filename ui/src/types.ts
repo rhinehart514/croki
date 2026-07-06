@@ -526,6 +526,10 @@ export type GTMNode = {
   // venture-style: what does this node own?
   sourceOfTruth?: string[];    // e.g. ["contacts", "signals"]
   contract?: GTMNodeContract;
+  // Slice 4 — ghost/proposed: a node Claude has PROPOSED but that isn't real yet. Set only on the
+  // client-staged preview (App merges these into the display graph); a committed node never carries it.
+  // Rendered translucent/dashed with an inline accept/reject the founder resolves in place.
+  proposed?: boolean;
 };
 
 export type GTMNodeContract = {
@@ -569,6 +573,11 @@ export type GTMEdge = {
   // Living-grammar visual weight (0–1): how much live volume/conviction this edge carries.
   // Derived from the run ledger, never authored. Drives stroke-width in the canvas (Phase 3).
   conviction?: number;
+  // Slice 4 — ghost/proposed: an edge Claude has PROPOSED but that isn't real yet. Set only on the
+  // client-staged preview; a committed edge never carries it. Rendered dashed with an inline
+  // accept/reject when both its endpoints are already real (an edge hanging off a ghost node commits
+  // or drops together with that node).
+  proposed?: boolean;
 };
 
 // A pending tool-birth proposal — a repeated deterministic procedure crystallized from runs, gated and
