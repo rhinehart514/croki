@@ -75,11 +75,12 @@ function sessionCandidates(session: OperatorSession | null): Candidate[] {
 
 // Minimal shape of the Web Speech API's SpeechRecognition we touch — the DOM lib types it behind
 // a vendor-prefixed global that isn't in our tsconfig's lib, so we declare just the surface we use.
+type SpeechResult = ArrayLike<{ transcript: string }> & { isFinal: boolean };
 type SpeechRecognitionLike = {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
-  onresult: (e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void;
+  onresult: (e: { results: ArrayLike<SpeechResult> }) => void;
   onend: () => void;
   onerror: () => void;
   start: () => void;
@@ -829,11 +830,26 @@ export function ComposerDock({
   const [view, setView] = useState<"focus" | "thread">("thread");
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  // Voice mode — the composer's signature. Toggling it erupts the rainbow (a CSS state on
-  // .composer-box) and, where the browser supports it, dictates speech straight into the input via
-  // the Web Speech API. The visual eruption stands on its own when recognition is unavailable.
-  const [voiceOn, setVoiceOn] = useState(false);
-  const recognitionRef = useRef<{ stop: () => void } | null>(null);
+  // Voice mode — the composer's signature. Two ways in, because hold-only can't carry a long thought:
+  //   • TAP the mic → hands-free listening locks on; tap again to stop and send.
+  //   • HOLD the mic → push-to-talk; release to send.
+  // Either way the rainbow erupts and the waveform is lit from your real microphone amplitude (Web
+  // Audio), so the bars track your actual voice instead of a canned loop. What's heard shows as a
+  // tentative line while it settles; when you stop, the settled transcript sends (or lands in the input
+  // if Claude is mid-turn, so nothing spoken is ever lost). A blocked or unsupported mic says so.
+  const [voiceOn, setVoiceOn] = useState(false); // true whenever the mic is capturing (held or locked)
+  const [locked, setLocked] = useState(false); // hands-free: capturing with no finger down
+  const [heardText, setHeardText] = useState(""); // live tentative transcript, shown while listening
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const engagedRef = useRef(false); // mic is capturing (survives async gaps); mirrors voiceOn
+  const lockedRef = useRef(false); // hands-free lock (survives async gaps); mirrors locked
+  const pressStartRef = useRef(0); // when the press began, to tell a tap from a hold
+  const heardRef = useRef(""); // newest full transcript, read on stop (state lags a frame)
+  const sendOnEndRef = useRef(false); // stop requested a send once recognition flushes
+  const barsRef = useRef<HTMLElement[]>([]); // the 28 waveform bars, driven imperatively per frame
+  const audioRef = useRef<{ ctx: AudioContext; stream: MediaStream; raf: number } | null>(null);
+  const TAP_MS = 350; // press shorter than this = a tap (locks hands-free); longer = push-to-talk
   // Which engine + model drives the operator — Claude (Opus/Sonnet/Haiku) or Codex (OpenAI). A
   // persisted founder preference; the composer bar reads the model and its engine from it.
   const [model, setModel] = useState<string>(() =>
@@ -843,29 +859,125 @@ export function ComposerDock({
   const timelineRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const stopVoice = () => { recognitionRef.current?.stop(); recognitionRef.current = null; setVoiceOn(false); };
-  const toggleVoice = () => {
-    if (voiceOn) { stopVoice(); return; }
+  // Tear down the live audio graph and animation frame; the mic tracks are released so the OS
+  // indicator goes dark. Idempotent — safe to call from release, error, and unmount.
+  const teardownAudio = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    audioRef.current = null;
+    cancelAnimationFrame(a.raf);
+    a.stream.getTracks().forEach((t) => t.stop());
+    void a.ctx.close().catch(() => {});
+    // Settle the bars back to rest so the next hold starts from flat, not a frozen shape.
+    barsRef.current.forEach((bar) => { if (bar) bar.style.height = ""; });
+  };
+
+  // Begin listening: real mic amplitude drives the waveform, Web Speech dictates. Shared by tap and
+  // hold — the press/release handlers below decide whether releasing locks (tap) or sends (hold).
+  const startVoice = async () => {
+    if (engagedRef.current) return;
+    engagedRef.current = true;
+    setVoiceError(null);
+    setHeardText("");
+    heardRef.current = "";
     setVoiceOn(true);
-    inputRef.current?.focus();
-    const SR = (window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike });
+    // 1) Live amplitude — the honest waveform. Independent of recognition, so the bars move even in a
+    //    browser with no dictation. A blocked mic throws here and we surface it plainly.
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!engagedRef.current) { stream.getTracks().forEach((t) => t.stop()); return; } // stopped mid-grant
+      const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new Ctx();
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 64; // 32 bins → enough spread across the 28 bars
+      ctx.createMediaStreamSource(stream).connect(analyser);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      const tick = () => {
+        analyser.getByteFrequencyData(data);
+        const bars = barsRef.current;
+        for (let i = 0; i < bars.length; i++) {
+          const v = data[i + 2] / 255; // skip the DC/low bins that swamp the low end
+          const h = Math.max(10, Math.min(100, v * 140)); // floor so a bar never fully collapses
+          if (bars[i]) bars[i].style.height = `${h.toFixed(1)}%`;
+        }
+        if (audioRef.current) audioRef.current.raf = requestAnimationFrame(tick);
+      };
+      audioRef.current = { ctx, stream, raf: requestAnimationFrame(tick) };
+    } catch {
+      setVoiceError("Microphone is blocked. Allow mic access to talk to Claude.");
+      setVoiceOn(false);
+      engagedRef.current = false;
+      lockedRef.current = false;
+      setLocked(false);
+      return;
+    }
+    // 2) Dictation — separate from amplitude so the waveform still works where this is missing.
+    const SR = window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike };
     const Ctor = SR.SpeechRecognition ?? SR.webkitSpeechRecognition;
-    if (!Ctor) return; // no recognition: the rainbow still runs as a visual mode
+    if (!Ctor) { setVoiceError("Voice typing isn't supported in this browser — the level meter still works."); return; }
     const r = new Ctor();
     r.continuous = true; r.interimResults = true; r.lang = "en-US";
-    const base = input ? input + " " : "";
-    r.onresult = (e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => {
+    r.onresult = (e) => {
       let txt = "";
       for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
-      setInput(base + txt);
+      txt = txt.trim();
+      heardRef.current = txt;
+      setHeardText(txt);
     };
-    r.onend = () => { recognitionRef.current = null; setVoiceOn(false); };
-    r.onerror = () => { recognitionRef.current = null; setVoiceOn(false); };
+    r.onerror = () => {}; // a no-speech error is common and harmless; release still flushes what we have
+    r.onend = () => {
+      recognitionRef.current = null;
+      if (sendOnEndRef.current) { sendOnEndRef.current = false; flushHeard(); }
+    };
     recognitionRef.current = r;
     try { r.start(); } catch { /* a double-start throws; ignore */ }
   };
-  // Tear down recognition if the dock unmounts mid-listen.
-  useEffect(() => () => recognitionRef.current?.stop(), []);
+
+  // Stop listening and send. Recognition flushes a final result on stop, so we send from onend; with no
+  // recognition at all we flush immediately with whatever the amplitude-only pass gathered.
+  const stopVoice = () => {
+    if (!engagedRef.current) return;
+    engagedRef.current = false;
+    lockedRef.current = false;
+    setLocked(false);
+    setVoiceOn(false);
+    teardownAudio();
+    const r = recognitionRef.current;
+    if (r) { sendOnEndRef.current = true; try { r.stop(); } catch { flushHeard(); } }
+    else { flushHeard(); }
+  };
+
+  // Finger (or key) goes down. A tap while already locked stops and sends; otherwise start listening
+  // and remember when (the event's own timestamp), so release can tell a tap (→ lock hands-free) from a
+  // hold (→ send). Using event time keeps this off the impure clock the render-purity lint forbids.
+  const pressVoice = (ts: number) => {
+    if (lockedRef.current) { stopVoice(); return; }
+    if (engagedRef.current) return;
+    pressStartRef.current = ts;
+    void startVoice();
+  };
+
+  // Finger (or key) lifts. A quick press locks hands-free (keep listening); a real hold sends.
+  const releaseVoice = (ts: number) => {
+    if (!engagedRef.current || lockedRef.current) return;
+    if (ts - pressStartRef.current < TAP_MS) { lockedRef.current = true; setLocked(true); }
+    else stopVoice();
+  };
+
+  // Send the settled transcript — or, if Claude is mid-turn, drop it into the input so it's editable
+  // and nothing spoken is lost.
+  const flushHeard = () => {
+    const text = heardRef.current.trim();
+    heardRef.current = "";
+    setHeardText("");
+    if (!text) return;
+    const nav = isNavCommand?.(text) ?? false;
+    if (sendDisabled && !nav) { setInput((prev) => (prev ? prev + " " : "") + text); inputRef.current?.focus(); }
+    else void sendText(text);
+  };
+
+  // Tear down recognition and audio if the dock unmounts mid-listen.
+  useEffect(() => () => { recognitionRef.current?.stop(); teardownAudio(); }, []);
 
   // Follow the layout context across navigation: collapse to a pill when the dock starts floating
   // over the channel workbench, restore it when it owns its own lane again. Adjusting state during
@@ -1018,9 +1130,9 @@ export function ComposerDock({
     void onSend(`Build this pipeline — ${candidate.label}. ${candidate.rationale} Compose it and run it to my gate.`);
   };
 
-  const send = async () => {
+  const sendText = async (raw: string) => {
     if (submitting) return;
-    const value = input.trim();
+    const value = raw.trim();
     if (!value) return;
     // A navigation command ("go to the gate") steers the canvas and never reaches Claude, so it's
     // allowed even while Claude is working. Any real turn still waits until Claude is free.
@@ -1031,6 +1143,7 @@ export function ComposerDock({
     try { await onSend(value); setInput(""); }
     finally { setSubmitting(false); }
   };
+  const send = () => sendText(input);
 
   // The command composer — the product's primary input, built to rival a real chat composer: a calm
   // textarea over a control row (context on the left, the live model/state, a dark send on the right).
@@ -1113,27 +1226,45 @@ export function ComposerDock({
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
         rows={1}
       />
-      {/* The waveform rises only while listening (Tolan register). Bars are decorative. */}
+      {/* The waveform rises only while the mic is held. Each bar's height is driven imperatively from
+          real microphone amplitude (see startVoice) — this is feedback, not decoration. */}
       <div className="composer-wave" aria-hidden="true">
-        {Array.from({ length: 28 }).map((_, i) => <i key={i} />)}
+        {Array.from({ length: 28 }).map((_, i) => (
+          <i key={i} ref={(el) => { if (el) barsRef.current[i] = el; }} />
+        ))}
       </div>
+      {/* What Claude is hearing, tentative until it settles — clears on release. Sits under the wave so
+          you can watch your words land before they send. */}
+      {voiceOn && heardText ? (
+        <div className="composer-heard" aria-live="polite">
+          {heardText}<span className="composer-heard-caret" aria-hidden="true" />
+        </div>
+      ) : null}
+      {voiceError ? <p className="composer-voice-error" role="status">{voiceError}</p> : null}
       <div className="composer-box-bar">
         <div className="composer-box-tools">
           <AgentPicker value={model} onChange={pickModel} />
           <span className="composer-box-model" title={sessionActive ? `${engineName} is on this outcome` : "The engine and model working this outcome"}>
-            <span className={`composer-box-dot ${sessionActive ? "live" : ""}`} />
-            {working ? "Working…" : session ? statusLabel(session.status) : "Ready"}
+            <span className={`composer-box-dot ${voiceOn ? "live" : sessionActive ? "live" : ""}`} />
+            {voiceOn ? "Listening…" : working ? "Working…" : session ? statusLabel(session.status) : "Ready"}
           </span>
         </div>
         <div className="composer-box-actions">
-          {/* Voice — toggles the rainbow eruption and (where supported) dictates into the input. */}
+          {/* Voice — TAP for hands-free (tap again to stop and send) or HOLD for push-to-talk (release
+              to send). The rainbow erupts and the waveform tracks your real mic either way. Pointer
+              capture guarantees release fires even if you drift off the button; Space/Enter mirror it. */}
           <button
-            className={`composer-box-mic ${voiceOn ? "active" : ""}`}
-            onClick={toggleVoice}
+            className={`composer-box-mic ${voiceOn ? "active" : ""} ${locked ? "locked" : ""}`}
             type="button"
-            aria-label={voiceOn ? "Stop voice" : "Talk to Claude"}
+            aria-label={locked ? "Listening hands-free — tap to stop and send" : "Tap or hold to talk to Claude"}
             aria-pressed={voiceOn}
-            title={voiceOn ? "Listening… tap to stop" : "Voice"}
+            title={locked ? "Listening hands-free — tap to stop" : voiceOn ? "Listening… release to send" : "Tap for hands-free, or hold to talk"}
+            onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); pressVoice(e.timeStamp); }}
+            onPointerUp={(e) => releaseVoice(e.timeStamp)}
+            onPointerCancel={(e) => releaseVoice(e.timeStamp)}
+            onKeyDown={(e) => { if ((e.key === " " || e.key === "Enter") && !e.repeat) { e.preventDefault(); pressVoice(e.timeStamp); } }}
+            onKeyUp={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); releaseVoice(e.timeStamp); } }}
+            onBlur={() => { if (!lockedRef.current) stopVoice(); }}
           >
             <Mic size={16} />
           </button>

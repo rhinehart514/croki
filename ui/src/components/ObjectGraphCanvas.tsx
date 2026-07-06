@@ -818,10 +818,14 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId 
     [visible, positions, highlightedNodes, weakestNodeId, onIdeateObject, ideatingNodeId, ideatingTarget, selectedId],
   );
   const edges = useMemo(() => {
-    // In Stages mode the card's column already carries the structure, so the full causal web is just
-    // noise — draw only the strongest-path spine through the bands. Flow mode keeps every edge.
-    const src = arrange === "stages" ? visible.edges.filter((e) => highlightedEdges.has(e.id)) : visible.edges;
-    return layoutEdges(src, highlightedEdges);
+    // Move (Stages) mode draws NO wires. The numbered columns already carry the sequence, and the
+    // recommended path is already lit on the CARDS themselves (node `lit`) — so wiring them adds only
+    // tangle. And market cards never link card-to-card: every edge routes through a hidden path/run
+    // node, so any "spine" drawn here is a star fanning out from that node, not a readable chain. The
+    // relationships still live in each card's Related list and in Engineer (Flow) mode, which is where
+    // wiring is the point and keeps every edge.
+    if (arrange === "stages") return [];
+    return layoutEdges(visible.edges, highlightedEdges);
   }, [arrange, visible, highlightedEdges]);
 
   // Reorganize: clear founder placements so the whole graph snaps back to the ordered left→right
