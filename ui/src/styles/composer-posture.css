@@ -279,6 +279,9 @@
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  /* Don't let the flex column shrink this -webkit-box to zero height — as a shrinkable flex item under
+     the card face's capped height it collapses and the statement vanishes. Keep its intrinsic height. */
+  flex: 0 0 auto;
   margin: 0;
   color: var(--ink);
   font-size: 14px;
