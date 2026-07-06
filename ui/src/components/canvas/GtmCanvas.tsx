@@ -6,11 +6,8 @@ import { CanvasShell, type LensDef, type LensProps } from "@/components/canvas/C
 import { ObjectGraphCanvas } from "@/components/ObjectGraphCanvas";
 import type { GateBag } from "@/lib/gateItem";
 import type { CanvasSubject } from "@/lib/cardDetail";
-import { GroundLens } from "@/components/lenses/GroundLens";
 import { BeliefSpine } from "@/components/lenses/BeliefSpine";
 import type { CockpitState } from "@/api";
-import { useGround, type IcpGrouping } from "@/lib/groundModel";
-import { useBoard } from "@/lib/boardModel";
 import type {
   ChannelFeed, ChannelMeta, Claim, ConnectorMeta, DirectedFeed, GateDecision, GtmExperiment, GTMContractAudit, GTMGraph, GTMNode,
   GTMRunResult, NodeSelection, Person,
@@ -223,48 +220,25 @@ function ChannelFlowLens({ model: m }: GtmLensProps) {
   );
 }
 
-// ── L0 ground: the overview landing. The former nine-layer belief board folds INTO the flow — its
-// beliefs now surface as each pipeline's state here (L0) and as the per-pipeline spine when a pipeline
-// opens (L1, BeliefSpine in ChannelFlowLens). Pipelines are grouped under the ICP they test (one honest
-// primary ground today; the ICPs[] shape is already plural for real per-ICP experiments). Conviction is
-// ink weight, never hue; the only accent is the amber needs-you pill. ──
-function GroundLensWrapper({ model: m }: GtmLensProps) {
-  // Read the board for its ICP grouping (the backend embeds icpGrouping on the board payload); this is
-  // what splits the ground into real per-ICP bands + arm races instead of one flat primary ground.
-  const board = useBoard(m.projectId);
-  const boardView = board.status === "ready" ? board.board : null;
-  const icpGrouping = (boardView as { icpGrouping?: IcpGrouping } | null)?.icpGrouping ?? null;
-  const ground = useGround(m.projectId, m.channels, m.people, m.claims, boardView, icpGrouping);
-  return <GroundLens model={ground.model} onOpenChannel={m.onOpenChannel} />;
-}
-
 // Two founder modes, not four: MOVE (the object graph in its story bands, the doing surface) and
 // ENGINEER (the causal reasoning graph, with the executable step chain folded in behind a Reasoning /
 // Steps switch). The former "Trace" and "Flow" tabs are subsumed into Engineer; "Learn" is retired as a
 // selectable mode (it re-rendered the cockpit read-only and could contradict Move on confidence — the
-// LearningsLens component is left in the tree for reuse, just not mounted here). Ground stays defined as
-// the overview landing but is not in the mode pill.
+// LearningsLens component is left in the tree for reuse, just not mounted here). The old "Ground"
+// overview lens was likewise retired from the pill; GroundLens.tsx is kept in the tree for reuse.
 const LENSES: LensDef<GtmCanvasModel, never>[] = [
   { id: "object-graph", label: "Move", Component: ObjectGraphLens },
   { id: "engineer", label: "Engineer", Component: EngineerLens },
-  // The ground is the LANDING surface (id kept as "board" so the host's controlled altitude prop is
-  // unchanged). The former nine-layer belief board is gone as a surface; its confidence signal survives
-  // only as the plain per-pipeline state the ground shows.
-  { id: "board", label: "Ground", Component: GroundLensWrapper },
 ];
-
-// Lens metadata (id + label) for the command dock's switcher lives in the sibling `lens-meta.ts`
-// (a non-component module) so this file only exports components and fast-refresh stays intact.
 
 export function GtmCanvas({
   model, activeLensId, chromeless,
 }: {
   model: GtmCanvasModel;
-  // The altitude is CONTROLLED by channel state, derived inline by the host (board on the overview,
-  // channel-flow with a channel open) — not stored. App reuses ONE GtmCanvas instance across both
-  // branches, so the lens must be a controlled prop: an uncontrolled default only seeds the shell's
-  // state once and would strand the reused instance on the stale lens when the branch flips.
-  activeLensId: "object-graph" | "engineer" | "board";
+  // The altitude is CONTROLLED by channel state, derived inline by the host. App reuses ONE GtmCanvas
+  // instance across both branches, so the lens must be a controlled prop: an uncontrolled default only
+  // seeds the shell's state once and would strand the reused instance on the stale lens when it flips.
+  activeLensId: "object-graph" | "engineer";
   chromeless?: boolean;
 }) {
   return (

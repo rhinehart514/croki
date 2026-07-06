@@ -124,4 +124,3 @@ export function isRoutingDecision(decision) {
   return Boolean(decision) && ROUTES.has(decision.route);
 }
 
-export { ROUTES as ROUTING_ROUTES };

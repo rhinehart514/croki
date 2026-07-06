@@ -597,9 +597,9 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId 
   // selection with the detail panel stuck open.
   subjectId?: string | null;
   // The mode switcher above the canvas drives the arrangement: Move re-projects the story bands
-  // ("stages"), Trace opens the free causal graph ("flow"). It only steers when it CHANGES.
+  // ("stages"), Engineer opens the free causal graph ("flow"). It only steers when it CHANGES.
   desiredArrange?: "stages" | "flow";
-  // When the mode pill (Move/Trace) owns the arrangement, the in-header arrange toggle is redundant —
+  // When the mode pill (Move/Engineer) owns the arrangement, the in-header arrange toggle is redundant —
   // hide it so there's one control for the same job, not two.
   modeControlled?: boolean;
   // The per-card "+" seam: the host owns the ideation (it runs the real endpoint and renders the
@@ -714,7 +714,7 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId 
   }, [hasNodes, reduceMotion]);
 
   // The mode pill above the canvas steers the arrangement, but only on an actual change — so flipping
-  // to Move snaps to the story bands and Trace opens the causal graph, while the in-canvas toggle and
+  // to Move snaps to the story bands and Engineer opens the causal graph, while the in-canvas toggle and
   // the drop-to-flow still move the map freely inside a mode without being yanked back. This is React's
   // adjust-state-during-render pattern (not an effect): compare the incoming mode to the last one we
   // acted on and re-project only on the transition.

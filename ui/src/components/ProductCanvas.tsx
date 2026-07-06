@@ -40,9 +40,6 @@ const LENSES: LensDef<ProductModel, ProductModelEdit>[] = [
   { id: "interaction", label: "Interaction", Component: adapt(InteractionLens) },
 ];
 
-// Lens metadata (id + label) for the command dock's switcher lives in the sibling
-// `canvas/lens-meta.ts` (a non-component module) so this file only exports components and
-// fast-refresh stays intact.
 
 export function ProductCanvas({
   model, productName, busy, onDerive, onRevise, onExitToGtm, activeLensId, onLensChange, chromeless,

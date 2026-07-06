@@ -472,19 +472,8 @@ export type CockpitState = {
   upgrades: string[];
 };
 
-export type MoveProposal = {
-  statement: string;
-  bet: string;
-  evidence: "guessed" | "researched" | "observed";
-  risk: string;
-  action: string;
-};
-
 export const getCockpit = (projectId: string) =>
   get<{ state: CockpitState }>(`/api/projects/${encodeURIComponent(projectId)}/cockpit`);
-
-export const getMoves = (projectId: string) =>
-  get<{ moves: MoveProposal[] }>(`/api/projects/${encodeURIComponent(projectId)}/moves`);
 
 // Record what actually happened on a run, in the founder's own words. `happened` is a plain label
 // (optionally an object with a count); `learned` is the lesson. Writes a Result + Learning; never sends.

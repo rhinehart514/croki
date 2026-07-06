@@ -7,7 +7,7 @@ import {
 // the palette row and the node it creates share, so a "Buyer" row and the buyer card it drops onto the
 // canvas carry one glyph. Stays monochrome (the icon is currentColor); hue is reserved for the semantic
 // roles only (gate amber, outcome green), never a rainbow per kind.
-export const KIND_ICON: Record<string, LucideIcon> = {
+const KIND_ICON: Record<string, LucideIcon> = {
   buyer: Users,
   pain: Flame,
   job: Target,
