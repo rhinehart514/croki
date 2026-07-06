@@ -104,6 +104,17 @@
   transition: background 0.16s var(--ease);
 }
 .loop-gate-open:hover { background: color-mix(in srgb, var(--gap) 16%, var(--surface)); }
+/* A run is paused here awaiting review — the compact node stays compact, but its Review button
+   breathes so the founder still knows a decision is waiting without the whole review blooming open. */
+.loop-gate-open.is-awaiting {
+  background: color-mix(in srgb, var(--gap) 15%, var(--surface));
+  animation: cgate-await-pulse 2.2s var(--ease) infinite;
+}
+@keyframes cgate-await-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--gap) 45%, transparent); }
+  70%      { box-shadow: 0 0 0 5px color-mix(in srgb, var(--gap) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) { .loop-gate-open.is-awaiting { animation: none; } }
 
 /* ── Inline gate review — read the real draft right on the node card ─────────────
    This is the shareable beat: the AI did the work, you read exactly what it wrote,

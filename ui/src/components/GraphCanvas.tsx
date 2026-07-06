@@ -1182,12 +1182,14 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
           </span>
           {gateItems.length === 0 ? (
             <span className="loop-gate-empty">Nothing staged yet. Nothing reaches the world until you approve it here.</span>
-          ) : (data.bloomed || selected || reviewOpen) ? (
+          ) : (selected || reviewOpen) ? (
+            // Detail-on-open: the full review is a deliberate act, not an always-on wall. The node stays
+            // a compact object until you open it (select or click Review), then the drafts bloom in place.
             <GateReview items={result!.items} onSubmit={data.onSubmitReview} learned={gateLearned} promote={data.gatePromote} offer={data.gateOffer} />
           ) : (
             <button
               type="button"
-              className="loop-gate-open"
+              className={cn("loop-gate-open", data.bloomed && "is-awaiting")}
               onClick={(e) => { e.stopPropagation(); setReviewOpen(true); }}
             >
               Review {gateWaiting} staged →
