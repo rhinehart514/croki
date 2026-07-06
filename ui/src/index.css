@@ -5446,9 +5446,8 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .settings-overlay-panel > .wsv { height: 100%; }
 .settings-overlay .wsv-head,
 .settings-overlay .team-space-head { display: none; }
-/* Team and tools are narrow reading surfaces — center them in the wide overlay. */
-.settings-overlay .team-space-body,
-.settings-overlay .tool-forge { max-width: 640px; margin: 0 auto; width: 100%; }
+/* Team is a narrow reading surface — center it in the wide overlay. */
+.settings-overlay .team-space-body { max-width: 640px; margin: 0 auto; width: 100%; }
 
 /* ── Canvas empty state (no channel selected — still the canvas, not a page) ─ */
 .canvas-empty {

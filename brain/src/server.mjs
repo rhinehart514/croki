@@ -65,11 +65,6 @@ import {
   buildMarketContext,
   founderInputsFromSharedContext,
 } from "./market-research.mjs";
-import {
-  composePathPortfolio,
-  createClaudePathGenerator,
-  createClaudePathGrader,
-} from "./path-portfolio.mjs";
 import { compileRunFromPath, gateReviewForRun, approveCompiledRun } from "./run-compile.mjs";
 import { ensureObjectGraphProductScan, objectGraphForProject } from "./object-graph-projection.mjs";
 import { objectGraphLayoutStore, objectGraphStore } from "./object-graph-store.mjs";
@@ -93,7 +88,6 @@ import {
 } from "./gtm-store.mjs";
 import { applyExperimentVerdict, suggestVerdictFromOutcomes } from "./belief-writeback.mjs";
 import { upsertStatedExperiment } from "./stated-experiment.mjs";
-import { listToolRegistry, approveToolBirth } from "./tool-registry-store.mjs";
 import { listPeople, getPerson } from "./person-store.mjs";
 import { loadClarity, addClarity, removeClarity } from "./clarity-store.mjs";
 import { appendInput, listInputs, markRouted } from "./inputs-store.mjs";
@@ -104,7 +98,6 @@ import { listConnectors } from "./connectors/registry.mjs";
 import { runGraph } from "./graph.mjs";
 import { liveStepRuntime } from "./agent-bridge.mjs";
 import { createClaudeComposer } from "./composition.mjs";
-import { createClaudeEvaluator } from "./eval.mjs";
 import { selectRuntime, authModeLabel } from "./runtimes/index.mjs";
 import { listArtifacts, readArtifact, writeArtifact } from "./artifact-store.mjs";
 import {
@@ -256,15 +249,6 @@ function marketResearchSummary(project, objects, meta = {}) {
   return `${parts.join(" — ")}.`;
 }
 
-function pathPortfolioSummary(result) {
-  const n = result?.paths?.length ?? 0;
-  if (!n) {
-    return "No paths were generated yet — research the buyer picture first, then generate the portfolio with Claude connected.";
-  }
-  const strongest = result.portfolio?.[0]?.path?.summary ?? null;
-  const tail = strongest ? ` The strongest bet right now: ${strongest}.` : "";
-  return `Mapped ${plural(n, "way")} to go to market, ranked strongest-first.${tail}`;
-}
 
 // Ground the ProductTruth side from the project's own scanned repo, so the GTM map and the path
 // portfolio rest on BOTH truths (product facts + market objects) instead of "0 product facts". Runs
@@ -657,41 +641,6 @@ const server = http.createServer(async (req, res) => {
     try {
       deleteProject(decodeURIComponent(deleteProjectMatch[1]));
       json(res, 200, listProjects());
-    } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
-    }
-    return;
-  }
-
-  // Self-built tools — the founder-gated tool-birth -> registry leg. GET lists pending proposals
-  // (deterministic procedures crystallized from repeated runs — gated, never auto-born) plus the
-  // registered, callable tools. Read-only.
-  const projectToolProposalsMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/tool-proposals$/);
-  if (req.method === "GET" && projectToolProposalsMatch) {
-    try {
-      const projectId = decodeURIComponent(projectToolProposalsMatch[1]);
-      json(res, 200, listToolRegistry(projectId));
-    } catch (err) {
-      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
-    }
-    return;
-  }
-
-  // Birth a tool from a pending proposal — a FOUNDER action. Requires authored code + a test; the
-  // gate refuses anything else. No agent/operator path reaches this.
-  const projectToolApproveMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/tool-proposals\/([^/]+)\/approve$/);
-  if (req.method === "POST" && projectToolApproveMatch) {
-    try {
-      const projectId = decodeURIComponent(projectToolApproveMatch[1]);
-      const proposalId = decodeURIComponent(projectToolApproveMatch[2]);
-      const body = await readBody(req);
-      const result = approveToolBirth({
-        projectId, proposalId,
-        code: body?.code, test: body?.test,
-        name: body?.name, description: body?.description,
-        decisionNote: body?.decisionNote,
-      });
-      json(res, 200, result);
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
@@ -1139,45 +1088,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Path portfolio generation — turn the two truth sides (ProductTruth + MarketObjects) into a ranked
-  // portfolio of 20-30 GTM paths (GTM-ENGINE-REBUILD Phase 2). Generation is rented (a lean generate +
-  // a SEPARATE grade); ranking is deterministic code inside composePathPortfolio. The GTMPaths persist,
-  // so the read-only reasoning canvas (GET .../gtm-map) renders them. Honest-blank when Claude is not
-  // connected. It composes and stores paths; it never runs one and never reaches the outside world.
-  const projectPathPortfolioMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/path-portfolio$/);
-  if (req.method === "POST" && projectPathPortfolioMatch) {
-    try {
-      const projectId = decodeURIComponent(projectPathPortfolioMatch[1]);
-      const project = loadProject({ projectId });
-      const repo = project.sharedContext?.repository?.repo || process.cwd();
-      // Make sure the product-truth side exists before paths are generated, so every bet can rest on
-      // real product facts even if the founder generates without researching first. Idempotent — a
-      // no-op when research already grounded them.
-      groundProductTruthsForProject(project, projectId);
-      const connected = !!selectRuntime({}).adapter;
-      // LEAN by default: ONE generate call (it spreads across the GTM-angle palette and self-tags each
-      // path) plus ONE separate batched grade call — no angle-proposer fan-out, so a portfolio returns
-      // in well under a minute instead of the multi-minute per-angle/per-path fleet.
-      const generators = connected
-        ? {
-            generate: createClaudePathGenerator({ cwd: repo }),
-            grade: createClaudePathGrader({ cwd: repo }),
-          }
-        : {};
-      // composePathPortfolio reads the project's persisted ProductTruth + MarketObjects itself.
-      const result = await composePathPortfolio({ projectId, ...generators });
-      json(res, 200, {
-        projectId,
-        paths: result.paths,
-        count: result.paths.length,
-        summary: pathPortfolioSummary(result),
-        meta: { ...result.meta, connected },
-      });
-    } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
-    }
-    return;
-  }
 
   // Outcomes — the Result-based report (GTM-ENGINE-REBUILD Phase 5). Replaces the legacy
   // systems/channels outcome view: it folds the run ledger and the joined Results into a per-path
@@ -2472,7 +2382,7 @@ const server = http.createServer(async (req, res) => {
       const saved = recordFlowRun(body.graph, result);
       // One seam fires all three run-completion derivations: taste ledger, People promotion, and the
       // per-channel experiment. Read-derived GTM state only — never health, never a gate.
-      const { feedback } = recordRunDerivations({ projectId: project.id, graph: body.graph, result });
+      recordRunDerivations({ projectId: project.id, graph: body.graph, result });
       // Graph failures are domain results. Return the full per-node result so
       // the client can render partial success, blocked nodes, and recovery.
       json(res, 200, {
@@ -2482,10 +2392,6 @@ const server = http.createServer(async (req, res) => {
           : null,
         storedRunCount: saved.runs.length,
         storedAt: saved.updatedAt,
-        // The self-building loop's output: repeated deterministic procedures the founder can
-        // crystallize, and the pending (gated, never auto-born) tool-birth proposals derived from them.
-        crystallizationSuggestions: feedback?.crystallizationSuggestions ?? [],
-        toolBirthProposals: feedback?.toolBirthProposals ?? [],
       });
     } catch (err) { json(res, 400, { error: err instanceof Error ? err.message : String(err) }); }
     return;
@@ -2540,7 +2446,7 @@ const server = http.createServer(async (req, res) => {
         onEvent: send,
       });
       const saved = recordFlowRun(body.graph, result);
-      const { feedback } = recordRunDerivations({ projectId: project.id, graph: body.graph, result });
+      recordRunDerivations({ projectId: project.id, graph: body.graph, result });
       send({
         type: "run_done",
         result: {
@@ -2550,8 +2456,6 @@ const server = http.createServer(async (req, res) => {
             : null,
           storedRunCount: saved.runs.length,
           storedAt: saved.updatedAt,
-          crystallizationSuggestions: feedback?.crystallizationSuggestions ?? [],
-          toolBirthProposals: feedback?.toolBirthProposals ?? [],
         },
       });
     } catch (err) {

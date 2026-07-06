@@ -8,7 +8,7 @@
 //
 // Read mostly; the one write per item is the founder's per-input decision (POST .../inputs/route with
 // { inputId, routedTo } to route, or { inputId, ignore:true } to set aside). Lives inside an opaque
-// CanvasCard (summoned like People / ToolForge). All color from the shared tokens — green = a routed
+// CanvasCard (summoned like People). All color from the shared tokens — green = a routed
 // decision, amber = the gate reminder, nothing decorative.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -66,7 +66,7 @@ export function InputsInbox({ projectId, channels = [] }: InputsInboxProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [rows, setRows] = useState<Record<string, RowState>>({});
 
-  // Mount-time fetch — the canonical "subscribe to an external system" effect (mirrors ToolForge).
+  // Mount-time fetch — the canonical "subscribe to an external system" effect.
   // setState lands in load's async continuation, not synchronously in the effect body.
   const load = useCallback(async () => {
     try {

@@ -97,7 +97,6 @@ import { ExperimentMatrixLens } from "@/components/lenses/ExperimentMatrixLens";
 import type { GateBag } from "@/lib/gateItem";
 import type { CanvasSubject } from "@/lib/cardDetail";
 import { ReferencesPanel, type ReferenceKind } from "@/components/ReferencesPanel";
-import { ToolForge } from "@/components/ToolForge";
 import { IssuesCard } from "@/components/IssuesCard";
 import { InputsInbox } from "@/components/InputsInbox";
 import { MicroproductFace, type Microproduct } from "@/components/MicroproductFace";
@@ -1257,22 +1256,40 @@ export default function App() {
 
   // Drop a new step onto the canvas — a real data source (scrape/leads/CSV/CRM) or any open step.
   const handleAddNode = useCallback((spec: Partial<GTMNode> & { label: string }) => {
-    if (!graph) return;
     const base = spec.kind && spec.kind !== "tool" ? spec.kind : spec.category ?? "step";
     const newId = `${base}-${Date.now().toString(36)}`;
-    const x = graph.nodes.reduce((maximum, node) => Math.max(maximum, node.position?.x ?? 0), 0) + 264;
-    const node = {
+    const buildNode = (x: number) => ({
       id: newId, label: spec.label, position: { x, y: 0 }, config: spec.config ?? {}, contract: spec.contract,
       ...(spec.kind && spec.kind !== "tool"
         ? { kind: spec.kind, category: spec.category ?? "generate", ref: spec.ref ?? "" }
         : { category: spec.category ?? "source", connector: spec.connector ?? "manual" }),
-    } as GTMNode;
+    } as GTMNode);
+    const isWorkbench = (kind?: string) => kind === "terminal" || kind === "query" || kind === "web";
+
+    // No pipeline focused — the empty landing canvas or the multi-pipeline overview. Instead of
+    // no-op'ing the drop, spin up a client-side scratch pipeline holding the dropped node, focus it in
+    // Engineer mode, and select it. Now a founder can drop an agent and run it as a single step (the
+    // in-card "Run step" posts this graph straight through /api/graph/run) without composing a pipeline
+    // first. A dropped Crew agent is a generate node, not an execute node, so the gate wall stays intact.
+    if (!graph) {
+      const scratchId = `scratch-${Date.now().toString(36)}`;
+      const scratchGraph: GTMGraph = { id: scratchId, name: "Scratch", version: "0", nodes: [buildNode(0)], edges: [] };
+      setChannelGraph(scratchId, scratchGraph);
+      setActiveChannelId(scratchId);
+      setOverviewActive(false);
+      setActiveMode("engineer");
+      if (!isWorkbench(spec.kind)) selectInGraph(newId, scratchId);
+      return;
+    }
+
+    const x = graph.nodes.reduce((maximum, node) => Math.max(maximum, node.position?.x ?? 0), 0) + 264;
+    const node = buildNode(x);
     void applyOperations([{ type: "add_node", node }]).then((next) => {
       // Workbench surfaces (terminal/query/web) are used in place — don't yank open the node-detail
       // editor on drop. Pipeline steps still auto-select so the founder lands in their config.
-      if (next && node.kind !== "terminal" && node.kind !== "query" && node.kind !== "web") selectInGraph(newId, graph.id);
+      if (next && !isWorkbench(node.kind)) selectInGraph(newId, graph.id);
     });
-  }, [applyOperations, graph, selectInGraph]);
+  }, [applyOperations, graph, selectInGraph, setChannelGraph, setOverviewActive]);
 
 
   // Drag a Crew member or Skill from the left rail onto the canvas → add it as a pipeline step, then
@@ -1330,8 +1347,13 @@ export default function App() {
     // pipeline for the product instead of re-driving the one on screen. One-shot; reset after use.
     const fresh = freshPipelineIntent.current;
     freshPipelineIntent.current = false;
-    // Bind the new session to the channel graph on screen so its tools target that graph.
-    const response = await createOperatorSession(projectId, goal, fresh ? undefined : graph?.id, fresh);
+    // Bind the new session to the channel graph on screen so its tools target that graph — UNLESS that
+    // graph is an unsaved client-side scratch pipeline (a drop-and-run canvas the server has no record
+    // of). Binding to it would fail the operator's flow lookup, so a scratch graph drives as an unbound
+    // fresh composition instead: talking to Claude composes a real, persisted pipeline for the product.
+    const isScratch = !!graph?.id?.startsWith("scratch-");
+    const boundGraphId = fresh || isScratch ? undefined : graph?.id;
+    const response = await createOperatorSession(projectId, goal, boundGraphId, fresh || isScratch);
     operatorGraphRevision.current = response.session.graphRevision;
     operatorRunId.current = null;
     setOperatorSession(response.session);
@@ -2231,9 +2253,6 @@ export default function App() {
                 {kind === "experiments" ? (
                   <ExperimentMatrixLens experiments={gtmCanvasModel.experiments} claims={gtmCanvasModel.claims} icp={gtmCanvasModel.icp} channels={gtmCanvasModel.channels} selected={reference?.kind === "experiment" ? reference.id : null} onSelect={(id) => openReference("experiment", id)} />
                 ) : null}
-                {kind === "tools" && activeProjectId ? (
-                  <ToolForge projectId={activeProjectId} />
-                ) : null}
                 {kind === "inbox" && activeProjectId ? (
                   <InputsInbox projectId={activeProjectId} channels={channels} />
                 ) : null}
@@ -2573,11 +2592,6 @@ export default function App() {
                       <Suspense fallback={null}>
                         <ConnectCapability onChange={() => {}} />
                       </Suspense>
-                      {activeProjectId ? (
-                        <ToolForge projectId={activeProjectId} />
-                      ) : (
-                        <p className="settings-overlay-empty">Open a product to see its self-built tools.</p>
-                      )}
                     </div>
                   ) : null}
                 </div>

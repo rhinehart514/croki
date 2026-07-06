@@ -1,5 +1,4 @@
 import { validateGraph } from "./graph-operations.mjs";
-import { deriveChannelEval } from "./eval.mjs";
 import { channelIdFor } from "./channel-graph.mjs";
 import { getProjectChannels, loadProject } from "./project-store.mjs";
 import { saveFlow } from "./flow-store.mjs";
@@ -285,17 +284,6 @@ export async function composeNakedGraph(input, options = {}) {
     compose: options.compose || blankCompose,
   });
 
-  // Derive this channel's eval — its answer key — at compose time (HARNESS.md invariant 1). With no
-  // evaluator wired the eval is null and composition is unaffected; with one wired it is stored on
-  // the graph and the run path grades against it.
-  const channelEval = await deriveChannelEval({
-    goal: input.objective || channel.objective,
-    channel,
-    agents,
-    grounding: input.grounding ?? null,
-    evaluate: options.evaluate,
-  });
-
   const channelName = input.name || channel.title;
   const channelObjective = input.objective || channel.objective;
   const channelId = channelIdFor(channelName, getProjectChannels(project, options).map((item) => item.id));
@@ -311,7 +299,6 @@ export async function composeNakedGraph(input, options = {}) {
     edges,
     store: { path: `.gtm/flows/${graphId}.json`, runs: 0 },
   };
-  if (channelEval) graph.eval = channelEval;
   // The wall, re-asserted on the composed topology: every execute node must have a founder gate upstream.
   assertGateWall(nodes, edges);
   const validation = validateGraph(graph);

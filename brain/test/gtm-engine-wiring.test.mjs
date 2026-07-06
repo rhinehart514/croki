@@ -69,23 +69,6 @@ describe("market-research route — the buyer-side ritual front door", () => {
   });
 });
 
-describe("path-portfolio route — the portfolio generation front door", () => {
-  it("resolves the project and returns a ranked-paths envelope (empty offline)", async () => {
-    const res = await fetch(`${base}/api/projects/${PROJECT}/path-portfolio`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    assert.equal(res.status, 200);
-    const body = await res.json();
-    assert.equal(body.projectId, PROJECT);
-    assert.equal(typeof body.count, "number");
-    assert.ok(Array.isArray(body.paths), "the persisted paths are returned as an array");
-    assert.equal(typeof body.summary, "string");
-    assert.equal(body.meta.connected, false);
-  });
-});
-
 describe("outcomes route — the Result-based report replaces the legacy systems view", () => {
   it("folds seeded runs + joined results into a per-path picture", async () => {
     // Seed a staged run whose one item carries a durable joinKey, and a real outcome joined on that key.

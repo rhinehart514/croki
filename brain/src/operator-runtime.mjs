@@ -4,9 +4,9 @@ import { liveStepRuntime } from "./agent-bridge.mjs";
 import { buildMicroproduct } from "./build.mjs";
 import { storeRoot } from "./store-fs.mjs";
 import { createClaudeComposer } from "./composition.mjs";
-import { createClaudeEvaluator } from "./eval.mjs";
 import { createClaudeProductModeler } from "./product-model-generator.mjs";
 import { loadFlow, recordFlowRun, saveFlow } from "./flow-store.mjs";
+import { buildRunGrounding } from "./run-grounding.mjs";
 import { createDerivedSourceLoader } from "./cross-reference.mjs";
 import { recordRunDerivations } from "./run-derivation.mjs";
 import { buildMarketContext } from "./market-research.mjs";
@@ -390,6 +390,7 @@ function flowFor(session, options = {}) {
   const channel = (project.channels ?? []).find((c) => c.graphId === graphId || c.id === graphId) ?? null;
   return {
     ...flow,
+    project,
     graph: applySharedContextToGraph(flow.graph, project.sharedContext, { channelOffer: channel?.offer ?? null }),
   };
 }
@@ -629,6 +630,10 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
     // Ground the run on the researched buyer picture (the persisted MarketObjects), not just
     // founder-typed guesses — a projection over the stored objects; null when none are researched.
     market: buildMarketContext(marketObjectStore.list({ ...options, projectId: session.projectId || "default" })),
+    // Ground every subagent on the product it serves + what's already been tried, so operator-driven
+    // runs get the same product map and run history as the direct/streaming graph-run endpoints.
+    grounding: buildRunGrounding(flow.project),
+    runs: flow.runs,
     // The live subscription-backed step runtime by default; a test injects a fake through
     // options.stepRuntime so the open agent/skill/code steps run keyless.
     stepRuntime: options.stepRuntime || liveStepRuntime({ cwd: options.cwd }),
@@ -648,7 +653,8 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
   const evidenceWorkspace = latestWorkspace(session, options);
   if (evidenceWorkspace?.report) annotateRunEvidence(result, evidenceWorkspace.report);
   const stored = recordFlowRun(flow.graph, result, options);
-  const { feedback } = recordRunDerivations({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
+  // Bank the run's derivations (founder-gate taste signals, promotions) for their side effects.
+  recordRunDerivations({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
   let next = {
     ...session,
     lastRunId: result.runId,
@@ -666,9 +672,6 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
       targetNodeId: targetNodeId ?? null,
       pendingGates: result.pendingGates,
       storedRunCount: stored.runs.length,
-      // Crystallized, gated tool-birth proposals — the operator surfaces them to route the founder
-      // to the dashboard approval (it never approves; birth is a founder action). LIST only.
-      toolBirthProposals: feedback?.toolBirthProposals ?? [],
     },
   }, options);
   if (result.pendingGates.length) {
@@ -1821,6 +1824,9 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
     designState: designStateFor(session, options),
     // Same researched buyer picture on the gate-resume run, so re-drafted descendants stay grounded.
     market: buildMarketContext(marketObjectStore.list({ ...options, projectId: session.projectId || "default" })),
+    // Same product grounding + run history on the gate-resume run, so re-drafted descendants stay grounded.
+    grounding: buildRunGrounding(flow.project),
+    runs: flow.runs,
     resumeResult: session.pendingGate.runResult,
     deployAuthorization,
     stepRuntime: liveStepRuntime({ cwd: options.cwd }),
@@ -1835,7 +1841,8 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
     authorizeRelease: () => authorizeGateRelease(session, payload, options),
   });
   recordFlowRun(flow.graph, result, options);
-  const { feedback } = recordRunDerivations({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
+  // Bank the run's derivations (founder-gate taste signals, promotions) for their side effects.
+  recordRunDerivations({ projectId: session.projectId || "default", graph: flow.graph, result }, options);
   session = addEvent({
     ...session,
     lastRunId: result.runId,
@@ -1860,7 +1867,6 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
       runId: result.runId,
       pendingGates: result.pendingGates,
       releasedBy: { userId: releasedBy.userId, name: releasedBy.name },
-      toolBirthProposals: feedback?.toolBirthProposals ?? [],
     },
   }, options);
   if (!result.pendingGates.length) launchOperatorSession(id, runtime);

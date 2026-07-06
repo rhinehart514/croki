@@ -255,16 +255,6 @@ async function listOutcomes({ projectId } = {}) {
 }
 
 /**
- * list_tool_proposals — pending tool-birth proposals (deterministic procedures crystallized from
- * repeated runs, gated and never auto-born) plus the registered, callable self-built tools.
- * Read-only: routes the founder to a decision; birth is a founder action in the dashboard.
- */
-async function listToolProposals({ projectId } = {}) {
-  const id = await resolveProjectId(projectId);
-  return brainGet(`/api/projects/${encodeURIComponent(id)}/tool-proposals`);
-}
-
-/**
  * get_outcome — one path's outcome readout (by path id or its plain-language summary) from the
  * Result-based report: how much was staged, how much drew a real outcome, and the count per kind.
  */
@@ -289,15 +279,6 @@ async function getOutcome({ outcomeId, projectId }) {
 async function runMarketResearchTool({ projectId } = {}) {
   const id = await resolveProjectId(projectId);
   return brainPost(`/api/projects/${encodeURIComponent(id)}/market-research`, {});
-}
-
-/**
- * compose_path_portfolio — generate the ranked portfolio of GTM paths (Phase 2) from the project's
- * product truth + buyer picture, persisting the paths so the reasoning canvas renders them.
- */
-async function composePathPortfolioTool({ projectId } = {}) {
-  const id = await resolveProjectId(projectId);
-  return brainPost(`/api/projects/${encodeURIComponent(id)}/path-portfolio`, {});
 }
 
 /**
@@ -435,16 +416,6 @@ const TOOLS = [
     handler: runMarketResearchTool,
   },
   {
-    name: "compose_path_portfolio",
-    description: "Generate the project's portfolio of go-to-market paths — a ranked set of distinct strategic bets built from the product truth (the scan) and the buyer picture (run_market_research first). Each path carries its bet, what it rests on, its risk, and its own measurement plan; ranking is deterministic code over the evidence each rests on. The paths persist, so the reasoning canvas renders them. Defaults to the active project. Composes and stores paths only — it never runs one and never reaches the outside world.",
-    inputSchema: {
-      type: "object",
-      properties: { projectId: { type: "string", description: "Optional. Defaults to the active project." } },
-      required: [],
-    },
-    handler: composePathPortfolioTool,
-  },
-  {
     name: "promote_run",
     description: "Turn a proven run into a repeatable motion: it re-stages the run that worked on a cadence, keeps score, and STILL STOPS AT THE FOUNDER GATE every time — it never auto-sends. An absent or unparseable cadence leaves the motion manual (it keeps score but only re-runs when asked). Autonomy is never granted here. Defaults to the active project.",
     inputSchema: {
@@ -457,12 +428,6 @@ const TOOLS = [
       required: ["runId"],
     },
     handler: promoteRunTool,
-  },
-  {
-    name: "list_tool_proposals",
-    description: "List a project's pending tool-birth proposals (deterministic procedures crystallized from repeated runs — gated and NEVER auto-born) plus the registered, callable self-built tools. Read-only: it routes the founder to a decision and does NOT approve or birth anything; birth is a founder action in the dashboard. Defaults to the active project.",
-    inputSchema: { type: "object", properties: { projectId: { type: "string", description: "Optional. Defaults to the active project." } }, required: [] },
-    handler: listToolProposals,
   },
 
   // ── Workflows — author (the channel's execution plan) ──────────────────────
@@ -803,39 +768,6 @@ const TOOLS = [
   // The canonical noun is "workflow". A lean set of the most-referenced legacy
   // channel names is kept so existing external callers keep working; they
   // delegate to the same handlers. Prefer the canonical workflow names.
-  {
-    name: "get_channel",
-    description: "Backward-compatible alias for get_workflow.",
-    inputSchema: {
-      type: "object",
-      properties: { id: { type: "string", description: "Workflow id." } },
-      required: ["id"],
-    },
-    handler: getChannel,
-  },
-  {
-    name: "run_channel",
-    description: "Backward-compatible alias for run_workflow.",
-    inputSchema: {
-      type: "object",
-      properties: { id: { type: "string", description: "Workflow id." } },
-      required: ["id"],
-    },
-    handler: runChannel,
-  },
-  {
-    name: "approve_gate",
-    description: "Backward-compatible alias for approve_workflow_gate.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        channelId: { type: "string", description: "Workflow id." },
-        nodeId: { type: "string", description: "Gate node id to approve." },
-      },
-      required: ["channelId", "nodeId"],
-    },
-    handler: approveGate,
-  },
   {
     name: "report_friction",
     description: "File a dogfood report about Drover ITSELF — a bug, rough edge, or wish the founder hits mid-flow ('the gate card hid the citation', 'I wish the queue showed all ventures'). Use it the moment the complaint is uttered; don't make the founder switch tools. Writes an agent-readable markdown item into the product repo's dogfood/queue/ with the current project and pending-gate state auto-attached, for the nightly build loop to work into gated PRs. This is feedback about the PRODUCT and never touches GTM taste memory — judgments about a draft belong at the gate, not here.",

@@ -571,43 +571,6 @@ export type GTMEdge = {
   conviction?: number;
 };
 
-// A pending tool-birth proposal — a repeated deterministic procedure crystallized from runs, gated and
-// never auto-born. The founder approves it (supplying code + a test) to register a callable self-built tool.
-export type ToolBirthProposal = {
-  id: string;
-  status: "pending" | "registered";
-  signature: string;
-  reason?: string;
-  count?: number;
-  sample?: unknown;
-  provenance?: string;
-  proposedAt?: string;
-  toolId?: string;
-  resolvedAt?: string;
-};
-
-// A registered, callable self-built tool — born only through an explicit founder approval at the gate.
-export type RegisteredTool = {
-  id: string;
-  name: string;
-  description: string;
-  code: string;
-  test: string;
-  signature?: string | null;
-  provenance?: string;
-  status: string;
-  proposedAt?: string;
-  decidedAt?: string;
-  decisionNote?: string;
-  sourceProposalId?: string;
-};
-
-export type ToolRegistryView = {
-  projectId: string;
-  pending: ToolBirthProposal[];
-  registered: RegisteredTool[];
-};
-
 export type GTMGraph = {
   id: string;
   name: string;

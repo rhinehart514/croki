@@ -8,7 +8,6 @@ import {
   ideaDecisionSignals,
   recordIdeaDecisions,
   loadFeedbackLedger,
-  actionSignalsFromRun,
 } from "../src/feedback-ledger.mjs";
 import {
   extractIdeaTaste,
@@ -17,7 +16,6 @@ import {
   renderDraftMemory,
   queryTaste,
 } from "../src/memory.mjs";
-import { detectCrystallizationCandidates, normalizeProcedure } from "../src/crystallization.mjs";
 
 function freshRoot() {
   return { root: fs.mkdtempSync(path.join(os.tmpdir(), "gtm-idea-feedback-")) };
@@ -64,28 +62,9 @@ describe("feedback-ledger — IdeaKill / IdeaKeep on the FEEDBACK rail", () => {
     assert.ok(ledger.signals.some((s) => s.type === "IdeaKill"));
   });
 
-  it("idea decisions are NOT AgentAction records, so crystallization never sees them", () => {
-    // The crystallization detector buckets AgentAction signals only; idea decisions live on the
-    // feedback rail and must never reach the action log.
+  it("idea decisions live on the feedback rail, never as AgentAction records", () => {
     const signals = ideaDecisionSignals({ decisions: [{ id: "i", angle: "a", pitch: "p", killed: true }] });
     assert.ok(signals.every((s) => s.type !== "AgentAction"));
-    // And the run-action extractor never emits an idea-decision type.
-    const actions = actionSignalsFromRun({ graph: { nodes: [] }, result: { nodes: {} } });
-    assert.ok(actions.every((s) => s.type === "AgentAction"));
-  });
-});
-
-describe("crystallization still excludes ideate / propose by signature design", () => {
-  it("stamps ideate/propose/compose actions into the judgment namespace", () => {
-    for (const verb of ["ideate", "propose", "compose"]) {
-      assert.match(normalizeProcedure({ name: `${verb} a channel for X` }), /^judgment:/);
-    }
-  });
-
-  it("never crystallizes a repeated ideate/propose action even past the threshold", () => {
-    const log = Array.from({ length: 5 }, () => ({ name: "propose a go-to-market angle" }));
-    const candidates = detectCrystallizationCandidates(log, { threshold: 3 });
-    assert.equal(candidates.length, 0);
   });
 });
 

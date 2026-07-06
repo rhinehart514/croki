@@ -2086,24 +2086,9 @@ export function GraphCanvas({
     if (connection.source && connection.target) onConnectNodes?.(connection.source, connection.target);
   }, [onConnectNodes]);
 
-  // The canvas is a drop target for the Library: drop an agent or skill and it becomes a node. The
-  // founder's universal "feed the canvas" gesture (the +Add button is the click-to-add counterpart).
-  const handleDrop = useCallback((event: React.DragEvent) => {
-    event.preventDefault();
-    if (!onAddNode) return;
-    const raw = event.dataTransfer.getData("application/gtm-capability");
-    if (!raw) return;
-    try {
-      const { kind, ref, label } = JSON.parse(raw) as { kind: "agent" | "skill"; ref: string; label?: string };
-      if (!ref) return;
-      onAddNode({ label: label || ref, kind, category: "generate", ref, contract: { accepts: [], emits: [] } });
-    } catch { /* ignore malformed drag payloads */ }
-  }, [onAddNode]);
-  const handleDragOver = useCallback((event: React.DragEvent) => {
-    if (!onAddNode) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
-  }, [onAddNode]);
+  // The live drop target for Crew/Skill drags is the outer canvas-area wrapper (App's onStepDrop),
+  // which lands a node in a real focused pipeline — spinning up a scratch one if none is focused. The
+  // click-to-add +Add button (onAddNode) is the counterpart gesture.
 
   const editorContext = useMemo<NodeEditorContextValue>(
     () => (nodeEditor ? { bridge: nodeEditor, graph, people } : null),
@@ -2127,8 +2112,6 @@ export function GraphCanvas({
       nodeTypes={NODE_TYPES}
       onNodeDragStop={handleNodeDragStop}
       onConnect={handleConnect}
-      onDrop={handleDrop}
-      onDragOver={handleDragOver}
       onEdgesDelete={(deleted) => onDeleteEdges?.(deleted.map((edge) => edge.id))}
       onPaneClick={onPaneClick}
       // A user-initiated pan/zoom (event is non-null; programmatic setCenter passes null) breaks the

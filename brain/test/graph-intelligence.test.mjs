@@ -6,7 +6,6 @@ import path from "node:path";
 
 import { deriveWeaknessForGraph, detectWeakness, weaknessReport } from "../src/graph-intelligence/weakness.mjs";
 import { recommend, scorePath } from "../src/graph-intelligence/path-ranking.mjs";
-import { routeEdgeType, validateInferredEdges } from "../src/graph-intelligence/edge-inference.mjs";
 import { sprayGraph } from "../src/graph-intelligence/spray.mjs";
 
 const at = "2026-07-02T00:00:00.000Z";
@@ -97,21 +96,7 @@ describe("graph intelligence — weakness", () => {
   });
 });
 
-describe("graph intelligence — edges and spray", () => {
-  it("routes unknown model edge labels into the closed edge union and drops edges without basis", () => {
-    assert.equal(routeEdgeType("backs"), "supports");
-    assert.equal(routeEdgeType("totally_new_edge"), "derived_from");
-    const a = node("a");
-    const b = node("b");
-    const edges = validateInferredEdges([
-      { source: "a", target: "b", type: "backs", confidence: 0.7, cites: ["a"], clause: "a backs b" },
-      { source: "a", target: "b", type: "invented", confidence: 0.2, cites: [], clause: "empty basis is invalid" },
-    ], { projectId: "drover", nodes: [a, b], edges: [] });
-    assert.equal(edges.length, 1);
-    assert.equal(edges[0].type, "supports");
-    assert.equal(edges[0].confidence, 70);
-  });
-
+describe("graph intelligence — spray", () => {
   it("sprays product, market, and strategy cards and draws structural support edges", () => {
     const graph = sprayGraph({
       projectId: "drover",

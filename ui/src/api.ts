@@ -6,7 +6,7 @@ import type {
   ContextManifest, GtmLibrary,
   GraphOperation, GTMContractAudit,
   ProductModel, ProductModelEdit,
-  CapabilityServer, Person, CrossReferenceResult, ToolRegistryView, RegisteredTool, ChannelFeed, DirectedFeed,
+  CapabilityServer, Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole, BoardView,
   ChannelMeta, Input, ObjectGraphView, GTMItem,
 } from "@/types";
@@ -563,24 +563,6 @@ export const findReferences = (
     `/api/projects/${encodeURIComponent(projectId)}/references?${params.toString()}`,
   );
 };
-
-// ── Self-built tools — the founder-gated tool-birth → registry leg ─────────────
-// Pending proposals are deterministic procedures crystallized from repeated runs (gated, never
-// auto-born); registered tools are the callable ones a founder has approved.
-export const getToolProposals = (projectId: string) =>
-  get<ToolRegistryView>(`/api/projects/${encodeURIComponent(projectId)}/tool-proposals`);
-
-// Birth a tool from a pending proposal — a FOUNDER action. Requires authored code + a test; the
-// server gate refuses anything else.
-export const approveToolBirth = (
-  projectId: string,
-  proposalId: string,
-  body: { code: string; test: string; name?: string; description?: string; decisionNote?: string },
-) =>
-  post<{ tool: RegisteredTool; registry: unknown; alreadyRegistered: boolean }>(
-    `/api/projects/${encodeURIComponent(projectId)}/tool-proposals/${encodeURIComponent(proposalId)}/approve`,
-    body,
-  );
 
 export const setActiveWorkflow = (workflowId: string) =>
   post<{ activeWorkflowId: string; activeChannelId?: string }>("/api/project/active-workflow", { workflowId });

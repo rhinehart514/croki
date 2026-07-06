@@ -42,13 +42,11 @@ describe("MCP tool IA — canonical surface", () => {
   });
 
   it("collapses the gate to a single canonical approval verb", () => {
-    // Both names still resolve, but to the SAME object family: approve_workflow_gate
-    // is canonical and approve_gate is only a thin alias delegating to it.
+    // One canonical gate verb — approve_workflow_gate. The old backward-compat approve_gate alias
+    // was removed; no other approval verb leaked in.
     assert.ok(names.includes("approve_workflow_gate"));
-    assert.ok(names.includes("approve_gate"));
-    // No third gate verb leaked in.
     const gateVerbs = names.filter((n) => n.startsWith("approve_"));
-    assert.deepEqual(new Set(gateVerbs), new Set(["approve_workflow_gate", "approve_gate"]));
+    assert.deepEqual(new Set(gateVerbs), new Set(["approve_workflow_gate"]));
   });
 
   it("exposes no direct graph-mutation verb on this surface", () => {
@@ -93,27 +91,10 @@ describe("MCP tool IA — canonical surface", () => {
   });
 });
 
-describe("MCP tool IA — channel aliases delegate to the workflow handlers", () => {
-  const aliasPairs = [
-    ["get_channel", "get_workflow"],
-    ["run_channel", "run_workflow"],
-    ["approve_gate", "approve_workflow_gate"],
-  ];
-
-  it("registers every alias and its canonical tool", () => {
-    for (const [alias, canonical] of aliasPairs) {
-      assert.ok(TOOL_MAP.has(alias), `alias ${alias} must be registered`);
-      assert.ok(TOOL_MAP.has(canonical), `canonical ${canonical} must be registered`);
-    }
-  });
-
-  it("marks each alias as backward-compatible in its description", () => {
-    for (const [alias] of aliasPairs) {
-      const desc = TOOL_MAP.get(alias).description.toLowerCase();
-      assert.ok(
-        desc.includes("alias"),
-        `${alias} should declare it is a backward-compatible alias`,
-      );
+describe("MCP tool IA — the removed backward-compat channel aliases stay gone", () => {
+  it("exposes no channel-noun alias for the canonical workflow tools", () => {
+    for (const alias of ["get_channel", "run_channel", "approve_gate"]) {
+      assert.ok(!TOOL_MAP.has(alias), `alias ${alias} must not be registered`);
     }
   });
 });

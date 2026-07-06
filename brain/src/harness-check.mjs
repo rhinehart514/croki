@@ -53,22 +53,6 @@ const INVARIANTS = [
     test: (s) => s.includes("mergeSharedDecisions"),
   },
   {
-    id: "eval_first",
-    label: "Composition derives an eval (the answer key) and stores it on the graph.",
-    file: "workflow-composer.mjs",
-    test: (s) => s.includes("deriveChannelEval") && s.includes("graph.eval"),
-  },
-  {
-    id: "oracle_first_grade",
-    label: "A run is checked oracle-first (deterministic) before any model judgment.",
-    file: "eval.mjs",
-    test: (s) => {
-      const oracle = s.indexOf("const oracle = checkRun(");
-      const grader = s.indexOf("runGrade(");
-      return oracle !== -1 && grader !== -1 && oracle < grader;
-    },
-  },
-  {
     id: "one_grader",
     label: "Grading shells out to the one shared crucible grade.mjs, not a reimplemented scorer.",
     file: "eval.mjs",
