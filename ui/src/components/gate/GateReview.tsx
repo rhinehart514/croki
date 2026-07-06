@@ -8,7 +8,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle, Check, ChevronDown, ChevronRight, CircleDot, CornerDownLeft, Loader, Pencil, ShieldCheck, Sprout, Undo2, X,
+  AlertTriangle, Check, ChevronDown, ChevronRight, ChevronUp, CircleDot, CornerDownLeft, Loader, Pencil, ShieldCheck, Sprout, Undo2, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { itemKey } from "@/lib/itemKey";
@@ -62,6 +62,30 @@ function EvidenceBody({ text, evidence }: { text: string; evidence: GateEvidence
         );
       })}
     </p>
+  );
+}
+
+// A staged draft can be a short outreach note or a long internal document. Left raw, a long one buries
+// the gate — you can't scan five drafts when each is a 40-line wall. So a long body clamps to a readable
+// preview with a fade, and opens fully on demand. Short drafts render whole, unchanged. The founder
+// scans the pile, then reads in full only the one they're deciding on.
+const LONG_BODY_CHARS = 300;
+function CardBody({ text, evidence }: { text: string; evidence: GateEvidenceLine[] }) {
+  const [open, setOpen] = useState(false);
+  if (text.length <= LONG_BODY_CHARS) return <EvidenceBody text={text} evidence={evidence} />;
+  return (
+    <div className="cgate-body-collapse">
+      <div className={cn("cgate-body-clip", !open && "is-clamped")}>
+        <EvidenceBody text={text} evidence={evidence} />
+      </div>
+      <button
+        type="button"
+        className="cgate-body-toggle"
+        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
+      >
+        {open ? <>Show less <ChevronUp size={12} aria-hidden /></> : <>Read full draft <ChevronDown size={12} aria-hidden /></>}
+      </button>
+    </div>
   );
 }
 
@@ -481,7 +505,7 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
               ) : (
                 <>
                   {v.body ? (
-                    <EvidenceBody text={v.body} evidence={evidence} />
+                    <CardBody text={v.body} evidence={evidence} />
                   ) : v.trigger || v.who || v.sourceUrl ? (
                     // Outreach framing ONLY when the item carries outreach fields — a staged
                     // prospect with no message yet reads as who/why/where, exactly as before.

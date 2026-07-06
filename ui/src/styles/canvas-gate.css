@@ -866,3 +866,20 @@
   .cgate-replay-chip { animation: none; opacity: 1; }
   .cgate-promote-hold.is-holding .cgate-promote-hold-fill { transition: none; }
 }
+
+/* ── Long draft bodies clamp to a scannable preview so the gate stays reviewable — you see all the
+   staged drafts at a glance and open only the one you're deciding on, instead of scrolling a wall. ── */
+.cgate-body-clip.is-clamped {
+  max-height: 6.2em;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(180deg, #000 58%, transparent);
+  mask-image: linear-gradient(180deg, #000 58%, transparent);
+}
+.cgate-body-toggle {
+  margin-top: 5px;
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: none; padding: 2px 0;
+  font: inherit; font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer;
+  transition: color 0.14s ease;
+}
+.cgate-body-toggle:hover { color: var(--ink); }
