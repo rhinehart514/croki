@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle, ArrowRight, ArrowUp, BarChart3, Bot, Boxes, ChevronRight, Code, Database, Filter, LoaderCircle, Lightbulb, Maximize2,
+  AlertTriangle, ArrowRight, ArrowUp, BarChart3, Bot, Boxes, Check, ChevronRight, Code, Database, Filter, LoaderCircle, Lightbulb, Maximize2,
   Mic, Minimize2, PenLine, Pin, Play, Search, Send, ShieldCheck, Square, Wand2, X,
 } from "lucide-react";
 import { statusLabel } from "@/lib/status";
@@ -652,6 +652,106 @@ function SubjectCardFace({ detail, onClose, onAction, onRelated }: {
 // The persistent co-pilot. Always docked, never summoned: your channels at the head, the
 // operator's live narration in the middle, one input at the foot. Talking to Claude here
 // either starts a new session (when idle) or continues the current one — one conversation.
+// A founder decision that arrives as a numbered list in the ask text ("1. **The win event** — …")
+// is a multiple-choice question wearing prose. Pull the choices out so they can be tapped instead of
+// re-typed. Each option is a bold/leading label plus an optional detail clause; anything that isn't a
+// list item is left for the stem. Returns no options when the ask is genuinely open-ended — the card
+// then falls back to a plain reply, never a broken picker.
+type AskOption = { label: string; detail: string };
+function parseAskOptions(text: string): AskOption[] {
+  const options: AskOption[] = [];
+  for (const line of String(text ?? "").split(/\r?\n/)) {
+    const item = line.match(/^\s*(?:\d+[.)]|[-*•])\s+(.+)$/);
+    if (!item) continue;
+    let label = item[1].trim();
+    let detail = "";
+    const bold = label.match(/^\*\*(.+?)\*\*\s*(.*)$/);
+    if (bold) {
+      label = bold[1];
+      detail = bold[2].replace(/^\s*[—–:-]\s*/, "");
+    } else {
+      const split = label.match(/^(.+?)\s*[—–:]\s+(.+)$/);
+      if (split) { label = split[1]; detail = split[2]; }
+    }
+    label = label.replace(/\*\*/g, "").replace(/[.:]\s*$/, "").trim();
+    detail = detail.replace(/\*\*/g, "").trim();
+    if (label) options.push({ label, detail });
+  }
+  return options;
+}
+
+// The founder gate for a plain-words question — the hero of the dock while Claude is waiting on you.
+// Selectable choices (when the ask is multiple-choice), a free correction, one send. It composes the
+// selection into the same text reply the operator already understands, so no protocol change is needed.
+function DecisionCard({ question, reason, onSend }: {
+  question: string;
+  reason: string;
+  onSend: (text: string) => void | Promise<void>;
+}) {
+  const options = parseAskOptions(reason);
+  const hasOptions = options.length > 0;
+  const [picked, setPicked] = useState<Set<number>>(new Set());
+  const [correction, setCorrection] = useState("");
+  const canSend = hasOptions ? (picked.size > 0 || correction.trim().length > 0) : correction.trim().length > 0;
+
+  const toggle = (i: number) => setPicked((prev) => {
+    const next = new Set(prev);
+    if (next.has(i)) next.delete(i); else next.add(i);
+    return next;
+  });
+
+  const submit = () => {
+    if (!canSend) return;
+    const chosen = [...picked].sort((a, b) => a - b).map((i) => options[i].label);
+    const parts: string[] = [];
+    if (chosen.length) parts.push(`These are wrong: ${chosen.join("; ")}.`);
+    if (correction.trim()) parts.push(correction.trim());
+    void onSend(parts.join(" ").trim() || correction.trim());
+    setPicked(new Set());
+    setCorrection("");
+  };
+
+  return (
+    <div className="dock-decide">
+      <div className="dock-decide-eyebrow"><ShieldCheck size={13} aria-hidden="true" /> Your call</div>
+      <div className="dock-decide-q"><MarkdownLite text={question} /></div>
+      {hasOptions ? (
+        <>
+          <div className="dock-decide-sub">Pick any that are off — I'll fix them together.</div>
+          <div className="dock-decide-opts">
+            {options.map((o, i) => (
+              <button
+                type="button"
+                key={i}
+                className={`dock-decide-opt${picked.has(i) ? " sel" : ""}`}
+                onClick={() => toggle(i)}
+                aria-pressed={picked.has(i)}
+              >
+                <span className="dock-decide-box">{picked.has(i) ? <Check size={11} aria-hidden="true" /> : null}</span>
+                <span className="dock-decide-opt-t"><b>{o.label}</b>{o.detail ? <span>{o.detail}</span> : null}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      ) : (
+        reason ? <div className="dock-decide-reason"><MarkdownLite text={reason} /></div> : null
+      )}
+      <textarea
+        className="dock-decide-correct"
+        rows={2}
+        value={correction}
+        onChange={(e) => setCorrection(e.target.value)}
+        placeholder={hasOptions ? "What's the correct version? — optional" : "Reply…"}
+      />
+      <div className="dock-decide-actions">
+        <button type="button" className="dock-decide-send" disabled={!canSend} onClick={submit}>
+          {hasOptions && picked.size > 0 ? "Fix what I picked" : "Send reply"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function ComposerDock({
   session, running, boundChannelName, onSend, onCancel, onReviewGate,
   floating = false, focusSignal = 0, recede = false,
@@ -1214,7 +1314,13 @@ export function ComposerDock({
           <FocusView session={session} />
         ) : (
           <Stagger className="cnv-thread">
-            {segmentEvents(session.events).map((seg) =>
+            {segmentEvents(
+              // The active pending ask is shown as the DecisionCard hero below, so drop it from the
+              // trail — an unanswered founder_input_requested (no founder_input_received after it).
+              session.pendingQuestion
+                ? session.events.filter((e, i, a) => !(e.type === "founder_input_requested" && !a.slice(i + 1).some((x) => x.type === "founder_input_received")))
+                : session.events,
+            ).map((seg) =>
               seg.kind === "tool" ? (
                 <StaggerItem key={seg.id}>
                   <ToolCluster events={seg.events} idBase={seg.id} />
@@ -1298,12 +1404,14 @@ export function ComposerDock({
         </div>
       )}
 
-      {/* ── Pending question / error ───────────────────────────── */}
+      {/* ── The founder's call — the dock's hero while Claude waits. One decidable card (tappable when
+          the ask is multiple-choice), not the raw question printed a second time under the trail. ── */}
       {session?.pendingQuestion && (
-        <div className="composer-dock-question">
-          <strong>{session.pendingQuestion.question}</strong>
-          <span>{session.pendingQuestion.reason}</span>
-        </div>
+        <DecisionCard
+          question={session.pendingQuestion.question}
+          reason={session.pendingQuestion.reason}
+          onSend={onSend}
+        />
       )}
       {session?.error && !session.pendingQuestion && (
         <div className="composer-dock-question error">
