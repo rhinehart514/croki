@@ -2329,11 +2329,9 @@ export default function App() {
               onOpen={handleProjectOpen}
               projects={projects}
             />
-          ) : operatorSession && ["ready", "running", "failed", "blocked"].includes(operatorSession.status) ? (
-            // The operator is driving the loop from the goal just given (or stopped trying). Never
-            // re-ask for the goal here, and never show an opaque spinner: the operator's live
-            // reasoning and the brief it's composing stream right here, and a failure/block surfaces
-            // its reason with a way to pick the loop back up.
+          ) : operatorSession && (operatorSession.status === "failed" || operatorSession.status === "blocked") ? (
+            // The drive STOPPED (a cold start with no runtime, a hit session limit, an error). Surface the
+            // reason and a way to pick the loop back up front-and-center, because the founder must act on it.
             <OperatorDriveState
               session={operatorSession}
               productName={activeProject?.name ?? "your product"}
@@ -2341,13 +2339,23 @@ export default function App() {
               onStartOver={() => void handleOperatorCancel()}
             />
           ) : (canvasGraph || activeProjectId) ? (
-            // Phase-1 GTM graph: one object graph, one strongest path lit, weak cards marked. Existing
-            // pipeline and map surfaces remain in the codebase; this branch is only the additive center
-            // projection for an opened product.
+            // A product is open, so SHOW THE CANVAS even while Claude is driving the loop — you watch the
+            // graph assemble here while its live reasoning streams in the co-pilot rail. Never cover the
+            // canvas with a spinner when there's a real graph to watch build (the rail already carries the
+            // "what it's thinking"; a full-center takeover here just hid the canvas and duplicated it).
             <GtmCanvas
               model={gtmCanvasModel}
               activeLensId={activeMode === "engineer" ? "engineer" : "object-graph"}
               chromeless
+            />
+          ) : operatorSession && (operatorSession.status === "ready" || operatorSession.status === "running") ? (
+            // True cold start: a goal was given but there is no product/graph yet to watch, so the drive's
+            // live reasoning IS the surface here until the first nodes exist.
+            <OperatorDriveState
+              session={operatorSession}
+              productName={activeProject?.name ?? "your product"}
+              onResume={() => void handleComposerSend("Continue.")}
+              onStartOver={() => void handleOperatorCancel()}
             />
           ) : (booting || projectBusy) ? (
             // Still resolving the workspace (initial boot, or switching products) — a calm loading
