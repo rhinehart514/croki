@@ -1870,7 +1870,7 @@ function buildMergedFlowGraph(
 // ─── Auto-center on selection ─────────────────────────────────────────────────
 
 function NodeFocuser({ selection, active }: { selection: NodeSelection; panelOpen: boolean; active: boolean }) {
-  const { getZoom, setCenter, getNode, fitView } = useReactFlow();
+  const { getNode, fitView } = useReactFlow();
   const prev = React.useRef<NodeSelection>(selection);
 
   useEffect(() => {
@@ -1883,16 +1883,15 @@ function NodeFocuser({ selection, active }: { selection: NodeSelection; panelOpe
       return;
     }
     prev.current = selection;
-    const node = getNode(selection);
-    if (!node) return;
-    const w = (node.measured?.width ?? node.width ?? 200);
-    const h = (node.measured?.height ?? node.height ?? 110);
-    const cx = node.position.x + w / 2;
-    const cy = node.position.y + h / 2;
-    // Clicking a card FLIES THE VIEW INTO it: center on the card and zoom in so it fills the view and
-    // becomes the editor. Never zoom out on select — only in (so a click from close-up doesn't recede).
-    const target = Math.max(getZoom(), 1.45);
-    setCenter(cx, cy, { zoom: target, duration: 460 });
+    if (!getNode(selection)) return;
+    // Clicking a card opens the editor, which grows the card tall. Fit that EXPANDED card fully into
+    // view (centered, whole thing on screen) rather than zooming into the collapsed node and letting the
+    // editor overflow off the page. The short delay lets the card expand and measure before we fit it.
+    const id = selection;
+    const t = setTimeout(() => {
+      fitView({ nodes: [{ id }], padding: 0.2, duration: 460, maxZoom: 1.05 });
+    }, 160);
+    return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selection]);
 
