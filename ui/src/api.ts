@@ -119,6 +119,13 @@ export const runGraph = (
   } = {},
 ) => post<GTMRunResult>("/api/graph/run", { graph, ...options });
 
+// Run a SINGLE node — the "run just this step" loop. Hits the same node-run route the full run uses
+// (POST /api/graph/run with targetNodeId), so only this node executes and its produced items come back
+// on result.nodes[nodeId]. The wall is untouched: an execute node still stops at its gate. Takes the
+// live in-memory graph (not a stored id) so it runs exactly what's on the canvas, edits included.
+export const runWorkflowNode = (graph: GTMGraph, nodeId: string) =>
+  runGraph(graph, { targetNodeId: nodeId });
+
 // Streaming run events — one per step, so the flow animates and content reveals live.
 type RunStreamEvent =
   | { type: "run_start"; nodeIds: string[] }

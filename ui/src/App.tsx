@@ -29,6 +29,7 @@ import {
   deriveChannelFrom,
   listProjects,
   runGraph,
+  runWorkflowNode,
   activateProject,
   deleteProject,
   cancelOperatorSession,
@@ -1116,6 +1117,44 @@ export default function App() {
     }
   }, [activeChannelId, approvals, decisions, graph, loadEngine, refreshProjectScope, setGraph, setRunResult, selectInGraph]);
 
+  // Run JUST ONE step — the "run a small thing" loop. Unlike executeGraph (which resolves a gate or
+  // runs the whole loop and then jumps to the first problem), this keeps the node you clicked selected
+  // so its produced items land inside its own open detail view — "that's what you see when you click on
+  // it." Uses the dedicated single-node run; nothing sends (an execute step still stops at its gate).
+  const runNode = useCallback(async (nodeId: string) => {
+    if (!graph) return;
+    setGraphRunning(true);
+    setRunningNodeId(nodeId);
+    setGraphError(null);
+    try {
+      const result = await runWorkflowNode(graph, nodeId);
+      setRunResult(result);
+      setFlowRuns((current) => [...current, result].slice(-10));
+      if (result.storedRunCount !== undefined) {
+        setGraph((current) => current ? {
+          ...current,
+          store: {
+            path: current.store?.path ?? `.gtm/flows/${current.id}.json`,
+            runs: result.storedRunCount ?? 0,
+            lastRunAt: result.storedAt,
+          },
+        } : current);
+      }
+      // Honest failure: surface a real step error, but a paused/blocked gate is the spine, not a fault.
+      const node = result.nodes[nodeId];
+      if (node && !node.ok && !node.pendingReview && !node.blocked) {
+        setGraphError(node.error || "This step needs attention.");
+      }
+    } catch (error) {
+      setGraphError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setGraphRunning(false);
+      setRunningNodeId(null);
+      loadEngine(graph?.id ?? activeChannelId); // a run updates the ledger → refresh health + problems
+      void refreshProjectScope();
+    }
+  }, [activeChannelId, graph, loadEngine, refreshProjectScope, setGraph, setRunResult]);
+
   // Streaming run — the full loop, animated. Each step lights up as it runs and its
   // content lands the moment it succeeds, instead of one batch at the end.
   const streamRun = useCallback(async () => {
@@ -1950,6 +1989,21 @@ export default function App() {
     onConnectNodes: handleGraphConnect,
     onDeleteEdges: handleDeleteEdges,
     onNodePositionChange: handleNodePositionChange,
+    // The in-card node detail (GraphCanvas → NodeCardEditor): selecting a step expands its card in
+    // place and shows Run + its produced output right there, instead of a modal takeover. Without this
+    // bridge the in-card editor stays dark. onRunNode runs JUST that node and keeps it selected so the
+    // output lands in the open card.
+    nodeEditor: {
+      flowRuns,
+      subsystem: null,
+      onApproveGate: (id: string) => void approveGate(id),
+      onSubmitReview: (id: string, d: Record<string, GateDecision>) => void submitGateReview(id, d),
+      onRunNode: (id: string) => void runNode(id),
+      onUpdateGraph: updateGraph,
+      onOpenArtifact: (type: "agent" | "skill", ref: string) => setArtifactEdit({ type, ref }),
+      onDeleteNode: handleDeleteNode,
+      onClose: () => setSelection(null),
+    },
     multiPipeline: { channels, channelGraphs, channelRunResults },
     panTo: panSignal,
     channels,
@@ -1988,7 +2042,7 @@ export default function App() {
     canvasGraph, connectors, contractAudits, runResult, graphRunning, runningNodeId, selection,
     dismissOverlays, proposedNodeIds, proposedEdgeIds, revealedNodeIds, proposalActive, operatorCursor,
     handleResolveProposal, submitGateReview, approveGate, handleAddNode, handleGraphConnect, handleDeleteEdges,
-    handleNodePositionChange, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, gtmMapGate, activeMode, composerSubject, ideateObjectFromCard, objectIdeation, objectGraphReload,
+    handleNodePositionChange, flowRuns, runNode, updateGraph, handleDeleteNode, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, gtmMapGate, activeMode, composerSubject, ideateObjectFromCard, objectIdeation, objectGraphReload,
   ]);
 
   // First-run team setup. Gated on Convex being configured AND no team chosen yet, so a local/solo
@@ -2666,8 +2720,12 @@ export default function App() {
         /> : null}
       </div>
 
-      {/* The node editor modal — the channel graph's step editor, opened by selecting a node. */}
-      {selectedNode && graph && (
+      {/* The node editor modal — the pipeline's step editor. In Engineer mode the step detail now opens
+          IN the node's own card on the canvas (GraphCanvas → NodeCardEditor: Run + produced output right
+          there), so the full-screen modal is suppressed there and kept only for other node-selection
+          contexts. Node selection today is Engineer-only, so this is effectively the modal's off switch;
+          left in place (not deleted) so it's trivially restorable and merges cleanly. */}
+      {selectedNode && graph && activeMode !== "engineer" && (
         <div className="node-detail-modal-backdrop">
           {/* A real button for click-outside-to-close — semantic and keyboard-reachable, sitting
               behind the dialog (which paints above it). Replaces a div with a mousedown handler. */}
