@@ -86,6 +86,7 @@ import { healthHex } from "@/lib/health";
 import { itemKey } from "@/lib/itemKey";
 import { gateItemView, channelOfferLine, type GatePromote, type GateReplayDecision } from "@/lib/gateItem";
 import { agentPersona } from "@/lib/agentPersona";
+import { STEP_DRAG_MIME } from "@/lib/objectPalette";
 const ProductUnderstanding = lazy(() => import("@/components/ProductUnderstanding").then((m) => ({ default: m.ProductUnderstanding })));
 const ProductCanvas = lazy(() => import("@/components/ProductCanvas").then((m) => ({ default: m.ProductCanvas })));
 import { GtmCanvas, type GtmCanvasModel } from "@/components/canvas/GtmCanvas";
@@ -1274,6 +1275,28 @@ export default function App() {
   }, [applyOperations, graph, selectInGraph]);
 
 
+  // Drag a Crew member or Skill from the left rail onto the canvas → add it as a pipeline step, then
+  // switch to the build view so the founder watches it land. This handler acts ONLY on the step MIME, so
+  // a belief-block drag (a different MIME, handled inside ObjectGraphCanvas) passes straight through
+  // untouched — the two object models never cross. If there is no active pipeline graph, handleAddNode
+  // no-ops and the drop is a harmless miss.
+  const onStepDragOver = useCallback((event: React.DragEvent) => {
+    if (!event.dataTransfer.types.includes(STEP_DRAG_MIME)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }, []);
+  const onStepDrop = useCallback((event: React.DragEvent) => {
+    const raw = event.dataTransfer.getData(STEP_DRAG_MIME);
+    if (!raw) return;
+    event.preventDefault();
+    try {
+      const { kind, ref, label } = JSON.parse(raw) as { kind: "agent" | "skill"; ref: string; label: string };
+      if (!ref) return;
+      handleAddNode({ label: label || ref, kind, category: "generate", ref, contract: { accepts: [], emits: [] } });
+      setActiveMode("engineer");
+    } catch { /* ignore malformed step payloads */ }
+  }, [handleAddNode]);
+
   const handleDeleteNode = useCallback((nodeId: string) => {
     void applyOperations([{ type: "remove_node", nodeId }]).then((next) => {
       if (next) setSelection(null);
@@ -2068,8 +2091,10 @@ export default function App() {
             onNewSkill={() => handleNewArtifact("skill")}
           />
         ) : null}
-        {/* Center — the canvas IS the workspace. Only the cold-start picker replaces it. */}
-        <section className="loop-canvas-area">
+        {/* Center — the canvas IS the workspace. Only the cold-start picker replaces it. The canvas-area
+            wrapper is the drop target for Crew/Skill steps dragged from the rail (step MIME only — belief
+            blocks fall through to ObjectGraphCanvas's own drop). */}
+        <section className="loop-canvas-area" onDragOver={onStepDragOver} onDrop={onStepDrop}>
           {/* What happened — the one organ kept from the retired cockpit, folded onto the canvas (its
               single home). A compact opaque strip that shows the latest run's real numbers and the
               loop-closer. It appears only once a run has happened; every cell with no signal is left out

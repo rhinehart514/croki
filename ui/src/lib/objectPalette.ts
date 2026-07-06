@@ -6,6 +6,12 @@
 // text drag never gets mistaken for a block.
 export const PALETTE_DRAG_MIME = "application/drover-block";
 
+// The MIME a Crew or Skill row writes on drag, read by the canvas-area drop target to add a pipeline
+// step. Kept distinct from the belief-block MIME so the two object models never cross: a block drop
+// builds the strategy map, a step drop builds the pipeline workflow. Payload is JSON:
+// { kind: "agent" | "skill"; ref: string; label: string }.
+export const STEP_DRAG_MIME = "application/drover-step";
+
 // One-word rail labels for each block. The card the drop creates keeps the same glyph (kindIcon), so a
 // "Buyer" row and the buyer card it becomes read as one thing.
 export const PALETTE_BLOCK_LABEL: Record<string, string> = {

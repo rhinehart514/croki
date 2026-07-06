@@ -10,7 +10,6 @@ import { applyObjectGraphOperations, approveRun, compileObjectGraphPath, getObje
 import type { GateDecision, GTMItem, ObjectGraphEdge, ObjectGraphNode, ObjectGraphPathRecommendation, ObjectGraphView } from "@/types";
 import { layoutObjectGraph, type PositionMap } from "@/lib/objectGraphLayout";
 import { GateReview } from "@/components/gate/GateReview";
-import { ObjectGraphPalette } from "@/components/ObjectGraphPalette";
 import { PALETTE_BLOCK_LABEL, PALETTE_DRAG_MIME } from "@/lib/objectPalette";
 import { kindIcon } from "@/lib/objectKindIcons";
 import type { GateBag } from "@/lib/gateItem";
@@ -678,8 +677,9 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId 
   );
   // The Blocks rail owns its collapsed state up here so the fit can clear its width (it floats over the
   // canvas): expanded → 224px left margin, collapsed → a slim 64px. Toggling it re-fits.
-  const [paletteCollapsed, setPaletteCollapsed] = useState(false);
-  const paletteInset = paletteCollapsed ? 64 : 224;
+  // The block palette moved to the app-level left rail, so the fit no longer clears a floating rail —
+  // just a small breathing-room inset from the canvas edge.
+  const paletteInset = 24;
   // Reduced-motion starts already-revealed (no animation); otherwise the effect below plays the waves.
   const [cardsIn, setCardsIn] = useState(reduceMotion);
   const [ignited, setIgnited] = useState(reduceMotion);
@@ -982,11 +982,6 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId 
           </button>
         </div>
       </div>
-
-      <ObjectGraphPalette
-        collapsed={paletteCollapsed}
-        onToggle={(next) => { setPaletteCollapsed(next); setRefitSignal((s) => s + 1); }}
-      />
 
       <ReactFlow
         nodes={nodes}

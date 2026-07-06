@@ -161,6 +161,35 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
+/* Rows that can be dragged onto the canvas (Crew, Skills) still click for their profile/editor, so they
+   read as grabbable without losing their button affordance. */
+.lr-draggable { cursor: grab; }
+.lr-draggable:active { cursor: grabbing; }
+
+/* ── Block chip ──────────────────────────────────────────────────────────── */
+/* A belief building block: one glyph + one word, dragged onto the strategy map. Same glyph the card it
+   becomes carries, so a "Buyer" row and the buyer card read as one thing. */
+.lr-block {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  cursor: grab;
+  user-select: none;
+  transition: background 0.1s var(--ease);
+}
+.lr-block:hover { background: var(--surface-2); }
+.lr-block:active { cursor: grabbing; }
+.lr-block svg { flex: none; color: var(--muted); }
+.lr-block:hover svg { color: var(--ink); }
+.lr-block-name {
+  font-size: 12.5px; color: var(--ink); font-weight: 500; line-height: 1.3;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
 .lr-crew-stats { display: flex; align-items: center; gap: 8px; }
 .lr-stat {
   display: inline-flex; align-items: center; gap: 3px;

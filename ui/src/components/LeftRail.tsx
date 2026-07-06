@@ -1,19 +1,25 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type DragEvent } from "react";
 import {
-  Workflow, Users, Wrench, Plus, ChevronDown,
+  Workflow, Users, Wrench, Plus, ChevronDown, Shapes,
   PanelLeftClose, PanelLeftOpen, Check,
 } from "lucide-react";
 import { agentPersona, humanizeRef, FAMILY_TINT } from "@/lib/agentPersona";
 import { healthHex } from "@/lib/health";
+import { kindIcon } from "@/lib/objectKindIcons";
+import { PALETTE_BLOCK_LABEL, PALETTE_DRAG_MIME, PALETTE_FAMILIES, STEP_DRAG_MIME } from "@/lib/objectPalette";
 import type { AgentBenchRow } from "@/api";
 import type { ChannelMeta, GtmLibrary } from "@/types";
 import "@/styles/left-rail.css";
 
 // The founder's "your stuff" rail — one always-present, opaque left column that folds the old bench
-// overlay and the workspace's pipeline list into a single index alongside the canvas. Three sections:
-// Pipelines (real project state, click to load on the canvas), Crew (every agent and what it has
-// earned at the gate, click for its profile), and Skills (the on-disk judgment, click to edit).
-// It sits BESIDE the canvas, never over it, and collapses to a thin strip to hand the width back.
+// overlay, the workspace's pipeline list, AND the floating block palette into a single index alongside
+// the canvas. Four sections: Pipelines (real project state, click to load on the canvas), Blocks (the
+// belief building blocks — drag one onto the strategy map to add it), Crew (every agent and what it has
+// earned at the gate — click for its profile, drag it onto the canvas to add it as a pipeline step),
+// and Skills (the on-disk judgment — click to edit, drag to add as a pipeline step).
+// Dragging behaves by TYPE, and the two object models never cross: a Block drop builds the strategy
+// map; a Crew or Skill drop builds the pipeline workflow. It sits BESIDE the canvas, never over it, and
+// collapses to a thin strip to hand the width back.
 
 // The round identity mark, derived from the persona library — same source the profile sheet reads.
 function Mark({ agentRef, job }: { agentRef: string; job?: string }) {
@@ -76,6 +82,24 @@ export function LeftRail({
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const skills = library?.skills ?? [];
+  const blockCount = useMemo(() => PALETTE_FAMILIES.reduce((total, family) => total + family.blocks.length, 0), []);
+
+  // Drag a belief block → the strategy/object map reads PALETTE_DRAG_MIME and creates a belief card
+  // (exactly the old floating palette's contract, so the existing canvas drop still fires).
+  const onBlockDragStart = (event: DragEvent<HTMLElement>, type: string) => {
+    event.dataTransfer.setData(PALETTE_DRAG_MIME, type);
+    event.dataTransfer.effectAllowed = "copy";
+  };
+
+  // Drag a Crew member or a Skill → the canvas-area drop target reads STEP_DRAG_MIME and adds a pipeline
+  // step (never a belief), switching to the build view so the founder watches it land.
+  const onStepDragStart = (
+    event: DragEvent<HTMLElement>,
+    payload: { kind: "agent" | "skill"; ref: string; label: string },
+  ) => {
+    event.dataTransfer.setData(STEP_DRAG_MIME, JSON.stringify(payload));
+    event.dataTransfer.effectAllowed = "copy";
+  };
 
   // Split the roster the way the bench did — proven above still-on-the-bench — so the founder reads
   // "who's earned it" first. Names fall back to the descriptive ref when a coarse role would collide.
@@ -152,7 +176,33 @@ export function LeftRail({
           )}
         </Section>
 
-        {/* Crew — every agent and what it earned at the gate; click opens its profile. */}
+        {/* Blocks — the belief building blocks; drag one onto the strategy map to add it. Grouped under
+            the plain-English families a founder tells a market story in. */}
+        <Section icon={<Shapes size={13} />} title="Blocks" count={blockCount}>
+          {PALETTE_FAMILIES.map((family) => (
+            <div key={family.label}>
+              <div className="lr-group">{family.label}</div>
+              {family.blocks.map((type) => {
+                const Glyph = kindIcon(type);
+                return (
+                  <div
+                    key={type}
+                    className="lr-block"
+                    draggable
+                    onDragStart={(event) => onBlockDragStart(event, type)}
+                    title={`Drag onto the map to add a ${PALETTE_BLOCK_LABEL[type].toLowerCase()}`}
+                  >
+                    <Glyph size={14} aria-hidden="true" />
+                    <span className="lr-block-name">{PALETTE_BLOCK_LABEL[type]}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </Section>
+
+        {/* Crew — every agent and what it earned at the gate; click opens its profile, drag adds it as a
+            pipeline step. */}
         <Section icon={<Users size={13} />} title="Crew" count={(bench ?? []).length}>
           {bench === null ? (
             <p className="lr-empty">Reading the roster…</p>
@@ -162,11 +212,11 @@ export function LeftRail({
             <>
               {proven.length > 0 ? <div className="lr-group">Proven</div> : null}
               {proven.map((row) => (
-                <CrewRow key={row.ref} row={row} name={nameByRef.get(row.ref)} onOpen={onOpenAgent} />
+                <CrewRow key={row.ref} row={row} name={nameByRef.get(row.ref)} onOpen={onOpenAgent} onDragStep={onStepDragStart} />
               ))}
               {waiting.length > 0 ? <div className="lr-group">On the bench</div> : null}
               {waiting.map((row) => (
-                <CrewRow key={row.ref} row={row} name={nameByRef.get(row.ref)} onOpen={onOpenAgent} />
+                <CrewRow key={row.ref} row={row} name={nameByRef.get(row.ref)} onOpen={onOpenAgent} onDragStep={onStepDragStart} />
               ))}
             </>
           )}
@@ -186,8 +236,10 @@ export function LeftRail({
             skills.map((sk) => (
               <button
                 key={sk.name}
-                className="lr-row"
+                className="lr-row lr-draggable"
                 type="button"
+                draggable
+                onDragStart={(event) => onStepDragStart(event, { kind: "skill", ref: sk.name, label: sk.name })}
                 onClick={() => onOpenSkill(sk.name)}
                 title={sk.description || sk.name}
               >
@@ -204,12 +256,26 @@ export function LeftRail({
   );
 }
 
-function CrewRow({ row, name, onOpen }: { row: AgentBenchRow; name?: string; onOpen: (ref: string) => void }) {
+function CrewRow({
+  row, name, onOpen, onDragStep,
+}: {
+  row: AgentBenchRow;
+  name?: string;
+  onOpen: (ref: string) => void;
+  onDragStep: (event: DragEvent<HTMLElement>, payload: { kind: "agent" | "skill"; ref: string; label: string }) => void;
+}) {
   const { role } = agentPersona(row.ref, row.job);
   const decided = row.counts.approved + row.counts.rejected;
   const pct = decided > 0 ? Math.round((row.counts.approved / decided) * 100) : null;
   return (
-    <button className="lr-row lr-crew" type="button" onClick={() => onOpen(row.ref)} title={row.job || (name ?? role)}>
+    <button
+      className="lr-row lr-crew lr-draggable"
+      type="button"
+      draggable
+      onDragStart={(event) => onDragStep(event, { kind: "agent", ref: row.ref, label: name ?? role })}
+      onClick={() => onOpen(row.ref)}
+      title={row.job || (name ?? role)}
+    >
       <Mark agentRef={row.ref} job={row.job} />
       <span className="lr-row-main">
         <span className="lr-row-name">{name ?? role}</span>
