@@ -1421,8 +1421,39 @@ function InspectorCard({ node, result, onClose }: {
 // nodes are unchanged) doesn't re-render all ~40+ cards — React Flow passes stable data/selected
 // props, so the default shallow comparison is correct. Memoizing at the registry keeps one stable
 // component type per node kind (React.memo must not be recreated per render).
+// ── Output node ── the pipeline's projected, honest endpoint (appended in buildFlowGraph). A compact
+// box that surfaces what the last run actually captured, with a CSV to pull it — or an honest "no result
+// yet". It is a canvas projection, never part of the composed graph (no fixed skeleton).
+function OutputNodeComponent({ data }: NodeProps<Node<{ label: string; items: unknown[]; hasRun: boolean }>>) {
+  const items = Array.isArray(data.items) ? data.items : [];
+  return (
+    <div className="loop-node loop-node-output">
+      <Handle type="target" position={Position.Left} id="t-l" />
+      <div className="loop-node-header">
+        <div className="loop-node-icon" style={{ background: `${INK}0f`, color: INK }}><Database size={15} /></div>
+        <span className="loop-node-type-label">Output</span>
+      </div>
+      <span className="loop-node-label">{items.length > 0 ? `${items.length} captured` : "No result yet"}</span>
+      {items.length > 0 ? (
+        <button
+          type="button"
+          className="loop-node-editor-csv"
+          onClick={(e) => { e.stopPropagation(); downloadItemsCsv(items as Array<Record<string, unknown>>, data.label); }}
+          title="Download the pipeline's captured result as a CSV"
+        >
+          <Download size={11} /> Download CSV · {items.length} row{items.length === 1 ? "" : "s"}
+        </button>
+      ) : (
+        <span className="loop-node-output-empty">{data.hasRun ? "The last run captured nothing here." : "Run the pipeline to capture its result."}</span>
+      )}
+      <Handle type="source" position={Position.Right} id="s-r" />
+    </div>
+  );
+}
+
 const NODE_TYPES = {
   resourceNode:   React.memo(ResourceNodeComponent),
+  outputNode:     React.memo(OutputNodeComponent),
   contextNode:    React.memo(ContextNodeComponent),
   workNode:       React.memo(WorkNodeComponent),
   laneStatusNode: React.memo(LaneStatusNodeComponent),
@@ -1680,6 +1711,37 @@ function buildFlowGraph(
       ...(proposed ? { className: `${base.className ?? ""} loop-edge-proposed ${edgeRevealed ? "is-revealed" : "is-unrevealed"}`.trim(), animated: true } : {}),
     };
   });
+
+  // ── Output node ── append the pipeline's honest endpoint: a projected node to the right of the last
+  // step, surfacing what the run actually captured (the right-most step that produced items) with a CSV,
+  // or "no result yet". Not part of the composed graph — a canvas projection, so no fixed skeleton.
+  if (!ideation && graph.nodes.length > 0) {
+    const rightmost = graph.nodes.reduce((a, b) => ((b.position?.x ?? 0) > (a.position?.x ?? 0) ? b : a));
+    const producing = graph.nodes.filter((n) => (result?.nodes[n.id]?.items?.length ?? 0) > 0);
+    const resultNode = producing.length
+      ? producing.reduce((a, b) => ((b.position?.x ?? 0) > (a.position?.x ?? 0) ? b : a))
+      : null;
+    const captured = resultNode ? (result?.nodes[resultNode.id]?.items ?? []) : [];
+    const outId = `${graph.id}::__output`;
+    nodes.push({
+      id: outId,
+      type: "outputNode",
+      position: { x: (rightmost.position?.x ?? 0) + 264, y: rightmost.position?.y ?? 0 },
+      draggable: true,
+      selectable: false,
+      data: { label: graph.name || "Result", items: captured, hasRun: !!result },
+    });
+    edges.push({
+      id: `${outId}__edge`,
+      source: rightmost.id,
+      target: outId,
+      sourceHandle: "s-r",
+      targetHandle: "t-l",
+      className: "loop-edge-data",
+      type: "smoothstep",
+      markerEnd: { type: MarkerType.ArrowClosed, width: 13, height: 13, color: EDGE_INK.data },
+    });
+  }
 
   return { nodes, edges };
 }

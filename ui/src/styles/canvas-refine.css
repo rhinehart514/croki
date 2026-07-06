@@ -243,6 +243,10 @@
   transition: border-color 0.14s var(--ease), color 0.14s var(--ease);
 }
 .react-flow .loop-node-editor-csv:hover { border-color: var(--ink-3, var(--muted)); color: var(--ink); }
+/* Output node — the projected endpoint reads as a distinct, quiet terminal: a dashed edge-of-flow box. */
+.react-flow .loop-node-output { border-style: dashed; min-width: 172px; max-width: 220px; }
+.react-flow .loop-node-output .loop-node-label { font-weight: 600; }
+.react-flow .loop-node-output-empty { font-size: 11px; line-height: 1.35; color: var(--muted); }
 
 /* ── Switch — conditional logic as a card ───────────────────────────────────────
    Mirrors the gate's left-accent grammar, but in INK, not amber: a switch is automatic
