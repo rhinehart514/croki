@@ -68,6 +68,7 @@ import { ComposerDock } from "@/components/ComposerDock";
 import { FloatingDock } from "@/components/FloatingDock";
 import { LeftRail } from "@/components/LeftRail";
 import { type OperatorCursorState } from "@/components/GraphCanvas";
+import { setGhostResolve } from "@/lib/ghostResolve";
 import { TeamOnboarding } from "@/components/TeamOnboarding";
 import { convexEnabled, loadTeamIdentity, type TeamIdentity } from "@/lib/convex";
 import { GoalLauncher } from "@/components/GoalLauncher";
@@ -169,7 +170,7 @@ import { ProductEntry } from "@/components/ProductEntry";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { Button } from "@/components/ui/button";
 import type {
-  ChannelMeta, ConnectorMeta, ContextManifest, Decisions, EngineState, GateDecision, GraphOperation, GtmLibrary, GTMContractAudit, GTMGraph, GTMNode, GTMNodeCategory,
+  ChannelMeta, ConnectorMeta, ContextManifest, Decisions, EngineState, GateDecision, GraphOperation, GtmLibrary, GTMContractAudit, GTMEdge, GTMGraph, GTMNode, GTMNodeCategory,
   GTMProject, GTMNodeResult, GTMRunResult, NodeSelection, OperatorSession, ProjectSummary,
   ProductModel, ProductModelEdit,
   Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
@@ -1774,9 +1775,133 @@ export default function App() {
   // backend nulls pendingProposal), so a resolved session shows nothing.
   const pendingProposal = operatorSession?.pendingProposal ?? null;
   const proposalActive = !!(pendingProposal && graph && pendingProposal.graphId === graph.id);
+
+  // ── Client-staged ghosts (slice 4): Claude's proposed canvas edits, held translucent until the ──
+  // founder accepts each in place. Distinct from the operator's all-or-nothing `pendingProposal` above:
+  // these are per-item, resolve without a backend round-trip, and carry `proposed: true` on the node/edge
+  // itself (added only in the display merge). The operator path owns the ghost layer whenever it holds a
+  // live proposal, so this stays dormant while `proposalActive`.
+  const [stagedGhosts, setStagedGhosts] = useState<{ nodes: GTMNode[]; edges: GTMEdge[] } | null>(null);
+  // Strip the transient ghost marker so a committed node/edge lands clean in the durable graph.
+  const stripProposed = <T extends { proposed?: boolean }>(obj: T): T => {
+    const copy = { ...obj };
+    delete copy.proposed;
+    return copy;
+  };
+  // Ghosts only make sense against the pipeline they were staged for; drop them if the founder navigates
+  // to a different graph so they never render on the wrong canvas.
+  const stagedGhostGraphId = useRef<string | null>(null);
+  useEffect(() => {
+    if (stagedGhosts && graph && stagedGhostGraphId.current && stagedGhostGraphId.current !== graph.id) {
+      setStagedGhosts(null);
+      stagedGhostGraphId.current = null;
+    }
+  }, [graph, stagedGhosts]);
+
+  const ghostsLive = !proposalActive && !!graph && !!stagedGhosts && (stagedGhosts.nodes.length > 0 || stagedGhosts.edges.length > 0);
+  const stagedGhostGraph = useMemo<GTMGraph | null>(() => {
+    if (!ghostsLive || !graph || !stagedGhosts) return null;
+    const nodeIds = new Set(graph.nodes.map((n) => n.id));
+    const edgeIds = new Set(graph.edges.map((e) => e.id));
+    const ghostNodes = stagedGhosts.nodes.filter((n) => !nodeIds.has(n.id)).map((n) => ({ ...n, proposed: true }));
+    const ghostEdges = stagedGhosts.edges.filter((e) => !edgeIds.has(e.id)).map((e) => ({ ...e, proposed: true }));
+    return { ...graph, nodes: [...graph.nodes, ...ghostNodes], edges: [...graph.edges, ...ghostEdges] };
+  }, [ghostsLive, graph, stagedGhosts]);
+
   const displayGraph = proposalActive && pendingProposal
     ? pendingProposal.preview
-    : graph;
+    : (stagedGhostGraph ?? graph);
+
+  // Stage a proposal onto the canvas as ghosts. THIS is the composer/Claude hook: when Claude proposes a
+  // graph edit, it calls this with the new nodes/edges and the founder resolves them in place.
+  // TODO(composer): wire ComposerDock / the operator so a "propose these steps" turn calls this directly
+  // (today it's reachable through the window bridge below and the operator's own pendingProposal path).
+  const stageGhostProposal = useCallback((nodes: GTMNode[], edges: GTMEdge[] = []) => {
+    if ((!nodes || nodes.length === 0) && (!edges || edges.length === 0)) return;
+    stagedGhostGraphId.current = graph?.id ?? null;
+    setStagedGhosts((prev) => ({
+      nodes: [...(prev?.nodes ?? []), ...(nodes ?? [])],
+      edges: [...(prev?.edges ?? []), ...(edges ?? [])],
+    }));
+    setActiveMode("engineer");
+  }, [graph]);
+
+  const acceptGhostNode = useCallback((nodeId: string) => {
+    setStagedGhosts((prev) => {
+      if (!prev) return prev;
+      const node = prev.nodes.find((n) => n.id === nodeId);
+      if (!node) return prev;
+      const remainingNodes = prev.nodes.filter((n) => n.id !== nodeId);
+      const stillGhost = new Set(remainingNodes.map((n) => n.id));
+      // Commit this node plus any staged edge whose BOTH endpoints are now real (this node + the graph).
+      const commitEdges = prev.edges.filter(
+        (e) => (e.source === nodeId || e.target === nodeId) && !stillGhost.has(e.source) && !stillGhost.has(e.target),
+      );
+      const commitEdgeIds = new Set(commitEdges.map((e) => e.id));
+      const remainingEdges = prev.edges.filter((e) => !commitEdgeIds.has(e.id));
+      // Commit clean, real objects — the ghost `proposed` marker never lands in the durable graph.
+      const ops: GraphOperation[] = [
+        { type: "add_node", node: stripProposed(node) },
+        ...commitEdges.map((edge) => ({ type: "connect_nodes", edge: stripProposed(edge) } as GraphOperation)),
+      ];
+      void applyOperations(ops);
+      return remainingNodes.length || remainingEdges.length ? { nodes: remainingNodes, edges: remainingEdges } : null;
+    });
+  }, [applyOperations]);
+
+  const rejectGhostNode = useCallback((nodeId: string) => {
+    setStagedGhosts((prev) => {
+      if (!prev) return prev;
+      const nodes = prev.nodes.filter((n) => n.id !== nodeId);
+      // Drop edges dangling off the discarded node too — they can never become real without it.
+      const edges = prev.edges.filter((e) => e.source !== nodeId && e.target !== nodeId);
+      return nodes.length || edges.length ? { nodes, edges } : null;
+    });
+  }, []);
+
+  const acceptGhostEdge = useCallback((edgeId: string) => {
+    setStagedGhosts((prev) => {
+      if (!prev) return prev;
+      const staged = prev.edges.find((e) => e.id === edgeId);
+      if (!staged) return prev;
+      void applyOperations([{ type: "connect_nodes", edge: stripProposed(staged) }]);
+      const edges = prev.edges.filter((e) => e.id !== edgeId);
+      return prev.nodes.length || edges.length ? { nodes: prev.nodes, edges } : null;
+    });
+  }, [applyOperations]);
+
+  const rejectGhostEdge = useCallback((edgeId: string) => {
+    setStagedGhosts((prev) => {
+      if (!prev) return prev;
+      const edges = prev.edges.filter((e) => e.id !== edgeId);
+      return prev.nodes.length || edges.length ? { nodes: prev.nodes, edges } : null;
+    });
+  }, []);
+
+  // Publish the resolve handlers + the live staged sets to the canvas's ghost controls (a module store,
+  // so no new prop threads through GtmCanvas). Cleared when nothing is staged.
+  useEffect(() => {
+    if (!ghostsLive || !stagedGhosts) {
+      setGhostResolve(null);
+      return;
+    }
+    setGhostResolve({
+      acceptNode: acceptGhostNode,
+      rejectNode: rejectGhostNode,
+      acceptEdge: acceptGhostEdge,
+      rejectEdge: rejectGhostEdge,
+      stagedNodeIds: new Set(stagedGhosts.nodes.map((n) => n.id)),
+      stagedEdgeIds: new Set(stagedGhosts.edges.map((e) => e.id)),
+    });
+    return () => setGhostResolve(null);
+  }, [ghostsLive, stagedGhosts, acceptGhostNode, rejectGhostNode, acceptGhostEdge, rejectGhostEdge]);
+
+  // Window bridge — the minimal, demonstrable composer seam until ComposerDock is wired. Claude (or a
+  // quick manual test) calls window.__droverStageGhosts(nodes, edges) to preview a graph edit as ghosts.
+  useEffect(() => {
+    (window as unknown as { __droverStageGhosts?: (n: GTMNode[], e?: GTMEdge[]) => void }).__droverStageGhosts = stageGhostProposal;
+    return () => { delete (window as unknown as { __droverStageGhosts?: unknown }).__droverStageGhosts; };
+  }, [stageGhostProposal]);
 
   // The gate on the canvas. When a staged run pauses at its founder gate, this resolves the real gate
   // node id + its staged items + the taste count, and hands them to the canvas so the review blooms in
@@ -1820,15 +1945,19 @@ export default function App() {
       const current = new Set(graph.nodes.map((node) => node.id));
       return new Set(pendingProposal.preview.nodes.filter((node) => !current.has(node.id)).map((node) => node.id));
     }
+    // Client-staged ghosts get the same dashed "loop-node-proposed" styling via this set; the per-item
+    // accept/reject rides the module store, not this all-or-nothing operator path.
+    if (ghostsLive && stagedGhosts) return new Set(stagedGhosts.nodes.map((node) => node.id));
     return undefined;
-  }, [proposalActive, pendingProposal, graph]);
+  }, [proposalActive, pendingProposal, graph, ghostsLive, stagedGhosts]);
   const proposedEdgeIds = useMemo(() => {
     if (proposalActive && pendingProposal && graph) {
       const current = new Set(graph.edges.map((edge) => edge.id));
       return new Set(pendingProposal.preview.edges.filter((edge) => !current.has(edge.id)).map((edge) => edge.id));
     }
+    if (ghostsLive && stagedGhosts) return new Set(stagedGhosts.edges.map((edge) => edge.id));
     return undefined;
-  }, [proposalActive, pendingProposal, graph]);
+  }, [proposalActive, pendingProposal, graph, ghostsLive, stagedGhosts]);
 
   // Staged reveal: the operator hands back a whole proposal at once, but the founder shouldn't see it
   // pop in fully formed — the new ghost nodes surface one at a time so the workflow visibly builds onto

@@ -31,6 +31,7 @@ import { computeChannelLanes, type ChannelLane } from "@/lib/channelLanes";
 import { channelOfferLine } from "@/lib/gateItem";
 import type { GatePromote } from "@/lib/gateItem";
 import { GateReview } from "@/components/gate/GateReview";
+import { useGhostResolve } from "@/lib/ghostResolve";
 
 // The in-card editor needs the same handler bag the old right rail held (run a step, save the
 // graph, open an artifact, delete, review a gate) plus the live graph (to clone-and-save a notes
@@ -38,6 +39,105 @@ import { GateReview } from "@/components/gate/GateReview";
 // topology mapper and the editor reads the bridge directly.
 type NodeEditorContextValue = { bridge: NodeEditorBridge; graph: GTMGraph; people: Person[] } | null;
 const NodeEditorContext = React.createContext<NodeEditorContextValue>(null);
+
+// ─── Ghost proposals (slice 4) — Claude's proposed canvas edits, accepted in place ─────────────────
+// Distinct from the operator's all-or-nothing pendingProposal path above. These are CLIENT-staged
+// ghosts: a node or edge Claude proposes, held translucent/dashed on the canvas until the founder
+// accepts or discards it — per item, right where the change is. The resolve handlers travel through the
+// ghostResolve module store (not props) so these controls reach them WITHOUT threading a new prop
+// through GtmCanvas, which is outside this slice's files. App registers the handlers; these subscribe.
+
+// The per-ghost accept/discard control that floats on a client-staged ghost NODE. Mirrors the operator
+// ProposalControls' placement and buttons (reusing .loop-proposal-inline), but resolves ONE node — not
+// the whole proposal — so Claude's proposed steps are adopted or dropped individually. nodrag/nopan
+// keep a click off the canvas pan; stopPropagation keeps it off the node's select handler.
+function GhostControls({ nodeId }: { nodeId: string }) {
+  const ghost = useGhostResolve();
+  if (!ghost || !ghost.stagedNodeIds.has(nodeId)) return null;
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+  return (
+    <div className="loop-proposal-inline nodrag nopan" role="group" aria-label="Accept or discard this proposed step">
+      <div className="loop-proposal-inline-row">
+        <button
+          type="button"
+          className="loop-proposal-inline-btn accept"
+          title="Add this proposed step"
+          aria-label="Add this proposed step"
+          onClick={(e) => { stop(e); ghost.acceptNode(nodeId); }}
+        >
+          <Check />
+        </button>
+        <button
+          type="button"
+          className="loop-proposal-inline-btn reject"
+          title="Discard this proposed step"
+          aria-label="Discard this proposed step"
+          onClick={(e) => { stop(e); ghost.rejectNode(nodeId); }}
+        >
+          <X />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// The accept/discard chips for client-staged ghost EDGES that stand on their own — both endpoints are
+// already real (an edge hanging off a ghost node commits or drops with that node, so it shows no chip).
+// Rendered in flow coordinates via ViewportPortal (mirrors InspectorCard), positioned at the edge's
+// midpoint. Reuses .loop-proposal-inline-btn for button styling; the wrapper is inline-styled so this
+// layer touches no shared CSS file.
+function GhostEdgeChips({ graph }: { graph: GTMGraph }) {
+  const ghost = useGhostResolve();
+  if (!ghost || ghost.stagedEdgeIds.size === 0) return null;
+  const pos = new Map(graph.nodes.map((n) => [n.id, n.position ?? { x: 0, y: 0 }]));
+  const NODE_W = 210;
+  const NODE_H = 52;
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+  const chips = graph.edges
+    .filter((e) => ghost.stagedEdgeIds.has(e.id) && !ghost.stagedNodeIds.has(e.source) && !ghost.stagedNodeIds.has(e.target))
+    .map((e) => {
+      const s = pos.get(e.source);
+      const t = pos.get(e.target);
+      if (!s || !t) return null;
+      const sx = s.x + NODE_W; const sy = s.y + NODE_H / 2;
+      const tx = t.x; const ty = t.y + NODE_H / 2;
+      const mx = (sx + tx) / 2; const my = (sy + ty) / 2;
+      return (
+        <div
+          key={e.id}
+          className="nodrag nopan"
+          style={{ position: "absolute", transform: `translate(${mx}px, ${my}px) translate(-50%, -50%)`, zIndex: 8 }}
+        >
+          <div
+            className="loop-proposal-inline-row"
+            style={{ padding: 4, borderRadius: 999, border: "1px solid var(--ghost)", background: "var(--surface)", boxShadow: "var(--shadow-pop)" }}
+          >
+            <button
+              type="button"
+              className="loop-proposal-inline-btn accept"
+              title="Add this proposed connection"
+              aria-label="Add this proposed connection"
+              onClick={(ev) => { stop(ev); ghost.acceptEdge(e.id); }}
+            >
+              <Check />
+            </button>
+            <button
+              type="button"
+              className="loop-proposal-inline-btn reject"
+              title="Discard this proposed connection"
+              aria-label="Discard this proposed connection"
+              onClick={(ev) => { stop(ev); ghost.rejectEdge(e.id); }}
+            >
+              <X />
+            </button>
+          </div>
+        </div>
+      );
+    })
+    .filter(Boolean);
+  if (chips.length === 0) return null;
+  return <ViewportPortal>{chips}</ViewportPortal>;
+}
 
 // ─── Category metadata ────────────────────────────────────────────────────────
 
@@ -789,6 +889,7 @@ function ResourceNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       )}
     </div>
       <ProposalControls data={data} />
+      <GhostControls nodeId={data.node.id} />
     </>
   );
 }
@@ -839,6 +940,7 @@ function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       )}
     </motion.div>
       <ProposalControls data={data} />
+      <GhostControls nodeId={data.node.id} />
     </>
   );
 }
@@ -1193,6 +1295,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       )}
     </motion.div>
       <ProposalControls data={data} />
+      <GhostControls nodeId={data.node.id} />
     </>
   );
 }
@@ -2217,6 +2320,8 @@ export function GraphCanvas({
           })}
         </ViewportPortal>
       ) : null}
+      {/* Slice 4: inline accept/discard for client-staged ghost EDGES that stand on their own. */}
+      <GhostEdgeChips graph={laidOutGraph} />
       <Background color="#e4e4e7" gap={26} size={1.5} />
       <Controls showInteractive={false} position="bottom-right" />
     </ReactFlow>
