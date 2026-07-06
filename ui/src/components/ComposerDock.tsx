@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle, ArrowRight, ArrowUp, BarChart3, Bot, Boxes, Check, ChevronRight, Code, Database, Filter, LoaderCircle, Lightbulb, Maximize2,
-  Mic, Minimize2, PenLine, Pin, Play, Search, Send, ShieldCheck, Square, Wand2, X,
+  AlertTriangle, ArrowRight, ArrowUp, BarChart3, Bot, Boxes, ChevronRight, Code, Database, Filter, LoaderCircle, Lightbulb, Maximize2,
+  Mic, Minimize2, PenLine, Pin, Play, Plus, Search, Send, ShieldCheck, Square, Wand2, X,
 } from "lucide-react";
 import { statusLabel } from "@/lib/status";
 import { subjectActions } from "@/lib/subjectActions";
@@ -680,73 +680,46 @@ function parseAskOptions(text: string): AskOption[] {
   return options;
 }
 
-// The founder gate for a plain-words question — the hero of the dock while Claude is waiting on you.
-// Selectable choices (when the ask is multiple-choice), a free correction, one send. It composes the
-// selection into the same text reply the operator already understands, so no protocol change is needed.
-function DecisionCard({ question, reason, onSend }: {
+// Strip the option lines (and the "if it's more than one…" meta) out of the ask, leaving just the
+// question being asked — the stem the founder reads first.
+function stripOptions(text: string): string {
+  return String(text ?? "")
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*(?:\d+[.)]|[-*•])\s+/.test(line))
+    .filter((line) => !/^\s*if\s+(it'?s\s+)?more than one/i.test(line))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// The founder's call — the dock's hero while Claude waits. Compact by design: the question, then the
+// choices as tap-to-answer chips that drop into the composer's OWN input (the reply lives there, not in
+// a second box on the card). Claude's longer reasoning stays in the thread, never stacked on the
+// decision. Labels only — the verbose per-option prose is what made the old card a wall.
+function DecisionCard({ question, reason, onPick }: {
   question: string;
   reason: string;
-  onSend: (text: string) => void | Promise<void>;
+  onPick: (text: string) => void;
 }) {
-  const options = parseAskOptions(reason);
-  const hasOptions = options.length > 0;
-  const [picked, setPicked] = useState<Set<number>>(new Set());
-  const [correction, setCorrection] = useState("");
-  const canSend = hasOptions ? (picked.size > 0 || correction.trim().length > 0) : correction.trim().length > 0;
-
-  const toggle = (i: number) => setPicked((prev) => {
-    const next = new Set(prev);
-    if (next.has(i)) next.delete(i); else next.add(i);
-    return next;
-  });
-
-  const submit = () => {
-    if (!canSend) return;
-    const chosen = [...picked].sort((a, b) => a - b).map((i) => options[i].label);
-    const parts: string[] = [];
-    if (chosen.length) parts.push(`These are wrong: ${chosen.join("; ")}.`);
-    if (correction.trim()) parts.push(correction.trim());
-    void onSend(parts.join(" ").trim() || correction.trim());
-    setPicked(new Set());
-    setCorrection("");
-  };
-
+  const fromQuestion = parseAskOptions(question);
+  const options = fromQuestion.length ? fromQuestion : parseAskOptions(reason);
+  const stem = stripOptions(question) || question;
   return (
     <div className="dock-decide">
       <div className="dock-decide-eyebrow"><ShieldCheck size={13} aria-hidden="true" /> Your call</div>
-      <div className="dock-decide-q"><MarkdownLite text={question} /></div>
-      {hasOptions ? (
-        <>
-          <div className="dock-decide-sub">Pick any that are off — I'll fix them together.</div>
-          <div className="dock-decide-opts">
-            {options.map((o, i) => (
-              <button
-                type="button"
-                key={i}
-                className={`dock-decide-opt${picked.has(i) ? " sel" : ""}`}
-                onClick={() => toggle(i)}
-                aria-pressed={picked.has(i)}
-              >
-                <span className="dock-decide-box">{picked.has(i) ? <Check size={11} aria-hidden="true" /> : null}</span>
-                <span className="dock-decide-opt-t"><b>{o.label}</b>{o.detail ? <span>{o.detail}</span> : null}</span>
-              </button>
-            ))}
-          </div>
-        </>
-      ) : (
-        reason ? <div className="dock-decide-reason"><MarkdownLite text={reason} /></div> : null
-      )}
-      <textarea
-        className="dock-decide-correct"
-        rows={2}
-        value={correction}
-        onChange={(e) => setCorrection(e.target.value)}
-        placeholder={hasOptions ? "What's the correct version? — optional" : "Reply…"}
-      />
-      <div className="dock-decide-actions">
-        <button type="button" className="dock-decide-send" disabled={!canSend} onClick={submit}>
-          {hasOptions && picked.size > 0 ? "Fix what I picked" : "Send reply"}
-        </button>
+      <div className="dock-decide-q">{stem}</div>
+      {options.length ? (
+        <div className="dock-decide-opts">
+          {options.map((o, i) => (
+            <button type="button" key={i} className="dock-decide-opt" onClick={() => onPick(o.label)}>
+              <span className="dock-decide-opt-t">{o.label}</span>
+              <Plus className="dock-decide-add" size={13} aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <div className="dock-decide-hint">
+        {options.length ? "Tap what's off — it drops into your reply below." : "Reply below to answer."}
       </div>
     </div>
   );
@@ -1410,7 +1383,10 @@ export function ComposerDock({
         <DecisionCard
           question={session.pendingQuestion.question}
           reason={session.pendingQuestion.reason}
-          onSend={onSend}
+          onPick={(text) => {
+            setInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
+            inputRef.current?.focus();
+          }}
         />
       )}
       {session?.error && !session.pendingQuestion && (
