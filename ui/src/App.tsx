@@ -2289,6 +2289,7 @@ export default function App() {
             activeChannelId={activeChannelId}
             bench={bench}
             library={library}
+            activeMode={activeMode}
             onLoadChannel={(id) => void loadChannel(id)}
             onNewChannel={handleNewChannel}
             onOpenAgent={(ref) => setAgentProfileRef(ref)}

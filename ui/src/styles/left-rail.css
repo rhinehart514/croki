@@ -161,10 +161,31 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-/* Rows that can be dragged onto the canvas (Crew, Skills) still click for their profile/editor, so they
+/* Rows that can be dragged onto the canvas (Agents, Tools) still click for their profile/editor, so they
    read as grabbable without losing their button affordance. */
 .lr-draggable { cursor: grab; }
 .lr-draggable:active { cursor: grabbing; }
+
+/* The grip — the "pick me up and drop me on the canvas" affordance. Absent at rest so the rail stays a
+   calm index; it fades in on hover to say the row is a tangible object you drag, not just a link. Lives
+   at the trailing edge of every draggable row (Agents, Tools) and block. */
+.lr-grip {
+  flex: none;
+  margin-left: auto;
+  align-self: center;
+  color: var(--faint);
+  opacity: 0;
+  transform: translateX(-2px);
+  transition: opacity 0.12s var(--ease), transform 0.12s var(--ease), color 0.12s var(--ease);
+  pointer-events: none;
+}
+.lr-draggable:hover .lr-grip,
+.lr-draggable:focus-visible .lr-grip,
+.lr-block:hover .lr-grip {
+  opacity: 1;
+  transform: translateX(0);
+  color: var(--muted);
+}
 
 /* ── Block chip ──────────────────────────────────────────────────────────── */
 /* A belief building block: one glyph + one word, dragged onto the strategy map. Same glyph the card it
