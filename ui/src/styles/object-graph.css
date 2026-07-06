@@ -168,12 +168,12 @@
 
 .object-card {
   position: relative;
-  width: 214px;
-  height: 152px;
+  width: 210px;
+  height: 118px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--line-2);
   border-radius: var(--r-sm);
   background: var(--surface);
@@ -440,7 +440,9 @@
   line-height: 1.35;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
+  /* Two full lines, clean ellipsis — the rest opens in the inspector. A deeper clamp cut mid-word and
+     read careless; two lines keeps every card the same scannable height. */
+  -webkit-line-clamp: 2;
   overflow: hidden;
 }
 
@@ -495,7 +497,7 @@
 .obj-message {
   position: relative;
   padding-left: 17px;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
 }
 .obj-message::before {
   content: "\201C";
@@ -512,7 +514,7 @@
   padding-left: 11px;
   border-left: 2px solid var(--ink);
   font-weight: 500;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
 }
 
 /* proof point: evidence, framed like a citation */
@@ -617,10 +619,10 @@
   transition: opacity 160ms ease;
 }
 
-/* Off-spine edges recede but stay readable as flow — at 0.18 they vanished and the map read as floating
-   dots joined by nothing. A third of full strength keeps the structure legible under the lit spine. */
+/* Off-spine edges recede hard so the ONE lit path to the dollar is traceable, not lost in a tangle of
+   faint crossing curves. They stay just barely present as structure; the lit spine carries the reading. */
 .object-graph-shell.has-path .object-edge:not(.lit) {
-  opacity: 0.34;
+  opacity: 0.12;
 }
 
 .object-edge.lit {
@@ -783,4 +785,28 @@
   background: var(--surface);
   color: var(--ink);
   box-shadow: var(--shadow-xs);
+}
+
+/* #3 — In the labeled-column (stages/Move) view, the column header already names the type ("Buyer",
+   "Pain"), so the per-card type label just repeats it. Hide it there and give the room to the content;
+   the free causal (Engineer) view keeps it, since it has no column headers to lean on. Special cards
+   (gate / outward / outcome) keep their label — they aren't in a plainly-named column. */
+.object-graph-shell.arrange-stages .object-card:not(.role-gate):not(.role-outward):not(.role-outcome) .object-card-type {
+  display: none;
+}
+
+/* #2 — The per-card weakness reads as a quiet muted dot, not a warning triangle, so the map isn't
+   littered with alarms. The ONE weakest link on the lit path still stands out via its amber pill; every
+   other card's weakness just informs. */
+.object-card .object-weakness {
+  color: var(--faint);
+  font-size: var(--text-xs);
+  gap: 4px;
+}
+.object-weakness-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--faint);
+  flex: 0 0 auto;
 }

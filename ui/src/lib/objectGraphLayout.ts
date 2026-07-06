@@ -17,15 +17,15 @@
 import dagre from "@dagrejs/dagre";
 import type { ObjectGraphEdge, ObjectGraphNode } from "@/types";
 
-// Card render size is fixed (214×152, statement clamped) so the reserved slot matches what actually
-// draws — an unbounded card would overflow its slot and overlap its neighbor. NODE_SEP leaves room for
-// the weakest-pill (~28px) that hangs below the box.
-const NODE_W = 214;
-const NODE_H = 152;
+// Card render size is fixed (210×118, statement clamped to two lines) so the reserved slot matches what
+// actually draws — an unbounded card would overflow its slot and overlap its neighbor. NODE_SEP leaves
+// room for the weakest-pill (~28px) that hangs below the box.
+const NODE_W = 210;
+const NODE_H = 118;
 // Tighter ranks pull the whole map in so it fits the frame at a readable zoom rather than the old
 // ~0.3× crush. The nodes read as icon-first coins when pulled back, so they tolerate sitting closer.
-const RANK_SEP = 68; // horizontal gap between causal ranks
-const NODE_SEP = 40; // vertical gap between nodes sharing a rank (room for the pill)
+const RANK_SEP = 64; // horizontal gap between causal ranks
+const NODE_SEP = 32; // vertical gap between nodes sharing a rank (room for the pill)
 const MARGIN = 40;
 
 export type PositionMap = Record<string, { x: number; y: number }>;

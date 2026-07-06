@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import {
-  AlertTriangle, CheckCircle2, FileSearch, LoaderCircle, Mail, Network, Play, Plus, Shield, ShieldCheck,
+  CheckCircle2, FileSearch, LoaderCircle, Mail, Network, Play, Plus, Shield, ShieldCheck,
 } from "lucide-react";
 import {
   Background, Controls, Handle, MarkerType, Position, ReactFlow, useReactFlow, useStore, type Edge, type Node, type NodeProps, type ReactFlowInstance,
@@ -32,7 +32,9 @@ function edgeVerb(type: string | null): string {
 // founder's OWN freshly dropped card (origin "founder") is intentional and always kept, even before it
 // has substance, so drag-to-create never vanishes under the founder's cursor.
 function isPlaceholderNode(node: ObjectGraphNode): boolean {
-  if (node.origin === "founder") return false;
+  // Bare filler is dropped whatever its origin — a lingering "New buyer" / "ref" with no substance made
+  // the whole map read as unfinished scaffolding. (Ideation lands cards WITH content, so a bare drop is
+  // stale, not in-progress.)
   const s = (node.statement || "").trim();
   if (!s) return true;
   if (/^ref$/i.test(s)) return true;
@@ -388,8 +390,8 @@ function ObjectCard({ data, selected }: NodeProps<Node<CardData>>) {
       <div className="object-card-foot">
         <span className={`object-evidence ${data.object.solidity || "unsupported"}`}>{evidenceLabel(data.object)}</span>
         {weakness ? (
-          <span className="object-weakness">
-            <AlertTriangle aria-hidden="true" />
+          <span className="object-weakness" title={weakness.statement}>
+            <span className="object-weakness-dot" aria-hidden="true" />
             {weaknessShort(weakness.kind)}
           </span>
         ) : null}
@@ -914,7 +916,7 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId 
   }
 
   return (
-    <div className={`object-graph-shell lens-${lens} ${highlightedPath ? "has-path" : ""} ${cardsIn ? "cards-in" : ""} ${ignited ? "path-ignited" : ""} ${compact ? "zoomed-out" : ""} ${gatePending ? "gate-pending" : ""}`}>
+    <div className={`object-graph-shell lens-${lens} arrange-${arrange} ${highlightedPath ? "has-path" : ""} ${cardsIn ? "cards-in" : ""} ${ignited ? "path-ignited" : ""} ${compact ? "zoomed-out" : ""} ${gatePending ? "gate-pending" : ""}`}>
       <div className="object-path-header">
         <div>
           <div className="object-path-kicker">
