@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Crosshair, FileCode2, History, PencilLine, ShieldCheck, Waypoints, X,
 } from "lucide-react";
-import { agentPersona, FAMILY_TINT } from "@/lib/agentPersona";
+import { agentPersona, humanizeRef, FAMILY_TINT } from "@/lib/agentPersona";
 import { Button } from "@/components/ui/button";
 import { getAgentLearning, type AgentLearning } from "@/api";
 import "@/styles/agent-profile.css";
@@ -25,6 +25,24 @@ function Mark({ agentRef, job, size = "lg" }: { agentRef: string; job?: string; 
       {monogram}
     </div>
   );
+}
+
+// Never let a scaffold or empty frontmatter line reach the founder. Some on-disk agent files still
+// carry the starter description ("One line on what this subagent does…"), and a project-composed agent
+// may carry none at all. Either way, that boilerplate is not a real description — return "" so the
+// caller can show an honest, role-based line instead of the template text.
+const TEMPLATE_MARKERS = [
+  "one line on what",
+  "when to invoke it",
+  "the model reads this",
+  "a library agent. open the source",
+  "open the source to see what it does",
+];
+function cleanJob(job: string | undefined): string {
+  const text = (job ?? "").trim();
+  if (!text) return "";
+  const low = text.toLowerCase();
+  return TEMPLATE_MARKERS.some((m) => low.includes(m)) ? "" : text;
 }
 
 export function AgentProfile({
@@ -61,12 +79,35 @@ export function AgentProfile({
     return () => { live = false; };
   }, [open, view, projectId]);
 
+  // Names in the team rail must be unique. The persona role vocabulary is coarser than a real crew, so
+  // several distinct agents can map to the same role (five "Prospect Researcher" cards). When a role is
+  // shared, fall back to each agent's own descriptive name — unique, and more specific than the role.
+  // Same rule the bench uses, so the two rosters read the same way.
+  const nameByRef = useMemo(() => {
+    const roleCount = new Map<string, number>();
+    const roleByRef = new Map<string, string>();
+    for (const m of team) {
+      const { role } = agentPersona(m.ref, m.job);
+      roleByRef.set(m.ref, role);
+      roleCount.set(role, (roleCount.get(role) ?? 0) + 1);
+    }
+    const out = new Map<string, string>();
+    for (const m of team) {
+      const role = roleByRef.get(m.ref) ?? m.ref;
+      out.set(m.ref, (roleCount.get(role) ?? 0) > 1 ? humanizeRef(m.ref) : role);
+    }
+    return out;
+  }, [team]);
+
   if (!open || !view) return null;
 
   const learning = loaded && loaded.ref === view.ref ? loaded.data : undefined;
   const loadingLearning = projectId ? learning === undefined : false;
 
   const { role } = agentPersona(view.ref, view.job);
+  // What this teammate does, in words a founder can trust — the real frontmatter line when there is
+  // one, otherwise an honest sentence built from the role. Never the scaffold text or a blank.
+  const mission = cleanJob(view.job) || `A ${role.toLowerCase()} on your crew. Open the source file to see exactly what it does.`;
 
   return (
     <div className="agentp-scrim" role="dialog" aria-modal="true" aria-label={`${role} profile`}>
@@ -82,7 +123,7 @@ export function AgentProfile({
           <div className="agentp-meta">
             <span className="agentp-status"><span className="dot" />Active</span>
           </div>
-          <p className="agentp-mission">{view.job}</p>
+          <p className="agentp-mission">{mission}</p>
 
           <div className="agentp-actions">
             {onAddToCanvas ? <Button onClick={() => onAddToCanvas(view.ref)} type="button">Put on the canvas</Button> : null}
@@ -103,7 +144,7 @@ export function AgentProfile({
 
           <section className="agentp-section">
             <div className="agentp-shead"><span className="agentp-sicon"><Crosshair size={13} /></span><h3>What I do</h3></div>
-            <p className="agentp-lead">{view.job}</p>
+            <p className="agentp-lead">{mission}</p>
           </section>
 
           <section className="agentp-section">
@@ -156,6 +197,7 @@ export function AgentProfile({
             <div className="agentp-mates">
               {team.map((m) => {
                 const p = agentPersona(m.ref, m.job);
+                const job = cleanJob(m.job);
                 return (
                   <button
                     key={m.ref}
@@ -164,7 +206,7 @@ export function AgentProfile({
                     type="button"
                   >
                     <Mark agentRef={m.ref} job={m.job} size="sm" />
-                    <span><span className="r">{p.role}</span><span className="j">{m.job}</span></span>
+                    <span><span className="r">{nameByRef.get(m.ref) ?? p.role}</span>{job ? <span className="j">{job}</span> : null}</span>
                   </button>
                 );
               })}

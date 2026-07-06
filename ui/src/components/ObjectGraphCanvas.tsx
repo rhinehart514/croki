@@ -21,6 +21,25 @@ function labelForType(type: string | null) {
   return String(type || "loose").replace(/_/g, " ");
 }
 
+// The verb an edge asserts, in plain words — "leads_to" → "leads to", "measured_by" → "measured by".
+// Surfaced as a small label on the lit edges so a connection reads as a claim, not a bare stroke.
+function edgeVerb(type: string | null): string {
+  return String(type || "").replace(/_/g, " ").trim();
+}
+
+// A bare placeholder node — an under-specified card that renders as filler ("New buyer", "ref", or an
+// empty statement). These clutter the map without saying anything, so the projection hides them. A
+// founder's OWN freshly dropped card (origin "founder") is intentional and always kept, even before it
+// has substance, so drag-to-create never vanishes under the founder's cursor.
+function isPlaceholderNode(node: ObjectGraphNode): boolean {
+  if (node.origin === "founder") return false;
+  const s = (node.statement || "").trim();
+  if (!s) return true;
+  if (/^ref$/i.test(s)) return true;
+  if (/^new\s+[\w-]+$/i.test(s)) return true;
+  return false;
+}
+
 // One consistent evidence ladder (observed / researched / inferred / speculative / founder /
 // unsupported), with a source count only when there's more than one — no mixing "scan ·3" with
 // a bare "inferred".
@@ -460,13 +479,22 @@ function layoutEdges(edges: ObjectGraphEdge[], highlighted: Set<string>): Edge[]
     // masquerades as forward causality. (Attachment edges like `supports` can also point backward but
     // are not loops — they stay ordinary faint edges.)
     const feedback = edge.type === "updates";
+    const verb = edgeVerb(edge.type);
     return {
       id: edge.id,
       source: edge.source,
       target: edge.target,
-      // No on-canvas edge-type label: the recommended path lights many edges at once and their labels
-      // pile up at convergence points into an illegible dark smear. The lit STROKE carries the spine;
-      // each edge's verb is listed in the node inspector, one click away.
+      // Edge-type label, but ONLY on the LIT edges (the strongest-path spine). Labeling every edge at
+      // once smears illegibly where edges converge, so the unlit web stays bare strokes; the lit spine
+      // names its verb — "leads to", "supports", "measured by", "updates" — so the path you're reading
+      // reads as a chain of claims, not anonymous lines. The full per-edge verb still lists in the card
+      // face one click away.
+      label: lit && verb ? verb : undefined,
+      labelShowBg: true,
+      labelBgPadding: [6, 3] as [number, number],
+      labelBgBorderRadius: 4,
+      labelStyle: { fill: "var(--ink-2)", fontSize: 11, fontWeight: 600, letterSpacing: "0.01em" },
+      labelBgStyle: { fill: "var(--surface)", stroke: "var(--line-2)", strokeWidth: 1 },
       type: feedback ? "smoothstep" : "default",
       // Every edge carries an arrowhead so direction reads at a glance (the n8n move — flow you can see,
       // not floating dots joined by faint threads). The lit spine gets a bold ink arrow; forward edges a
@@ -707,9 +735,39 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId 
   // see its items; the rest of the graph stays a clean strategy map, not an item-level hairball.
   const visible = useMemo(() => {
     const all = view?.graph.nodes ?? [];
-    const keep = all.filter(
-      (n) => n.maturity !== "execution" || n.domain === "runs" || highlightedNodes.has(n.id),
+    // Altitude filter (keep the strategy map, hide per-item execution detail) AND a placeholder filter
+    // (drop bare filler cards) — a node on the lit path is always kept regardless, so the spine never
+    // loses a link.
+    const kept = all.filter(
+      (n) =>
+        highlightedNodes.has(n.id) ||
+        ((n.maturity !== "execution" || n.domain === "runs") && !isPlaceholderNode(n)),
     );
+    // Collapse exact-duplicate run and gate cards into one representative each: the same staged run
+    // ("Run staged for path-…") repeated across paths, and the same founder-approval gate ("Founder
+    // approval for local/http") repeated across pipelines, otherwise stack up as identical cards. The
+    // signature is role + normalized statement; a lit node is never deduped away, and its signature is
+    // reserved first so a lit card wins over its non-lit twin.
+    const dupSig = (n: ObjectGraphNode): string | null => {
+      const role = nodeRole(n);
+      const isRun = stageColumnKey(n) === "run";
+      if (role !== "gate" && !isRun) return null;
+      return `${role === "gate" ? "gate" : "run"}:${(n.statement || "").trim().toLowerCase()}`;
+    };
+    const claimed = new Set<string>();
+    for (const n of kept) {
+      if (!highlightedNodes.has(n.id)) continue;
+      const sig = dupSig(n);
+      if (sig) claimed.add(sig);
+    }
+    const keep = kept.filter((n) => {
+      if (highlightedNodes.has(n.id)) return true;
+      const sig = dupSig(n);
+      if (!sig) return true;
+      if (claimed.has(sig)) return false;
+      claimed.add(sig);
+      return true;
+    });
     const ids = new Set(keep.map((n) => n.id));
     return {
       nodes: keep,

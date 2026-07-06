@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { persistence } from "./persistence.mjs";
 import { safeId, now } from "./store-fs.mjs";
-import { effectiveSolidity, normalizeEvidenceList } from "./evidence.mjs";
+import { effectiveSolidity, normalizeEvidenceList, friendlySource } from "./evidence.mjs";
 
 export const OBJECT_GRAPH_SCHEMA_VERSION = 1;
 
@@ -64,10 +64,13 @@ function normalizeSources(list) {
     if (!raw || typeof raw !== "object") return [];
     const ref = trimOrNull(raw.ref);
     if (!ref) return [];
+    // The founder reads this: collapse a raw file path to a plain phrase, keep a real URL, leave ids
+    // and plain labels alone. The preview follows suit when none was written for the receipt.
+    const display = friendlySource(ref);
     return [{
       kind: trimOrNull(raw.kind) || "founder",
-      ref,
-      preview: trimOrNull(raw.preview) || ref,
+      ref: display,
+      preview: trimOrNull(raw.preview) || display,
       at: raw.at || now(),
     }];
   });

@@ -79,3 +79,30 @@ export function isGrounded(solidity) {
   const label = String(solidity ?? "").trim().toLowerCase();
   return label !== "" && label !== SPECULATIVE;
 }
+
+// ── Founder-facing provenance ──────────────────────────────────────────────────────────────────────
+// A source ref is one of three shapes: a real web URL, an internal pointer into the founder's own
+// codebase (a file path, optionally with a line number — "REB/AGENTS.md:146"), or a plain label / id.
+// A founder should never read a raw file path — it means nothing to them and reads as machine debris —
+// so a path collapses to a plain phrase naming WHERE the claim came from. A real URL is kept intact
+// (it is a clickable receipt), and anything that is neither a URL nor a path (an object id, a label
+// already written for a person) passes straight through untouched. This ONLY rewrites the one shape a
+// founder shouldn't see raw; it never invents provenance and never hides a real link.
+const URL_RE = /^https?:\/\//i;
+// A path-like ref: a final path segment that is a filename with an extension, optionally followed by a
+// ":line" (or ":line-line") suffix. Requires the extension so a plain "notes:1" label is left alone.
+const PATH_LIKE_RE = /(^|\/)[^/\s]+\.[A-Za-z0-9]{1,6}(:\d+(?:-\d+)?)?$/;
+const NOTES_EXT = new Set(["md", "mdx", "markdown", "txt", "rst", "adoc", "org"]);
+const CONFIG_EXT = new Set(["json", "yaml", "yml", "toml", "ini", "env", "lock", "xml", "cfg", "conf"]);
+
+export function friendlySource(ref) {
+  const text = String(ref ?? "").trim();
+  if (!text) return text;
+  if (URL_RE.test(text)) return text; // a real web source stays a clickable URL
+  if (!PATH_LIKE_RE.test(text)) return text; // an id or an already-plain label is left alone
+  const file = text.split("/").pop() ?? text; // "AGENTS.md:146"
+  const ext = (file.split(":")[0].split(".").pop() ?? "").toLowerCase();
+  if (NOTES_EXT.has(ext)) return "from your product's notes";
+  if (CONFIG_EXT.has(ext)) return "from your product's config";
+  return "from your product's code";
+}

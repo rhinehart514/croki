@@ -422,6 +422,154 @@ export function ensureObjectGraphProductScan(project, { projectId = project?.id 
   return { scanned: true, reason: "scan-on-open", report, ...persisted };
 }
 
+// ── Close the outcome → belief loop ──────────────────────────────────────────────────────────────
+// A run tested a bet. When a real outcome comes back and joins to that run's path, the beliefs the bet
+// rested on are no longer guesses — the market answered. This writes that answer back onto the object
+// graph so the canvas shows it, and draws the feedback stroke that was always in the vocabulary but
+// never fed:
+//   - a POSITIVE outcome (a reply, a booked meeting, a purchase, a signup) CONFIRMS: it raises the
+//     confidence on the "supports" links from the bet's beliefs, marks them confirmed, and records the
+//     outcome as real OBSERVED evidence on those belief cards — which clears their "thin evidence"
+//     weakness on the next derive. The weakness recompute reads the new evidence; nothing is
+//     hand-maintained in parallel.
+//   - a NEGATIVE outcome (ignored, an objection) SNAPS: it cuts that confidence and marks the links
+//     "challenged", which pulls their support out of each belief's proof on the next derive (the
+//     weakness detectors already ignore challenged links).
+//   - EITHER way it adds an "updates" edge FROM the outcome card back TO the bet it changed — the
+//     return stroke the canvas draws but nothing produced until now.
+// Deterministic: outcome kind → polarity → a fixed confidence delta. No model call, no new store.
+
+// One real-world "yes" nudges a belief up; one "no" cuts deeper than a "yes" lifts — a single objection
+// should outweigh a single reply. That skepticism is the same bias the founder gate is built on.
+const CONFIRM_DELTA = 20;
+const SNAP_DELTA = -30;
+
+// The bet's belief links carry the "supports" verb from a belief card into the path. Those are the
+// links a real outcome actually tests, so those are the ones an outcome confirms or snaps.
+const TESTED_EDGE_TYPE = "supports";
+
+const POSITIVE_OUTCOME_KINDS = new Set(["reply", "meeting", "purchase", "signup"]);
+const NEGATIVE_OUTCOME_KINDS = new Set(["ignored", "objection"]);
+
+function outcomePolarity(kind) {
+  const label = String(kind ?? "").trim().toLowerCase();
+  if (POSITIVE_OUTCOME_KINDS.has(label)) return "confirm";
+  if (NEGATIVE_OUTCOME_KINDS.has(label)) return "snap";
+  return null; // an outcome we can't read as clearly good or bad leaves the graph untouched, honestly
+}
+
+function clampConfidence(value) {
+  return Math.min(100, Math.max(0, Math.round(Number(value) || 0)));
+}
+
+// Drop the derived fields so the projection recomputes them fresh from the changed evidence — storing
+// them would be the parallel copy the harness forbids.
+function withoutDerived(node) {
+  const { weaknesses, weaknessReport, confidence, solidity, ...rest } = node;
+  return rest;
+}
+
+export function closeOutcomeLoop({ result, projectId = "default", options = {} } = {}) {
+  const pathId = result?.pathId ? String(result.pathId) : null;
+  const polarity = outcomePolarity(result?.outcomeKind);
+  // Nothing to close: an out-of-band outcome (no path) or one whose kind isn't clearly good or bad.
+  if (!pathId || !polarity || !result?.id) return { closed: false };
+
+  const pathObjectId = objectIdForRecord(pathId);
+  const outcomeObjectId = objectIdForRecord(result.id);
+
+  // The live graph names which belief links actually touch this bet and their current confidence.
+  const { graph } = objectGraphForProject(projectId, options);
+  const liveNodes = new Map(graph.nodes.map((node) => [node.id, node]));
+  if (!liveNodes.has(pathObjectId)) return { closed: false };
+
+  const testedEdges = graph.edges.filter(
+    (edge) => edge.type === TESTED_EDGE_TYPE && edge.target === pathObjectId,
+  );
+
+  const stored = objectGraphStore.load(projectId, options);
+  const edgesByTriple = new Map(
+    stored.edges.map((edge) => [`${edge.source}\0${edge.target}\0${edge.type}`, edge]),
+  );
+  const nodesById = new Map(stored.nodes.map((node) => [node.id, node]));
+
+  const delta = polarity === "confirm" ? CONFIRM_DELTA : SNAP_DELTA;
+  const status = polarity === "confirm" ? "confirmed" : "challenged";
+  const outcomeRef = {
+    kind: "outcome",
+    ref: `outcome:${result.id}`,
+    preview: polarity === "confirm" ? "A real outcome confirmed this bet." : "A real outcome challenged this bet.",
+    at: now(),
+  };
+
+  const changedBeliefIds = [];
+  for (const edge of testedEdges) {
+    const triple = `${edge.source}\0${edge.target}\0${edge.type}`;
+    const current = edgesByTriple.get(triple) ?? edge;
+    edgesByTriple.set(triple, normalizeObjectEdge({
+      ...current,
+      projectId,
+      source: edge.source,
+      target: edge.target,
+      type: TESTED_EDGE_TYPE,
+      status,
+      basis: current.basis?.length ? current.basis : edge.basis,
+      confidence: clampConfidence((current.confidence ?? 100) + delta),
+    }));
+    changedBeliefIds.push(edge.source);
+  }
+
+  // The feedback stroke: the outcome card updates the bet it changed.
+  const updatesTriple = `${outcomeObjectId}\0${pathObjectId}\0updates`;
+  edgesByTriple.set(updatesTriple, normalizeObjectEdge({
+    id: edgesByTriple.get(updatesTriple)?.id || genObjectGraphId("edge"),
+    projectId,
+    source: outcomeObjectId,
+    target: pathObjectId,
+    type: "updates",
+    status,
+    basis: [outcomeRef],
+    confidence: 100,
+    label: outcomeRef.preview,
+  }));
+
+  // A positive outcome is observed proof for the beliefs under the bet. Record it on those cards so
+  // their "thin evidence" weakness clears when the projection re-derives (it reads the new evidence —
+  // no separate weakness ledger). A negative outcome adds no proof; the challenged links speak for it.
+  if (polarity === "confirm") {
+    for (const beliefId of changedBeliefIds) {
+      const base = nodesById.get(beliefId) ?? liveNodes.get(beliefId);
+      if (!base) continue;
+      const evidence = [
+        ...(Array.isArray(base.evidence) ? base.evidence : []),
+        {
+          claim: outcomeRef.preview,
+          source: `outcome:${result.id}`,
+          solidity: "observed",
+          notes: `A real ${result.outcomeKind} outcome joined back to this belief.`,
+          capturedAt: now(),
+        },
+      ];
+      nodesById.set(beliefId, normalizeObjectNode(withoutDerived({ ...base, projectId, evidence })));
+    }
+  }
+
+  objectGraphStore.save({
+    projectId,
+    nodes: [...nodesById.values()],
+    edges: [...edgesByTriple.values()],
+    revision: (stored.revision ?? 0) + 1,
+  }, options);
+
+  return {
+    closed: true,
+    polarity,
+    pathId,
+    supportsUpdated: testedEdges.length,
+    beliefsConfirmed: polarity === "confirm" ? changedBeliefIds.length : 0,
+  };
+}
+
 export function objectGraphForProject(projectId = "default", options = {}) {
   const stored = objectGraphStore.load(projectId, options);
   const productNodes = productTruthStore.list({ ...options, projectId }).map((truth) => productTruthToNode(truth, { projectId }));

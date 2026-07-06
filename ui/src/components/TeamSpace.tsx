@@ -25,6 +25,13 @@ const ROLE_NOTE: Record<TeamRole, string> = {
   member: "Builds and queues. Cannot release a gate.",
 };
 
+// Mirror of the server's id sanitizer (team-store.mjs safeId) so we can reconstruct the personal team's
+// STABLE id, `personal-<userId>`, and identify it reliably — rather than assuming it is whichever team
+// happens to have sorted first.
+function safeUserId(value: string): string {
+  return String(value || "").replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 100);
+}
+
 export function TeamSpace({
   onClose,
   onTeamChange,
@@ -46,8 +53,17 @@ export function TeamSpace({
     { userId: "", name: "", email: "", role: "member" },
   );
 
-  // The team space currently selected — null acting team means the personal team (first in the list).
-  const personalTeamId = me?.teams[0]?.id ?? null;
+  // Who I am — falls back to the acting identity before /me has loaded.
+  const myUserId = me?.user.userId ?? acting.userId;
+
+  // The personal team has a STABLE id derived from the user id (`personal-<userId>`), created lazily by
+  // the server. Identify it by that id — never "whichever team sorted most-recently-updated" — so a
+  // genuine second team the founder builds and edits later is never mislabeled as their personal space.
+  // Fall back to the first listed team only until the personal team has been created.
+  const personalTeamId =
+    me?.teams.find((t) => t.id === `personal-${safeUserId(myUserId)}`)?.id
+    ?? me?.teams[0]?.id
+    ?? null;
   const selectedTeamId = acting.teamId ?? personalTeamId;
   const selectedTeam = me?.teams.find((t) => t.id === selectedTeamId) ?? null;
 
@@ -113,8 +129,6 @@ export function TeamSpace({
       setError(e instanceof Error ? e.message : String(e));
     } finally { setBusy(false); }
   };
-
-  const myUserId = me?.user.userId ?? acting.userId;
 
   return (
     <aside className="team-space" role="dialog" aria-label="Team space" aria-modal="false">
@@ -259,6 +273,13 @@ export function TeamSpace({
                   </div>
                 );
               })}
+              {/* Honest solo state: the personal space is just you until you start a team. Say so plainly
+                  rather than padding the list with anyone who isn't really here. */}
+              {selectedTeam.id === personalTeamId && members.length <= 1 ? (
+                <p className="team-space-member-note">
+                  No teammates yet. It's just you. Start a team to invite someone to share your pipelines, runs, and gate decisions.
+                </p>
+              ) : null}
             </div>
           </section>
         ) : null}

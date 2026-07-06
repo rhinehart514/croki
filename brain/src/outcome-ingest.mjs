@@ -26,6 +26,7 @@
 // pool can strip PII at the write boundary. No aggregation across companies is performed here.
 
 import { runStore, resultStore, learningStore, gtmPathStore } from "./gtm-store.mjs";
+import { closeOutcomeLoop } from "./object-graph-projection.mjs";
 
 // The three canonical sources an outcome can arrive from. These are NAMES, not a gate — a source label
 // is an open string (§2.2); ingestion accepts any label. These exist so callers spell the common three
@@ -144,7 +145,18 @@ export function ingestOutcome(outcome = {}, options = {}) {
   );
 
   const learning = writeLearningForResult({ result, run, item, projectId, options });
-  return { result, learning, joined: Boolean(run), run, item };
+
+  // Close the loop back onto the object graph: an outcome that joined to a bet's path confirms or snaps
+  // the belief links that bet was testing, and draws the feedback stroke from the outcome to the bet.
+  // Recording the outcome is the truth that must never fail, so a graph writeback hiccup is non-fatal.
+  let loop = { closed: false };
+  try {
+    loop = closeOutcomeLoop({ result, projectId, options });
+  } catch (error) {
+    console.warn(`[outcome-ingest] object-graph loop-close skipped: ${error?.message ?? error}`);
+  }
+
+  return { result, learning, joined: Boolean(run), run, item, loop };
 }
 
 // ── Ingest a batch from the three sources ────────────────────────────────────────────────────────

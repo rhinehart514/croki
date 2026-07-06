@@ -74,6 +74,40 @@ function humanizeOperatorEvent(ev: OperatorEvent): OperatorEvent {
   return { ...ev, title, detail: detail || null };
 }
 
+// The Issues surface hands a broken part of the go-to-market to Claude to repair. The instruction the
+// founder fires shows up verbatim in their conversation thread, so it must read like something they'd
+// actually say — never "fix the learn subsystem". Each internal area maps to the plain words a founder
+// uses for that part of their go-to-market.
+const AREA_WORDS: Record<string, string> = {
+  research: "your market research",
+  context: "your product notes",
+  source: "finding the right people to reach",
+  enrich: "researching your prospects",
+  filter: "deciding who's a fit",
+  generate: "the drafting step",
+  gate: "your approval gate",
+  execute: "sending and publishing",
+  measure: "measuring what's working",
+  learn: "learning from your decisions",
+};
+
+// The founder-facing name for a part of the go-to-market — used both in the issue label and the fix
+// instruction so the same plain words describe it everywhere.
+export function areaLabel(area: string): string {
+  return AREA_WORDS[area] ?? "your go-to-market";
+}
+
+// Phrase the "fix this" ask as the founder would, pointing Claude at the real part that's struggling
+// and the problem in plain words. No module names, no "subsystem".
+export function fixProblemInstruction(area: string, problem: string): string {
+  return `Something's off with ${areaLabel(area)}: ${swapLabelWords(problem)} Can you look into this and fix it?`;
+}
+
+// The same ask for a specific step on the canvas — the founder already sees the step by its own name.
+export function fixStepInstruction(stepLabel: string, message: string): string {
+  return `The "${stepLabel}" step has a problem: ${swapLabelWords(message)} Can you fix it?`;
+}
+
 // Clean a terminal session's headline error the same way a detail line is cleaned.
 function humanizeError(error: string): string {
   const { text, rewritten } = rewriteDetail(error);

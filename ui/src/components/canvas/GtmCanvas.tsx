@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { GraphCanvas, type OperatorCursorState } from "@/components/GraphCanvas";
 import type { NodeEditorBridge } from "@/components/nodeEditorBridge";
 import type { GatePromote } from "@/lib/gateItem";
@@ -6,7 +7,6 @@ import { ObjectGraphCanvas } from "@/components/ObjectGraphCanvas";
 import type { GateBag } from "@/lib/gateItem";
 import type { CanvasSubject } from "@/lib/cardDetail";
 import { GroundLens } from "@/components/lenses/GroundLens";
-import { LearningsLens } from "@/components/lenses/LearningsLens";
 import { BeliefSpine } from "@/components/lenses/BeliefSpine";
 import type { CockpitState } from "@/api";
 import { useGround, type IcpGrouping } from "@/lib/groundModel";
@@ -110,12 +110,13 @@ export type GtmCanvasModel = {
   ideatingTarget?: string | null;
   objectGraphReload?: number;
   // The mode switcher drives the object graph's arrangement: Move → the story bands ("stages"),
-  // Trace → the free causal graph ("flow"). Steers only on change (see ObjectGraphCanvas).
+  // Engineer → the free causal graph ("flow"). Steers only on change (see ObjectGraphCanvas).
   desiredArrange?: "stages" | "flow";
   // The mode pill owns the arrangement, so the object graph hides its redundant in-header toggle.
   modeControlled?: boolean;
-  // The five-primitive founder state (goal, beliefs, last run, learnings) the Learn lens reads to
-  // project the loop closing. Null before a product is open — the lens shows its honest empty state.
+  // The five-primitive founder state (goal, beliefs, last run, learnings). Retained on the model for
+  // reuse; no lens mounts it now that Learn is retired as a mode (the host reads the same cockpit for
+  // its floating Best Next Move hero and the "log what happened" chip). Null before a product is open.
   cockpit?: CockpitState | null;
 };
 
@@ -125,9 +126,28 @@ function ObjectGraphLens({ model: m }: GtmLensProps) {
   return <ObjectGraphCanvas projectId={m.projectId} gate={m.gate} onSubjectChange={m.onObjectSelect} subjectId={m.subjectId ?? null} desiredArrange={m.desiredArrange} modeControlled={m.modeControlled} onIdeateObject={m.onIdeateObject} ideatingNodeId={m.ideatingNodeId ?? null} ideatingTarget={m.ideatingTarget ?? null} reloadSignal={m.objectGraphReload ?? 0} />;
 }
 
-// The Learn lens — the loop closing, read off the same cockpit state the map is built on.
-function LearningsLensWrapper({ model: m }: GtmLensProps) {
-  return <LearningsLens cockpit={m.cockpit ?? null} />;
+// ENGINEER — the deeper of the two founder modes. Its primary face is the causal reasoning graph: the
+// same object graph in its free "flow" arrangement (driven by the mode's desiredArrange="flow"), where
+// the founder reads WHY the recommended move follows from the product and market picture, with each
+// connection labelled by its verb so a stroke reads as a claim. A quiet Reasoning / Steps switch reveals
+// the same work as its executable step chain (the old top-level "Flow" view, the cleanest per the
+// audit) folded in here — so the runnable machinery lives one click from the reasoning instead of in a
+// third redundant tab.
+function EngineerLens(props: GtmLensProps) {
+  const [face, setFace] = useState<"reasoning" | "steps">("reasoning");
+  return (
+    <div className="engineer-lens">
+      <div className="engineer-face-switch" role="group" aria-label="Engineer view">
+        <button type="button" className={face === "reasoning" ? "active" : ""} onClick={() => setFace("reasoning")}>
+          Reasoning
+        </button>
+        <button type="button" className={face === "steps" ? "active" : ""} onClick={() => setFace("steps")}>
+          Steps
+        </button>
+      </div>
+      {face === "reasoning" ? <ObjectGraphLens {...props} /> : <ChannelFlowLens {...props} />}
+    </div>
+  );
 }
 
 // ── channel-flow: GraphCanvas, unchanged. Forwards App's prop bag straight through. ──
@@ -218,15 +238,19 @@ function GroundLensWrapper({ model: m }: GtmLensProps) {
   return <GroundLens model={ground.model} onOpenChannel={m.onOpenChannel} />;
 }
 
+// Two founder modes, not four: MOVE (the object graph in its story bands, the doing surface) and
+// ENGINEER (the causal reasoning graph, with the executable step chain folded in behind a Reasoning /
+// Steps switch). The former "Trace" and "Flow" tabs are subsumed into Engineer; "Learn" is retired as a
+// selectable mode (it re-rendered the cockpit read-only and could contradict Move on confidence — the
+// LearningsLens component is left in the tree for reuse, just not mounted here). Ground stays defined as
+// the overview landing but is not in the mode pill.
 const LENSES: LensDef<GtmCanvasModel, never>[] = [
-  { id: "object-graph", label: "GTM graph", Component: ObjectGraphLens },
+  { id: "object-graph", label: "Move", Component: ObjectGraphLens },
+  { id: "engineer", label: "Engineer", Component: EngineerLens },
   // The ground is the LANDING surface (id kept as "board" so the host's controlled altitude prop is
   // unchanged). The former nine-layer belief board is gone as a surface; its confidence signal survives
   // only as the plain per-pipeline state the ground shows.
   { id: "board", label: "Ground", Component: GroundLensWrapper },
-  { id: "channel-flow", label: "Pipeline flow", Component: ChannelFlowLens },
-  // The loop-close read-out — goal, beliefs, last run, learnings — projected over the same cockpit data.
-  { id: "learnings", label: "Learn", Component: LearningsLensWrapper },
 ];
 
 // Lens metadata (id + label) for the command dock's switcher lives in the sibling `lens-meta.ts`
@@ -240,7 +264,7 @@ export function GtmCanvas({
   // channel-flow with a channel open) — not stored. App reuses ONE GtmCanvas instance across both
   // branches, so the lens must be a controlled prop: an uncontrolled default only seeds the shell's
   // state once and would strand the reused instance on the stale lens when the branch flips.
-  activeLensId: "object-graph" | "board" | "channel-flow" | "learnings";
+  activeLensId: "object-graph" | "engineer" | "board";
   chromeless?: boolean;
 }) {
   return (

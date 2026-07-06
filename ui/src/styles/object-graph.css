@@ -742,3 +742,45 @@
     overflow-x: auto;
   }
 }
+
+/* Engineer lens — wraps the causal reasoning graph (or, behind the switch, the executable step chain)
+   and floats a quiet Reasoning / Steps segmented control over the canvas. The child lens fills the
+   frame; the switch sits bottom-center, clear of the react-flow controls in the bottom-left corner. */
+.engineer-lens {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+}
+.engineer-lens > .channel-flow-stack,
+.engineer-lens > .object-graph-shell {
+  height: 100%;
+}
+.engineer-face-switch {
+  position: absolute;
+  z-index: 7;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-xs);
+}
+.engineer-face-switch button {
+  height: 26px;
+  border: 0;
+  border-radius: calc(var(--r-sm) - 2px);
+  padding: 0 13px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.engineer-face-switch button.active {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-xs);
+}

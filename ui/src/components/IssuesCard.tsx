@@ -1,6 +1,7 @@
 import { AlertTriangle, ArrowRight, Wrench } from "lucide-react";
 import { Stagger, StaggerItem } from "@/lib/motion";
 import { healthHex } from "@/lib/health";
+import { areaLabel, fixProblemInstruction, fixStepInstruction } from "@/lib/operatorLanguage";
 import type { GTMContractAudit, GTMGraph, GTMNode, Investigation } from "@/types";
 import "@/styles/floating-dock.css";
 
@@ -27,6 +28,11 @@ export function IssuesCard({
     .filter((x): x is { node: GTMNode; audit: GTMContractAudit } =>
       !!x.audit && ["waiting", "blocked", "blind"].includes(x.audit.state));
   const issueCount = problems.length + auditIssues.length;
+  // Fixing hands the problem to Claude, which works it against the pipeline you have open. From the
+  // "All pipelines" overview no single pipeline is in focus, so there's nothing for the fix to target —
+  // firing it there used to error mid-run and spin up a stray pipeline. When no pipeline is open we
+  // point the founder to open one first instead of offering an action that can't land.
+  const pipelineActive = !!graph;
 
   if (issueCount === 0) {
     return <p className="fdock-problems-empty">No issues — your system is healthy.</p>;
@@ -44,7 +50,7 @@ export function IssuesCard({
                 <p>{p.problem}</p>
               </div>
               <div className="fdock-problems-meta">
-                <span className="fdock-problems-sub">{p.subsystem}</span>
+                <span className="fdock-problems-sub">{areaLabel(p.subsystem)}</span>
                 <span
                   className="fdock-problems-health"
                   style={{ color: healthHex(p.health), borderColor: healthHex(p.health) }}
@@ -53,20 +59,24 @@ export function IssuesCard({
                   {p.health}
                 </span>
               </div>
-              <div className="issues-card-actions">
-                <button
-                  className="fdock-problems-fix primary"
-                  onClick={() => onFix(`Fix this problem in the ${p.subsystem} subsystem: ${p.problem}`)}
-                  type="button"
-                >
-                  <Wrench size={12} /> Fix with Claude
-                </button>
-                {node ? (
-                  <button className="fdock-problems-fix" onClick={() => onJump(node.id)} type="button">
-                    Open {node.label}<ArrowRight size={12} />
+              {pipelineActive ? (
+                <div className="issues-card-actions">
+                  <button
+                    className="fdock-problems-fix primary"
+                    onClick={() => onFix(fixProblemInstruction(p.subsystem, p.problem))}
+                    type="button"
+                  >
+                    <Wrench size={12} /> Fix with Claude
                   </button>
-                ) : null}
-              </div>
+                  {node ? (
+                    <button className="fdock-problems-fix" onClick={() => onJump(node.id)} type="button">
+                      Open {node.label}<ArrowRight size={12} />
+                    </button>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="fdock-problems-hint">Open a pipeline to fix this with Claude.</p>
+              )}
             </StaggerItem>
           );
         })}
@@ -77,7 +87,7 @@ export function IssuesCard({
             <div className="issues-card-actions">
               <button
                 className="fdock-problems-fix primary"
-                onClick={() => onFix(`Fix the "${node.label}" step — ${audit.message}`)}
+                onClick={() => onFix(fixStepInstruction(node.label, audit.message))}
                 type="button"
               >
                 <Wrench size={12} /> Fix with Claude

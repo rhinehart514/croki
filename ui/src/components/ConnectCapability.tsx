@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle, ArrowRight, Ban, Check, CheckCheck, Clock, Info, Lock,
-  Search, ShieldCheck, Trash2,
+  ShieldCheck, Trash2,
 } from "lucide-react";
 import {
   connectCapability, getCapabilities, reclassifyCapabilityTool, removeCapability,
@@ -9,27 +9,23 @@ import {
 import type { CapabilityServer, CapabilityTool } from "@/types";
 import "@/styles/connect-capability.css";
 
-// Known servers offered in the add field. The local demo is a REAL stdio connection
-// to the bundled fixture (not seeded data) so the wall can be seen end-to-end; the
-// others are real registry targets that connect once their MCP command/auth is set up.
+// The only capability wired to genuinely connect today: the bundled local demo MCP server. It is a
+// REAL stdio connection to a shipped fixture (not seeded data), so the founder can watch the wall
+// sort a live server's tools end-to-end. There is no external MCP registry connected yet, so nothing
+// else is offered here — a real server appears once its own connection is actually configured, never
+// as a placeholder row wearing a "Verified" badge it has not earned.
 type CatalogEntry = {
   id: string; name: string; url: string;
   trust: "verified" | "community"; demo?: boolean; logo: string;
 };
-const CATALOG: CatalogEntry[] = [
-  { id: "clay-demo", name: "Clay (local demo)", url: "fixture · clay-demo", trust: "verified", demo: true, logo: "C" },
-  { id: "clay", name: "Clay", url: "mcp.clay.com", trust: "verified", logo: "C" },
-  { id: "google-drive", name: "Google Drive", url: "mcp.google.com/drive", trust: "verified", logo: "▦" },
-  { id: "gmail", name: "Gmail", url: "mcp.google.com/gmail", trust: "verified", logo: "✉" },
-  { id: "salesforce", name: "Salesforce", url: "mcp.salesforce.com", trust: "verified", logo: "S" },
-  { id: "zapier", name: "Zapier", url: "mcp.zapier.com", trust: "verified", logo: "⚡" },
-];
+const DEMO_CAPABILITY: CatalogEntry = {
+  id: "clay-demo", name: "Clay (local demo)", url: "fixture · clay-demo", trust: "verified", demo: true, logo: "C",
+};
 
 type ConfirmState = { server: CapabilityServer; tool: CapabilityTool } | null;
 
 export function ConnectCapability({ onChange }: { onChange?: () => void } = {}) {
   const [servers, setServers] = useState<CapabilityServer[]>([]);
-  const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
@@ -54,10 +50,7 @@ export function ConnectCapability({ onChange }: { onChange?: () => void } = {}) 
   useEffect(() => { void refresh(); }, [refresh]);
 
   const connectedIds = useMemo(() => new Set(servers.map((s) => s.id)), [servers]);
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return CATALOG.filter((c) => !q || c.name.toLowerCase().includes(q) || c.url.toLowerCase().includes(q));
-  }, [query]);
+  const demoConnected = connectedIds.has(DEMO_CAPABILITY.id);
 
   const connect = useCallback(async (entry: CatalogEntry) => {
     setBusyId(entry.id);
@@ -108,47 +101,33 @@ export function ConnectCapability({ onChange }: { onChange?: () => void } = {}) 
         their own, ones that <b>act on the world</b> wait for you. Anything we can&apos;t classify waits too.
       </p>
 
-      {/* add field + catalog */}
-      <div className="cc-add">
-        <div className="cc-field">
-          <Search size={16} />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search the MCP registry — Clay, Google Drive, Gmail, Salesforce, Zapier…"
-          />
-        </div>
-        {matches.length > 0 && (
+      {/* The only capability that genuinely connects today: the bundled local demo. No external
+          registry is wired up, so there is nothing else to offer here — and no placeholder rows. */}
+      {!demoConnected && (
+        <div className="cc-add">
+          <div className="cc-add-lead">Available to connect</div>
           <div className="cc-results">
-            {matches.map((entry) => {
-              const already = connectedIds.has(entry.id);
-              return (
-                <div className="cc-result" key={entry.id}>
-                  <div className="cc-logo">{entry.logo}</div>
-                  <div className="cc-result-body">
-                    <div className="cc-result-name">
-                      {entry.name}
-                      <span className={`cc-trust ${entry.trust}`}>
-                        {entry.trust === "verified" ? <ShieldCheck /> : <AlertTriangle />}
-                        {entry.trust === "verified" ? "Verified" : "Community"}
-                      </span>
-                    </div>
-                    <div className="cc-result-url">{entry.url}</div>
-                  </div>
-                  <button
-                    className={`cc-btn ${entry.demo ? "primary" : ""}`}
-                    disabled={busyId === entry.id || already}
-                    onClick={() => void connect(entry)}
-                    type="button"
-                  >
-                    {already ? "Connected" : busyId === entry.id ? "Connecting…" : "Connect"}
-                  </button>
+            <div className="cc-result">
+              <div className="cc-logo">{DEMO_CAPABILITY.logo}</div>
+              <div className="cc-result-body">
+                <div className="cc-result-name">
+                  {DEMO_CAPABILITY.name}
+                  <span className="cc-trust demo">Bundled demo</span>
                 </div>
-              );
-            })}
+                <div className="cc-result-url">{DEMO_CAPABILITY.url}</div>
+              </div>
+              <button
+                className="cc-btn primary"
+                disabled={busyId === DEMO_CAPABILITY.id}
+                onClick={() => void connect(DEMO_CAPABILITY)}
+                type="button"
+              >
+                {busyId === DEMO_CAPABILITY.id ? "Connecting…" : "Connect"}
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {error && <div className="cc-error">{error}</div>}
 

@@ -204,13 +204,13 @@ export default function App() {
   // the canvas out; they float OVER it as dismissable overlays (set via `overlay`), so the IDE is
   // never replaced. Channels live in the explorer, not a page.
   const [view, setView] = useState<"projects" | "canvas" | "start" | "cockpit">("canvas");
-  // The canvas frames the SAME product data four ways, chosen by one segmented pill over the map:
-  //   move  — the story bands with the Best Next Move floated over them (the doing surface)
-  //   flow  — the executable pipeline lane (Find targets → draft → gate → measure)
-  //   trace — the free causal graph, the reasoning laid bare
-  //   learn — the loop closing: goal, beliefs, last run, what the market taught
-  // Switching a mode re-projects the same data in place; it never navigates away.
-  const [activeMode, setActiveMode] = useState<"move" | "flow" | "trace" | "learn">("move");
+  // The canvas frames the SAME product data two ways, chosen by one segmented pill over the map:
+  //   move     — the story bands with the Best Next Move floated over them (the doing surface)
+  //   engineer — the causal reasoning graph, the "why this move" laid bare, with the executable step
+  //              chain folded in behind a Reasoning / Steps switch inside the lens
+  // Switching a mode re-projects the same data in place; it never navigates away. (The former Flow,
+  // Trace, and Learn tabs collapsed into these two — Flow and Trace into Engineer, Learn retired.)
+  const [activeMode, setActiveMode] = useState<"move" | "engineer">("move");
   const [booted, setBooted] = useState(false);
   // True until the initial boot load resolves. Guards the canvas empty-state so a deep-link / reload
   // shows a calm "loading your workspace" instead of flashing the cold-start goal launcher for the
@@ -439,10 +439,21 @@ export default function App() {
   // is one click away. `outcomeOpen` gates the manual "what happened / what did we learn" loop-closer.
   const [cockpit, setCockpit] = useState<CockpitState | null>(null);
   const [outcomeOpen, setOutcomeOpen] = useState(false);
-  // The Best Next Move hero floats over the canvas home; the founder can flick it away for the session.
-  // It re-appears when they switch products (the move is product-specific).
+  // The Best Next Move hero floats over the canvas home. Once the founder flicks it away it STAYS away —
+  // the dismissal persists per product in local storage, so landing on Move again (or reopening the app)
+  // doesn't re-cover the first columns. The move is product-specific, so the dismissal is keyed per
+  // product; a fresh product starts with the hero shown.
+  const moveHeroKey = activeProjectId ? `drover.moveHeroDismissed.${activeProjectId}` : null;
   const [moveHeroDismissed, setMoveHeroDismissed] = useState(false);
-  useEffect(() => { setMoveHeroDismissed(false); }, [activeProjectId]);
+  useEffect(() => {
+    if (!moveHeroKey) { setMoveHeroDismissed(false); return; }
+    try { setMoveHeroDismissed(localStorage.getItem(moveHeroKey) === "1"); }
+    catch { setMoveHeroDismissed(false); }
+  }, [moveHeroKey]);
+  const dismissMoveHero = () => {
+    setMoveHeroDismissed(true);
+    if (moveHeroKey) { try { localStorage.setItem(moveHeroKey, "1"); } catch { /* storage may be unavailable */ } }
+  };
   const [operatorSession, setOperatorSession] = useState<OperatorSession | null>(null);
   // The shared People object — durable identities promoted from real run entrants, read-only. Feeds
   // the GTM canvas's People lens (find-references / dedup) and is refreshed after each run promotes
@@ -461,22 +472,21 @@ export default function App() {
   // the source markdown is still one click away inside the sheet.
   const [agentProfileRef, setAgentProfileRef] = useState<string | null>(null);
 
-  // The team rail in the profile: the stock on-disk GTM agents. There is no per-founder agent factory
-  // anymore — agents are the library definitions, composed inline by the operator.
+  // The team rail in the profile: this product's own crew, scoped by the bench (the ~8 agents actually
+  // on this product), not the entire global agents folder. The bench is already loaded and scoped below.
   const agentTeam = useMemo<TeammateView[]>(
-    () => (library?.agents ?? []).map((a) => ({ ref: a.ref, job: a.description })),
-    [library],
+    () => (bench ?? []).map((a) => ({ ref: a.ref, job: a.job })),
+    [bench],
   );
 
-  // Assemble the open agent's profile from the stock on-disk library agent (clicked in the library).
+  // Assemble the open agent's profile — prefer the crew job (scoped to this product) and fall back to
+  // the stock on-disk library description only when the agent isn't on the bench.
   const agentProfileView = useMemo<AgentProfileView | null>(() => {
     if (!agentProfileRef) return null;
+    const crew = (bench ?? []).find((a) => a.ref === agentProfileRef);
     const stock = library?.agents.find((a) => a.ref === agentProfileRef);
-    return {
-      ref: agentProfileRef,
-      job: stock?.description ?? "A library agent. Open the source to see what it does.",
-    };
-  }, [agentProfileRef, library]);
+    return { ref: agentProfileRef, job: crew?.job || stock?.description || "" };
+  }, [agentProfileRef, bench, library]);
   const operatorGraphRevision = useRef<number | null>(null);
   const operatorRunId = useRef<string | null>(null);
   const nodeModalRef = useRef<HTMLElement | null>(null);
@@ -1956,9 +1966,9 @@ export default function App() {
     // Selecting a block on the object graph docks the composer to it (same subject seam the node
     // graph already uses). setComposerSubject is a stable state setter, so this never re-runs the memo.
     onObjectSelect: setComposerSubject,
-    // The mode pill steers the object graph's arrangement: Trace opens the free causal graph, every
-    // other mode reads the story bands.
-    desiredArrange: activeMode === "trace" ? "flow" : "stages",
+    // The mode pill steers the object graph's arrangement: Engineer opens the free causal graph, Move
+    // reads the story bands.
+    desiredArrange: activeMode === "engineer" ? "flow" : "stages",
     // The mode pill owns arrangement, so the object graph drops its redundant in-header toggle.
     modeControlled: true,
     // Feed the composer's subject back down so selecting a card and detaching the composer stay in sync.
@@ -2080,9 +2090,9 @@ export default function App() {
             </div>
           )}
 
-          {/* Log what happened, reachable straight from the map — a quiet chip in Learn mode once a run
-              has happened, so the founder closes the loop without leaving the canvas for the cockpit. */}
-          {view === "canvas" && !overlay && activeMode === "learn" && cockpit?.latestRun ? (
+          {/* Log what happened, reachable straight from the map — a quiet chip in Engineer mode once a
+              run has happened, so the founder closes the loop without leaving the canvas for the cockpit. */}
+          {view === "canvas" && !overlay && activeMode === "engineer" && cockpit?.latestRun ? (
             <button type="button" className="cockpit-log-outcome canvas-log-outcome" onClick={() => setOutcomeOpen(true)}>
               Log what happened →
             </button>
@@ -2118,7 +2128,7 @@ export default function App() {
               <button
                 type="button"
                 className="move-hero-dismiss"
-                onClick={() => setMoveHeroDismissed(true)}
+                onClick={dismissMoveHero}
                 aria-label="Dismiss best next move"
                 title="Dismiss"
               >
@@ -2140,17 +2150,16 @@ export default function App() {
             </button>
           ) : null}
 
-          {/* The mode switcher — one segmented pill over the map that frames the SAME product four ways
-              (do it · run it · trace the reasoning · read the loop). It re-projects in place; it never
-              navigates away, and it reads lighter than the Run button so it's a lens, not an action. */}
+          {/* The mode switcher — one segmented pill over the map that frames the SAME product two ways:
+              Move (do it) and Engineer (the reasoning, with the runnable steps folded in). It re-projects
+              in place; it never navigates away, and it reads lighter than the Run button so it's a lens,
+              not an action. */}
           {gtmCanvasVisible ? (
             <div className="canvas-mode-switch">
               <SlidingTabs
                 items={[
                   { value: "move", label: "Move" },
-                  { value: "flow", label: "Flow" },
-                  { value: "trace", label: "Trace" },
-                  { value: "learn", label: "Learn" },
+                  { value: "engineer", label: "Engineer" },
                 ]}
                 value={activeMode}
                 onChange={setActiveMode}
@@ -2337,7 +2346,7 @@ export default function App() {
             // projection for an opened product.
             <GtmCanvas
               model={gtmCanvasModel}
-              activeLensId={activeMode === "flow" ? "channel-flow" : activeMode === "learn" ? "learnings" : "object-graph"}
+              activeLensId={activeMode === "engineer" ? "engineer" : "object-graph"}
               chromeless
             />
           ) : (booting || projectBusy) ? (

@@ -19,6 +19,7 @@
 
 /* ── add field + catalog ──────────────────────────────────────────────────── */
 .cc-add { margin-top: var(--space-6); }
+.cc-add-lead { font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.02em; color: var(--muted); margin-bottom: var(--space-2); }
 .cc-field {
   display: flex; align-items: center; gap: var(--space-2);
   padding: 11px 14px; border: 1px solid var(--line-2); border-radius: var(--r-lg);
@@ -47,6 +48,9 @@
 .cc-trust.verified { color: var(--proven); background: var(--proven-soft); }
 .cc-trust.community { color: var(--gap); background: var(--gap-soft); }
 .cc-trust.untrusted { color: var(--danger); background: var(--danger-soft); }
+/* The bundled local demo is a shipped fixture, not an externally verified registry entry — a
+   neutral label, never a "Verified" shield it did not earn. */
+.cc-trust.demo { color: var(--muted); background: var(--surface-2); padding: 2px 7px; }
 
 .cc-btn { font: inherit; font-size: var(--text-sm); font-weight: 560; cursor: pointer; border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); padding: 7px 15px; transition: all 120ms var(--ease-out); }
 .cc-btn:hover { background: var(--surface-2); }
