@@ -522,11 +522,12 @@ function ProducedPreview({ items }: { items: GTMItem[] }) {
   );
 }
 
-function NodeCardEditor({ node, result, health, contractAudit }: {
+function NodeCardEditor({ node, result, health, contractAudit, running }: {
   node: GTMNode;
   result?: GTMNodeResult;
   health?: number;
   contractAudit?: GTMContractAudit;
+  running?: boolean;
 }) {
   const ctx = useContext(NodeEditorContext);
   // Notes are local-while-typing, saved into the graph onBlur so we don't rebuild the graph on every
@@ -554,6 +555,10 @@ function NodeCardEditor({ node, result, health, contractAudit }: {
   // Status tone: a satisfied contract / healthy result reads proven; a gate or waiting state reads
   // amber; a blocked/blind/error state reads danger. Monochrome otherwise.
   const items = result?.items?.length ?? 0;
+  // The honest Output section runs for every step EXCEPT a source (which shows its own "Who enters"
+  // roster) and a gate (whose staged drafts bloom on the canvas node itself). It reads real run state:
+  // running, produced items, ran-but-empty, or failed — never a fabricated result.
+  const showOutput = node.category !== "source" && node.category !== "gate";
   const contractState = contractAudit?.state;
   const contractTone =
     contractState === "blocked" || contractState === "blind" ? "danger" :
@@ -597,7 +602,6 @@ function NodeCardEditor({ node, result, health, contractAudit }: {
               onBlur={saveNotes}
             />
           </CardSection>
-          {items > 0 ? <CardSection label="Produced"><ProducedPreview items={result?.items ?? []} /></CardSection> : null}
         </>
       ) : node.kind === "code" ? (
         <CardSection label="Config">
@@ -680,8 +684,30 @@ function NodeCardEditor({ node, result, health, contractAudit }: {
             <p className="loop-node-editor-hint">Nothing waiting. A run stages sends here and stops for your approval.</p>
           )}
         </CardSection>
-      ) : items > 0 ? (
-        <CardSection label="Produced"><ProducedPreview items={result?.items ?? []} /></CardSection>
+      ) : null}
+
+      {/* Output — what this step actually produced, read inside its own open card. This is the "run a
+          small thing and see it" payoff: real items, an honest empty ("produced nothing"), or the
+          failure — never hidden away in the rail. */}
+      {showOutput ? (
+        <CardSection label="Output">
+          {running ? (
+            <p className="loop-node-editor-hint">
+              <Loader size={12} className="spin" style={{ verticalAlign: "-2px", marginRight: 4 }} />
+              Running this step…
+            </p>
+          ) : result && !result.ok && !result.pendingReview ? (
+            <span className="loop-node-editor-contract tone-danger">
+              {result.error ? result.error.slice(0, 120) : "This step failed."}
+            </span>
+          ) : items > 0 ? (
+            <ProducedPreview items={result?.items ?? []} />
+          ) : result ? (
+            <p className="loop-node-editor-hint">Ran — produced nothing.</p>
+          ) : (
+            <p className="loop-node-editor-hint">Not run yet. Run this step to see what it produces.</p>
+          )}
+        </CardSection>
       ) : null}
 
       <CardSection label="Status">
@@ -702,10 +728,12 @@ function NodeCardEditor({ node, result, health, contractAudit }: {
       <div className="loop-node-editor-actions">
         <button
           className="loop-node-editor-run"
+          disabled={!!running}
           onClick={(e) => { stop(e); bridge.onRunNode(node.id); }}
           type="button"
         >
-          <Play size={13} /> Run step
+          {running ? <Loader size={13} className="spin" /> : <Play size={13} />}
+          {running ? "Running…" : "Run step"}
         </button>
         <button
           className="loop-node-editor-delete"
@@ -757,7 +785,7 @@ function ResourceNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       </button>
       <Handle type="source" position={Position.Right} id="s-r" />
       {selected && (
-        <NodeCardEditor node={node} result={result} health={data.health} contractAudit={data.contractAudit} />
+        <NodeCardEditor node={node} result={result} health={data.health} contractAudit={data.contractAudit} running={data.running} />
       )}
     </div>
       <ProposalControls data={data} />
@@ -807,7 +835,7 @@ function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       {preview && <span className="loop-node-preview">{preview}</span>}
       <Handle type="source" position={Position.Right} id="s-r" />
       {selected && (
-        <NodeCardEditor node={node} result={result} health={data.health} contractAudit={data.contractAudit} />
+        <NodeCardEditor node={node} result={result} health={data.health} contractAudit={data.contractAudit} running={data.running} />
       )}
     </motion.div>
       <ProposalControls data={data} />
@@ -1152,12 +1180,15 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
         </>
       )}
       <Handle type="source" position={Position.Right} id="s-r" />
-      {selected && (
+      {/* A gate isn't "run" from the card — its staged drafts bloom in place above (GateReview), so the
+          in-card editor is only mounted for the non-gate steps you actually run and read output from. */}
+      {selected && !isGate && (
         <NodeCardEditor
           node={node}
           result={result}
           health={data.health}
           contractAudit={data.contractAudit}
+          running={running}
         />
       )}
     </motion.div>
