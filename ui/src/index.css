@@ -6165,6 +6165,14 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .product-entry-adv{margin:2px 0 20px;font-size:13px;color:var(--muted)}
 .product-entry-adv summary{cursor:pointer;user-select:none}
 .product-entry-adv .product-entry-input{margin-top:8px}
+/* "Try it on a sample product" — the no-repo-handy path, a quiet secondary affordance under the fold. */
+.product-entry-sample{display:flex;align-items:center;gap:10px;margin:4px 0 0;padding-top:16px;border-top:1px solid var(--line)}
+.product-entry-sample-or{font-size:12.5px;color:var(--faint);flex:0 0 auto}
+.product-entry-sample-btn{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font:13px/1.3 inherit;
+  padding:8px 13px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.product-entry-sample-btn:hover{border-color:var(--faint);background:#fff}
+.product-entry-sample-btn:disabled{opacity:.6;cursor:wait}
+.product-entry-sample-btn svg{flex:0 0 auto;color:var(--muted)}
 .product-entry-go{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;font-size:15px;font-weight:600;
   padding:13px;border-radius:11px;border:0;background:var(--ink);color:#fff;cursor:pointer;min-height:48px}
 .product-entry-go:disabled{opacity:.5;cursor:not-allowed}

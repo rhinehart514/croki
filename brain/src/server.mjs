@@ -532,6 +532,24 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // The bundled sample product — the "try it without your own repo" path. A stranger with no
+  // instrumented codebase still gets the scan's first-impression: this points them at a small, real
+  // sample app that ships in the repo (samples/acme-saas) and reproduces the attribution gap from
+  // honest code. The server resolves the absolute path relative to its own module so it survives
+  // packaging; the UI drives it through the SAME /api/scan → /api/projects flow a real repo uses.
+  if (req.method === "GET" && url.pathname === "/api/sample-product") {
+    const repoPath = path.resolve(here, "../../samples/acme-saas");
+    json(res, fs.existsSync(repoPath) ? 200 : 404, fs.existsSync(repoPath)
+      ? {
+          repoPath,
+          winEvent: "signup_completed",
+          name: "Acme",
+          blurb: "A small team task tracker — a stand-in product so you can watch the scan before pointing it at your own.",
+        }
+      : { error: "Bundled sample product not found." });
+    return;
+  }
+
   // Multi-channel project
   if (req.method === "GET" && url.pathname === "/api/projects") {
     try { json(res, 200, listProjects()); }

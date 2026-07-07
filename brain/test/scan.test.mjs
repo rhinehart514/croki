@@ -3,9 +3,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { buildPrompt, buildTrackingFix, compactAgentError } from "../src/build.mjs";
 import { scanRepo } from "../src/scan.mjs";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const SAMPLE_REPO = path.resolve(here, "../../samples/acme-saas");
 
 function fixture(files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-ide-"));
@@ -193,4 +197,30 @@ test("build action reports when the agent produces no reviewable change", async 
   execFileSync("git", ["-C", root, "worktree", "remove", "--force", result.worktree]);
   execFileSync("git", ["-C", root, "branch", "-D", result.branch]);
   fs.rmSync(parent, { recursive: true, force: true });
+});
+
+test("bundled sample product proves the attribution gap from real citations", () => {
+  // The first-run "Try it on a sample product" path scans this repo. Guard that it stays honest input
+  // the real scanner genuinely lights up on — the win event proven, attribution captured, and the
+  // captured source provably missing from the win event — with real file:line evidence, never canned.
+  const report = scanRepo(SAMPLE_REPO, { winEvent: "signup_completed" });
+
+  assert.equal(report.winEvent.found, true);
+  assert.equal(report.attribution.captured, true);
+  assert.equal(report.analytics.wired, true);
+  assert.deepEqual(report.winEvent.attributionProperties, []);
+  assert.match(report.headline, /Tracking gap proven/i);
+
+  const gap = report.gaps.find((g) => g.id === "attribution-not-carried");
+  assert.ok(gap, "expected the attribution-not-carried gap");
+  assert.equal(gap.status, "proven");
+  // Every cited line is real code in the sample, with a concrete file:line.
+  for (const cite of gap.citations) {
+    assert.ok(cite.file && cite.line > 0, "gap citation must carry file:line");
+    const source = fs.readFileSync(path.join(SAMPLE_REPO, cite.file), "utf8").split("\n");
+    assert.ok(source[cite.line - 1] !== undefined, `${cite.file}:${cite.line} must exist`);
+  }
+  // The win event is cited in the signup action; the capture in the attribution lib.
+  assert.ok(report.winEvent.citations.some((c) => c.file === "src/app/signup/actions.ts"));
+  assert.ok(report.attribution.citations.some((c) => c.file === "src/lib/attribution.ts"));
 });
