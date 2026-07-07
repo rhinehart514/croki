@@ -194,7 +194,7 @@ function EngineerLens({ model: m }: GtmLensProps) {
 // wired, and organized). Move answers "why this move"; Engineer is the machinery that runs it. The old
 // "Trace"/"Flow" tabs and the reasoning/steps split inside Engineer are gone — Engineer is now just the
 // node canvas. "Learn" is retired as a selectable mode (LearningsLens is left in the tree for reuse);
-// the old "Ground" overview lens was likewise retired from the pill (GroundLens.tsx kept for reuse).
+// the old "Ground" overview lens was likewise retired from the pill.
 const LENSES: LensDef<GtmCanvasModel, never>[] = [
   { id: "object-graph", label: "Move", Component: ObjectGraphLens },
   { id: "engineer", label: "Engineer", Component: EngineerLens },
