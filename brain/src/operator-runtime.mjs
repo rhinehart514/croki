@@ -13,6 +13,7 @@ import { buildMarketContext } from "./market-research.mjs";
 import { marketObjectStore } from "./gtm-store.mjs";
 import { applyGraphOperations, validateGraph } from "./graph-operations.mjs";
 import { listConnectors, runGraph } from "./graph.mjs";
+import { defaultSendRunners } from "./connectors/execute/gmail-transport.mjs";
 import { executeDomainCommand } from "./domain-commands.mjs";
 import { buildDraftMemory, extractDecisions } from "./memory.mjs";
 import { mergeSharedDecisions } from "./shared-judgments.mjs";
@@ -1835,6 +1836,11 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
     // persistence root so the stored key resolves from the same store the founder saved it in.
     projectId: session.projectId || "default",
     credentialOptions: options,
+    // The live delivery seam: this gate-resume run is the ONE path where founder-approved items reach an
+    // execute connector, so it is where a real send must be able to happen. The runner map only carries
+    // HOW an approved message leaves (e.g. a real Gmail send); WHETHER it may leave is still the item's
+    // gate stamp, set only by the authorized release above. Host-supplied here, never by composition.
+    sendRunners: options.sendRunners ?? defaultSendRunners(),
     // Defense-in-depth at the gate point: re-assert authority inside the runner before any approval is
     // applied. authorizeGateRelease already passed above (or this code is unreachable); re-running it
     // here means the wall holds even if a future caller wires runGraph approvals without the front guard.

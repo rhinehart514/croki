@@ -422,6 +422,13 @@ export async function runGraph(graph, opts = {}) {
     // env-only, the prior behavior — so existing runs are unchanged.
     projectId = null,
     credentialOptions = {},
+    // The live send-runner map an execute connector reaches to ACTUALLY deliver (e.g. sendRunners.gmail
+    // → a real Gmail send). Host-supplied per run and rebuilt from these opts every run, so composition
+    // and a model-driven run can never write it — the same posture as deployAuthorization. Absent it,
+    // every execute connector stages locally (its honest default), which is why a run with no runner
+    // wired never sends. It carries only the delivery seam; the gate stamp on the ITEM still governs
+    // WHETHER a message is eligible to send — this only governs HOW an already-approved one leaves.
+    sendRunners = null,
     // Per-node wall-clock ceiling (ms). A stuck connector/fetch fails honestly at this bound instead of
     // hanging the whole run. Generous by default; a non-positive value disables it (unbounded).
     nodeTimeoutMs = DEFAULT_NODE_TIMEOUT_MS,
@@ -504,6 +511,10 @@ export async function runGraph(graph, opts = {}) {
     // persistence options only — never a secret. The connector calls resolveCredentialToken(projectId,
     // provider, options): stored founder key first, env var fallback.
     context.credentials = { projectId, options: credentialOptions };
+    // The live delivery seam an execute connector reads to send for real (context.sendRunners.gmail).
+    // Rebuilt from opts every run — composition/run cannot forge it — and only present when the host
+    // explicitly wired a runner; absent it the connector stages, never sends.
+    if (sendRunners) context.sendRunners = sendRunners;
     context.__run = {
       runId,
       originRunId: resumeResult?.runId ?? runId,

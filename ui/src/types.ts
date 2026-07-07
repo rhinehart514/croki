@@ -981,6 +981,16 @@ export type CapabilityServer = {
   toolCount: number;
 };
 
+// ─── Sender credentials (BYO keys) ─────────────────────────────────────────────
+// The REDACTED view of a founder-pasted send credential — provider, label, when, and whether a token
+// is present. The token itself never crosses to the client (credential-store redacts on every read).
+export type SenderCredential = {
+  provider: string;
+  label: string | null;
+  savedAt: string;
+  hasToken: boolean;
+};
+
 // ─── GTM Board ────────────────────────────────────────────────────────────────
 // The nine belief layers getBoard() returns — the EXACT LayerBelief shape from brain/src/board.mjs.
 // A pure read of real state: a layer with no signal reports belief=null, confidence=0, status="blind"
