@@ -1,7 +1,7 @@
 # STATE — Drover (Alpha)
 
-**Stage: Alpha.** Logged 2026-07-03. This is the front-door snapshot of where the
-product actually stands. When something material changes, update this file and re-date it.
+**Stage: Alpha.** Logged 2026-07-03, updated 2026-07-07. This is the front-door snapshot of
+where the product actually stands. When something material changes, update this file and re-date it.
 For the product pitch read `README.md`; for how the system works read `AGENTS.md`; for the
 current build direction read `docs/GTM-ENGINE-REBUILD.md`. Everything else in `docs/` is
 history (see the doc map below).
@@ -57,6 +57,50 @@ measured result.
 
 ---
 
+## Sprint-alpha (2026-07-07) — the three named blockers are closed
+
+The 2026-07-06 full-codebase review found the alpha bet blocked by three concrete things: the
+product never actually sent anything (the email transport was not wired to the send path), the
+install broke for a stranger, and the founder gate could approve itself. This sprint closed all
+three, then hardened the codebase. It lives on the `sprint-alpha` branch (39 commits ahead of
+`origin/main`); as of this writing it is committed and pushed to its own branch but **not merged
+into `main`** — no change is live for anyone yet.
+
+**What now works that didn't:**
+
+- **It actually sends.** Real Gmail transport is wired into the live send path, behind the founder
+  gate. There is a durable bring-your-own-OAuth-client loopback sign-in that mints and refreshes
+  its own token, so a founder can connect their own Gmail once and send for real. Before this, the
+  send path staged locally and nothing ever left.
+- **Install works for a stranger.** A root post-install step now installs the two subprojects (the
+  brain and the interface) so a fresh clone comes up without hand-holding.
+- **First run refuses to start half-broken.** If no signed-in Claude is available, first run stops
+  with a clear message instead of failing mid-run.
+- **The gate can't approve itself.** Closed the hole where an agent could release its own gate over
+  the agent front door, and the raw-request bypass — the browser now mints a session token that the
+  gate release path checks, so only a real founder action clears the wall.
+- **One decision inbox.** A single pending-decision queue across every pipeline, with a live count on
+  the dock and one notification when anything reaches the wall — instead of per-pipeline scatter.
+- **Something to scan on first run.** A bundled sample product and a one-click sample scan, so a
+  stranger with no repo of their own still has a real thing to point Drover at.
+- **Manual outcome return.** A minimal way to mark what happened to a sent item, so a real outcome can
+  close the loop by hand while the automatic path is still unproven.
+- **Desktop branding.** The desktop build now reads as Drover, with an honest distribution doc.
+
+**Hardening (behavior-preserving, no feature change):**
+
+- Split the two oversized files the 07-06 review flagged as the real illegibility: the server split
+  into per-domain route modules, and the operator runtime split into separate tools, run-core, prompt,
+  and tool-execution modules. Tests stayed green across both splits.
+- Removed confirmed-dead code, relocated stray root screenshots, pruned stale docs.
+- Investigated collapsing the two parallel execution engines into one and wrote the plan
+  (`docs/ENGINE-COLLAPSE-PLAN.md`); **deferred on purpose** — the legacy path is still the live one, so
+  the collapse is a scoped follow-up, not something to rush mid-sprint.
+
+**What this does not change:** the alpha bet is still unproven. The machine can now send for real under
+the gate, install for a stranger, and can't wave itself through — but no real founder has driven a real
+go-to-market win to the gate. The honest line holds: built and tested, not validated in the market.
+
 ## How we build (the standing rule)
 
 Less is more. The harness — truth, the gate, taste — is the only thing we host. Every fuzzy
@@ -65,12 +109,14 @@ step, never a new hosted subsystem. A new feature is an agent plus a step, not n
 When something starts looking like an engine of modules, that's the smell — collapse it to
 agents. This is the anti-cage rule in `AGENTS.md`, restated because it's easy to drift off.
 
-## Build health (2026-07-03)
+## Build health (2026-07-07)
 
-- **Tests:** full suite green — 1170 backend pass / 0 fail, plus the front-end unit-test harness
-  (vitest + testing-library) at 12 pass / 0 fail, chained into `npm test`.
-- **Backend:** 89 modules. New GTM-engine modules present and tested: evidence, gtm-store,
-  market-research, path-portfolio, outcome-ingest, promote-motion, run-compile.
+- **Tests:** backend suite green — 1132 pass / 0 fail (1 skipped, 1133 total), and the full
+  `npm test` chain (backend tests → lint → build) is green. Backend test count dropped from the
+  07-03 figure because the sprint removed dead code, not coverage.
+- **Backend:** the two god-files are gone — the server and the operator runtime were each split into
+  focused modules this sprint (behavior-preserving). The GTM-engine modules present and tested:
+  evidence, gtm-store, market-research, path-portfolio, outcome-ingest, promote-motion, run-compile.
 - **Interface:** node-flow diagram as the default canvas. The IA was collapsed toward the
   vision's "one canvas + a composer" shape (see the note below) — the two hand-pick pickers are
   gone and the full-screen overlays dropped from four to three.
@@ -151,6 +197,8 @@ This is doctrine now — see the same bar in `AGENTS.md`.
 - `docs/VISION.md` — the north star: what Drover is for and the shape it's built toward.
 - `AGENTS.md` — how the system works and its guardrails.
 - `docs/GTM-ENGINE-REBUILD.md` — the current build direction (Phases 0–6 have landed as code).
+- `docs/ENGINE-COLLAPSE-PLAN.md` — the plan to collapse the two parallel execution engines into one; deferred (legacy path is still live).
+- `docs/DISTRIBUTION.md` — the honest distribution picture for the desktop build.
 - `docs/STATE.md` — this file.
 
 **History (kept for the record, superseded — do not treat as current):**
