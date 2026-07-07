@@ -49,7 +49,11 @@ connected to Drover's MCP server:
 Requirements: Node.js, Git, and a Claude Code login (composition is rented on the
 founder's subscription; with no connection the composer refuses rather than templating).
 
+Install dependencies once (this also installs the `brain/` and `ui/` subprojects), then
+start:
+
 ```sh
+npm install
 npm start
 ```
 

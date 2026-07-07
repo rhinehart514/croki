@@ -6,6 +6,7 @@
   "author": "Drover",
   "main": "electron/main.cjs",
   "scripts": {
+    "postinstall": "npm --prefix brain install && npm --prefix ui install",
     "build": "npm --prefix ui run build",
     "lint": "npm --prefix ui run lint",
     "test": "npm --prefix brain test && npm --prefix ui run test:unit && npm run lint && npm run build",
