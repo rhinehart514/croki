@@ -168,6 +168,17 @@
 .fdock-icon-btn.has-count,
 .fdock-icon-btn.has-pending { color: var(--ink); }
 
+/* Settings gear — deliberately the quietest thing on the bar. Smaller footprint and a fainter
+   resting color than the other controls, so it reads as a low-emphasis corner affordance rather than
+   a first-class action. It brightens to ink only on hover. */
+.fdock-settings-gear {
+  height: 28px;
+  min-width: 28px;
+  padding: 0 6px;
+  color: var(--faint);
+}
+.fdock-settings-gear:hover { color: var(--ink); }
+
 .fdock-count {
   min-width: 16px;
   padding: 1px 5px;

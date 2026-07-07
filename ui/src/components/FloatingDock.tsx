@@ -1,21 +1,20 @@
-import { useState } from "react";
 import { motion } from "motion/react";
-import { AlertTriangle, Inbox, LoaderCircle, Plus, Settings2 } from "lucide-react";
+import { LoaderCircle, Settings2 } from "lucide-react";
 import { SPRING } from "@/lib/springs";
-import { Reveal, Pop } from "@/lib/motion";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { ChannelSwitcher } from "@/components/ChannelSwitcher";
 import { SlidingTabs } from "@/components/SlidingTabs";
 import "@/styles/floating-dock.css";
 import type { ChannelMeta, GTMGraph, ProjectSummary } from "@/types";
 
-// The single floating control dock that sits top-center over the full-bleed canvas. It carries the
-// breadcrumb (product · channel), Ideate, the GTM↔Product toggle, Summon, and the first-class actions:
-// Issues (the always-present problem count) and Run. Workspace and Team
-// are no longer permanent buttons here; you summon those onto the canvas instead, so the bar holds only
-// what you reach for constantly. The Design/Simulation/Run lenses were cut: one project is one canvas.
+// The single floating control dock that sits top-center over the full-bleed canvas. It has been
+// slimmed to two jobs only: "where am I" (the product · pipeline breadcrumb and the GTM↔Product
+// toggle) and "go" (Run). The competing badges that used to crowd it — the amber Decisions count, the
+// Issues count, and the Summon button — have moved onto the canvas itself, so their props are still
+// accepted for compatibility but no longer rendered here. Settings is kept as one quiet, monochrome
+// gear in the corner rather than a prominent control.
 export function FloatingDock({
-  // Left — product · channel breadcrumb
+  // Left — product · pipeline breadcrumb
   projects, activeProjectId, projectBusy, onSwitchProject, onManageProjects, onNewProduct, onDeleteProject,
   channels, activeChannelId,
   onOpenChannel, onNewChannel,
@@ -25,20 +24,16 @@ export function FloatingDock({
   motionName,
   // GTM ↔ Product
   showGtmToggle, productMode, onModeToggle,
-  // Summon — the agentic replacement for lens tabs AND for the old toolbar sections. Instead of
-  // navigating between frozen views or hunting a dedicated button, you summon one onto the canvas as a
-  // draggable card. The caller passes the summonable views; onSummon pops the chosen one up.
-  summonItems, onSummon,
   // The admin door — opens the Settings overlay (workspace index, team + release roles, self-built
-  // tools). These moved out of the Summon menu so the bar's gear is their single home.
+  // tools). Rendered as a quiet, low-emphasis gear in the dock's corner.
   onOpenSettings,
-  // Right — the first-class actions
-  problems, issuesOpen, onToggleIssues,
-  // Decisions — the count of everything waiting on the founder across EVERY product and pipeline, and
-  // the inbox panel it toggles. Distinct from Issues (system problems): these are approvals you owe.
-  pendingDecisions, decisionsOpen, onToggleDecisions,
-  onCloseMenus,
+  // Right — the one first-class action left on the bar.
   graph, running, onRun,
+  // NOTE: the following props are still accepted so App.tsx keeps compiling, but they are no longer
+  // rendered — their surfaces (Decisions inbox, Issues, Summon) are moving onto the canvas. They are
+  // intentionally left out of the destructure above to avoid unused-variable lint. See the integration
+  // note: summonItems, onSummon, problems, issuesOpen, onToggleIssues, pendingDecisions, decisionsOpen,
+  // onToggleDecisions, onCloseMenus, runningNodeId.
 }: {
   projects: ProjectSummary[];
   activeProjectId: string | null;
@@ -77,7 +72,6 @@ export function FloatingDock({
   runningNodeId: string | null;
   onRun: () => void;
 }) {
-  const [summonOpen, setSummonOpen] = useState(false);
   const noGraph = !graph || graph.nodes.length === 0;
 
   return (
@@ -120,9 +114,8 @@ export function FloatingDock({
             {motionName}
           </span>
         ) : null}
-        {/* Ideate lives in the composer — the one "say things to Claude" home — not here. This bar is
-            the canvas's own controls (navigate, summon, run); asking Claude to think is a conversational
-            action, so it belongs with the conversation, not duplicated in the top chrome. */}
+        {/* GTM ↔ Product — the one lens toggle that stays on the bar, because it changes what the whole
+            canvas is showing you. Everything else you used to reach for here now lives on the canvas. */}
         {showGtmToggle ? (
           <SlidingTabs
             items={[{ value: "gtm", label: "GTM" }, { value: "product", label: "Product" }]}
@@ -132,116 +125,37 @@ export function FloatingDock({
             size="sm"
           />
         ) : null}
-        {/* Summon — the agentic replacement for lens tabs and the old toolbar sections. One + opens a
-            short menu of views you can pop onto the canvas as draggable cards (the experiment matrix,
-            a terminal, a query, …). You ask for what you want to see instead of navigating a fixed
-            taxonomy; Claude can summon the same cards. */}
-        {summonItems && summonItems.length && onSummon ? (
-          <div className="fdock-pop-wrap">
-            <button
-              className={`fdock-summon ${summonOpen ? "open" : ""}`}
-              onClick={() => { if (!summonOpen) onCloseMenus(); setSummonOpen((v) => !v); }}
-              type="button"
-              aria-haspopup="menu"
-              aria-expanded={summonOpen}
-              title="Summon a view onto the canvas"
-            >
-              <Plus size={14} />
-              <span>Summon</span>
-            </button>
-            <Reveal open={summonOpen} className="fdock-summon-pop" role="menu" origin="top-left">
-              <div className="fdock-summon-head">Pop a view onto the canvas</div>
-              {summonItems.map((item) => (
-                <button
-                  key={item.id}
-                  className="fdock-summon-item"
-                  role="menuitem"
-                  type="button"
-                  onClick={() => { onSummon(item.id); setSummonOpen(false); }}
-                >
-                  <strong>{item.label}</strong>
-                  {item.desc ? <span>{item.desc}</span> : null}
-                </button>
-              ))}
-            </Reveal>
-          </div>
-        ) : null}
       </div>
 
-      {/* Right — the first-class actions. Issues and Run; the founder gate now blooms on the canvas.
-          Everything else is summoned now. Claude's live status lives in the command dock below. */}
+      {/* Right — just "go", plus one quiet gear. The Decisions inbox, the Issues count, and Summon have
+          all moved onto the canvas, so the bar stays calm: where you are on the left, the run on the
+          right. */}
       <div className="fdock-right">
-        {/* Decisions — the single inbox of everything waiting on you, across EVERY product and pipeline.
-            Always visible (in GTM and Product mode), because a run reaching your gate or dying in a
-            pipeline you're not looking at is exactly what this must surface. The count is the founder
-            gate's own amber — these are approvals you owe — which reads distinct from Issues' neutral
-            system-problem count beside it. */}
-        <button
-          className={`fdock-icon-btn ${pendingDecisions > 0 ? "has-pending" : ""} ${decisionsOpen ? "open" : ""}`}
-          onClick={() => { setSummonOpen(false); onToggleDecisions(); }}
-          type="button"
-          aria-haspopup="dialog"
-          aria-expanded={decisionsOpen}
-          title={pendingDecisions > 0
-            ? `${pendingDecisions} decision${pendingDecisions === 1 ? "" : "s"} waiting on you`
-            : "Nothing waiting on you"}
-        >
-          <Inbox size={15} />
-          {pendingDecisions > 0 ? <Pop k={pendingDecisions} className="fdock-count gate">{pendingDecisions}</Pop> : null}
-        </button>
-        <span className="fdock-divider" />
-
-        {/* Settings — the admin door (workspace, team, self-built tools), evicted from the Summon
-            junk drawer into one overlay. Always reachable, in GTM and Product mode alike. The agent
-            roster moved to the always-present left rail's Crew section. */}
+        {/* Settings — a quiet, low-emphasis monochrome gear tucked in the corner. The admin door
+            (workspace, team, self-built tools); always reachable in GTM and Product mode alike. */}
         {onOpenSettings ? (
-          <>
-            <button
-              className="fdock-icon-btn"
-              onClick={() => { setSummonOpen(false); onOpenSettings(); }}
-              type="button"
-              title="Settings — workspace, team, and tools"
-              aria-label="Settings"
-            >
-              <Settings2 size={15} />
-            </button>
-            {!productMode ? <span className="fdock-divider" /> : null}
-          </>
-        ) : null}
-
-        {/* Issues — the always-present problem indicator, promoted off the Summon menu. Carries the live
-            problem count (monochrome — amber stays the gate's alone) and toggles the inline Issues panel.
-            GTM-only: problems are derived from the GTM graph and engine. */}
-        {!productMode ? (
           <button
-            className={`fdock-icon-btn ${problems > 0 ? "has-count" : ""} ${issuesOpen ? "open" : ""}`}
-            onClick={() => { setSummonOpen(false); onToggleIssues(); }}
+            className="fdock-icon-btn fdock-settings-gear"
+            onClick={onOpenSettings}
             type="button"
-            aria-haspopup="dialog"
-            aria-expanded={issuesOpen}
-            title={problems > 0
-              ? `${problems} problem${problems === 1 ? "" : "s"} across your system`
-              : "No issues — your system is healthy"}
+            title="Settings — workspace, team, and tools"
+            aria-label="Settings"
           >
-            <AlertTriangle size={15} />
-            {problems > 0 ? <Pop k={problems} className="fdock-count">{problems}</Pop> : null}
+            <Settings2 size={14} />
           </button>
         ) : null}
 
         {/* Run — the one dark primary, GTM-only (Product mode has nothing to run). */}
         {!productMode ? (
-          <>
-            <span className="fdock-divider" />
-            <button
-              className="fdock-run-btn"
-              disabled={running || noGraph}
-              onClick={onRun}
-              type="button"
-            >
-              {running ? <LoaderCircle className="spin" size={13} /> : null}
-              Run
-            </button>
-          </>
+          <button
+            className="fdock-run-btn"
+            disabled={running || noGraph}
+            onClick={onRun}
+            type="button"
+          >
+            {running ? <LoaderCircle className="spin" size={13} /> : null}
+            Run
+          </button>
         ) : null}
       </div>
     </motion.div>

@@ -9,6 +9,7 @@ import type {
   ChannelFeed, ChannelMeta, Claim, ConnectorMeta, DirectedFeed, GateDecision, GtmExperiment, GTMContractAudit, GTMGraph, GTMItem, GTMNode,
   GTMRunResult, NodeSelection, Person,
 } from "@/types";
+import type { RunSummary } from "@/api";
 
 // GtmCanvas — GTM mode's instance of the generic CanvasShell. It projects the GTM operational object
 // model through two lenses, chosen by channel state alone (no in-canvas switcher):
@@ -55,6 +56,11 @@ export type GtmCanvasModel = {
   // it: the Engineer lens threads it into GraphCanvas, the Move lens rides it on the gate bag.
   onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
   onAskClaude?: (node: GTMNode) => void;
+  // Open an agent's profile sheet from its monogram face on a step — the home of the deleted crew strip.
+  onOpenAgentProfile?: (ref: string) => void;
+  // The project's latest run numbers (real, from the run ledger), drawn on the focused pipeline's
+  // Measure node instead of a separate floating strip. Null when no run has been recorded.
+  runSummary?: RunSummary | null;
   onApproveGate?: (nodeId: string) => void;
   onAddNode?: (spec: Partial<GTMNode> & { label: string }) => void;
   onConnectNodes?: (source: string, target: string) => void;
@@ -115,8 +121,17 @@ export type GtmCanvasModel = {
 
 type GtmLensProps = LensProps<GtmCanvasModel, never>;
 
+// The left gutter the product-entry column occupies, published by ProductEntryColumn as --pentry-gutter
+// (0 when that column isn't mounted). Both lens panes pad their left edge by it so the canvas starts to
+// the RIGHT of the column — no node renders under it, and the column can't intercept a node's click.
+const GUTTER_STYLE = { paddingLeft: "var(--pentry-gutter, 0px)", transition: "padding-left 180ms ease" } as const;
+
 function ObjectGraphLens({ model: m }: GtmLensProps) {
-  return <ObjectGraphCanvas projectId={m.projectId} gate={m.gate} onRecordOutcome={m.onRecordOutcome} onSubjectChange={m.onObjectSelect} subjectId={m.subjectId ?? null} desiredArrange={m.desiredArrange} modeControlled={m.modeControlled} onIdeateObject={m.onIdeateObject} ideatingNodeId={m.ideatingNodeId ?? null} ideatingTarget={m.ideatingTarget ?? null} reloadSignal={m.objectGraphReload ?? 0} />;
+  return (
+    <div style={{ height: "100%", minHeight: 0, ...GUTTER_STYLE }}>
+      <ObjectGraphCanvas projectId={m.projectId} gate={m.gate} onRecordOutcome={m.onRecordOutcome} onSubjectChange={m.onObjectSelect} subjectId={m.subjectId ?? null} desiredArrange={m.desiredArrange} modeControlled={m.modeControlled} onIdeateObject={m.onIdeateObject} ideatingNodeId={m.ideatingNodeId ?? null} ideatingTarget={m.ideatingTarget ?? null} reloadSignal={m.objectGraphReload ?? 0} />
+    </div>
+  );
 }
 
 // ENGINEER — the pipeline builder. This is where the founder drops agents, tools, and data sources and
@@ -140,7 +155,7 @@ function EngineerLens({ model: m }: GtmLensProps) {
   // always-merged mount rendered a focused pipeline as a cramped lane crushed among the others.
   const multiPipeline = m.activeChannelId ? null : m.multiPipeline;
   return (
-    <div className="engineer-lens" style={{ position: "relative", height: "100%", minHeight: 0 }}>
+    <div className="engineer-lens" style={{ position: "relative", height: "100%", minHeight: 0, ...GUTTER_STYLE }}>
       <GraphCanvas
         connectors={m.connectors}
         contractAudits={m.contractAudits}
@@ -155,6 +170,8 @@ function EngineerLens({ model: m }: GtmLensProps) {
         gateOffer={m.gateOffer}
         onRecordOutcome={m.onRecordOutcome}
         onAskClaude={m.onAskClaude}
+        onOpenAgentProfile={m.onOpenAgentProfile}
+        runSummary={m.runSummary}
         onApproveGate={m.onApproveGate}
         onAddNode={m.onAddNode}
         onConnectNodes={m.onConnectNodes}

@@ -1,34 +1,65 @@
 import { useMemo, useState, type DragEvent } from "react";
 import {
-  Workflow, Users, Wrench, Plus, ChevronDown, Shapes,
-  PanelLeftClose, PanelLeftOpen, Check, GripVertical, Database,
+  Workflow, Users, Plus, ChevronDown,
+  PanelLeftClose, PanelLeftOpen, Check, GripVertical,
 } from "lucide-react";
 import { agentPersona, humanizeRef, FAMILY_TINT } from "@/lib/agentPersona";
 import { healthHex } from "@/lib/health";
-import { kindIcon } from "@/lib/objectKindIcons";
-import { PALETTE_BLOCK_LABEL, PALETTE_DRAG_MIME, PALETTE_FAMILIES, STEP_DRAG_MIME } from "@/lib/objectPalette";
+import { STEP_DRAG_MIME } from "@/lib/objectPalette";
 import type { AgentBenchRow } from "@/api";
 import type { ChannelMeta, GtmLibrary } from "@/types";
 import "@/styles/left-rail.css";
 
-// The founder's "your stuff" rail — one always-present, opaque left column that folds the old bench
-// overlay, the workspace's pipeline list, AND the floating block palette into a single index alongside
-// the canvas. Five sections: Pipelines (real project state, click to load on the canvas), Agents (every
-// agent and what it has earned at the gate — click for its profile, drag it onto the canvas to add it
-// as a pipeline step), Tools (the on-disk skills — click to edit, drag to add as a pipeline step), Data
-// (the sources a pipeline reads from — an honest empty state until one is connected), and Blocks (the
-// belief building blocks — drag one onto the strategy map to add it).
-// The rail is MODE-AWARE. In Engineer mode (the pipeline builder) the draggable build pieces — Agents,
-// Tools, Data — lead so they're visible without scrolling, and the Move-map Blocks drop to the bottom.
-// In Move mode the Blocks lead. Dragging behaves by TYPE, and the two object models never cross: a Block
-// drop builds the strategy map; an Agent or Tool drop builds the pipeline workflow. It sits BESIDE the
-// canvas, never over it, and collapses to a thin strip to hand the width back.
+// The founder's workspace rail — one always-present, opaque left column beside the canvas. It is a
+// two-item PARTS BIN, not a filing cabinet: only the things that are genuinely "stuff you have" live at
+// the top level — the pipelines you're running, and the crew of agents you've assembled. Everything
+// else that used to sit here is really an attribute of those two: a tool is something an agent knows, a
+// data source is a step inside a pipeline, and a belief block is a zoomed-out view of the canvas — none
+// of them are top-level objects, so they no longer get a section here.
+// Each pipeline and each agent carries a plain-English one-liner — what it does for you and when you'd
+// reach for it — so the rail teaches the founder their own workspace instead of listing code names.
+// The rail sits BESIDE the canvas, never over it, and collapses to a thin strip to hand the width back.
 
 // The round identity mark, derived from the persona library — same source the profile sheet reads.
 function Mark({ agentRef, job }: { agentRef: string; job?: string }) {
   const { family, monogram } = agentPersona(agentRef, job);
   const tint = FAMILY_TINT[family];
   return <span className="lr-mark" style={{ background: tint.bg, color: tint.fg }}>{monogram}</span>;
+}
+
+// Plain-English fallback for what an agent does, keyed by its human role — used only when the agent
+// carries no job description of its own. Written as "what it does for you, and when you'd reach for it",
+// never as a code name, so a stranger reads the rail and understands the team without opening anything.
+const ROLE_BLURB: Record<string, string> = {
+  "Prospect Researcher": "Finds the people worth reaching and why now — pull it in when you need a fresh list.",
+  "Signal Scout": "Watches for buying signals like new stars or sign-ups — reach for it to catch warm leads early.",
+  "Qualification Analyst": "Scores your leads so you know who to call first — use it when a list is too big to work by hand.",
+  "Enrichment Scout": "Fills in the missing details on a contact — add it when your list is thin on specifics.",
+  "Call-Order Planner": "Ranks who to contact in what order — use it to plan a day of outreach.",
+  "Outreach Writer": "Drafts the first message in your voice — reach for it when it's time to actually write.",
+  "First-Contact Writer": "Writes the opening message to someone new — use it to start a conversation.",
+  "Vouch Writer": "Turns a happy customer into a warm intro — use it when you have a fan to lean on.",
+  "Content Strategist": "Plans and drafts content that earns search traffic — reach for it to build an inbound channel.",
+  "Distribution Planner": "Maps where a piece gets seen after you publish — use it so good work actually travels.",
+  "Lifecycle Engineer": "Nudges new signups toward their first real win — use it to turn trials into users.",
+  "Growth Instrumenter": "Sets up the tracking to see what's working — use it before you scale a motion.",
+  "Community Lead": "Builds a presence where your users already gather — reach for it to grow through community.",
+  "Partnerships Lead": "Finds partners whose audience is your buyer — use it to grow through other people's reach.",
+  "Paid Acquisition": "Plans and drafts paid campaigns — use it when you want to buy your way to reach.",
+  "Referral Designer": "Builds a reason for users to invite others — reach for it to grow by word of mouth.",
+};
+
+function agentBlurb(row: AgentBenchRow): string {
+  const job = row.job?.trim();
+  if (job) return job;
+  const { role } = agentPersona(row.ref, row.job);
+  return ROLE_BLURB[role] ?? "A teammate you can drop into a pipeline — open it to see what it does.";
+}
+
+function pipelineBlurb(ch: ChannelMeta): string {
+  const objective = ch.objective?.trim();
+  if (objective) return objective;
+  return "A pipeline you've started — set its goal and run it to your gate.";
 }
 
 function Section({
@@ -66,38 +97,28 @@ export function LeftRail({
   channels,
   activeChannelId,
   bench,
-  library,
-  activeMode,
   onLoadChannel,
   onNewChannel,
   onOpenAgent,
-  onOpenSkill,
-  onNewSkill,
 }: {
   channels: ChannelMeta[];
   activeChannelId: string | null;
   bench: AgentBenchRow[] | null;
-  library: GtmLibrary | null;
-  activeMode: "move" | "engineer";
   onLoadChannel: (id: string) => void;
   onNewChannel: () => void;
   onOpenAgent: (ref: string) => void;
-  onOpenSkill: (name: string) => void;
-  onNewSkill: () => void;
+  // Retained so App keeps compiling while the old Tools/Data/Blocks sections stay retired. None are
+  // rendered anymore — a tool is something an agent knows, data is a step inside a pipeline, and blocks
+  // are a zoomed-out canvas view, so none belong at the top level of the parts bin.
+  library?: GtmLibrary | null;
+  activeMode?: "move" | "engineer";
+  onOpenSkill?: (name: string) => void;
+  onNewSkill?: () => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
-  const skills = library?.skills ?? [];
-  const blockCount = useMemo(() => PALETTE_FAMILIES.reduce((total, family) => total + family.blocks.length, 0), []);
 
-  // Drag a belief block → the strategy/object map reads PALETTE_DRAG_MIME and creates a belief card
-  // (exactly the old floating palette's contract, so the existing canvas drop still fires).
-  const onBlockDragStart = (event: DragEvent<HTMLElement>, type: string) => {
-    event.dataTransfer.setData(PALETTE_DRAG_MIME, type);
-    event.dataTransfer.effectAllowed = "copy";
-  };
-
-  // Drag a Crew member or a Skill → the canvas-area drop target reads STEP_DRAG_MIME and adds a pipeline
-  // step (never a belief), switching to the build view so the founder watches it land.
+  // Drag a crew member onto the canvas → the canvas-area drop target reads STEP_DRAG_MIME and adds a
+  // pipeline step, switching to the build view so the founder watches it land. Payload shape unchanged.
   const onStepDragStart = (
     event: DragEvent<HTMLElement>,
     payload: { kind: "agent" | "skill"; ref: string; label: string },
@@ -127,151 +148,10 @@ export function LeftRail({
     };
   }, [bench]);
 
-  // Pipelines — real project state; click loads it onto the canvas. Always leads, in both modes: it's
-  // the founder's own work, not a build piece.
-  const pipelinesSection = (
-    <Section
-      key="pipelines"
-      icon={<Workflow size={13} />}
-      title="Pipelines"
-      count={channels.length}
-      onNew={onNewChannel}
-      newTitle="Ideate a new pipeline"
-    >
-      {channels.length === 0 ? (
-        <p className="lr-empty">No pipelines yet.</p>
-      ) : (
-        channels.map((ch) => (
-          <button
-            key={ch.id}
-            className={`lr-row ${ch.id === activeChannelId ? "active" : ""}`}
-            type="button"
-            onClick={() => onLoadChannel(ch.id)}
-            title={ch.objective || ch.name}
-          >
-            <span
-              className="lr-dot"
-              style={{ background: healthHex(ch.lastRunOk === false ? 0.3 : ch.lastRunOk ? 0.85 : 0.6) }}
-            />
-            <span className="lr-row-main">
-              <span className="lr-row-name">{ch.name}</span>
-              <span className="lr-row-meta">
-                {ch.pendingGates > 0 ? `${ch.pendingGates} at the gate` : ch.runCount > 0 ? `${ch.runCount} run${ch.runCount === 1 ? "" : "s"}` : "never run"}
-              </span>
-            </span>
-          </button>
-        ))
-      )}
-    </Section>
-  );
-
-  // Agents — every agent and what it earned at the gate; click opens its profile, drag it onto the
-  // canvas to add it as a pipeline step. A build piece: leads in Engineer mode.
-  const agentsSection = (
-    <Section key="agents" icon={<Users size={13} />} title="Agents" count={(bench ?? []).length}>
-      {bench === null ? (
-        <p className="lr-empty">Reading the roster…</p>
-      ) : bench.length === 0 ? (
-        <p className="lr-empty">No agents yet.</p>
-      ) : (
-        <>
-          {proven.length > 0 ? <div className="lr-group">Proven</div> : null}
-          {proven.map((row) => (
-            <CrewRow key={row.ref} row={row} name={nameByRef.get(row.ref)} onOpen={onOpenAgent} onDragStep={onStepDragStart} />
-          ))}
-          {waiting.length > 0 ? <div className="lr-group">On the bench</div> : null}
-          {waiting.map((row) => (
-            <CrewRow key={row.ref} row={row} name={nameByRef.get(row.ref)} onOpen={onOpenAgent} onDragStep={onStepDragStart} />
-          ))}
-        </>
-      )}
-    </Section>
-  );
-
-  // Tools — the on-disk judgment (skills); click opens the markdown editor, drag it onto the canvas to
-  // add it as a pipeline step. A build piece: sits right under Agents in Engineer mode.
-  const toolsSection = (
-    <Section
-      key="tools"
-      icon={<Wrench size={13} />}
-      title="Tools"
-      count={skills.length}
-      onNew={onNewSkill}
-      newTitle="Author a new tool"
-    >
-      {skills.length === 0 ? (
-        <p className="lr-empty">No tools yet.</p>
-      ) : (
-        skills.map((sk) => (
-          <div
-            key={sk.name}
-            className="lr-row lr-draggable"
-            role="button"
-            tabIndex={0}
-            draggable
-            onDragStart={(event) => onStepDragStart(event, { kind: "skill", ref: sk.name, label: sk.name })}
-            onClick={() => onOpenSkill(sk.name)}
-            onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenSkill(sk.name); } }}
-            title={sk.description || sk.name}
-          >
-            <span className="lr-row-main">
-              <span className="lr-row-name">{sk.name}</span>
-              {sk.description ? <span className="lr-row-meta">{sk.description}</span> : null}
-            </span>
-            <GripVertical className="lr-grip" size={14} aria-hidden="true" />
-          </div>
-        ))
-      )}
-    </Section>
-  );
-
-  // Data — the sources a pipeline can read from. No real source inventory exists yet, so this is an
-  // honest empty state, never invented rows. A build piece: sits under Tools in Engineer mode.
-  const dataSection = (
-    <Section key="data" icon={<Database size={13} />} title="Data" count={0}>
-      <p className="lr-empty">Connect a data source to drag it onto the canvas.</p>
-    </Section>
-  );
-
-  // Blocks — the belief building blocks; drag one onto the strategy map to add it. These build the Move
-  // map, so they lead in Move mode and drop below the build pieces in Engineer mode.
-  const blocksSection = (
-    <Section key="blocks" icon={<Shapes size={13} />} title="Blocks" count={blockCount}>
-      {PALETTE_FAMILIES.map((family) => (
-        <div key={family.label}>
-          <div className="lr-group">{family.label}</div>
-          {family.blocks.map((type) => {
-            const Glyph = kindIcon(type);
-            return (
-              <div
-                key={type}
-                className="lr-block"
-                draggable
-                onDragStart={(event) => onBlockDragStart(event, type)}
-                title={`Drag onto the map to add a ${PALETTE_BLOCK_LABEL[type].toLowerCase()}`}
-              >
-                <Glyph size={14} aria-hidden="true" />
-                <span className="lr-block-name">{PALETTE_BLOCK_LABEL[type]}</span>
-                <GripVertical className="lr-grip" size={14} aria-hidden="true" />
-              </div>
-            );
-          })}
-        </div>
-      ))}
-    </Section>
-  );
-
-  // Engineer mode is the pipeline builder — the draggable build pieces (Agents, Tools, Data) lead and
-  // stay visible without scrolling; the Move-map Blocks drop to the bottom. Move mode keeps Blocks up top.
-  const sectionOrder =
-    activeMode === "engineer"
-      ? [pipelinesSection, agentsSection, toolsSection, dataSection, blocksSection]
-      : [pipelinesSection, blocksSection, agentsSection, toolsSection, dataSection];
-
   if (collapsed) {
     return (
-      <aside className="left-rail collapsed" aria-label="Your stuff">
-        <button className="lr-expand" type="button" onClick={() => setCollapsed(false)} title="Expand your stuff">
+      <aside className="left-rail collapsed" aria-label="Workspace">
+        <button className="lr-expand" type="button" onClick={() => setCollapsed(false)} title="Expand your workspace">
           <PanelLeftOpen size={16} />
         </button>
       </aside>
@@ -279,15 +159,73 @@ export function LeftRail({
   }
 
   return (
-    <aside className="left-rail" aria-label="Your stuff">
+    <aside className="left-rail" aria-label="Workspace">
       <header className="lr-head">
-        <span className="lr-head-title">Your stuff</span>
+        <span className="lr-head-title">Workspace</span>
         <button className="lr-collapse" type="button" onClick={() => setCollapsed(true)} title="Collapse — reclaim the width">
           <PanelLeftClose size={15} />
         </button>
       </header>
 
-      <div className="lr-body">{sectionOrder}</div>
+      <div className="lr-body">
+        {/* Pipelines — your real work; click loads one onto the canvas. The one-liner is the goal it's
+            chasing, so the list reads as intentions, not file names. */}
+        <Section
+          icon={<Workflow size={13} />}
+          title="Pipelines"
+          count={channels.length}
+          onNew={onNewChannel}
+          newTitle="Ideate a new pipeline"
+        >
+          {channels.length === 0 ? (
+            <p className="lr-empty">No pipelines yet — start one and it lands here.</p>
+          ) : (
+            channels.map((ch) => (
+              <button
+                key={ch.id}
+                className={`lr-row lr-stacked ${ch.id === activeChannelId ? "active" : ""}`}
+                type="button"
+                onClick={() => onLoadChannel(ch.id)}
+                title={ch.objective || ch.name}
+              >
+                <span
+                  className="lr-dot"
+                  style={{ background: healthHex(ch.lastRunOk === false ? 0.3 : ch.lastRunOk ? 0.85 : 0.6) }}
+                />
+                <span className="lr-row-main">
+                  <span className="lr-row-name">{ch.name}</span>
+                  <span className="lr-row-desc">{pipelineBlurb(ch)}</span>
+                  <span className="lr-row-meta">
+                    {ch.pendingGates > 0 ? `${ch.pendingGates} at the gate` : ch.runCount > 0 ? `${ch.runCount} run${ch.runCount === 1 ? "" : "s"}` : "never run"}
+                  </span>
+                </span>
+              </button>
+            ))
+          )}
+        </Section>
+
+        {/* Your crew — the agents you've assembled. Click opens a teammate's profile; drag one onto the
+            canvas to add it as a pipeline step. Proven above still-on-the-bench, so earned trust reads
+            first. */}
+        <Section icon={<Users size={13} />} title="Your crew" count={(bench ?? []).length}>
+          {bench === null ? (
+            <p className="lr-empty">Reading your crew…</p>
+          ) : bench.length === 0 ? (
+            <p className="lr-empty">No crew yet — assemble agents and they'll gather here.</p>
+          ) : (
+            <>
+              {proven.length > 0 ? <div className="lr-group">Proven</div> : null}
+              {proven.map((row) => (
+                <CrewRow key={row.ref} row={row} name={nameByRef.get(row.ref)} onOpen={onOpenAgent} onDragStep={onStepDragStart} />
+              ))}
+              {waiting.length > 0 ? <div className="lr-group">On the bench</div> : null}
+              {waiting.map((row) => (
+                <CrewRow key={row.ref} row={row} name={nameByRef.get(row.ref)} onOpen={onOpenAgent} onDragStep={onStepDragStart} />
+              ))}
+            </>
+          )}
+        </Section>
+      </div>
     </aside>
   );
 }
@@ -315,6 +253,7 @@ function CrewRow({
       <Mark agentRef={row.ref} job={row.job} />
       <span className="lr-row-main">
         <span className="lr-row-name">{name ?? role}</span>
+        <span className="lr-row-desc">{agentBlurb(row)}</span>
         {row.hasRuns ? (
           <span className="lr-row-meta lr-crew-stats">
             <span className="lr-stat good"><Check size={11} />{row.counts.approved}</span>

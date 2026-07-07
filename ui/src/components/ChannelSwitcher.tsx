@@ -6,9 +6,10 @@ import "@/styles/menu.css";
 import "@/styles/outcome-switcher.css";
 
 // A channel has no canonical status key, so its dot/meta derive from run signals: a pending gate
-// leads (amber), then a failed last run (red), then a proven run (green), then idle.
+// leads (amber = your judgment is needed, the one accent), then a failed last run (red, an error
+// signal), then a proven run (neutral ink — no green success accent), then idle (faint).
 const channelDot = (ch: ChannelMeta): string =>
-  ch.pendingGates > 0 ? "var(--gap)" : ch.lastRunOk === false ? "var(--danger)" : ch.runCount > 0 ? "var(--proven)" : "var(--ghost)";
+  ch.pendingGates > 0 ? "var(--gap)" : ch.lastRunOk === false ? "var(--danger)" : ch.runCount > 0 ? "var(--ink-2)" : "var(--ghost)";
 const channelMeta = (ch: ChannelMeta): string =>
   ch.pendingGates > 0 ? `${ch.pendingGates} gate${ch.pendingGates === 1 ? "" : "s"}`
     : ch.runCount > 0 ? `${ch.runCount} run${ch.runCount === 1 ? "" : "s"}` : "ready";

@@ -320,6 +320,15 @@ function offerTail(statement: string): string {
   return statement.slice(idx).replace(new RegExp(`^${PRICE}`), "").replace(/^[\s·,/-]+/, "").trim();
 }
 
+// A gate node's statement arrives as "Founder approval for local" / "Founder approval for http" — the
+// trailing word is the connector's transport protocol, meaningless to the founder. Strip the
+// "for <protocol>" tail so the gate reads as plain "Founder approval". Any other phrasing (e.g. a
+// deploy gate's "Founder approval to deploy") uses a different connector word and is left untouched.
+// Display only — the node's real statement stays intact for internal dedup/keying.
+function gateNodeLabel(statement: string): string {
+  return statement.replace(/\s+for\s+\S.*$/i, "").trim() || statement;
+}
+
 function ObjectBody({ node, kind }: { node: ObjectGraphNode; kind: ObjectKind }) {
   const statement = node.statement;
   if (kind === "offer") {
@@ -365,7 +374,7 @@ function ObjectBody({ node, kind }: { node: ObjectGraphNode; kind: ObjectKind })
     return (
       <div className="obj-body obj-gate">
         <span className="obj-gate-bar" aria-hidden="true" />
-        <span className="obj-text">{statement}</span>
+        <span className="obj-text">{gateNodeLabel(statement)}</span>
       </div>
     );
   }

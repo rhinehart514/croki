@@ -6,6 +6,7 @@ import {
 import { statusLabel } from "@/lib/status";
 import { subjectActions } from "@/lib/subjectActions";
 import { kindIcon } from "@/lib/objectKindIcons";
+import { humanizeFieldLabel } from "@/lib/labels";
 import type { CanvasSubject, CardDetail } from "@/lib/cardDetail";
 import type { ObjectCandidate } from "@/api";
 import { AgentPicker } from "@/components/AgentPicker";
@@ -470,10 +471,11 @@ function CandidateChoices({ candidates, pickedId, onPick }: {
   );
 }
 
-// A canvas object's type, in founder words — "value_prop" → "value prop", so the attached header
-// reads "Claude · editing value prop", never an internal token.
+// A canvas object's type, in founder words — "value_prop"/"valueProposition" → "Value proposition",
+// so the attached header reads "Claude · editing Value proposition", never an internal token. Routes
+// through the shared field-label map so every surface names an object kind the same plain way.
 function humanizeKind(kind: string): string {
-  return (kind || "block").replace(/_/g, " ");
+  return humanizeFieldLabel(kind) || "Block";
 }
 
 // ─── Per-card ideation (the on-card "+" seam) ───────────────────────────────────────────────────
@@ -824,6 +826,13 @@ export function ComposerDock({
     startOpen ? false : (floating || !session || TERMINAL.has(session.status)),
   );
   const [expanded, setExpanded] = useState(false);
+  // The docked dock's default is a SLIM INPUT RAIL, not a full conversation column: a single
+  // talk-to-Claude input plus a minimal status/peek, so the canvas keeps its width. `panelOpen`
+  // false = the slim rail; true = the full conversation panel (thread/focus/candidates/gate + the
+  // build room). The founder opens the panel with the ⤢ handle, and any attention moment (a gate, a
+  // pending decision, candidates, a selected card, sending a message) opens it for them. Floating is
+  // unaffected — it keeps its own resting/pill model — so this only governs the docked lane.
+  const [panelOpen, setPanelOpen] = useState(false);
   // The dock leads with the THREAD — the whole conversation in one scroll (your messages, Claude's
   // work folded into a step receipt, the answer, the gate). Focus (just the latest answer/state) is
   // still one click away for when you only want the result, but you land in the conversation.
@@ -1050,7 +1059,7 @@ export function ComposerDock({
   const [trackedObjectIdeation, setTrackedObjectIdeation] = useState(objectIdeationKey);
   if (objectIdeationKey !== trackedObjectIdeation) {
     setTrackedObjectIdeation(objectIdeationKey);
-    if (objectIdeationKey) setCollapsed(false);
+    if (objectIdeationKey) { setCollapsed(false); setPanelOpen(true); }
   }
 
   // Selecting a card on the object graph is the founder pointing at it — open the dock so the composer
@@ -1060,7 +1069,7 @@ export function ComposerDock({
   const [trackedSubjectCard, setTrackedSubjectCard] = useState(subjectCardKey);
   if (subjectCardKey !== trackedSubjectCard) {
     setTrackedSubjectCard(subjectCardKey);
-    if (subjectCardKey) setCollapsed(false);
+    if (subjectCardKey) { setCollapsed(false); setPanelOpen(true); }
   }
 
   // Opening the command bar drops you straight into the input — it reads as a command line, so a
@@ -1096,6 +1105,16 @@ export function ComposerDock({
   const sendDisabled = running || session?.status === "running" || session?.status === "ready" || waitingGate;
   const working = running || session?.status === "running";
 
+  // A gate or a pending question is the founder's judgment moment — the one thing the slim rail must
+  // not swallow. On its rising edge open the full panel so the decision is in front of them (the slim
+  // rail still flags it in amber if they shrink back). Rising edge only, so a manual shrink sticks.
+  const needsDecision = waitingGate || !!session?.pendingQuestion;
+  const [trackedNeedsDecision, setTrackedNeedsDecision] = useState(needsDecision);
+  if (needsDecision !== trackedNeedsDecision) {
+    setTrackedNeedsDecision(needsDecision);
+    if (needsDecision) { setCollapsed(false); setPanelOpen(true); }
+  }
+
   // Ambiguous-goal sketches, read off the session through the one isolated seam. Held as local pick
   // state so choosing one fades the rest; a fresh set of candidates clears the pick.
   const candidates = sessionCandidates(session);
@@ -1105,6 +1124,9 @@ export function ComposerDock({
   if (candidateSig !== trackedCandidateSig) {
     setTrackedCandidateSig(candidateSig);
     setPickedCandidateId(null);
+    // A fresh set of pipeline shapes is a decision to surface — open the full panel so they're
+    // pickable, not buried behind the slim rail.
+    if (candidateSig) { setCollapsed(false); setPanelOpen(true); }
   }
   // Announce a new set of candidates to the host exactly once (so it can ghost them on the canvas).
   // Guarded on the id signature so it fires per-set, not per-render.
@@ -1121,7 +1143,7 @@ export function ComposerDock({
   const buildCandidate = (candidate: Candidate) => {
     if (pickedCandidateId) return;
     setPickedCandidateId(candidate.id);
-    setCollapsed(false);
+    setCollapsed(false); setPanelOpen(true);
     // The founder's pick IS the act: build THIS shape via compose_and_run (it still stops at the
     // gate downstream). Prefer the host's dedicated builder; fall back to a concrete send so the
     // picker works standalone. This is the ONE place the build path is reached — a one-line swap if
@@ -1139,7 +1161,7 @@ export function ComposerDock({
     const nav = isNavCommand?.(value) ?? false;
     if (sendDisabled && !nav) return;
     setSubmitting(true);
-    setCollapsed(false); // sending opens the conversation above the composer
+    setCollapsed(false); setPanelOpen(true); // sending opens the full conversation above the composer
     try { await onSend(value); setInput(""); }
     finally { setSubmitting(false); }
   };
@@ -1328,6 +1350,55 @@ export function ComposerDock({
     );
   }
 
+  // ── The slim input rail — the DOCKED default ──────────────────────────────────────────────────
+  // A single talk-to-Claude input, a minimal status line, and a one-line peek at what Claude is doing
+  // (or an amber "your call" flag when it's waiting on you). Far less width than the full column, so
+  // the canvas breathes. The ⤢ handle — or any attention moment above — opens the full panel. Floating
+  // keeps its own model (handled below), so this rail is docked-only.
+  if (!floating && !panelOpen) {
+    const latestBeat = session?.events.at(-1)?.title;
+    const slimLine = working ? "Claude is working…" : session ? (latestBeat ?? `Claude · ${statusLabel(session.status)}`) : null;
+    return (
+      <aside className="composer-dock docked slim" aria-label="Claude co-pilot">
+        <div className="dock-slim-head">
+          <span className={`dock-slim-orb ${working ? "live" : ""}`} aria-hidden="true">
+            {working ? <LoaderCircle className="spin" /> : <Bot size={15} />}
+          </span>
+          <div className="dock-slim-id">
+            <strong>Claude</strong>
+            <span className="dock-slim-sub">{session ? statusLabel(session.status) : "co-pilot"}</span>
+          </div>
+          {sessionActive ? (
+            <button className="composer-dock-stop" onClick={() => void onCancel()} type="button" title="Stop" aria-label="Stop Claude">
+              <Square />
+            </button>
+          ) : null}
+          <button className="composer-dock-icon" onClick={() => setPanelOpen(true)} type="button" title="Open the conversation" aria-label="Open the full conversation">
+            <Maximize2 size={15} />
+          </button>
+          <button className="composer-dock-icon" onClick={() => setCollapsed(true)} type="button" title="Minimize" aria-label="Minimize the panel">
+            <X size={16} />
+          </button>
+        </div>
+        {/* The one amber moment in the rail — your judgment is required. Everything else stays monochrome. */}
+        {needsDecision ? (
+          <button className="dock-slim-gate" type="button" onClick={() => setPanelOpen(true)}>
+            <ShieldCheck size={14} aria-hidden="true" />
+            <span>{waitingGate ? "Your review is required" : "Your call — Claude is waiting"}</span>
+            <ChevronRight size={13} aria-hidden="true" />
+          </button>
+        ) : slimLine ? (
+          <button className="dock-slim-peek" type="button" onClick={() => setPanelOpen(true)} title="Open the conversation">
+            <span className={`dock-slim-peek-dot ${working ? "live" : ""}`} aria-hidden="true" />
+            <span className="dock-slim-peek-text">{slimLine}</span>
+            <Maximize2 size={12} aria-hidden="true" />
+          </button>
+        ) : null}
+        {composer}
+      </aside>
+    );
+  }
+
   // The build room: when the dock is expanded and a real graph exists, the right zone shows it
   // assembling in canvas-card language while the conversation stays on the left.
   const buildRoom = expanded && !!graph && graph.nodes.length > 0;
@@ -1366,7 +1437,13 @@ export function ComposerDock({
         <button className="composer-dock-icon" onClick={() => setExpanded((v) => !v)} type="button" title={expanded ? "Shrink" : "Expand"} aria-label={expanded ? "Shrink the panel" : "Expand the panel"} aria-pressed={expanded}>
           {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
         </button>
-        <button className="composer-dock-icon" onClick={() => setCollapsed(true)} type="button" title="Minimize" aria-label="Minimize the panel">
+        <button
+          className="composer-dock-icon"
+          onClick={() => { if (floating) setCollapsed(true); else setPanelOpen(false); }}
+          type="button"
+          title={floating ? "Minimize" : "Collapse to the input rail"}
+          aria-label={floating ? "Minimize the panel" : "Collapse to the input rail"}
+        >
           <X size={16} />
         </button>
       </header>

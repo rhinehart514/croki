@@ -66,7 +66,6 @@ const OutcomeCapture = lazy(() => import("@/components/OutcomeCapture"));
 const ConnectCapability = lazy(() => import("@/components/ConnectCapability").then((m) => ({ default: m.ConnectCapability })));
 const ConnectSender = lazy(() => import("@/components/ConnectSender").then((m) => ({ default: m.ConnectSender })));
 import type { AgentProfileView, TeammateView } from "@/components/AgentProfile";
-import { CrewStrip } from "@/components/CrewStrip";
 import { ComposerDock } from "@/components/ComposerDock";
 import { FloatingDock } from "@/components/FloatingDock";
 import { LeftRail } from "@/components/LeftRail";
@@ -95,7 +94,8 @@ import { STEP_DRAG_MIME } from "@/lib/objectPalette";
 const ProductUnderstanding = lazy(() => import("@/components/ProductUnderstanding").then((m) => ({ default: m.ProductUnderstanding })));
 const ProductCanvas = lazy(() => import("@/components/ProductCanvas").then((m) => ({ default: m.ProductCanvas })));
 import { GtmCanvas, type GtmCanvasModel } from "@/components/canvas/GtmCanvas";
-import { SlidingTabs } from "@/components/SlidingTabs";
+import { AltitudeControl } from "@/components/AltitudeControl";
+import { ProductEntryColumn } from "@/components/ProductEntryColumn";
 import { CanvasCard } from "@/components/CanvasCard";
 import { ClarityCard } from "@/components/ClarityCard";
 import { ExperimentMatrixLens } from "@/components/lenses/ExperimentMatrixLens";
@@ -2205,6 +2205,10 @@ export default function App() {
     onRecordOutcome: recordItemOutcome,
     onApproveGate: (id) => void approveGate(id),
     onAskClaude: askClaudeAbout,
+    // Crew faces on the step nodes open the same agent profile the old bottom strip did.
+    onOpenAgentProfile: (ref: string) => setAgentProfileRef(ref),
+    // The last run's real numbers ride the pipeline's Measure node (replaces the floating strip).
+    runSummary,
     onAddNode: handleAddNode,
     onConnectNodes: handleGraphConnect,
     onDeleteEdges: handleDeleteEdges,
@@ -2262,7 +2266,7 @@ export default function App() {
     canvasGraph, connectors, contractAudits, runResult, graphRunning, runningNodeId, selection,
     dismissOverlays, proposedNodeIds, proposedEdgeIds, revealedNodeIds, proposalActive, operatorCursor,
     handleResolveProposal, submitGateReview, approveGate, handleAddNode, handleGraphConnect, handleDeleteEdges,
-    handleNodePositionChange, flowRuns, runNode, updateGraph, handleDeleteNode, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, recordItemOutcome, gtmMapGate, activeMode, composerSubject, ideateObjectFromCard, objectIdeation, objectGraphReload,
+    handleNodePositionChange, flowRuns, runNode, updateGraph, handleDeleteNode, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, recordItemOutcome, gtmMapGate, activeMode, composerSubject, ideateObjectFromCard, objectIdeation, objectGraphReload, runSummary,
   ]);
 
   // First-run team setup. Gated on Convex being configured AND no team chosen yet, so a local/solo
@@ -2381,36 +2385,12 @@ export default function App() {
             wrapper is the drop target for Crew/Skill steps dragged from the rail (step MIME only — belief
             blocks fall through to ObjectGraphCanvas's own drop). */}
         <section className="loop-canvas-area" onDragOver={onStepDragOver} onDrop={onStepDrop}>
-          {/* What happened — the one organ kept from the retired cockpit, folded onto the canvas (its
-              single home). A compact opaque strip that shows the latest run's real numbers and the
-              loop-closer. It appears only once a run has happened; every cell with no signal is left out
-              rather than shown as a fake zero. */}
+          {/* What happened — the run's real numbers now ride the pipeline's Measure node (their single
+              home on the canvas), so the floating strip no longer repeats them. What stays here is only
+              the loop-closer: a low-emphasis door to log a real outcome, which refreshes the summary.
+              It appears only once a run has happened. */}
           {view === "canvas" && !overlay && runSummary ? (
-            <div className="run-strip" aria-label="What happened on your last run">
-              <div className="run-strip-head">What happened</div>
-              {(() => {
-                const cells = [
-                  { label: "Sent", value: runSummary.sent as number | string | null },
-                  { label: "Replies", value: runSummary.replies },
-                  { label: "Calls", value: runSummary.calls },
-                  { label: "Signups", value: runSummary.signups },
-                  { label: "Paid", value: runSummary.paid },
-                  { label: "Revenue", value: runSummary.revenue == null ? null : `$${runSummary.revenue.toLocaleString()}` },
-                  { label: "No reply", value: runSummary.noReply },
-                ].filter((c) => c.value != null);
-                return cells.length ? (
-                  <div className="run-strip-nums">
-                    {cells.map((c) => (
-                      <div key={c.label} className="run-strip-cell">
-                        <span className="run-strip-num">{c.value}</span>
-                        <span className="run-strip-lbl">{c.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : runSummary.note ? (
-                  <div className="run-strip-note">{runSummary.note}</div>
-                ) : null;
-              })()}
+            <div className="run-strip run-strip--log-only" aria-label="Log what happened on your last run">
               <button type="button" className="run-strip-log" onClick={() => setOutcomeOpen(true)}>
                 Log what happened →
               </button>
@@ -2438,24 +2418,28 @@ export default function App() {
             </div>
           ) : null}
 
-          {/* The mode switcher — one segmented pill over the map that frames the SAME product two ways:
-              Move (do it) and Engineer (the reasoning, with the runnable steps folded in). It re-projects
-              in place; it never navigates away, and it reads lighter than the Run button so it's a lens,
-              not an action. */}
+          {/* Altitude — the ONE axis that replaced the old Move/Engineer mode toggle. Pull up to the
+              Story (the whole go-to-market at a glance), drop down to the Steps (the runnable pipeline).
+              Same canvas, re-projected in place; it never navigates away and reads lighter than Run.
+              "story" maps to the story-bands lens, "steps" to the step canvas. */}
           {gtmCanvasVisible ? (
-            <div className="canvas-mode-switch">
-              <SlidingTabs
-                items={[
-                  { value: "move", label: "Move" },
-                  { value: "engineer", label: "Engineer" },
-                ]}
-                value={activeMode}
-                onChange={setActiveMode}
-                layoutId="canvas-mode"
-                size="sm"
-                className="mode-switch"
-              />
-            </div>
+            <AltitudeControl
+              altitude={activeMode === "engineer" ? "steps" : "story"}
+              onChange={(a) => setActiveMode(a === "steps" ? "engineer" : "move")}
+            />
+          ) : null}
+
+          {/* The product's truth, pinned to the LEFT EDGE of the same canvas — where wins enter. The
+              go-to-market flow reads left-to-right out of it. Opening it (or its "full picture" link)
+              still leads to the deep Product view; this anchor is its always-present presence on the
+              GTM canvas. First pass — the full merge of the Product canvas into these coordinates is a
+              follow-up. */}
+          {gtmCanvasVisible && activeProject ? (
+            <ProductEntryColumn
+              productName={activeProject.name}
+              model={productModel}
+              onOpenFull={() => setOverlay("product")}
+            />
           ) : null}
 
           {/* The floating control dock — every control the old top toolbar held, in one calm bar
@@ -2481,17 +2465,11 @@ export default function App() {
               showGtmToggle={!!activeProject}
               productMode={overlay === "product"}
               onModeToggle={(v) => { if (v === "product") { setOverlay("product"); } else { setOverlay(null); } }}
-              summonItems={overlay === "product" ? undefined : SUMMON_GTM}
+              // The Summon menu is retired from the dock — the eight-item card menu is no longer offered
+              // behind a button. The card components still exist and still render when something summons
+              // them (e.g. a signal opening the Inbox card); context-summon (cards appearing where the
+              // founder clicks on the canvas) is a later canvas concern. So no summonItems / onSummon.
               onOpenSettings={() => { setOverlay("settings"); setProblemsOpen(false); setIssuesOpen(false); }}
-              // Summon routes by kind: Terminal drops a live workbench surface IN canvas space (it pans
-              // and zooms with the graph, and its output can feed the pipeline); the rest pop onto the
-              // canvas as draggable cards. The admin surfaces moved to the Settings overlay.
-              onSummon={(id) => {
-                if (id === "terminal") { handleAddNode({ label: "Terminal", kind: "terminal", category: "source", config: {} }); return; }
-                if (id === "query") { handleAddNode({ label: "Query", kind: "query", category: "source", config: {} }); return; }
-                if (id === "web") { handleAddNode({ label: "Web", kind: "web", category: "source", config: {} }); return; }
-                summonView(id);
-              }}
               problems={issueCount}
               issuesOpen={issuesOpen}
               onToggleIssues={() => { setIssuesOpen((v) => !v); setDecisionsOpen(false); setProblemsOpen(false); }}
@@ -2692,13 +2670,10 @@ export default function App() {
             </div>
           ) : null}
 
-          {/* The crew strip — the focused pipeline read as a team, bottom-centered above the composer.
-              Only on a focused pipeline (never the overview), and never over the product-mode canvas. */}
-          {view === "canvas" && graph && !overviewActive && overlay !== "product" && (
-            <div className="crew-strip-mount">
-              <CrewStrip graph={graph} bench={bench} onOpenAgent={(ref) => setAgentProfileRef(ref)} />
-            </div>
-          )}
+          {/* The crew strip is gone from the canvas floor — the crew now lives on the canvas nodes
+              themselves (a later agent renders it there). The bench track record still loads and flows
+              (the left rail's crew section and the canvas both read it); it just no longer paints a
+              bottom strip over the composer. */}
 
           {/* Toolbar overlay: zoom controls at top-left */}
           {view === "canvas" && graph && (

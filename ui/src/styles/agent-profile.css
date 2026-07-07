@@ -22,6 +22,15 @@
 }
 
 .agentp-sheet {
+  /* This is a content surface you read in, so it must be fully OPAQUE — never glass. The app can run
+     a translucent "glass" skin that redefines --surface/--surface-2 to a see-through white and a warm
+     beige; under it the panel would show the canvas through its top and turn the team rail cream. Pin
+     the monochrome-zinc opaque values locally so every child (sheet, stat cards, team rail, mate cards,
+     voice/edit blocks) stays solid regardless of the active skin. */
+  --surface: #ffffff;
+  --surface-2: #f4f4f5;
+  --line: #ececec;
+  --line-2: #e4e4e7;
   width: min(1080px, calc(100vw - 76px));
   max-height: calc(100vh - 76px);
   display: grid;
@@ -64,7 +73,7 @@
 .agentp-status {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
-  background: var(--proven-soft); color: var(--proven);
+  background: var(--surface-2); color: var(--muted);
 }
 .agentp-status.draft { background: var(--gap-soft); color: var(--gap); }
 .agentp-status.retired { background: var(--surface-2); color: var(--muted); }
@@ -131,8 +140,10 @@
 .agentp-sig { font-size: 11.5px; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); padding: 4px 9px; border-radius: 999px; }
 .agentp-sig b { color: var(--ink); font-weight: 600; }
 
-/* team rail */
-.agentp-team { padding: 20px 34px 26px; border-top: 1px solid var(--line); background: var(--surface-2); grid-column: 1 / -1; }
+/* team rail — bounded so a large crew (13+ teammates) can't grow this row unbounded and starve the
+   dossier above it (grid row 1). Without the cap, row 1 shrinks until the "What I've become" stat row
+   is clipped mid-card by the row boundary. Capped + scrollable, the dossier keeps its full height. */
+.agentp-team { padding: 20px 34px 26px; border-top: 1px solid var(--line); background: var(--surface-2); grid-column: 1 / -1; max-height: 34vh; overflow-y: auto; }
 .agentp-team-h { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); margin-bottom: 12px; }
 .agentp-mates { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
 .agentp-mate { display: flex; gap: 12px; align-items: center; padding: 13px; border: 1px solid var(--line-2); border-radius: var(--r-lg); background: var(--surface); cursor: pointer; transition: all 0.14s var(--ease-out); text-align: left; }

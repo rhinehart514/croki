@@ -119,6 +119,15 @@ button {
   color: inherit;
 }
 
+/* Focus-ring floor — a zero-specificity baseline so any keyboard-focusable control
+   that never defines its own ring still shows one. :where() carries no specificity,
+   so every component's explicit :focus-visible style below always wins over this. */
+:where(button, a, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
 svg {
   width: 1em;
   height: 1em;
@@ -2522,7 +2531,6 @@ svg {
 .agent-origin-badge.is-project { border-color: color-mix(in srgb, #0e7490 30%, var(--line-2)); background: #ecfeff; color: #155e75; }
 .agent-origin-badge.is-project .agent-origin-dot { background: #0e7490; }
 .agent-origin-ref {
-  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 500;
   padding-left: 7px;
@@ -3171,8 +3179,10 @@ svg {
   font-size: 10.5px; font-weight: 580; padding: 1px 7px; border-radius: 999px;
   border: 1px solid var(--line-2); color: var(--muted);
 }
-.loop-node-editor-contract.tone-proven { color: var(--proven); border-color: color-mix(in srgb, var(--proven) 38%, transparent); }
-.loop-node-editor-contract.tone-gap { color: var(--gap); border-color: color-mix(in srgb, var(--gap) 40%, transparent); }
+/* "Contract satisfied" / "Waiting for input" are passive grades, not the gate's ask — monochrome, so
+   green never reads as success and amber stays reserved for the founder gate. */
+.loop-node-editor-contract.tone-proven { color: var(--ink-2); border-color: var(--line-2); }
+.loop-node-editor-contract.tone-gap { color: var(--muted); border-color: var(--line-2); }
 .loop-node-editor-contract.tone-danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 38%, transparent); }
 .loop-node-editor-actions { display: flex; align-items: center; gap: var(--space-2); padding-top: var(--space-2); }
 .loop-node-editor-run {
@@ -3203,7 +3213,7 @@ svg {
 }
 .loop-node-gate:hover { border-color: var(--gap); }
 
-.loop-node-done { background: var(--surface); border-color: var(--proven) !important; }
+.loop-node-done { background: var(--surface); border-color: var(--ghost) !important; }
 .loop-node-error { border-color: var(--danger) !important; background: var(--danger-soft); }
 .loop-node-pending { border-color: var(--gap) !important; }
 
@@ -3378,9 +3388,10 @@ svg {
 
 .loop-node-count {
   margin-top: 2px;
-  color: var(--proven);
+  color: var(--muted);
   font-size: 10px;
   font-weight: 660;
+  font-variant-numeric: tabular-nums;
 }
 
 .loop-node-preview {
@@ -3414,7 +3425,7 @@ svg {
 }
 .loop-node-mark svg { width: 14px !important; height: 14px !important; }
 .loop-node-mark.mark-scout { color: var(--ink); }
-.loop-node-mark.mark-seed { color: var(--proven); border-color: color-mix(in oklch, var(--proven) 24%, transparent); background: var(--proven-soft); }
+.loop-node-mark.mark-seed { color: var(--ink); border-color: var(--line-2); background: var(--surface-2); }
 .loop-node-kindline { display: flex; flex-direction: column; gap: 1px; min-width: 0; margin-right: auto; }
 .loop-node-mode { font-size: 11px; font-weight: 600; color: var(--ink-2); letter-spacing: 0.005em; }
 .loop-node-headline {
@@ -3422,7 +3433,7 @@ svg {
 }
 .loop-node-trigger { display: flex; align-items: flex-start; gap: 8px; margin-top: 9px; font-size: 11.5px; line-height: 1.38; color: var(--ink-2); }
 .loop-node-trigger-dot { width: 7px; height: 7px; border-radius: 999px; flex: 0 0 auto; margin-top: 4px; }
-.loop-node-trigger-dot.is-observed { background: var(--proven); }
+.loop-node-trigger-dot.is-observed { background: var(--ink); }
 .loop-node-trigger-dot.is-assumed { background: var(--faint); }
 .loop-node-enter { margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 10px; color: var(--muted); }
 .loop-node-enter-n { color: var(--ink-2); font-weight: 680; font-variant-numeric: tabular-nums; }
@@ -3450,6 +3461,53 @@ svg {
 .loop-node-obj-gate .loop-node-icon { background: var(--gap-soft); color: var(--gap); }
 .loop-node-obj-gate .loop-node-type-label { color: var(--gap); }
 
+/* ── The crew face — a teammate's monogram, on the step it runs ──────────────────
+   The persona monogram is a real button that opens this teammate's profile sheet (the home of the
+   deleted bottom crew strip). It reuses the .loop-node-icon tile exactly, adding only the button
+   reset and a quiet hover/focus affordance so it reads as pressable without borrowing the amber that
+   belongs only to the gate. */
+.loop-node-face {
+  appearance: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  transition: box-shadow 120ms var(--ease), transform 120ms var(--ease);
+}
+.loop-node-face:hover {
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 16%, transparent);
+}
+.loop-node-face:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px color-mix(in srgb, currentColor 45%, transparent);
+}
+
+/* ── Results on the pipeline — the Measure step's real run numbers ───────────────
+   What the last run actually did, drawn ON the Measure node instead of a floating strip. Calm
+   monochrome zinc with tabular numbers; every cell is a real signal (the component drops any that is
+   null), so this block never shows a fabricated zero. Amber is deliberately withheld — it belongs to
+   the gate alone. */
+.loop-node-measure-results {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
+  margin-top: 11px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.loop-node-measure-cell { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.loop-node-measure-num {
+  font-size: 16px; font-weight: 640; line-height: 1.1; color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.loop-node-measure-lbl {
+  font-size: 9.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--muted);
+}
+.loop-node-measure-note {
+  margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line);
+  font-size: 11.5px; line-height: 1.4; color: var(--ink-2);
+}
+
 /* ── Loop graph edges ────────────────────────────────────────────────────── */
 
 .loop-edge-data .react-flow__edge-path {
@@ -3464,7 +3522,7 @@ svg {
 }
 
 .loop-edge-feedback .react-flow__edge-path {
-  stroke: var(--proven);
+  stroke: var(--faint);
   stroke-width: 1.5;
   stroke-dasharray: 5 5;
   opacity: 0.7;
@@ -4019,11 +4077,11 @@ svg {
   font-size: 11px;
   font-weight: 620;
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: color 0.12s var(--ease), background 0.12s var(--ease), border-color 0.12s var(--ease);
 }
 .gate-btn svg { width: 12px; height: 12px; }
 .gate-btn:hover { border-color: var(--faint); color: var(--ink); }
-.gate-btn-approve.active { border-color: var(--proven); background: var(--proven); color: #fff; }
+.gate-btn-approve.active { border-color: var(--ink); background: var(--ink); color: #fff; }
 .gate-btn-reject.active  { border-color: var(--danger); background: var(--danger); color: #fff; }
 
 .gate-review-submit-row {
@@ -4296,7 +4354,7 @@ svg {
   font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
   color: var(--muted);
 }
-.artifact-door-ref { font-family: ui-monospace, monospace; font-size: 13px; font-weight: 600; }
+.artifact-door-ref { font-size: 13px; font-weight: 600; }
 .artifact-door-sub { font-size: 11px; color: var(--faint, #8a8f99); }
 .artifact-door-btn {
   flex-shrink: 0; cursor: pointer; border: none; border-radius: 8px;
@@ -4395,7 +4453,7 @@ svg {
   width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
   display: grid; place-items: center; background: #f4f4f5; color: #18181b;
 }
-.composer-dock-avatar.running { background: #ecfdf3; color: #24a568; }
+.composer-dock-avatar.running { background: var(--surface-2, #f4f4f5); color: var(--ink, #18181b); }
 .composer-dock-avatar svg { width: 17px; height: 17px; }
 .composer-dock-head-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .composer-dock-head-text strong { font-size: 13.5px; }
@@ -4527,11 +4585,11 @@ svg {
 /* Live presence while Claude works — a breathing orb + the current beat. */
 .cnv-focus-live { display: flex; gap: var(--space-3); align-items: flex-start; }
 .cnv-focus-orb {
-  width: 10px; height: 10px; border-radius: 50%; background: var(--proven); flex-shrink: 0; margin-top: 4px;
+  width: 10px; height: 10px; border-radius: 50%; background: var(--ink); flex-shrink: 0; margin-top: 4px;
   animation: focusPulse 1.8s var(--ease) infinite;
 }
 @keyframes focusPulse {
-  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--proven) 45%, transparent); }
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ink) 40%, transparent); }
   70%  { box-shadow: 0 0 0 9px transparent; }
   100% { box-shadow: 0 0 0 0 transparent; }
 }
@@ -4593,7 +4651,7 @@ svg {
 
 /* Toolbar model chip → live status readout */
 .loop-model-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint, #c4c8d0); }
-.loop-model-dot.live { background: var(--proven, #24a568); }
+.loop-model-dot.live { background: var(--ink, #18181b); }
 
 /* ── Run-flow animation: steps light up as they execute, content lands on success ── */
 @keyframes node-run-pulse {
@@ -4609,8 +4667,8 @@ svg {
 
 /* A completed step flashes once as its content arrives */
 @keyframes node-just-done {
-  0%   { box-shadow: 0 0 0 4px rgba(22,163,74,0.22), var(--shadow-pop); }
-  100% { box-shadow: 0 0 0 0 rgba(22,163,74,0), var(--shadow-card); }
+  0%   { box-shadow: 0 0 0 4px rgba(24,24,27,0.18), var(--shadow-pop); }
+  100% { box-shadow: 0 0 0 0 rgba(24,24,27,0), var(--shadow-card); }
 }
 .loop-node-justdone { animation: node-just-done 0.7s var(--ease) 1; }
 
@@ -5590,8 +5648,11 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
   font-size: 9.5px; font-weight: 640; letter-spacing: 0.01em; color: var(--muted);
 }
 .loop-verdict-dot { width: 5px; height: 5px; border-radius: 999px; background: currentColor; flex: 0 0 auto; }
-.loop-verdict.v-grounded { color: var(--proven); border-color: color-mix(in oklch, var(--proven) 30%, transparent); background: var(--proven-soft); }
-.loop-verdict.v-assumed  { color: var(--gap); border-color: color-mix(in oklch, var(--gap) 30%, transparent); background: var(--gap-soft); }
+/* Grounding is a GRADE, not a status ask — it stays monochrome so amber can mean only "your judgment
+   is needed" (the gate). The confidence ramp reads in ink weight: grounded (ink) > assumed (muted) >
+   generic (faint). No green-for-good, no amber-for-assumed. */
+.loop-verdict.v-grounded { color: var(--ink-2); border-color: var(--line-2); background: var(--surface-2); }
+.loop-verdict.v-assumed  { color: var(--muted); border-color: var(--line-2); background: var(--surface-2); }
 .loop-verdict.v-generic  { color: var(--faint); border-color: var(--line-2); background: var(--surface-2); }
 .loop-verdict.v-blind    { color: var(--blind); border-color: var(--line-2); background: var(--surface-2); }
 .loop-verdict.v-blocked  { color: var(--danger); border-color: color-mix(in oklch, var(--danger) 30%, transparent); background: var(--danger-soft); }
@@ -5750,6 +5811,47 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
   font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
 }
 .dock-rail-gate { margin-top: auto; color: var(--gap); display: inline-flex; }
+
+/* ── Slim input rail — the docked DEFAULT ──────────────────────────────────────────────────────────
+   A single talk-to-Claude input plus a compact head and a one-line peek. Far narrower than the full
+   panel and bottom-anchored (align-self: end), so it hugs its content and hands the width back to the
+   canvas. Opaque + monochrome (inherits .docked's surface/border/radius); amber only for the gate. */
+.composer-dock.docked.slim {
+  width: clamp(280px, 24vw, 340px);
+  align-self: end;
+}
+.dock-slim-head {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+}
+.dock-slim-orb {
+  width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0;
+  display: grid; place-items: center; background: var(--surface-2); color: var(--ink);
+}
+.dock-slim-orb.live { background: var(--proven-soft); color: var(--proven); }
+.dock-slim-orb svg { width: 15px; height: 15px; }
+.dock-slim-id { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.dock-slim-id strong { font-size: 13px; }
+.dock-slim-sub { font-size: 11px; color: var(--faint); text-transform: capitalize; }
+.dock-slim-peek, .dock-slim-gate {
+  display: flex; align-items: center; gap: var(--space-2); width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 0; background: transparent; cursor: pointer; font: inherit; font-size: 12px;
+  text-align: left; color: var(--muted);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.dock-slim-peek:hover { color: var(--ink); }
+.dock-slim-peek-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--line-2); flex-shrink: 0; }
+.dock-slim-peek-dot.live { background: var(--proven); }
+.dock-slim-peek-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.dock-slim-peek svg { flex-shrink: 0; color: var(--faint); }
+/* The one amber moment in the rail — your judgment is required. */
+.dock-slim-gate { color: var(--gap, #b9751f); font-weight: 600; }
+.dock-slim-gate span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dock-slim-gate:hover { background: color-mix(in srgb, var(--gap, #b9751f) 8%, transparent); }
+.dock-slim-gate svg { flex-shrink: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   .composer-dock.docked { transition: none; }
@@ -6313,9 +6415,9 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .idea-card-actions{display:flex;gap:6px;flex-shrink:0}
 .idea-card-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:var(--r-sm,8px);
   border:1px solid var(--line-2,var(--line));background:var(--surface,#fff);color:var(--muted);font:inherit;font-size:12.5px;
-  font-weight:560;cursor:pointer;transition:all .12s ease}
+  font-weight:560;cursor:pointer;transition:color .12s var(--ease),background .12s var(--ease),border-color .12s var(--ease)}
 .idea-card-btn:hover{color:var(--ink);border-color:var(--ink-3,var(--muted))}
-.idea-card-btn.build.active{background:var(--proven);border-color:var(--proven);color:var(--surface,#fff)}
+.idea-card-btn.build.active{background:var(--ink);border-color:var(--ink);color:var(--surface,#fff)}
 .idea-card-btn.kill.active{background:var(--danger,#dc2626);border-color:var(--danger,#dc2626);color:var(--surface,#fff)}
 .idea-review-foot{display:flex;align-items:center;gap:14px;width:100%;max-width:620px;justify-content:flex-end}
 .idea-review-tally{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
@@ -7627,24 +7729,8 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 @keyframes outcome-float-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .outcome-float { animation: none; } }
 
-/* The canvas mode switcher — one segmented pill floated top-center over the map, just below the full-
-   width path header. It frames the same product data four ways (Move / Flow / Trace / Learn) and
-   re-projects in place. A distinct white floating chip; the ACTIVE segment fills near-black so the
-   chosen frame is unmistakable, but the whole control stays quieter than the Run action beside it. */
-.canvas-mode-switch {
-  position: absolute;
-  z-index: 15;
-  top: 84px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-.stabs.mode-switch {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-card);
-}
-.stabs.mode-switch .stab-pill { background: var(--ink); box-shadow: none; }
-.stabs.mode-switch .stab.active { color: #fff; }
+/* The old canvas mode switcher (Move / Engineer) was replaced by the AltitudeControl — one axis, one
+   mental model. Its floated-top-center slot is now held by `.altitude` (see styles/altitude.css). */
 
 /* Learn lens: its content is a centered read-column that would otherwise sit under the floated mode
    pill. Drop its top in so the goal bar clears the switcher. Scoped to the lens — the full cockpit

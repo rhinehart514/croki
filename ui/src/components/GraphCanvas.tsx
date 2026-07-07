@@ -28,6 +28,7 @@ import type {
   Person, PersonAppearance,
 } from "@/types";
 import { computeChannelLanes, type ChannelLane } from "@/lib/channelLanes";
+import type { RunSummary } from "@/api";
 import { channelOfferLine } from "@/lib/gateItem";
 import type { GatePromote } from "@/lib/gateItem";
 import { GateReview } from "@/components/gate/GateReview";
@@ -295,7 +296,7 @@ function nodeVerdict(
   if (state === "blind") return { verdict: "blind", label: "Blind", title: contractAudit?.message ?? "No attribution source" };
   if (state === "blocked") return { verdict: "blocked", label: `Needs ${contractAudit?.missingFields?.[0] ?? "data"}`, title: contractAudit?.message ?? "Missing required input" };
   if (state === "waiting") return { verdict: "assumed", label: "Assumed", title: contractAudit?.message ?? "Waiting on upstream input" };
-  if (state === "satisfied" || state === "ready") return { verdict: "grounded", label: "Grounded", title: contractAudit?.message ?? "Contract satisfied" };
+  if (state === "satisfied" || state === "ready") return { verdict: "grounded", label: "Grounded", title: contractAudit?.message ?? "Has what it needs" };
   // 2. Source mode — a persisted topology fact, not a guess.
   if (mode === "provided") return { verdict: "grounded", label: "Grounded", title: `Founder-supplied seed (provided source)${healthNote}` };
   if (mode === "discovered") return { verdict: "assumed", label: "Assumed", title: `A scout agent self-sources this audience${healthNote}` };
@@ -378,6 +379,15 @@ type GTMNodeData = {
   // Hand this node to Claude as the chat subject, straight from the card — the canvas→chat tie without
   // routing through the node-detail modal.
   onAskClaude?: () => void;
+  // Open this agent's profile sheet straight from its monogram face — the crew, drawn ON the step it
+  // runs. This is the home of the deleted bottom crew strip's role: its faces opened the same sheet.
+  // Rides only agent-kind nodes (the ones that render a persona monogram); absent everywhere else.
+  onOpenAgentProfile?: (ref: string) => void;
+  // The project's latest run numbers (real, derived from the run ledger). Rides ONLY the focused
+  // pipeline's Measure node, so "what happened" reads on the step that produced it instead of a
+  // floating strip. Null/absent when no run has been recorded — the node then shows nothing (honest
+  // empty), never a fabricated zero.
+  runSummary?: RunSummary | null;
   // Ideation build animation: this node's left-to-right rank in its lane. When set, the card springs
   // in with a delay proportional to the rank, so a freshly composed workflow builds out node by node
   // instead of popping in whole. Unset on the main canvas (no entrance animation there).
@@ -435,7 +445,7 @@ function getStatus(_node: GTMNode, result?: GTMNodeResult, running = false): Run
 
 function StatusIcon({ status }: { status: RunStatus }) {
   if (status === "running") return <Loader className="spin" />;
-  if (status === "done")    return <CheckCircle2 style={{ color: "var(--proven)" }} />;
+  if (status === "done")    return <CheckCircle2 style={{ color: "var(--ink-2)" }} />;
   if (status === "error")   return <AlertCircle style={{ color: "var(--danger)" }} />;
   if (status === "pending") return <Circle style={{ color: "var(--gap)" }} />;
   if (status === "blocked") return <Ban style={{ color: "var(--faint)" }} />;
@@ -565,7 +575,7 @@ function cardDescription(node: GTMNode): string {
   if (typeof node.config?.description === "string" && node.config.description.trim()) {
     return String(node.config.description);
   }
-  if (node.kind === "agent") return "Runs a subagent on your subscription to do fuzzy judgment work.";
+  if (node.kind === "agent") return "Runs an agent on your subscription to do fuzzy judgment work.";
   if (node.kind === "skill") return "Runs a reusable working method (a skill) against each item.";
   if (node.kind === "code") return "Runs a deterministic transform over the items.";
   return CARD_DESCRIPTIONS[node.category] ?? "Processes items in the workflow.";
@@ -692,8 +702,8 @@ function NodeCardEditor({ node, result, health, contractAudit, running }: {
     contractState === "blind" ? "Blind — no attribution source" :
     contractState === "blocked" ? `Needs ${contractAudit?.missingFields?.[0] ?? "data"}` :
     contractState === "waiting" ? "Waiting for input" :
-    contractState === "satisfied" ? "Contract satisfied" :
-    contractState === "ready" ? "Ready" : null;
+    contractState === "satisfied" ? "Has what it needs" :
+    contractState === "ready" ? "Ready to run" : null;
 
   return (
     <section className="loop-node-editor nodrag nopan" onClick={stop} onKeyDown={stop} aria-label="Step editor">
@@ -986,6 +996,35 @@ function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
 // pass — the altitude where a single lane no longer fits comfortably — and meant to be tuned live.
 const LOD_COIN_ZOOM = 0.5;
 
+// The pipeline's real result, drawn ON its Measure step instead of a separate floating strip: what the
+// last run actually did (sent / replies / signups / revenue…). Every number is real — a cell with no
+// signal is dropped, never shown as a fake zero. With nothing but a free-text note, the note shows; with
+// nothing at all, the block renders nothing (the caller only mounts it when a summary exists).
+function MeasureResults({ summary }: { summary: RunSummary }) {
+  const cells = [
+    { label: "Sent", value: summary.sent as number | string | null },
+    { label: "Replies", value: summary.replies },
+    { label: "Calls", value: summary.calls },
+    { label: "Signups", value: summary.signups },
+    { label: "Paid", value: summary.paid },
+    { label: "No reply", value: summary.noReply },
+    { label: "Revenue", value: summary.revenue == null ? null : `$${summary.revenue.toLocaleString()}` },
+  ].filter((c) => c.value != null);
+  if (!cells.length) {
+    return summary.note ? <p className="loop-node-measure-note">{summary.note}</p> : null;
+  }
+  return (
+    <div className="loop-node-measure-results" aria-label="What happened on your last run">
+      {cells.map((c) => (
+        <div key={c.label} className="loop-node-measure-cell">
+          <span className="loop-node-measure-num">{c.value}</span>
+          <span className="loop-node-measure-lbl">{c.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
   const { node, result, running, selected, onSelect } = data;
   const ctx = useContext(NodeEditorContext);
@@ -1226,7 +1265,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
               className={cn("loop-gate-open", data.bloomed && "is-awaiting")}
               onClick={(e) => { e.stopPropagation(); setReviewOpen(true); }}
             >
-              Review {gateWaiting} staged →
+              {data.bloomed ? `Needs you · review ${gateWaiting} →` : `Review ${gateWaiting} staged →`}
             </button>
           )}
         </>
@@ -1235,16 +1274,33 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
         // Teammate, the brand mark for an MCP step), the quiet object label, the verdict, and status.
         <>
           <div className="loop-node-header">
-            <div
-              className={cn("loop-node-icon", isMcp && "loop-node-icon-brand")}
-              style={persona && tint
-                ? { background: tint.bg, color: tint.fg, borderRadius: 999, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600 }
-                : isMcp ? undefined
-                : { background: `${color}14`, color }}
-            >
-              {isMcp ? <BrandGlyph serverId={mcpServer} brand={selected} size={17} />
-                : persona ? persona.monogram : visual.icon}
-            </div>
+            {persona && data.onOpenAgentProfile && node.ref ? (
+              // The crew face, on the step it runs: the family-tinted monogram is a real button that
+              // opens this teammate's profile sheet (the deleted crew strip's exact behavior).
+              <button
+                type="button"
+                className="loop-node-icon loop-node-face"
+                style={tint
+                  ? { background: tint.bg, color: tint.fg, borderRadius: 999, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600 }
+                  : { background: `${color}14`, color }}
+                title={`Open ${persona.role}'s profile`}
+                aria-label={`Open ${persona.role}'s profile`}
+                onClick={(e) => { e.stopPropagation(); data.onOpenAgentProfile!(node.ref!); }}
+              >
+                {persona.monogram}
+              </button>
+            ) : (
+              <div
+                className={cn("loop-node-icon", isMcp && "loop-node-icon-brand")}
+                style={persona && tint
+                  ? { background: tint.bg, color: tint.fg, borderRadius: 999, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600 }
+                  : isMcp ? undefined
+                  : { background: `${color}14`, color }}
+              >
+                {isMcp ? <BrandGlyph serverId={mcpServer} brand={selected} size={17} />
+                  : persona ? persona.monogram : visual.icon}
+              </div>
+            )}
             <span className="loop-node-type-label">
               {obj === "teammate" ? "Teammate"
                 : obj === "measure" ? "Measure"
@@ -1301,6 +1357,9 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
               )
               : <span className="loop-node-count">{summary}</span>
           )}
+          {/* Results on the pipeline: the Measure step carries what the last run actually did (real
+              ledger numbers), so "what happened" lives on the step that produced it, not a floating strip. */}
+          {obj === "measure" && data.runSummary ? <MeasureResults summary={data.runSummary} /> : null}
           {node.category === "generate" && (() => {
             const mem = result?.meta?.memory as { approved?: number; rejected?: number; edits?: number } | undefined;
             const learned = (mem?.approved ?? 0) + (mem?.rejected ?? 0) + (mem?.edits ?? 0);
@@ -1589,6 +1648,11 @@ function buildFlowGraph(
   gatePromote?: GatePromote,
   gateOffer?: string | null,
   onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>,
+  // Open an agent's profile from its monogram face — passed for every lane (any pipeline's teammate
+  // can open its sheet). The pipeline's real run numbers ride ONLY the Measure node, and only the
+  // caller that owns the latest summary (the focused lane) passes it; every other lane passes null.
+  onOpenAgentProfile?: (ref: string) => void,
+  runSummary?: RunSummary | null,
 ): { nodes: Node[]; edges: Edge[] } {
   // A node is "revealed" unless it's a still-pending proposed ghost. Committed nodes are always
   // revealed (so an edge from a committed node to the first ghost shows immediately); a proposed node
@@ -1662,6 +1726,9 @@ function buildFlowGraph(
         onRecordOutcome: n.category === "gate" ? onRecordOutcome : undefined,
         bloomed,
         onAskClaude: onAskClaude ? () => onAskClaude(n) : undefined,
+        // The crew face opens the profile on every lane; the run numbers ride only the Measure node.
+        onOpenAgentProfile,
+        runSummary: n.category === "measure" ? (runSummary ?? null) : undefined,
         appearOrder,
       } as GTMNodeData,
     };
@@ -1784,6 +1851,9 @@ type MergedFlowFocus = {
   onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
   revealedNodeIds?: Set<string>;
   onInspect?: (id: string) => void;
+  // The project's latest run numbers, shown on the FOCUSED pipeline's Measure node only (there is one
+  // project-level summary, so it rides the pipeline on screen rather than being duplicated across lanes).
+  runSummary?: RunSummary | null;
 };
 
 function buildMergedFlowGraph(
@@ -1800,6 +1870,7 @@ function buildMergedFlowGraph(
   focus: MergedFlowFocus,
   people?: Person[],
   onAskClaude?: (node: GTMNode) => void,
+  onOpenAgentProfile?: (ref: string) => void,
 ): { nodes: Node[]; edges: Edge[]; lanes: Map<string, ChannelLane> } {
   // The single-channel canvas overrides EVERY node's position at render time with a DAG-rank
   // auto-layout (computeLayout, above) — the domain object's stored position is a fallback, not what
@@ -1857,6 +1928,10 @@ function buildMergedFlowGraph(
       isFocused ? (focus.gateOffer ?? channelOfferLine(channel)) : channelOfferLine(channel),
       // The outcome door rides only the focused pipeline's gate — nothing to record on a dimmed lane.
       isFocused ? focus.onRecordOutcome : undefined,
+      // The crew face opens the profile on every lane; the run numbers ride only the focused pipeline's
+      // Measure node (one project-level summary, shown on the pipeline on screen).
+      onOpenAgentProfile,
+      isFocused ? (focus.runSummary ?? null) : null,
     );
     for (const n of built.nodes) {
       nodes.push({
@@ -2118,6 +2193,7 @@ export function GraphCanvas({
   proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, refitNonce, highlightedNodeId = null,
   bloomNodeId = null, nodeEditor = null, revealedNodeIds, onPaneClick, operatorCursor = null, people = [],
   multiPipeline = null, panTo = null, onAskClaude, gatePromote, gateOffer = null, onRecordOutcome,
+  onOpenAgentProfile, runSummary = null,
 }: {
   graph: GTMGraph;
   result: GTMRunResult | null;
@@ -2192,6 +2268,12 @@ export function GraphCanvas({
   // only; unlike `selection` it never opens a node's editor. A fresh token re-pans even to the SAME
   // channel (e.g. re-picking it after drifting away). No-op outside merged mode.
   panTo?: { channelId: string; token: number; nodeId?: string } | null;
+  // Open an agent's profile sheet from its monogram face on the canvas — the home of the deleted crew
+  // strip's role. The host opens the same AgentProfile sheet the strip used to.
+  onOpenAgentProfile?: (ref: string) => void;
+  // The project's latest run numbers (real, from the run ledger), drawn on the focused pipeline's
+  // Measure node. Null when no run has been recorded — the node then shows nothing (honest empty).
+  runSummary?: RunSummary | null;
 }) {
   const handleSelect = useCallback((id: string) => onSelect(id), [onSelect]);
   // Inspector — the workbench's read surface. A node's record-count opens its real items as a card in
@@ -2288,21 +2370,22 @@ export function GraphCanvas({
         running, runningNodeId, selection,
         proposedNodeIds, proposedEdgeIds, proposalActive,
         onResolveProposal, onSubmitReview, onApproveGate, gatePromote, gateOffer, onRecordOutcome,
-        revealedNodeIds, onInspect: toggleInspect,
+        revealedNodeIds, onInspect: toggleInspect, runSummary,
       },
       people,
       onAskClaude,
+      onOpenAgentProfile,
     ) : null),
     [
       multiPipeline, connectors, subsystemHealth, contractAudits, handleSelect, graph.id, running,
       runningNodeId, selection, proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal,
-      onSubmitReview, onApproveGate, gatePromote, gateOffer, onRecordOutcome, revealedNodeIds, toggleInspect, people, onAskClaude,
+      onSubmitReview, onApproveGate, gatePromote, gateOffer, onRecordOutcome, revealedNodeIds, toggleInspect, people, onAskClaude, onOpenAgentProfile, runSummary,
     ],
   );
 
   const singleFlow = useMemo(
-    () => buildFlowGraph(laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, onRecordOutcome),
-    [laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, onRecordOutcome],
+    () => buildFlowGraph(laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, onRecordOutcome, onOpenAgentProfile, runSummary),
+    [laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, onRecordOutcome, onOpenAgentProfile, runSummary],
   );
 
   const nodes = merged ? merged.nodes : singleFlow.nodes;

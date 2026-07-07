@@ -8,13 +8,34 @@ import { cn } from "@/lib/utils";
 import { itemKey } from "@/lib/itemKey";
 import { healthHex } from "@/lib/health";
 import { SlidingTabs } from "@/components/SlidingTabs";
-import { agentOrigin, AGENT_ORIGIN_LABEL } from "@/lib/agentPersona";
+import { agentOrigin, AGENT_ORIGIN_LABEL, agentPersona } from "@/lib/agentPersona";
+import { humanizeFieldLabel } from "@/lib/labels";
 import type {
   ConnectorMeta, ContextManifest, EngineSubsystem, GateDecision, GTMContractAudit, GTMGraph, GTMItem, GTMNode,
   GTMNodeCategory, GTMNodeResult, GTMRunResult, NodeSelection,
 } from "@/types";
 
 type DetailTab = "overview" | "rules" | "signals" | "history";
+
+// Founder-facing readiness — never the raw contract state or the word "contract".
+function readinessLabel(audit: GTMContractAudit): string {
+  switch (audit.state) {
+    case "satisfied": return "Has what it needs";
+    case "ready":     return "Ready to run";
+    case "waiting":   return "Waiting for input";
+    case "blocked":   return audit.missingFields?.[0] ? `Needs ${humanizeFieldLabel(audit.missingFields[0])}` : "Needs input";
+    case "blind":     return "No source yet";
+    default:          return "—";
+  }
+}
+
+// Strip internal "contract" jargon from a backend-authored audit message before the founder reads it.
+function plainAuditMessage(message: string): string {
+  return message
+    .replace(/satisfy the contract/gi, "have what they need")
+    .replace(/data contract/gi, "data requirement")
+    .replace(/\bcontract\b/gi, "requirement");
+}
 
 // ─── Connector selector ───────────────────────────────────────────────────────
 
@@ -1008,8 +1029,8 @@ function NodeOverview({
             return (
               <span className={cn("agent-origin-badge", `is-${origin}`)} title={meta.hint}>
                 <span className="agent-origin-dot" aria-hidden />
-                {meta.label}
-                <span className="agent-origin-ref">{node.ref}</span>
+                Agent
+                <span className="agent-origin-ref">{agentPersona(node.ref, node.label).role}</span>
               </span>
             );
           })() : null}
@@ -1083,8 +1104,8 @@ function NodeOverview({
             )}
             {contractAudit && (
               <div className="node-health-row">
-                <span>Data contract</span>
-                <span className={`node-health-badge contract-${contractAudit.state}`}>{contractAudit.state}</span>
+                <span>Readiness</span>
+                <span className={`node-health-badge contract-${contractAudit.state}`}>{readinessLabel(contractAudit)}</span>
               </div>
             )}
             {result?.error && (
@@ -1094,7 +1115,7 @@ function NodeOverview({
               </div>
             )}
           </div>
-          {contractAudit ? <p className="contract-audit-message">{contractAudit.message}</p> : null}
+          {contractAudit ? <p className="contract-audit-message">{plainAuditMessage(contractAudit.message)}</p> : null}
           {subsystem && subsystem.health > 0 && subsystem.activeIssues[0] ? (
             <div className="node-health-why">
               <p className="node-health-issue">{subsystem.activeIssues[0]}</p>
@@ -1195,8 +1216,10 @@ export function NodeEditor({
       {artifactType && node.ref && onOpenArtifact && (
         <div className="artifact-door">
           <div className="artifact-door-text">
-            <span className="artifact-door-label">{artifactType === "agent" ? "Subagent" : "Skill"}</span>
-            <code className="artifact-door-ref">{node.ref}</code>
+            <span className="artifact-door-label">{artifactType === "agent" ? "Agent" : "Skill"}</span>
+            <span className="artifact-door-ref">
+              {artifactType === "agent" ? agentPersona(node.ref, node.label).role : node.ref}
+            </span>
             <span className="artifact-door-sub">runs a real markdown file you can edit fully</span>
           </div>
           <button
@@ -1204,7 +1227,7 @@ export function NodeEditor({
             onClick={() => onOpenArtifact(artifactType, node.ref!)}
             type="button"
           >
-            Edit {artifactType} file
+            Edit this {artifactType}
           </button>
         </div>
       )}

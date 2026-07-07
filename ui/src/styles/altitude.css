@@ -1,0 +1,77 @@
+/* The altitude control — the single axis that replaced the Move/Engineer mode toggle. One calm white
+   chip floated top-center over the map, clear below the Story lens's full-width path-header band (which
+   owns the top strip) so the two never collide. The active stop fills near-black so the chosen altitude
+   is unmistakable; the whole control stays quieter than the Run action. Monochrome zinc only — amber
+   belongs to the founder gate alone. */
+.altitude {
+  position: absolute;
+  z-index: 15;
+  top: 140px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  pointer-events: none; /* the hint line is decorative; only the buttons take clicks */
+}
+
+.altitude-row {
+  pointer-events: auto;
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  box-shadow: var(--shadow-card);
+}
+
+.altitude-stop {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border: none;
+  background: transparent;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 620;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.altitude-stop:hover { color: var(--ink); }
+.altitude-stop.active { color: #fff; }
+
+/* The sliding near-black fill that springs between the two stops (shared layoutId). */
+.altitude-fill {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--ink);
+  border-radius: 7px;
+}
+.altitude-ico,
+.altitude-lbl {
+  position: relative;
+  z-index: 1;
+}
+.altitude-ico { opacity: 0.9; }
+
+/* The one-line teaching hint — names what the current altitude shows you, in plain words. It reads
+   lighter than the control and sits on its own soft chip so it stays legible over the map. */
+.altitude-hint {
+  pointer-events: none;
+  max-width: 260px;
+  text-align: center;
+  font-size: 10.5px;
+  line-height: 1.3;
+  font-weight: 520;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  padding: 2px 8px;
+  border-radius: 6px;
+}

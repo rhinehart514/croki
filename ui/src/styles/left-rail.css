@@ -136,7 +136,10 @@
 .lr-row.active { background: var(--surface-2); }
 .lr-row.active .lr-row-name { color: var(--ink); font-weight: 600; }
 
-.lr-crew { align-items: flex-start; }
+/* Rows that carry a name + a plain-English one-liner (every pipeline and every crew member) stack their
+   body vertically, so the leading dot/monogram anchors to the top line, not the middle of two. */
+.lr-crew,
+.lr-stacked { align-items: flex-start; }
 
 .lr-dot {
   flex: none;
@@ -161,14 +164,36 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-/* Rows that can be dragged onto the canvas (Agents, Tools) still click for their profile/editor, so they
-   read as grabbable without losing their button affordance. */
-.lr-draggable { cursor: grab; }
-.lr-draggable:active { cursor: grabbing; }
+/* The plain-English one-liner under every pipeline and crew member — what it does for you and when you'd
+   reach for it. Wraps to two lines and then clips, so a longer job still reads as a sentence instead of
+   being cut mid-word. Sits between the name and the run stats. */
+.lr-row-desc {
+  font-size: 11px; color: var(--muted); line-height: 1.35;
+  margin: 1px 0 2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+}
+
+/* Rows you can pick up and drop on the canvas (your crew) still click for their profile, so they read as
+   grabbable without losing their button affordance: a grab cursor, and a subtle lift + hairline shadow
+   on hover that says "this is a tangible object you can carry over," not just a link. */
+.lr-draggable { cursor: grab; transition: background 0.1s var(--ease), transform 0.12s var(--ease), box-shadow 0.12s var(--ease); }
+.lr-draggable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.06);
+}
+.lr-draggable:active { cursor: grabbing; transform: none; box-shadow: none; }
+@media (prefers-reduced-motion: reduce) {
+  .lr-draggable { transition: background 0.1s var(--ease); }
+  .lr-draggable:hover { transform: none; }
+}
 
 /* The grip — the "pick me up and drop me on the canvas" affordance. Absent at rest so the rail stays a
    calm index; it fades in on hover to say the row is a tangible object you drag, not just a link. Lives
-   at the trailing edge of every draggable row (Agents, Tools) and block. */
+   at the trailing edge of every draggable crew row. */
 .lr-grip {
   flex: none;
   margin-left: auto;
@@ -180,35 +205,10 @@
   pointer-events: none;
 }
 .lr-draggable:hover .lr-grip,
-.lr-draggable:focus-visible .lr-grip,
-.lr-block:hover .lr-grip {
+.lr-draggable:focus-visible .lr-grip {
   opacity: 1;
   transform: translateX(0);
   color: var(--muted);
-}
-
-/* ── Block chip ──────────────────────────────────────────────────────────── */
-/* A belief building block: one glyph + one word, dragged onto the strategy map. Same glyph the card it
-   becomes carries, so a "Buyer" row and the buyer card read as one thing. */
-.lr-block {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 8px;
-  border-radius: var(--r-sm);
-  color: var(--ink);
-  cursor: grab;
-  user-select: none;
-  transition: background 0.1s var(--ease);
-}
-.lr-block:hover { background: var(--surface-2); }
-.lr-block:active { cursor: grabbing; }
-.lr-block svg { flex: none; color: var(--muted); }
-.lr-block:hover svg { color: var(--ink); }
-.lr-block-name {
-  font-size: 12.5px; color: var(--ink); font-weight: 500; line-height: 1.3;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 .lr-crew-stats { display: flex; align-items: center; gap: 8px; }

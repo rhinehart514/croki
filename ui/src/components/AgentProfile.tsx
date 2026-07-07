@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Crosshair, FileCode2, History, PencilLine, ShieldCheck, Waypoints, X,
 } from "lucide-react";
-import { agentPersona, humanizeRef, FAMILY_TINT } from "@/lib/agentPersona";
+import { agentPersona, humanizeRef, agentOrigin, AGENT_ORIGIN_LABEL, FAMILY_TINT } from "@/lib/agentPersona";
 import { Button } from "@/components/ui/button";
 import { getAgentLearning, type AgentLearning } from "@/api";
 import "@/styles/agent-profile.css";
@@ -118,7 +118,7 @@ export function AgentProfile({
         {/* ── who this is ── */}
         <aside className="agentp-ident">
           <Mark agentRef={view.ref} job={view.job} />
-          <div className="agentp-eyebrow">Library capability</div>
+          <div className="agentp-eyebrow">{AGENT_ORIGIN_LABEL[agentOrigin(view.ref)].label}</div>
           <h1 className="agentp-role">{role}</h1>
           <div className="agentp-meta">
             <span className="agentp-status"><span className="dot" />Active</span>

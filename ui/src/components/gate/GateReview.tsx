@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { itemKey } from "@/lib/itemKey";
+import { humanizeFieldLabel } from "@/lib/labels";
 import {
   gateItemView, gateItemPatternCleared, gateItemIsException, gateItemExceptionReasons, gateItemProvenance,
   gateItemEvidenceLines,
@@ -317,6 +318,20 @@ function RecordOutcome({ item, onRecord }: {
   );
 }
 
+// The founder reads content at the gate, not internal state. Before an item's open field list renders,
+// two things are stripped: bookkeeping booleans (a bare "First class: true" / "Editable: true" row is
+// machine state the founder never decides on), and code-shaped labels — every remaining label runs
+// through humanizeFieldLabel so a key and its alias read as one plain concept (both "value_prop" and
+// "valueProposition" render "Value proposition"), never as raw or duplicated field keys.
+function reviewableFields(fields: { label: string; value: string }[]): { label: string; value: string }[] {
+  return fields
+    .filter((f) => {
+      const v = f.value.trim().toLowerCase();
+      return v !== "true" && v !== "false";
+    })
+    .map((f) => ({ label: humanizeFieldLabel(f.label), value: f.value }));
+}
+
 // The founder gate, ON the canvas. When a run pauses at a gate, its staged drafts bloom out of the
 // gate node as first-class cards you read and decide in place — approve / edit-then-approve / reject —
 // instead of bouncing to a side rail. Each decision calls onSubmit (the node-bound onSubmitReview),
@@ -484,6 +499,7 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
           const reasons = isException ? gateItemExceptionReasons(item) : [];
           const provenance = gateItemProvenance(item);
           const evidence = gateItemEvidenceLines(item);
+          const reviewFields = reviewableFields(v.fields);
           return (
             <div className={cn("cgate-card", isException && "is-exception")} key={key}>
               <span className="cgate-card-to">
@@ -519,16 +535,17 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
                     </div>
                   ) : null}
                   {/* Whatever ELSE the item actually carries (a post's schedule, an offer, media…)
-                      renders as labeled lines — the item's own shape, no outreach template imposed. */}
-                  {v.fields.length > 0 ? (
+                      renders as labeled lines — the item's own shape, no outreach template imposed.
+                      Labels are humanized and internal boolean rows dropped first (reviewableFields). */}
+                  {reviewFields.length > 0 ? (
                     <div className="cgate-card-prospect">
-                      {v.fields.slice(0, 3).map((f) => (
+                      {reviewFields.slice(0, 3).map((f) => (
                         <p key={f.label}><span className="k">{f.label}</span> {f.value}</p>
                       ))}
-                      {v.fields.length > 3 ? (
+                      {reviewFields.length > 3 ? (
                         <details className="cgate-card-more" onClick={(e) => e.stopPropagation()}>
-                          <summary>{v.fields.length - 3} more details</summary>
-                          {v.fields.slice(3).map((f) => (
+                          <summary>{reviewFields.length - 3} more details</summary>
+                          {reviewFields.slice(3).map((f) => (
                             <p key={f.label}><span className="k">{f.label}</span> {f.value}</p>
                           ))}
                         </details>
