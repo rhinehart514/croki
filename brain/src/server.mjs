@@ -2089,8 +2089,11 @@ const server = http.createServer(async (req, res) => {
       let session;
       if (action === "resume") session = resumeOperatorSession(sessionId, body.input);
       // Role-gated release: pass the acting user (request headers, else founder) so resolveOperatorGate
-      // can authorize the send. A viewer/member release throws gate_release_forbidden → 403.
-      else if (action === "gate") session = await resolveOperatorGate(sessionId, { ...body, request: req });
+      // can authorize the send. A viewer/member release throws gate_release_forbidden → 403. Also pass the
+      // browser-only release guard (W2b): the same session-token/agent-header check the raw graph-run path
+      // uses, so an agent-stamped or token-less APPROVAL at the operator gate is refused too. Both guards
+      // hold — role AND browser session — defense in depth.
+      else if (action === "gate") session = await resolveOperatorGate(sessionId, { ...body, request: req }, { authorizeReleaseForRequest: authorizeReleaseForRequest(req) });
       else if (action === "proposal") session = resolveOperatorProposal(sessionId, body);
       // The founder kills/keeps the paused ideas — a founder act, never an agent tool. Picking ideas
       // resumes the operator to build each kept survivor through its pre-wired compose_and_run.

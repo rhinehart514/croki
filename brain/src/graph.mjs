@@ -389,6 +389,15 @@ function normalizeRunContracts(graph) {
   return { ...graph, nodes };
 }
 
+// Does this run carry an approve/release intent — a gate approval or an approve per-item decision? The
+// single source of truth for "this run releases a send", so every release-authority guard (the graph-run
+// path here and the operator gate's front guard) agrees on exactly what counts as a release. A pure
+// reject/skip carries no approve intent and is never treated as a release.
+export function hasApproveIntent(approvals = {}, decisions = {}) {
+  return Object.values(approvals).some((v) => v === true)
+    || Object.values(decisions).some((d) => d?.decision === "approve" || d?.pattern?.decision === "approve");
+}
+
 export async function runGraph(graph, opts = {}) {
   graph = normalizeRunContracts(graph);
   const {
@@ -443,10 +452,7 @@ export async function runGraph(graph, opts = {}) {
   // weakens it. The gate connector still refuses to send without an approval — this refuses to apply
   // an approval the actor is not allowed to make.
   if (typeof authorizeRelease === "function") {
-    const approvesAny = Object.values(approvals).some((v) => v === true)
-      || Object.values(decisions).some((d) => d?.decision === "approve")
-      || Object.values(decisions).some((d) => d?.pattern?.decision === "approve" || d?.decision === "approve");
-    if (approvesAny) authorizeRelease();
+    if (hasApproveIntent(approvals, decisions)) authorizeRelease();
   }
 
   const runId = `run-${Date.now()}`;

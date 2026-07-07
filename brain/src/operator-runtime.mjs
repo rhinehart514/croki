@@ -12,7 +12,7 @@ import { recordRunDerivations } from "./run-derivation.mjs";
 import { buildMarketContext } from "./market-research.mjs";
 import { marketObjectStore } from "./gtm-store.mjs";
 import { applyGraphOperations, validateGraph } from "./graph-operations.mjs";
-import { listConnectors, runGraph } from "./graph.mjs";
+import { hasApproveIntent, listConnectors, runGraph } from "./graph.mjs";
 import { defaultSendRunners } from "./connectors/execute/gmail-transport.mjs";
 import { executeDomainCommand } from "./domain-commands.mjs";
 import { buildDraftMemory, extractDecisions } from "./memory.mjs";
@@ -1801,6 +1801,17 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
   // team member (owner/approver) may do it. Throws gate_release_forbidden (403) for a viewer/member.
   // The wall in the gate connector is unchanged; this only guards who may stand at it.
   const { actor: releasedBy } = authorizeGateRelease(session, payload, options);
+  // Browser-only release (W2b): the operator gate is the live send path, so an APPROVAL here is held to
+  // the same bar as the raw graph-run path (server.authorizeReleaseForRequest) — it must come from the
+  // Drover page, refused for an agent-stamped or token-less request. The host injects this request-scoped
+  // guard; internal/non-HTTP callers (and the direct unit tests) supply none and are unaffected, so this
+  // only tightens the HTTP door. It fires ONLY on an approve intent (a pure reject/skip releases nothing
+  // and stays open) and BEFORE the atomic claim below, so a refused approval never strands the session
+  // mid-claim — mirroring why authorizeGateRelease runs before the claim.
+  const authorizeReleaseForRequest = runtime.authorizeReleaseForRequest;
+  if (typeof authorizeReleaseForRequest === "function" && hasApproveIntent(payload.approvals, payload.decisions)) {
+    authorizeReleaseForRequest();
+  }
   // ATOMICALLY CLAIM the transition before any async work. Two concurrent resolves both read
   // status === "waiting_for_gate" above, but that check and this save are SYNCHRONOUS with no await
   // between them, so under Node's single-threaded loop only the first call reaches here; it flips the
