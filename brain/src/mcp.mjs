@@ -320,6 +320,13 @@ async function getBench({ projectId } = {}) {
   return brainGet(`/api/projects/${encodeURIComponent(id)}/bench`);
 }
 
+// Everything waiting on the founder across every product and pipeline in one list. With no projectId
+// it spans all products; pass one to scope. Read-only projection over durable state.
+async function getPendingInbox({ projectId } = {}) {
+  if (projectId) return brainGet(`/api/pending-inbox?project=${encodeURIComponent(projectId)}`);
+  return brainGet("/api/pending-inbox");
+}
+
 async function recordOutcomeTool({ projectId, runId, happened, learned } = {}) {
   const id = await resolveProjectId(projectId);
   return brainPost(`/api/projects/${encodeURIComponent(id)}/outcome`, { runId, happened, learned });
@@ -617,6 +624,16 @@ const TOOLS = [
       required: [],
     },
     handler: getBench,
+  },
+  {
+    name: "get_pending_inbox",
+    description: "Read the single pending-decision inbox: everything waiting on the founder RIGHT NOW across every product and pipeline, in one list — runs staged at the founder gate, proposed graph edits held for review, ideate pauses (build or cut), candidate pipeline shapes to pick, a question an operator is blocked on, blocked or dead runs, and world-signals captured but not yet routed. Each item carries its product, pipeline, a plain title, a short summary of what's to decide, and how long it's been waiting. A PROJECTION over durable state — never a new stored object, and read-only: it never approves, resolves, routes, or advances anything. With no projectId it spans all products (the cross-pipeline view); pass one to scope to a product.",
+    inputSchema: {
+      type: "object",
+      properties: { projectId: { type: "string", description: "Optional. Omit to span every product; pass to scope to one." } },
+      required: [],
+    },
+    handler: getPendingInbox,
   },
   {
     name: "find_references",

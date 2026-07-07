@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "motion/react";
-import { AlertTriangle, LoaderCircle, Plus, Settings2 } from "lucide-react";
+import { AlertTriangle, Inbox, LoaderCircle, Plus, Settings2 } from "lucide-react";
 import { SPRING } from "@/lib/springs";
 import { Reveal, Pop } from "@/lib/motion";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
@@ -34,6 +34,9 @@ export function FloatingDock({
   onOpenSettings,
   // Right — the first-class actions
   problems, issuesOpen, onToggleIssues,
+  // Decisions — the count of everything waiting on the founder across EVERY product and pipeline, and
+  // the inbox panel it toggles. Distinct from Issues (system problems): these are approvals you owe.
+  pendingDecisions, decisionsOpen, onToggleDecisions,
   onCloseMenus,
   graph, running, onRun,
 }: {
@@ -62,6 +65,10 @@ export function FloatingDock({
   problems: number;
   issuesOpen: boolean;
   onToggleIssues: () => void;
+  // Decisions — how many things wait on the founder across ALL products, and the inbox panel toggle.
+  pendingDecisions: number;
+  decisionsOpen: boolean;
+  onToggleDecisions: () => void;
   // Close the App-owned toolbar popovers (Issues now). Used so opening the local Summon
   // menu dismisses them — at most one toolbar popover is open at a time.
   onCloseMenus: () => void;
@@ -164,6 +171,26 @@ export function FloatingDock({
       {/* Right — the first-class actions. Issues and Run; the founder gate now blooms on the canvas.
           Everything else is summoned now. Claude's live status lives in the command dock below. */}
       <div className="fdock-right">
+        {/* Decisions — the single inbox of everything waiting on you, across EVERY product and pipeline.
+            Always visible (in GTM and Product mode), because a run reaching your gate or dying in a
+            pipeline you're not looking at is exactly what this must surface. The count is the founder
+            gate's own amber — these are approvals you owe — which reads distinct from Issues' neutral
+            system-problem count beside it. */}
+        <button
+          className={`fdock-icon-btn ${pendingDecisions > 0 ? "has-pending" : ""} ${decisionsOpen ? "open" : ""}`}
+          onClick={() => { setSummonOpen(false); onToggleDecisions(); }}
+          type="button"
+          aria-haspopup="dialog"
+          aria-expanded={decisionsOpen}
+          title={pendingDecisions > 0
+            ? `${pendingDecisions} decision${pendingDecisions === 1 ? "" : "s"} waiting on you`
+            : "Nothing waiting on you"}
+        >
+          <Inbox size={15} />
+          {pendingDecisions > 0 ? <Pop k={pendingDecisions} className="fdock-count gate">{pendingDecisions}</Pop> : null}
+        </button>
+        <span className="fdock-divider" />
+
         {/* Settings — the admin door (workspace, team, self-built tools), evicted from the Summon
             junk drawer into one overlay. Always reachable, in GTM and Product mode alike. The agent
             roster moved to the always-present left rail's Crew section. */}

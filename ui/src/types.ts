@@ -115,6 +115,37 @@ export type Input = {
   routedTo: string | null;
 };
 
+// ─── Pending decision inbox ──────────────────────────────────────────────────
+// One thing waiting on the founder, whatever it is, in a single uniform shape. Aggregated across every
+// product and pipeline by the backend projection (brain/src/pending-inbox.mjs) — a read-only view over
+// operator sessions and unrouted signals, never a new stored object. Acting on an item happens on its
+// own existing surface (the gate bloom, the ghost proposal, the ideate pause, the inbox card); this is
+// the queue that routes the founder there.
+export type PendingDecisionKind =
+  | "gate" | "proposal" | "ideas" | "candidates" | "question" | "blocked" | "failed" | "signal";
+
+export type PendingDecision = {
+  id: string;
+  kind: PendingDecisionKind;
+  projectId: string | null;
+  projectName: string | null;
+  pipelineId: string | null;
+  pipelineName: string | null;
+  sessionId: string | null;
+  inputId: string | null;
+  title: string | null;
+  summary: string | null;
+  optionCount?: number;
+  waitingSince: string | null;
+};
+
+export type PendingInbox = {
+  projectId: string | null;
+  total: number;
+  byKind: Partial<Record<PendingDecisionKind, number>>;
+  decisions: PendingDecision[];
+};
+
 // ─── ChannelFeed — two channels linked by the real entities they share ───────
 // The engine view draws channels as nodes and "feeds" between them. There is no stored "channel A
 // produces, channel B consumes"; the honest derivation is that two channels are LINKED when they

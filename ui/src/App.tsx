@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle, Check, LoaderCircle, MessageSquare, Play, X,
+  AlertTriangle, Check, Inbox, LoaderCircle, MessageSquare, Play, X,
 } from "lucide-react";
 import {
   applyGraphOperations as applyGraphOperationsApi,
@@ -53,6 +53,7 @@ import {
   revokeChannel,
   ideateObjectCandidatesStream,
   applyObjectGraphOperations,
+  getPendingInbox,
 } from "@/api";
 import type { ObjectCandidate } from "@/api";
 // Heavy overlay/panel components are split into their own chunks and loaded on demand the first time
@@ -103,6 +104,7 @@ import type { CanvasSubject } from "@/lib/cardDetail";
 import { ReferencesPanel, type ReferenceKind } from "@/components/ReferencesPanel";
 import { IssuesCard } from "@/components/IssuesCard";
 import { InputsInbox } from "@/components/InputsInbox";
+import { DecisionInbox } from "@/components/DecisionInbox";
 import { MicroproductFace, type Microproduct } from "@/components/MicroproductFace";
 import { MarketLayers } from "@/components/MarketLayers";
 
@@ -178,6 +180,7 @@ import type {
   ProductModel, ProductModelEdit,
   Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, ComposerPosture,
+  PendingDecision, PendingInbox,
 } from "@/types";
 
 // Health → band color, identical to the canvas node badge (GraphCanvas healthHex), so a
@@ -264,6 +267,12 @@ export default function App() {
   // The Issues panel — the system's problem list, now a first-class always-present indicator on the
   // dock (no longer a summoned card). Opens from its toolbar badge, mutually exclusive with Approvals.
   const [issuesOpen, setIssuesOpen] = useState(false);
+  // The pending-decision inbox — everything waiting on the founder across EVERY product and pipeline,
+  // polled cross-project (independent of the focused session) so a run reaching the gate or dying in a
+  // pipeline you're not looking at still bumps the dock badge. The panel is toggled from that badge and
+  // is mutually exclusive with Issues (at most one dock popover open at a time).
+  const [pendingInbox, setPendingInbox] = useState<PendingInbox | null>(null);
+  const [decisionsOpen, setDecisionsOpen] = useState(false);
   // The space I'm acting in (stamped on requests via lib/identity). The founder personal space is the
   // default; switching in TeamSpace re-scopes my release authority (resolved via canApproveApi below).
   const [acting, setActing] = useState<ActingIdentity>(getIdentity());
@@ -1071,6 +1080,28 @@ export default function App() {
     };
   }, [activeProjectId, operatorSessionId, operatorSessionStatus, syncOperator]);
 
+  // Cross-project pending-decision poll — the notification. It reads what's waiting on the founder
+  // across EVERY product and pipeline, NOT just the focused session, so a run that reaches the gate or
+  // dies while the founder is looking elsewhere still lights the dock badge. Slower cadence than the
+  // focused-session poll (this is a badge, not a live thread). Runs for the whole app lifetime.
+  const refreshPendingInbox = useCallback(async () => {
+    try {
+      const inbox = await getPendingInbox();
+      setPendingInbox(inbox);
+    } catch {
+      // Keep the last known count; the next tick may recover.
+    }
+  }, []);
+  useEffect(() => {
+    let live = true;
+    const tick = async () => { if (live) await refreshPendingInbox(); };
+    void tick();
+    const timer = window.setInterval(() => void tick(), 4000);
+    return () => { live = false; window.clearInterval(timer); };
+  }, [refreshPendingInbox]);
+  const pendingCount = pendingInbox?.total ?? 0;
+  const pendingDecisions = pendingInbox?.decisions ?? [];
+
   // Graph actions
   const executeGraph = useCallback(async (
     targetNodeId?: string,
@@ -1472,6 +1503,20 @@ export default function App() {
       setProjectBusy(false);
     }
   }, [loadChannel, loadProjectOverview, refreshProjectScope]);
+
+  // Act on a pending decision from the inbox: jump the founder to where they actually decide it. This
+  // never decides anything itself — it opens the owning product (if it isn't already active), which the
+  // session-restore effect follows by surfacing the paused session on its real surface (the gate bloom,
+  // the ghost proposal, the ideate pause). A signal opens the inbox card in that product. The decision
+  // still happens on the existing gate / review surface, unchanged.
+  const openDecision = useCallback(async (d: PendingDecision) => {
+    setDecisionsOpen(false);
+    if (d.projectId && d.projectId !== activeProjectId) {
+      await handleProjectOpen(d.projectId);
+    }
+    if (d.kind === "signal") summonView("inbox");
+    void refreshPendingInbox();
+  }, [activeProjectId, handleProjectOpen, summonView, refreshPendingInbox]);
 
   // Remove a duplicate product. The switcher only offers it on non-active rows, so the active scope
   // never vanishes underfoot — a refresh of the project list is all that's needed.
@@ -2447,8 +2492,11 @@ export default function App() {
               }}
               problems={issueCount}
               issuesOpen={issuesOpen}
-              onToggleIssues={() => { setIssuesOpen((v) => !v); setProblemsOpen(false); }}
-              onCloseMenus={() => { setProblemsOpen(false); setIssuesOpen(false); }}
+              onToggleIssues={() => { setIssuesOpen((v) => !v); setDecisionsOpen(false); setProblemsOpen(false); }}
+              pendingDecisions={pendingCount}
+              decisionsOpen={decisionsOpen}
+              onToggleDecisions={() => { setDecisionsOpen((v) => { const next = !v; if (next) void refreshPendingInbox(); return next; }); setIssuesOpen(false); setProblemsOpen(false); }}
+              onCloseMenus={() => { setProblemsOpen(false); setIssuesOpen(false); setDecisionsOpen(false); }}
               graph={graph}
               running={graphRunning}
               runningNodeId={runningNodeId}
@@ -2815,6 +2863,28 @@ export default function App() {
             What used to be a card you had to summon yourself: every engine investigation and pipeline
             contract gap, each row handing the problem to Claude to fix or jumping to the node that owns
             it. Opaque, twin of the Approvals panel; the two are mutually exclusive. */}
+        {/* The pending-decision inbox panel — one surface for everything waiting on the founder across
+            every product and pipeline. It routes, it never decides: each Open jumps to the item's real
+            gate / review / inbox surface. Opaque, same register as the Issues panel; mutually exclusive
+            with it. */}
+        {decisionsOpen && view === "canvas" ? (
+          <aside className="loop-issues-panel" role="dialog" aria-label="Decisions waiting on you" aria-modal="false">
+            <header className="loop-issues-head">
+              <div className="loop-issues-head-title">
+                <Inbox />
+                <strong>Waiting on you</strong>
+                {pendingCount > 0 ? <span className="loop-issues-count">{pendingCount}</span> : null}
+              </div>
+              <button className="loop-issues-close" onClick={() => setDecisionsOpen(false)} type="button" aria-label="Close decisions">
+                <X />
+              </button>
+            </header>
+            <div className="loop-issues-body">
+              <DecisionInbox decisions={pendingDecisions} onOpen={(d) => void openDecision(d)} />
+            </div>
+          </aside>
+        ) : null}
+
         {issuesOpen && view === "canvas" ? (
           <aside className="loop-issues-panel" role="dialog" aria-label="Issues" aria-modal="false">
             <header className="loop-issues-head">
