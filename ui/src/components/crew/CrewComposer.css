@@ -1,0 +1,133 @@
+/* Build-a-teammate sheet — a small centered dialog over a dimmed canvas. Opaque content surface (never
+   glass): you read and decide here. Monochrome zinc, one calm accent, matches the crew room's register. */
+.crewc-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.crewc-scrim-close {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: color-mix(in oklch, var(--ink) 34%, transparent);
+  cursor: pointer;
+}
+.crewc-sheet {
+  position: relative;
+  width: min(520px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  box-shadow: var(--shadow-pop);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.crewc-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.crewc-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--ink);
+}
+.crewc-sub {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.crewc-close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 120ms var(--ease), color 120ms var(--ease);
+}
+.crewc-close:hover { background: var(--surface-2); color: var(--ink); }
+
+.crewc-body { display: flex; flex-direction: column; gap: 14px; }
+
+.crewc-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 76px;
+  padding: 11px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.crewc-input::placeholder { color: var(--muted); }
+.crewc-input:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+
+.crewc-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+.crewc-primary,
+.crewc-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms var(--ease), color 120ms var(--ease), border-color 120ms var(--ease), opacity 120ms var(--ease);
+}
+.crewc-primary {
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--surface);
+}
+.crewc-primary:hover:not(:disabled) { background: color-mix(in oklch, var(--ink) 88%, transparent); }
+.crewc-secondary {
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  color: var(--muted);
+}
+.crewc-secondary:hover:not(:disabled) { color: var(--ink); border-color: var(--ink); }
+.crewc-primary:disabled,
+.crewc-secondary:disabled { opacity: 0.55; cursor: default; }
+
+.crewc-error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--gap, #b45309);
+}
+
+/* Preview card — the drafted teammate as a face + name + what it does, so accepting is a look, not a read. */
+.crewc-preview {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.crewc-face { flex: none; }
+.crewc-preview-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.crewc-name { font-size: 14px; font-weight: 650; color: var(--ink); }
+.crewc-role { font-size: 11.5px; color: var(--muted); }
+.crewc-desc { margin: 4px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-2, var(--ink)); }

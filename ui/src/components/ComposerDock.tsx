@@ -13,15 +13,16 @@ import { kindIcon } from "@/lib/objectKindIcons";
 import { humanizeFieldLabel } from "@/lib/labels";
 import type { CanvasSubject, CardDetail } from "@/lib/cardDetail";
 import type { ObjectCandidate } from "@/api";
+import { motion } from "motion/react";
 import { AgentPicker } from "@/components/AgentPicker";
 import { DEFAULT_MODEL, modelById } from "@/components/agent-picker-models";
 import { DockContext } from "@/components/DockContext";
-import { SlidingTabs } from "@/components/SlidingTabs";
 import { Collapse, Stagger, StaggerItem } from "@/lib/motion";
 import "@/styles/dock-context.css";
 import "@/styles/composer-posture.css";
 import "@/styles/composer-candidates.css";
-import type { ClarityKind, ContextManifest, GTMEdge, GTMGraph, GTMNode, GTMNodeCategory, GTMRunResult, OperatorEvent, OperatorSession } from "@/types";
+import "@/styles/chat-tabs.css";
+import type { ClarityKind, ContextManifest, GTMEdge, GTMGraph, GTMNode, GTMNodeCategory, GTMRunResult, OperatorEvent, OperatorSession, OperatorSessionSummary, OperatorStatus } from "@/types";
 
 // A pipeline SKETCH the operator returns when the goal is too vague to compose one graph — a named
 // shape the founder can pick from, not a draft to approve. Mirrors the backend's ambiguous-goal
@@ -227,39 +228,6 @@ function ToolCluster({ events, idBase }: { events: OperatorEvent[]; idBase: stri
           })}
         </ul>
       </Collapse>
-    </div>
-  );
-}
-
-// FOCUS — the dock's default face. Not a scrolling log: it shows the operator's STATE. While Claude
-// works, a live "now" presence (the current beat). When it's done, the answer itself, prominent and
-// readable. The full transcript is the Thread mode, one click away — you opt into the history, you
-// don't land in it. This is the rebuild: state-first, not log-first.
-function FocusView({ session }: { session: OperatorSession }) {
-  if (session.status === "running") {
-    const beat = [...session.events].reverse().find((e) => e.title);
-    return (
-      <div className="cnv-focus cnv-focus-live">
-        <span className="cnv-focus-orb" aria-hidden="true" />
-        <div className="cnv-focus-live-body">
-          <strong>{beat?.title ?? "Working…"}</strong>
-          {beat?.detail ? <p>{beat.detail}</p> : null}
-        </div>
-      </div>
-    );
-  }
-  const answer = [...session.events].reverse().find((e) => speakerOf(e) === "say" && (e.detail ?? "").trim());
-  if (answer) {
-    return (
-      <div className="cnv-focus cnv-focus-answer">
-        <span className="cnv-focus-eyebrow">Claude</span>
-        <div className="cnv-say-body"><MarkdownLite text={answer.detail ?? answer.title} /></div>
-      </div>
-    );
-  }
-  return (
-    <div className="cnv-focus cnv-focus-empty">
-      <p>{session.summary ?? statusLabel(session.status)}</p>
     </div>
   );
 }
@@ -745,39 +713,6 @@ function stripOptions(text: string): string {
     .trim();
 }
 
-// The founder's call — the dock's hero while Claude waits. Compact by design: the question, then the
-// choices as tap-to-answer chips that drop into the composer's OWN input (the reply lives there, not in
-// a second box on the card). Claude's longer reasoning stays in the thread, never stacked on the
-// decision. Labels only — the verbose per-option prose is what made the old card a wall.
-function DecisionCard({ question, reason, onPick }: {
-  question: string;
-  reason: string;
-  onPick: (text: string) => void;
-}) {
-  const fromQuestion = parseAskOptions(question);
-  const options = fromQuestion.length ? fromQuestion : parseAskOptions(reason);
-  const stem = stripOptions(question) || question;
-  return (
-    <div className="dock-decide">
-      <div className="dock-decide-eyebrow"><ShieldCheck size={13} aria-hidden="true" /> Your call</div>
-      <div className="dock-decide-q">{stem}</div>
-      {options.length ? (
-        <div className="dock-decide-opts">
-          {options.map((o, i) => (
-            <button type="button" key={i} className="dock-decide-opt" onClick={() => onPick(o.label)}>
-              <span className="dock-decide-opt-t">{o.label}</span>
-              <Plus className="dock-decide-add" size={13} aria-hidden="true" />
-            </button>
-          ))}
-        </div>
-      ) : null}
-      <div className="dock-decide-hint">
-        {options.length ? "Tap what's off — it drops into your reply below." : "Reply below to answer."}
-      </div>
-    </div>
-  );
-}
-
 // ─── The verb-scoped send control (a canvas object is selected) ─────────────────────────────────
 // When the founder has a node or card selected, the plain send arrow becomes a VERB chip: it names the
 // action pressing send performs on that object — Draft, Connect, Split, Stage, Ask … — derived
@@ -851,8 +786,73 @@ function VerbSend({ verb, disabled, submitting, onSend, onPick }: {
   );
 }
 
+// ─── Chat tabs (one per pipeline the founder is running in parallel) ────────────────────────────
+// The backend already drives multiple operator sessions at once; this strip is where they get a home.
+// Each tab wears a status dot — working (pulsing), needs-you (amber), or done (a quiet ring) — so the
+// founder's actual job, "which pipeline is waiting on me," reads at a glance. The active pill springs
+// between tabs via Motion's shared layoutId, the same felt motion as the rest of the app.
+type ChatTabState = "working" | "needs" | "done";
+function chatTabState(status: OperatorStatus): ChatTabState {
+  if (status === "waiting_for_gate" || status === "waiting_for_proposal" || status === "waiting_for_ideas" || status === "waiting_for_input") return "needs";
+  if (status === "running" || status === "ready") return "working";
+  return "done"; // completed · cancelled · blocked · failed · interrupted
+}
+// A tab's name: the session's short summary if it has one, else its goal, else a fallback. The CSS
+// clamps the width and ellipsizes, so a long goal never blows out the strip.
+function chatTabName(s: OperatorSessionSummary): string {
+  return (s.summary || s.goal || "Untitled pipeline").trim();
+}
+
+function ChatTabs({ roster, activeId, onSwitch, onNew }: {
+  roster: OperatorSessionSummary[];
+  activeId: string | null;
+  onSwitch: (id: string) => void;
+  onNew?: () => void;
+}) {
+  // Stable order — oldest first — so a tab never jumps position when its status changes; the dot
+  // carries the state, the slot stays put. (Sorting by status would reshuffle tabs under the cursor.)
+  const tabs = [...roster].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return (
+    <div className="chat-tabs" role="tablist" aria-label="Your pipelines">
+      {tabs.map((s) => {
+        const active = s.id === activeId;
+        const state = chatTabState(s.status);
+        return (
+          <button
+            key={s.id}
+            role="tab"
+            type="button"
+            aria-selected={active}
+            className={`chat-tab ${active ? "active" : ""}`}
+            title={chatTabName(s)}
+            onClick={() => onSwitch(s.id)}
+          >
+            {active ? (
+              <motion.span
+                layoutId="chat-tab-pill"
+                className="chat-tab-pill"
+                transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.8 }}
+              />
+            ) : null}
+            <span className="chat-tab-face">
+              <span className={`chat-tab-dot ${state}`} aria-hidden="true" />
+              <span className="chat-tab-name">{chatTabName(s)}</span>
+            </span>
+          </button>
+        );
+      })}
+      {onNew ? (
+        <button className="chat-tab-new" type="button" onClick={onNew} title="Start another pipeline" aria-label="Start another pipeline">
+          <Plus size={15} />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export function ComposerDock({
   session, running, boundChannelName, onSend, onCancel, onReviewGate,
+  roster = [], activeSessionId = null, onSwitchSession, onNewChat,
   floating = false, focusSignal = 0, recede = false,
   contextManifest = null, onOpenGrounding, onOpenPicture, onIdeate,
   posture, onExitPosture, onPin,
@@ -864,6 +864,14 @@ export function ComposerDock({
 }: {
   session: OperatorSession | null;
   running: boolean;
+  // The founder's live pipelines — one operator session each, all running server-side in parallel. The
+  // tab strip renders them; `activeSessionId` is the one on screen; switching swaps the conversation (the
+  // host also follows the tab to that pipeline's graph). `onNewChat` starts another. All optional so a
+  // caller that never passes a roster keeps the plain single-conversation dock.
+  roster?: OperatorSessionSummary[];
+  activeSessionId?: string | null;
+  onSwitchSession?: (id: string) => void;
+  onNewChat?: () => void;
   // The canvas↔chat tie: the object the founder handed to Claude from the canvas. A node-graph step
   // shows the lightweight header; an object-graph card carries `detail`, and the composer BECOMES that
   // card — its face pinned at the top. The host frames the next message with its context and clears it.
@@ -956,10 +964,9 @@ export function ComposerDock({
   // pending decision, candidates, a selected card, sending a message) opens it for them. Floating is
   // unaffected — it keeps its own resting/pill model — so this only governs the docked lane.
   const [panelOpen, setPanelOpen] = useState(false);
-  // The dock leads with the THREAD — the whole conversation in one scroll (your messages, Claude's
-  // work folded into a step receipt, the answer, the gate). Focus (just the latest answer/state) is
-  // still one click away for when you only want the result, but you land in the conversation.
-  const [view, setView] = useState<"focus" | "thread">("thread");
+  // One view: the THREAD — the whole conversation in one scroll (your messages, Claude's work folded
+  // into a step receipt, the answer, the gate, and the "your call" ask inline). The old Focus/Thread
+  // toggle is gone; each pipeline's latest state now reads off its tab, not a per-conversation switch.
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   // Voice mode — the composer's signature. Two ways in, because hold-only can't carry a long thought:
@@ -1320,6 +1327,13 @@ export function ComposerDock({
     const value = activeVerb && !nav ? frameVerbMessage(activeVerb, input) : input;
     void sendText(value);
   };
+  // Tapping an inline "your call" option drops its label into the reply (appending, so several can
+  // stack), editable — the founder still presses send. The decision lives in the composer's one input,
+  // never a second box on the ask.
+  const askPick = (text: string) => {
+    setInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
+    inputRef.current?.focus();
+  };
 
   // The command composer — the product's primary input, built to rival a real chat composer: a calm
   // textarea over a control row (context on the left, the live model/state, a dark send on the right).
@@ -1591,14 +1605,13 @@ export function ComposerDock({
               : "co-pilot · on your subscription"}
           </span>
         </div>
-        {session && session.events.length > 0 ? (
-          <SlidingTabs
-            items={[{ value: "focus", label: "Focus" }, { value: "thread", label: "Thread" }]}
-            value={view}
-            onChange={setView}
-            layoutId="dock-view"
-            size="sm"
-          />
+        {/* A second pipeline is always one click away. When the founder already has two or more, the
+            full tab strip below the header carries the "+"; here it's the discovery affordance for the
+            first-and-second, so multi-pipeline never stays hidden behind having to already have two. */}
+        {onNewChat && roster.length < 2 ? (
+          <button className="composer-dock-icon" onClick={onNewChat} type="button" title="Start another pipeline" aria-label="Start another pipeline">
+            <Plus size={15} />
+          </button>
         ) : null}
         {sessionActive && (
           <button className="composer-dock-stop" onClick={() => void onCancel()} type="button" title="Stop" aria-label="Stop Claude">
@@ -1618,6 +1631,12 @@ export function ComposerDock({
           <X size={16} />
         </button>
       </header>
+
+      {/* ── The pipelines you're running, as tabs. Only once there are two or more — a single pipeline
+          needs no strip (its name is already in the header), and the "+" lives up there until then. */}
+      {roster.length >= 2 && onSwitchSession ? (
+        <ChatTabs roster={roster} activeId={activeSessionId} onSwitch={onSwitchSession} onNew={onNewChat} />
+      ) : null}
 
       {/* ── What Claude reads — the grounding/picture/ideate actions folded into the dock head, so
           they stop being mystery buttons on a far rail. Shown only when the host wired the views. */}
@@ -1645,8 +1664,8 @@ export function ComposerDock({
       {/* ── Conversation / narration (left) + build room (right when expanded) ── */}
       <div className={`composer-dock-body ${buildRoom ? "split" : ""}`}>
       <div
-        key={session ? view : "idle"}
-        className={`composer-dock-timeline view-enter ${session && view === "focus" ? "is-focus" : ""}`}
+        key={session ? "thread" : "idle"}
+        className="composer-dock-timeline view-enter"
         ref={timelineRef}
         role="log"
         aria-label="Conversation with Claude"
@@ -1662,17 +1681,11 @@ export function ComposerDock({
               ))}
             </div>
           </div>
-        ) : view === "focus" ? (
-          <FocusView session={session} />
         ) : (
           <Stagger className="cnv-thread">
-            {segmentEvents(
-              // The active pending ask is shown as the DecisionCard hero below, so drop it from the
-              // trail — an unanswered founder_input_requested (no founder_input_received after it).
-              session.pendingQuestion
-                ? session.events.filter((e, i, a) => !(e.type === "founder_input_requested" && !a.slice(i + 1).some((x) => x.type === "founder_input_received")))
-                : session.events,
-            ).map((seg) =>
+            {/* The whole conversation in one stream — including the "your call" ask, folded in as just
+                another message (its tap options land inline), never lifted out into a separate box. */}
+            {segmentEvents(session.events).map((seg) =>
               seg.kind === "tool" ? (
                 <StaggerItem key={seg.id}>
                   <ToolCluster events={seg.events} idBase={seg.id} />
@@ -1697,8 +1710,24 @@ export function ComposerDock({
                   <div className="cnv-ask">
                     <ShieldCheck size={15} aria-hidden="true" />
                     <div className="cnv-ask-body">
-                      <strong>{seg.event.title}</strong>
+                      <span className="cnv-ask-eyebrow">Your call</span>
+                      <strong>{stripOptions(seg.event.title) || seg.event.title}</strong>
                       {seg.event.detail ? <div className="cnv-ask-detail"><MarkdownLite text={seg.event.detail} /></div> : null}
+                      {/* The choices, tappable — each drops into the reply below, editable, never a bare
+                          fire. Parsed from the ask's own text; open-ended asks show none and you just type. */}
+                      {(() => {
+                        const opts = parseAskOptions(seg.event.title).length ? parseAskOptions(seg.event.title) : parseAskOptions(seg.event.detail ?? "");
+                        return opts.length ? (
+                          <div className="dock-decide-opts">
+                            {opts.map((o, i) => (
+                              <button type="button" key={i} className="dock-decide-opt" onClick={() => askPick(o.label)}>
+                                <span className="dock-decide-opt-t">{o.label}</span>
+                                <Plus className="dock-decide-add" size={13} aria-hidden="true" />
+                              </button>
+                            ))}
+                          </div>
+                        ) : null;
+                      })()}
                     </div>
                   </div>
                 </StaggerItem>
@@ -1756,18 +1785,8 @@ export function ComposerDock({
         </div>
       )}
 
-      {/* ── The founder's call — the dock's hero while Claude waits. One decidable card (tappable when
-          the ask is multiple-choice), not the raw question printed a second time under the trail. ── */}
-      {session?.pendingQuestion && (
-        <DecisionCard
-          question={session.pendingQuestion.question}
-          reason={session.pendingQuestion.reason}
-          onPick={(text) => {
-            setInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
-            inputRef.current?.focus();
-          }}
-        />
-      )}
+      {/* The founder's call is no longer a separate hero card — it rides in the thread as an inline
+          "Your call" ask with tap options (see the ask segment above), same as any other message. */}
       {session?.error && !session.pendingQuestion && (
         <div className="composer-dock-question error">
           <strong>Claude hit a snag</strong>

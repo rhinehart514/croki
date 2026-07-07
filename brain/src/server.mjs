@@ -32,6 +32,7 @@ import engineRoutes from "./routes/engine.mjs";
 import workspaceRoutes from "./routes/workspaces.mjs";
 import graphRoutes from "./routes/graph.mjs";
 import artifactRoutes from "./routes/artifacts.mjs";
+import crewRoutes from "./routes/crew.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -80,6 +81,7 @@ const ROUTE_GROUPS = [
   workspaceRoutes,
   graphRoutes,
   artifactRoutes,
+  crewRoutes,
 ];
 
 const server = http.createServer(async (req, res) => {

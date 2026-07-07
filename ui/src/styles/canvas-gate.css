@@ -28,6 +28,19 @@
   animation: cgate-bloom 2.4s var(--ease) infinite;
 }
 
+/* The staged review lands as an event — a single confident spring up from the gate node
+   the first time it blooms, then it holds. The amber ring keeps breathing; this is the
+   one-time arrival, not a loop, so the gate reads as the moment it is. The global
+   reduced-motion wall settles it flat. */
+@keyframes cgate-review-in {
+  from { opacity: 0; transform: translateY(9px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.cgate-node-bloom .cgate-review {
+  transform-origin: top center;
+  animation: cgate-review-in var(--dur-slow, 460ms) var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)) both;
+}
+
 /* ── Gate as a threshold — the wall, never an empty box ─────────────────────────
    A wider gate node reading as a turnstile: a waiting|released split divided by an
    amber seam, the autonomy ladder as posture, and an honest empty state when

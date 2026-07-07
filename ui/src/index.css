@@ -4680,6 +4680,16 @@ svg {
 }
 .loop-node-justdone { animation: node-just-done 0.7s var(--ease) 1; }
 
+/* Completion snaps into place — the step's icon settles in as it finishes, then holds
+   at the calm done state (.loop-node-done). One shot, never a loop; the done node keeps
+   its quiet ring so finished work stays scannable at a glance without any motion. */
+@keyframes node-done-pop {
+  0%   { transform: scale(0.86); opacity: 0.5; }
+  60%  { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+.loop-node-justdone .loop-node-icon { animation: node-done-pop 0.4s var(--ease-out) 1; }
+
 /* The item count rises in when a step succeeds — "content being made" */
 @keyframes count-rise {
   from { opacity: 0; transform: translateY(3px); }
@@ -4695,6 +4705,20 @@ svg {
   animation: edge-dash 0.6s linear infinite;
 }
 @keyframes edge-dash { to { stroke-dashoffset: -18; } }
+
+/* ── One focus at a time ────────────────────────────────────────────────────
+   While a step is executing, the nodes that aren't live or just-finished recede,
+   so the eye lands on the work without hunting for it — movement and full weight
+   become the answer to "where are we right now." Pure CSS via :has(): it engages
+   only while something is running and lifts the instant nothing is. The gate node
+   (blooming amber) and done nodes stay at full strength — they're signal too. */
+.react-flow:has(.loop-node-running) .react-flow__node {
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+.react-flow:has(.loop-node-running)
+  .react-flow__node:not(:has(.loop-node-running)):not(:has(.loop-node-done)):not(:has(.cgate-node-bloom)) {
+  opacity: 0.5;
+}
 
 /* The toolbar Run button reads as live while streaming */
 .loop-run-btn:disabled { opacity: 1; }
@@ -5317,6 +5341,18 @@ svg {
   transition: background 120ms var(--ease);
 }
 .op-cursor-back:hover { background: var(--surface-2); }
+
+/* Auto-arrange — the quiet on-demand tidy for the free pipeline canvas. A muted secondary control (not
+   the ink-bordered primary), so it reads as an available option, never a call to action. */
+.loop-auto-arrange {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 11px; border-radius: 999px; cursor: pointer;
+  font-size: 12px; font-weight: 600;
+  border: 1px solid var(--line-2); background: var(--surface); color: var(--muted);
+  box-shadow: var(--shadow-pop);
+  transition: background 120ms var(--ease), color 120ms var(--ease), border-color 120ms var(--ease);
+}
+.loop-auto-arrange:hover { background: var(--surface-2); color: var(--ink); border-color: var(--ink); }
 
 
 /* Inspector — the program framing the DAG lacks. Agent chips select a policy to read; no synthetic
@@ -7007,6 +7043,14 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
      --agent, every --cat-* — semantics shared under both skins. */
 }
 
+/* Dropdown menus are surfaces you READ IN, so they must be opaque. Under the glass skin --surface is a
+   52%-translucent white, which let the canvas bleed straight through the menu text on every dropdown.
+   Force every plain menu popover to a solid warm plane; the glass treatment stays ONLY for .menu-glass,
+   the tiny transient chrome it is meant for. This is the same rule the agent-picker menu already follows. */
+[data-skin="glass"] .menu:not(.menu-glass) {
+  background: #fbfaf8;
+}
+
 /* ── Base plane — warm greige + printed dot-grid + soft pastel ambient ────── */
 [data-skin="glass"] body,
 [data-skin="glass"] .loop-shell {
@@ -7648,6 +7692,7 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
   [data-skin="glass"] .loop-canvas-area,
   .loop-node-running,
   .loop-node-running .loop-node-icon,
+  .cnv-live-orb,
   .lane-status-spine span,
   .lane-edge-enter,
   .product-pulse,

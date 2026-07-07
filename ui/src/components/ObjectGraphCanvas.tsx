@@ -8,7 +8,8 @@ import {
 import "@xyflow/react/dist/style.css";
 import { applyObjectGraphOperations, approveRun, compileObjectGraphPath, getObjectGraph, saveObjectGraphPositions, type CompiledGate } from "@/api";
 import type { GateDecision, GTMItem, ObjectGraphEdge, ObjectGraphNode, ObjectGraphPathRecommendation, ObjectGraphView } from "@/types";
-import { layoutObjectGraph, type PositionMap } from "@/lib/objectGraphLayout";
+import { computeFlowPositions, type PositionMap } from "@/lib/objectGraphLayout";
+import { ObjectFloatingEdge } from "@/components/ObjectFloatingEdge";
 import { GateReview } from "@/components/gate/GateReview";
 import { PALETTE_BLOCK_LABEL, PALETTE_DRAG_MIME } from "@/lib/objectPalette";
 import { kindIcon } from "@/lib/objectKindIcons";
@@ -471,6 +472,7 @@ function ObjectCard({ data, selected }: NodeProps<Node<CardData>>) {
 }
 
 const nodeTypes = { objectCard: ObjectCard };
+const edgeTypes = { floating: ObjectFloatingEdge };
 
 function layoutNodes(
   nodes: ObjectGraphNode[],
@@ -530,7 +532,10 @@ function layoutEdges(edges: ObjectGraphEdge[], highlighted: Set<string>): Edge[]
       labelBgBorderRadius: 4,
       labelStyle: { fill: "var(--ink-2)", fontSize: 11, fontWeight: 600, letterSpacing: "0.01em" },
       labelBgStyle: { fill: "var(--surface)", stroke: "var(--line-2)", strokeWidth: 1 },
-      type: feedback ? "smoothstep" : "default",
+      // Forward edges float — they attach to the two cards at the borders facing each other, so a card
+      // dragged anywhere still routes cleanly (the node-diagram feel). The one backward loop (`updates`)
+      // keeps its smoothstep return stroke so it reads as a deliberate feedback arc, not a stray line.
+      type: feedback ? "smoothstep" : "floating",
       // Every edge carries an arrowhead so direction reads at a glance (the n8n move — flow you can see,
       // not floating dots joined by faint threads). The lit spine gets a bold ink arrow; forward edges a
       // small muted one; the feedback loop its own amber return marker.
@@ -686,6 +691,11 @@ export function ObjectGraphCanvas({ projectId, gate, onRecordOutcome, onSubjectC
   // (staging approved items locally — nothing sends). Separate from the operator-session `gate` prop.
   const [runGate, setRunGate] = useState<CompiledGate | null>(null);
   const [placed, setPlaced] = useState<PositionMap>({});
+  // Ids the free canvas has already SEEDED (a cold graph's first tidy) or SPAWNED (a new card beside its
+  // neighbour) and written to the server, so the persist effect saves each exactly once. The save is what
+  // makes a position sticky: the next graph reload folds it into `placed`. Auto-arrange empties this so a
+  // fresh tidy re-seeds.
+  const seededRef = useRef<Set<string>>(new Set());
   const reduceMotion = useMemo(
     () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,
     [],
@@ -704,7 +714,7 @@ export function ObjectGraphCanvas({ projectId, gate, onRecordOutcome, onSubjectC
   // zoom in and the detail returns. Only flips the boolean at the threshold, not on every wheel tick.
   const [compact, setCompact] = useState(false);
   const onZoomCompact = useCallback((c: boolean) => setCompact((prev) => (prev === c ? prev : c)), []);
-  // Bumped by Reorganize so the view re-fits after the graph snaps back to order.
+  // Bumped by Auto-arrange so the view re-fits after the graph re-lays into an ordered pass.
   const [refitSignal, setRefitSignal] = useState(0);
 
   const load = useCallback(async () => {
@@ -824,9 +834,15 @@ export function ObjectGraphCanvas({ projectId, gate, onRecordOutcome, onSubjectC
     const maxX = Math.max(...pts.map((p) => p.x)) + 214; // + card width
     return { minX, width: Math.max(maxX - minX, 1) };
   }, [banded]);
+  // Flow mode is a free canvas: placed cards stay put forever, and any card without a spot yet is either
+  // seeded once (a cold graph) or spawned beside what it connects to (a new card) — never re-ranked.
+  const flowArranged = useMemo(
+    () => computeFlowPositions(visible.nodes, visible.edges, placed),
+    [visible, placed],
+  );
   const positions = useMemo(
-    () => (arrange === "stages" ? banded.positions : layoutObjectGraph(visible.nodes, visible.edges, placed)),
-    [arrange, banded, visible, placed],
+    () => (arrange === "stages" ? banded.positions : flowArranged.positions),
+    [arrange, banded, flowArranged],
   );
   const nodes = useMemo(
     () => layoutNodes(visible.nodes, positions, highlightedNodes, weakestNodeId, onIdeateObject, ideatingNodeId, ideatingTarget, selectedId),
@@ -843,16 +859,30 @@ export function ObjectGraphCanvas({ projectId, gate, onRecordOutcome, onSubjectC
     return layoutEdges(visible.edges, highlightedEdges);
   }, [arrange, visible, highlightedEdges]);
 
-  // Reorganize: clear founder placements so the whole graph snaps back to the ordered left→right
-  // pass, and persist that fresh layout so the tidy sticks across reloads (the server merge overwrites
-  // each node's saved position with the dagre one).
-  const reorganize = useCallback(() => {
+  // Make a seeded/spawned position sticky: whenever the free-canvas layout hands a card its first spot,
+  // persist it to the server once. The save is what makes it permanent — the next graph reload folds these
+  // positions into `placed`, so the card never re-ranks. Cards the founder already placed are untouched;
+  // this only writes cards that had no position yet.
+  useEffect(() => {
+    if (arrange !== "flow" || !projectId) return;
+    const fresh: PositionMap = {};
+    for (const [id, pos] of Object.entries(flowArranged.seeded)) {
+      if (!seededRef.current.has(id)) fresh[id] = pos;
+    }
+    const ids = Object.keys(fresh);
+    if (!ids.length) return;
+    ids.forEach((id) => seededRef.current.add(id));
+    void saveObjectGraphPositions(projectId, fresh);
+  }, [arrange, flowArranged, projectId]);
+
+  // Auto-arrange: the one explicit tidy. Drop every founder placement and every remembered seed so the
+  // graph gets a fresh ordered pass, which the sticky-seed effect above then re-lays and saves as the new
+  // resting layout. Never runs on its own — the founder presses it.
+  const autoArrange = useCallback(() => {
+    seededRef.current.clear();
     setPlaced({});
     setRefitSignal((s) => s + 1);
-    if (!projectId) return;
-    const fresh = layoutObjectGraph(visible.nodes, visible.edges, {});
-    void saveObjectGraphPositions(projectId, fresh);
-  }, [projectId, visible]);
+  }, []);
   // The single emitter of the selected card's face: whenever a card is selected (by a click, a Related
   // re-target, or a fresh graph load), hand its full detail up so the composer BECOMES that card. A
   // prop callback in an effect (not a local setState), so it's lint-clean and can't loop — the emit
@@ -986,9 +1016,9 @@ export function ObjectGraphCanvas({ projectId, gate, onRecordOutcome, onSubjectC
             Weakness · {softCount}
           </button>
           {arrange === "flow" ? (
-            <button type="button" className="reorganize" onClick={reorganize} disabled={!nodes.length}>
+            <button type="button" className="reorganize" onClick={autoArrange} disabled={!nodes.length} title="Tidy the map into an ordered layout — you can rearrange freely after.">
               <Network aria-hidden="true" />
-              Reorganize
+              Auto-arrange
             </button>
           ) : null}
           <button type="button" className="compile" onClick={() => void compile()} disabled={!highlightedPath || compileState.status === "running"}>
@@ -1002,6 +1032,7 @@ export function ObjectGraphCanvas({ projectId, gate, onRecordOutcome, onSubjectC
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         fitView
         minZoom={0.12}
         maxZoom={1.4}

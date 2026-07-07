@@ -1,13 +1,15 @@
 import { useMemo, useState, type DragEvent } from "react";
 import {
   Workflow, Users, Plus, ChevronDown,
-  PanelLeftClose, PanelLeftOpen, Check, GripVertical, LayoutGrid,
+  PanelLeftClose, PanelLeftOpen, Check, GripVertical, LayoutGrid, Blocks, ArrowRight,
 } from "lucide-react";
 import { agentPersona, humanizeRef } from "@/lib/agentPersona";
 import { healthHex } from "@/lib/health";
 import { STEP_DRAG_MIME } from "@/lib/objectPalette";
 import { CrewFace } from "@/components/crew/CrewFace";
 import { CrewRoom } from "@/components/crew/CrewRoom";
+import { CrewComposer } from "@/components/crew/CrewComposer";
+import { CAPABILITIES, STAGE_ORDER, STAGE_LABEL, capabilityMark, type Capability } from "@/lib/capabilities";
 import type { AgentBenchRow } from "@/api";
 import type { ChannelMeta, GtmLibrary } from "@/types";
 import "@/styles/left-rail.css";
@@ -100,16 +102,23 @@ export function LeftRail({
   channels,
   activeChannelId,
   bench,
+  projectId = null,
   onLoadChannel,
   onNewChannel,
   onOpenAgent,
+  onCrewChanged,
+  onConnectCapability,
 }: {
   channels: ChannelMeta[];
   activeChannelId: string | null;
   bench: AgentBenchRow[] | null;
+  // The active project — the "+ build a teammate" flow scopes the new teammate to it.
+  projectId?: string | null;
   onLoadChannel: (id: string) => void;
   onNewChannel: () => void;
   onOpenAgent: (ref: string) => void;
+  // Fired after a teammate is built and added, so the host refetches the bench and the new face appears.
+  onCrewChanged?: () => void;
   // Retained so App keeps compiling while the old Tools/Data/Blocks sections stay retired. None are
   // rendered anymore — a tool is something an agent knows, data is a step inside a pipeline, and blocks
   // are a zoomed-out canvas view, so none belong at the top level of the parts bin.
@@ -117,9 +126,13 @@ export function LeftRail({
   activeMode?: "move" | "engineer";
   onOpenSkill?: (name: string) => void;
   onNewSkill?: () => void;
+  // Connecting a capability is founder-initiated; App owns the actual connect flow. Optional so the rail
+  // still renders the inviting roster before any connect handler is wired.
+  onConnectCapability?: (id: string) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [crewRoomOpen, setCrewRoomOpen] = useState(false);
+  const [crewComposerOpen, setCrewComposerOpen] = useState(false);
 
   // Drag a crew member onto the canvas → the canvas-area drop target reads STEP_DRAG_MIME and adds a
   // pipeline step, switching to the build view so the founder watches it land. Payload shape unchanged.
@@ -215,6 +228,8 @@ export function LeftRail({
           icon={<Users size={13} />}
           title="Your crew"
           count={(bench ?? []).length}
+          onNew={() => setCrewComposerOpen(true)}
+          newTitle="Build a teammate with Claude"
           action={
             (bench ?? []).length > 0 ? (
               <button
@@ -245,6 +260,25 @@ export function LeftRail({
             </>
           )}
         </Section>
+
+        {/* Capabilities — what your crew can reach and do, the parts a pipeline is wired from. Grouped by
+            run-stage so the list reads like a pipeline: find → enrich → reach → publish → measure. Real
+            brand marks where an open mark exists; anything that reaches the outside world carries the
+            amber gate marker, because it can only act behind your approval. */}
+        <Section icon={<Blocks size={13} />} title="Capabilities" count={CAPABILITIES.length}>
+          {STAGE_ORDER.map((stage) => {
+            const caps = CAPABILITIES.filter((c) => c.stage === stage);
+            if (caps.length === 0) return null;
+            return (
+              <div key={stage} className="lr-cap-group">
+                <div className="lr-group">{STAGE_LABEL[stage]}</div>
+                {caps.map((cap) => (
+                  <CapabilityRow key={cap.id} cap={cap} onConnect={onConnectCapability} />
+                ))}
+              </div>
+            );
+          })}
+        </Section>
       </div>
 
       {/* The crew room — your whole team as characters, opened from the crew header. Clicking a
@@ -255,7 +289,68 @@ export function LeftRail({
         onClose={() => setCrewRoomOpen(false)}
         onOpen={(ref) => { setCrewRoomOpen(false); onOpenAgent(ref); }}
       />
+
+      {/* Build a teammate with Claude — opened from the "+" on the crew header. On add, the host refetches
+          the bench so the new face appears among the crew. */}
+      {crewComposerOpen ? (
+        <CrewComposer
+          projectId={projectId}
+          onClose={() => setCrewComposerOpen(false)}
+          onAdded={() => { setCrewComposerOpen(false); onCrewChanged?.(); }}
+        />
+      ) : null}
     </aside>
+  );
+}
+
+// The capability's mark: a real brand logo drawn in its own color where an open-licensed one exists,
+// otherwise a clean lettermark tile in the brand's tone. The mark is the only place brand color lives —
+// it's identity, not decoration — so the rail feels recognizable while the chrome stays monochrome zinc.
+function CapabilityMark({ cap }: { cap: Capability }) {
+  const mark = capabilityMark(cap);
+  if (mark) {
+    return (
+      <span className="lr-cap-mark" style={{ ["--brand" as string]: `#${mark.hex}` }}>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill={`#${mark.hex}`} aria-hidden="true">
+          <path d={mark.path} />
+        </svg>
+      </span>
+    );
+  }
+  const lm = cap.lettermark!;
+  return (
+    <span
+      className="lr-cap-mark lr-cap-mark-letter"
+      style={{ ["--brand" as string]: lm.hex, color: lm.hex }}
+      aria-hidden="true"
+    >
+      {lm.text}
+    </span>
+  );
+}
+
+// One capability, inviting to connect: logo, what it does, and a Connect affordance that fills on hover.
+// Gated capabilities (they reach the outside world) show the amber gate marker beside the name.
+function CapabilityRow({ cap, onConnect }: { cap: Capability; onConnect?: (id: string) => void }) {
+  return (
+    <button
+      className="lr-row lr-cap"
+      type="button"
+      onClick={() => onConnect?.(cap.id)}
+      title={`Connect ${cap.name}`}
+    >
+      <CapabilityMark cap={cap} />
+      <span className="lr-row-main">
+        <span className="lr-row-name">
+          {cap.name}
+          {cap.gated ? (
+            <span className="lr-cap-gate" title="Reaches the outside world — only acts behind your gate" aria-label="gated" />
+          ) : null}
+        </span>
+        <span className="lr-row-desc">{cap.blurb}</span>
+      </span>
+      <span className="lr-cap-connect">Connect<ArrowRight size={12} /></span>
+    </button>
   );
 }
 

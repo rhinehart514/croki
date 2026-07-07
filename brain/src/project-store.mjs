@@ -8,6 +8,7 @@ import "./migrate-to-sqlite.mjs";
 import { loadFlow, saveFlow, summarizeRunResult } from "./flow-store.mjs";
 import { defaultTeamId } from "./team-store.mjs";
 import { buildAgentProfile, buildAgentBench } from "./memory.mjs";
+import { crewRosterStore } from "./crew-roster-store.mjs";
 
 const SCHEMA_VERSION = 4;
 const CATALOG_SCHEMA_VERSION = 1;
@@ -551,7 +552,13 @@ export function projectAgents(projectId, options = {}) {
 export function getAgentBench(projectId, { agents = [], runs } = {}, options = {}) {
   const runSet = Array.isArray(runs) ? runs : loadProjectRuns(projectId, options);
   const crew = projectAgents(projectId, options);
-  const roster = crew.length ? crew : agents;
+  // Founder-added teammates (the "+ build a teammate" flow) that may not be in a pipeline yet — merge them
+  // in so a freshly built teammate shows up immediately. Dedup by ref; the derived crew's label wins over
+  // the roster's since it reflects real use. Fall back to the library roster only when nothing scopes it.
+  const added = crewRosterStore.load(projectId, options).members.map((m) => ({ ref: m.ref, description: m.description }));
+  const byRef = new Map();
+  for (const a of [...added, ...crew]) if (a?.ref) byRef.set(a.ref, a);
+  const roster = byRef.size ? [...byRef.values()] : agents;
   return buildAgentBench(runSet, roster);
 }
 

@@ -2336,7 +2336,12 @@ export function GraphCanvas({
   // pre-laid swimlane positions). Only the ideation preview keeps its own pre-laid positions, since
   // it builds in with a staggered entrance keyed off those x's. A fresh topology clears the drag
   // overrides so a re-compose re-lays the whole flow.
-  const draggedIds = useRef<Set<string>>(new Set());
+  // A pipeline is auto-laid ONCE, the first time it's seen this session, so a freshly composed graph
+  // (the composer ships cramped, overlapping positions) reads as a clean left-to-right flow. After that
+  // seed the founder OWNS the layout: stored positions paint as-is, nothing re-ranks on a render or when
+  // a step is dropped in, and Auto-arrange is the only thing that re-lays. `autoLaidRef` remembers which
+  // pipelines have been seeded this session.
+  const autoLaidRef = useRef<Set<string>>(new Set());
   const layoutSig = `${topologySignature(graph)}|${graph.id}`;
   const autoPos = useMemo(
     () => (graph.id === "ideation-preview" ? null : computeLayout(graph)),
@@ -2344,28 +2349,23 @@ export function GraphCanvas({
     [layoutSig],
   );
   const laidOutGraph = useMemo(() => {
-    if (!autoPos) return graph;
-    return {
-      ...graph,
-      // draggedIds is a deliberately non-reactive mutable set: it's populated in the drag-stop event
-      // handler (which must NOT re-render) and cleared in the topology-change effect below. Reading it
-      // here only DECIDES which nodes the auto-layout may move; the set never changes WITHIN a render,
-      // so this read is render-stable. State would either re-render on every drag-stop or fight the
-      // reset. A ref is the right tool, so this read during render is intentional.
-      // eslint-disable-next-line react-hooks/refs
-      nodes: graph.nodes.map((n) =>
-        draggedIds.current.has(n.id) ? n : { ...n, position: autoPos.get(n.id) ?? n.position }),
-    };
+    // Ideation preview keeps its own pre-laid positions; a seeded pipeline paints its stored positions
+    // untouched (the free node canvas); only a not-yet-seeded pipeline gets the one-time rank layout so
+    // it isn't shown cramped for the frame before the seed effect persists. `autoLaidRef` never changes
+    // within a render, so reading it here is render-stable (the seed effect flips it, which re-renders
+    // via the persisted positions).
+    // eslint-disable-next-line react-hooks/refs
+    if (!autoPos || autoLaidRef.current.has(graph.id)) return graph;
+    return { ...graph, nodes: graph.nodes.map((n) => ({ ...n, position: autoPos.get(n.id) ?? n.position })) };
   }, [graph, autoPos]);
 
-  // Persist the computed positions for other readers, and reset drag overrides on a topology change.
-  // The render above no longer depends on this round-trip succeeding — this is belt-and-suspenders.
-  const lastTopology = useRef<string | null>(null);
+  // Seed a pipeline's layout ONCE per session: the first time we see this graph id, persist the rank
+  // layout so its cramped composer positions become the clean starting flow. After that the founder's
+  // positions are the truth — dropping a step or dragging a node never triggers a re-lay (Auto-arrange does).
   useEffect(() => {
-    const sig = topologySignature(graph);
-    if (sig === lastTopology.current) return;
-    lastTopology.current = sig;
-    draggedIds.current = new Set();
+    if (graph.id === "ideation-preview") return;
+    if (autoLaidRef.current.has(graph.id)) return;
+    autoLaidRef.current.add(graph.id);
     if (!onNodePositionChange) return;
     const layout = computeLayout(graph);
     for (const node of graph.nodes) {
@@ -2373,6 +2373,18 @@ export function GraphCanvas({
       if (p && (p.x !== node.position?.x || p.y !== node.position?.y)) {
         onNodePositionChange(node.id, p, "layout");
       }
+    }
+  }, [graph, onNodePositionChange]);
+
+  // Auto-arrange — the one explicit tidy. Re-rank the whole pipeline left-to-right and persist it; the
+  // founder presses it, it never runs on its own.
+  const autoArrange = useCallback(() => {
+    autoLaidRef.current.add(graph.id);
+    if (!onNodePositionChange) return;
+    const layout = computeLayout(graph);
+    for (const node of graph.nodes) {
+      const p = layout.get(node.id);
+      if (p) onNodePositionChange(node.id, p, "layout");
     }
   }, [graph, onNodePositionChange]);
 
@@ -2448,9 +2460,8 @@ export function GraphCanvas({
 
   const handleNodeDragStop = useCallback(
     (_event: unknown, node: Node) => {
-      // This node is now founder-placed: the render-time auto-layout must stop overriding it.
-      draggedIds.current.add(node.id);
-      // "drag" marks this as a real founder move so the history records it (auto-layout below does not).
+      // A drag is a real founder move: persist it (origin "drag" records it in history). On a seeded
+      // pipeline stored positions already paint as-is, so there's nothing extra to pin.
       onNodePositionChange?.(node.id, node.position, "drag");
     },
     [onNodePositionChange],
@@ -2516,6 +2527,18 @@ export function GraphCanvas({
             onClick={() => { setFollowBroken(false); setRecenterSignal((n) => n + 1); }}
           >
             <MousePointer2 size={13} /> Back to Claude
+          </button>
+        </Panel>
+      ) : null}
+      {editable && singlePipeline && nodes.length > 1 ? (
+        <Panel position="top-left">
+          <button
+            type="button"
+            className="loop-auto-arrange"
+            onClick={autoArrange}
+            title="Tidy the pipeline into a left-to-right layout — you can rearrange freely after."
+          >
+            <Wand2 size={13} /> Auto-arrange
           </button>
         </Panel>
       ) : null}

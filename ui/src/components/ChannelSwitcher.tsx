@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, LayoutGrid, Plus, Search } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, LayoutGrid, Plus, Search } from "lucide-react";
 import { Reveal } from "@/lib/motion";
 import type { ChannelMeta } from "@/types";
 import "@/styles/menu.css";
@@ -13,6 +13,11 @@ const channelDot = (ch: ChannelMeta): string =>
 const channelMeta = (ch: ChannelMeta): string =>
   ch.pendingGates > 0 ? `${ch.pendingGates} gate${ch.pendingGates === 1 ? "" : "s"}`
     : ch.runCount > 0 ? `${ch.runCount} run${ch.runCount === 1 ? "" : "s"}` : "ready";
+
+// The one-line goal shown under each pipeline name, so a row reads as an intention you can act on
+// rather than a bare label. Falls back to a plain invitation when the pipeline has no stated goal yet.
+const channelSub = (ch: ChannelMeta): string =>
+  ch.objective?.trim() || "Ready to run to your gate.";
 
 // The ChannelSwitcher is the breadcrumb that names the active channel and opens a flat dropdown of
 // every channel in the project (channels are plain flows now — there is no separate program surface).
@@ -124,17 +129,25 @@ export function ChannelSwitcher({
             {channelsToShow.map((ch) => (
               <button
                 key={ch.id}
-                className={`menu-item ${ch.id === activeChannelId ? "active" : ""}`}
+                className={`osw-prow ${ch.id === activeChannelId ? "active" : ""}`}
                 onClick={pick(() => onOpenChannel(ch.id))}
                 type="button"
                 role="menuitem"
                 title={ch.objective || ch.name}
               >
-                <span className="osw-dot" style={{ background: channelDot(ch) }} />
-                <span className="menu-item-label">{ch.name}</span>
-                {ch.id === activeChannelId
-                  ? <Check className="menu-item-check" />
-                  : <span className="menu-item-trail">{channelMeta(ch)}</span>}
+                <span className="osw-prow-dot" style={{ background: channelDot(ch) }} />
+                <span className="osw-prow-main">
+                  <span className="osw-prow-name">{ch.name}</span>
+                  <span className="osw-prow-sub">{channelSub(ch)}</span>
+                </span>
+                {ch.pendingGates > 0 ? (
+                  <span className="osw-prow-gate">Needs you · {ch.pendingGates}</span>
+                ) : ch.id === activeChannelId ? (
+                  <Check className="osw-prow-check" size={14} />
+                ) : (
+                  <span className="osw-prow-meta">{channelMeta(ch)}</span>
+                )}
+                <ArrowRight className="osw-prow-go" size={14} />
               </button>
             ))}
           </div>

@@ -689,6 +689,23 @@
   text-transform: uppercase;
 }
 
+/* The verb label on a lit floating edge ("leads to", "supports", "measured by") — a small opaque chip
+   that rides the midpoint of the curve. Floating edges render their own label (React Flow's built-in
+   edge-text is only for the default renderer), so it's a positioned node here, styled to match. */
+.object-edge-label {
+  position: absolute;
+  padding: 3px 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 .object-graph-status {
   position: absolute;
   z-index: 16;

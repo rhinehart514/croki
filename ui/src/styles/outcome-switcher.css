@@ -60,8 +60,8 @@
   top: calc(100% + 6px);
   left: 0;
   z-index: 60;
-  min-width: 18rem;
-  max-width: 24rem;
+  min-width: 20rem;
+  max-width: 25rem;
 }
 
 .osw-list {
@@ -87,6 +87,116 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
+}
+
+/* ── Pipeline rows — richer and more inviting than a flat menu line ──────────
+   Each row carries its one-line goal under the name, a clear status, and — when a
+   gate is waiting — an amber "Needs you" pill that gives a real reason to click.
+   The whole row warms and reveals a go-arrow on hover, so it reads as "enter here."
+   Monochrome zinc chrome; amber (--gap) only for the gate, the one privileged accent. */
+.osw-prow {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md, 8px);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  transition: background 120ms var(--ease), border-color 120ms var(--ease);
+}
+.osw-prow:hover,
+.osw-prow:focus-visible {
+  background: var(--surface-2);
+  border-color: var(--line-2);
+  outline: none;
+}
+.osw-prow.active {
+  background: var(--surface-2);
+  border-color: var(--line-2);
+}
+
+.osw-prow-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 5px;
+}
+
+.osw-prow-main {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.osw-prow-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.osw-prow-sub {
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.osw-prow-meta {
+  flex: none;
+  align-self: center;
+  font-size: 11px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.osw-prow-check {
+  flex: none;
+  align-self: center;
+  color: var(--ink);
+}
+
+/* The reason to click — amber, because a pending gate is exactly the Wall asking for you. */
+.osw-prow-gate {
+  flex: none;
+  align-self: center;
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--gap);
+  background: var(--gap-soft);
+  border: 1px solid color-mix(in srgb, var(--gap) 30%, transparent);
+  border-radius: 100px;
+  padding: 2px 8px;
+}
+
+/* The go-arrow — absent at rest so the list stays calm, slides in on hover. */
+.osw-prow-go {
+  flex: none;
+  align-self: center;
+  color: var(--muted);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity 120ms var(--ease), transform 120ms var(--ease);
+}
+.osw-prow:hover .osw-prow-go,
+.osw-prow:focus-visible .osw-prow-go {
+  opacity: 1;
+  transform: translateX(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .osw-prow-go { transform: none; }
 }
 
 /* The channel qualifier demoted to a quiet suffix after the outcome name ("· Trigger Outbound"). */

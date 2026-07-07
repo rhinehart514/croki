@@ -178,7 +178,7 @@ import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { Button } from "@/components/ui/button";
 import type {
   ChannelMeta, ConnectorMeta, ContextManifest, Decisions, EngineState, GateDecision, GraphOperation, GtmLibrary, GTMContractAudit, GTMEdge, GTMGraph, GTMItem, GTMNode, GTMNodeCategory,
-  GTMProject, GTMNodeResult, GTMRunResult, NodeSelection, OperatorSession, ProjectSummary,
+  GTMProject, GTMNodeResult, GTMRunResult, NodeSelection, OperatorSession, OperatorSessionSummary, ProjectSummary,
   ProductModel, ProductModelEdit,
   Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, ComposerPosture,
@@ -461,6 +461,11 @@ export default function App() {
   const [runSummary, setRunSummary] = useState<RunSummary | null>(null);
   const [outcomeOpen, setOutcomeOpen] = useState(false);
   const [operatorSession, setOperatorSession] = useState<OperatorSession | null>(null);
+  // Every pipeline the founder is running for this product, as lightweight summaries — the source for
+  // the composer's chat tabs. The backend already drives these sessions in parallel; this is the UI
+  // catching up to that. `operatorSession` stays the single ACTIVE conversation (all the gate / proposal
+  // / polling wiring keys off it, untouched); the roster is purely additive, refreshed alongside it.
+  const [sessionRoster, setSessionRoster] = useState<OperatorSessionSummary[]>([]);
   // The shared People object — durable identities promoted from real run entrants, read-only. Feeds
   // the GTM canvas's People lens (find-references / dedup) and is refreshed after each run promotes
   // new entrants.
@@ -522,12 +527,15 @@ export default function App() {
 
   // The bench's derived track record, per project, for the crew strip's approved-count badges. The
   // bench SURFACE fetches its own fresh copy on open; this is the always-available copy for the canvas.
+  // Bumped after a teammate is built and added, so the bench refetches and the new face appears.
+  const [benchNonce, setBenchNonce] = useState(0);
+  const refreshBench = useCallback(() => setBenchNonce((n) => n + 1), []);
   useEffect(() => {
     if (!activeProjectId) { setBench(null); return; }
     let live = true;
     getAgentBench(activeProjectId).then((r) => { if (live) setBench(r.bench); }).catch(() => { if (live) setBench(null); });
     return () => { live = false; };
-  }, [activeProjectId]);
+  }, [activeProjectId, benchNonce]);
 
   // The run summary, fetched whenever the founder is on the canvas (and after an outcome is logged, so
   // the loop visibly compounds). Honest null when no run has happened yet.
@@ -920,6 +928,19 @@ export default function App() {
     // satisfy the linter.
   }, [loadProjectOverview, setChannelGraph, setChannelRunResult]);
 
+  // Refresh the chat-tab roster — every pipeline conversation for the active product, as summaries.
+  // Cheap (no per-session detail fetch), so it's safe to call on the operator poll tick and after any
+  // create/switch. Keeps the tab dots (working / needs-you / done) honest for pipelines that aren't the
+  // one on screen, which is the whole point of running several at once.
+  const refreshRoster = useCallback(async () => {
+    const projectId = activeProjectIdRef.current;
+    if (!projectId) return;
+    try {
+      const { sessions } = await listOperatorSessions(projectId);
+      setSessionRoster(sessions);
+    } catch { /* a roster refresh failure is non-fatal — the active conversation is unaffected */ }
+  }, []);
+
   // Restore the latest durable operator session for the active product. Re-runs
   // whenever the active product changes, so switching products in the top-left
   // swaps the Claude session to that product's own chat (or clears it if none).
@@ -929,9 +950,10 @@ export default function App() {
     listOperatorSessions(activeProjectId)
       .then(async ({ sessions }) => {
         if (!live) return;
-        // The dock binds to the project's ONE durable conversation: prefer the active (non-terminal)
+        setSessionRoster(sessions); // seed the tab roster with every pipeline for this product
+        // The dock OPENS on the project's most-live conversation: prefer the active (non-terminal)
         // thread; fall back to the newest session so a just-finished one (which may still hold an
-        // unresolved on-canvas proposal) stays on screen. Older terminal sessions are reopenable history.
+        // unresolved on-canvas proposal) stays on screen. The others are reachable on their tabs.
         const TERMINAL = ["completed", "cancelled"];
         const active = sessions.find((s) => !TERMINAL.includes(s.status)) ?? sessions[0];
         if (!active) { setOperatorSession(null); return; }
@@ -1098,6 +1120,33 @@ export default function App() {
       window.clearInterval(timer);
     };
   }, [activeProjectId, operatorSessionId, operatorSessionStatus, syncOperator]);
+
+  // Keep the chat-tab dots live for pipelines that AREN'T the active conversation: a calm 4s refresh of
+  // the roster while any of them is still in flight. Gated on a derived boolean (not the roster array) so
+  // it doesn't re-arm on every refresh; stops entirely once every pipeline has settled, so an idle
+  // product polls nothing. The active tab doesn't wait on this — it's merged live below.
+  const anyRosterLive = sessionRoster.some(
+    (s) => !["completed", "cancelled", "blocked", "failed"].includes(s.status),
+  );
+  useEffect(() => {
+    if (!activeProjectId || !anyRosterLive) return;
+    const timer = window.setInterval(() => void refreshRoster(), 4000);
+    return () => window.clearInterval(timer);
+  }, [activeProjectId, anyRosterLive, refreshRoster]);
+
+  // The roster the composer tabs render: the summaries, but with the LIVE active session overlaid onto
+  // its own row (fresh status + name) and guaranteed present even before the first roster fetch lands.
+  // So the tab you're looking at is always exactly right; the others catch up on the 4s cadence above.
+  const rosterForDock = useMemo<OperatorSessionSummary[]>(() => {
+    if (!operatorSession) return sessionRoster;
+    let found = false;
+    const merged = sessionRoster.map((s) => {
+      if (s.id !== operatorSession.id) return s;
+      found = true;
+      return { ...s, status: operatorSession.status, summary: operatorSession.summary ?? s.summary, goal: operatorSession.goal };
+    });
+    return found ? merged : [operatorSession, ...merged];
+  }, [sessionRoster, operatorSession]);
 
   // Cross-project pending-decision poll — the notification. It reads what's waiting on the founder
   // across EVERY product and pipeline, NOT just the focused session, so a run that reaches the gate or
@@ -1523,7 +1572,8 @@ export default function App() {
     operatorGraphRevision.current = response.session.graphRevision;
     operatorRunId.current = null;
     setOperatorSession(response.session);
-  }, [graph?.id]);
+    void refreshRoster(); // a fresh pipeline gets its tab in the strip immediately
+  }, [graph?.id, refreshRoster]);
 
   // One conversation: talking to Claude continues the live session, or starts a new one
   // when idle. The dock decides nothing about safety — App owns create vs. resume.
@@ -1620,6 +1670,27 @@ export default function App() {
     setOperatorSession(null);
     setComposerFocus((n) => n + 1);
   }, []);
+
+  // Switch the active conversation to another pipeline's tab: load that session's full detail, make it
+  // the one on screen, and FOLLOW it to its own pipeline graph on the canvas (so the tab and the board
+  // agree). Best-effort on the graph — a session bound to a scratch/removed graph just switches the
+  // conversation and leaves the canvas as-is. Never a create: this only moves between existing sessions.
+  const switchSession = useCallback(async (id: string) => {
+    const projectId = activeProjectIdRef.current;
+    if (!id || id === operatorSession?.id) return;
+    try {
+      const response = await getOperatorSession(id, projectId ?? undefined);
+      const next = humanizeOperatorSession(response.session);
+      freshPipelineIntent.current = false; // a switch is not a "new pipeline" intent
+      operatorGraphRevision.current = response.session.graphRevision;
+      operatorRunId.current = null;
+      setOperatorSession(next);
+      const gid = response.session.graphId;
+      if (gid && !gid.startsWith("scratch-")) {
+        try { await loadChannel(gid); } catch { /* graph may be gone — keep the current canvas */ }
+      }
+    } catch { /* the switch failed (session gone / scope mismatch) — stay on the current conversation */ }
+  }, [operatorSession?.id, loadChannel]);
 
   const handleProjectCreate = useCallback(async (input: { name?: string; repoPath: string; outcome: string }) => {
     setProjectBusy(true);
@@ -2450,11 +2521,13 @@ export default function App() {
             channels={channels}
             activeChannelId={activeChannelId}
             bench={bench}
+            projectId={activeProjectId}
             library={library}
             activeMode={activeMode}
             onLoadChannel={(id) => void loadChannel(id)}
             onNewChannel={handleNewChannel}
             onOpenAgent={(ref) => setAgentProfileRef(ref)}
+            onCrewChanged={refreshBench}
             onOpenSkill={(name) => setArtifactEdit({ type: "skill", ref: name })}
             onNewSkill={() => handleNewArtifact("skill")}
           />

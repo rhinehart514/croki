@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drover running-workflow motion audit — 2026-07-07</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Public+Sans:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink:        oklch(0.155 0.006 255);
+    --surface:    oklch(0.195 0.007 255);
+    --surface-2:  oklch(0.235 0.008 255);
+    --paper:      oklch(0.945 0.004 255);
+    --paper-dim:  oklch(0.800 0.006 255);
+    --muted:      oklch(0.680 0.008 255);
+    --faint:      oklch(0.505 0.008 255);
+    --line:       oklch(0.95 0.01 255 / 0.09);
+    --line-strong:oklch(0.95 0.01 255 / 0.16);
+
+    --sev-crit: oklch(0.655 0.185 25);
+    --sev-imp:  oklch(0.805 0.125 78);
+    --sev-opp:  oklch(0.745 0.135 152);
+    --t-good: oklch(0.745 0.135 152);
+    --t-mid:  oklch(0.805 0.125 78);
+    --t-slow: oklch(0.655 0.185 25);
+
+    --display: "Familjen Grotesk", "Hanken Grotesk", system-ui, sans-serif;
+    --sans: "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  :root:has(#theme-light:checked) {
+    --ink:        oklch(0.985 0.003 255);
+    --surface:    oklch(0.965 0.004 255);
+    --surface-2:  oklch(0.940 0.005 255);
+    --paper:      oklch(0.180 0.006 255);
+    --paper-dim:  oklch(0.330 0.008 255);
+    --muted:      oklch(0.475 0.010 255);
+    --faint:      oklch(0.640 0.009 255);
+    --line:       oklch(0.180 0.010 255 / 0.12);
+    --line-strong:oklch(0.180 0.010 255 / 0.22);
+    --sev-crit: oklch(0.560 0.190 25);
+    --sev-imp:  oklch(0.640 0.130 74);
+    --sev-opp:  oklch(0.590 0.140 152);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--ink); color: var(--paper);
+    font-family: var(--sans); margin: 0; line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 32px 96px; }
+  a { color: inherit; }
+  .vh { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  .mono-label { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+
+  /* theme switch */
+  .theme-switch { display: flex; justify-content: flex-end; margin-bottom: 28px; }
+  .theme-switch .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 100px; overflow: hidden; }
+  .theme-switch label { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 5px 12px; cursor: pointer; user-select: none; transition: background 0.15s ease, color 0.15s ease; }
+  #theme-dark:checked ~ .theme-switch label[for="theme-dark"],
+  #theme-light:checked ~ .theme-switch label[for="theme-light"] { background: color-mix(in oklch, var(--paper) 12%, transparent); color: var(--paper); }
+
+  /* header */
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--faint); }
+  h1.title { font-family: var(--display); font-size: 40px; line-height: 1.08; font-weight: 700; letter-spacing: -0.02em; margin: 14px 0 0; max-width: 20ch; }
+  .lede { font-size: 17px; color: var(--paper-dim); margin: 16px 0 0; max-width: 62ch; }
+  .meta-row { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-top: 18px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .meta-row span { color: var(--faint); }
+  .stats { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
+  .stat { border: 1px solid var(--line-strong); border-radius: 10px; padding: 10px 16px; text-decoration: none; display: flex; align-items: baseline; gap: 8px; transition: border-color 0.2s ease; }
+  .stat:hover { border-color: var(--paper-dim); }
+  .stat b { font-family: var(--display); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 12px; color: var(--muted); }
+  .stat.crit b { color: var(--sev-crit); } .stat.imp b { color: var(--sev-imp); } .stat.opp b { color: var(--sev-opp); }
+
+  section { margin-top: 56px; }
+  .sec-num { font-family: var(--mono); font-size: 11px; color: var(--faint); letter-spacing: 0.1em; }
+  h2.sec-title { font-family: var(--display); font-size: 15px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; margin: 6px 0 20px; color: var(--paper-dim); }
+
+  .assessment { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 28px 30px; }
+  .assessment p { font-family: var(--display); font-size: 20px; line-height: 1.42; font-weight: 500; margin: 12px 0 0; letter-spacing: -0.01em; }
+  .assessment p + p { font-size: 16px; font-family: var(--sans); font-weight: 400; color: var(--paper-dim); margin-top: 16px; }
+
+  /* lens table */
+  .lens-table { width: 100%; border-collapse: collapse; }
+  .lens-table th { text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); padding: 0 16px 10px; font-weight: 500; }
+  .lens-table td { padding: 16px; border-top: 1px solid var(--line); vertical-align: top; font-size: 14px; }
+  .lens-table tr { transition: border-color 0.2s ease; }
+  .lens-name { font-weight: 600; font-size: 15px; }
+  .weight-chip { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line-strong); border-radius: 100px; padding: 2px 8px; margin-left: 8px; }
+  .vdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
+  .v-strong { color: var(--t-good); } .v-strong .vdot { background: var(--t-good); }
+  .v-mixed { color: var(--sev-imp); } .v-mixed .vdot { background: var(--sev-imp); }
+  .v-concern { color: var(--sev-crit); } .v-concern .vdot { background: var(--sev-crit); }
+
+  /* timing diagram */
+  .timing-grid { display: grid; grid-template-columns: 1fr 300px; gap: 28px; align-items: start; }
+  .timing-svg { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+  .tkey { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+  .tkey li { display: flex; gap: 10px; align-items: baseline; font-size: 13px; }
+  .tkey .n { font-family: var(--mono); font-size: 11px; color: var(--ink); background: var(--paper-dim); width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .tkey .d { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: auto; }
+  .whats-off { margin-top: 22px; border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; background: var(--surface); }
+  .whats-off h4 { margin: 0 0 8px; font-size: 13px; font-family: var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+  .whats-off p { margin: 8px 0 0; font-size: 14px; color: var(--paper-dim); }
+
+  /* lens sections */
+  .lens-sec__head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .lens-sec__head h3 { font-family: var(--display); font-size: 24px; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
+  .lens-sec__verdict { font-size: 14px; margin: 8px 0 22px; }
+  .lens-block { margin-top: 24px; }
+  .lens-block > .mono-label { display: block; margin-bottom: 12px; }
+  .lens-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 9px; }
+  .lens-list li { font-size: 14px; color: var(--paper-dim); padding-left: 26px; position: relative; }
+  .lens-list.good li::before { content: "✓"; position: absolute; left: 0; color: var(--t-good); font-weight: 700; }
+  .lens-list.opp li::before { content: "→"; position: absolute; left: 0; color: var(--sev-opp); font-weight: 700; }
+  .lens-list code, .find-loc code { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .lens-take { margin-top: 26px; font-size: 15px; font-style: italic; color: var(--paper-dim); border-top: 1px solid var(--line); padding-top: 18px; }
+
+  /* finding rows */
+  .finding-row { display: grid; grid-template-columns: 1fr 380px; gap: 32px; padding: 26px 0; border-top: 1px solid var(--line); align-items: start; }
+  .find-tags { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .sev-chip { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; border-radius: 100px; padding: 3px 9px; font-weight: 500; }
+  .sev-chip.crit { color: var(--sev-crit); border: 1px solid color-mix(in oklch, var(--sev-crit) 45%, transparent); }
+  .sev-chip.imp { color: var(--sev-imp); border: 1px solid color-mix(in oklch, var(--sev-imp) 45%, transparent); }
+  .lens-chip { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line-strong); border-radius: 100px; padding: 3px 9px; }
+  h4.find-title { font-family: var(--display); font-size: 19px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 12px; }
+  .find-body p { margin: 10px 0 0; font-size: 14.5px; color: var(--paper-dim); }
+  .find-body .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); margin-right: 8px; }
+  .fix { margin-top: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 15px; }
+  .fix p { margin: 0; }
+  .find-loc { margin-top: 12px; }
+
+  /* demo cards */
+  .demo { position: relative; width: 380px; }
+  .demo__bar { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  .demo__meta { min-width: 0; }
+  .demo__title { display: block; font-size: 13.5px; font-weight: 600; color: var(--paper); line-height: 1.3; }
+  .demo__timing { display: block; font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .demo__controls { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .demo__loop { font-family: var(--mono); font-size: 12px; color: var(--faint); }
+  .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 100px; overflow: hidden; }
+  .seg label { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 4px 9px; cursor: pointer; user-select: none; transition: background 0.15s ease, color 0.15s ease; }
+  .demo input[id$="-a"]:checked ~ .demo__bar .seg label[for$="-a"],
+  .demo input[id$="-l"]:checked ~ .demo__bar .seg label[for$="-l"],
+  .demo input[id$="-d"]:checked ~ .demo__bar .seg label[for$="-d"] { background: color-mix(in oklch, var(--paper) 12%, transparent); color: var(--paper); }
+  .demo__stage {
+    --st-bg: var(--surface-2); --st-fg: var(--paper);
+    --st-line: var(--line-strong); --st-dim: color-mix(in oklch, var(--paper) 55%, transparent);
+    --st-accent: oklch(0.805 0.125 78);
+    background: var(--st-bg); color: var(--st-fg);
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 30px 24px; min-height: 176px;
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+  }
+  .demo input[id$="-l"]:checked ~ .demo__stage { --st-bg: oklch(0.985 0.003 255); --st-fg: oklch(0.180 0.006 255); --st-line: oklch(0.180 0.010 255 / 0.18); --st-dim: oklch(0.180 0.010 255 / 0.45); }
+  .demo input[id$="-d"]:checked ~ .demo__stage { --st-bg: oklch(0.180 0.006 255); --st-fg: oklch(0.985 0.003 255); --st-line: oklch(0.985 0.010 255 / 0.18); --st-dim: oklch(0.985 0.010 255 / 0.50); }
+
+  /* stage primitives — Drover node language */
+  .nd { width: 56px; height: 56px; border-radius: 13px; background: var(--st-bg); border: 1px solid var(--st-line); box-shadow: 0 6px 18px oklch(0 0 0 / 0.14); display: inline-flex; align-items: center; justify-content: center; position: relative; }
+  .nd-ico { width: 20px; height: 20px; border-radius: 6px; background: var(--st-dim); }
+  .nd-lbl { font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--st-dim); position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%); white-space: nowrap; }
+  .check { width: 22px; height: 22px; }
+  .check circle { fill: none; stroke: var(--st-fg); stroke-width: 2; opacity: 0.25; }
+  .check path { fill: none; stroke: var(--st-fg); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 26; stroke-dashoffset: 26; }
+  .rowset { display: flex; align-items: center; gap: 34px; }
+  .edge { width: 34px; height: 2px; background: var(--st-line); position: relative; overflow: hidden; }
+  .edge::after { content: ""; position: absolute; inset: 0; width: 0%; background: var(--st-fg); }
+  .gcard { width: 210px; background: var(--st-bg); border: 1px solid var(--st-line); border-radius: 11px; padding: 13px 15px; box-shadow: 0 12px 30px oklch(0 0 0 / 0.2); transform-origin: bottom left; }
+  .gcard .gc-tag { font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--st-bg); background: var(--st-accent); border-radius: 100px; padding: 2px 8px; display: inline-block; }
+  .gcard .gc-line { height: 7px; border-radius: 4px; background: var(--st-dim); opacity: 0.5; margin-top: 9px; }
+  .gcard .gc-line.s { width: 60%; }
+  .crew { width: 30px; height: 30px; border-radius: 8px; background: var(--st-fg); display: inline-flex; align-items: center; justify-content: center; }
+  .crew::before { content: ""; width: 14px; height: 14px; border-radius: 50% 50% 45% 45%; background: var(--st-bg); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .demo__loop { display: none; }
+    [class*="__mt"], [class*="__mt"] * { animation: none !important; transition: none !important; }
+    .demo-4__mt .check path { stroke-dashoffset: 0; }
+    .demo-3__mt .check.done path { stroke-dashoffset: 0; }
+  }
+
+  /* rec tables */
+  .rec-tier { margin-top: 30px; }
+  .tier-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; display: flex; align-items: center; gap: 10px; }
+  .tier-label.crit { color: var(--sev-crit); } .tier-label.imp { color: var(--sev-imp); } .tier-label.opp { color: var(--sev-opp); }
+  .tier-label .cnt { color: var(--faint); }
+  .rec-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  .rec-table th { text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); padding: 0 14px 8px; font-weight: 500; }
+  .rec-table td { padding: 13px 14px; border-top: 1px solid var(--line); font-size: 13.5px; vertical-align: top; color: var(--paper-dim); }
+  .rec-table td:first-child { color: var(--paper); font-weight: 500; }
+  .rec-table code { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+
+  .ref-summary { margin-top: 56px; border: 1px solid var(--line); border-radius: 14px; padding: 26px 28px; background: var(--surface); }
+  .ref-summary p { font-size: 14px; color: var(--paper-dim); margin: 10px 0 0; }
+  .ref-summary .lead { font-family: var(--display); font-size: 16px; color: var(--paper); font-weight: 500; }
+  footer { margin-top: 56px; padding-top: 22px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 11px; color: var(--faint); display: flex; gap: 12px; flex-wrap: wrap; }
+
+  @media (max-width: 860px) {
+    .finding-row { grid-template-columns: 1fr; }
+    .demo { width: 100%; }
+    .timing-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ───────────── per-finding demo motion ───────────── */
+  @media (prefers-reduced-motion: no-preference) {
+    /* 1 — calm-by-default: only the active node breathes, and gently */
+    @keyframes m1 {
+      0%, 100% { transform: scale(1); box-shadow: 0 6px 18px oklch(0 0 0 / 0.14), 0 0 0 0 color-mix(in oklch, var(--st-accent) 40%, transparent); }
+      55%      { transform: scale(1.03); box-shadow: 0 8px 22px oklch(0 0 0 / 0.16), 0 0 0 5px color-mix(in oklch, var(--st-accent) 16%, transparent); }
+    }
+    .demo-1__mt .nd.live { animation: m1 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite; border-color: color-mix(in oklch, var(--st-accent) 55%, var(--st-line)); }
+    .demo-1__mt .nd.live .nd-ico { background: var(--st-accent); }
+
+    /* 2 — one focus at a time: work-light travels; the others hold still */
+    @keyframes m2a { 0%, 26% { opacity: 1; transform: scale(1.03); } 33%, 100% { opacity: 0.5; transform: scale(1); } }
+    @keyframes m2b { 0%, 33% { opacity: 0.5; transform: scale(1); } 40%, 66% { opacity: 1; transform: scale(1.03); } 73%, 100% { opacity: 0.5; transform: scale(1); } }
+    @keyframes m2c { 0%, 66% { opacity: 0.5; transform: scale(1); } 73%, 96% { opacity: 1; transform: scale(1.03); } 100% { opacity: 0.5; transform: scale(1); } }
+    .demo-2__mt .nd { opacity: 0.5; }
+    .demo-2__mt .n-a { animation: m2a 3s cubic-bezier(0.4,0,0.2,1) infinite; }
+    .demo-2__mt .n-b { animation: m2b 3s cubic-bezier(0.4,0,0.2,1) infinite; }
+    .demo-2__mt .n-c { animation: m2c 3s cubic-bezier(0.4,0,0.2,1) infinite; }
+
+    /* 3 — the baton-pass: done-check → edge draws → next lights */
+    @keyframes m3check { 0% { stroke-dashoffset: 26; } 18%, 100% { stroke-dashoffset: 0; } }
+    @keyframes m3edge  { 0%, 20% { width: 0%; } 45%, 100% { width: 100%; } }
+    @keyframes m3next  { 0%, 45% { opacity: 0.5; transform: scale(1); border-color: var(--st-line); } 60%, 100% { opacity: 1; transform: scale(1.03); border-color: color-mix(in oklch, var(--st-accent) 55%, var(--st-line)); } }
+    @keyframes m3done  { 0%, 18% { border-color: var(--st-line); } 30%, 100% { border-color: color-mix(in oklch, var(--t-good) 50%, var(--st-line)); } }
+    .demo-3__mt .nd.done { animation: m3done 3s ease-out infinite; }
+    .demo-3__mt .nd.done .check path { animation: m3check 3s ease-out infinite; }
+    .demo-3__mt .edge::after { animation: m3edge 3s cubic-bezier(0.5,0,0.2,1) infinite; }
+    .demo-3__mt .nd.next { opacity: 0.5; animation: m3next 3s cubic-bezier(0.4,0,0.2,1) infinite; }
+
+    /* 4 — done is a state that stays: the check draws on and holds */
+    @keyframes m4 { 0% { stroke-dashoffset: 26; } 30%, 100% { stroke-dashoffset: 0; } }
+    @keyframes m4ring { 0% { opacity: 0.25; } 30%, 100% { opacity: 0.55; } }
+    .demo-4__mt .check path { animation: m4 3s cubic-bezier(0.65,0,0.35,1) infinite; }
+    .demo-4__mt .check circle { animation: m4ring 3s ease-out infinite; }
+
+    /* 5 — the gate blooms: one earned spring from the node origin */
+    @keyframes m5 {
+      0%, 12%  { opacity: 0; transform: translateY(6px) scale(0.92); }
+      42%      { opacity: 1; transform: translateY(0) scale(1); }
+      100%     { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .demo-5__mt .gcard { animation: m5 3s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+  }
+</style>
+</head>
+<body>
+<input class="vh" type="radio" name="theme" id="theme-dark" checked>
+<input class="vh" type="radio" name="theme" id="theme-light">
+<div class="wrap">
+
+  <div class="theme-switch">
+    <div class="seg"><label for="theme-dark">Dark</label><label for="theme-light">Light</label></div>
+  </div>
+
+  <header>
+    <div class="eyebrow">Motion audit · running workflow · design-motion-principles</div>
+    <h1 class="title">The board is alive. It doesn't yet perform.</h1>
+    <p class="lede">Drover already has a real motion system — one spring drives every reveal and list, and a run genuinely animates: nodes glow, edges flow, the crew springs in. The gap is that all of it fires at once and independently, so nothing tells your eye <em>where the work is right now, and what just changed.</em> This is what a single, staged performance looks like instead — held to a work-tool bar, product-wide.</p>
+    <div class="meta-row">Drover (gtm-ide) <span>·</span> React + Motion 12 + ~41 CSS keyframes <span>·</span> desktop 1440 <span>·</span> 2026-07-07</div>
+    <div class="stats">
+      <a class="stat crit" href="#rec-crit"><b>2</b><span>Critical</span></a>
+      <a class="stat imp" href="#rec-imp"><b>3</b><span>Important</span></a>
+      <a class="stat opp" href="#rec-opp"><b>3</b><span>Opportunities</span></a>
+    </div>
+  </header>
+
+  <section class="assessment">
+    <div class="mono-label">Overall</div>
+    <p>The foundation is better than most shipped products — nothing hard-cuts, everything animates out as well as in, and a run has real feedback. It's not under-animated. It's <em>over-simultaneous.</em></p>
+    <p>During a live run, six-plus continuous loops breathe at the same time: the active-node glow, a think-pulse, the marching edge dashes, the lane shimmer, the "live" orb, and the crew bob. When everything pulses, pulsing stops meaning anything — the eye can't find the one node where work actually is. And those run-time loops don't honor reduced-motion, so a vestibular-sensitive founder gets all of it, forever. The fix isn't more motion or less motion. It's <em>choreography</em>: reserve continuous movement for the single active step, and turn every hand-off into one legible through-line — done check, edge draws to the next node, next node lights, crew glides across. One performance the eye can follow from goal to gate.</p>
+  </section>
+
+  <section>
+    <div class="sec-num">01</div>
+    <h2 class="sec-title">Lens summary</h2>
+    <table class="lens-table">
+      <thead><tr><th>Lens</th><th>Verdict</th><th>One-line read</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="lens-name">Restraint &amp; speed</span><span class="weight-chip">Primary</span></td>
+          <td class="v-concern"><span class="vdot"></span>Concern</td>
+          <td>Continuous motion is the default, not the exception — the strongest signal (movement) is spent everywhere, so it points nowhere.</td>
+        </tr>
+        <tr>
+          <td><span class="lens-name">Production polish</span><span class="weight-chip">Secondary</span></td>
+          <td class="v-mixed"><span class="vdot"></span>Mixed</td>
+          <td>The spring system and enter/exit discipline are genuinely strong; completion and the gate — the two moments that matter most — under-perform.</td>
+        </tr>
+        <tr>
+          <td><span class="lens-name">Experimentation &amp; delight</span><span class="weight-chip">Selective</span></td>
+          <td class="v-strong"><span class="vdot"></span>Strong</td>
+          <td>Right call to keep it sober. The one place to spend a little character is the gate bloom — the rare, high-stakes moment where expression is earned.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <div class="sec-num">02</div>
+    <h2 class="sec-title">Where the timings land</h2>
+    <div class="timing-grid">
+      <svg class="timing-svg" viewBox="0 0 660 300" role="img" aria-label="Duration budget of running-workflow animations">
+        <style>
+          .zg { fill: var(--t-good); opacity: 0.10; } .zm { fill: var(--t-mid); opacity: 0.10; } .zs { fill: var(--t-slow); opacity: 0.12; }
+          .axl { fill: var(--faint); font-family: var(--mono); font-size: 10px; }
+          .zl { font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; }
+          .dot-good { fill: var(--t-good); } .dot-mid { fill: var(--t-mid); } .dot-slow { fill: var(--t-slow); }
+          .dot-inf { fill: none; stroke: var(--t-slow); stroke-width: 1.5; stroke-dasharray: 3 3; }
+          .dn { fill: var(--ink); font-family: var(--mono); font-size: 10px; font-weight: 600; }
+        </style>
+        <rect class="zg" x="40" y="40" width="173" height="180"/>
+        <rect class="zm" x="213" y="40" width="120" height="180"/>
+        <rect class="zs" x="333" y="40" width="287" height="180"/>
+        <text class="zl" x="48" y="58" fill="var(--t-good)">Responsive</text>
+        <text class="zl" x="221" y="58" fill="var(--t-mid)">Deliberate</text>
+        <text class="zl" x="341" y="58" fill="var(--t-slow)">Sluggish · continuous</text>
+        <line x1="40" y1="220" x2="620" y2="220" stroke="var(--line-strong)"/>
+        <text class="axl" x="40" y="238">0</text>
+        <text class="axl" x="205" y="238">300ms</text>
+        <text class="axl" x="325" y="238">500ms</text>
+        <text class="axl" x="600" y="238">∞</text>
+        <!-- 240 op-cursor-in -> x = 40 + 240/600*580 ~ 272? scale: 0-600ms across 40..620 (580px) -->
+        <circle class="dot-good" cx="272" cy="150" r="13"/><text class="dn" x="272" y="154" text-anchor="middle">1</text>
+        <circle class="dot-mid" cx="485" cy="120" r="13"/><text class="dn" x="485" y="124" text-anchor="middle">2</text>
+        <circle class="dot-slow" cx="620" cy="150" r="13"/><text class="dn" x="620" y="154" text-anchor="middle">3</text>
+        <circle class="dot-inf" cx="590" cy="185" r="13"/><text class="dn" x="590" y="189" text-anchor="middle" fill="var(--t-slow)">4</text>
+      </svg>
+      <ul class="tkey">
+        <li><span class="n">1</span> Crew springs in over node <span class="d">240ms</span></li>
+        <li><span class="n">2</span> Edge draws to next node <span class="d">460ms</span></li>
+        <li><span class="n">3</span> Step-done flash <span class="d">700ms</span></li>
+        <li><span class="n">4</span> Glow · pulse · shimmer · dash · orb · bob <span class="d">∞ loop</span></li>
+      </ul>
+    </div>
+    <div class="whats-off">
+      <h4>What's off</h4>
+      <p><b>The enters are right</b> — the crew springing in at 240ms is dead-on for a work tool. The problem lives at the two ends of the scale.</p>
+      <p><b>The step-done flash is slow (700ms) and then gone</b> — a completion should register fast and <em>stay</em> registered, not linger then vanish.</p>
+      <p><b>Everything at "∞" is the real issue.</b> Half a dozen animations never stop. In a work tool, continuous motion should be rationed to the one thing happening now; here it's the wallpaper.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="lens-sec__head"><h3>Restraint &amp; speed</h3><span class="weight-chip">Primary lens</span></div>
+    <p class="lens-sec__verdict v-concern"><span class="vdot"></span>Concern — motion is spent as ambience, so it can't be used as signal.</p>
+
+    <div class="lens-block">
+      <div class="mono-label">What's working</div>
+      <ul class="lens-list good">
+        <li>Enter timings are genuinely fast — the crew springs in at 240ms, well under the 300ms work-tool ceiling. <code>op-cursor-in</code></li>
+        <li>Custom easing everywhere, not default <code>ease</code> — the spring curve is shared across the app. <code>lib/springs</code></li>
+        <li>The right instinct to keep it sober — no bounce, no elastic, no decorative flourish. This is a work tool and it moves like one.</li>
+      </ul>
+    </div>
+
+    <div class="lens-block">
+      <div class="mono-label">Issues to address</div>
+
+      <div class="finding-row" data-sev="crit">
+        <div class="find-prose">
+          <div class="find-tags"><span class="sev-chip crit">Critical</span><span class="lens-chip">Restraint</span><span class="lens-chip">Accessibility</span></div>
+          <h4 class="find-title">The run's continuous loops ignore reduced-motion</h4>
+          <div class="find-body">
+            <p><span class="label">What</span>The animations that run <em>during</em> a workflow — the node glow, think-pulse, edge march, lane shimmer, live orb, replay pulse — all loop <code>infinite</code> with no <code>prefers-reduced-motion</code> escape. A founder who's set their system to reduce motion still gets every loop, indefinitely.</p>
+            <p><span class="label">Why it matters</span>This is the one hard gate in motion work — continuous, un-pausable movement is a vestibular trigger, and a run is the exact moment the screen is busiest. It's also the fix that costs the least.</p>
+            <div class="fix"><p><span class="label">Recommended motion</span>Under reduced-motion, collapse every run-time loop to a static state signal — the active node simply reads "active" with a still ring and a tinted icon, no breathing. Motion off; meaning intact.</p></div>
+            <p class="find-loc"><code>index.css · node-run-glow, node-run-pulse, think-pulse, lane-shimmer, cnv-live-pulse, replay-pulse</code></p>
+          </div>
+        </div>
+        <div class="demo">
+          <input class="vh" type="radio" name="st1" id="st1-a" checked><input class="vh" type="radio" name="st1" id="st1-l"><input class="vh" type="radio" name="st1" id="st1-d">
+          <div class="demo__bar"><div class="demo__meta"><span class="demo__title">Active node — calm by default</span><span class="demo__timing">2.4s · gentle · off under reduced-motion</span></div><div class="demo__controls"><div class="seg"><label for="st1-a">Auto</label><label for="st1-l">Light</label><label for="st1-d">Dark</label></div><span class="demo__loop">↻</span></div></div>
+          <div class="demo__stage"><div class="demo-1__mt"><div class="nd live"><div class="nd-ico"></div></div></div></div>
+        </div>
+      </div>
+
+      <div class="finding-row" data-sev="crit">
+        <div class="find-prose">
+          <div class="find-tags"><span class="sev-chip crit">Critical</span><span class="lens-chip">Restraint</span></div>
+          <h4 class="find-title">Everything breathes at once, so nothing points anywhere</h4>
+          <div class="find-body">
+            <p><span class="label">What</span>At any moment in a run, six-plus loops animate simultaneously across the canvas, rail, and composer. The active node glows, but so does the live orb, the lane shimmer, the marching edges, and the crew bob — all at similar volume.</p>
+            <p><span class="label">Why it matters</span>Movement is the strongest thing the eye tracks. If it's everywhere, it's the same as nowhere — the founder can't glance at the board and instantly know which step is working. The most valuable signal in the product is being spent on wallpaper.</p>
+            <div class="fix"><p><span class="label">Recommended motion</span>One focus at a time. Only the single node doing work moves; every other node holds perfectly still and dims slightly. As work advances, the "live" state travels from node to node — so movement itself becomes the answer to "where are we right now."</p></div>
+            <p class="find-loc"><code>GraphCanvas.tsx · loop-node-running + concurrent index.css loops</code></p>
+          </div>
+        </div>
+        <div class="demo">
+          <input class="vh" type="radio" name="st2" id="st2-a" checked><input class="vh" type="radio" name="st2" id="st2-l"><input class="vh" type="radio" name="st2" id="st2-d">
+          <div class="demo__bar"><div class="demo__meta"><span class="demo__title">The work-light travels; the rest hold still</span><span class="demo__timing">one focus at a time</span></div><div class="demo__controls"><div class="seg"><label for="st2-a">Auto</label><label for="st2-l">Light</label><label for="st2-d">Dark</label></div><span class="demo__loop">↻</span></div></div>
+          <div class="demo__stage"><div class="demo-2__mt"><div class="rowset"><div class="nd n-a"><div class="nd-ico"></div></div><div class="nd n-b"><div class="nd-ico"></div></div><div class="nd n-c"><div class="nd-ico"></div></div></div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lens-block">
+      <div class="mono-label">Opportunities</div>
+      <ul class="lens-list opp">
+        <li>The active node is where "the plan is the loading state" belongs — show its live substep and elapsed time on the one node that's working, instead of an anonymous glow.</li>
+      </ul>
+    </div>
+    <p class="lens-take">Through the restraint lens: the motion here isn't too loud per element — each animation is tasteful. It's that they all run at once and forever. Spend movement like it's scarce, because to the eye it is: give it to the one step that's live, and take it back from everything else.</p>
+  </section>
+
+  <section>
+    <div class="lens-sec__head"><h3>Production polish</h3><span class="weight-chip">Secondary lens</span></div>
+    <p class="lens-sec__verdict v-mixed"><span class="vdot"></span>Mixed — the system is strong; the two highest-stakes moments are the weakest.</p>
+
+    <div class="lens-block">
+      <div class="mono-label">What's working</div>
+      <ul class="lens-list good">
+        <li>One spring drives reveals, collapses, lists, and value-changes — the whole app feels like one object. <code>lib/motion.tsx</code></li>
+        <li>Nothing hard-cuts: elements animate <em>out</em> via AnimatePresence, not just in. This is the discipline most products skip.</li>
+        <li>Values that change pop so the eye catches them (counts, health). <code>Pop</code></li>
+      </ul>
+    </div>
+
+    <div class="lens-block">
+      <div class="mono-label">Issues to address</div>
+
+      <div class="finding-row" data-sev="imp">
+        <div class="find-prose">
+          <div class="find-tags"><span class="sev-chip imp">Important</span><span class="lens-chip">Polish</span><span class="lens-chip">Continuity</span></div>
+          <h4 class="find-title">Steps hand off with no through-line</h4>
+          <div class="find-body">
+            <p><span class="label">What</span>When one step finishes and the next begins, the two events fire independently — a flash here, a glow there. Nothing visually connects them, so the eye has to re-find where the work moved.</p>
+            <p><span class="label">Why it matters</span>The single most important thing a running board can tell you is <em>the work just moved from here to there.</em> Right now that's left to chance. A hand-off is the natural place to spend a beat of motion because it carries real information.</p>
+            <div class="fix"><p><span class="label">Recommended motion</span>Choreograph the baton-pass as one sequence: the finished node's check draws on, the edge draws toward the next node, the next node lights as the edge lands. ~600ms end to end, and the eye rides it.</p></div>
+            <p class="find-loc"><code>GraphCanvas.tsx · node-just-done → edge-draw-on → next loop-node-running</code></p>
+          </div>
+        </div>
+        <div class="demo">
+          <input class="vh" type="radio" name="st3" id="st3-a" checked><input class="vh" type="radio" name="st3" id="st3-l"><input class="vh" type="radio" name="st3" id="st3-d">
+          <div class="demo__bar"><div class="demo__meta"><span class="demo__title">The baton-pass — done, draw, light</span><span class="demo__timing">~600ms · one through-line</span></div><div class="demo__controls"><div class="seg"><label for="st3-a">Auto</label><label for="st3-l">Light</label><label for="st3-d">Dark</label></div><span class="demo__loop">↻</span></div></div>
+          <div class="demo__stage"><div class="demo-3__mt"><div class="rowset" style="gap:0;">
+            <div class="nd done"><svg class="check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M6 12.5l4 4 8-9"/></svg></div>
+            <div class="edge"></div>
+            <div class="nd next"><div class="nd-ico"></div></div>
+          </div></div></div>
+        </div>
+      </div>
+
+      <div class="finding-row" data-sev="imp">
+        <div class="find-prose">
+          <div class="find-tags"><span class="sev-chip imp">Important</span><span class="lens-chip">Polish</span></div>
+          <h4 class="find-title">"Done" is a flash, not a state that stays</h4>
+          <div class="find-body">
+            <p><span class="label">What</span>A completed step flashes for 700ms and then looks like every idle node again. There's no durable, scannable mark that says "this one's finished."</p>
+            <p><span class="label">Why it matters</span>A founder scanning a run needs to read progress at a glance — what's done, what's live, what's ahead. If done-ness evaporates, they can't. The shipped pattern is steps that check off and <em>stay</em> checked, the same receipts logic you already built for the history trail.</p>
+            <div class="fix"><p><span class="label">Recommended motion</span>Replace the flash with a check that draws on over ~320ms and holds. The node keeps a quiet "done" ring afterward — progress becomes legible without any motion at all once it's settled.</p></div>
+            <p class="find-loc"><code>index.css · node-just-done (0.7s flash, no persistent state)</code></p>
+          </div>
+        </div>
+        <div class="demo">
+          <input class="vh" type="radio" name="st4" id="st4-a" checked><input class="vh" type="radio" name="st4" id="st4-l"><input class="vh" type="radio" name="st4" id="st4-d">
+          <div class="demo__bar"><div class="demo__meta"><span class="demo__title">Check draws on and stays</span><span class="demo__timing">320ms · ease · persistent</span></div><div class="demo__controls"><div class="seg"><label for="st4-a">Auto</label><label for="st4-l">Light</label><label for="st4-d">Dark</label></div><span class="demo__loop">↻</span></div></div>
+          <div class="demo__stage"><div class="demo-4__mt"><div class="nd" style="width:64px;height:64px;"><svg class="check" viewBox="0 0 24 24" style="width:28px;height:28px;"><circle cx="12" cy="12" r="10"/><path d="M6 12.5l4 4 8-9"/></svg></div></div></div>
+        </div>
+      </div>
+
+      <div class="finding-row" data-sev="imp">
+        <div class="find-prose">
+          <div class="find-tags"><span class="sev-chip imp">Important</span><span class="lens-chip">Polish</span><span class="lens-chip">Restraint</span></div>
+          <h4 class="find-title">The gate — the whole point of a run — arrives at the same volume as everything else</h4>
+          <div class="find-body">
+            <p><span class="label">What</span>The founder gate blooming its decidable card is the climax of every run: it's the moment you're asked to decide. Today it appears amid all the ambient pulsing, so it doesn't land as the event it is.</p>
+            <p><span class="label">Why it matters</span>By the frequency rule, a rare high-stakes moment is exactly where expressive motion is <em>earned</em> — the opposite of the constant loops. But it only reads as special if the ambience around it goes quiet first. Restraint everywhere else is what buys the gate its moment.</p>
+            <div class="fix"><p><span class="label">Recommended motion</span>Once the loops are rationed (findings 1–2), let the gate be the one expressive spring: the card blooms up from its node — a real origin, not fading in from center — settling in ~380ms. Amber stays reserved for exactly this.</p></div>
+            <p class="find-loc"><code>GraphCanvas.tsx · data.bloomed → GateReview cards</code></p>
+          </div>
+        </div>
+        <div class="demo">
+          <input class="vh" type="radio" name="st5" id="st5-a" checked><input class="vh" type="radio" name="st5" id="st5-l"><input class="vh" type="radio" name="st5" id="st5-d">
+          <div class="demo__bar"><div class="demo__meta"><span class="demo__title">The gate blooms from its node</span><span class="demo__timing">380ms · spring · the one earned moment</span></div><div class="demo__controls"><div class="seg"><label for="st5-a">Auto</label><label for="st5-l">Light</label><label for="st5-d">Dark</label></div><span class="demo__loop">↻</span></div></div>
+          <div class="demo__stage"><div class="demo-5__mt"><div class="gcard"><span class="gc-tag">Needs you</span><div class="gc-line"></div><div class="gc-line s"></div></div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lens-block">
+      <div class="mono-label">Opportunities</div>
+      <ul class="lens-list opp">
+        <li>Let the crew avatar travel the edge to its next node as work advances — "who's working where" becomes readable as movement, not a jump-cut.</li>
+        <li>When a decision persists into the receipts trail, land it with a quiet <code>Pop</code> — the accepted chip arriving is a small, earned confirmation.</li>
+      </ul>
+    </div>
+    <p class="lens-take">Through the polish lens: the plumbing is excellent — the spring system is the hard part and it's done. What's missing is choreographing the two moments a founder actually cares about, completion and the gate, so they read as events instead of dissolving into the ambient hum.</p>
+  </section>
+
+  <section>
+    <div class="lens-sec__head"><h3>Experimentation &amp; delight</h3><span class="weight-chip">Selective lens</span></div>
+    <p class="lens-sec__verdict v-strong"><span class="vdot"></span>Strong — sobriety is correct for a work tool; spend character only where it's earned.</p>
+    <div class="lens-block">
+      <div class="mono-label">Issues to address</div>
+      <p style="font-size:14px;color:var(--faint);font-style:italic;">No issues at this severity — the restraint is the right call.</p>
+    </div>
+    <div class="lens-block">
+      <div class="mono-label">Opportunities</div>
+      <ul class="lens-list opp">
+        <li>The crew avatar is the one place a touch of personality fits without cheapening the tool — the tiny working bob is enough; resist adding more.</li>
+      </ul>
+    </div>
+    <p class="lens-take">Through the delight lens: don't make this playful — it's a founder's revenue tool. The single sanctioned flourish is the gate bloom, and only because it's rare and consequential. Everything else stays quiet on purpose.</p>
+  </section>
+
+  <section>
+    <div class="sec-num">06</div>
+    <h2 class="sec-title">Recommendations</h2>
+
+    <div class="rec-tier" id="rec-crit">
+      <div class="tier-label crit">Critical · must fix <span class="cnt">— 2</span></div>
+      <table class="rec-table">
+        <thead><tr><th>Issue</th><th>Where</th><th>Fix</th></tr></thead>
+        <tbody>
+          <tr><td>Run-time loops ignore reduced-motion</td><td><code>index.css</code> run keyframes</td><td>Collapse every infinite run loop to a static state under <code>prefers-reduced-motion: reduce</code></td></tr>
+          <tr><td>Six-plus loops breathe at once</td><td><code>GraphCanvas.tsx</code> + index.css</td><td>Ration continuous motion to the single active node; all others hold still and dim</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="rec-tier" id="rec-imp">
+      <div class="tier-label imp">Important · should fix <span class="cnt">— 3</span></div>
+      <table class="rec-table">
+        <thead><tr><th>Issue</th><th>Where</th><th>Fix</th></tr></thead>
+        <tbody>
+          <tr><td>No through-line between steps</td><td>node-done → edge → next</td><td>Choreograph the baton-pass as one ~600ms sequence the eye can follow</td></tr>
+          <tr><td>"Done" flashes then vanishes</td><td><code>node-just-done</code></td><td>Check draws on over ~320ms and holds; keep a quiet done ring</td></tr>
+          <tr><td>Gate arrives at ambient volume</td><td><code>data.bloomed</code> gate card</td><td>Quiet the loops, then bloom the gate as the one earned spring from its node</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="rec-tier" id="rec-opp">
+      <div class="tier-label opp">Opportunities · could enhance <span class="cnt">— 3</span></div>
+      <table class="rec-table">
+        <thead><tr><th>Enhancement</th><th>Where</th><th>Impact</th></tr></thead>
+        <tbody>
+          <tr><td>Plan-is-the-loading-state on the active node</td><td>active node</td><td>Show the live substep + elapsed time instead of an anonymous glow</td></tr>
+          <tr><td>Crew travels the edge to its next node</td><td>op-cursor</td><td>"Who's working where" reads as movement, not a jump-cut</td></tr>
+          <tr><td>Decisions land in the trail with a Pop</td><td>receipts trail</td><td>The accepted chip arriving becomes a small earned confirmation</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="ref-summary">
+    <div class="mono-label">Lens reference</div>
+    <p class="lead">Judged primarily by restraint, secondarily by production polish.</p>
+    <p><b>Why:</b> Drover is a work tool a founder lives in daily, so the bar is "most motion shouldn't exist, and what does must earn its place by how rarely you meet it." The system already has the polish plumbing; what it needs is the discipline to ration continuous motion and choreograph the few moments that carry information.</p>
+    <p><b>To lean harder on restraint:</b> cut every ambient loop that isn't the active step, and make completion a static state rather than an animation once it's settled.</p>
+    <p><b>To lean harder on polish:</b> invest the baton-pass and the gate bloom with shared-element continuity (the crew and the edge as one moving object), and mirror every enter with a subtler exit.</p>
+  </div>
+
+  <footer>
+    <span>Drover · running-workflow motion audit</span><span>·</span><span>2 critical · 3 important · 3 opportunities</span><span>·</span><span>2026-07-07</span>
+  </footer>
+
+</div>
+</body>
+</html>

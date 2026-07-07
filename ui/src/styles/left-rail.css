@@ -219,3 +219,82 @@
 .lr-stat.good { color: var(--proven); }
 .lr-stat-pct { color: var(--muted); font-variant-numeric: tabular-nums; }
 .lr-stat-runs { color: var(--faint); font-variant-numeric: tabular-nums; }
+
+/* ── Capabilities ───────────────────────────────────────────────────────────
+   The parts a pipeline is wired from — grouped by run-stage. Designed to invite:
+   the real brand mark reads instantly, and a Connect affordance fills on hover so
+   each row says "pick me up and use me." Chrome stays monochrome zinc; the only
+   color is the logo itself (identity) and the amber gate marker (the Wall). */
+.lr-cap-group { display: contents; }
+
+.lr-cap { align-items: flex-start; }
+
+/* The logo tile — a rounded square (distinct from the crew's round faces), white by
+   default with the mark in full brand color. On hover it warms to a faint wash of the
+   brand so the row feels alive without the rail turning colorful at rest. */
+.lr-cap-mark {
+  flex: none;
+  width: 28px; height: 28px;
+  margin-top: 1px;
+  border-radius: var(--r-md, 8px);
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  display: grid; place-items: center;
+  transition: border-color 0.14s var(--ease), background 0.14s var(--ease), box-shadow 0.14s var(--ease);
+}
+.lr-cap-mark svg { display: block; }
+.lr-cap-mark-letter {
+  font-size: 12px; font-weight: 700; letter-spacing: -0.01em;
+  /* color is set inline to the brand tone */
+}
+.lr-cap:hover .lr-cap-mark {
+  border-color: color-mix(in srgb, var(--brand, var(--ink)) 40%, var(--line-2));
+  background: color-mix(in srgb, var(--brand, var(--ink)) 7%, var(--surface));
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--brand, #000) 14%, transparent);
+}
+
+/* The amber gate marker — a small dot beside the name of anything that reaches the
+   outside world, so the rail teaches the Wall: this capability only acts behind your
+   approval. Amber (--gap) is the founder-gate accent, allowed here for that reason. */
+.lr-cap-gate {
+  display: inline-block;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--gap);
+  margin-left: 6px; vertical-align: middle;
+  flex: none;
+}
+
+/* The invite — a Connect pill that sits quiet at rest and fills to ink on hover, with
+   the arrow nudging out, so the row reads as something you act on, not just an entry. */
+.lr-cap-connect {
+  flex: none;
+  align-self: center;
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.01em;
+  color: var(--muted);
+  border: 1px solid var(--line-2);
+  border-radius: 100px;
+  padding: 3px 9px;
+  opacity: 0;
+  transform: translateX(-2px);
+  transition: opacity 0.14s var(--ease), transform 0.14s var(--ease),
+              background 0.14s var(--ease), color 0.14s var(--ease), border-color 0.14s var(--ease);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.lr-cap-connect svg { transition: transform 0.14s var(--ease); }
+.lr-cap:hover .lr-cap-connect,
+.lr-cap:focus-visible .lr-cap-connect {
+  opacity: 1;
+  transform: translateX(0);
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+.lr-cap:hover .lr-cap-connect svg { transform: translateX(2px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .lr-cap-connect { transform: none; }
+  .lr-cap:hover .lr-cap-connect svg { transform: none; }
+}

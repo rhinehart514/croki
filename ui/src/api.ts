@@ -529,6 +529,14 @@ export type AgentBenchRow = {
 export const getAgentBench = (projectId: string) =>
   get<{ bench: AgentBenchRow[] }>(`/api/projects/${encodeURIComponent(projectId)}/bench`);
 
+// "+ build a teammate with Claude": compose drafts one from a sentence (nothing written), add persists the
+// accepted draft as a real agent file and puts it on this project's crew so it shows up immediately.
+export type CrewDraft = { ref: string; name: string; description: string; systemPrompt: string; markdown: string };
+export const composeCrewMember = (projectId: string, description: string) =>
+  post<{ draft: CrewDraft }>(`/api/projects/${encodeURIComponent(projectId)}/crew/compose`, { description });
+export const addCrewMember = (projectId: string, draft: { ref: string; description: string; markdown: string }) =>
+  post<{ ok: boolean; member: { ref: string; description: string } }>(`/api/projects/${encodeURIComponent(projectId)}/crew/add`, draft);
+
 // The market picture, built one layer at a time. researchMarketLayer returns a spread of real
 // alternatives for the NEXT buyer facet, grounded in what's already settled — and persists nothing.
 // The founder picks (or writes) one; saveMarketObject commits just that one to the graph.
