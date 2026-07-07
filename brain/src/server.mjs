@@ -79,6 +79,7 @@ import { createClaudeIdeaBar } from "./idea-bar.mjs";
 import { createGtmIdea, getGtmIdea, saveGtmIdea, listGtmIdeas } from "./idea-store.mjs";
 import { recordRunDerivations } from "./run-derivation.mjs";
 import { getBoard, getPipelineBeliefSpine, getPipelineIcpGrouping } from "./board.mjs";
+import { getPendingInbox } from "./pending-inbox.mjs";
 import {
   productTruthStore,
   marketObjectStore,
@@ -1646,6 +1647,35 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, { projectId, flows: listFlowsNeedingFounder({ projectId }) });
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // The single pending-decision inbox — everything waiting on the founder across EVERY product and
+  // pipeline, in one list: runs staged at the gate, proposed graph edits, ideate pauses, candidate
+  // pipeline picks, a blank re-prompt an operator is blocked on, blocked/dead runs, and unrouted
+  // world-signals. A PROJECTION over durable state (operator sessions + input store), never a new
+  // stored object. Read-only: it never approves, resolves, routes, or advances anything. With no
+  // ?project= it spans all products (the dock badge's cross-pipeline view); ?project= scopes to one.
+  if (req.method === "GET" && url.pathname === "/api/pending-inbox") {
+    try {
+      const projectId = url.searchParams.get("project") || undefined;
+      json(res, 200, getPendingInbox({ projectId }));
+    } catch (err) {
+      json(res, 500, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Project-scoped twin of the pending inbox, mirroring /board and /bench so an agent can read one
+  // product's waiting decisions the same way. Same read-only projection, scoped to the project.
+  const projectPendingInboxMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/pending-inbox$/);
+  if (req.method === "GET" && projectPendingInboxMatch) {
+    try {
+      const projectId = decodeURIComponent(projectPendingInboxMatch[1]);
+      json(res, 200, getPendingInbox({ projectId }));
+    } catch (err) {
+      json(res, 500, { error: err instanceof Error ? err.message : String(err) });
     }
     return;
   }

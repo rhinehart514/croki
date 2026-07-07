@@ -8,7 +8,7 @@ import type {
   ProductModel, ProductModelEdit,
   CapabilityServer, SenderCredential, Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole, BoardView,
-  ChannelMeta, Input, ObjectGraphView, GTMItem,
+  ChannelMeta, Input, ObjectGraphView, GTMItem, PendingInbox,
 } from "@/types";
 import { identityHeaders } from "@/lib/identity";
 
@@ -368,6 +368,12 @@ export const getPerson = (projectId: string, personId: string) =>
 // ── GTM Board — the nine belief layers, a pure read of real state ──────────────
 export const getBoard = (projectId: string) =>
   get<BoardView>(`/api/projects/${encodeURIComponent(projectId)}/board`);
+
+// ── Pending-decision inbox — everything waiting on the founder across EVERY product and pipeline ─────
+// No projectId spans all products (the dock badge's cross-pipeline view); a projectId scopes to one.
+// A read-only projection: reading it never approves, routes, or advances anything.
+export const getPendingInbox = (projectId?: string) =>
+  get<PendingInbox>(`/api/pending-inbox${projectId ? `?project=${encodeURIComponent(projectId)}` : ""}`);
 
 export const getObjectGraph = (projectId: string) =>
   get<ObjectGraphView>(`/api/projects/${encodeURIComponent(projectId)}/object-graph`);
