@@ -1,4 +1,4 @@
-// GTM IDE desktop shell.
+// Drover desktop shell (code identifier: gtm-ide).
 //
 // The product is a thin host: a Node "brain" (brain/src/server.mjs) that serves the API and the
 // built React client on a loopback port, plus the operator runtime that shells out to the founder's

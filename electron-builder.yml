@@ -2,6 +2,13 @@ appId: com.gtmide.desktop
 productName: Drover
 copyright: Drover
 
+# No auto-updater. The app bundles no electron-updater and boots no update check, so we tell
+# electron-builder not to emit an update manifest (latest-mac.yml) or assume a publish target.
+# A local, unsigned build has nowhere to update FROM; shipping a manifest that points nowhere is
+# worse than shipping none. Real distribution (signing + hosting) is a founder decision — see
+# docs/DISTRIBUTION.md.
+publish: null
+
 # Keep everything as plain files in Resources. The brain is a Node server that reads ui/dist off disk
 # and loads a native SQLite module (better-sqlite3); asar packing would force unpack rules for both.
 # For a local, unsigned, single-user build the size cost is irrelevant and this removes a whole class
