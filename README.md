@@ -57,6 +57,12 @@ npm install
 npm start
 ```
 
+First run requires a signed-in Claude: Drover runs every act of intelligence on your own
+Claude subscription through the local Claude Code harness. On first launch, if no Claude is
+signed in, Drover shows a blocking "Connect Claude" screen and does no AI work until it
+connects — install Claude Code and run `claude` to sign in, or set `CLAUDE_CODE_OAUTH_TOKEN`
+/ `ANTHROPIC_API_KEY`.
+
 Open [http://127.0.0.1:4317](http://127.0.0.1:4317). Register a product by pointing the
 folder picker at its repo and naming the event that counts as a real win.
 
