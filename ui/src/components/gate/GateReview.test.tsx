@@ -86,6 +86,43 @@ describe("GateReview outcome return on a sent item", () => {
     expect(await screen.findByText(/Recorded: reply/i)).toBeTruthy();
   });
 
+  // The compiled-run gate (ObjectGraphCanvas) used to carry its OWN inline outcome handler that keyed on
+  // joinKey ONLY and never refreshed the run summary — a divergent copy. It now forwards the SAME shared
+  // handler the operator gate uses (App's recordItemOutcome): resolve the item's provenance id as
+  // joinKey ?? gtmActionId, record, then refresh the summary. This models that handler and proves an
+  // item carrying ONLY gtmActionId (no joinKey) records against gtmActionId and triggers the refresh —
+  // the exact behavior the old inline handler dropped.
+  it("compiled-run gate records+joins on gtmActionId via the shared handler, and refreshes the summary", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const recordOutcomeApi = vi.fn().mockResolvedValue(undefined);
+    const refreshRunSummary = vi.fn();
+    // The shared handler, exactly as App wires it onto both gates.
+    const sharedRecordOutcome = async (
+      item: GTMItem,
+      outcome: { outcomeKind: string; value?: number },
+    ) => {
+      const ids = item as { joinKey?: unknown; gtmActionId?: unknown };
+      const joinKey = typeof ids.joinKey === "string" && ids.joinKey
+        ? ids.joinKey
+        : typeof ids.gtmActionId === "string" ? ids.gtmActionId : "";
+      if (!joinKey) return;
+      await recordOutcomeApi({ joinKey, outcomeKind: outcome.outcomeKind });
+      refreshRunSummary();
+    };
+    render(<GateReview items={sentItem} onSubmit={onSubmit} learned={0} onRecordOutcome={sharedRecordOutcome} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Approve & release/i }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    fireEvent.click(await screen.findByRole("button", { name: /Record what happened/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^signup$/ }));
+
+    await waitFor(() => expect(recordOutcomeApi).toHaveBeenCalledTimes(1));
+    // The gtmActionId became the joinKey — not dropped as the old joinKey-only inline handler did.
+    expect(recordOutcomeApi).toHaveBeenCalledWith({ joinKey: "gtm-abc", outcomeKind: "signup" });
+    // And the summary re-read — the second half the divergent copy never did.
+    expect(refreshRunSummary).toHaveBeenCalledTimes(1);
+  });
+
   it("offers no outcome door when the item carries no provenance id at all", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const onRecordOutcome = vi.fn().mockResolvedValue(undefined);

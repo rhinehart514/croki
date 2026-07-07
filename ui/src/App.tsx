@@ -2348,8 +2348,10 @@ export default function App() {
                   { label: "Sent", value: runSummary.sent as number | string | null },
                   { label: "Replies", value: runSummary.replies },
                   { label: "Calls", value: runSummary.calls },
+                  { label: "Signups", value: runSummary.signups },
                   { label: "Paid", value: runSummary.paid },
                   { label: "Revenue", value: runSummary.revenue == null ? null : `$${runSummary.revenue.toLocaleString()}` },
+                  { label: "No reply", value: runSummary.noReply },
                 ].filter((c) => c.value != null);
                 return cells.length ? (
                   <div className="run-strip-nums">

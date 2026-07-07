@@ -473,7 +473,11 @@ export type RunSummary = {
   sent: number | null;
   replies: number | null;
   calls: number | null;
+  signups: number | null;
   paid: number | null;
+  // A recorded "no response yet" — the sent items that drew silence. An honest negative signal, not a
+  // fabricated number; null until the founder marks at least one item as no-response.
+  noReply: number | null;
   revenue: number | null;
   note: string | null;
 };

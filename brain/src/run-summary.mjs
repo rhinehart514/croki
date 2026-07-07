@@ -16,29 +16,39 @@ import { resultStore } from "./gtm-store.mjs";
 // ── Latest run (run gate items + joined Results → What happened) ────────────────────────────────────
 const REPLY_KINDS = new Set(["reply", "replies", "response", "responded", "answered"]);
 const CALL_KINDS = new Set(["meeting", "meetings", "call", "calls", "booked", "demo", "demos"]);
+const SIGNUP_KINDS = new Set(["signup", "signups", "sign-up", "sign up", "signed up", "registered", "trial", "activated"]);
 const PAID_KINDS = new Set(["purchase", "paid", "payment", "deal", "pilot", "won", "deposit"]);
+// A recorded "nothing came back" is a real, honest signal — a sent item the founder marked as silent.
+// It is neither positive nor a fabricated number: it counts the items that went out and drew no response.
+const NO_REPLY_KINDS = new Set(["no-response", "no response", "no-reply", "no reply", "noreply", "ignored", "silence"]);
 
 function bucketOutcomes(results) {
   let replies = null;
   let calls = null;
+  let signups = null;
   let paid = null;
+  let noReply = null;
   for (const result of results) {
     const kind = String(result.outcomeKind ?? "").trim().toLowerCase();
     const value = Number(result.value);
     const step = Number.isFinite(value) && value > 0 ? value : 1;
     if (REPLY_KINDS.has(kind)) replies = (replies ?? 0) + step;
     else if (CALL_KINDS.has(kind)) calls = (calls ?? 0) + step;
+    else if (SIGNUP_KINDS.has(kind)) signups = (signups ?? 0) + step;
     else if (PAID_KINDS.has(kind)) paid = (paid ?? 0) + step;
+    else if (NO_REPLY_KINDS.has(kind)) noReply = (noReply ?? 0) + step;
   }
-  return { replies, calls, paid, revenue: null };
+  return { replies, calls, signups, paid, noReply, revenue: null };
 }
 
-function latestRunNote({ sent, replies, calls, paid }) {
+function latestRunNote({ sent, replies, calls, signups, paid, noReply }) {
   const parts = [];
   if (sent != null) parts.push(`${sent} approved to go out`);
   if (replies != null) parts.push(`${replies} replied`);
   if (calls != null) parts.push(`${calls} booked a call`);
+  if (signups != null) parts.push(`${signups} signed up`);
   if (paid != null) parts.push(`${paid} paid`);
+  if (noReply != null) parts.push(`${noReply} no reply yet`);
   if (!parts.length) return null;
   return `${parts.join(", ")}.`;
 }
@@ -84,7 +94,9 @@ export function deriveRunSummary(projectId = "default", options = {}) {
     sent,
     replies: buckets.replies,
     calls: buckets.calls,
+    signups: buckets.signups,
     paid: buckets.paid,
+    noReply: buckets.noReply,
     revenue: buckets.revenue,
     note: latestRunNote({ sent, ...buckets }),
   };
