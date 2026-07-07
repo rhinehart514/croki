@@ -62,6 +62,7 @@ const WorkspaceView = lazy(() => import("@/components/WorkspaceView").then((m) =
 const AgentProfile = lazy(() => import("@/components/AgentProfile").then((m) => ({ default: m.AgentProfile })));
 const OutcomeCapture = lazy(() => import("@/components/OutcomeCapture"));
 const ConnectCapability = lazy(() => import("@/components/ConnectCapability").then((m) => ({ default: m.ConnectCapability })));
+const ConnectSender = lazy(() => import("@/components/ConnectSender").then((m) => ({ default: m.ConnectSender })));
 import type { AgentProfileView, TeammateView } from "@/components/AgentProfile";
 import { CrewStrip } from "@/components/CrewStrip";
 import { ComposerDock } from "@/components/ComposerDock";
@@ -2771,6 +2772,12 @@ export default function App() {
                   ) : null}
                   {settingsTab === "tools" ? (
                     <div className="settings-tools-stack">
+                      {/* Connect your own Gmail as the sender — the one-field BYO step that turns the
+                          staged send leg into a real send. Never loosens the wall; the gate still
+                          governs every send. */}
+                      <Suspense fallback={null}>
+                        <ConnectSender />
+                      </Suspense>
                       {/* Connect external MCP servers; the wall sorts each tool read (runs free) /
                           write (behind your gate). Was its own takeover overlay — folded in here. */}
                       <Suspense fallback={null}>

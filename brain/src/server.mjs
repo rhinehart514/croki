@@ -96,6 +96,8 @@ import { findReferences, listSharedKernel, deriveChannelFeeds, deriveDirectedFee
 import { compareChannelRuns } from "./run-compare.mjs";
 import { listConnectors } from "./connectors/registry.mjs";
 import { runGraph } from "./graph.mjs";
+import { defaultSendRunners } from "./connectors/execute/gmail-transport.mjs";
+import { setCredential, listCredentials, removeCredential } from "./credential-store.mjs";
 import { liveStepRuntime } from "./agent-bridge.mjs";
 import { createClaudeComposer } from "./composition.mjs";
 import { selectRuntime, authModeLabel } from "./runtimes/index.mjs";
@@ -2402,6 +2404,10 @@ const server = http.createServer(async (req, res) => {
         // Gate approval is human-only: refuse an approval arriving through the agent/MCP door. Fires
         // only on an actual approval intent, so agent runs that merely reach a gate are unaffected.
         authorizeRelease: authorizeReleaseForRequest(req),
+        // The live delivery seam for an approved item (real Gmail send). WHETHER a message may leave is
+        // still the item's gate stamp; this only wires HOW an approved one is delivered. Absent it, every
+        // execute connector stages locally.
+        sendRunners: defaultSendRunners(),
       });
       const saved = recordFlowRun(body.graph, result);
       // One seam fires all three run-completion derivations: taste ledger, People promotion, and the
@@ -2473,6 +2479,9 @@ const server = http.createServer(async (req, res) => {
         stepRuntime: liveStepRuntime({ cwd: project.sharedContext?.repository?.repo || process.cwd() }),
         // Same human-only gate rule on the streaming path: an agent-originated approval is refused.
         authorizeRelease: authorizeReleaseForRequest(req),
+        // Same live delivery seam on the streaming run path — the gate stamp still governs whether a
+        // message may leave; this only wires how an approved one is delivered.
+        sendRunners: defaultSendRunners(),
         onEvent: send,
       });
       const saved = recordFlowRun(body.graph, result);
@@ -2560,6 +2569,50 @@ const server = http.createServer(async (req, res) => {
     try {
       removeServer(decodeURIComponent(capabilityMatch[1]), {});
       json(res, 200, { servers: listServers().map(serverView) });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // ── Sender credentials (BYO keys the founder pastes to connect a sender) ───────────────────────
+  // The founder connects their OWN Gmail as the sender by pasting one credential — no OAuth app to
+  // register, no key in the environment. It is stored per active project (credential-store), redacted
+  // on every read, and NEVER echoed. Connecting a sender does NOT loosen the wall: the founder gate
+  // still governs every send; this only supplies the key an already-approved send will use.
+  if (req.method === "GET" && url.pathname === "/api/credentials") {
+    try {
+      const project = loadProject();
+      json(res, 200, { credentials: listCredentials(project.id) });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/credentials") {
+    try {
+      const body = await readBody(req);
+      const project = loadProject();
+      // setCredential returns the REDACTED credential (never the token) — safe to hand back to the UI.
+      const credential = setCredential(project.id, {
+        provider: body.provider,
+        token: body.token,
+        label: body.label,
+      });
+      json(res, 200, { credential, credentials: listCredentials(project.id) });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  const credentialMatch = url.pathname.match(/^\/api\/credentials\/([^/]+)$/);
+  if (req.method === "DELETE" && credentialMatch) {
+    try {
+      const project = loadProject();
+      const removed = removeCredential(project.id, decodeURIComponent(credentialMatch[1]));
+      json(res, 200, { removed, credentials: listCredentials(project.id) });
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }

@@ -6,7 +6,7 @@ import type {
   ContextManifest, GtmLibrary,
   GraphOperation, GTMContractAudit,
   ProductModel, ProductModelEdit,
-  CapabilityServer, Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
+  CapabilityServer, SenderCredential, Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole, BoardView,
   ChannelMeta, Input, ObjectGraphView, GTMItem,
 } from "@/types";
@@ -76,6 +76,19 @@ export const reclassifyCapabilityTool = (serverId: string, tool: string, lane: "
 export const removeCapability = (serverId: string) =>
   fetch(`/api/capabilities/${encodeURIComponent(serverId)}`, { method: "DELETE" })
     .then((r) => r.json() as Promise<{ servers: CapabilityServer[] }>);
+
+// ── Sender credentials (BYO keys — connect your own Gmail as the sender) ──────
+// A pasted credential the founder connects so an approved send has a key to use. Never loosens the
+// wall — the gate still governs every send. The token never comes back; the server redacts on read.
+export const getCredentials = () =>
+  get<{ credentials: SenderCredential[] }>("/api/credentials");
+
+export const connectSender = (input: { provider: string; token: string; label?: string }) =>
+  post<{ credential: SenderCredential; credentials: SenderCredential[] }>("/api/credentials", input);
+
+export const removeSender = (provider: string) =>
+  fetch(`/api/credentials/${encodeURIComponent(provider)}`, { method: "DELETE", headers: { ...identityHeaders() } })
+    .then((r) => r.json() as Promise<{ removed: boolean; credentials: SenderCredential[] }>);
 
 // ── GTM Graph (DAG — zoom 3) ────────────────────────────────────────────────
 export const getGraphTemplate = (channelId?: string) =>
