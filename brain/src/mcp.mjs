@@ -27,7 +27,12 @@ async function brainGet(path) {
 async function brainPost(path, body) {
   const res = await fetch(`${BRAIN}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    // Stamp EVERY request from this door as the agent front door. A gate approval is human-only
+    // (docs/GOAL.md: "the founder gate — human-only; the agent has no approve/send/publish"), so the
+    // brain refuses an approval carrying this stamp. The stamp is set here, not from a tool argument,
+    // so an agent calling approve_workflow_gate cannot strip it. The founder's browser sends no such
+    // header, so the local canvas gate is unaffected.
+    headers: { "Content-Type": "application/json", "x-gtm-actor": "agent" },
     body: JSON.stringify(body),
   });
   if (!res.ok) {

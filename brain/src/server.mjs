@@ -406,6 +406,27 @@ function serveFile(reqPath, res) {
   fs.createReadStream(file).pipe(res);
 }
 
+// The release-authority guard for a raw graph run (/api/graph/run + /stream). A gate approval is a
+// human-only act — the agent front door (mcp.mjs) stamps every request `x-gtm-actor: agent`, and an
+// approval carrying that stamp is refused here, closing the MCP self-approval hole (approve_workflow_gate
+// posted `approvals: { nodeId: true }` and the route honored it unchecked). This extends the EXISTING
+// authorizeRelease seam runGraph already honors: the returned function is invoked ONLY when the run
+// actually carries an approval/release intent, so an agent run that merely reaches a gate still works —
+// only an agent-originated APPROVAL throws. The founder's browser sends no such header, so the local
+// canvas gate is unchanged (no new friction). The thrown error maps to 403, like the operator gate.
+function authorizeReleaseForRequest(req) {
+  const isAgent = String(req?.headers?.["x-gtm-actor"] ?? "").trim().toLowerCase() === "agent";
+  return () => {
+    if (!isAgent) return;
+    const error = new Error(
+      "Gate approval is human-only. An agent/MCP session cannot approve a founder gate — a person must approve it at the canvas gate.",
+    );
+    error.code = "gate_release_forbidden";
+    error.status = 403;
+    throw error;
+  };
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || "/", `http://${req.headers.host || `${host}:${port}`}`);
 
@@ -2378,6 +2399,9 @@ const server = http.createServer(async (req, res) => {
         projectId: project.id,
         // Open steps (agent/skill) reach the rented frontier model + skills on disk.
         stepRuntime: liveStepRuntime({ cwd: project.sharedContext?.repository?.repo || process.cwd() }),
+        // Gate approval is human-only: refuse an approval arriving through the agent/MCP door. Fires
+        // only on an actual approval intent, so agent runs that merely reach a gate are unaffected.
+        authorizeRelease: authorizeReleaseForRequest(req),
       });
       const saved = recordFlowRun(body.graph, result);
       // One seam fires all three run-completion derivations: taste ledger, People promotion, and the
@@ -2393,7 +2417,11 @@ const server = http.createServer(async (req, res) => {
         storedRunCount: saved.runs.length,
         storedAt: saved.updatedAt,
       });
-    } catch (err) { json(res, 400, { error: err instanceof Error ? err.message : String(err) }); }
+    } catch (err) {
+      // A refused agent-originated gate approval is a 403 (authority), everything else a 400 (bad run).
+      const status = err?.code === "gate_release_forbidden" ? 403 : 400;
+      json(res, status, { error: err instanceof Error ? err.message : String(err) });
+    }
     return;
   }
 
@@ -2443,6 +2471,8 @@ const server = http.createServer(async (req, res) => {
         // BYO credentials: a founder-pasted Clay/Exa/send-auth key for this project wins over env.
         projectId: project.id,
         stepRuntime: liveStepRuntime({ cwd: project.sharedContext?.repository?.repo || process.cwd() }),
+        // Same human-only gate rule on the streaming path: an agent-originated approval is refused.
+        authorizeRelease: authorizeReleaseForRequest(req),
         onEvent: send,
       });
       const saved = recordFlowRun(body.graph, result);
