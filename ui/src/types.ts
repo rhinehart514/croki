@@ -989,6 +989,10 @@ export type SenderCredential = {
   label: string | null;
   savedAt: string;
   hasToken: boolean;
+  // How the sender is connected. "oauth" is the durable loopback flow (banked refresh token — never needs
+  // a re-paste); "token" is a pasted access token that expires in ~1h. Absent on older records → treat as
+  // "token". The secrets themselves never cross to the client.
+  authType?: "oauth" | "token";
 };
 
 // ─── GTM Board ────────────────────────────────────────────────────────────────

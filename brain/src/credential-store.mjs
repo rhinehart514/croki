@@ -66,7 +66,11 @@ export function redactCredential(credential) {
     provider: credential.provider,
     label: credential.label ?? null,
     savedAt: credential.savedAt,
-    hasToken: Boolean(credential.token),
+    // Present for a pasted token OR a banked OAuth refresh token — either means "connected, has a key".
+    hasToken: Boolean(credential.token || credential.refreshToken),
+    // How the sender is connected: "oauth" (durable, banked refresh token) or "token" (pasted, expiring).
+    // Non-secret; lets the UI say whether a reconnect will ever be needed. Never exposes the secrets.
+    authType: credential.authType ?? "token",
   };
 }
 
@@ -87,6 +91,35 @@ export function setCredential(projectId, input = {}, options = {}) {
     label: input.label != null ? String(input.label).slice(0, 80) : (existing?.label ?? null),
     // First-saved time is preserved across an update so `savedAt` reads as "when the founder first
     // connected this provider"; the document's own `updatedAt` carries the last-touched time.
+    savedAt: existing?.savedAt || now(),
+  };
+  const saved = saveStore({ ...store, credentials: { ...store.credentials, [provider]: credential } }, options);
+  return redactCredential(saved.credentials[provider]);
+}
+
+// Save (or replace, by provider) a DURABLE OAuth credential — the banked refresh token plus the client
+// id/secret it refreshes against. This is the Gmail loopback-flow's product: the founder connects once and
+// this credential lets a send mint a fresh access token forever, with no re-paste. Stored alongside pasted
+// token credentials in the same per-project document, keyed by provider; the token-minting layer keys off
+// `authType === "oauth"`. Returns the REDACTED credential — the secrets are never echoed back.
+export function setOAuthCredential(projectId, input = {}, options = {}) {
+  const provider = normalizeProvider(input.provider || "gmail");
+  if (!provider) throw new Error("A credential provider is required.");
+  const clientId = String(input.clientId ?? "").trim();
+  const clientSecret = String(input.clientSecret ?? "").trim();
+  const refreshToken = String(input.refreshToken ?? "").trim();
+  if (!clientId || !clientSecret) throw new Error("An OAuth client id and secret are required.");
+  if (!refreshToken) throw new Error("An OAuth refresh token is required.");
+
+  const store = loadStore(projectId, options);
+  const existing = store.credentials[provider];
+  const credential = {
+    provider,
+    authType: "oauth",
+    clientId,
+    clientSecret,
+    refreshToken,
+    label: input.label != null ? String(input.label).slice(0, 80) : (existing?.label ?? "Gmail (OAuth)"),
     savedAt: existing?.savedAt || now(),
   };
   const saved = saveStore({ ...store, credentials: { ...store.credentials, [provider]: credential } }, options);

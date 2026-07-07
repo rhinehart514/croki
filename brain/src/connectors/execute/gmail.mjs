@@ -36,7 +36,8 @@
 // SECURITY: the resolved token is handed to the transport and NOTHING else — it is never logged, never
 // placed on a returned item, never echoed in meta. The connector emits no console output.
 
-import { resolveCredentialToken } from "../../credential-store.mjs";
+import { resolveCredentialToken, getCredential } from "../../credential-store.mjs";
+import { getFreshAccessToken } from "./gmail-oauth.mjs";
 
 export const DEFAULT_RATE_LIMIT = 50;
 export const DEFAULT_RECALL_WINDOW_MS = 30_000;
@@ -54,22 +55,56 @@ export const meta = {
   approvalRequired: ["continue_from_gate"],
 };
 
-// Resolve the founder's Gmail credential: their pasted Gmail credential first, then a Google one,
-// then the conventional env fallback — stored-first, exactly as resolveCredentialToken defines. The
-// projectId is read from the run context (host-supplied); the persistence options (e.g. a test root)
-// ride context.credentialOptions. Returns the raw token or null; never logs it.
-function resolveGmailToken(node, context) {
-  // Full injectable override (used by tests to supply a token without touching the store).
+// Resolve the founder's Gmail access token — the Bearer credential the transport delivers with. Three
+// paths, in priority order, all landing on a fresh access token (or an honest reason there is none):
+//   1. A banked OAUTH credential (the durable loopback flow): mint a fresh access token from the stored
+//      refresh token, cached until ~1 min before expiry. A revoked/expired grant returns needsReconnect —
+//      NEVER a fake send. This is the path that survives the ~1h access-token expiry.
+//   2. A pasted access TOKEN (A3's original path) or the env fallback — used as-is; expires in ~1h and
+//      surfaces its own reconnect signal from the transport on a 401. Unchanged behavior.
+//   3. Nothing → { token: null }, an honest staged no-op upstream.
+// Returns `{ token, needsReconnect?, reason? }`. Async because minting is a real (mocked-in-test) call.
+// The projectId is read from the run context (host-supplied); persistence options (e.g. a test root) ride
+// context.credentialOptions. Never logs a token or a secret.
+async function resolveGmailToken(node, context) {
+  // Full injectable override (used by tests to supply a token without touching the store). Supports a
+  // sync or async override so a test can hand back a token directly.
   if (typeof context?.resolveCredential === "function") {
-    return context.resolveCredential("gmail", node, context) || null;
+    return { token: (await context.resolveCredential("gmail", node, context)) || null };
   }
   const projectId = context?.__run?.projectId ?? context?.projectId ?? node?.config?.projectId ?? null;
   const credOptions = context?.credentialOptions ?? {};
-  return (
+
+  // Path 1 — a durable OAuth credential (gmail first, then google), if one is banked for this project.
+  const oauthCredential =
+    getCredential(projectId, "gmail", credOptions) ??
+    getCredential(projectId, "google", credOptions);
+  if (oauthCredential?.authType === "oauth" && oauthCredential.refreshToken && oauthCredential.clientId && oauthCredential.clientSecret) {
+    try {
+      const token = await getFreshAccessToken({
+        clientId: oauthCredential.clientId,
+        clientSecret: oauthCredential.clientSecret,
+        refreshToken: oauthCredential.refreshToken,
+        // Test seam: a mock token endpoint / fetch can ride the run context without touching Google.
+        fetchImpl: context?.oauthFetch,
+        tokenEndpoint: context?.oauthTokenEndpoint,
+      });
+      if (token) return { token };
+      return { token: null, needsReconnect: true, reason: "Gmail connection returned no access token — reconnect Gmail." };
+    } catch (err) {
+      if (err?.needsReconnect) return { token: null, needsReconnect: true, reason: err.message };
+      // A transient mint failure (network, endpoint down) is NOT a reconnect — stage honestly and let the
+      // founder retry, rather than telling them their durable connection is broken.
+      return { token: null, reason: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  // Path 2 — a pasted access token or the conventional env fallback (A3's original behavior, unchanged).
+  const token =
     resolveCredentialToken(projectId, "gmail", { envKey: "GMAIL_OAUTH_TOKEN", ...credOptions }) ||
     resolveCredentialToken(projectId, "google", { envKey: "GOOGLE_OAUTH_TOKEN", ...credOptions }) ||
-    null
-  );
+    null;
+  return { token };
 }
 
 // The provenance marker stamped on every send — the traceable tie from a delivered message back to the
@@ -123,14 +158,21 @@ export async function run(node, upstream, context = {}) {
 
   // Resolve the founder's credential and the wired transport. Either missing → honest STAGED no-op:
   // every approved item is staged (applied:false), the transport is NEVER called, nothing is faked sent.
-  const token = resolveGmailToken(node, context);
+  // For a durable OAuth connection this is also where a fresh access token is minted from the banked
+  // refresh token; a revoked grant returns needsReconnect so we stage a reconnect prompt, never a fake send.
+  const resolvedToken = await resolveGmailToken(node, context);
+  const token = resolvedToken?.token ?? null;
   const transport = typeof config.transport === "function"
     ? config.transport
     : (typeof context?.sendRunners?.gmail === "function" ? context.sendRunners.gmail : null);
   if (!token || !transport) {
     const reason = !token
-      ? "No Gmail credential resolved — paste a Gmail credential (or set GMAIL_OAUTH_TOKEN) to send."
+      ? (resolvedToken?.reason
+        || "No Gmail credential resolved — connect Gmail (or set GMAIL_OAUTH_TOKEN) to send.")
       : "No Gmail transport wired — the send leg is staged until a transport is injected.";
+    const blocked = !token
+      ? (resolvedToken?.needsReconnect ? "needs_reconnect" : "missing_credential")
+      : "missing_transport";
     return {
       ok: true,
       items: approved.map((item) => ({
@@ -139,9 +181,11 @@ export async function run(node, upstream, context = {}) {
         applied: false,
         executionStatus: "staged",
         stagedReason: reason,
+        // Surface the reconnect signal on the item so the UI can prompt a re-connect, not a re-paste.
+        ...(resolvedToken?.needsReconnect ? { needsReconnect: true } : {}),
         sentAt: null,
       })),
-      meta: { sent: 0, staged: approved.length, note: reason, blocked: !token ? "missing_credential" : "missing_transport" },
+      meta: { sent: 0, staged: approved.length, note: reason, blocked, ...(resolvedToken?.needsReconnect ? { needsReconnect: true } : {}) },
     };
   }
 

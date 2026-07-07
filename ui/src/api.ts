@@ -86,6 +86,12 @@ export const getCredentials = () =>
 export const connectSender = (input: { provider: string; token: string; label?: string }) =>
   post<{ credential: SenderCredential; credentials: SenderCredential[] }>("/api/credentials", input);
 
+// Durable Gmail connect — the founder pastes their Google "Desktop app" OAuth client id + secret, and the
+// server runs the loopback consent flow (opens Google in the browser) and banks a refresh token. This call
+// resolves only when the founder finishes consent, so it can take a while; the secrets never come back.
+export const connectGmailOAuth = (input: { clientId: string; clientSecret: string }) =>
+  post<{ credential: SenderCredential; credentials: SenderCredential[] }>("/api/credentials/gmail/connect", input);
+
 export const removeSender = (provider: string) =>
   fetch(`/api/credentials/${encodeURIComponent(provider)}`, { method: "DELETE", headers: { ...identityHeaders() } })
     .then((r) => r.json() as Promise<{ removed: boolean; credentials: SenderCredential[] }>);

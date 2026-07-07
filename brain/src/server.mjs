@@ -97,7 +97,8 @@ import { compareChannelRuns } from "./run-compare.mjs";
 import { listConnectors } from "./connectors/registry.mjs";
 import { runGraph } from "./graph.mjs";
 import { defaultSendRunners } from "./connectors/execute/gmail-transport.mjs";
-import { setCredential, listCredentials, removeCredential } from "./credential-store.mjs";
+import { setCredential, setOAuthCredential, listCredentials, removeCredential } from "./credential-store.mjs";
+import { runLoopbackConnect } from "./connectors/execute/gmail-oauth.mjs";
 import { liveStepRuntime } from "./agent-bridge.mjs";
 import { createClaudeComposer } from "./composition.mjs";
 import { selectRuntime, authModeLabel } from "./runtimes/index.mjs";
@@ -2600,6 +2601,29 @@ const server = http.createServer(async (req, res) => {
         token: body.token,
         label: body.label,
       });
+      json(res, 200, { credential, credentials: listCredentials(project.id) });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Durable Gmail connect — the BYO-OAuth-client loopback flow. The founder pastes their Google "Desktop
+  // app" client id + secret ONCE; this opens Google's consent in their browser, catches the loopback
+  // callback, banks a REFRESH token (never an expiring access token), and stores it for this project. From
+  // then on a send mints a fresh access token itself, so the founder never re-pastes. This connects a
+  // sender; it does NOT loosen the wall — every send still waits for the founder at the gate.
+  if (req.method === "POST" && url.pathname === "/api/credentials/gmail/connect") {
+    try {
+      const body = await readBody(req);
+      const clientId = String(body.clientId ?? "").trim();
+      const clientSecret = String(body.clientSecret ?? "").trim();
+      if (!clientId || !clientSecret) throw new Error("Paste your Google OAuth client id and secret to connect Gmail.");
+      const project = loadProject();
+      // Blocks until the founder completes (or cancels) consent in their browser; the loopback listener
+      // is what waits. On success we bank ONLY the refresh token (+ client id/secret) — never echoed back.
+      const { refreshToken } = await runLoopbackConnect({ clientId, clientSecret });
+      const credential = setOAuthCredential(project.id, { provider: "gmail", clientId, clientSecret, refreshToken, label: "Gmail (OAuth)" });
       json(res, 200, { credential, credentials: listCredentials(project.id) });
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
