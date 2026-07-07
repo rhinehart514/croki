@@ -53,6 +53,12 @@ export const scanPreview = (repoPath: string, winEvent?: string) =>
 export const pickFolder = () =>
   post<{ path?: string; cancelled?: boolean; unsupported?: boolean; error?: string }>("/api/pick-folder", {});
 
+// The bundled sample product — lets a stranger with no instrumented repo try the scan on real code
+// that reproduces the attribution gap. Returns the absolute path the server resolved, plus the win
+// event to scan for; the UI feeds these into the same scanPreview → createProject flow a real repo uses.
+export const getSampleProduct = () =>
+  get<{ repoPath: string; winEvent: string; name: string; blurb: string }>("/api/sample-product");
+
 // ── Connector registry ──────────────────────────────────────────────────────
 export const getConnectors = () =>
   get<{ connectors: ConnectorMeta[] }>("/api/connectors");

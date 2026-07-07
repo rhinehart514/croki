@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { ArrowRight, FolderOpen, LoaderCircle, ScanSearch } from "lucide-react";
-import { pickFolder, scanPreview } from "@/api";
+import { ArrowRight, FolderOpen, LoaderCircle, PackageOpen, ScanSearch } from "lucide-react";
+import { getSampleProduct, pickFolder, scanPreview } from "@/api";
 import type { ScanPreview as ScanPreviewData } from "@/types";
 import { ScanPreview } from "@/components/ScanPreview";
 
@@ -22,19 +22,39 @@ export function ProductEntry({ busy, onStart, onSeePortfolio }: {
   const [goal, setGoal] = useState("");
   const [outcome, setOutcome] = useState("");
   const [picking, setPicking] = useState(false);
+  const [loadingSample, setLoadingSample] = useState(false);
   const [report, setReport] = useState<ScanPreviewData | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
 
-  const runScan = async (path: string) => {
+  const runScan = async (path: string, winOverride?: string) => {
     setPhase("scanning");
     setScanError(null);
     try {
-      const result = await scanPreview(path, outcome.trim() || undefined);
+      const result = await scanPreview(path, winOverride || outcome.trim() || undefined);
       setReport(result);
       setPhase("preview");
     } catch (error) {
       setScanError(error instanceof Error ? error.message : String(error));
       setPhase("pick");
+    }
+  };
+
+  // "Try it on a sample product" — for a stranger with no instrumented repo of their own. Pulls the
+  // bundled sample's real path + win event from the server, then runs the exact same scan flow a real
+  // folder would, so they see the attribution gap prove itself on honest code before committing anything.
+  const trySample = async () => {
+    setLoadingSample(true);
+    setScanError(null);
+    try {
+      const sample = await getSampleProduct();
+      setRepoPath(sample.repoPath);
+      setOutcome(sample.winEvent);
+      await runScan(sample.repoPath, sample.winEvent);
+    } catch (error) {
+      setScanError(error instanceof Error ? error.message : String(error));
+      setPhase("pick");
+    } finally {
+      setLoadingSample(false);
     }
   };
 
@@ -110,6 +130,19 @@ export function ProductEntry({ busy, onStart, onSeePortfolio }: {
                 onChange={(e) => setOutcome(e.target.value)}
               />
             </details>
+
+            <div className="product-entry-sample">
+              <span className="product-entry-sample-or">No codebase handy?</span>
+              <button
+                type="button"
+                className="product-entry-sample-btn"
+                disabled={busy || picking || loadingSample || phase === "scanning"}
+                onClick={trySample}
+              >
+                <PackageOpen size={14} />
+                {loadingSample ? "Opening sample…" : "Try it on a sample product"}
+              </button>
+            </div>
 
             {phase === "scanning" ? (
               <div className="product-entry-progress" role="status">
