@@ -6181,6 +6181,17 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .product-entry-progress-steps span{font-size:12.5px;color:var(--muted);line-height:1.45}
 .product-entry-error{margin:14px 0 0;font-size:13px;color:#b91c1c}
 
+/* ── Connect Claude: the hard first-run gate's numbered walkthrough ──────────── */
+.connect-steps{list-style:none;margin:6px 0 22px;padding:0;display:grid;gap:16px}
+.connect-step{display:flex;align-items:flex-start;gap:12px}
+.connect-step-num{flex:0 0 auto;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;
+  font-size:12px;font-weight:600;color:var(--proven);background:var(--proven-soft)}
+.connect-step-body{display:grid;gap:3px;min-width:0}
+.connect-step-body strong{font-size:14px;color:var(--ink)}
+.connect-step-body span{font-size:12.5px;color:var(--muted);line-height:1.55}
+.connect-step-body code{font-family:var(--font-mono);font-size:11.5px;padding:1px 5px;border-radius:4px;
+  background:#f4f4f5;border:1px solid var(--line);color:var(--ink)}
+
 /* ── Scan preview: what it read in your product, before you commit a goal ────── */
 .scan-preview{display:block}
 .scan-preview-head{margin-bottom:18px}

@@ -168,6 +168,7 @@ function extractMicroproductPreview(
 }
 import { ProjectPicker } from "@/components/ProjectPicker";
 import { ProductEntry } from "@/components/ProductEntry";
+import { ConnectClaude } from "@/components/ConnectClaude";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { Button } from "@/components/ui/button";
 import type {
@@ -329,11 +330,9 @@ export default function App() {
   const [projectBusy, setProjectBusy] = useState(false);
   // Is a live Claude available? Drives the cold-start state — composing, ideating, and the operator
   // all need a signed-in subscription, so an unconnected founder gets a clear path, not a dead end.
+  // A disconnected founder never reaches the canvas — the hard first-run gate (ConnectClaude, below)
+  // stands in front of the whole workspace until Claude is signed in, replacing the old soft banner.
   const [connection, setConnection] = useState<ConnectionStatus | null>(null);
-  // The "Connect Claude" banner is a soft nudge, not a wall: dismiss it and keep exploring the canvas,
-  // library, and any existing product without a live subscription. The connection state itself stays
-  // live (the model dot still reads "not connected"), so building still names the path when you reach it.
-  const [connectBannerDismissed, setConnectBannerDismissed] = useState(false);
 
   // Graph state — held per pipeline so every pipeline's full graph can coexist on one merged canvas
   // (switching pipelines becomes a camera pan, never a reload). `channelGraphs` is the source of
@@ -2203,6 +2202,17 @@ export default function App() {
     return <TeamOnboarding onDone={setTeamIdentity} />;
   }
 
+  // Hard first-run gate: Drover's intelligence runs on the founder's own Claude subscription, so with no
+  // signed-in Claude the product can do no real work. Rather than a silent no-op behind a dismissible
+  // banner, we stop here and walk the founder through connecting — the goal launcher, composer, ideation,
+  // and operator are all unreachable until Claude answers, so no fake/blank intelligence is ever served.
+  // The re-check flows a fresh connection status up to `setConnection`; the moment it reads connected this
+  // early return stops firing and the app renders exactly as before. `connection` stays null until the
+  // status resolves, so a connected founder never flashes this screen and their flow is unchanged.
+  if (booted && connection && !connection.connected) {
+    return <ConnectClaude connection={connection} onResult={setConnection} />;
+  }
+
   // Hard gate: nothing in the IDE is usable until a real codebase is grounded. Until the active
   // product has a scanned workspace, the only screen is the folder picker — point it at your product.
   const productGrounded = !!activeProject?.sharedContext?.repository?.workspaceId;
@@ -2642,28 +2652,6 @@ export default function App() {
                   Clear run
                 </button>
               )}
-            </div>
-          )}
-
-          {/* No live Claude — a soft, dismissible nudge, not a wall. Composing/ideating/running goals
-              need a signed-in subscription, so we name the path; but you can dismiss this and keep
-              looking around the canvas, library, and any existing product meanwhile. */}
-          {connection && !connection.connected && !connectBannerDismissed && (
-            <div className="loop-connect-banner" role="status">
-              <AlertTriangle />
-              <div className="loop-connect-text">
-                <strong>Connect Claude to build</strong>
-                <span>Composing, ideating, and running goals happen on your Claude subscription. Run <code>claude</code> in your terminal to sign in, or set <code>CLAUDE_CODE_OAUTH_TOKEN</code>. You can keep exploring the canvas, library, and any existing product meanwhile.</span>
-              </div>
-              <button
-                className="loop-connect-dismiss"
-                onClick={() => setConnectBannerDismissed(true)}
-                type="button"
-                title="Dismiss — keep exploring without Claude"
-                aria-label="Dismiss"
-              >
-                <X />
-              </button>
             </div>
           )}
 
