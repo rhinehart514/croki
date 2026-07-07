@@ -1,14 +1,22 @@
-// gate-mcp-approval.test.mjs — the founder gate is human-only on the raw graph-run path.
+// gate-mcp-approval.test.mjs — the founder gate is human-only AND browser-only on the raw graph-run path.
 //
-// THE HOLE this closes: the MCP tool approve_workflow_gate (mcp.mjs) posted `approvals: { nodeId: true }`
-// to POST /api/graph/run, and that route ran the graph WITHOUT a release-authority guard — so an agent
-// could approve its own gate and release a send. mcp.mjs now stamps every request `x-gtm-actor: agent`,
-// and the route supplies authorizeRelease, which refuses an approval carrying that stamp.
+// THE HOLE this closes (two layers, defense in depth):
+//   A4: the MCP tool approve_workflow_gate (mcp.mjs) posted `approvals: { nodeId: true }` to
+//       POST /api/graph/run, and that route ran the graph WITHOUT a release-authority guard — so an agent
+//       could approve its own gate and release a send. mcp.mjs now stamps every request `x-gtm-actor: agent`,
+//       and the route supplies authorizeRelease, which refuses an approval carrying that stamp.
+//   W2: that guard trusted the agent to incriminate itself with the header. A capable agent with raw
+//       loopback HTTP could POST an approval with NO header and be treated as the founder. The route now
+//       also requires the browser-minted session token (an HttpOnly cookie the served page holds); a
+//       header-less request that never loaded a page carries no token and is refused — INDEPENDENT of the
+//       agent header.
 //
 // What this proves, over the real HTTP wiring (not a re-implementation):
-//   - An agent-originated APPROVAL (x-gtm-actor: agent + approvals) is rejected 403 and nothing releases.
-//   - The founder's browser (no such header) approves unchanged — the local canvas gate keeps working.
-//   - An agent may still RUN a graph to a gate (no approval intent) — only the approval is refused.
+//   - An agent-originated APPROVAL (x-gtm-actor: agent) is rejected 403 and nothing releases. [A4]
+//   - A raw approval with NO session token and NO agent header is rejected 403 — the raw-curl bypass. [W2]
+//   - The founder's browser (holds the session cookie, no agent header) approves — the canvas gate works.
+//   - An agent, or any caller, may still RUN a graph to a gate (no approval intent) with no token — only
+//     the approval is refused.
 
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -44,6 +52,19 @@ after(() => {
   fs.rmSync(HOME, { recursive: true, force: true });
 });
 
+// What a real browser does on first contact: a GET lands the HttpOnly session cookie. We read it back and
+// replay it as the Cookie header, exactly as the browser auto-sends it on the later approval POST. Uses
+// /api/health so it works regardless of whether the UI bundle is built (the cookie is issued on every GET).
+async function browserSessionCookie() {
+  const res = await fetch(`${base}/api/health`);
+  const setCookie = typeof res.headers.getSetCookie === "function"
+    ? res.headers.getSetCookie().join("; ")
+    : (res.headers.get("set-cookie") ?? "");
+  const match = setCookie.match(/gtm_session=[^;]+/);
+  assert.ok(match, "the server issues a session cookie on a GET");
+  return match[0];
+}
+
 // A gated graph that lands one staged item at a founder gate: source(manual) → gate → execute(local) →
 // measure. The execute connector stages locally and never sends, so releasing it here is safe.
 function gatedGraph() {
@@ -65,9 +86,10 @@ function gatedGraph() {
   };
 }
 
-async function runGraphHttp({ graph, approvals, agent }) {
+async function runGraphHttp({ graph, approvals, agent, cookie }) {
   const headers = { "Content-Type": "application/json" };
   if (agent) headers["x-gtm-actor"] = "agent";
+  if (cookie) headers["Cookie"] = cookie;
   const res = await fetch(`${base}/api/graph/run`, {
     method: "POST",
     headers,
@@ -77,8 +99,8 @@ async function runGraphHttp({ graph, approvals, agent }) {
   return { status: res.status, body };
 }
 
-describe("founder gate is human-only on POST /api/graph/run", () => {
-  it("rejects an agent/MCP-originated gate approval (403) and releases nothing", async () => {
+describe("founder gate is human-only AND browser-only on POST /api/graph/run", () => {
+  it("rejects an agent/MCP-originated gate approval (403) and releases nothing [A4]", async () => {
     const { status, body } = await runGraphHttp({
       graph: gatedGraph(),
       approvals: { gate: true },
@@ -90,11 +112,24 @@ describe("founder gate is human-only on POST /api/graph/run", () => {
     assert.equal(body.nodes, undefined, "the run body is the error, not a run result");
   });
 
-  it("lets the founder's browser (no agent stamp) approve unchanged — no new friction", async () => {
+  it("rejects a raw approval with NO session token and NO agent header (403) — the raw-curl bypass [W2]", async () => {
+    const { status, body } = await runGraphHttp({
+      graph: gatedGraph(),
+      approvals: { gate: true },
+      // No agent stamp, no cookie: the header-less raw loopback POST.
+    });
+    assert.equal(status, 403, "a header-less, token-less approval is forbidden");
+    assert.match(String(body.error), /browser session|Drover page/i);
+    assert.equal(body.nodes, undefined, "nothing released — the run body is the error, not a run result");
+  });
+
+  it("lets the founder's browser (holds the session cookie, no agent stamp) approve — no new friction", async () => {
+    const cookie = await browserSessionCookie();
     const { status, body } = await runGraphHttp({
       graph: gatedGraph(),
       approvals: { gate: true },
       agent: false,
+      cookie,
     });
     assert.notEqual(status, 403, "the local founder is never refused");
     assert.equal(status, 200);
@@ -102,13 +137,14 @@ describe("founder gate is human-only on POST /api/graph/run", () => {
     assert.ok(body.nodes && typeof body.nodes === "object", "the founder's approval ran the graph");
   });
 
-  it("still lets an agent RUN a graph to a gate — only the approval is refused", async () => {
+  it("still lets a caller RUN a graph to a gate with no token — only the approval is refused", async () => {
     const { status, body } = await runGraphHttp({
       graph: gatedGraph(),
       approvals: {},
       agent: true,
+      // No cookie: a non-approval run is unaffected by the session-token requirement.
     });
-    assert.equal(status, 200, "an agent run with no approval intent is allowed");
+    assert.equal(status, 200, "a run with no approval intent is allowed");
     assert.ok(Array.isArray(body.pendingGates) && body.pendingGates.includes("gate"), "the run reached the founder gate");
   });
 });
