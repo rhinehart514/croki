@@ -6,7 +6,7 @@ import { ObjectGraphCanvas } from "@/components/ObjectGraphCanvas";
 import type { GateBag } from "@/lib/gateItem";
 import type { CanvasSubject } from "@/lib/cardDetail";
 import type {
-  ChannelFeed, ChannelMeta, Claim, ConnectorMeta, DirectedFeed, GateDecision, GtmExperiment, GTMContractAudit, GTMGraph, GTMNode,
+  ChannelFeed, ChannelMeta, Claim, ConnectorMeta, DirectedFeed, GateDecision, GtmExperiment, GTMContractAudit, GTMGraph, GTMItem, GTMNode,
   GTMRunResult, NodeSelection, Person,
 } from "@/types";
 
@@ -51,6 +51,9 @@ export type GtmCanvasModel = {
   // The deal the focused pipeline's staged work carries, in plain words — its own offer, or the
   // project's standing one. Shown on the gate's inline review.
   gateOffer?: string | null;
+  // The outcome door on an approved gate card — record what came back on a sent item. Both lenses use
+  // it: the Engineer lens threads it into GraphCanvas, the Move lens rides it on the gate bag.
+  onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
   onAskClaude?: (node: GTMNode) => void;
   onApproveGate?: (nodeId: string) => void;
   onAddNode?: (spec: Partial<GTMNode> & { label: string }) => void;
@@ -150,6 +153,7 @@ function EngineerLens({ model: m }: GtmLensProps) {
         onSubmitReview={m.onSubmitReview}
         gatePromote={m.gatePromote}
         gateOffer={m.gateOffer}
+        onRecordOutcome={m.onRecordOutcome}
         onAskClaude={m.onAskClaude}
         onApproveGate={m.onApproveGate}
         onAddNode={m.onAddNode}

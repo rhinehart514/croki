@@ -454,8 +454,11 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
           const isEditing = editing?.key === key;
           if (state) {
             // An approved item can carry a real outcome back — the founder records what happened here,
-            // keyed off the item's joinKey. Only when the host wired the door AND the item has a join key.
-            const canRecord = state === "approve" && !!onRecordOutcome && !!(item as { joinKey?: unknown }).joinKey;
+            // keyed off the item's durable provenance id (its Phase-5 joinKey when one was minted, else
+            // the gtmActionId the gate stamps on every item). Only when the host wired the door AND the
+            // item carries one of those ids to join the outcome back on.
+            const itemIds = item as { joinKey?: unknown; gtmActionId?: unknown };
+            const canRecord = state === "approve" && !!onRecordOutcome && (!!itemIds.joinKey || !!itemIds.gtmActionId);
             return (
               <div className={cn("cgate-card", "is-decided", `is-${state}`)} key={key}>
                 <span className="cgate-card-to">{v.subject}</span>

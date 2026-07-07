@@ -368,6 +368,10 @@ type GTMNodeData = {
   // The deal this pipeline's staged work carries, in plain words — the pipeline's own offer, or the
   // project's standing one as the default. Rides only gate nodes; absent when neither states a deal.
   gateOffer?: string | null;
+  // The outcome door on an approved card: the founder records what actually came back (a reply, a
+  // meeting, a purchase), keyed off the item's provenance id. Records what ALREADY happened — never
+  // sends. Rides only the focused gate; absent elsewhere, so those cards show no record affordance.
+  onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
   // This gate is the one a run is paused at (staged drafts awaiting review). The node breathes an amber
   // ring AND blooms its GateReview cards open without needing selection — the review comes to the founder.
   bloomed?: boolean;
@@ -1215,7 +1219,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
           ) : (selected || reviewOpen) ? (
             // Detail-on-open: the full review is a deliberate act, not an always-on wall. The node stays
             // a compact object until you open it (select or click Review), then the drafts bloom in place.
-            <GateReview items={result!.items} onSubmit={data.onSubmitReview} learned={gateLearned} promote={data.gatePromote} offer={data.gateOffer} />
+            <GateReview items={result!.items} onSubmit={data.onSubmitReview} learned={gateLearned} promote={data.gatePromote} offer={data.gateOffer} onRecordOutcome={data.onRecordOutcome} />
           ) : (
             <button
               type="button"
@@ -1584,6 +1588,7 @@ function buildFlowGraph(
   onAskClaude?: (node: GTMNode) => void,
   gatePromote?: GatePromote,
   gateOffer?: string | null,
+  onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>,
 ): { nodes: Node[]; edges: Edge[] } {
   // A node is "revealed" unless it's a still-pending proposed ghost. Committed nodes are always
   // revealed (so an edge from a committed node to the first ghost shows immediately); a proposed node
@@ -1653,6 +1658,8 @@ function buildFlowGraph(
         gatePromote: n.category === "gate" ? gatePromote : undefined,
         // The pipeline's deal rides only the gate node — the founder reviews drafts against the offer.
         gateOffer: n.category === "gate" ? gateOffer : undefined,
+        // The outcome door rides only the gate node — an approved card records what came back.
+        onRecordOutcome: n.category === "gate" ? onRecordOutcome : undefined,
         bloomed,
         onAskClaude: onAskClaude ? () => onAskClaude(n) : undefined,
         appearOrder,
@@ -1773,6 +1780,8 @@ type MergedFlowFocus = {
   // The focused pipeline's deal line (includes the project-level fallback the host computed). Other
   // lanes derive their own from each channel's offer below.
   gateOffer?: string | null;
+  // The outcome door — rides only the focused pipeline's gate, matching onSubmitReview's scope.
+  onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
   revealedNodeIds?: Set<string>;
   onInspect?: (id: string) => void;
 };
@@ -1846,6 +1855,8 @@ function buildMergedFlowGraph(
       // Each lane's gate shows the deal ITS pipeline carries; the focused lane gets the host-computed
       // line (which already falls back to the project's standing offer).
       isFocused ? (focus.gateOffer ?? channelOfferLine(channel)) : channelOfferLine(channel),
+      // The outcome door rides only the focused pipeline's gate — nothing to record on a dimmed lane.
+      isFocused ? focus.onRecordOutcome : undefined,
     );
     for (const n of built.nodes) {
       nodes.push({
@@ -2106,7 +2117,7 @@ export function GraphCanvas({
   onSelect, onNodePositionChange, onConnectNodes, onDeleteEdges, onAddNode, panelOpen, variant,
   proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, refitNonce, highlightedNodeId = null,
   bloomNodeId = null, nodeEditor = null, revealedNodeIds, onPaneClick, operatorCursor = null, people = [],
-  multiPipeline = null, panTo = null, onAskClaude, gatePromote, gateOffer = null,
+  multiPipeline = null, panTo = null, onAskClaude, gatePromote, gateOffer = null, onRecordOutcome,
 }: {
   graph: GTMGraph;
   result: GTMRunResult | null;
@@ -2149,6 +2160,9 @@ export function GraphCanvas({
   // The deal the focused pipeline's staged work carries, in plain words — its own offer, or the
   // project's standing one. Shown on the gate's inline review; absent when neither states a deal.
   gateOffer?: string | null;
+  // The outcome door on the focused gate's approved cards: record what actually came back on a sent
+  // item, keyed off its provenance id. Records what ALREADY happened — never sends.
+  onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
   // Bump to re-fit the viewport after the container resizes (debugger drawer open/close).
   refitNonce?: number;
   // The run scrubber's current step — this node glows, the rest dim, so a replay reads node-by-node.
@@ -2273,7 +2287,7 @@ export function GraphCanvas({
         channelId: graph.id,
         running, runningNodeId, selection,
         proposedNodeIds, proposedEdgeIds, proposalActive,
-        onResolveProposal, onSubmitReview, onApproveGate, gatePromote, gateOffer,
+        onResolveProposal, onSubmitReview, onApproveGate, gatePromote, gateOffer, onRecordOutcome,
         revealedNodeIds, onInspect: toggleInspect,
       },
       people,
@@ -2282,13 +2296,13 @@ export function GraphCanvas({
     [
       multiPipeline, connectors, subsystemHealth, contractAudits, handleSelect, graph.id, running,
       runningNodeId, selection, proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal,
-      onSubmitReview, onApproveGate, gatePromote, gateOffer, revealedNodeIds, toggleInspect, people, onAskClaude,
+      onSubmitReview, onApproveGate, gatePromote, gateOffer, onRecordOutcome, revealedNodeIds, toggleInspect, people, onAskClaude,
     ],
   );
 
   const singleFlow = useMemo(
-    () => buildFlowGraph(laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer),
-    [laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer],
+    () => buildFlowGraph(laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, onRecordOutcome),
+    [laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, onRecordOutcome],
   );
 
   const nodes = merged ? merged.nodes : singleFlow.nodes;

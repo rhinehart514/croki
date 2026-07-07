@@ -54,16 +54,24 @@ export function deriveRunSummary(projectId = "default", options = {}) {
   let approved = 0;
   let executed = 0;
   const joinKeys = new Set();
+  // An item's durable identity for the outcome join is its joinKey when the Phase-5 run store minted one,
+  // else the gtmActionId the founder gate stamps on every item. A founder-entered outcome recorded on a
+  // sent item joins on that same provenance id, so this fallback is what lets it show up here.
+  const itemJoinId = (item) => item?.joinKey ?? item?.gtmActionId ?? null;
   for (const node of Object.values(nodes)) {
     const items = Array.isArray(node?.items) ? node.items : [];
     if (node?.category === "gate") {
       for (const item of items) {
         if (item?.approvalStatus === "approved") approved += 1;
-        if (item?.joinKey) joinKeys.add(item.joinKey);
+        const key = itemJoinId(item);
+        if (key) joinKeys.add(key);
       }
     } else if (node?.category === "execute") {
       executed += items.length;
-      for (const item of items) if (item?.joinKey) joinKeys.add(item.joinKey);
+      for (const item of items) {
+        const key = itemJoinId(item);
+        if (key) joinKeys.add(key);
+      }
     }
   }
   // What actually went out: items that moved through an execute step, else what the founder approved.

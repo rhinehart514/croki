@@ -1049,17 +1049,7 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId 
             offer={gate.offer}
             promote={gate.promote}
             onSubmit={(decisions) => gate.onSubmitReview(gate.gateNodeId, decisions)}
-            onRecordOutcome={
-              projectId
-                ? async (item, outcome) => {
-                    await recordOutcome(projectId, {
-                      joinKey: String((item as { joinKey?: unknown }).joinKey ?? ""),
-                      outcomeKind: outcome.outcomeKind,
-                      value: outcome.value,
-                    });
-                  }
-                : undefined
-            }
+            onRecordOutcome={gate.onRecordOutcome}
           />
         </aside>
       ) : null}
