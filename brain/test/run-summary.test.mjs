@@ -78,4 +78,40 @@ describe("run-summary — what happened, honest or nothing", () => {
     assert.equal(run.replies, 1, "the reply recorded on that item joins back and shows in the summary");
     assert.match(run.note, /1 replied/);
   });
+
+  it("moves the strip's signup count when a signup is recorded — a positive outcome, not lumped into replies", () => {
+    const { channel } = createChannel({ name: "Cold DM" }, options);
+    stageRun(
+      channel.graphId,
+      [{ email: "a@x.com", draft: "note a", approvalStatus: "approved", gtmActionId: "gtm-signup" }],
+      options,
+    );
+    ingestOutcome(
+      { joinKey: "gtm-signup", outcomeKind: "signup", source: "founder-entered" },
+      { projectId: "default", ...options },
+    );
+    const run = deriveRunSummary("default", options);
+    assert.equal(run.signups, 1, "the signup joins back and shows as its own positive number");
+    assert.equal(run.replies, null, "a signup is not a reply — the reply bucket stays honestly null");
+    assert.equal(run.paid, null, "a signup is not a purchase — the paid bucket stays null");
+    assert.match(run.note, /1 signed up/);
+  });
+
+  it("moves the strip's no-reply count when a no-response is recorded — an honest negative, never a fake zero", () => {
+    const { channel } = createChannel({ name: "Cold DM" }, options);
+    stageRun(
+      channel.graphId,
+      [{ email: "a@x.com", draft: "note a", approvalStatus: "approved", gtmActionId: "gtm-silent" }],
+      options,
+    );
+    ingestOutcome(
+      { joinKey: "gtm-silent", outcomeKind: "no-response", source: "founder-entered" },
+      { projectId: "default", ...options },
+    );
+    const run = deriveRunSummary("default", options);
+    assert.equal(run.noReply, 1, "the recorded silence joins back and shows as its own number");
+    assert.equal(run.replies, null, "no-response is the opposite of a reply — replies stays null");
+    assert.equal(run.signups, null, "no-response is not a signup — signups stays null");
+    assert.match(run.note, /1 no reply yet/);
+  });
 });

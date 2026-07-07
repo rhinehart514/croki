@@ -6,7 +6,7 @@ import {
   Background, Controls, Handle, MarkerType, Position, ReactFlow, useReactFlow, useStore, type Edge, type Node, type NodeProps, type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { applyObjectGraphOperations, approveRun, compileObjectGraphPath, getObjectGraph, recordOutcome, saveObjectGraphPositions, type CompiledGate } from "@/api";
+import { applyObjectGraphOperations, approveRun, compileObjectGraphPath, getObjectGraph, saveObjectGraphPositions, type CompiledGate } from "@/api";
 import type { GateDecision, GTMItem, ObjectGraphEdge, ObjectGraphNode, ObjectGraphPathRecommendation, ObjectGraphView } from "@/types";
 import { layoutObjectGraph, type PositionMap } from "@/lib/objectGraphLayout";
 import { GateReview } from "@/components/gate/GateReview";
@@ -611,9 +611,15 @@ function BandHeaders({ cols }: { cols: { key: string; label: string; sub: string
   );
 }
 
-export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId = null, desiredArrange, modeControlled = false, onIdeateObject, ideatingNodeId = null, ideatingTarget = null, reloadSignal = 0 }: {
+export function ObjectGraphCanvas({ projectId, gate, onRecordOutcome, onSubjectChange, subjectId = null, desiredArrange, modeControlled = false, onIdeateObject, ideatingNodeId = null, ideatingTarget = null, reloadSignal = 0 }: {
   projectId: string | null;
   gate?: GateBag | null;
+  // The outcome door on an approved gate card — the SAME shared handler the operator gate rides on
+  // (App's recordItemOutcome): it resolves the item's provenance id (joinKey when minted, else the
+  // gtmActionId the gate stamps), records what came back, then refreshes the run summary. Threaded as
+  // its own prop so the staged compiled-run gate below uses one handler with the rest of the app,
+  // instead of a divergent inline copy that keyed on joinKey only and never re-read the summary.
+  onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
   // The attached-composer tie: whenever the founder selects (or deselects) a block on the canvas, we
   // hand its identity up so the composer can dock to it — "Claude · editing offer" — and frame the
   // next message with it. Fired only from selection events, never during render, so it can't loop.
@@ -1070,17 +1076,7 @@ export function ObjectGraphCanvas({ projectId, gate, onSubjectChange, subjectId 
             items={runGateItems}
             learned={0}
             onSubmit={approveRunItems}
-            onRecordOutcome={
-              projectId
-                ? async (item, outcome) => {
-                    await recordOutcome(projectId, {
-                      joinKey: String((item as { joinKey?: unknown }).joinKey ?? ""),
-                      outcomeKind: outcome.outcomeKind,
-                      value: outcome.value,
-                    });
-                  }
-                : undefined
-            }
+            onRecordOutcome={onRecordOutcome}
           />
         </aside>
       ) : null}
