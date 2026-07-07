@@ -55,6 +55,49 @@ describe("GateReview decision mapping", () => {
   });
 });
 
+describe("GateReview outcome return on a sent item", () => {
+  // A real operator gate item carries gtmActionId (the gate stamps it) but no Phase-5 joinKey. The
+  // affordance must still appear on it and record against that provenance id.
+  const sentItem: GTMItem[] = [
+    { type: "draft", id: "alpha-1", gtmActionId: "gtm-abc", subject: "Intro to Acme", draft: "Hi — wanted to reach out." },
+  ];
+
+  it("shows 'Record what happened' only after approval, and records the item's provenance outcome", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const onRecordOutcome = vi.fn().mockResolvedValue(undefined);
+    render(<GateReview items={sentItem} onSubmit={onSubmit} learned={0} onRecordOutcome={onRecordOutcome} />);
+
+    // Before approval there is no outcome door — it rides only the decided-approved card.
+    expect(screen.queryByRole("button", { name: /Record what happened/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Approve & release/i }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+
+    // Now the door is on the approved card; open it and record a plain-label reply.
+    fireEvent.click(await screen.findByRole("button", { name: /Record what happened/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^reply$/ }));
+
+    await waitFor(() => expect(onRecordOutcome).toHaveBeenCalledTimes(1));
+    expect(onRecordOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ gtmActionId: "gtm-abc" }),
+      { outcomeKind: "reply" },
+    );
+    // The card collapses to a receipt of what was recorded.
+    expect(await screen.findByText(/Recorded: reply/i)).toBeTruthy();
+  });
+
+  it("offers no outcome door when the item carries no provenance id at all", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const onRecordOutcome = vi.fn().mockResolvedValue(undefined);
+    // No id, no gtmActionId, no joinKey — nothing to join an outcome back on.
+    render(<GateReview items={[{ type: "draft", subject: "Orphan", draft: "no ids here" }]} onSubmit={onSubmit} learned={0} onRecordOutcome={onRecordOutcome} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Approve & release/i }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("button", { name: /Record what happened/i })).toBeNull();
+  });
+});
+
 describe("GateReview failed submit (the Phase 1 busy/error fix)", () => {
   it("locks the actions while a submit is in flight, then unlocks", async () => {
     // A submit we resolve by hand so we can observe the in-flight (busy) window.

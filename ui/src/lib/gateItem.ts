@@ -186,6 +186,9 @@ export type GateBag = {
   offer: string | null;
   promote?: GatePromote;
   onSubmitReview: (nodeId: string, decisions: Record<string, GateDecision>) => void;
+  // The outcome door on an approved card: record what actually came back on a sent item, keyed off its
+  // provenance id (joinKey when minted, else gtmActionId). Records what ALREADY happened — never sends.
+  onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
 };
 
 // ─── The pipeline's offer, on the gate card ────────────────────────────────────

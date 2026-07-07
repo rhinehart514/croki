@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import { deriveRunSummary } from "../src/run-summary.mjs";
 import { createChannel } from "../src/project-store.mjs";
 import { loadFlow, recordFlowRun } from "../src/flow-store.mjs";
+import { ingestOutcome } from "../src/outcome-ingest.mjs";
 
 // Stage a flow run carrying a gate node with founder-decided items, exactly as flow-store persists it.
 function stageRun(graphId, items, options, { runId = "run-1" } = {}) {
@@ -56,5 +57,25 @@ describe("run-summary — what happened, honest or nothing", () => {
     assert.equal(run.paid, null);
     assert.equal(run.revenue, null, "revenue is not tracked at this layer ⇒ honestly null");
     assert.match(run.note, /1 approved to go out/);
+  });
+
+  it("shows a founder-entered outcome recorded on a sent item, joined by its gtmActionId", () => {
+    const { channel } = createChannel({ name: "Cold DM" }, options);
+    // A real operator gate item carries gtmActionId (the founder gate stamps it) but no Phase-5 joinKey.
+    stageRun(
+      channel.graphId,
+      [{ email: "a@x.com", draft: "note a", approvalStatus: "approved", gtmActionId: "gtm-abc" }],
+      options,
+    );
+    // The founder records what came back on that exact item — keyed on its provenance id, source
+    // founder-entered, exactly as the per-item outcome affordance posts it.
+    ingestOutcome(
+      { joinKey: "gtm-abc", outcomeKind: "reply", source: "founder-entered" },
+      { projectId: "default", ...options },
+    );
+    const run = deriveRunSummary("default", options);
+    assert.equal(run.sent, 1, "the approved item still counts as one to go out");
+    assert.equal(run.replies, 1, "the reply recorded on that item joins back and shows in the summary");
+    assert.match(run.note, /1 replied/);
   });
 });

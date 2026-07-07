@@ -15,6 +15,7 @@ import {
   type AgentBenchRow,
   getRunSummary,
   type RunSummary,
+  recordOutcome,
   getGraphTemplate,
   getOperatorSession,
   getProject,
@@ -170,7 +171,7 @@ import { ProductEntry } from "@/components/ProductEntry";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { Button } from "@/components/ui/button";
 import type {
-  ChannelMeta, ConnectorMeta, ContextManifest, Decisions, EngineState, GateDecision, GraphOperation, GtmLibrary, GTMContractAudit, GTMEdge, GTMGraph, GTMNode, GTMNodeCategory,
+  ChannelMeta, ConnectorMeta, ContextManifest, Decisions, EngineState, GateDecision, GraphOperation, GtmLibrary, GTMContractAudit, GTMEdge, GTMGraph, GTMItem, GTMNode, GTMNodeCategory,
   GTMProject, GTMNodeResult, GTMRunResult, NodeSelection, OperatorSession, ProjectSummary,
   ProductModel, ProductModelEdit,
   Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
@@ -1232,6 +1233,25 @@ export default function App() {
     await executeGraph(undefined, approvals, next, runResult?.runId);
   }, [decisions, approvals, executeGraph, operatorSession, runResult?.runId, syncOperator]);
 
+  // The outcome door on an approved gate card. After the founder releases an item, the real result comes
+  // back later — a reply, a meeting, a purchase. This records THAT on the exact item the founder just
+  // sent, joined by the item's durable provenance id (its Phase-5 joinKey when one was minted, else the
+  // gtmActionId the gate stamps on every item), through the existing founder-entered outcome ingest. It
+  // records what ALREADY happened; nothing sends. The run summary re-reads so the new result shows.
+  const recordItemOutcome = useCallback(async (
+    item: GTMItem,
+    outcome: { outcomeKind: string; value?: number },
+  ) => {
+    if (!activeProjectId) return;
+    const ids = item as { joinKey?: unknown; gtmActionId?: unknown };
+    const joinKey = typeof ids.joinKey === "string" && ids.joinKey
+      ? ids.joinKey
+      : typeof ids.gtmActionId === "string" ? ids.gtmActionId : "";
+    if (!joinKey) return;
+    await recordOutcome(activeProjectId, { joinKey, outcomeKind: outcome.outcomeKind, value: outcome.value ?? null });
+    refreshRunSummary();
+  }, [activeProjectId, refreshRunSummary]);
+
   const persistGraph = useCallback(async () => {
     if (!graph) return;
     setGraphRunning(true);
@@ -1918,6 +1938,8 @@ export default function App() {
         gateNodeId, items, learned, offer: gateOffer, promote: gatePromote,
         // Return the promise (no `void`) so GateReview can await the release and surface a failure.
         onSubmitReview: (id, d) => submitGateReview(id, d),
+        // One handler for both lenses: record a sent item's real outcome, then refresh the summary.
+        onRecordOutcome: recordItemOutcome,
       };
     };
     // Primary: an operator run paused at its gate — the session carries the staged run + its gate node ids.
@@ -1939,7 +1961,7 @@ export default function App() {
       }
     }
     return null;
-  }, [operatorSession, displayGraph, graph, runResult, gateOffer, gatePromote, submitGateReview]);
+  }, [operatorSession, displayGraph, graph, runResult, gateOffer, gatePromote, submitGateReview, recordItemOutcome]);
   const proposedNodeIds = useMemo(() => {
     if (proposalActive && pendingProposal && graph) {
       const current = new Set(graph.nodes.map((node) => node.id));
@@ -2134,6 +2156,8 @@ export default function App() {
     onSubmitReview: (id, d) => submitGateReview(id, d),
     gatePromote,
     gateOffer,
+    // The outcome door on approved cards — record a sent item's real result, then refresh the summary.
+    onRecordOutcome: recordItemOutcome,
     onApproveGate: (id) => void approveGate(id),
     onAskClaude: askClaudeAbout,
     onAddNode: handleAddNode,
@@ -2193,7 +2217,7 @@ export default function App() {
     canvasGraph, connectors, contractAudits, runResult, graphRunning, runningNodeId, selection,
     dismissOverlays, proposedNodeIds, proposedEdgeIds, revealedNodeIds, proposalActive, operatorCursor,
     handleResolveProposal, submitGateReview, approveGate, handleAddNode, handleGraphConnect, handleDeleteEdges,
-    handleNodePositionChange, flowRuns, runNode, updateGraph, handleDeleteNode, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, gtmMapGate, activeMode, composerSubject, ideateObjectFromCard, objectIdeation, objectGraphReload,
+    handleNodePositionChange, flowRuns, runNode, updateGraph, handleDeleteNode, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, recordItemOutcome, gtmMapGate, activeMode, composerSubject, ideateObjectFromCard, objectIdeation, objectGraphReload,
   ]);
 
   // First-run team setup. Gated on Convex being configured AND no team chosen yet, so a local/solo
