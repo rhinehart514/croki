@@ -95,6 +95,8 @@ const ProductUnderstanding = lazy(() => import("@/components/ProductUnderstandin
 const ProductCanvas = lazy(() => import("@/components/ProductCanvas").then((m) => ({ default: m.ProductCanvas })));
 import { GtmCanvas, type GtmCanvasModel } from "@/components/canvas/GtmCanvas";
 import { AltitudeControl } from "@/components/AltitudeControl";
+import { CanvasHistoryControl } from "@/components/CanvasHistoryControl";
+import { useCanvasHistory, describeOperations, describeGraphDiff } from "@/lib/canvasHistory";
 import { ProductEntryColumn } from "@/components/ProductEntryColumn";
 import { CanvasCard } from "@/components/CanvasCard";
 import { ClarityCard } from "@/components/ClarityCard";
@@ -350,6 +352,15 @@ export default function App() {
   // ~40 existing call sites below that read a single `graph` (selection, run, mutation, audit...)
   // keep working completely unchanged.
   const [channelGraphs, setChannelGraphs] = useState<Map<string, GTMGraph>>(new Map());
+  // Structural-edit history for the working canvas graph — the undo/redo foundation. Founder edits
+  // (add/move/connect/delete) and crew edits (the operator revising the board) both record here, so any
+  // structural move is reversible. `recordEdit`/`undoEdit`/`redoEdit` are stable; the read helpers track
+  // history state. Scoped to graph structure only — never runs, sends, or gate decisions.
+  const { record: recordEdit, undo: undoEdit, redo: redoEdit, canUndo, canRedo, entriesFor } = useCanvasHistory();
+  // A synchronous mirror of channelGraphs so async callbacks (operator poll) can read the pre-edit
+  // snapshot without listing channelGraphs as a dependency (which would churn the polling effect).
+  const channelGraphsRef = useRef(channelGraphs);
+  channelGraphsRef.current = channelGraphs;
   const graph = useMemo(
     () => (activeChannelId ? channelGraphs.get(activeChannelId) ?? null : null),
     [channelGraphs, activeChannelId],
@@ -1028,6 +1039,14 @@ export default function App() {
       operatorGraphRevision.current = next.graphRevision;
       if (activeChannelId !== next.graphId) setActiveChannelId(next.graphId);
       void getGraphTemplate(next.graphId).then((response) => {
+        // A crew edit: the operator revised the board server-side. Record the structural delta so the
+        // founder can undo an agent move exactly like their own. `describeGraphDiff` returns null when
+        // nothing structural changed (a pure run/store refresh), so those never land in the history.
+        const prevGraph = channelGraphsRef.current.get(next.graphId);
+        if (prevGraph) {
+          const label = describeGraphDiff(prevGraph, response.graph);
+          if (label) recordEdit(next.graphId, { label, actor: { by: "claude" }, before: prevGraph, after: response.graph });
+        }
         setChannelGraph(next.graphId, response.graph);
         setFlowRuns(response.runs ?? []);
         setGraphSavedAt(response.graph.store?.lastRunAt ?? null);
@@ -1042,7 +1061,7 @@ export default function App() {
       if (gateId) selectInGraph(gateId, next.graphId);
       loadEngine();
     }
-  }, [activeChannelId, loadEngine, setChannelGraph, setChannelRunResult, selectInGraph]);
+  }, [activeChannelId, loadEngine, setChannelGraph, setChannelRunResult, selectInGraph, recordEdit]);
 
   // Active sessions are executed server-side. Polling keeps the event trail and
   // graph in lockstep even if the panel is closed and reopened.
@@ -1297,18 +1316,67 @@ export default function App() {
     }
   }, [graph, setGraph]);
 
-  const handleNodePositionChange = useCallback((nodeId: string, position: { x: number; y: number }) => {
+  // `origin` distinguishes a genuine founder drag (undoable) from the automatic left-to-right relayout
+  // the canvas pushes on every topology change (not undoable — it's layout, not a move the founder made).
+  const handleNodePositionChange = useCallback((nodeId: string, position: { x: number; y: number }, origin?: "drag" | "layout") => {
     setGraphSavedAt(null);
+    if (origin === "drag" && graph) {
+      const after: GTMGraph = { ...graph, nodes: graph.nodes.map((node) => node.id === nodeId ? { ...node, position } : node) };
+      const label = describeGraphDiff(graph, after);
+      if (label) {
+        recordEdit(graph.id, { label, actor: { by: "you" }, before: graph, after });
+        setChannelGraph(graph.id, after);
+        return;
+      }
+    }
     setGraph((current) => current ? {
       ...current,
       nodes: current.nodes.map((node) => node.id === nodeId ? { ...node, position } : node),
     } : current);
-  }, [setGraph]);
+  }, [setGraph, graph, recordEdit, setChannelGraph]);
 
   const updateGraph = useCallback((next: GTMGraph) => {
+    if (graph && graph.id === next.id) {
+      const label = describeGraphDiff(graph, next);
+      if (label) recordEdit(next.id, { label, actor: { by: "you" }, before: graph, after: next });
+    }
     setGraph(next);
     setGraphSavedAt(null);
-  }, [setGraph]);
+  }, [setGraph, graph, recordEdit]);
+
+  // Undo / redo the working board. Restores the recorded snapshot directly into the active pipeline's
+  // graph — this write bypasses the mutation handlers above, so an undo is never itself recorded as a
+  // new edit. Structure only: runs, sends, and gate decisions are out of scope and untouched here.
+  const handleUndoBoard = useCallback(() => {
+    const edit = undoEdit(activeChannelId);
+    if (!edit) return;
+    setChannelGraph(edit.before.id, edit.before);
+    setGraphSavedAt(null);
+    setGraphError(null);
+  }, [undoEdit, activeChannelId, setChannelGraph]);
+
+  const handleRedoBoard = useCallback(() => {
+    const edit = redoEdit(activeChannelId);
+    if (!edit) return;
+    setChannelGraph(edit.after.id, edit.after);
+    setGraphSavedAt(null);
+    setGraphError(null);
+  }, [redoEdit, activeChannelId, setChannelGraph]);
+
+  // Keyboard: ⌘Z / Ctrl+Z undoes the board, ⇧⌘Z / Ctrl+Shift+Z redoes. Only on the canvas, and never
+  // when the founder is typing (a text field owns its own undo).
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "z") return;
+      if (view !== "canvas" || overlay) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      event.preventDefault();
+      if (event.shiftKey) handleRedoBoard(); else handleUndoBoard();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [handleUndoBoard, handleRedoBoard, view, overlay]);
 
   useEffect(() => {
     if (!graph) return;
@@ -1322,8 +1390,15 @@ export default function App() {
 
   const applyOperations = useCallback(async (operations: GraphOperation[]) => {
     if (!graph) return null;
+    const before = graph; // snapshot BEFORE the await so undo restores exactly the pre-edit board
     try {
-      const response = await applyGraphOperationsApi(graph, operations);
+      const response = await applyGraphOperationsApi(before, operations);
+      recordEdit(before.id, {
+        label: describeOperations(operations, before),
+        actor: { by: "you" },
+        before,
+        after: response.graph,
+      });
       setGraph(response.graph);
       setGraphSavedAt(null);
       setGraphError(null);
@@ -1332,7 +1407,7 @@ export default function App() {
       setGraphError(error instanceof Error ? error.message : String(error));
       return null;
     }
-  }, [graph, setGraph]);
+  }, [graph, setGraph, recordEdit]);
 
   // ── Drag-and-drop editing of the workflow Claude generated (un-gatekeeping) ──
   // Wire a data edge by dragging between node handles.
@@ -2306,6 +2381,9 @@ export default function App() {
   const operatorDriving = !!operatorSession && ["ready", "running", "failed", "blocked"].includes(operatorSession.status);
   const gtmCanvasVisible = view === "canvas" && !overlay && !operatorDriving && !!(canvasGraph || activeProjectId);
 
+  // The board-history trail for the focused pipeline — drives the undo/redo control's receipts list.
+  const boardHistory = entriesFor(activeChannelId);
+
   // The "your stuff" rail sits beside the canvas whenever a product is open on the GTM canvas and no
   // full-screen overlay (Settings, Product mode, Understand) has taken over. It never covers the map;
   // it holds its own grid column, so the canvas reflows around it.
@@ -2426,6 +2504,20 @@ export default function App() {
             <AltitudeControl
               altitude={activeMode === "engineer" ? "steps" : "story"}
               onChange={(a) => setActiveMode(a === "steps" ? "engineer" : "move")}
+            />
+          ) : null}
+
+          {/* Board history — undo/redo the working canvas plus the receipts trail of what the founder and
+              Claude built. Bottom-left, clear of the top-center altitude control and the left product
+              column. Both founder and crew structural edits are reversible here (never runs or sends). */}
+          {gtmCanvasVisible && activeChannelId ? (
+            <CanvasHistoryControl
+              edits={boardHistory.edits}
+              index={boardHistory.index}
+              canUndo={canUndo(activeChannelId)}
+              canRedo={canRedo(activeChannelId)}
+              onUndo={handleUndoBoard}
+              onRedo={handleRedoBoard}
             />
           ) : null}
 

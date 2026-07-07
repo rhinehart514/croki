@@ -55,10 +55,11 @@
   overflow-y: auto;
 }
 .agentp-mark {
-  width: 76px; height: 76px; border-radius: 50%;
+  /* A transparent frame that seats the crew face inside a calm ring — the character brings its own soft
+     family chip, so the frame itself carries no fill or border, only the focal ring. */
+  width: 76px; height: 76px;
   display: grid; place-items: center;
-  font-family: var(--font-mono); font-weight: 500; font-size: 27px; letter-spacing: -0.02em;
-  border: 1px solid var(--line-2); margin-bottom: 18px; position: relative;
+  margin-bottom: 18px; position: relative;
 }
 .agentp-mark::after { /* the calm ring — the one circular focal form */
   content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 1px solid var(--line);
@@ -149,7 +150,6 @@
 .agentp-mate { display: flex; gap: 12px; align-items: center; padding: 13px; border: 1px solid var(--line-2); border-radius: var(--r-lg); background: var(--surface); cursor: pointer; transition: all 0.14s var(--ease-out); text-align: left; }
 .agentp-mate:hover { box-shadow: var(--shadow-card); transform: translateY(-1px); }
 .agentp-mate.on { border-color: var(--ink); box-shadow: var(--shadow-card); }
-.agentp-mate .mm { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-family: var(--font-mono); font-weight: 500; font-size: 14px; flex: none; border: 1px solid var(--line-2); }
 .agentp-mate .r { font-size: 13.5px; font-weight: 600; line-height: 1.2; }
 .agentp-mate .j { font-size: 11.5px; color: var(--muted); margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 

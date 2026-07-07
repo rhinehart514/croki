@@ -2,9 +2,17 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { FloatingDock } from "./FloatingDock";
 
-// The dock's decisions badge is the notification: it must carry the cross-product pending count and
-// toggle the inbox panel. These assert the count shows when > 0, is absent at 0 (no fake zero), and
-// clicking the button asks to open the inbox.
+// The dock was slimmed to two jobs: "where am I" (breadcrumb + GTM↔Product toggle) and "go" (Run). The
+// competing badges it used to carry — the Decisions count, the Issues count, Summon — moved onto the
+// canvas, so their props are still ACCEPTED (App keeps compiling) but no longer rendered here. These
+// pin that contract: Run is the one primary action, it disables with no runnable graph, and Product
+// mode (nothing to run) hides it. The moved badges are covered where they now live, not on this bar.
+
+const graph = {
+  id: "g1", name: "Test", version: "0",
+  nodes: [{ id: "n1", label: "Draft", category: "generate" as const, position: { x: 0, y: 0 }, config: {} }],
+  edges: [],
+};
 
 const baseProps = {
   projects: [],
@@ -23,6 +31,9 @@ const baseProps = {
   problems: 0,
   issuesOpen: false,
   onToggleIssues: () => {},
+  pendingDecisions: 0,
+  decisionsOpen: false,
+  onToggleDecisions: () => {},
   onCloseMenus: () => {},
   graph: null,
   running: false,
@@ -30,33 +41,28 @@ const baseProps = {
   onRun: () => {},
 } as const;
 
-describe("FloatingDock decisions badge", () => {
-  it("shows the pending-decision count and toggles the inbox on click", () => {
-    const onToggleDecisions = vi.fn();
-    render(
-      <FloatingDock
-        {...baseProps}
-        pendingDecisions={4}
-        decisionsOpen={false}
-        onToggleDecisions={onToggleDecisions}
-      />,
-    );
-    const badge = screen.getByTitle("4 decisions waiting on you");
-    expect(badge).toHaveTextContent("4");
-    fireEvent.click(badge);
-    expect(onToggleDecisions).toHaveBeenCalledTimes(1);
+describe("FloatingDock", () => {
+  it("shows Run, and runs on click when there is a runnable graph", () => {
+    const onRun = vi.fn();
+    render(<FloatingDock {...baseProps} graph={graph} onRun={onRun} />);
+    const run = screen.getByRole("button", { name: "Run" });
+    expect(run).not.toBeDisabled();
+    fireEvent.click(run);
+    expect(onRun).toHaveBeenCalledTimes(1);
   });
 
-  it("shows no count when nothing is waiting", () => {
-    render(
-      <FloatingDock
-        {...baseProps}
-        pendingDecisions={0}
-        decisionsOpen={false}
-        onToggleDecisions={() => {}}
-      />,
-    );
-    const badge = screen.getByTitle("Nothing waiting on you");
-    expect(badge).not.toHaveTextContent("0");
+  it("disables Run when there is no runnable graph (no fake affordance)", () => {
+    render(<FloatingDock {...baseProps} graph={null} />);
+    expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
+  });
+
+  it("hides Run in Product mode — there is nothing to run there", () => {
+    render(<FloatingDock {...baseProps} graph={graph} productMode />);
+    expect(screen.queryByRole("button", { name: "Run" })).toBeNull();
+  });
+
+  it("no longer renders a decisions badge here (it moved onto the canvas)", () => {
+    render(<FloatingDock {...baseProps} pendingDecisions={4} />);
+    expect(screen.queryByTitle(/waiting on you/)).toBeNull();
   });
 });

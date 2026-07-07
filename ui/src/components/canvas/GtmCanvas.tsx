@@ -65,7 +65,7 @@ export type GtmCanvasModel = {
   onAddNode?: (spec: Partial<GTMNode> & { label: string }) => void;
   onConnectNodes?: (source: string, target: string) => void;
   onDeleteEdges?: (edgeIds: string[]) => void;
-  onNodePositionChange?: (nodeId: string, position: { x: number; y: number }) => void;
+  onNodePositionChange?: (nodeId: string, position: { x: number; y: number }, origin?: "drag" | "layout") => void;
   nodeEditor?: NodeEditorBridge | null;
   // The literal one-coordinate-space unification: every other pipeline's graph, so channel-flow
   // renders ALL of them as lanes in one canvas instead of swapping which one is on screen. Absent

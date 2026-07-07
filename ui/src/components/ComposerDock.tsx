@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle, ArrowRight, ArrowUp, BarChart3, Bot, Boxes, ChevronRight, Code, Database, Filter, LoaderCircle, Lightbulb, Maximize2,
+  AlertTriangle, ArrowRight, ArrowUp, BarChart3, Bot, Boxes, Check, ChevronDown, ChevronRight, Code, Database, Filter, LoaderCircle, Lightbulb, Maximize2,
   Mic, Minimize2, PenLine, Pin, Play, Plus, Search, Send, ShieldCheck, Square, Wand2, X,
 } from "lucide-react";
+import { CrewAvatar } from "@/components/crew/CrewAvatar";
+import { agentPersona } from "@/lib/agentPersona";
 import { statusLabel } from "@/lib/status";
 import { subjectActions } from "@/lib/subjectActions";
+import { COMPOSER_VERBS, deriveVerb, frameVerbMessage, type ComposerVerb } from "@/lib/composerVerb";
+import { rosterState, type RosterState } from "@/lib/rosterState";
 import { kindIcon } from "@/lib/objectKindIcons";
 import { humanizeFieldLabel } from "@/lib/labels";
 import type { CanvasSubject, CardDetail } from "@/lib/cardDetail";
@@ -366,38 +370,84 @@ function BuildCard({ node, live, ghost }: { node: GTMNode; live: boolean; ghost:
   );
 }
 
+// ─── The plan roster (the run's live checklist) ─────────────────────────────────
+// The composed plan is known the instant a build/run starts, so it renders as a checklist: one row per
+// step, each wearing the pixel face of the agent doing it (a deterministic step wears its tool icon; the
+// founder gate wears amber). Row state binds to the streamed run — waiting until the step starts, a live
+// rainbow while it runs, struck off the moment it lands — in lockstep with the canvas node that the same
+// `runningNodeId` lights. No fabricated progress: a row only advances on a real streamed event. The
+// binding itself lives in lib/rosterState.ts (pure + unit-tested); this file just renders it.
+
+// One checklist row: leading status tick, the step's face, its plain-English name, and a state word.
+function RosterRow({ node, state }: { node: GTMNode; state: RosterState }) {
+  const isGate = node.category === "gate";
+  // Any node with a ref is a rented mind (agent / skill / connector) — give it a face. Deterministic
+  // steps (code, tool, workbench) and the founder gate carry no ref and wear their own mark instead.
+  const persona = !isGate && node.ref ? agentPersona(node.ref, node.label ?? node.agentPrompt) : null;
+  const meta = buildCardMeta(node);
+  const { Icon } = meta;
+  const eyebrow = isGate ? "Your gate" : persona ? persona.role : meta.eyebrow;
+  const stateWord =
+    state === "ghost" ? "Proposed"
+    : state === "working" ? "Working"
+    : state === "gate" ? "Your call"
+    : state === "stuck" ? "Needs a look"
+    : state === "done" ? "Done"
+    : isGate ? "Your call"          // an upcoming gate names the founder's step ahead of time
+    : "Waiting";
+  return (
+    <div className={`roster-row ${state}${isGate ? " is-gate" : ""}`}>
+      <span className="roster-tick" aria-hidden="true">
+        {state === "done" ? <Check size={11} strokeWidth={3} /> : null}
+      </span>
+      <span className="roster-face" aria-hidden="true">
+        {isGate ? <ShieldCheck size={16} />
+          : persona ? <CrewAvatar agentRef={node.ref!} family={persona.family} size={30} state={state === "working" ? "working" : "idle"} />
+          : <Icon size={15} />}
+      </span>
+      <span className="roster-body">
+        <span className="roster-eyebrow">{eyebrow}</span>
+        <span className="roster-name">{node.label}</span>
+      </span>
+      <span className="roster-state">{stateWord}</span>
+    </div>
+  );
+}
+
 function BuildRail({ graph, runningNodeId, proposedNodeIds, result }: {
   graph: GTMGraph;
   runningNodeId: string | null;
-  // Steps Claude has proposed but the founder hasn't accepted yet — rendered as ghost (dashed) cards,
-  // same "not yet real" language as the main canvas, plus counted out in the summary below.
+  // Steps Claude has proposed but the founder hasn't accepted yet — rendered as ghost (dashed) rows,
+  // the same "not yet real" language as the main canvas, plus counted out in the summary below.
   proposedNodeIds?: Set<string> | null;
-  // Run results so far, so the summary can say what's actually changed — not just "N nodes".
+  // The run so far, streamed in step by step, so each row reflects a real event — never a guess.
   result?: GTMRunResult | null;
 }) {
-  // Flow order: top-down by canvas position, the same reading order the overview canvas uses.
+  // Plan order: top-down by canvas position, the same reading order the overview canvas uses.
   const nodes = [...graph.nodes]
     .filter((n) => n.category !== "context" && n.category !== "resource")
     .sort((a, b) => (a.position.y - b.position.y) || (a.position.x - b.position.x));
   const proposedCount = proposedNodeIds ? nodes.filter((n) => proposedNodeIds.has(n.id)).length : 0;
-  const doneCount = result ? nodes.filter((n) => result.nodes[n.id]).length : 0;
+  const doneCount = result ? nodes.filter((n) => result.nodes[n.id] && result.nodes[n.id]!.ok).length : 0;
+  const running = doneCount > 0 || nodes.some((n) => n.id === runningNodeId);
   return (
-    <div className="dock-build" aria-label="Building on the canvas">
+    <div className="dock-build" aria-label="The plan, striking off live as it runs">
       <div className="dock-build-head">
         <span className="dock-build-head-dot" aria-hidden="true" />
-        <span className="dock-build-head-label">Building on canvas</span>
+        <span className="dock-build-head-label">Plan</span>
         <span className="dock-build-head-count">
-          {nodes.length} node{nodes.length === 1 ? "" : "s"}
-          {proposedCount > 0 ? ` · ${proposedCount} proposed` : ""}
-          {!proposedCount && doneCount > 0 ? ` · ${doneCount} of ${nodes.length} run` : ""}
+          {proposedCount > 0 ? `${proposedCount} proposed`
+            : running ? `${doneCount} of ${nodes.length} done`
+            : `${nodes.length} step${nodes.length === 1 ? "" : "s"}`}
         </span>
       </div>
-      <div className="dock-build-flow">
-        {nodes.map((n, i) => (
-          <div className="dock-build-step" key={n.id}>
-            <BuildCard node={n} live={n.id === runningNodeId} ghost={proposedNodeIds?.has(n.id) ?? false} />
-            {i < nodes.length - 1 ? <span className="dock-build-edge" aria-hidden="true" /> : null}
-          </div>
+      <div className="dock-roster">
+        {nodes.map((n) => (
+          <RosterRow
+            key={n.id}
+            node={n}
+            state={rosterState(n, runningNodeId, result, proposedNodeIds?.has(n.id) ?? false)}
+          />
         ))}
       </div>
     </div>
@@ -724,6 +774,79 @@ function DecisionCard({ question, reason, onPick }: {
       <div className="dock-decide-hint">
         {options.length ? "Tap what's off — it drops into your reply below." : "Reply below to answer."}
       </div>
+    </div>
+  );
+}
+
+// ─── The verb-scoped send control (a canvas object is selected) ─────────────────────────────────
+// When the founder has a node or card selected, the plain send arrow becomes a VERB chip: it names the
+// action pressing send performs on that object — Draft, Connect, Split, Stage, Ask … — derived
+// deterministically from the selection kind and whatever's typed (see composerVerb.ts). The caret opens
+// a menu to change it. Monochrome throughout; only the gate verb (Stage) wears amber, because staging is
+// the one move that reaches the founder gate. The change never touches the free-chat send (no subject).
+function VerbSend({ verb, disabled, submitting, onSend, onPick }: {
+  verb: ComposerVerb;
+  disabled: boolean;
+  submitting: boolean;
+  onSend: () => void;
+  onPick: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => { if (!wrapRef.current?.contains(e.target as Node)) setOpen(false); };
+    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onEsc);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onEsc); };
+  }, [open]);
+  return (
+    <div className={`composer-verb ${verb.gate ? "gate" : ""} ${open ? "open" : ""}`} ref={wrapRef}>
+      <button
+        className="composer-verb-go"
+        type="button"
+        disabled={disabled}
+        onClick={onSend}
+        aria-label={`${verb.label} — send to Claude`}
+        title={`${verb.label} — ${verb.hint}`}
+      >
+        {submitting ? <LoaderCircle className="spin" /> : (
+          <>
+            <span className="composer-verb-label">{verb.label}</span>
+            <ArrowUp size={15} aria-hidden="true" />
+          </>
+        )}
+      </button>
+      <button
+        className="composer-verb-caret"
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Change the action"
+        title="Change the action"
+        disabled={submitting}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <ChevronDown size={13} aria-hidden="true" />
+      </button>
+      {open ? (
+        <div className="composer-verb-menu" role="menu">
+          {COMPOSER_VERBS.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              role="menuitemradio"
+              aria-checked={v.id === verb.id}
+              className={`composer-verb-item ${v.id === verb.id ? "active" : ""} ${v.gate ? "gate" : ""}`}
+              onClick={() => { onPick(v.id); setOpen(false); }}
+            >
+              <span className="composer-verb-item-label">{v.label}</span>
+              <span className="composer-verb-item-hint">{v.hint}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1072,6 +1195,17 @@ export function ComposerDock({
     if (subjectCardKey) { setCollapsed(false); setPanelOpen(true); }
   }
 
+  // The verb the send control performs on the selected object — an explicit founder override, kept only
+  // while the SAME object stays selected. Changing (or clearing) the selection drops the override so the
+  // verb re-derives from the new object's kind. setState-during-render on a changed prop, the sanctioned
+  // pattern used throughout this dock.
+  const [verbOverride, setVerbOverride] = useState<string | null>(null);
+  const [trackedVerbSubject, setTrackedVerbSubject] = useState(subject?.id ?? "");
+  if ((subject?.id ?? "") !== trackedVerbSubject) {
+    setTrackedVerbSubject(subject?.id ?? "");
+    setVerbOverride(null);
+  }
+
   // Opening the command bar drops you straight into the input — it reads as a command line, so a
   // click should land the cursor, not just reveal a panel you then have to click again.
   const [openFocus, setOpenFocus] = useState(0);
@@ -1113,6 +1247,16 @@ export function ComposerDock({
   if (needsDecision !== trackedNeedsDecision) {
     setTrackedNeedsDecision(needsDecision);
     if (needsDecision) { setCollapsed(false); setPanelOpen(true); }
+  }
+
+  // The run is the plan made live: the instant a build/run starts (rising edge), surface the roster —
+  // open the full panel and the build room so the checklist is in front of the founder, striking off
+  // step by step in lockstep with the canvas. Rising edge only, so a manual shrink mid-run sticks.
+  const runLive = running && !!graph && graph.nodes.length > 0;
+  const [trackedRunLive, setTrackedRunLive] = useState(runLive);
+  if (runLive !== trackedRunLive) {
+    setTrackedRunLive(runLive);
+    if (runLive) { setCollapsed(false); setPanelOpen(true); setExpanded(true); }
   }
 
   // Ambiguous-goal sketches, read off the session through the one isolated seam. Held as local pick
@@ -1165,7 +1309,17 @@ export function ComposerDock({
     try { await onSend(value); setInput(""); }
     finally { setSubmitting(false); }
   };
-  const send = () => sendText(input);
+  // The verb the send performs on the selected object (null in free chat). Derived deterministically
+  // from the selection's kind + what's typed, unless the founder picked one from the change menu.
+  const verbKind = subject ? (subject.detail?.type ?? subject.kind) : "";
+  const activeVerb = subject ? deriveVerb(verbKind, input, verbOverride) : null;
+  // Send. A canvas navigation command ("go to the gate") must reach the host verbatim so it can steer
+  // the camera, so it's never verb-framed — only a real turn about the selected object gets the verb.
+  const send = () => {
+    const nav = isNavCommand?.(input.trim()) ?? false;
+    const value = activeVerb && !nav ? frameVerbMessage(activeVerb, input) : input;
+    void sendText(value);
+  };
 
   // The command composer — the product's primary input, built to rival a real chat composer: a calm
   // textarea over a control row (context on the left, the live model/state, a dark send on the right).
@@ -1290,15 +1444,32 @@ export function ComposerDock({
           >
             <Mic size={16} />
           </button>
-          <button
-            className="composer-box-send"
-            disabled={submitting || !input.trim() || (sendDisabled && !(isNavCommand?.(input.trim()) ?? false))}
-            onClick={() => void send()}
-            type="button"
-            aria-label="Send to Claude"
-          >
-            {submitting ? <LoaderCircle className="spin" /> : <ArrowUp size={18} />}
-          </button>
+          {activeVerb ? (
+            /* A canvas object is selected: the send names the action it performs on it, and it's
+               changeable. A non-"ask" verb can send with an empty input (the verb IS the instruction);
+               "ask" and free chat still need typed text. */
+            <VerbSend
+              verb={activeVerb}
+              submitting={submitting}
+              disabled={
+                submitting
+                || (sendDisabled && !(isNavCommand?.(input.trim()) ?? false))
+                || (!input.trim() && activeVerb.id === "ask")
+              }
+              onSend={() => void send()}
+              onPick={setVerbOverride}
+            />
+          ) : (
+            <button
+              className="composer-box-send"
+              disabled={submitting || !input.trim() || (sendDisabled && !(isNavCommand?.(input.trim()) ?? false))}
+              onClick={() => void send()}
+              type="button"
+              aria-label="Send to Claude"
+            >
+              {submitting ? <LoaderCircle className="spin" /> : <ArrowUp size={18} />}
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -1,11 +1,13 @@
 import { useMemo, useState, type DragEvent } from "react";
 import {
   Workflow, Users, Plus, ChevronDown,
-  PanelLeftClose, PanelLeftOpen, Check, GripVertical,
+  PanelLeftClose, PanelLeftOpen, Check, GripVertical, LayoutGrid,
 } from "lucide-react";
-import { agentPersona, humanizeRef, FAMILY_TINT } from "@/lib/agentPersona";
+import { agentPersona, humanizeRef } from "@/lib/agentPersona";
 import { healthHex } from "@/lib/health";
 import { STEP_DRAG_MIME } from "@/lib/objectPalette";
+import { CrewFace } from "@/components/crew/CrewFace";
+import { CrewRoom } from "@/components/crew/CrewRoom";
 import type { AgentBenchRow } from "@/api";
 import type { ChannelMeta, GtmLibrary } from "@/types";
 import "@/styles/left-rail.css";
@@ -20,11 +22,10 @@ import "@/styles/left-rail.css";
 // reach for it — so the rail teaches the founder their own workspace instead of listing code names.
 // The rail sits BESIDE the canvas, never over it, and collapses to a thin strip to hand the width back.
 
-// The round identity mark, derived from the persona library — same source the profile sheet reads.
+// The crew member's face — the pixel character from the shared library (same source every surface
+// reads), which degrades to the two-letter monogram if the character can't render.
 function Mark({ agentRef, job }: { agentRef: string; job?: string }) {
-  const { family, monogram } = agentPersona(agentRef, job);
-  const tint = FAMILY_TINT[family];
-  return <span className="lr-mark" style={{ background: tint.bg, color: tint.fg }}>{monogram}</span>;
+  return <CrewFace agentRef={agentRef} job={job} size={26} className="lr-mark" />;
 }
 
 // Plain-English fallback for what an agent does, keyed by its human role — used only when the agent
@@ -63,13 +64,14 @@ function pipelineBlurb(ch: ChannelMeta): string {
 }
 
 function Section({
-  icon, title, count, onNew, newTitle, children,
+  icon, title, count, onNew, newTitle, action, children,
 }: {
   icon: React.ReactNode;
   title: string;
   count: number;
   onNew?: () => void;
   newTitle?: string;
+  action?: React.ReactNode;   // an extra header affordance (e.g. "open the crew room"), left of + New
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(true);
@@ -82,6 +84,7 @@ function Section({
           <span className="lr-shead-title">{title}</span>
           <span className="lr-shead-count">{count}</span>
         </button>
+        {action}
         {onNew ? (
           <button className="lr-shead-new" type="button" onClick={onNew} title={newTitle}>
             <Plus size={13} />
@@ -116,6 +119,7 @@ export function LeftRail({
   onNewSkill?: () => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [crewRoomOpen, setCrewRoomOpen] = useState(false);
 
   // Drag a crew member onto the canvas → the canvas-area drop target reads STEP_DRAG_MIME and adds a
   // pipeline step, switching to the build view so the founder watches it land. Payload shape unchanged.
@@ -207,7 +211,23 @@ export function LeftRail({
         {/* Your crew — the agents you've assembled. Click opens a teammate's profile; drag one onto the
             canvas to add it as a pipeline step. Proven above still-on-the-bench, so earned trust reads
             first. */}
-        <Section icon={<Users size={13} />} title="Your crew" count={(bench ?? []).length}>
+        <Section
+          icon={<Users size={13} />}
+          title="Your crew"
+          count={(bench ?? []).length}
+          action={
+            (bench ?? []).length > 0 ? (
+              <button
+                className="lr-shead-new"
+                type="button"
+                onClick={() => setCrewRoomOpen(true)}
+                title="Open the crew room — your whole team at a glance"
+              >
+                <LayoutGrid size={13} />
+              </button>
+            ) : null
+          }
+        >
           {bench === null ? (
             <p className="lr-empty">Reading your crew…</p>
           ) : bench.length === 0 ? (
@@ -226,6 +246,15 @@ export function LeftRail({
           )}
         </Section>
       </div>
+
+      {/* The crew room — your whole team as characters, opened from the crew header. Clicking a
+          teammate steps into its profile (the same sheet the rail rows open). */}
+      <CrewRoom
+        open={crewRoomOpen}
+        roster={bench ?? []}
+        onClose={() => setCrewRoomOpen(false)}
+        onOpen={(ref) => { setCrewRoomOpen(false); onOpenAgent(ref); }}
+      />
     </aside>
   );
 }

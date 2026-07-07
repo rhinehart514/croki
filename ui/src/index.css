@@ -3468,8 +3468,16 @@ svg {
    belongs only to the gate. */
 .loop-node-face {
   appearance: none;
+  display: grid;
+  place-items: center;
+  flex: none;
   padding: 0;
+  border: 0;
+  background: none;
   font: inherit;
+  /* Match the crew avatar's rounded-square so the hover/focus ring hugs the face (the circular
+     monogram fallback is close enough that the same ring reads clean around it too). */
+  border-radius: 24%;
   cursor: pointer;
   transition: box-shadow 120ms var(--ease), transform 120ms var(--ease);
 }
@@ -5100,10 +5108,20 @@ svg {
   animation: ghost-edge-march 0.55s linear infinite;
 }
 @keyframes ghost-edge-march { to { stroke-dashoffset: -20; } }
-/* A proposed edge fades in only once both its endpoints have surfaced, so it never dangles to a
+/* A proposed edge only exists once both its endpoints have surfaced, so it never dangles to a
    not-yet-revealed node during the staged build. */
 .react-flow__edge.loop-edge-proposed { transition: opacity 300ms var(--ease-out); }
 .react-flow__edge.loop-edge-proposed.is-unrevealed { opacity: 0; }
+/* The moment both endpoints surface, the connection is DRAWN in — the stroke wipes from source to
+   target once (a single dash long enough to cover any lane hop), then settles as a faint ghost line.
+   This reads as the operator making the connection, and supersedes the marching-ants look above for a
+   revealed edge (higher specificity + later in the cascade). */
+.react-flow__edge.loop-edge-proposed.is-revealed .react-flow__edge-path {
+  stroke: var(--ghost);
+  stroke-dasharray: 900;
+  animation: edge-draw-on 460ms var(--ease-out) both;
+}
+@keyframes edge-draw-on { from { stroke-dashoffset: 900; } to { stroke-dashoffset: 0; } }
 
 .loop-proposal-bar {
   position: absolute;
@@ -5259,19 +5277,24 @@ svg {
 .loop-proposal-note-btn.keep:not(:disabled):hover { color: var(--proven); border-color: var(--proven); background: color-mix(in srgb, var(--proven) 10%, transparent); }
 .loop-proposal-note-btn.redirect:not(:disabled):hover { color: var(--ink); border-color: var(--ink); background: var(--surface-2); }
 
-/* ── The operator cursor — Claude working on the canvas (presence over the proposal layer) ──
+/* ── The operator — the working crew member on the canvas (presence over the proposal layer) ──
    Renders in flow coordinates (ViewportPortal), so it tracks pan/zoom. The wrapper glides between
-   node positions; the pointer and tag counter-scale (inline) so they stay legible at any zoom. */
+   node positions; the character and tag counter-scale (inline) so they stay legible at any zoom.
+   The character itself is the CrewAvatar — the crew member's own face and family tint — perched on
+   the node it's working; the tag names the crew member and what it's doing. */
 .op-cursor {
   position: absolute; top: 0; left: 0;
   pointer-events: none; z-index: 9;
   transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
 }
-.op-cursor-arrow { display: block; color: var(--ink); filter: drop-shadow(0 2px 4px oklch(0.21 0.006 285.9 / 0.40)); }
-.op-cursor-arrow svg { width: 22px; height: 22px; fill: var(--ink); }
+.op-cursor-char {
+  display: block;
+  filter: drop-shadow(0 3px 5px oklch(0.21 0.006 285.9 / 0.35));
+  animation: op-cursor-in 240ms var(--ease-out) both;
+}
 .op-cursor-tag {
-  position: absolute; top: 20px; left: 16px;
+  position: absolute; top: 26px; left: 22px;
   display: flex; align-items: baseline; gap: 7px; white-space: nowrap;
   padding: 5px 10px; border-radius: 8px;
   background: var(--ink); color: #fff;
@@ -5281,9 +5304,8 @@ svg {
 .op-cursor-name { font-size: 11.5px; font-weight: 700; letter-spacing: 0.01em; }
 .op-cursor-caption { font-size: 11.5px; font-weight: 500; opacity: 0.92; }
 @keyframes op-cursor-in { from { opacity: 0; transform: translateY(-3px) scale(0.96); } to { opacity: 1; transform: none; } }
-/* At the gate the cursor wears the wall's amber, not indigo — same color grammar as the gate node. */
-.op-cursor.phase-gate .op-cursor-arrow { color: var(--gap, #d97706); }
-.op-cursor.phase-gate .op-cursor-arrow svg { fill: var(--gap, #d97706); }
+/* At the gate the tag wears the wall's amber — same color grammar as the gate node. The character
+   keeps its own crew tint (never recolored) so it stays a recognizable person, not a status chip. */
 .op-cursor.phase-gate .op-cursor-tag { background: var(--gap, #d97706); }
 
 .op-cursor-back {
@@ -5939,6 +5961,55 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .composer-box-send:disabled { background: var(--line-2); color: var(--surface); cursor: default; }
 .composer-box-send svg { width: 18px; height: 18px; }
 
+/* ── The verb-scoped send — shown only when a canvas object is selected ─────────
+   The plain arrow becomes a named action: a dark pill (Draft / Connect / Split …) split into a "go"
+   half and a caret that opens the change menu. Monochrome by the one-accent rule; ONLY the gate verb
+   (Stage) wears amber, because staging is the single move that reaches the founder gate. */
+.composer-verb { position: relative; display: inline-flex; align-items: stretch; height: 32px; flex-shrink: 0; }
+.composer-verb-go {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 100%; padding: 0 10px 0 12px; border: 0; border-radius: 16px 0 0 16px;
+  background: var(--ink); color: #fff; cursor: pointer; font-size: 12.5px; font-weight: 600;
+  letter-spacing: -0.01em; transition: opacity var(--ease), transform var(--ease);
+}
+.composer-verb-go svg { width: 15px; height: 15px; }
+.composer-verb-go .spin { width: 16px; height: 16px; }
+.composer-verb-caret {
+  display: grid; place-items: center; width: 24px; height: 100%;
+  border: 0; border-left: 1px solid rgba(255, 255, 255, 0.16); border-radius: 0 16px 16px 0;
+  background: var(--ink); color: #fff; cursor: pointer; transition: opacity var(--ease);
+}
+.composer-verb-go:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+.composer-verb-caret:hover:not(:disabled) { opacity: 0.88; }
+.composer-verb-go:disabled { background: var(--line-2); color: var(--surface); cursor: default; }
+.composer-verb-go:disabled + .composer-verb-caret { background: var(--line-2); color: var(--surface); }
+.composer-verb-caret:disabled { cursor: default; }
+/* The gate verb (Stage) is the one amber action — it's the move that reaches the founder gate. */
+.composer-verb.gate .composer-verb-go,
+.composer-verb.gate .composer-verb-caret { background: var(--gap, #b9751f); }
+.composer-verb.gate .composer-verb-caret { border-left-color: rgba(255, 255, 255, 0.24); }
+
+/* The change menu — opaque popover above the control, so the conversation never bleeds through. */
+.composer-verb-menu {
+  position: absolute; bottom: calc(100% + 6px); right: 0; z-index: 20;
+  min-width: 208px; padding: 4px; display: flex; flex-direction: column; gap: 1px;
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-md);
+  box-shadow: var(--shadow-pop);
+}
+.composer-verb-item {
+  display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 7px 9px;
+  border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ink);
+  cursor: pointer; text-align: left; transition: background var(--ease);
+}
+.composer-verb-item:hover { background: var(--surface-2); }
+.composer-verb-item.active { background: var(--surface-2); }
+.composer-verb-item-label { font-size: 12.5px; font-weight: 600; flex-shrink: 0; }
+.composer-verb-item-hint { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-verb-item.gate .composer-verb-item-label { color: var(--gap, #b9751f); }
+@media (prefers-reduced-motion: reduce) {
+  .composer-verb-go, .composer-verb-caret { transition: none; }
+}
+
 /* ── Aurora + voice mode — the composer's signature ──────────────────────────
    Aurora Canvas direction (chosen 2026-06-28, docs/design/composer.md). Palette is
    black / white / rainbow (founder call 2026-06-28): the composer is strictly
@@ -6140,9 +6211,82 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 }
 .dock-build-head-label { font-size: 10.5px; font-weight: 650; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .dock-build-head-count { margin-left: auto; font-size: 10.5px; color: var(--faint); font-family: var(--font-mono); }
-.dock-build-flow { display: flex; flex-direction: column; align-items: center; }
-.dock-build-step { display: flex; flex-direction: column; align-items: center; width: 100%; }
 .dock-build-edge { width: 2px; height: 14px; background: color-mix(in srgb, var(--line-2) 80%, transparent); flex-shrink: 0; }
+
+/* ── The plan roster: the composed steps as a live checklist that strikes off as the run streams. ── */
+.dock-roster { display: flex; flex-direction: column; gap: 2px; }
+.roster-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: var(--r-lg);
+  transition: background-color 140ms ease, opacity 140ms ease;
+}
+/* leading status tick: a hollow ring by default, filled + checked when the step lands */
+.roster-tick {
+  width: 16px; height: 16px; flex-shrink: 0; display: grid; place-items: center;
+  border-radius: 50%; border: 1.5px solid var(--ghost); color: var(--surface);
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+.roster-face {
+  width: 30px; height: 30px; flex-shrink: 0; display: grid; place-items: center;
+  border-radius: var(--r-md); background: var(--surface-2); color: var(--muted);
+  transition: opacity 140ms ease;
+}
+.roster-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.roster-eyebrow {
+  font-size: 9px; font-weight: 650; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.roster-name {
+  font-size: 12.5px; font-weight: 550; line-height: 1.25; letter-spacing: -0.011em; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.roster-state {
+  margin-left: auto; flex-shrink: 0; font-size: 9.5px; font-weight: 650;
+  letter-spacing: 0.03em; text-transform: uppercase; color: var(--faint);
+}
+
+/* waiting — quiet, the founder reads the plan ahead of the run */
+.roster-row.pending .roster-name { color: var(--ink-2); }
+
+/* working — the one rainbow, matching the canvas node lit by the same runningNodeId */
+.roster-row.working { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
+.roster-row.working .roster-tick {
+  border-color: transparent; position: relative; background: var(--surface);
+}
+.roster-row.working .roster-tick::after {
+  content: ""; position: absolute; inset: -1.5px; border-radius: 50%; padding: 1.5px;
+  background: conic-gradient(from var(--composer-ang), #ff5d5d, #ff9e3d, #ffd23f, #7be36a, #34d3cf, #5b8def, #b06cf0, #ff5db0, #ff5d5d);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+  animation: composer-spectrum-spin 2.6s linear infinite;
+}
+.roster-row.working .roster-name { color: var(--ink); font-weight: 600; }
+.roster-row.working .roster-state { color: var(--ink-2); }
+
+/* done — struck off, receding so live work stays the eye's anchor */
+.roster-row.done .roster-tick { border-color: var(--proven); background: var(--proven); color: var(--surface); }
+.roster-row.done .roster-name { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--ghost); }
+.roster-row.done .roster-face { opacity: 0.55; }
+.roster-row.done .roster-state { color: var(--faint); }
+
+/* stuck — ran and errored: honest, held in zinc (danger red stays reserved), never a false "done" */
+.roster-row.stuck .roster-tick { border-color: var(--muted); }
+.roster-row.stuck .roster-name { color: var(--ink-2); }
+.roster-row.stuck .roster-state { color: var(--muted); }
+
+/* the founder gate — the one amber, whether it's reached now or waiting ahead */
+.roster-row.is-gate .roster-face { background: var(--gap-soft); color: var(--gap); }
+.roster-row.is-gate .roster-eyebrow { color: var(--gap); }
+.roster-row.gate { background: var(--gap-soft); }
+.roster-row.gate .roster-tick { border-color: var(--gap); }
+.roster-row.gate .roster-state { color: var(--gap); }
+.roster-row.is-gate.pending .roster-state { color: color-mix(in srgb, var(--gap) 60%, var(--faint)); }
+
+/* proposed — not yet accepted: the dashed, "not yet real" language the canvas uses */
+.roster-row.ghost .roster-tick { border-style: dashed; }
+.roster-row.ghost .roster-face { opacity: 0.6; }
+.roster-row.ghost .roster-name { color: var(--muted); }
+.roster-row.ghost .roster-state { color: var(--muted); }
 
 .dock-build-card {
   position: relative; width: 100%; background: var(--surface);
@@ -7509,6 +7653,11 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
   .product-pulse,
   .composer-caret {
     animation: none !important;
+  }
+  /* No draw-on wipe under reduced motion — the revealed connection just appears, drawn. */
+  .react-flow__edge.loop-edge-proposed.is-revealed .react-flow__edge-path {
+    animation: none !important;
+    stroke-dashoffset: 0;
   }
   /* Live-progress spinner keeps turning (meaning, not decoration) */
   .spin { animation: spin 0.8s linear infinite !important; }

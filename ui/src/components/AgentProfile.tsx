@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Crosshair, FileCode2, History, PencilLine, ShieldCheck, Waypoints, X,
 } from "lucide-react";
-import { agentPersona, humanizeRef, agentOrigin, AGENT_ORIGIN_LABEL, FAMILY_TINT } from "@/lib/agentPersona";
+import { agentPersona, humanizeRef, agentOrigin, AGENT_ORIGIN_LABEL } from "@/lib/agentPersona";
+import { CrewFace } from "@/components/crew/CrewFace";
 import { Button } from "@/components/ui/button";
 import { getAgentLearning, type AgentLearning } from "@/api";
 import "@/styles/agent-profile.css";
@@ -18,13 +19,16 @@ export type AgentProfileView = {
 export type TeammateView = { ref: string; job: string };
 
 function Mark({ agentRef, job, size = "lg" }: { agentRef: string; job?: string; size?: "lg" | "sm" }) {
-  const { family, monogram } = agentPersona(agentRef, job);
-  const tint = FAMILY_TINT[family];
-  return (
-    <div className={size === "lg" ? "agentp-mark" : "mm"} style={{ background: tint.bg, color: tint.fg }}>
-      {monogram}
-    </div>
-  );
+  // The teammate's crew face — the hero avatar sits inside a calm ring; the team-grid one stands on its
+  // own soft family chip. Both degrade to the monogram if the character can't render.
+  if (size === "lg") {
+    return (
+      <span className="agentp-mark">
+        <CrewFace agentRef={agentRef} job={job} size={64} />
+      </span>
+    );
+  }
+  return <CrewFace agentRef={agentRef} job={job} size={36} />;
 }
 
 // Never let a scaffold or empty frontmatter line reach the founder. Some on-disk agent files still

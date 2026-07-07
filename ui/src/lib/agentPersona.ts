@@ -7,7 +7,7 @@
 // persists a model-given name on a composed agent node, this becomes the fallback for agents that
 // carry no such name — humanizing the ref instead of guessing a role.
 
-type AgentFamily =
+export type AgentFamily =
   | "research" | "qualify" | "write"
   | "content" | "community" | "growth"
   | "general";

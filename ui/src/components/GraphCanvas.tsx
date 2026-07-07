@@ -18,7 +18,9 @@ import QueryNode from "@/components/QueryNode";
 import WebNode from "@/components/WebNode";
 import { cn } from "@/lib/utils";
 import { healthHex } from "@/lib/health";
-import { agentPersona, FAMILY_TINT } from "@/lib/agentPersona";
+import { agentPersona } from "@/lib/agentPersona";
+import { CrewAvatar } from "@/components/crew/CrewAvatar";
+import { CrewFace } from "@/components/crew/CrewFace";
 import { useBrandGlyph } from "@/lib/brandGlyph";
 import { BrandGlyph } from "@/components/BrandGlyph";
 import type { NodeEditorBridge } from "@/components/nodeEditorBridge";
@@ -1055,10 +1057,9 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
   );
   // The judgment verdict replaces the bare health number — derived from real signals only.
   const verdict = nodeVerdict(data.health, data.contractAudit, mode);
-  // An agent node reads as a person: the role name is the headline and a family-tinted monogram is the
-  // icon, with the raw ref demoted to the faint slug below. Other kinds keep their connector icon.
+  // An agent node reads as a person: the role name is the headline and the teammate's own crew face is
+  // the icon, with the raw ref demoted to the faint slug below. Other kinds keep their connector icon.
   const persona = node.kind === "agent" && node.ref ? agentPersona(node.ref, node.label) : null;
-  const tint = persona ? FAMILY_TINT[persona.family] : null;
   // External MCP capability: this step calls a real service (Notion, Gmail, Slack…). Show that
   // service's real logo, and whether it runs free (read) or sits behind your gate (write) — the wall,
   // legible on the card itself.
@@ -1270,35 +1271,43 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
           )}
         </>
       ) : (
-        // ── Teammate / Measure / Step ── job-first header: an icon (a persona monogram for a
-        // Teammate, the brand mark for an MCP step), the quiet object label, the verdict, and status.
+        // ── Teammate / Measure / Step ── job-first header: an icon (the teammate's crew face for an
+        // agent, the brand mark for an MCP step), the quiet object label, the verdict, and status.
         <>
           <div className="loop-node-header">
             {persona && data.onOpenAgentProfile && node.ref ? (
-              // The crew face, on the step it runs: the family-tinted monogram is a real button that
-              // opens this teammate's profile sheet (the deleted crew strip's exact behavior).
+              // The crew face, on the step it runs: the teammate's own character is a real button that
+              // opens this teammate's profile sheet (the deleted crew strip's exact behavior). It bobs
+              // while the step runs, and degrades to the family-tinted monogram if it can't render.
               <button
                 type="button"
-                className="loop-node-icon loop-node-face"
-                style={tint
-                  ? { background: tint.bg, color: tint.fg, borderRadius: 999, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600 }
-                  : { background: `${color}14`, color }}
+                className="loop-node-face"
                 title={`Open ${persona.role}'s profile`}
                 aria-label={`Open ${persona.role}'s profile`}
                 onClick={(e) => { e.stopPropagation(); data.onOpenAgentProfile!(node.ref!); }}
               >
-                {persona.monogram}
+                <CrewFace
+                  agentRef={node.ref}
+                  family={persona.family}
+                  monogram={persona.monogram}
+                  size={28}
+                  state={status === "running" ? "working" : "idle"}
+                />
               </button>
+            ) : persona && node.ref ? (
+              <CrewFace
+                agentRef={node.ref}
+                family={persona.family}
+                monogram={persona.monogram}
+                size={28}
+                state={status === "running" ? "working" : "idle"}
+              />
             ) : (
               <div
                 className={cn("loop-node-icon", isMcp && "loop-node-icon-brand")}
-                style={persona && tint
-                  ? { background: tint.bg, color: tint.fg, borderRadius: 999, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600 }
-                  : isMcp ? undefined
-                  : { background: `${color}14`, color }}
+                style={isMcp ? undefined : { background: `${color}14`, color }}
               >
-                {isMcp ? <BrandGlyph serverId={mcpServer} brand={selected} size={17} />
-                  : persona ? persona.monogram : visual.icon}
+                {isMcp ? <BrandGlyph serverId={mcpServer} brand={selected} size={17} /> : visual.icon}
               </div>
             )}
             <span className="loop-node-type-label">
@@ -2013,13 +2022,16 @@ function LanePanner({ panTo, lanes }: { panTo: { channelId: string; token: numbe
   return null;
 }
 
-// ─── The operator cursor — Claude, working on your canvas ─────────────────────
-// Presence over the proposal machinery. Instead of describing a change in a wall of prose, a
-// labelled cursor travels the canvas to each node as it's staged, captions what it's doing, and
-// points at the gate when your review is needed. The camera follows the work (grab the canvas to
-// break away). This is the WATCH beat; the inline ✓/✕/note on the lead ghost is the DECIDE beat
-// that lands right where the cursor finishes. Renders in flow coordinates via ViewportPortal so it
-// tracks pan/zoom for free; the pointer and tag counter-scale so they stay legible at any zoom.
+// ─── The operator — the working crew member, on your canvas ───────────────────
+// Presence over the proposal machinery. Instead of describing a change in a wall of prose, the
+// crew member responsible for the active step appears ON that node — a little pixel character,
+// visibly working — captions what it's doing, and moves with the camera to the next step as the
+// run advances. When your review is needed, it stands on the gate. The camera follows the work
+// (grab the canvas to break away). This is the WATCH beat; the inline ✓/✕/note on the lead ghost
+// is the DECIDE beat that lands right where it finishes. Renders in flow coordinates via
+// ViewportPortal so it tracks pan/zoom for free; the character and tag counter-scale so they stay
+// legible at any zoom. There is no walking-traversal — the character appears and works in place,
+// then re-appears on the next node (motion is feedback, not decoration).
 export type OperatorCursorState = {
   phase: "build" | "rest" | "run" | "gate";
   revealOrder: string[];     // proposed node ids, in the order they surface
@@ -2069,19 +2081,31 @@ function OperatorCursor({ graph, state, followBroken, recenterSignal }: {
     : state.phase === "run" ? `Running ${target.label}`
     : state.phase === "build" ? `Adding ${target.label}`
     : state.staged > 1 ? `Staged ${state.staged} steps` : "Staged it";
+  // Whose character is on the node: any ref-bearing step is a rented mind (agent / skill / connector)
+  // and wears its own crew face — the same rule the dock's plan roster uses, so the two embodiments
+  // never disagree on who's working a step. Refless steps (gate, code, tool, context) are the lead
+  // ("Claude") — composing, running deterministic steps, or standing on the gate.
+  const isGate = target.category === "gate";
+  const persona = !isGate && target.ref ? agentPersona(target.ref, target.label) : null;
+  const operatorName = persona?.role ?? "Claude";
+  const characterRef = persona ? target.ref! : "claude";
+  const family = persona?.family ?? "general";
+  // The character is visibly working while a step is actively being composed or executed; at the
+  // resting proposal and the gate it stands idle (the amber gate styling carries the "your turn" cue).
+  const working = state.phase === "build" || state.phase === "run";
   const inv = zoom ? 1 / zoom : 1;
   return (
     <ViewportPortal>
       <div
         className={`op-cursor phase-${state.phase}`}
-        style={{ transform: `translate(${(target.position?.x ?? 0) - 14}px, ${(target.position?.y ?? 0) - 14}px)` }}
+        style={{ transform: `translate(${(target.position?.x ?? 0) - 10}px, ${(target.position?.y ?? 0) - 30}px)` }}
         aria-hidden
       >
-        <span className="op-cursor-arrow" style={{ transform: `scale(${inv})`, transformOrigin: "top left" }}>
-          <MousePointer2 />
+        <span className="op-cursor-char" style={{ transform: `scale(${inv})`, transformOrigin: "bottom left" }}>
+          <CrewAvatar agentRef={characterRef} family={family} size={34} state={working ? "working" : "idle"} />
         </span>
         <div className="op-cursor-tag" style={{ transform: `scale(${inv})`, transformOrigin: "top left" }}>
-          <span className="op-cursor-name">Claude</span>
+          <span className="op-cursor-name">{operatorName}</span>
           <span className="op-cursor-caption">{caption}</span>
         </div>
       </div>
@@ -2205,7 +2229,7 @@ export function GraphCanvas({
   subsystemHealth?: Record<string, { health: number; issue?: string }>;
   contractAudits?: Record<string, GTMContractAudit>;
   onSelect: (id: string) => void;
-  onNodePositionChange?: (nodeId: string, position: { x: number; y: number }) => void;
+  onNodePositionChange?: (nodeId: string, position: { x: number; y: number }, origin?: "drag" | "layout") => void;
   onConnectNodes?: (source: string, target: string) => void;
   onDeleteEdges?: (edgeIds: string[]) => void;
   onAddNode?: (spec: Partial<GTMNode> & { label: string }) => void;
@@ -2347,7 +2371,7 @@ export function GraphCanvas({
     for (const node of graph.nodes) {
       const p = layout.get(node.id);
       if (p && (p.x !== node.position?.x || p.y !== node.position?.y)) {
-        onNodePositionChange(node.id, p);
+        onNodePositionChange(node.id, p, "layout");
       }
     }
   }, [graph, onNodePositionChange]);
@@ -2426,7 +2450,8 @@ export function GraphCanvas({
     (_event: unknown, node: Node) => {
       // This node is now founder-placed: the render-time auto-layout must stop overriding it.
       draggedIds.current.add(node.id);
-      onNodePositionChange?.(node.id, node.position);
+      // "drag" marks this as a real founder move so the history records it (auto-layout below does not).
+      onNodePositionChange?.(node.id, node.position, "drag");
     },
     [onNodePositionChange],
   ) as Parameters<typeof ReactFlow>[0]["onNodeDragStop"];

@@ -1,0 +1,30 @@
+/* The shared teammate face. The wrapper carries the size; the crew character (which brings its own
+   soft family-tint chip) fills it, and the monogram fallback (a family-tinted round mark) sits in the
+   same footprint if the character can't render. Purely presentational — callers own any surrounding
+   button, ring, or tile. */
+
+.crew-face {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  line-height: 0;
+}
+
+/* Fill the wrapper's footprint and win over any container's own svg sizing (e.g. the canvas node's
+   .loop-node-icon svg clamp) — higher specificity than a single-class + element rule. */
+.crew-face .crew-avatar,
+.crew-face .crew-avatar svg {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.crew-face-monogram {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
