@@ -28,7 +28,12 @@ const EDGE_TYPES = new Set(["data", "context", "feedback"]);
 // "query" and "web" are workbench surfaces like "terminal" — human-operated, canvas-space, category
 // "source", no ref, never auto-execute work. query reads the project's own data (people/ledger); web is
 // a research browser. Their runners emit committed output or nothing; the wall is untouched.
-const NODE_KINDS = new Set(["tool", "agent", "skill", "code", "mcp", "switch", "terminal", "query", "web"]);
+// The canonical node-kind vocabulary. Exported as an ordered list so the operator's typed tool schema
+// (operator-tools.mjs) builds its enum from THIS single source instead of a hand-copied subset that
+// drifts (it previously listed only 4 of these, so the operator couldn't create mcp/switch/terminal/
+// query/web nodes). One list, one source of truth.
+export const NODE_KINDS_LIST = ["tool", "agent", "skill", "code", "mcp", "switch", "terminal", "query", "web"];
+const NODE_KINDS = new Set(NODE_KINDS_LIST);
 const OPEN_KINDS = new Set(["agent", "skill", "code", "mcp"]);
 
 // The fixed predicate op vocabulary a switch edge may use — the same set step-runners' applyPredicate

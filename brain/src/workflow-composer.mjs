@@ -1,4 +1,5 @@
 import { validateGraph } from "./graph-operations.mjs";
+import { listCapabilities } from "./artifact-store.mjs";
 import { channelIdFor } from "./channel-graph.mjs";
 import { getProjectChannels, loadProject } from "./project-store.mjs";
 import { saveFlow } from "./flow-store.mjs";
@@ -16,11 +17,12 @@ function groundingWithClarity(grounding, clarity) {
 }
 
 // The engine's current agent pool — the teammates a new channel could reuse instead of minting a
-// near-duplicate. With the capability-foundry layer removed there is no persisted instance pool, so
-// this is empty; the naked path composes agents inline. Kept as the single seam for reuse if a pool
-// is reintroduced.
-function enginePoolFor() {
-  return [];
+// near-duplicate. This is the LIVE on-disk crew (listCapabilities().agents): the real teammates other
+// channels already use. Previously returned [] (a stub from when there was no persisted pool), which
+// left the composer blind to the crew and prone to inventing duplicate refs. Now it reads the real
+// inventory so the compose prompt reuses existing teammates by their exact refs. Empty when none authored.
+function enginePoolFor(_project, options = {}) {
+  return listCapabilities(options).agents;
 }
 
 // Honest blank default: with no composer wired, compose nothing rather than fall back to a
@@ -254,12 +256,15 @@ function bindIO(nodes, channel, inputAdapter, outputAdapter) {
 // gate wall — returns { nodes, edges } with NO persistence and no status mutation. Used by both
 // the streaming compose preview (compose each channel's real graph, live) and the
 // persisting compose below. The model owns topology; the host owns the wall.
-export async function composeGraphForChannel({ channel, agents = [], grounding = null, clarity = null, enginePool = [], input, output, compose = blankCompose }) {
+export async function composeGraphForChannel({ channel, agents = [], grounding = null, clarity = null, enginePool = [], capabilities = null, input, output, compose = blankCompose }) {
   const spec = await compose({
     goal: input?.objective || channel.objective,
     channel,
     agents: agents.map((a) => ({ ref: a.ref, title: a.title, objective: a.objective, prompt: a.prompt, provider: a.provider })),
     enginePool,
+    // The live capability inventory (agents ∪ skills ∪ connected MCP tools) so the model composes
+    // from what actually exists — real skill names and MCP tool refs — instead of inventing them.
+    capabilities,
     grounding: groundingWithClarity(grounding, clarity),
   });
   if (spec?.ok === false) {
@@ -330,6 +335,8 @@ export async function composeNakedGraph(input, options = {}) {
     channel,
     agents,
     enginePool: enginePoolFor(project, options),
+    // The full live inventory (agents ∪ skills ∪ connected MCP tools) reaches the compose prompt.
+    capabilities: listCapabilities(options),
     grounding: input.grounding ?? null,
     clarity: clarityGrounding(project.id, options),
     input: input.input,

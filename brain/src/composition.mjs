@@ -49,14 +49,25 @@ A data edge leaving a "switch" node ALSO carries "predicate": { "field": "<itemF
 // Live composer: reads the repo on the founder's subscription and returns a { nodes, edges }
 // graph spec. The host (workflow-composer.mjs) normalizes, enforces the gate wall, and validates.
 export function createClaudeComposer({ cwd = process.cwd(), model, maxTurns = 24, onText } = {}) {
-  return async function compose({ goal, channel, agents, grounding, enginePool }) {
+  return async function compose({ goal, channel, agents, grounding, enginePool, capabilities }) {
+    // The live capability inventory (agents ∪ skills ∪ connected MCP tools). When present, the model
+    // composes from what ACTUALLY exists — real skill names and MCP tool refs — instead of inventing
+    // them. Only skills + MCP tools are rendered here; the reusable agent pool has its own block above.
+    const capabilityBlock = capabilities
+      ? [
+          "\nLive capabilities you can wire (compose from these; reference by their exact ref/name):",
+          `- Skills (kind:\"skill\", ref = the name): ${JSON.stringify((capabilities.skills ?? []).map((s) => s.name))}`,
+          `- Connected MCP tools (kind:\"mcp\", ref = \"serverId/toolName\"; a \"read\" tool runs free, a \"write\" tool still sits behind a founder gate): ${JSON.stringify((capabilities.tools ?? []).map((t) => ({ ref: `${t.serverId}/${t.toolName}`, lane: t.lane })))}`,
+        ].join("\n")
+      : "";
     const prompt = [
       COMPOSE_PROMPT,
       `\nChannel objective:\n${goal || channel?.objective || ""}`,
       `\nAccepted agents (use these refs):\n${JSON.stringify(agents ?? [], null, 2)}`,
       `\nEngine agent pool — reuse an existing ref when it already covers the capability, don't duplicate:\n${JSON.stringify(enginePool ?? [], null, 2)}`,
+      capabilityBlock,
       `\nProduct grounding:\n${JSON.stringify(grounding ?? {}, null, 2)}`,
-    ].join("\n");
+    ].filter(Boolean).join("\n");
     const { text, error } = await runClaudeQuery({ prompt, cwd, model, maxTurns, onText });
     if (error) return { ok: false, error: error.message };
     const graph = parseAgentObject(text);

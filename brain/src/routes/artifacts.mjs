@@ -3,7 +3,7 @@
 // wall: the founder gate still governs every send; this only supplies the key an approved send will use.
 import { json, readBody } from "./util.mjs";
 import { loadProject } from "../project-store.mjs";
-import { listArtifacts, readArtifact, writeArtifact } from "../artifact-store.mjs";
+import { listArtifacts, listCapabilities, readArtifact, writeArtifact } from "../artifact-store.mjs";
 import { setCredential, setOAuthCredential, listCredentials, removeCredential } from "../credential-store.mjs";
 import { runLoopbackConnect } from "../connectors/execute/gmail-oauth.mjs";
 
@@ -12,6 +12,11 @@ export default async function handle({ req, res, url }) {
   // editing: the raw .md is the source of truth. This is the P3 authoring surface.
   if (req.method === "GET" && url.pathname === "/api/artifacts") {
     json(res, 200, listArtifacts()); return true;
+  }
+  // The live capability inventory the UI lane consumes: agents ∪ skills ∪ connected MCP tools, each
+  // tool tagged with the lane it sits in. The same inventory injected into the compose prompt (Wave 4).
+  if (req.method === "GET" && url.pathname === "/api/capabilities") {
+    json(res, 200, listCapabilities()); return true;
   }
   if (req.method === "GET" && url.pathname === "/api/artifact") {
     const type = url.searchParams.get("type");

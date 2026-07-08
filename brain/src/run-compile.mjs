@@ -20,6 +20,7 @@
 //     field is required, no shape is rejected. The gate renders whatever was staged.
 
 import { composeGraphForChannel, assertGateWall } from "./workflow-composer.mjs";
+import { listCapabilities } from "./artifact-store.mjs";
 import { gtmPathStore, measurementContractStore, runStore, productTruthStore, marketObjectStore } from "./gtm-store.mjs";
 import { normalizeRunPlan } from "./graph-intelligence/compile-decompose.mjs";
 import { runGraph } from "./graph.mjs";
@@ -430,7 +431,7 @@ export async function compileRunFromPath({
   // 4. Reuse the proven compose-to-gate engine to design the executable steps. It asserts the founder
   //    gate on every path to an execute node; a run that could send without a gate never compiles.
   const channel = channelForPath(resolvedPath);
-  const { nodes, edges } = await composeGraphForChannel({ channel, grounding, input, output, compose });
+  const { nodes, edges } = await composeGraphForChannel({ channel, grounding, input, output, compose, capabilities: listCapabilities(options) });
 
   // 5. Re-assert the wall on the compiled topology (belt and suspenders — the wall is untouched).
   assertGateWall(nodes, edges);

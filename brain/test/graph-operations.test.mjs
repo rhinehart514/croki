@@ -1,7 +1,19 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { applyGraphOperations, validateGraph } from "../src/graph-operations.mjs";
+import { applyGraphOperations, validateGraph, NODE_KINDS_LIST } from "../src/graph-operations.mjs";
+import { GRAPH_OPERATIONS_INPUT_SCHEMA } from "../src/operator-tools.mjs";
 import { defaultGraphTemplate } from "../src/graph.mjs";
+
+describe("node-kind enum stays synced across the operator schema and the validator (Wave 4)", () => {
+  it("the operator's add-node kind enum is exactly the validator's canonical kinds", () => {
+    const schemaEnum = GRAPH_OPERATIONS_INPUT_SCHEMA
+      .properties.operations.items.properties.node.properties.kind.enum;
+    // Same set of kinds — the operator can create every kind the validator accepts (mcp/switch/
+    // terminal/query/web included), instead of the old 4-kind subset that couldn't.
+    assert.deepEqual([...schemaEnum].sort(), [...NODE_KINDS_LIST].sort());
+    assert.ok(schemaEnum.includes("mcp") && schemaEnum.includes("switch"), "the full vocabulary is exposed");
+  });
+});
 
 describe("typed graph operations", () => {
   it("applies a multi-operation patch and increments the revision", () => {

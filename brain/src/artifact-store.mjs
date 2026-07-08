@@ -14,6 +14,7 @@
 
 import fs from "node:fs";
 import os from "node:os";
+import { listServers, effectiveClass } from "./mcp-store.mjs";
 import path from "node:path";
 
 function claudeDir(options = {}) {
@@ -107,6 +108,27 @@ export function listArtifacts(options = {}) {
   agents.sort((a, b) => a.ref.localeCompare(b.ref));
   skills.sort((a, b) => a.ref.localeCompare(b.ref));
   return { agents, skills };
+}
+
+// The live capability inventory — what the crew can ACTUALLY reach right now, from real sources:
+// the on-disk agents and skills (listArtifacts) plus every connected MCP tool (mcp-store), each
+// tool carrying the lane it really sits in (read runs free; write stays behind the founder gate).
+// Wave 4: this is injected into the compose prompt so the model composes from what exists instead
+// of inventing refs, and exposed over HTTP so the UI can show the same inventory. Pure aggregation
+// over live stores — never seeded, empty when nothing is connected/authored.
+export function listCapabilities(options = {}) {
+  const { agents, skills } = listArtifacts(options);
+  const tools = [];
+  for (const server of listServers(options)) {
+    for (const tool of server.tools ?? []) {
+      tools.push({ serverId: server.id, toolName: tool.name, lane: effectiveClass(tool) });
+    }
+  }
+  return {
+    tools,
+    agents: agents.map((a) => ({ ref: a.ref, label: a.name })),
+    skills: skills.map((s) => ({ name: s.ref })),
+  };
 }
 
 // Read one artifact's full raw markdown. `exists:false` (not an error) when the ref has

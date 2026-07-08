@@ -90,6 +90,27 @@ describe("model-composed workflow (no fixed skeleton)", () => {
     assert.equal(loadFlow(composed.channel.graphId, null, options).graph.nodes.length, composed.graph.nodes.length);
   });
 
+  it("feeds the live capability inventory + non-empty engine pool into the composer (Wave 4)", async () => {
+    // Seed a real on-disk agent + skill and a connected MCP tool in this test's isolated dirs.
+    fs.mkdirSync(path.join(options.claudeDir, "agents"), { recursive: true });
+    fs.writeFileSync(path.join(options.claudeDir, "agents", "researcher.md"), "---\nname: researcher\ndescription: R.\n---\n# researcher\n");
+    fs.mkdirSync(path.join(options.claudeDir, "skills", "positioning"), { recursive: true });
+    fs.writeFileSync(path.join(options.claudeDir, "skills", "positioning", "SKILL.md"), "---\nname: positioning\ndescription: P.\n---\n# positioning\n");
+    const { recordServer } = await import("../src/mcp-store.mjs");
+    recordServer({ id: "clay", name: "Clay", trust: "verified", tools: [{ name: "find_companies" }] }, options);
+
+    let seen = null;
+    const spyComposer = (args) => { seen = args; return branchedComposer(args); };
+    await composeNakedGraph(channelInput(), { ...options, compose: spyComposer });
+
+    // enginePoolFor no longer returns [] — it carries the live agents so the model reuses real refs.
+    assert.ok(seen.enginePool.some((a) => a.ref === "researcher"), "the live agent pool reaches the composer, not []");
+    // The full inventory (agents ∪ skills ∪ MCP tools) reaches the composer as `capabilities`.
+    assert.ok(seen.capabilities, "capabilities are passed through");
+    assert.ok(seen.capabilities.skills.some((s) => s.name === "positioning"), "skills reach the composer");
+    assert.ok(seen.capabilities.tools.some((t) => t.toolName === "find_companies"), "connected MCP tools reach the composer");
+  });
+
   it("enforces the wall: rejects an execute node that is not behind a founder gate", async () => {
     const ungated = () => ({
       ok: true,

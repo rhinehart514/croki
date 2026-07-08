@@ -4,8 +4,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
-  fileForArtifact, isValidRef, listArtifacts, parseFrontmatter, readArtifact, writeArtifact,
+  fileForArtifact, isValidRef, listArtifacts, listCapabilities, parseFrontmatter, readArtifact, writeArtifact,
 } from "../src/artifact-store.mjs";
+import { recordServer } from "../src/mcp-store.mjs";
 
 let dir;
 const opts = () => ({ claudeDir: dir });
@@ -98,5 +99,38 @@ describe("list / read / write", () => {
 
   it("refuses an empty write", () => {
     assert.throws(() => writeArtifact("agent", "gtm-find", "   ", opts()), /non-empty/);
+  });
+});
+
+describe("listCapabilities — the live inventory the composer + UI consume (Wave 4)", () => {
+  it("aggregates on-disk agents ∪ skills ∪ connected MCP tools in the contract shape", () => {
+    // Same claudeDir carries the seeded agent + skill; a fresh root isolates the MCP store, where we
+    // record a server so a real write-class tool AND a read tool both appear with their lanes.
+    const capOpts = { claudeDir: dir, root: dir };
+    recordServer({
+      id: "clay",
+      name: "Clay",
+      trust: "verified",
+      tools: [{ name: "find_companies" }, { name: "push_to_crm" }],
+    }, capOpts);
+
+    const caps = listCapabilities(capOpts);
+
+    // agents: {ref,label}
+    assert.deepEqual(caps.agents, [{ ref: "gtm-find", label: "gtm-find" }]);
+    // skills: {name}
+    assert.deepEqual(caps.skills, [{ name: "positioning" }]);
+    // tools: {serverId,toolName,lane} — read vs write derived from the real classifier, not seeded
+    const byTool = Object.fromEntries(caps.tools.map((t) => [t.toolName, t]));
+    assert.equal(byTool.find_companies.serverId, "clay");
+    assert.equal(byTool.find_companies.lane, "read");
+    assert.equal(byTool.push_to_crm.lane, "write", "a write tool is tagged write, stays behind the gate");
+  });
+
+  it("returns empty arrays, not an error, when nothing is authored or connected", () => {
+    const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-cap-empty-"));
+    const caps = listCapabilities({ claudeDir: emptyDir, root: emptyDir });
+    assert.deepEqual(caps, { tools: [], agents: [], skills: [] });
+    fs.rmSync(emptyDir, { recursive: true, force: true });
   });
 });

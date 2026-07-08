@@ -2,6 +2,11 @@
 // NAKED subset the autonomous model is actually offered. Pure data, moved verbatim out of
 // operator-runtime.mjs so the runtime file reads as orchestration, not a wall of schema.
 
+// The node-kind enum is built from the canonical list in graph-operations so it can never drift below
+// what the validator accepts. It previously listed only tool/agent/skill/code — so the operator could
+// not create mcp/switch/terminal/query/web nodes the graph validator already allows.
+import { NODE_KINDS_LIST } from "./graph-operations.mjs";
+
 export const GRAPH_OPERATIONS_INPUT_SCHEMA = {
   type: "object",
   properties: {
@@ -34,8 +39,8 @@ export const GRAPH_OPERATIONS_INPUT_SCHEMA = {
               id: { type: "string" },
               kind: {
                 type: "string",
-                enum: ["tool", "agent", "skill", "code"],
-                description: "tool = connector (default); agent = invoke a subagent; skill = apply a skill's judgment; code = a bounded transform.",
+                enum: NODE_KINDS_LIST,
+                description: "tool = connector (default); agent = invoke a subagent; skill = apply a skill's judgment; code = a bounded transform; mcp = a connected external tool (serverId/toolName); switch = a conditional router; terminal/query/web = human-operated workbench surfaces.",
               },
               ref: { type: "string", description: "For agent/skill/code steps: the subagent, skill, or transform to invoke." },
               category: {
