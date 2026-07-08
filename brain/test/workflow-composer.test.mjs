@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { composeNakedGraph, composeGraphForChannel } from "../src/workflow-composer.mjs";
+import { composeNakedGraph, composeGraphForChannel, normalizeComposedGraph, explainComposedGraph, graphNeedsRationale } from "../src/workflow-composer.mjs";
 import { createProject, loadProject } from "../src/project-store.mjs";
 import { loadFlow } from "../src/flow-store.mjs";
 import { scanRepo } from "../src/scan.mjs";
@@ -227,6 +227,75 @@ describe("model-composed workflow (no fixed skeleton)", () => {
     assert.equal(source.connector, "api", "the composed source keeps its own connector");
     assert.equal(source.config.endpoint, "https://api.example.com/releases", "and its own endpoint");
     assert.equal(source.config.items, undefined, "no empty founder list is stamped over it");
+  });
+
+  it("carries a one-line rationale through on nodes and edges, dropping nothing else", () => {
+    const spec = {
+      nodes: [
+        { id: "src", category: "source", connector: "manual", label: "Input", rationale: "Where the leads come in." },
+        { id: "draft", kind: "agent", ref: "researcher", label: "Draft", prompt: "Draft it.", rationale: "  Writes the first pass.  " },
+        { id: "route", kind: "switch", label: "Split", rationale: "Sends hot leads down a faster path." },
+        { id: "bare", category: "measure", connector: "default", label: "Measure" }, // no rationale supplied
+      ],
+      edges: [
+        { id: "e1", source: "src", target: "draft", edgeType: "data", label: "leads", rationale: "The draft needs the leads first." },
+        { id: "e2", source: "draft", target: "route", edgeType: "data" }, // no rationale supplied
+      ],
+    };
+    const { nodes, edges } = normalizeComposedGraph(spec);
+    const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+
+    assert.equal(byId.src.rationale, "Where the leads come in.");
+    assert.equal(byId.draft.rationale, "Writes the first pass.", "the rationale is trimmed");
+    assert.equal(byId.route.rationale, "Sends hot leads down a faster path.");
+    assert.equal(byId.bare.rationale, undefined, "a node without a rationale gets no empty field");
+    // Nothing else dropped: existing fields survive alongside the new one.
+    assert.equal(byId.draft.ref, "researcher");
+    assert.equal(byId.draft.agentPrompt, "Draft it.");
+    assert.equal(byId.src.connector, "manual");
+
+    const edgeById = Object.fromEntries(edges.map((e) => [e.id, e]));
+    assert.equal(edgeById.e1.rationale, "The draft needs the leads first.");
+    assert.equal(edgeById.e1.label, "leads", "the edge label survives alongside the rationale");
+    assert.equal(edgeById.e2.rationale, undefined, "an edge without a rationale gets no empty field");
+  });
+
+  it("explainComposedGraph short-circuits with no model call when every node and edge already has a rationale", async () => {
+    const graph = {
+      id: "g1",
+      nodes: [
+        { id: "src", category: "source", label: "Input", rationale: "in" },
+        { id: "gate", category: "gate", label: "Review", rationale: "gate" },
+      ],
+      edges: [{ id: "e1", source: "src", target: "gate", edgeType: "data", rationale: "order" }],
+    };
+    assert.equal(graphNeedsRationale(graph), false);
+    let called = false;
+    const explain = async () => { called = true; return { ok: true, nodes: {}, edges: {} }; };
+    const out = await explainComposedGraph(graph, { explain });
+    assert.equal(called, false, "the rented model is never called when nothing is missing");
+    assert.equal(out, graph, "the same graph object is returned untouched");
+  });
+
+  it("explainComposedGraph fills missing rationale from the rented explainer, preserving existing ones", async () => {
+    const graph = {
+      id: "g1",
+      nodes: [
+        { id: "src", category: "source", label: "Input", rationale: "kept" },
+        { id: "gate", category: "gate", label: "Review" }, // missing
+      ],
+      edges: [{ id: "e1", source: "src", target: "gate", edgeType: "data" }], // missing
+    };
+    assert.equal(graphNeedsRationale(graph), true);
+    const explain = async ({ graph: g }) => {
+      assert.ok(Array.isArray(g.nodes), "the explainer receives the real graph");
+      return { ok: true, nodes: { src: "should not overwrite", gate: "Founder checks the drafts." }, edges: { e1: "Review comes after input." } };
+    };
+    const out = await explainComposedGraph(graph, { explain });
+    const byId = Object.fromEntries(out.nodes.map((n) => [n.id, n]));
+    assert.equal(byId.src.rationale, "kept", "an existing rationale is not overwritten");
+    assert.equal(byId.gate.rationale, "Founder checks the drafts.", "a missing node rationale is filled");
+    assert.equal(out.edges[0].rationale, "Review comes after input.", "a missing edge rationale is filled");
   });
 
   it("the pure compose path returns nodes/edges without persisting", async () => {

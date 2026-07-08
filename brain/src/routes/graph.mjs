@@ -6,6 +6,8 @@ import { json, readBody, channelOfferFor, srcDir } from "./util.mjs";
 import { loadProject, applySharedContextToGraph, getChannel } from "../project-store.mjs";
 import { loadFlow, recordFlowRun, saveFlow } from "../flow-store.mjs";
 import { applyGraphOperations, validateGraph } from "../graph-operations.mjs";
+import { explainComposedGraph } from "../workflow-composer.mjs";
+import { createClaudeExplainer } from "../composition.mjs";
 import { auditGraphContracts } from "../contracts.mjs";
 import { buildDraftMemory, extractDecisions } from "../memory.mjs";
 import { ideaTasteForProject } from "../feedback-ledger.mjs";
@@ -61,6 +63,30 @@ export default async function handle({ req, res, url }) {
       if (!validation.ok) throw new Error(`Graph is invalid: ${validation.errors.join(" ")}`);
       const saved = saveFlow(body.graph);
       json(res, 200, { graph: saved.graph, savedAt: saved.updatedAt });
+    } catch (err) { json(res, 400, { error: err instanceof Error ? err.message : String(err) }); }
+    return true;
+  }
+
+  // Explain — fill in a one-line rationale for every node and edge of an already-composed pipeline
+  // that predates rationale. Reads the persisted graph, rents the model to reason over its real
+  // labels/kinds/edges (no product facts invented), persists the rationale back, and returns the
+  // updated graph. Idempotent: a graph already fully annotated skips the model call and re-saves
+  // nothing unless `force` is passed. Read-shaped — it never runs the pipeline, never sends.
+  if (req.method === "POST" && url.pathname === "/api/graph/explain") {
+    try {
+      const body = await readBody(req);
+      const requested = body.channelId || body.workflowId || body.graphId;
+      if (!requested) throw new Error("Request must include a channelId, workflowId, or graphId.");
+      const project = loadProject();
+      let graphId = requested;
+      try { graphId = getChannel(project, requested).graphId; } catch { /* already a raw graph id */ }
+      const saved = loadFlow(graphId, null);
+      if (!saved.graph) throw new Error(`Graph not found: ${graphId}`);
+      const explain = createClaudeExplainer({ cwd: project.sharedContext?.repository?.repo || process.cwd() });
+      const updated = await explainComposedGraph(saved.graph, { explain, force: body.force === true });
+      // Only persist when something actually changed — the idempotent skip returns the same object.
+      if (updated !== saved.graph) saveFlow(updated);
+      json(res, 200, { graph: updated });
     } catch (err) { json(res, 400, { error: err instanceof Error ? err.message : String(err) }); }
     return true;
   }

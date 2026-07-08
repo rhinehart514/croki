@@ -25,6 +25,9 @@ type AgentPersona = {
 // instead of being forced into an SDR name. Non-outbound, motion-spanning roles are tested FIRST so
 // a "content draft" agent lands "Content Strategist", never the generic "Outreach Writer" below it.
 const RULES: { test: RegExp; role: string; family: AgentFamily }[] = [
+  // Build / compose (a microproduct, a demo, an asset) — a maker, not a command string. Placed first so
+  // "gtm-compose-microproduct" reads as a teammate ("Product Builder"), never falls through to the raw ref.
+  { test: /compose|microproduct|assemble|scaffold|\bbuilder?\b/, role: "Product Builder", family: "content" },
   // Content / SEO / inbound
   { test: /content|\bseo\b|blog|article|editorial|\bwriting\b.*(rank|search)/, role: "Content Strategist", family: "content" },
   { test: /\bpublish|distribut|syndicat/, role: "Distribution Planner", family: "content" },

@@ -4,7 +4,7 @@
 // executeTool back (and re-exports it as executeOperatorTool), so no import cycle is introduced.
 import path from "node:path";
 import { getEngineState } from "./engine.mjs";
-import { liveStepRuntime } from "./agent-bridge.mjs";
+import { liveStepRuntime, createGateTranslator } from "./agent-bridge.mjs";
 import { buildMicroproduct } from "./build.mjs";
 import { storeRoot } from "./store-fs.mjs";
 import { createClaudeComposer } from "./composition.mjs";
@@ -20,6 +20,8 @@ import { listConnectors, runGraph } from "./graph.mjs";
 import { executeDomainCommand } from "./domain-commands.mjs";
 import { saveOperatorSession } from "./operator-store.mjs";
 import { loadProject, registerComposedChannel, updateSharedContext } from "./project-store.mjs";
+import { teammateSoulStore } from "./teammate-soul-store.mjs";
+import { createTeammateNarrator } from "./teammate-narrator.mjs";
 import { composeNakedGraph } from "./workflow-composer.mjs";
 import { composeCandidates, createClaudeCandidateComposer } from "./candidate-composer.mjs";
 import { annotateRunEvidence } from "./evidence-lines.mjs";
@@ -82,6 +84,30 @@ async function liveProduceMicroproduct({ goal, grounding, repo, options }) {
   });
 }
 
+// First-person heartbeats a teammate speaks while it works — a deterministic template keyed on the
+// node's category, never a model call (cheap, per the grounding: code answers when code can). These are
+// the ONLY strings a crew beat carries; they read solely off the node's own category, label, and the
+// item count — never its prompt, config, or any soul internals. The founder sees the teammate's voice
+// and quality, never the machinery behind it.
+function narrateStart(node = {}) {
+  const label = (node.label || "the next step").toString().trim() || "the next step";
+  switch (node.category) {
+    case "generate": return "Let me draft the first pass.";
+    case "enrich": return "Pulling the details together now.";
+    case "measure": return "Checking how this landed.";
+    default: return `On it — ${label}.`;
+  }
+}
+function narrateDone(node = {}, result = {}, count = 0) {
+  const n = Number.isFinite(count) ? count : 0;
+  switch (node.category) {
+    case "generate": return `Drafted ${n} for your review.`;
+    case "enrich": return `Filled in ${n}.`;
+    case "measure": return "Measured — here's what it says.";
+    default: return `Found ${n} worth a look.`;
+  }
+}
+
 async function executeGraphRun(session, { targetNodeId, stream = false } = {}, options = {}) {
   const flow = flowFor(session, options);
   // When streaming is on (the autonomous compose_and_run drive), surface each step as it executes —
@@ -89,26 +115,86 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
   // UI can animate progress instead of seeing one batch at the end. The events are persisted through
   // saveOperatorSession (mutating the local `session` ref), the same mechanism every other event uses.
   let live = session;
+  // Per-node metadata captured on node_start (ref/label/kind/category), read back on node_done so a
+  // teammate's closing beat knows who spoke and in what register. Cosmetic surfacing only.
+  const nodeMeta = new Map();
+  // The live teammate-voice narrator: writes each crew beat in the teammate's own voice, guided ONLY by
+  // the wall-safe brief. Gated identically to the gateTranslator auto-create below — live only, OFF for
+  // any unit run (scoped to options.root) or injected stepRuntime. So every existing unit test gets
+  // narrator=null and keeps today's exact deterministic template strings (zero churn, no subprocess).
+  const narrator = "teammateNarrator" in options
+    ? options.teammateNarrator
+    : ((options.stepRuntime || options.root) ? null : createTeammateNarrator({ cwd: options.cwd }));
+  // The founder-safe voice brief for one teammate in this project. Births a thin soul if needed so a
+  // never-run teammate still narrates off its deterministic fallback. Any error → null (falls back to
+  // the template), never a thrown error that breaks the streaming run.
+  const briefFor = (ref) => {
+    if (!ref) return null;
+    try {
+      return teammateSoulStore.voiceBriefFor(session.projectId || "default", ref, { definition: null }, options);
+    } catch {
+      return null;
+    }
+  };
   const onEvent = stream
-    ? (event) => {
+    ? async (event) => {
         if (event.type === "node_start") {
-          live = addEvent(live, {
-            type: "operator_node_start",
-            title: `Running ${event.label || event.nodeId}`,
-            detail: event.category ? `${event.kind || "tool"} · ${event.category}` : (event.ref || event.kind || "tool"),
-            data: { nodeId: event.nodeId, category: event.category, kind: event.kind, ref: event.ref },
-          }, options);
+          nodeMeta.set(event.nodeId, { ref: event.ref, label: event.label, kind: event.kind, category: event.category });
+          // A teammate actually doing the work (an agent-kind node with a ref) speaks a first-person
+          // heartbeat as ITSELF — the composer resolves its face/name per message from data.ref. Every
+          // other node stays quiet machinery in the collapsed tool trace, exactly as before.
+          if (event.kind === "agent" && event.ref) {
+            // The real in-character beat, written in this teammate's own voice (guided by the wall-safe
+            // brief). Falls back to the deterministic template on any miss — a beat that can't be written
+            // in-voice is silently the old string, so no new failure mode reaches the founder.
+            const brief = narrator ? briefFor(event.ref) : null;
+            const line = (narrator && brief)
+              ? await narrator({ brief, phase: "start", node: { nodeId: event.nodeId, label: event.label } })
+              : null;
+            live = addEvent(live, {
+              type: "teammate_said",
+              title: line || narrateStart(event),
+              data: { ref: event.ref, nodeId: event.nodeId, phase: "start", label: event.label ?? null, category: event.category ?? null },
+            }, options);
+          } else {
+            live = addEvent(live, {
+              type: "operator_node_start",
+              title: `Running ${event.label || event.nodeId}`,
+              detail: event.category ? `${event.kind || "tool"} · ${event.category}` : (event.ref || event.kind || "tool"),
+              data: { nodeId: event.nodeId, category: event.category, kind: event.kind, ref: event.ref },
+            }, options);
+          }
         } else if (event.type === "node_done") {
           const r = event.result ?? {};
           const count = Array.isArray(r.items) ? r.items.length : 0;
-          live = addEvent(live, {
+          const meta = nodeMeta.get(event.nodeId) ?? {};
+          // The machinery done-event — the collapsed-tool-trace record. A teammate node's closing beat
+          // REPLACES it on the happy path, but on a FAILURE the raw engine error must still land here
+          // (never on the crew bubble), so a teammate never voices an engine stack trace.
+          const machineryDone = {
             type: r.pendingReview ? "operator_reached_gate" : "operator_node_done",
             title: r.pendingReview
               ? `Reached the founder gate · ${count} item${count === 1 ? "" : "s"} awaiting release`
               : `${r.category === "gate" ? "Gate" : r.category === "generate" || r.kind === "agent" ? "Drafted" : "Completed"} ${event.nodeId} · ${count} item${count === 1 ? "" : "s"}`,
             detail: r.ok === false ? (r.error ?? "Step failed.") : null,
             data: { nodeId: event.nodeId, ok: r.ok, itemCount: count, pendingReview: r.pendingReview ?? false },
-          }, options);
+          };
+          // An agent that FINISHED its work (not one pausing for review — the gate owns that moment)
+          // gets a closing first-person beat. A pendingReview agent keeps the machinery event only.
+          if (meta.kind === "agent" && meta.ref && !r.pendingReview) {
+            const brief = narrator ? briefFor(meta.ref) : null;
+            const line = (narrator && brief)
+              ? await narrator({ brief, phase: "done", node: { nodeId: event.nodeId, label: meta.label }, count })
+              : null;
+            live = addEvent(live, {
+              type: "teammate_said",
+              title: line || narrateDone(meta, r, count),
+              data: { ref: meta.ref, nodeId: event.nodeId, phase: "done", itemCount: count, category: meta.category ?? null },
+            }, options);
+            if (r.ok === false) live = addEvent(live, machineryDone, options);
+          } else {
+            live = addEvent(live, machineryDone, options);
+          }
         }
       }
     : null;
@@ -126,6 +212,14 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
     // The live subscription-backed step runtime by default; a test injects a fake through
     // options.stepRuntime so the open agent/skill/code steps run keyless.
     stepRuntime: options.stepRuntime || liveStepRuntime({ cwd: options.cwd }),
+    // The live plain-language gate translator. Auto-created only for a real run: it is OFF when the caller
+    // passed an explicit options.gateTranslator, injected a fake stepRuntime (keyless run), or scoped the
+    // run to an isolated store root (options.root — every unit test does this; production never does). So a
+    // unit run never spawns a translation call, while a real run gets the live translator, which the gate
+    // connector still wraps in a timeout + raw-subject fallback.
+    gateTranslator: "gateTranslator" in options
+      ? options.gateTranslator
+      : ((options.stepRuntime || options.root) ? null : createGateTranslator({ cwd: options.cwd })),
     loadLastRunItems: createDerivedSourceLoader({ ...options, projectId: session.projectId || "default" }),
     // BYO credentials: a founder-pasted key for this project wins over env; options carries the
     // persistence root so the stored key resolves from the same store the founder saved it in.

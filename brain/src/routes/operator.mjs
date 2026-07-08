@@ -2,6 +2,8 @@
 // status, and the founder-decision actions (resume / gate / proposal / ideas / candidates / cancel).
 // Moved verbatim out of server.mjs. The gate action carries the browser-only release guard.
 import { json, readBody } from "./util.mjs";
+import { handleComposerTurn } from "../composer-turn.mjs";
+import { buildComposerBriefing } from "../composer-briefing.mjs";
 import { loadProject } from "../project-store.mjs";
 import { loadFlow } from "../flow-store.mjs";
 import {
@@ -17,6 +19,7 @@ import {
   launchOperatorSession,
   resolveOperatorCandidates,
   resolveOperatorGate,
+  resolveOperatorGateRefine,
   resolveOperatorIdeas,
   resolveOperatorProposal,
   resumeOperatorSession,
@@ -118,7 +121,7 @@ export default async function handle({ req, res, url }) {
     return true;
   }
 
-  const operatorActionMatch = url.pathname.match(/^\/api\/operator\/sessions\/([^/]+)\/(resume|gate|proposal|ideas|candidates|cancel)$/);
+  const operatorActionMatch = url.pathname.match(/^\/api\/operator\/sessions\/([^/]+)\/(resume|gate-refine|gate|proposal|ideas|candidates|cancel)$/);
   if (req.method === "POST" && operatorActionMatch) {
     try {
       const body = await readBody(req);
@@ -127,13 +130,19 @@ export default async function handle({ req, res, url }) {
       // driving, reject a mismatch loudly rather than letting it resume/gate another project's session.
       if (body.projectId) assertOperatorSessionProject(sessionId, body.projectId);
       let session;
-      if (action === "resume") session = resumeOperatorSession(sessionId, body.input);
+      // `body.hints` (optional) carries the founder's @-mentioned teammates/capabilities from the
+      // composer — advisory steering only, folded into the operator's context so composition prefers the
+      // named crew. It never blocks or contracts the run (the no-cage invariant).
+      if (action === "resume") session = resumeOperatorSession(sessionId, body.input, { hints: body.hints });
       // Role-gated release: pass the acting user (request headers, else founder) so resolveOperatorGate
       // can authorize the send. A viewer/member release throws gate_release_forbidden → 403. Also pass the
       // browser-only release guard (W2b): the same session-token/agent-header check the raw graph-run path
       // uses, so an agent-stamped or token-less APPROVAL at the operator gate is refused too. Both guards
       // hold — role AND browser session — defense in depth.
       else if (action === "gate") session = await resolveOperatorGate(sessionId, { ...body, request: req }, { authorizeReleaseForRequest: authorizeReleaseForRequest(req) });
+      // Send ONE staged item back to the crew to rework, with the founder's note. Releases nothing — it
+      // re-drives to a fresh gate — so it takes the same authorizers as `gate` but never crosses the wall.
+      else if (action === "gate-refine") session = await resolveOperatorGateRefine(sessionId, { ...body, request: req }, { authorizeReleaseForRequest: authorizeReleaseForRequest(req) });
       else if (action === "proposal") session = resolveOperatorProposal(sessionId, body);
       // The founder kills/keeps the paused ideas — a founder act, never an agent tool. Picking ideas
       // resumes the operator to build each kept survivor through its pre-wired compose_and_run.
@@ -150,5 +159,89 @@ export default async function handle({ req, res, url }) {
     return true;
   }
 
+  const operatorAskMatch = url.pathname.match(/^\/api\/operator\/sessions\/([^/]+)\/ask$/);
+  if (req.method === "POST" && operatorAskMatch) {
+    try {
+      const body = await readBody(req);
+      const sessionId = operatorAskMatch[1];
+      // Same project-ownership guard the existing action routes use.
+      if (body.projectId) assertOperatorSessionProject(sessionId, body.projectId);
+      const result = await handleComposerTurn(
+        { projectId: body.projectId, sessionId, text: body.input, hints: body.hints },
+        {},
+      );
+      if (result.handled === "drive") {
+        json(res, 202, { mode: "drive", intent: result.intent, session: publicOperatorSession(result.session) });
+      } else {
+        json(res, 200, { mode: "fast", intent: result.intent, answer: result.answer, briefing: result.briefing });
+      }
+    } catch (err) {
+      const status = err?.code === "gate_release_forbidden" ? 403 : 409;
+      json(res, status, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return true;
+  }
+
+  // Composer briefing — a read-only cross-pipeline snapshot shaped EXACTLY for the composer's `briefing`
+  // prop (eyebrow / rows / summary). Reading it never drives, resumes, sends, or creates anything.
+  if (req.method === "GET" && url.pathname === "/api/operator/briefing") {
+    const projectId = url.searchParams.get("project") || undefined;
+    const b = buildComposerBriefing({ projectId });
+    json(res, 200, briefingProp(b));
+    return true;
+  }
+
+  // The session-optional composer fast lane. Status/explain get a fast deterministic answer WITHOUT
+  // spawning the autonomous drive (the !allowDrive path injects a no-op resume seam so act/run never
+  // resumes or creates here — it reports mode:"drive", session:null for the client to create on its own
+  // untouched path). When allowDrive AND a sessionId are present, handleComposerTurn's default resume
+  // runs, which is byte-for-byte the same drive-to-gate as the existing resume route. THE WALL is
+  // untouched: this never sends; only the unchanged gate route releases.
+  if (req.method === "POST" && url.pathname === "/api/operator/turn") {
+    try {
+      const body = await readBody(req);
+      if (body.sessionId && body.projectId) assertOperatorSessionProject(body.sessionId, body.projectId);
+      const allowDrive = body.allowDrive === true && !!body.sessionId;
+      const runtime = allowDrive ? {} : { resume: () => null };
+      const result = await handleComposerTurn(
+        { projectId: body.projectId, sessionId: body.sessionId, text: body.input, hints: body.hints },
+        runtime,
+      );
+      if (result.handled === "fast") {
+        json(res, 200, { mode: "fast", intent: result.intent, answer: result.answer, briefing: result.briefing ?? null });
+      } else {
+        json(res, 202, { mode: "drive", intent: result.intent, session: result.session ? publicOperatorSession(result.session) : null });
+      }
+    } catch (err) {
+      const status = err?.code === "gate_release_forbidden" ? 403 : 409;
+      json(res, status, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return true;
+  }
+
   return false;
+}
+
+// Maps a buildComposerBriefing() result to the composer's `briefing` prop shape. Mirrors ComposerDock's
+// needs/work/quiet vocabulary so the server read visually matches the retired client-derived briefing.
+function briefingProp(b) {
+  const now = new Date();
+  const eyebrow =
+    now.toLocaleDateString([], { weekday: "long" }) +
+    ", " +
+    now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const rows = (b.perPipeline || []).map((p) => {
+    const needs = (p.pendingGates ?? 0) > 0;
+    const working = p.status === "running";
+    const state = needs ? "needs" : working ? "work" : "quiet";
+    const what = needs
+      ? (p.pendingGates === 1 ? "1 waiting at your gate" : `${p.pendingGates} waiting at your gate`)
+      : working
+        ? "working…"
+        : (p.runCount > 0
+            ? (p.produced > 0 ? `${p.produced} drafted, nothing waiting` : "ran, nothing waiting")
+            : "quiet for now");
+    return { id: p.id, name: p.name, state, what };
+  });
+  return { eyebrow, rows, summary: b.summary };
 }

@@ -28,6 +28,7 @@ import {
 } from "./providers.mjs";
 import { queryTaste } from "../memory.mjs";
 import { queryDesign } from "../design-state-store.mjs";
+import { promotedSoulLessons } from "../soul-wiring.mjs";
 
 // Each spec binds a callable tool name to the context key it reads and the provider that knows
 // how to summarize it. `label` is used only for the honest-blank note. Descriptions are written
@@ -82,7 +83,7 @@ const TOOL_SPECS = [
     label: "founder taste",
     // Queried slice (E2.1): pass a `question` to get only the prior decisions that bear on it,
     // instead of the whole history. No question returns the full profile (backward-compatible).
-    query: (source, args) => queryTaste(source, { question: args?.question, limit: args?.limit }),
+    query: (source, args) => queryTaste(source, { question: args?.question, limit: args?.limit, promotedLessons: args?.promotedLessons }),
     description:
       "Read the founder's accumulated taste — what they have approved, rejected, and edited at the gate. Pass a `question` (e.g. \"subject line tone\", \"how direct an ask\") to get only the decisions that bear on it; omit it for the full history. The one thing a generic model cannot guess — ALWAYS consult before drafting or proposing anything the founder will review.",
   },
@@ -140,11 +141,20 @@ export const SOURCE_TO_TOOL = Object.fromEntries(TOOL_SPECS.map((spec) => [spec.
 // `sources` (optional) restricts the set to the named canonical sources — the per-provider cutover
 // hook. Omit it (the default) to build every tool, which is today's full-agentic behavior. A name
 // not in the catalog is simply ignored, so a stale config entry can never invent a tool.
-export function createRetrievalTools(context = {}, { sources = null } = {}) {
+//
+// `agentRef` + `projectId` (optional) bind the taste tool to the SPECIFIC teammate that is drafting, so
+// get_taste leads with that teammate's promoted (founder-blessed) soul before the derived recent
+// decisions. Absent them (or absent a soul) the tool behaves exactly as before — purely additive.
+export function createRetrievalTools(context = {}, { sources = null, agentRef = null, projectId = null, soulStore, soulOptions = {} } = {}) {
   const selected = Array.isArray(sources) ? new Set(sources) : null;
   return TOOL_SPECS.filter((spec) => !selected || selected.has(spec.source)).map((spec) => {
     const source = context?.[spec.key];
     const provider = source != null ? spec.make(source) : null;
+    // Only the taste tool carries a teammate's promoted soul; every other tool leaves it null.
+    const promotedLessons = spec.source === "taste"
+      ? promotedSoulLessons(projectId, agentRef, soulOptions, soulStore ?? undefined)
+      : null;
+    const hasSoul = Array.isArray(promotedLessons) && promotedLessons.length > 0;
     return {
       name: spec.name,
       source: spec.source,
@@ -156,13 +166,22 @@ export function createRetrievalTools(context = {}, { sources = null } = {}) {
         ? (spec.querySchema ?? { type: "object", properties: { question: { type: "string", description: "What this decision turns on, to scope the slice." } }, additionalProperties: false })
         : { type: "object", properties: {}, additionalProperties: false },
       call(args = {}) {
-        if (!source) return blank(spec.label);
-        // Queried path: a relevant slice when any scoping arg is present (question or dimension).
-        const hasQueryArg = spec.query && args && (args.question || args.dimension);
+        if (!source) {
+          // A teammate's founder-blessed soul still surfaces even before any derived taste exists — the
+          // permanent lessons are real signal regardless of whether the recent-decision profile is empty.
+          if (hasSoul) {
+            const sliced = spec.query(null, { ...args, promotedLessons });
+            if (sliced && sliced.text) return { found: true, text: sliced.text, meta: sliced.meta ?? null };
+          }
+          return blank(spec.label);
+        }
+        // Queried path: a relevant slice when any scoping arg is present (question or dimension), OR when
+        // this teammate has a promoted soul to lead with (so get_taste with no question still shows it).
+        const hasQueryArg = spec.query && ((args && (args.question || args.dimension)) || hasSoul);
         if (hasQueryArg) {
           let sliced = null;
           try {
-            sliced = spec.query(source, args);
+            sliced = spec.query(source, { ...args, promotedLessons });
           } catch (error) {
             return { found: false, text: null, meta: { error: String(error?.message ?? error) }, note: `Could not read ${spec.label}.` };
           }

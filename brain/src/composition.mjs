@@ -39,10 +39,11 @@ Critical rules:
 - REUSE the engine's existing teammates. You are given the engine's current agent pool — the agents other channels in this same product already use. When an existing engine agent already covers a capability this channel needs, reference it by its EXACT existing ref instead of inventing a near-duplicate. Channels are routes through ONE engine that shares its agent pool; they do not each get a private copy of every worker. Introduce a new agent ref ONLY when no existing teammate fits the job.
 - Give every executable node a plain data contract: "contract": { "accepts": ["fieldName"], "emits": ["fieldName"], "minItems": 1 }. Use only fields the step genuinely needs or can promise. A personal outreach draft should require a real personalFact; measurement should require the attribution join fields it needs.
 - Close the loop where it helps: a feedback edge from measure back to context or source.
+- Give every node and every edge a one-line "rationale": a plain founder-facing sentence — for a node, why this teammate/step exists and why it sits here; for an edge, why this ordering (source → target). Plain language the founder reads, never engineering register. Keep each to one sentence.
 
 Return ONLY a JSON object: { "nodes": [ ... ], "edges": [ ... ] }.
-Each node: { "id": "kebab-id", plus the kind/category fields above, "label": "...", "contract": { "accepts": [], "emits": [] }, and for agents "ref". Positions optional; the host lays out anything you omit.
-Each edge: { "source": "node-id", "target": "node-id", "edgeType": "data" | "context" | "feedback" }.
+Each node: { "id": "kebab-id", plus the kind/category fields above, "label": "...", "rationale": "one plain sentence on why this step exists here", "contract": { "accepts": [], "emits": [] }, and for agents "ref". Positions optional; the host lays out anything you omit.
+Each edge: { "source": "node-id", "target": "node-id", "edgeType": "data" | "context" | "feedback", "rationale": "one plain sentence on why this ordering" }.
 A data edge leaving a "switch" node ALSO carries "predicate": { "field": "<itemField>", "op": "eq"|"ne"|"gt"|"gte"|"lt"|"lte"|"exists"|"missing"|"contains"|"in", "value": <v> } — only items matching it take that branch. An unconditional fall-through branch omits the predicate.`;
 
 // Live composer: reads the repo on the founder's subscription and returns a { nodes, edges }
@@ -63,5 +64,56 @@ export function createClaudeComposer({ cwd = process.cwd(), model, maxTurns = 24
       return { ok: false, error: "Composer did not return a { nodes, edges } graph." };
     }
     return { ok: true, nodes: graph.nodes, edges: Array.isArray(graph.edges) ? graph.edges : [] };
+  };
+}
+
+// The explain doctrine — the twin of COMPOSE_PROMPT for an already-composed graph that predates
+// rationale. The model reasons ONLY over the real graph structure (node labels, kinds, edges) and
+// explains ordering/purpose in plain founder language. It grounds in what is on the canvas; it must
+// not invent product facts, only explain why each step sits where it does.
+export const EXPLAIN_PROMPT = `You are explaining an already-composed go-to-market pipeline to the founder who owns it. You are given the pipeline's real nodes (each with an id, a label, and its kind/category) and its real edges (each with an id, a source, a target, and an edge type).
+
+For EVERY node write one plain sentence: why this teammate/step exists and why it sits where it does in the flow.
+For EVERY edge write one plain sentence: why this ordering — why the source feeds the target.
+
+Ground every sentence in the REAL graph you were given — the labels, the kinds, and how the nodes connect. Do NOT invent product facts, buyer facts, or capabilities that are not visible in the graph. Explain the purpose and the ordering, nothing more. Use plain founder-facing language, never engineering register or code identifiers.
+
+Return ONLY a JSON object:
+{
+  "nodes": { "<node-id>": "one plain sentence", ... },
+  "edges": { "<edge-id>": "one plain sentence", ... }
+}
+Key every entry by the exact id given. No prose, no preamble.`;
+
+// Live explainer: reads only the graph structure handed in and returns the rationale maps. The host
+// (workflow-composer.mjs explainComposedGraph) merges these onto the stored graph and persists.
+// maxTurns is low — this is a single structured reply over data already in the prompt, no tool use.
+export function createClaudeExplainer({ cwd = process.cwd(), model, maxTurns = 2, onText } = {}) {
+  return async function explain({ graph }) {
+    const nodes = (Array.isArray(graph?.nodes) ? graph.nodes : []).map((n) => ({
+      id: n.id,
+      label: n.label ?? n.id,
+      kind: n.kind ?? n.category ?? null,
+    }));
+    const edges = (Array.isArray(graph?.edges) ? graph.edges : []).map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      edgeType: e.edgeType ?? "data",
+    }));
+    const prompt = [
+      EXPLAIN_PROMPT,
+      `\nNodes:\n${JSON.stringify(nodes, null, 2)}`,
+      `\nEdges:\n${JSON.stringify(edges, null, 2)}`,
+    ].join("\n");
+    const { text, error } = await runClaudeQuery({ prompt, cwd, model, maxTurns, onText });
+    if (error) return { ok: false, error: error.message };
+    const parsed = parseAgentObject(text);
+    if (!parsed) return { ok: false, error: "Explainer did not return a { nodes, edges } rationale object." };
+    return {
+      ok: true,
+      nodes: parsed.nodes && typeof parsed.nodes === "object" ? parsed.nodes : {},
+      edges: parsed.edges && typeof parsed.edges === "object" ? parsed.edges : {},
+    };
   };
 }

@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { appendGateJudgments } from "./shared-judgments.mjs";
 import { persistence } from "./persistence.mjs";
 import { extractIdeaTaste } from "./memory.mjs";
+import { recordGateDecisionsIntoSouls } from "./soul-wiring.mjs";
 
 const SCHEMA_VERSION = 1;
 const COLLECTION = "feedback-ledger";
@@ -170,6 +171,13 @@ export function recordFeedbackSignalsFromRun({ projectId = "default", graph, res
     appendGateJudgments({ projectId, graph, result }, options);
   } catch {
     // capture is best-effort; a write failure must not interrupt feedback recording
+  }
+  // Fill each teammate's soul from the founder's gate decisions on the items IT produced. Best-effort:
+  // a soul write must never interrupt feedback recording (same discipline as the shared-judgments bank).
+  try {
+    recordGateDecisionsIntoSouls({ projectId, result }, options);
+  } catch {
+    // soul capture is best-effort; a write failure must not interrupt feedback recording
   }
   const signals = normalizeRunFeedback({ projectId, graph, result });
   const ledger = recordFeedbackSignals(signals, { ...options, projectId });

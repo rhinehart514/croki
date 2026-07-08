@@ -1,10 +1,11 @@
 import "@/styles/canvas-refine.css";
 import "@/styles/canvas-gate.css";
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Background, BaseEdge, Controls, Handle, MarkerType, Panel, Position, ReactFlow,
   useReactFlow, useStore, useNodesInitialized, useUpdateNodeInternals, ViewportPortal,
-  type Connection, type Edge, type EdgeProps, type Node, type NodeProps,
+  type Connection, type Edge, type EdgeProps, type Node, type NodeChange, type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { motion } from "motion/react";
@@ -23,6 +24,8 @@ import { CrewAvatar } from "@/components/crew/CrewAvatar";
 import { CrewFace } from "@/components/crew/CrewFace";
 import { useBrandGlyph } from "@/lib/brandGlyph";
 import { BrandGlyph } from "@/components/BrandGlyph";
+import { CapabilityGlyph } from "@/components/CapabilityGlyph";
+import { CAPABILITIES } from "@/lib/capabilities";
 import type { NodeEditorBridge } from "@/components/nodeEditorBridge";
 import type {
   ChannelMeta, ConnectorMeta, GateDecision, GTMEdge, GTMEdgeType, GTMGraph,
@@ -31,10 +34,18 @@ import type {
 } from "@/types";
 import { computeChannelLanes, type ChannelLane } from "@/lib/channelLanes";
 import type { RunSummary } from "@/api";
+import { explainGraph } from "@/api";
 import { channelOfferLine } from "@/lib/gateItem";
 import type { GatePromote } from "@/lib/gateItem";
 import { GateReview } from "@/components/gate/GateReview";
 import { useGhostResolve } from "@/lib/ghostResolve";
+import {
+  structuralWarnings,
+  warningsByNode,
+  weakEdgeIds,
+  worthALookCount,
+  type StructuralWarning,
+} from "@/lib/structuralWarnings";
 
 // The in-card editor needs the same handler bag the old right rail held (run a step, save the
 // graph, open an artifact, delete, review a gate) plus the live graph (to clone-and-save a notes
@@ -140,6 +151,79 @@ function GhostEdgeChips({ graph }: { graph: GTMGraph }) {
     .filter(Boolean);
   if (chips.length === 0) return null;
   return <ViewportPortal>{chips}</ViewportPortal>;
+}
+
+// ─── Pipeline intelligence — the shape reads its own strengths and mistakes ─────────────────────────
+// A quiet layer ON the canvas, not a side drawer. A structural warning wears one small amber mark on
+// the offending card (amber = "worth a look"; red stays reserved for true breakage), and hovering it
+// reveals the plain reason. Explain mode adds the composer's reasoning — why a step exists, why this
+// ordering — on demand. Both ride the node's own data so the card owns its own read.
+
+// The corner mark + hover reason on a flagged card. Amber, small, rationed — never a red alarm board.
+function NodeWarnMark({ warning, onSeeFix }: { warning: StructuralWarning; onSeeFix?: (w: StructuralWarning) => void }) {
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+  return (
+    <div className="loop-warn nodrag nopan" onClick={stop}>
+      <button
+        type="button"
+        className={cn("loop-warn-mark", `is-${warning.kind}`)}
+        aria-label={`${warning.title} — ${warning.detail}`}
+        title={warning.title}
+      >
+        <AlertTriangle aria-hidden />
+      </button>
+      <div className="loop-warn-pop" role="tooltip">
+        <div className="loop-warn-pop-head"><span className="loop-warn-pop-ico"><AlertTriangle aria-hidden /></span>{warning.title}</div>
+        <p className="loop-warn-pop-body">{warning.detail}</p>
+        {onSeeFix && warning.fixable ? (
+          <button type="button" className="loop-warn-fix" onClick={(e) => { stop(e); onSeeFix(warning); }}>
+            See the fix →
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+// The one-line reason a card exists / sits where it does — captured at compose time, surfaced only in
+// Explain mode. Sits BELOW the card (absolute, so revealing it never resizes or reflows the card).
+function NodeWhyCaption({ rationale }: { rationale: string }) {
+  return (
+    <div className="loop-why nodrag nopan"><em>Why here:</em> {rationale}</div>
+  );
+}
+
+// The rationale pills that ride the edges in Explain mode: each carries the one reason for that
+// ordering. Drawn in flow coordinates (mirrors GhostEdgeChips) so they track pan/zoom, and only for
+// data edges that actually carry a reason — quiet by default, never a pill on every line.
+function ExplainEdgeLayer({ graph, active, extra }: { graph: GTMGraph; active: boolean; extra?: Map<string, string> }) {
+  if (!active) return null;
+  const pos = new Map(graph.nodes.map((n) => [n.id, n.position ?? { x: 0, y: 0 }]));
+  const NODE_W = 210;
+  const NODE_H = 52;
+  const pills = graph.edges
+    .map((e) => {
+      if (e.edgeType !== "data") return null;
+      const rationale = (typeof e.rationale === "string" && e.rationale.trim()) ? e.rationale : extra?.get(e.id);
+      if (!rationale) return null;
+      const s = pos.get(e.source);
+      const t = pos.get(e.target);
+      if (!s || !t) return null;
+      const mx = (s.x + NODE_W + t.x) / 2;
+      const my = (s.y + t.y) / 2 + NODE_H / 2;
+      return (
+        <div
+          key={`why-${e.id}`}
+          className="loop-edge-why nodrag nopan"
+          style={{ position: "absolute", transform: `translate(${mx}px, ${my}px) translate(-50%, -50%)` }}
+        >
+          {rationale}
+        </div>
+      );
+    })
+    .filter(Boolean);
+  if (pills.length === 0) return null;
+  return <ViewportPortal>{pills}</ViewportPortal>;
 }
 
 // ─── Category metadata ────────────────────────────────────────────────────────
@@ -375,6 +459,13 @@ type GTMNodeData = {
   // meeting, a purchase), keyed off the item's provenance id. Records what ALREADY happened — never
   // sends. Rides only the focused gate; absent elsewhere, so those cards show no record affordance.
   onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
+  // The FULL run result (not just this node's), threaded onto the gate node so the review can render the
+  // "reel" — the sequence of what the crew did to get here, derived from the run's executed steps. Rides
+  // only the gate node; absent elsewhere.
+  run?: GTMRunResult | null;
+  // Veto-as-loop: the founder sends an item back to the crew with a note; it reworks in the Composer and
+  // returns to the gate. NOT a release — nothing sends. Rides only the focused gate.
+  onRefineItem?: (item: GTMItem, note: string) => void | Promise<void>;
   // This gate is the one a run is paused at (staged drafts awaiting review). The node breathes an amber
   // ring AND blooms its GateReview cards open without needing selection — the review comes to the founder.
   bloomed?: boolean;
@@ -400,6 +491,15 @@ type GTMNodeData = {
   // OWN pipeline, not whichever one happens to be centered — see WorkNodeComponent's entrant lookup.
   channelId?: string;
   graphId?: string;
+  // Pipeline intelligence (post-processed onto the built graph, so buildFlowGraph stays pure): the
+  // single primary structural warning on this node, whether Explain mode is on (drives the why-caption),
+  // and the handler that turns a warning into a restructure proposal ("See the fix").
+  warning?: StructuralWarning;
+  explainMode?: boolean;
+  onSeeFix?: (w: StructuralWarning) => void;
+  // The one-line reason for this card in Explain mode — the composer's own `node.rationale`, or (for a
+  // pipeline composed before rationale existed) the reason fetched on demand from the explain endpoint.
+  explainRationale?: string;
 };
 
 // A lane that hasn't composed yet: the model is reasoning, or the compose failed. Carried on the
@@ -959,12 +1059,17 @@ function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
         nesting interactive controls in a <button> is invalid. */}
     <motion.div
       {...entranceProps(data.appearOrder)}
-      className={cn("loop-node loop-node-context", selected && "loop-node-selected")}
+      className={cn(
+        "loop-node loop-node-context",
+        selected && "loop-node-selected",
+        data.warning?.kind === "orphan-context" && "loop-node-orphan",
+      )}
       role="button"
       tabIndex={0}
       onClick={onSelect}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
     >
+      {data.warning ? <NodeWarnMark warning={data.warning} onSeeFix={data.onSeeFix} /> : null}
       <Handle type="target" position={Position.Left} id="t-l" />
       <div className="loop-node-header">
         <div className="loop-node-icon" style={{ background: `${color}18`, color }}>
@@ -981,6 +1086,7 @@ function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       <span className="loop-node-label">{node.label}</span>
       {preview && <span className="loop-node-preview">{preview}</span>}
       <Handle type="source" position={Position.Right} id="s-r" />
+      {data.explainMode && (data.explainRationale ?? node.rationale) ? <NodeWhyCaption rationale={(data.explainRationale ?? node.rationale)!} /> : null}
       {selected && (
         <NodeCardEditor node={node} result={result} health={data.health} contractAudit={data.contractAudit} running={data.running} />
       )}
@@ -1030,9 +1136,31 @@ function MeasureResults({ summary }: { summary: RunSummary }) {
 function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
   const { node, result, running, selected, onSelect } = data;
   const ctx = useContext(NodeEditorContext);
-  // A gate with staged drafts opens its inline review right here on the canvas — auto when a run pauses
-  // on it (bloomed), and on demand from its own count when it's a completed/idle gate you want to revisit.
+  // A gate with staged drafts opens the Split Stage — the immersive review room — as a full-surface
+  // overlay: auto the moment a run pauses on it (bloomed), so the decision comes TO the founder, and on
+  // demand from its own count when it's a completed/idle gate you want to revisit.
   const [reviewOpen, setReviewOpen] = useState(false);
+  // Open the room once per bloom transition (false→true). If the founder closes it, it stays closed
+  // until the NEXT time a run pauses here — the stage surfaces the moment, it doesn't nag.
+  const wasBloomed = useRef(false);
+  useEffect(() => {
+    if (data.bloomed && !wasBloomed.current) setReviewOpen(true);
+    wasBloomed.current = !!data.bloomed;
+  }, [data.bloomed]);
+  // Close the room on Escape while it's open — a full-surface overlay must always have a keyboard exit.
+  // But NOT while the founder is typing: Escape in the send-back note or the draft editor closes that
+  // field (handled locally in GateReview), never the whole room — so a stray Escape can't wipe their text.
+  useEffect(() => {
+    if (!reviewOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const el = document.activeElement;
+      if (el && (el.tagName === "TEXTAREA" || el.tagName === "INPUT")) return;
+      setReviewOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [reviewOpen]);
   // Node LOD: subscribe to zoom as a BOOLEAN so the card only re-renders when it crosses the coin
   // threshold, not on every wheel tick. A selected card always shows full detail regardless of zoom.
   const coinLod = useStore((s) => s.transform[2] < LOD_COIN_ZOOM);
@@ -1067,6 +1195,13 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
   const mcpServer = isMcp ? String(node.config?.server ?? node.ref?.split("/")[0] ?? "") : "";
   const mcpGlyph = useBrandGlyph(isMcp ? mcpServer : null);
   const mcpWrites = isMcp && node.config?.toolClass === "write";
+  // A capability grabbed onto the canvas is a tool step keyed to a service (its connector is the
+  // capability id). Show that service's real brand logo as the node's face — a dragged-in Gmail reads as
+  // Gmail by its mark, not a generic step icon — and, when it's a gated one, that it acts behind the gate.
+  const capability = useMemo(
+    () => (!isOpenKind && !isMcp && node.connector ? CAPABILITIES.find((c) => c.id === node.connector) ?? null : null),
+    [isOpenKind, isMcp, node.connector],
+  );
 
   // A switch reads its branches off its OUTGOING data edges: each carries the routing predicate (the
   // rule) and points at the branch it feeds. Read from the live graph on context, not node data.
@@ -1122,7 +1257,11 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
       >
         <Handle type="target" position={Position.Left} id="t-l" />
-        <span className="loop-node-coin-icon" style={{ color }} aria-hidden>{visual.icon}</span>
+        {capability ? (
+          <span className="loop-node-coin-icon loop-node-coin-brand" aria-hidden><CapabilityGlyph cap={capability} size={17} /></span>
+        ) : (
+          <span className="loop-node-coin-icon" style={{ color }} aria-hidden>{visual.icon}</span>
+        )}
         <span className="loop-node-coin-label">{node.label}</span>
         <Handle type="source" position={Position.Right} id="s-r" />
       </motion.div>
@@ -1159,6 +1298,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       onClick={onSelect}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
     >
+      {data.warning ? <NodeWarnMark warning={data.warning} onSeeFix={data.onSeeFix} /> : null}
       <Handle type="target" position={Position.Left} id="t-l" />
       {obj === "switch" ? (
         // ── Switch ── conditional logic as a readable card. The rule lives on each outgoing branch:
@@ -1221,7 +1361,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
         <>
           <div className="loop-node-header">
             <div className="loop-node-icon loop-gate-mark" style={{ background: `${color}1c`, color }}>{visual.icon}</div>
-            <span className="loop-node-type-label">Gate · the wall</span>
+            <span className="loop-node-type-label">Gate · your call</span>
             <div className="loop-node-header-right">
               {data.onAskClaude ? (
                 <button
@@ -1256,11 +1396,9 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
           </span>
           {gateItems.length === 0 ? (
             <span className="loop-gate-empty">Nothing staged yet. Nothing reaches the world until you approve it here.</span>
-          ) : (selected || reviewOpen) ? (
-            // Detail-on-open: the full review is a deliberate act, not an always-on wall. The node stays
-            // a compact object until you open it (select or click Review), then the drafts bloom in place.
-            <GateReview items={result!.items} onSubmit={data.onSubmitReview} learned={gateLearned} promote={data.gatePromote} offer={data.gateOffer} onRecordOutcome={data.onRecordOutcome} />
           ) : (
+            // The node stays a compact object on the canvas; opening the review is a deliberate act that
+            // brings up the immersive room, not a cramped bloom in the corner.
             <button
               type="button"
               className={cn("loop-gate-open", data.bloomed && "is-awaiting")}
@@ -1269,6 +1407,24 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
               {data.bloomed ? `Needs you · review ${gateWaiting} →` : `Review ${gateWaiting} staged →`}
             </button>
           )}
+          {/* The review room — a full-surface overlay portaled to the body so it escapes the canvas
+              transform and truly takes over: the reel of what the crew did, then the decisions. Click the
+              scrim or press Escape (when not typing) to step out. Dialog semantics so keyboard and
+              screen-reader users can't tab into the obscured canvas behind the scrim. */}
+          {reviewOpen && result ? createPortal(
+            <div className="cgate-stage-overlay" onClick={() => setReviewOpen(false)}>
+              <div className="cgate-stage-shell" role="dialog" aria-modal="true" aria-label="Your call — review your crew's work" onClick={(e) => e.stopPropagation()}>
+                <div className="cgate-stage-bar">
+                  <span className="cgate-stage-eyebrow"><ShieldCheck size={13} aria-hidden /> Your call</span>
+                  <button type="button" className="cgate-stage-close" onClick={() => setReviewOpen(false)} aria-label="Close" autoFocus>
+                    <X size={16} aria-hidden />
+                  </button>
+                </div>
+                <GateReview variant="stage" items={result.items} run={data.run} onSubmit={data.onSubmitReview} learned={gateLearned} promote={data.gatePromote} offer={data.gateOffer} onRecordOutcome={data.onRecordOutcome} onRefineItem={data.onRefineItem} />
+              </div>
+            </div>,
+            document.body,
+          ) : null}
         </>
       ) : (
         // ── Teammate / Measure / Step ── job-first header: an icon (the teammate's crew face for an
@@ -1302,6 +1458,10 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
                 size={28}
                 state={status === "running" ? "working" : "idle"}
               />
+            ) : capability ? (
+              <div className="loop-node-icon loop-node-icon-brand">
+                <CapabilityGlyph cap={capability} size={17} />
+              </div>
             ) : (
               <div
                 className={cn("loop-node-icon", isMcp && "loop-node-icon-brand")}
@@ -1313,6 +1473,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
             <span className="loop-node-type-label">
               {obj === "teammate" ? "Teammate"
                 : obj === "measure" ? "Measure"
+                : capability ? capability.name
                 : isMcp ? (mcpGlyph?.title ?? mcpServer.replace(/^./, (c) => c.toUpperCase()))
                 : visual.label}
             </span>
@@ -1348,7 +1509,11 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
               caption that never competes with the title; hover (the title attr) reveals the full ref. */}
           {isOpenKind
             ? <span className="loop-node-connector" title={node.ref}>{node.ref}</span>
-            : node.connector && <span className="loop-node-connector" title={node.connector}>{node.connector}</span>}
+            : capability
+              // A capability node already reads as its service from the logo + name — the connector slug
+              // ("gmail") would just repeat it, so it's dropped for a cleaner, logo-forward card.
+              ? null
+              : node.connector && <span className="loop-node-connector" title={node.connector}>{node.connector}</span>}
           {summary && !hasErr && (
             result?.items?.length
               ? (
@@ -1386,6 +1551,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
         </>
       )}
       <Handle type="source" position={Position.Right} id="s-r" />
+      {data.explainMode && (data.explainRationale ?? node.rationale) ? <NodeWhyCaption rationale={(data.explainRationale ?? node.rationale)!} /> : null}
       {/* A gate isn't "run" from the card — its staged drafts bloom in place above (GateReview), so the
           in-card editor is only mounted for the non-gate steps you actually run and read output from. */}
       {selected && !isGate && (
@@ -1662,6 +1828,7 @@ function buildFlowGraph(
   // caller that owns the latest summary (the focused lane) passes it; every other lane passes null.
   onOpenAgentProfile?: (ref: string) => void,
   runSummary?: RunSummary | null,
+  onRefineItem?: (item: GTMItem, note: string) => void | Promise<void>,
 ): { nodes: Node[]; edges: Edge[] } {
   // A node is "revealed" unless it's a still-pending proposed ghost. Committed nodes are always
   // revealed (so an edge from a committed node to the first ghost shows immediately); a proposed node
@@ -1733,6 +1900,10 @@ function buildFlowGraph(
         gateOffer: n.category === "gate" ? gateOffer : undefined,
         // The outcome door rides only the gate node — an approved card records what came back.
         onRecordOutcome: n.category === "gate" ? onRecordOutcome : undefined,
+        // The full run + the veto-to-refine callback ride only the gate node: the reel reads the run's
+        // executed steps, and Send-back hands an item to the crew.
+        run: n.category === "gate" ? (result ?? null) : undefined,
+        onRefineItem: n.category === "gate" ? onRefineItem : undefined,
         bloomed,
         onAskClaude: onAskClaude ? () => onAskClaude(n) : undefined,
         // The crew face opens the profile on every lane; the run numbers ride only the Measure node.
@@ -1766,7 +1937,13 @@ function buildFlowGraph(
     const routing = {
       sourceHandle: "s-r",
       targetHandle: "t-l",
-      markerEnd: { type: MarkerType.ArrowClosed, width: 13, height: 13, color: EDGE_INK[e.edgeType] ?? EDGE_INK.data },
+      // Only the data spine carries an arrowhead — it's the one directed flow to read. Context (a
+      // supply line into a step) and feedback (a return loop) are support, not steps in the sequence;
+      // giving every edge its own arrowhead is what made the canvas read as a tangle. They recede to
+      // thin, faint strokes with no head (see .loop-edge-context / .loop-edge-feedback in index.css).
+      ...(e.edgeType === "data"
+        ? { markerEnd: { type: MarkerType.ArrowClosed, width: 13, height: 13, color: EDGE_INK.data } }
+        : {}),
     };
     // Ideation build-in: each edge fades along its target node's cascade beat, so a connector never
     // arrives before the node it points at. Delay = target rank, the same beat the node card uses.
@@ -1858,6 +2035,8 @@ type MergedFlowFocus = {
   gateOffer?: string | null;
   // The outcome door — rides only the focused pipeline's gate, matching onSubmitReview's scope.
   onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
+  // Veto-to-refine — rides only the focused pipeline's gate, same scope as onSubmitReview.
+  onRefineItem?: (item: GTMItem, note: string) => void | Promise<void>;
   revealedNodeIds?: Set<string>;
   onInspect?: (id: string) => void;
   // The project's latest run numbers, shown on the FOCUSED pipeline's Measure node only (there is one
@@ -1941,6 +2120,7 @@ function buildMergedFlowGraph(
       // Measure node (one project-level summary, shown on the pipeline on screen).
       onOpenAgentProfile,
       isFocused ? (focus.runSummary ?? null) : null,
+      isFocused ? focus.onRefineItem : undefined,
     );
     for (const n of built.nodes) {
       nodes.push({
@@ -2217,7 +2397,7 @@ export function GraphCanvas({
   proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, refitNonce, highlightedNodeId = null,
   bloomNodeId = null, nodeEditor = null, revealedNodeIds, onPaneClick, operatorCursor = null, people = [],
   multiPipeline = null, panTo = null, onAskClaude, gatePromote, gateOffer = null, onRecordOutcome,
-  onOpenAgentProfile, runSummary = null,
+  onRefineItem, onOpenAgentProfile, runSummary = null,
 }: {
   graph: GTMGraph;
   result: GTMRunResult | null;
@@ -2263,6 +2443,9 @@ export function GraphCanvas({
   // The outcome door on the focused gate's approved cards: record what actually came back on a sent
   // item, keyed off its provenance id. Records what ALREADY happened — never sends.
   onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
+  // Veto-as-loop on the focused gate: the founder sends an item back to the crew with a note; it reworks
+  // in the Composer and returns to the gate. NOT a release — nothing sends.
+  onRefineItem?: (item: GTMItem, note: string) => void | Promise<void>;
   // Bump to re-fit the viewport after the container resizes (debugger drawer open/close).
   refitNonce?: number;
   // The run scrubber's current step — this node glows, the rest dim, so a replay reads node-by-node.
@@ -2406,7 +2589,7 @@ export function GraphCanvas({
         running, runningNodeId, selection,
         proposedNodeIds, proposedEdgeIds, proposalActive,
         onResolveProposal, onSubmitReview, onApproveGate, gatePromote, gateOffer, onRecordOutcome,
-        revealedNodeIds, onInspect: toggleInspect, runSummary,
+        onRefineItem, revealedNodeIds, onInspect: toggleInspect, runSummary,
       },
       people,
       onAskClaude,
@@ -2415,23 +2598,92 @@ export function GraphCanvas({
     [
       multiPipeline, connectors, subsystemHealth, contractAudits, handleSelect, graph.id, running,
       runningNodeId, selection, proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal,
-      onSubmitReview, onApproveGate, gatePromote, gateOffer, onRecordOutcome, revealedNodeIds, toggleInspect, people, onAskClaude, onOpenAgentProfile, runSummary,
+      onSubmitReview, onApproveGate, gatePromote, gateOffer, onRecordOutcome, onRefineItem, revealedNodeIds, toggleInspect, people, onAskClaude, onOpenAgentProfile, runSummary,
     ],
   );
 
   const singleFlow = useMemo(
-    () => buildFlowGraph(laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, onRecordOutcome, onOpenAgentProfile, runSummary),
-    [laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, onRecordOutcome, onOpenAgentProfile, runSummary],
+    () => buildFlowGraph(laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, onRecordOutcome, onOpenAgentProfile, runSummary, onRefineItem),
+    [laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, onRecordOutcome, onOpenAgentProfile, runSummary, onRefineItem],
   );
 
-  const nodes = merged ? merged.nodes : singleFlow.nodes;
-  const edges = merged ? merged.edges : singleFlow.edges;
+  const baseNodes = merged ? merged.nodes : singleFlow.nodes;
+  const baseEdges = merged ? merged.edges : singleFlow.edges;
+
+  // Pipeline intelligence — a pure read of the SHAPE (structuralWarnings) + Explain mode, injected onto
+  // the already-built flow graph so buildFlowGraph stays a pure topology mapper. Node warnings key off
+  // each card's REAL node id (data.node.id — unprefixed on both the single and merged builds); the
+  // weak-feed edge class keys off the raw edge id (namespaced on the merged canvas, so the focused
+  // lane's prefix is stripped). Read only the focused pipeline: on the merged overview other lanes stay
+  // unmarked, since node/edge ids are unique only within one pipeline.
+  const [explainMode, setExplainMode] = useState(false);
+  const [warnIndex, setWarnIndex] = useState(0);
+  // Rationale fetched on demand for a pipeline composed before Explain existed (its nodes/edges carry
+  // none). Held locally and overlaid — the server also persists it, so a reload has it baked in.
+  const [fetchedRat, setFetchedRat] = useState<{ n: Map<string, string>; e: Map<string, string> } | null>(null);
+  const explainedRef = useRef<string | null>(null);
+  const warnings = useMemo(() => structuralWarnings(laidOutGraph), [laidOutGraph]);
+  const warnByNode = useMemo(() => warningsByNode(warnings), [warnings]);
+  const weakEdges = useMemo(() => weakEdgeIds(warnings), [warnings]);
+  const worthLook = useMemo(() => worthALookCount(warnings), [warnings]);
+  const warnedNodeIds = useMemo(
+    () => [...new Set(warnings.filter((w) => w.nodeId).map((w) => w.nodeId!))],
+    [warnings],
+  );
+  const focusPrefix = merged ? `${graph.id}::` : "";
+  const nodes = useMemo(() => baseNodes.map((n) => {
+    if (merged && !n.id.startsWith(focusPrefix)) return n;
+    const rawId = (n.data as GTMNodeData | undefined)?.node?.id;
+    const warning = rawId ? warnByNode.get(rawId) : undefined;
+    if (!warning && !explainMode) return n;
+    const explainRationale = rawId ? fetchedRat?.n.get(rawId) : undefined;
+    return { ...n, data: { ...(n.data as GTMNodeData), warning, explainMode, explainRationale } };
+  }), [baseNodes, merged, focusPrefix, warnByNode, explainMode, fetchedRat]);
+  const edges = useMemo(() => {
+    if (weakEdges.size === 0) return baseEdges;
+    return baseEdges.map((e) => {
+      const rawId = focusPrefix && e.id.startsWith(focusPrefix) ? e.id.slice(focusPrefix.length) : e.id;
+      return weakEdges.has(rawId) ? { ...e, className: cn((e as Edge).className, "loop-edge-weak") } : e;
+    });
+  }, [baseEdges, weakEdges, focusPrefix]);
+
+  // The "N worth a look" chip steps the camera through each flagged card in turn (selecting it centers
+  // it via NodeFocuser) — the fast path from "something's off" to the exact spot, no side list to scan.
+  const stepToWarning = useCallback(() => {
+    if (warnedNodeIds.length === 0) return;
+    const id = warnedNodeIds[warnIndex % warnedNodeIds.length];
+    setWarnIndex((i) => i + 1);
+    onSelect(id);
+  }, [warnedNodeIds, warnIndex, onSelect]);
 
   // Framing: a MULTI-lane overview (All pipelines) fits every lane, shrinking as needed to the zoomed-out
   // map. A single FOCUSED pipeline — whether rendered on its own (activeChannelId) or as the lone lane of
   // a one-pipeline product's overview — instead lands at a readable zoom: a `minZoom` floor keeps a wide
   // pipeline above the coin threshold (full-size cards, ~0.7–1.0) rather than fitting all of it to specks.
   const singlePipeline = !merged || merged.lanes.size <= 1;
+
+  // When Explain turns on for a pipeline that carries no reasons yet (composed before Explain existed),
+  // fetch them once from the explain endpoint and overlay. Idempotent server-side (no model call when
+  // already annotated); a graph that already ships rationale skips the fetch entirely. Failure is quiet
+  // — Explain still renders whatever reasons the graph already has.
+  useEffect(() => {
+    if (!explainMode || !singlePipeline) return;
+    const gid = graph.id;
+    if (!gid || explainedRef.current === gid) return;
+    const hasAny = graph.nodes.some((n) => n.rationale) || graph.edges.some((e) => e.rationale);
+    if (hasAny) return;
+    explainedRef.current = gid;
+    explainGraph(gid)
+      .then((res) => {
+        const nMap = new Map<string, string>();
+        const eMap = new Map<string, string>();
+        for (const nd of res.graph.nodes) if (typeof nd.rationale === "string" && nd.rationale.trim()) nMap.set(nd.id, nd.rationale);
+        for (const ed of res.graph.edges) if (typeof ed.rationale === "string" && ed.rationale.trim()) eMap.set(ed.id, ed.rationale);
+        if (nMap.size || eMap.size) setFetchedRat({ n: nMap, e: eMap });
+      })
+      .catch(() => { explainedRef.current = null; });
+  }, [explainMode, singlePipeline, graph.id, graph.nodes, graph.edges]);
+
   const fitOptions = useMemo<FitOpts>(
     () => (singlePipeline ? { padding: 0.16, maxZoom: 1, minZoom: 0.72 } : { padding: 0.14, maxZoom: 1 }),
     [singlePipeline],
@@ -2467,6 +2719,23 @@ export function GraphCanvas({
     [onNodePositionChange],
   ) as Parameters<typeof ReactFlow>[0]["onNodeDragStop"];
 
+  // React Flow v12 only makes a CONTROLLED `nodes` graph interactive when it's given `onNodesChange` —
+  // without it the cards render but won't drag at all (the missing piece behind "I can't move it once
+  // it's on the canvas"). We forward the in-progress drag frames so the controlled prop follows the
+  // pointer smoothly; the final, undoable resting position is persisted by onNodeDragStop above. Only
+  // position matters here — measurement and selection are handled internally / by our own click.
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      if (!onNodePositionChange) return;
+      for (const change of changes) {
+        if (change.type === "position" && change.dragging && change.position) {
+          onNodePositionChange(change.id, change.position, "layout");
+        }
+      }
+    },
+    [onNodePositionChange],
+  );
+
   const handleConnect = useCallback((connection: Connection) => {
     if (connection.source && connection.target) onConnectNodes?.(connection.source, connection.target);
   }, [onConnectNodes]);
@@ -2496,6 +2765,7 @@ export function GraphCanvas({
       edges={edges}
       nodeTypes={NODE_TYPES}
       edgeTypes={EDGE_TYPES}
+      onNodesChange={onNodesChange}
       onNodeDragStop={handleNodeDragStop}
       onConnect={handleConnect}
       onEdgesDelete={(deleted) => onDeleteEdges?.(deleted.map((edge) => edge.id))}
@@ -2542,6 +2812,26 @@ export function GraphCanvas({
           </button>
         </Panel>
       ) : null}
+      {/* Pipeline intelligence bar: the Explain toggle (off = the canvas is exactly as clean as today;
+          on = every arrow says why and every teammate says why it's here) and the quiet amber tally of
+          what's worth a look. Reads the pipeline's SHAPE, never a side drawer. */}
+      {singlePipeline && nodes.length > 1 ? (
+        <Panel position="top-right">
+          <div className="loop-explain-bar">
+            <div className="loop-explain-seg" role="group" aria-label="Explain mode">
+              <button type="button" className={cn(!explainMode && "on")} aria-pressed={!explainMode} onClick={() => setExplainMode(false)}>Clean</button>
+              <button type="button" className={cn(explainMode && "on")} aria-pressed={explainMode} onClick={() => setExplainMode(true)}>
+                <span className="loop-explain-dot" aria-hidden />Explain
+              </button>
+            </div>
+            {worthLook > 0 ? (
+              <button type="button" className="loop-worth-chip" onClick={stepToWarning} title="Step through what's worth a look">
+                <span className="loop-worth-b">{worthLook}</span> Worth a look
+              </button>
+            ) : null}
+          </div>
+        </Panel>
+      ) : null}
       <MeasureGuard nodeIds={measureNodeIds} />
       <RunZoom running={running} />
       <FitOnGraph topology={fitSignature} bounds={boundsSignature} running={running} suspended={!!operatorCursor} fitOptions={fitOptions} />
@@ -2571,6 +2861,8 @@ export function GraphCanvas({
       ) : null}
       {/* Slice 4: inline accept/discard for client-staged ghost EDGES that stand on their own. */}
       <GhostEdgeChips graph={laidOutGraph} />
+      {/* Explain mode: the composer's one-line reason riding each ordered edge. */}
+      <ExplainEdgeLayer graph={laidOutGraph} active={explainMode && singlePipeline} extra={fetchedRat?.e} />
       <Background color="#e4e4e7" gap={26} size={1.5} />
       <Controls showInteractive={false} position="bottom-right" />
     </ReactFlow>

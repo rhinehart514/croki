@@ -22,6 +22,17 @@ export const STAGE_LABEL: Record<CapStage, string> = {
 
 export const STAGE_ORDER: CapStage[] = ["find", "enrich", "reach", "publish", "measure"];
 
+// A capability grabbed onto the canvas lands as a pipeline step of this category — its run-stage read as
+// a graph stage, so a "reach" capability (Gmail) becomes a gated execute step and a "find" one (Exa)
+// becomes a source. It lands collapsed and draggable like a teammate; the founder wires it or asks Claude.
+export const CAP_STAGE_CATEGORY: Record<CapStage, "source" | "enrich" | "execute" | "measure"> = {
+  find: "source",
+  enrich: "enrich",
+  reach: "execute",
+  publish: "execute",
+  measure: "measure",
+};
+
 export type Capability = {
   id: string;
   name: string;

@@ -120,6 +120,12 @@ export const applyGraphOperations = (graph: GTMGraph, operations: GraphOperation
 export const auditGraph = (graph: GTMGraph, runResult?: GTMRunResult | null) =>
   post<{ audits: Record<string, GTMContractAudit> }>("/api/graph/audit", { graph, runResult });
 
+// Fill each node/edge with a one-line "why" (Explain mode). Idempotent server-side: no model call when
+// the graph is already annotated; `force` re-explains. Reasons over the real shape only — never invents
+// product facts, never runs the workflow. Returns the persisted graph with `rationale` merged on.
+export const explainGraph = (graphId: string, force = false) =>
+  post<{ graph: GTMGraph }>("/api/graph/explain", { graphId, force });
+
 // ── Artifacts — subagents & skills as real, fully-editable .md files ─────────
 export type ArtifactType = "agent" | "skill";
 type ArtifactFile = {
@@ -215,8 +221,25 @@ export const createOperatorSession = (projectId: string, goal: string, graphId?:
     projectId, reuse: !fresh, goal, graphId: fresh ? undefined : graphId, fresh,
   });
 
-export const resumeOperatorSession = (sessionId: string, projectId: string, input: string) =>
-  post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/resume`, { projectId, input });
+// Advisory @-mention steering a founder message can carry: the specific teammates (crew refs) and
+// capabilities the founder named in the composer. Optional and never a contract — the backend folds it
+// into the operator's context so composition PREFERS the named crew, but a run is never blocked on it.
+export type OperatorHints = {
+  teammates?: string[];
+  capabilities?: string[];
+};
+
+export const resumeOperatorSession = (
+  sessionId: string,
+  projectId: string,
+  input: string,
+  hints?: OperatorHints,
+) =>
+  post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/resume`, {
+    projectId,
+    input,
+    ...(hints ? { hints } : {}),
+  });
 
 export const resolveOperatorGate = (
   sessionId: string,
@@ -226,6 +249,14 @@ export const resolveOperatorGate = (
 
 export const cancelOperatorSession = (sessionId: string, projectId: string) =>
   post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/cancel`, { projectId });
+
+// Veto-as-loop: the founder sends ONE staged item back to the crew with a note. The operator re-drives
+// to rework just that item and returns it to the gate — nothing is released. Not a reject; a rework.
+export const refineOperatorGate = (
+  sessionId: string,
+  projectId: string,
+  payload: { gateNodeId: string; itemKey: string; founderNote: string },
+) => post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/gate-refine`, { projectId, ...payload });
 
 // Accept or discard a graph change the operator staged for review (the on-canvas ghost proposal). An
 // optional note rides along — a reject note is a redirect (Claude changes it), an accept note a quiet
@@ -251,6 +282,28 @@ export const resolveOperatorCandidates = (
   projectId: string | undefined,
   pick: string,
 ) => post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/candidates`, { projectId, pick });
+
+// ── Composer fast lane — the session-optional briefing read + the intent-routed turn ──────────────
+// The briefing is the read-only cross-pipeline snapshot shaped for ComposerDock's `briefing` prop
+// (eyebrow / rows / summary). Reading it never drives, resumes, sends, or creates anything.
+export type ComposerBriefingRow = { id: string; name: string; state: "needs" | "work" | "quiet"; what: string };
+export type ComposerBriefing = { eyebrow: string; rows: ComposerBriefingRow[]; summary: string };
+export const getComposerBriefing = (projectId?: string) =>
+  get<ComposerBriefing>(`/api/operator/briefing${projectId ? `?project=${encodeURIComponent(projectId)}` : ""}`);
+
+// The intent-routed turn. status|explain answer FAST (mode:"fast") without spawning the drive; act|run
+// (mode:"drive") either resume the live session server-side (allowDrive && a resumable sessionId) or hand
+// back session:null so the client creates a fresh session on its own untouched path. THE WALL is untouched.
+export type ComposerTurnResult =
+  | { mode: "fast"; intent: "status" | "explain"; answer: string; briefing?: unknown }
+  | { mode: "drive"; intent: "act" | "run"; session: OperatorSession | null };
+export const composerTurn = (input: {
+  projectId?: string;
+  sessionId?: string;
+  input: string;
+  hints?: OperatorHints;
+  allowDrive?: boolean;
+}) => post<ComposerTurnResult>("/api/operator/turn", input);
 
 // ── The outcome door — record what actually happened ──────────────────────────
 // After the gate releases work, the founder records the real result (a reply, a meeting, a purchase)
@@ -500,27 +553,15 @@ export const recordFounderOutcome = (
   body: { runId?: string | null; happened: string | { label: string; count?: number }; learned?: string },
 ) => post<{ ok: boolean }>(`/api/projects/${encodeURIComponent(projectId)}/outcome`, body);
 
-// The agent's face — what a teammate has BECOME, all derived from real run history. A fresh agent
-// reads honestly (hasRuns false, "no runs yet"), never a fabricated number.
-export type AgentLearning = {
-  hasRuns: boolean;
-  runCount: number;
-  counts: { approved: number; rejected: number; edits: number };
-  lastEdits: { from: string; to: string }[];
-  voice: string;
-  note: string | null;
-};
-export const getAgentLearning = (projectId: string, ref: string) =>
-  get<{ profile: AgentLearning }>(
-    `/api/projects/${encodeURIComponent(projectId)}/agents/${encodeURIComponent(ref)}/profile`,
-  );
-
 // The bench — the whole roster as one lens over the run ledger. Each row is the compact face of an
 // agent's real track record; a never-run agent reads honestly (hasRuns false, "no runs yet"). The
 // profile sheet still fetches the full record (edits + voice) on click.
 export type AgentBenchRow = {
   ref: string;
   job: string;
+  // A founder-chosen display name (a teammate built via the crew "+"); empty for composed-pipeline agents,
+  // which fall back to their derived role.
+  name?: string;
   hasRuns: boolean;
   runCount: number;
   counts: { approved: number; rejected: number; edits: number };
@@ -531,11 +572,67 @@ export const getAgentBench = (projectId: string) =>
 
 // "+ build a teammate with Claude": compose drafts one from a sentence (nothing written), add persists the
 // accepted draft as a real agent file and puts it on this project's crew so it shows up immediately.
-export type CrewDraft = { ref: string; name: string; description: string; systemPrompt: string; markdown: string };
-export const composeCrewMember = (projectId: string, description: string) =>
-  post<{ draft: CrewDraft }>(`/api/projects/${encodeURIComponent(projectId)}/crew/compose`, { description });
-export const addCrewMember = (projectId: string, draft: { ref: string; description: string; markdown: string }) =>
+export type ImportedLesson = { patternKey: string; text: string; why: string; source: string };
+export type CrewDraft = {
+  ref: string; name: string; description: string; systemPrompt: string; markdown: string;
+  // Present only on a draft imported from an OpenClaw workspace: the earned lessons that seed the
+  // template soul on accept, and the read-only-reduced toolset.
+  source?: string;
+  importedPromoted?: ImportedLesson[];
+  importedScratch?: ImportedLesson[];
+  tools?: { allowed: string[]; dropped: string[] };
+};
+// One endpoint, three moves: fresh from a sentence (description), refine an in-progress draft (current +
+// instruction, ref held stable), or fork an existing teammate (baseRef + instruction).
+export type ComposeCrewInput = {
+  description?: string;
+  instruction?: string;
+  baseRef?: string;
+  current?: { ref: string; name: string; description: string; systemPrompt: string };
+};
+export const composeCrewMember = (projectId: string, input: ComposeCrewInput) =>
+  post<{ draft: CrewDraft }>(`/api/projects/${encodeURIComponent(projectId)}/crew/compose`, input);
+export const addCrewMember = (
+  projectId: string,
+  draft: { ref: string; name: string; description: string; systemPrompt: string; importedPromoted?: ImportedLesson[]; importedScratch?: ImportedLesson[] },
+) =>
   post<{ ok: boolean; member: { ref: string; description: string } }>(`/api/projects/${encodeURIComponent(projectId)}/crew/add`, draft);
+
+// A teammate's founder-facing card: its real track record and the lessons it has learned FROM the
+// founder, all in plain words. `learned` is what's already permanent; `stillFiguring` is what it's
+// still watching; `ready` is what has earned a graduation and awaits the founder's one tap. Every
+// counter is a real signal — a teammate with no history reads name:null and zeros, never a fake number.
+export type CrewLesson = { text: string; why: string };
+export type CrewReadyLesson = CrewLesson & { patternKey: string };
+export type CrewMemberProfile = {
+  name: string | null;
+  record: { runs: number; sent: number; replies: number; wins: number };
+  learned: CrewLesson[];
+  stillFiguring: CrewLesson[];
+  ready: CrewReadyLesson[];
+};
+export const getCrewMemberProfile = (projectId: string, ref: string) =>
+  get<{ profile: CrewMemberProfile }>(
+    `/api/projects/${encodeURIComponent(projectId)}/crew/${encodeURIComponent(ref)}/profile`,
+  );
+// The founder's blessing (make a ready lesson permanent) and its "not yet" (set it aside). Both return
+// the fresh founder-view so the card updates in place.
+export const promoteCrewLearning = (projectId: string, ref: string, patternKey: string) =>
+  post<{ profile: CrewMemberProfile }>(
+    `/api/projects/${encodeURIComponent(projectId)}/crew/${encodeURIComponent(ref)}/promote`, { patternKey },
+  );
+export const dismissCrewLearning = (projectId: string, ref: string, patternKey: string) =>
+  post<{ profile: CrewMemberProfile }>(
+    `/api/projects/${encodeURIComponent(projectId)}/crew/${encodeURIComponent(ref)}/dismiss`, { patternKey },
+  );
+
+// Import an OpenClaw agent workspace into a teammate draft (nothing persisted until add). Send a single
+// combined paste (text) or the per-file object; the draft comes back with its earned lessons attached.
+export const importOpenClawTeammate = (
+  projectId: string,
+  input: { text?: string; files?: { soul?: string; agents?: string; memory?: string; tools?: string; learnings?: string }; dirPath?: string },
+) =>
+  post<{ draft: CrewDraft }>(`/api/projects/${encodeURIComponent(projectId)}/crew/import`, input);
 
 // The market picture, built one layer at a time. researchMarketLayer returns a spread of real
 // alternatives for the NEXT buyer facet, grounded in what's already settled — and persists nothing.

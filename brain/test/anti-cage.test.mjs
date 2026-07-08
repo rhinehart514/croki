@@ -50,6 +50,9 @@ import {
   learningStore,
 } from "../src/gtm-store.mjs";
 import { effectiveSolidity } from "../src/evidence.mjs";
+import { deriveVoiceBrief, renderVoiceForNarration } from "../src/teammate-soul.mjs";
+import { teammateSoulStore } from "../src/teammate-soul-store.mjs";
+import { createTeammateNarrator } from "../src/teammate-narrator.mjs";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -669,6 +672,81 @@ describe("anti-cage: read models and stores carry no closed GTM taxonomy", () =>
 // Learning. Their kind/label/bet fields are OPEN strings by invariant (§2.2) — never a closed enum
 // that rejects a value, never a fixed GTM stage skeleton. And evidence discipline (§2.3) is
 // structural, not advisory: a claim with no sourced evidence is demoted to speculative in code.
+
+// GUARD H — The teammate voice surface never leaks a raw prompt or a soul internal. A teammate now
+// speaks in the founder's chat in the first person during a run. The stakes STANCE and the operating
+// instructions live in the soul/prompt (backend); the founder must see ONLY the teammate's voice + its
+// quality — never its systemPrompt, never a scratch learning still on watch, never a soul-entry's
+// internal id/why/patternKey/source. deriveVoiceBrief and renderVoiceForNarration are the only assemblers
+// that feed that surface, so this pins them as allowlist-only. (Locks HARD INVARIANT #2 for this surface.)
+describe("anti-cage: the teammate voice surface carries no raw prompt or soul internal", () => {
+  const MARKER = "RAW_PROMPT_MARKER_do_not_surface_7c1e";
+
+  // A soul whose every INTERNAL field carries the marker, plus one genuinely founder-safe promoted lesson.
+  function boobyTrappedSoul() {
+    return {
+      ref: "outreach-writer",
+      name: "Maya",
+      voice: { register: "crisp, dry", stance: "I earn my spot by finding what everyone skimmed." },
+      soul: [
+        { id: `soul:${MARKER}`, patternKey: MARKER, why: MARKER, source: MARKER, text: "Lead with the buyer's trigger." },
+      ],
+      learnings: [
+        { patternKey: MARKER, why: MARKER, source: "gate", text: MARKER, status: "watching", occurrences: [] },
+      ],
+      record: { runs: 2, sent: 3, replies: 1, wins: 0 },
+    };
+  }
+
+  it("a raw systemPrompt passed as the definition cannot reach the brief or the narration fragment", () => {
+    const soul = boobyTrappedSoul();
+    const definition = { name: "Maya", systemPrompt: `You are Maya. Internal ops: ${MARKER}.` };
+    const brief = deriveVoiceBrief(soul, { definition });
+    const fragment = renderVoiceForNarration(brief);
+    for (const surface of [JSON.stringify(brief), fragment]) {
+      assert.equal(surface.includes(MARKER), false, `the voice surface leaked a raw prompt / soul internal:\n${surface}`);
+    }
+    // The founder-facing halves DID survive — the wall subtracts internals, it does not empty the voice.
+    assert.deepEqual(brief.convictions, ["Lead with the buyer's trigger."]);
+    assert.ok(fragment.includes("crisp, dry"));
+  });
+
+  it("the brief object carries none of the soul-entry internal keys", () => {
+    const brief = deriveVoiceBrief(boobyTrappedSoul(), {});
+    const keys = Object.keys(brief);
+    for (const banned of ["systemPrompt", "learnings", "why", "patternKey", "id", "source", "occurrences"]) {
+      assert.equal(keys.includes(banned), false, `the brief exposes a soul internal key: ${banned}`);
+    }
+    // Convictions are plain strings, never entry objects (which would drag id/why/patternKey along).
+    assert.ok(brief.convictions.every((c) => typeof c === "string"), "a conviction must be plain text, never a soul entry");
+  });
+
+  // The FULL WI-A path, end to end: a real soul persisted through voiceBriefFor, then run through the live
+  // narrator (with an injected runQuery capturing the prompt). This proves the wall holds through the whole
+  // narration seam the founder's chat actually uses — not just the two assemblers in isolation.
+  it("the whole WI-A path (soul → voiceBriefFor → narrator prompt) leaks no internal", async () => {
+    const options = { root: fs.mkdtempSync(path.join(os.tmpdir(), "anti-cage-narrate-")) };
+    // Persist a clean voice, then a booby-trapped scratch learning (a watching, ungraduated lesson) — an
+    // INTERNAL that must NOT reach the narration. A raw systemPrompt is also passed as the definition.
+    teammateSoulStore.setVoice("proj-x", "outreach-writer", {
+      register: "crisp, dry",
+      stance: "I earn my spot by finding what everyone skimmed.",
+    }, options);
+    teammateSoulStore.record("proj-x", "outreach-writer", {
+      text: MARKER, why: MARKER, source: "gate", patternKey: MARKER,
+    }, {}, options);
+
+    const brief = teammateSoulStore.voiceBriefFor("proj-x", "outreach-writer", { definition: { name: "Maya", systemPrompt: MARKER } }, options);
+
+    const calls = [];
+    const runQuery = async (args) => { calls.push(args); return { text: "On it." }; };
+    const narrate = createTeammateNarrator({ runQuery });
+    await narrate({ brief, phase: "start", node: { nodeId: "n1", label: "Draft outreach" } });
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].prompt.includes(MARKER), false, `the WI-A narration path leaked an internal:\n${calls[0].prompt}`);
+  });
+});
 
 describe("anti-cage: the Phase 0 GTM record model is open, evidence-disciplined shapes", () => {
   function freshRoot() {

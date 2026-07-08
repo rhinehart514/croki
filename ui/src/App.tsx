@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle, Check, Inbox, LoaderCircle, MessageSquare, Play, X,
+  AlertTriangle, Check, Inbox, LoaderCircle, X,
 } from "lucide-react";
 import {
   applyGraphOperations as applyGraphOperationsApi,
@@ -9,7 +9,6 @@ import {
   getEngineState,
   getConnection,
   type ConnectionStatus,
-  getContext,
   getLibrary,
   getAgentBench,
   type AgentBenchRow,
@@ -36,9 +35,11 @@ import {
   cancelOperatorSession,
   createProject,
   createOperatorSession,
+  composerTurn,
+  getComposerBriefing,
   listOperatorSessions,
   resolveOperatorGate,
-  resolveOperatorIdeas,
+  refineOperatorGate,
   resolveOperatorCandidates,
   resolveOperatorProposal,
   resumeOperatorSession,
@@ -46,16 +47,12 @@ import {
   saveGraph,
   setActiveWorkflow,
   getProductModel,
-  deriveProductModel,
-  reviseProductModel,
   composeMicroproduct,
   promoteChannel,
   revokeChannel,
-  ideateObjectCandidatesStream,
-  applyObjectGraphOperations,
   getPendingInbox,
 } from "@/api";
-import type { ObjectCandidate } from "@/api";
+import type { OperatorHints, ComposerBriefing, ComposerTurnResult } from "@/api";
 // Heavy overlay/panel components are split into their own chunks and loaded on demand the first time
 // the founder opens them, so they stay out of the initial app chunk. Each is named-exported, so the
 // dynamic import maps the named export onto the default React.lazy expects.
@@ -68,40 +65,35 @@ const ConnectSender = lazy(() => import("@/components/ConnectSender").then((m) =
 import type { AgentProfileView, TeammateView } from "@/components/AgentProfile";
 import { ComposerDock } from "@/components/ComposerDock";
 import { FloatingDock } from "@/components/FloatingDock";
-import { LeftRail } from "@/components/LeftRail";
+import { LeftRail, type StepDragPayload } from "@/components/LeftRail";
+import { CAP_STAGE_CATEGORY } from "@/lib/capabilities";
 import { type OperatorCursorState } from "@/components/GraphCanvas";
 import { setGhostResolve } from "@/lib/ghostResolve";
 import { TeamOnboarding } from "@/components/TeamOnboarding";
 import { convexEnabled, loadTeamIdentity, type TeamIdentity } from "@/lib/convex";
 import { GoalLauncher } from "@/components/GoalLauncher";
 import { OperatorDriveState } from "@/components/OperatorDriveState";
-import { IdeaReview } from "@/components/IdeaReview";
 const TeamSpace = lazy(() => import("@/components/TeamSpace").then((m) => ({ default: m.TeamSpace })));
 import { canApprove as canApproveApi } from "@/api";
 import { getIdentity, FOUNDER_USER_ID, type ActingIdentity } from "@/lib/identity";
-import { NodeEditor } from "@/components/NodeEditor";
 // GtmExplorer (the old left rail) is intentionally no longer rendered — channel navigation moved to
 // the FloatingDock's channel switcher, the feeds into ComposerDock, Problems to the dock. The
 // breadcrumb switchers, mode lenses, Problems, Approvals, Simulate and Run all live in FloatingDock
 // now. The hand-pick pickers were removed — Claude composes what a pipeline needs.
 import { statusLabel } from "@/lib/status";
 import { humanizeOperatorSession } from "@/lib/operatorLanguage";
-import { healthHex } from "@/lib/health";
 import { itemKey } from "@/lib/itemKey";
 import { gateItemView, channelOfferLine, type GatePromote, type GateReplayDecision } from "@/lib/gateItem";
 import { agentPersona } from "@/lib/agentPersona";
 import { STEP_DRAG_MIME } from "@/lib/objectPalette";
 const ProductUnderstanding = lazy(() => import("@/components/ProductUnderstanding").then((m) => ({ default: m.ProductUnderstanding })));
-const ProductCanvas = lazy(() => import("@/components/ProductCanvas").then((m) => ({ default: m.ProductCanvas })));
 import { GtmCanvas, type GtmCanvasModel } from "@/components/canvas/GtmCanvas";
-import { AltitudeControl } from "@/components/AltitudeControl";
 import { CanvasHistoryControl } from "@/components/CanvasHistoryControl";
 import { useCanvasHistory, describeOperations, describeGraphDiff } from "@/lib/canvasHistory";
 import { ProductEntryColumn } from "@/components/ProductEntryColumn";
 import { CanvasCard } from "@/components/CanvasCard";
 import { ClarityCard } from "@/components/ClarityCard";
 import { ExperimentMatrixLens } from "@/components/lenses/ExperimentMatrixLens";
-import type { GateBag } from "@/lib/gateItem";
 import type { CanvasSubject } from "@/lib/cardDetail";
 import { ReferencesPanel, type ReferenceKind } from "@/components/ReferencesPanel";
 import { IssuesCard } from "@/components/IssuesCard";
@@ -175,11 +167,10 @@ import { ProjectPicker } from "@/components/ProjectPicker";
 import { ProductEntry } from "@/components/ProductEntry";
 import { ConnectClaude } from "@/components/ConnectClaude";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
-import { Button } from "@/components/ui/button";
 import type {
-  ChannelMeta, ConnectorMeta, ContextManifest, Decisions, EngineState, GateDecision, GraphOperation, GtmLibrary, GTMContractAudit, GTMEdge, GTMGraph, GTMItem, GTMNode, GTMNodeCategory,
-  GTMProject, GTMNodeResult, GTMRunResult, NodeSelection, OperatorSession, OperatorSessionSummary, ProjectSummary,
-  ProductModel, ProductModelEdit,
+  ChannelMeta, ConnectorMeta, Decisions, EngineState, GateDecision, GraphOperation, GtmLibrary, GTMContractAudit, GTMEdge, GTMGraph, GTMItem, GTMNode, GTMNodeCategory,
+  GTMProject, GTMRunResult, NodeSelection, OperatorSession, OperatorSessionSummary, ProjectSummary,
+  ProductModel,
   Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, ComposerPosture,
   PendingDecision, PendingInbox,
@@ -206,25 +197,39 @@ function projectRouteFromLocation() {
   return { projectId: decodeURIComponent(match[1]) };
 }
 
+// Where a rail drag was released, in canvas (flow) coordinates. The drop fires on the canvas-area
+// wrapper, which sits ABOVE React Flow, so its projection hook isn't in scope — instead read the flow's
+// own viewport transform straight off the DOM (`matrix(scale,0,0,scale,tx,ty)` on .react-flow__viewport)
+// and invert it: screenPoint → (screenPoint − paneOrigin − translate) / scale. The node is nudged up-left
+// by roughly half a collapsed card so it lands centered under the cursor, not hanging off its corner.
+// Returns undefined when no flow is mounted (empty canvas) — the caller then appends at a default spot.
+function flowPositionFromDrop(event: React.DragEvent): { x: number; y: number } | undefined {
+  const container = (event.currentTarget as HTMLElement).querySelector(".react-flow") as HTMLElement | null;
+  const viewport = container?.querySelector(".react-flow__viewport") as HTMLElement | null;
+  if (!container || !viewport) return undefined;
+  const rect = container.getBoundingClientRect();
+  const transform = window.getComputedStyle(viewport).transform;
+  const m = transform && transform !== "none" ? new DOMMatrixReadOnly(transform) : new DOMMatrixReadOnly();
+  const scale = m.a || 1;
+  const x = (event.clientX - rect.left - m.e) / scale;
+  const y = (event.clientY - rect.top - m.f) / scale;
+  return { x: x - 116, y: y - 34 };
+}
+
 export default function App() {
   // The canvas IS the workspace. "projects" is the only other base view — the cold-start picker
   // before any product exists. Understand and Ideas are no longer destinations that swap
   // the canvas out; they float OVER it as dismissable overlays (set via `overlay`), so the IDE is
   // never replaced. Channels live in the explorer, not a page.
   const [view, setView] = useState<"projects" | "canvas" | "start">("canvas");
-  // The canvas frames the SAME product data two ways, chosen by one segmented pill over the map:
-  //   move     — the story bands with the Best Next Move floated over them (the doing surface)
-  //   engineer — the causal reasoning graph, the "why this move" laid bare, with the executable step
-  //              chain folded in behind a Reasoning / Steps switch inside the lens
-  // Switching a mode re-projects the same data in place; it never navigates away. (The former Flow,
-  // Trace, and Learn tabs collapsed into these two — Flow and Trace into Engineer, Learn retired.)
-  const [activeMode, setActiveMode] = useState<"move" | "engineer">("move");
+  // The canvas is the runnable pipeline — the Steps surface (GraphCanvas). The former Story ("move")
+  // altitude and its Move/Engineer toggle were removed; Steps is now the whole canvas.
   const [booted, setBooted] = useState(false);
   // True until the initial boot load resolves. Guards the canvas empty-state so a deep-link / reload
   // shows a calm "loading your workspace" instead of flashing the cold-start goal launcher for the
   // 1–2s before the project's graph arrives.
   const [booting, setBooting] = useState(true);
-  const [overlay, setOverlay] = useState<"understand" | "product" | "settings" | null>(null);
+  const [overlay, setOverlay] = useState<"understand" | "settings" | null>(null);
   // Which Settings section is showing — the three admin surfaces (workspace index, team + release
   // roles, self-built tools) live behind one overlay now, switched by these tabs.
   const [settingsTab, setSettingsTab] = useState<"workspace" | "team" | "tools">("workspace");
@@ -246,7 +251,6 @@ export default function App() {
   // The living product picture — the founder-editable INTERPRETATION aggregate, loaded alongside the
   // active project. Edits persist through the domain commands (revise/derive) then re-fetch.
   const [productModel, setProductModel] = useState<ProductModel | null>(null);
-  const [productModelBusy, setProductModelBusy] = useState(false);
   // Bumped to summon the Claude co-pilot — a new channel is born by telling Claude the goal, not by
   // filling a form, so "New channel" opens and focuses the chat.
   const [composerFocus, setComposerFocus] = useState(0);
@@ -254,18 +258,6 @@ export default function App() {
   // shows it as the subject chip and the next message is framed with that node's context, so "make this
   // shorter" / "why did this come up empty" resolves to a real canvas object — no describing it by hand.
   const [composerSubject, setComposerSubject] = useState<CanvasSubject | null>(null);
-  // Per-card ideation (the on-card "+"): the source card, the plain target, the returning candidate
-  // OBJECTS, and the call's status. The composer renders these as a decidable list; adding one writes a
-  // real draft card. Null when no ideation is running. objectGraphReload is bumped after an add so the
-  // object-graph canvas reloads and the fresh draft appears joined to its source.
-  const [objectIdeation, setObjectIdeation] = useState<{
-    sourceId: string; sourceLabel: string; target: string;
-    status: "loading" | "done" | "error"; candidates: ObjectCandidate[];
-    // Claude's plain-language reasoning, streamed live into the chat as it ideates — the founder watches
-    // it think, then the candidates land. Trimmed at the JSON fence so only prose ever shows.
-    reasoning: string; error?: string | null;
-  } | null>(null);
-  const [objectGraphReload, setObjectGraphReload] = useState(0);
   // The Issues panel — the system's problem list, now a first-class always-present indicator on the
   // dock (no longer a summoned card). Opens from its toolbar badge, mutually exclusive with Approvals.
   const [issuesOpen, setIssuesOpen] = useState(false);
@@ -290,7 +282,6 @@ export default function App() {
   // The base canvas per mode (no lens taxonomy): GTM shows the engine on the overview and a channel's
   // flow when one is open, chosen by channel state alone (no GTM lens state); Product drives its one
   // lens from the command dock. Everything else is summoned as a card.
-  const [productLensId] = useState("conceptual");
   // Summoned cards on the canvas — one per kind (summoning an open view is a no-op). Claude or the
   // composer + pops these up; they're draggable and dismissible.
   const [summoned, setSummoned] = useState<string[]>([]);
@@ -450,7 +441,6 @@ export default function App() {
   const [contractAudits, setContractAudits] = useState<Record<string, GTMContractAudit>>({});
   // Engine state powers inline node health and the Problems rail.
   const [engine, setEngine] = useState<EngineState | null>(null);
-  const [contextManifest, setContextManifest] = useState<ContextManifest | null>(null);
   const [library, setLibrary] = useState<GtmLibrary | null>(null);
   // The bench — every agent's track record derived from the run ledger. Loaded once per project and
   // reused by both the bench surface and the crew strip's approved-count badges.
@@ -461,11 +451,18 @@ export default function App() {
   const [runSummary, setRunSummary] = useState<RunSummary | null>(null);
   const [outcomeOpen, setOutcomeOpen] = useState(false);
   const [operatorSession, setOperatorSession] = useState<OperatorSession | null>(null);
+  // The host-computed opening briefing (cross-pipeline snapshot), fetched from the server and handed to
+  // ComposerDock's `briefing` prop — it overrides the dock's client-derived-from-roster fallback.
+  const [composerBriefing, setComposerBriefing] = useState<ComposerBriefing | null>(null);
   // Every pipeline the founder is running for this product, as lightweight summaries — the source for
   // the composer's chat tabs. The backend already drives these sessions in parallel; this is the UI
   // catching up to that. `operatorSession` stays the single ACTIVE conversation (all the gate / proposal
   // / polling wiring keys off it, untouched); the roster is purely additive, refreshed alongside it.
   const [sessionRoster, setSessionRoster] = useState<OperatorSessionSummary[]>([]);
+  // Tabs the founder has CLOSED. Close has no backend delete (a pipeline stays alive server-side), so a
+  // closed tab is a client-side view dismissal: rosterForDock filters these out. It naturally resets on a
+  // product switch (the roster re-seeds), so a still-alive pipeline honestly reappears on product re-entry.
+  const [dismissedTabs, setDismissedTabs] = useState<Set<string>>(new Set());
   // The shared People object — durable identities promoted from real run entrants, read-only. Feeds
   // the GTM canvas's People lens (find-references / dedup) and is refreshed after each run promotes
   // new entrants.
@@ -500,23 +497,9 @@ export default function App() {
   }, [agentProfileRef, bench, library]);
   const operatorGraphRevision = useRef<number | null>(null);
   const operatorRunId = useRef<string | null>(null);
-  const nodeModalRef = useRef<HTMLElement | null>(null);
-  const nodeModalCloseRef = useRef<HTMLButtonElement | null>(null);
 
   const loadEngine = useCallback((channelId: string | null = activeChannelId) => {
     getEngineState(channelId ?? undefined).then((res) => setEngine(res.engine)).catch(console.error);
-    // Refresh the assembled-context manifest alongside the engine: a run changes taste and state,
-    // so the context pill must move with the loop, not lag it.
-    getContext(channelId ?? undefined).then((res) => setContextManifest(res.manifest)).catch(console.error);
-  }, [activeChannelId]);
-
-  // Keep the context pill in sync with the active channel, even when the channel changes through
-  // paths that don't call loadEngine (channel switch, operator hand-off).
-  useEffect(() => {
-    if (!activeChannelId) return;
-    let live = true;
-    getContext(activeChannelId).then((res) => { if (live) setContextManifest(res.manifest); }).catch(console.error);
-    return () => { live = false; };
   }, [activeChannelId]);
 
   // The library (subagents + skills on disk) is product-wide; load it once for the explorer.
@@ -697,43 +680,6 @@ export default function App() {
     setComposerFocus((f) => f + 1);
   }, []);
 
-  // The on-card "+": scope the composer to the card, open it, and run the REAL grounded ideate for the
-  // plain target (the endpoint drives the same live Claude generator the ideas round uses). The
-  // candidates land in the composer as a decidable list; the source card lights blue-violet while the
-  // call runs. Nothing is persisted here — a candidate becomes a real draft only when the founder adds it.
-  const ideateObjectFromCard = useCallback(async (source: { id: string; label: string; type: string }, target: string) => {
-    const projectId = activeProjectIdRef.current;
-    if (!projectId) return;
-    setComposerSubject({ id: source.id, label: source.label, kind: source.type });
-    setComposerFocus((f) => f + 1);
-    setObjectIdeation({ sourceId: source.id, sourceLabel: source.label, target, status: "loading", candidates: [], reasoning: "" });
-    const matches = (cur: typeof objectIdeation) => !!cur && cur.sourceId === source.id && cur.target === target;
-    // Stop appending reasoning once the JSON fence appears, so only Claude's plain prose shows in the chat.
-    let fenceReached = false;
-    try {
-      await ideateObjectCandidatesStream(projectId, { target, sourceNodeId: source.id }, (event) => {
-        if (event.type === "reasoning") {
-          setObjectIdeation((cur) => {
-            if (!matches(cur) || fenceReached) return cur;
-            let next = cur!.reasoning + event.text;
-            const fence = next.indexOf("```");
-            if (fence !== -1) { fenceReached = true; next = next.slice(0, fence); }
-            return { ...cur!, reasoning: next };
-          });
-        } else if (event.type === "candidates") {
-          setObjectIdeation((cur) => (matches(cur) ? { ...cur!, status: "done", candidates: event.candidates } : cur));
-        } else if (event.type === "ideate_error") {
-          setObjectIdeation((cur) => (matches(cur) ? { ...cur!, status: "error", error: event.error } : cur));
-        }
-      });
-      // Stream closed without a candidates event (defensive): settle out of the loading state.
-      setObjectIdeation((cur) => (matches(cur) && cur!.status === "loading" ? { ...cur!, status: "done" } : cur));
-    } catch (err) {
-      setObjectIdeation((cur) => (matches(cur)
-        ? { ...cur!, status: "error", error: err instanceof Error ? err.message : String(err) } : cur));
-    }
-  }, []);
-
   // Re-target the composer to a Related card from the composer's own card face: point composerSubject at
   // that card (light identity only). Flipping subjectId makes the object graph select that card and emit
   // its full detail back up, which re-scopes the card face — the founder walks the graph without the
@@ -741,61 +687,6 @@ export default function App() {
   const handleRetargetSubject = useCallback((rel: { id: string; name: string }) => {
     setComposerSubject({ id: rel.id, label: rel.name, kind: "block", detail: null });
   }, []);
-
-  // The founder's explicit pick: write a REAL gray DRAFT card (loose, founder-origin, the candidate's own
-  // statement + type) PLUS a provenance link from the source card, then bump the reload so the object
-  // graph re-reads and the new draft appears joined. The added candidate drops out of the list. Nothing
-  // sends — a draft card is inert until it's built into a path and taken to the gate.
-  const addObjectCandidate = useCallback(async (candidate: ObjectCandidate) => {
-    const projectId = activeProjectIdRef.current;
-    const ideation = objectIdeation;
-    if (!projectId || !ideation) return;
-    const newId = `obj-founder-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const draftOp = {
-      type: "add_node" as const,
-      node: {
-        id: newId,
-        // A typed idea lands with its type; an untyped one stays a genuinely loose draft card.
-        ...(candidate.type ? { type: candidate.type } : {}),
-        maturity: "loose" as const,
-        statement: candidate.statement,
-        origin: "founder",
-      },
-    };
-    const edgeOp = {
-      type: "add_edge" as const,
-      edge: {
-        source: ideation.sourceId,
-        target: newId,
-        type: "leads_to",
-        basis: [{ ref: `ideated-from:${ideation.sourceId}`, preview: `Ideated from “${ideation.sourceLabel}”`, kind: "founder" }],
-      },
-    };
-    try {
-      try {
-        // The join lands directly when the source is already a writable card in the store.
-        await applyObjectGraphOperations(projectId, [draftOp, edgeOp]);
-      } catch {
-        // The source is a PROJECTED card (a scanned product fact, a researched market object) that isn't
-        // in the writable store yet, so the edge has nothing to attach to. Anchor it as a loose stored
-        // node under the same id — the projection still overrides this anchor in the view (same id, no
-        // duplicate), it just gives the provenance edge a real home — then land the draft joined to it.
-        const anchorOp = {
-          type: "add_node" as const,
-          node: { id: ideation.sourceId, maturity: "loose" as const, statement: ideation.sourceLabel, origin: "founder" },
-        };
-        await applyObjectGraphOperations(projectId, [anchorOp, draftOp, edgeOp]);
-      }
-      setObjectGraphReload((n) => n + 1);
-      setObjectIdeation((cur) => (cur && cur.sourceId === ideation.sourceId
-        ? { ...cur, error: null, candidates: cur.candidates.filter((c) => c.id !== candidate.id) } : cur));
-    } catch (err) {
-      setObjectIdeation((cur) => (cur && cur.sourceId === ideation.sourceId
-        ? { ...cur, error: err instanceof Error ? err.message : String(err) } : cur));
-    }
-  }, [objectIdeation]);
-
-  const dismissObjectIdeation = useCallback(() => setObjectIdeation(null), []);
 
   // Zoom out to the one-canvas overview: show the GTM canvas's engine-overview lens — every built
   // channel as a tile — instead of a single focused workflow. Returns false when there's nothing to
@@ -939,6 +830,9 @@ export default function App() {
       const { sessions } = await listOperatorSessions(projectId);
       setSessionRoster(sessions);
     } catch { /* a roster refresh failure is non-fatal — the active conversation is unaffected */ }
+    try {
+      setComposerBriefing(await getComposerBriefing(projectId));
+    } catch { /* the briefing read is non-fatal — the dock falls back to its client-derived one */ }
   }, []);
 
   // Restore the latest durable operator session for the active product. Re-runs
@@ -947,10 +841,12 @@ export default function App() {
   useEffect(() => {
     if (!activeProjectId) return;
     let live = true;
+    setComposerBriefing(null);
     listOperatorSessions(activeProjectId)
       .then(async ({ sessions }) => {
         if (!live) return;
         setSessionRoster(sessions); // seed the tab roster with every pipeline for this product
+        getComposerBriefing(activeProjectId).then((b) => { if (live) setComposerBriefing(b); }).catch(() => {});
         // The dock OPENS on the project's most-live conversation: prefer the active (non-terminal)
         // thread; fall back to the newest session so a just-finished one (which may still hold an
         // unresolved on-canvas proposal) stays on screen. The others are reachable on their tabs.
@@ -1026,33 +922,6 @@ export default function App() {
       console.error("Failed to wire channel feed", err);
     }
   }, []);
-
-  // Derive a first draft (or re-derive) from the scan grounding — the server injects the live
-  // generator. Re-fetch after so the surface reflects the new version.
-  const handleDeriveProductModel = useCallback(async () => {
-    if (!activeProject) return;
-    setProductModelBusy(true);
-    try {
-      const { productModel: model } = await deriveProductModel();
-      setProductModel(model);
-    } finally {
-      setProductModelBusy(false);
-    }
-  }, [activeProject]);
-
-  // A founder edit — persists the changed bag through ReviseProductModel (its own append-only event
-  // log → a new version), then re-fetches so the surface shows the persisted version.
-  const handleReviseProductModel = useCallback(async (edit: ProductModelEdit) => {
-    if (!activeProject) return;
-    setProductModelBusy(true);
-    try {
-      await reviseProductModel(edit);
-      const { productModel: model } = await getProductModel();
-      setProductModel(model);
-    } finally {
-      setProductModelBusy(false);
-    }
-  }, [activeProject]);
 
   const syncOperator = useCallback((raw: OperatorSession) => {
     const next = humanizeOperatorSession(raw); // one seam: run state becomes founder language here
@@ -1134,19 +1003,37 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, [activeProjectId, anyRosterLive, refreshRoster]);
 
-  // The roster the composer tabs render: the summaries, but with the LIVE active session overlaid onto
-  // its own row (fresh status + name) and guaranteed present even before the first roster fetch lands.
-  // So the tab you're looking at is always exactly right; the others catch up on the 4s cadence above.
+  // The roster the composer tabs render. Tabs are for the pipelines you're RUNNING RIGHT NOW, not a
+  // graveyard of every past conversation — so this keeps only the still-in-flight sessions (working or
+  // waiting on you), plus the active one even if it just went terminal (your current chat keeps its
+  // tab). The active row is overlaid with the LIVE session (fresh status + goal) and guaranteed present
+  // before the first roster fetch lands; the rest catch up on the 4s cadence above.
   const rosterForDock = useMemo<OperatorSessionSummary[]>(() => {
-    if (!operatorSession) return sessionRoster;
-    let found = false;
-    const merged = sessionRoster.map((s) => {
-      if (s.id !== operatorSession.id) return s;
-      found = true;
-      return { ...s, status: operatorSession.status, summary: operatorSession.summary ?? s.summary, goal: operatorSession.goal };
-    });
-    return found ? merged : [operatorSession, ...merged];
-  }, [sessionRoster, operatorSession]);
+    const LIVE = new Set([
+      "running", "ready",
+      "waiting_for_gate", "waiting_for_proposal", "waiting_for_ideas", "waiting_for_input",
+      "interrupted", "blocked",
+    ]);
+    const rows = sessionRoster
+      .filter((s) => LIVE.has(s.status) || s.id === operatorSession?.id)
+      // A closed tab drops out — UNLESS it's the active thread on screen (you can't hide the conversation
+      // you're currently reading out from under yourself; closing the active one switches away first).
+      .filter((s) => !dismissedTabs.has(s.id) || s.id === operatorSession?.id)
+      .map((s) =>
+        s.id === operatorSession?.id
+          ? { ...s, status: operatorSession.status, goal: operatorSession.goal, summary: operatorSession.summary ?? s.summary }
+          : s,
+      );
+    if (operatorSession && !rows.some((s) => s.id === operatorSession.id)) {
+      rows.unshift({
+        id: operatorSession.id, goal: operatorSession.goal, graphId: operatorSession.graphId,
+        projectId: operatorSession.projectId, workspaceId: operatorSession.workspaceId,
+        status: operatorSession.status, createdAt: operatorSession.createdAt,
+        updatedAt: operatorSession.updatedAt, summary: operatorSession.summary, error: operatorSession.error,
+      });
+    }
+    return rows;
+  }, [sessionRoster, operatorSession, dismissedTabs]);
 
   // Cross-project pending-decision poll — the notification. It reads what's waiting on the founder
   // across EVERY product and pipeline, NOT just the focused session, so a run that reaches the gate or
@@ -1332,6 +1219,27 @@ export default function App() {
     await executeGraph(undefined, approvals, next, runResult?.runId);
   }, [decisions, approvals, executeGraph, operatorSession, runResult?.runId, syncOperator]);
 
+  // Veto-as-loop: the founder sends ONE staged item back to the crew with a note. This routes the item +
+  // note into the operator session (which re-drives to rework just that item and returns it to the gate)
+  // and opens the Composer so the rework reads as a crew conversation. Nothing is released — not a reject,
+  // a rework. Only fires while a run is paused at the gate; otherwise there's no session to hand it to.
+  const refineGateItem = useCallback(async (item: GTMItem, note: string) => {
+    if (!operatorSession || operatorSession.status !== "waiting_for_gate") return;
+    const gateNodeId = operatorSession.pendingGate?.nodeIds?.[0];
+    if (!gateNodeId) return;
+    const gateItems = runResult?.nodes[gateNodeId]?.items ?? [];
+    const idx = gateItems.indexOf(item);
+    const key = itemKey(item, idx >= 0 ? idx : 0);
+    const response = await refineOperatorGate(
+      operatorSession.id,
+      operatorProjectId(operatorSession),
+      { gateNodeId, itemKey: key, founderNote: note },
+    );
+    syncOperator(response.session);
+    // Surface the rework: open/focus the Composer so the crew picking this back up reads as a conversation.
+    setComposerFocus((f) => f + 1);
+  }, [operatorSession, runResult, syncOperator]);
+
   // The outcome door on an approved gate card. After the founder releases an item, the real result comes
   // back later — a reply, a meeting, a purchase. This records THAT on the exact item the founder just
   // sent, joined by the item's durable provenance id (its Phase-5 joinKey when one was minted, else the
@@ -1470,11 +1378,16 @@ export default function App() {
   }, [applyOperations, graph]);
 
   // Drop a new step onto the canvas — a real data source (scrape/leads/CSV/CRM) or any open step.
-  const handleAddNode = useCallback((spec: Partial<GTMNode> & { label: string }) => {
+  const handleAddNode = useCallback((spec: Partial<GTMNode> & { label: string }, opts?: { select?: boolean; position?: { x: number; y: number } }) => {
+    // Whether landing the node also opens its editor. A node dropped onto the canvas (a teammate from
+    // the rail) should land COLLAPSED and draggable — selecting it expands the in-card editor, which is
+    // `nodrag`, so auto-selecting on drop is exactly why a just-dropped teammate couldn't be moved. The
+    // founder drags it where they want, then clicks to configure. Palette adds still auto-select.
+    const autoSelect = opts?.select ?? true;
     const base = spec.kind && spec.kind !== "tool" ? spec.kind : spec.category ?? "step";
     const newId = `${base}-${Date.now().toString(36)}`;
-    const buildNode = (x: number) => ({
-      id: newId, label: spec.label, position: { x, y: 0 }, config: spec.config ?? {}, contract: spec.contract,
+    const buildNode = (position: { x: number; y: number }) => ({
+      id: newId, label: spec.label, position, config: spec.config ?? {}, contract: spec.contract,
       ...(spec.kind && spec.kind !== "tool"
         ? { kind: spec.kind, category: spec.category ?? "generate", ref: spec.ref ?? "" }
         : { category: spec.category ?? "source", connector: spec.connector ?? "manual" }),
@@ -1486,32 +1399,34 @@ export default function App() {
     // Engineer mode, and select it. Now a founder can drop an agent and run it as a single step (the
     // in-card "Run step" posts this graph straight through /api/graph/run) without composing a pipeline
     // first. A dropped Crew agent is a generate node, not an execute node, so the gate wall stays intact.
+    // Where the node lands: the exact canvas point the founder released the drag over (opts.position,
+    // projected from the drop event), so a grabbed teammate/capability lands under the cursor — not
+    // snapped to a fixed spot. Falls back to appending at the right of the graph when there's no drop
+    // point (the click-to-add +Add gesture, or a projection that couldn't be computed).
     if (!graph) {
       const scratchId = `scratch-${Date.now().toString(36)}`;
-      const scratchGraph: GTMGraph = { id: scratchId, name: "Scratch", version: "0", nodes: [buildNode(0)], edges: [] };
+      const scratchGraph: GTMGraph = { id: scratchId, name: "Scratch", version: "0", nodes: [buildNode(opts?.position ?? { x: 0, y: 0 })], edges: [] };
       setChannelGraph(scratchId, scratchGraph);
       setActiveChannelId(scratchId);
       setOverviewActive(false);
-      setActiveMode("engineer");
-      if (!isWorkbench(spec.kind)) selectInGraph(newId, scratchId);
+      if (autoSelect && !isWorkbench(spec.kind)) selectInGraph(newId, scratchId);
       return;
     }
 
-    const x = graph.nodes.reduce((maximum, node) => Math.max(maximum, node.position?.x ?? 0), 0) + 264;
-    const node = buildNode(x);
+    const fallback = { x: graph.nodes.reduce((maximum, node) => Math.max(maximum, node.position?.x ?? 0), 0) + 264, y: 0 };
+    const node = buildNode(opts?.position ?? fallback);
     void applyOperations([{ type: "add_node", node }]).then((next) => {
       // Workbench surfaces (terminal/query/web) are used in place — don't yank open the node-detail
-      // editor on drop. Pipeline steps still auto-select so the founder lands in their config.
-      if (next && !isWorkbench(node.kind)) selectInGraph(newId, graph.id);
+      // editor on drop. Other adds auto-select only when the caller asked (palette yes, canvas drop no).
+      if (next && autoSelect && !isWorkbench(node.kind)) selectInGraph(newId, graph.id);
     });
   }, [applyOperations, graph, selectInGraph, setChannelGraph, setOverviewActive]);
 
 
-  // Drag a Crew member or Skill from the left rail onto the canvas → add it as a pipeline step, then
-  // switch to the build view so the founder watches it land. This handler acts ONLY on the step MIME, so
-  // a belief-block drag (a different MIME, handled inside ObjectGraphCanvas) passes straight through
-  // untouched — the two object models never cross. If there is no active pipeline graph, handleAddNode
-  // no-ops and the drop is a harmless miss.
+  // Drag a Crew member or Skill from the left rail onto the canvas → add it as a pipeline step so the
+  // founder watches it land. This handler acts ONLY on the step MIME, so any other drag passes straight
+  // through untouched. If there is no active pipeline graph, handleAddNode no-ops and the drop is a
+  // harmless miss.
   const onStepDragOver = useCallback((event: React.DragEvent) => {
     if (!event.dataTransfer.types.includes(STEP_DRAG_MIME)) return;
     event.preventDefault();
@@ -1521,11 +1436,29 @@ export default function App() {
     const raw = event.dataTransfer.getData(STEP_DRAG_MIME);
     if (!raw) return;
     event.preventDefault();
+    // Land the node under the cursor. React Flow's drop projection isn't wired here (the drop target is
+    // the outer canvas-area wrapper, above the flow), so read the flow's own viewport transform off the
+    // DOM and invert it: the release point in screen space → the point in canvas space. Undefined when
+    // no flow is mounted yet (empty canvas), where handleAddNode falls back to the origin / append.
+    const position = flowPositionFromDrop(event);
     try {
-      const { kind, ref, label } = JSON.parse(raw) as { kind: "agent" | "skill"; ref: string; label: string };
+      const payload = JSON.parse(raw) as StepDragPayload;
+      // A capability lands as a stage step — its run-stage mapped to a graph category (find→source,
+      // reach/publish→gated execute, …). A tool node keyed to the service; the founder wires it or asks
+      // Claude. Like a teammate, it lands collapsed and draggable (select:false), never auto-opened.
+      if (payload.kind === "capability") {
+        const category = CAP_STAGE_CATEGORY[payload.stage] ?? "source";
+        handleAddNode(
+          { label: payload.name, category, connector: payload.id, ...(payload.gated ? { config: { gated: true } } : {}) },
+          { select: false, position },
+        );
+        return;
+      }
+      const { kind, ref, label } = payload;
       if (!ref) return;
-      handleAddNode({ label: label || ref, kind, category: "generate", ref, contract: { accepts: [], emits: [] } });
-      setActiveMode("engineer");
+      // Land it collapsed and draggable — don't auto-open its editor. The founder places it, then
+      // clicks to configure or talk to Claude about it.
+      handleAddNode({ label: label || ref, kind, category: "generate", ref, contract: { accepts: [], emits: [] } }, { select: false, position });
     } catch { /* ignore malformed step payloads */ }
   }, [handleAddNode]);
 
@@ -1577,7 +1510,7 @@ export default function App() {
 
   // One conversation: talking to Claude continues the live session, or starts a new one
   // when idle. The dock decides nothing about safety — App owns create vs. resume.
-  const handleComposerSend = useCallback(async (text: string) => {
+  const handleComposerSend = useCallback(async (text: string, hints?: OperatorHints): Promise<ComposerTurnResult | void> => {
     // Chat drives the canvas: a bare navigation command ("go to the gate") moves the camera and never
     // reaches Claude — it was steering, not a question. Anything else falls through to the operator.
     if (composerPosture !== "ideate" && runCanvasCommand(text)) return;
@@ -1594,10 +1527,22 @@ export default function App() {
       ? `[Ideate posture — think and discuss this with me: challenge my assumptions, surface what you know, help me get clear on the go-to-market. Do NOT compose or build a pipeline/workflow yet — this is thinking, not building.]\n\n${withSubject}`
       : withSubject;
     const s = operatorSession;
+    const projectId = s ? operatorProjectId(s) : (activeProjectIdRef.current ?? undefined);
     // A pending "New channel" intent must compose fresh, never resume the prior conversation.
     const resumable = !freshPipelineIntent.current && s && ["waiting_for_input", "interrupted", "failed"].includes(s.status);
+    // Build posture routes through the intent-routed turn first: status/explain get a FAST answer with NO
+    // session touched (the dock renders it inline); act/run with a resumable session are resumed server-side
+    // (delegation) and synced once; act/run without one return drive+null and fall through to the untouched
+    // create path below. Ideate posture always skips the fast lane so ideate conversations are unchanged.
+    if (composerPosture !== "ideate") {
+      const turn = await composerTurn({ projectId, sessionId: s?.id, input: framed, hints, allowDrive: !!(resumable && s) });
+      if (turn.mode === "fast") return turn;
+      if (turn.mode === "drive" && turn.session) { syncOperator(turn.session); return turn; }
+    }
     if (resumable && s) {
-      const response = await resumeOperatorSession(s.id, operatorProjectId(s), framed);
+      // The founder's @-mentioned crew rides along as advisory hints — composition prefers the named
+      // teammates & capabilities, never a contract, never blocking (the backend folds it into context).
+      const response = await resumeOperatorSession(s.id, operatorProjectId(s), framed, hints);
       syncOperator(response.session);
     } else {
       await handleCommandSubmit(framed);
@@ -1722,13 +1667,17 @@ export default function App() {
       setActiveChannelId(null);
       const project = await refreshProjectScope();
       setView("canvas");
-      // Hand the goal to the operator — it inspects the freshly-scanned product and composes the
-      // system, exactly like the dogfood session did, so the stranger watches their OWN loop build.
-      // The session is bound to the just-created project explicitly (the composer's project lock).
-      const response = await createOperatorSession(project.id, input.goal);
-      operatorGraphRevision.current = response.session.graphRevision;
-      operatorRunId.current = null;
-      setOperatorSession(response.session);
+      // The goal is now optional at the front door. When the founder gave one, hand it to the operator —
+      // it inspects the freshly-scanned product and composes the system, so the stranger watches their OWN
+      // loop build (bound to the just-created project explicitly, the composer's project lock). When they
+      // DIDN'T, we ground and stop: the founder lands on the canvas and its goal launcher asks them there,
+      // so nobody is forced to converge on a goal before they've looked around.
+      if (input.goal.trim()) {
+        const response = await createOperatorSession(project.id, input.goal);
+        operatorGraphRevision.current = response.session.graphRevision;
+        operatorRunId.current = null;
+        setOperatorSession(response.session);
+      }
       setComposerFocus((n) => n + 1);
     } catch (error) {
       setGraphError(error instanceof Error ? error.message : String(error));
@@ -1753,72 +1702,40 @@ export default function App() {
     syncOperator(response.session);
   }, [operatorSession, syncOperator]);
 
+  // Stop a running pipeline BY ID (not just the active one). Routes through the exact authorized cancel
+  // path handleOperatorCancel uses — cancel ABANDONS a run (discarding any pending gate WITHOUT sending),
+  // it never releases. If the stopped thread is the one on screen, sync it so the conversation reflects
+  // the cancel; then refresh the roster so every tab's dot re-derives and the stopped one drops out.
+  const handleSessionStop = useCallback(async (id: string) => {
+    const row = rosterForDock.find((s) => s.id === id);
+    const projectId = row?.projectId ?? activeProjectIdRef.current ?? "";
+    const { session } = await cancelOperatorSession(id, projectId);
+    if (id === operatorSession?.id) syncOperator(session);
+    await refreshRoster();
+  }, [rosterForDock, operatorSession, syncOperator, refreshRoster]);
+
+  // Close a pipeline's tab — a client-side dismissal (no backend delete; the pipeline stays alive). If the
+  // thread is still running or holds a pending gate, ChatTabs already required a two-tap confirm before
+  // calling this, so here we STOP it (never leave a run that could still send in the background) and then
+  // hide it. Closing the ACTIVE tab first falls the founder onto the next live tab (or the empty state).
+  const handleSessionClose = useCallback((id: string) => {
+    const row = rosterForDock.find((s) => s.id === id);
+    // "working" in chat-tab terms — a live run. (waiting_for_* is "needs", already stopped, so it only
+    // needs dismissing, not cancelling.) Keep this in sync with ComposerDock's chatTabState.
+    const running = row?.status === "running" || row?.status === "ready";
+    if (running) void handleSessionStop(id);
+    setDismissedTabs((prev) => new Set(prev).add(id));
+    if (id === operatorSession?.id) {
+      const next = rosterForDock.find((s) => s.id !== id && !dismissedTabs.has(s.id));
+      if (next) void switchSession(next.id);
+      else handleNewChannel();
+    }
+  }, [rosterForDock, operatorSession, dismissedTabs, handleSessionStop, switchSession, handleNewChannel]);
+
   // Derived
   // `selection` may be a bare node id (the focused graph, single-channel behavior) or a merged-canvas
   // `channelId::nodeId` — resolve against that node's REAL owning graph either way, not just `graph`,
   // so a click doesn't have to wait a render for `activeChannelId` to catch up.
-  const selectedNode = useMemo(() => {
-    if (!selection) return null;
-    const sep = selection.indexOf("::");
-    if (sep === -1) return graph?.nodes.find((n) => n.id === selection) ?? null;
-    const channelId = selection.slice(0, sep);
-    const nodeId = selection.slice(sep + 2);
-    return (channelGraphs.get(channelId) ?? graph)?.nodes.find((n) => n.id === nodeId) ?? null;
-  }, [graph, selection, channelGraphs]);
-  // The node editor needs the SAME graph + bare id that selectedNode resolved to. A board selection is
-  // compound (`channelId::nodeId`), and the node lives in that channel's graph — not necessarily the
-  // focused `graph`. Passing the raw compound selection made NodeEditor's `n.id === selection` miss and
-  // render nothing (the empty modal). Resolve both here, mirroring selectedNode.
-  const selectedNodeGraph = useMemo(() => {
-    if (!selection) return graph;
-    const sep = selection.indexOf("::");
-    return sep === -1 ? graph : (channelGraphs.get(selection.slice(0, sep)) ?? graph);
-  }, [graph, selection, channelGraphs]);
-  const selectedNodeId = selection
-    ? (selection.includes("::") ? selection.slice(selection.indexOf("::") + 2) : selection)
-    : null;
-  const selectedNodeResult = selectedNode ? runResult?.nodes[selectedNode.id] : null;
-  const selectedNodeAudit = selectedNode
-    ? contractAudits[selectedNode.id] ?? selectedNodeResult?.contractAudit
-    : null;
-  // The engine subsystem behind this node — the source of the canvas health badge.
-  // Surfacing it in the editor explains the number instead of leaving it a bare figure.
-  const selectedNodeSubsystem = selectedNode
-    ? engine?.subsystems.find((s) => s.id === selectedNode.category) ?? null
-    : null;
-
-  useEffect(() => {
-    if (!selectedNode) return;
-    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const focusClose = window.requestAnimationFrame(() => nodeModalCloseRef.current?.focus());
-    const handleModalKeys = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setSelection(null);
-        return;
-      }
-      if (event.key !== "Tab" || !nodeModalRef.current) return;
-      const focusable = Array.from(nodeModalRef.current.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
-      ));
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    window.addEventListener("keydown", handleModalKeys);
-    return () => {
-      window.cancelAnimationFrame(focusClose);
-      window.removeEventListener("keydown", handleModalKeys);
-      previousFocus?.focus();
-    };
-  }, [selectedNode]);
-
   // The channel the operator session is bound to — surfaced as a quiet sub-label so the co-pilot
   // names the channel it's narrating. The composer is locked to the project, so there is no
   // "viewing a different channel" mismatch to warn about anymore.
@@ -1867,15 +1784,6 @@ export default function App() {
     setProblemsOpen(false);
   }, [selectInGraph]);
 
-  // The single "open a side view" router the dissolved explorer rail used for its foot buttons. Now
-  // shared by the dock's "what Claude reads" strip, so all entry points drive the same overlay state.
-  const handleOpenView = useCallback((v: "understand" | "product" | "canvas") => {
-    if (v === "understand") setOverlay("understand");
-    else if (v === "product") setOverlay("product");
-    else setOverlay(null);
-  }, []);
-
-
   const runCount = graph?.store?.runs ?? flowRuns.length;
 
   // ── The founder gate, surfaced on the canvas ─────────────────────────────
@@ -1904,7 +1812,9 @@ export default function App() {
       if (!graphNodeIds.has(nodeId) || !perItem) continue;
       const items = runResult?.nodes[nodeId]?.items ?? [];
       for (const [key, d] of Object.entries(perItem)) {
-        if (!d?.decision) continue;
+        // A "refine" is a rework routed to the crew, not an approve/reject — it never banks as a
+        // replay-able pattern decision for the autonomy ladder.
+        if (!d?.decision || d.decision === "refine") continue;
         const idx = items.findIndex((it, i) => itemKey(it, i) === key);
         out.push(idx >= 0 ? { decision: d.decision, subject: gateItemView(items[idx]).subject } : { decision: d.decision });
       }
@@ -2034,7 +1944,6 @@ export default function App() {
       nodes: [...(prev?.nodes ?? []), ...(nodes ?? [])],
       edges: [...(prev?.edges ?? []), ...(edges ?? [])],
     }));
-    setActiveMode("engineer");
   }, [graph]);
 
   const acceptGhostNode = useCallback((nodeId: string) => {
@@ -2114,45 +2023,6 @@ export default function App() {
     return () => { delete (window as unknown as { __droverStageGhosts?: unknown }).__droverStageGhosts; };
   }, [stageGhostProposal]);
 
-  // The gate on the canvas. When a staged run pauses at its founder gate, this resolves the real gate
-  // node id + its staged items + the taste count, and hands them to the canvas so the review blooms in
-  // place. Two honest sources, never a synthesized id: an operator-driven run carries its paused gate on
-  // the session; a manually-run graph carries it on the focused channel's run result (the same
-  // pendingReview/awaitingReview signal the canvas blooms on). Null when nothing is paused. The wall is
-  // untouched: onSubmitReview still banks each decision into the run ledger and resumes, nothing sends.
-  const gtmMapGate = useMemo<GateBag | null>(() => {
-    const bag = (gateNodeId: string, nr: GTMNodeResult | undefined): GateBag => {
-      const items = nr?.items ?? [];
-      const mem = nr?.meta?.memory as { approved?: number; rejected?: number; edits?: number } | undefined;
-      const learned = (mem?.approved ?? 0) + (mem?.rejected ?? 0) + (mem?.edits ?? 0);
-      return {
-        gateNodeId, items, learned, offer: gateOffer, promote: gatePromote,
-        // Return the promise (no `void`) so GateReview can await the release and surface a failure.
-        onSubmitReview: (id, d) => submitGateReview(id, d),
-        // One handler for both lenses: record a sent item's real outcome, then refresh the summary.
-        onRecordOutcome: recordItemOutcome,
-      };
-    };
-    // Primary: an operator run paused at its gate — the session carries the staged run + its gate node ids.
-    const pg = operatorSession?.status === "waiting_for_gate" ? operatorSession.pendingGate : null;
-    if (pg?.runResult && pg.nodeIds?.length) {
-      const gateNodeId = pg.nodeIds[0];
-      return bag(gateNodeId, pg.runResult.nodes[gateNodeId]);
-    }
-    // Secondary: a manually-run graph paused at a gate node, on the focused channel's run result.
-    const g = displayGraph ?? graph;
-    if (g && runResult) {
-      for (const n of g.nodes) {
-        if (n.category !== "gate") continue;
-        const nr = runResult.nodes[n.id];
-        if (!nr) continue;
-        const pending = nr.pendingReview === true
-          || (typeof nr.meta?.awaitingReview === "number" && (nr.meta.awaitingReview as number) > 0);
-        if (pending) return bag(n.id, nr);
-      }
-    }
-    return null;
-  }, [operatorSession, displayGraph, graph, runResult, gateOffer, gatePromote, submitGateReview, recordItemOutcome]);
   const proposedNodeIds = useMemo(() => {
     if (proposalActive && pendingProposal && graph) {
       const current = new Set(graph.nodes.map((node) => node.id));
@@ -2225,28 +2095,29 @@ export default function App() {
   // The founder resolves an ideate pause: build the strong ideas, kill the weak ones. A founder act —
   // the operator generated and graded the ideas but never decides which become work. Building resumes
   // the operator to compose+run each pick (wired back to its idea); killing teaches the next round.
-  const handleResolveIdeas = useCallback(async (payload: { build: string[]; kill: string[]; mode?: "directions" | "build" }) => {
-    if (!operatorSession) return;
-    try {
-      const response = await resolveOperatorIdeas(operatorSession.id, operatorProjectId(operatorSession), payload);
-      syncOperator(response.session);
-    } catch (error) {
-      setGraphError(error instanceof Error ? error.message : String(error));
-    }
-  }, [operatorSession, syncOperator]);
-
   // The founder picks one of the candidate pipeline shapes an ambiguous goal produced. The pick is the
   // founder act — it resumes the operator to build that one shape through compose_and_run, still
   // stopping at the founder gate. Nothing ran until this call.
   const resolveCandidatesAndSync = useCallback(async (pick: string) => {
     if (!operatorSession) return;
     try {
-      const response = await resolveOperatorCandidates(operatorSession.id, operatorProjectId(operatorSession), pick);
-      syncOperator(response.session);
+      // The build runs on the SAME authorized path (resolveOperatorCandidates → compose_and_run →
+      // executeGraphRun, pausing at the founder gate — nothing sends). What WI-C changes is only where
+      // the founder LANDS: the picked candidate builds into its own pipeline graph, so we surface it as
+      // its own chat thread instead of silently swapping the graph under the current one. Because the
+      // resolve reuses this session id and re-points its graphId to the built pipeline, "the thread I was
+      // picking in" simply becomes "the pipeline I built" — we refresh the roster so it reads as a real
+      // tab, reset the switch-intent refs (mirroring switchSession — a focus, never a new-pipeline
+      // intent), then let syncOperator load the built graph and follow it onto the canvas.
+      const built = (await resolveOperatorCandidates(operatorSession.id, operatorProjectId(operatorSession), pick)).session;
+      await refreshRoster(); // the built pipeline lands as a real row alongside any other live threads
+      freshPipelineIntent.current = false;
+      operatorRunId.current = null;
+      syncOperator(built);
     } catch (error) {
       setGraphError(error instanceof Error ? error.message : String(error));
     }
-  }, [operatorSession, syncOperator]);
+  }, [operatorSession, syncOperator, refreshRoster]);
 
   // The live operator presence: Claude's cursor travels the canvas as it stages each node (camera
   // following), then rests on the lead ghost where the ✓/✕/note sits. Once the pipeline is composed
@@ -2349,6 +2220,8 @@ export default function App() {
     gateOffer,
     // The outcome door on approved cards — record a sent item's real result, then refresh the summary.
     onRecordOutcome: recordItemOutcome,
+    // Veto-as-loop: send a staged item back to the crew to rework in the Composer.
+    onRefineItem: refineGateItem,
     onApproveGate: (id) => void approveGate(id),
     onAskClaude: askClaudeAbout,
     // Crew faces on the step nodes open the same agent profile the old bottom strip did.
@@ -2389,30 +2262,11 @@ export default function App() {
     onOpenChannel: focusChannel,
     // Empty-canvas landing: focus the goal composer so a fresh product starts by stating an outcome.
     onComposeFirst: () => setComposerFocus((f) => f + 1),
-    // A run paused at its founder gate blooms its decidable items on the object-graph gate node.
-    gate: gtmMapGate,
-    // Selecting a block on the object graph docks the composer to it (same subject seam the node
-    // graph already uses). setComposerSubject is a stable state setter, so this never re-runs the memo.
-    onObjectSelect: setComposerSubject,
-    // The mode pill steers the object graph's arrangement: Engineer opens the free causal graph, Move
-    // reads the story bands.
-    desiredArrange: activeMode === "engineer" ? "flow" : "stages",
-    // The mode pill owns arrangement, so the object graph drops its redundant in-header toggle.
-    modeControlled: true,
-    // Feed the composer's subject back down so selecting a card and detaching the composer stay in sync.
-    subjectId: composerSubject?.id ?? null,
-    // The on-card "+" hands its card + a plain target up; the host runs the real ideate and renders the
-    // candidates in the composer. While the call runs the source card lights blue-violet; after an add,
-    // objectGraphReload bumps so the canvas re-reads and the fresh draft appears joined.
-    onIdeateObject: ideateObjectFromCard,
-    ideatingNodeId: objectIdeation?.status === "loading" ? objectIdeation.sourceId : null,
-    ideatingTarget: objectIdeation?.status === "loading" ? objectIdeation.target : null,
-    objectGraphReload,
   }), [
     canvasGraph, connectors, contractAudits, runResult, graphRunning, runningNodeId, selection,
     dismissOverlays, proposedNodeIds, proposedEdgeIds, revealedNodeIds, proposalActive, operatorCursor,
     handleResolveProposal, submitGateReview, approveGate, handleAddNode, handleGraphConnect, handleDeleteEdges,
-    handleNodePositionChange, flowRuns, runNode, updateGraph, handleDeleteNode, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, recordItemOutcome, gtmMapGate, activeMode, composerSubject, ideateObjectFromCard, objectIdeation, objectGraphReload, runSummary,
+    handleNodePositionChange, flowRuns, runNode, updateGraph, handleDeleteNode, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, recordItemOutcome, refineGateItem, runSummary,
   ]);
 
   // First-run team setup. Gated on Convex being configured AND no team chosen yet, so a local/solo
@@ -2523,7 +2377,6 @@ export default function App() {
             bench={bench}
             projectId={activeProjectId}
             library={library}
-            activeMode={activeMode}
             onLoadChannel={(id) => void loadChannel(id)}
             onNewChannel={handleNewChannel}
             onOpenAgent={(ref) => setAgentProfileRef(ref)}
@@ -2533,8 +2386,7 @@ export default function App() {
           />
         ) : null}
         {/* Center — the canvas IS the workspace. Only the cold-start picker replaces it. The canvas-area
-            wrapper is the drop target for Crew/Skill steps dragged from the rail (step MIME only — belief
-            blocks fall through to ObjectGraphCanvas's own drop). */}
+            wrapper is the drop target for Crew/Skill steps dragged from the rail (step MIME only). */}
         <section className="loop-canvas-area" onDragOver={onStepDragOver} onDrop={onStepDrop}>
           {/* What happened — the run's real numbers now ride the pipeline's Measure node (their single
               home on the canvas), so the floating strip no longer repeats them. What stays here is only
@@ -2569,17 +2421,6 @@ export default function App() {
             </div>
           ) : null}
 
-          {/* Altitude — the ONE axis that replaced the old Move/Engineer mode toggle. Pull up to the
-              Story (the whole go-to-market at a glance), drop down to the Steps (the runnable pipeline).
-              Same canvas, re-projected in place; it never navigates away and reads lighter than Run.
-              "story" maps to the story-bands lens, "steps" to the step canvas. */}
-          {gtmCanvasVisible ? (
-            <AltitudeControl
-              altitude={activeMode === "engineer" ? "steps" : "story"}
-              onChange={(a) => setActiveMode(a === "steps" ? "engineer" : "move")}
-            />
-          ) : null}
-
           {/* Board history — undo/redo the working canvas plus the receipts trail of what the founder and
               Claude built. Bottom-left, clear of the top-center altitude control and the left product
               column. Both founder and crew structural edits are reversible here (never runs or sends). */}
@@ -2603,15 +2444,14 @@ export default function App() {
             <ProductEntryColumn
               productName={activeProject.name}
               model={productModel}
-              onOpenFull={() => setOverlay("product")}
             />
           ) : null}
 
           {/* The floating control dock — every control the old top toolbar held, in one calm bar
-              floating top-center over the full-bleed canvas. Kept over the canvas and Product mode
-              (it owns the GTM↔Product toggle); hidden under the utility takeovers (Settings, Bench,
-              Understand), which carry their own header + close, so the dock never collides with them. */}
-          {view === "canvas" && (!overlay || overlay === "product") ? (
+              floating top-center over the full-bleed canvas. Kept over the canvas; hidden under the
+              utility takeovers (Settings, Bench, Understand), which carry their own header + close, so
+              the dock never collides with them. */}
+          {view === "canvas" && !overlay ? (
             <FloatingDock
               projects={projects}
               activeProjectId={activeProject?.id ?? null}
@@ -2627,9 +2467,6 @@ export default function App() {
               onShowOverview={overviewActive ? () => { void loadProjectOverview(channels); } : undefined}
               overviewActive={overviewActive && !activeChannelId}
               motionName={engine?.motion?.name ?? null}
-              showGtmToggle={!!activeProject}
-              productMode={overlay === "product"}
-              onModeToggle={(v) => { if (v === "product") { setOverlay("product"); } else { setOverlay(null); } }}
               // The Summon menu is retired from the dock — the eight-item card menu is no longer offered
               // behind a button. The card components still exist and still render when something summons
               // them (e.g. a signal opening the Inbox card); context-summon (cards appearing where the
@@ -2651,7 +2488,7 @@ export default function App() {
 
           {/* Summoned views — they pop up ON the canvas as draggable cards (the agentic replacement
               for lens tabs). One card per kind; drag by the head, dismiss with ×. */}
-          {view === "canvas" && overlay !== "product" && summoned.map((kind, i) => {
+          {view === "canvas" && summoned.map((kind, i) => {
             const item = SUMMON_GTM.find((s) => s.id === kind);
             return (
               <CanvasCard
@@ -2710,7 +2547,7 @@ export default function App() {
 
           {/* Find references — the cross-channel drill-down for a selected person / experiment, opened
               from a lens. A draggable opaque CanvasCard like the summoned views; read-only. */}
-          {view === "canvas" && overlay !== "product" && reference && (
+          {view === "canvas" && reference && (
             <CanvasCard
               key="references"
               title="Find references"
@@ -2733,7 +2570,7 @@ export default function App() {
 
           {/* Clarity cards — the durable residue of Ideate sessions, pinned onto the canvas. Draggable
               and dismissible like any summoned card; persisted per-project. */}
-          {view === "canvas" && overlay !== "product" && clarityItems.map((item, i) => (
+          {view === "canvas" && clarityItems.map((item, i) => (
             <CanvasCard
               key={item.id}
               title={item.kind === "icp" ? "ICP" : item.kind === "question" ? "Open question" : item.kind === "direction" ? "Direction" : "Claim"}
@@ -2768,14 +2605,16 @@ export default function App() {
               onResume={() => void handleComposerSend("Continue.")}
               onStartOver={() => void handleOperatorCancel()}
             />
-          ) : (canvasGraph || activeProjectId) ? (
-            // A product is open, so SHOW THE CANVAS even while Claude is driving the loop — you watch the
-            // graph assemble here while its live reasoning streams in the co-pilot rail. Never cover the
-            // canvas with a spinner when there's a real graph to watch build (the rail already carries the
-            // "what it's thinking"; a full-center takeover here just hid the canvas and duplicated it).
+          ) : (canvasGraph || (activeProjectId && channels.length > 0)) ? (
+            // A product with real work to show — a graph to watch assemble, or built pipelines — SHOWS THE
+            // CANVAS even while Claude is driving the loop, its live reasoning streaming in the co-pilot rail.
+            // A freshly-grounded product with NO goal yet, no graph and no pipelines falls through instead to
+            // the goal launcher below, so the founder is asked "what do you want to happen" on the canvas
+            // rather than landing on a barren object graph. `projectBusy` covers the open/load window, so a
+            // product that does have pipelines never flashes the launcher before its graph resolves.
             <GtmCanvas
               model={gtmCanvasModel}
-              activeLensId={activeMode === "engineer" ? "engineer" : "object-graph"}
+              activeLensId="engineer"
               chromeless
             />
           ) : operatorSession && (operatorSession.status === "ready" || operatorSession.status === "running") ? (
@@ -2817,23 +2656,10 @@ export default function App() {
             />
           )}
 
-          {/* The ideation pause, DEMOTED from a full-screen takeover to an overlay over the map. The
-              operator ideated and stopped for the founder's call — still a blocking decision that owns
-              the foreground, but the GTM map stays the canvas behind it instead of the pause replacing
-              the whole surface. Stage follows the project's life: a project with no pipelines yet is at
-              its BEGINNING, so kept ideas become ICP directions; a mature project's keeps compose into
-              pipelines. Nothing runs until you pick. */}
-          {view === "canvas" && operatorSession?.status === "waiting_for_ideas" && operatorSession.pendingIdeas ? (
-            <div className="idea-pause-overlay" role="dialog" aria-modal="true" aria-label="Pick the directions worth exploring">
-              <div className="idea-pause-panel">
-                <IdeaReview
-                  session={operatorSession}
-                  stage={(projects.find((p) => p.id === operatorSession.projectId)?.channelCount ?? 0) === 0 ? "directions" : "build"}
-                  onResolve={handleResolveIdeas}
-                />
-              </div>
-            </div>
-          ) : null}
+          {/* The prose ideation pause is retired: the operator now surfaces ideation exclusively as
+              embodied candidate SHAPES in the composer (a chain of crew faces ending at the gate), so
+              the operator never enters `waiting_for_ideas` and this full-screen idea-review overlay is
+              dead. Candidate shapes render inline in ComposerDock; picking one builds it to the gate. */}
 
           {/* The crew strip is gone from the canvas floor — the crew now lives on the canvas nodes
               themselves (a later agent renders it there). The bench track record still loads and flows
@@ -2900,27 +2726,6 @@ export default function App() {
                   />
                 </Suspense>
               </div>
-            </div>
-          )}
-
-          {/* Product mode — the living picture as a full React Flow canvas, the same visual language
-              as the GTM graph. It fills the workspace (the explorer + assistant frame stay), so
-              flipping GTM↔Product swaps the canvas, not the whole page. The editable INTERPRETATION
-              layer on top of the cited truth. */}
-          {overlay === "product" && activeProject && (
-            <div className="canvas-overlay canvas-overlay-flush" role="region" aria-label="Product mode">
-              <Suspense fallback={null}>
-                <ProductCanvas
-                  model={productModel}
-                  busy={productModelBusy}
-                  productName={activeProject.name}
-                  onDerive={handleDeriveProductModel}
-                  onRevise={handleReviseProductModel}
-                  onExitToGtm={() => setOverlay(null)}
-                  activeLensId={productLensId}
-                  chromeless
-                />
-              </Suspense>
             </div>
           )}
 
@@ -3058,6 +2863,18 @@ export default function App() {
         {view === "canvas" && !showGoalLauncher ? <ComposerDock
           session={operatorSession}
           running={graphRunning}
+          // The founder's crew — the same bench the rail reads. Feeds the @-mention roster and the
+          // summoned parts tray so "@" autocompletes teammates and the tray shows their faces.
+          bench={bench}
+          // The parallel pipelines, as tabs: the roster (with the live active session merged in), which
+          // one is on screen, how to switch between them, and how to start another.
+          roster={rosterForDock}
+          activeSessionId={operatorSession?.id ?? null}
+          onSwitchSession={(id) => void switchSession(id)}
+          onNewChat={handleNewChannel}
+          // End a thread from its tab: Stop a live run (authorized cancel), Close a paused/finished one.
+          onStopSession={handleSessionStop}
+          onCloseSession={handleSessionClose}
           // Docked, not floating: the dock takes the loop-body grid's trailing `auto` column so the
           // canvas (the `1fr` column) reflows around it and its nodes are never covered. Floating made
           // it an absolutely-positioned card over the middle/right of the board — the occlusion bug.
@@ -3073,16 +2890,21 @@ export default function App() {
           onRetargetSubject={handleRetargetSubject}
           isNavCommand={isCanvasCommand}
           onSend={handleComposerSend}
+          briefing={composerBriefing}
           onBuildCandidate={(c) => void resolveCandidatesAndSync(c.id)}
-          objectIdeation={objectIdeation}
-          onAddObjectCandidate={(c) => void addObjectCandidate(c)}
-          onDismissObjectIdeation={dismissObjectIdeation}
           onCancel={handleOperatorCancel}
           onReviewGate={(nodeId) => selectInGraph(nodeId, operatorSession?.graphId ?? null)}
-          contextManifest={contextManifest}
-          onOpenGrounding={() => handleOpenView("understand")}
-          onOpenPicture={() => handleOpenView("product")}
-          onIdeate={() => setComposerPosture("ideate")}
+          // The gate, brought INTO the chat: "Review & send" opens the real GateReview in-thread, and these
+          // route it through the SAME authorized release path the canvas gate uses — no fork, no new wall.
+          onSubmitGateReview={(nodeId, d) => submitGateReview(nodeId, d)}
+          onRefineItem={(item, note) => refineGateItem(item, note)}
+          onRecordItemOutcome={(item, o) => recordItemOutcome(item, o)}
+          gateLearned={(() => {
+            const mem = operatorSession?.pendingGate?.runResult?.memoryApplied;
+            return (mem?.approved ?? 0) + (mem?.rejected ?? 0) + (mem?.edits ?? 0);
+          })()}
+          gateOffer={gateOffer}
+          gatePromote={gatePromote}
           posture={composerPosture}
           onExitPosture={() => setComposerPosture("build")}
           onPin={(kind, text) => { void pinClarity(kind, text); }}
@@ -3092,119 +2914,12 @@ export default function App() {
           runningNodeId={runningNodeId}
           proposedNodeIds={proposedNodeIds}
           result={runResult}
+          // The pencil on a plan-checklist step selects/opens it on the canvas.
+          onEditStep={(node) => selectInGraph(node.id, operatorSession?.graphId ?? null)}
+          // "Run to my gate" on the pre-run plan card runs the composed plan to the founder gate.
+          onRunPlan={() => void executeGraph()}
         /> : null}
       </div>
-
-      {/* The node editor modal — the pipeline's step editor. In Engineer mode the step detail now opens
-          IN the node's own card on the canvas (GraphCanvas → NodeCardEditor: Run + produced output right
-          there), so the full-screen modal is suppressed there and kept only for other node-selection
-          contexts. Node selection today is Engineer-only, so this is effectively the modal's off switch;
-          left in place (not deleted) so it's trivially restorable and merges cleanly. */}
-      {selectedNode && graph && activeMode !== "engineer" && (
-        <div className="node-detail-modal-backdrop">
-          {/* A real button for click-outside-to-close — semantic and keyboard-reachable, sitting
-              behind the dialog (which paints above it). Replaces a div with a mousedown handler. */}
-          <button
-            type="button"
-            className="node-detail-modal-scrim"
-            aria-label="Close the step editor"
-            onClick={() => setSelection(null)}
-          />
-          <section
-            aria-label={`${selectedNode.label} step editor`}
-            aria-modal="true"
-            className="node-detail-workspace"
-            ref={nodeModalRef}
-            role="dialog"
-          >
-            <header className="node-detail-workspace-header">
-              <div className="node-detail-heading">
-                <div className="node-detail-breadcrumb">
-                  <span>{graph.name}</span>
-                  <span aria-hidden="true">/</span>
-                  <span>
-                    {selectedNode.kind && selectedNode.kind !== "tool"
-                      ? selectedNode.kind
-                      : selectedNode.category}
-                  </span>
-                </div>
-                <div className="node-detail-title-row">
-                  <h1>{selectedNode.label}</h1>
-                  <div className="node-detail-statuses">
-                    <span className={`node-detail-status ${selectedNodeResult ? selectedNodeResult.ok ? "ok" : "error" : "idle"}`}>
-                      {selectedNodeResult ? selectedNodeResult.ok ? "Healthy" : "Needs attention" : "Not run"}
-                    </span>
-                    {selectedNodeSubsystem && selectedNodeSubsystem.health > 0 ? (
-                      <span
-                        className="node-detail-status node-detail-health"
-                        style={{ color: healthHex(selectedNodeSubsystem.health), borderColor: healthHex(selectedNodeSubsystem.health) }}
-                        title="Derived from your scan, run ledger, and connectors — the same figure on the canvas node"
-                      >
-                        Health {selectedNodeSubsystem.health}
-                      </span>
-                    ) : null}
-                    {selectedNodeAudit ? (
-                      <span className={`node-detail-status contract-${selectedNodeAudit.state}`}>
-                        {selectedNodeAudit.state === "none" ? "No contract" : `Contract ${selectedNodeAudit.state}`}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-                <p>
-                  {selectedNode.kind && selectedNode.kind !== "tool"
-                    ? `${selectedNode.kind.charAt(0).toUpperCase() + selectedNode.kind.slice(1)} step${selectedNode.ref ? ` using ${selectedNode.ref}` : ""}`
-                    : `${selectedNode.category.charAt(0).toUpperCase() + selectedNode.category.slice(1)} step${selectedNode.connector ? ` using ${selectedNode.connector}` : ""}`}
-                </p>
-              </div>
-              <div className="node-detail-actions">
-                <Button
-                  className="secondary-button node-detail-ask"
-                  onClick={() => askClaudeAbout(selectedNode)}
-                  type="button"
-                >
-                  <MessageSquare /> Ask Claude
-                </Button>
-                <Button
-                  className="secondary-button node-detail-run"
-                  disabled={runningNodeId === selectedNode.id}
-                  onClick={() => void executeGraph(selectedNode.id)}
-                  type="button"
-                >
-                  {runningNodeId === selectedNode.id ? <LoaderCircle className="spin" /> : <Play />}
-                  {runningNodeId === selectedNode.id ? "Running…" : "Run step"}
-                </Button>
-                <button
-                  aria-label="Close step editor"
-                  className="node-detail-close"
-                  onClick={() => setSelection(null)}
-                  ref={nodeModalCloseRef}
-                  type="button"
-                >
-                  <X />
-                </button>
-              </div>
-            </header>
-            <NodeEditor
-              key={selection ?? "none"}
-              connectors={connectors}
-              contractAudits={contractAudits}
-              subsystem={selectedNodeSubsystem}
-              flowRuns={flowRuns}
-              graph={selectedNodeGraph}
-              onApproveGate={(id) => void approveGate(id)}
-              onSubmitReview={(id, d) => void submitGateReview(id, d)}
-              onRunNode={(id) => void executeGraph(id)}
-              onUpdateGraph={updateGraph}
-              onOpenArtifact={(type, ref) => setArtifactEdit({ type, ref })}
-              onDeleteNode={handleDeleteNode}
-              onRefine={() => askClaudeAbout(selectedNode)}
-              runResult={runResult}
-              runningNodeId={runningNodeId}
-              selection={selectedNodeId}
-            />
-          </section>
-        </div>
-      )}
 
       {/* ── Artifact editor — full markdown for the subagent/skill a step runs ── */}
       {artifactEdit && (

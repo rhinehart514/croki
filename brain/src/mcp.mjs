@@ -107,6 +107,14 @@ async function getWorkflow({ id, workflowId }) {
   return getChannel({ id: workflowId ?? id });
 }
 
+// explain_workflow — fill in a one-line rationale for every node and edge of an already-composed
+// workflow, so the UI can show "why this teammate exists / why this ordering". Reads the persisted
+// graph, has the brain rent the model over its real structure, persists the rationale back, and
+// returns the updated graph. Idempotent: a fully-annotated graph skips the model call unless force.
+async function explainWorkflow({ channelId, workflowId, id, force }) {
+  return brainPost("/api/graph/explain", { channelId: workflowId ?? channelId ?? id, force: force === true });
+}
+
 /**
  * run_channel — runs the full graph and returns the run result.
  */
@@ -514,6 +522,19 @@ const TOOLS = [
       required: ["workflowId", "nodeId"],
     },
     handler: getWorkflowItems,
+  },
+  {
+    name: "explain_workflow",
+    description: "Fill in a one-line rationale for every node and edge of a workflow — why each teammate/step exists and why the ordering — so the canvas can show the reasoning behind the pipeline. Grounded only in the real graph structure; invents no product facts. Idempotent and cheap: a workflow whose nodes and edges already have a rationale is returned unchanged with no model call unless force is true. Persists the rationale onto the stored graph and returns { graph }. Never runs the workflow, never sends.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        workflowId: WORKFLOW_ID,
+        force: { type: "boolean", description: "Re-explain every node and edge even if a rationale already exists." },
+      },
+      required: ["workflowId"],
+    },
+    handler: explainWorkflow,
   },
 
   // ── Workflows — run and gate ───────────────────────────────────────────────

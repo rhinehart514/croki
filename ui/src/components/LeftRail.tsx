@@ -1,7 +1,7 @@
 import { useMemo, useState, type DragEvent } from "react";
 import {
   Workflow, Users, Plus, ChevronDown,
-  PanelLeftClose, PanelLeftOpen, Check, GripVertical, LayoutGrid, Blocks, ArrowRight,
+  PanelLeftClose, PanelLeftOpen, Check, GripVertical, LayoutGrid, Blocks,
 } from "lucide-react";
 import { agentPersona, humanizeRef } from "@/lib/agentPersona";
 import { healthHex } from "@/lib/health";
@@ -13,6 +13,12 @@ import { CAPABILITIES, STAGE_ORDER, STAGE_LABEL, capabilityMark, type Capability
 import type { AgentBenchRow } from "@/api";
 import type { ChannelMeta, GtmLibrary } from "@/types";
 import "@/styles/left-rail.css";
+
+// What a rail row writes on drag, read by the canvas drop target. A teammate is an agent/skill ref; a
+// capability is an external service that lands as a stage step. One union so the drop handler branches.
+export type StepDragPayload =
+  | { kind: "agent" | "skill"; ref: string; label: string }
+  | { kind: "capability"; id: string; name: string; stage: Capability["stage"]; gated: boolean };
 
 // The founder's workspace rail — one always-present, opaque left column beside the canvas. It is a
 // two-item PARTS BIN, not a filing cabinet: only the things that are genuinely "stuff you have" live at
@@ -123,7 +129,6 @@ export function LeftRail({
   // rendered anymore — a tool is something an agent knows, data is a step inside a pipeline, and blocks
   // are a zoomed-out canvas view, so none belong at the top level of the parts bin.
   library?: GtmLibrary | null;
-  activeMode?: "move" | "engineer";
   onOpenSkill?: (name: string) => void;
   onNewSkill?: () => void;
   // Connecting a capability is founder-initiated; App owns the actual connect flow. Optional so the rail
@@ -134,12 +139,11 @@ export function LeftRail({
   const [crewRoomOpen, setCrewRoomOpen] = useState(false);
   const [crewComposerOpen, setCrewComposerOpen] = useState(false);
 
-  // Drag a crew member onto the canvas → the canvas-area drop target reads STEP_DRAG_MIME and adds a
-  // pipeline step, switching to the build view so the founder watches it land. Payload shape unchanged.
-  const onStepDragStart = (
-    event: DragEvent<HTMLElement>,
-    payload: { kind: "agent" | "skill"; ref: string; label: string },
-  ) => {
+  // Drag a crew member OR a capability onto the canvas → the canvas-area drop target reads
+  // STEP_DRAG_MIME and adds a pipeline step, switching to the build view so the founder watches it land.
+  // A teammate carries { kind:"agent", ref }; a capability carries { kind:"capability", id, stage } and
+  // the drop maps its run-stage to a graph stage (find→source, reach→gated execute, …).
+  const onStepDragStart = (event: DragEvent<HTMLElement>, payload: StepDragPayload) => {
     event.dataTransfer.setData(STEP_DRAG_MIME, JSON.stringify(payload));
     event.dataTransfer.effectAllowed = "copy";
   };
@@ -156,7 +160,10 @@ export function LeftRail({
     const nameByRef = new Map<string, string>();
     for (const r of list) {
       const { role } = agentPersona(r.ref, r.job);
-      nameByRef.set(r.ref, (roleCount.get(role) ?? 0) > 1 ? humanizeRef(r.ref) : role);
+      // A teammate the founder named (built via "+") shows exactly that name; everything else falls back to
+      // the derived role, disambiguated by the id when a role is shared.
+      const chosen = r.name?.trim();
+      nameByRef.set(r.ref, chosen || ((roleCount.get(role) ?? 0) > 1 ? humanizeRef(r.ref) : role));
     }
     return {
       proven: list.filter((r) => r.hasRuns),
@@ -259,6 +266,15 @@ export function LeftRail({
               ))}
             </>
           )}
+          {/* The inviting way in — a real row, not just the tiny header "+". Opens the same build-a-teammate
+              space. Always present, so growing your crew is one obvious click. */}
+          <button type="button" className="lr-row lr-crew-add" onClick={() => setCrewComposerOpen(true)} title="Build a teammate with Claude">
+            <span className="lr-crew-add-face" aria-hidden="true"><Plus size={15} /></span>
+            <span className="lr-row-main">
+              <span className="lr-row-name">Build a teammate</span>
+              <span className="lr-row-desc">Describe it — Claude drafts it for your crew.</span>
+            </span>
+          </button>
         </Section>
 
         {/* Capabilities — what your crew can reach and do, the parts a pipeline is wired from. Grouped by
@@ -273,7 +289,7 @@ export function LeftRail({
               <div key={stage} className="lr-cap-group">
                 <div className="lr-group">{STAGE_LABEL[stage]}</div>
                 {caps.map((cap) => (
-                  <CapabilityRow key={cap.id} cap={cap} onConnect={onConnectCapability} />
+                  <CapabilityRow key={cap.id} cap={cap} onConnect={onConnectCapability} onDragStep={onStepDragStart} />
                 ))}
               </div>
             );
@@ -295,6 +311,7 @@ export function LeftRail({
       {crewComposerOpen ? (
         <CrewComposer
           projectId={projectId}
+          bench={bench}
           onClose={() => setCrewComposerOpen(false)}
           onAdded={() => { setCrewComposerOpen(false); onCrewChanged?.(); }}
         />
@@ -329,15 +346,24 @@ function CapabilityMark({ cap }: { cap: Capability }) {
   );
 }
 
-// One capability, inviting to connect: logo, what it does, and a Connect affordance that fills on hover.
-// Gated capabilities (they reach the outside world) show the amber gate marker beside the name.
-function CapabilityRow({ cap, onConnect }: { cap: Capability; onConnect?: (id: string) => void }) {
+// One capability: logo, what it does, and two ways to use it — drag it onto the canvas to wire it into a
+// pipeline as a stage step, or click Connect to hook up the service. Gated capabilities (they reach the
+// outside world) show the amber gate marker beside the name. Draggable like a crew row, same grip.
+function CapabilityRow({
+  cap, onConnect, onDragStep,
+}: {
+  cap: Capability;
+  onConnect?: (id: string) => void;
+  onDragStep: (event: DragEvent<HTMLElement>, payload: StepDragPayload) => void;
+}) {
   return (
     <button
-      className="lr-row lr-cap"
+      className="lr-row lr-cap lr-draggable"
       type="button"
+      draggable
+      onDragStart={(event) => onDragStep(event, { kind: "capability", id: cap.id, name: cap.name, stage: cap.stage, gated: !!cap.gated })}
       onClick={() => onConnect?.(cap.id)}
-      title={`Connect ${cap.name}`}
+      title={`Drag ${cap.name} onto the canvas, or click to connect`}
     >
       <CapabilityMark cap={cap} />
       <span className="lr-row-main">
@@ -349,7 +375,7 @@ function CapabilityRow({ cap, onConnect }: { cap: Capability; onConnect?: (id: s
         </span>
         <span className="lr-row-desc">{cap.blurb}</span>
       </span>
-      <span className="lr-cap-connect">Connect<ArrowRight size={12} /></span>
+      <GripVertical className="lr-grip" size={14} aria-hidden="true" />
     </button>
   );
 }

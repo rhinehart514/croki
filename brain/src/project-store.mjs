@@ -555,9 +555,21 @@ export function getAgentBench(projectId, { agents = [], runs } = {}, options = {
   // Founder-added teammates (the "+ build a teammate" flow) that may not be in a pipeline yet — merge them
   // in so a freshly built teammate shows up immediately. Dedup by ref; the derived crew's label wins over
   // the roster's since it reflects real use. Fall back to the library roster only when nothing scopes it.
-  const added = crewRosterStore.load(projectId, options).members.map((m) => ({ ref: m.ref, description: m.description }));
+  const added = crewRosterStore.load(projectId, options).members.map((m) => ({ ref: m.ref, name: m.name, description: m.description }));
+  // Crew (real pipeline use) is primary, but keep the founder-chosen name from the roster when the crew
+  // entry has none, so a built-and-renamed teammate keeps its name even once it's used in a pipeline.
   const byRef = new Map();
-  for (const a of [...added, ...crew]) if (a?.ref) byRef.set(a.ref, a);
+  for (const a of crew) if (a?.ref) byRef.set(a.ref, { ...a });
+  for (const a of added) {
+    if (!a?.ref) continue;
+    const existing = byRef.get(a.ref);
+    if (existing) {
+      if (a.name && !existing.name) existing.name = a.name;
+      if (a.description && !existing.description) existing.description = a.description;
+    } else {
+      byRef.set(a.ref, { ...a });
+    }
+  }
   const roster = byRef.size ? [...byRef.values()] : agents;
   return buildAgentBench(runSet, roster);
 }

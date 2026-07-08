@@ -2,9 +2,6 @@ import { GraphCanvas, type OperatorCursorState } from "@/components/GraphCanvas"
 import type { NodeEditorBridge } from "@/components/nodeEditorBridge";
 import type { GatePromote } from "@/lib/gateItem";
 import { CanvasShell, type LensDef, type LensProps } from "@/components/canvas/CanvasShell";
-import { ObjectGraphCanvas } from "@/components/ObjectGraphCanvas";
-import type { GateBag } from "@/lib/gateItem";
-import type { CanvasSubject } from "@/lib/cardDetail";
 import type {
   ChannelFeed, ChannelMeta, Claim, ConnectorMeta, DirectedFeed, GateDecision, GtmExperiment, GTMContractAudit, GTMGraph, GTMItem, GTMNode,
   GTMRunResult, NodeSelection, Person,
@@ -55,6 +52,8 @@ export type GtmCanvasModel = {
   // The outcome door on an approved gate card — record what came back on a sent item. Both lenses use
   // it: the Engineer lens threads it into GraphCanvas, the Move lens rides it on the gate bag.
   onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
+  // Veto-as-loop on the gate: send a staged item back to the crew to rework in the Composer.
+  onRefineItem?: (item: GTMItem, note: string) => void | Promise<void>;
   onAskClaude?: (node: GTMNode) => void;
   // Open an agent's profile sheet from its monogram face on a step — the home of the deleted crew strip.
   onOpenAgentProfile?: (ref: string) => void;
@@ -97,26 +96,6 @@ export type GtmCanvasModel = {
   // invitation instead of a separate ranked-bets page. This focuses the goal composer so the founder
   // states the outcome and Claude composes the first pipeline.
   onComposeFirst?: () => void;
-  // A run paused at its founder gate — its decidable items bloom on the gate node in the object graph.
-  gate?: GateBag | null;
-  // The attached-composer tie for the object graph: selecting a block hands its identity — and its full
-  // card face (tone, evidence, related, weakness) — up so the composer BECOMES that card. Null on deselect.
-  onObjectSelect?: (subject: CanvasSubject | null) => void;
-  // The composer's current subject id, fed back so selection and the attached composer clear together.
-  subjectId?: string | null;
-  // The per-card "+" seam: the object graph hands up which card the founder wants the next move off (and
-  // a plain target); the host runs the real ideate and renders the decidable candidates in the composer.
-  // `ideatingNodeId` lights that card blue-violet while the call runs; `objectGraphReload` bumps after a
-  // candidate is added so the fresh draft card appears joined to its source.
-  onIdeateObject?: (source: { id: string; label: string; type: string }, target: string) => void;
-  ideatingNodeId?: string | null;
-  ideatingTarget?: string | null;
-  objectGraphReload?: number;
-  // The mode switcher drives the object graph's arrangement: Move → the story bands ("stages"),
-  // Engineer → the free causal graph ("flow"). Steers only on change (see ObjectGraphCanvas).
-  desiredArrange?: "stages" | "flow";
-  // The mode pill owns the arrangement, so the object graph hides its redundant in-header toggle.
-  modeControlled?: boolean;
 };
 
 type GtmLensProps = LensProps<GtmCanvasModel, never>;
@@ -125,14 +104,6 @@ type GtmLensProps = LensProps<GtmCanvasModel, never>;
 // (0 when that column isn't mounted). Both lens panes pad their left edge by it so the canvas starts to
 // the RIGHT of the column — no node renders under it, and the column can't intercept a node's click.
 const GUTTER_STYLE = { paddingLeft: "var(--pentry-gutter, 0px)", transition: "padding-left 180ms ease" } as const;
-
-function ObjectGraphLens({ model: m }: GtmLensProps) {
-  return (
-    <div style={{ height: "100%", minHeight: 0, ...GUTTER_STYLE }}>
-      <ObjectGraphCanvas projectId={m.projectId} gate={m.gate} onRecordOutcome={m.onRecordOutcome} onSubjectChange={m.onObjectSelect} subjectId={m.subjectId ?? null} desiredArrange={m.desiredArrange} modeControlled={m.modeControlled} onIdeateObject={m.onIdeateObject} ideatingNodeId={m.ideatingNodeId ?? null} ideatingTarget={m.ideatingTarget ?? null} reloadSignal={m.objectGraphReload ?? 0} />
-    </div>
-  );
-}
 
 // ENGINEER — the pipeline builder. This is where the founder drops agents, tools, and data sources and
 // wires them into an executable pipeline: the node canvas (GraphCanvas), one pipeline's Source → … →
@@ -169,6 +140,7 @@ function EngineerLens({ model: m }: GtmLensProps) {
         gatePromote={m.gatePromote}
         gateOffer={m.gateOffer}
         onRecordOutcome={m.onRecordOutcome}
+        onRefineItem={m.onRefineItem}
         onAskClaude={m.onAskClaude}
         onOpenAgentProfile={m.onOpenAgentProfile}
         runSummary={m.runSummary}
@@ -206,14 +178,11 @@ function EngineerLens({ model: m }: GtmLensProps) {
   );
 }
 
-// Two founder modes: MOVE (the object graph in its story bands — the reasoning, the doing surface) and
-// ENGINEER (the executable pipeline node canvas — where agents, tools, and data sources are dropped,
-// wired, and organized). Move answers "why this move"; Engineer is the machinery that runs it. The old
-// "Trace"/"Flow" tabs and the reasoning/steps split inside Engineer are gone — Engineer is now just the
-// node canvas. "Learn" is retired as a selectable mode (LearningsLens is left in the tree for reuse);
-// the old "Ground" overview lens was likewise retired from the pill.
+// One surface: ENGINEER — the executable pipeline node canvas, where agents, tools, and data sources are
+// dropped, wired, and organized. The old Story ("Move") object-graph altitude and the Move/Engineer
+// toggle were removed; Engineer is now the whole canvas. It stays a single-lens CanvasShell so the shell's
+// chrome and layout stay identical.
 const LENSES: LensDef<GtmCanvasModel, never>[] = [
-  { id: "object-graph", label: "Move", Component: ObjectGraphLens },
   { id: "engineer", label: "Engineer", Component: EngineerLens },
 ];
 
@@ -221,10 +190,8 @@ export function GtmCanvas({
   model, activeLensId, chromeless,
 }: {
   model: GtmCanvasModel;
-  // The altitude is CONTROLLED by channel state, derived inline by the host. App reuses ONE GtmCanvas
-  // instance across both branches, so the lens must be a controlled prop: an uncontrolled default only
-  // seeds the shell's state once and would strand the reused instance on the stale lens when it flips.
-  activeLensId: "object-graph" | "engineer";
+  // Only one lens now (Steps/Engineer); kept as a prop so the shell's controlled-lens plumbing is untouched.
+  activeLensId: "engineer";
   chromeless?: boolean;
 }) {
   return (

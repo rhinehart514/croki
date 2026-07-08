@@ -4,11 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { defaultGraphTemplate } from "../src/graph.mjs";
-import { saveFlow } from "../src/flow-store.mjs";
+import { recordFlowRun, saveFlow } from "../src/flow-store.mjs";
 import { createOperatorSession, getOperatorSession, saveOperatorSession } from "../src/operator-store.mjs";
-import { operatorTools, resolveOperatorGate, resolveOperatorProposal, runOperatorSession, operatorSessionStalled } from "../src/operator-runtime.mjs";
+import { operatorTools, resolveOperatorGate, resolveOperatorGateRefine, resolveOperatorProposal, runOperatorSession, operatorSessionStalled } from "../src/operator-runtime.mjs";
 import { loadFlow } from "../src/flow-store.mjs";
 import { createProject, loadProject } from "../src/project-store.mjs";
+import { recallTaste } from "../src/operator-run-core.mjs";
+import { run as gateRun, buildGateFraming } from "../src/connectors/gate/default.mjs";
+import { itemReviewText } from "../src/memory.mjs";
 
 function fakeClient(responses) {
   let index = 0;
@@ -30,7 +33,9 @@ describe("resident GTM operator runtime", () => {
 
   beforeEach(() => {
     parent = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-operator-runtime-"));
-    options = { root: parent };
+    // gateTranslator: null keeps every unit run keyless — the gate stages items without a live
+    // plain-language translation call (which would otherwise spawn a subscription query).
+    options = { root: parent, gateTranslator: null };
     saveFlow(defaultGraphTemplate(), options);
   });
 
@@ -302,6 +307,108 @@ describe("resident GTM operator runtime", () => {
     assert.ok(resolved.events.some((event) => event.type === "graph_proposal_discarded"));
   });
 
+  // Craft a session paused at a gate with one hand-built staged item, so the refine resolver can be
+  // tested in isolation from a live run. draftKey() keys on item.name before item.id (mirrored by the
+  // UI's itemKey), so the first item's key is "Jane Doe" — the exact key the founder's browser sends.
+  function seedGatedSession(fake) {
+    const session = createOperatorSession({ goal: "Draft outreach.", graphId: defaultGraphTemplate().id }, options);
+    const pendingGate = {
+      runId: "run-x",
+      nodeIds: ["gate"],
+      runResult: {
+        runId: "run-x",
+        pendingGates: ["gate"],
+        nodes: {
+          gate: {
+            category: "gate",
+            items: [
+              { id: "staged-1", name: "Jane Doe", subject: "Quick question", draft: "Hi Jane, the exact outbound body.", approvalStatus: "pending" },
+              { id: "staged-2", name: "Sam Roe", draft: "Hey Sam, another draft.", approvalStatus: "pending" },
+            ],
+          },
+        },
+      },
+    };
+    saveOperatorSession({ ...getOperatorSession(session.id, options), status: "waiting_for_gate", pendingGate, lastRunId: "run-x" }, options);
+    return session;
+  }
+
+  it("sends one gate item back to rework, re-drives, and releases nothing", async () => {
+    let driven = null;
+    const fake = {
+      id: "cap", label: "Capture", isAvailable: () => ({ ok: true }),
+      drive: async (ctx) => { driven = ctx; return { kind: "completed", summary: "reworked and re-staged" }; },
+    };
+    const session = seedGatedSession();
+
+    const refined = await resolveOperatorGateRefine(session.id, {
+      gateNodeId: "gate", itemKey: "Jane Doe", founderNote: "Make it warmer and shorter.",
+    }, { options, runtime: fake });
+
+    assert.equal(refined.status, "ready", "the session leaves the gate to rework");
+    assert.equal(refined.pendingGate, null, "the gate pause is cleared for the re-drive");
+    // The rework instruction is pushed as a user message carrying the item framing and the note.
+    const msg = (refined.modelMessages ?? []).at(-1);
+    assert.equal(msg.role, "user");
+    assert.match(msg.content, /sent ONE item back for rework/i);
+    assert.match(msg.content, /Jane Doe/);
+    assert.match(msg.content, /Make it warmer and shorter\./);
+    // Releases NOTHING: no gate_resolved event, no run/send fired — only the refine event.
+    assert.ok(refined.events.some((e) => e.type === "gate_item_refined"));
+    assert.ok(!refined.events.some((e) => e.type === "gate_resolved"), "refine must not resolve/release the gate");
+    assert.equal(refined.lastRunId, "run-x", "no new run was executed (nothing sent)");
+
+    // It re-drives through the same launch path.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.ok(driven, "the operator re-drove after the rework instruction");
+    assert.equal(getOperatorSession(session.id, options).status, "completed");
+  });
+
+  it("rejects a refine for an unknown item or a non-waiting session", async () => {
+    const session = seedGatedSession();
+    await assert.rejects(
+      () => resolveOperatorGateRefine(session.id, { gateNodeId: "gate", itemKey: "nope", founderNote: "x" }, { options }),
+      /No staged item "nope"/,
+    );
+    // A note is required (the item resolves — "Jane Doe" is the real key — so it reaches the note check).
+    await assert.rejects(
+      () => resolveOperatorGateRefine(session.id, { gateNodeId: "gate", itemKey: "Jane Doe", founderNote: "  " }, { options }),
+      /note is required/i,
+    );
+    // A session that is not paused at a gate is refused cleanly.
+    const ready = createOperatorSession({ goal: "No gate.", graphId: defaultGraphTemplate().id }, options);
+    saveOperatorSession({ ...getOperatorSession(ready.id, options), status: "ready" }, options);
+    await assert.rejects(
+      () => resolveOperatorGateRefine(ready.id, { gateNodeId: "gate", itemKey: "staged-1", founderNote: "x" }, { options }),
+      /not waiting at a founder gate/,
+    );
+  });
+
+  it("gate plain-language translation never alters the reviewable body", async () => {
+    const item = { id: "i1", name: "Jane", subject: "Subj", draft: "THE EXACT OUTBOUND BODY" };
+    const node = { id: "gate", category: "gate", connector: "default", config: {}, runtime: {} };
+
+    // No translator wired: the gate stages the item untouched, with no plain-language fields.
+    const plain = await gateRun(node, [structuredClone(item)], {});
+    const bodyPlain = itemReviewText(plain.items[0]);
+    assert.equal(plain.items[0].plainLanguageTitle, undefined, "no translator → no plain fields added");
+
+    // A translator returning arbitrary strings must not change the item's reviewable/sendable body.
+    const ctx = {
+      __gateTranslate: async () => [{ plainLanguageTitle: "ARBITRARY HEADLINE", whatYourYesDoes: "does " + "x".repeat(400) }],
+      __gateDownstream: { verb: "send", willSend: true },
+    };
+    const translated = await gateRun(node, [structuredClone(item)], ctx);
+    const bodyTranslated = itemReviewText(translated.items[0]);
+    assert.equal(bodyTranslated, bodyPlain, "the reviewable body is byte-identical with/without translation");
+    assert.equal(bodyTranslated, "THE EXACT OUTBOUND BODY", "the body is exactly the original draft");
+    assert.equal(translated.items[0].plainLanguageTitle, "ARBITRARY HEADLINE");
+
+    // Structural safety: the framing handed to the translator can never contain the outbound body.
+    const framing = buildGateFraming(item);
+    assert.ok(!JSON.stringify(framing).includes("OUTBOUND BODY"), "the translation framing must never carry the body");
+  });
+
 });
 
 describe("operatorSessionStalled (hang watchdog)", () => {
@@ -322,5 +429,45 @@ describe("operatorSessionStalled (hang watchdog)", () => {
   it("is safe when the timestamp is missing", () => {
     assert.equal(operatorSessionStalled({ status: "running" }, now, T), false);
     assert.equal(operatorSessionStalled(null, now, T), false);
+  });
+});
+
+describe("recallTaste", () => {
+  let parent;
+  let options;
+
+  beforeEach(() => {
+    parent = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-operator-taste-"));
+    options = { root: parent };
+  });
+
+  afterEach(() => fs.rmSync(parent, { recursive: true, force: true }));
+
+  it("degrades safely when there is no graph to read", () => {
+    assert.equal(recallTaste({ projectId: "none", graphId: null }, options), null);
+  });
+
+  it("recalls approved gate decisions through the flow store", () => {
+    const graph = defaultGraphTemplate();
+    saveFlow(graph, options);
+    const result = {
+      runId: "r1",
+      ok: true,
+      targetNodeId: null,
+      pendingGates: [],
+      nodes: {
+        gate: {
+          category: "gate",
+          items: [{ name: "A", email: "a@x.com", draft: "warm note to A", approvalStatus: "approved" }],
+        },
+      },
+    };
+    recordFlowRun(graph, result, options);
+    const taste = recallTaste({ projectId: "default", graphId: graph.id }, options);
+    assert.ok(taste, "recallTaste returns non-null after a seeded approved gate item");
+    assert.ok(
+      taste.rules.some((rule) => rule.includes("warm note to A")),
+      "rules include the approved-voice exemplar",
+    );
   });
 });

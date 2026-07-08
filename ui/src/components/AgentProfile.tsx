@@ -1,12 +1,26 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Crosshair, FileCode2, History, PencilLine, ShieldCheck, Waypoints, X,
+  Crosshair, FileCode2, GraduationCap, ShieldCheck, X,
 } from "lucide-react";
 import { agentPersona, humanizeRef, agentOrigin, AGENT_ORIGIN_LABEL } from "@/lib/agentPersona";
 import { CrewFace } from "@/components/crew/CrewFace";
 import { Button } from "@/components/ui/button";
-import { getAgentLearning, type AgentLearning } from "@/api";
+import {
+  getCrewMemberProfile, promoteCrewLearning, dismissCrewLearning,
+  type CrewMemberProfile,
+} from "@/api";
 import "@/styles/agent-profile.css";
+
+// The durable track record, in plain words. Only real, non-zero signals appear — a teammate that has
+// never sent for you shows just its runs, never a fake "0 replies". Empty when there's nothing real.
+function trackRecordLine(record: CrewMemberProfile["record"]): string | null {
+  const parts: string[] = [];
+  if (record.runs > 0) parts.push(`${record.runs} run${record.runs === 1 ? "" : "s"}`);
+  if (record.sent > 0) parts.push(`${record.sent} sent`);
+  if (record.replies > 0) parts.push(`${record.replies} repl${record.replies === 1 ? "y" : "ies"}`);
+  if (record.wins > 0) parts.push(`${record.wins} win${record.wins === 1 ? "" : "s"}`);
+  return parts.length ? `Proven on ${parts.join(" · ")}` : null;
+}
 
 // The normalized view of one on-disk library agent. Everything here is REAL — no field is invented;
 // the "person" feeling comes from the role name, the layout, and the framing labels, not from
@@ -69,19 +83,38 @@ export function AgentProfile({
     return () => document.removeEventListener("keydown", onKey, true);
   }, [open, onClose]);
 
-  // What this teammate has learned — derived from real gate decisions, fetched when the sheet opens.
-  // Stamped with the ref it belongs to so we never render one agent's record on another's sheet, and
-  // so "still loading" is simply "the loaded record isn't for the agent on screen yet."
-  const [loaded, setLoaded] = useState<{ ref: string; data: AgentLearning | null } | null>(null);
+  // The teammate's SOUL — its durable track record and the lessons it has learned from the founder.
+  // Fetched when the sheet opens; stamped with the ref so one teammate's soul never renders on another's.
+  const [soul, setSoul] = useState<{ ref: string; data: CrewMemberProfile | null } | null>(null);
+  const loadSoul = useCallback((ref: string) => {
+    if (!projectId) return;
+    getCrewMemberProfile(projectId, ref)
+      .then((r) => setSoul({ ref, data: r.profile }))
+      .catch(() => setSoul({ ref, data: null }));
+  }, [projectId]);
   useEffect(() => {
     if (!open || !view || !projectId) return;
     let live = true;
     const ref = view.ref;
-    getAgentLearning(projectId, ref)
-      .then((r) => { if (live) setLoaded({ ref, data: r.profile }); })
-      .catch(() => { if (live) setLoaded({ ref, data: null }); });
+    getCrewMemberProfile(projectId, ref)
+      .then((r) => { if (live) setSoul({ ref, data: r.profile }); })
+      .catch(() => { if (live) setSoul({ ref, data: null }); });
     return () => { live = false; };
   }, [open, view, projectId]);
+
+  // The founder's blessing / "not yet" on a ready lesson. Each returns the fresh founder-view, which
+  // replaces the soul in place so the card updates without a reload. The founder is always the judge:
+  // a lesson only becomes permanent on an explicit tap here (the wall), never on its own.
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const onBless = useCallback((ref: string, patternKey: string, keep: boolean) => {
+    if (!projectId || busyKey) return;
+    setBusyKey(patternKey);
+    const call = keep ? promoteCrewLearning : dismissCrewLearning;
+    call(projectId, ref, patternKey)
+      .then((r) => setSoul({ ref, data: r.profile }))
+      .catch(() => loadSoul(ref))
+      .finally(() => setBusyKey(null));
+  }, [projectId, busyKey, loadSoul]);
 
   // Names in the team rail must be unique. The persona role vocabulary is coarser than a real crew, so
   // several distinct agents can map to the same role (five "Prospect Researcher" cards). When a role is
@@ -105,8 +138,16 @@ export function AgentProfile({
 
   if (!open || !view) return null;
 
-  const learning = loaded && loaded.ref === view.ref ? loaded.data : undefined;
-  const loadingLearning = projectId ? learning === undefined : false;
+  // The soul for the teammate on screen (never a stale ref's). This is the SINGLE "what this teammate
+  // has learned from you" story — its durable track record, the lessons it has earned, what it's still
+  // figuring out, and any lesson ready for the founder's blessing. It renders in every state: still
+  // loading, honestly empty (no runs decided on yet), or full. There is no separate legacy section.
+  const soulData = soul && soul.ref === view.ref ? soul.data : null;
+  const soulPending = !soul || soul.ref !== view.ref;
+  const recordLine = soulData ? trackRecordLine(soulData.record) : null;
+  const hasSoul = !!soulData && (
+    !!recordLine || soulData.learned.length > 0 || soulData.stillFiguring.length > 0 || soulData.ready.length > 0
+  );
 
   const { role } = agentPersona(view.ref, view.job);
   // What this teammate does, in words a founder can trust — the real frontmatter line when there is
@@ -152,36 +193,72 @@ export function AgentProfile({
           </section>
 
           <section className="agentp-section">
-            <div className="agentp-shead"><span className="agentp-sicon"><History size={13} /></span><h3>What I've become</h3></div>
-            {loadingLearning ? (
+            <div className="agentp-shead"><span className="agentp-sicon"><GraduationCap size={13} /></span><h3>What I've learned from you</h3></div>
+
+            {soulPending ? (
               <p className="agentp-quiet">Reading my track record…</p>
-            ) : !learning || !learning.hasRuns ? (
-              <p className="agentp-quiet">No runs yet — I haven't drafted anything you've decided on, so there's nothing learned to show. Once you approve, reject, or edit my work at the gate, it lands here.</p>
+            ) : !hasSoul || !soulData ? (
+              <p className="agentp-quiet">No runs yet — I haven't drafted anything you've decided on, so there's nothing learned to show. Once you approve, reject, or edit my work at the gate, what I learn from it lands here.</p>
             ) : (
               <>
-                <div className="agentp-stats">
-                  <div className="agentp-stat"><b>{learning.runCount}</b><span>run{learning.runCount === 1 ? "" : "s"}</span></div>
-                  <div className="agentp-stat"><b>{learning.counts.approved}</b><span>approved</span></div>
-                  <div className="agentp-stat"><b>{learning.counts.rejected}</b><span>rejected</span></div>
-                  <div className="agentp-stat"><b>{learning.counts.edits}</b><span>edited</span></div>
-                </div>
-                {learning.lastEdits.length ? (
-                  <div className="agentp-edits">
-                    <div className="agentp-edits-h"><PencilLine size={12} /> How you've corrected me</div>
-                    {learning.lastEdits.map((e, i) => (
-                      <div className="agentp-edit" key={i}>
-                        <div className="agentp-edit-side from"><span>you saw</span><p>{e.from}</p></div>
-                        <div className="agentp-edit-side to"><span>you changed it to</span><p>{e.to}</p></div>
-                      </div>
+                {recordLine ? <p className="agentp-soul-record">{recordLine}</p> : null}
+
+                {soulData.learned.length ? (
+                  <ul className="agentp-soul-list">
+                    {soulData.learned.map((l, i) => (
+                      <li className="agentp-soul-lesson" key={`learned-${i}`}>
+                        <span className="agentp-soul-tick" aria-hidden="true">✓</span>
+                        <span className="agentp-soul-lesson-body">
+                          <span className="agentp-soul-lesson-text">{l.text}</span>
+                          {l.why ? <span className="agentp-soul-lesson-why">{l.why}</span> : null}
+                        </span>
+                      </li>
                     ))}
+                  </ul>
+                ) : (
+                  <p className="agentp-quiet">Nothing permanent yet — the lessons below become part of me when you say so.</p>
+                )}
+
+                {soulData.stillFiguring.length ? (
+                  <div className="agentp-soul-block">
+                    <div className="agentp-soul-blabel">Still figuring out</div>
+                    <ul className="agentp-soul-list">
+                      {soulData.stillFiguring.map((l, i) => (
+                        <li className="agentp-soul-lesson watching" key={`figuring-${i}`}>
+                          <span className="agentp-soul-lesson-body">
+                            <span className="agentp-soul-lesson-text">{l.text}</span>
+                            {l.why ? <span className="agentp-soul-lesson-why">{l.why}</span> : null}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 ) : null}
-                {learning.voice ? (
-                  <div className="agentp-voice">
-                    <div className="agentp-voice-h"><Waypoints size={12} /> How I write for you now</div>
-                    <pre className="agentp-voice-body">{learning.voice}</pre>
+
+                {soulData.ready.map((l) => (
+                  <div className="agentp-soul-ready" key={`ready-${l.patternKey}`}>
+                    <div className="agentp-soul-ready-h">Ready to make permanent?</div>
+                    <p className="agentp-soul-ready-text">{l.text}</p>
+                    {l.why ? <p className="agentp-soul-ready-why">{l.why}</p> : null}
+                    <div className="agentp-soul-ready-acts">
+                      <Button
+                        type="button"
+                        disabled={busyKey === l.patternKey}
+                        onClick={() => onBless(view.ref, l.patternKey, true)}
+                      >
+                        Make permanent
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={busyKey === l.patternKey}
+                        onClick={() => onBless(view.ref, l.patternKey, false)}
+                      >
+                        Not yet
+                      </Button>
+                    </div>
                   </div>
-                ) : null}
+                ))}
               </>
             )}
           </section>

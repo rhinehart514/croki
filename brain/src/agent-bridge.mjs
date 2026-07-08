@@ -291,6 +291,11 @@ export function buildAgentPrompt({ ref, prompt, items, context = {}, artifactPat
   const fullAgentic = agenticSet.size === RETRIEVAL_SOURCES.length;
   const partialAgentic = agenticSet.size > 0 && !fullAgentic;
 
+  // Bind the taste tool to THIS drafting teammate so get_taste leads with its promoted, founder-blessed
+  // soul. `ref` is the agentRef; the project comes off the run context the graph threads through. Absent
+  // either (or absent a soul) the retrieval tools behave exactly as before — the binding is additive.
+  const soulBinding = { agentRef: ref ?? null, projectId: context?.__run?.projectId ?? context?.credentials?.projectId ?? null };
+
   // eslint-disable-next-line no-unused-vars
   const { grounding, productModel, market, __memory, __state, signal, designState, __skillGuidance, ...rest } = context ?? {};
   const restJson = Object.keys(rest).length ? JSON.stringify(rest, null, 2) : null;
@@ -309,12 +314,12 @@ export function buildAgentPrompt({ ref, prompt, items, context = {}, artifactPat
   let manifest;
   let retrievalTools = null;
   if (fullAgentic) {
-    retrievalTools = createRetrievalTools(context);
+    retrievalTools = createRetrievalTools(context, soulBinding);
     contextBlock = renderRetrievalCatalog(retrievalTools);
     manifest = { mode: "agentic", offered: retrievalTools.map((t) => t.name), assembledAt: new Date().toISOString() };
   } else if (partialAgentic) {
     // Tools for the cut-over sources; pre-pack (toggled off for those) for the rest.
-    retrievalTools = createRetrievalTools(context, { sources: [...agenticSet] });
+    retrievalTools = createRetrievalTools(context, { sources: [...agenticSet], ...soulBinding });
     const catalog = renderRetrievalCatalog(retrievalTools);
     // Toggle the cut-over providers OFF in the pre-pack so a source is never delivered both ways.
     const toggles = {};
@@ -520,6 +525,46 @@ export function createClaudeMicroproductInvoker({ cwd = process.cwd(), model, ma
     const artifactFiles = coerceArtifactFiles(parsed.artifactFiles ?? parsed.files);
     return { ok: true, artifactSpec, artifactFiles, meta: { toolCalls } };
   };
+}
+
+// ── Founder-gate plain-language translator (live, OAuth-first subscription) ──
+// The plain-language half of the watchable founder gate. It turns each staged item's SAFE framing
+// (buildGateFraming in connectors/gate/default.mjs: subject / trigger / who / sourceUrl / field-NAMES —
+// never the outbound body) into a founder-plain headline plus a one-line "what your yes does". SAFETY:
+// it receives ONLY framings (no body), so it can never paraphrase what is being sent. Returns an array
+// aligned by index to the input framings, or null on any failure — the gate connector wraps the call in
+// a timeout and falls back to the raw subject, so a failure here never blocks a run from reaching the
+// gate. `runQuery` is injectable so a fake subscription can be supplied in tests.
+export function createGateTranslator({ cwd = process.cwd(), model, runQuery = runClaudeQuery } = {}) {
+  return async function translate({ items = [], downstream = null } = {}) {
+    if (!Array.isArray(items) || !items.length) return null;
+    const prompt = buildGateTranslationPrompt(items, downstream);
+    // maxTurns 1: a single structured reply, no tool use. Read-only default tools; nothing is sent.
+    const { text, error } = await runQuery({ prompt, cwd, model, maxTurns: 1 });
+    if (error) return null;
+    const arr = parseAgentItems(text);
+    return Array.isArray(arr) && arr.length ? arr : null;
+  };
+}
+
+function buildGateTranslationPrompt(framings, downstream) {
+  const doesHint = downstream?.willSend === false
+    ? "Approving STAGES this locally — nothing sends. Say that plainly."
+    : downstream?.verb === "send"
+      ? "Approving SENDS this out — an email or message actually leaves."
+      : downstream?.verb === "publish" || downstream?.verb === "deploy"
+        ? "Approving PUBLISHES or DEPLOYS this to the outside world."
+        : "Approving lets this go out.";
+  return [
+    "You translate staged go-to-market items into plain founder language for a review gate.",
+    "You are given ONLY each item's framing: a subject, a trigger, who it is about, a source URL, and the NAMES of the fields it carries. You are NOT given the message body, and you must not invent one.",
+    `What approving does: ${doesHint}`,
+    "Write for a founder who is NOT a marketer — a stranger must understand each line at a glance.",
+    "BANNED — never use: GTM jargon (long tail, highest-intent, programmatic, keystone, top-of-funnel, ICP, conversion), internal product terms (founder gate, the wall, pipeline, connector, node), startup clichés (streamline, empower, seamless, leverage, unlock), the \"not just X but Y\" shape, and the em-dash (—) — use a period or the word \"so\" instead.",
+    "For EACH item return a plain-language headline (<= 50 characters, plain everyday words, no jargon and no code identifiers) and a one-line \"whatYourYesDoes\" describing what approving it does, grounded in the line above.",
+    "Return ONLY a JSON array, one object per item IN THE SAME ORDER, each shaped { \"plainLanguageTitle\": string, \"whatYourYesDoes\": string }. No prose, no preamble.",
+    `Items:\n${JSON.stringify(framings, null, 2)}`,
+  ].join("\n\n");
 }
 
 export function createCodexAgentInvoker({ cwd = process.cwd(), model, binary = "codex" } = {}) {

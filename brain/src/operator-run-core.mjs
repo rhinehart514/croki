@@ -4,11 +4,12 @@
 // module depends on the stores below but on NEITHER the tool dispatcher nor the orchestrator, so the
 // split introduces no import cycle.
 import { loadFlow } from "./flow-store.mjs";
-import { buildDraftMemory, extractDecisions } from "./memory.mjs";
+import { buildDraftMemory, buildTasteProfile, extractDecisions } from "./memory.mjs";
 import { mergeSharedDecisions } from "./shared-judgments.mjs";
 import { getDesignState } from "./design-state-store.mjs";
 import { getWorkspace, listWorkspaces } from "./workspace.mjs";
 import { ideaTasteForProject } from "./feedback-ledger.mjs";
+import { distillTaste } from "./taste-distill.mjs";
 import { appendOperatorEvent, saveOperatorSession } from "./operator-store.mjs";
 import { applySharedContextToGraph, loadProject, projectTeamId } from "./project-store.mjs";
 import { canApprove, getMember, resolveCurrentUser } from "./team-store.mjs";
@@ -69,6 +70,24 @@ export function memoryFor(runs, options, projectId) {
   return buildDraftMemory(mergeSharedDecisions(extractDecisions(runs), options), {
     ideaTaste: ideaTasteForProject(projectId || "default", options),
   });
+}
+
+export function recallTaste(session, options = {}) {
+  let runs = [];
+  try {
+    if (session?.graphId) runs = flowFor(session, options).runs || [];
+  } catch {
+    runs = [];
+  }
+  const projectId = session?.projectId || options.projectId || "default";
+  let profile = null;
+  try {
+    const decisions = mergeSharedDecisions(extractDecisions(runs), options);
+    profile = buildTasteProfile(decisions, { ideaTaste: ideaTasteForProject(projectId, options) });
+  } catch {
+    profile = null;
+  }
+  return distillTaste(profile);
 }
 
 export function designStateFor(session, options) {

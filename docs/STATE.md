@@ -1,6 +1,6 @@
 # STATE — Drover (Alpha)
 
-**Stage: Alpha.** Logged 2026-07-03, updated 2026-07-07. This is the front-door snapshot of
+**Stage: Alpha.** Logged 2026-07-03, updated 2026-07-08. This is the front-door snapshot of
 where the product actually stands. When something material changes, update this file and re-date it.
 For the product pitch read `README.md`; for how the system works read `AGENTS.md`; for the
 current build direction read `docs/GTM-ENGINE-REBUILD.md`. Everything else in `docs/` is
@@ -62,9 +62,9 @@ measured result.
 The 2026-07-06 full-codebase review found the alpha bet blocked by three concrete things: the
 product never actually sent anything (the email transport was not wired to the send path), the
 install broke for a stranger, and the founder gate could approve itself. This sprint closed all
-three, then hardened the codebase. It lives on the `sprint-alpha` branch (39 commits ahead of
-`origin/main`); as of this writing it is committed and pushed to its own branch but **not merged
-into `main`** — no change is live for anyone yet.
+three, then hardened the codebase. It shipped from the `sprint-alpha` branch and is now **merged
+into `main`**: the real send path, the stranger-safe install, and the gate-self-approval fix are
+all in the mainline (corrected 2026-07-08 — an earlier note here wrongly said it was unmerged).
 
 **What now works that didn't:**
 
@@ -101,6 +101,51 @@ into `main`** — no change is live for anyone yet.
 the gate, install for a stranger, and can't wave itself through — but no real founder has driven a real
 go-to-market win to the gate. The honest line holds: built and tested, not validated in the market.
 
+## 2026-07-08 — the composer invert and the watchable run
+
+The chat was the weak surface: a generic panel that took a goal, disappeared into an autonomous
+model drive, and handed back a finished pipeline — while leaking raw engine errors (a founder
+literally saw "Reached maximum number of turns"). A machinery audit found the cause: the operator
+ran as a Claude Code subprocess *inside* the app, so the app's own turn budget and the model's
+turn budget collided. This pass reshaped the whole chat experience around one idea — the founder
+should watch a colleague work, not hand a machine a prompt.
+
+**What now works that didn't:**
+
+- **"Our chat" — the composer, rebuilt.** A warm, calm chat surface (the "Warm Calm" register:
+  warm off-white ground, opaque cards, amber reserved for the gate, motion that settles and never
+  springs). It opens with a briefing over the founder's real cross-pipeline state instead of a
+  blank box; every reply comes from a named teammate with a real face, not a faceless "Claude";
+  decisions and the gate live in the thread and settle into stamped receipts. The old machinery —
+  a parts tray, a plan mirror, a verb-picker send button, a heavy voice waveform — was deleted.
+- **A fast lane instead of a tower.** A plain-code router reads the founder's message: status and
+  "what happened" questions are answered instantly from real state with no model drive; only a
+  build or an explicit "run it" reaches the autonomous path. This ended the colliding-budget
+  failure — the "max turns" leak is stripped at the source and can never reach a founder again.
+- **Taste finally reaches composition.** The founder's gate decisions are distilled into short
+  rules and pre-packed into the prompt that composes the pipeline — closing the long-standing gap
+  where the taste memory existed but never shaped the work.
+- **The run narrates itself, in each teammate's voice.** As a pipeline runs, each teammate speaks
+  in the first person, in its own voice, with real stakes drawn from its soul (a stance, never a
+  destructive auto-fire). Tool steps render as a live tracker that checks off. The prose ideation
+  path was retired in favor of embodied pipeline shapes the founder picks from.
+- **The gate opens in the chat.** The dead "Review & send" button is fixed the right way: the real
+  review — the drafts, what a yes does, the crew's steps — opens inside the conversation and
+  releases through the same authorized wall, instead of punting to a canvas that never bloomed.
+- **Chats you can run and control.** Building a picked idea opens its own thread so the founder
+  sees where it is heading; threads can be closed and stopped.
+
+Built across several codex-first workflows with Opus review and adversarial verification; `npm test`
+is green (see build health). Version moved to **0.3.2**, still alpha.
+
+**What only a live run settles (the founder's eyes):** the *felt* quality — whether the teammate
+voices read as distinct people, whether the calmer cards feel low-friction, whether the motion
+feels beautiful — can only be judged by driving a real goal, not by a green suite. The warm register
+is currently scoped to the composer; warming the canvas and rails to match is the next visual step.
+
+**What this does not change:** the alpha bet is still unproven. No outside founder has driven a real
+go-to-market win to the gate. Built and tested, not validated in the market.
+
 ## How we build (the standing rule)
 
 Less is more. The harness — truth, the gate, taste — is the only thing we host. Every fuzzy
@@ -109,11 +154,11 @@ step, never a new hosted subsystem. A new feature is an agent plus a step, not n
 When something starts looking like an engine of modules, that's the smell — collapse it to
 agents. This is the anti-cage rule in `AGENTS.md`, restated because it's easy to drift off.
 
-## Build health (2026-07-07)
+## Build health (2026-07-08)
 
-- **Tests:** backend suite green — 1132 pass / 0 fail (1 skipped, 1133 total), and the full
-  `npm test` chain (backend tests → lint → build) is green. Backend test count dropped from the
-  07-03 figure because the sprint removed dead code, not coverage.
+- **Tests:** backend suite green — 1,289 pass / 0 fail (1 skipped), and the full `npm test`
+  chain (backend tests → lint → build) is green as of 2026-07-08. The suite self-terminates (a
+  pre-existing gate-test connection-handle leak was fixed this pass).
 - **Backend:** the two god-files are gone — the server and the operator runtime were each split into
   focused modules this sprint (behavior-preserving). The GTM-engine modules present and tested:
   evidence, gtm-store, market-research, path-portfolio, outcome-ingest, promote-motion, run-compile.
@@ -122,9 +167,9 @@ agents. This is the anti-cage rule in `AGENTS.md`, restated because it's easy to
   gone and the full-screen overlays dropped from four to three.
 - **Agent front door:** 40 tools over the MCP server (`npm run mcp`).
 - **Run:** `npm start` (builds the interface, serves API + client on port 4317).
-- **Version:** 0.3.1 (root), pre-1.0 by design.
-- **On origin/main:** the ordered left-to-right living-graph canvas landed 07-03, on top of
-  the GTM engine rebuild and two-surface canvas from 07-02.
+- **Version:** 0.3.2 (root), pre-1.0 by design.
+- **On `main`:** sprint-alpha (real send, stranger-safe install, gate-self-approval fix) is
+  merged; the composer invert and the watchable run (2026-07-08) land on top of it.
 
 ## The IA collapse (2026-07-03)
 

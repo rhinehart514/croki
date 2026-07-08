@@ -31,6 +31,12 @@ function slug(value) {
   return String(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "step";
 }
 
+// A one-line rationale is an optional plain sentence the composer may attach to a node or edge —
+// why this teammate exists, why this ordering. Returns the trimmed string or null; never throws.
+function trimmedRationale(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
 // The open step kinds the composer may use — must match graph-operations.mjs's OPEN_KINDS, or
 // normalization silently deletes nodes the runtime fully supports (the mcp-node regression).
 const OPEN_KINDS = new Set(["agent", "skill", "code", "mcp"]);
@@ -61,6 +67,9 @@ export function normalizeComposedGraph(spec) {
     if (!raw || typeof raw !== "object") return;
     let id = slug(raw.id || raw.label || `node-${index + 1}`);
     while (usedIds.has(id)) id = `${id}-${index + 1}`;
+    // One plain sentence — why this teammate/step exists and why it sits here. Optional and
+    // additive: carried through when the composer supplies it, never required.
+    const rationale = trimmedRationale(raw.rationale);
     const position = (raw.position && Number.isFinite(raw.position.x))
       ? raw.position
       : { x: 120 + index * 240, y: 200 };
@@ -72,6 +81,7 @@ export function normalizeComposedGraph(spec) {
         config: raw.config && typeof raw.config === "object" ? raw.config : {},
         ...(raw.contract && typeof raw.contract === "object" ? { contract: raw.contract } : {}),
         ...(raw.kind === "agent" ? { agentPrompt: raw.agentPrompt || raw.prompt || "" } : {}),
+        ...(rationale ? { rationale } : {}),
         sourceOfTruth: Array.isArray(raw.sourceOfTruth) ? raw.sourceOfTruth : ["signals", "artifacts"],
       });
       return;
@@ -83,6 +93,7 @@ export function normalizeComposedGraph(spec) {
         id, kind: "switch", label: raw.label || "Route", position,
         config: raw.config && typeof raw.config === "object" ? raw.config : {},
         ...(raw.contract && typeof raw.contract === "object" ? { contract: raw.contract } : {}),
+        ...(rationale ? { rationale } : {}),
       });
       return;
     }
@@ -94,6 +105,7 @@ export function normalizeComposedGraph(spec) {
         label: raw.label || category, position,
         config: raw.config && typeof raw.config === "object" ? raw.config : {},
         ...(raw.contract && typeof raw.contract === "object" ? { contract: raw.contract } : {}),
+        ...(rationale ? { rationale } : {}),
         ...(Array.isArray(raw.sourceOfTruth) ? { sourceOfTruth: raw.sourceOfTruth } : {}),
       });
       return;
@@ -112,6 +124,7 @@ export function normalizeComposedGraph(spec) {
           unrunnable: `This step asks for a kind of work ("${raw.kind}") this runtime does not know how to run yet. It stays on the canvas with its connections, but it will not run.`,
         },
         ...(raw.contract && typeof raw.contract === "object" ? { contract: raw.contract } : {}),
+        ...(rationale ? { rationale } : {}),
       });
       return;
     }
@@ -129,6 +142,8 @@ export function normalizeComposedGraph(spec) {
     edges.push({
       id, source: raw.source, target: raw.target, edgeType,
       ...(raw.label ? { label: raw.label } : {}),
+      // Why this ordering (source → target), one plain sentence. Optional and additive.
+      ...(trimmedRationale(raw.rationale) ? { rationale: trimmedRationale(raw.rationale) } : {}),
       // A switch's routing rule lives on its outgoing edge — stripping it would silently turn a
       // conditional branch into a take-everything branch. Kept as the model wrote it; the typed
       // graph validation still checks its shape.
@@ -136,6 +151,44 @@ export function normalizeComposedGraph(spec) {
     });
   }
   return { nodes, edges };
+}
+
+// True when any node or edge is still missing its one-line rationale. The short-circuit signal for
+// explainComposedGraph: a fully-annotated graph needs no model call.
+export function graphNeedsRationale(graph) {
+  const missing = (item) => !trimmedRationale(item?.rationale);
+  const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
+  const edges = Array.isArray(graph?.edges) ? graph.edges : [];
+  return nodes.some(missing) || edges.some(missing);
+}
+
+// A graph composed before rationale existed carries none. Given the stored graph, rent the model to
+// produce a one-line rationale for each node and edge — grounded ONLY in the real labels/kinds/edges,
+// never inventing product facts — and return the graph with rationale merged on. Cheap and idempotent:
+// when every node and edge already has a rationale it skips the model call and returns the graph
+// unchanged, unless `force` is set. The rented `explain` is injectable (createClaudeExplainer live;
+// a stub in tests); the host never hosts the intelligence. Persistence is the caller's job.
+export async function explainComposedGraph(graph, { explain, force = false } = {}) {
+  if (!graph || !Array.isArray(graph.nodes)) throw new Error("explainComposedGraph needs a graph with a nodes array.");
+  if (!force && !graphNeedsRationale(graph)) return graph;
+  if (typeof explain !== "function") throw new Error("explainComposedGraph needs a rented explainer.");
+  const spec = await explain({ graph });
+  if (spec?.ok === false) throw new Error(`Explain failed: ${spec.error}`);
+  const nodeR = spec?.nodes && typeof spec.nodes === "object" ? spec.nodes : {};
+  const edgeR = spec?.edges && typeof spec.edges === "object" ? spec.edges : {};
+  // Keep an existing rationale unless forced; otherwise take the model's when it gave one. A node or
+  // edge the model skipped simply stays as it was — never blanked.
+  const withRationale = (item, produced) => {
+    const existing = trimmedRationale(item?.rationale);
+    if (existing && !force) return item;
+    const next = trimmedRationale(produced);
+    return next ? { ...item, rationale: next } : item;
+  };
+  return {
+    ...graph,
+    nodes: graph.nodes.map((n) => withRationale(n, nodeR[n.id])),
+    edges: (Array.isArray(graph.edges) ? graph.edges : []).map((e) => withRationale(e, edgeR[e.id])),
+  };
 }
 
 // The wall, owned by the host: anything that reaches the world (an execute node) must have a

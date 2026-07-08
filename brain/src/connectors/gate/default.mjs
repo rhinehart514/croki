@@ -9,6 +9,92 @@ import { draftKey, itemReviewField, itemReviewText } from "../../memory.mjs";
 import { applyPatternApproval } from "../../gate-pattern.mjs";
 import crypto from "node:crypto";
 
+// How long the plain-language translation may take before the gate gives up and falls back to the raw
+// subject. Kept short: the founder is waiting on the gate, so a slow translate must never hold the run.
+const GATE_TRANSLATE_TIMEOUT_MS = 8000;
+
+// Build the ONLY thing the plain-language translation call is ever allowed to see about an item: its
+// normalized framing. HARD SAFETY RULE, enforced structurally (not by comment alone): the translator
+// must NEVER receive or be able to paraphrase the item's outbound BODY/draft. So this constructs the
+// input by EXPLICITLY listing the allowed slots — subject, trigger, who, sourceUrl, and the NAMES of the
+// fields the item carries (names only, never their values). The item is never spread, so a draft/body
+// value cannot leak into the prompt even if a new content field is added to items later.
+export function buildGateFraming(item) {
+  if (!item || typeof item !== "object") {
+    return { subject: null, trigger: null, who: null, sourceUrl: null, fields: [] };
+  }
+  const pick = (...keys) => {
+    for (const key of keys) {
+      const value = item[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+    return null;
+  };
+  return {
+    subject: pick("subject", "suggested_subject_line"),
+    trigger: pick("nowTrigger", "now_trigger"),
+    who: pick("name", "founder_name", "company", "handle"),
+    sourceUrl: pick("sourceUrl", "url", "linkedin", "linkedinUrl"),
+    // Field NAMES only (e.g. "draft", "post_text", "scheduled_for") — never their values, so the
+    // outbound body never travels to the model, only the shape of the item does.
+    fields: Object.keys(item),
+  };
+}
+
+// Batch-translate the framings of the items the founder will actually review. SAFETY: `translate` only
+// ever receives buildGateFraming output (no body) plus the deterministic downstream descriptor — it
+// cannot see or change what is sent. Any failure/timeout returns null so the caller silently falls back
+// to the raw subject; this NEVER throws and NEVER blocks the run from reaching the gate.
+async function translateGateFramings(framings, downstream, translate) {
+  if (typeof translate !== "function" || !framings.length) return null;
+  try {
+    const timeout = new Promise((resolve) => setTimeout(() => resolve(null), GATE_TRANSLATE_TIMEOUT_MS));
+    const out = await Promise.race([translate({ items: framings, downstream: downstream ?? null }), timeout]);
+    return Array.isArray(out) ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+// Stamp each staged item with two founder-plain fields before the gate returns it. Only the items the
+// founder actually REVIEWS (approvalStatus "pending") are translated — an auto-approved batch spends no
+// model call. When no translator is wired (every unit test, any run the host didn't wire one), the items
+// are returned untouched, so the gate's shape is byte-identical to before. When a translator IS wired
+// but fails or times out, both fields land as null (silent fallback to the raw subject) — never a throw.
+// SAFETY: this only ever adds the two bookkeeping fields; it never reads or mutates the item's body, so
+// the reviewable/sendable content is provably unchanged by translation.
+async function finalizeGate({ items, pendingReview, meta }, context) {
+  const translate = context?.__gateTranslate;
+  const base = { ok: true, items, pendingReview, meta };
+  if (typeof translate !== "function") return base;
+  const pendingIndexes = [];
+  for (let i = 0; i < items.length; i += 1) {
+    if (items[i]?.approvalStatus === "pending") pendingIndexes.push(i);
+  }
+  if (!pendingIndexes.length) return base;
+  const framings = pendingIndexes.map((i) => buildGateFraming(items[i]));
+  const translations = await translateGateFramings(framings, context.__gateDownstream, translate);
+  const stamped = items.slice();
+  pendingIndexes.forEach((itemIndex, k) => {
+    const t = Array.isArray(translations) ? translations[k] : null;
+    const title = firstString(t?.plainLanguageTitle, t?.title);
+    const does = firstString(t?.whatYourYesDoes, t?.does);
+    stamped[itemIndex] = {
+      ...stamped[itemIndex],
+      plainLanguageTitle: title ? title.slice(0, 80) : null,
+      whatYourYesDoes: does ?? null,
+    };
+  });
+  return { ok: true, items: stamped, pendingReview, meta };
+}
+
+function firstString(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
 export const meta = {
   id: "default",
   name: "Founder review",
@@ -74,8 +160,7 @@ export async function run(node, upstream, context) {
       gtmActionId: item.gtmActionId ?? actionId(node, item, index, context),
       gated: true,
     }));
-    return {
-      ok: true,
+    return finalizeGate({
       items,
       pendingReview: applied.pendingReview,
       meta: {
@@ -84,7 +169,7 @@ export async function run(node, upstream, context) {
         ...applied.counts,
         awaitingReview: applied.counts.pending,
       },
-    };
+    }, context);
   }
 
   // Per-item founder decisions (approve / reject / edit) — the real learning
@@ -130,8 +215,7 @@ export async function run(node, upstream, context) {
         ...editPatch,
       };
     });
-    return {
-      ok: true,
+    return finalizeGate({
       items,
       pendingReview: pending > 0,
       meta: {
@@ -139,12 +223,11 @@ export async function run(node, upstream, context) {
         rejected: items.filter((i) => i.approvalStatus === "rejected").length,
         awaitingReview: pending,
       },
-    };
+    }, context);
   }
 
   if (node.runtime?.approved) {
-    return {
-      ok: true,
+    return finalizeGate({
       items: upstream.map((item, index) => ({
         ...item,
         gtmActionId: actionId(node, item, index, context),
@@ -154,7 +237,7 @@ export async function run(node, upstream, context) {
       })),
       pendingReview: false,
       meta: { approved: upstream.length },
-    };
+    }, context);
   }
   // support both old (stage, upstream) and new (node, upstream) call signatures
   const items = upstream.map((item, index) => ({
@@ -164,10 +247,9 @@ export async function run(node, upstream, context) {
     approved: false,
     approvalStatus: "pending",
   }));
-  return {
-    ok: true,
+  return finalizeGate({
     items,
     pendingReview: true,
     meta: { awaitingReview: items.length },
-  };
+  }, context);
 }

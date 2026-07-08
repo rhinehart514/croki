@@ -80,6 +80,46 @@
   100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--gap) 0%, transparent); }
 }
 
+/* Per-tab trailing control — Stop a running run, Close a paused/finished thread. One control per tab
+   (never both crowding the row). Hidden until the tab is hovered or holds keyboard focus, so the strip
+   stays calm; reserved space (chat-tab padding-right) means the name doesn't jump when it fades in.
+   Monochrome by the one-accent rule — amber (--gap) stays reserved for the needs-you dot and the gate. */
+.chat-tab { padding-right: 24px; }
+.chat-tab-close {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  margin-left: 4px;
+  margin-right: -6px; /* pull into the reserved right padding */
+  width: 16px;
+  height: 16px;
+  border-radius: var(--r-xs, 4px);
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.chat-tab:hover .chat-tab-close,
+.chat-tab:focus-within .chat-tab-close,
+.chat-tab-close:focus-visible,
+.chat-tab-close.armed { opacity: 1; }
+.chat-tab-close:hover { color: var(--ink); background: var(--surface-2); }
+.chat-tab-close:focus-visible { outline: 2px solid var(--line-2); outline-offset: 1px; }
+/* Armed "End?" — the two-tap confirm state. Still monochrome (no amber; this isn't the gate), small and
+   legible inside the tab. */
+.chat-tab-close.armed {
+  width: auto;
+  padding: 0 5px;
+  margin-right: -3px;
+  color: var(--ink);
+  background: var(--surface-2);
+}
+.chat-tab-close.armed { font-size: 10px; font-weight: 650; letter-spacing: 0.01em; }
+.chat-tab-close-text { line-height: 1; }
+
 /* New-pipeline button pinned at the end of the strip — start another conversation without leaving. */
 .chat-tab-new {
   flex: 0 0 auto;
@@ -117,4 +157,5 @@
 
 @media (prefers-reduced-motion: reduce) {
   .chat-tab-dot.working, .chat-tab-dot.needs { animation: none; }
+  .chat-tab-close { transition: none; }
 }

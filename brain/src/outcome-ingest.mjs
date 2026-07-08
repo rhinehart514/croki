@@ -27,6 +27,7 @@
 
 import { runStore, resultStore, learningStore, gtmPathStore } from "./gtm-store.mjs";
 import { closeOutcomeLoop } from "./object-graph-projection.mjs";
+import { recordOutcomeIntoSoul } from "./soul-wiring.mjs";
 
 // The three canonical sources an outcome can arrive from. These are NAMES, not a gate — a source label
 // is an open string (§2.2); ingestion accepts any label. These exist so callers spell the common three
@@ -145,6 +146,28 @@ export function ingestOutcome(outcome = {}, options = {}) {
   );
 
   const learning = writeLearningForResult({ result, run, item, projectId, options });
+
+  // Fold a real reply/win back into the soul of the teammate that produced the item it joined to — its
+  // track record, plus a world learning capturing what landed. Only fires when the outcome joined to an
+  // item carrying an agentRef, so the signal is real and attributable. Best-effort: recording the
+  // outcome is the truth that must never fail, so a soul-write hiccup is non-fatal.
+  try {
+    if (item?.agentRef) {
+      recordOutcomeIntoSoul(
+        {
+          projectId,
+          agentRef: item.agentRef,
+          outcomeKind: result.outcomeKind,
+          message: item?.message ?? item?.draft ?? null,
+          taskId: run?.id ?? result.runId ?? null,
+          templateRef: item?.templateRef ?? null,
+        },
+        options,
+      );
+    }
+  } catch (error) {
+    console.warn(`[outcome-ingest] soul outcome-write skipped: ${error?.message ?? error}`);
+  }
 
   // Close the loop back onto the object graph: an outcome that joined to a bet's path confirms or snaps
   // the belief links that bet was testing, and draws the feedback stroke from the outcome to the bet.

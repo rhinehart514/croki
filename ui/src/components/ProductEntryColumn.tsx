@@ -19,8 +19,9 @@ export function ProductEntryColumn({
 }: {
   productName: string;
   model: ProductModel | null;
-  // Open the full product picture (the existing Product view) for the deep dive.
-  onOpenFull: () => void;
+  // Optionally open a deeper product view. When omitted, the "full picture" button is hidden — the
+  // product's understanding now lives on the main canvas, so there's no separate screen to open.
+  onOpenFull?: () => void;
 }) {
   const [open, setOpen] = useState(true);
 
@@ -97,10 +98,12 @@ export function ProductEntryColumn({
         </p>
       )}
 
-      <button type="button" className="pentry-open" onClick={onOpenFull}>
-        {hasModel ? "Open the full product picture" : "Read my product"}
-        <ArrowRight size={13} />
-      </button>
+      {onOpenFull ? (
+        <button type="button" className="pentry-open" onClick={onOpenFull}>
+          {hasModel ? "Open the full product picture" : "Read my product"}
+          <ArrowRight size={13} />
+        </button>
+      ) : null}
 
       {/* The flow-out cue: go-to-market reads to the RIGHT of the product, so the canvas visibly grows
           out of it. Decorative — the real edges live on the canvas nodes. */}

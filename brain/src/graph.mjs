@@ -398,6 +398,44 @@ export function hasApproveIntent(approvals = {}, decisions = {}) {
     || Object.values(decisions).some((d) => d?.decision === "approve" || d?.pattern?.decision === "approve");
 }
 
+// What approving at a gate actually DOES, read off the nearest downstream execute node. Deterministic
+// (code answers when it can): the plain-language "what your yes does" line is grounded in this, so the
+// gate can honestly say "nothing sends — staged locally" for a local queue vs "sends" / "publishes" for
+// a real transport. Null when no execute node is downstream of the gate (nothing leaves on approval).
+const EXECUTE_ACTION_BY_CONNECTOR = {
+  local: { verb: "stage-local", willSend: false },
+  gmail: { verb: "send", willSend: true },
+  "gmail-oauth": { verb: "send", willSend: true },
+  "gmail-transport": { verb: "send", willSend: true },
+  http: { verb: "send", willSend: true },
+  artifact: { verb: "publish", willSend: true },
+  deploy: { verb: "deploy", willSend: true },
+};
+
+export function gateDownstreamAction(gateNodeId, nodes, edges) {
+  const nodeMap = new Map((nodes ?? []).map((n) => [n.id, n]));
+  const dataEdges = (edges ?? []).filter((e) => e.edgeType === "data" || e.edgeType == null);
+  const seen = new Set([gateNodeId]);
+  let frontier = [gateNodeId];
+  while (frontier.length) {
+    const next = [];
+    for (const id of frontier) {
+      for (const edge of dataEdges) {
+        if (edge.source !== id || seen.has(edge.target)) continue;
+        seen.add(edge.target);
+        const target = nodeMap.get(edge.target);
+        if (target?.category === "execute") {
+          const connector = target.connector || "local";
+          return { connector, ...(EXECUTE_ACTION_BY_CONNECTOR[connector] ?? { verb: null, willSend: null }) };
+        }
+        next.push(edge.target);
+      }
+    }
+    frontier = next;
+  }
+  return null;
+}
+
 export async function runGraph(graph, opts = {}) {
   graph = normalizeRunContracts(graph);
   const {
@@ -438,6 +476,11 @@ export async function runGraph(graph, opts = {}) {
     // wired never sends. It carries only the delivery seam; the gate stamp on the ITEM still governs
     // WHETHER a message is eligible to send — this only governs HOW an already-approved one leaves.
     sendRunners = null,
+    // Host-injected plain-language translator for the founder gate (agent-bridge.createGateTranslator).
+    // It turns each staged item's SAFE framing (no body) into a founder-plain headline + a "what your yes
+    // does" line. Host-supplied per run and never forgeable by composition; absent (every unit test, any
+    // run the host didn't wire it) the gate stamps no plain-language fields, so its shape is unchanged.
+    gateTranslator = null,
     // Per-node wall-clock ceiling (ms). A stuck connector/fetch fails honestly at this bound instead of
     // hanging the whole run. Generous by default; a non-positive value disables it (unbounded).
     nodeTimeoutMs = DEFAULT_NODE_TIMEOUT_MS,
@@ -525,6 +568,9 @@ export async function runGraph(graph, opts = {}) {
       runId,
       originRunId: resumeResult?.runId ?? runId,
       graphId: graphId ?? "unknown",
+      // The project this run belongs to — lets the context substrate bind a drafting teammate's soul
+      // (agent-bridge reads context.__run.projectId to lead get_taste with that teammate's promoted soul).
+      projectId,
     };
     // Inject loop memory (founder decisions from prior runs) for nodes that
     // generate reviewable artifacts. Connectors opt in by reading context.__memory.
@@ -541,10 +587,16 @@ export async function runGraph(graph, opts = {}) {
     // record labelled by how solid) into the base layer, instead of the run guessing the buyer.
     if (market) context.market = market;
     if (Array.isArray(runs)) context.__state = runs;
+    // Founder-gate plain-language framing: the translator (only when the host wired one) and the
+    // deterministic descriptor of what approving here does. Gate-only, so a normal step never carries it.
+    if (node.category === "gate") {
+      if (typeof gateTranslator === "function") context.__gateTranslate = gateTranslator;
+      context.__gateDownstream = gateDownstreamAction(node.id, nodes, edges);
+    }
 
     // Stream the step lifecycle so the UI can animate the flow and reveal content
     // as each step succeeds (not one batch at the end).
-    emit({ type: "node_start", nodeId, category: node.category, kind: node.kind ?? "tool", label: node.label, ref: node.ref });
+    await emit({ type: "node_start", nodeId, category: node.category, kind: node.kind ?? "tool", label: node.label, ref: node.ref });
     const inputAudit = auditInput(node, upstream);
     let result;
     if (inputAudit.state === "blocked" || inputAudit.state === "waiting") {
@@ -595,7 +647,7 @@ export async function runGraph(graph, opts = {}) {
       }
     }
     nodeResults.set(nodeId, result);
-    emit({ type: "node_done", nodeId, result });
+    await emit({ type: "node_done", nodeId, result });
 
     // Gate node: record as pending and continue (don't stop other branches)
     if (result.pendingReview) {

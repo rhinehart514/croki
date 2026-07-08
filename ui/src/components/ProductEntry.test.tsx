@@ -50,8 +50,9 @@ describe("ProductEntry — try the sample product", () => {
     );
     // The folder picker is never touched on the sample path.
     expect(pickFolder).not.toHaveBeenCalled();
-    // The scan's headline surfaces in the preview.
-    await waitFor(() => expect(screen.getByText(/Tracking gap proven/i)).toBeTruthy());
+    // The calm read surfaces — the detected win event, and the walk-in CTA (no forced goal step, no alarm).
+    await waitFor(() => expect(screen.getByText(/signup_completed/i)).toBeTruthy());
+    expect(screen.getByRole("button", { name: /take me in/i })).toBeTruthy();
   });
 
   it("surfaces an error instead of the preview when the sample can't be loaded", async () => {

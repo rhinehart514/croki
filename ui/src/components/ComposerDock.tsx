@@ -1,41 +1,51 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { DragEvent } from "react";
 import {
-  AlertTriangle, ArrowRight, ArrowUp, BarChart3, Bot, Boxes, Check, ChevronDown, ChevronRight, Code, Database, Filter, LoaderCircle, Lightbulb, Maximize2,
-  Mic, Minimize2, PenLine, Pin, Play, Plus, Search, Send, ShieldCheck, Square, Wand2, X,
+  AlertTriangle, ArrowUp, Bot, Check, ChevronRight, LoaderCircle,
+  Lightbulb, Maximize2, Mic, Pin, Play, Plus, ShieldCheck, Square, X,
 } from "lucide-react";
-import { CrewAvatar } from "@/components/crew/CrewAvatar";
-import { agentPersona } from "@/lib/agentPersona";
 import { statusLabel } from "@/lib/status";
 import { subjectActions } from "@/lib/subjectActions";
-import { COMPOSER_VERBS, deriveVerb, frameVerbMessage, type ComposerVerb } from "@/lib/composerVerb";
-import { rosterState, type RosterState } from "@/lib/rosterState";
 import { kindIcon } from "@/lib/objectKindIcons";
 import { humanizeFieldLabel } from "@/lib/labels";
 import type { CanvasSubject, CardDetail } from "@/lib/cardDetail";
-import type { ObjectCandidate } from "@/api";
+import type { AgentBenchRow, OperatorHints } from "@/api";
 import { motion } from "motion/react";
 import { AgentPicker } from "@/components/AgentPicker";
 import { DEFAULT_MODEL, modelById } from "@/components/agent-picker-models";
-import { DockContext } from "@/components/DockContext";
 import { Collapse, Stagger, StaggerItem } from "@/lib/motion";
-import "@/styles/dock-context.css";
+// ── The four embodied response/roster components — "one inventory, one language." The same roster tile
+// renders in the @-menu, the parts tray, the idea flow, and the plan checklist. ────────────────────────
+import { RosterTile } from "@/components/composer/RosterTile";
+import { EmbodiedFlow } from "@/components/composer/EmbodiedFlow";
+import { MentionMenu } from "@/components/composer/MentionMenu";
+import { CrewFace } from "@/components/crew/CrewFace";
+import { agentPersona } from "@/lib/agentPersona";
+import {
+  buildRoster, detectMentionQuery, rankRoster,
+  type MentionEntity, type PlacedMention,
+} from "@/lib/mention";
+import { STEP_DRAG_MIME } from "@/lib/objectPalette";
+import type { StepDragPayload } from "@/components/LeftRail";
+import { GateReview } from "@/components/gate/GateReview";
+import type { GatePromote } from "@/lib/gateItem";
 import "@/styles/composer-posture.css";
 import "@/styles/composer-candidates.css";
 import "@/styles/chat-tabs.css";
-import type { ClarityKind, ContextManifest, GTMEdge, GTMGraph, GTMNode, GTMNodeCategory, GTMRunResult, OperatorEvent, OperatorSession, OperatorSessionSummary, OperatorStatus } from "@/types";
+import "@/styles/our-chat.css";
+import type { ClarityKind, GateDecision, GTMEdge, GTMGraph, GTMItem, GTMNode, GTMRunResult, OperatorEvent, OperatorSession, OperatorSessionSummary, OperatorStatus } from "@/types";
 
-// A pipeline SKETCH the operator returns when the goal is too vague to compose one graph — a named
-// shape the founder can pick from, not a draft to approve. Mirrors the backend's ambiguous-goal
-// result: { kind: "candidates", candidates: [...] }. These never run or send; picking one is what
-// starts the build (which still stops at the founder gate downstream).
+// A pipeline SHAPE the operator returns when a goal admits more than one way through — a named shape the
+// founder can pick from, not a draft to approve. Mirrors the backend's candidate result: each carries its
+// full crew (nodes with kind/ref/connector) and a gate, so it renders embodied — a chain of faces/marks —
+// not as prose. Picking one starts the build (which still stops at the founder gate downstream).
 type Candidate = { id: string; label: string; rationale: string; nodes: GTMNode[]; edges: GTMEdge[] };
 
-// ─── The ONE seam where the backend's ambiguous-goal result is read off the session ─────────────
-// The backend agent defines, in parallel, an operator capability that stages candidate pipeline
-// shapes for a vague goal. Until the exact landing field is pinned, this probes the likely spots (a
-// `pendingCandidates` field mirroring the existing `pendingIdeas`, a top-level `candidates`, or a
-// staged event whose `data.kind === "candidates"`). Returns [] when absent, so the dock degrades to
-// the normal conversation. To reconcile with the backend's real field name, change only this reader.
+// ─── The ONE seam where the backend's candidate result is read off the session ──────────────────────────
+// The operator surfaces ideation exclusively via embodied candidates now (the prose ideate path was
+// retired from the operator's toolset). This reads them off whichever field the session carries them on —
+// a `pendingCandidates` bag, a top-level `candidates`, or a staged event whose `data.kind === "candidates"`
+// — and returns [] when absent, so the dock degrades to the plain conversation.
 function normalizeCandidates(raw: unknown): Candidate[] {
   if (!Array.isArray(raw)) return [];
   const out: Candidate[] = [];
@@ -94,9 +104,9 @@ type SpeechRecognitionLike = {
 };
 
 // Operator narration arrives as markdown (the model writes tables, bold, bullets). Rendered raw
-// it's an illegible wall of pipes and asterisks — the thing that read as "broken" in the panel.
-// This is a deliberately tiny renderer: bold spans, bullet lines, and markdown tables collapsed
-// to readable "col · col" rows. Not a full markdown engine — just enough to make Claude legible.
+// it's an illegible wall of pipes and asterisks. This is a deliberately tiny renderer: bold spans,
+// bullet lines, and markdown tables collapsed to readable "col · col" rows — just enough to make Claude
+// legible, not a full markdown engine.
 function renderInline(text: string, keyBase: string): React.ReactNode[] {
   return text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean).map((part, i) =>
     part.startsWith("**") && part.endsWith("**")
@@ -152,12 +162,18 @@ const STARTERS = [
 //   tool   — a tool call (inspect product, inspect context…). RECEDES: consecutive ones collapse
 //            into one quiet "N steps" cluster so the answer never drowns under machine noise.
 //   system — session lifecycle (started / resumed). A quiet centered line.
-type Speaker = "say" | "you" | "ask" | "system" | "tool";
+// A resolved gate ("gate_resolved") is not a message — it's a settled decision, and it renders as a
+// stamped receipt line ("Released — you · 9:14 AM"), the persistent record of a call the founder made.
+type Speaker = "say" | "you" | "ask" | "system" | "tool" | "receipt" | "crew";
 function speakerOf(ev: OperatorEvent): Speaker {
   const t = ev.type;
+  if (t === "gate_resolved") return "receipt";
   if (t === "operator_note" || t === "session_completed") return "say";
   if (t === "founder_input_received") return "you";
   if (t === "founder_input_requested") return "ask";
+  // A teammate's first-person heartbeat while the run advances — rendered as its own crew bubble whose
+  // face/name resolve PER MESSAGE from the event's ref (not the single session voice).
+  if (t === "teammate_said") return "crew";
   if (t.startsWith("session_")) return "system";
   return "tool";
 }
@@ -188,46 +204,101 @@ function segmentEvents(events: OperatorEvent[]): Segment[] {
   return out;
 }
 
+// A plain-word verb-face for each tool step, read ONLY off the sanitized `data.category` the backend
+// already narrates (never the node's prompt/config/soul). So the trace reads as a sequence of real
+// actions — "Read your product", "Drafted 4 leads" — not "Running node-3".
+function stepVerb(category: unknown): string {
+  switch (category) {
+    case "source": return "Read";
+    case "enrich": return "Enriched";
+    case "generate": return "Drafted";
+    case "measure": return "Measured";
+    case "gate": return "Reached the wall";
+    default: return "Ran";
+  }
+}
+
 // The operator's work, woven into the thread: a collapsed "N steps" receipt that opens to the
 // individual calls, each with its own status dot. Defaults closed so the conversation, not the
 // tooling, is what you read — but it's one keystroke and one click from the full trace, and it never
 // hides that work happened. Fully keyboard- and screen-reader-reachable (a real disclosure widget).
-function ToolCluster({ events, idBase }: { events: OperatorEvent[]; idBase: string }) {
+// When it's the live, still-running segment (`live`), the collapsed dot breathes so the trace stays
+// honest that work is happening now.
+function ToolCluster({ events, idBase, live = false }: { events: OperatorEvent[]; idBase: string; live?: boolean }) {
   const [open, setOpen] = useState(false);
   const failed = events.some((e) => e.type === "tool_failed" || /failed/i.test(e.title));
   const listId = `cnv-tools-${idBase}`;
   const label = `${events.length} step${events.length === 1 ? "" : "s"}${failed ? ", one failed" : ""} — ${open ? "collapse" : "expand"}`;
+  const dotState = failed ? "fail" : live ? "live" : "done";
   return (
-    <div className={`cnv-tools ${open ? "open" : ""}`}>
+    <div className={`oc-steps ${open ? "open" : ""}`}>
       <button
-        className="cnv-tools-head"
+        className="oc-steps-head"
         onClick={() => setOpen((v) => !v)}
         type="button"
         aria-expanded={open}
         aria-controls={listId}
         aria-label={label}
       >
-        <ChevronRight className="cnv-tools-chev" size={13} aria-hidden="true" />
-        <span className={`cnv-tools-dot ${failed ? "fail" : "done"}`} aria-hidden="true" />
-        <span className="cnv-tools-count">{events.length} step{events.length === 1 ? "" : "s"}</span>
-        {!open ? <span className="cnv-tools-peek">{events[events.length - 1].title}</span> : null}
+        <ChevronRight className="oc-steps-chev" size={13} aria-hidden="true" />
+        <span className={`oc-steps-dot ${dotState}`} aria-hidden="true" />
+        <span className="oc-steps-count">{events.length} step{events.length === 1 ? "" : "s"}</span>
+        {!open ? <span className="oc-steps-peek">{events[events.length - 1].title}</span> : null}
       </button>
       <Collapse open={open}>
-        <ul className="cnv-tools-list" id={listId}>
-          {events.map((e) => {
+        <ul className="oc-steps-list" id={listId}>
+          {events.map((e, i) => {
             const stepFailed = e.type === "tool_failed" || /failed/i.test(e.title);
+            const verb = stepVerb((e.data ?? null)?.category);
             return (
-              <li key={e.id} className="cnv-tool">
-                <span className={`cnv-tool-dot ${stepFailed ? "fail" : "done"}`} aria-hidden="true" />
-                <span className="cnv-tool-text">
-                  <span className="cnv-tool-title">{e.title}</span>
-                  {e.detail ? <span className="cnv-tool-detail">{e.detail}</span> : null}
+              <li key={e.id} className="oc-step" style={{ animationDelay: `${Math.min(i * 0.045, 0.5)}s` }}>
+                <span className={`oc-step-node ${stepFailed ? "fail" : "done"}`} aria-hidden="true">
+                  {stepFailed ? <X size={7} strokeWidth={3} /> : <Check size={8} strokeWidth={3} />}
+                </span>
+                <span className="oc-step-text">
+                  <span className="oc-step-title"><span className="oc-step-kind">{verb}</span>{e.title}</span>
+                  {e.detail ? <span className="oc-step-detail">{e.detail}</span> : null}
                 </span>
               </li>
             );
           })}
         </ul>
       </Collapse>
+    </div>
+  );
+}
+
+// The first of two stops — "your call". The stem reads as a real question; each option is a soft,
+// tappable chip. Tapping one drafts its label into the reply (append-only, unchanged) AND marks it as
+// chosen in place — a decision persists as a receipt, per doctrine, with the radio filled in the calm
+// green. Local pick-state resets whenever the question changes (the parent keys this by the event id).
+function AskCard({ event, onPick }: { event: OperatorEvent; onPick: (label: string) => void }) {
+  const [picked, setPicked] = useState<number | null>(null);
+  const stem = stripOptions(event.title) || event.title;
+  const fromTitle = parseAskOptions(event.title);
+  const opts = fromTitle.length ? fromTitle : parseAskOptions(event.detail ?? "");
+  return (
+    <div className="oc-card">
+      <div className="oc-card-h">
+        <span className="oc-card-tag">Your call</span>
+        <span className="oc-card-q">{stem}</span>
+      </div>
+      {event.detail ? <div className="oc-card-detail"><MarkdownLite text={event.detail} /></div> : null}
+      {opts.map((o, i) => (
+        <button
+          type="button"
+          key={i}
+          className={`oc-opt ${picked === i ? "picked" : ""}`}
+          aria-pressed={picked === i}
+          onClick={() => { onPick(o.label); setPicked(i); }}
+        >
+          <span className="oc-opt-pick" aria-hidden="true" />
+          <span className="oc-opt-body">
+            <span className="oc-opt-t">{o.label}</span>
+            {o.detail ? <span className="oc-opt-d">{o.detail}</span> : null}
+          </span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -243,8 +314,7 @@ const CLARITY_KINDS: { kind: ClarityKind; label: string }[] = [
 
 // Pin — the quiet affordance on each Claude paragraph in the thread. It appears on hover, and one
 // click opens a tiny menu of the four clarity kinds; choosing one pins THAT message's text onto the
-// canvas as a durable card via onPin. Self-contained (own open state, own outside-click), so adding
-// it to a message never touches the conversation rendering around it.
+// canvas as a durable card via onPin.
 function PinControl({ text, onPin }: { text: string; onPin: (kind: ClarityKind, text: string) => void }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -291,303 +361,16 @@ function PinControl({ text, onPin }: { text: string; onPin: (kind: ClarityKind, 
   );
 }
 
-// ─── The build room (expanded dock) ─────────────────────────────────────────────────────────────
-// The right zone of the expanded dock: a live slice of the real canvas. The graph's nodes render in
-// the product's own card language (icon tile + eyebrow + label, amber gate, green grounded), the node
-// executing right now lit by the rainbow "happening now" signal. Watch it build while you keep talking.
-const CATEGORY_META: Record<GTMNodeCategory, { eyebrow: string; Icon: typeof Search }> = {
-  source: { eyebrow: "Source", Icon: Search },
-  enrich: { eyebrow: "Enrich", Icon: Database },
-  filter: { eyebrow: "Filter", Icon: Filter },
-  generate: { eyebrow: "Draft", Icon: PenLine },
-  gate: { eyebrow: "Gate", Icon: ShieldCheck },
-  execute: { eyebrow: "Send", Icon: Send },
-  measure: { eyebrow: "Measure", Icon: BarChart3 },
-  context: { eyebrow: "Context", Icon: Boxes },
-  resource: { eyebrow: "Connection", Icon: Boxes },
-};
-// Open `kind` steps (agent/skill/code/mcp) carry no `category` — it's an optional label, not the
-// dispatch key (see AGENTS.md). Falling through to CATEGORY_META for them mislabeled every agent
-// step "Source" here. Mirrors GraphCanvas.tsx's KIND_META so a step reads the same kind in both places.
-const KIND_META: Partial<Record<NonNullable<GTMNode["kind"]>, { eyebrow: string; Icon: typeof Search }>> = {
-  agent: { eyebrow: "Agent", Icon: Bot },
-  skill: { eyebrow: "Skill", Icon: Wand2 },
-  code: { eyebrow: "Code", Icon: Code },
-  mcp: { eyebrow: "Connector", Icon: Boxes },
-};
-function buildCardMeta(node: GTMNode) {
-  if (node.kind && node.kind !== "tool" && KIND_META[node.kind]) return KIND_META[node.kind]!;
-  return CATEGORY_META[node.category] ?? CATEGORY_META.source;
-}
-
-function BuildCard({ node, live, ghost }: { node: GTMNode; live: boolean; ghost: boolean }) {
-  const meta = buildCardMeta(node);
-  const isGate = node.category === "gate";
-  const { Icon } = meta;
-  return (
-    <div className={`dock-build-card ${isGate ? "gate" : ""} ${live ? "live" : ""} ${ghost ? "ghost" : ""}`}>
-      <div className="dock-build-card-head">
-        <span className="dock-build-card-ico">{live ? null : <Icon size={14} aria-hidden="true" />}</span>
-        <span className="dock-build-card-eyebrow">{meta.eyebrow}</span>
-        {isGate ? <span className="dock-build-card-tag">your gate</span> : null}
-        {live ? <span className="dock-build-card-tag now">building</span> : null}
-        {ghost && !live ? <span className="dock-build-card-tag proposed">proposed</span> : null}
-      </div>
-      <div className="dock-build-card-label">{node.label}</div>
-    </div>
-  );
-}
-
-// ─── The plan roster (the run's live checklist) ─────────────────────────────────
-// The composed plan is known the instant a build/run starts, so it renders as a checklist: one row per
-// step, each wearing the pixel face of the agent doing it (a deterministic step wears its tool icon; the
-// founder gate wears amber). Row state binds to the streamed run — waiting until the step starts, a live
-// rainbow while it runs, struck off the moment it lands — in lockstep with the canvas node that the same
-// `runningNodeId` lights. No fabricated progress: a row only advances on a real streamed event. The
-// binding itself lives in lib/rosterState.ts (pure + unit-tested); this file just renders it.
-
-// One checklist row: leading status tick, the step's face, its plain-English name, and a state word.
-function RosterRow({ node, state }: { node: GTMNode; state: RosterState }) {
-  const isGate = node.category === "gate";
-  // Any node with a ref is a rented mind (agent / skill / connector) — give it a face. Deterministic
-  // steps (code, tool, workbench) and the founder gate carry no ref and wear their own mark instead.
-  const persona = !isGate && node.ref ? agentPersona(node.ref, node.label ?? node.agentPrompt) : null;
-  const meta = buildCardMeta(node);
-  const { Icon } = meta;
-  const eyebrow = isGate ? "Your gate" : persona ? persona.role : meta.eyebrow;
-  const stateWord =
-    state === "ghost" ? "Proposed"
-    : state === "working" ? "Working"
-    : state === "gate" ? "Your call"
-    : state === "stuck" ? "Needs a look"
-    : state === "done" ? "Done"
-    : isGate ? "Your call"          // an upcoming gate names the founder's step ahead of time
-    : "Waiting";
-  return (
-    <div className={`roster-row ${state}${isGate ? " is-gate" : ""}`}>
-      <span className="roster-tick" aria-hidden="true">
-        {state === "done" ? <Check size={11} strokeWidth={3} /> : null}
-      </span>
-      <span className="roster-face" aria-hidden="true">
-        {isGate ? <ShieldCheck size={16} />
-          : persona ? <CrewAvatar agentRef={node.ref!} family={persona.family} size={30} state={state === "working" ? "working" : "idle"} />
-          : <Icon size={15} />}
-      </span>
-      <span className="roster-body">
-        <span className="roster-eyebrow">{eyebrow}</span>
-        <span className="roster-name">{node.label}</span>
-      </span>
-      <span className="roster-state">{stateWord}</span>
-    </div>
-  );
-}
-
-function BuildRail({ graph, runningNodeId, proposedNodeIds, result }: {
-  graph: GTMGraph;
-  runningNodeId: string | null;
-  // Steps Claude has proposed but the founder hasn't accepted yet — rendered as ghost (dashed) rows,
-  // the same "not yet real" language as the main canvas, plus counted out in the summary below.
-  proposedNodeIds?: Set<string> | null;
-  // The run so far, streamed in step by step, so each row reflects a real event — never a guess.
-  result?: GTMRunResult | null;
-}) {
-  // Plan order: top-down by canvas position, the same reading order the overview canvas uses.
-  const nodes = [...graph.nodes]
-    .filter((n) => n.category !== "context" && n.category !== "resource")
-    .sort((a, b) => (a.position.y - b.position.y) || (a.position.x - b.position.x));
-  const proposedCount = proposedNodeIds ? nodes.filter((n) => proposedNodeIds.has(n.id)).length : 0;
-  const doneCount = result ? nodes.filter((n) => result.nodes[n.id] && result.nodes[n.id]!.ok).length : 0;
-  const running = doneCount > 0 || nodes.some((n) => n.id === runningNodeId);
-  return (
-    <div className="dock-build" aria-label="The plan, striking off live as it runs">
-      <div className="dock-build-head">
-        <span className="dock-build-head-dot" aria-hidden="true" />
-        <span className="dock-build-head-label">Plan</span>
-        <span className="dock-build-head-count">
-          {proposedCount > 0 ? `${proposedCount} proposed`
-            : running ? `${doneCount} of ${nodes.length} done`
-            : `${nodes.length} step${nodes.length === 1 ? "" : "s"}`}
-        </span>
-      </div>
-      <div className="dock-roster">
-        {nodes.map((n) => (
-          <RosterRow
-            key={n.id}
-            node={n}
-            state={rosterState(n, runningNodeId, result, proposedNodeIds?.has(n.id) ?? false)}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Candidate pipeline sketches (an ambiguous goal returns a few shapes, not a stall) ──────────
-// When the goal is too vague to compose one graph, the operator hands back a small set of concrete
-// pipeline SHAPES. The founder picks one; that pick is what starts the build. These are NOT gate
-// items: no amber, no ✓/✕ approve gesture — picking a shape is choosing a direction, not approving a
-// send. One sketch = its name, a one-line why, and its steps as the same ghost cards the build room
-// uses, so the shape reads in the product's own card language.
-function CandidateSketch({ candidate, picked, dimmed, onPick }: {
-  candidate: Candidate;
-  picked: boolean;
-  dimmed: boolean;
-  onPick: () => void;
-}) {
-  const nodes = [...candidate.nodes]
-    .filter((n) => n.category !== "context" && n.category !== "resource")
-    .sort((a, b) => (a.position.y - b.position.y) || (a.position.x - b.position.x));
-  return (
-    <div className={`cnv-cand ${picked ? "picked" : ""} ${dimmed ? "dimmed" : ""}`}>
-      <div className="cnv-cand-head">
-        <span className="cnv-cand-label">{candidate.label}</span>
-        <button className="cnv-cand-pick" type="button" onClick={onPick} disabled={dimmed || picked}>
-          {picked ? "Building…" : "Build this"}
-        </button>
-      </div>
-      {candidate.rationale ? <p className="cnv-cand-why">{candidate.rationale}</p> : null}
-      {nodes.length ? (
-        <div className="cnv-cand-flow">
-          {nodes.map((n, i) => (
-            <div className="cnv-cand-step" key={n.id}>
-              <BuildCard node={n} live={false} ghost />
-              {i < nodes.length - 1 ? <span className="dock-build-edge" aria-hidden="true" /> : null}
-            </div>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function CandidateChoices({ candidates, pickedId, onPick }: {
-  candidates: Candidate[];
-  pickedId: string | null;
-  onPick: (candidate: Candidate) => void;
-}) {
-  return (
-    <div className="cnv-cands" role="group" aria-label="Pipeline shapes to choose from">
-      <div className="cnv-cands-head">
-        <Boxes size={13} aria-hidden="true" />
-        <div className="cnv-cands-head-text">
-          <strong>A few ways to shape this</strong>
-          <span>Pick one and Claude builds it. Nothing runs or sends until your gate.</span>
-        </div>
-      </div>
-      <div className="cnv-cands-list">
-        {candidates.map((c) => (
-          <CandidateSketch
-            key={c.id}
-            candidate={c}
-            picked={pickedId === c.id}
-            dimmed={!!pickedId && pickedId !== c.id}
-            onPick={() => onPick(c)}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// A canvas object's type, in founder words — "value_prop"/"valueProposition" → "Value proposition",
-// so the attached header reads "Claude · editing Value proposition", never an internal token. Routes
-// through the shared field-label map so every surface names an object kind the same plain way.
+// A canvas object's type, in founder words — "value_prop"/"valueProposition" → "Value proposition".
 function humanizeKind(kind: string): string {
   return humanizeFieldLabel(kind) || "Block";
 }
 
-// ─── Per-card ideation (the on-card "+" seam) ───────────────────────────────────────────────────
-// When the founder clicks a card's "+", the host runs the real grounded ideate and hands the returning
-// candidate cards down here. This renders them as a decidable list — nothing is added until the founder
-// clicks "add to canvas" on a specific one, at which point the host writes a real draft card joined to
-// the source. Distinct from the pipeline candidates above: these are OBJECTS (a message, a trigger),
-// not pipeline shapes, and adding one lands a gray DRAFT card, never a send.
-type ObjectIdeationState = {
-  sourceId: string;
-  sourceLabel: string;
-  target: string;
-  status: "loading" | "done" | "error";
-  candidates: ObjectCandidate[];
-  // Claude's plain-language reasoning, streamed live as it ideates (empty until the first delta lands).
-  reasoning: string;
-  error?: string | null;
-};
-
-// Strip a trailing partial JSON fence (backticks the stream cut mid-write) so no code marker flickers in.
-function cleanReasoning(text: string) {
-  return text.replace(/`+\s*$/, "").trim();
-}
-function ObjectIdeationChoices({ ideation, onAdd, onDismiss }: {
-  ideation: ObjectIdeationState;
-  onAdd: (candidate: ObjectCandidate) => void;
-  onDismiss: () => void;
-}) {
-  const { target, sourceLabel, status, candidates } = ideation;
-  const reasoning = cleanReasoning(ideation.reasoning || "");
-  return (
-    <div className="cnv-cands obj-ideate" role="group" aria-label={`Ideas for ${target}`}>
-      <div className="cnv-cands-head">
-        <Lightbulb size={13} aria-hidden="true" />
-        <div className="cnv-cands-head-text">
-          <strong>Claude <span aria-hidden="true">·</span> ideating {target}</strong>
-          <span>for “{sourceLabel}”. Add the ones you like — each lands a draft card. Nothing sends.</span>
-        </div>
-        <button className="obj-ideate-x" type="button" aria-label="Dismiss these ideas" title="Dismiss" onClick={onDismiss}>
-          <X size={13} />
-        </button>
-      </div>
-      {/* Live reasoning: the founder watches Claude think, in plain words, as it ideates. Rendered as a
-          Claude say-beat with the blue-violet "working" accent while streaming. Once the first delta
-          lands this replaces the pulsing orb; when done it stays visible above the candidates. */}
-      {reasoning ? (
-        <div className="obj-ideate-reasoning" role="status">
-          <span className="obj-ideate-reasoning-eyebrow">
-            {status === "loading" ? <span className="obj-ideate-orb" aria-hidden="true" /> : null}
-            Claude{status === "loading" ? " · thinking" : ""}
-          </span>
-          <div className="cnv-say-body"><MarkdownLite text={reasoning} /></div>
-        </div>
-      ) : status === "loading" ? (
-        <div className="obj-ideate-working" role="status">
-          <span className="obj-ideate-orb" aria-hidden="true" />
-          <span>Claude is thinking through {target}…</span>
-        </div>
-      ) : null}
-      {status === "error" || ideation.error ? (
-        <p className="obj-ideate-error">{ideation.error || "Couldn't ideate right now — try again."}</p>
-      ) : null}
-      {status === "done" && candidates.length === 0 ? (
-        <p className="cnv-cand-why">No ideas came back for this card. Try a different card or ask in the composer.</p>
-      ) : null}
-      {candidates.length ? (
-        <div className="cnv-cands-list">
-          {candidates.map((c) => (
-            <div className="cnv-cand obj-ideate-cand" key={c.id}>
-              <div className="obj-ideate-cand-body">
-                <span className="cnv-cand-label">{c.statement}</span>
-                {c.type ? <span className="obj-ideate-cand-type">{humanizeKind(c.type)}</span> : null}
-              </div>
-              {c.rationale ? <p className="cnv-cand-why">{c.rationale}</p> : null}
-              <button className="obj-ideate-add" type="button" onClick={() => onAdd(c)}>
-                <ArrowRight size={13} aria-hidden="true" /> add to canvas
-              </button>
-            </div>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 // ─── The card face (a selected object graph card, folded into the top of the composer) ──────────
 // When the founder selects a card on the object graph, the composer BECOMES that card: this face sits
-// pinned at the top of the panel and the conversation/ideation/input scope to it below. It's the retired
-// right-dock inspector, moved here whole — the state-colored type chip + maturity, the statement, the
-// evidence receipts (a guess reads softer than a grounded fact), a clickable Related list that re-targets
-// the composer to that card, a weakness line when present, and the Claude action chips (each drops its
-// phrasing into the input, editable — never a bare fire). Everything is clamped so it stays scannable.
-// The kind glyph for a card face. A plain helper (not a component) so the icon lookup stays out of
-// render — the same shape as ObjectGraphCanvas's cardIcon.
+// pinned at the top and the conversation/input scope to it below. The state-colored type chip + maturity,
+// the statement, the evidence receipts, a clickable Related list, a weakness line, and the Claude action
+// chips (each drops its phrasing into the input, editable — never a bare fire).
 function cardFaceIcon(type: string) {
   const Icon = kindIcon(type);
   return <Icon size={13} aria-hidden="true" />;
@@ -670,14 +453,8 @@ function SubjectCardFace({ detail, onClose, onAction, onRelated }: {
   );
 }
 
-// The persistent co-pilot. Always docked, never summoned: your channels at the head, the
-// operator's live narration in the middle, one input at the foot. Talking to Claude here
-// either starts a new session (when idle) or continues the current one — one conversation.
-// A founder decision that arrives as a numbered list in the ask text ("1. **The win event** — …")
-// is a multiple-choice question wearing prose. Pull the choices out so they can be tapped instead of
-// re-typed. Each option is a bold/leading label plus an optional detail clause; anything that isn't a
-// list item is left for the stem. Returns no options when the ask is genuinely open-ended — the card
-// then falls back to a plain reply, never a broken picker.
+// A founder decision that arrives as a numbered list in the ask text ("1. **The win event** — …") is a
+// multiple-choice question wearing prose. Pull the choices out so they can be tapped instead of re-typed.
 type AskOption = { label: string; detail: string };
 function parseAskOptions(text: string): AskOption[] {
   const options: AskOption[] = [];
@@ -701,8 +478,7 @@ function parseAskOptions(text: string): AskOption[] {
   return options;
 }
 
-// Strip the option lines (and the "if it's more than one…" meta) out of the ask, leaving just the
-// question being asked — the stem the founder reads first.
+// Strip the option lines out of the ask, leaving just the question — the stem the founder reads first.
 function stripOptions(text: string): string {
   return String(text ?? "")
     .split(/\r?\n/)
@@ -713,110 +489,70 @@ function stripOptions(text: string): string {
     .trim();
 }
 
-// ─── The verb-scoped send control (a canvas object is selected) ─────────────────────────────────
-// When the founder has a node or card selected, the plain send arrow becomes a VERB chip: it names the
-// action pressing send performs on that object — Draft, Connect, Split, Stage, Ask … — derived
-// deterministically from the selection kind and whatever's typed (see composerVerb.ts). The caret opens
-// a menu to change it. Monochrome throughout; only the gate verb (Stage) wears amber, because staging is
-// the one move that reaches the founder gate. The change never touches the free-chat send (no subject).
-function VerbSend({ verb, disabled, submitting, onSend, onPick }: {
-  verb: ComposerVerb;
-  disabled: boolean;
-  submitting: boolean;
-  onSend: () => void;
-  onPick: (id: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => { if (!wrapRef.current?.contains(e.target as Node)) setOpen(false); };
-    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onEsc);
-    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onEsc); };
-  }, [open]);
-  return (
-    <div className={`composer-verb ${verb.gate ? "gate" : ""} ${open ? "open" : ""}`} ref={wrapRef}>
-      <button
-        className="composer-verb-go"
-        type="button"
-        disabled={disabled}
-        onClick={onSend}
-        aria-label={`${verb.label} — send to Claude`}
-        title={`${verb.label} — ${verb.hint}`}
-      >
-        {submitting ? <LoaderCircle className="spin" /> : (
-          <>
-            <span className="composer-verb-label">{verb.label}</span>
-            <ArrowUp size={15} aria-hidden="true" />
-          </>
-        )}
-      </button>
-      <button
-        className="composer-verb-caret"
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label="Change the action"
-        title="Change the action"
-        disabled={submitting}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <ChevronDown size={13} aria-hidden="true" />
-      </button>
-      {open ? (
-        <div className="composer-verb-menu" role="menu">
-          {COMPOSER_VERBS.map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              role="menuitemradio"
-              aria-checked={v.id === verb.id}
-              className={`composer-verb-item ${v.id === verb.id ? "active" : ""} ${v.gate ? "gate" : ""}`}
-              onClick={() => { onPick(v.id); setOpen(false); }}
-            >
-              <span className="composer-verb-item-label">{v.label}</span>
-              <span className="composer-verb-item-hint">{v.hint}</span>
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 // ─── Chat tabs (one per pipeline the founder is running in parallel) ────────────────────────────
-// The backend already drives multiple operator sessions at once; this strip is where they get a home.
-// Each tab wears a status dot — working (pulsing), needs-you (amber), or done (a quiet ring) — so the
-// founder's actual job, "which pipeline is waiting on me," reads at a glance. The active pill springs
-// between tabs via Motion's shared layoutId, the same felt motion as the rest of the app.
 type ChatTabState = "working" | "needs" | "done";
 function chatTabState(status: OperatorStatus): ChatTabState {
   if (status === "waiting_for_gate" || status === "waiting_for_proposal" || status === "waiting_for_ideas" || status === "waiting_for_input") return "needs";
   if (status === "running" || status === "ready") return "working";
   return "done"; // completed · cancelled · blocked · failed · interrupted
 }
-// A tab's name: the session's short summary if it has one, else its goal, else a fallback. The CSS
-// clamps the width and ellipsizes, so a long goal never blows out the strip.
 function chatTabName(s: OperatorSessionSummary): string {
-  return (s.summary || s.goal || "Untitled pipeline").trim();
+  const raw = (s.goal || s.summary || "Untitled pipeline").replace(/^\[[^\]]*\]\s*/, "").trim();
+  return raw || "Untitled pipeline";
 }
 
-function ChatTabs({ roster, activeId, onSwitch, onNew }: {
+function ChatTabs({ roster, activeId, onSwitch, onNew, onStop, onClose }: {
   roster: OperatorSessionSummary[];
   activeId: string | null;
   onSwitch: (id: string) => void;
   onNew?: () => void;
+  // End a running thread (routes through the authorized cancel path) / dismiss an idle or finished one.
+  // A tab shows exactly one trailing control on hover: Stop for a live run, Close for a paused/done thread.
+  onStop?: (id: string) => void | Promise<void>;
+  onClose?: (id: string) => void;
 }) {
-  // Stable order — oldest first — so a tab never jumps position when its status changes; the dot
-  // carries the state, the slot stays put. (Sorting by status would reshuffle tabs under the cursor.)
   const tabs = [...roster].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  // Two-tap confirm for a tab that has something to lose — a running run or a pending gate. The first tap
+  // on its control ARMS it (swaps to a small "End?"), the second tap within ~3s confirms; switching tabs
+  // or the timeout disarms. A finished tab has nothing to lose, so it closes on a single tap, no arm.
+  const [armed, setArmed] = useState<string | null>(null);
+  const armTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const disarm = () => {
+    if (armTimer.current) { clearTimeout(armTimer.current); armTimer.current = null; }
+    setArmed(null);
+  };
+  const arm = (id: string) => {
+    if (armTimer.current) clearTimeout(armTimer.current);
+    setArmed(id);
+    armTimer.current = setTimeout(() => setArmed(null), 3000);
+  };
+  useEffect(() => () => { if (armTimer.current) clearTimeout(armTimer.current); }, []);
+
   return (
     <div className="chat-tabs" role="tablist" aria-label="Your pipelines">
       {tabs.map((s) => {
         const active = s.id === activeId;
         const state = chatTabState(s.status);
+        const running = state === "working";
+        // Confirm-required for anything not finished: a live run OR a tab waiting on a founder decision.
+        // Never silently drop a run mid-flight or a pending gate.
+        const confirmRequired = state !== "done";
+        const isArmed = armed === s.id;
+        const handleControl = (e: React.MouseEvent) => {
+          e.stopPropagation();
+          if (running) {
+            // Stopping a live run: arm first, confirm on the second tap.
+            if (confirmRequired && !isArmed) { arm(s.id); return; }
+            disarm();
+            void onStop?.(s.id);
+          } else {
+            // Closing a paused/finished thread. A pending-gate tab still confirms; a done tab closes at once.
+            if (confirmRequired && !isArmed) { arm(s.id); return; }
+            disarm();
+            onClose?.(s.id);
+          }
+        };
+        const controlLabel = running ? `Stop ${chatTabName(s)}` : `Close ${chatTabName(s)}`;
         return (
           <button
             key={s.id}
@@ -825,7 +561,8 @@ function ChatTabs({ roster, activeId, onSwitch, onNew }: {
             aria-selected={active}
             className={`chat-tab ${active ? "active" : ""}`}
             title={chatTabName(s)}
-            onClick={() => onSwitch(s.id)}
+            onClick={() => { if (isArmed) disarm(); onSwitch(s.id); }}
+            onBlur={(e) => { if (isArmed && !e.currentTarget.contains(e.relatedTarget as Node)) disarm(); }}
           >
             {active ? (
               <motion.span
@@ -838,6 +575,21 @@ function ChatTabs({ roster, activeId, onSwitch, onNew }: {
               <span className={`chat-tab-dot ${state}`} aria-hidden="true" />
               <span className="chat-tab-name">{chatTabName(s)}</span>
             </span>
+            {(onStop || onClose) ? (
+              <span
+                role="button"
+                tabIndex={0}
+                className={`chat-tab-close ${isArmed ? "armed" : ""}`}
+                aria-label={isArmed ? `Confirm — ${controlLabel}` : controlLabel}
+                title={isArmed ? "End this pipeline?" : controlLabel}
+                onClick={handleControl}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleControl(e as unknown as React.MouseEvent); }
+                }}
+              >
+                {isArmed ? <span className="chat-tab-close-text">End?</span> : running ? <Square size={11} /> : <X size={13} />}
+              </span>
+            ) : null}
           </button>
         );
       })}
@@ -850,147 +602,232 @@ function ChatTabs({ roster, activeId, onSwitch, onNew }: {
   );
 }
 
+// ─── Placed mention chips (the @-team the founder named, rendered as roster tiles) ──────────────────────
+// The mentions placed in the sentence, surfaced as removable roster tiles below the line so the founder
+// can see (and drop) exactly which teammates and capabilities the turn will steer toward. Same RosterTile
+// that renders in the @-menu, the parts tray, the idea flow, and the plan — one inventory, one language.
+function MentionChips({ mentions, onRemove }: {
+  mentions: PlacedMention[];
+  onRemove: (m: PlacedMention) => void;
+}) {
+  if (!mentions.length) return null;
+  return (
+    <div className="cmp-chips" role="list" aria-label="Teammates and capabilities in this message">
+      {mentions.map((m) => (
+        <span key={`${m.kind}:${m.id}`} className={`cmp-chip ${m.gated ? "gated" : ""}`} role="listitem">
+          {m.kind === "capability"
+            ? <RosterTile kind="capability" id={m.id} size="xs" />
+            : <RosterTile kind="agent" ref={m.ref ?? m.id} size="xs" />}
+          <span className="cmp-chip-label">{m.label}</span>
+          <button
+            className="cmp-chip-x"
+            type="button"
+            aria-label={`Remove ${m.label}`}
+            title={`Remove ${m.label}`}
+            onClick={() => onRemove(m)}
+          >
+            <X size={11} aria-hidden="true" />
+          </button>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// Turn a picked roster entity / dragged step into the structured mention the send path binds.
+function entityToPlaced(entity: MentionEntity): PlacedMention {
+  if (entity.kind === "agent") return { kind: "agent", id: entity.id, ref: entity.ref, label: entity.label, gated: false };
+  return { kind: "capability", id: entity.id, label: entity.label, gated: entity.gated };
+}
+function dragToPlaced(payload: StepDragPayload): PlacedMention {
+  if (payload.kind === "capability") return { kind: "capability", id: payload.id, label: payload.name, gated: payload.gated };
+  return { kind: "agent", id: payload.ref, ref: payload.ref, label: payload.label, gated: false };
+}
+
+// ─── The crew voice (who speaks a `say` turn) ───────────────────────────────────────────────────
+// A conversation is spoken by the crew, never by a faceless "Claude". Take the first real teammate we
+// can name — an agent node in the running graph, else the founder's first bench teammate — and fall back
+// to a stable crew identity when neither is known. Resolves to a real Notionists face + a plain-English
+// role, so every crew turn has a person behind it.
+type CrewVoice = { ref: string; job?: string; name: string; role: string };
+// Resolve ONE teammate's face + name + role from a ref against the bench — the shared resolver a `say`
+// turn and a per-message crew heartbeat both use, so a face never drifts between them. A ref that isn't
+// on the bench still lands a real role (agentPersona reads the ref) and a monogram face downstream.
+// nameHint is the node's own label, used when the bench carries no name for this ref.
+function voiceForRef(ref: string | null | undefined, bench: AgentBenchRow[] | null, nameHint?: string): CrewVoice {
+  const resolved = ref || "gtm-compose-workflow";
+  const row = bench?.find((b) => b.ref === resolved) ?? null;
+  const persona = agentPersona(resolved, row?.job);
+  return { ref: resolved, job: row?.job, name: nameHint?.trim() || row?.name?.trim() || persona.role, role: persona.role };
+}
+// The session-level voice for a `say` turn — the first real teammate in the running graph, else the
+// founder's first bench teammate, else a stable crew identity.
+function sessionVoice(graph: GTMGraph | null, bench: AgentBenchRow[] | null): CrewVoice {
+  const agentNode = graph?.nodes.find((n) => n.kind === "agent" && n.ref);
+  const ref = agentNode?.ref ?? bench?.find((b) => b.ref)?.ref ?? "gtm-compose-workflow";
+  return voiceForRef(ref, bench);
+}
+
+// A friendly clock stamp ("9:14 AM") from an ISO timestamp — for receipts and turn times.
+function clockTime(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+// ─── The opening briefing ───────────────────────────────────────────────────────────────────────
+// One row per live pipeline (the same roster the tabs read): a state dot — a decision waiting is amber,
+// working is neutral, quiet is hollow — the pipeline's name, and one plain line about where it stands.
+// The host may hand a fuller `briefing` down later; until then this is the honest client-side read.
+type BriefingRow = { id: string; name: string; state: "needs" | "work" | "quiet"; what: string };
+type Briefing = { eyebrow: string; rows: BriefingRow[] };
+
+function briefingStateOf(status: OperatorStatus): BriefingRow["state"] {
+  const s = chatTabState(status);
+  return s === "needs" ? "needs" : s === "working" ? "work" : "quiet";
+}
+function briefingLine(s: OperatorSessionSummary): string {
+  const state = chatTabState(s.status);
+  if (state === "needs") return "waiting at your gate";
+  if (state === "working") return s.summary?.trim() || "working…";
+  return s.summary?.trim() || "quiet for now";
+}
+function deriveBriefing(roster: OperatorSessionSummary[]): Briefing {
+  const rows = [...roster]
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .map((s) => ({ id: s.id, name: chatTabName(s), state: briefingStateOf(s.status), what: briefingLine(s) }));
+  const now = new Date();
+  const eyebrow = `${now.toLocaleDateString([], { weekday: "long" })}, ${now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+  return { eyebrow, rows };
+}
+
 export function ComposerDock({
-  session, running, boundChannelName, onSend, onCancel, onReviewGate,
-  roster = [], activeSessionId = null, onSwitchSession, onNewChat,
+  session, running, onSend, onCancel, onReviewGate,
+  bench = null,
+  roster = [], activeSessionId = null, onSwitchSession, onNewChat, onStopSession, onCloseSession,
   floating = false, focusSignal = 0, recede = false,
-  contextManifest = null, onOpenGrounding, onOpenPicture, onIdeate,
   posture, onExitPosture, onPin,
-  graph = null, runningNodeId = null, proposedNodeIds = null, result = null,
+  graph = null,
   subject = null, onClearSubject, onRetargetSubject, isNavCommand,
   onProposeCandidates, onBuildCandidate,
-  objectIdeation = null, onAddObjectCandidate, onDismissObjectIdeation,
+  briefing = null,
+  onSubmitGateReview, onRefineItem, onRecordItemOutcome,
+  gateLearned = 0, gateOffer = null, gatePromote,
   seed = null, startOpen = false,
+  // NOTE: `boundChannelName`, `runningNodeId`, `proposedNodeIds`, `result`, `onEditStep`, and `onRunPlan`
+  // are still accepted in the type below (the App call site passes them) but intentionally left un-bound
+  // here — the pre-run plan checklist and the raw channel label were retired in the warm redesign.
 }: {
   session: OperatorSession | null;
   running: boolean;
-  // The founder's live pipelines — one operator session each, all running server-side in parallel. The
-  // tab strip renders them; `activeSessionId` is the one on screen; switching swaps the conversation (the
-  // host also follows the tab to that pipeline's graph). `onNewChat` starts another. All optional so a
-  // caller that never passes a roster keeps the plain single-conversation dock.
+  // The founder's crew — the same bench the rail reads. Feeds the @-mention roster and the parts tray so
+  // "@" autocompletes teammates and the summoned tray shows their faces. null while loading; empty is fine.
+  bench?: AgentBenchRow[] | null;
+  // The founder's live pipelines — one operator session each. The tab strip renders them; `activeSessionId`
+  // is the one on screen; switching swaps the conversation. `onNewChat` starts another.
   roster?: OperatorSessionSummary[];
   activeSessionId?: string | null;
   onSwitchSession?: (id: string) => void;
   onNewChat?: () => void;
-  // The canvas↔chat tie: the object the founder handed to Claude from the canvas. A node-graph step
-  // shows the lightweight header; an object-graph card carries `detail`, and the composer BECOMES that
-  // card — its face pinned at the top. The host frames the next message with its context and clears it.
+  // Per-tab lifecycle: STOP a running thread (routes through the authorized cancel path) or CLOSE a
+  // paused/finished one (a client-side dismissal). Threaded straight to ChatTabs — no dock-side logic.
+  onStopSession?: (id: string) => void | Promise<void>;
+  onCloseSession?: (id: string) => void;
+  // The canvas↔chat tie: the object the founder handed to Claude from the canvas. A node-graph step shows
+  // the lightweight header; an object-graph card carries `detail` and the composer BECOMES that card.
   subject?: CanvasSubject | null;
   onClearSubject?: () => void;
-  // A Related row on the card face re-targets the composer to that card. The host points the subject at
-  // it, which flips the canvas selection and emits the new card's full detail back — the panel never
-  // closes. Absent → the Related rows still render but don't re-target.
   onRetargetSubject?: (rel: { id: string; name: string }) => void;
   // True when the text is a canvas navigation command ("go to the gate") — steering, not a question.
-  // These are allowed EVEN while Claude is working: they move the camera and never reach the operator.
   isNavCommand?: (text: string) => boolean;
-  // The channel the operator session is editing, shown as a quiet sub-label in the dock head. The
-  // composer is locked to the project, so there is no longer a "you're viewing a different channel"
-  // mismatch to warn about — this is informational only.
   boundChannelName?: string | null;
-  onSend: (text: string) => void | Promise<void>;
+  // Send a turn to Claude. Carries the optional advisory @-mention hints (the teammates & capabilities the
+  // founder named in the sentence) so composition prefers the named crew — never a contract, never blocking.
+  onSend: (text: string, hints?: OperatorHints) => void | Promise<void | { mode: "fast" | "drive"; intent: string; answer?: string }>;
   onCancel: () => void | Promise<void>;
   onReviewGate: (nodeId: string) => void;
-  // On the channel workbench the dock floats over a four-zone IDE rather than holding its own
-  // column, so it opens collapsed (a pill) to keep the inspector visible until summoned.
+  // The founder gate, brought INTO the chat. When a run pauses at the wall, "Review & send" opens the real
+  // GateReview stage in-thread; approving routes through onSubmitGateReview — the SAME authorized release
+  // path the canvas gate uses (App.submitGateReview → resolveOperatorGate). Nothing here sends: the founder's
+  // explicit approve flows through the unchanged handler. onRefineItem is veto-as-loop (send back to the crew,
+  // not a release); onRecordItemOutcome records what already happened on an approved item.
+  onSubmitGateReview?: (nodeId: string, decisions: Record<string, GateDecision>) => void | Promise<void>;
+  onRefineItem?: (item: GTMItem, note: string) => void | Promise<void>;
+  onRecordItemOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
+  gateLearned?: number;
+  gateOffer?: string | null;
+  gatePromote?: GatePromote;
   floating?: boolean;
-  // Bumped by the host to summon the chat — e.g. "New channel" opens and focuses it, since a
-  // channel is created by telling Claude the goal, not by filling a form.
   focusSignal?: number;
-  // The cold landing of an empty product (no pipelines, no run yet): the composer opens instead of
-  // resting as a slim edge rail, so "State a go-to-market goal" points at a visible input the founder
-  // can read and type into. Only forces open on the rising edge, so a manual collapse still sticks.
+  // The cold landing of an empty product: the composer opens instead of resting as a slim edge rail, so
+  // "State a go-to-market goal" points at a visible input. Only forces open on the rising edge.
   startOpen?: boolean;
-  // A message the founder started from the canvas — asking why a GTM path ranks, requesting variants,
-  // challenging a bet, editing a belief, or advancing a path to the gate. The host pre-fills the input
-  // with it (and opens the dock) but NEVER sends it: the founder reads, edits, and presses send. The
-  // token makes an identical re-ask re-seed. Pure steering language; nothing runs until the founder acts.
+  // A message the founder started from the canvas — the host pre-fills the input (and opens the dock) but
+  // NEVER sends it: the founder reads, edits, and presses send. The token makes an identical re-ask re-seed.
   seed?: { text: string; token: number } | null;
-  // While Claude is staging a graph change, the cursor builds it onto the canvas and the inline
-  // ✓/✕/note carry the decision — so the dock RECEDES to its peek to leave the watch beat
-  // unobstructed. It re-opens itself the moment the founder resolves the proposal (recede → false).
+  // While Claude stages a graph change, the cursor builds it onto the canvas and the composer RECEDES to
+  // its slim line to leave the watch beat unobstructed. It re-opens the moment the proposal resolves.
   recede?: boolean;
-  // The "what Claude reads" strip in the dock head — the grounding/picture/ideate actions folded in
-  // from the old Explorer rail. All optional so the dock still renders without product context.
-  contextManifest?: ContextManifest | null;
-  onOpenGrounding?: () => void;
-  onOpenPicture?: () => void;
-  onIdeate?: () => void;
-  // Ideate posture — the composer in a "thinking, not building" register. When "ideate", the input
-  // invites discussion (who's the buyer, where's the wedge, why now) instead of eagerly composing
-  // channels, and a quiet chip in the head marks the posture (× exits it via onExitPosture). The
-  // insights from the conversation are pinned as durable clarity cards through onPin. Undefined is
-  // treated as "build" — every existing caller keeps its current behavior.
+  // Ideate posture — the composer in a "thinking, not building" register. Undefined is treated as "build".
   posture?: "build" | "ideate";
   onExitPosture?: () => void;
   onPin?: (kind: ClarityKind, text: string) => void;
-  // The live graph + the node executing right now. When the dock is EXPANDED these power the build
-  // room: the right zone renders the real graph as canvas-style cards, the running node lit by the
-  // rainbow "now" signal. Optional, so callers without a graph keep the plain conversation.
+  // The live graph + the node executing right now + the run so far. These power the embodied PLAN checklist
+  // in the response zone: a teammate-stamped list that strikes off step by step in lockstep with the canvas.
   graph?: GTMGraph | null;
   runningNodeId?: string | null;
-  // Steps Claude has proposed but the founder hasn't accepted yet, and the run's results so far —
-  // the build room's "what would change" diff: ghost cards for proposed steps, a summary count.
   proposedNodeIds?: Set<string> | null;
   result?: GTMRunResult | null;
-  // Ambiguous-goal candidates. When the operator returns a set of pipeline SHAPES instead of one
-  // graph, the dock renders them as selectable sketches. `onProposeCandidates` fires once per new set
-  // so the host can also ghost them on the canvas — the in-dock picker stands alone without it.
-  // `onBuildCandidate` is the founder's pick reaching the host's compose_and_run build path; when it's
-  // absent the dock falls back to a concrete `onSend`, so picking works even before that wiring exists.
+  // Candidate pipeline SHAPES. When a goal admits more than one way through, the dock renders them as
+  // embodied idea flows (a chain of faces/marks ending at the gate). `onProposeCandidates` fires once per
+  // new set so the host can also ghost them on the canvas; `onBuildCandidate` is the founder's pick.
   onProposeCandidates?: (candidates: Candidate[]) => void;
   onBuildCandidate?: (candidate: Candidate) => void | Promise<void>;
-  // Per-card ideation, driven by the on-card "+". The host runs the real ideate and passes the state
-  // (target, source card, the returning candidates) here; `onAddObjectCandidate` is the founder's pick
-  // reaching the host's real add_node + provenance add_edge write; `onDismissObjectIdeation` clears it.
-  objectIdeation?: ObjectIdeationState | null;
-  onAddObjectCandidate?: (candidate: ObjectCandidate) => void | Promise<void>;
-  onDismissObjectIdeation?: () => void;
+  // The pencil on a plan row: hand a step back to the host to edit (select it on the canvas / open it).
+  // Optional — no pencil renders when absent.
+  onEditStep?: (node: GTMNode) => void;
+  // "Run to my gate" on the pre-run plan card — run the composed plan to the founder gate. Optional; the
+  // button only appears when the host wires it (a composed plan the founder can launch from the composer).
+  onRunPlan?: () => void;
+  // The opening briefing — the "here's where things stand" block at the top of the thread. Optional: when
+  // absent the dock derives it client-side from `roster` (one row per live pipeline), so it works today with
+  // no host wiring; when the host later hands a fuller read, it overrides the derived one.
+  briefing?: Briefing | null;
 }) {
-  // Rest as a pill on first paint when the dock floats over the channel workbench, OR when a FINISHED
-  // session would otherwise open its full transcript over the read-only overview canvas. Either way the
-  // founder lands on the work, not a panel covering it; the conversation is one click away on the peek.
-  // Rest as the slim edge rail whenever there's no live work to watch — floating always opens collapsed,
-  // and docked opens collapsed unless an ACTIVE (non-terminal) session is running, so an idle or finished
-  // session hands the width back to the canvas instead of holding an open lane over it.
+  // ── THE STATE MODEL: closed (a slim edge line) vs open (the three zones). It opens itself for exactly
+  // one reason — the founder is needed — and never self-drives between the six shapes it used to. `floating`
+  // keeps its own resting-pill model for the rare over-canvas usage; docked is closed/open only.
   const [collapsed, setCollapsed] = useState(
     startOpen ? false : (floating || !session || TERMINAL.has(session.status)),
   );
-  const [expanded, setExpanded] = useState(false);
-  // The docked dock's default is a SLIM INPUT RAIL, not a full conversation column: a single
-  // talk-to-Claude input plus a minimal status/peek, so the canvas keeps its width. `panelOpen`
-  // false = the slim rail; true = the full conversation panel (thread/focus/candidates/gate + the
-  // build room). The founder opens the panel with the ⤢ handle, and any attention moment (a gate, a
-  // pending decision, candidates, a selected card, sending a message) opens it for them. Floating is
-  // unaffected — it keeps its own resting/pill model — so this only governs the docked lane.
-  const [panelOpen, setPanelOpen] = useState(false);
-  // One view: the THREAD — the whole conversation in one scroll (your messages, Claude's work folded
-  // into a step receipt, the answer, the gate, and the "your call" ask inline). The old Focus/Thread
-  // toggle is gone; each pipeline's latest state now reads off its tab, not a per-conversation switch.
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  // Voice mode — the composer's signature. Two ways in, because hold-only can't carry a long thought:
-  //   • TAP the mic → hands-free listening locks on; tap again to stop and send.
-  //   • HOLD the mic → push-to-talk; release to send.
-  // Either way the rainbow erupts and the waveform is lit from your real microphone amplitude (Web
-  // Audio), so the bars track your actual voice instead of a canned loop. What's heard shows as a
-  // tentative line while it settles; when you stop, the settled transcript sends (or lands in the input
-  // if Claude is mid-turn, so nothing spoken is ever lost). A blocked or unsupported mic says so.
-  const [voiceOn, setVoiceOn] = useState(false); // true whenever the mic is capturing (held or locked)
-  const [locked, setLocked] = useState(false); // hands-free: capturing with no finger down
-  const [heardText, setHeardText] = useState(""); // live tentative transcript, shown while listening
+  // Ephemeral fast-lane turns (status/explain) — answered without a session, so they aren't in
+  // session.events. Rendered in the thread just after the opening briefing; cleared when a drive lands
+  // or the session switches.
+  const [fastTurns, setFastTurns] = useState<{ id: string; you: string; answer: string; at: string }[]>([]);
+
+  // ── @-mention state: the roster (crew + capabilities), the mentions placed in the sentence, the live
+  // "@query" being typed, and whether the summoned parts tray is open. ──────────────────────────────────
+  const rosterEntities = useMemo(() => buildRoster(bench ?? []), [bench]);
+  const [mentions, setMentions] = useState<PlacedMention[]>([]);
+  const [mentionQuery, setMentionQuery] = useState<{ query: string; start: number; end: number } | null>(null);
+
+  // Voice — a simple tap-to-talk mic (the composer's calm signature; the heavy amplitude waveform was
+  // retired). TAP the mic → hands-free listening locks on (tap again to stop and send); HOLD → push-to-talk
+  // (release to send). What's heard shows as a tentative line; when you stop, the settled transcript sends
+  // (or lands in the input if Claude is mid-turn).
+  const [voiceOn, setVoiceOn] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const [heardText, setHeardText] = useState("");
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-  const engagedRef = useRef(false); // mic is capturing (survives async gaps); mirrors voiceOn
-  const lockedRef = useRef(false); // hands-free lock (survives async gaps); mirrors locked
-  const pressStartRef = useRef(0); // when the press began, to tell a tap from a hold
-  const heardRef = useRef(""); // newest full transcript, read on stop (state lags a frame)
-  const sendOnEndRef = useRef(false); // stop requested a send once recognition flushes
-  const barsRef = useRef<HTMLElement[]>([]); // the 28 waveform bars, driven imperatively per frame
-  const audioRef = useRef<{ ctx: AudioContext; stream: MediaStream; raf: number } | null>(null);
-  const TAP_MS = 350; // press shorter than this = a tap (locks hands-free); longer = push-to-talk
-  // Which engine + model drives the operator — Claude (Opus/Sonnet/Haiku) or Codex (OpenAI). A
-  // persisted founder preference; the composer bar reads the model and its engine from it.
+  const engagedRef = useRef(false);
+  const lockedRef = useRef(false);
+  const pressStartRef = useRef(0);
+  const heardRef = useRef("");
+  const sendOnEndRef = useRef(false);
+  const TAP_MS = 350;
+  // Which engine + model drives the operator — Claude or Codex. A persisted founder preference.
   const [model, setModel] = useState<string>(() =>
     (typeof localStorage !== "undefined" && localStorage.getItem("gtm.model")) || DEFAULT_MODEL);
   const pickModel = (id: string) => { setModel(id); try { localStorage.setItem("gtm.model", id); } catch { /* private mode */ } };
@@ -998,62 +835,20 @@ export function ComposerDock({
   const timelineRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Tear down the live audio graph and animation frame; the mic tracks are released so the OS
-  // indicator goes dark. Idempotent — safe to call from release, error, and unmount.
-  const teardownAudio = () => {
-    const a = audioRef.current;
-    if (!a) return;
-    audioRef.current = null;
-    cancelAnimationFrame(a.raf);
-    a.stream.getTracks().forEach((t) => t.stop());
-    void a.ctx.close().catch(() => {});
-    // Settle the bars back to rest so the next hold starts from flat, not a frozen shape.
-    barsRef.current.forEach((bar) => { if (bar) bar.style.height = ""; });
-  };
-
-  // Begin listening: real mic amplitude drives the waveform, Web Speech dictates. Shared by tap and
-  // hold — the press/release handlers below decide whether releasing locks (tap) or sends (hold).
-  const startVoice = async () => {
+  const startVoice = () => {
     if (engagedRef.current) return;
     engagedRef.current = true;
     setVoiceError(null);
     setHeardText("");
     heardRef.current = "";
-    setVoiceOn(true);
-    // 1) Live amplitude — the honest waveform. Independent of recognition, so the bars move even in a
-    //    browser with no dictation. A blocked mic throws here and we surface it plainly.
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (!engagedRef.current) { stream.getTracks().forEach((t) => t.stop()); return; } // stopped mid-grant
-      const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const ctx = new Ctx();
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 64; // 32 bins → enough spread across the 28 bars
-      ctx.createMediaStreamSource(stream).connect(analyser);
-      const data = new Uint8Array(analyser.frequencyBinCount);
-      const tick = () => {
-        analyser.getByteFrequencyData(data);
-        const bars = barsRef.current;
-        for (let i = 0; i < bars.length; i++) {
-          const v = data[i + 2] / 255; // skip the DC/low bins that swamp the low end
-          const h = Math.max(10, Math.min(100, v * 140)); // floor so a bar never fully collapses
-          if (bars[i]) bars[i].style.height = `${h.toFixed(1)}%`;
-        }
-        if (audioRef.current) audioRef.current.raf = requestAnimationFrame(tick);
-      };
-      audioRef.current = { ctx, stream, raf: requestAnimationFrame(tick) };
-    } catch {
-      setVoiceError("Microphone is blocked. Allow mic access to talk to Claude.");
-      setVoiceOn(false);
-      engagedRef.current = false;
-      lockedRef.current = false;
-      setLocked(false);
-      return;
-    }
-    // 2) Dictation — separate from amplitude so the waveform still works where this is missing.
     const SR = window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike };
     const Ctor = SR.SpeechRecognition ?? SR.webkitSpeechRecognition;
-    if (!Ctor) { setVoiceError("Voice typing isn't supported in this browser — the level meter still works."); return; }
+    if (!Ctor) {
+      setVoiceError("Voice typing isn't supported in this browser.");
+      engagedRef.current = false;
+      return;
+    }
+    setVoiceOn(true);
     const r = new Ctor();
     r.continuous = true; r.interimResults = true; r.lang = "en-US";
     r.onresult = (e) => {
@@ -1063,7 +858,7 @@ export function ComposerDock({
       heardRef.current = txt;
       setHeardText(txt);
     };
-    r.onerror = () => {}; // a no-speech error is common and harmless; release still flushes what we have
+    r.onerror = () => { setVoiceError("Microphone is blocked. Allow mic access to talk to your crew."); };
     r.onend = () => {
       recognitionRef.current = null;
       if (sendOnEndRef.current) { sendOnEndRef.current = false; flushHeard(); }
@@ -1072,39 +867,30 @@ export function ComposerDock({
     try { r.start(); } catch { /* a double-start throws; ignore */ }
   };
 
-  // Stop listening and send. Recognition flushes a final result on stop, so we send from onend; with no
-  // recognition at all we flush immediately with whatever the amplitude-only pass gathered.
   const stopVoice = () => {
     if (!engagedRef.current) return;
     engagedRef.current = false;
     lockedRef.current = false;
     setLocked(false);
     setVoiceOn(false);
-    teardownAudio();
     const r = recognitionRef.current;
     if (r) { sendOnEndRef.current = true; try { r.stop(); } catch { flushHeard(); } }
     else { flushHeard(); }
   };
 
-  // Finger (or key) goes down. A tap while already locked stops and sends; otherwise start listening
-  // and remember when (the event's own timestamp), so release can tell a tap (→ lock hands-free) from a
-  // hold (→ send). Using event time keeps this off the impure clock the render-purity lint forbids.
   const pressVoice = (ts: number) => {
     if (lockedRef.current) { stopVoice(); return; }
     if (engagedRef.current) return;
     pressStartRef.current = ts;
-    void startVoice();
+    startVoice();
   };
 
-  // Finger (or key) lifts. A quick press locks hands-free (keep listening); a real hold sends.
   const releaseVoice = (ts: number) => {
     if (!engagedRef.current || lockedRef.current) return;
     if (ts - pressStartRef.current < TAP_MS) { lockedRef.current = true; setLocked(true); }
     else stopVoice();
   };
 
-  // Send the settled transcript — or, if Claude is mid-turn, drop it into the input so it's editable
-  // and nothing spoken is lost.
   const flushHeard = () => {
     const text = heardRef.current.trim();
     heardRef.current = "";
@@ -1115,30 +901,24 @@ export function ComposerDock({
     else void sendText(text);
   };
 
-  // Tear down recognition and audio if the dock unmounts mid-listen.
-  useEffect(() => () => { recognitionRef.current?.stop(); teardownAudio(); }, []);
+  useEffect(() => () => { recognitionRef.current?.stop(); }, []);
 
-  // Follow the layout context across navigation: collapse to a pill when the dock starts floating
-  // over the channel workbench, restore it when it owns its own lane again. Adjusting state during
-  // render from a changed prop is React's sanctioned pattern — no effect, no cascading render.
+  // Follow the layout context: collapse to the slim line when the dock starts floating over a workbench.
   const [trackedFloating, setTrackedFloating] = useState(floating);
   if (trackedFloating !== floating) {
     setTrackedFloating(floating);
     setCollapsed(floating);
   }
 
-  // Cold landing of an empty product: open the composer so its goal input is visible. Rising edge only
-  // (React's sanctioned setState-during-render), so a founder who collapses it back keeps it collapsed.
+  // Cold landing of an empty product: open so its goal input is visible. Rising edge only.
   const [trackedStartOpen, setTrackedStartOpen] = useState(startOpen);
   if (startOpen !== trackedStartOpen) {
     setTrackedStartOpen(startOpen);
     if (startOpen) setCollapsed(false);
   }
 
-  // A FINISHED session on the read-only overview (the dock is not floating over a channel there) rests
-  // as a pill, so a completed transcript never covers the engine the founder came to see. The thread is
-  // one click away on the peek bar. An ACTIVE session, or any session in the focused channel view,
-  // behaves as before. Adjusting state during render from a changed prop is React's sanctioned pattern.
+  // A FINISHED session on the read-only overview rests as the slim line, so a completed transcript never
+  // covers the canvas. The thread is one click away. An active session stays open.
   const terminalOverview = !floating && !!session && TERMINAL.has(session.status);
   const [trackedTerminalOverview, setTrackedTerminalOverview] = useState(terminalOverview);
   if (terminalOverview !== trackedTerminalOverview) {
@@ -1146,12 +926,8 @@ export function ComposerDock({
     if (terminalOverview) setCollapsed(true);
   }
 
-  // When the host bumps focusSignal the founder has EXPLICITLY asked for the composer — stated a goal
-  // from the empty canvas, handed Claude a node, started another pipeline. Every bump is a deliberate
-  // user act (never an automatic on-completion signal), so always open the dock in the same render (so
-  // the input is mounted) and focus it in an effect. This must override the rest-as-a-pill state a
-  // finished session leaves behind: a terminal session auto-collapses on its own (above), but if an
-  // explicit "state a goal" click were swallowed here the empty-canvas button would read as dead.
+  // focusSignal — the founder EXPLICITLY asked for the composer (stated a goal, handed Claude a node,
+  // started another pipeline). Always open in the same render (so the input is mounted) and focus it.
   const [trackedFocus, setTrackedFocus] = useState(focusSignal);
   if (focusSignal !== trackedFocus) {
     setTrackedFocus(focusSignal);
@@ -1161,66 +937,37 @@ export function ComposerDock({
     if (focusSignal) inputRef.current?.focus();
   }, [focusSignal]);
 
-  // A canvas-started message pre-fills the input, opens the dock, and focuses it — but is never sent for
-  // the founder. Tracked by token so re-asking the same question re-seeds. setState-during-render is the
-  // sanctioned pattern for a changed prop; the focus is a DOM call in an effect, not more state.
+  // A canvas-started message pre-fills the input, opens the dock, and focuses it — but is never sent.
   const [trackedSeed, setTrackedSeed] = useState(seed?.token ?? 0);
   if (seed && seed.token !== trackedSeed) {
     setTrackedSeed(seed.token);
     setInput(seed.text);
-    setCollapsed(false); // a seed is an explicit user act too — open over a finished session
+    setCollapsed(false);
   }
   useEffect(() => {
     if (seed?.token) inputRef.current?.focus();
   }, [seed?.token]);
 
-  // Recede while a proposal stages onto the canvas; rise again once it's resolved. Adjusting state
-  // during render from a changed prop is React's sanctioned pattern — no effect, no extra render.
+  // Recede while a proposal stages onto the canvas; rise again once it's resolved.
   const [trackedRecede, setTrackedRecede] = useState(recede);
   if (recede !== trackedRecede) {
     setTrackedRecede(recede);
     setCollapsed(recede);
   }
 
-  // A new per-card ideation ("+") is an explicit user act — open the dock so its candidate list is
-  // visible, not buried on the edge rail. Keyed by source+target so a fresh ideation re-opens; the same
-  // sanctioned setState-during-render pattern. Dismissing (key → "") never re-collapses on its own.
-  const objectIdeationKey = objectIdeation ? `${objectIdeation.sourceId}|${objectIdeation.target}` : "";
-  const [trackedObjectIdeation, setTrackedObjectIdeation] = useState(objectIdeationKey);
-  if (objectIdeationKey !== trackedObjectIdeation) {
-    setTrackedObjectIdeation(objectIdeationKey);
-    if (objectIdeationKey) { setCollapsed(false); setPanelOpen(true); }
-  }
-
-  // Selecting a card on the object graph is the founder pointing at it — open the dock so the composer
-  // BECOMES that card (its face pinned at the top) instead of staying a slim edge rail. Keyed by the
-  // card's id so re-targeting to another card keeps it open; the same setState-during-render pattern.
+  // Selecting a card on the object graph opens the dock so the composer BECOMES that card.
   const subjectCardKey = subject?.detail ? subject.id : "";
   const [trackedSubjectCard, setTrackedSubjectCard] = useState(subjectCardKey);
   if (subjectCardKey !== trackedSubjectCard) {
     setTrackedSubjectCard(subjectCardKey);
-    if (subjectCardKey) { setCollapsed(false); setPanelOpen(true); }
+    if (subjectCardKey) setCollapsed(false);
   }
 
-  // The verb the send control performs on the selected object — an explicit founder override, kept only
-  // while the SAME object stays selected. Changing (or clearing) the selection drops the override so the
-  // verb re-derives from the new object's kind. setState-during-render on a changed prop, the sanctioned
-  // pattern used throughout this dock.
-  const [verbOverride, setVerbOverride] = useState<string | null>(null);
-  const [trackedVerbSubject, setTrackedVerbSubject] = useState(subject?.id ?? "");
-  if ((subject?.id ?? "") !== trackedVerbSubject) {
-    setTrackedVerbSubject(subject?.id ?? "");
-    setVerbOverride(null);
-  }
-
-  // Opening the command bar drops you straight into the input — it reads as a command line, so a
-  // click should land the cursor, not just reveal a panel you then have to click again.
+  // ⌘K / Ctrl-K summons the composer from anywhere — always one key away.
   const [openFocus, setOpenFocus] = useState(0);
   useEffect(() => {
     if (openFocus) inputRef.current?.focus();
   }, [openFocus]);
-
-  // ⌘K / Ctrl-K summons the command dock from anywhere — the canvas's command line, always one key away.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -1237,37 +984,65 @@ export function ComposerDock({
     timelineRef.current?.scrollTo({ top: timelineRef.current.scrollHeight, behavior: "smooth" });
   }, [session?.events.length]);
 
-  // Ideate posture is a calm overlay on the same composer, never a separate mode. Undefined === build.
+  // A new conversation starts clean — the ephemeral fast answers belong to the session they were asked in.
+  // Adjust-during-render (the file's idiom), not a setState-in-effect: reset only when the session id changes.
+  const [trackedFastSession, setTrackedFastSession] = useState(session?.id);
+  if (trackedFastSession !== session?.id) { setTrackedFastSession(session?.id); setFastTurns([]); }
+
   const ideating = posture === "ideate";
   const sessionActive = !!session && !TERMINAL.has(session.status);
   const waitingGate = session?.status === "waiting_for_gate";
   const pendingGateId = session?.pendingGate?.nodeIds[0];
-  // The agent is mid-thought — the input parks until it pauses for you.
+  // The staged drafts to review — read straight off the session's own pending-gate payload (the gate
+  // node's result.items), not a top-level .items (GTMRunResult has none). Empty when the node result or
+  // its items are missing, so the gate falls back to its summary card rather than opening a hollow stage.
+  const gateItems = useMemo<GTMItem[]>(() => {
+    const id = session?.pendingGate?.nodeIds[0];
+    const r = session?.pendingGate?.runResult;
+    return (id && r?.nodes[id]?.items) || [];
+  }, [session?.pendingGate]);
+  // The in-thread review stage — flipped open by "Review & send". Local, so it never sends; it just opens
+  // the real GateReview whose approve routes through the authorized release handler.
+  const [reviewOpen, setReviewOpen] = useState(false);
+  // A resolved gate or a switched pipeline closes a stale-open stage. Keyed off the pending-gate identity
+  // (the gate node id) and the waiting flag so it resets when the gate clears or the founder switches away.
+  // Adjust-during-render (the file's idiom), not a setState-in-effect.
+  const gateStageKey = `${pendingGateId ?? ""}|${waitingGate ? 1 : 0}|${session?.id ?? ""}`;
+  const [trackedGateStageKey, setTrackedGateStageKey] = useState(gateStageKey);
+  if (trackedGateStageKey !== gateStageKey) { setTrackedGateStageKey(gateStageKey); setReviewOpen(false); }
   const sendDisabled = running || session?.status === "running" || session?.status === "ready" || waitingGate;
   const working = running || session?.status === "running";
+  // The latest reasoning turn, while the crew is still producing — it gets the soft streaming shimmer + a
+  // caret, so the output reads as "still forming" instead of a finished block that popped in.
+  const streamingSayId = working && session
+    ? [...session.events].reverse().find((e) => speakerOf(e) === "say")?.id ?? null
+    : null;
+  // The newest teammate heartbeat while the run is live — it gets the same soft shimmer as a forming
+  // say-turn, so the latest beat reads as "still working" and older beats settle behind it.
+  const streamingCrewId = working && session
+    ? [...session.events].reverse().find((e) => e.type === "teammate_said")?.id ?? null
+    : null;
+  // Who voices the crew's turns in this thread — a real face + role, never a faceless "Claude".
+  const voice = sessionVoice(graph, bench);
 
-  // A gate or a pending question is the founder's judgment moment — the one thing the slim rail must
-  // not swallow. On its rising edge open the full panel so the decision is in front of them (the slim
-  // rail still flags it in amber if they shrink back). Rising edge only, so a manual shrink sticks.
+  // A gate or a pending question is the founder's judgment moment — open on its rising edge.
   const needsDecision = waitingGate || !!session?.pendingQuestion;
   const [trackedNeedsDecision, setTrackedNeedsDecision] = useState(needsDecision);
   if (needsDecision !== trackedNeedsDecision) {
     setTrackedNeedsDecision(needsDecision);
-    if (needsDecision) { setCollapsed(false); setPanelOpen(true); }
+    if (needsDecision) setCollapsed(false);
   }
 
-  // The run is the plan made live: the instant a build/run starts (rising edge), surface the roster —
-  // open the full panel and the build room so the checklist is in front of the founder, striking off
-  // step by step in lockstep with the canvas. Rising edge only, so a manual shrink mid-run sticks.
+  // The run is the plan made live — open on its rising edge so the plan checklist is in front of the
+  // founder, striking off step by step in lockstep with the canvas.
   const runLive = running && !!graph && graph.nodes.length > 0;
   const [trackedRunLive, setTrackedRunLive] = useState(runLive);
   if (runLive !== trackedRunLive) {
     setTrackedRunLive(runLive);
-    if (runLive) { setCollapsed(false); setPanelOpen(true); setExpanded(true); }
+    if (runLive) setCollapsed(false);
   }
 
-  // Ambiguous-goal sketches, read off the session through the one isolated seam. Held as local pick
-  // state so choosing one fades the rest; a fresh set of candidates clears the pick.
+  // Ambiguous-goal shapes, read off the session through the one isolated seam.
   const candidates = sessionCandidates(session);
   const candidateSig = candidates.map((c) => c.id).join("|");
   const [pickedCandidateId, setPickedCandidateId] = useState<string | null>(null);
@@ -1275,12 +1050,8 @@ export function ComposerDock({
   if (candidateSig !== trackedCandidateSig) {
     setTrackedCandidateSig(candidateSig);
     setPickedCandidateId(null);
-    // A fresh set of pipeline shapes is a decision to surface — open the full panel so they're
-    // pickable, not buried behind the slim rail.
-    if (candidateSig) { setCollapsed(false); setPanelOpen(true); }
+    if (candidateSig) setCollapsed(false);
   }
-  // Announce a new set of candidates to the host exactly once (so it can ghost them on the canvas).
-  // Guarded on the id signature so it fires per-set, not per-render.
   const proposedSigRef = useRef<string>("");
   useEffect(() => {
     if (candidateSig && candidateSig !== proposedSigRef.current) {
@@ -1294,59 +1065,109 @@ export function ComposerDock({
   const buildCandidate = (candidate: Candidate) => {
     if (pickedCandidateId) return;
     setPickedCandidateId(candidate.id);
-    setCollapsed(false); setPanelOpen(true);
-    // The founder's pick IS the act: build THIS shape via compose_and_run (it still stops at the
-    // gate downstream). Prefer the host's dedicated builder; fall back to a concrete send so the
-    // picker works standalone. This is the ONE place the build path is reached — a one-line swap if
-    // main names the endpoint differently.
+    setCollapsed(false);
     if (onBuildCandidate) { void onBuildCandidate(candidate); return; }
     void onSend(`Build this pipeline — ${candidate.label}. ${candidate.rationale} Compose it and run it to my gate.`);
   };
 
-  const sendText = async (raw: string) => {
+  // ── @-mention wiring ──────────────────────────────────────────────────────────────────────────────────
+  // The advisory hints a send carries: the teammates (crew refs) and capabilities the founder @-named. Built
+  // from the placed mentions; folded into the operator's context so composition prefers them — never blocks.
+  const hintsFromMentions = (): OperatorHints | undefined => {
+    const teammates = mentions.filter((m) => m.kind !== "capability").map((m) => m.ref ?? m.id);
+    const capabilities = mentions.filter((m) => m.kind === "capability").map((m) => m.id);
+    if (!teammates.length && !capabilities.length) return undefined;
+    return {
+      ...(teammates.length ? { teammates } : {}),
+      ...(capabilities.length ? { capabilities } : {}),
+    };
+  };
+
+  // Detect the live "@query" at the caret and open/close the mention menu accordingly.
+  const syncMentionQuery = (value: string, caret: number) => {
+    setMentionQuery(detectMentionQuery(value, caret));
+  };
+
+  // Splice a placed mention's readable surface ("@Label ") into the sentence, recording the structured
+  // mention so the send path can steer toward it. `range` (from detectMentionQuery) replaces the live query;
+  // without one the mention lands at the caret (a parts-tray click or a dropped tile).
+  const insertMention = (placed: PlacedMention, range?: { start: number; end: number }) => {
+    const surface = `@${placed.label} `;
+    const el = inputRef.current;
+    const caret = range ? range.end : (el?.selectionStart ?? input.length);
+    const start = range ? range.start : caret;
+    const next = input.slice(0, start) + surface + input.slice(caret);
+    setInput(next);
+    setMentions((prev) => (prev.some((m) => m.kind === placed.kind && m.id === placed.id) ? prev : [...prev, placed]));
+    setMentionQuery(null);
+    const pos = start + surface.length;
+    requestAnimationFrame(() => {
+      const node = inputRef.current;
+      if (node) { node.focus(); node.setSelectionRange(pos, pos); }
+    });
+  };
+
+  // Drop a placed mention: pull it from the strip and remove one "@Label" occurrence from the sentence.
+  const removeMention = (m: PlacedMention) => {
+    setMentions((prev) => prev.filter((x) => !(x.kind === m.kind && x.id === m.id)));
+    const needle = `@${m.label}`;
+    setInput((prev) => {
+      const idx = prev.indexOf(needle);
+      if (idx < 0) return prev;
+      return (prev.slice(0, idx) + prev.slice(idx + needle.length)).replace(/ {2,}/g, " ");
+    });
+  };
+
+  // A tile dropped from the parts tray (or the rail) onto the line inserts a mention chip — the same
+  // PlacedMention the click and the @-menu produce, so all three paths land identically.
+  const onInputDrop = (e: DragEvent<HTMLTextAreaElement>) => {
+    const raw = e.dataTransfer.getData(STEP_DRAG_MIME);
+    if (!raw) return;
+    e.preventDefault();
+    try { insertMention(dragToPlaced(JSON.parse(raw) as StepDragPayload)); } catch { /* not a step payload */ }
+  };
+
+  const sendText = async (raw: string, hints?: OperatorHints) => {
     if (submitting) return;
     const value = raw.trim();
     if (!value) return;
-    // A navigation command ("go to the gate") steers the canvas and never reaches Claude, so it's
-    // allowed even while Claude is working. Any real turn still waits until Claude is free.
     const nav = isNavCommand?.(value) ?? false;
     if (sendDisabled && !nav) return;
     setSubmitting(true);
-    setCollapsed(false); setPanelOpen(true); // sending opens the full conversation above the composer
-    try { await onSend(value); setInput(""); }
-    finally { setSubmitting(false); }
+    setCollapsed(false);
+    setMentionQuery(null);
+    try {
+      const r = await onSend(value, hints);
+      setInput("");
+      setMentions([]);
+      if (r && r.mode === "fast" && typeof r.answer === "string") {
+        setFastTurns((prev) => [...prev, { id: `fast-${Date.now()}`, you: value, answer: r.answer!, at: new Date().toISOString() }]);
+      } else if (r && r.mode === "drive") {
+        setFastTurns([]);
+      }
+    } finally { setSubmitting(false); }
   };
-  // The verb the send performs on the selected object (null in free chat). Derived deterministically
-  // from the selection's kind + what's typed, unless the founder picked one from the change menu.
-  const verbKind = subject ? (subject.detail?.type ?? subject.kind) : "";
-  const activeVerb = subject ? deriveVerb(verbKind, input, verbOverride) : null;
-  // Send. A canvas navigation command ("go to the gate") must reach the host verbatim so it can steer
-  // the camera, so it's never verb-framed — only a real turn about the selected object gets the verb.
+
+  // Send the sentence to the crew — plus the advisory @-mention hints, unless it's a canvas nav command.
   const send = () => {
     const nav = isNavCommand?.(input.trim()) ?? false;
-    const value = activeVerb && !nav ? frameVerbMessage(activeVerb, input) : input;
-    void sendText(value);
+    void sendText(input, nav ? undefined : hintsFromMentions());
   };
-  // Tapping an inline "your call" option drops its label into the reply (appending, so several can
-  // stack), editable — the founder still presses send. The decision lives in the composer's one input,
-  // never a second box on the ask.
+
+  // Tapping an inline "your call" option drops its label into the reply (appending, so several can stack).
   const askPick = (text: string) => {
     setInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
     inputRef.current?.focus();
   };
 
-  // The command composer — the product's primary input, built to rival a real chat composer: a calm
-  // textarea over a control row (context on the left, the live model/state, a dark send on the right).
-  // Enter sends, Shift+Enter newlines. Shared by the resting state and the active conversation so the
-  // input never changes shape as you move between them.
+  // The briefing shown at the top of the thread: the host's read when handed, else derived from the roster.
+  const briefingModel = briefing ?? deriveBriefing(roster);
+
+  // ── The input zone (Zone 3): the calm sentence line — @-chips, the mention menu, a small model picker,
+  // the mic, and a plain send button. Shared by the open panel and the floating resting state so the input
+  // never changes shape as you move.
   const composer = (
-    <div className={`composer-box ${voiceOn ? "voice" : ""}`}>
-      {/* The aurora — a faint monochrome graphite drift at rest; on voice it swells into the rainbow.
-          aria-hidden: pure ambience, no semantics. */}
-      <div className="composer-aurora" aria-hidden="true" />
-      {/* Ideate posture — a quiet chip that names the register ("thinking, not building"). It rides
-          above the input in both the resting and open dock so the founder always sees they're in the
-          thinking posture; the × hands control back to the host to exit it. Calm, not a mode banner. */}
+    <div className="oc-input-wrap">
       {ideating ? (
         <div className="composer-posture">
           <Lightbulb className="composer-posture-icon" size={13} aria-hidden="true" />
@@ -1364,19 +1185,13 @@ export function ComposerDock({
           ) : null}
         </div>
       ) : null}
-      {/* The attached composer — when the founder selects a block or edge on the canvas, the dock docks
-          to it: it says what it's editing, shows the object's own words, and offers plain-English moves.
-          Clicking a move drops its phrasing into the input (editable — it never sends on its own). The
-          host frames the next message with this object's context, so "make it shorter" resolves to the
-          real thing. The × lets go and returns to free chat. When a per-card ideation is running, the
-          ideation block below carries the framing instead, so the two never stack on the same card.
-          Object-graph cards (subject.detail set) render the full card face at the top of the dock
-          instead — this lightweight header stays for node-graph steps, which carry no detail. */}
-      {subject && !subject.detail && !objectIdeation ? (
+      {/* Node-graph step attached from the canvas — a lightweight header. Object-graph cards render the full
+          card face at the top of the panel instead (subject.detail), so this stays for steps only. */}
+      {subject && !subject.detail ? (
         <div className="composer-attached">
           <div className="composer-attached-head">
             <span className="composer-attached-title">
-              Claude <span aria-hidden="true">·</span> editing {humanizeKind(subject.kind)}
+              Your crew <span aria-hidden="true">·</span> editing {humanizeKind(subject.kind)}
             </span>
             {onClearSubject ? (
               <button
@@ -1391,62 +1206,84 @@ export function ComposerDock({
             ) : null}
           </div>
           <div className="composer-attached-label" title={subject.label}>{subject.label}</div>
-          <div className="composer-attached-actions">
-            {subjectActions(subject.kind).map((action) => (
-              <button
-                key={action}
-                type="button"
-                className="composer-attached-action"
-                onClick={() => { setInput(action); inputRef.current?.focus(); }}
-              >
-                {action}
-              </button>
-            ))}
-          </div>
         </div>
       ) : null}
-      <textarea
-        ref={inputRef}
-        className="composer-box-input"
-        aria-label="Message Claude"
-        placeholder={subject ? `Ask Claude about “${subject.label}” — make it shorter, why it's empty, run it…` : sendDisabled ? "Claude is working — you can still say “go to …” to move the canvas" : ideating ? "Think through your GTM — who's the real buyer, where's the wedge, why now" : session ? "Reply, redirect, or ask Claude to continue…" : "Ask Claude to build, run, or change anything…"}
-        value={input}
-        disabled={submitting}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
-        rows={1}
-      />
-      {/* The waveform rises only while the mic is held. Each bar's height is driven imperatively from
-          real microphone amplitude (see startVoice) — this is feedback, not decoration. */}
-      <div className="composer-wave" aria-hidden="true">
-        {Array.from({ length: 28 }).map((_, i) => (
-          <i key={i} ref={(el) => { if (el) barsRef.current[i] = el; }} />
-        ))}
-      </div>
-      {/* What Claude is hearing, tentative until it settles — clears on release. Sits under the wave so
-          you can watch your words land before they send. */}
-      {voiceOn && heardText ? (
-        <div className="composer-heard" aria-live="polite">
-          {heardText}<span className="composer-heard-caret" aria-hidden="true" />
-        </div>
+
+      {/* The @-mention menu — Notion-style, sectioned Teammates / Capabilities. The parent detects & ranks;
+          the menu owns highlight + arrow/enter/esc nav. Anchored above the input line. */}
+      {mentionQuery ? (
+        <MentionMenu
+          query={mentionQuery.query}
+          results={rankRoster(rosterEntities, mentionQuery.query)}
+          onPick={(entity) => insertMention(entityToPlaced(entity), { start: mentionQuery.start, end: mentionQuery.end })}
+          onClose={() => setMentionQuery(null)}
+          className="composer-mention"
+        />
       ) : null}
-      {voiceError ? <p className="composer-voice-error" role="status">{voiceError}</p> : null}
-      <div className="composer-box-bar">
-        <div className="composer-box-tools">
-          <AgentPicker value={model} onChange={pickModel} />
-          <span className="composer-box-model" title={sessionActive ? `${engineName} is on this outcome` : "The engine and model working this outcome"}>
-            <span className={`composer-box-dot ${voiceOn ? "live" : sessionActive ? "live" : ""}`} />
-            {voiceOn ? "Listening…" : working ? "Working…" : session ? statusLabel(session.status) : "Ready"}
-          </span>
-        </div>
-        <div className="composer-box-actions">
-          {/* Voice — TAP for hands-free (tap again to stop and send) or HOLD for push-to-talk (release
-              to send). The rainbow erupts and the waveform tracks your real mic either way. Pointer
-              capture guarantees release fires even if you drift off the button; Space/Enter mirror it. */}
+
+      <div className="oc-input">
+        <textarea
+          ref={inputRef}
+          className="oc-input-text"
+          aria-label="Message your crew"
+          placeholder={subject ? `Ask about “${subject.label}” — make it shorter, why it's empty, run it…` : sendDisabled ? "Your crew is working — you can still say “go to …” to move the canvas" : ideating ? "Think through your GTM — who's the real buyer, where's the wedge, why now" : session ? "Reply, redirect, or @-mention a teammate…" : "Message your crew — build, run, or change anything"}
+          value={input}
+          disabled={submitting}
+          onChange={(e) => {
+            const el = e.currentTarget;
+            setInput(el.value);
+            el.style.height = "auto";
+            el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
+            syncMentionQuery(el.value, el.selectionStart ?? el.value.length);
+          }}
+          onKeyUp={(e) => { const el = e.currentTarget; syncMentionQuery(el.value, el.selectionStart ?? el.value.length); }}
+          onClick={(e) => { const el = e.currentTarget; syncMentionQuery(el.value, el.selectionStart ?? el.value.length); }}
+          onKeyDown={(e) => {
+            // While the mention menu is open it owns arrows/enter/esc/tab (a capture-phase listener); don't
+            // let Enter also send. Otherwise Enter sends, Shift+Enter newlines.
+            if (mentionQuery && ["Enter", "Tab", "ArrowUp", "ArrowDown", "Escape"].includes(e.key)) return;
+            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); }
+          }}
+          onDrop={onInputDrop}
+          onDragOver={(e) => { if (e.dataTransfer.types.includes(STEP_DRAG_MIME)) e.preventDefault(); }}
+          rows={1}
+        />
+
+        {/* The placed @-team — removable roster tiles, the same tile the menu shows. */}
+        <MentionChips mentions={mentions} onRemove={removeMention} />
+
+        {voiceOn && heardText ? <div className="oc-heard" aria-live="polite">{heardText}</div> : null}
+        {voiceError ? <p className="oc-voice-error" role="status">{voiceError}</p> : null}
+
+        <div className="oc-input-bar">
+          {/* The @-mention keystone — one tap drops an "@" and opens the crew menu at the caret. */}
           <button
-            className={`composer-box-mic ${voiceOn ? "active" : ""} ${locked ? "locked" : ""}`}
+            className="oc-ib at"
             type="button"
-            aria-label={locked ? "Listening hands-free — tap to stop and send" : "Tap or hold to talk to Claude"}
+            aria-label="Mention a teammate"
+            title="@ a teammate"
+            onClick={() => {
+              const el = inputRef.current;
+              const caret = el?.selectionStart ?? input.length;
+              const end = el?.selectionEnd ?? caret;
+              const next = input.slice(0, caret) + "@" + input.slice(end);
+              setInput(next);
+              const pos = caret + 1;
+              requestAnimationFrame(() => {
+                const node = inputRef.current;
+                if (node) { node.focus(); node.setSelectionRange(pos, pos); syncMentionQuery(node.value, pos); }
+              });
+            }}
+          >
+            @
+          </button>
+          <span className="oc-input-picker" title={sessionActive ? `${engineName} is on this outcome` : "The engine and model working this outcome"}>
+            <AgentPicker value={model} onChange={pickModel} />
+          </span>
+          <button
+            className={`oc-ib ${voiceOn ? "active" : ""}`}
+            type="button"
+            aria-label={locked ? "Listening hands-free — tap to stop and send" : "Tap or hold to talk"}
             aria-pressed={voiceOn}
             title={locked ? "Listening hands-free — tap to stop" : voiceOn ? "Listening… release to send" : "Tap for hands-free, or hold to talk"}
             onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); pressVoice(e.timeStamp); }}
@@ -1456,45 +1293,29 @@ export function ComposerDock({
             onKeyUp={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); releaseVoice(e.timeStamp); } }}
             onBlur={() => { if (!lockedRef.current) stopVoice(); }}
           >
-            <Mic size={16} />
+            <Mic size={15} />
           </button>
-          {activeVerb ? (
-            /* A canvas object is selected: the send names the action it performs on it, and it's
-               changeable. A non-"ask" verb can send with an empty input (the verb IS the instruction);
-               "ask" and free chat still need typed text. */
-            <VerbSend
-              verb={activeVerb}
-              submitting={submitting}
-              disabled={
-                submitting
-                || (sendDisabled && !(isNavCommand?.(input.trim()) ?? false))
-                || (!input.trim() && activeVerb.id === "ask")
-              }
-              onSend={() => void send()}
-              onPick={setVerbOverride}
-            />
-          ) : (
-            <button
-              className="composer-box-send"
-              disabled={submitting || !input.trim() || (sendDisabled && !(isNavCommand?.(input.trim()) ?? false))}
-              onClick={() => void send()}
-              type="button"
-              aria-label="Send to Claude"
-            >
-              {submitting ? <LoaderCircle className="spin" /> : <ArrowUp size={18} />}
-            </button>
-          )}
+          <button
+            className="oc-send"
+            disabled={submitting || !input.trim() || (sendDisabled && !(isNavCommand?.(input.trim()) ?? false))}
+            onClick={() => void send()}
+            type="button"
+            aria-label="Send to your crew"
+          >
+            {submitting ? <LoaderCircle className="spin" size={15} /> : <ArrowUp size={15} />}
+          </button>
         </div>
       </div>
+      <p className="oc-hint">@ a teammate · everything you approve stays as a receipt</p>
     </div>
   );
 
-  // Collapsed. When the dock owns a lane (docked, the canvas usage), it shrinks to a SLIM EDGE RAIL with
-  // a launcher — out of the content area, never a panel over the board. The canvas reclaims the width.
+  // ── CLOSED — the slim edge line. Docked hands the width back to the canvas; floating rests as the
+  // command-line pill with a peek at any live session. ─────────────────────────────────────────────────
   if (collapsed) {
     if (!floating) {
       return (
-        <aside className="composer-dock docked collapsed" aria-label="Claude co-pilot">
+        <aside className="composer-dock docked collapsed our-chat" aria-label="Your crew">
           <button
             className="dock-rail-launcher"
             onClick={() => setCollapsed(false)}
@@ -1515,17 +1336,13 @@ export function ComposerDock({
         </aside>
       );
     }
-    // Floating resting = the composer alone, centered on the canvas (the command line). The conversation
-    // only rises above it once you send or open a live session — minimizing (the header X) returns here.
     return (
-      <aside className="composer-dock floating resting" aria-label="Claude">
-        {/* When Claude is live, a slim peek above the composer shows the state and opens the
-            conversation — so the resting composer never hides an in-flight session. */}
+      <aside className="composer-dock floating resting our-chat" aria-label="Your crew">
         {session ? (
-          <button className="composer-peek" onClick={() => setCollapsed(false)} type="button" title="Open the conversation" aria-label="Open the conversation with Claude">
+          <button className="composer-peek" onClick={() => setCollapsed(false)} type="button" title="Open the conversation" aria-label="Open the conversation with your crew">
             <span className={`composer-peek-dot ${working ? "live" : ""}`} aria-hidden="true" />
             <span className="composer-peek-text">
-              {recede ? "Staged on the canvas — keep, change, or note it there" : working ? "Claude is working…" : session.events.length ? session.events[session.events.length - 1].title : `Claude · ${statusLabel(session.status)}`}
+              {recede ? "Staged on the canvas — keep, change, or note it there" : working ? "Your crew is working…" : session.events.length ? session.events[session.events.length - 1].title : `Your crew · ${statusLabel(session.status)}`}
             </span>
             <Maximize2 size={13} />
           </button>
@@ -1535,123 +1352,47 @@ export function ComposerDock({
     );
   }
 
-  // ── The slim input rail — the DOCKED default ──────────────────────────────────────────────────
-  // A single talk-to-Claude input, a minimal status line, and a one-line peek at what Claude is doing
-  // (or an amber "your call" flag when it's waiting on you). Far less width than the full column, so
-  // the canvas breathes. The ⤢ handle — or any attention moment above — opens the full panel. Floating
-  // keeps its own model (handled below), so this rail is docked-only.
-  if (!floating && !panelOpen) {
-    const latestBeat = session?.events.at(-1)?.title;
-    const slimLine = working ? "Claude is working…" : session ? (latestBeat ?? `Claude · ${statusLabel(session.status)}`) : null;
-    return (
-      <aside className="composer-dock docked slim" aria-label="Claude co-pilot">
-        <div className="dock-slim-head">
-          <span className={`dock-slim-orb ${working ? "live" : ""}`} aria-hidden="true">
-            {working ? <LoaderCircle className="spin" /> : <Bot size={15} />}
-          </span>
-          <div className="dock-slim-id">
-            <strong>Claude</strong>
-            <span className="dock-slim-sub">{session ? statusLabel(session.status) : "co-pilot"}</span>
-          </div>
-          {sessionActive ? (
-            <button className="composer-dock-stop" onClick={() => void onCancel()} type="button" title="Stop" aria-label="Stop Claude">
-              <Square />
-            </button>
-          ) : null}
-          <button className="composer-dock-icon" onClick={() => setPanelOpen(true)} type="button" title="Open the conversation" aria-label="Open the full conversation">
-            <Maximize2 size={15} />
-          </button>
-          <button className="composer-dock-icon" onClick={() => setCollapsed(true)} type="button" title="Minimize" aria-label="Minimize the panel">
-            <X size={16} />
-          </button>
-        </div>
-        {/* The one amber moment in the rail — your judgment is required. Everything else stays monochrome. */}
-        {needsDecision ? (
-          <button className="dock-slim-gate" type="button" onClick={() => setPanelOpen(true)}>
-            <ShieldCheck size={14} aria-hidden="true" />
-            <span>{waitingGate ? "Your review is required" : "Your call — Claude is waiting"}</span>
-            <ChevronRight size={13} aria-hidden="true" />
-          </button>
-        ) : slimLine ? (
-          <button className="dock-slim-peek" type="button" onClick={() => setPanelOpen(true)} title="Open the conversation">
-            <span className={`dock-slim-peek-dot ${working ? "live" : ""}`} aria-hidden="true" />
-            <span className="dock-slim-peek-text">{slimLine}</span>
-            <Maximize2 size={12} aria-hidden="true" />
-          </button>
-        ) : null}
-        {composer}
-      </aside>
-    );
-  }
-
-  // The build room: when the dock is expanded and a real graph exists, the right zone shows it
-  // assembling in canvas-card language while the conversation stays on the left.
-  const buildRoom = expanded && !!graph && graph.nodes.length > 0;
-
+  // ── OPEN — the three zones: chrome (header + tabs), the response stream, the input. ───────────────────
   return (
-    <aside className={`composer-dock ${floating ? "floating" : "docked"} ${expanded ? "expanded" : ""} ${buildRoom ? "buildroom" : ""}`} aria-label="Claude co-pilot">
-      {/* ── Header ─────────────────────────────────────────────── */}
-      <header className="composer-dock-head">
-        <span className={`composer-dock-avatar ${sessionActive ? "running" : ""}`}>
-          {running || session?.status === "running" ? <LoaderCircle className="spin" /> : <Bot />}
+    <aside className={`composer-dock ${floating ? "floating" : "docked"} our-chat`} aria-label="Your crew">
+      {/* ── Zone 1 · chrome — header. The working teammate's face carries the soft rotating ring: calm,
+          meaningful presence (the signature). ─────────────────────────── */}
+      <header className="oc-head">
+        <span className={`oc-presence ${working ? "working" : ""}`}>
+          <span className="oc-ring" aria-hidden="true" />
+          <CrewFace agentRef={voice.ref} job={voice.job} size={34} state={working ? "working" : "idle"} />
         </span>
-        <div className="composer-dock-head-text">
-          <strong>Claude</strong>
-          <span className="composer-dock-sub">
-            {session
-              ? boundChannelName
-                ? <>{statusLabel(session.status)} · <span className="composer-dock-channel">{boundChannelName}</span></>
-                : statusLabel(session.status)
-              : "co-pilot · on your subscription"}
-          </span>
-        </div>
-        {/* A second pipeline is always one click away. When the founder already has two or more, the
-            full tab strip below the header carries the "+"; here it's the discovery affordance for the
-            first-and-second, so multi-pipeline never stays hidden behind having to already have two. */}
+        <span className="oc-head-title">Your crew</span>
+        <span className="oc-head-sub">
+          {working ? `${voice.name} is working…` : session ? "just now" : "on your subscription"}
+        </span>
         {onNewChat && roster.length < 2 ? (
-          <button className="composer-dock-icon" onClick={onNewChat} type="button" title="Start another pipeline" aria-label="Start another pipeline">
+          <button className="oc-head-icon" onClick={onNewChat} type="button" title="Start another pipeline" aria-label="Start another pipeline">
             <Plus size={15} />
           </button>
         ) : null}
         {sessionActive && (
-          <button className="composer-dock-stop" onClick={() => void onCancel()} type="button" title="Stop" aria-label="Stop Claude">
-            <Square />
+          <button className="oc-head-icon oc-head-stop" onClick={() => void onCancel()} type="button" title="Stop" aria-label="Stop your crew">
+            <Square size={15} />
           </button>
         )}
-        <button className="composer-dock-icon" onClick={() => setExpanded((v) => !v)} type="button" title={expanded ? "Shrink" : "Expand"} aria-label={expanded ? "Shrink the panel" : "Expand the panel"} aria-pressed={expanded}>
-          {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-        </button>
         <button
-          className="composer-dock-icon"
-          onClick={() => { if (floating) setCollapsed(true); else setPanelOpen(false); }}
+          className="oc-head-icon"
+          onClick={() => setCollapsed(true)}
           type="button"
-          title={floating ? "Minimize" : "Collapse to the input rail"}
-          aria-label={floating ? "Minimize the panel" : "Collapse to the input rail"}
+          title={floating ? "Minimize" : "Collapse to the slim line"}
+          aria-label={floating ? "Minimize the panel" : "Collapse to the slim line"}
         >
           <X size={16} />
         </button>
       </header>
 
-      {/* ── The pipelines you're running, as tabs. Only once there are two or more — a single pipeline
-          needs no strip (its name is already in the header), and the "+" lives up there until then. */}
+      {/* ── Zone 1 · chrome — the pipelines you're running, as tabs (only at 2+). */}
       {roster.length >= 2 && onSwitchSession ? (
-        <ChatTabs roster={roster} activeId={activeSessionId} onSwitch={onSwitchSession} onNew={onNewChat} />
+        <ChatTabs roster={roster} activeId={activeSessionId} onSwitch={onSwitchSession} onNew={onNewChat} onStop={onStopSession} onClose={onCloseSession} />
       ) : null}
 
-      {/* ── What Claude reads — the grounding/picture/ideate actions folded into the dock head, so
-          they stop being mystery buttons on a far rail. Shown only when the host wired the views. */}
-      {onOpenGrounding && onOpenPicture && onIdeate ? (
-        <DockContext
-          contextManifest={contextManifest}
-          onOpenGrounding={onOpenGrounding}
-          onOpenPicture={onOpenPicture}
-          onIdeate={onIdeate}
-        />
-      ) : null}
-
-      {/* ── The card face — a selected object-graph card, pinned at the top: the composer BECOMES that
-          card. Its conversation / ideation / input scope to it below. Node-graph steps carry no detail
-          and keep the lightweight header above the input instead. */}
+      {/* ── The card face — a selected object-graph card, pinned at the top: the composer BECOMES that card. */}
       {subject?.detail ? (
         <SubjectCardFace
           detail={subject.detail}
@@ -1661,147 +1402,253 @@ export function ComposerDock({
         />
       ) : null}
 
-      {/* ── Conversation / narration (left) + build room (right when expanded) ── */}
-      <div className={`composer-dock-body ${buildRoom ? "split" : ""}`}>
+      {/* ── Zone 2 · the response stream — the opening briefing, then the crew-voiced conversation with its
+          two stops (a "your call" card and the calm amber gate) and settled receipts, all in one scroll. */}
       <div
         key={session ? "thread" : "idle"}
-        className="composer-dock-timeline view-enter"
+        className="composer-dock-timeline oc-thread"
         ref={timelineRef}
         role="log"
-        aria-label="Conversation with Claude"
+        aria-label="Conversation with your crew"
         aria-live="polite"
         aria-relevant="additions text"
       >
+        {/* Opening briefing — one row per live pipeline; derived from the roster (or the host's read). */}
+        {briefingModel.rows.length ? (
+          <div className="oc-briefing oc-rise">
+            <div className="oc-briefing-ey"><b>{briefingModel.eyebrow}</b> — here's where things stand</div>
+            {briefingModel.rows.map((r) => (
+              <div className="oc-vrow" key={r.id}>
+                <span className={`oc-vdot ${r.state}`} aria-hidden="true" />
+                <span className="oc-vname" title={r.name}>{r.name}</span>
+                <span className="oc-vwhat">{r.what}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {fastTurns.map((t) => (
+          <div key={t.id} className="oc-fast">
+            <div className="oc-you-wrap">
+              <div className="oc-you">{t.you}</div>
+              <div className="oc-you-t tnum">{clockTime(t.at)}</div>
+            </div>
+            <div className="oc-msg">
+              <CrewFace className="oc-msg-face" agentRef={voice.ref} job={voice.job} size={32} />
+              <div className="oc-msg-body">
+                <div className="oc-who">
+                  <span className="oc-who-n">{voice.name}</span>
+                  <span className="oc-who-t tnum">{clockTime(t.at)}</span>
+                </div>
+                <div className="oc-bubble"><MarkdownLite text={t.answer} /></div>
+              </div>
+            </div>
+          </div>
+        ))}
+
         {!session ? (
-          <div className="composer-dock-idle">
-            <p className="composer-idle-lead">Tell Claude the outcome you want. It composes the agents that chase it, runs them, and stops at your gate.</p>
-            <div className="composer-idle-starters">
+          <div className="oc-idle">
+            <p className="oc-idle-lead">Tell your crew the outcome you want. They compose the teammates that chase it, run them, and stop at your gate.</p>
+            <div className="oc-idle-starters">
               {STARTERS.map((s) => (
-                <button key={s} className="composer-idle-starter" onClick={() => setInput(s)} type="button">{s}</button>
+                <button key={s} className="oc-idle-starter" onClick={() => setInput(s)} type="button">{s}</button>
               ))}
             </div>
           </div>
         ) : (
-          <Stagger className="cnv-thread">
-            {/* The whole conversation in one stream — including the "your call" ask, folded in as just
-                another message (its tap options land inline), never lifted out into a separate box. */}
-            {segmentEvents(session.events).map((seg) =>
+          <Stagger className="oc-thread-list">
+            {(() => { const segs = segmentEvents(session.events); const lastIdx = segs.length - 1; return segs.map((seg, segIdx) =>
               seg.kind === "tool" ? (
                 <StaggerItem key={seg.id}>
-                  <ToolCluster events={seg.events} idBase={seg.id} />
+                  <ToolCluster events={seg.events} idBase={seg.id} live={working && segIdx === lastIdx} />
                 </StaggerItem>
               ) : seg.kind === "say" ? (
                 <StaggerItem key={seg.id}>
-                  <div className="cnv-say">
-                    <div className="cnv-say-body">
-                      {seg.event.detail ? <MarkdownLite text={seg.event.detail} /> : <p>{seg.event.title}</p>}
+                  <div className="oc-msg">
+                    <CrewFace className="oc-msg-face" agentRef={voice.ref} job={voice.job} size={32} />
+                    <div className="oc-msg-body">
+                      <div className="oc-who">
+                        <span className="oc-who-n">{voice.name}</span>
+                        {voice.role !== voice.name ? <span className="oc-who-role">{voice.role}</span> : null}
+                        <span className="oc-who-t tnum">{clockTime(seg.event.createdAt)}</span>
+                      </div>
+                      <div className={`oc-bubble ${seg.id === streamingSayId ? "streaming" : ""}`}>
+                        {seg.event.detail ? <MarkdownLite text={seg.event.detail} /> : <p>{seg.event.title}</p>}
+                      </div>
+                      {onPin ? <div className="oc-pin"><PinControl text={(seg.event.detail ?? seg.event.title).trim()} onPin={onPin} /></div> : null}
                     </div>
-                    {onPin ? <PinControl text={(seg.event.detail ?? seg.event.title).trim()} onPin={onPin} /> : null}
                   </div>
+                </StaggerItem>
+              ) : seg.kind === "crew" ? (
+                <StaggerItem key={seg.id}>
+                  {(() => {
+                    // A teammate's first-person heartbeat — face + name resolved PER MESSAGE from the
+                    // event's own ref, so consecutive beats can switch teammate to teammate. A `.beat`
+                    // reads lighter than a full say-turn; the newest one shimmers while the run is live.
+                    const d = (seg.event.data ?? null) as { ref?: string; label?: string } | null;
+                    const v = voiceForRef(d?.ref, bench, d?.label);
+                    return (
+                      <div className="oc-msg beat">
+                        <CrewFace className="oc-msg-face" agentRef={v.ref} job={v.job} size={28} state={seg.id === streamingCrewId ? "working" : "idle"} />
+                        <div className="oc-msg-body">
+                          <div className="oc-who">
+                            <span className="oc-who-n">{v.name}</span>
+                            {v.role !== v.name ? <span className="oc-who-role">{v.role}</span> : null}
+                            <span className="oc-who-t tnum">{clockTime(seg.event.createdAt)}</span>
+                          </div>
+                          <div className={`oc-bubble beat ${seg.id === streamingCrewId ? "streaming" : ""}`}>
+                            <p>{seg.event.title}</p>
+                            {seg.event.detail ? <MarkdownLite text={seg.event.detail} /> : null}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </StaggerItem>
               ) : seg.kind === "you" ? (
                 <StaggerItem key={seg.id}>
-                  <div className="cnv-you">
-                    <div className="cnv-you-bubble">{seg.event.detail || seg.event.title}</div>
+                  <div className="oc-you-wrap">
+                    <div className="oc-you">{seg.event.detail || seg.event.title}</div>
+                    <div className="oc-you-t tnum">{clockTime(seg.event.createdAt)}</div>
                   </div>
                 </StaggerItem>
               ) : seg.kind === "ask" ? (
                 <StaggerItem key={seg.id}>
-                  <div className="cnv-ask">
-                    <ShieldCheck size={15} aria-hidden="true" />
-                    <div className="cnv-ask-body">
-                      <span className="cnv-ask-eyebrow">Your call</span>
-                      <strong>{stripOptions(seg.event.title) || seg.event.title}</strong>
-                      {seg.event.detail ? <div className="cnv-ask-detail"><MarkdownLite text={seg.event.detail} /></div> : null}
-                      {/* The choices, tappable — each drops into the reply below, editable, never a bare
-                          fire. Parsed from the ask's own text; open-ended asks show none and you just type. */}
-                      {(() => {
-                        const opts = parseAskOptions(seg.event.title).length ? parseAskOptions(seg.event.title) : parseAskOptions(seg.event.detail ?? "");
-                        return opts.length ? (
-                          <div className="dock-decide-opts">
-                            {opts.map((o, i) => (
-                              <button type="button" key={i} className="dock-decide-opt" onClick={() => askPick(o.label)}>
-                                <span className="dock-decide-opt-t">{o.label}</span>
-                                <Plus className="dock-decide-add" size={13} aria-hidden="true" />
-                              </button>
-                            ))}
-                          </div>
-                        ) : null;
-                      })()}
-                    </div>
-                  </div>
+                  {/* Keyed by the event id so a NEW question remounts and clears the old pick. */}
+                  <AskCard key={seg.id} event={seg.event} onPick={askPick} />
+                </StaggerItem>
+              ) : seg.kind === "receipt" ? (
+                <StaggerItem key={seg.id}>
+                  {(() => {
+                    // A settled decision, stamped as a persistent receipt. Never fabricated — it reads the
+                    // released-by name off the real gate_resolved event.
+                    const data = seg.event.data as { releasedBy?: { name?: string } } | null;
+                    const who = data?.releasedBy?.name?.trim() || "you";
+                    const time = clockTime(seg.event.createdAt);
+                    return (
+                      <div className="oc-receipt">
+                        <span className="oc-receipt-rc" aria-hidden="true"><Check /></span>
+                        <span className="oc-receipt-t"><b>Released</b> — the reviewed work continued</span>
+                        <span className="oc-receipt-stamp tnum">{who}{time ? ` · ${time}` : ""}</span>
+                      </div>
+                    );
+                  })()}
                 </StaggerItem>
               ) : (
                 <StaggerItem key={seg.id}>
-                  <div className="cnv-sys">
+                  <div className="oc-sys">
                     <span>{seg.event.detail || seg.event.title}</span>
                   </div>
                 </StaggerItem>
               ),
-            )}
-            {/* The live "now" beat — keeps the thread honest about latency: while Claude works, the
-                bottom of the conversation shows what it's doing this second, not a frozen log. */}
+            ); })()}
+
+            {/* ── Embodied idea shapes — a goal with more than one way through returns a few pipeline SHAPES,
+                each a chain of crew faces & capability marks ending at the amber gate. Picking one builds it
+                (still stops at the gate). Hidden while a gate is waiting so the two decisions never collide. */}
+            {candidates.length > 0 && !waitingGate ? (
+              <div className="cmp-response-group">
+                <p className="cmp-response-lead">A few ways to shape this — each shows its crew in order, ending at your gate. Pick one, edit it, nothing sends until you approve.</p>
+                {candidates.map((c) => (
+                  <EmbodiedFlow
+                    key={c.id}
+                    nodes={c.nodes}
+                    edges={c.edges}
+                    title={c.label}
+                    rationale={c.rationale}
+                    onBuild={() => buildCandidate(c)}
+                    dimmed={!!pickedCandidateId && pickedCandidateId !== c.id}
+                    building={pickedCandidateId === c.id}
+                  />
+                ))}
+              </div>
+            ) : null}
+
+            {/* ── The gate — the second of two stops. SACRED: it arrives calm and certain, and does not
+                perform (no pulse, no bloom). Amber only here. "Review & send" no longer selects an invisible
+                canvas node (the dead door) — it opens the REAL review IN the thread: the same GateReview the
+                canvas gate uses, releasing through the same authorized handler. Nothing sends until approve. */}
+            {waitingGate && pendingGateId ? (
+              reviewOpen && gateItems.length ? (
+                <div className="oc-gate-stage">
+                  <div className="oc-gate-stage-h">
+                    <span className="oc-gate-lock" aria-hidden="true"><ShieldCheck /></span>
+                    <div>
+                      <div className="oc-gate-t">Your call — review your crew's work</div>
+                      <div className="oc-gate-s">Nothing sends until you approve.</div>
+                    </div>
+                    <button
+                      className="oc-gate-stage-close"
+                      type="button"
+                      onClick={() => setReviewOpen(false)}
+                    >
+                      <X size={13} aria-hidden="true" /> Close
+                    </button>
+                  </div>
+                  <div className="oc-gate-stage-body">
+                    <GateReview
+                      variant="stage"
+                      items={gateItems}
+                      run={session.pendingGate?.runResult ?? null}
+                      onSubmit={(d) =>
+                        onSubmitGateReview ? onSubmitGateReview(pendingGateId, d) : onReviewGate(pendingGateId)}
+                      learned={gateLearned}
+                      offer={gateOffer}
+                      promote={gatePromote}
+                      onRefineItem={onRefineItem}
+                      onRecordOutcome={onRecordItemOutcome}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="oc-gate">
+                  <div className="oc-gate-h">
+                    <span className="oc-gate-lock" aria-hidden="true"><ShieldCheck /></span>
+                    <div>
+                      <div className="oc-gate-t">Ready to leave — your release</div>
+                      <div className="oc-gate-s">
+                        {gateItems.length
+                          ? "Your crew reached the wall. Nothing sends until you approve."
+                          : "Your crew reached the wall — but there's nothing staged to review yet."}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="oc-gate-f">
+                    <button
+                      className="oc-btn amber"
+                      onClick={() => { if (gateItems.length) setReviewOpen(true); }}
+                      disabled={!gateItems.length}
+                      type="button"
+                    >
+                      Review &amp; send
+                    </button>
+                  </div>
+                </div>
+              )
+            ) : null}
+
+            {/* ── Error — a snag your crew hit; one calm sentence, never the raw engine text. */}
+            {session?.error && !session.pendingQuestion ? (
+              <div className="oc-error">
+                <span>Your crew hit a snag and paused. You can pick up where it left off.</span>
+                <button className="oc-btn" onClick={() => void onSend("continue")} type="button">
+                  <Play size={13} aria-hidden="true" /> Try again
+                </button>
+              </div>
+            ) : null}
+
+            {/* The live "now" beat — keeps the thread honest about latency while the crew works. */}
             {working ? (
-              <div className="cnv-live" role="status">
-                <span className="cnv-live-orb" aria-hidden="true" />
-                <span className="cnv-live-text">{session.events.at(-1)?.title ?? "Working…"}</span>
+              <div className="oc-live" role="status">
+                <span className="oc-live-orb" aria-hidden="true" />
+                <span className="oc-live-text">{session.events.at(-1)?.title ?? "Working…"}</span>
               </div>
             ) : null}
           </Stagger>
         )}
       </div>
-        {buildRoom && graph ? (
-          <BuildRail graph={graph} runningNodeId={runningNodeId} proposedNodeIds={proposedNodeIds} result={result} />
-        ) : null}
-      </div>
 
-      {/* ── Per-card ideation — the on-card "+" hands back candidate OBJECTS (a message, a trigger) to
-          add as draft cards. Decidable, never auto-applied; adding one lands a gray draft joined to its
-          source. Hidden while a gate is waiting so the two decisions never collide. */}
-      {objectIdeation && !waitingGate && onAddObjectCandidate ? (
-        <ObjectIdeationChoices
-          ideation={objectIdeation}
-          onAdd={onAddObjectCandidate}
-          onDismiss={() => onDismissObjectIdeation?.()}
-        />
-      ) : null}
-
-      {/* ── Candidate sketches — an ambiguous goal returns a few shapes to pick from, not a stall.
-          Distinct from the gate below: no amber, no approve gesture — choosing a shape is a direction,
-          not an approval to send. Hidden while a gate is waiting so the two decisions never collide. */}
-      {candidates.length > 0 && !waitingGate ? (
-        <CandidateChoices candidates={candidates} pickedId={pickedCandidateId} onPick={buildCandidate} />
-      ) : null}
-
-      {/* ── Gate prompt ────────────────────────────────────────── */}
-      {waitingGate && pendingGateId && (
-        <div className="composer-dock-gate">
-          <ShieldCheck />
-          <div>
-            <strong>Your review is required</strong>
-            <span>Claude reached the wall. Nothing leaves until you approve.</span>
-          </div>
-          <button onClick={() => onReviewGate(pendingGateId)} type="button">Review</button>
-        </div>
-      )}
-
-      {/* The founder's call is no longer a separate hero card — it rides in the thread as an inline
-          "Your call" ask with tap options (see the ask segment above), same as any other message. */}
-      {session?.error && !session.pendingQuestion && (
-        <div className="composer-dock-question error">
-          <strong>Claude hit a snag</strong>
-          <span>
-            {/connection closed|mid-response|network|ECONNRESET|timed out|timeout/i.test(session.error)
-              ? "The model connection dropped mid-thought — usually transient. Pick up where it left off."
-              : session.error}
-          </span>
-          <button className="composer-dock-retry" onClick={() => void onSend("continue")} type="button">
-            <Play size={13} /> Try again
-          </button>
-        </div>
-      )}
-
-      {/* ── Composer input (the same beautiful composer as the resting state) ── */}
+      {/* ── Zone 3 · the input ── */}
       {composer}
     </aside>
   );

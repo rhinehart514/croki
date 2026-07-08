@@ -196,7 +196,7 @@ export const TOOLS = [
   },
   {
     name: "propose_candidates",
-    description: "When the founder's goal genuinely FORKS into several distinct go-to-market shapes — for example an outbound pipeline that contacts owners directly, a content/community play that earns inbound, or a referral loop through existing users — sketch 2–3 candidate pipelines and PAUSE for the founder to pick, instead of assuming one. It NEVER runs, sends, or builds: each candidate is a shape only. If the goal points at ONE clear shape, do not call this — go straight to compose_and_run. When the founder picks a candidate, that pick builds the chosen shape through compose_and_run and stops at the gate. There is no channel catalog; judge the fork freely from the real product and the goal.",
+    description: "The ONE way to hand the founder options to pick among. When the goal genuinely FORKS into several distinct go-to-market shapes — for example an outbound pipeline that contacts owners directly, a content/community play that earns inbound, or a referral loop through existing users — OR the founder is clearly asking for ideas/angles rather than one committed build, sketch 2–3 candidate pipelines and PAUSE for the founder to pick. Each candidate is EMBODIED: it comes back as a full pipeline shape already naming the crew (its agents) and capabilities that would run it, ending at the founder gate — never a bare paragraph of prose. It NEVER runs, sends, or builds: a candidate is a shape only. If the goal points at ONE clear shape and the founder wants it built, skip this and go straight to compose_and_run. When the founder picks a candidate, that pick builds the chosen shape through compose_and_run and stops at the gate. There is no channel catalog and no forced fork; judge honestly from the real product and the goal, and if there is only one real shape, say so and build it.",
     input_schema: {
       type: "object",
       properties: {
@@ -283,14 +283,21 @@ export const TOOLS = [
 // can reach, so it builds and runs instead of navigating an ontology. `executeOperatorTool` still routes every tool name, so direct API/MCP callers
 // and tests are unaffected — this only narrows what the autonomous model is offered. The wall (founder
 // gate) and taste (shared context) are the only constraints that remain on the model's hands.
+//
+// There is exactly ONE "pause and let the founder pick among options" door the operator reaches for:
+// propose_candidates, which sketches EMBODIED pipeline shapes — each already naming the crew (agent
+// faces) and capabilities (marks) that would run it. The older prose `ideate` tool (paragraphs with no
+// crew, graph composed only AFTER a pick) is deliberately kept OUT of this set, so the founder-driving
+// operator never surfaces a bare-paragraph idea on either runtime door (the Claude Code path restricts
+// its allowed MCP tools to exactly these NAKED names). `ideate` remains a routable tool for the
+// taste-learning loop and back-compat callers, but it is no longer a shape the operator reaches for.
 export const NAKED_TOOL_NAMES = new Set([
   "inspect_product",          // truth — read what the product actually is
   "inspect_shared_context",   // taste/memory — ICP, positioning, what's been tried
   "update_shared_context",    // record inferred taste/positioning rather than duplicating into graphs
   "compose_and_run",          // THE move — design the work, build behind a gate, run to the gate
-  "propose_candidates",       // an ambiguous goal forks — sketch 2-3 shapes and pause for the founder's pick
+  "propose_candidates",       // the options door — sketch 2-3 EMBODIED shapes (crew + gate) and pause for the founder's pick
   "compose_microproduct",     // the build-and-ship door — cut a deployable artifact, STAGE it behind the gate
-  "ideate",                   // generate ideas, grade with a separate critic, pause for the founder to pick
   "inspect_graph",            // inspect/repair a failed run
   "inspect_problems",
   "inspect_run",

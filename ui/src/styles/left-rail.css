@@ -154,6 +154,18 @@
   font-size: 10.5px; font-weight: 640; letter-spacing: 0.02em;
 }
 
+/* The "Build a teammate" row — a real invitation to grow your crew, with a dashed placeholder where a
+   teammate's face would be. Aligned to the crew rows above it. */
+.lr-crew-add { align-items: flex-start; cursor: pointer; }
+.lr-crew-add-face {
+  flex: none;
+  width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center;
+  border: 1px dashed var(--line-2); color: var(--muted);
+  transition: border-color 120ms var(--ease), color 120ms var(--ease);
+}
+.lr-crew-add:hover .lr-crew-add-face { border-color: var(--ink); color: var(--ink); }
+
 .lr-row-main { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 1px; }
 .lr-row-name {
   font-size: 12.5px; color: var(--ink); font-weight: 500; line-height: 1.3;

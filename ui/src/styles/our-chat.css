@@ -1,0 +1,498 @@
+/* our-chat.css — the "Warm Calm" register for the OPEN composer, scoped to `.our-chat` so the rest of
+   the app keeps its cool zinc palette until the founder verifies warm against the canvas. Opaque content
+   surfaces (never glass), amber only at the gate, motion SETTLES (ease-out) and never springs. The values
+   are the approved mockup's (docs/design/composer-redesign + our-chat.html). Geist rides in from the
+   global font stack; these only add the warm ground, the bubble shapes, and the settle timing. */
+
+.our-chat {
+  --oc-ground: #faf8f4; --oc-panel: #fffefb; --oc-line: #ece7df; --oc-line-soft: #f3efe8;
+  --oc-ink: #211f1b; --oc-ink-2: #5b554c; --oc-ink-3: #a39c90; --oc-ink-4: #cec7ba;
+  --oc-warm-50: #f8f5ef; --oc-warm-100: #f3efe7; --oc-warm-150: #ece7dd;
+  --oc-amber-ink: #b45309; --oc-amber: #f59e0b; --oc-amber-tint: #fffdf8; --oc-amber-tint2: #fff8ee; --oc-amber-line: #f3e2c4;
+  --oc-ok: #4a9d76;
+  --oc-sh-1: 0 1px 2px rgba(66,52,34,.06), 0 1px 1px rgba(66,52,34,.03);
+  --oc-sh-2: 0 8px 20px -10px rgba(66,52,34,.16), 0 2px 5px -3px rgba(66,52,34,.07);
+  --oc-sh-lift: 0 14px 30px -12px rgba(66,52,34,.20), 0 4px 8px -4px rgba(66,52,34,.09);
+  --oc-sh-warm: 0 10px 26px -12px rgba(180,120,40,.20);
+  --oc-ease: cubic-bezier(.32,.72,0,1);        /* settle — no overshoot */
+  --oc-ease-soft: cubic-bezier(.4,0,.2,1);
+}
+
+/* Warm the docked shell (the shape/width still come from .composer-dock.docked). */
+.composer-dock.docked.our-chat { background: var(--oc-panel); border-color: var(--oc-line); }
+.composer-dock.floating.our-chat { background: var(--oc-panel); }
+
+.our-chat .tnum { font-variant-numeric: tabular-nums; letter-spacing: 0; }
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.our-chat .oc-head {
+  display: flex; align-items: center; gap: 11px;
+  padding: 15px 18px; border-bottom: 1px solid var(--oc-line-soft);
+}
+.our-chat .oc-head-title { font-weight: 600; font-size: 14.5px; letter-spacing: -.014em; color: var(--oc-ink); }
+.our-chat .oc-head-sub { font-size: 12px; color: var(--oc-ink-3); margin-left: auto; }
+.our-chat .oc-head-icon {
+  width: 26px; height: 26px; border-radius: 8px; border: none; background: transparent;
+  display: grid; place-items: center; cursor: pointer; color: var(--oc-ink-3);
+  transition: background var(--oc-ease-soft) .16s, color var(--oc-ease-soft) .16s;
+}
+.our-chat .oc-head-icon:hover { background: var(--oc-warm-100); color: var(--oc-ink); }
+.our-chat .oc-head-stop:hover { background: #fbecec; color: #c0563f; }
+
+/* the working teammate — a circular presence with a soft rotating ring (the signature) */
+.our-chat .oc-presence { position: relative; width: 34px; height: 34px; flex: none; }
+.our-chat .oc-presence .oc-ring {
+  position: absolute; inset: -4px; border-radius: 50%; opacity: 0;
+  background: conic-gradient(from 0deg, rgba(74,157,118,0), rgba(74,157,118,.55), rgba(74,157,118,0) 65%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  transition: opacity .3s var(--oc-ease-soft);
+}
+.our-chat .oc-presence.working .oc-ring { opacity: 1; animation: oc-spin 3.4s linear infinite; }
+@keyframes oc-spin { to { transform: rotate(360deg); } }
+
+/* ── Thread ─────────────────────────────────────────────────────────────── */
+.our-chat .oc-thread {
+  padding: 18px 18px 10px; display: flex; flex-direction: column; gap: 17px;
+  background: var(--oc-panel);
+}
+.our-chat .oc-thread::-webkit-scrollbar { width: 8px; }
+.our-chat .oc-thread::-webkit-scrollbar-thumb { background: var(--oc-warm-150); border-radius: 8px; border: 2px solid var(--oc-panel); }
+
+/* entrance — settle, no overshoot */
+.our-chat .oc-rise { opacity: 0; transform: translateY(9px); animation: oc-rise .5s var(--oc-ease-soft) forwards; }
+@keyframes oc-rise { to { opacity: 1; transform: none; } }
+
+/* ── Opening briefing ───────────────────────────────────────────────────── */
+.our-chat .oc-briefing {
+  background: var(--oc-warm-50); border: 1px solid var(--oc-line); border-radius: 18px;
+  padding: 14px 16px; box-shadow: var(--oc-sh-1);
+}
+.our-chat .oc-briefing-ey { font-size: 12px; color: var(--oc-ink-3); font-weight: 600; margin-bottom: 9px; letter-spacing: -.005em; }
+.our-chat .oc-briefing-ey b { color: var(--oc-ink-2); }
+.our-chat .oc-vrow { display: flex; align-items: center; gap: 11px; padding: 8px 0; }
+.our-chat .oc-vrow + .oc-vrow { border-top: 1px solid var(--oc-line-soft); }
+.our-chat .oc-vdot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.our-chat .oc-vdot.needs { background: var(--oc-amber); box-shadow: 0 0 0 3px rgba(245,158,11,.15); }
+.our-chat .oc-vdot.work { background: var(--oc-ink-4); }
+.our-chat .oc-vdot.quiet { background: var(--oc-panel); box-shadow: inset 0 0 0 1.5px var(--oc-line); }
+.our-chat .oc-vname { font-weight: 600; font-size: 13px; width: 96px; flex: none; letter-spacing: -.01em; color: var(--oc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.our-chat .oc-vwhat { font-size: 13px; color: var(--oc-ink-2); min-width: 0; }
+.our-chat .oc-vwhat b { color: var(--oc-ink); font-weight: 600; }
+
+/* ── Crew message ───────────────────────────────────────────────────────── */
+.our-chat .oc-msg { display: flex; gap: 11px; }
+.our-chat .oc-msg-face { flex: none; }
+.our-chat .oc-msg-body { flex: 1; min-width: 0; }
+.our-chat .oc-who { display: flex; align-items: baseline; gap: 8px; margin-bottom: 5px; }
+.our-chat .oc-who-n { font-weight: 600; font-size: 13px; letter-spacing: -.01em; color: var(--oc-ink); }
+.our-chat .oc-who-role { font-size: 11px; color: var(--oc-ink-3); font-weight: 500; }
+.our-chat .oc-who-t { font-size: 11px; color: var(--oc-ink-4); margin-left: auto; }
+.our-chat .oc-bubble {
+  position: relative;
+  background: var(--oc-warm-50); border-radius: 5px 19px 19px 19px;
+  padding: 11px 14px; box-shadow: var(--oc-sh-1);
+  font-size: 13.5px; color: var(--oc-ink); line-height: 1.55;
+}
+.our-chat .oc-bubble p { margin: 0 0 7px; }
+.our-chat .oc-bubble p:last-child { margin-bottom: 0; }
+.our-chat .oc-bubble strong { font-weight: 640; }
+.our-chat .oc-bubble ul { margin: 5px 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+
+/* a teammate heartbeat while the run advances — lighter and tighter than a full say-turn, so a stream
+   of beats reads as quiet progress, not a wall of chat bubbles. No box, no shadow: just the voice. */
+.our-chat .oc-msg.beat .oc-bubble.beat {
+  background: transparent; box-shadow: none; border-radius: 0;
+  padding: 2px 0; font-size: 13px; color: var(--oc-ink-2);
+}
+
+/* the taste line — "your voice" */
+.our-chat .oc-taste {
+  margin-top: 9px; font-size: 12.5px; color: var(--oc-ink-2); background: var(--oc-panel);
+  border: 1px solid var(--oc-line); border-radius: 13px; padding: 9px 11px; line-height: 1.5;
+}
+.our-chat .oc-taste b { color: var(--oc-ink); font-weight: 600; }
+.our-chat .oc-taste-lbl {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--oc-ink-3); margin-right: 6px;
+}
+.our-chat .oc-taste-lbl .s { width: 5px; height: 5px; border-radius: 50%; background: var(--oc-ink-3); }
+
+/* receipts (provenance chips under a crew message) */
+.our-chat .oc-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.our-chat .oc-chip { font-size: 11px; padding: 3px 9px; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px; font-weight: 500; }
+.our-chat .oc-chip.grounded { background: var(--oc-panel); color: var(--oc-ink-2); border: 1px solid var(--oc-line); box-shadow: var(--oc-sh-1); }
+.our-chat .oc-chip.inferred { background: transparent; color: var(--oc-ink-3); border: 1px dashed var(--oc-ink-4); }
+.our-chat .oc-chip .dot { width: 5px; height: 5px; border-radius: 50%; }
+.our-chat .oc-chip.grounded .dot { background: var(--oc-ok); }
+.our-chat .oc-chip.inferred .dot { background: transparent; box-shadow: inset 0 0 0 1px var(--oc-ink-4); }
+
+/* the quiet pin affordance on a crew bubble */
+.our-chat .oc-pin { margin-top: 6px; }
+
+/* ── Founder bubble ─────────────────────────────────────────────────────── */
+.our-chat .oc-you-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.our-chat .oc-you {
+  max-width: 82%; background: var(--oc-ink); color: #faf8f4; border-radius: 19px 19px 5px 19px;
+  padding: 10px 14px; font-size: 13.5px; line-height: 1.5; box-shadow: 0 6px 16px -8px rgba(33,31,27,.38);
+}
+.our-chat .oc-you-t { font-size: 11px; color: var(--oc-ink-4); padding-right: 5px; }
+
+/* ── System line ────────────────────────────────────────────────────────── */
+.our-chat .oc-sys { display: flex; justify-content: center; padding: 2px 0; }
+.our-chat .oc-sys span { font-size: 11px; color: var(--oc-ink-3); text-align: center; max-width: 90%; }
+
+/* ── "Your call" card (the first of two stops) ──────────────────────────── */
+.our-chat .oc-card {
+  border: 1px solid var(--oc-line); border-radius: 18px; overflow: hidden; background: var(--oc-panel);
+  box-shadow: var(--oc-sh-2); transition: box-shadow .24s var(--oc-ease), transform .24s var(--oc-ease);
+  /* the card's own soft settle — a low rise + a barely-there scale, ease-out, no overshoot (the
+     generic Stagger wrapper only fades; this gives the "your call" moment a shape of its own). */
+  opacity: 0; transform: translateY(10px) scale(.985);
+  animation: oc-card-rise .5s var(--oc-ease-soft) forwards;
+}
+@keyframes oc-card-rise { to { opacity: 1; transform: none; } }
+.our-chat .oc-card:hover { box-shadow: var(--oc-sh-lift); transform: translateY(-1px); }
+/* the stem reads as a real question, separated from the choices by a hairline rule */
+.our-chat .oc-card-h { display: flex; align-items: baseline; gap: 9px; padding: 13px 15px 12px; flex-wrap: wrap; border-bottom: 1px solid var(--oc-line-soft); }
+.our-chat .oc-card-tag {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--oc-ink-3);
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.our-chat .oc-card-tag::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--oc-ink-3); flex: none; }
+.our-chat .oc-card-q { font-weight: 600; font-size: 14px; line-height: 1.4; letter-spacing: -.01em; color: var(--oc-ink); }
+.our-chat .oc-card-detail { padding: 10px 15px 4px; font-size: 12.5px; line-height: 1.5; color: var(--oc-ink-2); }
+.our-chat .oc-card-detail p { margin: 0 0 5px; }
+.our-chat .oc-card-detail p:last-child { margin-bottom: 0; }
+/* each option is its own soft, tappable target — a rounded chip, not a form row */
+.our-chat .oc-opt {
+  display: flex; gap: 11px; padding: 11px 13px; margin: 2px 6px; cursor: pointer; width: auto; text-align: left;
+  border: none; border-radius: 12px; background: transparent; font: inherit; color: inherit;
+  transition: background .16s var(--oc-ease-soft), transform .12s var(--oc-ease);
+}
+.our-chat .oc-opt:first-of-type { margin-top: 6px; }
+.our-chat .oc-opt:last-of-type { margin-bottom: 8px; }
+.our-chat .oc-opt:hover { background: var(--oc-warm-50); }
+.our-chat .oc-opt:hover .oc-opt-pick { border-color: var(--oc-ink-2); box-shadow: inset 0 0 0 3px var(--oc-panel), 0 0 0 3px var(--oc-warm-100); }
+.our-chat .oc-opt:active { transform: scale(.99); }
+.our-chat .oc-opt:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--oc-panel), 0 0 0 4px var(--oc-ink-4); }
+/* a tapped option persists as chosen — a receipt-in-place, the radio filled in the calm green (never amber) */
+.our-chat .oc-opt.picked { background: var(--oc-warm-50); }
+.our-chat .oc-opt.picked .oc-opt-pick { border-color: var(--oc-ok); background: radial-gradient(circle at center, var(--oc-ok) 0 5px, transparent 5px); box-shadow: none; }
+.our-chat .oc-opt-pick { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--oc-ink-4); margin-top: 1px; flex: none; transition: border-color .16s var(--oc-ease-soft), box-shadow .16s var(--oc-ease-soft); }
+.our-chat .oc-opt-body { min-width: 0; }
+.our-chat .oc-opt-t { display: block; font-weight: 600; font-size: 13px; letter-spacing: -.01em; color: var(--oc-ink); }
+.our-chat .oc-opt-d { display: block; font-size: 12.5px; color: var(--oc-ink-2); margin-top: 2px; line-height: 1.45; }
+
+/* ── Gate card — SACRED: arrives calm and certain, never performs ───────── */
+.our-chat .oc-gate {
+  border: 1px solid var(--oc-amber-line); border-radius: 18px; overflow: hidden;
+  background: linear-gradient(180deg, var(--oc-amber-tint), var(--oc-amber-tint2)); box-shadow: var(--oc-sh-warm);
+}
+.our-chat .oc-gate-h { display: flex; align-items: center; gap: 11px; padding: 14px 16px 12px; }
+.our-chat .oc-gate-lock {
+  width: 30px; height: 30px; border-radius: 10px; background: var(--oc-panel); border: 1px solid var(--oc-amber-line);
+  display: grid; place-items: center; color: var(--oc-amber-ink); flex: none; box-shadow: 0 2px 6px -3px rgba(245,158,11,.35);
+}
+.our-chat .oc-gate-lock svg { width: 15px; height: 15px; }
+.our-chat .oc-gate-t { font-weight: 700; font-size: 13.5px; color: var(--oc-amber-ink); letter-spacing: -.01em; }
+.our-chat .oc-gate-s { font-size: 12px; color: #a06a24; margin-top: 1px; }
+.our-chat .oc-gate-f { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--oc-amber-line); background: rgba(255,255,255,.35); }
+.our-chat .oc-gate .oc-btn.amber:disabled { opacity: .5; cursor: default; }
+
+/* ── Gate stage — the real founder review, IN the thread. The amber-at-the-gate register holds: a warm
+   header with the same lock, then the GateReview stage body on an opaque ground (a read surface is never
+   glass — matches opaque-content-surfaces). It SETTLES in (ease-out height + opacity), never springs or
+   blooms; the wall itself is sacred, so the arrival stays calm. */
+.our-chat .oc-gate-stage {
+  border: 1px solid var(--oc-amber-line); border-radius: 18px; overflow: hidden;
+  background: var(--oc-panel); box-shadow: var(--oc-sh-warm);
+  animation: oc-stage-settle .22s var(--oc-ease-soft) both;
+}
+@keyframes oc-stage-settle {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.our-chat .oc-gate-stage-h {
+  display: flex; align-items: center; gap: 11px; padding: 13px 15px;
+  background: linear-gradient(180deg, var(--oc-amber-tint), var(--oc-amber-tint2));
+  border-bottom: 1px solid var(--oc-amber-line);
+}
+.our-chat .oc-gate-stage-h > div { min-width: 0; }
+.our-chat .oc-gate-stage-close {
+  margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 5px;
+  font-family: inherit; font-size: 12px; font-weight: 600; color: #a06a24; cursor: pointer;
+  background: transparent; border: 1px solid transparent; border-radius: 9px; padding: 5px 9px;
+  transition: background .16s var(--oc-ease-soft), border-color .16s var(--oc-ease-soft);
+}
+.our-chat .oc-gate-stage-close:hover { background: rgba(255,255,255,.5); border-color: var(--oc-amber-line); }
+.our-chat .oc-gate-stage-close svg { width: 13px; height: 13px; }
+.our-chat .oc-gate-stage-body { padding: 4px; overflow-x: auto; }
+
+/* ── Warm the in-chat gate review ──────────────────────────────────────────
+   The stage GateReview is shared with the on-canvas gate, so it ships in the cool zinc palette. Inside
+   the chat it must read in the warm register — but ESSENCE-FIRST and calm, never a wall of fields. These
+   overrides are scoped to `.our-chat .oc-gate-stage` so the canvas gate stays untouched. The card reads:
+   who it's going to, the real message (verbatim, always visible), one primary action — and every extra
+   detail tucks behind a single quiet reveal. Amber stays reserved for the gate chrome; the card ground is
+   warm-neutral, a settled decision goes calm green (never amber on an action). */
+.our-chat .oc-gate-stage .cgate-review.cgate-review-stage {
+  padding: 14px 15px 16px; gap: 13px; max-width: none;
+}
+.our-chat .oc-gate-stage .cgate-review-lead { gap: 6px; }
+.our-chat .oc-gate-stage .cgate-review-count { color: var(--oc-ink-2); font-size: 12.5px; letter-spacing: -.01em; }
+.our-chat .oc-gate-stage .cgate-review-taste { color: var(--oc-ink-3); }
+.our-chat .oc-gate-stage .cgate-review-offer { color: var(--oc-ink-2); }
+
+/* the crew reel across the top — warm, quiet, still */
+.our-chat .oc-gate-stage .cgate-reel { background: var(--oc-warm-50); border-color: var(--oc-line); }
+.our-chat .oc-gate-stage .cgate-reel-head { color: var(--oc-ink-3); }
+.our-chat .oc-gate-stage .cgate-reel-who { color: var(--oc-ink); }
+.our-chat .oc-gate-stage .cgate-reel-did { color: var(--oc-ink-2); }
+.our-chat .oc-gate-stage .cgate-reel-check { color: var(--oc-ok); }
+
+/* the decision card — warm ground, opaque, soft; the one accent is reserved for state */
+.our-chat .oc-gate-stage .cgate-cards { gap: 12px; }
+.our-chat .oc-gate-stage .cgate-card-stage {
+  padding: 14px 15px; border-radius: 16px; background: var(--oc-panel);
+  border: 1px solid var(--oc-line); border-left: 1px solid var(--oc-line);
+  box-shadow: var(--oc-sh-1);
+}
+.our-chat .oc-gate-stage .cgate-card-stage .cgate-card-to {
+  font-size: 14.5px; font-weight: 620; letter-spacing: -.012em; color: var(--oc-ink);
+}
+.our-chat .oc-gate-stage .cgate-card-does { color: var(--oc-ink-2); font-size: 12.5px; margin-top: 4px; }
+
+/* the real message, verbatim — an inset warm block so it reads as the actual thing about to be sent */
+.our-chat .oc-gate-stage .cgate-card-artifact {
+  margin-top: 11px; padding: 11px 13px; border-radius: 12px;
+  background: var(--oc-warm-50); border: 1px solid var(--oc-line-soft);
+}
+.our-chat .oc-gate-stage .cgate-card-artifact .cgate-card-body {
+  font-size: 13px; line-height: 1.55; color: var(--oc-ink); white-space: pre-wrap;
+}
+.our-chat .oc-gate-stage .cgate-body-toggle { color: var(--oc-ink-3); font-weight: 600; }
+
+/* the ONE reveal — "who it's for & why". A single quiet line by default; opens to the labeled detail.
+   No wall of fields until the founder asks for it. */
+.our-chat .oc-gate-stage .cgate-card-tuck { margin-top: 10px; }
+.our-chat .oc-gate-stage .cgate-card-tuck > summary {
+  list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; font-weight: 600; letter-spacing: -.005em; color: var(--oc-ink-3);
+  padding: 3px 0; user-select: none;
+  transition: color .16s var(--oc-ease-soft);
+}
+.our-chat .oc-gate-stage .cgate-card-tuck > summary::-webkit-details-marker { display: none; }
+.our-chat .oc-gate-stage .cgate-card-tuck > summary::before {
+  content: "▸"; font-size: 9px; color: var(--oc-ink-4); transition: transform .18s var(--oc-ease);
+}
+.our-chat .oc-gate-stage .cgate-card-tuck[open] > summary::before { transform: rotate(90deg); }
+.our-chat .oc-gate-stage .cgate-card-tuck > summary:hover { color: var(--oc-ink-2); }
+.our-chat .oc-gate-stage .cgate-card-tuck-body {
+  margin-top: 7px; padding-top: 8px; border-top: 1px solid var(--oc-line-soft);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.our-chat .oc-gate-stage .cgate-card-tuck-body p { margin: 0; font-size: 12px; color: var(--oc-ink-2); line-height: 1.45; }
+.our-chat .oc-gate-stage .cgate-card-tuck-body .k {
+  font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--oc-ink-3); margin-right: 7px;
+}
+
+/* the primary action — ink fill, calm; amber stays chrome-only. Send-back / edit read as quiet outlines. */
+.our-chat .oc-gate-stage .cgate-card-actions-stage { margin-top: 13px; gap: 8px; }
+.our-chat .oc-gate-stage .cgate-approve {
+  background: var(--oc-ink); color: #faf8f4; border: none; border-radius: 11px;
+  font-weight: 600; box-shadow: var(--oc-sh-1);
+  transition: transform .12s var(--oc-ease), box-shadow .18s var(--oc-ease);
+}
+.our-chat .oc-gate-stage .cgate-approve:hover:not(:disabled) { background: #000; transform: translateY(-1px); }
+.our-chat .oc-gate-stage .cgate-sendback,
+.our-chat .oc-gate-stage .cgate-edit {
+  background: transparent; color: var(--oc-ink-2); border: 1px solid var(--oc-line); border-radius: 11px;
+  transition: background .16s var(--oc-ease-soft), border-color .16s var(--oc-ease-soft);
+}
+.our-chat .oc-gate-stage .cgate-sendback:hover:not(:disabled),
+.our-chat .oc-gate-stage .cgate-edit:hover:not(:disabled) { background: var(--oc-warm-50); border-color: #e2dcd0; }
+
+/* batch approve — a quiet warm-neutral secondary, never amber */
+.our-chat .oc-gate-stage .cgate-approve-all {
+  color: var(--oc-ink); background: var(--oc-warm-50);
+  border: 1px solid var(--oc-line); box-shadow: none; border-radius: 12px;
+}
+.our-chat .oc-gate-stage .cgate-approve-all:hover:not(:disabled) { background: var(--oc-warm-100); }
+
+/* a settled decision collapses to a calm green receipt */
+.our-chat .oc-gate-stage .cgate-card-stage.is-decided { background: var(--oc-warm-50); border-color: var(--oc-line); }
+.our-chat .oc-gate-stage .cgate-card-verdict-check { background: #e6f2ea; color: var(--oc-ok); }
+.our-chat .oc-gate-stage .cgate-card-verdict { color: var(--oc-ink-3); }
+
+@media (prefers-reduced-motion: reduce) {
+  .our-chat .oc-gate-stage { animation: none; }
+  .our-chat .oc-gate-stage .cgate-card-tuck > summary::before { transition: none; }
+  .our-chat .oc-gate-stage .cgate-approve:hover:not(:disabled) { transform: none; }
+}
+
+/* ── Settled receipt ────────────────────────────────────────────────────── */
+.our-chat .oc-receipt {
+  display: flex; align-items: center; gap: 10px; padding: 9px 13px;
+  border: 1px solid var(--oc-line-soft); border-radius: 13px; background: var(--oc-warm-50);
+}
+.our-chat .oc-receipt-rc { width: 20px; height: 20px; border-radius: 50%; background: #e6f2ea; color: var(--oc-ok); display: grid; place-items: center; flex: none; }
+.our-chat .oc-receipt-rc svg { width: 12px; height: 12px; }
+.our-chat .oc-receipt-t { font-size: 12.5px; color: var(--oc-ink-2); min-width: 0; }
+.our-chat .oc-receipt-t b { color: var(--oc-ink); font-weight: 600; }
+.our-chat .oc-receipt-stamp { margin-left: auto; font-size: 11px; color: var(--oc-ink-4); flex: none; }
+
+/* ── Buttons (shared by the two stops) ──────────────────────────────────── */
+.our-chat .oc-btn {
+  font-family: inherit; font-size: 12.5px; font-weight: 600; border-radius: 11px; padding: 8px 15px;
+  border: 1px solid var(--oc-line); background: var(--oc-panel); color: var(--oc-ink); cursor: pointer;
+  box-shadow: var(--oc-sh-1); letter-spacing: -.01em;
+  transition: transform .12s var(--oc-ease), box-shadow .18s var(--oc-ease), background .18s var(--oc-ease);
+}
+.our-chat .oc-btn:hover { transform: translateY(-1px); box-shadow: var(--oc-sh-2); }
+.our-chat .oc-btn:active { transform: translateY(0) scale(.98); }
+.our-chat .oc-btn.ghost { background: transparent; border-color: transparent; color: var(--oc-ink-2); box-shadow: none; }
+.our-chat .oc-btn.ghost:hover { background: var(--oc-warm-100); box-shadow: none; }
+.our-chat .oc-btn.amber { background: #b45309; border-color: #a04a08; color: #fff; box-shadow: 0 8px 18px -8px rgba(180,83,9,.5); }
+
+/* ── Typing indicator (crew is composing) ───────────────────────────────── */
+.our-chat .oc-typing { display: inline-flex; align-items: center; gap: 4px; background: var(--oc-warm-50); border-radius: 5px 17px 17px 17px; padding: 12px 15px; box-shadow: var(--oc-sh-1); }
+.our-chat .oc-typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--oc-ink-4); animation: oc-blink 1.3s var(--oc-ease-soft) infinite; }
+.our-chat .oc-typing i:nth-child(2) { animation-delay: .18s; }
+.our-chat .oc-typing i:nth-child(3) { animation-delay: .36s; }
+@keyframes oc-blink { 0%, 60%, 100% { opacity: .3; } 30% { opacity: 1; } }
+
+/* thread list (the Stagger wrapper) + idle wrapper share the thread's rhythm */
+.our-chat .oc-thread-list { display: flex; flex-direction: column; gap: 17px; }
+.our-chat .oc-idle { padding: 2px 2px; }
+
+/* ── Calm error (never the raw engine text) ─────────────────────────────── */
+.our-chat .oc-error {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 9px;
+  padding: 13px 15px; border: 1px solid var(--oc-line); border-radius: 16px;
+  background: var(--oc-warm-50); box-shadow: var(--oc-sh-1);
+  font-size: 13px; line-height: 1.5; color: var(--oc-ink-2);
+}
+.our-chat .oc-error .oc-btn { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ── Idle starters (no session yet) ─────────────────────────────────────── */
+.our-chat .oc-idle-lead { font-size: 13.5px; line-height: 1.55; color: var(--oc-ink-2); margin: 0 0 12px; }
+.our-chat .oc-idle-starters { display: flex; flex-direction: column; gap: 8px; }
+.our-chat .oc-idle-starter {
+  text-align: left; padding: 10px 13px; border: 1px solid var(--oc-line); border-radius: 13px;
+  background: var(--oc-warm-50); color: var(--oc-ink); font: inherit; font-size: 13px; cursor: pointer;
+  box-shadow: var(--oc-sh-1); transition: transform .12s var(--oc-ease), box-shadow .18s var(--oc-ease), border-color .18s var(--oc-ease);
+}
+.our-chat .oc-idle-starter:hover { transform: translateY(-1px); box-shadow: var(--oc-sh-2); border-color: #e2dcd0; }
+
+/* ── The calm input ─────────────────────────────────────────────────────── */
+.our-chat .oc-input-wrap { border-top: 1px solid var(--oc-line-soft); padding: 13px 16px 15px; background: var(--oc-panel); position: relative; }
+.our-chat .oc-input {
+  border: 1px solid var(--oc-line); border-radius: 18px; padding: 11px 13px; display: flex; flex-direction: column; gap: 9px;
+  background: var(--oc-panel); box-shadow: var(--oc-sh-1);
+  transition: box-shadow .22s var(--oc-ease), border-color .22s var(--oc-ease);
+}
+.our-chat .oc-input:focus-within { box-shadow: var(--oc-sh-2); border-color: #e2dcd0; }
+.our-chat .oc-input-text {
+  width: 100%; border: none; background: transparent; resize: none; font: inherit; font-size: 13.5px;
+  color: var(--oc-ink); line-height: 1.5; max-height: 140px; padding: 0;
+}
+.our-chat .oc-input-text::placeholder { color: var(--oc-ink-3); }
+.our-chat .oc-input-text:focus { outline: none; }
+.our-chat .oc-input-bar { display: flex; align-items: center; gap: 8px; }
+.our-chat .oc-ib {
+  width: 30px; height: 30px; border-radius: 10px; background: var(--oc-warm-100); border: none;
+  display: grid; place-items: center; color: var(--oc-ink-3); cursor: pointer;
+  transition: background .16s var(--oc-ease-soft), transform .12s var(--oc-ease), color .16s var(--oc-ease-soft);
+}
+.our-chat .oc-ib:hover { background: var(--oc-warm-150); color: var(--oc-ink-2); }
+.our-chat .oc-ib:active { transform: scale(.94); }
+.our-chat .oc-ib.at { font-weight: 700; font-size: 15px; }
+.our-chat .oc-ib.active { background: #fbecec; color: #c0563f; }
+.our-chat .oc-send {
+  margin-left: auto; width: 32px; height: 32px; border-radius: 11px; background: var(--oc-ink); color: #faf8f4; border: none;
+  display: grid; place-items: center; cursor: pointer; box-shadow: 0 6px 14px -6px rgba(33,31,27,.45);
+  transition: transform .12s var(--oc-ease), opacity .16s var(--oc-ease);
+}
+.our-chat .oc-send:hover:not(:disabled) { transform: translateY(-1px); }
+.our-chat .oc-send:active:not(:disabled) { transform: scale(.94); }
+.our-chat .oc-send:disabled { opacity: .4; cursor: default; }
+.our-chat .oc-input-picker { display: inline-flex; align-items: center; }
+.our-chat .oc-hint { font-size: 11px; color: var(--oc-ink-4); margin-top: 9px; text-align: center; }
+.our-chat .oc-heard { margin-top: 8px; font-size: 13px; color: var(--oc-ink-2); font-style: italic; }
+.our-chat .oc-voice-error { margin: 8px 0 0; font-size: 11.5px; color: #b45309; }
+
+/* ── The work, made beautiful — a live step-tracker (pending→✓ done) + a shimmering "producing now"
+   line. Soft, settling, stream-don't-spin; motion shows causality, never performs. ─────────────── */
+.our-chat .oc-steps { border-radius: 12px; }
+.our-chat .oc-steps-head {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  border: none; background: transparent; font: inherit; cursor: pointer;
+  padding: 5px 6px; border-radius: 10px; color: var(--oc-ink-3);
+  transition: background .16s var(--oc-ease-soft);
+}
+.our-chat .oc-steps-head:hover { background: var(--oc-warm-50); }
+.our-chat .oc-steps-chev { color: var(--oc-ink-4); transition: transform .3s var(--oc-ease); flex: none; }
+.our-chat .oc-steps.open .oc-steps-chev { transform: rotate(90deg); }
+.our-chat .oc-steps-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--oc-ok); box-shadow: 0 0 0 3px rgba(74,157,118,.12); }
+.our-chat .oc-steps-dot.fail { background: #c0563f; box-shadow: 0 0 0 3px rgba(192,86,63,.12); }
+/* while this cluster is the live, still-running segment, its collapsed dot breathes — the trace stays
+   honest that work is happening now, not finished. */
+.our-chat .oc-steps-dot.live { animation: oc-breathe 2s var(--oc-ease-soft) infinite; }
+.our-chat .oc-steps-count { font-weight: 600; font-size: 12.5px; color: var(--oc-ink-2); letter-spacing: -.01em; flex: none; }
+.our-chat .oc-steps-peek { font-size: 12.5px; color: var(--oc-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* expanded — a vertical spine with soft nodes that check off, staggered in */
+.our-chat .oc-steps-list { list-style: none; margin: 4px 0 2px; padding: 2px 0 2px 6px; position: relative; }
+.our-chat .oc-steps-list::before { content: ""; position: absolute; left: 12.5px; top: 12px; bottom: 12px; width: 1.5px; background: var(--oc-line); }
+.our-chat .oc-step {
+  position: relative; display: flex; gap: 11px; padding: 5px 0;
+  opacity: 0; transform: translateY(4px); animation: oc-rise .42s var(--oc-ease-soft) forwards;
+}
+.our-chat .oc-step-node {
+  position: relative; z-index: 1; width: 14px; height: 14px; border-radius: 50%; flex: none; margin-top: 1px;
+  background: var(--oc-panel); box-shadow: inset 0 0 0 1.5px var(--oc-ok); color: var(--oc-ok);
+  display: grid; place-items: center;
+}
+.our-chat .oc-step-node.fail { box-shadow: inset 0 0 0 1.5px #c0563f; color: #c0563f; }
+.our-chat .oc-step-node svg { animation: oc-check .32s var(--oc-ease-soft) both; }
+@keyframes oc-check { from { opacity: 0; transform: scale(.5); } to { opacity: 1; transform: none; } }
+.our-chat .oc-step-text { min-width: 0; padding-top: 0; }
+/* a plain-word verb-face before each step title, so the trace reads as real actions ("Read your
+   product", "Drafted 4 leads") not "Running node-3". Monochrome warm — color stays reserved. */
+.our-chat .oc-step-kind { font-size: 11px; font-weight: 600; color: var(--oc-ink-3); letter-spacing: -.01em; margin-right: 6px; }
+.our-chat .oc-step-title { font-size: 12.5px; color: var(--oc-ink-2); font-weight: 500; }
+.our-chat .oc-step-detail { display: block; font-size: 11.5px; color: var(--oc-ink-3); margin-top: 1px; line-height: 1.4; }
+
+/* the live "now" beat — a breathing orb + a soft shimmer sweep across the current step */
+.our-chat .oc-live { display: flex; align-items: center; gap: 9px; padding: 4px 6px; }
+.our-chat .oc-live-orb {
+  width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--oc-ok);
+  animation: oc-breathe 2s var(--oc-ease-soft) infinite;
+}
+@keyframes oc-breathe { 0%, 100% { box-shadow: 0 0 0 0 rgba(74,157,118,.36); } 50% { box-shadow: 0 0 0 5px rgba(74,157,118,0); } }
+.our-chat .oc-live-text {
+  font-size: 12.5px; font-weight: 500; letter-spacing: -.01em;
+  background: linear-gradient(90deg, var(--oc-ink-3) 30%, var(--oc-ink) 50%, var(--oc-ink-3) 70%);
+  background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: oc-shimmer 2.4s linear infinite;
+}
+@keyframes oc-shimmer { to { background-position: -220% 0; } }
+
+/* reasoning still forming — a soft blinking caret trailing the latest bubble */
+.our-chat .oc-bubble.streaming::after {
+  content: ""; display: inline-block; width: 2px; height: 13px; margin-left: 3px; vertical-align: -2px;
+  background: var(--oc-ink-3); border-radius: 1px; animation: oc-caret 1.05s var(--oc-ease-soft) infinite;
+}
+@keyframes oc-caret { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .our-chat .oc-rise, .our-chat .oc-step { animation: none; opacity: 1; transform: none; }
+  .our-chat .oc-card { animation: none; opacity: 1; transform: none; }
+  .our-chat .oc-opt:active { transform: none; }
+  .our-chat .oc-steps-dot.live { animation: none; }
+  .our-chat .oc-presence.working .oc-ring { animation: none; opacity: .4; }
+  .our-chat .oc-typing i, .our-chat .oc-step-node svg, .our-chat .oc-live-orb, .our-chat .oc-bubble.streaming::after { animation: none; }
+  .our-chat .oc-live-text { animation: none; background: none; -webkit-background-clip: initial; background-clip: initial; color: var(--oc-ink-2); }
+}

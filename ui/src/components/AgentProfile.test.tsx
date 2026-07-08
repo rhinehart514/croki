@@ -1,15 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 
-// Mock the API seam so the learning section renders from data we control, not the network.
+// Mock the API seam so the soul section renders from data we control, not the network.
 vi.mock("@/api", () => ({
-  getAgentLearning: vi.fn(),
+  getCrewMemberProfile: vi.fn(),
+  promoteCrewLearning: vi.fn(),
+  dismissCrewLearning: vi.fn(),
 }));
 
 import { AgentProfile, type AgentProfileView } from "./AgentProfile";
-import { getAgentLearning } from "@/api";
+import { getCrewMemberProfile, promoteCrewLearning, dismissCrewLearning } from "@/api";
 
-const mockedLearning = vi.mocked(getAgentLearning);
+const mockedSoul = vi.mocked(getCrewMemberProfile);
+const mockedPromote = vi.mocked(promoteCrewLearning);
+const mockedDismiss = vi.mocked(dismissCrewLearning);
+
+const EMPTY_SOUL = { name: null, record: { runs: 0, sent: 0, replies: 0, wins: 0 }, learned: [], stillFiguring: [], ready: [] };
 
 const view: AgentProfileView = { ref: "cold-outreach", job: "Write first-touch intros" };
 
@@ -25,60 +31,79 @@ const baseProps = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockedSoul.mockResolvedValue({ profile: EMPTY_SOUL });
 });
 
-describe("AgentProfile learning section", () => {
-  it("renders the honest 'no runs yet' copy when the agent has no history", async () => {
-    mockedLearning.mockResolvedValue({
-      profile: {
-        hasRuns: false,
-        runCount: 0,
-        counts: { approved: 0, rejected: 0, edits: 0 },
-        lastEdits: [],
-        voice: "",
-        note: null,
-      },
-    });
+// There is ONE learning story now — the soul. The legacy "What I've become" derived-stats section was
+// folded into it, so a teammate has a single "What I've learned from you" panel that handles every state.
+describe("AgentProfile — the single learning story (soul)", () => {
+  it("renders the honest 'no runs yet' copy when nothing has been learned", async () => {
     render(<AgentProfile {...baseProps} />);
-
     await waitFor(() => expect(screen.getByText(/No runs yet/i)).toBeInTheDocument());
-    // No fabricated stats row when there's no history.
-    expect(screen.queryByText(/approved/i)).toBeNull();
+    // Exactly one learning section — the legacy block is gone.
+    expect(screen.getByText(/What I've learned from you/i)).toBeInTheDocument();
+    expect(screen.queryByText(/What I've become/i)).toBeNull();
   });
 
-  it("renders the derived stats and correction edits when the agent has runs", async () => {
-    mockedLearning.mockResolvedValue({
+  it("fetches the soul for the ref on screen", async () => {
+    render(<AgentProfile {...baseProps} />);
+    await waitFor(() => expect(mockedSoul).toHaveBeenCalledWith("proj-1", "cold-outreach"));
+  });
+
+  it("shows the track record (omitting zero counters) and learned + still-figuring lessons", async () => {
+    mockedSoul.mockResolvedValue({
       profile: {
-        hasRuns: true,
-        runCount: 5,
-        counts: { approved: 3, rejected: 1, edits: 1 },
-        lastEdits: [{ from: "Hey there!", to: "Hi — quick note" }],
-        voice: "Warmer, shorter, no exclamation marks.",
-        note: null,
+        name: "Maya",
+        record: { runs: 4, sent: 0, replies: 2, wins: 0 },
+        learned: [{ text: "lead with their trigger", why: "you corrected this 3 times" }],
+        stillFiguring: [{ text: "keep it under three sentences", why: "" }],
+        ready: [],
       },
     });
     render(<AgentProfile {...baseProps} />);
 
-    // The stats are the real derived numbers.
-    await waitFor(() => expect(screen.getByText("5")).toBeInTheDocument());
-    expect(screen.getByText("3")).toBeInTheDocument(); // approved
-    expect(screen.getByText("approved")).toBeInTheDocument();
-    expect(screen.getByText("rejected")).toBeInTheDocument();
-
-    // The correction pair renders both the founder's before and after.
-    expect(screen.getByText(/How you've corrected me/i)).toBeInTheDocument();
-    expect(screen.getByText("Hey there!")).toBeInTheDocument();
-    expect(screen.getByText("Hi — quick note")).toBeInTheDocument();
-
-    // The learned voice shows through.
-    expect(screen.getByText(/Warmer, shorter/i)).toBeInTheDocument();
+    // The exact line proves zero counters are omitted: no "sent", no "wins" — only real runs+replies.
+    await waitFor(() => expect(screen.getByText("Proven on 4 runs · 2 replies")).toBeInTheDocument());
+    expect(screen.getByText("lead with their trigger")).toBeInTheDocument();
+    expect(screen.getByText(/Still figuring out/i)).toBeInTheDocument();
+    expect(screen.getByText("keep it under three sentences")).toBeInTheDocument();
   });
 
-  it("fetches learning for the ref on screen", async () => {
-    mockedLearning.mockResolvedValue({
-      profile: { hasRuns: false, runCount: 0, counts: { approved: 0, rejected: 0, edits: 0 }, lastEdits: [], voice: "", note: null },
+  it("renders a ready lesson and promotes it on the founder's tap", async () => {
+    mockedSoul.mockResolvedValue({
+      profile: {
+        name: "Maya",
+        record: { runs: 0, sent: 0, replies: 0, wins: 0 },
+        learned: [],
+        stillFiguring: [],
+        ready: [{ text: "no em-dashes ever", why: "", patternKey: "no em dashes ever" }],
+      },
     });
+    mockedPromote.mockResolvedValue({
+      profile: { ...EMPTY_SOUL, name: "Maya", learned: [{ text: "no em-dashes ever", why: "" }] },
+    });
+    const { getByText } = render(<AgentProfile {...baseProps} />);
+
+    await waitFor(() => expect(getByText(/Ready to make permanent\?/i)).toBeInTheDocument());
+    getByText("Make permanent").click();
+
+    await waitFor(() => expect(mockedPromote).toHaveBeenCalledWith("proj-1", "cold-outreach", "no em dashes ever"));
+    // After blessing, the lesson is permanent and no longer asking.
+    await waitFor(() => expect(screen.queryByText(/Ready to make permanent\?/i)).toBeNull());
+  });
+
+  it("dismisses a ready lesson on 'Not yet'", async () => {
+    mockedSoul.mockResolvedValue({
+      profile: {
+        ...EMPTY_SOUL, name: "Maya",
+        ready: [{ text: "mention the case study", why: "", patternKey: "mention the case study" }],
+      },
+    });
+    mockedDismiss.mockResolvedValue({ profile: { ...EMPTY_SOUL, name: "Maya" } });
     render(<AgentProfile {...baseProps} />);
-    await waitFor(() => expect(mockedLearning).toHaveBeenCalledWith("proj-1", "cold-outreach"));
+
+    await waitFor(() => expect(screen.getByText("Not yet")).toBeInTheDocument());
+    screen.getByText("Not yet").click();
+    await waitFor(() => expect(mockedDismiss).toHaveBeenCalledWith("proj-1", "cold-outreach", "mention the case study"));
   });
 });

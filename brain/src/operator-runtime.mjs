@@ -3,7 +3,8 @@
 // ideas, candidates, cancel). The tool schemas, the run mechanics, the prompt, and the tool dispatcher
 // were split into sibling modules (W8, behavior-preserving); this file composes them and re-exports the
 // symbols other modules and tests import (operatorTools, executeOperatorTool, and the resolvers).
-import { liveStepRuntime } from "./agent-bridge.mjs";
+import { liveStepRuntime, createGateTranslator } from "./agent-bridge.mjs";
+import { draftKey, itemReviewText } from "./memory.mjs";
 import { recordFlowRun, saveFlow } from "./flow-store.mjs";
 import { buildRunGrounding } from "./run-grounding.mjs";
 import { createDerivedSourceLoader } from "./cross-reference.mjs";
@@ -33,6 +34,7 @@ import {
   flowFor,
   latestWorkspace,
   memoryFor,
+  recallTaste,
   summarizeRun,
 } from "./operator-run-core.mjs";
 import { recallPriorSessions, systemPrompt } from "./operator-prompt.mjs";
@@ -120,7 +122,7 @@ export async function runOperatorSession(id, runtime = {}) {
     // objective to act on without relaxing anything past the gate.
     goal: firstNonEmpty(session.goal, session.standingBrief),
     model: session.model,
-    system: systemPrompt(session, workspace, recallPriorSessions(session, options)),
+    system: systemPrompt(session, workspace, recallPriorSessions(session, options), recallTaste(session, options)),
     // The model is handed ONLY the naked toolset (truth + compose_and_run + repair loop + gate + chat).
     // executeOperatorTool below still routes every tool name for direct API/MCP callers and tests.
     // filterSafeTools re-asserts the outbound/approval guard over the list the model actually sees, so
@@ -279,6 +281,25 @@ export function launchOperatorSession(id, runtime = {}) {
   return work;
 }
 
+// Optional, ADVISORY steering a founder message can carry: which specific teammates and capabilities
+// they @-mentioned in the composer. It is folded into the model's channel as a strong steer toward
+// composing with the named crew — never a contract and never a gate: an unrecognized or ill-fitting
+// name is chosen against, not enforced, so a run is never blocked on a hint (the no-cage invariant).
+// Shape is open — { teammates?: string[], capabilities?: string[] } — and read defensively; anything
+// that is not a non-empty string list is ignored rather than throwing.
+function formatOperatorHints(hints) {
+  if (!hints || typeof hints !== "object") return "";
+  const clean = (list) => (Array.isArray(list) ? list.map((v) => String(v ?? "").trim()).filter(Boolean) : []);
+  const teammates = clean(hints.teammates);
+  const capabilities = clean(hints.capabilities);
+  if (!teammates.length && !capabilities.length) return "";
+  const parts = [];
+  if (teammates.length) parts.push(`teammates ${teammates.join(", ")}`);
+  if (capabilities.length) parts.push(`capabilities ${capabilities.join(", ")}`);
+  return `\n\nThe founder named specific parts of the crew for this — ${parts.join("; ")}. Prefer composing with these where they genuinely fit the goal (pass named teammates as agents to compose_and_run, and lean on the named capabilities); treat it as a strong steer, not a hard requirement — if one does not fit, choose better and say why. Never block the work on them.`;
+}
+
+// `runtime.hints` (optional) carries the founder's @-mentions from the composer — advisory context only.
 export function resumeOperatorSession(id, input, runtime = {}) {
   const options = runtime.options ?? {};
   let session = getOperatorSession(id, options);
@@ -297,6 +318,10 @@ export function resumeOperatorSession(id, input, runtime = {}) {
   if (["completed", "cancelled"].includes(session.status)) throw new Error(`Session is already ${session.status}.`);
   const text = String(input || "").trim();
   if (!text) throw new Error("A founder response is required.");
+  // The @-mention steer rides on the SAME user message as the founder's words, so the resumed drive
+  // reads both as one prompt (latestResumeInstruction returns the last user string). Empty/omitted
+  // hints add nothing — the resume is byte-identical to a plain founder response.
+  const hintsSuffix = formatOperatorHints(runtime.hints);
   session = addEvent({
     ...session,
     status: "ready",
@@ -305,7 +330,7 @@ export function resumeOperatorSession(id, input, runtime = {}) {
     maxSteps: Math.min(60, Math.max(session.maxSteps, session.stepCount + 12)),
     modelMessages: [
       ...(session.modelMessages ?? []),
-      { role: "user", content: `Founder response: ${text}` },
+      { role: "user", content: `Founder response: ${text}${hintsSuffix}` },
     ],
   }, {
     type: "founder_input_received",
@@ -475,7 +500,15 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
     runs: flow.runs,
     resumeResult: session.pendingGate.runResult,
     deployAuthorization,
-    stepRuntime: liveStepRuntime({ cwd: options.cwd }),
+    stepRuntime: options.stepRuntime || liveStepRuntime({ cwd: options.cwd }),
+    // Live plain-language gate translator for any items re-staged on this resume. Auto-created only for a
+    // real run: OFF when the caller passed options.gateTranslator, injected a fake stepRuntime, or scoped
+    // the run to an isolated store root (options.root — every unit test does this; production never does),
+    // so a unit resume never spawns a translation call. The gate connector still wraps it in a timeout +
+    // raw-subject fallback.
+    gateTranslator: "gateTranslator" in options
+      ? options.gateTranslator
+      : ((options.stepRuntime || options.root) ? null : createGateTranslator({ cwd: options.cwd })),
     loadLastRunItems: createDerivedSourceLoader({ ...options, projectId: session.projectId || "default" }),
     // BYO credentials: a founder-pasted key for this project wins over env; options carries the
     // persistence root so the stored key resolves from the same store the founder saved it in.
@@ -522,6 +555,71 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
   }, options);
   if (!result.pendingGates.length) launchOperatorSession(id, runtime);
   return session;
+}
+
+// "Send back to refine" — the founder vetoes ONE staged item with a note; it goes back to the crew to
+// rework and returns to the founder gate. This is NOT a release: nothing sends, deploys, or crosses the
+// wall. Modeled on resolveOperatorGate (atomic claim, same runtime), but it never runs the graph, never
+// calls authorizeGateRelease / authorizeReleaseForRequest, and never touches a send/execute path — the
+// only effect is a rework instruction handed back to the model, which re-drives to a fresh gate.
+export async function resolveOperatorGateRefine(id, payload = {}, runtime = {}) {
+  const options = runtime.options ?? {};
+  const session = getOperatorSession(id, options);
+  if (session.status !== "waiting_for_gate" || !session.pendingGate?.runResult) {
+    throw new Error("This operator session is not waiting at a founder gate.");
+  }
+  const gateNodeId = payload.gateNodeId || session.pendingGate.nodeIds?.[0] || null;
+  const gateResult = gateNodeId ? session.pendingGate.runResult.nodes?.[gateNodeId] : null;
+  if (!gateResult || !Array.isArray(gateResult.items)) {
+    throw new Error(`No gate "${gateNodeId ?? "?"}" is waiting for review in this session.`);
+  }
+  const itemKey = typeof payload.itemKey === "string" ? payload.itemKey : null;
+  // Match by the SAME stable key the gate uses to bind founder decisions to items (memory.draftKey,
+  // mirrored in ui/src/lib/itemKey.ts), so refine targets exactly the item the founder pointed at.
+  const target = itemKey ? gateResult.items.find((item) => draftKey(item) === itemKey) : null;
+  if (!target) {
+    throw new Error(itemKey ? `No staged item "${itemKey}" is waiting at this gate.` : "An item key is required to send an item back for rework.");
+  }
+  const founderNote = typeof payload.founderNote === "string" ? payload.founderNote.trim() : "";
+  if (!founderNote) throw new Error("A note is required to send an item back for rework.");
+
+  // ATOMICALLY claim the transition BEFORE any launch, exactly like resolveOperatorGate: the guard above
+  // and this save are synchronous with no await between them, so a concurrent refine re-reads the claimed
+  // (no longer waiting_for_gate) status and is rejected — the rework is handed back exactly once.
+  // Extract the item's reviewable FRAMING (who / subject / current draft), never its machinery, for the
+  // rework instruction. The crew reads its own prior draft to rework it — this stays inside the wall.
+  const who = firstNonEmpty(target.name, target.founder_name, target.company, target.handle);
+  const subject = firstNonEmpty(target.subject, target.suggested_subject_line);
+  const draft = itemReviewText(target);
+  const framingParts = [];
+  if (who) framingParts.push(`for ${who}`);
+  if (subject) framingParts.push(`subject "${subject}"`);
+  const framingLabel = framingParts.length ? framingParts.join(", ") : (target.gtmActionId || itemKey);
+  const framing = draft ? `${framingLabel} — current draft: ${draft}` : framingLabel;
+
+  const next = addEvent({
+    ...session,
+    status: "ready",
+    // Leaving the gate for rework: the model re-drives and brings the batch back to a fresh gate.
+    pendingGate: null,
+    error: null,
+    pendingQuestion: null,
+    maxSteps: Math.min(60, Math.max(session.maxSteps, session.stepCount + 12)),
+    modelMessages: [
+      ...(session.modelMessages ?? []),
+      {
+        role: "user",
+        content: `The founder reviewed the staged work and sent ONE item back for rework. Item: ${framing}. Their note: ${founderNote}. Re-draft ONLY this item to address the note, keep everything else, and bring it back to the founder gate. Do not send, publish, or approve anything — the founder releases at the gate.`,
+      },
+    ],
+  }, {
+    type: "gate_item_refined",
+    title: "Sent an item back for rework",
+    detail: founderNote,
+    data: { gateNodeId, itemKey },
+  }, options);
+  launchOperatorSession(id, runtime);
+  return next;
 }
 
 // The founder accepts or discards a staged graph proposal. Accept applies the exact reviewed

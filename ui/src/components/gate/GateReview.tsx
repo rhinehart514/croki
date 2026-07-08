@@ -18,7 +18,8 @@ import {
   gateItemEvidenceLines,
 } from "@/lib/gateItem";
 import type { GateEvidenceLine, GatePromote } from "@/lib/gateItem";
-import type { GateDecision, GTMItem } from "@/types";
+import { gateReel } from "@/lib/gateReel";
+import type { GateDecision, GTMItem, GTMRunResult } from "@/types";
 import "@/styles/canvas-gate.css";
 
 // Split a draft body into sentences for the evidence pass, keeping each sentence's own trailing
@@ -38,6 +39,10 @@ function EvidenceBody({ text, evidence }: { text: string; evidence: GateEvidence
   const [openIdx, setOpenIdx] = useState<number | null>(null);
   if (!evidence.length) return <p className="cgate-card-body">{text}</p>;
   const sentences = splitSentences(text);
+  // Verbatim guarantee: the sentence split MUST reproduce the body exactly. If it doesn't (a leading run
+  // of terminators can be dropped by the regex), fall back to the plain body — the outbound content the
+  // founder approves is never silently altered by the evidence-highlighting pass.
+  if (sentences.join("") !== text) return <p className="cgate-card-body">{text}</p>;
   return (
     <p className="cgate-card-body cgate-card-body-evi">
       {sentences.map((raw, i) => {
@@ -332,6 +337,31 @@ function reviewableFields(fields: { label: string; value: string }[]): { label: 
     .map((f) => ({ label: humanizeFieldLabel(f.label), value: f.value }));
 }
 
+// The reel — "how your crew got here". A left-to-right row of the concrete things the crew DID on this
+// run, each traced to a REAL executed step (gateReel), attributed to the teammate that ran it, and
+// checked off like a finished run. Nothing is narrated: an empty run yields no steps and the band hides
+// itself, so the reel never invents a story the run didn't produce.
+function GateReel({ run }: { run?: GTMRunResult | null }) {
+  const steps = gateReel(run);
+  if (!steps.length) return null;
+  return (
+    <div className="cgate-reel" aria-label="How your crew got here">
+      <div className="cgate-reel-head">How your crew got here</div>
+      <ol className="cgate-reel-steps">
+        {steps.map((s, i) => (
+          <li className="cgate-reel-step" key={i} style={{ animationDelay: `${i * 0.06}s` }}>
+            <span className="cgate-reel-check" aria-hidden><Check size={11} /></span>
+            <span className="cgate-reel-who">{s.teammate}</span>
+            <span className="cgate-reel-did">
+              {s.verb}{s.count != null ? <> <b className="tnum">{s.count}</b></> : null} {s.object}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 // The founder gate, ON the canvas. When a run pauses at a gate, its staged drafts bloom out of the
 // gate node as first-class cards you read and decide in place — approve / edit-then-approve / reject —
 // instead of bouncing to a side rail. Each decision calls onSubmit (the node-bound onSubmitReview),
@@ -339,8 +369,17 @@ function reviewableFields(fields: { label: string; value: string }[]): { label: 
 // so the card resolves instantly under your hand. This is the product's moment: reviewing real work
 // where the work lives. Never renders a hollow item as approvable — an empty draft only offers Reject.
 const GATE_CARD_CAP = 6;
-export function GateReview({ items, onSubmit, learned, promote, offer, onRecordOutcome }: {
+// Fields the reasoning rail owns in stage mode — dropped from the decision card there so the two halves
+// don't say the same thing twice (labels are compared lowercased, post-humanize).
+const REASON_OWNED_LABELS = new Set(["verdict", "composite score", "score", "dimensions", "dimension", "dims"]);
+export function GateReview({ items, run, onSubmit, learned, promote, offer, onRecordOutcome, onRefineItem, variant = "bloom" }: {
   items: GTMItem[];
+  // The full run — only the stage variant reads it, to render the reel of what the crew did to get here.
+  run?: GTMRunResult | null;
+  // "bloom" (default) is the compact in-node review — unchanged. "stage" is the immersive, watchable gate:
+  // a reel of the crew's real steps across the top, then big plain-language decision cards. The decision
+  // logic below is byte-identical across both; only the framing differs.
+  variant?: "bloom" | "stage";
   // May be async — GateReview awaits it so a failed release/return reverts the optimistic verdict and
   // surfaces the error instead of silently losing the founder's decision.
   onSubmit?: (decisions: Record<string, GateDecision>) => void | Promise<void>;
@@ -352,10 +391,14 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
   // meeting, a purchase) keyed off the item's joinKey. Records what ALREADY happened — never sends.
   // Absent when the host has no project context to post against.
   onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
+  // Veto-as-loop: hand this item back to the crew in the Composer with the founder's note. NOT a release.
+  onRefineItem?: (item: GTMItem, note: string) => void | Promise<void>;
 }) {
   const [clearedOpen, setClearedOpen] = useState(false);
-  const [decided, setDecided] = useState<Record<string, "approve" | "reject">>({});
+  const [decided, setDecided] = useState<Record<string, "approve" | "reject" | "refine">>({});
   const [editing, setEditing] = useState<{ key: string; text: string } | null>(null);
+  // The item currently being sent back for rework — the founder is writing the note that goes to the crew.
+  const [refining, setRefining] = useState<{ key: string; text: string } | null>(null);
   // Busy + error, mirroring GatePromotePanel: a decision is optimistic AND awaited. While a submit is in
   // flight the actions lock; if it rejects, the optimistic verdict reverts and the error shows — the
   // founder never loses a decision to a silent failure.
@@ -386,6 +429,29 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
         return next;
       });
       setError(e instanceof Error ? e.message : submitFailed);
+    } finally {
+      setBusy(false);
+    }
+  };
+  // Send an item back to the crew to rework, carrying the founder's note. This is the veto-as-loop: it
+  // does NOT go through onSubmit (nothing is released or banked as a reject) — it fires onRefineItem,
+  // which routes the item + note into the Composer and re-drives the crew. The card flips to a
+  // "reworking" receipt; the reworked draft returns to the gate as a fresh review.
+  const sendBack = async (item: GTMItem, key: string, note: string) => {
+    if (busy || !note.trim()) return;
+    setRefining(null);
+    setDecided((d) => ({ ...d, [key]: "refine" }));
+    setError(null);
+    if (!onRefineItem) return;
+    setBusy(true);
+    try {
+      await onRefineItem(item, note.trim());
+    } catch (e) {
+      // It didn't reach the crew — revert the optimistic receipt AND re-open the note with the founder's
+      // text intact, so a retry never makes them retype what they wrote.
+      setDecided((d) => { const next = { ...d }; delete next[key]; return next; });
+      setRefining({ key, text: note });
+      setError(e instanceof Error ? e.message : "That didn't reach your crew — try again.");
     } finally {
       setBusy(false);
     }
@@ -438,13 +504,16 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
   };
   const cleanUndecided = bloom.reduce((n, { it, i }) => n + (!gateItemView(it).hollow && !gateItemIsException(it) && !decided[itemKey(it, i)] ? 1 : 0), 0);
   const shown = bloom.slice(0, GATE_CARD_CAP);
-  return (
-    <div className="cgate-review" onClick={(e) => e.stopPropagation()}>
+  const lean = variant === "stage";
+  const reviewBody = (
+    <div className={cn("cgate-review", variant === "stage" && "cgate-review-stage")} onClick={(e) => e.stopPropagation()}>
       <div className="cgate-review-lead">
         <span className="cgate-review-count">
-          {exceptionCount > 0
-            ? `${exceptionCount} exception${exceptionCount === 1 ? "" : "s"} for your eyes · nothing sends until you approve`
-            : `${bloom.length} staged · nothing sends until you approve`}
+          {bloom.length === 0
+            ? "Everything here cleared — nothing needs your eyes"
+            : exceptionCount > 0
+              ? `${exceptionCount} exception${exceptionCount === 1 ? "" : "s"} for your eyes · nothing sends until you approve`
+              : `${bloom.length} staged · nothing sends until you approve`}
         </span>
         {learned > 0 ? (
           <span className="cgate-review-taste" title="Drafted from your past gate decisions">
@@ -474,10 +543,14 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
             // item carries one of those ids to join the outcome back on.
             const itemIds = item as { joinKey?: unknown; gtmActionId?: unknown };
             const canRecord = state === "approve" && !!onRecordOutcome && (!!itemIds.joinKey || !!itemIds.gtmActionId);
+            const decidedTitle = (lean && typeof item.plainLanguageTitle === "string" && item.plainLanguageTitle.trim())
+              ? item.plainLanguageTitle : v.subject;
+            const verdictLabel = state === "approve" ? "Accepted" : state === "refine" ? "Reworking with the crew…" : "Returned";
             return (
               <div className={cn("cgate-card", "is-decided", `is-${state}`)} key={key}>
-                <span className="cgate-card-to">{v.subject}</span>
-                <span className="cgate-card-verdict">{state === "approve" ? "Approved" : "Returned"}</span>
+                <span className="cgate-card-verdict-check" aria-hidden><Check size={12} /></span>
+                <span className="cgate-card-to">{decidedTitle}</span>
+                <span className="cgate-card-verdict">{verdictLabel}</span>
                 {canRecord ? <RecordOutcome item={item} onRecord={onRecordOutcome!} /> : null}
               </div>
             );
@@ -499,14 +572,25 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
           const reasons = isException ? gateItemExceptionReasons(item) : [];
           const provenance = gateItemProvenance(item);
           const evidence = gateItemEvidenceLines(item);
-          const reviewFields = reviewableFields(v.fields);
+          // In stage mode the reasoning rail owns the verdict, score, dimensions, grounding and source —
+          // so the decision card sheds them and reads lean: the subject, the actual thing being approved,
+          // and the call. Duplicating them here is what made the card read as flattened machinery.
+          const reviewFields = reviewableFields(v.fields).filter((f) => !lean || !REASON_OWNED_LABELS.has(f.label.toLowerCase()));
+          // In stage mode the card reads as a plain decision: a founder-plain headline (the translated
+          // title, falling back to the subject) and one line naming what a YES does. Both are framing;
+          // the outbound artifact below stays verbatim.
+          const cardTitle = (lean && typeof item.plainLanguageTitle === "string" && item.plainLanguageTitle.trim())
+            ? item.plainLanguageTitle : v.subject;
+          const yesDoes = (lean && typeof item.whatYourYesDoes === "string" && item.whatYourYesDoes.trim())
+            ? item.whatYourYesDoes : null;
           return (
-            <div className={cn("cgate-card", isException && "is-exception")} key={key}>
+            <div className={cn("cgate-card", lean && "cgate-card-stage", isException && "is-exception")} key={key}>
               <span className="cgate-card-to">
                 {isException ? <AlertTriangle size={11} aria-hidden /> : null}
-                {v.subject}
+                {cardTitle}
               </span>
-              {provenance ? <span className="cgate-card-prov">{provenance}</span> : null}
+              {yesDoes && !isEditing ? <p className="cgate-card-does">{yesDoes}</p> : null}
+              {provenance && !lean ? <span className="cgate-card-prov">{provenance}</span> : null}
               {/* An exception carries the reason it deviated from the pattern — the "hold for your eyes"
                   note, so the founder knows why this one bloomed instead of clearing. */}
               {reasons.length > 0 && !isEditing ? (
@@ -520,10 +604,50 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
                   autoFocus
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) => setEditing({ key, text: e.target.value })}
+                  onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setEditing(null); } }}
                 />
+              ) : lean ? (
+                // ── Stage (in-chat) mode: essence by default. The card shows only who it's going to
+                // (the headline above) and the real outbound message — nothing else competes for the
+                // eye. Every structured detail the crew attached (who/why/segment/source and any extra
+                // fields) tucks behind ONE quiet reveal, so the default read is a message and a call,
+                // not a wall of labels. The body stays VERBATIM and always visible (invariant 1): the
+                // reveal only hides the framing around it, never the thing being sent.
+                (() => {
+                  const detailRows: { label: string; value: string }[] = [];
+                  if (v.who) detailRows.push({ label: "Who", value: v.who });
+                  if (v.trigger) detailRows.push({ label: "Now", value: v.trigger });
+                  if (v.evidence) detailRows.push({ label: "Why them", value: v.evidence });
+                  if (v.sourceUrl) detailRows.push({ label: "Source", value: v.sourceUrl });
+                  for (const f of reviewFields) detailRows.push(f);
+                  return (
+                    <>
+                      {v.body ? (
+                        <div className="cgate-card-artifact"><CardBody text={v.body} evidence={evidence} /></div>
+                      ) : detailRows.length === 0 ? (
+                        // No message and no detail — surface the who/trigger inline so the card isn't blank.
+                        <div className="cgate-card-prospect">
+                          {v.trigger ? <p><span className="k">Now</span> {v.trigger}</p> : null}
+                          {v.who ? <p><span className="k">Who</span> {v.who}</p> : null}
+                        </div>
+                      ) : null}
+                      {detailRows.length > 0 ? (
+                        <details className="cgate-card-tuck" onClick={(e) => e.stopPropagation()}>
+                          <summary>Who it's for &amp; why</summary>
+                          <div className="cgate-card-tuck-body">
+                            {detailRows.map((f) => (
+                              <p key={f.label}><span className="k">{f.label}</span> {f.value}</p>
+                            ))}
+                          </div>
+                        </details>
+                      ) : null}
+                    </>
+                  );
+                })()
               ) : (
                 <>
                   {v.body ? (
+                    // The outbound artifact, VERBATIM — never paraphrased.
                     <CardBody text={v.body} evidence={evidence} />
                   ) : v.trigger || v.who || v.sourceUrl ? (
                     // Outreach framing ONLY when the item carries outreach fields — a staged
@@ -554,28 +678,67 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
                   ) : null}
                 </>
               )}
-              {v.evidence && !isEditing ? <p className="cgate-card-why">Why them: {v.evidence}</p> : null}
-              <div className="cgate-card-actions">
-                {isEditing ? (
-                  <>
-                    <button className="cgate-approve" type="button" disabled={busy || !editing.text.trim()}
-                      onClick={() => void decide(key, "approve", editing.text)}>Save &amp; approve</button>
-                    <button className="cgate-ghost" type="button" disabled={busy} onClick={() => setEditing(null)}>Cancel</button>
-                  </>
-                ) : (
-                  <>
-                    <button className="cgate-approve" type="button" disabled={busy} onClick={() => void decide(key, "approve")}>
-                      <Check size={11} aria-hidden /> Approve &amp; release
+              {v.evidence && !isEditing && !lean ? <p className="cgate-card-why">Why them: {v.evidence}</p> : null}
+              {isEditing ? (
+                <div className="cgate-card-actions">
+                  <button className="cgate-approve" type="button" disabled={busy || !editing.text.trim()}
+                    onClick={() => void decide(key, "approve", editing.text)}>Save &amp; approve</button>
+                  <button className="cgate-ghost" type="button" disabled={busy} onClick={() => setEditing(null)}>Cancel</button>
+                </div>
+              ) : refining?.key === key ? (
+                // Send-back is note-first: the founder writes what to change, and it routes to the crew
+                // in the Composer. Not a rejection — a rework. The card flips to "reworking" on send.
+                <div className="cgate-refine" onClick={(e) => e.stopPropagation()}>
+                  <p className="cgate-refine-lead">Your crew picks this back up in the chat. What should they change?</p>
+                  <textarea
+                    className="cgate-refine-note"
+                    rows={2}
+                    autoFocus
+                    value={refining.text}
+                    placeholder="e.g. make the opening less salesy"
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => setRefining({ key, text: e.target.value })}
+                    onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setRefining(null); } }}
+                  />
+                  <div className="cgate-refine-actions">
+                    <button className="cgate-refine-send" type="button" disabled={busy || !refining.text.trim()}
+                      onClick={() => void sendBack(item, key, refining.text)}>
+                      {busy ? <Loader size={11} className="spin" aria-hidden /> : <CornerDownLeft size={11} aria-hidden />} Send to your crew
                     </button>
+                    <button className="cgate-ghost" type="button" disabled={busy} onClick={() => setRefining(null)}>Cancel</button>
+                  </div>
+                </div>
+              ) : lean ? (
+                <div className="cgate-card-actions cgate-card-actions-stage">
+                  <button className="cgate-approve" type="button" disabled={busy} onClick={() => void decide(key, "approve")}>
+                    <Check size={12} aria-hidden /> Approve
+                  </button>
+                  {onRefineItem ? (
+                    <button className="cgate-sendback" type="button" disabled={busy} onClick={() => setRefining({ key, text: "" })}>
+                      <CornerDownLeft size={12} aria-hidden /> Send back to refine
+                    </button>
+                  ) : (
                     <button className="cgate-reject" type="button" disabled={busy} onClick={() => void decide(key, "reject")}>
-                      <CornerDownLeft size={11} aria-hidden /> Return as draft
+                      <CornerDownLeft size={12} aria-hidden /> Return
                     </button>
-                    <button className="cgate-edit" type="button" disabled={busy} onClick={() => setEditing({ key, text: v.body ?? "" })}>
-                      <Pencil size={11} aria-hidden /> Edit
-                    </button>
-                  </>
-                )}
-              </div>
+                  )}
+                  <button className="cgate-edit" type="button" disabled={busy} onClick={() => setEditing({ key, text: v.body ?? "" })}>
+                    <Pencil size={12} aria-hidden /> Edit
+                  </button>
+                </div>
+              ) : (
+                <div className="cgate-card-actions">
+                  <button className="cgate-approve" type="button" disabled={busy} onClick={() => void decide(key, "approve")}>
+                    <Check size={11} aria-hidden /> Approve &amp; release
+                  </button>
+                  <button className="cgate-reject" type="button" disabled={busy} onClick={() => void decide(key, "reject")}>
+                    <CornerDownLeft size={11} aria-hidden /> Return as draft
+                  </button>
+                  <button className="cgate-edit" type="button" disabled={busy} onClick={() => setEditing({ key, text: v.body ?? "" })}>
+                    <Pencil size={11} aria-hidden /> Edit
+                  </button>
+                </div>
+              )}
             </div>
           );
         })}
@@ -629,4 +792,16 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
       ) : null}
     </div>
   );
+  // Bloom: the compact in-node review, exactly as before. Stage: the watchable gate — the reel of what
+  // the crew did to get here across the top, then the same decision cards below. One decision path, two
+  // framings — the immersive stage never forks the wall's logic.
+  if (variant === "stage") {
+    return (
+      <div className="cgate-stage" onClick={(e) => e.stopPropagation()}>
+        <GateReel run={run} />
+        {reviewBody}
+      </div>
+    );
+  }
+  return reviewBody;
 }

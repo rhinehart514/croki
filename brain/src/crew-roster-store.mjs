@@ -14,6 +14,7 @@ function normalizeMember(input) {
   if (!ref) return null;
   return {
     ref,
+    name: typeof input?.name === "string" ? input.name.trim() : "",
     description: typeof input?.description === "string" ? input.description.trim() : "",
     addedAt: input?.addedAt || now(),
   };

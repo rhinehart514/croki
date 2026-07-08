@@ -15,6 +15,9 @@ const BOOKKEEPING_KEYS = new Set([
   "id", "gtmActionId", "type", "approvalStatus", "approved", "viaPattern", "isException",
   "reasons", "exception", "needsReview", "confidence", "editedFrom", "evidence_lines", "source",
   "score", "fit", "enriched", "gated", "sentAt", "channel",
+  // Plain-language framing stamped at gate staging — surfaced through named slots (title / byline), never
+  // as open detail rows. Mirror in brain/src/memory.mjs BOOKKEEPING_KEYS.
+  "plainLanguageTitle", "whatYourYesDoes",
 ]);
 
 // Keys already surfaced through a named slot below (body / subject / evidence / trigger / who /
@@ -30,6 +33,55 @@ const SLOTTED_KEYS = new Set([
 // "scheduled_for" / "postText" → "scheduled for" / "post text" — field names read as plain words.
 function humanizeKey(key: string): string {
   return key.replace(/[_-]+/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().trim();
+}
+
+// ─── The register boundary, enforced at the wall ───────────────────────────────
+// The founder gate is a FOUNDER surface: it shows what a decision is about, in plain words, and hides
+// the machine's own bookkeeping. Agent output is free-form (composition is free by design), so an agent
+// may hand back a blob laced with run ids, graph ids, agent refs, "built on" pointers, and deeply nested
+// planning objects. Rendering those verbatim is the machinery register AGENTS.md bans on anything the
+// founder reads. These three guards translate-by-subtraction: an identifier field never shows, a machine
+// id hiding under an innocent key never shows, and a nested-object blob never flattens into an
+// "id: K1 · state: … · risk: Low" machine string. What survives is the content a founder actually decides on.
+const MACHINERY_KEYS = new Set([
+  "run", "graph", "node", "agent", "ref", "built", "meta", "trace", "slug", "uuid", "guid", "hash",
+  "checksum", "revision", "version", "namespace", "pointer", "fetchedat", "provenance",
+  // provenance pointers ("built on X", "derived from Y", "based on Z") — where it came from, not what it is.
+  "builton", "builtfrom", "derivedfrom", "basedon", "sourcedfrom", "generatedfrom",
+]);
+// A field key that names an identifier or internal pointer, never founder content.
+function isMachineryKey(key: string): boolean {
+  const k = key.toLowerCase().replace(/[\s-]+/g, "_");
+  if (MACHINERY_KEYS.has(k) || MACHINERY_KEYS.has(k.replace(/_/g, ""))) return true;
+  // …anything ending in _id / _ref / _key / _uuid / _hash / _slug (run_id, graph_id, agent_ref, join_key).
+  return /(?:^|_)(?:id|ids|ref|refs|key|keys|uuid|guid|hash|slug|url_slug)$/.test(k);
+}
+// A value that IS a machine token — a run tag, a kebab graph/agent id — even under an innocent key.
+// Prose (anything with a space) is never a machine token, so real founder content is never caught.
+function isMachineryValue(s: string): boolean {
+  const t = s.trim();
+  if (!t || /\s/.test(t)) return false;
+  if (/^run-\d/i.test(t)) return true;
+  if (t.includes("--")) return true; // strelva--ai-answer-engine-content-…
+  const seps = (t.match(/[-_./]/g) || []).length;
+  return seps >= 2 && t.length >= 12; // aeo-content-planner, a long separator-heavy id
+}
+// A structured value — a nested object, or a list of them (waves, pieces). This is machine data the
+// founder never edits at the wall; the item's own body carries the plain-words summary of it.
+function isStructuralValue(v: unknown): boolean {
+  if (Array.isArray(v)) return v.some((x) => !!x && typeof x === "object");
+  return !!v && typeof v === "object";
+}
+// A subject that is really a raw field key ("planner_meta", "shipPlan", "aeo-content-planner") rather
+// than a written title — snake/kebab/camel with no spaces. Humanized to plain words so a title never
+// reads as code. A real title (it has spaces / punctuation) is left exactly as written.
+function looksLikeRawKey(s: string): boolean {
+  const t = s.trim();
+  if (!t || /\s/.test(t)) return false;
+  return /^[a-z0-9]+(?:[_-][a-z0-9]+)+$/i.test(t) || /^[a-z]+[A-Z][a-zA-Z]*$/.test(t);
+}
+function titleCase(s: string): string {
+  return s.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 // Render one field value readably: strings as-is, numbers/booleans plainly, arrays joined, nested
@@ -83,7 +135,9 @@ export function gateItemView(item: GTMItem): GateItemView {
   // `type` is a valid subject fallback for display, but NOT a real subject for the hollow test — a bare
   // output-kind label ("outreach-draft") must never make an empty item look approvable.
   const realSubject = pickStr(it.suggested_subject_line, it.subject, it.founder_name, it.name, it.handle);
-  const subject = realSubject ?? pickStr(it.type) ?? "Staged action";
+  const rawSubject = realSubject ?? pickStr(it.type) ?? "Staged action";
+  // A title never reads as a code identifier — a raw key like "planner_meta" becomes "Planner Meta".
+  const subject = looksLikeRawKey(rawSubject) ? titleCase(humanizeKey(rawSubject)) : rawSubject;
   const evidence = pickStr(it.grounding_citation, it.icpFitRationale, it.fitRationale, it.nowTrigger);
   const trigger = pickStr(it.nowTrigger, it.now_trigger);
   const who = pickStr(it.role, it.title, it.company);
@@ -93,8 +147,11 @@ export function gateItemView(item: GTMItem): GateItemView {
   let bestStringIdx = -1; // index into `fields` of the longest free-form STRING field
   for (const [key, value] of Object.entries(it)) {
     if (BOOKKEEPING_KEYS.has(key) || SLOTTED_KEYS.has(key)) continue;
+    if (isMachineryKey(key)) continue;        // run/graph/agent ids and pointers — never founder content
+    if (isStructuralValue(value)) continue;   // nested planning blobs — the body already summarizes them
     const rendered = renderFieldValue(value);
     if (!rendered) continue;
+    if (isMachineryValue(rendered)) continue; // a machine id hiding under an innocent key
     fields.push({ label: humanizeKey(key), value: rendered });
     if (typeof value === "string" && (bestStringIdx === -1 || rendered.length > fields[bestStringIdx].value.length)) {
       bestStringIdx = fields.length - 1;
@@ -108,6 +165,61 @@ export function gateItemView(item: GTMItem): GateItemView {
   }
   const hollow = !body && !realSubject && !evidence && !trigger && !who && !sourceUrl && !fields.length;
   return { subject, body, evidence, trigger, who, sourceUrl, fields, hollow };
+}
+
+// ─── The case behind a ranked item — the reasoning rail's real source ─────────
+// The Split-Stage gate stands the founder's decision beside WHY each option got where it did. That
+// "why" is not fabricated crew dialogue — it is the real reasoning the run already stamped on the
+// item: the teammate/tool that produced it, its verdict, its composite score, the case it makes
+// (verdictWhy / recommendation / rationale), the grounding evidence, and any scored dimensions with
+// their notes. Every field degrades to null/[] when the run recorded none, so a thin item reads as a
+// thin case honestly — the rail never invents a sentence the item doesn't carry.
+export type GateItemDimension = { label: string; score: number | null; note: string | null };
+export type GateItemReason = {
+  agent: string | null;      // the teammate/tool that produced this item (source.tool), plain
+  verdict: string | null;    // the run's own verdict line, e.g. "strong-fit — ship as keystone"
+  score: number | null;      // composite score, when the run scored it
+  theCase: string | null;    // the argument for this item, in the run's words
+  evidence: string | null;   // the grounding it rides
+  dimensions: GateItemDimension[];
+};
+
+function pickNum(...vals: unknown[]): number | null {
+  for (const v of vals) {
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string" && v.trim() && Number.isFinite(Number(v))) return Number(v);
+  }
+  return null;
+}
+
+// One scored dimension normalized from the item's `dimensions` — tolerant of the field-name variance
+// different agents emit (name/label/dimension, score/value, note/why/rationale).
+function normalizeDimension(raw: unknown): GateItemDimension | null {
+  if (!raw || typeof raw !== "object") return null;
+  const d = raw as Record<string, unknown>;
+  const label = pickStr(d.label, d.name, d.dimension, d.key);
+  if (!label) return null;
+  return {
+    label: humanizeKey(label),
+    score: pickNum(d.score, d.value, d.rating),
+    note: pickStr(d.note, d.why, d.rationale, d.reason),
+  };
+}
+
+export function gateItemReason(item: GTMItem): GateItemReason {
+  const it = item as Record<string, unknown>;
+  const source = it.source as { tool?: string } | undefined;
+  const agent = source && typeof source.tool === "string" && source.tool.trim() ? source.tool.trim() : null;
+  const rawDims = Array.isArray(it.dimensions) ? it.dimensions : Array.isArray(it.dims) ? it.dims : [];
+  const dimensions = rawDims.map(normalizeDimension).filter((d): d is GateItemDimension => !!d);
+  return {
+    agent,
+    verdict: pickStr(it.verdict, it.fit_verdict, it.recommendation_verdict),
+    score: pickNum(it.composite_score, it.score, it.compositeScore),
+    theCase: pickStr(it.verdictWhy, it.recommendation, it.rationale, it.the_case, it.summary),
+    evidence: pickStr(it.grounding_citation, it.icpFitRationale, it.fitRationale, it.nowTrigger, it.now_trigger),
+    dimensions,
+  };
 }
 
 // ─── Pattern / exception split — the gate-bloom's two faces ───────────────────
@@ -212,7 +324,9 @@ export function channelOfferLine(channel: Pick<ChannelMeta, "offer"> | null | un
 export function gateItemProvenance(item: GTMItem): string | null {
   const source = (item as Record<string, unknown>).source as { tool?: string; tag?: string } | undefined;
   if (source && typeof source.tool === "string" && source.tool.trim()) {
-    return typeof source.tag === "string" && source.tag.trim() ? `via ${source.tool} · ${source.tag}` : `via ${source.tool}`;
+    // The teammate who produced it, in plain words — never the raw agent ref ("aeo-content-planner").
+    const tool = looksLikeRawKey(source.tool) ? titleCase(humanizeKey(source.tool)) : source.tool.trim();
+    return typeof source.tag === "string" && source.tag.trim() ? `via ${tool} · ${source.tag}` : `via ${tool}`;
   }
   return gateItemView(item).sourceUrl;
 }

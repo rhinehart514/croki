@@ -1,16 +1,14 @@
 import { useState } from "react";
-import { ArrowRight, FolderOpen, LoaderCircle, PackageOpen, ScanSearch } from "lucide-react";
+import { ArrowRight, Check, FolderOpen, LoaderCircle, PackageOpen, ScanSearch } from "lucide-react";
 import { getSampleProduct, pickFolder, scanPreview } from "@/api";
 import type { ScanPreview as ScanPreviewData } from "@/types";
-import { ScanPreview } from "@/components/ScanPreview";
 
-// The front door for a stranger, in three honest beats: point it at your product, SEE what it read,
-// then say what you want. The scan is the wedge (grounding) — so we no longer hide it behind a silent
-// createProject. You pick a folder, watch the read-only scan run, and the preview hands back the real
-// product headline, stack, the detected win event with its file:line evidence, and an honest
-// blind-attribution callout. Only after you confirm "this is my product" do you give the goal, which
-// becomes the operator's durable goal and composes the loop to the gate.
-type Phase = "pick" | "scanning" | "preview" | "goal";
+// The front door for a stranger, kept to ONE calm screen: point it at your product, watch the
+// read-only scan, and see a plain-language read of what it learned — then walk in. There is no
+// separate diagnostic page and no forced goal step: the goal is asked later, on the canvas, so the
+// founder is never made to converge before they've looked around. The scan is still the wedge
+// (grounding), but it's presented as a calm confirmation, never an alarm.
+type Phase = "pick" | "scanning" | "read";
 
 export function ProductEntry({ busy, onStart, onSeePortfolio }: {
   busy: boolean;
@@ -19,7 +17,6 @@ export function ProductEntry({ busy, onStart, onSeePortfolio }: {
 }) {
   const [phase, setPhase] = useState<Phase>("pick");
   const [repoPath, setRepoPath] = useState("");
-  const [goal, setGoal] = useState("");
   const [outcome, setOutcome] = useState("");
   const [picking, setPicking] = useState(false);
   const [loadingSample, setLoadingSample] = useState(false);
@@ -32,7 +29,7 @@ export function ProductEntry({ busy, onStart, onSeePortfolio }: {
     try {
       const result = await scanPreview(path, winOverride || outcome.trim() || undefined);
       setReport(result);
-      setPhase("preview");
+      setPhase("read");
     } catch (error) {
       setScanError(error instanceof Error ? error.message : String(error));
       setPhase("pick");
@@ -41,7 +38,7 @@ export function ProductEntry({ busy, onStart, onSeePortfolio }: {
 
   // "Try it on a sample product" — for a stranger with no instrumented repo of their own. Pulls the
   // bundled sample's real path + win event from the server, then runs the exact same scan flow a real
-  // folder would, so they see the attribution gap prove itself on honest code before committing anything.
+  // folder would, so they see the read prove itself on honest code before committing anything.
   const trySample = async () => {
     setLoadingSample(true);
     setScanError(null);
@@ -78,31 +75,40 @@ export function ProductEntry({ busy, onStart, onSeePortfolio }: {
     setScanError(null);
   };
 
-  const canStart = !!repoPath.trim() && !!goal.trim() && !busy;
-  const submit = () => {
-    if (!canStart) return;
-    // The win event the founder named on the preview wins; otherwise fall back to what the scan
-    // detected, or a sane default — so the operator always has an outcome to chase. The scan returns
-    // the win event as a structured object ({ name, ... }); tolerate the legacy string form too.
+  // Walk in. The goal is deferred to the canvas (its "what do you want to happen" launcher), so we hand
+  // the operator no goal here — grounding the product is enough to land on the canvas and look around.
+  // The win event the founder named (or the scan detected) still rides along so attribution has a target.
+  const enter = () => {
+    if (!repoPath.trim() || busy) return;
     const detected = typeof report?.winEvent === "string"
       ? report.winEvent
       : report?.winEvent?.name;
     const winEvent = outcome.trim() || detected?.trim() || "signup";
-    void onStart({ repoPath: repoPath.trim(), outcome: winEvent, goal: goal.trim() });
+    void onStart({ repoPath: repoPath.trim(), outcome: winEvent, goal: "" });
   };
+
+  // ── Plain-language read of the scan — calm, never an alarm ──────────────────────────────────────
+  const stack = report?.stack?.filter(Boolean) ?? [];
+  const files = report?.report?.filesScanned ?? null;
+  const winName = typeof report?.winEvent === "string"
+    ? report.winEvent.trim() || null
+    : report?.winEvent?.name?.trim() || null;
+  const winFound = report && typeof report.winEvent === "object" && report.winEvent
+    ? report.winEvent.found === true
+    : false;
+  const emptyScan = files === 0;
 
   return (
     <div className="product-entry">
       <div className="product-entry-inner">
         <span className="product-entry-eyebrow">Drover</span>
 
-        {/* ── Beat 1: point it at your product ───────────────────────────────── */}
+        {/* ── Point it at your product ─────────────────────────────────────────── */}
         {(phase === "pick" || phase === "scanning") && (
           <>
-            <h1 className="product-entry-title">Point it at your product. It reads your code first.</h1>
+            <h1 className="product-entry-title">Point it at your product.</h1>
             <p className="product-entry-sub">
-              Pick your product folder and watch the read-only scan. You'll see what it learned —
-              your stack, the win event, where it fires — before you say what you want.
+              It reads your code first — read-only, nothing changes, nothing sends. Then you walk in.
             </p>
 
             <div className="product-entry-field">
@@ -160,48 +166,38 @@ export function ProductEntry({ busy, onStart, onSeePortfolio }: {
           </>
         )}
 
-        {/* ── Beat 2: see what it read ───────────────────────────────────────── */}
-        {phase === "preview" && report && (
+        {/* ── The calm read, then walk in ──────────────────────────────────────── */}
+        {phase === "read" && report && (
           <>
-            <ScanPreview
-              repoPath={repoPath}
-              report={report}
-              busy={busy}
-              onConfirm={() => setPhase("goal")}
-              onRescan={startOver}
-            />
-          </>
-        )}
-
-        {/* ── Beat 3: say what you want ──────────────────────────────────────── */}
-        {phase === "goal" && (
-          <>
-            <h1 className="product-entry-title">Now — what do you want to happen?</h1>
+            <h1 className="product-entry-title">
+              {emptyScan ? "Not much to read in there yet." : "Here's what it read."}
+            </h1>
             <p className="product-entry-sub">
-              {report?.headline?.trim()
-                ? <>It knows your product. Tell it the goal and it builds the go-to-market system that chases it — stopping at your gate before anything reaches a real person.</>
-                : <>Tell it the goal and it builds the go-to-market system that chases it — stopping at your gate before anything reaches a real person.</>}
+              {emptyScan
+                ? <>No code files turned up in that folder. You can point it somewhere else, or walk in anyway and tell it what you want.</>
+                : <>You'll tell it what you want once you're inside — nothing to decide here.</>}
             </p>
 
-            <label className="product-entry-field">
-              <span className="product-entry-label">What do you want to happen?</span>
-              <textarea
-                className="product-entry-goal"
-                rows={2}
-                placeholder="e.g. get my first dev-tool founder to try it"
-                value={goal}
-                disabled={busy}
-                autoFocus
-                onChange={(e) => setGoal(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); } }}
-              />
-            </label>
+            {!emptyScan && (
+              <div className="product-entry-read">
+                <p className="product-entry-read-line">
+                  {stack.length
+                    ? <>A <strong>{stack.length === 1 ? "single-framework" : "multi-part"}</strong> product{typeof files === "number" ? <>, <strong>{files.toLocaleString()}</strong> files</> : null}.</>
+                    : <>{typeof files === "number" ? <><strong>{files.toLocaleString()}</strong> files</> : "Read"}, no framework manifest — that's fine.</>}
+                </p>
+                <p className={`product-entry-read-win ${winFound ? "found" : "pending"}`}>
+                  {winFound
+                    ? <><Check size={13} /> Win event <code>{winName}</code> — found in your code.</>
+                    : <>Win event {winName ? <code>{winName}</code> : null} isn't wired yet. You can add one anytime.</>}
+                </p>
+              </div>
+            )}
 
-            <button className="product-entry-go" disabled={!canStart} onClick={submit} type="button">
-              {busy ? "Building your system…" : <>Build it <ArrowRight size={16} /></>}
+            <button className="product-entry-go" disabled={busy || !repoPath.trim()} onClick={enter} type="button">
+              {busy ? "Taking you in…" : <>Take me in <ArrowRight size={16} /></>}
             </button>
-            <button className="product-entry-link product-entry-back" onClick={() => setPhase("preview")} type="button">
-              Back to the scan
+            <button className="product-entry-link product-entry-back" onClick={startOver} type="button">
+              Pick a different folder
             </button>
           </>
         )}

@@ -10,6 +10,25 @@ import { EyeOff, FileCode2, Layers, ScanSearch, Target } from "lucide-react";
 // blind-attribution stored), and the read-out says so rather than inventing it.
 export type ProductEvidence = { file: string; line?: number | string; text?: string };
 
+// The scanner writes its headline in attribution-diagnostic shorthand — "Blind: project_created could
+// not be confirmed." A founder reading their product's grounding deserves the same fact in plain,
+// non-alarming words: honest about the gap, but never leading with "Blind" like an error. Anchored to
+// the scanner's exact phrasings (scan.mjs) so a genuine product summary is never rewritten by accident;
+// anything that doesn't match passes through untouched.
+function humanizeScanHeadline(headline: string): string {
+  const h = headline.trim();
+  let m: RegExpExecArray | null;
+  if ((m = /^Tracking gap proven: attribution is captured but missing from (.+?)\.?$/i.exec(h)))
+    return `You do capture where wins come from — it's just not attached to ${m[1]} yet, so you can't tell which pipeline earned each one.`;
+  if ((m = /^Blind:\s*(.+?) could not be confirmed\.?$/i.exec(h)))
+    return `Couldn't find ${m[1]} firing anywhere in your code yet, so wins can't be traced back to a pipeline.`;
+  if ((m = /^Blind:\s*(.+?) exists, but acquisition source is not captured\.?$/i.exec(h)))
+    return `${m[1]} fires, but nothing records where it came from — so wins can't be traced back to a pipeline yet.`;
+  if ((m = /^Instrumented:\s*(.+?) carries (.+?)\.?$/i.exec(h)))
+    return `${m[1]} fires and carries its source, so wins can trace back to the pipeline that earned them.`;
+  return h;
+}
+
 type ProductReadoutData = {
   headline?: string | null;
   productLine?: string | null;
@@ -37,7 +56,7 @@ export function ProductReadout({ data }: { data: ProductReadoutData }) {
     <div className="scan-preview-readout">
       <div className="scan-preview-head">
         <span className="scan-preview-eyebrow"><ScanSearch size={14} /> What it read in your product</span>
-        <h2 className="scan-preview-headline">{data.headline?.trim() || "Read your code, but couldn't summarize it yet."}</h2>
+        <h2 className="scan-preview-headline">{data.headline?.trim() ? humanizeScanHeadline(data.headline) : "Read your code, but couldn't summarize it yet."}</h2>
         {data.productLine?.trim() ? <p className="scan-preview-line">{data.productLine.trim()}</p> : null}
         {data.repoPath ? <p className="scan-preview-repo"><FileCode2 size={12} /> {data.repoPath}</p> : null}
       </div>

@@ -19,6 +19,8 @@ const BOOKKEEPING_KEYS = new Set([
   "id", "gtmActionId", "type", "approvalStatus", "approved", "viaPattern", "isException",
   "reasons", "exception", "needsReview", "confidence", "editedFrom", "evidence_lines", "source",
   "score", "fit", "enriched", "gated", "sentAt", "channel",
+  // Plain-language gate framing (title / byline) — mirror of ui/src/lib/gateItem.ts BOOKKEEPING_KEYS.
+  "plainLanguageTitle", "whatYourYesDoes",
 ]);
 
 // Known draft aliases, preferred when present so legacy shapes read exactly as before.
@@ -204,10 +206,14 @@ export function buildAgentBench(runs = [], agents = []) {
   const rows = (Array.isArray(agents) ? agents : []).map((agent) => {
     const ref = typeof agent === "string" ? agent : agent?.ref;
     const job = typeof agent === "string" ? "" : (agent?.description ?? "");
+    // The founder-chosen display name, when the agent carries one (a teammate built via the crew "+").
+    // Composed-pipeline agents have none, so the rail falls back to the derived role — unchanged for them.
+    const name = typeof agent === "string" ? "" : (agent?.name ?? "");
     const profile = buildAgentProfile(runs, ref, { editLimit: 0, voiceExamples: 0 });
     return {
       ref: ref ?? null,
       job,
+      name,
       hasRuns: profile.hasRuns,
       runCount: profile.runCount,
       counts: profile.counts,
@@ -384,12 +390,37 @@ function tasteOverlap(text, questionTokens) {
   return score;
 }
 
-export function queryTaste(profile, { question = "", limit = 3 } = {}) {
-  if (!profile) return null;
+// Render the teammate's permanent, founder-blessed lessons as a leading block. These come FIRST — a
+// promoted lesson is a rule the founder explicitly graduated, so it outranks the raw recent decisions
+// underneath. Purely additive: an empty list renders nothing, so a teammate with no soul is unchanged.
+function renderPromotedLessons(promotedLessons) {
+  const lessons = (Array.isArray(promotedLessons) ? promotedLessons : [])
+    .map((l) => ({ text: String(l?.text || "").trim(), why: String(l?.why || "").trim() }))
+    .filter((l) => l.text);
+  if (!lessons.length) return "";
+  const lines = ["Lessons this teammate has earned (permanent — you always follow these):"];
+  for (const l of lessons) lines.push(l.why ? `- ${l.text} (${l.why})` : `- ${l.text}`);
+  return lines.join("\n");
+}
+
+// `promotedLessons` (optional) is the teammate's founder-blessed soul, surfaced ABOVE the derived recent
+// decisions. When present it always leads; the existing taste read is appended below, unchanged. When
+// absent/empty the whole function behaves exactly as before (a teammate with no soul is unaffected).
+export function queryTaste(profile, { question = "", limit = 3, promotedLessons = null } = {}) {
+  const soulBlock = renderPromotedLessons(promotedLessons);
+  const withSoul = (base) => {
+    if (!soulBlock) return base;
+    if (!base) return { text: soulBlock, meta: { mode: "soul-only", promotedLessons: soulBlock.split("\n").length - 1 } };
+    return {
+      text: `${soulBlock}\n\n${base.text}`,
+      meta: { ...(base.meta ?? {}), promotedLessons: soulBlock.split("\n").length - 1 },
+    };
+  };
+  if (!profile) return withSoul(null);
   const q = tasteTokens(question);
   if (!q.length) {
     const text = renderTasteProfile(profile);
-    return text ? { text, meta: { mode: "full", ...(profile.counts ?? {}) } } : null;
+    return withSoul(text ? { text, meta: { mode: "full", ...(profile.counts ?? {}) } } : null);
   }
   const rank = (arr, asText) =>
     (arr ?? [])
@@ -412,12 +443,12 @@ export function queryTaste(profile, { question = "", limit = 3 } = {}) {
 
   if (!approved.length && !rejected.length && !edits.length && !ideaTaste) {
     const c = profile.counts ?? {};
-    return {
+    return withSoul({
       text: `No prior taste decisions match "${question}". Observed so far — approved ${c.approved ?? 0}, rejected ${c.rejected ?? 0}, edits ${c.edits ?? 0}, killed angles ${c.killedAngles ?? 0}.`,
       meta: { mode: "no-match", question },
-    };
+    });
   }
-  return {
+  return withSoul({
     text: renderDraftMemory({ approved, rejected, edits, ideaTaste }).replace(/^\n+/, ""),
     meta: {
       mode: "query",
@@ -427,5 +458,5 @@ export function queryTaste(profile, { question = "", limit = 3 } = {}) {
       edits: edits.length,
       killedAngles: ideaTaste?.killedAngles?.length ?? 0,
     },
-  };
+  });
 }

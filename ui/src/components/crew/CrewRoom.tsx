@@ -9,7 +9,7 @@ import { agentPersona, humanizeRef } from "@/lib/agentPersona";
 import { CrewFace } from "./CrewFace";
 import "./CrewRoom.css";
 
-export type CrewMember = { ref: string; job?: string; hasRuns?: boolean };
+export type CrewMember = { ref: string; job?: string; name?: string; hasRuns?: boolean };
 
 export function CrewRoom({
   open, roster, onClose, onOpen,
@@ -41,7 +41,9 @@ export function CrewRoom({
     const out = new Map<string, string>();
     for (const m of roster) {
       const role = roleByRef.get(m.ref) ?? m.ref;
-      out.set(m.ref, (roleCount.get(role) ?? 0) > 1 ? humanizeRef(m.ref) : role);
+      // A teammate the founder named (built via "+") shows exactly that name.
+      const chosen = m.name?.trim();
+      out.set(m.ref, chosen || ((roleCount.get(role) ?? 0) > 1 ? humanizeRef(m.ref) : role));
     }
     return out;
   }, [roster]);

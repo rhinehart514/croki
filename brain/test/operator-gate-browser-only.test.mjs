@@ -48,8 +48,8 @@ const { saveFlow } = await import("../src/flow-store.mjs");
 const { createOperatorSession, getOperatorSession } = await import("../src/operator-store.mjs");
 const { runOperatorSession } = await import("../src/operator-runtime.mjs");
 
-after(() => {
-  server.close();
+after(async () => {
+  await new Promise((resolve) => { server.closeAllConnections?.(); server.close(resolve); });
   fs.rmSync(HOME, { recursive: true, force: true });
 });
 

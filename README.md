@@ -1,78 +1,83 @@
 # Drover
 
-**Stage: Alpha** (v0.3.1) — the spine runs and the suite is green, but no real founder has
-driven a real go-to-market win to the gate yet. See `docs/STATE.md` for the honest current
-snapshot.
+**Alpha · v0.3.2** — the product runs end to end and the test suite is green, but no outside
+founder has driven a real go-to-market win through it yet. `docs/STATE.md` has the honest,
+dated snapshot.
 
-Drover (formerly GTM IDE) is the go-to-market desk for founders running more than one
-product. It is local-first: point it at a product's codebase and it reads what the product
-actually does; state a go-to-market goal in plain words and a frontier model composes the
-pipeline of agents and steps that goal needs; every pipeline stops at a founder approval
-gate — nothing sends, publishes, or charges until the founder says yes; and every gate
-decision trains a durable taste memory that shapes the next run.
+**Drover turns frontier models into your go-to-market team — and gets better every time the
+models do.** Point it at your product, tell it what you want in plain English, and it builds
+and runs the pipelines to get there — outreach, content, campaigns — while you stay the one
+making the calls.
 
-Three things are enforced by the host. Everything else is the model's to compose freshly:
+Everyone running AI agents hits the same wall: the agents can do the work, but *you* become
+the bottleneck — reviewing every output, re-feeding context, babysitting loops that don't
+share what they know. Drover is the structure that fixes that. You run many agent pipelines
+at once and stay the **taste executor**: the person deciding what's good enough, what needs
+to change, and where to point the system next.
 
-1. **Truth.** A read-only scan produces product claims with `file:line` evidence. Claims
-   about what the product already does are cited or labeled inferred — the model cannot
-   invent product facts. (The citation rule binds the truth layer only; ideation and
-   strategy run free.)
-2. **The wall.** Every execute step must have a founder gate upstream on every path or the
-   composition is rejected outright. The default execute connector stages locally and never
-   sends. The wall graduates rather than disappears: a founder may explicitly promote a
-   pipeline up the autonomy ladder (`draft → trusted → autonomous`), where the gate
-   auto-applies a blessed pattern to clean items and still escalates exceptions. Only the
-   founder can promote; composition and runs cannot.
-3. **Taste.** Approvals, rejections, and edits at the gate become durable per-founder
-   memory. Drafting agents are required to consult it before writing; skipping the consult
-   is surfaced at the gate.
+## Why it grows with the models
 
-Intelligence is rented, not hosted: fuzzy work (research, enrichment, ideation, drafting)
-runs as agents and skills on the founder's own Claude subscription, keyless. Code is the
-deterministic spine only.
+Drover rents the intelligence and owns the harness. The agents run on frontier Claude, on
+your own subscription — so every model release makes them smarter with no change on your
+side. What Drover holds is the part that *doesn't* get obsoleted:
+
+- **It reads your actual product.** A read-only scan of your codebase produces claims about
+  what your product really does, cited to `file:line`. The model can't invent facts about
+  your product, so the work it produces is true to what you built, not generic.
+- **Nothing sends without you.** Every step that touches the outside world sits behind your
+  approval. Drafts stage locally; nothing sends, publishes, or charges until you say go. As
+  you come to trust a pipeline, you can let it handle the routine cases on its own and only
+  pull you in on the exceptions.
+- **It learns your taste.** Every approval, rejection, and edit becomes durable memory that
+  shapes the next run — so the tenth draft sounds like you without re-explaining.
+
+Rent the intelligence, own the harness. The models get better; everything you run inside
+Drover gets better with them. The judgment stays yours — the volume stops being your problem.
+
+Intelligence is rented, not hosted: research, enrichment, ideation, and drafting run as
+agents and skills on your Claude subscription, keyless. Code is the deterministic spine —
+the truth, the wall, and the taste memory — and nothing more.
 
 ## The dogfood loop
 
 Drover files and builds its own improvements. From any codebase, in any Claude session
 connected to Drover's MCP server:
 
-- `report_friction` — a complaint or wish, uttered mid-flow, lands as agent-readable
-  markdown in `dogfood/queue/` with the current project/run/gate state attached.
-- `request_feature` — spins up a headless builder agent in an isolated git worktree of this
-  repo, one build at a time. The result is a `dogfood/*` branch that **waits for founder
-  review**; nothing merges, pushes, or ships from the loop. Crash recovery at boot salvages
-  interrupted work and marks its queue item honestly.
+- `report_friction` — a complaint or wish, said mid-flow, lands as agent-readable markdown
+  in `dogfood/queue/` with the current project, run, and gate state attached.
+- `request_feature` — spins up a headless builder agent in an isolated git worktree, one
+  build at a time. The result is a `dogfood/*` branch that **waits for founder review** —
+  nothing merges, pushes, or ships from the loop. Crash recovery at boot salvages interrupted
+  work and marks its queue item honestly.
 - `get_dogfood_queue` — what's open, queued, building, ready for review, declined, failed.
 
 ## Run
 
-Requirements: Node.js, Git, and a Claude Code login (composition is rented on the
-founder's subscription; with no connection the composer refuses rather than templating).
+Requirements: Node.js, Git, and a Claude Code login (the intelligence runs on your
+subscription; with no connection Drover refuses rather than templating).
 
-Install dependencies once (this also installs the `brain/` and `ui/` subprojects), then
-start:
+Install once (this also installs the `brain/` and `ui/` subprojects), then start:
 
 ```sh
 npm install
 npm start
 ```
 
-First run requires a signed-in Claude: Drover runs every act of intelligence on your own
-Claude subscription through the local Claude Code harness. On first launch, if no Claude is
-signed in, Drover shows a blocking "Connect Claude" screen and does no AI work until it
-connects — install Claude Code and run `claude` to sign in, or set `CLAUDE_CODE_OAUTH_TOKEN`
-/ `ANTHROPIC_API_KEY`.
+First run needs a signed-in Claude: Drover runs every act of intelligence on your own Claude
+subscription through the local Claude Code harness. If no Claude is signed in, Drover shows a
+blocking "Connect Claude" screen and does no AI work until it connects — install Claude Code
+and run `claude` to sign in, or set `CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_API_KEY`.
 
 Open [http://127.0.0.1:4317](http://127.0.0.1:4317). Register a product by pointing the
 folder picker at its repo and naming the event that counts as a real win.
 
-MCP front door (use Drover as tools from any Claude session):
+Use Drover as tools from any Claude session (the MCP front door):
 
 ```sh
 npm run mcp
 ```
 
-Direct repository scan:
+Scan a repository directly:
 
 ```sh
 node brain/src/mirror.mjs <repo> --win <event>
@@ -127,20 +132,21 @@ brain/src/memory.mjs           taste: gate decisions → durable memory → next
 brain/src/board.mjs            belief/health derivations from real signals only, never seeded
 brain/src/friction.mjs         dogfood queue (agent-readable markdown items)
 brain/src/feature-builder.mjs  request_feature: isolated-worktree builder, branch waits for review
-brain/src/mcp.mjs              the MCP front door (37 tools) bridging to the local brain
+brain/src/mcp.mjs              the MCP front door bridging to the local brain
 brain/src/server.mjs           local API + static client
 ui/                            React, Tailwind, React Flow — the canvas and the gate
 ```
 
-In code the pipeline unit is still identified as `channel` — a historical identifier, not a
-concept; product language says "pipeline." See `AGENTS.md` for engineering doctrine and the
-invariants a change must preserve.
+In code the pipeline unit is still identified as `channel`, and package names / storage
+paths keep the old `gtm-ide` identifier — historical, not a concept. Product language says
+"pipeline." See `AGENTS.md` for engineering doctrine and the invariants a change must
+preserve.
 
 ## Safety boundary
 
 - Scanning is read-only; a private repo never leaves the machine.
-- General GTM execution stops at founder gates; the included execution connector stages
-  approved actions locally.
+- GTM execution stops at founder gates; the included execution connector stages approved
+  actions locally.
 - Real sends (e.g. Gmail) run only on per-item gate stamps that config cannot forge, with a
   rate cap and a provenance header tracing every message to its run and item.
 - The gated microproduct deploy ships only under two explicit founder authorizations.

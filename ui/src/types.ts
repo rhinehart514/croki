@@ -561,6 +561,10 @@ export type GTMNode = {
   // client-staged preview (App merges these into the display graph); a committed node never carries it.
   // Rendered translucent/dashed with an inline accept/reject the founder resolves in place.
   proposed?: boolean;
+  // Why-this-shape: one plain sentence the composer wrote for why this step exists and why it sits
+  // where it does. Additive and optional — captured at compose time, or filled on demand by the
+  // explain path. Surfaced only in the canvas's Explain mode; a graph without it renders as before.
+  rationale?: string;
 };
 
 export type GTMNodeContract = {
@@ -609,6 +613,9 @@ export type GTMEdge = {
   // accept/reject when both its endpoints are already real (an edge hanging off a ghost node commits
   // or drops together with that node).
   proposed?: boolean;
+  // Why-this-order: one plain sentence for why this ordering (source → target) exists. Additive and
+  // optional; surfaced as a rationale pill on the edge in the canvas's Explain mode.
+  rationale?: string;
 };
 
 export type GTMGraph = {
@@ -659,6 +666,10 @@ export type GTMItem = {
   approvalStatus?: "approved" | "rejected" | "pending";
   editedFrom?: string | null;
   sentAt?: string | null;
+  // plain-language framing stamped at gate staging (never the outbound body — that stays verbatim).
+  // A founder-plain headline and a one-line "what your yes does". Null when translation didn't run.
+  plainLanguageTitle?: string | null;
+  whatYourYesDoes?: string | null;
   // provenance (venture doctrine: every item has a source pointer)
   source?: {
     tool: string;
@@ -746,14 +757,26 @@ export type GtmLibrary = { agents: LibraryAgent[]; skills: LibrarySkill[] };
 // ─── Founder gate decisions (the loop's learning signal) ─────────────────────
 
 // One decision on one drafted item. An edit is an approve that carries the
-// founder's rewritten draft.
+// founder's rewritten draft. A "refine" is a veto that is NOT a dead end: it hands the item back to the
+// crew in the Composer with the founder's note, and the reworked draft returns to the gate.
 export type GateDecision = {
-  decision: "approve" | "reject";
+  decision: "approve" | "reject" | "refine";
   editedDraft?: string;
+  founderNote?: string;
 };
 
 // nodeId → (itemKey → decision). Keyed to match itemKey() / brain draftKey().
 export type Decisions = Record<string, Record<string, GateDecision>>;
+
+// One completed step in the gate's "reel" — what a teammate DID on this run, derived from a real executed
+// node (never narrated). teammate is the plain role name (agentPersona), verb+object a plain past-tense
+// phrase ("mapped", "buyer segments"), count the real item tally when one reads naturally.
+export type ReelStep = {
+  teammate: string;
+  verb: string;
+  object: string;
+  count: number | null;
+};
 
 // ─── Durable resident GTM operator ───────────────────────────────────────────
 

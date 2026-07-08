@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440, initial-scale=1">
+<title>Drover — Claude Composer redesign</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap');
+
+:root{
+  --ink:#18181b; --ink-2:#3f3f46; --muted:#71717a; --faint:#a1a1aa; --ghost:#d4d4d8;
+  --line:#ececec; --line-2:#e4e4e7; --surface:#fff; --surface-2:#f4f4f5; --canvas:#fafafa; --canvas-dot:#e4e4e7;
+  --primary:#18181b; --on-primary:#fff; --proven:#16a34a; --proven-soft:#f0fdf4;
+  --gap:#d97706; --gap-soft:#fffbeb; --danger:#dc2626;
+  --r-sm:6px; --r-md:9px; --r-lg:12px; --r-xl:16px;
+  --shadow-card:0 1px 2px rgba(24,24,27,.04), 0 1px 3px rgba(24,24,27,.06);
+  --shadow-pop:0 4px 12px rgba(24,24,27,.08), 0 12px 32px rgba(24,24,27,.10);
+  --shadow-modal:0 8px 24px rgba(24,24,27,.12), 0 24px 64px rgba(24,24,27,.16);
+  --ease:cubic-bezier(.22,1,.36,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--canvas);color:var(--ink);font-family:"Geist",ui-sans-serif,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
+.mono{font-family:"Geist Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;}
+.tnum{font-variant-numeric:tabular-nums;}
+
+/* ── Stage ─────────────────────────────────────────────────────── */
+.stage{width:1440px;height:1180px;display:grid;grid-template-columns:1fr 484px;position:relative;overflow:hidden;}
+
+/* ── Left: dimmed canvas context ──────────────────────────────── */
+.canvas{position:relative;background:
+  radial-gradient(circle at 1px 1px, var(--canvas-dot) 1px, transparent 0) 0 0/22px 22px,
+  var(--canvas);
+  overflow:hidden;}
+.canvas::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(250,250,250,0) 60%,rgba(250,250,250,.55));}
+.canvas-top{position:absolute;top:20px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;
+  background:var(--surface);border:1px solid var(--line-2);border-radius:999px;padding:6px 8px 6px 12px;box-shadow:var(--shadow-card);z-index:3;}
+.canvas-top .crumb{font-size:12.5px;color:var(--ink);font-weight:560;}
+.canvas-top .crumb .sep{color:var(--ghost);margin:0 6px;}
+.canvas-top .crumb .dim{color:var(--muted);font-weight:460;}
+.canvas-top .run{margin-left:6px;background:var(--ink);color:#fff;border:0;border-radius:999px;font:inherit;font-size:12px;font-weight:600;padding:6px 14px;}
+.gcard{position:absolute;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-lg);box-shadow:var(--shadow-card);width:196px;opacity:.66;}
+.gcard .gc-h{display:flex;align-items:center;gap:7px;padding:9px 11px 5px;}
+.gc-ico{width:22px;height:22px;border-radius:6px;background:var(--surface-2);display:grid;place-items:center;color:var(--muted);}
+.gc-eye{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);font-weight:600;}
+.gcard .gc-l{padding:0 11px 11px;font-size:12.5px;color:var(--ink-2);line-height:1.35;}
+.gedge{position:absolute;height:1.5px;background:var(--ghost);opacity:.6;}
+.ghost-face{width:22px;height:22px;border-radius:6px;}
+
+/* ── Right: the Composer ──────────────────────────────────────── */
+.composer{background:var(--surface);border-left:1px solid var(--line);display:flex;flex-direction:column;box-shadow:-1px 0 0 rgba(24,24,27,.02), var(--shadow-pop);z-index:2;}
+
+/* Zone 1 — chrome */
+.c-head{display:flex;align-items:center;gap:10px;padding:14px 14px 12px;border-bottom:1px solid var(--line);}
+.c-avatar{width:30px;height:30px;border-radius:9px;background:#101014;display:grid;place-items:center;position:relative;flex-shrink:0;}
+.c-avatar svg{width:17px;height:17px;color:#fff;}
+.c-avatar .live{position:absolute;right:-2px;bottom:-2px;width:9px;height:9px;border-radius:50%;background:var(--proven);border:2px solid var(--surface);}
+.c-id{display:flex;flex-direction:column;flex:1;min-width:0;}
+.c-id strong{font-size:14px;font-weight:620;letter-spacing:-.01em;}
+.c-id span{font-size:11px;color:var(--faint);}
+.c-icon{width:28px;height:28px;border-radius:8px;border:1px solid transparent;background:transparent;display:grid;place-items:center;color:var(--muted);cursor:pointer;}
+.c-icon:hover{background:var(--surface-2);color:var(--ink);}
+.c-icon svg{width:15px;height:15px;}
+
+.c-tabs{display:flex;align-items:center;gap:6px;padding:8px 12px;border-bottom:1px solid var(--line);overflow:hidden;}
+.c-tab{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;border-radius:8px;border:1px solid transparent;background:transparent;cursor:pointer;max-width:210px;position:relative;}
+.c-tab.active{background:var(--surface-2);border-color:var(--line-2);}
+.c-tab .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.dot-work{background:var(--proven);box-shadow:0 0 0 3px var(--proven-soft);}
+.dot-need{background:var(--gap);box-shadow:0 0 0 3px var(--gap-soft);}
+.dot-done{background:transparent;border:1.5px solid var(--ghost);}
+.c-tab .nm{font-size:12.5px;color:var(--ink);font-weight:540;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.c-tab.idle .nm{color:var(--muted);font-weight:460;}
+.c-tab-new{width:28px;height:28px;border-radius:8px;border:1px dashed var(--ghost);background:transparent;color:var(--faint);display:grid;place-items:center;cursor:pointer;flex-shrink:0;}
+.c-tab-new svg{width:14px;height:14px;}
+
+/* Zone 2 — the response stream (one card language) */
+.c-thread{flex:1;overflow:hidden;padding:16px 14px 8px;display:flex;flex-direction:column;gap:16px;position:relative;}
+.sys{align-self:center;font-size:11px;color:var(--faint);display:flex;align-items:center;gap:7px;}
+.sys .l{width:22px;height:1px;background:var(--line-2);}
+.you{align-self:flex-end;max-width:78%;background:var(--ink);color:#fff;font-size:13px;line-height:1.5;padding:9px 13px;border-radius:14px 14px 4px 14px;}
+
+/* the shared "hand-back" card — idea sets, plans, questions, gates all wear this */
+.card{border:1px solid var(--line-2);border-radius:var(--r-lg);background:var(--surface);box-shadow:var(--shadow-card);overflow:hidden;}
+.card-h{display:flex;align-items:flex-start;gap:9px;padding:12px 13px 10px;}
+.card-h .hi{width:24px;height:24px;border-radius:7px;background:var(--surface-2);display:grid;place-items:center;color:var(--muted);flex-shrink:0;margin-top:1px;}
+.card-h .ht{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.card-h strong{font-size:13px;font-weight:620;letter-spacing:-.01em;}
+.card-h span{font-size:11.5px;color:var(--muted);line-height:1.4;}
+
+/* ── the roster tile — the ONE component used in the menu, the palette, the flows & the plan ── */
+.face{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-size:11px;font-weight:640;color:#fff;flex-shrink:0;position:relative;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14), 0 1px 1.5px rgba(24,24,27,.14);}
+.face.sm{width:26px;height:26px;border-radius:7px;font-size:10px;}
+.face.xs{width:22px;height:22px;border-radius:6px;font-size:9px;}
+.mark{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-size:10.5px;font-weight:700;flex-shrink:0;background:var(--surface);border:1px solid var(--line-2);box-shadow:var(--shadow-card);position:relative;}
+.mark.sm{width:26px;height:26px;border-radius:7px;font-size:9.5px;}
+.mark.xs{width:22px;height:22px;border-radius:6px;font-size:8.5px;}
+.mark .g{position:absolute;right:-3px;top:-3px;width:11px;height:11px;border-radius:50%;background:var(--gap);border:2px solid var(--surface);display:grid;place-items:center;}
+.mark .g::after{content:"";width:3px;height:3px;border-radius:50%;background:#fff;}
+/* persona tints — soft, desaturated identity (the monogram degrade of the real pixel faces) */
+.p-signal{background:linear-gradient(160deg,#5b7a8c,#456070);}
+.p-qual{background:linear-gradient(160deg,#7d6f96,#5f5478);}
+.p-writer{background:linear-gradient(160deg,#8c6d5b,#6f5545);}
+.p-strat{background:linear-gradient(160deg,#5b8c74,#456e5b);}
+.p-first{background:linear-gradient(160deg,#8c5b6d,#6e4557);}
+.p-dist{background:linear-gradient(160deg,#6d7a8c,#54606e);}
+
+/* embodied idea option */
+.opt{border-top:1px solid var(--line);padding:12px 13px;}
+.opt-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}
+.opt-h .ol{font-size:12.5px;font-weight:600;color:var(--ink);}
+.opt-h .ob{font-size:11.5px;font-weight:600;color:var(--ink);background:var(--surface);border:1px solid var(--line-2);border-radius:999px;padding:4px 11px;cursor:pointer;box-shadow:var(--shadow-card);}
+.opt-h .ob.dim{color:var(--muted);box-shadow:none;background:transparent;}
+.flow{display:flex;align-items:center;gap:0;flex-wrap:wrap;row-gap:8px;}
+.flow .chev{color:var(--ghost);margin:0 5px;flex-shrink:0;}
+.flow .chev svg{width:13px;height:13px;display:block;}
+.gate-chip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px 0 8px;border-radius:8px;background:var(--gap-soft);border:1px solid #f0d9a8;color:#8a5a06;font-size:11.5px;font-weight:620;flex-shrink:0;}
+.gate-chip svg{width:14px;height:14px;color:var(--gap);}
+.opt-why{margin-top:9px;font-size:11.5px;color:var(--muted);line-height:1.45;}
+
+/* the plan card — teammate-stamped checklist */
+.plan-rows{border-top:1px solid var(--line);}
+.prow{display:flex;align-items:center;gap:10px;padding:9px 13px;border-bottom:1px solid var(--line);position:relative;}
+.prow:last-child{border-bottom:0;}
+.prow .tick{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--ghost);flex-shrink:0;display:grid;place-items:center;}
+.prow.ok .tick{background:var(--proven);border-color:var(--proven);}
+.prow.ok .tick svg{width:9px;height:9px;color:#fff;}
+.prow .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
+.prow .eye{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);font-weight:600;}
+.prow .nm{font-size:12.5px;color:var(--ink);font-weight:520;}
+.prow .edit{opacity:0;width:24px;height:24px;border-radius:6px;border:1px solid var(--line-2);background:var(--surface);display:grid;place-items:center;color:var(--muted);flex-shrink:0;}
+.prow.hov .edit{opacity:1;}
+.prow.hov{background:var(--surface-2);}
+.prow .edit svg{width:12px;height:12px;}
+.prow .st{font-size:11px;color:var(--faint);flex-shrink:0;}
+.prow.gate{background:var(--gap-soft);}
+.prow.gate .nm{color:#8a5a06;font-weight:600;}
+.prow.gate .g-ico{width:26px;height:26px;border-radius:7px;background:var(--surface);border:1px solid #f0d9a8;display:grid;place-items:center;flex-shrink:0;}
+.prow.gate .g-ico svg{width:14px;height:14px;color:var(--gap);}
+.plan-foot{display:flex;align-items:center;gap:8px;padding:11px 13px;}
+.btn-run{background:var(--ink);color:#fff;border:0;border-radius:9px;font:inherit;font-size:12.5px;font-weight:600;padding:9px 16px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;}
+.btn-run svg{width:14px;height:14px;}
+.btn-ghost{background:transparent;color:var(--ink);border:1px solid var(--line-2);border-radius:9px;font:inherit;font-size:12.5px;font-weight:540;padding:9px 14px;cursor:pointer;}
+.plan-foot .note{margin-left:auto;font-size:11px;color:var(--faint);}
+
+/* Zone 3 — the input, with palette + @-menu */
+.c-input-wrap{border-top:1px solid var(--line);padding:10px 12px 12px;position:relative;background:var(--surface);}
+
+/* @-menu popover */
+.mention{position:absolute;left:16px;bottom:196px;width:296px;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-lg);box-shadow:var(--shadow-modal);overflow:hidden;z-index:5;}
+.mention-q{display:flex;align-items:center;gap:8px;padding:9px 11px;border-bottom:1px solid var(--line);}
+.mention-q .at{color:var(--faint);font-size:13px;}
+.mention-q .q{font-size:13px;color:var(--ink);}
+.mention-q .q b{font-weight:400;}
+.mention-q .cur{display:inline-block;width:1.5px;height:15px;background:var(--ink);vertical-align:-3px;margin-left:1px;}
+.mention-sec{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);font-weight:600;padding:8px 12px 4px;}
+.mention-row{display:flex;align-items:center;gap:9px;padding:6px 10px;cursor:pointer;}
+.mention-row.on{background:var(--surface-2);}
+.mention-row .rb{display:flex;flex-direction:column;gap:0;min-width:0;flex:1;}
+.mention-row .rn{font-size:12.5px;color:var(--ink);font-weight:540;}
+.mention-row .rr{font-size:10.5px;color:var(--muted);}
+.mention-row .tag{font-size:9.5px;font-weight:600;color:#8a5a06;background:var(--gap-soft);border:1px solid #f0d9a8;border-radius:5px;padding:1px 5px;}
+
+/* the input card */
+.inp{border:1px solid var(--line-2);border-radius:var(--r-lg);background:var(--surface);box-shadow:var(--shadow-card);overflow:hidden;}
+.inp:focus-within{border-color:var(--ink);}
+.inp-text{padding:12px 13px 4px;font-size:14px;line-height:1.6;color:var(--ink);}
+.mchip{display:inline-flex;align-items:center;gap:5px;height:23px;padding:0 8px 0 4px;border-radius:7px;background:var(--surface-2);border:1px solid var(--line-2);font-size:12.5px;font-weight:560;vertical-align:-5px;margin:0 1px;}
+.mchip .face,.mchip .mark{box-shadow:none;}
+.mchip.gated{background:var(--gap-soft);border-color:#f0d9a8;color:#8a5a06;}
+.cur2{display:inline-block;width:1.5px;height:16px;background:var(--ink);vertical-align:-3px;margin-left:1px;animation:blink 1.1s steps(1) infinite;}
+@keyframes blink{50%{opacity:0}}
+
+/* the roster palette strip — summoned tray */
+.palette{display:flex;align-items:center;gap:7px;padding:8px 11px;border-top:1px solid var(--line);overflow:hidden;}
+.palette.tray{background:var(--surface-2);}
+.bar-left{display:flex;align-items:center;gap:8px;}
+.parts-toggle{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px 0 9px;border:1px solid var(--line-2);border-radius:999px;background:var(--surface);color:var(--muted);font:inherit;font-size:11.5px;font-weight:560;cursor:pointer;}
+.parts-toggle svg{width:13px;height:13px;}
+.parts-toggle.on{background:var(--ink);border-color:var(--ink);color:#fff;}
+.palette .plabel{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);font-weight:600;flex-shrink:0;margin-right:2px;}
+.palette .pdiv{width:1px;height:22px;background:var(--line-2);flex-shrink:0;margin:0 2px;}
+.ptile{position:relative;cursor:grab;}
+.ptile:hover{transform:translateY(-2px);transition:transform 120ms var(--ease);}
+.ptile .grip{position:absolute;top:-3px;left:50%;transform:translateX(-50%);opacity:0;}
+.palette .more{font-size:11px;color:var(--muted);flex-shrink:0;padding:0 4px;}
+
+/* the control bar */
+.inp-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-top:1px solid var(--line);}
+.model{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;border:1px solid var(--line-2);border-radius:999px;background:var(--surface);cursor:pointer;}
+.model .md{width:6px;height:6px;border-radius:50%;background:var(--proven);}
+.model .mt{font-size:11.5px;color:var(--ink-2);font-weight:540;}
+.model svg{width:12px;height:12px;color:var(--faint);}
+.inp-actions{display:flex;align-items:center;gap:8px;}
+.mic{width:32px;height:32px;border-radius:50%;border:1px solid var(--line-2);background:transparent;display:grid;place-items:center;color:var(--muted);cursor:pointer;}
+.mic svg{width:16px;height:16px;}
+.send{width:34px;height:34px;border-radius:50%;border:0;background:var(--ink);display:grid;place-items:center;color:#fff;cursor:pointer;}
+.send svg{width:17px;height:17px;}
+
+/* legend in the canvas dead-space */
+.legend{position:absolute;left:64px;top:560px;width:420px;z-index:4;}
+.lg-eye{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:600;margin-bottom:6px;}
+.lg-title{font-size:20px;font-weight:640;letter-spacing:-.02em;color:var(--ink);line-height:1.2;margin-bottom:20px;}
+.lg-rows{display:flex;flex-direction:column;gap:14px;}
+.lg-row{display:flex;gap:12px;align-items:flex-start;}
+.lg-n{width:22px;height:22px;border-radius:7px;background:var(--ink);color:#fff;font-family:"Geist Mono",monospace;font-size:11px;font-weight:600;display:grid;place-items:center;flex-shrink:0;margin-top:1px;}
+.lg-row div{display:flex;flex-direction:column;gap:2px;}
+.lg-row b{font-size:13.5px;font-weight:600;color:var(--ink);letter-spacing:-.01em;}
+.lg-row span{font-size:12px;color:var(--muted);line-height:1.4;}
+.lg-row i{color:var(--faint);font-style:normal;}
+.lg-foot{margin-top:22px;padding-top:16px;border-top:1px solid var(--line-2);font-size:12px;color:var(--ink-2);line-height:1.6;max-width:400px;}
+.lg-swatch{display:inline-flex;vertical-align:-3px;margin:0 1px;}
+.lg-swatch .face,.lg-swatch .mark{display:grid;place-items:center;color:#fff;font-weight:700;}
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <!-- ══════════ LEFT — dimmed canvas context ══════════ -->
+  <div class="canvas">
+    <div class="canvas-top">
+      <span class="crumb">Strelva <span class="sep">/</span><span class="dim">Land 3 design-partner calls</span></span>
+      <button class="run">Run</button>
+    </div>
+
+    <!-- ghost pipeline on the board -->
+    <div class="gcard" style="top:250px;left:90px;">
+      <div class="gc-h"><span class="ghost-face p-signal" style="display:grid;place-items:center;color:#fff;font-size:9px;font-weight:700;">SS</span><span class="gc-eye">Signal Scout</span></div>
+      <div class="gc-l">Watch new GitHub stars for buying signal</div>
+    </div>
+    <div class="gedge" style="top:290px;left:286px;width:78px;"></div>
+    <div class="gcard" style="top:250px;left:364px;">
+      <div class="gc-h"><span class="ghost-face p-writer" style="display:grid;place-items:center;color:#fff;font-size:9px;font-weight:700;">OW</span><span class="gc-eye">Outreach Writer</span></div>
+      <div class="gc-l">Draft the first message in your voice</div>
+    </div>
+    <div class="gedge" style="top:290px;left:560px;width:78px;"></div>
+    <div class="gcard" style="top:250px;left:638px;border-color:#f0d9a8;background:#fffdf8;opacity:.7;">
+      <div class="gc-h"><span class="gc-ico" style="background:#fffbeb;color:#d97706;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span><span class="gc-eye" style="color:#b98218;">Your gate</span></div>
+      <div class="gc-l" style="color:#8a5a06;">Nothing sends until you approve</div>
+    </div>
+
+  </div>
+
+  <!-- ══════════ RIGHT — the redesigned Composer ══════════ -->
+  <div class="composer">
+
+    <!-- Zone 1 · chrome -->
+    <div class="c-head">
+      <div class="c-avatar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M12 7V4M8 3h8M9 13h.01M15 13h.01"/></svg>
+        <span class="live"></span>
+      </div>
+      <div class="c-id"><strong>Claude</strong><span>working · on your subscription</span></div>
+      <button class="c-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button class="c-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
+      <button class="c-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+
+    <!-- pipeline tabs -->
+    <div class="c-tabs">
+      <div class="c-tab active"><span class="dot dot-work"></span><span class="nm">Land 3 design-partner calls</span></div>
+      <div class="c-tab idle"><span class="dot dot-need"></span><span class="nm">Content that ranks</span></div>
+      <button class="c-tab-new"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+    </div>
+
+    <!-- Zone 2 · the response stream -->
+    <div class="c-thread">
+      <div class="sys"><span class="l"></span> read your product · found 2 shapes <span class="l"></span></div>
+
+      <div class="you">Find people who’d care about Strelva and get outreach out through Gmail</div>
+
+      <!-- EMBODIED IDEA CARD — feature #2, one shared card language -->
+      <div class="card">
+        <div class="card-h">
+          <span class="hi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 00-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0012 2z"/></svg></span>
+          <span class="ht"><strong>A few ways to shape this</strong><span>Each shows the crew it would use, in order, ending at your gate. Pick one — edit it — nothing sends until you approve.</span></span>
+        </div>
+
+        <div class="opt">
+          <div class="opt-h">
+            <span class="ol">Warm inbound first</span>
+            <button class="ob">Build this</button>
+          </div>
+          <div class="flow">
+            <span class="mark sm" style="color:#24292f;">GH</span>
+            <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 6l6 6-6 6"/></svg></span>
+            <span class="face sm p-signal">SS</span>
+            <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 6l6 6-6 6"/></svg></span>
+            <span class="face sm p-qual">QA</span>
+            <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 6l6 6-6 6"/></svg></span>
+            <span class="face sm p-writer">OW</span>
+            <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 6l6 6-6 6"/></svg></span>
+            <span class="mark sm" style="color:#c5221f;">Gm<span class="g"></span></span>
+            <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 6l6 6-6 6"/></svg></span>
+            <span class="gate-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Your gate</span>
+          </div>
+          <p class="opt-why">Catches people already circling your repo, so the first message lands warm — highest hit-rate, smaller volume.</p>
+        </div>
+
+        <div class="opt">
+          <div class="opt-h">
+            <span class="ol">Cold outbound at volume</span>
+            <button class="ob dim">Build this</button>
+          </div>
+          <div class="flow">
+            <span class="mark sm" style="color:#1b1b1f;">Ex</span>
+            <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 6l6 6-6 6"/></svg></span>
+            <span class="mark sm" style="color:#e8603c;">Fc</span>
+            <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 6l6 6-6 6"/></svg></span>
+            <span class="face sm p-first">FC</span>
+            <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 6l6 6-6 6"/></svg></span>
+            <span class="mark sm" style="color:#c5221f;">Gm<span class="g"></span></span>
+            <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 6l6 6-6 6"/></svg></span>
+            <span class="gate-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Your gate</span>
+          </div>
+          <p class="opt-why">Finds fit by meaning and reads each prospect’s own site first, so cold notes still feel researched.</p>
+        </div>
+      </div>
+
+      <!-- PRE-RUN PLAN CARD — feature #4, same card language -->
+      <div class="card">
+        <div class="card-h">
+          <span class="hi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></span>
+          <span class="ht"><strong>Here’s the plan for “Warm inbound first”</strong><span>4 steps, then your gate. Edit any before it runs — or just tell me to change it.</span></span>
+        </div>
+        <div class="plan-rows">
+          <div class="prow ok">
+            <span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><path d="M20 6L9 17l-5-5"/></svg></span>
+            <span class="mark xs" style="color:#24292f;">GH</span>
+            <span class="body"><span class="eye">GitHub</span><span class="nm">Watch new stars &amp; forks on your repo</span></span>
+            <span class="st">ready</span>
+          </div>
+          <div class="prow hov">
+            <span class="tick"></span>
+            <span class="face xs p-signal">SS</span>
+            <span class="body"><span class="eye">Signal Scout</span><span class="nm">Flag the ones who look like real buyers</span></span>
+            <button class="edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></button>
+          </div>
+          <div class="prow">
+            <span class="tick"></span>
+            <span class="face xs p-qual">QA</span>
+            <span class="body"><span class="eye">Qualification Analyst</span><span class="nm">Rank who to reach first, with the why</span></span>
+            <span class="st">waiting</span>
+          </div>
+          <div class="prow">
+            <span class="tick"></span>
+            <span class="face xs p-writer">OW</span>
+            <span class="body"><span class="eye">Outreach Writer</span><span class="nm">Draft each first message in your voice</span></span>
+            <span class="st">waiting</span>
+          </div>
+          <div class="prow gate">
+            <span class="g-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+            <span class="body"><span class="eye" style="color:#b98218;">Your gate · Gmail</span><span class="nm">Read every draft — approve, edit, or hold. Then it sends.</span></span>
+          </div>
+        </div>
+        <div class="plan-foot">
+          <button class="btn-run"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Run to my gate</button>
+          <button class="btn-ghost">Change it</button>
+          <span class="note">or keep typing below</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Zone 3 · the input -->
+    <div class="c-input-wrap">
+
+      <!-- @-menu popover (open) -->
+      <div class="mention">
+        <div class="mention-q"><span class="at">@</span><span class="q">Gm<span class="cur"></span></span></div>
+        <div class="mention-sec">Teammates</div>
+        <div class="mention-row"><span class="face sm p-strat">CS</span><span class="rb"><span class="rn">Content Strategist</span><span class="rr">Plans content that earns search traffic</span></span></div>
+        <div class="mention-sec">Capabilities</div>
+        <div class="mention-row on"><span class="mark sm" style="color:#c5221f;">Gm</span><span class="rb"><span class="rn">Gmail</span><span class="rr">Sends your drafts — always through your gate</span></span><span class="tag">GATED</span></div>
+        <div class="mention-row"><span class="mark sm" style="color:#4285f4;">GC</span><span class="rb"><span class="rn">Google Calendar</span><span class="rr">Books the call once someone says yes</span></span><span class="tag">GATED</span></div>
+      </div>
+
+      <div class="inp">
+        <div class="inp-text">have <span class="mchip"><span class="face xs p-writer">OW</span>Outreach&nbsp;Writer</span> send this through <span style="color:var(--muted);">@Gm</span><span class="cur2"></span></div>
+
+        <!-- the roster palette — SUMMONED: slides in from the "parts" toggle. Same tiles, draggable to
+             canvas OR into the sentence. -->
+        <div class="palette tray">
+          <span class="plabel">Your crew &amp; tools</span>
+          <span class="ptile"><span class="face sm p-signal">SS</span></span>
+          <span class="ptile"><span class="face sm p-qual">QA</span></span>
+          <span class="ptile"><span class="face sm p-writer">OW</span></span>
+          <span class="ptile"><span class="face sm p-strat">CS</span></span>
+          <span class="pdiv"></span>
+          <span class="ptile"><span class="mark sm" style="color:#1b1b1f;">Ex</span></span>
+          <span class="ptile"><span class="mark sm" style="color:#24292f;">GH</span></span>
+          <span class="ptile"><span class="mark sm" style="color:#e8603c;">Fc</span></span>
+          <span class="ptile"><span class="mark sm" style="color:#c5221f;">Gm<span class="g"></span></span></span>
+          <span class="ptile"><span class="mark sm" style="color:#0a66c2;">Li<span class="g"></span></span></span>
+          <span class="more">+7</span>
+        </div>
+
+        <div class="inp-bar">
+          <div class="bar-left">
+            <button class="parts-toggle on" title="Your crew & tools"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg> Parts</button>
+            <button class="model"><span class="md"></span><span class="mt">Claude · Opus 4.8</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></button>
+          </div>
+          <div class="inp-actions">
+            <button class="mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0014 0M12 19v3"/></svg></button>
+            <button class="send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- legend — in the canvas dead space, so the composer stays unobstructed -->
+  <div class="legend">
+    <div class="lg-eye">The Claude composer, redesigned</div>
+    <div class="lg-title">Three zones. Four moves. Fewer parts than before.</div>
+    <div class="lg-rows">
+      <div class="lg-row"><span class="lg-n">1</span><div><b>@-mention your team in the sentence</b><span>Type @ — teammates &amp; capabilities become chips. <i>Input zone.</i></span></div></div>
+      <div class="lg-row"><span class="lg-n">2</span><div><b>Ideas come back as faces, not paragraphs</b><span>Each shape shows its crew in order, ending at your gate. <i>Response zone.</i></span></div></div>
+      <div class="lg-row"><span class="lg-n">3</span><div><b>A parts strip you summon on the input</b><span>Hit <i>Parts</i> — the same faces &amp; marks slide in to drag to canvas or drop into the line. <i>Input zone.</i></span></div></div>
+      <div class="lg-row"><span class="lg-n">4</span><div><b>See the plan before it runs</b><span>A teammate-stamped checklist you edit mid-thought. <i>Response zone.</i></span></div></div>
+    </div>
+    <div class="lg-foot">One roster tile — the <span class="lg-swatch"><span class="face xs p-writer" style="width:16px;height:16px;border-radius:4px;font-size:7px;">OW</span></span> face, the <span class="lg-swatch"><span class="mark xs" style="width:16px;height:16px;border-radius:4px;font-size:7px;color:#c5221f;box-shadow:none;border:1px solid var(--line-2);">Gm</span></span> mark — is the same object in the menu, the palette, the ideas, and the plan.</div>
+  </div>
+</div>
+</body>
+</html>

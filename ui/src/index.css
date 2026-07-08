@@ -3331,6 +3331,12 @@ svg {
   height: 15px !important;
 }
 
+/* Capability logo inside a node's icon tile (a grabbed-in Gmail/Exa/…). The svg mark inherits the tile
+   sizing above; the lettermark fallback (Exa, Firecrawl, LinkedIn) draws as a compact brand-tone
+   monogram. Same mark the workspace rail shows, so a capability reads identically wherever it appears. */
+.cap-glyph { display: inline-flex; align-items: center; justify-content: center; }
+.cap-glyph-letter { font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
+
 .loop-node-type-label {
   font-size: 9.5px;
   font-weight: 700;
@@ -3524,9 +3530,10 @@ svg {
 }
 
 .loop-edge-context .react-flow__edge-path {
-  stroke: #c4c7db;
-  stroke-width: 1.4;
-  stroke-dasharray: 5 5;
+  stroke: #d6d9e6;
+  stroke-width: 1;
+  stroke-dasharray: 2 6;
+  opacity: 0.5;
 }
 
 .loop-edge-feedback .react-flow__edge-path {
@@ -5934,7 +5941,7 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
    Rivals a real chat composer: a calm textarea over a control row. Left a context "+"
    and the live model/state; right a dark circular send — the one monochrome primary
    (amber stays the gate's alone). */
-.composer-box { display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-3) var(--space-2); }
+.composer-box { position: relative; display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-3) var(--space-2); }
 .composer-dock.floating:not(.resting) .composer-box {
   border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
 }
@@ -5946,6 +5953,48 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .composer-box-input::placeholder { color: var(--faint); }
 .composer-box-input:focus { outline: none; }
 .composer-box-input:disabled { color: var(--muted); cursor: default; }
+
+/* ── The @-mention menu, anchored above the input line (Notion-style popover). The menu itself is
+   styled in composer-mention.css; this only places it relative to the composer box. ── */
+/* Higher specificity (0,3,0) than `.composer-box > *:not(.composer-aurora)` (0,2,0) below, which would
+   otherwise force the menu back into flow (position:relative, z-index:1) and it would push the input
+   down instead of floating above it. */
+.composer-box > .mention.composer-mention {
+  position: absolute;
+  left: var(--space-3);
+  right: auto;
+  bottom: calc(100% + 6px);
+  z-index: 40;
+}
+
+/* ── Placed @-team chips — the roster tiles the founder named in the sentence, removable. The same
+   RosterTile that renders in the menu, the tray, the idea flow, and the plan (one inventory, one
+   language). ── */
+.cmp-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px var(--space-1) 0; }
+.cmp-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 4px 0 4px; border-radius: 8px;
+  background: var(--surface-2); border: 1px solid var(--line-2);
+  font-size: 12.5px; font-weight: 540; color: var(--ink);
+  animation: chip-in 200ms var(--ease-out) both;
+}
+.cmp-chip.gated {
+  background: var(--gap-soft);
+  border-color: color-mix(in srgb, var(--gap) 30%, var(--line-2));
+  color: color-mix(in srgb, var(--gap) 78%, #000);
+}
+.cmp-chip-label { line-height: 1; }
+.cmp-chip-x {
+  display: grid; place-items: center; width: 18px; height: 18px; flex-shrink: 0;
+  border: 0; border-radius: 5px; background: transparent; color: var(--faint); cursor: pointer;
+  transition: background var(--ease), color var(--ease);
+}
+.cmp-chip-x:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
+
+/* ── The response-zone idea group — the intro line that heads a set of embodied idea shapes. The shapes
+   themselves wear the shared .composer-card2 frame (composer-embodied.css). ── */
+.cmp-response-group { display: flex; flex-direction: column; gap: var(--space-3); }
+.cmp-response-lead { font-size: 12px; line-height: 1.45; color: var(--muted); padding: 0 2px; }
 
 /* Step-mode chips — the "+" stages a building block as a chip here instead of dropping a card. While
    set, the composer reads as "describe this step." Removable; clears on send. */
@@ -6470,6 +6519,17 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .product-entry-progress-steps strong{font-size:14px;color:var(--ink)}
 .product-entry-progress-steps span{font-size:12.5px;color:var(--muted);line-height:1.45}
 .product-entry-error{margin:14px 0 0;font-size:13px;color:#b91c1c}
+
+/* ── The calm read: a plain-language confirmation of the scan, never an alarm ──── */
+.product-entry-read{margin:2px 0 22px;padding:16px 17px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface)}
+.product-entry-read-line{margin:0;font-size:15px;line-height:1.5;color:var(--ink-2)}
+.product-entry-read-line strong{color:var(--ink);font-weight:600}
+.product-entry-read-win{display:flex;align-items:center;gap:7px;margin:11px 0 0;padding:11px 0 0;
+  border-top:1px solid var(--line);font-size:13px;line-height:1.45;color:var(--muted)}
+.product-entry-read-win.found{color:var(--ink-2)}
+.product-entry-read-win.found svg{color:var(--proven);flex:0 0 auto}
+.product-entry-read-win code{font-family:var(--font-mono);font-size:12px;padding:1px 5px;border-radius:4px;
+  background:#f4f4f5;border:1px solid var(--line);color:var(--ink)}
 
 /* ── Connect Claude: the hard first-run gate's numbered walkthrough ──────────── */
 .connect-steps{list-style:none;margin:6px 0 22px;padding:0;display:grid;gap:16px}
@@ -7923,10 +7983,103 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 @keyframes outcome-float-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .outcome-float { animation: none; } }
 
-/* The old canvas mode switcher (Move / Engineer) was replaced by the AltitudeControl — one axis, one
-   mental model. Its floated-top-center slot is now held by `.altitude` (see styles/altitude.css). */
+/* The old canvas mode switcher (Move / Engineer) and its later AltitudeControl replacement are gone —
+   the Story altitude was removed and Steps (the runnable pipeline) is now the whole canvas. */
 
 /* Learn lens: its content is a centered read-column that would otherwise sit under the floated mode
    pill. Drop its top in so the goal bar clears the switcher. Scoped to the lens — the full cockpit
    scroll (no floating pill) keeps its own padding. */
 .lens-frame .ck.learn-lens { padding-top: 116px; }
+
+/* ── Pipeline intelligence — Explain mode + structural warnings ──────────────────────────────────────
+   A quiet layer over the canvas: the pipeline explains its own shape and flags its own mistakes without
+   a side drawer. Amber (--gap) is the ONE added signal, rationed; red stays reserved for true breakage. */
+
+/* Toolbar (top-right panel): Clean/Explain segmented toggle + the amber "worth a look" tally. */
+.loop-explain-bar { display: inline-flex; align-items: center; gap: 8px; }
+.loop-explain-seg {
+  display: inline-flex; padding: 2px; gap: 2px;
+  border: 1px solid var(--line-2); border-radius: 999px; background: var(--surface);
+  box-shadow: var(--shadow-pop);
+}
+.loop-explain-seg button {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border: 0; border-radius: 999px; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 550; color: var(--muted); background: transparent;
+  transition: background 120ms var(--ease), color 120ms var(--ease);
+}
+.loop-explain-seg button:hover { color: var(--ink); }
+.loop-explain-seg button.on { background: var(--ink); color: var(--on-primary); }
+.loop-explain-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.loop-worth-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 11px 5px 6px; border-radius: 999px; cursor: pointer; font: inherit;
+  font-size: 12px; font-weight: 600; color: #92600b;
+  border: 1px solid #f2dcae; background: var(--gap-soft); box-shadow: var(--shadow-pop);
+  transition: background 120ms var(--ease);
+}
+.loop-worth-chip:hover { background: #fdf3dd; }
+.loop-worth-b {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
+  background: var(--gap); color: #fff; font-size: 10px; font-weight: 700;
+}
+
+/* The corner mark on a flagged card. */
+.loop-warn { position: absolute; top: -8px; right: -8px; z-index: 6; }
+.loop-warn-mark {
+  display: flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; padding: 0; border-radius: 50%; cursor: pointer;
+  background: var(--gap); color: #fff; border: 2px solid var(--canvas);
+  box-shadow: 0 1px 4px oklch(0.667 0.157 58.3 / 0.4);
+}
+.loop-warn-mark svg { width: 11px; height: 11px; }
+.loop-warn-pop {
+  position: absolute; top: 26px; right: -6px; z-index: 40; width: 234px;
+  padding: 11px 12px; border-radius: 12px;
+  background: var(--surface); border: 1px solid var(--line-2); box-shadow: var(--shadow-pop);
+  opacity: 0; visibility: hidden; transform: translateY(-4px);
+  transition: opacity 130ms var(--ease), transform 130ms var(--ease), visibility 130ms;
+  pointer-events: none;
+}
+.loop-warn:hover .loop-warn-pop, .loop-warn:focus-within .loop-warn-pop {
+  opacity: 1; visibility: visible; transform: translateY(0); pointer-events: auto;
+}
+.loop-warn-pop-head { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 650; color: var(--ink); }
+.loop-warn-pop-ico {
+  display: flex; align-items: center; justify-content: center; width: 16px; height: 16px;
+  border-radius: 50%; background: var(--gap-soft); color: var(--gap); flex: none;
+}
+.loop-warn-pop-ico svg { width: 10px; height: 10px; }
+.loop-warn-pop-body { margin-top: 6px; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+.loop-warn-fix {
+  margin-top: 9px; padding: 0; border: 0; background: transparent; cursor: pointer;
+  font: inherit; font-size: 11.5px; font-weight: 600; color: var(--link);
+}
+
+/* Orphan context — nothing reads it, so it recedes (never deleted, just quieted) until hovered. */
+.loop-node-orphan { opacity: 0.6; transition: opacity 130ms var(--ease); }
+.loop-node-orphan:hover, .loop-node-orphan.loop-node-selected { opacity: 1; }
+
+/* The why-caption below a card (Explain mode) — a faint attached note that never resizes the card. */
+.loop-why {
+  position: absolute; top: calc(100% + 8px); left: 0; width: 100%;
+  padding: 7px 10px; border-radius: 10px;
+  background: var(--surface-2); border: 1px solid var(--line);
+  font-size: 10.5px; line-height: 1.4; color: var(--muted);
+}
+.loop-why em { font-style: normal; font-weight: 600; color: var(--ink-2); }
+
+/* The rationale pill riding an edge (Explain mode) — quiet, on the line, only where a reason exists. */
+.loop-edge-why {
+  max-width: 210px; padding: 5px 10px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--line-2); box-shadow: var(--shadow-card);
+  font-size: 10.5px; line-height: 1.3; color: var(--ink-2); text-align: center;
+  pointer-events: none;
+}
+
+/* A weak feed into the gate (a duplicated step) reads as a thin amber dashed line, not a solid spine. */
+.react-flow__edge.loop-edge-weak .react-flow__edge-path {
+  stroke: var(--gap); stroke-width: 1.6; stroke-dasharray: 5 4; opacity: 0.85;
+}

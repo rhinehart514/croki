@@ -26,6 +26,7 @@ import {
   OUTCOME_SOURCES,
 } from "../src/outcome-ingest.mjs";
 import { gtmPathStore, runStore, resultStore, learningStore } from "../src/gtm-store.mjs";
+import { teammateSoulStore } from "../src/teammate-soul-store.mjs";
 
 // Isolated store root per test — nothing touches the real ~/.gtm-ide.
 function freshRoot() {
@@ -185,6 +186,43 @@ describe("outcome ingest — three sources on one key", () => {
     );
     assert.equal(ingested[0].result.outcomeKind, "a_brand_new_outcome_kind");
     assert.equal(ingested[0].result.source, "a_source_that_did_not_exist_yesterday");
+  });
+});
+
+describe("outcome ingest — the live path feeds a teammate's standing (GAP 2)", () => {
+  // Proves the LIVE ingest path — not just the store in isolation — actually calls recordOutcome on the
+  // teammate that produced the joined item, so a real reply/win moves its standing off "proving". Without
+  // this feed every teammate reads "proving" forever and the stakes tone never sharpens.
+  it("a real joined win bumps the producing teammate's record so standing leaves 'proving'", () => {
+    const options = freshRoot();
+    const projectId = "strelva";
+    const ref = "outreach-writer";
+    // A staged item that carries the agentRef the graph stamps when an agent step produced it.
+    seedRun(options, {
+      projectId,
+      items: [{ joinKey: "handle-ada", buyer: "Ada", channel: "discord", message: "hey Ada", agentRef: ref }],
+    });
+
+    // Cold: no signal yet — the honest "proving" read.
+    assert.equal(teammateSoulStore.voiceBriefFor(projectId, ref, {}, options).standing, "proving");
+
+    // A real win comes back and joins to that item.
+    ingestOutcome({ joinKey: "handle-ada", outcomeKind: "converted", value: 1 }, { ...options, projectId });
+
+    // The live ingest folded the win into the teammate's real record → standing sharpens to "trusted".
+    const brief = teammateSoulStore.voiceBriefFor(projectId, ref, {}, options);
+    assert.equal(brief.record.wins, 1);
+    assert.equal(brief.standing, "trusted");
+  });
+
+  it("an item with no agentRef teaches no soul — nothing is fabricated", () => {
+    const options = freshRoot();
+    const projectId = "strelva";
+    // The default seed items carry no agentRef.
+    seedRun(options);
+    ingestOutcome({ joinKey: "handle-ada", outcomeKind: "reply" }, { ...options, projectId });
+    // No teammate soul was born from an unattributable outcome.
+    assert.equal(teammateSoulStore.listForProject(projectId, options).length, 0);
   });
 });
 

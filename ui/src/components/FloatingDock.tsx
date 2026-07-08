@@ -3,27 +3,23 @@ import { LoaderCircle, Settings2 } from "lucide-react";
 import { SPRING } from "@/lib/springs";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { ChannelSwitcher } from "@/components/ChannelSwitcher";
-import { SlidingTabs } from "@/components/SlidingTabs";
 import "@/styles/floating-dock.css";
 import type { ChannelMeta, GTMGraph, ProjectSummary } from "@/types";
 
 // The single floating control dock that sits top-center over the full-bleed canvas. It has been
-// slimmed to two jobs only: "where am I" (the product · pipeline breadcrumb and the GTM↔Product
-// toggle) and "go" (Run). The competing badges that used to crowd it — the amber Decisions count, the
-// Issues count, and the Summon button — have moved onto the canvas itself, so their props are still
-// accepted for compatibility but no longer rendered here. Settings is kept as one quiet, monochrome
-// gear in the corner rather than a prominent control.
+// slimmed to two jobs only: "where am I" (the product · pipeline breadcrumb) and "go" (Run). The
+// competing badges that used to crowd it — the amber Decisions count, the Issues count, and the
+// Summon button — have moved onto the canvas itself, so their props are still accepted for
+// compatibility but no longer rendered here. Settings is kept as one quiet, monochrome gear in the
+// corner rather than a prominent control.
 export function FloatingDock({
   // Left — product · pipeline breadcrumb
   projects, activeProjectId, projectBusy, onSwitchProject, onManageProjects, onNewProduct, onDeleteProject,
   channels, activeChannelId,
   onOpenChannel, onNewChannel,
   onShowOverview, overviewActive,
-  // The focused channel's emergent motion identity ("Outbound loop", "Content loop") — what KIND of
-  // go-to-market this is, derived from its real stages. Null on the all-channels overview.
-  motionName,
-  // GTM ↔ Product
-  showGtmToggle, productMode, onModeToggle,
+  // motionName is still accepted in the props type but no longer destructured or rendered — the "…loop"
+  // pill it drove was removed from the bar (see the render note below).
   // The admin door — opens the Settings overlay (workspace index, team + release roles, self-built
   // tools). Rendered as a quiet, low-emphasis gear in the dock's corner.
   onOpenSettings,
@@ -50,9 +46,6 @@ export function FloatingDock({
   onShowOverview?: () => void;
   overviewActive?: boolean;
   motionName?: string | null;
-  showGtmToggle: boolean;
-  productMode: boolean;
-  onModeToggle: (v: "gtm" | "product") => void;
   summonItems?: { id: string; label: string; desc?: string }[];
   onSummon?: (id: string) => void;
   onOpenSettings?: () => void;
@@ -106,25 +99,11 @@ export function FloatingDock({
           onShowOverview={onShowOverview}
           overviewActive={overviewActive}
         />
-        {/* Motion identity — names WHAT KIND of go-to-market the focused workflow is, derived from its
-            real stages (no fixed motion list). Hidden on the all-workflows overview and on an empty
-            canvas, where there's no single motion to name. */}
-        {motionName && !overviewActive && !noGraph && !productMode ? (
-          <span className="fdock-motion" title="The kind of go-to-market this pipeline is — derived from its stages">
-            {motionName}
-          </span>
-        ) : null}
-        {/* GTM ↔ Product — the one lens toggle that stays on the bar, because it changes what the whole
-            canvas is showing you. Everything else you used to reach for here now lives on the canvas. */}
-        {showGtmToggle ? (
-          <SlidingTabs
-            items={[{ value: "gtm", label: "GTM" }, { value: "product", label: "Product" }]}
-            value={productMode ? "product" : "gtm"}
-            onChange={onModeToggle}
-            layoutId="fdock-gtm-mode"
-            size="sm"
-          />
-        ) : null}
+        {/* The "…loop" motion pill was removed from the bar: naming the pipeline "Outbound loop" is
+            internal machinery vocabulary that reads as jargon here, and it sat right next to the Run
+            control where it looked like a second, confusing thing to act on. The kind-of-motion signal,
+            when we want it, belongs on the canvas near the stages it's derived from — not the top bar.
+            The prop is still accepted (see the destructure) so callers keep compiling. */}
       </div>
 
       {/* Right — just "go", plus one quiet gear. The Decisions inbox, the Issues count, and Summon have
@@ -132,7 +111,7 @@ export function FloatingDock({
           right. */}
       <div className="fdock-right">
         {/* Settings — a quiet, low-emphasis monochrome gear tucked in the corner. The admin door
-            (workspace, team, self-built tools); always reachable in GTM and Product mode alike. */}
+            (workspace, team, self-built tools). */}
         {onOpenSettings ? (
           <button
             className="fdock-icon-btn fdock-settings-gear"
@@ -145,18 +124,16 @@ export function FloatingDock({
           </button>
         ) : null}
 
-        {/* Run — the one dark primary, GTM-only (Product mode has nothing to run). */}
-        {!productMode ? (
-          <button
-            className="fdock-run-btn"
-            disabled={running || noGraph}
-            onClick={onRun}
-            type="button"
-          >
-            {running ? <LoaderCircle className="spin" size={13} /> : null}
-            Run
-          </button>
-        ) : null}
+        {/* Run — the one dark primary. */}
+        <button
+          className="fdock-run-btn"
+          disabled={running || noGraph}
+          onClick={onRun}
+          type="button"
+        >
+          {running ? <LoaderCircle className="spin" size={13} /> : null}
+          Run
+        </button>
       </div>
     </motion.div>
   );
