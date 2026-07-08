@@ -57,7 +57,9 @@ export async function run(stage, upstream, context) {
     || context?.productContext
     || "Drover";
   const promptTemplate = stage.agentPrompt || DEFAULT_PROMPT;
-  const model = stage.config.model || "claude-haiku-4-5-20251001";
+  // Founder-facing draft copy: taste + intelligence matter most, so the default is Opus (never Haiku,
+  // which the project + global AGENTS.md ban). A founder can still override via stage.config.model.
+  const model = stage.config.model || "claude-opus-4-8";
 
   const drafted = await Promise.all(
     prospects.map(async (p) => {

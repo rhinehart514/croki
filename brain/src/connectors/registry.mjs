@@ -169,7 +169,7 @@ Return only the message body.`;
         connector: "claude",
         label: "Draft outreach",
         position: { x: 880, y: 180 },
-        config: { senderName: "Jacob", model: "claude-haiku-4-5-20251001" },
+        config: { senderName: "Jacob", model: "claude-opus-4-8" },
         agentPrompt: DRAFT_PROMPT,
       },
 
