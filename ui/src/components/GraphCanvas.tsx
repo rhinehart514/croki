@@ -500,6 +500,9 @@ type GTMNodeData = {
   // The one-line reason for this card in Explain mode — the composer's own `node.rationale`, or (for a
   // pipeline composed before rationale existed) the reason fetched on demand from the explain endpoint.
   explainRationale?: string;
+  // The crew's newest first-person heartbeat on this step (matched by node id). Rendered on the running
+  // card in place of the anonymous spinner. Absent when the backend stamped no beat for this node.
+  liveBeat?: string;
 };
 
 // A lane that hasn't composed yet: the model is reasoning, or the compose failed. Carried on the
@@ -922,6 +925,16 @@ function NodeCardEditor({ node, result, health, contractAudit, running }: {
         </CardSection>
       ) : null}
 
+      {/* What the teammate figured out — the model's OWN plain-language account of this step, mirroring
+          the lane's live `thinking` line but for a finished step. Render-if-present: absent on
+          deterministic steps and older runs, so the section simply doesn't appear then. Never raw JSON —
+          it's the model's prose, shown as a short beat under the teammate's name. */}
+      {typeof result?.reasoning === "string" && result.reasoning.trim() ? (
+        <CardSection label={`What ${node.kind === "agent" && node.ref ? agentPersona(node.ref, undefined, node.label).role : "the step"} figured out`}>
+          <p className="loop-node-editor-reasoning">{result.reasoning.trim()}</p>
+        </CardSection>
+      ) : null}
+
       {/* Output — what this step actually produced, read inside its own open card. This is the "run a
           small thing and see it" payoff: real items, an honest empty ("produced nothing"), or the
           failure — never hidden away in the rail. */}
@@ -1187,7 +1200,9 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
   const verdict = nodeVerdict(data.health, data.contractAudit, mode);
   // An agent node reads as a person: the role name is the headline and the teammate's own crew face is
   // the icon, with the raw ref demoted to the faint slug below. Other kinds keep their connector icon.
-  const persona = node.kind === "agent" && node.ref ? agentPersona(node.ref, node.label) : null;
+  // node.label is the model-given / founder-chosen NAME — passed as the name (3rd arg) so it wins outright
+  // over the regex table, which used to rename a well-named agent by an incidental keyword.
+  const persona = node.kind === "agent" && node.ref ? agentPersona(node.ref, undefined, node.label) : null;
   // External MCP capability: this step calls a real service (Notion, Gmail, Slack…). Show that
   // service's real logo, and whether it runs free (read) or sits behind your gate (write) — the wall,
   // legible on the card itself.
@@ -1494,6 +1509,15 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
             </div>
           </div>
           <span className="loop-node-label">{persona ? persona.role : node.label}</span>
+          {/* The live per-node narrator: while this step runs, its teammate's newest first-person beat
+              reads right on the card — what it's actually doing NOW, in the model's words — instead of a
+              faceless spinner. Falls back to a plain "Working…" when the backend stamped no beat yet. */}
+          {status === "running" ? (
+            <span className="loop-node-beat" title={data.liveBeat || undefined}>
+              <Loader size={10} className="spin" aria-hidden />
+              {data.liveBeat?.trim() || "Working…"}
+            </span>
+          ) : null}
           {isMcp && (
             <span
               className={cn("loop-node-lane", mcpWrites ? "gated" : "free")}
@@ -1611,14 +1635,44 @@ function LaneStatusNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
 // Cracks a node open IN canvas space to show the REAL records flowing through it — the source's
 // prospects, the gate's drafts — instead of a "12 items" count you can't open. Read-only; it never
 // mutates the graph. Pairs with the terminal: run a script, watch its output land as records here.
-function inspectorRow(item: GTMItem): { title: string; sub?: string; badge?: string } {
-  const title = item.name || item.company || item.subject || item.email || item.url || item.id || item.type;
+// The first line of a record's own text — used as an inspector title when the record carries no name/
+// subject, so the row reads as what it IS ("Hi Sarah — saw you just…") instead of the raw enum word
+// ("context" / "signal"). The 5-value `type` field is internal bookkeeping and never becomes a label.
+function recordFirstLine(item: GTMItem): string | null {
+  const text = typeof item.draft === "string" ? item.draft
+    : typeof item.summary === "string" ? item.summary
+    : typeof (item as Record<string, unknown>).message === "string" ? (item as Record<string, string>).message
+    : typeof (item as Record<string, unknown>).text === "string" ? (item as Record<string, string>).text
+    : null;
+  if (!text) return null;
+  const line = text.split(/\r?\n/)[0].trim();
+  if (!line) return null;
+  return line.length > 90 ? `${line.slice(0, 87).trimEnd()}…` : line;
+}
+// The full text a record carries — its draft/message/summary/text, whole, so opening a row can show the
+// entire thing instead of a clipped preview. null when the record carries no free-form body.
+function recordFullText(item: GTMItem): string | null {
+  const it = item as Record<string, unknown>;
+  for (const v of [it.draft, it.message, it.summary, it.text, it.content, it.body]) {
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return null;
+}
+function inspectorRow(item: GTMItem): { title: string; sub?: string; badge?: string; full?: string } {
+  // Real content only — never `item.type`, which is an internal enum, not a headline. A record with no
+  // name/subject reads by its own first line of text; only a truly empty record shows "Untitled record".
+  const title = item.name || item.company || item.subject || item.email || item.url || recordFirstLine(item) || item.id || "Untitled record";
+  const full = recordFullText(item);
   const sub = [item.title, item.email, item.url].filter(Boolean).join(" · ")
-    || (item.draft ? item.draft.slice(0, 140) : undefined);
+    || (full && full !== recordFirstLine(item) ? full.slice(0, 240) : undefined);
   const badge = item.approvalStatus
     ?? (item.fit === true ? "fit" : item.fit === false ? "no fit" : undefined)
     ?? (typeof item.score === "number" ? `score ${item.score}` : undefined);
-  return { title: String(title), sub: sub || undefined, badge: badge || undefined };
+  // `full` is the whole body (for the expand-to-read affordance); `sub` is the scan preview. Only surface
+  // `full` when it's actually longer than what the preview shows, so short records don't offer a pointless
+  // "read more".
+  const hasMore = !!full && (!sub || full.length > sub.length);
+  return { title: String(title), sub: sub || undefined, badge: badge || undefined, full: hasMore ? full : undefined };
 }
 
 function InspectorCard({ node, result, onClose }: {
@@ -1638,19 +1692,40 @@ function InspectorCard({ node, result, onClose }: {
       <div className="rec-inspector-body">
         {items.length === 0 ? (
           <p className="rec-inspector-empty">No records to show.</p>
-        ) : items.map((item, i) => {
-          const row = inspectorRow(item);
-          return (
-            <div className="rec-row" key={item.id ?? i}>
-              <div className="rec-row-main">
-                <span className="rec-row-title">{row.title}</span>
-                {row.badge ? <span className="rec-row-badge">{row.badge}</span> : null}
-              </div>
-              {row.sub ? <span className="rec-row-sub">{row.sub}</span> : null}
-            </div>
-          );
-        })}
+        ) : items.map((item, i) => (
+          <InspectorRow item={item} key={item.id ?? i} />
+        ))}
       </div>
+    </div>
+  );
+}
+
+// One record row in the inspector. It shows a scan-friendly preview by default; when the record carries
+// more text than the preview shows, "Read full" opens the WHOLE thing in place — so opening a record
+// reaches the full item, never a permanently-clipped 240-char stub.
+function InspectorRow({ item }: { item: GTMItem }) {
+  const [open, setOpen] = useState(false);
+  const row = inspectorRow(item);
+  return (
+    <div className="rec-row">
+      <div className="rec-row-main">
+        <span className="rec-row-title">{row.title}</span>
+        {row.badge ? <span className="rec-row-badge">{row.badge}</span> : null}
+      </div>
+      {open && row.full ? (
+        <span className="rec-row-full">{row.full}</span>
+      ) : row.sub ? (
+        <span className="rec-row-sub">{row.sub}</span>
+      ) : null}
+      {row.full ? (
+        <button
+          type="button"
+          className="rec-row-more"
+          onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
+        >
+          {open ? "Show less" : "Read full"}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -1829,6 +1904,9 @@ function buildFlowGraph(
   onOpenAgentProfile?: (ref: string) => void,
   runSummary?: RunSummary | null,
   onRefineItem?: (item: GTMItem, note: string) => void | Promise<void>,
+  // nodeId → the crew's newest first-person heartbeat on that step. A running node shows its live beat
+  // instead of an anonymous spinner. Empty/absent → the spinner fallback (render-if-present).
+  nodeBeats?: Record<string, string>,
 ): { nodes: Node[]; edges: Edge[] } {
   // A node is "revealed" unless it's a still-pending proposed ghost. Committed nodes are always
   // revealed (so an edge from a committed node to the first ghost shows immediately); a proposed node
@@ -1909,6 +1987,9 @@ function buildFlowGraph(
         // The crew face opens the profile on every lane; the run numbers ride only the Measure node.
         onOpenAgentProfile,
         runSummary: n.category === "measure" ? (runSummary ?? null) : undefined,
+        // The crew's newest first-person heartbeat on THIS step (matched by node id). Shown on the
+        // running card in place of the anonymous spinner. Undefined when the backend stamped no beat.
+        liveBeat: nodeBeats?.[n.id],
         appearOrder,
       } as GTMNodeData,
     };
@@ -2042,6 +2123,9 @@ type MergedFlowFocus = {
   // The project's latest run numbers, shown on the FOCUSED pipeline's Measure node only (there is one
   // project-level summary, so it rides the pipeline on screen rather than being duplicated across lanes).
   runSummary?: RunSummary | null;
+  // The live per-node narrator beats — apply only to the focused pipeline (the one that's running); a
+  // dimmed lane shows no beat. nodeId → newest heartbeat.
+  nodeBeats?: Record<string, string>;
 };
 
 function buildMergedFlowGraph(
@@ -2121,6 +2205,8 @@ function buildMergedFlowGraph(
       onOpenAgentProfile,
       isFocused ? (focus.runSummary ?? null) : null,
       isFocused ? focus.onRefineItem : undefined,
+      // Live beats only on the focused (running) lane — a dimmed lane isn't the one narrating.
+      isFocused ? focus.nodeBeats : undefined,
     );
     for (const n of built.nodes) {
       nodes.push({
@@ -2266,7 +2352,8 @@ function OperatorCursor({ graph, state, followBroken, recenterSignal }: {
   // never disagree on who's working a step. Refless steps (gate, code, tool, context) are the lead
   // ("Claude") — composing, running deterministic steps, or standing on the gate.
   const isGate = target.category === "gate";
-  const persona = !isGate && target.ref ? agentPersona(target.ref, target.label) : null;
+  // target.label is the model-given name — passed as name (3rd arg) so it wins over the regex table.
+  const persona = !isGate && target.ref ? agentPersona(target.ref, undefined, target.label) : null;
   const operatorName = persona?.role ?? "Claude";
   const characterRef = persona ? target.ref! : "claude";
   const family = persona?.family ?? "general";
@@ -2392,7 +2479,7 @@ function FitOnGraph({ topology, bounds, running, suspended, fitOptions }: { topo
 // ─── Canvas ───────────────────────────────────────────────────────────────────
 
 export function GraphCanvas({
-  graph, result, running, runningNodeId = null, selection, connectors, subsystemHealth = {}, contractAudits = {},
+  graph, result, running, runningNodeId = null, nodeBeats, selection, connectors, subsystemHealth = {}, contractAudits = {},
   onSelect, onNodePositionChange, onConnectNodes, onDeleteEdges, onAddNode, panelOpen, variant,
   proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, refitNonce, highlightedNodeId = null,
   bloomNodeId = null, nodeEditor = null, revealedNodeIds, onPaneClick, operatorCursor = null, people = [],
@@ -2404,6 +2491,9 @@ export function GraphCanvas({
   running: boolean;
   onAskClaude?: (node: GTMNode) => void;
   runningNodeId?: string | null;
+  // nodeId → the crew's newest first-person heartbeat on that step, shown on the running card in place of
+  // the anonymous spinner. Absent/empty → spinner fallback (render-if-present).
+  nodeBeats?: Record<string, string>;
   selection: NodeSelection;
   connectors: ConnectorMeta[];
   subsystemHealth?: Record<string, { health: number; issue?: string }>;
@@ -2589,7 +2679,7 @@ export function GraphCanvas({
         running, runningNodeId, selection,
         proposedNodeIds, proposedEdgeIds, proposalActive,
         onResolveProposal, onSubmitReview, onApproveGate, gatePromote, gateOffer, onRecordOutcome,
-        onRefineItem, revealedNodeIds, onInspect: toggleInspect, runSummary,
+        onRefineItem, revealedNodeIds, onInspect: toggleInspect, runSummary, nodeBeats,
       },
       people,
       onAskClaude,
@@ -2598,13 +2688,13 @@ export function GraphCanvas({
     [
       multiPipeline, connectors, subsystemHealth, contractAudits, handleSelect, graph.id, running,
       runningNodeId, selection, proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal,
-      onSubmitReview, onApproveGate, gatePromote, gateOffer, onRecordOutcome, onRefineItem, revealedNodeIds, toggleInspect, people, onAskClaude, onOpenAgentProfile, runSummary,
+      onSubmitReview, onApproveGate, gatePromote, gateOffer, onRecordOutcome, onRefineItem, revealedNodeIds, toggleInspect, people, onAskClaude, onOpenAgentProfile, runSummary, nodeBeats,
     ],
   );
 
   const singleFlow = useMemo(
-    () => buildFlowGraph(laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, onRecordOutcome, onOpenAgentProfile, runSummary, onRefineItem),
-    [laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, onRecordOutcome, onOpenAgentProfile, runSummary, onRefineItem],
+    () => buildFlowGraph(laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, onRecordOutcome, onOpenAgentProfile, runSummary, onRefineItem, nodeBeats),
+    [laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, onRecordOutcome, onOpenAgentProfile, runSummary, onRefineItem, nodeBeats],
   );
 
   const baseNodes = merged ? merged.nodes : singleFlow.nodes;

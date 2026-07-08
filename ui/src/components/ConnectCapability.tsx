@@ -4,9 +4,9 @@ import {
   ShieldCheck, Trash2,
 } from "lucide-react";
 import {
-  connectCapability, getCapabilities, reclassifyCapabilityTool, removeCapability,
+  connectCapability, getCapabilities, getCapabilityInventory, reclassifyCapabilityTool, removeCapability,
 } from "@/api";
-import type { CapabilityServer, CapabilityTool } from "@/types";
+import type { CapabilityInventory, CapabilityServer, CapabilityTool } from "@/types";
 import "@/styles/connect-capability.css";
 
 // The only capability wired to genuinely connect today: the bundled local demo MCP server. It is a
@@ -30,6 +30,10 @@ export function ConnectCapability({ onChange }: { onChange?: () => void } = {}) 
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [loaded, setLoaded] = useState(false);
+  // The live inventory — its distinct serverIds are the founder's already-configured MCP servers, which
+  // seed the add-a-server form (one tap to connect a server they've already wired elsewhere). null when
+  // the backend hasn't produced it yet — the form still works, just without the seeded suggestions.
+  const [inventory, setInventory] = useState<CapabilityInventory | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -48,9 +52,22 @@ export function ConnectCapability({ onChange }: { onChange?: () => void } = {}) 
   // the cascading-render concern the rule guards against does not apply here.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void refresh(); }, [refresh]);
+  // The founder's configured servers (from the live inventory) — used to seed the add-server form.
+  useEffect(() => {
+    let live = true;
+    void getCapabilityInventory().then((inv) => { if (live) setInventory(inv); });
+    return () => { live = false; };
+  }, []);
 
   const connectedIds = useMemo(() => new Set(servers.map((s) => s.id)), [servers]);
   const demoConnected = connectedIds.has(DEMO_CAPABILITY.id);
+  // Distinct serverIds the founder already has wired (from the inventory) that aren't yet connected here —
+  // the one-tap seeds for the add-server form.
+  const seededServers = useMemo(() => {
+    const ids = new Set<string>();
+    for (const t of inventory?.tools ?? []) if (!connectedIds.has(t.serverId)) ids.add(t.serverId);
+    return [...ids];
+  }, [inventory, connectedIds]);
 
   const connect = useCallback(async (entry: CatalogEntry) => {
     setBusyId(entry.id);
@@ -61,6 +78,29 @@ export function ConnectCapability({ onChange }: { onChange?: () => void } = {}) 
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(`${entry.name}: ${message}`);
+    } finally {
+      setBusyId(null);
+    }
+  }, [refresh]);
+
+  // Connect an ARBITRARY server the founder names — a real add action, not just the demo. The backend
+  // already supports connecting any server (name + url, or a command). We hand it what the founder typed
+  // (or a one-tapped seed from their configured servers) and refresh.
+  const connectServer = useCallback(async (input: { name: string; url?: string; command?: string }) => {
+    const name = input.name.trim();
+    if (!name) return;
+    setBusyId(`form:${name}`);
+    setError(null);
+    try {
+      await connectCapability({
+        name,
+        ...(input.url?.trim() ? { url: input.url.trim() } : {}),
+        ...(input.command?.trim() ? { command: input.command.trim() } : {}),
+        trust: "community",
+      });
+      await refresh();
+    } catch (err) {
+      setError(`${name}: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setBusyId(null);
     }
@@ -101,11 +141,32 @@ export function ConnectCapability({ onChange }: { onChange?: () => void } = {}) 
         their own, ones that <b>act on the world</b> wait for you. Anything we can&apos;t classify waits too.
       </p>
 
-      {/* The only capability that genuinely connects today: the bundled local demo. No external
-          registry is wired up, so there is nothing else to offer here — and no placeholder rows. */}
-      {!demoConnected && (
-        <div className="cc-add">
-          <div className="cc-add-lead">Available to connect</div>
+      {/* Connect a real server — name it and give it a URL (or a launch command). The backend connects
+          any server, sorts its tools across the wall, and it appears below. The bundled demo stays as one
+          quick option; servers you've already configured elsewhere seed as one-tap connects. */}
+      <div className="cc-add">
+        <div className="cc-add-lead">Add a server</div>
+        <AddServerForm onConnect={connectServer} busy={busyId?.startsWith("form:") ?? false} />
+        {seededServers.length > 0 && (
+          <div className="cc-seeded">
+            <div className="cc-seeded-lead">From servers you&apos;ve already configured</div>
+            <div className="cc-seeded-chips">
+              {seededServers.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  className="cc-btn sm"
+                  disabled={busyId === `form:${id}`}
+                  onClick={() => void connectServer({ name: id })}
+                  title={`Connect ${id}`}
+                >
+                  {busyId === `form:${id}` ? "Connecting…" : `+ ${id}`}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {!demoConnected && (
           <div className="cc-results">
             <div className="cc-result">
               <div className="cc-logo">{DEMO_CAPABILITY.logo}</div>
@@ -126,8 +187,8 @@ export function ConnectCapability({ onChange }: { onChange?: () => void } = {}) 
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {error && <div className="cc-error">{error}</div>}
 
@@ -150,6 +211,58 @@ export function ConnectCapability({ onChange }: { onChange?: () => void } = {}) 
           onConfirm={() => void move(confirm.server, confirm.tool, "read", true)}
         />
       )}
+    </div>
+  );
+}
+
+// The real add-a-server form: a name, plus either a URL (a hosted MCP server) or a launch command (a
+// local one). One is enough. On connect the backend links it and sorts its tools across the wall.
+function AddServerForm({ onConnect, busy }: {
+  onConnect: (input: { name: string; url?: string; command?: string }) => void | Promise<void>;
+  busy: boolean;
+}) {
+  const [name, setName] = useState("");
+  const [url, setUrl] = useState("");
+  const [command, setCommand] = useState("");
+  const canSubmit = name.trim() !== "" && (url.trim() !== "" || command.trim() !== "") && !busy;
+  const submit = () => {
+    if (!canSubmit) return;
+    void onConnect({ name, url, command });
+    setName(""); setUrl(""); setCommand("");
+  };
+  return (
+    <div className="cc-form">
+      <div className="cc-form-row">
+        <input
+          className="cc-form-in"
+          value={name}
+          placeholder="Name (e.g. Linear)"
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+        />
+      </div>
+      <div className="cc-form-row">
+        <input
+          className="cc-form-in"
+          value={url}
+          placeholder="Server URL (https://…)"
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+        />
+      </div>
+      <div className="cc-form-row">
+        <input
+          className="cc-form-in"
+          value={command}
+          placeholder="or a launch command (npx …)"
+          onChange={(e) => setCommand(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+        />
+        <button className="cc-btn primary" type="button" disabled={!canSubmit} onClick={submit}>
+          {busy ? "Connecting…" : "Connect"}
+        </button>
+      </div>
+      <div className="cc-form-hint">Give it a URL or a command — either one connects the server. Every tool it brings is sorted read (runs free) or write (behind your gate).</div>
     </div>
   );
 }

@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import { Wrench } from "lucide-react";
 import { CrewFace } from "@/components/crew/CrewFace";
 import { CapabilityGlyph } from "@/components/CapabilityGlyph";
 import type { MentionEntity } from "@/lib/mention";
@@ -171,7 +172,9 @@ function MentionRow({
         />
       ) : (
         <span className="mention-mark">
-          <CapabilityGlyph cap={entity.cap} size={15} />
+          {/* A LIVE connected tool has no brand mark — it draws a generic tool glyph. A suggested brand
+              capability draws its real logo. */}
+          {entity.cap ? <CapabilityGlyph cap={entity.cap} size={15} /> : <Wrench size={14} aria-hidden />}
           {entity.gated && <span className="g" />}
         </span>
       )}

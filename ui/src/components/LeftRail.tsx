@@ -1,7 +1,7 @@
-import { useMemo, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useState, type DragEvent } from "react";
 import {
   Workflow, Users, Plus, ChevronDown,
-  PanelLeftClose, PanelLeftOpen, Check, GripVertical, LayoutGrid, Blocks,
+  PanelLeftClose, PanelLeftOpen, Check, GripVertical, LayoutGrid, Blocks, Lock, Wrench,
 } from "lucide-react";
 import { agentPersona, humanizeRef } from "@/lib/agentPersona";
 import { healthHex } from "@/lib/health";
@@ -10,8 +10,8 @@ import { CrewFace } from "@/components/crew/CrewFace";
 import { CrewRoom } from "@/components/crew/CrewRoom";
 import { CrewComposer } from "@/components/crew/CrewComposer";
 import { CAPABILITIES, STAGE_ORDER, STAGE_LABEL, capabilityMark, type Capability } from "@/lib/capabilities";
-import type { AgentBenchRow } from "@/api";
-import type { ChannelMeta, GtmLibrary } from "@/types";
+import { getCapabilityInventory, type AgentBenchRow } from "@/api";
+import type { CapabilityInventory, ChannelMeta, GtmLibrary } from "@/types";
 import "@/styles/left-rail.css";
 
 // What a rail row writes on drag, read by the canvas drop target. A teammate is an agent/skill ref; a
@@ -138,6 +138,15 @@ export function LeftRail({
   const [collapsed, setCollapsed] = useState(false);
   const [crewRoomOpen, setCrewRoomOpen] = useState(false);
   const [crewComposerOpen, setCrewComposerOpen] = useState(false);
+  // The LIVE capability inventory — the real tools the crew can reach right now, from the runtime. null
+  // while loading OR when the backend hasn't produced the endpoint yet, in which case the rail falls back
+  // to the suggested-connections catalog alone (render-if-present). Refetched when the crew changes.
+  const [inventory, setInventory] = useState<CapabilityInventory | null>(null);
+  useEffect(() => {
+    let live = true;
+    void getCapabilityInventory().then((inv) => { if (live) setInventory(inv); });
+    return () => { live = false; };
+  }, [projectId, bench]);
 
   // Drag a crew member OR a capability onto the canvas → the canvas-area drop target reads
   // STEP_DRAG_MIME and adds a pipeline step, switching to the build view so the founder watches it land.
@@ -277,24 +286,38 @@ export function LeftRail({
           </button>
         </Section>
 
-        {/* Capabilities — what your crew can reach and do, the parts a pipeline is wired from. Grouped by
-            run-stage so the list reads like a pipeline: find → enrich → reach → publish → measure. Real
-            brand marks where an open mark exists; anything that reaches the outside world carries the
-            amber gate marker, because it can only act behind your approval. */}
-        <Section icon={<Blocks size={13} />} title="Capabilities" count={CAPABILITIES.length}>
-          {STAGE_ORDER.map((stage) => {
-            const caps = CAPABILITIES.filter((c) => c.stage === stage);
-            if (caps.length === 0) return null;
-            return (
-              <div key={stage} className="lr-cap-group">
-                <div className="lr-group">{STAGE_LABEL[stage]}</div>
-                {caps.map((cap) => (
-                  <CapabilityRow key={cap.id} cap={cap} onConnect={onConnectCapability} onDragStep={onStepDragStart} />
-                ))}
-              </div>
-            );
-          })}
-        </Section>
+        {/* Capabilities — what your crew can ACTUALLY reach right now. When the live inventory is present,
+            the real connected tools lead (grouped by server, each showing whether it runs free or acts
+            behind your gate). The hardcoded brand list is demoted to "Suggested connections" — things you
+            could connect, clearly labeled not-yet-connected — so the rail reflects reality, not a catalog.
+            Falls back to the suggested list alone when the backend hasn't produced the inventory yet. */}
+        {inventory && (inventory.tools.length > 0 || inventory.skills.length > 0) ? (
+          <Section icon={<Blocks size={13} />} title="Capabilities" count={inventory.tools.length + inventory.skills.length}>
+            <ConnectedCapabilities inventory={inventory} />
+            <div className="lr-cap-group">
+              <div className="lr-group">Suggested connections · not connected yet</div>
+              {CAPABILITIES.map((cap) => (
+                <CapabilityRow key={cap.id} cap={cap} suggested onConnect={onConnectCapability} onDragStep={onStepDragStart} />
+              ))}
+            </div>
+          </Section>
+        ) : (
+          <Section icon={<Blocks size={13} />} title="Capabilities" count={CAPABILITIES.length}>
+            <div className="lr-cap-hint">Suggested connections — connect one to give your crew a real capability.</div>
+            {STAGE_ORDER.map((stage) => {
+              const caps = CAPABILITIES.filter((c) => c.stage === stage);
+              if (caps.length === 0) return null;
+              return (
+                <div key={stage} className="lr-cap-group">
+                  <div className="lr-group">{STAGE_LABEL[stage]}</div>
+                  {caps.map((cap) => (
+                    <CapabilityRow key={cap.id} cap={cap} suggested onConnect={onConnectCapability} onDragStep={onStepDragStart} />
+                  ))}
+                </div>
+              );
+            })}
+          </Section>
+        )}
       </div>
 
       {/* The crew room — your whole team as characters, opened from the crew header. Clicking a
@@ -350,20 +373,23 @@ function CapabilityMark({ cap }: { cap: Capability }) {
 // pipeline as a stage step, or click Connect to hook up the service. Gated capabilities (they reach the
 // outside world) show the amber gate marker beside the name. Draggable like a crew row, same grip.
 function CapabilityRow({
-  cap, onConnect, onDragStep,
+  cap, onConnect, onDragStep, suggested,
 }: {
   cap: Capability;
   onConnect?: (id: string) => void;
   onDragStep: (event: DragEvent<HTMLElement>, payload: StepDragPayload) => void;
+  // A suggested (not-yet-connected) capability — visibly recessive, and its click is "connect", not
+  // "use". A live connected tool renders through ConnectedCapabilities instead, never here.
+  suggested?: boolean;
 }) {
   return (
     <button
-      className="lr-row lr-cap lr-draggable"
+      className={`lr-row lr-cap lr-draggable${suggested ? " lr-cap-suggested" : ""}`}
       type="button"
       draggable
       onDragStart={(event) => onDragStep(event, { kind: "capability", id: cap.id, name: cap.name, stage: cap.stage, gated: !!cap.gated })}
       onClick={() => onConnect?.(cap.id)}
-      title={`Drag ${cap.name} onto the canvas, or click to connect`}
+      title={suggested ? `Connect ${cap.name} to give your crew this capability` : `Drag ${cap.name} onto the canvas, or click to connect`}
     >
       <CapabilityMark cap={cap} />
       <span className="lr-row-main">
@@ -377,6 +403,57 @@ function CapabilityRow({
       </span>
       <GripVertical className="lr-grip" size={14} aria-hidden="true" />
     </button>
+  );
+}
+
+// The LIVE connected capabilities — the real tools the crew can reach right now, grouped by their server,
+// each showing whether it runs free (read) or acts behind the gate (write). This is the truth the rail
+// leads with; the brand catalog below it is only suggestions. Drag a tool onto the canvas to wire it as a
+// step, exactly like a suggested capability, but keyed to the real serverId::toolName it came from.
+function ConnectedCapabilities({ inventory }: { inventory: CapabilityInventory }) {
+  const byServer = useMemo(() => {
+    const map = new Map<string, CapabilityInventory["tools"]>();
+    for (const t of inventory.tools) {
+      const list = map.get(t.serverId) ?? [];
+      list.push(t);
+      map.set(t.serverId, list);
+    }
+    return [...map.entries()];
+  }, [inventory.tools]);
+  return (
+    <div className="lr-cap-group">
+      <div className="lr-group">Connected · your crew can reach these now</div>
+      {byServer.map(([serverId, tools]) => (
+        <div key={serverId} className="lr-cap-server">
+          <div className="lr-cap-server-name">{serverId}</div>
+          {tools.map((t) => (
+            <div key={t.toolName} className="lr-row lr-cap lr-cap-live" title={`${t.toolName} — ${t.lane === "write" ? "acts behind your gate" : "runs free"}`}>
+              <span className="lr-cap-tool-mark" aria-hidden><Wrench size={13} /></span>
+              <span className="lr-row-main">
+                <span className="lr-row-name">
+                  {t.toolName}
+                  {t.lane === "write" ? (
+                    <span className="lr-cap-lane-gate" title="Acts on the world — only runs behind your gate"><Lock size={9} /></span>
+                  ) : null}
+                </span>
+                <span className="lr-row-desc">{t.lane === "write" ? "Acts on the world — behind your gate" : "Reads only — runs free"}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      ))}
+      {inventory.skills.length > 0 ? (
+        <div className="lr-cap-server">
+          <div className="lr-cap-server-name">Skills</div>
+          {inventory.skills.map((s) => (
+            <div key={s.name} className="lr-row lr-cap lr-cap-live" title={s.name}>
+              <span className="lr-cap-tool-mark" aria-hidden><Wrench size={13} /></span>
+              <span className="lr-row-main"><span className="lr-row-name">{s.name}</span></span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

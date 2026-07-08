@@ -390,6 +390,43 @@
   font-style: italic;
 }
 
+/* The inspectable receipt — everything the crew attached that the card can't show up front (nested
+   plans, offer objects, scoring breakdowns). Opt-in, indented, opaque; the model's real output is
+   tucked here, never silently dropped. Same quiet register as .cgate-card-more. */
+.cgate-card-receipt { margin-top: 2px; }
+.cgate-card-receipt > summary {
+  cursor: pointer; list-style: none; font-size: 0.625rem; font-weight: 600;
+  color: var(--ink-3, var(--muted)); padding: 2px 0; user-select: none;
+}
+.cgate-card-receipt > summary::before { content: "▸ "; }
+.cgate-card-receipt[open] > summary::before { content: "▾ "; }
+.cgate-card-receipt-body {
+  display: flex; flex-direction: column; gap: 2px;
+  margin-top: 4px; padding: var(--space-2);
+  background: color-mix(in srgb, var(--gap) 4%, var(--surface));
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  max-height: 240px; overflow-y: auto;
+}
+.cgate-receipt-line {
+  margin: 0; font-size: 0.625rem; line-height: 1.4; color: var(--muted);
+  display: flex; gap: 6px; align-items: baseline;
+}
+.cgate-receipt-line.is-group {
+  color: var(--ink-3, var(--muted)); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.5625rem;
+  margin-top: 2px;
+}
+.cgate-receipt-line .k {
+  font-size: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;
+  font-weight: 700; color: var(--ink-3, var(--muted)); flex-shrink: 0;
+}
+.cgate-receipt-line .v { color: var(--ink); }
+
+/* A grounding/context item that slipped into the decision list — reference, never approvable. */
+.cgate-card.is-context { opacity: 0.92; }
+.cgate-card.is-context .cgate-card-to { color: var(--muted); }
+
 .cgate-card-note {
   margin: 0;
   font-size: 0.625rem;

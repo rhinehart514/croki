@@ -33,6 +33,9 @@ export type GtmCanvasModel = {
   result: GTMRunResult | null;
   running: boolean;
   runningNodeId: string | null;
+  // The live per-node narrator beats: nodeId → the crew's newest first-person heartbeat on that step.
+  // A running node shows this instead of an anonymous spinner. Absent/empty → the spinner fallback.
+  nodeBeats?: Record<string, string>;
   selection: NodeSelection;
   onSelect: (id: string) => void;
   onPaneClick?: () => void;
@@ -160,6 +163,7 @@ function EngineerLens({ model: m }: GtmLensProps) {
         result={m.result}
         running={m.running}
         runningNodeId={m.runningNodeId}
+        nodeBeats={m.nodeBeats}
         selection={m.selection}
         subsystemHealth={m.subsystemHealth}
       />

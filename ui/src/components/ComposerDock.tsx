@@ -9,7 +9,7 @@ import { subjectActions } from "@/lib/subjectActions";
 import { kindIcon } from "@/lib/objectKindIcons";
 import { humanizeFieldLabel } from "@/lib/labels";
 import type { CanvasSubject, CardDetail } from "@/lib/cardDetail";
-import type { AgentBenchRow, OperatorHints } from "@/api";
+import { getCapabilityInventory, type AgentBenchRow, type OperatorHints } from "@/api";
 import { motion } from "motion/react";
 import { AgentPicker } from "@/components/AgentPicker";
 import { DEFAULT_MODEL, modelById } from "@/components/agent-picker-models";
@@ -33,7 +33,7 @@ import "@/styles/composer-posture.css";
 import "@/styles/composer-candidates.css";
 import "@/styles/chat-tabs.css";
 import "@/styles/our-chat.css";
-import type { ClarityKind, GateDecision, GTMEdge, GTMGraph, GTMItem, GTMNode, GTMRunResult, OperatorEvent, OperatorSession, OperatorSessionSummary, OperatorStatus } from "@/types";
+import type { CapabilityInventory, ClarityKind, GateDecision, GTMEdge, GTMGraph, GTMItem, GTMNode, GTMRunResult, OperatorEvent, OperatorSession, OperatorSessionSummary, OperatorStatus } from "@/types";
 
 // A pipeline SHAPE the operator returns when a goal admits more than one way through — a named shape the
 // founder can pick from, not a draft to approve. Mirrors the backend's candidate result: each carries its
@@ -808,7 +808,16 @@ export function ComposerDock({
 
   // ── @-mention state: the roster (crew + capabilities), the mentions placed in the sentence, the live
   // "@query" being typed, and whether the summoned parts tray is open. ──────────────────────────────────
-  const rosterEntities = useMemo(() => buildRoster(bench ?? []), [bench]);
+  // The live capability inventory — so an @-mention reaches the crew's REAL connected tools, not just the
+  // suggested brand catalog. null while loading or when the backend hasn't produced it (render-if-present:
+  // the roster then falls back to bench + suggested brands, exactly as before).
+  const [inventory, setInventory] = useState<CapabilityInventory | null>(null);
+  useEffect(() => {
+    let live = true;
+    void getCapabilityInventory().then((inv) => { if (live) setInventory(inv); });
+    return () => { live = false; };
+  }, []);
+  const rosterEntities = useMemo(() => buildRoster(bench ?? [], undefined, inventory), [bench, inventory]);
   const [mentions, setMentions] = useState<PlacedMention[]>([]);
   const [mentionQuery, setMentionQuery] = useState<{ query: string; start: number; end: number } | null>(null);
 
@@ -1010,7 +1019,12 @@ export function ComposerDock({
   const gateStageKey = `${pendingGateId ?? ""}|${waitingGate ? 1 : 0}|${session?.id ?? ""}`;
   const [trackedGateStageKey, setTrackedGateStageKey] = useState(gateStageKey);
   if (trackedGateStageKey !== gateStageKey) { setTrackedGateStageKey(gateStageKey); setReviewOpen(false); }
-  const sendDisabled = running || session?.status === "running" || session?.status === "ready" || waitingGate;
+  // A running OR gated session is STEERABLE: the founder can send a message that redirects the crew
+  // mid-run without waiting or releasing anything (App routes it to the steer endpoint). So those states
+  // no longer disable the input — only a local single-node run (`running`) and the transient "ready" do.
+  // The gate's own approve/release path is untouched: steering is a separate message, never a decision.
+  const steerable = session?.status === "running" || session?.status === "waiting_for_gate";
+  const sendDisabled = running || session?.status === "ready" || (waitingGate && !steerable);
   const working = running || session?.status === "running";
   // The latest reasoning turn, while the crew is still producing — it gets the soft streaming shimmer + a
   // caret, so the output reads as "still forming" instead of a finished block that popped in.
@@ -1226,7 +1240,7 @@ export function ComposerDock({
           ref={inputRef}
           className="oc-input-text"
           aria-label="Message your crew"
-          placeholder={subject ? `Ask about “${subject.label}” — make it shorter, why it's empty, run it…` : sendDisabled ? "Your crew is working — you can still say “go to …” to move the canvas" : ideating ? "Think through your GTM — who's the real buyer, where's the wedge, why now" : session ? "Reply, redirect, or @-mention a teammate…" : "Message your crew — build, run, or change anything"}
+          placeholder={subject ? `Ask about “${subject.label}” — make it shorter, why it's empty, run it…` : sendDisabled ? "Your crew is working — you can still say “go to …” to move the canvas" : steerable ? "Redirect your crew mid-run — “focus on enterprise”, “drop the third one”… nothing sends" : ideating ? "Think through your GTM — who's the real buyer, where's the wedge, why now" : session ? "Reply, redirect, or @-mention a teammate…" : "Message your crew — build, run, or change anything"}
           value={input}
           disabled={submitting}
           onChange={(e) => {
