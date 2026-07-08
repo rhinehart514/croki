@@ -33,7 +33,7 @@ import "@/styles/composer-posture.css";
 import "@/styles/composer-candidates.css";
 import "@/styles/chat-tabs.css";
 import "@/styles/our-chat.css";
-import type { ClarityKind, GateDecision, GTMEdge, GTMGraph, GTMItem, GTMNode, GTMRunResult, OperatorEvent, OperatorSession, OperatorSessionSummary, OperatorStatus } from "@/types";
+import type { ClarityKind, GateDecision, GTMEdge, GTMGraph, GTMItem, GTMNode, OperatorEvent, OperatorSession, OperatorSessionSummary, OperatorStatus } from "@/types";
 
 // A pipeline SHAPE the operator returns when a goal admits more than one way through — a named shape the
 // founder can pick from, not a draft to approve. Mirrors the backend's candidate result: each carries its
@@ -713,9 +713,6 @@ export function ComposerDock({
   onSubmitGateReview, onRefineItem, onRecordItemOutcome,
   gateLearned = 0, gateOffer = null, gatePromote,
   seed = null, startOpen = false,
-  // NOTE: `boundChannelName`, `runningNodeId`, `proposedNodeIds`, `result`, `onEditStep`, and `onRunPlan`
-  // are still accepted in the type below (the App call site passes them) but intentionally left un-bound
-  // here — the pre-run plan checklist and the raw channel label were retired in the warm redesign.
 }: {
   session: OperatorSession | null;
   running: boolean;
@@ -739,7 +736,6 @@ export function ComposerDock({
   onRetargetSubject?: (rel: { id: string; name: string }) => void;
   // True when the text is a canvas navigation command ("go to the gate") — steering, not a question.
   isNavCommand?: (text: string) => boolean;
-  boundChannelName?: string | null;
   // Send a turn to Claude. Carries the optional advisory @-mention hints (the teammates & capabilities the
   // founder named in the sentence) so composition prefers the named crew — never a contract, never blocking.
   onSend: (text: string, hints?: OperatorHints) => void | Promise<void | { mode: "fast" | "drive"; intent: string; answer?: string }>;
@@ -771,23 +767,13 @@ export function ComposerDock({
   posture?: "build" | "ideate";
   onExitPosture?: () => void;
   onPin?: (kind: ClarityKind, text: string) => void;
-  // The live graph + the node executing right now + the run so far. These power the embodied PLAN checklist
-  // in the response zone: a teammate-stamped list that strikes off step by step in lockstep with the canvas.
+  // The live graph — read only for the session-level teammate voice (the first real agent in the running graph).
   graph?: GTMGraph | null;
-  runningNodeId?: string | null;
-  proposedNodeIds?: Set<string> | null;
-  result?: GTMRunResult | null;
   // Candidate pipeline SHAPES. When a goal admits more than one way through, the dock renders them as
   // embodied idea flows (a chain of faces/marks ending at the gate). `onProposeCandidates` fires once per
   // new set so the host can also ghost them on the canvas; `onBuildCandidate` is the founder's pick.
   onProposeCandidates?: (candidates: Candidate[]) => void;
   onBuildCandidate?: (candidate: Candidate) => void | Promise<void>;
-  // The pencil on a plan row: hand a step back to the host to edit (select it on the canvas / open it).
-  // Optional — no pencil renders when absent.
-  onEditStep?: (node: GTMNode) => void;
-  // "Run to my gate" on the pre-run plan card — run the composed plan to the founder gate. Optional; the
-  // button only appears when the host wires it (a composed plan the founder can launch from the composer).
-  onRunPlan?: () => void;
   // The opening briefing — the "here's where things stand" block at the top of the thread. Optional: when
   // absent the dock derives it client-side from `roster` (one row per live pipeline), so it works today with
   // no host wiring; when the host later hands a fuller read, it overrides the derived one.

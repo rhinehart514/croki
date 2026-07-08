@@ -227,14 +227,7 @@ function emptySharedContext() {
       keywords: [],
       hypotheses: [],
     },
-    founderTaste: {
-      approvedPatterns: [],
-      rejectedPatterns: [],
-      edits: [],
-      policies: [],
-    },
     contacts: {},
-    outcomes: [],
     experiments: [],
     artifacts: [],
     productFeedback: [],
@@ -594,8 +587,6 @@ export function applySharedContextToGraph(graph, sharedContext, { channelOffer =
           positioning: sharedContext?.positioning ?? {},
           icp: sharedContext?.icp ?? {},
           offer: channelOffer ?? sharedContext?.offer ?? {},
-          founderTaste: sharedContext?.founderTaste ?? {},
-          outcomes: sharedContext?.outcomes ?? [],
           experiments: sharedContext?.experiments ?? [],
           productFeedback: sharedContext?.productFeedback ?? [],
         },
@@ -879,8 +870,8 @@ export function updateSharedContext(patch, options = {}) {
   const project = loadProject(options);
   const current = project.sharedContext ?? emptySharedContext();
   const allowed = new Set([
-    "repository", "product", "positioning", "icp", "founderTaste",
-    "contacts", "outcomes", "experiments", "artifacts", "productFeedback",
+    "repository", "product", "positioning", "icp",
+    "contacts", "experiments", "artifacts", "productFeedback",
     "claims", "offer",
   ]);
   const unknown = Object.keys(patch ?? {}).filter((key) => !allowed.has(key));
