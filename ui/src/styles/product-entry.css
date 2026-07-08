@@ -122,6 +122,39 @@
 }
 .pentry-open:hover { background: var(--surface); border-color: var(--line-2); }
 
+/* Live "reading your product…" state — shown while the crew derives the picture in the background,
+   so an empty panel never reads as a dead void. */
+.pentry-reading {
+  margin: 12px 0 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.pentry-reading-spin { flex: none; margin-top: 1px; color: var(--faint); animation: pentry-spin 0.9s linear infinite; }
+@keyframes pentry-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pentry-reading-spin { animation: none; } }
+
+/* Quiet manual re-read link — sits under the open button. */
+.pentry-reread {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 560;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+.pentry-reread:hover:not(:disabled) { color: var(--ink); }
+.pentry-reread:disabled { color: var(--faint); cursor: default; }
+
 /* Flow-out cue — a short line + arrow off the right edge, saying the go-to-market grows to the right. */
 .pentry-flow {
   position: absolute;

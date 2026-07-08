@@ -75,7 +75,8 @@ describe("ComposerDock — gate in chat", () => {
     fireEvent.click(button);
 
     // The GateReview stage's count lead proves the review opened (not the summary card, not an empty stage).
-    expect(screen.getByText(/2 to decide · nothing sends until you say so/i)).toBeTruthy();
+    // With no transport connected, the lead names what a yes does honestly: it stages locally.
+    expect(screen.getByText(/2 to decide · nothing goes until you say so, then a yes stages it on your machine/i)).toBeTruthy();
     // The staged draft body renders — the founder is now reading the real work in the thread.
     expect(screen.getByText(/saw your launch/i)).toBeTruthy();
   });
@@ -119,7 +120,7 @@ describe("ComposerDock — gate in chat", () => {
     fireEvent.click(button);
     expect(screen.getByText(/nothing staged to review/i)).toBeTruthy();
     // No decision-card lead text — the stage stayed closed.
-    expect(screen.queryByText(/^nothing sends until you approve$/i)).toBeNull();
+    expect(screen.queryByText(/to decide · nothing goes until you say so/i)).toBeNull();
   });
 
   it("threads send-back: opening the note box and sending fires onRefineItem with the item + note", () => {

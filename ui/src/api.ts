@@ -359,6 +359,72 @@ export const reviseProductModel = (edit: ProductModelEdit) =>
   post<{ productModel: ProductModel | null }>("/api/product-model/revise", edit);
 
 // The "living" stroke: pin an already-persisted FeedbackSignal onto a specific element.
+
+// ── Design taste — the founder's front-end house style, made persistent ────────
+// TASTE, not the gate: setting a house style, a feeling, or flagging a reference screen never sends,
+// publishes, or approves anything. It only shapes what a visual agent reads before it drafts, so the
+// crew stops always falling back to the built-in "Warm Calm" defaults. Reads fall back to the seeded
+// house style when a project has saved nothing yet, so this surface is never blank.
+export type DesignDimension = { principle: string; grounded: boolean };
+export type DesignReference = {
+  id: string;
+  source: "mobbin" | "url";
+  label: string;
+  url: string | null;
+  dimensions: string[];
+  proves: string;
+};
+export type DesignState = {
+  projectId: string;
+  houseStyle: string;
+  feeling: string;
+  dimensions: Record<string, DesignDimension>;
+  references: DesignReference[];
+  updatedAt: string;
+};
+
+export const getDesignState = () => get<{ designState: DesignState }>("/api/design-state");
+
+// Persist an edited house style / feeling / dimensions / references. projectId is FORCED to the active
+// project server-side, so a client value is ignored — one project can never overwrite another's taste.
+export const saveDesignState = (body: {
+  houseStyle?: string;
+  feeling?: string;
+  dimensions?: Record<string, { principle?: string }>;
+  references?: DesignReference[];
+}) => post<{ designState: DesignState }>("/api/design-state", body);
+
+// Flag one reference screen (a Mobbin curation or a live URL). It joins the project's library and
+// re-marks whatever dimensions it anchors as grounded.
+export const addDesignReference = (reference: {
+  label: string;
+  url?: string | null;
+  note?: string;
+  source?: "mobbin" | "url";
+  dimensions?: string[];
+  proves?: string;
+}) => post<{ designState: DesignState }>("/api/design-state/references", { reference });
+
+// ── Signal weights — the founder-tunable path-ranking judgment ──────────────────
+// Path ranking scores GTM paths as a weighted sum of seven signals; HOW they trade off is a strategic
+// judgment the founder owns. Reading returns the active table plus the key order and seed defaults so
+// the surface can render a tuner. Saving persists a tuned table for the active project (projectId is
+// forced server-side). Pure taste — it tunes ordering only, sends/publishes/charges nothing.
+export type SignalWeights = Record<string, number>;
+export const getSignalWeights = () =>
+  get<{ weights: SignalWeights; keys: string[]; defaults: SignalWeights }>("/api/signal-weights");
+
+export const saveSignalWeights = (weights: SignalWeights) =>
+  fetch("/api/signal-weights", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...identityHeaders() },
+    body: JSON.stringify({ weights }),
+  }).then(async (res) => {
+    const payload = (await res.json().catch(() => ({}))) as { weights?: SignalWeights; error?: string };
+    if (!res.ok) throw new Error(payload.error || `Saving weights failed (${res.status}).`);
+    return payload as { weights: SignalWeights };
+  });
+
 // ── Connection status — is a live Claude available for compose/ideate/operator ──
 export type ConnectionStatus = { connected: boolean; label: string | null; reason: string | null };
 export const getConnection = () => get<ConnectionStatus>("/api/connection");

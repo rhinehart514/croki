@@ -18,8 +18,9 @@ export default async function handle({ req, res, url }) {
   // Dogfood friction capture — feedback about GTM IDE itself (a bug, rough edge, or wish noticed
   // mid-flow), filed into the repo's dogfood/queue/ as agent-readable markdown with the current
   // object-model state auto-attached. This is the BUILD loop, not the taste loop: it never touches
-  // GTM memory, and nothing here approves, sends, or merges — a nightly agent works the queue into
-  // PRs that wait at founder review. Snapshot pieces that can't be read stay absent, never invented.
+  // GTM memory, and nothing here approves, sends, or merges. The item is captured for an agent to
+  // work later into a PR that waits at founder review; nothing auto-drains the queue on a schedule.
+  // Snapshot pieces that can't be read stay absent, never invented.
   if (req.method === "POST" && url.pathname === "/api/friction") {
     try {
       const body = await readBody(req);

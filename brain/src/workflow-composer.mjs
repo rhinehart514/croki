@@ -5,6 +5,10 @@ import { getProjectChannels, loadProject } from "./project-store.mjs";
 import { saveFlow } from "./flow-store.mjs";
 import { resolveEntry, hasConcreteInput, SOURCE_MODES } from "./source-entry.mjs";
 import { clarityGrounding } from "./clarity-store.mjs";
+import { distillTaste, renderDistilledTaste } from "./taste-distill.mjs";
+import { buildTasteProfile } from "./memory.mjs";
+import { mergeSharedDecisions } from "./shared-judgments.mjs";
+import { ideaTasteForProject } from "./feedback-ledger.mjs";
 
 // Fold the founder's pinned clarity into the product grounding the composer sees, under an explicit
 // founderDirection key so the model reads it as real founder steering (claims to honor, ICP,
@@ -23,6 +27,22 @@ function groundingWithClarity(grounding, clarity) {
 // inventory so the compose prompt reuses existing teammates by their exact refs. Empty when none authored.
 function enginePoolFor(_project, options = {}) {
   return listCapabilities(options).agents;
+}
+
+// The founder's distilled taste for THIS project, read the same way the operator prompt reads it
+// (operator-run-core.mjs recallTaste): fold the shared taste ledger (the global rig plus other
+// projects' gate decisions) together with this project's banked idea kills/keeps, build a profile,
+// and distill it to a few plain rules. Keyed on the project rather than a single run's session, so
+// composition sees the accumulated voice without needing a live run to hang off of. Returns null
+// (no rules) when the founder has taught nothing yet — an untrained founder adds no taste block.
+function tasteProfileFor(project, options = {}) {
+  const projectId = project?.id || options.projectId || "default";
+  try {
+    const decisions = mergeSharedDecisions({}, options);
+    return buildTasteProfile(decisions, { ideaTaste: ideaTasteForProject(projectId, options) });
+  } catch {
+    return null;
+  }
 }
 
 // Honest blank default: with no composer wired, compose nothing rather than fall back to a
@@ -256,7 +276,7 @@ function bindIO(nodes, channel, inputAdapter, outputAdapter) {
 // gate wall — returns { nodes, edges } with NO persistence and no status mutation. Used by both
 // the streaming compose preview (compose each channel's real graph, live) and the
 // persisting compose below. The model owns topology; the host owns the wall.
-export async function composeGraphForChannel({ channel, agents = [], grounding = null, clarity = null, enginePool = [], capabilities = null, input, output, compose = blankCompose }) {
+export async function composeGraphForChannel({ channel, agents = [], grounding = null, clarity = null, enginePool = [], capabilities = null, taste = null, input, output, compose = blankCompose }) {
   const spec = await compose({
     goal: input?.objective || channel.objective,
     channel,
@@ -266,6 +286,9 @@ export async function composeGraphForChannel({ channel, agents = [], grounding =
     // from what actually exists — real skill names and MCP tool refs — instead of inventing them.
     capabilities,
     grounding: groundingWithClarity(grounding, clarity),
+    // The founder's distilled taste (voice guidance only; the gate still decides what sends) so the
+    // composer shapes the crew and steps to fit what they've approved/rejected, not re-asking it.
+    taste,
   });
   if (spec?.ok === false) {
     throw new Error(spec.error === "blank"
@@ -331,12 +354,17 @@ export async function composeNakedGraph(input, options = {}) {
   const channel = channelSpecFrom(input);
   const agents = agentSpecsFrom(input);
 
+  // The founder's distilled taste, rendered to a plain-language block for the compose prompt (null
+  // when they've taught nothing yet). Voice guidance only — never overrides the wall or invents facts.
+  const taste = renderDistilledTaste(distillTaste(tasteProfileFor(project, options))) || null;
+
   const { nodes, edges } = await composeGraphForChannel({
     channel,
     agents,
     enginePool: enginePoolFor(project, options),
     // The full live inventory (agents ∪ skills ∪ connected MCP tools) reaches the compose prompt.
     capabilities: listCapabilities(options),
+    taste,
     grounding: input.grounding ?? null,
     clarity: clarityGrounding(project.id, options),
     input: input.input,

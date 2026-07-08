@@ -1,7 +1,7 @@
 {
   "name": "gtm-ide",
   "private": true,
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Drover — the go-to-market desk for founders running more than one product.",
   "author": "Drover",
   "main": "electron/main.cjs",

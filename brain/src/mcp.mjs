@@ -813,7 +813,7 @@ const TOOLS = [
   // delegate to the same handlers. Prefer the canonical workflow names.
   {
     name: "report_friction",
-    description: "File a dogfood report about Drover ITSELF — a bug, rough edge, or wish the founder hits mid-flow ('the gate card hid the citation', 'I wish the queue showed all ventures'). Use it the moment the complaint is uttered; don't make the founder switch tools. Writes an agent-readable markdown item into the product repo's dogfood/queue/ with the current project and pending-gate state auto-attached, for the nightly build loop to work into gated PRs. This is feedback about the PRODUCT and never touches GTM taste memory — judgments about a draft belong at the gate, not here.",
+    description: "File a dogfood report about Drover ITSELF — a bug, rough edge, or wish the founder hits mid-flow ('the gate card hid the citation', 'I wish the queue showed all ventures'). Use it the moment the complaint is uttered; don't make the founder switch tools. Writes an agent-readable markdown item into the product repo's dogfood/queue/ with the current project and pending-gate state auto-attached — captured for review, so an agent can later work it into a gated PR. Nothing drains the queue on a schedule; it waits for an agent to pick it up. This is feedback about the PRODUCT and never touches GTM taste memory — judgments about a draft belong at the gate, not here.",
     inputSchema: {
       type: "object",
       properties: {

@@ -48,10 +48,12 @@ import {
   saveGraph,
   setActiveWorkflow,
   getProductModel,
+  deriveProductModel,
   composeMicroproduct,
   promoteChannel,
   revokeChannel,
   getPendingInbox,
+  getCredentials,
 } from "@/api";
 import type { OperatorHints, ComposerBriefing, ComposerTurnResult } from "@/api";
 // Heavy overlay/panel components are split into their own chunks and loaded on demand the first time
@@ -63,6 +65,8 @@ const AgentProfile = lazy(() => import("@/components/AgentProfile").then((m) => 
 const OutcomeCapture = lazy(() => import("@/components/OutcomeCapture"));
 const ConnectCapability = lazy(() => import("@/components/ConnectCapability").then((m) => ({ default: m.ConnectCapability })));
 const ConnectSender = lazy(() => import("@/components/ConnectSender").then((m) => ({ default: m.ConnectSender })));
+const DesignTaste = lazy(() => import("@/components/DesignTaste").then((m) => ({ default: m.DesignTaste })));
+const SignalWeights = lazy(() => import("@/components/SignalWeights").then((m) => ({ default: m.SignalWeights })));
 import type { AgentProfileView, TeammateView } from "@/components/AgentProfile";
 import { ComposerDock } from "@/components/ComposerDock";
 import { FloatingDock } from "@/components/FloatingDock";
@@ -252,6 +256,14 @@ export default function App() {
   // The living product picture — the founder-editable INTERPRETATION aggregate, loaded alongside the
   // active project. Edits persist through the domain commands (revise/derive) then re-fetch.
   const [productModel, setProductModel] = useState<ProductModel | null>(null);
+  // True while the crew is reading the product in the background — either the auto-read that fires when a
+  // project with no picture becomes active, or a founder's manual re-read. Drives the "reading your
+  // product…" live state on the product panel so an empty panel never reads as a dead void.
+  const [productDeriving, setProductDeriving] = useState(false);
+  // Whether the founder has connected a REAL send transport (their own Gmail, or a connected endpoint).
+  // Read once; used only to make the gate honest about what a "yes" does — "sends via your connected
+  // Gmail/endpoint" vs "stages locally". This never loosens the wall; every send still waits at the gate.
+  const [transportConnected, setTransportConnected] = useState(false);
   // Bumped to summon the Claude co-pilot — a new channel is born by telling Claude the goal, not by
   // filling a form, so "New channel" opens and focuses the chat.
   const [composerFocus, setComposerFocus] = useState(0);
@@ -864,16 +876,77 @@ export default function App() {
   }, [activeProjectId]);
 
   // Load the current living product picture whenever the active product changes. The model is
-  // per-project, so it's fetched alongside the project and cleared when none is active. The clear
-  // and the fetch both land in async callbacks, never synchronously in the effect body.
+  // per-project, so it's fetched alongside the project and cleared when none is active. If the picture
+  // is still empty (a freshly-scanned product the background derive hasn't filled in yet), kick a
+  // read and poll a couple times, showing the "reading your product…" live state until it lands.
+  // The clear, the fetch, and the derive all run in async callbacks, never synchronously in the effect body.
+  const productHasContent = useCallback(
+    (m: ProductModel | null) => !!m && ((m.things?.length ?? 0) > 0 || (m.userGoals?.length ?? 0) > 0),
+    [],
+  );
   useEffect(() => {
     let live = true;
-    const load = activeProjectId
-      ? getProductModel().then(({ productModel: model }) => model).catch(() => null)
-      : Promise.resolve(null);
-    void load.then((model) => { if (live) setProductModel(model); });
+    if (!activeProjectId) { setProductModel(null); setProductDeriving(false); return; }
+    (async () => {
+      const first = await getProductModel().then(({ productModel: m }) => m).catch(() => null);
+      if (!live) return;
+      setProductModel(first);
+      if (productHasContent(first)) return;
+      // Nothing derived yet — read the product in the background, then refetch a few times so the panel
+      // fills the moment the picture is ready. deriveProductModel is idempotent server-side; this never
+      // sends or publishes anything.
+      setProductDeriving(true);
+      try {
+        const derived = await deriveProductModel().then(({ productModel: m }) => m).catch(() => null);
+        if (!live) return;
+        if (productHasContent(derived)) { setProductModel(derived); return; }
+        // The derive returned blank (or is still settling) — poll the read a couple times before giving up.
+        for (let i = 0; i < 3 && live; i += 1) {
+          await new Promise((r) => setTimeout(r, 1200));
+          if (!live) return;
+          const again = await getProductModel().then(({ productModel: m }) => m).catch(() => null);
+          if (!live) return;
+          if (productHasContent(again)) { setProductModel(again); return; }
+          if (again) setProductModel(again);
+        }
+      } finally {
+        if (live) setProductDeriving(false);
+      }
+    })();
     return () => { live = false; };
-  }, [activeProjectId]);
+  }, [activeProjectId, productHasContent]);
+
+  // Manual re-read — an explicit refresh of the product picture. Reads the product again and refetches
+  // the picture. Idempotent, read-only-to-the-world: never sends or publishes.
+  const handleRereadProduct = useCallback(async () => {
+    if (!activeProjectId || productDeriving) return;
+    setProductDeriving(true);
+    try {
+      const derived = await deriveProductModel().then(({ productModel: m }) => m).catch(() => null);
+      if (productHasContent(derived)) { setProductModel(derived); return; }
+      const refreshed = await getProductModel().then(({ productModel: m }) => m).catch(() => null);
+      setProductModel(refreshed);
+    } finally {
+      setProductDeriving(false);
+    }
+  }, [activeProjectId, productDeriving, productHasContent]);
+
+  // Read whether a real send transport is connected — a founder-connected Gmail, or a connected http
+  // endpoint. Only the gate lead copy reads this, to say honestly what a "yes" does. Re-read when the
+  // active product changes (credentials are founder-owned/universal, but the Settings tab may have just
+  // connected one). Read-only; touches nothing about the wall.
+  useEffect(() => {
+    let live = true;
+    getCredentials()
+      .then(({ credentials }) => {
+        if (!live) return;
+        setTransportConnected(
+          credentials.some((c) => c.provider === "gmail" || c.provider === "http_endpoint"),
+        );
+      })
+      .catch(() => { if (live) setTransportConnected(false); });
+    return () => { live = false; };
+  }, [activeProjectId, overlay]);
 
   // Load the shared People for the active project — the keystone object the People lens projects.
   // Re-fetched when the active product changes and after a run completes (a run promotes new
@@ -2248,6 +2321,9 @@ export default function App() {
     onSubmitReview: (id, d) => submitGateReview(id, d),
     gatePromote,
     gateOffer,
+    // Whether a real send transport is connected — the gate reads this to say honestly what a "yes"
+    // does ("sends via your connected Gmail/endpoint" vs "stages locally"). Never loosens the wall.
+    transportConnected,
     // The outcome door on approved cards — record a sent item's real result, then refresh the summary.
     onRecordOutcome: recordItemOutcome,
     // Veto-as-loop: send a staged item back to the crew to rework in the Composer.
@@ -2296,7 +2372,7 @@ export default function App() {
     canvasGraph, connectors, contractAudits, runResult, graphRunning, runningNodeId, nodeBeats, selection,
     dismissOverlays, proposedNodeIds, proposedEdgeIds, revealedNodeIds, proposalActive, operatorCursor,
     handleResolveProposal, submitGateReview, approveGate, handleAddNode, handleGraphConnect, handleDeleteEdges,
-    handleNodePositionChange, flowRuns, runNode, updateGraph, handleDeleteNode, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, recordItemOutcome, refineGateItem, runSummary,
+    handleNodePositionChange, flowRuns, runNode, updateGraph, handleDeleteNode, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, recordItemOutcome, refineGateItem, runSummary, transportConnected,
   ]);
 
   // First-run team setup. Gated on Convex being configured AND no team chosen yet, so a local/solo
@@ -2474,6 +2550,8 @@ export default function App() {
             <ProductEntryColumn
               productName={activeProject.name}
               model={productModel}
+              deriving={productDeriving}
+              onReread={() => void handleRereadProduct()}
             />
           ) : null}
 
@@ -2819,6 +2897,15 @@ export default function App() {
                           write (behind your gate). Was its own takeover overlay — folded in here. */}
                       <Suspense fallback={null}>
                         <ConnectCapability onChange={() => {}} />
+                      </Suspense>
+                      {/* Founder taste capture — the two surfaces that let a founder shape what the crew
+                          drafts, without ever sending: the front-end house style a visual agent reads,
+                          and the leaning that ranks which GTM paths come first. Neither touches the wall. */}
+                      <Suspense fallback={null}>
+                        <DesignTaste />
+                      </Suspense>
+                      <Suspense fallback={null}>
+                        <SignalWeights />
                       </Suspense>
                     </div>
                   ) : null}

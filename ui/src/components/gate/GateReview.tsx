@@ -391,7 +391,7 @@ const GATE_CARD_CAP = 6;
 // Fields the reasoning rail owns in stage mode — dropped from the decision card there so the two halves
 // don't say the same thing twice (labels are compared lowercased, post-humanize).
 const REASON_OWNED_LABELS = new Set(["verdict", "composite score", "score", "dimensions", "dimension", "dims"]);
-export function GateReview({ items, onSubmit, learned, promote, offer, onRecordOutcome, onRefineItem, variant = "bloom" }: {
+export function GateReview({ items, onSubmit, learned, promote, offer, transportConnected = false, onRecordOutcome, onRefineItem, variant = "bloom" }: {
   items: GTMItem[];
   // The full run. Retained on the props for callers, but the pure-decision room no longer renders a reel
   // from it — watchability lives on the run surface, not stacked on the gate.
@@ -407,6 +407,11 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
   promote?: GatePromote;
   // The deal the staged work carries — shown so the founder reviews drafts against the offer they ride.
   offer?: string | null;
+  // Whether a real send transport is connected (the founder's own Gmail, or a connected endpoint). Only
+  // the lead copy reads it, to say honestly what a "yes" does: "sends via your connected transport" when
+  // one is wired, "stages on your machine" when none is. This changes NOTHING about the wall — every
+  // send still waits for the founder here; it only makes the consequence of a yes accurate.
+  transportConnected?: boolean;
   // The outcome door: after an item is approved, the founder records what actually happened (a reply, a
   // meeting, a purchase) keyed off the item's joinKey. Records what ALREADY happened — never sends.
   // Absent when the host has no project context to post against.
@@ -525,6 +530,12 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
   const cleanUndecided = bloom.reduce((n, { it, i }) => n + (!isContextItem(it) && !gateItemView(it).hollow && !gateItemIsException(it) && !decided[itemKey(it, i)] ? 1 : 0), 0);
   const shown = bloom.slice(0, GATE_CARD_CAP);
   const lean = variant === "stage";
+  // What a "yes" actually does, in plain words — read off the connected transport so the founder never
+  // guesses. Connected → a yes really sends; not connected → a yes stages on the machine (honest, not a
+  // no-op dressed as a send). The wall is identical either way; this line only names the consequence.
+  const yesEffect = transportConnected
+    ? "a yes sends through your connected transport"
+    : "a yes stages it on your machine — connect a sender to send for real";
   const reviewBody = (
     <div className={cn("cgate-review", variant === "stage" && "cgate-review-stage")} onClick={(e) => e.stopPropagation()}>
       <div className="cgate-review-lead">
@@ -532,10 +543,10 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
           {bloom.length === 0
             ? "Everything here cleared — nothing needs your eyes"
             : lean
-              ? `${bloom.length} to decide · nothing sends until you say so`
+              ? `${bloom.length} to decide · nothing goes until you say so, then ${yesEffect}`
               : exceptionCount > 0
-                ? `${exceptionCount} exception${exceptionCount === 1 ? "" : "s"} for your eyes · nothing sends until you approve`
-                : `${bloom.length} staged · nothing sends until you approve`}
+                ? `${exceptionCount} exception${exceptionCount === 1 ? "" : "s"} for your eyes · ${yesEffect}`
+                : `${bloom.length} staged · ${yesEffect}`}
         </span>
         {/* Pure-decision gate: the taste counter and the offer line are context, not the call — they
             leave the decision room. Both stay on the compact bloom, which is a working surface. */}

@@ -131,9 +131,27 @@ export function createGmailTransport({ fetchImpl, endpoint = GMAIL_SEND_ENDPOINT
   };
 }
 
+// The generic HTTP delivery seam the host injects as context.sendRunners.http. Unlike gmail (which needs
+// a bespoke Gmail-API transport), the http execute connector already speaks native fetch — it POSTs an
+// approved item and reads back { ok, status, json() }. So the http runner is just a native-fetch call:
+// same shape the connector's global-fetch default uses, exposed here so it is an INJECTABLE seam mirroring
+// gmail (a test or a proxy can override it) rather than an implicit global reach. It delivers ONLY what the
+// connector hands it — the connector already filtered to approved === true — and never reads the gate,
+// caps, or decides what to send. With no fetch available it stays staged rather than faking a send.
+export function createHttpTransport({ fetchImpl } = {}) {
+  const doFetch = typeof fetchImpl === "function" ? fetchImpl : (typeof fetch === "function" ? fetch : null);
+  if (!doFetch) return null;
+  return (url, options) => doFetch(url, options);
+}
+
 // The default live send-runner map the host injects into a run's context. gmail.mjs reads
-// context.sendRunners.gmail; this is the one real runner wired today. A connector with no runner here
-// stays staged-by-default — adding one is a deliberate act, never the fallback.
+// context.sendRunners.gmail and http.mjs reads context.sendRunners.http; these are the real runners wired
+// today. A connector with no runner here stays staged-by-default — adding one is a deliberate act, never
+// the fallback. (The http runner falls back to the connector's own global fetch when omitted, so the http
+// seam is live either way — this only makes it injectable, exactly like gmail.)
 export function defaultSendRunners(options = {}) {
-  return { gmail: createGmailTransport(options.gmail ?? {}) };
+  const runners = { gmail: createGmailTransport(options.gmail ?? {}) };
+  const http = createHttpTransport(options.http ?? {});
+  if (http) runners.http = http;
+  return runners;
 }

@@ -14,8 +14,10 @@
 //
 // Invariants:
 //   - Only items the gate marked `approved === true` are sent. Nothing else.
-//   - A real destination is required (GTM_IDE_SEND_ENDPOINT). With none set the
-//     node refuses to run rather than silently staging — honest, not a no-op.
+//   - A real destination is required. It resolves from the node config, then a
+//     founder-connected endpoint the founder pasted through the app, then the
+//     GTM_IDE_SEND_ENDPOINT env var. With none of the three set the node refuses
+//     to run rather than silently staging — honest, not a no-op.
 //   - Every item carries an attribution id so the Measure node can join the send
 //     back to an outcome. Failures are recorded as failures, never swallowed.
 
@@ -31,6 +33,19 @@ function resolveSendAuth(context) {
   return resolveCredentialToken(creds.projectId ?? null, "http", { envKey: "GTM_IDE_SEND_AUTH", ...(creds.options ?? {}) });
 }
 
+// Resolve the outbound DESTINATION the same BYO way the auth token resolves: a founder who connected a
+// transport through the app pasted the endpoint URL as an "http_endpoint" credential, and that stored
+// value wins over the GTM_IDE_SEND_ENDPOINT env var. This is DESTINATION RESOLUTION ONLY — it removes the
+// env-var hard requirement for a founder who connected a transport, and changes NOTHING about when a send
+// happens: only items the gate stamped `approved === true` are ever sent, and only on the gate-resume run.
+// (The endpoint is a URL, not a secret, so it is not treated as sensitive — but it still flows through the
+// same credential store the founder connects through, never invented here.)
+function resolveSendEndpoint(context) {
+  const creds = context?.credentials ?? {};
+  const stored = resolveCredentialToken(creds.projectId ?? null, "http_endpoint", { envKey: "GTM_IDE_SEND_ENDPOINT", ...(creds.options ?? {}) });
+  return typeof stored === "string" && stored.trim() ? stored.trim() : null;
+}
+
 export const meta = {
   id: "http",
   name: "HTTP send",
@@ -44,10 +59,17 @@ export const meta = {
 };
 
 export async function run(node, upstream, context) {
-  const endpoint = node.config.endpoint || process.env.GTM_IDE_SEND_ENDPOINT;
+  // Destination resolution, in order: an explicit node config, then the founder-connected endpoint the
+  // founder pasted through the app, then the GTM_IDE_SEND_ENDPOINT env var (resolveSendEndpoint folds the
+  // env var in as its own fallback). A founder who connected a transport no longer needs an env var.
+  const endpoint = node.config.endpoint || resolveSendEndpoint(context);
   if (!endpoint) {
-    // Should not happen — the runner gates on the env key — but never send blind.
-    return { ok: false, items: [], error: "No send endpoint configured. Set GTM_IDE_SEND_ENDPOINT to a real destination." };
+    // No destination from any of the three sources — never send blind. Honest refusal, not a silent no-op.
+    return {
+      ok: false,
+      items: [],
+      error: "No send endpoint configured. Connect a transport in the app, or set GTM_IDE_SEND_ENDPOINT to a real destination.",
+    };
   }
 
   const approved = upstream.filter((item) => item.approved === true);
@@ -58,7 +80,13 @@ export async function run(node, upstream, context) {
   const channel = node.config.channel || "http";
   const auth = resolveSendAuth(context);
   const baseHeaders = { "Content-Type": "application/json", ...(auth ? { Authorization: auth } : {}) };
-  const doFetch = node.config.fetchImpl || globalThis.fetch;
+  // The delivery seam, in order: an explicit node config fetch (a unit test drives it), then the live http
+  // send runner the host injected on the gate-resume run (context.sendRunners.http — mirrors how gmail.mjs
+  // reads context.sendRunners.gmail), then native global fetch. Whichever it is, it is invoked ONLY for
+  // items already stamped approved === true above; this is HOW the send leaves, never WHETHER it may.
+  const doFetch = node.config.fetchImpl
+    || (typeof context?.sendRunners?.http === "function" ? context.sendRunners.http : null)
+    || globalThis.fetch;
 
   const sent = [];
   for (const item of approved) {

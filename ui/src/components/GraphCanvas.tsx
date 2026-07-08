@@ -455,6 +455,9 @@ type GTMNodeData = {
   // The deal this pipeline's staged work carries, in plain words — the pipeline's own offer, or the
   // project's standing one as the default. Rides only gate nodes; absent when neither states a deal.
   gateOffer?: string | null;
+  // Whether a real send transport is connected — the gate lead reads this to say honestly what a "yes"
+  // does. Never loosens the wall; every send still waits at the gate. Rides only gate nodes.
+  transportConnected?: boolean;
   // The outcome door on an approved card: the founder records what actually came back (a reply, a
   // meeting, a purchase), keyed off the item's provenance id. Records what ALREADY happened — never
   // sends. Rides only the focused gate; absent elsewhere, so those cards show no record affordance.
@@ -1435,7 +1438,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
                     <X size={16} aria-hidden />
                   </button>
                 </div>
-                <GateReview variant="stage" items={result.items} run={data.run} onSubmit={data.onSubmitReview} learned={gateLearned} promote={data.gatePromote} offer={data.gateOffer} onRecordOutcome={data.onRecordOutcome} onRefineItem={data.onRefineItem} />
+                <GateReview variant="stage" items={result.items} run={data.run} onSubmit={data.onSubmitReview} learned={gateLearned} promote={data.gatePromote} offer={data.gateOffer} transportConnected={data.transportConnected} onRecordOutcome={data.onRecordOutcome} onRefineItem={data.onRefineItem} />
               </div>
             </div>,
             document.body,
@@ -1897,6 +1900,7 @@ function buildFlowGraph(
   onAskClaude?: (node: GTMNode) => void,
   gatePromote?: GatePromote,
   gateOffer?: string | null,
+  transportConnected?: boolean,
   onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>,
   // Open an agent's profile from its monogram face — passed for every lane (any pipeline's teammate
   // can open its sheet). The pipeline's real run numbers ride ONLY the Measure node, and only the
@@ -1976,6 +1980,8 @@ function buildFlowGraph(
         gatePromote: n.category === "gate" ? gatePromote : undefined,
         // The pipeline's deal rides only the gate node — the founder reviews drafts against the offer.
         gateOffer: n.category === "gate" ? gateOffer : undefined,
+        // Transport state rides only the gate node — the lead copy says what a "yes" actually does.
+        transportConnected: n.category === "gate" ? transportConnected : undefined,
         // The outcome door rides only the gate node — an approved card records what came back.
         onRecordOutcome: n.category === "gate" ? onRecordOutcome : undefined,
         // The full run + the veto-to-refine callback ride only the gate node: the reel reads the run's
@@ -2114,6 +2120,9 @@ type MergedFlowFocus = {
   // The focused pipeline's deal line (includes the project-level fallback the host computed). Other
   // lanes derive their own from each channel's offer below.
   gateOffer?: string | null;
+  // Whether a real send transport is connected — a founder-level connection, so it applies to every
+  // pipeline's gate. Only affects the gate lead copy; never loosens the wall.
+  transportConnected?: boolean;
   // The outcome door — rides only the focused pipeline's gate, matching onSubmitReview's scope.
   onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
   // Veto-to-refine — rides only the focused pipeline's gate, same scope as onSubmitReview.
@@ -2198,6 +2207,8 @@ function buildMergedFlowGraph(
       // Each lane's gate shows the deal ITS pipeline carries; the focused lane gets the host-computed
       // line (which already falls back to the project's standing offer).
       isFocused ? (focus.gateOffer ?? channelOfferLine(channel)) : channelOfferLine(channel),
+      // Transport state applies to any pipeline's gate — it's a founder-level connection, not per-lane.
+      focus.transportConnected,
       // The outcome door rides only the focused pipeline's gate — nothing to record on a dimmed lane.
       isFocused ? focus.onRecordOutcome : undefined,
       // The crew face opens the profile on every lane; the run numbers ride only the focused pipeline's
@@ -2483,7 +2494,7 @@ export function GraphCanvas({
   onSelect, onNodePositionChange, onConnectNodes, onDeleteEdges, onAddNode, panelOpen, variant,
   proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, refitNonce, highlightedNodeId = null,
   bloomNodeId = null, nodeEditor = null, revealedNodeIds, onPaneClick, operatorCursor = null, people = [],
-  multiPipeline = null, panTo = null, onAskClaude, gatePromote, gateOffer = null, onRecordOutcome,
+  multiPipeline = null, panTo = null, onAskClaude, gatePromote, gateOffer = null, transportConnected = false, onRecordOutcome,
   onRefineItem, onOpenAgentProfile, runSummary = null,
 }: {
   graph: GTMGraph;
@@ -2530,6 +2541,10 @@ export function GraphCanvas({
   // The deal the focused pipeline's staged work carries, in plain words — its own offer, or the
   // project's standing one. Shown on the gate's inline review; absent when neither states a deal.
   gateOffer?: string | null;
+  // Whether a real send transport is connected (Gmail or an endpoint). The gate lead reads this to say
+  // honestly what a "yes" does — "sends via your connected transport" vs "stages locally". Never
+  // loosens the wall; every send still waits at the gate.
+  transportConnected?: boolean;
   // The outcome door on the focused gate's approved cards: record what actually came back on a sent
   // item, keyed off its provenance id. Records what ALREADY happened — never sends.
   onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
@@ -2678,7 +2693,7 @@ export function GraphCanvas({
         channelId: graph.id,
         running, runningNodeId, selection,
         proposedNodeIds, proposedEdgeIds, proposalActive,
-        onResolveProposal, onSubmitReview, onApproveGate, gatePromote, gateOffer, onRecordOutcome,
+        onResolveProposal, onSubmitReview, onApproveGate, gatePromote, gateOffer, transportConnected, onRecordOutcome,
         onRefineItem, revealedNodeIds, onInspect: toggleInspect, runSummary, nodeBeats,
       },
       people,
@@ -2688,13 +2703,13 @@ export function GraphCanvas({
     [
       multiPipeline, connectors, subsystemHealth, contractAudits, handleSelect, graph.id, running,
       runningNodeId, selection, proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal,
-      onSubmitReview, onApproveGate, gatePromote, gateOffer, onRecordOutcome, onRefineItem, revealedNodeIds, toggleInspect, people, onAskClaude, onOpenAgentProfile, runSummary, nodeBeats,
+      onSubmitReview, onApproveGate, gatePromote, gateOffer, transportConnected, onRecordOutcome, onRefineItem, revealedNodeIds, toggleInspect, people, onAskClaude, onOpenAgentProfile, runSummary, nodeBeats,
     ],
   );
 
   const singleFlow = useMemo(
-    () => buildFlowGraph(laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, onRecordOutcome, onOpenAgentProfile, runSummary, onRefineItem, nodeBeats),
-    [laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, onRecordOutcome, onOpenAgentProfile, runSummary, onRefineItem, nodeBeats],
+    () => buildFlowGraph(laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, transportConnected, onRecordOutcome, onOpenAgentProfile, runSummary, onRefineItem, nodeBeats),
+    [laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, transportConnected, onRecordOutcome, onOpenAgentProfile, runSummary, onRefineItem, nodeBeats],
   );
 
   const baseNodes = merged ? merged.nodes : singleFlow.nodes;

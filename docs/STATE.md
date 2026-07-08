@@ -1,6 +1,8 @@
 # STATE — Drover (Alpha)
 
-**Stage: Alpha.** Logged 2026-07-03, updated 2026-07-08. This is the front-door snapshot of
+**Stage: Alpha.** Logged 2026-07-03, updated 2026-07-08 (sending + dogfood-loop copy reconciled to
+what is actually wired: connected-transport sending under the gate, no nightly/scheduled agent).
+This is the front-door snapshot of
 where the product actually stands. When something material changes, update this file and re-date it.
 For the product pitch read `README.md`; for how the system works read `AGENTS.md`; for the
 current build direction read `docs/GTM-ENGINE-REBUILD.md`. Everything else in `docs/` is
@@ -49,7 +51,7 @@ measured result.
 | Node-flow canvas (primary surface) | **Real** | The wired-steps diagram is the default landing; card detail-on-zoom shipped. |
 | Living GTM graph (ordered canvas) | **Building** | The reimagined surface: one map of the whole go-to-market picture, arranged left-to-right, the strongest path lit as the spine, drag / reorganize. Ordered layout landed on main 07-03; verified on one dogfood product, not a live founder. |
 | GTM engine rebuild | **Landed, unexercised** | Evidence graph, market research, path portfolio, outcome ingest, promotion, run-compile — merged and tested, not yet run end-to-end on a live goal. Note: this is fuzzy work; by doctrine it belongs in rented agents behind open steps, not hosted modules — keep it thin and collapse toward agents, never grow it into a subsystem. |
-| Dogfood loop | **Landed, unexercised** | Drover files and builds its own improvements to gated branches that wait for review. |
+| Dogfood loop | **Landed, unexercised** | Drover captures friction and feature requests into its own repo queue; an agent can later work a queued item into a gated branch that waits for review. Nothing drains the queue on a schedule — there is no nightly agent. |
 | The learning loop closes (machinery) | **Built & verified** | On branch `lean-rebuild`: outcome-door, compile→approve→run, outcome-proposed verdicts — a real outcome can now flow back and shape the next run. Audited alpha-loop-ready; not yet exercised by a real founder. |
 | The two new surfaces | **Built & browser-verified** | The agent face (derived per-agent record, honest "no runs yet") and the market picture built layer by layer (co-construct picker) — both on `lean-rebuild`. |
 | Agent bench + crew view | **Built & browser-verified** | Added 2026-07-05. The bench is the whole roster as one lens over the run ledger — every specialist with a track record derived from real gate decisions, honest "no runs yet" when unrun; reached from the dock. The crew strip shows a focused pipeline's agents left-to-right, ending on the gate. Both are projections over data the host already keeps, not new stored objects. `get_bench` MCP tool mirrors `get_board`. |
@@ -68,9 +70,12 @@ all in the mainline (corrected 2026-07-08 — an earlier note here wrongly said 
 
 **What now works that didn't:**
 
-- **It actually sends.** Real Gmail transport is wired into the live send path, behind the founder
-  gate. There is a durable bring-your-own-OAuth-client loopback sign-in that mints and refreshes
-  its own token, so a founder can connect their own Gmail once and send for real. Before this, the
+- **It actually sends.** Real transport is wired into the live send path, behind the founder gate.
+  A founder who has connected a transport can send for real once the gate approves: Gmail (a durable
+  bring-your-own-OAuth-client loopback sign-in that mints and refreshes its own token, so they
+  connect their own Gmail once) and, as of 2026-07-08, a connected HTTP endpoint. Sending is not
+  fully general — it reaches only a transport the founder has actually connected, only after gate
+  approval, and there is still no scheduled or nightly agent that sends on its own. Before this, the
   send path staged locally and nothing ever left.
 - **Install works for a stranger.** A root post-install step now installs the two subprojects (the
   brain and the interface) so a fresh clone comes up without hand-holding.
@@ -146,6 +151,39 @@ is currently scoped to the composer; warming the canvas and rails to match is th
 **What this does not change:** the alpha bet is still unproven. No outside founder has driven a real
 go-to-market win to the gate. Built and tested, not validated in the market.
 
+## 2026-07-08 — the not-wired audit, and wiring the promised loop
+
+A four-lane audit found the recurring shape behind "the machine runs but I still don't see it":
+Drover was built to be *read from* but not *written into*. Everywhere an agent consults truth or
+taste, the read was wired — but the feedback-writes and the recurring triggers that would let the
+product learn and come back on its own were not. Seven promised features were built but sat
+disconnected. This pass wired all seven, laned by file-owner so parallel work could not collide,
+and verified each wire end-to-end (traced the actual connecting call, not just a green suite).
+
+**Now wired that wasn't:**
+
+- **The product reader runs on scan and reaches the crew.** Activating a product now derives the
+  living product picture in the background, and that picture is folded into run grounding — so the
+  discovery, research, and drafting agents work from what the product actually *is*, not just a
+  README paragraph and one tracking gap. (Before, the reader existed but nothing triggered it and
+  its output never reached a run.)
+- **Promoted motions re-fire on their own.** An in-process scheduler wakes due cadence motions and
+  ambient briefs; every re-fire still stops at the founder gate. (Before, promotion wired to nothing.)
+- **Design taste persists.** The founder can name the house style, the feeling, and pin reference
+  screens, and it saves — so visual agents follow the founder's taste instead of seed defaults.
+- **Ranking weights are tunable per venture** and persist. (Before, frozen on defaults for everyone.)
+- **Gate decisions shape composition.** Distilled taste now reaches the compose prompt, not only the
+  drafting agents — the founder's judgment shapes *how* a pipeline is built, not just what it writes.
+- **Sending reaches a connected transport** (Gmail or an HTTP endpoint) after gate approval, with no
+  env var to set; the gate copy now names honestly what a "yes" does.
+- **The overclaim copy is gone** — no more "nightly loop" the product never had.
+
+**What only a live run settles:** the three new founder-facing surfaces (design taste, ranking
+weights, the product picture) are wired and unit-green but not yet browser-verified; two of the new
+wires lack a regression test; and a run fired within a second of activating a product can race ahead
+of the reader. None of this is market validation — the alpha bet (a real founder, a real win to the
+gate) is unchanged. Built, wired, and proven-connected — not validated in the market.
+
 ## How we build (the standing rule)
 
 Less is more. The harness — truth, the gate, taste — is the only thing we host. Every fuzzy
@@ -156,9 +194,9 @@ agents. This is the anti-cage rule in `AGENTS.md`, restated because it's easy to
 
 ## Build health (2026-07-08)
 
-- **Tests:** backend suite green — 1,289 pass / 0 fail (1 skipped), and the full `npm test`
-  chain (backend tests → lint → build) is green as of 2026-07-08. The suite self-terminates (a
-  pre-existing gate-test connection-handle leak was fixed this pass).
+- **Tests:** backend suite — 1,313 pass / 1 fail / 1 skipped, and the full `npm test` chain
+  (backend tests → lint → build) exits green as of 2026-07-08. The one failure is the pre-existing,
+  unrelated `project-merge` case (connections-universal); nothing in the wiring pass broke.
 - **Backend:** the two god-files are gone — the server and the operator runtime were each split into
   focused modules this sprint (behavior-preserving). The GTM-engine modules present and tested:
   evidence, gtm-store, market-research, path-portfolio, outcome-ingest, promote-motion, run-compile.
@@ -167,7 +205,7 @@ agents. This is the anti-cage rule in `AGENTS.md`, restated because it's easy to
   gone and the full-screen overlays dropped from four to three.
 - **Agent front door:** 40 tools over the MCP server (`npm run mcp`).
 - **Run:** `npm start` (builds the interface, serves API + client on port 4317).
-- **Version:** 0.3.2 (root), pre-1.0 by design.
+- **Version:** 0.3.3 (root), pre-1.0 by design.
 - **On `main`:** sprint-alpha (real send, stranger-safe install, gate-self-approval fix) is
   merged; the composer invert and the watchable run (2026-07-08) land on top of it.
 

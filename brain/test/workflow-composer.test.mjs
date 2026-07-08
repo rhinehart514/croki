@@ -105,9 +105,10 @@ describe("model-composed workflow (no fixed skeleton)", () => {
 
     // enginePoolFor no longer returns [] — it carries the live agents so the model reuses real refs.
     assert.ok(seen.enginePool.some((a) => a.ref === "researcher"), "the live agent pool reaches the composer, not []");
-    // The full inventory (agents ∪ skills ∪ MCP tools) reaches the composer as `capabilities`.
+    // The live inventory (agents ∪ connected MCP tools) reaches the composer as `capabilities`.
+    // Skills were deliberately dropped from the inventory (they leaked personal global Claude skills
+    // onto the GTM rail), so they no longer reach the composer.
     assert.ok(seen.capabilities, "capabilities are passed through");
-    assert.ok(seen.capabilities.skills.some((s) => s.name === "positioning"), "skills reach the composer");
     assert.ok(seen.capabilities.tools.some((t) => t.toolName === "find_companies"), "connected MCP tools reach the composer");
   });
 

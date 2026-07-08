@@ -8,6 +8,7 @@ import { attachTerminalServer } from "./terminal-server.mjs";
 import { recoverStaleBuilds } from "./feature-builder.mjs";
 import { listConnectors } from "./connectors/registry.mjs";
 import { recoverInterruptedOperatorSessions } from "./operator-store.mjs";
+import { startAmbientScheduler } from "./ambient-scheduler.mjs";
 import { json, serveFile } from "./routes/util.mjs";
 import { issueSessionCookie } from "./routes/session-guard.mjs";
 
@@ -27,6 +28,8 @@ import ideaRoutes from "./routes/ideas.mjs";
 import channelRoutes from "./routes/channels.mjs";
 import inboxRoutes from "./routes/inbox.mjs";
 import productModelRoutes from "./routes/product-model.mjs";
+import tasteRoutes from "./routes/taste.mjs";
+import signalWeightsRoutes from "./routes/signal-weights.mjs";
 import operatorRoutes from "./routes/operator.mjs";
 import engineRoutes from "./routes/engine.mjs";
 import workspaceRoutes from "./routes/workspaces.mjs";
@@ -76,6 +79,8 @@ const ROUTE_GROUPS = [
   channelRoutes,
   inboxRoutes,
   productModelRoutes,
+  tasteRoutes,
+  signalWeightsRoutes,
   operatorRoutes,
   engineRoutes,
   workspaceRoutes,
@@ -109,8 +114,14 @@ attachTerminalServer(server);
 // Exported so a test can boot the real route handler on an ephemeral port and close it cleanly.
 export { server };
 
+// In-process ambient heartbeat handle, so shutdown can clear the timer cleanly.
+let ambientScheduler = null;
+
 server.listen(port, host, () => {
   console.log(`Drover running at http://${host}:${port}`);
+  // Start the in-process heartbeat that re-fires promoted motions and ambient briefs on an interval.
+  // It only DRIVES/STAGES standing work — every due item still stops at the founder gate; nothing sends.
+  ambientScheduler = startAmbientScheduler();
   // Dogfood crash recovery: no feature build survives a restart, so flip stale queued/building
   // items to `interrupted` and salvage any orphaned worktree work onto its branch. Best-effort.
   try {
@@ -138,3 +149,14 @@ server.listen(port, host, () => {
       .catch(() => {});
   }
 });
+
+// Clear the ambient heartbeat timer on shutdown so the process can exit cleanly.
+for (const signal of ["SIGTERM", "SIGINT"]) {
+  process.on(signal, () => {
+    try {
+      ambientScheduler?.stop();
+    } catch {
+      /* best-effort: never block shutdown on the heartbeat timer */
+    }
+  });
+}

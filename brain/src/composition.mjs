@@ -49,7 +49,7 @@ A data edge leaving a "switch" node ALSO carries "predicate": { "field": "<itemF
 // Live composer: reads the repo on the founder's subscription and returns a { nodes, edges }
 // graph spec. The host (workflow-composer.mjs) normalizes, enforces the gate wall, and validates.
 export function createClaudeComposer({ cwd = process.cwd(), model, maxTurns = 24, onText } = {}) {
-  return async function compose({ goal, channel, agents, grounding, enginePool, capabilities }) {
+  return async function compose({ goal, channel, agents, grounding, enginePool, capabilities, taste }) {
     // The live capability inventory (agents ∪ connected MCP tools). When present, the model composes
     // from what ACTUALLY exists — real MCP tool refs — instead of inventing them. Only MCP tools are
     // rendered here; the reusable agent pool has its own block above.
@@ -66,6 +66,12 @@ export function createClaudeComposer({ cwd = process.cwd(), model, maxTurns = 24
       `\nEngine agent pool — reuse an existing ref when it already covers the capability, don't duplicate:\n${JSON.stringify(enginePool ?? [], null, 2)}`,
       capabilityBlock,
       `\nProduct grounding:\n${JSON.stringify(grounding ?? {}, null, 2)}`,
+      // The founder's distilled taste (voice guidance only) — shape the crew and steps to fit what
+      // they've already approved/rejected instead of re-asking. It NEVER overrides the wall (every
+      // execute still needs a founder gate) and NEVER licenses inventing product facts.
+      taste
+        ? "\nFounder taste to match (learned from what they approved/rejected — compose the crew and steps to fit it, do not re-ask what this already settles; it never overrides the founder gate and never licenses inventing product facts):\n" + taste
+        : "",
     ].filter(Boolean).join("\n");
     const { text, error } = await runClaudeQuery({ prompt, cwd, model, maxTurns, onText });
     if (error) return { ok: false, error: error.message };

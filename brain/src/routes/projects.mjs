@@ -27,6 +27,27 @@ import {
 } from "../team-store.mjs";
 import { openWorkspace } from "../workspace.mjs";
 import { listPeople, getPerson } from "../person-store.mjs";
+import { executeDomainCommand } from "../domain-commands.mjs";
+import { createClaudeProductModeler } from "../product-model-generator.mjs";
+
+// Fire-and-forget: after a project is grounded or activated, derive its interpretive product model
+// in the background so the picture panel and run grounding are populated without the founder having
+// to click "derive". NON-BLOCKING and error-swallowing — a failed derive must never break grounding.
+// Skipped when there is no real repo to read (a blank cwd would be a pointless model call).
+function kickProductModelDerive(project, repo) {
+  if (!project?.id) return;
+  const cwd = typeof repo === "string" ? repo.trim() : "";
+  if (!cwd || cwd === process.cwd()) return;
+  Promise.resolve()
+    .then(() =>
+      executeDomainCommand(
+        "DeriveProductModel",
+        { projectId: project.id },
+        { projectId: project.id, generate: createClaudeProductModeler({ cwd }) },
+      ),
+    )
+    .catch(() => {});
+}
 
 export default async function handle({ req, res, url }) {
   // Multi-channel project
@@ -48,11 +69,13 @@ export default async function handle({ req, res, url }) {
         setActiveProject(existing.id);
         const project = groundProjectInWorkspace(workspace, { projectId: existing.id });
         json(res, 200, { project, workspace, activeProjectId: existing.id });
+        kickProductModelDerive(project, workspace.repo);
         return true;
       }
       const created = createProject({ name });
       const project = groundProjectInWorkspace(workspace, { projectId: created.project.id });
       json(res, 201, { project, workspace, activeProjectId: created.project.id });
+      kickProductModelDerive(project, workspace.repo);
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
@@ -64,6 +87,7 @@ export default async function handle({ req, res, url }) {
     try {
       const project = setActiveProject(decodeURIComponent(activateProjectMatch[1]));
       json(res, 200, { project, activeProjectId: project.id });
+      kickProductModelDerive(project, project.sharedContext?.repository?.repo || process.cwd());
     } catch (err) {
       json(res, 404, { error: err instanceof Error ? err.message : String(err) });
     }

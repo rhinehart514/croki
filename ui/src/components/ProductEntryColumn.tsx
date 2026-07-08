@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, Loader2, RefreshCw } from "lucide-react";
 import type { ProductModel } from "@/types";
 import "@/styles/product-entry.css";
 
@@ -16,12 +16,19 @@ export function ProductEntryColumn({
   productName,
   model,
   onOpenFull,
+  deriving = false,
+  onReread,
 }: {
   productName: string;
   model: ProductModel | null;
   // Optionally open a deeper product view. When omitted, the "full picture" button is hidden — the
   // product's understanding now lives on the main canvas, so there's no separate screen to open.
   onOpenFull?: () => void;
+  // True while the crew is reading the product in the background (right after a scan, or on a manual
+  // re-read). Shows a live "reading your product…" state so an empty panel never reads as a dead void.
+  deriving?: boolean;
+  // Manually re-read the product — an explicit refresh of the picture. Hidden when not supplied.
+  onReread?: () => void;
 }) {
   const [open, setOpen] = useState(true);
 
@@ -91,6 +98,11 @@ export function ProductEntryColumn({
             </li>
           ))}
         </ul>
+      ) : deriving ? (
+        <div className="pentry-reading" role="status">
+          <Loader2 className="pentry-reading-spin" size={15} aria-hidden="true" />
+          <span>Reading your product… mapping where real wins come from.</span>
+        </div>
       ) : (
         <p className="pentry-empty">
           Point Drover at your product and it maps where real wins come from — then your go-to-market
@@ -102,6 +114,21 @@ export function ProductEntryColumn({
         <button type="button" className="pentry-open" onClick={onOpenFull}>
           {hasModel ? "Open the full product picture" : "Read my product"}
           <ArrowRight size={13} />
+        </button>
+      ) : null}
+
+      {/* Manual re-read — an explicit refresh of the picture when the founder wants the crew to look
+          again (after shipping something, or if the auto-read hasn't filled it in). Quiet by default. */}
+      {onReread ? (
+        <button
+          type="button"
+          className="pentry-reread"
+          onClick={onReread}
+          disabled={deriving}
+          title="Read the product again"
+        >
+          <RefreshCw size={11} className={deriving ? "pentry-reading-spin" : undefined} />
+          {deriving ? "Reading…" : hasModel ? "Re-read product" : "Read it now"}
         </button>
       ) : null}
 

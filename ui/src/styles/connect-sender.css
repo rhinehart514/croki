@@ -71,3 +71,7 @@
 
 .cs-foot { margin-top: var(--space-6); display: flex; align-items: center; gap: var(--space-2); padding-top: var(--space-4); border-top: 1px solid var(--line); font-size: var(--text-xs); color: var(--muted); }
 .cs-foot svg { flex: none; width: 13px; height: 13px; color: var(--muted); }
+
+/* ── second transport (generic endpoint) — divides the Gmail block from the endpoint block ──── */
+.cs-divider { margin: var(--space-8) 0 var(--space-5); border-top: 1px solid var(--line); }
+.cs-sub-tight { margin-top: var(--space-1); font-size: var(--text-sm); }
