@@ -17,7 +17,7 @@ import {
   gateItemView, gateItemPatternCleared, gateItemIsException, gateItemExceptionReasons, gateItemProvenance,
   gateItemEvidenceLines,
 } from "@/lib/gateItem";
-import type { GateEvidenceLine, GatePromote } from "@/lib/gateItem";
+import type { GateEvidenceLine, GatePromote, GateReceiptLine } from "@/lib/gateItem";
 import type { GateDecision, GTMItem, GTMRunResult } from "@/types";
 import "@/styles/canvas-gate.css";
 
@@ -333,6 +333,14 @@ function RecordOutcome({ item, onRecord }: {
   );
 }
 
+// Defense-in-depth for the gate wall's content boundary. The backend already excludes grounding/context
+// items from a gate's staged decisions — but if one slips through, it must NOT render as an approvable
+// card: grounding is the truth the drafts stand on, not a thing the founder sends. A context item shows
+// as a quiet "reference the crew used" line with no approve action, so a stray one can never be released.
+function isContextItem(item: GTMItem): boolean {
+  return (item as { type?: unknown }).type === "context";
+}
+
 // The founder reads content at the gate, not internal state. Before an item's open field list renders,
 // two things are stripped: bookkeeping booleans (a bare "First class: true" / "Editable: true" row is
 // machine state the founder never decides on), and code-shaped labels — every remaining label runs
@@ -345,6 +353,32 @@ function reviewableFields(fields: { label: string; value: string }[]): { label: 
       return v !== "true" && v !== "false";
     })
     .map((f) => ({ label: humanizeFieldLabel(f.label), value: f.value }));
+}
+
+// The inspectable receipt for everything the crew attached that the card can't show up front — the
+// nested structure (a content plan's waves, an offer object, a scoring breakdown). It is NOT dropped
+// (the old normalizer silently deleted it); it's tucked here as a readable, indented outline the founder
+// can open. Subtraction stays inspectable — the wall never swallows the model's real output. Renders
+// nothing when the item is flat (the common case). Mirrors the cleared-pile receipt pattern below.
+function GateReceipt({ receipt }: { receipt: GateReceiptLine[] }) {
+  if (!receipt.length) return null;
+  return (
+    <details className="cgate-card-receipt" onClick={(e) => e.stopPropagation()}>
+      <summary>Everything else the crew attached ({receipt.filter((l) => l.value != null).length} details)</summary>
+      <div className="cgate-card-receipt-body">
+        {receipt.map((line, i) => (
+          <p
+            key={`${line.label}-${i}`}
+            className={cn("cgate-receipt-line", line.value == null && "is-group")}
+            style={{ paddingLeft: `${line.depth * 12}px` }}
+          >
+            <span className="k">{humanizeFieldLabel(line.label)}</span>
+            {line.value != null ? <span className="v">{line.value}</span> : null}
+          </p>
+        ))}
+      </div>
+    </details>
+  );
 }
 
 // The founder gate, ON the canvas. When a run pauses at a gate, its staged drafts bloom out of the
@@ -454,7 +488,7 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
   const exceptionCount = bloom.reduce((n, { it }) => n + (gateItemIsException(it) ? 1 : 0), 0);
   // The clean drafts a promotion would auto-clear — every staged item the pattern could vouch for
   // (has a body, not flagged, not already cleared). Drives the promote panel's "what will release" band.
-  const cleanTotal = bloom.reduce((n, { it }) => n + (!gateItemView(it).hollow && !gateItemIsException(it) ? 1 : 0), 0);
+  const cleanTotal = bloom.reduce((n, { it }) => n + (!isContextItem(it) && !gateItemView(it).hollow && !gateItemIsException(it) ? 1 : 0), 0);
   // The standing approval that released the cleared pile — surfaced as the audit basis when it's fanned.
   const clearedBasis = promote?.channel.blessedPattern?.note?.trim() || null;
   // Batch approve every clean, still-undecided draft at once — the pattern-approval the gate is built
@@ -466,7 +500,7 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
     const nextDecided: Record<string, "approve" | "reject"> = {};
     bloom.forEach(({ it, i }) => {
       const key = itemKey(it, i);
-      if (!gateItemView(it).hollow && !gateItemIsException(it) && !decided[key]) { batch[key] = { decision: "approve" }; nextDecided[key] = "approve"; }
+      if (!isContextItem(it) && !gateItemView(it).hollow && !gateItemIsException(it) && !decided[key]) { batch[key] = { decision: "approve" }; nextDecided[key] = "approve"; }
     });
     const keys = Object.keys(batch);
     if (!keys.length) return;
@@ -488,7 +522,7 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
       setBusy(false);
     }
   };
-  const cleanUndecided = bloom.reduce((n, { it, i }) => n + (!gateItemView(it).hollow && !gateItemIsException(it) && !decided[itemKey(it, i)] ? 1 : 0), 0);
+  const cleanUndecided = bloom.reduce((n, { it, i }) => n + (!isContextItem(it) && !gateItemView(it).hollow && !gateItemIsException(it) && !decided[itemKey(it, i)] ? 1 : 0), 0);
   const shown = bloom.slice(0, GATE_CARD_CAP);
   const lean = variant === "stage";
   const reviewBody = (
@@ -545,6 +579,23 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
                 <span className="cgate-card-to">{decidedTitle}</span>
                 <span className="cgate-card-verdict">{verdictLabel}</span>
                 {canRecord ? <RecordOutcome item={item} onRecord={onRecordOutcome!} /> : null}
+              </div>
+            );
+          }
+          if (isContextItem(item)) {
+            // Grounding that slipped into the decision list — shown as reference, never as an approvable
+            // send. No approve/edit action; the founder can only set it aside so it can't be released.
+            return (
+              <div className="cgate-card is-context" key={key}>
+                <span className="cgate-card-to">{v.subject}</span>
+                <p className="cgate-card-note">Reference the crew used to write these drafts — not something to send. Set it aside to clear it from your review.</p>
+                {v.body ? <div className="cgate-card-artifact"><CardBody text={v.body} evidence={[]} clamp /></div> : null}
+                <GateReceipt receipt={v.receipt} />
+                <div className="cgate-card-actions">
+                  <button className="cgate-reject" type="button" disabled={busy} onClick={() => void decide(key, "reject")}>
+                    <CornerDownLeft size={11} aria-hidden /> Set aside
+                  </button>
+                </div>
               </div>
             );
           }
@@ -635,6 +686,7 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
                           </div>
                         </details>
                       ) : null}
+                      <GateReceipt receipt={v.receipt} />
                     </>
                   );
                 })()
@@ -670,6 +722,7 @@ export function GateReview({ items, onSubmit, learned, promote, offer, onRecordO
                       ) : null}
                     </div>
                   ) : null}
+                  <GateReceipt receipt={v.receipt} />
                 </>
               )}
               {v.evidence && !isEditing && !lean ? <p className="cgate-card-why">Why them: {v.evidence}</p> : null}

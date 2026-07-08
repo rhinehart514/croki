@@ -84,6 +84,17 @@ function titleCase(s: string): string {
   return s.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// The first sentence/line of a body, trimmed to a headline length — used as a card title when the item
+// carries no real subject, so the founder reads what the item IS instead of a raw "context" type word.
+// null when there's no usable text.
+function firstLine(text: string | null): string | null {
+  if (!text) return null;
+  const line = text.split(/\r?\n/)[0].trim();
+  if (!line) return null;
+  const clipped = line.length > 80 ? `${line.slice(0, 77).trimEnd()}…` : line;
+  return clipped || null;
+}
+
 // Render one field value readably: strings as-is, numbers/booleans plainly, arrays joined, nested
 // objects flattened to "key: value" pairs. null when the value carries nothing showable.
 function renderFieldValue(value: unknown): string | null {
@@ -108,6 +119,55 @@ function renderFieldValue(value: unknown): string | null {
 // One open field of a staged item, rendered for the card: a plain-words label and a readable value.
 type GateItemField = { label: string; value: string };
 
+// Render a nested value (object or array of objects) into a readable, indented outline the founder can
+// expand — never a flattened "id: K1 · state: …" machine string, and never a silent drop. Machinery
+// keys/values are still hidden WITHIN the nesting (an id inside a nested object is as much bookkeeping as
+// one at the top), but real content at any depth survives. Returns [] when nothing showable remains.
+export type GateReceiptLine = { label: string; value: string | null; depth: number };
+function receiptLines(value: unknown, depth: number, label: string): GateReceiptLine[] {
+  if (Array.isArray(value)) {
+    // A list: each element becomes its own indented block ("Item 1", "Item 2"), so a list of waves/pieces
+    // reads as a list, not one run-on line.
+    const out: GateReceiptLine[] = [];
+    let shown = 0;
+    value.forEach((el) => {
+      if (el && typeof el === "object") {
+        shown += 1;
+        out.push({ label: `${label} ${shown}`, value: null, depth });
+        out.push(...receiptLines(el, depth + 1, ""));
+      } else {
+        const s = renderScalar(el);
+        if (s) { shown += 1; out.push({ label: `${label} ${shown}`, value: s, depth }); }
+      }
+    });
+    return out;
+  }
+  if (value && typeof value === "object") {
+    const out: GateReceiptLine[] = [];
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (isMachineryKey(k)) continue; // an id/ref nested inside is still bookkeeping
+      if (v && typeof v === "object") {
+        out.push({ label: humanizeKey(k), value: null, depth });
+        out.push(...receiptLines(v, depth + 1, humanizeKey(k)));
+      } else {
+        const s = renderScalar(v);
+        if (s && isMachineryValue(s)) continue; // a machine token hiding under an innocent key
+        if (s) out.push({ label: humanizeKey(k), value: s, depth });
+      }
+    }
+    return out;
+  }
+  const s = renderScalar(value);
+  return s ? [{ label, value: s, depth }] : [];
+}
+
+// A single scalar rendered plainly — no nesting logic (that's receiptLines' job). null when empty.
+function renderScalar(value: unknown): string | null {
+  if (typeof value === "string") return value.trim() || null;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return null;
+}
+
 // The one normalized view of a staged gate item. The founder gate's rail AND the on-canvas gate
 // review both render from this, so the two surfaces can never disagree about what a draft says or
 // whether it's hollow. The known aliases live here once — the drafter emits
@@ -122,6 +182,10 @@ type GateItemView = {
   who: string | null;
   sourceUrl: string | null;
   fields: GateItemField[];
+  // The nested structure the flat `fields` list can't show — objects and lists the item carried, kept as
+  // an inspectable outline behind an expandable receipt instead of being silently dropped. Empty on the
+  // common flat item. Subtraction stays visible: what the card doesn't show up front lives here, never gone.
+  receipt: GateReceiptLine[];
   hollow: boolean;
 };
 
@@ -135,20 +199,32 @@ export function gateItemView(item: GTMItem): GateItemView {
   // `type` is a valid subject fallback for display, but NOT a real subject for the hollow test — a bare
   // output-kind label ("outreach-draft") must never make an empty item look approvable.
   const realSubject = pickStr(it.suggested_subject_line, it.subject, it.founder_name, it.name, it.handle);
-  const rawSubject = realSubject ?? pickStr(it.type) ?? "Staged action";
+  // No real subject? The title reads off the item's own CONTENT — the first line of its message/body —
+  // never the raw `type` word ("context" / "signal" / "draft"), which is an internal enum, not a headline.
+  // Only when there's truly no content does it fall to the generic "Staged action".
+  const rawSubject = realSubject ?? firstLine(body) ?? "Staged action";
   // A title never reads as a code identifier — a raw key like "planner_meta" becomes "Planner Meta".
   const subject = looksLikeRawKey(rawSubject) ? titleCase(humanizeKey(rawSubject)) : rawSubject;
   const evidence = pickStr(it.grounding_citation, it.icpFitRationale, it.fitRationale, it.nowTrigger);
   const trigger = pickStr(it.nowTrigger, it.now_trigger);
   const who = pickStr(it.role, it.title, it.company);
   const sourceUrl = pickStr(it.sourceUrl, it.url, it.founder_github_or_url);
-  // Everything else the item actually carries, rendered plainly — the open half of the view.
+  // Everything else the item actually carries, rendered plainly — the open half of the view. Two kinds:
+  // flat scalar fields land in `fields` (shown as labeled lines on the card); nested structure (objects,
+  // lists of objects) lands in `receipt` as an indented outline behind an expandable — the model's real
+  // output is NEVER dropped, only tucked. Only true machinery (identifier keys, machine tokens) stays hidden.
   const fields: GateItemField[] = [];
+  const receipt: GateReceiptLine[] = [];
   let bestStringIdx = -1; // index into `fields` of the longest free-form STRING field
   for (const [key, value] of Object.entries(it)) {
     if (BOOKKEEPING_KEYS.has(key) || SLOTTED_KEYS.has(key)) continue;
     if (isMachineryKey(key)) continue;        // run/graph/agent ids and pointers — never founder content
-    if (isStructuralValue(value)) continue;   // nested planning blobs — the body already summarizes them
+    if (isStructuralValue(value)) {
+      // Nested planning blob — no longer dropped. It expands into a readable outline on the receipt so the
+      // founder can inspect exactly what the crew attached, instead of the card silently swallowing it.
+      receipt.push(...receiptLines(value, 0, humanizeKey(key)));
+      continue;
+    }
     const rendered = renderFieldValue(value);
     if (!rendered) continue;
     if (isMachineryValue(rendered)) continue; // a machine id hiding under an innocent key
@@ -163,8 +239,8 @@ export function gateItemView(item: GTMItem): GateItemView {
     body = fields[bestStringIdx].value;
     fields.splice(bestStringIdx, 1);
   }
-  const hollow = !body && !realSubject && !evidence && !trigger && !who && !sourceUrl && !fields.length;
-  return { subject, body, evidence, trigger, who, sourceUrl, fields, hollow };
+  const hollow = !body && !realSubject && !evidence && !trigger && !who && !sourceUrl && !fields.length && !receipt.length;
+  return { subject, body, evidence, trigger, who, sourceUrl, fields, receipt, hollow };
 }
 
 // ─── The case behind a ranked item — the reasoning rail's real source ─────────

@@ -1611,10 +1611,26 @@ function LaneStatusNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
 // Cracks a node open IN canvas space to show the REAL records flowing through it — the source's
 // prospects, the gate's drafts — instead of a "12 items" count you can't open. Read-only; it never
 // mutates the graph. Pairs with the terminal: run a script, watch its output land as records here.
+// The first line of a record's own text — used as an inspector title when the record carries no name/
+// subject, so the row reads as what it IS ("Hi Sarah — saw you just…") instead of the raw enum word
+// ("context" / "signal"). The 5-value `type` field is internal bookkeeping and never becomes a label.
+function recordFirstLine(item: GTMItem): string | null {
+  const text = typeof item.draft === "string" ? item.draft
+    : typeof item.summary === "string" ? item.summary
+    : typeof (item as Record<string, unknown>).message === "string" ? (item as Record<string, string>).message
+    : typeof (item as Record<string, unknown>).text === "string" ? (item as Record<string, string>).text
+    : null;
+  if (!text) return null;
+  const line = text.split(/\r?\n/)[0].trim();
+  if (!line) return null;
+  return line.length > 90 ? `${line.slice(0, 87).trimEnd()}…` : line;
+}
 function inspectorRow(item: GTMItem): { title: string; sub?: string; badge?: string } {
-  const title = item.name || item.company || item.subject || item.email || item.url || item.id || item.type;
+  // Real content only — never `item.type`, which is an internal enum, not a headline. A record with no
+  // name/subject reads by its own first line of text; only a truly empty record shows "Untitled record".
+  const title = item.name || item.company || item.subject || item.email || item.url || recordFirstLine(item) || item.id || "Untitled record";
   const sub = [item.title, item.email, item.url].filter(Boolean).join(" · ")
-    || (item.draft ? item.draft.slice(0, 140) : undefined);
+    || (item.draft && item.draft.trim() !== recordFirstLine(item) ? item.draft.slice(0, 240) : undefined);
   const badge = item.approvalStatus
     ?? (item.fit === true ? "fit" : item.fit === false ? "no fit" : undefined)
     ?? (typeof item.score === "number" ? `score ${item.score}` : undefined);
