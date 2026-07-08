@@ -1039,6 +1039,20 @@ export type CapabilityServer = {
   toolCount: number;
 };
 
+// ─── Live capability inventory (the real "what your crew can reach" roster) ─────
+// What the crew can actually reach RIGHT NOW — the live tools (from connected MCP servers), agents, and
+// skills, straight from the runtime instead of a hardcoded brand list. The `lane` mirrors the wall: a
+// "read" tool runs free, a "write" one acts only behind the gate. Render-if-present: when the backend
+// hasn't produced this yet, the surfaces fall back to the suggested-connections catalog.
+export type CapabilityInventoryTool = { serverId: string; toolName: string; lane: "read" | "write" };
+export type CapabilityInventoryAgent = { ref: string; label: string };
+export type CapabilityInventorySkill = { name: string };
+export type CapabilityInventory = {
+  tools: CapabilityInventoryTool[];
+  agents: CapabilityInventoryAgent[];
+  skills: CapabilityInventorySkill[];
+};
+
 // ─── Sender credentials (BYO keys) ─────────────────────────────────────────────
 // The REDACTED view of a founder-pasted send credential — provider, label, when, and whether a token
 // is present. The token itself never crosses to the client (credential-store redacts on every read).

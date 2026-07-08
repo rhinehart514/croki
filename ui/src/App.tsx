@@ -43,6 +43,7 @@ import {
   resolveOperatorCandidates,
   resolveOperatorProposal,
   resumeOperatorSession,
+  steerOperatorSession,
   runGraphStream,
   saveGraph,
   setActiveWorkflow,
@@ -1528,6 +1529,16 @@ export default function App() {
       : withSubject;
     const s = operatorSession;
     const projectId = s ? operatorProjectId(s) : (activeProjectIdRef.current ?? undefined);
+    // Mid-run steer: while the crew is RUNNING or paused at the gate, the founder can still redirect them —
+    // "focus on the enterprise segment", "drop the third draft" — without waiting for the run to finish and
+    // without releasing anything. The message goes to the steer endpoint (never resume, never the gate), the
+    // session syncs, and the crew adjusts course. Nothing sends. If the backend hasn't wired the steer
+    // endpoint yet, this throws and the message surfaces an error rather than silently vanishing.
+    if (s && (s.status === "running" || s.status === "waiting_for_gate")) {
+      const response = await steerOperatorSession(s.id, operatorProjectId(s), framed, hints);
+      syncOperator(response.session);
+      return;
+    }
     // A pending "New channel" intent must compose fresh, never resume the prior conversation.
     const resumable = !freshPipelineIntent.current && s && ["waiting_for_input", "interrupted", "failed"].includes(s.status);
     // Build posture routes through the intent-routed turn first: status/explain get a FAST answer with NO

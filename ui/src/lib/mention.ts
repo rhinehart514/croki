@@ -28,6 +28,7 @@
 import { agentPersona, type AgentFamily } from "@/lib/agentPersona";
 import { CAPABILITIES, type Capability } from "@/lib/capabilities";
 import type { AgentBenchRow } from "@/api";
+import type { CapabilityInventory } from "@/types";
 
 export const MENTION_KINDS = ["agent", "skill", "capability"] as const;
 export type MentionKind = (typeof MENTION_KINDS)[number];
@@ -52,7 +53,9 @@ export type MentionEntity =
       kind: "capability";
       id: string; // the capability id — also the token id
       label: string; // the capability name — "Gmail"
-      cap: Capability; // the full capability, so the menu can draw its brand mark
+      cap?: Capability; // the full brand capability (suggested) — absent for a LIVE tool, which draws a
+                        // generic mark instead. The menu branches on its presence.
+      live?: boolean; // a real connected tool from the inventory (vs a suggested brand). Drawn plainer.
       blurb: string; // one plain-English line — what it does for you
       gated: boolean; // reaches the outside world → carries the amber dot everywhere
       search: string;
@@ -82,9 +85,14 @@ export type MessageSegment =
 export function buildRoster(
   bench: AgentBenchRow[],
   capabilities: Capability[] = CAPABILITIES,
+  // The LIVE inventory — the real connected tools/skills the crew can reach now. When present, its tools
+  // lead the capability list (@-mention reaches what's actually connected); the brand catalog stays as
+  // suggestions after them. Absent → the roster is bench + suggested brands, exactly as before.
+  inventory?: CapabilityInventory | null,
 ): MentionEntity[] {
   const agents: MentionEntity[] = bench.map((row) => {
-    const persona = agentPersona(row.ref, row.job);
+    // row.name is the founder-chosen name — passed as the name (3rd arg) so it wins over the regex table.
+    const persona = agentPersona(row.ref, row.job, row.name);
     const label = row.name?.trim() || persona.role;
     return {
       kind: "agent",
@@ -102,6 +110,18 @@ export function buildRoster(
     };
   });
 
+  // The real connected tools first — @-mention reaches what the crew actually has, keyed to the real
+  // serverId::toolName so the operator binds the live tool, not a brand id.
+  const liveTools: MentionEntity[] = (inventory?.tools ?? []).map((t) => ({
+    kind: "capability",
+    id: `${t.serverId}::${t.toolName}`,
+    label: t.toolName,
+    live: true,
+    blurb: t.lane === "write" ? `${t.serverId} · acts behind your gate` : `${t.serverId} · runs free`,
+    gated: t.lane === "write",
+    search: [t.toolName, t.serverId, t.lane].join(" ").toLowerCase(),
+  }));
+
   const caps: MentionEntity[] = capabilities.map((cap) => ({
     kind: "capability",
     id: cap.id,
@@ -112,7 +132,7 @@ export function buildRoster(
     search: [cap.name, cap.id, cap.blurb].join(" ").toLowerCase(),
   }));
 
-  return [...agents, ...caps];
+  return [...agents, ...liveTools, ...caps];
 }
 
 // ── Detecting an active @query at the caret ──────────────────────────────────────────────────────────

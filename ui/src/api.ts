@@ -6,7 +6,7 @@ import type {
   ContextManifest, GtmLibrary,
   GraphOperation, GTMContractAudit,
   ProductModel, ProductModelEdit,
-  CapabilityServer, SenderCredential, Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
+  CapabilityServer, CapabilityInventory, SenderCredential, Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole, BoardView,
   ChannelMeta, Input, ObjectGraphView, GTMItem, PendingInbox,
 } from "@/types";
@@ -66,6 +66,12 @@ export const getConnectors = () =>
 // ── Capabilities (external MCP servers) ──────────────────────────────────────
 export const getCapabilities = () =>
   get<{ servers: CapabilityServer[] }>("/api/capabilities");
+
+// The LIVE capability inventory — the real tools/agents/skills the crew can reach right now, from the
+// runtime, not a hardcoded brand list. Returns null when the backend hasn't produced this endpoint yet
+// (or errors), so every caller degrades to the suggested-connections catalog — render-if-present.
+export const getCapabilityInventory = (): Promise<CapabilityInventory | null> =>
+  get<CapabilityInventory>("/api/capabilities/inventory").catch(() => null);
 
 export const connectCapability = (input: {
   id?: string; name: string; url?: string; trust?: string; demo?: boolean;
@@ -246,6 +252,22 @@ export const resolveOperatorGate = (
   projectId: string,
   payload: { approvals?: Record<string, boolean>; decisions?: Decisions },
 ) => post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/gate`, { projectId, ...payload });
+
+// Mid-run steer — a founder message delivered to a RUNNING or gated session WITHOUT resuming or releasing
+// anything. It redirects the crew's course; it never sends. The backend folds the message into the live
+// session's context and returns the updated session. Distinct from resume (which advances a paused
+// session) and from the gate (which releases). Never touches the wall.
+export const steerOperatorSession = (
+  sessionId: string,
+  projectId: string,
+  input: string,
+  hints?: OperatorHints,
+) =>
+  post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/steer`, {
+    projectId,
+    input,
+    ...(hints ? { hints } : {}),
+  });
 
 export const cancelOperatorSession = (sessionId: string, projectId: string) =>
   post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/cancel`, { projectId });

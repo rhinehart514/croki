@@ -276,6 +276,40 @@
   flex: none;
 }
 
+/* A one-line orienting note under the Capabilities header when only suggestions are shown. */
+.lr-cap-hint {
+  padding: 2px 0 6px;
+  font-size: 11px; line-height: 1.4; color: var(--muted);
+}
+
+/* Suggested (not-yet-connected) capabilities read recessive — they're the catalog, not the reality. */
+.lr-cap-suggested { opacity: 0.72; }
+.lr-cap-suggested:hover { opacity: 1; }
+
+/* A live connected server's tools — grouped under the server's name, each a real tool the crew reaches
+   now. Reads calm and factual; the lock marks a write tool that only acts behind the gate. */
+.lr-cap-server { display: contents; }
+.lr-cap-server-name {
+  padding: 4px 0 1px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.03em;
+  text-transform: uppercase; color: var(--muted);
+}
+.lr-cap-live { cursor: default; align-items: center; }
+.lr-cap-tool-mark {
+  flex: none;
+  width: 24px; height: 24px;
+  border-radius: var(--r-sm, 6px);
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  display: grid; place-items: center;
+  color: var(--muted);
+}
+.lr-cap-lane-gate {
+  display: inline-flex; align-items: center;
+  margin-left: 5px; color: var(--gap);
+  vertical-align: middle;
+}
+
 /* The invite — a Connect pill that sits quiet at rest and fills to ink on hover, with
    the arrow nudging out, so the row reads as something you act on, not just an entry. */
 .lr-cap-connect {

@@ -30,6 +30,26 @@
 .cc-field input::placeholder { color: var(--faint); }
 .cc-field input:focus { outline: none; }
 
+/* The add-a-server form — a few opaque fields and a Connect button. Plain, calm, no decoration. */
+.cc-form {
+  display: flex; flex-direction: column; gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.cc-form-row { display: flex; align-items: center; gap: var(--space-2); }
+.cc-form-in {
+  flex: 1; min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--line-2); border-radius: var(--r-md, 8px);
+  background: var(--surface); font: inherit; font-size: var(--text-sm); color: var(--ink);
+}
+.cc-form-in::placeholder { color: var(--faint); }
+.cc-form-in:focus { outline: 2px solid color-mix(in srgb, var(--ink) 18%, transparent); outline-offset: 1px; }
+.cc-form-hint { font-size: var(--text-xs); line-height: 1.4; color: var(--muted); }
+
+.cc-seeded { margin-bottom: var(--space-3); }
+.cc-seeded-lead { font-size: var(--text-xs); font-weight: 600; color: var(--muted); margin-bottom: var(--space-1); }
+.cc-seeded-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
 .cc-results { margin-top: var(--space-2); border: 1px solid var(--line-2); border-radius: var(--r-lg); background: var(--surface); overflow: hidden; box-shadow: var(--shadow-card); }
 .cc-result { display: flex; align-items: center; gap: var(--space-3); padding: 11px 14px; border-bottom: 1px solid var(--line); text-align: left; width: 100%; }
 .cc-result:last-child { border-bottom: 0; }
