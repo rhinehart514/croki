@@ -224,3 +224,34 @@ test("bundled sample product proves the attribution gap from real citations", ()
   assert.ok(report.winEvent.citations.some((c) => c.file === "src/app/signup/actions.ts"));
   assert.ok(report.attribution.citations.some((c) => c.file === "src/lib/attribution.ts"));
 });
+
+test("reads product context (README prose, manifest, sample data) without a data parser", () => {
+  const root = fixture({
+    "README.md": "# Acme\n\n[![build](x)](y)\n\nAcme turns raw invoices into a reconciled ledger for small shops.\n\nMore details here.",
+    "package.json": JSON.stringify({ name: "acme", description: "invoice reconciler", keywords: ["fintech", "invoices"] }),
+    "data/leads.csv": "name,email\na,b\n",
+    "services/project.ts": `await recordDiscoveryEvent("project_created", { builderId });`,
+  });
+  const report = scanRepo(root, { winEvent: "project_created" });
+
+  assert.ok(report.productContext, "product context is populated");
+  assert.equal(
+    report.productContext.readme,
+    "Acme turns raw invoices into a reconciled ledger for small shops.",
+    "the first real prose paragraph is picked, skipping the title and badge lines",
+  );
+  assert.equal(report.productContext.pkg.name, "acme");
+  assert.equal(report.productContext.pkg.description, "invoice reconciler");
+  assert.deepEqual(report.productContext.pkg.keywords, ["fintech", "invoices"]);
+  assert.ok(report.productContext.sampleDataFiles.some((f) => f.file === "data/leads.csv"));
+  // The scan's own gap headline is unchanged — product context is additive, not a rewrite of the verdict.
+  assert.equal(typeof report.headline, "string");
+});
+
+test("product context is null when a repo carries no README, manifest, or sample data", () => {
+  const root = fixture({
+    "services/project.ts": `await recordDiscoveryEvent("project_created", { builderId });`,
+  });
+  const report = scanRepo(root, { winEvent: "project_created" });
+  assert.equal(report.productContext, null, "no invented product facts when the repo has none");
+});

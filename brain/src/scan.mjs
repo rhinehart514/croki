@@ -64,6 +64,74 @@ function readSource(file) {
   }
 }
 
+// LEAN product-context read (Wave 1 grounding widen). The code scanner proves the tracking gap; this
+// adds the plain-words picture of WHAT the product is so a reading agent (find prospects, research,
+// draft) starts grounded on the founder's own product, not on nothing. No data parser: README prose,
+// the package manifest's name/description/keywords, and a bare presence flag for sample data files.
+function readFirst(root, names) {
+  for (const name of names) {
+    try {
+      const full = path.join(root, name);
+      if (fs.existsSync(full) && fs.statSync(full).size <= MAX_BYTES) {
+        return { name, text: fs.readFileSync(full, "utf8") };
+      }
+    } catch { /* unreadable — try the next candidate */ }
+  }
+  return null;
+}
+
+function readProductContext(root) {
+  const context = { readme: null, pkg: null, sampleDataFiles: [] };
+
+  // README: the first real prose paragraph (skip the title line and badges), capped short.
+  const readme = readFirst(root, ["README.md", "readme.md", "README", "README.txt", "docs/README.md"]);
+  if (readme) {
+    const para = readme.text
+      .split(/\n\s*\n/)
+      .map((block) => block.trim())
+      .find((block) => block && !/^#/.test(block) && !/^\[!\[/.test(block) && !/^!\[/.test(block));
+    if (para) context.readme = para.replace(/\s+/g, " ").slice(0, 600);
+  }
+
+  // package.json: name + description + a few keywords. Parse ONLY the manifest (it is JSON by spec).
+  const pkg = readFirst(root, ["package.json"]);
+  if (pkg) {
+    try {
+      const parsed = JSON.parse(pkg.text);
+      const manifest = {
+        name: typeof parsed.name === "string" ? parsed.name : null,
+        description: typeof parsed.description === "string" ? parsed.description : null,
+        keywords: Array.isArray(parsed.keywords) ? parsed.keywords.slice(0, 12) : [],
+      };
+      if (manifest.name || manifest.description || manifest.keywords.length) context.pkg = manifest;
+    } catch { /* a malformed manifest is not a product fact — skip it */ }
+  }
+
+  // Sample data files: a bare presence list (path + size), no parse. Signals the product's real
+  // domain shape (a leads.csv, a fixtures/*.json) the agent can go read on its own if it needs to.
+  const DATA_DIRS = ["data", "fixtures", "samples", "sample-data", "seed", "seeds", "mock", "mocks"];
+  const DATA_EXT = new Set([".csv", ".json", ".jsonl", ".tsv", ".yaml", ".yml"]);
+  for (const dir of DATA_DIRS) {
+    const full = path.join(root, dir);
+    let entries;
+    try {
+      if (!fs.existsSync(full) || !fs.statSync(full).isDirectory()) continue;
+      entries = fs.readdirSync(full, { withFileTypes: true });
+    } catch { continue; }
+    for (const entry of entries) {
+      if (context.sampleDataFiles.length >= 8) break;
+      if (!entry.isFile() || !DATA_EXT.has(path.extname(entry.name))) continue;
+      try {
+        const size = fs.statSync(path.join(full, entry.name)).size;
+        context.sampleDataFiles.push({ file: `${dir}/${entry.name}`, bytes: size });
+      } catch { /* unreadable — skip */ }
+    }
+  }
+
+  if (!context.readme && !context.pkg && context.sampleDataFiles.length === 0) return null;
+  return context;
+}
+
 function citation(root, file, lineIndex, text, label) {
   return {
     label,
@@ -196,6 +264,7 @@ export function scanRepo(inputRoot, options = {}) {
   }
 
   const winEventName = options.winEvent || "project_created";
+  const productContext = readProductContext(root);
   const files = walk(root);
   const analytics = [];
   const attribution = [];
@@ -341,6 +410,9 @@ export function scanRepo(inputRoot, options = {}) {
       "next.config.js", "next.config.mjs", "vite.config.ts", "svelte.config.js",
     ].filter((file) => fs.existsSync(path.join(root, file))),
     headline,
+    // Plain-words product picture from README/manifest/sample-data (LEAN read, Wave 1). Null when the
+    // repo carries none — the grounding stays honestly blind rather than inventing a description.
+    productContext,
     analytics: {
       wired: analyticsCitations.length > 0,
       providers,

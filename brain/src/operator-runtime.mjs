@@ -479,6 +479,11 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
   // authorizeGateRelease runs BEFORE the claim so a forbidden actor never strands the session mid-claim.
   session = saveOperatorSession({ ...session, status: "resolving_gate" }, options);
   const flow = flowFor(session, options);
+  // Same cwd + grounding threading as executeGraphRun: the gate-resume run re-drafts descendants, so it
+  // must read the founder's OWN repo (runCwd) and ground on the real scan report — never Drover's source
+  // or a hardcoded BLIND grounding.
+  const runCwd = options.cwd || flow.project?.sharedContext?.repository?.repo || process.cwd();
+  const runWorkspace = latestWorkspace(session, options);
   // The SECOND founder authorization for a microproduct deploy (GUARD 2), built host-side from the
   // SAME authorized release this gate just cleared. A deploy is heavier than a send, so a normal gate
   // approval does NOT ship a microproduct — the founder must explicitly confirm the deploy AT the gate
@@ -496,11 +501,12 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
     // Same researched buyer picture on the gate-resume run, so re-drafted descendants stay grounded.
     market: buildMarketContext(marketObjectStore.list({ ...options, projectId: session.projectId || "default" })),
     // Same product grounding + run history on the gate-resume run, so re-drafted descendants stay grounded.
-    grounding: buildRunGrounding(flow.project),
+    // The real scan report carries cited win event/attribution/gaps (BLIND only when no workspace is open).
+    grounding: buildRunGrounding(flow.project, runWorkspace?.report ?? null),
     runs: flow.runs,
     resumeResult: session.pendingGate.runResult,
     deployAuthorization,
-    stepRuntime: options.stepRuntime || liveStepRuntime({ cwd: options.cwd }),
+    stepRuntime: options.stepRuntime || liveStepRuntime({ cwd: runCwd }),
     // Live plain-language gate translator for any items re-staged on this resume. Auto-created only for a
     // real run: OFF when the caller passed options.gateTranslator, injected a fake stepRuntime, or scoped
     // the run to an isolated store root (options.root — every unit test does this; production never does),
@@ -508,7 +514,7 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
     // raw-subject fallback.
     gateTranslator: "gateTranslator" in options
       ? options.gateTranslator
-      : ((options.stepRuntime || options.root) ? null : createGateTranslator({ cwd: options.cwd })),
+      : ((options.stepRuntime || options.root) ? null : createGateTranslator({ cwd: runCwd })),
     loadLastRunItems: createDerivedSourceLoader({ ...options, projectId: session.projectId || "default" }),
     // BYO credentials: a founder-pasted key for this project wins over env; options carries the
     // persistence root so the stored key resolves from the same store the founder saved it in.

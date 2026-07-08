@@ -110,6 +110,14 @@ function narrateDone(node = {}, result = {}, count = 0) {
 
 async function executeGraphRun(session, { targetNodeId, stream = false } = {}, options = {}) {
   const flow = flowFor(session, options);
+  // The founder's OWN product repo is what every agent step must read — not Drover's repo. The routes
+  // launch/resume with no options.cwd, so without this the invoker fell back to process.cwd() (Drover's
+  // own source). Resolve it once from the founder's repo path (the same fallback chain the composer,
+  // product-modeler, and ideation paths already use) and thread it into every subprocess this run spawns.
+  const runCwd = options.cwd || flow.project?.sharedContext?.repository?.repo || process.cwd();
+  // The real scan report grounds the drafts on cited product truth (win event, attribution, gaps with
+  // their file:line citations) instead of a hardcoded BLIND grounding. Null when no workspace is scanned.
+  const runWorkspace = latestWorkspace(session, options);
   // When streaming is on (the autonomous compose_and_run drive), surface each step as it executes —
   // "running node X", "drafted N items", "reached the gate" — onto the durable session events so the
   // UI can animate progress instead of seeing one batch at the end. The events are persisted through
@@ -124,7 +132,7 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
   // narrator=null and keeps today's exact deterministic template strings (zero churn, no subprocess).
   const narrator = "teammateNarrator" in options
     ? options.teammateNarrator
-    : ((options.stepRuntime || options.root) ? null : createTeammateNarrator({ cwd: options.cwd }));
+    : ((options.stepRuntime || options.root) ? null : createTeammateNarrator({ cwd: runCwd }));
   // The founder-safe voice brief for one teammate in this project. Births a thin soul if needed so a
   // never-run teammate still narrates off its deterministic fallback. Any error → null (falls back to
   // the template), never a thrown error that breaks the streaming run.
@@ -206,12 +214,15 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
     // founder-typed guesses — a projection over the stored objects; null when none are researched.
     market: buildMarketContext(marketObjectStore.list({ ...options, projectId: session.projectId || "default" })),
     // Ground every subagent on the product it serves + what's already been tried, so operator-driven
-    // runs get the same product map and run history as the direct/streaming graph-run endpoints.
-    grounding: buildRunGrounding(flow.project),
+    // runs get the same product map and run history as the direct/streaming graph-run endpoints. The
+    // real scan report (when a workspace is open) carries the cited win event, attribution, and gaps —
+    // so the drafts are grounded on proven product truth, not a hardcoded BLIND grounding.
+    grounding: buildRunGrounding(flow.project, runWorkspace?.report ?? null),
     runs: flow.runs,
     // The live subscription-backed step runtime by default; a test injects a fake through
-    // options.stepRuntime so the open agent/skill/code steps run keyless.
-    stepRuntime: options.stepRuntime || liveStepRuntime({ cwd: options.cwd }),
+    // options.stepRuntime so the open agent/skill/code steps run keyless. cwd is the founder's OWN repo
+    // (runCwd) so an agent step reads the founder's product, never Drover's own source.
+    stepRuntime: options.stepRuntime || liveStepRuntime({ cwd: runCwd }),
     // The live plain-language gate translator. Auto-created only for a real run: it is OFF when the caller
     // passed an explicit options.gateTranslator, injected a fake stepRuntime (keyless run), or scoped the
     // run to an isolated store root (options.root — every unit test does this; production never does). So a
@@ -219,7 +230,7 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
     // connector still wraps in a timeout + raw-subject fallback.
     gateTranslator: "gateTranslator" in options
       ? options.gateTranslator
-      : ((options.stepRuntime || options.root) ? null : createGateTranslator({ cwd: options.cwd })),
+      : ((options.stepRuntime || options.root) ? null : createGateTranslator({ cwd: runCwd })),
     loadLastRunItems: createDerivedSourceLoader({ ...options, projectId: session.projectId || "default" }),
     // BYO credentials: a founder-pasted key for this project wins over env; options carries the
     // persistence root so the stored key resolves from the same store the founder saved it in.
@@ -233,7 +244,7 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
   // construction — a ref is never fabricated, and an item with nothing grounded gets no field. A run
   // with no product grounding is left exactly as-is. Runs before persistence so the stored run and the
   // pending-gate artifacts both carry the evidence the gate renders.
-  const evidenceWorkspace = latestWorkspace(session, options);
+  const evidenceWorkspace = runWorkspace ?? latestWorkspace(session, options);
   if (evidenceWorkspace?.report) annotateRunEvidence(result, evidenceWorkspace.report);
   const stored = recordFlowRun(flow.graph, result, options);
   // Bank the run's derivations (founder-gate taste signals, promotions) for their side effects.
@@ -500,14 +511,19 @@ export async function executeTool(session, tool, options = {}) {
         detail: seededShape ? `Building the founder's chosen shape for: ${goal}` : `Designing the channel for: ${goal}`,
         data: { goal },
       }, options);
-      const composeRepo = options.cwd || loadProject(options).sharedContext?.repository?.repo || process.cwd();
+      const composeProject = loadProject(options);
+      const composeRepo = options.cwd || composeProject.sharedContext?.repository?.repo || process.cwd();
       const composeFn = seededShape
         ? async () => ({ ok: true, nodes: seededShape.nodes, edges: Array.isArray(seededShape.edges) ? seededShape.edges : [] })
         : (options.compose || createClaudeComposer({ cwd: composeRepo }));
+      // The composer sees the SAME real product grounding a run does — the cited scan report when a
+      // workspace is open — so it composes against proven product truth instead of an empty {} .
+      const composeWorkspace = latestWorkspace(working, options);
       const composed = await composeNakedGraph({
         title: firstNonEmpty(input.title, seededShape?.label, goal),
         objective: goal,
         agents: Array.isArray(input.agents) ? input.agents : [],
+        grounding: buildRunGrounding(composeProject, composeWorkspace?.report ?? null),
       }, {
         ...options,
         compose: composeFn,
