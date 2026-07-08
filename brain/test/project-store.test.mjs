@@ -37,7 +37,6 @@ describe("multi-channel GTM project", () => {
     assert.equal(project.channels.length, 0);
     assert.equal(project.activeChannelId, null);
     assert.ok(project.sharedContext.product);
-    assert.ok(project.sharedContext.founderTaste);
   });
 
   it("creates, duplicates, updates, and activates founder-defined channels", () => {

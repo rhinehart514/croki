@@ -263,9 +263,11 @@ export const steerOperatorSession = (
   input: string,
   hints?: OperatorHints,
 ) =>
+  // The backend steer route reads the steering note off `note` (its param name), and `hints` for the
+  // @-mentioned crew. `projectId` is the session-ownership guard. The founder's typed message is the note.
   post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/steer`, {
     projectId,
-    input,
+    note: input,
     ...(hints ? { hints } : {}),
   });
 

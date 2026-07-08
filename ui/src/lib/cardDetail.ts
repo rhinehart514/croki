@@ -1,8 +1,8 @@
-// The rich card face the composer renders when a card is selected on the object graph — the detail
-// that used to live in the separate right-dock inspector, now folded into the top of the composer.
-// It's computed once in ObjectGraphCanvas from the SAME helpers the card itself uses (tone, evidence,
-// receipts, related, weakness) and threaded down inside the selection payload, so the composer never
-// re-derives product truth — it just displays what the canvas already decided.
+// The rich card face the composer renders when a card is selected on the graph — the detail that used
+// to live in the separate right-dock inspector, now folded into the top of the composer (ComposerDock).
+// It's computed from the SAME helpers the card itself uses (tone, evidence, receipts, related,
+// weakness) and threaded down inside the selection payload, so the composer never re-derives product
+// truth — it just displays what the canvas already decided.
 
 export type CardReceipt = {
   preview: string;

@@ -15,7 +15,9 @@ export default async function handle({ req, res, url }) {
   }
   // The live capability inventory the UI lane consumes: agents ∪ skills ∪ connected MCP tools, each
   // tool tagged with the lane it sits in. The same inventory injected into the compose prompt (Wave 4).
-  if (req.method === "GET" && url.pathname === "/api/capabilities") {
+  // Served at /api/capabilities/inventory — NOT /api/capabilities, which the graph routes already own for
+  // the connected-MCP-servers surface ({ servers }) and dispatch before this module (first match wins).
+  if (req.method === "GET" && url.pathname === "/api/capabilities/inventory") {
     json(res, 200, listCapabilities()); return true;
   }
   if (req.method === "GET" && url.pathname === "/api/artifact") {

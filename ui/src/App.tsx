@@ -2914,7 +2914,6 @@ export default function App() {
           // the "State a go-to-market goal" invitation points at a visible input, not a slim edge rail.
           startOpen={!canvasGraph && !operatorSession}
           recede={proposalActive}
-          boundChannelName={boundChannel?.name ?? null}
           subject={composerSubject}
           onClearSubject={() => setComposerSubject(null)}
           onRetargetSubject={handleRetargetSubject}
@@ -2941,13 +2940,6 @@ export default function App() {
           // Build-your-own-workflow retired: the composer composes via Claude, not a hand-pick picker.
           // You state a goal and Claude composes to the gate rather than wiring steps by hand.
           graph={graph}
-          runningNodeId={runningNodeId}
-          proposedNodeIds={proposedNodeIds}
-          result={runResult}
-          // The pencil on a plan-checklist step selects/opens it on the canvas.
-          onEditStep={(node) => selectInGraph(node.id, operatorSession?.graphId ?? null)}
-          // "Run to my gate" on the pre-run plan card runs the composed plan to the founder gate.
-          onRunPlan={() => void executeGraph()}
         /> : null}
       </div>
 

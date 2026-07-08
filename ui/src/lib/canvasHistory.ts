@@ -2,7 +2,7 @@
 //
 // This is the prerequisite for "Claude acts freely on the board, the founder undoes." Every structural
 // move on a pipeline's graph — add / move / connect / delete a node or edge — is captured here as a
-// reversible entry with a plain-English label ("Connected Buyer to Draft", "Added a gate"). BOTH the
+// reversible entry with a plain-English label ("Connected Research to Draft", "Added a gate"). BOTH the
 // founder's own edits (drag, connect, delete) and the crew's edits (the operator revising the board)
 // funnel through the same history, so an agent move is undoable exactly like a founder move.
 //
@@ -22,7 +22,7 @@ export type CanvasEditActor = { by: "you" } | { by: "claude"; agentRef?: string 
 
 export type CanvasEdit = {
   id: string;
-  label: string;            // plain-English receipt, e.g. "Connected Buyer to Draft"
+  label: string;            // plain-English receipt, e.g. "Connected Research to Draft"
   actor: CanvasEditActor;
   at: number;               // epoch ms
   before: GTMGraph;         // full snapshot to restore on undo

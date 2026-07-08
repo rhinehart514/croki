@@ -266,11 +266,9 @@ export type SharedContext = {
   // The project-level standing offer (price / unit / terms) — the default deal every pipeline's
   // drafts carry unless the pipeline states its own (ChannelMeta.offer).
   offer?: { price?: string; unit?: string; terms?: string; alternatives?: string[]; status?: string };
-  founderTaste: FounderTaste;
   contacts: Record<string, unknown>;
   // Structured claims — the source of truth `product.claims` projects from.
   claims: Claim[];
-  outcomes: unknown[];
   experiments: GtmExperiment[];
   artifacts: unknown[];
   productFeedback: unknown[];
@@ -339,15 +337,6 @@ export type GTMProject = {
   activeChannelId: string | null;
   sharedContext: SharedContext;
   channels: ChannelMeta[];
-};
-
-// Founder taste has a stable shape from its producer (project sharedContext); type it instead of
-// leaving it as a bag. It is read by SharedContext below.
-export type FounderTaste = {
-  approvedPatterns?: string[];
-  rejectedPatterns?: string[];
-  edits?: unknown[];
-  policies?: string[];
 };
 
 export type ProjectSummary = {
