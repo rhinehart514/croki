@@ -24,6 +24,7 @@ import {
   resolveOperatorProposal,
   resumeOperatorSession,
   runDueAmbientTicks,
+  steerOperatorSession,
 } from "../operator-runtime.mjs";
 import { runDueMotions } from "../promote-motion.mjs";
 import { selectRuntime, authModeLabel } from "../runtimes/index.mjs";
@@ -121,7 +122,7 @@ export default async function handle({ req, res, url }) {
     return true;
   }
 
-  const operatorActionMatch = url.pathname.match(/^\/api\/operator\/sessions\/([^/]+)\/(resume|gate-refine|gate|proposal|ideas|candidates|cancel)$/);
+  const operatorActionMatch = url.pathname.match(/^\/api\/operator\/sessions\/([^/]+)\/(resume|gate-refine|gate|proposal|ideas|candidates|steer|cancel)$/);
   if (req.method === "POST" && operatorActionMatch) {
     try {
       const body = await readBody(req);
@@ -150,6 +151,9 @@ export default async function handle({ req, res, url }) {
       // The founder picks ONE candidate pipeline — a founder act that builds the chosen shape through
       // compose_and_run and drives it to the gate. Never an agent tool.
       else if (action === "candidates") session = await resolveOperatorCandidates(sessionId, body);
+      // Mid-run steer: the founder redirects a running OR gated run with a note (reuses the refine
+      // mechanism — inject the steer, re-drive to a fresh gate). Never a release; nothing crosses the wall.
+      else if (action === "steer") session = steerOperatorSession(sessionId, body, { hints: body.hints });
       else session = cancelOperatorSession(sessionId);
       json(res, action === "gate" || action === "proposal" || action === "ideas" || action === "candidates" ? 200 : 202, { session: publicOperatorSession(session) });
     } catch (err) {

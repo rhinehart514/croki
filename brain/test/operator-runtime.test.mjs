@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import { defaultGraphTemplate } from "../src/graph.mjs";
 import { recordFlowRun, saveFlow } from "../src/flow-store.mjs";
 import { createOperatorSession, getOperatorSession, saveOperatorSession } from "../src/operator-store.mjs";
-import { operatorTools, resolveOperatorGate, resolveOperatorGateRefine, resolveOperatorProposal, runOperatorSession, operatorSessionStalled } from "../src/operator-runtime.mjs";
+import { operatorTools, resolveOperatorGate, resolveOperatorGateRefine, resolveOperatorProposal, runOperatorSession, operatorSessionStalled, steerOperatorSession } from "../src/operator-runtime.mjs";
 import { loadFlow } from "../src/flow-store.mjs";
 import { createProject, loadProject } from "../src/project-store.mjs";
 import { recallTaste } from "../src/operator-run-core.mjs";
@@ -362,6 +362,45 @@ describe("resident GTM operator runtime", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.ok(driven, "the operator re-drove after the rework instruction");
     assert.equal(getOperatorSession(session.id, options).status, "completed");
+  });
+
+  it("mid-run steer redirects a GATED run, re-drives, and releases nothing (Wave 5)", async () => {
+    let driven = null;
+    const fake = {
+      id: "cap", label: "Capture", isAvailable: () => ({ ok: true }),
+      drive: async (ctx) => { driven = ctx; return { kind: "completed", summary: "re-steered" }; },
+    };
+    const session = seedGatedSession();
+
+    const steered = steerOperatorSession(session.id, { note: "Focus on Buffalo operators only." }, { options, runtime: fake });
+
+    assert.equal(steered.status, "ready", "leaves the gate to fold in the steer");
+    assert.equal(steered.pendingGate, null, "the gate pause is cleared for the re-drive");
+    const msg = (steered.modelMessages ?? []).at(-1);
+    assert.equal(msg.role, "user");
+    assert.match(msg.content, /steering the run mid-flight/i);
+    assert.match(msg.content, /Focus on Buffalo operators only\./);
+    // Releases nothing — no gate resolution, no new run id.
+    assert.ok(steered.events.some((e) => e.type === "founder_steered_run"));
+    assert.ok(!steered.events.some((e) => e.type === "gate_resolved"), "steer must not release the gate");
+    assert.equal(steered.lastRunId, "run-x", "no send happened");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.ok(driven, "the operator re-drove with the steer folded in");
+  });
+
+  it("mid-run steer works on a READY (non-gated) session and rejects a terminal one", async () => {
+    const fake = { id: "cap", label: "Capture", isAvailable: () => ({ ok: true }), drive: async () => ({ kind: "completed", summary: "ok" }) };
+    const ready = createOperatorSession({ goal: "Working.", graphId: defaultGraphTemplate().id }, options);
+    saveOperatorSession({ ...getOperatorSession(ready.id, options), status: "ready" }, options);
+    const steered = steerOperatorSession(ready.id, { note: "Try a warmer opener." }, { options, runtime: fake });
+    assert.equal(steered.status, "ready");
+    assert.match((steered.modelMessages ?? []).at(-1).content, /Try a warmer opener\./);
+
+    // A blank note is refused, and a terminal session cannot be steered.
+    assert.throws(() => steerOperatorSession(ready.id, { note: "  " }, { options }), /steering note is required/i);
+    const done = createOperatorSession({ goal: "Done.", graphId: defaultGraphTemplate().id }, options);
+    saveOperatorSession({ ...getOperatorSession(done.id, options), status: "completed" }, options);
+    assert.throws(() => steerOperatorSession(done.id, { note: "too late" }, { options }), /already completed/i);
   });
 
   it("rejects a refine for an unknown item or a non-waiting session", async () => {

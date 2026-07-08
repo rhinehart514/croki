@@ -628,6 +628,48 @@ export async function resolveOperatorGateRefine(id, payload = {}, runtime = {}) 
   return next;
 }
 
+// Mid-run steer — the founder redirects a run that is either mid-flight (running/ready) OR paused at
+// the gate, without vetoing one specific item the way refine does. It generalizes resolveOperatorGateRefine:
+// same "inject a founder message into modelMessages and re-drive" mechanism, but graph-wide (no itemKey,
+// no per-item framing) and it accepts more states. NOT a release: it never calls authorizeGateRelease,
+// never crosses the wall — the crew re-drives with the steer folded in and comes back to the founder gate.
+// A gated session leaves the gate (pendingGate cleared) so the re-drive re-stages a fresh batch; a running
+// or ready session simply takes the steer on its next turn. Terminal sessions (completed/cancelled) can't
+// be steered — resume them instead.
+export function steerOperatorSession(id, payload = {}, runtime = {}) {
+  const options = runtime.options ?? {};
+  const session = getOperatorSession(id, options);
+  if (["completed", "cancelled"].includes(session.status)) {
+    throw new Error(`This session is already ${session.status} — start or resume a run rather than steering it.`);
+  }
+  const note = typeof payload.note === "string" ? payload.note.trim()
+    : typeof payload.founderNote === "string" ? payload.founderNote.trim() : "";
+  if (!note) throw new Error("A steering note is required.");
+  const hintsSuffix = formatOperatorHints(runtime.hints);
+  const next = addEvent({
+    ...session,
+    // Leaving any gate/pause behind so the re-drive folds in the steer and returns to a fresh gate.
+    status: "ready",
+    pendingGate: null,
+    pendingQuestion: null,
+    error: null,
+    maxSteps: Math.min(60, Math.max(session.maxSteps, session.stepCount + 12)),
+    modelMessages: [
+      ...(session.modelMessages ?? []),
+      {
+        role: "user",
+        content: `The founder is steering the run mid-flight: ${note}${hintsSuffix} Fold this into the work in progress — adjust course, keep what still fits, and bring the batch back to the founder gate. Do not send, publish, or approve anything — the founder releases at the gate.`,
+      },
+    ],
+  }, {
+    type: "founder_steered_run",
+    title: "Founder steered the run",
+    detail: note,
+  }, options);
+  launchOperatorSession(id, runtime);
+  return next;
+}
+
 // The founder accepts or discards a staged graph proposal. Accept applies the exact reviewed
 // operations to the current graph and resumes the operator; discard drops them and resumes the
 // operator told not to reapply. Mirrors resolveOperatorGate: founder-only, never an agent tool.

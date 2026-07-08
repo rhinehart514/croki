@@ -76,8 +76,16 @@ describe("composer fast-lane routes — briefing read + turn", () => {
     const out = await res.json();
     assert.equal(out.mode, "fast");
     assert.equal(out.intent, "status");
-    assert.equal(out.answer, "Nothing is waiting at your gate, and no pipeline has run yet.");
+    // Wave 5: the ANSWER is now crew-written from the briefing (voiced), not the raw summary string.
+    // The raw honest briefing still rides back on out.briefing for the UI. Either the model wrote a
+    // real answer, or (no subscription) it fell back to that exact honest line — both are non-empty.
+    assert.ok(typeof out.answer === "string" && out.answer.length > 0, "a voiced status answer");
     assert.ok(out.briefing && typeof out.briefing === "object", "a status turn carries the raw briefing");
+    assert.equal(
+      out.briefing.summary,
+      "Nothing is waiting at your gate, and no pipeline has run yet.",
+      "the raw briefing summary is still the deterministic honest line",
+    );
 
     // THE PROOF: no autonomous session was created by answering a status question.
     assert.equal(listOperatorSessions({}).length, before, "the status turn created no session");
@@ -101,16 +109,19 @@ describe("composer fast-lane routes — briefing read + turn", () => {
     assert.equal(listOperatorSessions({}).length, before, "the act turn created no session");
   });
 
-  it("POST /api/operator/turn with an empty input still classifies to a drive default, never a rejection (no cage)", async () => {
+  it("POST /api/operator/turn with an empty input is answered, never rejected (no cage)", async () => {
     const res = await fetch(`${base}/api/operator/turn`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ input: "", allowDrive: false }),
     });
-    assert.equal(res.status, 202);
+    // Wave 5: empty/ambiguous input is a low-confidence catch-all, so it becomes a real conversational
+    // turn (a fast answer) rather than silently driving the builder. The no-cage property is intact —
+    // it is answered, never rejected with an error or forced into a fixed taxonomy.
+    assert.equal(res.status, 200);
     const out = await res.json();
-    assert.equal(out.mode, "drive");
-    assert.equal(out.intent, "act", "ambiguous/empty defaults to act — never a rejection or a fixed taxonomy");
-    assert.equal(out.session, null);
+    assert.equal(out.mode, "fast");
+    assert.equal(out.intent, "converse", "ambiguous/empty is a chat turn, not a silent build");
+    assert.ok(typeof out.answer === "string" && out.answer.length > 0, "the founder still gets a reply");
   });
 });
