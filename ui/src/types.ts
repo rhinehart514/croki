@@ -694,6 +694,10 @@ export type GTMNodeResult = {
   // gate-specific: pending founder review
   pendingReview?: boolean;
   contractAudit?: GTMContractAudit;
+  // The model's own plain-language account of what it figured out on this step — "what I learned / why I
+  // did this". Surfaced on the opened card as a short "what [teammate] figured out" beat. Absent on
+  // deterministic (tool/code) steps and on any run the backend didn't stamp it on — render-if-present.
+  reasoning?: string;
 };
 
 export type GraphOperation =

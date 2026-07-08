@@ -3143,6 +3143,14 @@ svg {
 }
 .loop-node-editor-desc { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ink); }
 .loop-node-editor-hint { margin: 0; font-size: 11px; line-height: 1.45; color: var(--muted); }
+/* The teammate's own account of a finished step — a calm, readable beat, same register as the lane's
+   live reasoning line. Opaque, no decoration; it's prose the founder reads, not a status chip. */
+.loop-node-editor-reasoning {
+  margin: 0; font-size: 11.5px; line-height: 1.55; color: var(--ink);
+  white-space: pre-wrap;
+  border-left: 2px solid var(--line-2);
+  padding-left: 8px;
+}
 .loop-node-editor-fileline { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
 .loop-node-editor-filelabel { font-size: 11px; color: var(--muted); flex: none; }
 .loop-node-editor-ref {
@@ -3372,6 +3380,21 @@ svg {
   color: var(--ink);
   letter-spacing: -0.012em;
 }
+
+/* The live per-node narrator — while a step runs, its teammate's newest first-person beat reads right
+   here, so the founder watches what's actually happening instead of a faceless spinner. Two lines max,
+   then clamps; the spinner icon keeps it reading as "in motion". Recedes when the step finishes. */
+.loop-node-beat {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.loop-node-beat .spin { vertical-align: -1px; margin-right: 4px; }
 
 /* The ref/connector is a technical identifier, not the headline. It rides as a faint, single-line
    mono caption — recessive enough to never compete with the title, truncated so a long slug can't

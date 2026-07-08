@@ -2143,6 +2143,24 @@ export default function App() {
     return null;
   }, [proposalActive, proposalRevealOrder, revealCount, graphRunning, runningNodeId, operatorSession?.status, operatorSession?.pendingGate]);
 
+  // The live per-node narrator: the crew's own first-person heartbeat ("teammate_said" beats), keyed by
+  // the node it was narrating. A running step then shows what its teammate is actually doing RIGHT NOW,
+  // in the model's words, instead of an anonymous spinner. Latest beat per node wins (a later beat
+  // supersedes an earlier one on the same step). Render-if-present: a beat without a nodeId is skipped,
+  // and when the backend stamps none the map is empty and the card falls back to the plain spinner.
+  const nodeBeats = useMemo<Record<string, string>>(() => {
+    const events = operatorSession?.events ?? [];
+    const out: Record<string, string> = {};
+    for (const ev of events) {
+      if (ev.type !== "teammate_said") continue;
+      const nodeId = (ev.data as { nodeId?: unknown } | null)?.nodeId;
+      if (typeof nodeId !== "string" || !nodeId) continue;
+      const beat = (ev.detail ?? ev.title ?? "").trim();
+      if (beat) out[nodeId] = beat; // events are chronological, so the last write is the newest beat
+    }
+    return out;
+  }, [operatorSession?.events]);
+
   // ── View-control channel (composer → canvas) ──────────────────────────────────
   // The operator's current focus, DERIVED from session state — the stable decision node it's resting
   // on: a staged proposal's lead ghost (where the inline ✓/✕/note sits), or the node a paused run is
@@ -2205,6 +2223,7 @@ export default function App() {
     result: runResult,
     running: graphRunning,
     runningNodeId,
+    nodeBeats,
     selection,
     onSelect: handleCanvasSelect,
     onPaneClick: dismissOverlays,
@@ -2263,7 +2282,7 @@ export default function App() {
     // Empty-canvas landing: focus the goal composer so a fresh product starts by stating an outcome.
     onComposeFirst: () => setComposerFocus((f) => f + 1),
   }), [
-    canvasGraph, connectors, contractAudits, runResult, graphRunning, runningNodeId, selection,
+    canvasGraph, connectors, contractAudits, runResult, graphRunning, runningNodeId, nodeBeats, selection,
     dismissOverlays, proposedNodeIds, proposedEdgeIds, revealedNodeIds, proposalActive, operatorCursor,
     handleResolveProposal, submitGateReview, approveGate, handleAddNode, handleGraphConnect, handleDeleteEdges,
     handleNodePositionChange, flowRuns, runNode, updateGraph, handleDeleteNode, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, recordItemOutcome, refineGateItem, runSummary,

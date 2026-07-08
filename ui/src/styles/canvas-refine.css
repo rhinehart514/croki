@@ -433,6 +433,27 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The whole record, opened in place — the full item, not the clipped preview. Wraps and preserves the
+   draft's own line breaks so a founder reads the real thing. */
+.rec-row-full {
+  font-size: 11px;
+  color: var(--ink, #18181b);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.rec-row-more {
+  align-self: flex-start;
+  margin-top: 2px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted, #71717a);
+  cursor: pointer;
+}
+.rec-row-more:hover { color: var(--ink, #18181b); }
 
 /* ═══ Stage silhouettes — read the pipeline from shape (Direction B) ══════════════
    Each GTM stage becomes a distinct OBJECT so a founder reads find → enrich → draft →

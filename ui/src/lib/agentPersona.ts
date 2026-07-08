@@ -78,12 +78,40 @@ function monogramOf(role: string): string {
   return role.slice(0, 2).toUpperCase();
 }
 
-export function agentPersona(ref: string, job?: string): AgentPersona {
-  // Match on the agent's own ref FIRST — its identity — so a specific agent is never relabeled by an
-  // incidental keyword in its job text. A discovery DRAFTER whose job mentions "qualified", or a claim
-  // AUDITOR whose job mentions "first-contact", used to collide onto "Qualification Analyst" /
-  // "First-Contact Writer" and show a duplicate name on the bench. Only when the ref matches no rule do
-  // we fall back to ref + job, so a vague ref still lands by what the job says it does.
+// A model-given / founder-chosen name is a REAL name the moment it exists and isn't just the raw ref
+// wearing kebab clothes. "Prospect Researcher" or "Aria" is a name; "gtm-find-prospects" is not — that's
+// the ref, and it must still run through the regex table. This gate is what lets a persisted name win
+// WITHOUT letting the ref itself sneak in as a title.
+function isRealName(name: string | undefined, ref: string): name is string {
+  const n = (name ?? "").trim();
+  if (!n) return false;
+  if (n.toLowerCase() === ref.toLowerCase()) return false; // the ref echoed as the label — not a real name
+  // A kebab/snake identifier with no spaces reads as a ref, not a written name.
+  if (!/\s/.test(n) && /^[a-z0-9]+(?:[-_][a-z0-9]+)+$/i.test(n)) return false;
+  return true;
+}
+
+// Best-effort family for a named agent — the name won the ROLE, but the tint still wants a meaning, so
+// the regex table is consulted for the family only (falling back to general). The name never loses.
+function familyOf(ref: string, name: string): AgentFamily {
+  const hay = `${ref} ${name}`.toLowerCase();
+  return RULES.find((r) => r.test.test(hay))?.family ?? "general";
+}
+
+export function agentPersona(ref: string, job?: string, name?: string): AgentPersona {
+  // A persisted, model-given / founder-chosen NAME wins outright — the 17-regex table is the LAST resort,
+  // not the first. This is the inversion: a well-named agent ("Prospect Researcher", a founder's "Aria")
+  // is shown exactly as named and is NEVER relabeled by an incidental keyword the regex table happens to
+  // catch. The regex only decides the family tint here, never the role.
+  if (isRealName(name, ref)) {
+    const role = name.trim();
+    return { role, family: familyOf(ref, role), monogram: monogramOf(role) };
+  }
+  // No real name → derive one. Match on the agent's own ref FIRST — its identity — so a specific agent is
+  // never relabeled by an incidental keyword in its job text. A discovery DRAFTER whose job mentions
+  // "qualified", or a claim AUDITOR whose job mentions "first-contact", used to collide onto
+  // "Qualification Analyst" / "First-Contact Writer". Only when the ref matches no rule do we fall back to
+  // ref + job, so a vague ref still lands by what the job says it does; and the raw ref is the final floor.
   const refHay = ref.toLowerCase();
   const match = RULES.find((r) => r.test.test(refHay))
     ?? RULES.find((r) => r.test.test(`${refHay} ${(job ?? "").toLowerCase()}`));
