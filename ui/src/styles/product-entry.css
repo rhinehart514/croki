@@ -133,6 +133,14 @@
   line-height: 1.45;
   color: var(--muted);
 }
+.pentry-reading-text { flex: 1 1 auto; }
+.pentry-reading-elapsed {
+  flex: none;
+  margin-top: 1px;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--faint);
+}
 .pentry-reading-spin { flex: none; margin-top: 1px; color: var(--faint); animation: pentry-spin 0.9s linear infinite; }
 @keyframes pentry-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .pentry-reading-spin { animation: none; } }

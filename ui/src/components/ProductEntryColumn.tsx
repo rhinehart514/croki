@@ -32,6 +32,19 @@ export function ProductEntryColumn({
 }) {
   const [open, setOpen] = useState(true);
 
+  // Honest progress for the read: it's one open-ended pass (the model decides how many files to open),
+  // so there is no truthful percentage to show. What IS real is how long it has been working — a live
+  // elapsed counter so the read reads as alive-and-working, never a hung spinner. Resets each read.
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!deriving) { setElapsed(0); return; }
+    setElapsed(0);
+    const started = Date.now();
+    const id = window.setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => window.clearInterval(id);
+  }, [deriving]);
+  const elapsedLabel = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`;
+
   // The column is an absolute overlay pinned to the canvas's left edge (mounted as a sibling of the
   // canvas, so it can't reserve space by layout). Publish the gutter it currently occupies as a CSS
   // variable on the document root; the GTM canvas panes read it and pad their left edge by exactly this
@@ -101,7 +114,8 @@ export function ProductEntryColumn({
       ) : deriving ? (
         <div className="pentry-reading" role="status">
           <Loader2 className="pentry-reading-spin" size={15} aria-hidden="true" />
-          <span>Reading your product… mapping where real wins come from.</span>
+          <span className="pentry-reading-text">Reading your product… mapping where real wins come from.</span>
+          <span className="pentry-reading-elapsed" aria-label={`Reading for ${elapsedLabel}`}>{elapsedLabel}</span>
         </div>
       ) : (
         <p className="pentry-empty">

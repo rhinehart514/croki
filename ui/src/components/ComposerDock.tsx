@@ -660,12 +660,14 @@ function voiceForRef(ref: string | null | undefined, bench: AgentBenchRow[] | nu
   const persona = agentPersona(resolved, row?.job);
   return { ref: resolved, job: row?.job, name: nameHint?.trim() || row?.name?.trim() || persona.role, role: persona.role };
 }
-// The session-level voice for a `say` turn — the first real teammate in the running graph, else the
-// founder's first bench teammate, else a stable crew identity.
+// The session-level voice for a `say` turn. Only a teammate ACTUALLY in the running pipeline speaks as
+// themselves — the specialist doing the work. General chat with no running pipeline is the whole crew
+// talking, voiced as "Your crew", NEVER an arbitrary specialist plucked off the bench (which is how a
+// tone auditor ended up fielding a go-to-market strategy question).
 function sessionVoice(graph: GTMGraph | null, bench: AgentBenchRow[] | null): CrewVoice {
   const agentNode = graph?.nodes.find((n) => n.kind === "agent" && n.ref);
-  const ref = agentNode?.ref ?? bench?.find((b) => b.ref)?.ref ?? "gtm-compose-workflow";
-  return voiceForRef(ref, bench);
+  if (agentNode?.ref) return voiceForRef(agentNode.ref, bench);
+  return { ref: "gtm-compose-workflow", name: "Your crew", role: "Your crew" };
 }
 
 // A friendly clock stamp ("9:14 AM") from an ISO timestamp — for receipts and turn times.

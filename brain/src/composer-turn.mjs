@@ -4,6 +4,7 @@ import { classifyComposerIntent } from './composer-router.mjs';
 import { resumeOperatorSession } from './operator-runtime.mjs';
 import { getOperatorSession } from './operator-store.mjs';
 import { getProductModel } from './product-model-store.mjs';
+import { loadProject } from './project-store.mjs';
 
 // The composer is chat-first, not a keyword switchboard. The classifier is DEMOTED to a fast shortcut
 // that only fires on an UNAMBIGUOUS mechanical lookup — a confident, clearly-shaped status/explain ask,
@@ -106,6 +107,11 @@ async function buildConverseAnswer({ projectId, sessionId, text }, { query, buil
   const briefing = safe(() => buildBriefing({ projectId }, options));
   const model = safe(() => productModel(projectId || 'default', options));
   const history = recentHistory(sessionId, options);
+  // The product the crew is working on, BY NAME, from the authoritative project record — not inferred
+  // from the (often name-less) product model. Without this the crew has no product name in context and
+  // guesses the venture, which is how a founder on LocalSeoData got answered about a different company.
+  const project = safe(() => loadProject({ ...options, projectId }));
+  const productName = project?.name || model?.name || null;
   const fallback = (briefing && briefing.summary)
     || "I'm here — tell me what you want to do and I'll get the crew on it.";
   try {
@@ -114,6 +120,9 @@ async function buildConverseAnswer({ projectId, sessionId, text }, { query, buil
       `directly and in plain language, in the crew's own voice. You have read tools if you need to look`,
       `something up. Never claim to have sent, published, or approved anything — the founder releases at`,
       `the gate. Do not invent product facts, customers, or metrics.`,
+      productName
+        ? `\nThe product you are working on is "${productName}". Every answer is about THIS product only. Never assume, name, or switch to a different venture — when the founder says "this", they mean ${productName}.`
+        : `\nYou do not yet know which product this is. If the founder refers to "this" or their product, ask which one rather than guessing or naming a venture.`,
       `\nFounder's message:\n${text}`,
       briefing ? `\nWhere every pipeline stands right now:\n${briefing.summary}` : '',
       model ? `\nThe product you serve (its model):\n${compactModel(model)}` : '',
