@@ -18,7 +18,6 @@ import {
   gateItemEvidenceLines,
 } from "@/lib/gateItem";
 import type { GateEvidenceLine, GatePromote } from "@/lib/gateItem";
-import { gateReel } from "@/lib/gateReel";
 import type { GateDecision, GTMItem, GTMRunResult } from "@/types";
 import "@/styles/canvas-gate.css";
 
@@ -30,6 +29,15 @@ function splitSentences(text: string): string[] {
 }
 
 const normalizeClaim = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+
+// The primary button names the real-world effect, not "Approve". Derived deterministically from what the
+// item says a yes does (or the subject) so the founder reads the consequence off the button: a social post
+// reads "Post it", anything else reads "Send it". Deterministic code, never a model call.
+function deriveSendVerb(...hints: (string | null | undefined)[]): string {
+  const text = hints.filter(Boolean).join(" ").toLowerCase();
+  if (/\b(post|publish|tweet|thread)\b|linkedin/.test(text)) return "Post it";
+  return "Send it";
+}
 
 // The draft body with its claims made tappable against the scan. When the item carries evidence_lines,
 // each sentence that matches a grounded claim reads at full ink and unfolds its ref (path:line) inline
@@ -76,9 +84,11 @@ function EvidenceBody({ text, evidence }: { text: string; evidence: GateEvidence
 // preview with a fade, and opens fully on demand. Short drafts render whole, unchanged. The founder
 // scans the pile, then reads in full only the one they're deciding on.
 const LONG_BODY_CHARS = 300;
-function CardBody({ text, evidence }: { text: string; evidence: GateEvidenceLine[] }) {
+function CardBody({ text, evidence, clamp = true }: { text: string; evidence: GateEvidenceLine[]; clamp?: boolean }) {
   const [open, setOpen] = useState(false);
-  if (text.length <= LONG_BODY_CHARS) return <EvidenceBody text={text} evidence={evidence} />;
+  // Pure-decision gate: the message IS the decision, so the call you're on shows it whole — no
+  // "Read full draft" click. Clamping stays only for the compact in-node bloom, where cards are dense.
+  if (!clamp || text.length <= LONG_BODY_CHARS) return <EvidenceBody text={text} evidence={evidence} />;
   return (
     <div className="cgate-body-collapse">
       <div className={cn("cgate-body-clip", !open && "is-clamped")}>
@@ -337,31 +347,6 @@ function reviewableFields(fields: { label: string; value: string }[]): { label: 
     .map((f) => ({ label: humanizeFieldLabel(f.label), value: f.value }));
 }
 
-// The reel — "how your crew got here". A left-to-right row of the concrete things the crew DID on this
-// run, each traced to a REAL executed step (gateReel), attributed to the teammate that ran it, and
-// checked off like a finished run. Nothing is narrated: an empty run yields no steps and the band hides
-// itself, so the reel never invents a story the run didn't produce.
-function GateReel({ run }: { run?: GTMRunResult | null }) {
-  const steps = gateReel(run);
-  if (!steps.length) return null;
-  return (
-    <div className="cgate-reel" aria-label="How your crew got here">
-      <div className="cgate-reel-head">How your crew got here</div>
-      <ol className="cgate-reel-steps">
-        {steps.map((s, i) => (
-          <li className="cgate-reel-step" key={i} style={{ animationDelay: `${i * 0.06}s` }}>
-            <span className="cgate-reel-check" aria-hidden><Check size={11} /></span>
-            <span className="cgate-reel-who">{s.teammate}</span>
-            <span className="cgate-reel-did">
-              {s.verb}{s.count != null ? <> <b className="tnum">{s.count}</b></> : null} {s.object}
-            </span>
-          </li>
-        ))}
-      </ol>
-    </div>
-  );
-}
-
 // The founder gate, ON the canvas. When a run pauses at a gate, its staged drafts bloom out of the
 // gate node as first-class cards you read and decide in place — approve / edit-then-approve / reject —
 // instead of bouncing to a side rail. Each decision calls onSubmit (the node-bound onSubmitReview),
@@ -372,9 +357,10 @@ const GATE_CARD_CAP = 6;
 // Fields the reasoning rail owns in stage mode — dropped from the decision card there so the two halves
 // don't say the same thing twice (labels are compared lowercased, post-humanize).
 const REASON_OWNED_LABELS = new Set(["verdict", "composite score", "score", "dimensions", "dimension", "dims"]);
-export function GateReview({ items, run, onSubmit, learned, promote, offer, onRecordOutcome, onRefineItem, variant = "bloom" }: {
+export function GateReview({ items, onSubmit, learned, promote, offer, onRecordOutcome, onRefineItem, variant = "bloom" }: {
   items: GTMItem[];
-  // The full run — only the stage variant reads it, to render the reel of what the crew did to get here.
+  // The full run. Retained on the props for callers, but the pure-decision room no longer renders a reel
+  // from it — watchability lives on the run surface, not stacked on the gate.
   run?: GTMRunResult | null;
   // "bloom" (default) is the compact in-node review — unchanged. "stage" is the immersive, watchable gate:
   // a reel of the crew's real steps across the top, then big plain-language decision cards. The decision
@@ -511,16 +497,20 @@ export function GateReview({ items, run, onSubmit, learned, promote, offer, onRe
         <span className="cgate-review-count">
           {bloom.length === 0
             ? "Everything here cleared — nothing needs your eyes"
-            : exceptionCount > 0
-              ? `${exceptionCount} exception${exceptionCount === 1 ? "" : "s"} for your eyes · nothing sends until you approve`
-              : `${bloom.length} staged · nothing sends until you approve`}
+            : lean
+              ? `${bloom.length} to decide · nothing sends until you say so`
+              : exceptionCount > 0
+                ? `${exceptionCount} exception${exceptionCount === 1 ? "" : "s"} for your eyes · nothing sends until you approve`
+                : `${bloom.length} staged · nothing sends until you approve`}
         </span>
-        {learned > 0 ? (
+        {/* Pure-decision gate: the taste counter and the offer line are context, not the call — they
+            leave the decision room. Both stay on the compact bloom, which is a working surface. */}
+        {learned > 0 && !lean ? (
           <span className="cgate-review-taste" title="Drafted from your past gate decisions">
             <Sprout size={9} aria-hidden /> tuned by {learned} of your calls
           </span>
         ) : null}
-        {offer ? (
+        {offer && !lean ? (
           <p className="cgate-review-offer">The deal this work carries: {offer}</p>
         ) : null}
         {error ? <p className="cgate-review-error" role="alert">{error}</p> : null}
@@ -541,8 +531,11 @@ export function GateReview({ items, run, onSubmit, learned, promote, offer, onRe
             // keyed off the item's durable provenance id (its Phase-5 joinKey when one was minted, else
             // the gtmActionId the gate stamps on every item). Only when the host wired the door AND the
             // item carries one of those ids to join the outcome back on.
+            // Pure-decision gate: recording an outcome belongs when the reply/meeting/signup actually
+            // arrives, not bolted to the instant you approve — so the lean room omits it. The capability
+            // stays wired for the compact bloom and the outcome surface; it just doesn't clutter the call.
             const itemIds = item as { joinKey?: unknown; gtmActionId?: unknown };
-            const canRecord = state === "approve" && !!onRecordOutcome && (!!itemIds.joinKey || !!itemIds.gtmActionId);
+            const canRecord = !lean && state === "approve" && !!onRecordOutcome && (!!itemIds.joinKey || !!itemIds.gtmActionId);
             const decidedTitle = (lean && typeof item.plainLanguageTitle === "string" && item.plainLanguageTitle.trim())
               ? item.plainLanguageTitle : v.subject;
             const verdictLabel = state === "approve" ? "Accepted" : state === "refine" ? "Reworking with the crew…" : "Returned";
@@ -583,6 +576,7 @@ export function GateReview({ items, run, onSubmit, learned, promote, offer, onRe
             ? item.plainLanguageTitle : v.subject;
           const yesDoes = (lean && typeof item.whatYourYesDoes === "string" && item.whatYourYesDoes.trim())
             ? item.whatYourYesDoes : null;
+          const sendVerb = deriveSendVerb(yesDoes, cardTitle, v.body);
           return (
             <div className={cn("cgate-card", lean && "cgate-card-stage", isException && "is-exception")} key={key}>
               <span className="cgate-card-to">
@@ -623,7 +617,7 @@ export function GateReview({ items, run, onSubmit, learned, promote, offer, onRe
                   return (
                     <>
                       {v.body ? (
-                        <div className="cgate-card-artifact"><CardBody text={v.body} evidence={evidence} /></div>
+                        <div className="cgate-card-artifact"><CardBody text={v.body} evidence={evidence} clamp={false} /></div>
                       ) : detailRows.length === 0 ? (
                         // No message and no detail — surface the who/trigger inline so the card isn't blank.
                         <div className="cgate-card-prospect">
@@ -711,15 +705,15 @@ export function GateReview({ items, run, onSubmit, learned, promote, offer, onRe
               ) : lean ? (
                 <div className="cgate-card-actions cgate-card-actions-stage">
                   <button className="cgate-approve" type="button" disabled={busy} onClick={() => void decide(key, "approve")}>
-                    <Check size={12} aria-hidden /> Approve
+                    <Check size={12} aria-hidden /> {sendVerb}
                   </button>
                   {onRefineItem ? (
                     <button className="cgate-sendback" type="button" disabled={busy} onClick={() => setRefining({ key, text: "" })}>
-                      <CornerDownLeft size={12} aria-hidden /> Send back to refine
+                      <CornerDownLeft size={12} aria-hidden /> Send back
                     </button>
                   ) : (
                     <button className="cgate-reject" type="button" disabled={busy} onClick={() => void decide(key, "reject")}>
-                      <CornerDownLeft size={12} aria-hidden /> Return
+                      <CornerDownLeft size={12} aria-hidden /> Send back
                     </button>
                   )}
                   <button className="cgate-edit" type="button" disabled={busy} onClick={() => setEditing({ key, text: v.body ?? "" })}>
@@ -785,9 +779,10 @@ export function GateReview({ items, run, onSubmit, learned, promote, offer, onRe
         </div>
       ) : null}
 
-      {/* Promote by Replay — the autonomy ladder, on the gate. Present only for the focused pipeline
-          (the host wires it), so the founder promotes standing approval right where the wall lives. */}
-      {promote ? (
+      {/* Promote by Replay — the autonomy ladder. It's a property of the PIPELINE, set once, not part of
+          any single call, so the pure-decision room drops it — it belongs on a per-pipeline control. Kept
+          on the compact bloom, which is a working surface where standing-approval context earns its place. */}
+      {promote && !lean ? (
         <GatePromotePanel promote={promote} cleanCount={cleanTotal} exceptionCount={exceptionCount} />
       ) : null}
     </div>
@@ -796,9 +791,10 @@ export function GateReview({ items, run, onSubmit, learned, promote, offer, onRe
   // the crew did to get here across the top, then the same decision cards below. One decision path, two
   // framings — the immersive stage never forks the wall's logic.
   if (variant === "stage") {
+    // Pure-decision gate: the crew reel (the step-by-step strip) is watchability, not the call — it
+    // belongs on the run, not stacked on top of every yes/no. The room is the decision and nothing else.
     return (
       <div className="cgate-stage" onClick={(e) => e.stopPropagation()}>
-        <GateReel run={run} />
         {reviewBody}
       </div>
     );

@@ -75,7 +75,7 @@ describe("ComposerDock — gate in chat", () => {
     fireEvent.click(button);
 
     // The GateReview stage's count lead proves the review opened (not the summary card, not an empty stage).
-    expect(screen.getByText(/2 staged · nothing sends until you approve/i)).toBeTruthy();
+    expect(screen.getByText(/2 to decide · nothing sends until you say so/i)).toBeTruthy();
     // The staged draft body renders — the founder is now reading the real work in the thread.
     expect(screen.getByText(/saw your launch/i)).toBeTruthy();
   });
@@ -95,7 +95,7 @@ describe("ComposerDock — gate in chat", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /review & send/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^approve$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^send it$/i }));
 
     const key = itemKey(items[0], 0);
     expect(onSubmitGateReview).toHaveBeenCalledWith(GATE_ID, { [key]: { decision: "approve" } });
@@ -138,8 +138,8 @@ describe("ComposerDock — gate in chat", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /review & send/i }));
-    // With onRefineItem passed, the stage card offers "Send back to refine" instead of a bare Return.
-    fireEvent.click(screen.getByRole("button", { name: /send back to refine/i }));
+    // With onRefineItem passed, the stage card offers "Send back" (routes to the crew) instead of a bare Return.
+    fireEvent.click(screen.getByRole("button", { name: /^send back$/i }));
     const note = screen.getByPlaceholderText(/make the opening less salesy/i) as HTMLTextAreaElement;
     fireEvent.change(note, { target: { value: "warmer opener please" } });
     // Scope to the refine card so a stray composer "Send" control never matches.

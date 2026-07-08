@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, it } from "node:test";
 import { run } from "../src/connectors/execute/http.mjs";
-import { setCredential } from "../src/credential-store.mjs";
+import { setCredential, removeCredential } from "../src/credential-store.mjs";
 
 // Isolate the BYO-credential store to a temp home so resolving the send auth never touches ~/.gtm-ide.
 process.env.GTM_IDE_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-http-creds-"));
@@ -50,7 +50,12 @@ describe("HTTP execution connector", () => {
 });
 
 describe("HTTP send auth — BYO credential resolution (key resolution only, send-gating untouched)", () => {
-  afterEach(() => { delete process.env.GTM_IDE_SEND_AUTH; });
+  afterEach(() => {
+    delete process.env.GTM_IDE_SEND_AUTH;
+    // Credentials are universal now, so clear the stored http key between tests — otherwise the
+    // "falls back to env when nothing stored" case would still see a key a prior test connected.
+    removeCredential(null, "http");
+  });
 
   async function runWithCapture(context) {
     const requests = [];

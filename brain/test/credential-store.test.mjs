@@ -78,12 +78,16 @@ describe("credential store", () => {
     assert.equal(removeCredential("p1", "clay", options), false);
   });
 
-  it("is project-scoped — one project's credential never leaks into another", () => {
-    setCredential("p1", { provider: "clay", token: "p1-token" }, options);
-    setCredential("p2", { provider: "clay", token: "p2-token" }, options);
-    assert.equal(getCredential("p1", "clay", options).token, "p1-token");
-    assert.equal(getCredential("p2", "clay", options).token, "p2-token");
-    assert.equal(getCredential("p3", "clay", options), null);
+  it("is universal — a connection is founder-owned and reads back from any project", () => {
+    // A Gmail login connected once works across every venture; the projectId passed never scopes it.
+    setCredential("p1", { provider: "clay", token: "the-one-token" }, options);
+    assert.equal(getCredential("p1", "clay", options).token, "the-one-token");
+    assert.equal(getCredential("p2", "clay", options).token, "the-one-token");
+    assert.equal(getCredential("p3", "clay", options).token, "the-one-token");
+    // Saving from a different project updates the same universal connection, never a second copy.
+    setCredential("p2", { provider: "clay", token: "reconnected" }, options);
+    assert.equal(getCredential("p1", "clay", options).token, "reconnected");
+    assert.equal(listCredentials("p9", options).length, 1);
   });
 
   it("persists durably and reloads across a fresh store read", () => {

@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { run } from "../src/connectors/enrich/clay.mjs";
-import { setCredential } from "../src/credential-store.mjs";
+import { setCredential, removeCredential } from "../src/credential-store.mjs";
 
 // Isolate the BYO-credential store to a temp home so resolving keys never touches ~/.gtm-ide.
 process.env.GTM_IDE_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-clay-creds-"));
@@ -31,6 +31,10 @@ describe("Clay enrich — BYO credential resolution (stored key wins, env fallba
     delete process.env.CLAY_TABLE_ID;
     delete process.env.CLAY_API_KEY;
     delete process.env.EXA_API_KEY;
+    // Credentials are now UNIVERSAL (founder-owned, not per-project), so a key stored in one test
+    // persists into the next. Clear it so the "falls back to env when nothing stored" cases start clean.
+    removeCredential(null, "clay");
+    removeCredential(null, "exa");
   });
 
   function authHeaderOf(call) {

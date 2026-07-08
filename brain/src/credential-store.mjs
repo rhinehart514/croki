@@ -1,29 +1,36 @@
-// The BYO-credential store — durable, project-scoped, founder-pasted API credentials.
+// The BYO-credential store — durable, UNIVERSAL, founder-owned API credentials.
 //
 // Today every connector reads its key from `process.env` only (see connectors/enrich/clay.mjs:
 // `process.env.CLAY_API_KEY`). That works for an engineer who can export an env var, but it locks
 // out a non-technical founder who just wants to paste a Gmail / Apollo / Clay key into the product
 // and run. This store is the durable place those pasted credentials live, so a connector can read a
-// key at RUNTIME (per project) instead of demanding it be in the process environment.
+// key at RUNTIME instead of demanding it be in the process environment.
+//
+// A connection belongs to the FOUNDER, not to a project. A Gmail login connected once works across
+// every venture — you don't reconnect the same inbox per pipeline. So all credentials live in ONE
+// universal document, keyed by provider (lowercased); the projectId argument the API still accepts is
+// ignored for storage, kept only so callers don't have to change. (Before 2026-07-08 this store was
+// per-project; it was made universal on Jacob's call that connections are his, not a project's.)
 //
 // Scope: host-owned DURABLE STATE, not intelligence. It stages a secret for later use; it never
 // sends, publishes, or charges, so it sits comfortably inside the Wall — the gate still governs any
-// outbound action, this just lets the founder supply the key that action will need. One document per
-// project holds every provider's credential, keyed by provider (lowercased), matching the per-project
-// convention design-state-store.mjs uses.
+// outbound action, this just lets the founder supply the key that action will need.
 //
 // SECURITY: a token is never logged, never printed, and never returned by `list` — `list` redacts to
 // `{ provider, label, savedAt, hasToken }`. Only `get` (the runtime read) and `resolveCredentialToken`
 // return the raw token, to the caller that is about to use it.
 
-import { safeId, now } from "./store-fs.mjs";
+import { now } from "./store-fs.mjs";
 import { persistence } from "./persistence.mjs";
 
 const SCHEMA_VERSION = 1;
 const COLLECTION = "credentials";
+// The single slot every project shares. Connections are founder-owned and universal, so the projectId
+// a caller passes never changes which document is read or written — it always resolves here.
+const UNIVERSAL_KEY = "global";
 
-function keyFor(projectId) {
-  return safeId(projectId || "default");
+function keyFor() {
+  return UNIVERSAL_KEY;
 }
 
 // Normalize a provider label to its stable key: lowercased, trimmed, filesystem/lookup-safe. So
@@ -32,8 +39,9 @@ export function normalizeProvider(provider) {
   return String(provider || "").trim().toLowerCase();
 }
 
-function emptyStore(projectId) {
-  return { schemaVersion: SCHEMA_VERSION, projectId: projectId || "default", credentials: {}, updatedAt: now() };
+function emptyStore() {
+  // The document is universal, so it records the shared slot id, not any caller's projectId.
+  return { schemaVersion: SCHEMA_VERSION, projectId: UNIVERSAL_KEY, credentials: {}, updatedAt: now() };
 }
 
 function loadStore(projectId, options = {}) {

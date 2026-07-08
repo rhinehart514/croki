@@ -13,8 +13,29 @@
 // what the founder ran without the client having to scrape the xterm scrollback (slice 2).
 
 import os from "node:os";
+import { createRequire } from "node:module";
 import { WebSocketServer } from "ws";
-import pty from "node-pty";
+
+// node-pty is a native module, and a native module can only match ONE runtime's ABI at a time — the
+// plain Node that runs `npm start`/`npm test`, or the Electron node the packaged app forks the brain
+// under, but not both from one on-disk build. So we DON'T import it at module load: a failed load here
+// would take the whole brain down and the app would never reach a window. Instead we load it lazily on
+// first terminal use and cache the result (module or null). If it can't load for this runtime, terminal
+// nodes are simply unavailable — the rest of the brain boots and serves normally.
+const require = createRequire(import.meta.url);
+let ptyModule; // undefined = not tried yet · a module = loaded · null = load failed, feature off
+function loadPty() {
+  if (ptyModule !== undefined) return ptyModule;
+  try {
+    ptyModule = require("node-pty");
+  } catch (err) {
+    ptyModule = null;
+    console.warn(
+      `[terminal] node-pty unavailable for this runtime — terminal nodes disabled: ${String(err?.message || err).split("\n")[0]}`
+    );
+  }
+  return ptyModule;
+}
 
 const MAX_SESSIONS = 24;        // a runaway-tabs backstop, not a real limit
 const RING_BYTES = 256 * 1024;  // recent output kept per session for output capture
@@ -50,6 +71,7 @@ function pushRing(session, data) {
 }
 
 function spawnSession(id, { cwd, cols, rows }) {
+  const pty = loadPty(); // guaranteed non-null: the upgrade handler rejects the socket if it can't load
   const term = pty.spawn(defaultShell(), shellArgs(), {
     name: "xterm-color",
     cols: cols || 80,
@@ -119,6 +141,13 @@ export function attachTerminalServer(httpServer) {
     try { url = new URL(req.url || "/", "http://127.0.0.1"); }
     catch { socket.destroy(); return; }
     if (url.pathname !== "/api/terminal") return; // not ours — leave it for another handler
+
+    // Terminal native module can't load under this runtime — refuse the upgrade instead of crashing.
+    if (!loadPty()) {
+      socket.write("HTTP/1.1 503 Terminal Unavailable\r\n\r\n");
+      socket.destroy();
+      return;
+    }
 
     if (sessions.size >= MAX_SESSIONS && !sessions.has(url.searchParams.get("id"))) {
       socket.write("HTTP/1.1 503 Too Many Sessions\r\n\r\n");

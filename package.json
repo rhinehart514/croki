@@ -12,10 +12,11 @@
     "test": "npm --prefix brain test && npm --prefix ui run test:unit && npm run lint && npm run build",
     "start": "npm run build && node brain/src/server.mjs",
     "mcp": "node brain/src/mcp.mjs",
-    "app:rebuild": "electron-rebuild --module-dir brain --only better-sqlite3 && codesign -s - -f brain/node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+    "app:rebuild": "electron-rebuild --module-dir brain --only better-sqlite3,node-pty && codesign -s - -f brain/node_modules/better-sqlite3/build/Release/better_sqlite3.node brain/node_modules/node-pty/build/Release/pty.node",
     "build:desktop": "VITE_CONVEX_URL= npm run build",
+    "app:reset-native": "npm --prefix brain rebuild better-sqlite3 node-pty",
     "app": "npm run build:desktop && electron .",
-    "app:dist": "npm run build:desktop && npm run app:rebuild && electron-builder --mac"
+    "app:dist": "npm run build:desktop && npm run app:rebuild && electron-builder --mac && npm run app:reset-native"
   },
   "dependencies": {
     "convex": "1.42.0"
