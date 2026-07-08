@@ -241,6 +241,27 @@ export function parseAgentItems(text) {
   return [];
 }
 
+// The teammate's pre-JSON prose — its plain-language reasoning, captured not discarded (Wave 2). With
+// the narrate-then-fenced-JSON prompt the model thinks aloud for the watching founder, then emits the
+// items in a fenced block; that prose is the reasoning the run and the gate can surface. We take the
+// text up to the first fence (or, if the model skipped the fence, up to the first bare array/object).
+// Returns "" when the whole message is JSON — an honest empty, never fabricated narration.
+export function parseAgentReasoning(text) {
+  if (typeof text !== "string" || !text.trim()) return "";
+  const fenceIdx = text.search(/```(?:json)?/i);
+  let head;
+  if (fenceIdx !== -1) {
+    head = text.slice(0, fenceIdx);
+  } else {
+    // No fence: reasoning is whatever precedes the first JSON span (array or object).
+    const arr = text.indexOf("[");
+    const obj = text.indexOf("{");
+    const cut = [arr, obj].filter((i) => i !== -1).sort((a, b) => a - b)[0];
+    head = cut === undefined ? "" : text.slice(0, cut);
+  }
+  return head.replace(/\s+/g, " ").trim();
+}
+
 // Pull a JSON object out of model prose — fenced, inline, or the whole message. Returns null
 // when there is no parseable object. The composer uses this for its { nodes, edges } graph.
 export function parseAgentObject(text) {
@@ -358,7 +379,13 @@ export function buildAgentPrompt({ ref, prompt, items, context = {}, artifactPat
     contextBlock,
     restJson ? `\nAdditional workflow context (JSON):\n${restJson}` : "",
     `\nInput items (JSON):\n${input}`,
-    `\nReturn ONLY a JSON array of result items — no prose, no preamble. Each item should be a JSON object. If you have nothing to return, return [].`,
+    // Narrate-then-fenced-JSON (Wave 2), mirroring OBJECT_IDEATE_GENERATE_PROMPT. The founder is
+    // watching the crew work, so the prose BEFORE the fence is the teammate's plain-language reasoning
+    // (captured as result.reasoning, streamed live) and the machine-readable items ride in the fenced
+    // JSON block. parseAgentItems still reads the fenced block, so the items parse exactly as before.
+    `\nFirst, in 1 to 3 short plain sentences, say what you did and what you're handing back — talk to the founder in plain language, no jargon, no code. This is you thinking aloud.`,
+    `\nThen output your result items as ONE fenced JSON block and nothing after it — a JSON array of result objects (or [] if you have nothing to return):`,
+    "```json\n[ { } ]\n```",
   ].filter(Boolean).join("\n");
 
   return { prompt: text, manifest, definitionLoaded: !!definition, tools, retrievalTools };
@@ -477,10 +504,12 @@ export function createClaudeAgentInvoker({ cwd = process.cwd(), model, maxTurns 
     // Surface the granted toolset (and anything the wall refused) so the run is auditable, plus the
     // tool names the agent ACTUALLY called — the evidence the required-consult guard reads at the gate.
     const toolMeta = { tools: built.tools.allowed, toolsDropped: built.tools.dropped, toolCalls };
+    // The teammate's plain-language reasoning — its pre-JSON prose, captured for the run + gate (Wave 2).
+    const reasoning = parseAgentReasoning(text);
     if (error) {
-      return { ok: false, items: [], error: error.message, meta: { invoked: ref, contextManifest: built.manifest, errorKind: error.kind, retriable: error.retriable, ...toolMeta } };
+      return { ok: false, items: [], reasoning, error: error.message, meta: { invoked: ref, contextManifest: built.manifest, errorKind: error.kind, retriable: error.retriable, ...toolMeta } };
     }
-    return { ok: true, items: parseAgentItems(text), meta: { invoked: ref, contextManifest: built.manifest, ...toolMeta } };
+    return { ok: true, items: parseAgentItems(text), reasoning, meta: { invoked: ref, contextManifest: built.manifest, ...toolMeta } };
   };
 }
 

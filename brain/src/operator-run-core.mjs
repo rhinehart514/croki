@@ -106,6 +106,9 @@ export function summarizeNodeResult(node) {
     itemCount: Array.isArray(node.items) ? node.items.length : 0,
     error: node.error ?? null,
     meta: node.meta ?? null,
+    // The teammate's plain-language reasoning — its pre-JSON prose, captured on the node result so the
+    // run ledger and the founder gate can show WHY the crew handed this back, not just the items (Wave 2).
+    ...(node.reasoning ? { reasoning: node.reasoning } : {}),
     // Required-consult violations surfaced by graph.mjs at the gate: drafting/UI steps that skipped
     // the founder's taste (and design) signal. Carried through so the operator and founder see the
     // blocking issue at the gate instead of approving a draft as if it were grounded.

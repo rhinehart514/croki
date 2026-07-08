@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { buildAgentPrompt, createProviderAgentInvoker, loadAgentDefinition, loadSkillGuidance, parseAgentItems, parseDeclaredTools, resolveAgentTools, DEFAULT_AGENT_TOOLS } from "../src/agent-bridge.mjs";
+import { buildAgentPrompt, createProviderAgentInvoker, loadAgentDefinition, loadSkillGuidance, parseAgentItems, parseAgentReasoning, parseDeclaredTools, resolveAgentTools, DEFAULT_AGENT_TOOLS } from "../src/agent-bridge.mjs";
 import { createStepRuntime } from "../src/step-runners.mjs";
 import { buildDesignState } from "../src/design-state-store.mjs";
 
@@ -199,6 +199,37 @@ describe("parseAgentItems — pull a JSON array out of model prose", () => {
     assert.deepEqual(parseAgentItems("no array here"), []);
     assert.deepEqual(parseAgentItems(""), []);
     assert.deepEqual(parseAgentItems(null), []);
+  });
+});
+
+describe("parseAgentReasoning — capture the teammate's pre-JSON prose", () => {
+  it("captures the plain-language prose before a fenced block", () => {
+    const text = "I checked the three operators and kept the two with a real trigger.\n\n```json\n[{\"id\":\"a\"}]\n```";
+    assert.equal(parseAgentReasoning(text), "I checked the three operators and kept the two with a real trigger.");
+  });
+  it("captures prose before a bare inline array when the model skipped the fence", () => {
+    assert.equal(parseAgentReasoning("Here's what I found: [{\"id\":1}]"), "Here's what I found:");
+  });
+  it("returns empty string when the whole message is JSON (no fabricated narration)", () => {
+    assert.equal(parseAgentReasoning('[{"id":1}]'), "");
+    assert.equal(parseAgentReasoning(""), "");
+    assert.equal(parseAgentReasoning(null), "");
+  });
+});
+
+describe("agent invoker carries reasoning onto the result (Wave 2)", () => {
+  it("captures pre-JSON prose as result.reasoning while items still parse", async () => {
+    const invoke = createProviderAgentInvoker({
+      claudeInvoker: async () => {
+        // Simulate the real invoker's internals via the actual parse helpers on a narrate-then-JSON text.
+        const text = "Two prospects fit, both shipped in the last month.\n```json\n[{\"name\":\"Ada\"},{\"name\":\"Bo\"}]\n```";
+        return { ok: true, items: parseAgentItems(text), reasoning: parseAgentReasoning(text), meta: {} };
+      },
+    });
+    const out = await invoke({ ref: "gtm-find-prospects", config: { provider: "claude" } });
+    assert.equal(out.ok, true);
+    assert.equal(out.items.length, 2);
+    assert.equal(out.reasoning, "Two prospects fit, both shipped in the last month.");
   });
 });
 
