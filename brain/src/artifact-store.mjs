@@ -117,7 +117,7 @@ export function listArtifacts(options = {}) {
 // of inventing refs, and exposed over HTTP so the UI can show the same inventory. Pure aggregation
 // over live stores — never seeded, empty when nothing is connected/authored.
 export function listCapabilities(options = {}) {
-  const { agents, skills } = listArtifacts(options);
+  const { agents } = listArtifacts(options);
   const tools = [];
   for (const server of listServers(options)) {
     for (const tool of server.tools ?? []) {
@@ -127,7 +127,6 @@ export function listCapabilities(options = {}) {
   return {
     tools,
     agents: agents.map((a) => ({ ref: a.ref, label: a.name })),
-    skills: skills.map((s) => ({ name: s.ref })),
   };
 }
 

@@ -103,7 +103,7 @@ describe("list / read / write", () => {
 });
 
 describe("listCapabilities — the live inventory the composer + UI consume (Wave 4)", () => {
-  it("aggregates on-disk agents ∪ skills ∪ connected MCP tools in the contract shape", () => {
+  it("aggregates on-disk agents ∪ connected MCP tools in the contract shape", () => {
     // Same claudeDir carries the seeded agent + skill; a fresh root isolates the MCP store, where we
     // record a server so a real write-class tool AND a read tool both appear with their lanes.
     const capOpts = { claudeDir: dir, root: dir };
@@ -118,8 +118,6 @@ describe("listCapabilities — the live inventory the composer + UI consume (Wav
 
     // agents: {ref,label}
     assert.deepEqual(caps.agents, [{ ref: "gtm-find", label: "gtm-find" }]);
-    // skills: {name}
-    assert.deepEqual(caps.skills, [{ name: "positioning" }]);
     // tools: {serverId,toolName,lane} — read vs write derived from the real classifier, not seeded
     const byTool = Object.fromEntries(caps.tools.map((t) => [t.toolName, t]));
     assert.equal(byTool.find_companies.serverId, "clay");
@@ -130,7 +128,7 @@ describe("listCapabilities — the live inventory the composer + UI consume (Wav
   it("returns empty arrays, not an error, when nothing is authored or connected", () => {
     const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-cap-empty-"));
     const caps = listCapabilities({ claudeDir: emptyDir, root: emptyDir });
-    assert.deepEqual(caps, { tools: [], agents: [], skills: [] });
+    assert.deepEqual(caps, { tools: [], agents: [] });
     fs.rmSync(emptyDir, { recursive: true, force: true });
   });
 });

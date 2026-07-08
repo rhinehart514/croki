@@ -1035,11 +1035,9 @@ export type CapabilityServer = {
 // hasn't produced this yet, the surfaces fall back to the suggested-connections catalog.
 export type CapabilityInventoryTool = { serverId: string; toolName: string; lane: "read" | "write" };
 export type CapabilityInventoryAgent = { ref: string; label: string };
-export type CapabilityInventorySkill = { name: string };
 export type CapabilityInventory = {
   tools: CapabilityInventoryTool[];
   agents: CapabilityInventoryAgent[];
-  skills: CapabilityInventorySkill[];
 };
 
 // ─── Sender credentials (BYO keys) ─────────────────────────────────────────────

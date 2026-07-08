@@ -291,8 +291,8 @@ export function LeftRail({
             behind your gate). The hardcoded brand list is demoted to "Suggested connections" — things you
             could connect, clearly labeled not-yet-connected — so the rail reflects reality, not a catalog.
             Falls back to the suggested list alone when the backend hasn't produced the inventory yet. */}
-        {inventory && (inventory.tools.length > 0 || inventory.skills.length > 0) ? (
-          <Section icon={<Blocks size={13} />} title="Capabilities" count={inventory.tools.length + inventory.skills.length}>
+        {inventory && inventory.tools.length > 0 ? (
+          <Section icon={<Blocks size={13} />} title="Capabilities" count={inventory.tools.length}>
             <ConnectedCapabilities inventory={inventory} />
             <div className="lr-cap-group">
               <div className="lr-group">Suggested connections · not connected yet</div>
@@ -442,17 +442,6 @@ function ConnectedCapabilities({ inventory }: { inventory: CapabilityInventory }
           ))}
         </div>
       ))}
-      {inventory.skills.length > 0 ? (
-        <div className="lr-cap-server">
-          <div className="lr-cap-server-name">Skills</div>
-          {inventory.skills.map((s) => (
-            <div key={s.name} className="lr-row lr-cap lr-cap-live" title={s.name}>
-              <span className="lr-cap-tool-mark" aria-hidden><Wrench size={13} /></span>
-              <span className="lr-row-main"><span className="lr-row-name">{s.name}</span></span>
-            </div>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }

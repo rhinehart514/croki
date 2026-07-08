@@ -50,13 +50,12 @@ A data edge leaving a "switch" node ALSO carries "predicate": { "field": "<itemF
 // graph spec. The host (workflow-composer.mjs) normalizes, enforces the gate wall, and validates.
 export function createClaudeComposer({ cwd = process.cwd(), model, maxTurns = 24, onText } = {}) {
   return async function compose({ goal, channel, agents, grounding, enginePool, capabilities }) {
-    // The live capability inventory (agents ∪ skills ∪ connected MCP tools). When present, the model
-    // composes from what ACTUALLY exists — real skill names and MCP tool refs — instead of inventing
-    // them. Only skills + MCP tools are rendered here; the reusable agent pool has its own block above.
+    // The live capability inventory (agents ∪ connected MCP tools). When present, the model composes
+    // from what ACTUALLY exists — real MCP tool refs — instead of inventing them. Only MCP tools are
+    // rendered here; the reusable agent pool has its own block above.
     const capabilityBlock = capabilities
       ? [
           "\nLive capabilities you can wire (compose from these; reference by their exact ref/name):",
-          `- Skills (kind:\"skill\", ref = the name): ${JSON.stringify((capabilities.skills ?? []).map((s) => s.name))}`,
           `- Connected MCP tools (kind:\"mcp\", ref = \"serverId/toolName\"; a \"read\" tool runs free, a \"write\" tool still sits behind a founder gate): ${JSON.stringify((capabilities.tools ?? []).map((t) => ({ ref: `${t.serverId}/${t.toolName}`, lane: t.lane })))}`,
         ].join("\n")
       : "";
