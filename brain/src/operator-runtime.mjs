@@ -145,6 +145,14 @@ export async function runOperatorSession(id, runtime = {}) {
         session = saveOperatorSession({ ...session, runtimeSessionId: sid }, options);
       }
     },
+    // Cumulative dollars this session has already spent across all prior drives — the runtime uses it
+    // to make each drive's budget session-total-aware (Wave 6). Persisted, so it survives every founder
+    // pause and process restart. onCost banks each finished drive's cost onto that running total.
+    spentUsd: Number(session.spentUsd) || 0,
+    onCost: (usd) => {
+      const add = Number(usd) || 0;
+      if (add > 0) session = saveOperatorSession({ ...session, spentUsd: (Number(session.spentUsd) || 0) + add }, options);
+    },
     maxSteps: session.maxSteps,
     stepCount: session.stepCount,
     isCancelled: () => getOperatorSession(id, options).status === "cancelled",

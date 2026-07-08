@@ -1,29 +1,18 @@
+// Demoted to a pass-through (Wave 6). This used to be "Keyword score" — a deterministic keyword-match
+// ICP scorer that dropped prospects whose name/summary didn't contain enough config keywords. That is
+// exactly the keyword-judgment leash the harness removed: fit is a judgment call, so it belongs to an
+// AGENT step (a qualifier reads the real ICP and reasons), not to a substring count that silently drops
+// real prospects a keyword list happened to miss. The default filter connector now passes items through
+// untouched and never drops anyone — the founder gate and any composed agent-qualifier own the judgment.
 export const meta = {
   id: "default",
-  name: "Keyword score",
-  type: "score",
-  description: "Deterministic keyword-match ICP scoring.",
+  name: "Pass-through filter",
+  type: "filter",
+  description: "Passes items through untouched. Fit judgment is an agent step, not a keyword count.",
   envKey: null,
 };
 
-export async function run(stage, upstream) {
-  const { minFitScore = 0.3, keywords = [] } = stage.config;
-  const prospects = upstream.filter((i) => i.type === "prospect");
-
-  if (prospects.length === 0) return { ok: true, items: [], meta: { total: 0, passed: 0 } };
-
-  const scored = prospects.map((p) => {
-    const text = `${p.name} ${p.summary}`.toLowerCase();
-    let score;
-    if (Array.isArray(keywords) && keywords.length > 0) {
-      const hits = keywords.filter((kw) => kw && text.includes(kw.toLowerCase())).length;
-      score = hits / keywords.length;
-    } else {
-      score = 0.6;
-    }
-    return { ...p, score: Math.round(score * 100) / 100, fit: score >= minFitScore };
-  });
-
-  const passed = scored.filter((p) => p.fit);
-  return { ok: true, items: passed, meta: { total: scored.length, passed: passed.length } };
+export async function run(_stage, upstream) {
+  const items = Array.isArray(upstream) ? upstream : [];
+  return { ok: true, items, meta: { total: items.length, passed: items.length, passthrough: true } };
 }

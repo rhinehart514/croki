@@ -9,12 +9,33 @@ import {
   authModeLabel,
   buildClaudeArgs,
   detectClaudeAuth,
+  driveBudgetUsd,
   findClaudeBinary,
   isResumeFailure,
+  modelMaxTurns,
   operatorAllowedTools,
   parseStreamLine,
   PAUSE_STATUSES,
 } from "../src/runtimes/claude-code.mjs";
+
+describe("Wave 6 — model turn budget severed from the operator step budget", () => {
+  it("gives a generous fixed turn budget, never maxSteps - stepCount", () => {
+    // Late in a session (16 of 18 steps used) the model used to get just 2 turns and hit 'max turns (2)'.
+    const ctx = { maxSteps: 18, stepCount: 16 };
+    assert.ok(modelMaxTurns(ctx, false) >= 40, "the model's turns are generous, not the 2 left in the step budget");
+  });
+  it("floors a resume drive at 8 turns so a gate-resume re-draft always has room", () => {
+    assert.ok(modelMaxTurns({ maxSteps: 18, stepCount: 17 }, true) >= 8);
+  });
+  it("makes the drive budget session-total-aware — never more than what the session budget has left", () => {
+    // Fresh session: full per-drive cap available.
+    assert.equal(driveBudgetUsd({ spentUsd: 0 }), 5);
+    // Deep into a session (spent 23 of a 25 session cap): the drive is throttled to what remains.
+    assert.ok(driveBudgetUsd({ spentUsd: 23 }) <= 2 + 1e-9, "the remaining session budget caps the drive");
+    // Never handed exactly $0 (which would instantly trip the budget) — a small floor holds.
+    assert.ok(driveBudgetUsd({ spentUsd: 999 }) >= 0.25);
+  });
+});
 
 // A ctx test double. Every callback is GTM-IDE-owned in production; here we just
 // record what the runtime asked GTM IDE to do.

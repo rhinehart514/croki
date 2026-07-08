@@ -114,6 +114,9 @@ export function createOperatorSession(input, options = {}) {
     startedAt: null,
     completedAt: null,
     stepCount: 0,
+    // Cumulative model dollars spent across every drive of this session — the session-total budget the
+    // runtime throttles against (Wave 6). Durable so it survives founder pauses and process restarts.
+    spentUsd: 0,
     maxSteps: Math.max(4, Math.min(Number(input.maxSteps) || 18, 40)),
     graphRevision: Number(input.graphRevision) || 0,
     lastRunId: null,

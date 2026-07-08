@@ -75,6 +75,29 @@ export function buildClaudeArgs({ mcpConfigPath, allowedTools, model, maxTurns }
   return args;
 }
 
+// The MODEL's per-drive turn budget — decoupled from the operator step budget (Wave 6). Generous by
+// default so a real multi-step drive can think, and floored at 8 on a resume so a gate-resume re-draft
+// always has room. Overridable via env for tuning. Never derived from maxSteps/stepCount — that
+// coupling was the "max turns (2)" leak; the operator's own step guard is the cross-cycle throttle.
+export function modelMaxTurns(ctx, isResume) {
+  const base = Number(process.env.GTM_IDE_CLAUDE_CODE_MAX_TURNS) || 40;
+  const floor = isResume ? 8 : 1;
+  return Math.max(floor, base);
+}
+
+// The per-drive dollar cap, made session-total-aware. Each drive may spend up to the per-drive cap, but
+// never more than what remains of the session's total budget (sessionBudget − spentSoFar, both in USD).
+// spentSoFar is the cumulative cost prior drives reported back through ctx.onCost; 0 on the first drive.
+// This makes ONE real dollar figure the throttle for a whole multi-drive run, instead of an unbounded
+// fresh $5 every drive. A tiny floor keeps a drive from being handed $0 and instantly tripping budget.
+export function driveBudgetUsd(ctx) {
+  const perDrive = Number(process.env.GTM_IDE_CLAUDE_CODE_MAX_BUDGET_USD) || 5;
+  const sessionCap = Number(process.env.GTM_IDE_CLAUDE_CODE_SESSION_BUDGET_USD) || 25;
+  const spent = Number(ctx?.spentUsd) || 0;
+  const remaining = Math.max(0, sessionCap - spent);
+  return Math.max(0.25, Math.min(perDrive, remaining));
+}
+
 // Parse one newline-delimited stream-json line into a neutral event. Returns
 // null for lines we do not surface. Tolerant of partial/non-JSON noise.
 export function parseStreamLine(line) {
@@ -320,8 +343,19 @@ export const claudeCodeRuntime = {
             abortController,
             cwd: ctx.options?.cwd || process.cwd(),
             model: ctx.model,
-            maxTurns: Math.max(1, ctx.maxSteps - ctx.stepCount),
-            maxBudgetUsd: Number(process.env.GTM_IDE_CLAUDE_CODE_MAX_BUDGET_USD) || 5,
+            // SEVERED from the operator step budget (Wave 6). maxTurns is the MODEL's turns inside ONE
+            // drive; it used to be `maxSteps - stepCount`, so late in a session the model got 1-2 turns
+            // and hit "max turns (2)" before it could think — the leak the audit named. The operator's
+            // own cross-cycle throttle stays where it belongs (stepCount >= maxSteps in the runtime).
+            // Here the model gets a generous fixed turn budget, with a HARD FLOOR of 8 on a resume so a
+            // gate-resume drive always has room to re-draft. The real economic throttle is maxBudgetUsd
+            // (session-total-aware, below) plus the silence watchdog — not a starved turn count.
+            maxTurns: modelMaxTurns(ctx, resumeId != null),
+            // Session-total-aware: each drive may spend up to the per-drive cap, but never past what is
+            // left of the session's total budget (sessionBudgetUsd minus what prior drives already spent,
+            // reported back via ctx.onCost). So a long multi-drive run is bounded by ONE real dollar cap
+            // instead of an unbounded per-drive $5 each time.
+            maxBudgetUsd: driveBudgetUsd(ctx),
             systemPrompt: harness === "full"
               ? `${ctx.system}\n\nYou are running inside the founder's full Claude harness: their skills (invoke with the Skill tool), their named subagents and parallel fan-out (Task/Agent), web research, and read-only file tools are available alongside the Drover bridge tools. Use them — fan out research, run /ideate-style generation with separate judging — but the walls hold: you cannot send, publish, write files, or resolve a founder gate from here; everything outward still stages at the gate.`
               : ctx.system,
@@ -387,6 +421,12 @@ export const claudeCodeRuntime = {
       if (!terminalResult) {
         if (abortController.signal.aborted) return { kind: "budget" };
         throw new Error(stderr.join("").trim().slice(-2_000) || "Claude Code ended without a result.");
+      }
+      // Report this drive's real dollar cost back so the session can track cumulative spend and make the
+      // NEXT drive's budget session-total-aware. Best-effort: any SDK that omits the field reports 0.
+      const driveCost = Number(terminalResult.total_cost_usd ?? terminalResult.cost_usd ?? 0) || 0;
+      if (driveCost > 0 && typeof ctx.onCost === "function") {
+        try { ctx.onCost(driveCost); } catch { /* a cost-report error never breaks the run */ }
       }
       if (terminalResult.subtype === "error_max_turns" || terminalResult.subtype === "error_max_budget_usd") {
         return { kind: "budget" };

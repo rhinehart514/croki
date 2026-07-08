@@ -539,19 +539,14 @@ function categoryMinX(graph, cat) {
 // inferred from the stages actually present, so a content motion reads as a "Content loop" and an
 // outbound one as an "Outbound loop" without any motion taxonomy being hardcoded anywhere. New
 // shapes fall back to naming after their first stage ("Webinar loop"), never to "broken outbound".
-function deriveMotionName(cats) {
-  const set = new Set(cats);
-  const has = (...c) => c.some((x) => set.has(x));
-  // Most-specific non-outbound signatures first, so a content/PLG/community motion is never
-  // mislabelled outbound just because it also sends something.
-  if (has("content", "publish", "seo", "distribute")) return "Content loop";
-  if (has("instrument", "segment", "activate", "onboard", "trigger")) return "Activation loop";
-  if (has("community", "advocate", "event")) return "Community loop";
-  if (has("partner", "integration", "ecosystem")) return "Partnerships loop";
-  if (has("paid", "ad", "campaign")) return "Paid loop";
-  if (has("referral", "invite", "viral")) return "Referral loop";
-  // Outbound's defining stage is sourcing a list — source (alone or with enrich/filter) ⇒ outbound.
-  if (has("source", "enrich", "filter")) return "Outbound loop";
+// The motion's name. The COMPOSER already named the pipeline when it designed the graph — that name
+// (graph.name) is the real, goal-specific identity and is preferred. This function is only the NEUTRAL
+// FALLBACK for a graph with no name: it names the motion after its own first stage, with zero keyword
+// taxonomy (Wave 6 removed the hardcoded content/outbound/paid/community map — a fixed motion enum was
+// the same cage as a fixed channel enum, and it mislabelled motions the list didn't anticipate).
+function deriveMotionName(cats, graphName = null) {
+  const named = typeof graphName === "string" ? graphName.trim() : "";
+  if (named) return named;
   if (cats.length) return `${stageLabel(cats[0])} loop`;
   return "GTM loop";
 }
@@ -594,7 +589,8 @@ export function getEngineState({ report = null, runs = [], connectors = [], grap
     ];
     const stages = metas.map((m) => m.id);
     return composeState(subsystems, report, runs, {
-      name: deriveMotionName(stages),
+      // Prefer the composer's own pipeline name; the shape-derived label is only the neutral fallback.
+      name: deriveMotionName(stages, graph.name),
       stages,
     });
   }

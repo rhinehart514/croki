@@ -31,7 +31,11 @@ import { genObjectGraphId } from "./object-graph-store.mjs";
 // one JSON reply. The SDK's read tools are reserved for steps that genuinely research; a generate/grade
 // pass does not, and a repo-reading 12-turn agent per idea was the machinery this phase removes.
 const LEAN_TOOLS = [];
-const LEAN_TURNS = 2;
+// Raised from 2 (Wave 6). A narrate-then-fenced-JSON generate/grade pass emits its prose AND the JSON;
+// a 2-turn ceiling could cut a longer reasoned reply off before the fence, losing the whole result to
+// the fallback. These calls are still tool-less (LEAN_TOOLS = []), so the extra turns only buy the model
+// room to finish writing — not a repo-reading agent. Overridable via env for tuning.
+const LEAN_TURNS = Number(process.env.GTM_IDE_LEAN_TURNS) || 6;
 
 // The angle-derivation doctrine: the sides come from THIS goal, never from a recycled list.
 export const PROPOSE_ANGLES_PROMPT = `You are choosing the ANGLES a set of idea generators will take on ONE go-to-market goal, grounded in a real product. Derive the angles from THIS goal — the genuinely different real sides someone could come at it from. An offer goal splits into sides like who the offer tempts, what makes it credible, where it gets seen; a channel goal into who already gathers there and what earns their attention; an outreach goal into who to reach and what they'd actually answer. Do not reuse a house list of categories; name the sides this goal really has. 3 to 6 angles.

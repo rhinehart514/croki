@@ -240,19 +240,26 @@ describe("engine — topology is emergent: the motion's OWN stages, not a fixed 
     assert.equal(flowZeros.length, 0, `no phantom 0-health stages, got ${flowZeros.map((s) => s.id)}`);
   });
 
-  it("names the motion by its shape, with no fixed enum", () => {
+  it("names the motion by its shape with no fixed enum, and prefers the composer's own name (Wave 6)", () => {
+    // No keyword taxonomy: the neutral fallback names the motion after its OWN first stage.
     const content = getEngineState({ graph: { nodes: [
       { id: "r", category: "research", kind: "agent", position: { x: 0 } },
       { id: "d", category: "generate", kind: "agent", position: { x: 260 } },
       { id: "p", category: "publish", kind: "agent", position: { x: 520 } },
     ], edges: [] } });
-    assert.equal(content.motion.name, "Content loop");
+    assert.equal(content.motion.name, "Research loop", "first-stage fallback, not a hardcoded 'Content loop'");
 
     const outbound = getEngineState({ graph: { nodes: [
       { id: "s", category: "source", kind: "tool", position: { x: 0 } },
       { id: "e", category: "enrich", kind: "agent", position: { x: 260 } },
     ], edges: [] } });
-    assert.equal(outbound.motion.name, "Outbound loop");
+    assert.equal(outbound.motion.name, "Source loop", "first-stage fallback, not a hardcoded 'Outbound loop'");
+
+    // When the composer named the pipeline, THAT name wins — it is the real, goal-specific identity.
+    const named = getEngineState({ graph: { name: "Buffalo operator outreach", nodes: [
+      { id: "s", category: "source", kind: "tool", position: { x: 0 } },
+    ], edges: [] } });
+    assert.equal(named.motion.name, "Buffalo operator outreach");
   });
 
   it("surfaces an arbitrary, never-seen stage category as its own title-cased stage", () => {
