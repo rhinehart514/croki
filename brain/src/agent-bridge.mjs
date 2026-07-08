@@ -426,7 +426,10 @@ export async function runClaudeQuery({ prompt, cwd = process.cwd(), model, maxTu
     prompt,
     options: {
       cwd,
-      model: model || undefined,
+      // Pin the default to Opus 4.8 so an unset model can never silently downgrade the crew's work
+      // (a missing model previously fell to the SDK default). Every caller can still pass an explicit
+      // model; only the DEFAULT is pinned. Opus 4.8 is the project + global AGENTS.md drafting default.
+      model: model || "claude-opus-4-8",
       maxTurns,
       permissionMode: "dontAsk",
       allowedTools,

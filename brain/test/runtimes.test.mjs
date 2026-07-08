@@ -116,6 +116,41 @@ describe("anthropicRuntime.drive", () => {
     assert.equal(calls.toolError[0][0], "run_loop");
     assert.match(calls.toolError[0][1], /boom/);
   });
+
+  it("sends adaptive thinking, high effort, and a cache-controlled system prefix (Wave 3)", async () => {
+    let seen = null;
+    const ctx = {
+      goal: "goal", model: "claude-opus-4-8", system: "Operate the GTM desk.", tools: [{ name: "x" }],
+      client: { messages: { async create(params) { seen = params; return { content: [{ type: "text", text: "done" }] }; } } },
+      initialMessages: null, maxSteps: 5, stepCount: 0,
+      isCancelled: () => false, currentStatus: () => "running",
+      onTurn: () => 1, onText: () => {}, onToolStart: () => {}, onToolError: () => {},
+      runTool: async () => ({ result: {}, pause: false }), persistMessages: () => {},
+    };
+    await anthropicRuntime.drive(ctx);
+    assert.deepEqual(seen.thinking, { type: "adaptive" }, "adaptive thinking is on — no downgrade to no-think");
+    assert.deepEqual(seen.output_config, { effort: "high" }, "high effort for the reasoning-heavy operator loop");
+    assert.ok(seen.max_tokens >= 16000, "room for thinking + a real tool turn (thinking counts toward max_tokens)");
+    // The operator doctrine (system) rides as a cache_control block so each turn re-reads the prefix cheaply.
+    assert.ok(Array.isArray(seen.system), "system is a block array carrying cache_control");
+    assert.equal(seen.system[0].text, "Operate the GTM desk.");
+    assert.deepEqual(seen.system[0].cache_control, { type: "ephemeral" });
+  });
+
+  it("leaves a caller-supplied system block array untouched (no double cache_control)", async () => {
+    let seen = null;
+    const suppliedSystem = [{ type: "text", text: "custom", cache_control: { type: "ephemeral", ttl: "1h" } }];
+    const ctx = {
+      goal: "g", model: "claude-opus-4-8", system: suppliedSystem, tools: [],
+      client: { messages: { async create(params) { seen = params; return { content: [{ type: "text", text: "done" }] }; } } },
+      initialMessages: null, maxSteps: 5, stepCount: 0,
+      isCancelled: () => false, currentStatus: () => "running",
+      onTurn: () => 1, onText: () => {}, onToolStart: () => {}, onToolError: () => {},
+      runTool: async () => ({ result: {}, pause: false }), persistMessages: () => {},
+    };
+    await anthropicRuntime.drive(ctx);
+    assert.equal(seen.system, suppliedSystem, "a caller's own system blocks pass through unchanged");
+  });
 });
 
 describe("selectRuntime", () => {

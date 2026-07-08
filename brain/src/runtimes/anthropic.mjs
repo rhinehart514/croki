@@ -31,13 +31,31 @@ export const anthropicRuntime = {
       : [{ role: "user", content: ctx.goal }];
     let steps = ctx.stepCount;
 
+    // The system prompt (operator doctrine) + tool list are the stable prefix of every turn in this
+    // loop — identical bytes turn after turn. Cache them so each subsequent turn reads the prefix at
+    // ~0.1x instead of re-billing it. cache_control rides on the last system block (tools render before
+    // system, so the breakpoint caches tools + system together). Only when system is a plain string —
+    // a test may inject a block array with its own control, which we leave untouched.
+    const cachedSystem = typeof ctx.system === "string" && ctx.system.trim()
+      ? [{ type: "text", text: ctx.system, cache_control: { type: "ephemeral" } }]
+      : ctx.system;
+
     while (steps < ctx.maxSteps) {
       if (ctx.isCancelled()) return { kind: "cancelled" };
 
       const response = await client.messages.create({
         model: ctx.model,
-        max_tokens: 4096,
-        system: ctx.system,
+        // Room for adaptive thinking + a real tool-call turn. Thinking counts toward max_tokens, so the
+        // prior 4096 could truncate a reasoned turn; streaming isn't used here, so stay under the HTTP
+        // timeout ceiling. The operator loop is reasoning-heavy — this is where thinking earns its cost.
+        max_tokens: 16000,
+        // Adaptive thinking + high effort: the operator plans multi-step GTM work across tool calls, the
+        // reasoning-heavy creator case the harness wants to think hard. Opus 4.8 (the pinned default)
+        // takes adaptive thinking; effort lives inside output_config. A founder-injected client in tests
+        // ignores these, so they only shape the real subscription-billed run.
+        thinking: { type: "adaptive" },
+        output_config: { effort: "high" },
+        system: cachedSystem,
         tools: ctx.tools,
         messages,
       });
