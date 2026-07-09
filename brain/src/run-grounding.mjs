@@ -43,6 +43,48 @@ function compactProductModel(model) {
   return { things, relationships, userGoals, states };
 }
 
+// The FULL slice of the derived product model the OPERATION PLAN path needs (Area 4). Unlike
+// compactProductModel — which discards ia/workflows/interactions/transitions to keep the RUN prompt
+// lean — the motion planner reasons about the product's whole shape (how it is organized, the flows a
+// user moves through, the screens between them) to find code-native and in-product-loop motions the
+// lean slice can't see. So this retains those four product-led layers ON TOP OF the compact core. It is
+// used ONLY by the plan path (derive_operation_plan); the run path stays lean via compactProductModel.
+// Returns null when no model is derived yet (honest blank — never invented). Pure, total, never throws.
+export function productLedGrounding(model) {
+  const core = compactProductModel(model);
+  if (!core) return null;
+  const ia = (Array.isArray(model.ia) ? model.ia : []).map((n) => ({
+    name: n?.name ?? null,
+    parentId: n?.parentId ?? "",
+    summary: n?.summary || null,
+    relatedThings: Array.isArray(n?.relatedThings) ? n.relatedThings : [],
+    provenance: n?.provenance || null,
+    evidence: Array.isArray(n?.evidence) ? n.evidence : [],
+  })).filter((n) => n.name);
+  const workflows = (Array.isArray(model.workflows) ? model.workflows : []).map((w) => ({
+    name: w?.name ?? null,
+    actor: w?.actor || null,
+    summary: w?.summary || null,
+    steps: (Array.isArray(w?.steps) ? w.steps : []).map((s) => (s?.label ? { label: s.label, summary: s.summary || null } : null)).filter(Boolean),
+    provenance: w?.provenance || null,
+    evidence: Array.isArray(w?.evidence) ? w.evidence : [],
+  })).filter((w) => w.name);
+  const interactions = (Array.isArray(model.interactions) ? model.interactions : []).map((i) => ({
+    name: i?.name ?? null,
+    kind: i?.kind || null,
+    summary: i?.summary || null,
+    provenance: i?.provenance || null,
+    evidence: Array.isArray(i?.evidence) ? i.evidence : [],
+  })).filter((i) => i.name);
+  const transitions = (Array.isArray(model.transitions) ? model.transitions : []).map((t) => ({
+    from: t?.from ?? null,
+    to: t?.to ?? null,
+    trigger: t?.trigger ?? null,
+    provenance: t?.provenance || null,
+  })).filter((t) => t.from && t.to && t.trigger);
+  return { ...core, ia, workflows, interactions, transitions };
+}
+
 // ── The dead-primitive revival: cross-motion suppression, advisory only ─────────────────────────────
 // Wire dedupeAcrossChannels (built, tested, zero callers until now) into the compose/run entry and
 // cross-check its identities against Area 1's durable touch ledger. This answers, for a batch of

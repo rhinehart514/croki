@@ -285,6 +285,14 @@ describe("anti-cage: fixed stage skeleton not re-introduced as live code", () =>
           !src.includes("groundingMode"),
           `${filename} references groundingMode. A belief's grounding must never decide whether a run runs.`,
         );
+        // Area 4: the operation plan is a REGENERATED READ, never a persisted pre-run object. A run/gate
+        // path must never import the motion planner or read a plan to decide whether/what to run —
+        // compose_and_run reaches the gate on whatever it produced, plan present or not (GTM-MACHINE.md
+        // §"Staying out of the cage" #4). Importing motion-plan.mjs into a run path re-grows that cage.
+        assert.ok(
+          !/from\s+["']\.\/motion-plan\.mjs["']/.test(src),
+          `${filename} imports motion-plan.mjs. The operation plan is a regenerated read — a run path must never depend on it, or the plan becomes a required pre-run object (the fourth cage).`,
+        );
       });
     }
 
@@ -532,6 +540,11 @@ describe("anti-cage: read models and stores carry no closed GTM taxonomy", () =>
     "project-store.mjs",
     "idea-store.mjs",
     "operator-store.mjs",
+    // Area 4's operation-plan planner joins the read-model guard: the plan is a REGENERATED READ over
+    // open motion kinds, never a closed channel enum and never a fixed stage skeleton. A motion `kind`
+    // must stay an open string the planner derives — the moment it becomes a validated list, the plan
+    // re-cages the model (GTM-MACHINE.md §Area 4: "no closed channel enum").
+    "motion-plan.mjs",
   ];
 
   const CAGE_CHANNEL_STRINGS = [

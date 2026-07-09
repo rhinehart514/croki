@@ -249,6 +249,14 @@ async function reviseProductModel(input = {}) {
   return brainPost("/api/product-model/revise", input);
 }
 
+// derive_operation_plan — the twin of derive_product_model (GTM-MACHINE.md Area 4). A read that turns
+// the scanned product into a ranked list of go-to-market MOTIONS spanning kinds, at least one code-native
+// and cited. It NEVER composes, runs, or gates — it only proposes the plan for the founder to cut/reorder.
+async function deriveOperationPlan({ goal } = {}) {
+  const qs = goal ? `?goal=${encodeURIComponent(goal)}` : "";
+  return brainGet(`/api/operation-plan${qs}`);
+}
+
 async function recordProductSignal(input = {}) {
   return brainPost("/api/product-model/signal", input);
 }
@@ -781,6 +789,18 @@ const TOOLS = [
       required: [],
     },
     handler: deriveProductModel,
+  },
+  {
+    name: "derive_operation_plan",
+    description: "Read the active project's scanned product and return the OPERATION PLAN: a ranked list of go-to-market MOTIONS the machine could run — spanning kinds (outbound, programmatic pages minted from the product's own data, in-product loops, AI visibility, partnerships, code-native product changes), with at least one code-native motion derived from the product's real data model and cited to file:line. Motions grounded in the real code are labeled derived with their citation; bets are labeled speculative; a claimed derivation with no real citation is demoted to a bet by the host. The plan regenerates on demand (never persisted) and replays the founder's prior cuts/reorders from the taste ledger. Use to see the whole operation, not one campaign. It NEVER composes, runs, or gates — picking a motion to run is a separate compose_and_run step behind the founder gate. Read-only; honest-empty on a product with no derived model or scan yet.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        goal: { type: "string", description: "Optional. A stated go-to-market goal to bias the plan toward (e.g. \"more seller signups in my top metros\")." },
+      },
+      required: [],
+    },
+    handler: deriveOperationPlan,
   },
   {
     name: "revise_product_model",

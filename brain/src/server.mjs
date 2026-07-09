@@ -28,6 +28,7 @@ import ideaRoutes from "./routes/ideas.mjs";
 import channelRoutes from "./routes/channels.mjs";
 import inboxRoutes from "./routes/inbox.mjs";
 import productModelRoutes from "./routes/product-model.mjs";
+import operationPlanRoutes from "./routes/operation-plan.mjs";
 import tasteRoutes from "./routes/taste.mjs";
 import signalWeightsRoutes from "./routes/signal-weights.mjs";
 import reallocationTunablesRoutes from "./routes/reallocation-tunables.mjs";
@@ -80,6 +81,7 @@ const ROUTE_GROUPS = [
   channelRoutes,
   inboxRoutes,
   productModelRoutes,
+  operationPlanRoutes,
   tasteRoutes,
   signalWeightsRoutes,
   reallocationTunablesRoutes,
