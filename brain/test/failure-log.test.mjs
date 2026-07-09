@@ -122,6 +122,28 @@ describe("classifyErrorKind — raw error/meta → token", () => {
     assert.equal(classifyErrorKind("API error: 500 Internal server error"), "model_error");
     assert.equal(classifyErrorKind("503 Service Unavailable"), "model_error");
     assert.equal(classifyErrorKind("Too Many Requests"), "model_error");
+    // A 5xx status IS recognized when a real HTTP/status cue sits next to it.
+    assert.equal(classifyErrorKind("HTTP 500"), "model_error");
+    assert.equal(classifyErrorKind("status 503"), "model_error");
+    assert.equal(classifyErrorKind("error code 502"), "model_error");
+  });
+
+  // Regression: a bare 500–599 number inside a genuine JS-exception message must NOT be read as a provider
+  // 5xx. A stack frame, a JSON parse offset, an array bound, a source location, or a plain count all carry
+  // three-digit 5xx-range numbers; filing them as transient would bury a real code-throw bug behind the
+  // transient filter — the exact opposite of self-inflicted-bug detection.
+  it("a bare 5xx-range number in a code-throw message stays 'code_throw' (self_inflicted), never transient", () => {
+    for (const message of [
+      "at line 523",
+      "Unexpected token < in JSON at position 512",
+      "index 512 out of bounds",
+      "  at parseItems (foo.js:512:8)",
+      "500 characters exceeded",
+      "550 malformed rows",
+    ]) {
+      assert.equal(classifyErrorKind(message), "code_throw", `"${message}" is a real bug, not a 5xx`);
+      assert.equal(classifyFault(classifyErrorKind(message), "node-error"), "self_inflicted", `"${message}" must surface as self_inflicted`);
+    }
   });
 
   it("classifyAgentError's generic kind:'error' bucket maps to model_error (a provider error, not our code)", () => {

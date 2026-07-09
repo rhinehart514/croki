@@ -25,6 +25,8 @@ import { gtmPathStore, measurementContractStore, runStore, productTruthStore, ma
 import { normalizeRunPlan } from "./graph-intelligence/compile-decompose.mjs";
 import { runGraph } from "./graph.mjs";
 import { recordRunDerivations } from "./run-derivation.mjs";
+import { makeFailureSink } from "./failure-log.mjs";
+import { resolveGitShaAsync } from "./friction.mjs";
 
 function slug(value) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "path";
@@ -348,10 +350,32 @@ export async function approveCompiledRun({
   const gateDecisions = Object.fromEntries(gateNodes.map((node) => [node.id, decisions ?? {}]));
 
   const graph = { nodes, edges, id: staged.id };
+
+  // Self-observation on the compiled-run gate-approval leg — the parallel HTTP path to the operator
+  // gate-resume run. Post-approval this run threads authorizeRelease, so approved items flow into
+  // execute/send/deploy connectors and upstream steps re-run live; without this sink every node-error
+  // and bad-output failure here fell to runGraph's no-op onFailure and was silently dropped. This is the
+  // SAME shared sink both operator legs use, so a failure on this consequential wall-crossing run logs
+  // identically. Git sha resolved ONCE off the hot path (explicit options.gitSha wins for tests).
+  let approveFailureGitSha;
+  if ("gitSha" in options) {
+    approveFailureGitSha = options.gitSha;
+  } else {
+    try { approveFailureGitSha = await resolveGitShaAsync(); } catch { approveFailureGitSha = null; }
+  }
+  const onFailure = makeFailureSink({
+    graphId: staged.id ?? null,
+    graphLabel: staged.pathId ?? staged.runPlan?.summary ?? null,
+    session: { id: staged.id ?? null, graphId: staged.id ?? null },
+    gitSha: approveFailureGitSha,
+    options,
+  });
+
   const result = await runGraph(graph, {
     resumeResult,
     decisions: gateDecisions,
     approvals,
+    onFailure,
     stepRuntime,
     market,
     grounding,

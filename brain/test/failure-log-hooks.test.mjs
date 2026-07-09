@@ -27,6 +27,8 @@ import { runOperatorSession, operatorSessionStalled, resolveOperatorGate } from 
 import { safeLogFailure } from "../src/failure-log.mjs";
 import { listFrictionQueue, reportFriction } from "../src/friction.mjs";
 import { buildFailureLogView } from "../src/routes/system.mjs";
+import { compileRunFromPath, approveCompiledRun, stableActionId } from "../src/run-compile.mjs";
+import { gtmPathStore } from "../src/gtm-store.mjs";
 
 // The self-observed failures the queue has captured, keyed on the signature/category the frontmatter
 // carries. Manual friction (no signature) is not one of these.
@@ -362,6 +364,70 @@ describe("self-observing failure capture — the four paths, dedup, split, never
     assert.equal(logged.length, 1, "the gate-resume run's downstream failure IS filed — the hole is closed");
     assert.equal(logged[0].category, "node-error");
     assert.match(logged[0].errorSnippet, /downstream re-draft threw on resume/);
+  });
+
+  // ── (c) COMPILED-RUN gate approval — the parallel HTTP leg logs failures too (Round 2 finding #1) ──
+  // approveCompiledRun (reached from routes/runs.mjs POST /api/projects/:id/runs/:id/approve) crosses the
+  // wall: post-approval it threads authorizeRelease so approved items flow into execute/send/deploy and
+  // upstream steps re-run live. Before the fix it called runGraph WITHOUT onFailure, so a downstream step
+  // failing on THIS leg was silently dropped — the same hole the operator gate-resume leg had closed. This
+  // drives a real compile → approve with a failing downstream node and asserts the failure reaches the queue.
+  it("(c) compiled-run approve: a downstream node that fails AFTER approval files a node-error entry (was silently dropped)", async () => {
+    const projectId = "compiled-leg";
+    const gtmPath = gtmPathStore.create(
+      {
+        projectId,
+        summary: "Reach a hand-picked founder with a launch nudge",
+        bet: { buyer: "solo founders", channel: "email", offer: "launch checklist", message: "Here's a launch checklist." },
+        status: "selected",
+      },
+      options,
+    );
+    // A composer whose topology fails downstream of the gate on the release run: source → gate →
+    // execute(local, stages the approved item) → agent(re-draft that throws). The failing agent sits after
+    // the gate, so it only runs on the approve/release leg — exactly the wall-crossing path under test.
+    const composer = async () => ({
+      ok: true,
+      nodes: [
+        { id: "src", category: "source", connector: "manual", label: "Input" },
+        { id: "gate", category: "gate", connector: "default", label: "Founder review" },
+        { id: "out", category: "execute", connector: "local", label: "Stage output" },
+        { id: "post", kind: "agent", ref: "drafter", category: "generate", label: "Re-draft downstream" },
+      ],
+      edges: [
+        { source: "src", target: "gate", edgeType: "data" },
+        { source: "gate", target: "out", edgeType: "data" },
+        { source: "out", target: "post", edgeType: "data" },
+      ],
+    });
+    const { run } = await compileRunFromPath({
+      projectId,
+      pathId: gtmPath.id,
+      compose: composer,
+      input: { items: [{ handle: "@alice", draft: "Hi Alice — launch checklist inside." }] },
+      options,
+    });
+    assert.equal(run.status, "staged");
+
+    // Approve the item, then release through approveCompiledRun with a stepRuntime whose downstream agent
+    // fails. options carries queueDir + gitSha, so the sink routes into this test's isolated queue.
+    const [alice] = run.items;
+    const stepRuntime = {
+      agent: async () => ({ ok: false, items: [], error: "the downstream re-draft threw on release: cannot read properties of undefined" }),
+    };
+    await approveCompiledRun({
+      projectId,
+      runId: run.id,
+      decisions: { [stableActionId(run, alice)]: { decision: "approve" } },
+      stepRuntime,
+      options,
+    });
+
+    const logged = failures(queueDir);
+    assert.equal(logged.length, 1, "the compiled-run approval leg's downstream failure IS filed — the parallel hole is closed");
+    assert.equal(logged[0].category, "node-error");
+    assert.equal(logged[0].failureClass, "self_inflicted");
+    assert.match(logged[0].errorSnippet, /downstream re-draft threw on release/);
   });
 
   // ── (d) BAD OUTPUT as PURE OBSERVATION — ok:true carries meta.badOutput (finding #5) ───────────
