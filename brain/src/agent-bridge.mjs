@@ -241,6 +241,45 @@ export function parseAgentItems(text) {
   return [];
 }
 
+// Classify WHY parseAgentItems came back with no usable items, so the run path can tell a genuine
+// "found nothing" apart from bad model output (path (d) of the self-observing failure log). parseAgentItems
+// deliberately collapses every no-item case to [] and its contract must not change (many callers and its
+// own test depend on that). This is a separate, side-effect-free read of the SAME text:
+//   - null                 → not a bad-output case; the caller keeps ok:true. Either the parse actually
+//                            produced items, or the model explicitly returned a parseable EMPTY array
+//                            ([] — "I have nothing to return"), which is a legitimate honest-empty result.
+//   - "empty_output"       → the model returned blank / whitespace-only text (it said nothing at all).
+//   - "unparseable_output" → the model returned non-empty prose but nothing JSON-parseable — garbage the
+//                            step cannot use, a real bug to surface rather than a silent empty success.
+// It mirrors parseAgentItems' candidate scan so the two can never disagree about what "parseable" means.
+export function classifyEmptyItems(text) {
+  if (typeof text !== "string" || !text.trim()) return "empty_output";
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidates = [];
+  if (fenced) candidates.push(fenced[1].trim());
+  const arrStart = text.indexOf("[");
+  const arrEnd = text.lastIndexOf("]");
+  if (arrStart !== -1 && arrEnd > arrStart) candidates.push(text.slice(arrStart, arrEnd + 1));
+  const objStart = text.indexOf("{");
+  const objEnd = text.lastIndexOf("}");
+  if (objStart !== -1 && objEnd > objStart) candidates.push(text.slice(objStart, objEnd + 1));
+  candidates.push(text.trim());
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      // A parseable empty array (or an object that coerces to an empty array) is an honest empty result,
+      // not bad output — the model followed the contract and had nothing to hand back.
+      if (Array.isArray(parsed) && parsed.length === 0) return null;
+      const coerced = coerceAgentItems(parsed);
+      if (Array.isArray(coerced)) return null;
+    } catch {
+      // try the next candidate
+    }
+  }
+  // Non-empty text that yields nothing parseable is unusable model output — a real bug, not an empty result.
+  return "unparseable_output";
+}
+
 // The teammate's pre-JSON prose — its plain-language reasoning, captured not discarded (Wave 2). With
 // the narrate-then-fenced-JSON prompt the model thinks aloud for the watching founder, then emits the
 // items in a fenced block; that prose is the reasoning the run and the gate can surface. We take the
@@ -512,7 +551,22 @@ export function createClaudeAgentInvoker({ cwd = process.cwd(), model, maxTurns 
     if (error) {
       return { ok: false, items: [], reasoning, error: error.message, meta: { invoked: ref, contextManifest: built.manifest, errorKind: error.kind, retriable: error.retriable, ...toolMeta } };
     }
-    return { ok: true, items: parseAgentItems(text), reasoning, meta: { invoked: ref, contextManifest: built.manifest, ...toolMeta } };
+    const resultItems = parseAgentItems(text);
+    // Path (d) — bad model output. The call succeeded (no quota/turn error) but produced no usable items.
+    // Distinguish a genuine honest-empty result (the model returned a parseable [] — keep ok:true, items []
+    // is correct) from unusable output (blank text, or non-empty prose with nothing parseable). The latter
+    // is a real bug: fail the step loudly with an errorKind the self-observation sink tags as "bad-output",
+    // instead of masquerading as an empty success the way this path used to.
+    if (resultItems.length === 0) {
+      const badKind = classifyEmptyItems(text);
+      if (badKind) {
+        const reason = badKind === "empty_output"
+          ? "The agent returned no output at all — the model produced nothing to hand back."
+          : "The agent returned output that could not be read as result items — the model's reply was not usable.";
+        return { ok: false, items: [], reasoning, error: reason, meta: { invoked: ref, contextManifest: built.manifest, errorKind: badKind, retriable: false, ...toolMeta } };
+      }
+    }
+    return { ok: true, items: resultItems, reasoning, meta: { invoked: ref, contextManifest: built.manifest, ...toolMeta } };
   };
 }
 
@@ -592,7 +646,10 @@ export function createClaudeMicroproductInvoker({ cwd = process.cwd(), model, ma
     }
     const parsed = parseAgentObject(text);
     if (!parsed) {
-      return { ok: false, error: "Microproduct producer did not return a JSON { artifactSpec, artifactFiles } object.", meta: { toolCalls } };
+      // Path (d) — bad model output: the producer ran clean but returned no parseable object. Tag it so the
+      // self-observation sink files it as "bad-output" (blank text vs unusable prose), not a generic error.
+      const badKind = text && text.trim() ? "unparseable_output" : "empty_output";
+      return { ok: false, error: "Microproduct producer did not return a JSON { artifactSpec, artifactFiles } object.", meta: { errorKind: badKind, retriable: false, toolCalls } };
     }
     const artifactSpec = parsed.artifactSpec ?? parsed.spec ?? null;
     const artifactFiles = coerceArtifactFiles(parsed.artifactFiles ?? parsed.files);
@@ -679,7 +736,20 @@ export function createCodexAgentInvoker({ cwd = process.cwd(), model, binary = "
         meta: { provider: "codex", invoked: ref },
       };
     }
-    return { ok: true, items: parseAgentItems(text), meta: { provider: "codex", invoked: ref, contextManifest: built.manifest } };
+    const resultItems = parseAgentItems(text);
+    // Path (d) — bad model output on the codex path, mirroring the Claude invoker: a clean exit with no
+    // usable items is either an honest empty ([]) or unusable output. Only the latter fails the step with a
+    // bad-output errorKind the self-observation sink can tag.
+    if (resultItems.length === 0) {
+      const badKind = classifyEmptyItems(text);
+      if (badKind) {
+        const reason = badKind === "empty_output"
+          ? `Codex agent "${ref}" returned no output at all.`
+          : `Codex agent "${ref}" returned output that could not be read as result items.`;
+        return { ok: false, items: [], error: reason, meta: { provider: "codex", invoked: ref, contextManifest: built.manifest, errorKind: badKind, retriable: false } };
+      }
+    }
+    return { ok: true, items: resultItems, meta: { provider: "codex", invoked: ref, contextManifest: built.manifest } };
   };
 }
 

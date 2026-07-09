@@ -17,6 +17,18 @@
 import path from "node:path";
 import { reportFriction, updateFrictionItem, listFrictionQueue, slugify, DEFAULT_QUEUE_DIR } from "./friction.mjs";
 
+// Resolve where this failure gets filed. An explicit options.queueDir always wins. Otherwise, when the
+// caller isolates its session to a store root (options.root — every operator unit test does this, and the
+// run-path hooks thread the session's options straight through), the self-observation queue is isolated to
+// that SAME root at <root>/dogfood/queue. Without this, an isolated test run would silently write real
+// self-observed failures into the live repo dogfood/queue/ — polluting the founder's queue and coupling
+// otherwise-isolated tests through one shared growing file. Production passes neither, so it lands on the
+// real DEFAULT_QUEUE_DIR exactly as before.
+function resolveQueueOptions(options = {}) {
+  if (options.queueDir || !options.root) return options;
+  return { ...options, queueDir: path.join(options.root, "dogfood", "queue") };
+}
+
 // The four capture paths — where a failure entered our observation. An observability taxonomy, not a GTM
 // vocabulary: it names HOW we saw the failure (a crash vs a stall vs a node error vs bad model output).
 export const FAILURE_CATEGORIES = ["run-crash", "run-stall", "node-error", "bad-output"];
@@ -191,7 +203,8 @@ function reportHeadline({ category, graphLabel, graphId, nodeLabel }) {
 // Keying on OPEN status is intentional: a founder marking an entry resolved lets the same failure re-open a
 // fresh entry later. This does synchronous file IO exactly like reportFriction — nothing is awaited, so the
 // run loop's control flow never depends on it.
-export function logFailure(input = {}, options = {}) {
+export function logFailure(input = {}, rawOptions = {}) {
+  const options = resolveQueueOptions(rawOptions);
   const now = options.now ? new Date(options.now) : new Date();
   const stamp = now.toISOString();
   const ctx = buildFailureContext(input);
@@ -246,7 +259,9 @@ export function logFailure(input = {}, options = {}) {
     },
     { ...options, now: stamp },
   );
-  return { file: record.file, signature: ctx.signature, occurrences: 1, bumped: false };
+  // Return the basename so the create and dedup-bump paths agree on the shape, matching what
+  // listFrictionQueue and the founder surface use to key a queue item.
+  return { file: path.basename(record.file), signature: ctx.signature, occurrences: 1, bumped: false };
 }
 
 // The never-throws shell the run path calls. It swallows EVERYTHING — a bad input, a full disk, a throw

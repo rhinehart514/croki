@@ -5,7 +5,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { json, readBody, srcDir } from "./util.mjs";
 import { loadProject } from "../project-store.mjs";
-import { reportFriction, listFrictionQueue } from "../friction.mjs";
+import { reportFriction, listFrictionQueue, DEFAULT_QUEUE_DIR } from "../friction.mjs";
 import { enqueueFeatureRequest } from "../feature-builder.mjs";
 import { listFlowsNeedingFounder } from "../operator-store.mjs";
 
@@ -60,7 +60,10 @@ export default async function handle({ req, res, url }) {
   // transientCount }. The grouping is by signature — dedup already collapsed recurrences into one file with
   // an occurrences count, so one open self-observed file == one group. Newest lastSeen first.
   if (req.method === "GET" && url.pathname === "/api/friction") {
-    try { json(res, 200, buildFailureLogView(listFrictionQueue())); }
+    try {
+      const queue = listFrictionQueue();
+      json(res, 200, buildFailureLogView({ reports: enrichWithContext(queue) }));
+    }
     catch (err) { json(res, 500, { error: err instanceof Error ? err.message : String(err) }); }
     return true;
   }
@@ -139,13 +142,40 @@ export default async function handle({ req, res, url }) {
   return false;
 }
 
+// Read the "## Context" JSON block a self-observed failure wrote (see logFailure in failure-log.mjs) off
+// each queue file and attach its reproducible fields — the pipeline label, the step label, and the
+// normalized errorKind — onto the report. listFrictionQueue parses only the frontmatter + the one-line
+// errorSnippet; the richer context lives in the body, so this is where the surface picks it up. Read-only,
+// best-effort: a file that can't be read or has no Context block just keeps the null defaults (honest
+// absence, never invented). Manual friction (no signature) is skipped entirely.
+function enrichWithContext(queue) {
+  const { queueDir = DEFAULT_QUEUE_DIR, reports = [] } = queue ?? {};
+  return reports.map((r) => {
+    if (!r.signature) return r;
+    let context = null;
+    try {
+      const text = fs.readFileSync(path.join(queueDir, r.file), "utf8");
+      // Grab the JSON fenced block that follows the "## Context" heading.
+      const m = text.match(/##\s*Context\s*\n+```json\s*\n([\s\S]*?)\n```/);
+      if (m) context = JSON.parse(m[1]);
+    } catch { /* unreadable / malformed — leave the context null, fields stay their honest defaults */ }
+    return {
+      ...r,
+      pipeline: context?.pipeline?.label ?? context?.pipeline?.id ?? null,
+      step: context?.step?.label ?? null,
+      errorKind: context?.errorKind ?? null,
+    };
+  });
+}
+
 // Shape the raw friction queue into the FailureLogView the founder surface reads (ui/src/api.ts). Only
 // self-observed failures (those carrying a signature) become groups; manual friction is excluded. Dedup
 // already collapsed recurrences into one file per signature, so this maps one open self-observed report to
 // one group, sorts newest lastSeen first, and counts the self-inflicted vs transient split.
 //
-// SCAFFOLD (lane: SURFACE): pure and deterministic — no model, no IO beyond the reports handed in. The
-// SURFACE builder owns this file; keep the returned shape byte-compatible with FailureLogView.
+// Pure and deterministic — no model, no IO. The route reads each item's Context JSON via enrichWithContext
+// above and hands the reports in already carrying pipeline / step / errorKind. Keep the returned shape
+// byte-compatible with FailureLogView (ui/src/api.ts).
 export function buildFailureLogView({ reports = [] } = {}) {
   const failures = reports.filter((r) => r.signature && r.status !== "resolved");
   const groups = failures
@@ -153,12 +183,16 @@ export function buildFailureLogView({ reports = [] } = {}) {
       signature: r.signature,
       category: r.category ?? null,
       failureClass: r.failureClass === "transient" ? "transient" : "self_inflicted",
-      errorKind: null, // errorKind isn't surfaced in frontmatter yet; the surface reads category for now.
+      // The normalized errorKind token (code_throw, timeout, unparseable_output, …), read off the item's
+      // Context JSON by enrichWithContext; null when the item predates that field or couldn't be read.
+      errorKind: r.errorKind ?? null,
       occurrences: Number.isFinite(r.occurrences) ? r.occurrences : 1,
       firstSeen: r.firstSeen ?? null,
       lastSeen: r.lastSeen ?? r.capturedAt ?? null,
-      pipeline: null, // pipeline/step live in the item's Context JSON; the SURFACE builder can surface them.
-      step: null,
+      // The pipeline it happened in + the step that failed — from the Context JSON, so the surface names
+      // "which pipeline, which step" instead of just a signature. Null stays null (a crash/stall has no step).
+      pipeline: r.pipeline ?? null,
+      step: r.step ?? null,
       errorSnippet: r.errorSnippet ?? null,
       file: r.file,
       status: r.status ?? "open",
