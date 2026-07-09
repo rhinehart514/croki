@@ -87,16 +87,22 @@ describe("project merge + delete", () => {
     assert.equal(listInputs("beta", options).length, 0); // source store purged
   });
 
-  it("keeps the target's pasted credentials authoritative and purges the source's", () => {
+  it("leaves the founder's universal credentials untouched across a merge", () => {
+    // Credentials are FOUNDER-OWNED and UNIVERSAL (one global slot, projectId ignored) since
+    // 2026-07-08 — see credential-store.mjs. So setting "clay" under alpha then beta is the same slot
+    // written twice; the second write wins for every project. A merge has no per-project credential
+    // file to move or purge, and must leave the surviving credential in place for the target.
     setCredential("alpha", { provider: "clay", token: "sk-alpha" }, options);
     setCredential("beta", { provider: "clay", token: "sk-beta" }, options);
 
+    // Before the merge both projects already read the universal (last-written) value.
+    assert.equal(getCredential("alpha", "clay", options).token, "sk-beta");
+    assert.equal(getCredential("beta", "clay", options).token, "sk-beta");
+
     mergeProjects(["beta"], "alpha", options);
 
-    // Target wins (credentials have no move step) and the source's pasted key is purged with its file.
-    assert.equal(getCredential("alpha", "clay", options).token, "sk-alpha");
-    assert.equal(getCredential("beta", "clay", options), null);
-    assert.equal(fs.existsSync(path.join(parent, "credentials", "beta.json")), false);
+    // The merge leaves the founder's universal credential intact for the surviving target.
+    assert.equal(getCredential("alpha", "clay", options).token, "sk-beta");
   });
 
   it("is idempotent on re-running the same merge (dedupe by id)", () => {

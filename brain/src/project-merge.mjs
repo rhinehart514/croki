@@ -22,9 +22,9 @@ import { getGtmIdea, listGtmIdeas, saveGtmIdea } from "./idea-store.mjs";
 // - STAYS PUT (global, keyed by graphId): flows. A moved channel keeps its existing graphId, so
 //   `loadFlow(graphId)` still finds the flow file. The graphId prefix becomes a cosmetic, opaque
 //   string under the target — never rekeyed.
-// - TARGET AUTHORITATIVE (one file per projectId, dropped from the source on merge): founder-pasted
-//   credentials. Same-repo dedup means the source's keys duplicate the target's; the target's pasted
-//   keys win, and the source's file is purged with the rest, matching the sharedContext rule.
+// - NOT TOUCHED (founder-owned, UNIVERSAL): pasted credentials. Since 2026-07-08 credentials live in
+//   one global slot keyed by provider, not per project (credential-store.mjs) — a merge has no
+//   per-project credential file to move or purge, so the founder's connections carry through untouched.
 // - UNIONED ON THE TARGET PROJECT OBJECT: channels (deduped by id). The target keeps its own
 //   sharedContext (its repo grounding) as authoritative.
 
@@ -34,11 +34,11 @@ function safeId(value) {
 
 // The per-project store files this module owns (keyed by safeId(projectId)). Each is
 // `<root>/<dir>/<safeId(projectId)>.json`. Purged from a source on merge and from a project on delete.
-// "credentials" stays target-authoritative — it has no move step, so the source's pasted keys drop
-// when this purges them. (gtm-ideas is keyed by idea id, not projectId, so it is repointed in place
-// like operator sessions, not listed here.)
+// Credentials are NOT listed — they are founder-owned and universal (one global slot, not per project),
+// so there is nothing per-project to purge. (gtm-ideas is keyed by idea id, not projectId, so it is
+// repointed in place like operator sessions, not listed here.)
 const PROJECT_STORE_DIRS = [
-  "feedback-ledger", "product-models", "domain-events", "inputs", "credentials",
+  "feedback-ledger", "product-models", "domain-events", "inputs",
 ];
 
 function dedupeById(existing, incoming, targetId) {
