@@ -140,6 +140,10 @@ export default async function handle({ req, res, url }) {
       // browser-only release guard (W2b): the same session-token/agent-header check the raw graph-run path
       // uses, so an agent-stamped or token-less APPROVAL at the operator gate is refused too. Both guards
       // hold — role AND browser session — defense in depth.
+      // Area 5 MOVE 1 — the founder's explicit deploy confirmation rides this SAME body: the UI's "Ship it
+      // live" button sends `deployConfirmed:true`, which the whole `body` forwards to resolveOperatorGate
+      // (it builds the deploy authorization from it and threads it onto node.runtime). No allowlist strips
+      // it and the route never invents it, so only a real founder body carrying it clears the deploy GUARD 2.
       else if (action === "gate") session = await resolveOperatorGate(sessionId, { ...body, request: req }, { authorizeReleaseForRequest: authorizeReleaseForRequest(req) });
       // Send ONE staged item back to the crew to rework, with the founder's note. Releases nothing — it
       // re-drives to a fresh gate — so it takes the same authorizers as `gate` but never crosses the wall.

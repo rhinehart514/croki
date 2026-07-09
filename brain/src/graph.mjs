@@ -476,6 +476,16 @@ export async function runGraph(graph, opts = {}) {
     // wired never sends. It carries only the delivery seam; the gate stamp on the ITEM still governs
     // WHETHER a message is eligible to send — this only governs HOW an already-approved one leaves.
     sendRunners = null,
+    // The live deploy-runner map an execute connector reaches to ACTUALLY go live (context.deployRunners
+    // .vercel → a real hosted deploy). Host-supplied per run and rebuilt from these opts every run, so
+    // composition and a model-driven run can never write it — the SAME posture as sendRunners and
+    // deployAuthorization. It carries only the ship seam (the HOW); WHETHER a microproduct may deploy is
+    // still the item's gate stamp AND the explicit deployAuthorization on node.runtime, both of which the
+    // deploy connector checks BEFORE it reaches any runner here. Absent it, the deploy connector falls back
+    // to its BYO git-push default (the zero-credential alpha path); a hosted (Vercel) deploy needs a runner
+    // wired here. It is NEVER the authorization — a run with a deployRunner but no founder confirmation
+    // still refuses (the deploy connector reads the confirmation only from node.runtime).
+    deployRunners = null,
     // Host-injected plain-language translator for the founder gate (agent-bridge.createGateTranslator).
     // It turns each staged item's SAFE framing (no body) into a founder-plain headline + a "what your yes
     // does" line. Host-supplied per run and never forgeable by composition; absent (every unit test, any
@@ -564,6 +574,12 @@ export async function runGraph(graph, opts = {}) {
     // Rebuilt from opts every run — composition/run cannot forge it — and only present when the host
     // explicitly wired a runner; absent it the connector stages, never sends.
     if (sendRunners) context.sendRunners = sendRunners;
+    // The live ship seam an execute connector reads to go live for real (context.deployRunners.vercel).
+    // Rebuilt from opts every run — composition/run cannot forge it — and only present when the host
+    // explicitly wired a runner; absent it the deploy connector uses its BYO git-push default, and a
+    // hosted deploy stays a blocked no-op. It is only the HOW; the two founder authorizations the deploy
+    // connector checks first (gate stamp + node.runtime.deployAuthorization) remain the WHETHER.
+    if (deployRunners) context.deployRunners = deployRunners;
     context.__run = {
       runId,
       originRunId: resumeResult?.runId ?? runId,

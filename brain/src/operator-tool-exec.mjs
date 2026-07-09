@@ -721,6 +721,18 @@ export async function executeTool(session, tool, options = {}) {
       throw new Error("The microproduct producer returned no files to stage — refusing to compose an empty deploy.");
     }
 
+    // MOVE 2 — is this a standalone MICROPRODUCT (its own artifact) or an IN-REPO product CHANGE (files
+    // that land at real paths inside the founder's product)? The producer signals in-repo intent on the
+    // spec (`inRepo:true` or `target:"in-repo"`), or the founder does via `input.target`. An in-repo change
+    // takes the SAME leg as a microproduct — the same worktree cut off the real repo, the same local build
+    // against the product's own tests, the same stop-before-commit, the same double-authorized gate — the
+    // only difference is WHERE the files land and that the ship leg is the BYO push/PR of that real worktree
+    // (deploy.mjs's zero-credential alpha path). A standalone microproduct still builds in an isolated dir
+    // with no git remote, so its ship path is the hosted Vercel runner, never a BYO push into nothing.
+    const inRepoChange = artifactSpec?.inRepo === true
+      || artifactSpec?.target === "in-repo"
+      || String(input.target || "").trim() === "in-repo";
+
     // 1b) BUILD the artifact locally BEFORE the gate, so the founder approves a built, previewable
     //     microproduct — not raw file text. buildMicroproduct writes the producer files into an isolated
     //     build dir, runs any local install/build (assertLocalBuildCommand rejects a deploy-like command,
@@ -728,6 +740,9 @@ export async function executeTool(session, tool, options = {}) {
     //     list). It NEVER commits, pushes, or deploys. Injectable for tests; the live default is the real
     //     local build leg. A build failure is surfaced but never blocks reaching the gate — the founder
     //     still reviews the raw files, just without a rendered preview.
+    //     For an IN-REPO change, we pass `repo` so buildMicroproduct cuts a git worktree OFF the real repo
+    //     (a branch, files written against real paths) — the exact worktree the BYO push/PR ships. A
+    //     standalone microproduct passes no repo (isolated dir), keeping its ship path the hosted runner.
     const buildLocally = options.buildMicroproduct || buildMicroproduct;
     let preview = null;
     let build = null;
@@ -739,6 +754,7 @@ export async function executeTool(session, tool, options = {}) {
           install: artifactSpec?.install,
           build: artifactSpec?.build ?? artifactSpec?.buildCommand,
           previewDir: artifactSpec?.previewDir,
+          ...(inRepoChange ? { repo } : {}),
         },
         { worktreeRoot: path.join(storeRoot(options), "microproduct-builds") },
       );
@@ -756,6 +772,17 @@ export async function executeTool(session, tool, options = {}) {
         : `${artifactSpec?.kind || "artifact"} · ${artifactFiles.length} file${artifactFiles.length === 1 ? "" : "s"} — staging it behind the founder gate before any deploy.`,
       data: { kind: artifactSpec?.kind ?? null, fileCount: artifactFiles.length, previewEntry: preview?.entry ?? null, previewBuilt: Boolean(preview?.exists) },
     }, options);
+
+    // MOVE 3 — a proposed/scaffolded/shipped product CHANGE is ONE object on the shared map, identified by
+    // Area 1's `change:<repo>#<path>` key. We surface that identity on the staged item so the run-derivation
+    // touch deriver (recordObjectTouchesFromRun) files it as a `change` object at the SAME seam every other
+    // object uses — no separate change registry. inferKind reads `repo` + `path` off the item and keys it
+    // `change:<repo>#<path>`; the run-to-gate pass records a "proposed" touch, the gate-resume deploy pass a
+    // "shipped" touch, and a later win joins to the same key through Area 7's motionKind. The change's
+    // primary path is the producer-named entry, else the first file — one logical change, one object key.
+    const primaryChangePath = inRepoChange
+      ? String(artifactSpec?.entry || artifactSpec?.path || artifactFiles[0]?.path || "").trim()
+      : "";
 
     // 2) Compose the deploy graph: the built artifact (a provided source item) → founder gate → deploy
     //    (an execute node). composeNakedGraph normalizes, binds the IO, and RE-ASSERTS the wall — the
@@ -791,6 +818,10 @@ export async function executeTool(session, tool, options = {}) {
         microproduct: true,
         ...(preview ? { preview } : {}),
         ...(build?.worktree ? { buildWorktree: build.worktree } : {}),
+        // MOVE 3 change-object identity: an in-repo change carries `kind:"change"` + `repo` + `path` so the
+        // touch deriver keys it `change:<repo>#<path>` and it lands on the shared map like any other object.
+        // A standalone microproduct carries none of these — it is not a change to the founder's product.
+        ...(inRepoChange && primaryChangePath ? { kind: "change", repo, path: primaryChangePath } : {}),
       }] },
       output: { type: "local" },
     }, { ...options, compose: async () => microproductSpec });
@@ -802,7 +833,17 @@ export async function executeTool(session, tool, options = {}) {
     const deploy = graph.nodes.find((node) => node.category === "execute");
     if (deploy) {
       deploy.connector = "deploy";
-      deploy.config = { ...deploy.config, target, microproduct: true };
+      // MOVE 1/2 — set the ship leg's target. For an IN-REPO change, config.repo is the build worktree (the
+      // branch cut off the real repo), so deploy.mjs's BYO runner pushes THAT worktree — the zero-credential
+      // alpha ship path (PR + BYO push). branch/remote ride along so the push targets the change branch, not
+      // the founder's default. This is config only (composition's reach); it is NOT an authorization — the
+      // deploy connector still refuses without the founder's explicit deployConfirmation on node.runtime, so
+      // setting config.repo can never itself ship. A standalone microproduct leaves config.repo unset (its
+      // isolated build dir has no git remote); its ship path is the hosted Vercel runner via deployRunners.
+      const shipConfig = inRepoChange && build?.worktree
+        ? { repo: build.worktree, runner: "byo", ...(build.branch ? { branch: build.branch } : {}) }
+        : {};
+      deploy.config = { ...deploy.config, target, microproduct: true, ...shipConfig };
       graph.revision = (graph.revision ?? 1) + 1;
       const revalidated = validateGraph(graph);
       if (!revalidated.ok) throw new Error(`Microproduct deploy graph is invalid: ${revalidated.errors.join(" ")}`);

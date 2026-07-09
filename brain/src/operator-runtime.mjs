@@ -14,6 +14,7 @@ import { marketObjectStore } from "./gtm-store.mjs";
 import { applyGraphOperations } from "./graph-operations.mjs";
 import { hasApproveIntent, runGraph } from "./graph.mjs";
 import { defaultSendRunners } from "./connectors/execute/gmail-transport.mjs";
+import { defaultDeployRunners } from "./connectors/execute/deploy-transport.mjs";
 import {
   armNextWake,
   getOperatorSession,
@@ -533,6 +534,14 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
     // HOW an approved message leaves (e.g. a real Gmail send); WHETHER it may leave is still the item's
     // gate stamp, set only by the authorized release above. Host-supplied here, never by composition.
     sendRunners: options.sendRunners ?? defaultSendRunners(),
+    // The live SHIP seam, populated beside sendRunners: this gate-resume run is the ONE path where a
+    // founder-approved microproduct reaches the deploy connector, so it is where a real go-live must be
+    // able to happen. The map only carries HOW an approved artifact ships (a hosted Vercel deploy via the
+    // injected MCP tool); WHETHER it may ship is still the item's gate stamp AND the explicit deploy
+    // confirmation (deployAuthorization above), both host-only. The BYO git-push primary path is the
+    // deploy connector's own default and needs no runner here — so with no Vercel account connected this
+    // map is honestly empty and BYO is used. Never populated by composition.
+    deployRunners: options.deployRunners ?? defaultDeployRunners(),
     // Defense-in-depth at the gate point: re-assert authority inside the runner before any approval is
     // applied. authorizeGateRelease already passed above (or this code is unreachable); re-running it
     // here means the wall holds even if a future caller wires runGraph approvals without the front guard.

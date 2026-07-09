@@ -45,15 +45,16 @@
 // `deployed: false` with a clear "refused — needs explicit founder gate approval" status, and
 // returns `ok: false`. There is no silent send/deploy path.
 //
-// NOTE (status, deliberate): the founder deploy confirmation is now THREADED end-to-end — an
-// explicit founder deploy confirm at the gate (`payload.deployConfirmed === true`) is built into a
-// deploy authorization by `resolveOperatorGate` and carried through `runGraph` onto `node.runtime`,
-// where this connector reads it. What remains deferred scaffolding — like the autonomy ladder and
-// the BYO credential store — is the live SHIP runner: a configured BYO git remote/hook
-// (`config.repo`) and the MCP-backed Vercel runner (`context.deployRunners.vercel`) are not yet
-// wired into the live run path, so an end-to-end LIVE deploy is not yet operable. Absent a wired
-// runner the connector returns an honest blocked no-op, never a fake deploy. The safety contract —
-// deploy is founder-only and unforgeable by composition — is real and enforced now.
+// NOTE (status): the SHIP leg is now LIVE end-to-end (Area 5). The founder deploy confirmation is
+// threaded — an explicit founder deploy confirm at the gate (`payload.deployConfirmed === true`) is
+// built into a deploy authorization by `resolveOperatorGate` and carried through `runGraph` onto
+// `node.runtime`, where this connector reads it. Both live runners are wired: the BYO git push (the
+// primary alpha path — `config.repo` is set at compose time to the build worktree cut off the real
+// repo, zero new credentials) and the hosted Vercel runner (`context.deployRunners.vercel`, populated
+// beside `sendRunners` from an injected MCP deploy tool). With no worktree/remote configured (a
+// standalone microproduct with no Vercel account) the connector still returns an honest blocked no-op,
+// never a fake deploy. The safety contract — deploy is founder-only, needs BOTH authorizations, and is
+// unforgeable by composition — is real and enforced now.
 
 import { execFileSync } from "node:child_process";
 
