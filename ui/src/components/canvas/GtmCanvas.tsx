@@ -1,13 +1,13 @@
 import { GraphCanvas, type OperatorCursorState } from "@/components/GraphCanvas";
 import type { NodeEditorBridge } from "@/components/nodeEditorBridge";
 import type { GatePromote } from "@/lib/gateItem";
+import type { WovenAxis, WovenFocus } from "@/lib/wovenOverlay";
 import { CanvasShell, type LensDef, type LensProps } from "@/components/canvas/CanvasShell";
 import type {
   ChannelFeed, ChannelMeta, Claim, ConnectorMeta, DirectedFeed, GateDecision, GateDeltaDecision, GtmExperiment, GTMContractAudit, GTMGraph, GTMItem, GTMNode,
-  GTMRunResult, NodeSelection, OperatingView, Person,
+  GTMRunResult, NodeSelection, OperatingView, Person, WovenGraph,
 } from "@/types";
 import type { RunSummary } from "@/api";
-import { OperatorLens as OperatorLensView } from "@/components/lenses/OperatorLens";
 
 // GtmCanvas — GTM mode's instance of the generic CanvasShell. It projects the GTM operational object
 // model through two lenses, chosen by channel state alone (no in-canvas switcher):
@@ -76,7 +76,7 @@ export type GtmCanvasModel = {
   // The literal one-coordinate-space unification: every other pipeline's graph, so channel-flow
   // renders ALL of them as lanes in one canvas instead of swapping which one is on screen. Absent
   // (or a single channel) behaves exactly like today's single-pipeline canvas.
-  multiPipeline?: { channels: ChannelMeta[]; channelGraphs: Map<string, GTMGraph>; channelRunResults: Map<string, GTMRunResult | null> } | null;
+  multiPipeline?: { channels: ChannelMeta[]; channelGraphs: Map<string, GTMGraph>; channelRunResults: Map<string, GTMRunResult | null>; draggedByNode?: Map<string, { x: number; y: number }> } | null;
   // "Open this pipeline" (ChannelSwitcher, a board tile) pans the merged canvas to that lane without
   // touching node selection. A fresh token still re-pans even to the SAME channel.
   panTo?: { channelId: string; token: number; nodeId?: string } | null;
@@ -111,6 +111,23 @@ export type GtmCanvasModel = {
   onFlyToGate?: (target: { decisionId: string; sessionId: string | null; pipelineId: string | null; channelId: string }) => void;
   // Open a lane's pipeline in the Engineer lens (the single-motion editor) — a quiet route, never forced.
   onOpenLane?: (channelId: string) => void;
+  // ── The intertwined canvas (docs/INTERTWINED-CANVAS.md) — the Operator lens IS the woven canvas ──
+  // The woven projection over the same lanes + objects (object chips, tie edges, kind clusters), attached to
+  // the operating view by the backend. The Operator lens renders it as one GraphCanvas over the merged lanes.
+  woven?: WovenGraph | null;
+  // The projection axis (objects = the moat view, type = the spread/forms view) and the focus-to-trace
+  // selection — pure view state the host owns so the toggle persists across renders.
+  wovenAxis?: WovenAxis;
+  wovenFocus?: WovenFocus;
+  onWovenAxisChange?: (axis: WovenAxis) => void;
+  onWovenSelect?: (focus: WovenFocus) => void;
+  // Drag-to-wire a step onto an object chip / kind region — a composer steer, filled in by the crew.
+  onWireObject?: (sourceStepId: string, targetId: string) => void;
+  // Candidate lanes folded into the woven graph (docs/INTERTWINED-CANVAS.md decision 4) — the retired
+  // candidate board. Synthetic channel ids in multiPipeline rendered as dashed proposed lanes; picking one
+  // commits it live.
+  candidateLaneIds?: Set<string>;
+  onPickCandidate?: (channelId: string) => void;
 };
 
 type GtmLensProps = LensProps<GtmCanvasModel, never>;
@@ -195,22 +212,110 @@ function EngineerLens({ model: m }: GtmLensProps) {
   );
 }
 
-// OPERATOR — the one operating view over the whole fleet (GTM-MACHINE.md Area 6). Every motion drawn as a
-// uniform lane in one grammar, the shared objects drawn once with lane ties, the parked-at-gate state that
-// routes one click to the real founder gate. This REPLACES the old merged-lane overview as the many-motion
-// view; the Engineer lens below stays the single-motion editor. Strictly read-only — it renders state and
-// routes to real decisions, never emitting next-move prose.
+// OPERATOR — the INTERTWINED CANVAS (docs/INTERTWINED-CANVAS.md). The whole fleet as ONE woven graph:
+// every motion still a lane in one grammar, but now the shared objects are drawn once ON the canvas as
+// chips with tie edges converging from the steps that touched them — the intertwining drawn once, where the
+// threads meet. The old three-region OperatorLens (stacked lanes + a separate shared-map band + the
+// candidate board) collapses into this single surface: candidates are dashed lanes, the shared map is the
+// object chips, and the type-axis forms map is one toggle away. It reuses GraphCanvas's React Flow engine,
+// the merged-lane layout, the parked-gate pulse + fly-to, and every editing handler — a lane is a real
+// editable graph, and every edit re-derives the projection so new touches draw new ties live. The gate is
+// absolute through every edit. Two altitudes: the object axis (the moat view) and the type axis (the
+// forms/spread view); semantic zoom fans clusters into lanes as you zoom in.
 function OperatorLensPane({ model: m }: GtmLensProps) {
-  // No gutter padding here — the lens fills this pane with position:absolute, so it owns the
-  // --pentry-gutter offset on its own left edge (see .operator-lens in OperatorLens.css). Padding the
-  // pane would be ignored by the absolute child and slide the map under the product column.
+  // Nothing wired yet → the compose invitation on the empty node ground, never empty scaffolding. The
+  // woven canvas has nothing to weave with no lanes.
+  const hasLanes = (m.operatingView?.lanes.length ?? 0) > 0 || m.channels.length > 0;
+  if (m.operatingView && !hasLanes) {
+    return (
+      <div className="operator-lens-pane" style={{ position: "relative", height: "100%", minHeight: 0, ...GUTTER_STYLE }}>
+        <div className="blank-channel-guide">
+          <strong>Your operation lives here</strong>
+          <span>
+            Every go-to-market motion you run shows up as a lane on one canvas — outbound, pages minted from
+            your data, product changes — with the people, places, and pages they share drawn once where the
+            motions cross. State a goal and the first motion appears. Nothing sends without you.
+          </span>
+          {m.onComposeFirst ? (
+            <button type="button" className="blank-channel-compose" onClick={m.onComposeFirst}>
+              State a go-to-market goal
+            </button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  const axis = m.wovenAxis ?? "objects";
+  // The parked lane count — surfaced on the axis bar so a waiting decision is never buried under the map.
+  const parkedCount = (m.operatingView?.lanes ?? []).filter((l) => l.runState === "parked").length;
   return (
-    <div className="operator-lens-pane" style={{ position: "relative", height: "100%", minHeight: 0, overflow: "auto" }}>
-      <OperatorLensView
-        view={m.operatingView ?? null}
-        onFlyToGate={m.onFlyToGate}
-        onOpenLane={m.onOpenLane}
-        onComposeFirst={m.onComposeFirst}
+    <div className="operator-lens-pane" style={{ position: "relative", height: "100%", minHeight: 0, ...GUTTER_STYLE }}>
+      {/* The one axis toggle — by shared objects (the moat) vs by GTM type (the forms/spread). Pure view
+          state; selection persists across it. The parked chip rides here so a needs-you decision is always
+          visible above the canvas. Opaque chrome, monochrome — the only color is the parked state. */}
+      <div className="woven-axisbar">
+        <div className="woven-axisseg" role="group" aria-label="Canvas axis">
+          <button type="button" className={axis === "objects" ? "on" : ""} aria-pressed={axis === "objects"} onClick={() => m.onWovenAxisChange?.("objects")}>
+            By shared objects
+          </button>
+          <button type="button" className={axis === "type" ? "on" : ""} aria-pressed={axis === "type"} onClick={() => m.onWovenAxisChange?.("type")}>
+            By GTM type
+          </button>
+        </div>
+        {m.wovenFocus ? (
+          <button type="button" className="woven-clearfocus" onClick={() => m.onWovenSelect?.(null)}>
+            Clear focus
+          </button>
+        ) : null}
+        {parkedCount ? <span className="woven-parked"><b>{parkedCount}</b> need you</span> : null}
+      </div>
+      <GraphCanvas
+        connectors={m.connectors}
+        contractAudits={m.contractAudits}
+        graph={m.graph ?? LANDING_EMPTY_GRAPH}
+        proposedNodeIds={m.proposedNodeIds}
+        proposedEdgeIds={m.proposedEdgeIds}
+        revealedNodeIds={m.revealedNodeIds}
+        proposalActive={m.proposalActive}
+        onResolveProposal={m.onResolveProposal}
+        onSubmitReview={m.onSubmitReview}
+        gatePromote={m.gatePromote}
+        gateOffer={m.gateOffer}
+        onRecordOutcome={m.onRecordOutcome}
+        onRefineItem={m.onRefineItem}
+        onDecideDelta={m.onDecideDelta}
+        onAskClaude={m.onAskClaude}
+        onOpenAgentProfile={m.onOpenAgentProfile}
+        runSummary={m.runSummary}
+        onApproveGate={m.onApproveGate}
+        onAddNode={m.onAddNode}
+        onConnectNodes={m.onConnectNodes}
+        onDeleteEdges={m.onDeleteEdges}
+        onNodePositionChange={m.onNodePositionChange}
+        onSelect={m.onSelect}
+        onPaneClick={m.onPaneClick}
+        operatorCursor={m.operatorCursor}
+        nodeEditor={m.nodeEditor}
+        // The whole fleet as merged lanes — the substrate the woven overlay hangs on.
+        multiPipeline={m.multiPipeline}
+        panTo={m.panTo}
+        people={m.people}
+        panelOpen={false}
+        result={m.result}
+        running={m.running}
+        runningNodeId={m.runningNodeId}
+        nodeBeats={m.nodeBeats}
+        selection={m.selection}
+        subsystemHealth={m.subsystemHealth}
+        // The intertwining itself.
+        woven={m.woven}
+        wovenAxis={axis}
+        wovenFocus={m.wovenFocus}
+        onWovenSelect={m.onWovenSelect}
+        onWireObject={m.onWireObject}
+        candidateLaneIds={m.candidateLaneIds}
+        onPickCandidate={m.onPickCandidate}
       />
     </div>
   );

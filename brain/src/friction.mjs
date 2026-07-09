@@ -30,7 +30,7 @@ function readGitSha() {
   }
 }
 
-function slugify(text) {
+export function slugify(text) {
   const slug = String(text)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -69,11 +69,24 @@ export function reportFriction(input = {}, options = {}) {
     `captured_at: ${now.toISOString()}`,
     `git_sha: ${gitSha ?? "unknown"}`,
     `source: ${input.source ?? "unknown"}`,
+  ];
+  // Optional observability frontmatter — emitted ONLY when the caller supplies it, and appended AFTER
+  // the source line so every existing exact-prefix assertion (kind/status/captured_at/git_sha/source)
+  // still matches byte-identically. A manual friction report (no signature/category) writes none of
+  // these, so its file is unchanged. Auto-logged self-observed failures carry the full set.
+  if (input.signature) lines.push(`signature: ${input.signature}`);
+  if (input.category) lines.push(`category: ${input.category}`);
+  if (input.failureClass) lines.push(`failure_class: ${input.failureClass}`);
+  const occurrences = Number.isFinite(input.occurrences) ? input.occurrences : (input.signature ? 1 : null);
+  if (occurrences != null) lines.push(`occurrences: ${occurrences}`);
+  if (input.firstSeen) lines.push(`first_seen: ${input.firstSeen}`);
+  if (input.lastSeen) lines.push(`last_seen: ${input.lastSeen ?? now.toISOString()}`);
+  lines.push(
     "---",
     "",
     report,
     "",
-  ];
+  );
   if (context) {
     lines.push("## What was happening", "", context, "");
   }
@@ -85,6 +98,9 @@ export function reportFriction(input = {}, options = {}) {
     kind,
     capturedAt: now.toISOString(),
     gitSha: gitSha ?? null,
+    signature: input.signature ?? null,
+    category: input.category ?? null,
+    failureClass: input.failureClass ?? null,
     queued: true,
   };
 }
@@ -130,7 +146,26 @@ export function listFrictionQueue(options = {}) {
     }
     const body = text.slice(head ? head[0].length : 0);
     const firstLine = body.split("\n").map((l) => l.trim()).find((l) => l && !l.startsWith("#")) ?? "";
-    return { file: name, kind: meta.kind ?? "friction", status: meta.status ?? "open", capturedAt: meta.captured_at ?? null, summary: firstLine };
+    // The raw error/output snippet a self-observed failure wrote under "## What broke" — the one line a
+    // founder surface renders in monospace. Absent (manual friction) → null, never invented.
+    const brokeMatch = body.match(/##\s*What broke\s*\n+([^\n]+)/);
+    return {
+      file: name,
+      kind: meta.kind ?? "friction",
+      status: meta.status ?? "open",
+      capturedAt: meta.captured_at ?? null,
+      summary: firstLine,
+      // Observability fields (present only on self-observed failures; null on manual friction). occurrences
+      // is coerced to a Number so the surface can compare/format it; the rest stay strings.
+      signature: meta.signature ?? null,
+      category: meta.category ?? null,
+      failureClass: meta.failure_class ?? null,
+      occurrences: meta.occurrences != null ? Number(meta.occurrences) : null,
+      firstSeen: meta.first_seen ?? null,
+      lastSeen: meta.last_seen ?? null,
+      gitSha: meta.git_sha ?? null,
+      errorSnippet: brokeMatch ? brokeMatch[1].trim() : null,
+    };
   });
   return { queueDir, reports };
 }

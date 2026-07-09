@@ -1409,6 +1409,53 @@ export type OperatingObject = {
   provenance: OperatingProvenance;
 };
 
+// The woven projection (docs/INTERTWINED-CANVAS.md §2) — the same lanes + objects emitted as one graph of
+// three synthetic families: object nodes (drawn once), tie edges (a lane's touch of an object, carrying the
+// ledger verb + a derived anchor step), and kind clusters (lanes grouped by shape-derived motion name). All
+// render-time projections, never persisted. Computed server-side (where the touch ledger lives) and attached
+// to the operating view so the intertwined canvas gets real ties without a second round trip.
+export type WovenObjectNode = {
+  id: string;                 // "obj:<objectKey>"
+  objectKey: string;
+  kind: string | null;
+  label: string | null;
+  bucket: OperatingObject["bucket"] | null;
+  motionCount: number;        // degree — v2 sizes on this
+  touchCount: number;
+  draw: boolean;              // the 2+-touch rule: true iff motionCount >= 2
+  provenance: OperatingProvenance | null;
+  laneKeys: string[];
+  anchorMeanX: number | null; // mean-X of its ties' anchors (v1 chip placement)
+};
+export type WovenTie = {
+  id: string;                 // "tie:<channelId>:<objectKey>"
+  channelId: string;
+  objectKey: string;
+  verb: string | null;        // real, from the ledger
+  runId: string | null;
+  anchorStepId: string | null;// the lane's last data-producing step / gate (raw, unnamespaced)
+  anchorX: number | null;
+  drawn: boolean;             // mirrors the object's draw
+};
+export type WovenKindCluster = {
+  id: string;                 // "kind:<motionKind>"
+  motionKind: string;
+  laneKeys: string[];
+  laneCount: number;
+};
+export type WovenGraph = {
+  projectId: string;
+  objectNodes: WovenObjectNode[];
+  ties: WovenTie[];
+  kindClusters: WovenKindCluster[];
+  laneKinds: Record<string, string[]>;              // laneKey → every kind it belongs to (2+ = blended)
+  collapsedByLane: Record<string, { count: number; objectKeys: string[] }>;
+  stats: {
+    objectCount: number; drawnObjectCount: number; collapsedObjectCount: number;
+    tieCount: number; drawnTieCount: number; kindCount: number;
+  };
+};
+
 export type OperatingView = {
   projectId: string;
   // Real lanes first (running / parked / idle), then proposed plan lanes. The lens keeps this order but
@@ -1423,4 +1470,7 @@ export type OperatingView = {
   // quiet "plan older than your last scan" marker, never auto-refreshes.
   planStale?: boolean;
   generatedAt: string;
+  // The woven projection over the same lanes + objects (docs/INTERTWINED-CANVAS.md §2). Present when the
+  // backend could build it; absent → the canvas degrades to the raw lanes/objects.
+  woven?: WovenGraph | null;
 };

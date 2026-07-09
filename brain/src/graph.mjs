@@ -455,6 +455,12 @@ export async function runGraph(graph, opts = {}) {
     stepRuntime = defaultStepRuntime,
     loadLastRunItems = null,
     onEvent = null,
+    // PURE OBSERVATION sink (default no-op): when a node genuinely fails, the runner hands the failing
+    // node + its result to this callback so a self-observing logger can file it. It NEVER branches run
+    // behavior and is wrapped in its own try/catch at the call site — a throw here can never touch the
+    // run. graph.mjs imports nothing to support it (keeps the anti-cage scans clean); the host injects
+    // the actual logger from operator-tool-exec, where the graphId/project/session are in scope.
+    onFailure = () => {},
     authorizeRelease = null,
     // The explicit founder deploy confirmation, threaded from the founder's gate-release payload by the
     // host (resolveOperatorGate builds it from the authorized releaser + payload.deployConfirmed). It
@@ -671,6 +677,14 @@ export async function runGraph(graph, opts = {}) {
     }
     nodeResults.set(nodeId, result);
     await emit({ type: "node_done", nodeId, result });
+
+    // Self-observation sink (pure): a GENUINE node failure — actually errored, not merely blocked (waiting
+    // on input that never arrived), not a pending gate, not blind (measurement that can't attribute yet) —
+    // is handed to the injected onFailure logger. This is the single aggregation point, so the four
+    // scattered runNode catch blocks stay untouched. It never branches the run and can never throw into it.
+    if (result.ok === false && !result.blocked && !result.pendingReview && !result.blind) {
+      try { onFailure(node, result, graphId); } catch { /* observation never touches the run */ }
+    }
 
     // Gate node: record as pending and continue (don't stop other branches)
     if (result.pendingReview) {

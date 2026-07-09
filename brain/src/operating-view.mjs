@@ -23,6 +23,7 @@ import { listConnectors } from "./connectors/registry.mjs";
 import { deriveMotionEfficiency } from "./outcome-ingest.mjs";
 import { deriveFunnel } from "./object-funnel.mjs";
 import { getPendingInbox } from "./pending-inbox.mjs";
+import { buildWovenGraph } from "./woven-graph.mjs";
 
 // Map a subsystem's derived health onto the lens's stage vocabulary. getEngineState exposes per-
 // subsystem health only (no explicit state word); the lens needs done / active / waiting / blind. The
@@ -244,7 +245,10 @@ export function getOperatingView({ projectId } = {}, options = {}) {
     }
   }
 
-  // Build a lane per built channel from its own engine read.
+  // Build a lane per built channel from its own engine read. Collect each lane's loaded graph as we go —
+  // buildWovenGraph reuses these (already in hand for the engine read, so no second disk read) to anchor
+  // ties on real steps and derive each lane's kind. Keyed by graphId, the same key lanes carry.
+  const channelGraphs = new Map();
   const lanes = [];
   for (const channel of channels) {
     if (!channel.graphId) continue;
@@ -252,6 +256,7 @@ export function getOperatingView({ projectId } = {}, options = {}) {
       try { return loadFlow(channel.graphId, null, options); }
       catch { return { graph: null, runs: [] }; }
     })();
+    if (graph) channelGraphs.set(channel.graphId, graph);
     const engine = getEngineState({ graph, runs: runs ?? [], connectors, results: [] });
     // The motion's shape-derived name IS its efficiency-table key (both go through deriveMotionName over
     // the same graph). The engine puts it on `motion.name`; fall back to the channel name only for a lane
@@ -279,7 +284,7 @@ export function getOperatingView({ projectId } = {}, options = {}) {
   const planMotions = Array.isArray(options.planMotions) ? options.planMotions : [];
   planMotions.forEach((motion, i) => lanes.push(proposedLaneFromMotion(motion, i)));
 
-  return {
+  const view = {
     projectId: resolvedProjectId,
     lanes,
     objects,
@@ -287,4 +292,16 @@ export function getOperatingView({ projectId } = {}, options = {}) {
     planStale: options.planStale === true ? true : undefined,
     generatedAt: new Date().toISOString(),
   };
+
+  // The intertwined canvas's one woven projection (docs/INTERTWINED-CANVAS.md §2) — object/tie/kind
+  // families over the same lanes + objects, computed from the graphs already loaded above and the touch
+  // ledger the store already holds. Nothing new is read from disk; it's a reshape of what this view built.
+  // Attached so the canvas gets real ties (with ledger verbs) and kinds without a second round trip. A
+  // failure here never breaks the base read — the canvas degrades to the raw lanes/objects.
+  view.woven = (() => {
+    try { return buildWovenGraph(view, { channelGraphs, storeOptions: options }); }
+    catch { return null; }
+  })();
+
+  return view;
 }

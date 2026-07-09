@@ -1,0 +1,242 @@
+/* woven-canvas — the intertwined canvas's two synthetic node components (docs/INTERTWINED-CANVAS.md §3).
+   Design system held to the letter: opaque surfaces only (never glass), #fafafa ground, monochrome zinc,
+   Geist, semantic color only (the parked pulse), no gradients, no water styling. Tokens, never raw hexes.
+
+   Degree (motionCount) reads through INK + SIZE, never by filling a card dark — the light ground stays
+   light, and a moat object is the largest/darkest-inked chip, not a black box. inkStep 0..4 walks the zinc
+   ramp from faint to full ink on the label + border; the surface stays opaque white throughout. */
+
+/* ─── ObjectChip ─────────────────────────────────────────────────────────────────────────────────── */
+.woven-chip {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);            /* opaque — never glass */
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-card);
+  font-family: "Geist Variable", ui-sans-serif, -apple-system, sans-serif;
+  cursor: pointer;
+  /* Motion is feedback only: the re-weave settles chips into place; a focus-to-trace fade. Nothing ambient.
+     transform/opacity only, with a reduced-motion escape below. */
+  transition: box-shadow 140ms ease, border-color 140ms ease, opacity 160ms ease, transform 160ms ease;
+}
+.woven-chip:hover { box-shadow: var(--shadow-pop); border-color: var(--ghost); }
+
+.woven-chip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.woven-chip-kind {
+  font-size: var(--text-xs);
+  font-weight: 560;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  color: var(--muted);
+}
+/* The degree count — a small tabular numeral so it holds still as the weave re-runs (never a decorative
+   badge). Only shown on shared (2+-touch) chips, where the number is the point. */
+.woven-chip-degree {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xs);
+  font-weight: 640;
+  min-width: 16px;
+  text-align: center;
+  padding: 0 var(--space-1);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.woven-chip-label {
+  font-size: var(--text-sm);
+  font-weight: 560;
+  line-height: var(--leading-tight);
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.woven-chip-foot {
+  font-size: var(--text-xs);
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.woven-chip-foot b { color: var(--ink-2); font-weight: 640; }
+
+/* Degree → ink. Walk the zinc ramp on the label + left border weight; the surface stays opaque white so the
+   light ground is never broken. Bigger degree = darker ink + a firmer left rule = reads heavier at a glance. */
+.woven-chip-ink-0 { border-left: 2px solid var(--ghost); }
+.woven-chip-ink-1 { border-left: 2px solid var(--faint); }
+.woven-chip-ink-2 { border-left: 3px solid var(--muted); }
+.woven-chip-ink-3 { border-left: 3px solid var(--ink-2); }
+.woven-chip-ink-4 { border-left: 4px solid var(--ink); }
+.woven-chip-ink-3 .woven-chip-label,
+.woven-chip-ink-4 .woven-chip-label { color: var(--ink); font-weight: 600; }
+
+/* A shared object (touched by 2+ motions) — the money shot. A firmer surface so the eye lands on the
+   convergence points, still opaque and monochrome. */
+.woven-chip.is-shared { border-color: var(--ghost); }
+
+/* State is the ONLY place semantic color earns its use here: an in-flight object (worked by 2+ motions, not
+   yet resolved) carries the one amber accent as a quiet left seam — the same --gap the wall uses, rationed.
+   Never a per-pipeline palette; this is state, not identity. */
+.woven-chip.is-inflight { border-left-color: var(--gap); }
+
+/* Focus-to-trace (scale rule #2): on focus, the isolated crossing path lights and everything else recedes to
+   near-monochrome. Rendered spatially — the dimmed chips fade back, the focused ones lift. */
+.woven-chip.is-focus {
+  border-color: var(--ink);
+  box-shadow: var(--shadow-pop);
+  transform: translateZ(0);
+}
+.woven-chip.is-dim { opacity: 0.34; }
+
+/* ─── KindCluster ────────────────────────────────────────────────────────────────────────────────── */
+.woven-cluster {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface);            /* opaque */
+  border: 1px dashed var(--ghost);       /* dashed = a region stand-in, not a solid object */
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  font-family: "Geist Variable", ui-sans-serif, -apple-system, sans-serif;
+  cursor: pointer;
+  transition: box-shadow 140ms ease, border-color 140ms ease, opacity 160ms ease;
+}
+.woven-cluster:hover { box-shadow: var(--shadow-card); border-color: var(--muted); }
+
+.woven-cluster-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.woven-cluster-label {
+  font-size: var(--text-md);
+  font-weight: 620;
+  color: var(--ink);
+  letter-spacing: var(--tracking-tight);
+}
+.woven-cluster-count {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
+  font-weight: 640;
+  padding: 0 var(--space-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+.woven-cluster-foot {
+  font-size: var(--text-xs);
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.woven-cluster-foot b { color: var(--ink-2); font-weight: 640; }
+
+.woven-cluster.is-focus { border-color: var(--ink); border-style: solid; box-shadow: var(--shadow-pop); }
+.woven-cluster.is-dim { opacity: 0.34; }
+
+/* The tie handles are invisible anchors — the converging lines are the intertwining, the handle isn't a
+   visible dot. Both node types share this. */
+.woven-chip .react-flow__handle,
+.woven-cluster .react-flow__handle {
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  min-height: 0;
+  background: transparent;
+  border: none;
+  opacity: 0;
+}
+
+/* ─── Axis bar ───────────────────────────────────────────────────────────────────────────────────── */
+/* The one toggle over the woven canvas: by shared objects (the moat) vs by GTM type (the forms/spread).
+   Opaque chrome, monochrome; the only color is the parked "need you" state. Floats top-left, clear of the
+   product-entry gutter (the pane already pads by --pentry-gutter). */
+.woven-axisbar {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: "Geist Variable", ui-sans-serif, -apple-system, sans-serif;
+}
+.woven-axisseg {
+  display: inline-flex;
+  background: var(--surface);          /* opaque */
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.woven-axisseg button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 560;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.woven-axisseg button + button { border-left: 1px solid var(--line-2); }
+.woven-axisseg button.on { background: var(--surface-2); color: var(--ink); }
+.woven-axisseg button:hover:not(.on) { color: var(--ink-2); }
+
+.woven-clearfocus {
+  appearance: none;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  border-radius: var(--r-md);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 560;
+  color: var(--ink-2);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+.woven-clearfocus:hover { border-color: var(--muted); }
+
+.woven-parked {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--gap);
+  color: var(--ink-2);
+  font-size: var(--text-xs);
+  font-weight: 560;
+  box-shadow: var(--shadow-sm);
+}
+.woven-parked b { color: var(--ink); font-weight: 680; font-variant-numeric: tabular-nums; }
+
+/* ─── Tie edges ──────────────────────────────────────────────────────────────────────────────────── */
+/* A tie is a thin 1px zinc curve from a lane's touching step to its object chip — the intertwining, drawn
+   once where two threads converge on one node. Monochrome; NO per-pipeline color. Focus-to-trace dims a tie
+   whose crossing isn't the isolated one. */
+.woven-tie .react-flow__edge-path {
+  stroke: var(--ghost);
+  stroke-width: 1px;
+  fill: none;
+}
+.woven-tie.is-dim .react-flow__edge-path { stroke: var(--line-2); opacity: 0.28; }
+
+/* Focus-to-trace on the lanes themselves: when a chip / lane / cluster is isolated, the lane cards NOT on
+   the lit crossing set recede to near-monochrome so the crossings read. Spatial, not a filter list. */
+.woven-lane-dim { opacity: 0.3; transition: opacity 160ms ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  .woven-chip, .woven-cluster, .woven-lane-dim { transition: none; }
+}

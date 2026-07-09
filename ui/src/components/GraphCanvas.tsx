@@ -33,6 +33,9 @@ import type {
   Person, PersonAppearance,
 } from "@/types";
 import { computeChannelLanes, type ChannelLane } from "@/lib/channelLanes";
+import { ObjectChip, KindCluster } from "@/components/canvas/wovenNodes";
+import { buildWovenOverlay, type WovenAxis, type WovenFocus } from "@/lib/wovenOverlay";
+import type { WovenGraph } from "@/types";
 import type { RunSummary } from "@/api";
 import { explainGraph } from "@/api";
 import { channelOfferLine } from "@/lib/gateItem";
@@ -1779,6 +1782,10 @@ const NODE_TYPES = {
   terminalNode:   React.memo(TerminalNode),
   queryNode:      React.memo(QueryNode),
   webNode:        React.memo(WebNode),
+  // The intertwined canvas's two synthetic families (docs/INTERTWINED-CANVAS.md §3) — shared-object chips
+  // and kind-cluster regions, overlaid on the merged lanes. Already memoized at their own export.
+  objectChip:     ObjectChip,
+  kindCluster:    KindCluster,
 };
 
 // ─── Feedback edge ── a return/learning edge (measure → context, switch → architect) routes UNDER the
@@ -2145,6 +2152,13 @@ type MergedFlowFocus = {
   // The live per-node narrator beats — apply only to the focused pipeline (the one that's running); a
   // dimmed lane shows no beat. nodeId → newest heartbeat.
   nodeBeats?: Record<string, string>;
+  // Candidate lanes (docs/INTERTWINED-CANVAS.md decision 4): the 2–3 candidate pipeline SHAPES an ambiguous
+  // goal produced, folded into the ONE woven graph as DASHED proposed lanes (the retired candidate board).
+  // Every node of a candidate lane renders in the proposed (dashed) treatment; picking one commits it live
+  // through onPickCandidate → the same resolveCandidatesAndSync path the old board used. A Set of the
+  // synthetic candidate channel ids present in `channels`.
+  candidateLaneIds?: Set<string>;
+  onPickCandidate?: (channelId: string) => void;
 };
 
 function buildMergedFlowGraph(
@@ -2162,17 +2176,29 @@ function buildMergedFlowGraph(
   people?: Person[],
   onAskClaude?: (node: GTMNode) => void,
   onOpenAgentProfile?: (ref: string) => void,
+  // Per-lane dragged positions keyed by the namespaced `channelId::nodeId` (docs/INTERTWINED-CANVAS.md
+  // scoped-in fix). Applied OVER the auto-layout so a live re-weave doesn't discard a manual drag.
+  draggedByNode?: Map<string, { x: number; y: number }>,
 ): { nodes: Node[]; edges: Edge[]; lanes: Map<string, ChannelLane> } {
   // The single-channel canvas overrides EVERY node's position at render time with a DAG-rank
   // auto-layout (computeLayout, above) — the domain object's stored position is a fallback, not what
   // actually paints. Lane math has to run against those same laid-out positions, or a lane's bounding
   // box (and the offset every other lane stacks on) would be computed against numbers nobody sees.
-  // v1 scope cut: unlike the single-channel canvas, a manual drag inside a lane doesn't yet "stick"
-  // across renders (no per-channel draggedIds tracking) — every lane re-lays out on each render.
+  // A manual drag now sticks: draggedByNode carries the founder's dropped positions (keyed by the
+  // namespaced id), applied over the auto-layout so a live re-weave never throws the drag away.
   const laidOutGraphs = new Map<string, GTMGraph>();
   for (const [channelId, g] of channelGraphs) {
     const autoPos = g.id === "ideation-preview" ? null : computeLayout(g);
-    laidOutGraphs.set(channelId, autoPos ? { ...g, nodes: g.nodes.map((n) => ({ ...n, position: autoPos.get(n.id) ?? n.position })) } : g);
+    const withAuto = autoPos ? { ...g, nodes: g.nodes.map((n) => ({ ...n, position: autoPos.get(n.id) ?? n.position })) } : g;
+    // Re-apply any manual drags for this lane over the auto-layout (before lane stacking, so the lane's
+    // bounding box reflects where the founder actually put the cards).
+    const withDrag = draggedByNode && draggedByNode.size
+      ? { ...withAuto, nodes: withAuto.nodes.map((n) => {
+          const dragged = draggedByNode.get(`${channelId}::${n.id}`);
+          return dragged ? { ...n, position: dragged } : n;
+        }) }
+      : withAuto;
+    laidOutGraphs.set(channelId, withDrag);
   }
   const lanes = computeChannelLanes(channels, laidOutGraphs);
   const nodes: Node[] = [];
@@ -2191,6 +2217,9 @@ function buildMergedFlowGraph(
     const localSelection = isFocused && focus.selection
       ? (focus.selection.startsWith(prefix) ? focus.selection.slice(prefix.length) : focus.selection)
       : null;
+    // A candidate lane is a proposed SHAPE, not a live pipeline: dash every node and route accept → pick.
+    const isCandidate = focus.candidateLaneIds?.has(channel.id) ?? false;
+    const candidateProposedIds = isCandidate ? new Set(g.nodes.map((n) => n.id)) : undefined;
     const built = buildFlowGraph(
       g,
       runResults.get(channel.id) ?? null,
@@ -2201,11 +2230,11 @@ function buildMergedFlowGraph(
       subsystemHealth,
       contractAudits,
       (nodeId) => onSelect(`${channel.id}::${nodeId}`),
-      isFocused ? focus.proposedNodeIds : undefined,
+      isCandidate ? candidateProposedIds : (isFocused ? focus.proposedNodeIds : undefined),
       isFocused ? focus.proposedEdgeIds : undefined,
       null, // highlightedNodeId — the run-replay scrubber; not part of the merged canvas
-      isFocused ? focus.proposalActive : false,
-      isFocused ? focus.onResolveProposal : undefined,
+      isCandidate ? true : (isFocused ? focus.proposalActive : false),
+      isCandidate ? (accept: boolean) => { if (accept) focus.onPickCandidate?.(channel.id); } : (isFocused ? focus.onResolveProposal : undefined),
       isFocused ? focus.onSubmitReview : undefined,
       isFocused ? focus.onApproveGate : undefined,
       null, // bloomNodeId — folded into per-node data below via the gate's own pendingReview state
@@ -2308,6 +2337,22 @@ function LanePanner({ panTo, lanes }: { panTo: { channelId: string; token: numbe
     setCenter(lane.centerX, lane.centerY, { zoom: 0.7, duration: 480 });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panTo, lanes]);
+  return null;
+}
+
+// ─── Woven zoom reporter — feed the live zoom up so semantic zoom can swap altitudes ──────────────
+// The overlay build (far = kind clusters, near = chips + ties) needs the current zoom, which lives in the
+// React Flow store (only readable inside the provider). This thin child reads it and lifts it to the
+// parent's state. Debounced to whole-ish steps so a smooth pinch doesn't rebuild the overlay every frame.
+function WovenZoomReporter({ onZoom }: { onZoom: (z: number) => void }) {
+  const zoom = useStore((s) => s.transform[2]);
+  const last = useRef<number | null>(null);
+  useEffect(() => {
+    // Only report a change big enough to possibly cross the cluster threshold — avoids per-frame rebuilds.
+    if (last.current != null && Math.abs(last.current - zoom) < 0.02) return;
+    last.current = zoom;
+    onZoom(zoom);
+  }, [zoom, onZoom]);
   return null;
 }
 
@@ -2508,6 +2553,8 @@ export function GraphCanvas({
   bloomNodeId = null, nodeEditor = null, revealedNodeIds, onPaneClick, operatorCursor = null, people = [],
   multiPipeline = null, panTo = null, onAskClaude, gatePromote, gateOffer = null, transportConnected = false, onRecordOutcome,
   onRefineItem, onDecideDelta, onOpenAgentProfile, runSummary = null,
+  woven = null, wovenAxis = "objects", wovenFocus = null, onWovenSelect, onWireObject,
+  candidateLaneIds, onPickCandidate,
 }: {
   graph: GTMGraph;
   result: GTMRunResult | null;
@@ -2591,7 +2638,7 @@ export function GraphCanvas({
   // instead of `graph` being the only thing on screen. `graph` stays "the focused pipeline" — the one
   // OperatorCursor/gate-review/proposal state applies to; everything else renders as a plain committed
   // lane. Absent or containing only one pipeline, behavior is identical to today's single-channel canvas.
-  multiPipeline?: { channels: ChannelMeta[]; channelGraphs: Map<string, GTMGraph>; channelRunResults: Map<string, GTMRunResult | null> } | null;
+  multiPipeline?: { channels: ChannelMeta[]; channelGraphs: Map<string, GTMGraph>; channelRunResults: Map<string, GTMRunResult | null>; draggedByNode?: Map<string, { x: number; y: number }> } | null;
   // "Open this pipeline" — pans the camera to that lane's center on the merged canvas. Navigation
   // only; unlike `selection` it never opens a node's editor. A fresh token re-pans even to the SAME
   // channel (e.g. re-picking it after drifting away). No-op outside merged mode.
@@ -2602,6 +2649,25 @@ export function GraphCanvas({
   // The project's latest run numbers (real, from the run ledger), drawn on the focused pipeline's
   // Measure node. Null when no run has been recorded — the node then shows nothing (honest empty).
   runSummary?: RunSummary | null;
+  // ── The intertwined canvas (docs/INTERTWINED-CANVAS.md) ──
+  // The woven projection over the same lanes + objects — object chips, tie edges, kind clusters — overlaid
+  // on the merged lane canvas. Present only on the merged (Operator) canvas; null → the plain lane canvas.
+  woven?: WovenGraph | null;
+  // The projection axis: "objects" = the moat view (chips + ties in the gutter), "type" = the spread view
+  // (lanes collapse into kind clusters). Pure view state the host toggles.
+  wovenAxis?: WovenAxis;
+  // Focus-to-trace: the selected object / lane / cluster whose crossings stay lit while everything recedes.
+  wovenFocus?: WovenFocus;
+  // Click a chip or cluster → the host sets focus-to-trace (or clears it). Absent → chips are inert.
+  onWovenSelect?: (focus: WovenFocus) => void;
+  // Drag-to-wire a step onto an object chip / kind region — a composer STEER (a proposed dashed tie the
+  // crew turns into real steps), never a literal targeting edge. `sourceStepId` is the namespaced step id;
+  // `targetId` is the synthetic obj:/kind: id. Absent → the gesture is inert.
+  onWireObject?: (sourceStepId: string, targetId: string) => void;
+  // Candidate lanes (docs/INTERTWINED-CANVAS.md decision 4): synthetic channel ids in multiPipeline that are
+  // candidate SHAPES, rendered as dashed proposed lanes in the one woven graph. Picking one commits it live.
+  candidateLaneIds?: Set<string>;
+  onPickCandidate?: (channelId: string) => void;
 }) {
   const handleSelect = useCallback((id: string) => onSelect(id), [onSelect]);
   // Inspector — the workbench's read surface. A node's record-count opens its real items as a card in
@@ -2711,15 +2777,18 @@ export function GraphCanvas({
         proposedNodeIds, proposedEdgeIds, proposalActive,
         onResolveProposal, onSubmitReview, onApproveGate, gatePromote, gateOffer, transportConnected, onRecordOutcome,
         onRefineItem, onDecideDelta, revealedNodeIds, onInspect: toggleInspect, runSummary, nodeBeats,
+        candidateLaneIds, onPickCandidate,
       },
       people,
       onAskClaude,
       onOpenAgentProfile,
+      multiPipeline.draggedByNode,
     ) : null),
     [
       multiPipeline, connectors, subsystemHealth, contractAudits, handleSelect, graph.id, running,
       runningNodeId, selection, proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal,
       onSubmitReview, onApproveGate, gatePromote, gateOffer, transportConnected, onRecordOutcome, onRefineItem, onDecideDelta, revealedNodeIds, toggleInspect, people, onAskClaude, onOpenAgentProfile, runSummary, nodeBeats,
+      candidateLaneIds, onPickCandidate,
     ],
   );
 
@@ -2752,7 +2821,7 @@ export function GraphCanvas({
     [warnings],
   );
   const focusPrefix = merged ? `${graph.id}::` : "";
-  const nodes = useMemo(() => baseNodes.map((n) => {
+  const laneGraphNodes = useMemo(() => baseNodes.map((n) => {
     if (merged && !n.id.startsWith(focusPrefix)) return n;
     const rawId = (n.data as GTMNodeData | undefined)?.node?.id;
     const warning = rawId ? warnByNode.get(rawId) : undefined;
@@ -2760,13 +2829,57 @@ export function GraphCanvas({
     const explainRationale = rawId ? fetchedRat?.n.get(rawId) : undefined;
     return { ...n, data: { ...(n.data as GTMNodeData), warning, explainMode, explainRationale } };
   }), [baseNodes, merged, focusPrefix, warnByNode, explainMode, fetchedRat]);
-  const edges = useMemo(() => {
+  const laneGraphEdges = useMemo(() => {
     if (weakEdges.size === 0) return baseEdges;
     return baseEdges.map((e) => {
       const rawId = focusPrefix && e.id.startsWith(focusPrefix) ? e.id.slice(focusPrefix.length) : e.id;
       return weakEdges.has(rawId) ? { ...e, className: cn((e as Edge).className, "loop-edge-weak") } : e;
     });
   }, [baseEdges, weakEdges, focusPrefix]);
+
+  // ── The intertwined-canvas overlay (docs/INTERTWINED-CANVAS.md §3) ──
+  // The woven object chips + tie edges + kind clusters, projected onto the merged lanes and re-derived on
+  // every re-weave. Lives ONLY on the merged (Operator) canvas with a woven read; the single/focused canvas
+  // is the editor and stays untouched. `wovenZoom` tracks the live zoom so semantic zoom (far = clusters,
+  // near = chips + ties) swaps without a second data read. The overlay never persists a thing.
+  const [wovenZoom, setWovenZoom] = useState(1);
+  const wovenOverlay = useMemo(() => {
+    if (!merged || !woven) return null;
+    return buildWovenOverlay({
+      woven,
+      lanes: merged.lanes,
+      mergedNodes: laneGraphNodes,
+      axis: wovenAxis,
+      zoom: wovenZoom,
+      focus: wovenFocus,
+    });
+  }, [merged, woven, laneGraphNodes, wovenAxis, wovenZoom, wovenFocus]);
+
+  // On the TYPE axis (the spread view) the lanes recede — the forms map IS the surface. We drop the lane
+  // graph entirely and show only the kind clusters. On the OBJECT axis the lanes stay and the chips/ties
+  // overlay them. Focus-to-trace dims the lanes when a chip/lane/cluster is isolated.
+  const typeAxisActive = !!(merged && woven && wovenAxis === "type");
+  const nodes = useMemo(() => {
+    if (!wovenOverlay) return laneGraphNodes;
+    if (typeAxisActive) return wovenOverlay.nodes;
+    // Object axis: dim the lane cards when a focus isolates a crossing set (spatial focus-to-trace).
+    const laneNodes = wovenFocus
+      ? laneGraphNodes.map((n) => {
+          const channelId = (n.data as GTMNodeData | undefined)?.channelId as string | undefined;
+          const lit = wovenFocus.kind === "lane" ? channelId === wovenFocus.channelId
+            : wovenFocus.kind === "object" ? (woven?.objectNodes.find((o) => o.objectKey === wovenFocus.objectKey)?.laneKeys ?? []).includes(channelId ?? "")
+            : wovenFocus.kind === "cluster" ? (woven?.kindClusters.find((c) => c.motionKind === wovenFocus.motionKind)?.laneKeys ?? []).includes(channelId ?? "")
+            : true;
+          return lit ? n : { ...n, className: cn((n as Node).className, "woven-lane-dim") };
+        })
+      : laneGraphNodes;
+    return [...laneNodes, ...wovenOverlay.nodes];
+  }, [wovenOverlay, laneGraphNodes, typeAxisActive, wovenFocus, woven]);
+  const edges = useMemo(() => {
+    if (!wovenOverlay) return laneGraphEdges;
+    if (typeAxisActive) return wovenOverlay.edges;
+    return [...laneGraphEdges, ...wovenOverlay.edges];
+  }, [wovenOverlay, laneGraphEdges, typeAxisActive]);
 
   // The "N worth a look" chip steps the camera through each flagged card in turn (selecting it centers
   // it via NodeFocuser) — the fast path from "something's off" to the exact spot, no side list to scan.
@@ -2857,9 +2970,36 @@ export function GraphCanvas({
     [onNodePositionChange],
   );
 
+  // Click a woven chip / cluster → focus-to-trace (scale rule #2): the host isolates that object's / lane's
+  // / kind's crossings and everything else recedes. Re-clicking the same focus clears it. Only acts on the
+  // synthetic obj:/kind: ids — a real step card handles its own click through its data.onSelect, untouched.
+  const handleWovenNodeClick = useCallback(
+    (_event: unknown, node: Node) => {
+      if (!onWovenSelect) return;
+      if (node.id.startsWith("obj:")) {
+        const objectKey = (node.data as { objectKey?: string } | undefined)?.objectKey ?? node.id.slice(4);
+        const same = wovenFocus?.kind === "object" && wovenFocus.objectKey === objectKey;
+        onWovenSelect(same ? null : { kind: "object", objectKey });
+      } else if (node.id.startsWith("kind:")) {
+        const motionKind = (node.data as { label?: string } | undefined)?.label ?? node.id.slice(5);
+        const same = wovenFocus?.kind === "cluster" && wovenFocus.motionKind === motionKind;
+        onWovenSelect(same ? null : { kind: "cluster", motionKind });
+      }
+    },
+    [onWovenSelect, wovenFocus],
+  ) as Parameters<typeof ReactFlow>[0]["onNodeClick"];
+
   const handleConnect = useCallback((connection: Connection) => {
+    // Drag-to-wire-object (docs/INTERTWINED-CANVAS.md §4): dragging from a step handle onto an object chip
+    // or a kind region is a STEER — a proposed touch the crew fills in, never a literal targeting edge. It
+    // routes through onWireObject (the host runs the composer scoped to that lane and renders a dashed tie).
+    // A normal step→step connection stays the existing typed graph mutation.
+    if (connection.target && (connection.target.startsWith("obj:") || connection.target.startsWith("kind:")) && connection.source) {
+      onWireObject?.(connection.source, connection.target);
+      return;
+    }
     if (connection.source && connection.target) onConnectNodes?.(connection.source, connection.target);
-  }, [onConnectNodes]);
+  }, [onConnectNodes, onWireObject]);
 
   // The live drop target for Crew/Skill drags is the outer canvas-area wrapper (App's onStepDrop),
   // which lands a node in a real focused pipeline — spinning up a scratch one if none is focused. The
@@ -2888,6 +3028,7 @@ export function GraphCanvas({
       edgeTypes={EDGE_TYPES}
       onNodesChange={onNodesChange}
       onNodeDragStop={handleNodeDragStop}
+      onNodeClick={woven ? handleWovenNodeClick : undefined}
       onConnect={handleConnect}
       onEdgesDelete={(deleted) => onDeleteEdges?.(deleted.map((edge) => edge.id))}
       onPaneClick={onPaneClick}
@@ -2898,7 +3039,9 @@ export function GraphCanvas({
       fitViewOptions={fitOptions}
       minZoom={0.15}
       maxZoom={1.8}
-      nodesConnectable={editable && !running}
+      // With the woven overlay live, steps stay connectable even on a read-only fleet so the drag-to-wire
+      // steer works; the wall still gates whatever the composer fills in.
+      nodesConnectable={(editable && !running) || !!(woven && wovenAxis === "objects")}
       edgesFocusable={editable}
       edgesReconnectable={false}
       deleteKeyCode={editable ? ["Backspace", "Delete"] : null}
@@ -2907,6 +3050,7 @@ export function GraphCanvas({
     >
       <NodeFocuser selection={selection} panelOpen={!!panelOpen} active={!running && !operatorCursor} />
       {merged ? <LanePanner panTo={panTo} lanes={merged.lanes} /> : null}
+      {woven ? <WovenZoomReporter onZoom={setWovenZoom} /> : null}
       {operatorCursor ? (
         <OperatorCursor graph={cursorGraph} state={operatorCursor} followBroken={followBroken} recenterSignal={recenterSignal} />
       ) : null}

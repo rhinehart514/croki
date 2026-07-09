@@ -40,6 +40,7 @@ import {
 } from "./operator-run-core.mjs";
 import { recallPriorSessions, systemPrompt } from "./operator-prompt.mjs";
 import { executeTool } from "./operator-tool-exec.mjs";
+import { safeLogFailure } from "./failure-log.mjs";
 
 const activeSessions = new Map();
 
@@ -225,6 +226,10 @@ export async function runOperatorSession(id, runtime = {}) {
     return getOperatorSession(id, options);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    // Self-observation: an uncaught crash in the drive loop is filed into the dogfood queue so the team
+    // sees what to fix. Best-effort and never-throws — the session's failed status below is unchanged
+    // whether logging succeeds or not.
+    safeLogFailure({ category: "run-crash", error, session: getOperatorSession(id, options) }, options);
     return addEvent({
       ...getOperatorSession(id, options),
       status: "failed",
@@ -266,6 +271,10 @@ export function launchOperatorSession(id, runtime = {}) {
       const current = getOperatorSession(id, options);
       if (operatorSessionStalled(current, Date.now())) {
         clearInterval(watchdog);
+        // Self-observation: a stalled drive the watchdog kills is filed into the dogfood queue. Inside the
+        // watchdog's own try/catch (a fourth backstop) and itself never-throws — it never affects the
+        // failed session status the watchdog sets below.
+        safeLogFailure({ category: "run-stall", session: current, error: "The run stalled and was ended by the watchdog." }, options);
         addEvent({
           ...current,
           status: "failed",

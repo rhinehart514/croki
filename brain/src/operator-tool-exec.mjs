@@ -30,6 +30,7 @@ import { composeIdeas, createClaudeAngleProposer, createClaudeIdeaGenerator } fr
 import { createClaudeIdeaBar } from "./idea-bar.mjs";
 import { attachBuildWiring, createGtmIdea, getGtmIdea, listGtmIdeas, saveGtmIdea } from "./idea-store.mjs";
 import { compareChannelRuns } from "./run-compare.mjs";
+import { safeLogFailure } from "./failure-log.mjs";
 import {
   addEvent,
   compactProduct,
@@ -268,6 +269,26 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
     projectId: session.projectId || "default",
     credentialOptions: options,
     onEvent,
+    // Self-observation sink: a genuinely failed node is filed into the dogfood queue. This is where the
+    // graph id, project, and session are all in scope. A bad-output failure (the model returned
+    // unusable/empty content — the agent bridge sets ok:false with an unparseable/empty errorKind) is
+    // tagged "bad-output"; every other node/step failure is "node-error". Never-throws and never branches
+    // the run — safeLogFailure swallows everything, and graph.mjs already wraps the call in its own catch.
+    onFailure: (node, result, graphId) => {
+      const errorKind = result?.meta?.errorKind ?? null;
+      const category = (errorKind === "unparseable_output" || errorKind === "empty_output")
+        ? "bad-output"
+        : "node-error";
+      safeLogFailure({
+        category,
+        node,
+        result,
+        errorKind,
+        graphId: graphId ?? flow.graph?.id ?? null,
+        graphLabel: session.goal ?? null,
+        session,
+      }, options);
+    },
   });
   if (stream) session = live;
   // Ground the drafts the founder is about to review: attach evidence_lines to any item whose claim

@@ -107,8 +107,8 @@ import { agentPersona } from "@/lib/agentPersona";
 import { STEP_DRAG_MIME } from "@/lib/objectPalette";
 const ProductUnderstanding = lazy(() => import("@/components/ProductUnderstanding").then((m) => ({ default: m.ProductUnderstanding })));
 import { GtmCanvas, type GtmCanvasModel } from "@/components/canvas/GtmCanvas";
-import { CandidatePipelinesCanvas } from "@/components/canvas/CandidatePipelinesCanvas";
-import { sessionCandidates } from "@/lib/sessionCandidates";
+import { sessionCandidates, type Candidate } from "@/lib/sessionCandidates";
+import type { WovenFocus } from "@/lib/wovenOverlay";
 import { CanvasHistoryControl } from "@/components/CanvasHistoryControl";
 import { useCanvasHistory, describeOperations, describeGraphDiff } from "@/lib/canvasHistory";
 import { ProductEntryColumn } from "@/components/ProductEntryColumn";
@@ -288,6 +288,11 @@ export default function App() {
   // view), "engineer" = the single-motion pipeline editor. Focusing a lane or a parked gate drops into
   // Engineer; the whole-operation view is Operator.
   const [canvasLens, setCanvasLens] = useState<"operator" | "engineer">("operator");
+  // The intertwined canvas's view state (docs/INTERTWINED-CANVAS.md) — the projection axis (objects = the
+  // moat view, type = the forms/spread view) and the focus-to-trace selection. Pure view state; nothing
+  // persists. The canvas OPENS on the broad type/forms map, drilling to the object axis as you focus.
+  const [wovenAxis, setWovenAxis] = useState<"objects" | "type">("type");
+  const [wovenFocus, setWovenFocus] = useState<WovenFocus>(null);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [activeProject, setActiveProjectState] = useState<GTMProject | null>(null);
   // The current project id, mirrored into a ref so URL-sync inside the `[]`-dep load callbacks can read
@@ -1208,6 +1213,25 @@ export default function App() {
     return () => { live = false; window.clearInterval(timer); };
   }, [refreshOperatingView]);
 
+  // What the woven canvas opens on (docs/INTERTWINED-CANVAS.md decision 2): whatever NEEDS you — if a lane
+  // is parked at a gate, open on the object axis focused on that lane so its crossings light immediately;
+  // otherwise the broad GTM-forms map (the type axis, fully zoomed out). Runs once per project open (keyed
+  // on the project), never fighting a founder's later toggle.
+  const openedWovenForProject = useRef<string | null>(null);
+  useEffect(() => {
+    if (!activeProjectId || !operatingView) return;
+    if (openedWovenForProject.current === activeProjectId) return;
+    openedWovenForProject.current = activeProjectId;
+    const parked = operatingView.lanes.find((l) => l.runState === "parked");
+    if (parked) {
+      setWovenAxis("objects");
+      setWovenFocus({ kind: "lane", channelId: parked.channelId });
+    } else {
+      setWovenAxis("type");
+      setWovenFocus(null);
+    }
+  }, [activeProjectId, operatingView]);
+
   // The per-motion efficiency table (Area 7) — the Measure surface's "which motion is working" read.
   // Fetched on demand when the outcome/measure surface opens, so recording a result and seeing what it
   // moved sit together. Pure read; never sends.
@@ -1509,8 +1533,23 @@ export default function App() {
 
   // `origin` distinguishes a genuine founder drag (undoable) from the automatic left-to-right relayout
   // the canvas pushes on every topology change (not undoable — it's layout, not a move the founder made).
+  // Per-lane dragged positions on the merged (woven) canvas (docs/INTERTWINED-CANVAS.md scoped-in fix).
+  // A drag on a NON-focused lane's node arrives namespaced `channelId::nodeId`; the focused `graph` isn't
+  // its home, so we can't round-trip it through the graph store. We keep those drags here, keyed by the
+  // namespaced id, and hand them to buildMergedFlowGraph so a live re-weave doesn't discard the manual drag.
+  // Cleared per project open (openedWovenForProject also resets), so stale drags never haunt a new fleet.
+  const [mergedDragOverrides, setMergedDragOverrides] = useState<Map<string, { x: number; y: number }>>(new Map());
+
   const handleNodePositionChange = useCallback((nodeId: string, position: { x: number; y: number }, origin?: "drag" | "layout") => {
     setGraphSavedAt(null);
+    // A namespaced id is a merged-lane node; a drag on it persists in the per-lane override map (the focused
+    // graph isn't its owner). Layout round-trips for the focused graph still flow through below.
+    if (nodeId.includes("::")) {
+      if (origin === "drag") {
+        setMergedDragOverrides((cur) => { const next = new Map(cur); next.set(nodeId, position); return next; });
+      }
+      return;
+    }
     if (origin === "drag" && graph) {
       const after: GTMGraph = { ...graph, nodes: graph.nodes.map((node) => node.id === nodeId ? { ...node, position } : node) };
       const label = describeGraphDiff(graph, after);
@@ -1610,6 +1649,7 @@ export default function App() {
       edge: { id: `e-${source}-${target}-${Date.now().toString(36)}`, source, target, edgeType: "data" },
     }]);
   }, [applyOperations, graph]);
+
 
   // Drop a new step onto the canvas — a real data source (scrape/leads/CSV/CRM) or any open step.
   const handleAddNode = useCallback((spec: Partial<GTMNode> & { label: string }, opts?: { select?: boolean; position?: { x: number; y: number } }) => {
@@ -1795,6 +1835,31 @@ export default function App() {
     }
   }, [operatorSession, handleCommandSubmit, syncOperator, composerPosture, composerSubject, runCanvasCommand]);
 
+  // Drag-to-wire-object (docs/INTERTWINED-CANVAS.md §4): dragging from a step onto an object chip or a kind
+  // region is a STEER, never a literal targeting edge. The founder is saying "this motion should also cover
+  // that person / place / this whole kind." We route it to the crew as a plain-words composer message scoped
+  // to the source pipeline; the composer proposes the real steps and they render as dashed ghost nodes/ties
+  // on that lane (the existing proposal path), which the founder accepts in place. The gate still stands in
+  // front of anything it produces — this only proposes, it never sends.
+  const handleWireObject = useCallback((sourceStepId: string, targetId: string) => {
+    const channelId = sourceStepId.includes("::") ? sourceStepId.split("::")[0] : (activeChannelId ?? sourceStepId);
+    // Focus the pipeline so the proposal lands where the founder is looking, then steer the crew.
+    if (channelId) focusChannel(channelId);
+    let ask: string;
+    if (targetId.startsWith("obj:")) {
+      const key = targetId.slice(4);
+      const obj = operatingView?.objects.find((o) => o.objectKey === key);
+      const name = obj?.label ?? key;
+      ask = `Extend this motion to also cover ${name}${obj?.kind ? ` (a ${obj.kind})` : ""}. Propose the steps that would reach it, stopping at my gate — don't send anything.`;
+    } else if (targetId.startsWith("kind:")) {
+      const motionKind = targetId.slice(5);
+      ask = `Extend this motion to also cover the ${motionKind} objects it doesn't touch yet. Propose the steps that would reach them, stopping at my gate — don't send anything.`;
+    } else {
+      return;
+    }
+    void handleComposerSend(ask);
+  }, [activeChannelId, focusChannel, operatingView, handleComposerSend]);
+
   const handleProjectOpen = useCallback(async (projectId: string) => {
     setProjectBusy(true);
     setGraphError(null);
@@ -1802,6 +1867,7 @@ export default function App() {
       await activateProject(projectId);
       setOperatorSession(null);
       setChannelGraphs(new Map());
+      setMergedDragOverrides(new Map());
       setActiveChannelId(null);
       const project = await refreshProjectScope();
       // Land on the one-canvas overview of every workflow. Only fall back to focusing a single
@@ -1916,6 +1982,7 @@ export default function App() {
       await createProject(input);
       setOperatorSession(null);
       setChannelGraphs(new Map());
+      setMergedDragOverrides(new Map());
       setActiveChannelId(null);
       await refreshProjectScope();
       setView("canvas");
@@ -1936,6 +2003,7 @@ export default function App() {
       await createProject({ repoPath: input.repoPath, outcome: input.outcome });
       setOperatorSession(null);
       setChannelGraphs(new Map());
+      setMergedDragOverrides(new Map());
       setActiveChannelId(null);
       const project = await refreshProjectScope();
       setView("canvas");
@@ -2569,7 +2637,46 @@ export default function App() {
     () => (operatorSession?.status === "waiting_for_candidates" ? sessionCandidates(operatorSession) : []),
     [operatorSession],
   );
-  const pickedCandidateId = assembling?.key ?? null;
+  // Candidates folded into the ONE woven graph as dashed lanes (docs/INTERTWINED-CANVAS.md decision 4 —
+  // the retired candidate board). Each candidate shape becomes a synthetic channel + graph in the merged
+  // canvas, tagged in `candidateLaneIds` so GraphCanvas dashes every node and routes accept → pick. The
+  // pick runs the SAME authorized build path the old board used (resolveCandidatesAndSync → compose_and_run
+  // → the founder gate — nothing sends). Empty when the session isn't parked on candidates.
+  const candidateLanes = useMemo(() => {
+    if (!canvasCandidates.length) return null;
+    const channels: ChannelMeta[] = [];
+    const graphs = new Map<string, GTMGraph>();
+    const ids = new Set<string>();
+    const byLaneId = new Map<string, Candidate>();
+    for (const c of canvasCandidates) {
+      const laneId = `candidate:${c.id}`;
+      ids.add(laneId);
+      byLaneId.set(laneId, c);
+      graphs.set(laneId, { id: laneId, name: c.label, version: "0", nodes: c.nodes, edges: c.edges });
+      channels.push({
+        id: laneId, name: c.label, kind: "candidate", objective: c.rationale, graphId: laneId,
+        enabled: false, status: "idle", lastRunAt: null, lastRunOk: null, pendingGates: 0,
+        nodeCount: c.nodes.length, runCount: 0, graphRevision: 0, lastRunResult: null,
+      } as ChannelMeta);
+    }
+    return { channels, graphs, ids, byLaneId };
+  }, [canvasCandidates]);
+
+  // Pick a candidate lane → build it live (the founder act). Maps the synthetic lane id back to its shape.
+  const handlePickCandidateLane = useCallback((laneId: string) => {
+    const c = candidateLanes?.byLaneId.get(laneId);
+    if (c) void resolveCandidatesAndSync(c.id, { nodes: c.nodes, edges: c.edges });
+  }, [candidateLanes, resolveCandidatesAndSync]);
+
+  // The merged fleet the woven canvas draws — real pipelines PLUS any candidate lanes, so candidates weave
+  // into the one graph instead of taking over a separate board.
+  const wovenMultiPipeline = useMemo(() => {
+    if (!candidateLanes) return { channels, channelGraphs, channelRunResults, draggedByNode: mergedDragOverrides };
+    const mergedChannels = [...channels, ...candidateLanes.channels];
+    const mergedGraphs = new Map(channelGraphs);
+    for (const [id, g] of candidateLanes.graphs) mergedGraphs.set(id, g);
+    return { channels: mergedChannels, channelGraphs: mergedGraphs, channelRunResults, draggedByNode: mergedDragOverrides };
+  }, [candidateLanes, channels, channelGraphs, channelRunResults, mergedDragOverrides]);
 
   // Which lens is actually on screen. Decided-question 5: the Operator lens replaces the old merged-lane
   // overview as the default MANY-motion view; the Engineer lens is the single-motion editor. So: a focused
@@ -2578,10 +2685,13 @@ export default function App() {
   // product with zero or one pipeline has no fleet to operate, so it lands in Engineer (its landing/editor).
   const builtPipelineCount = channels.filter((c) => c.nodeCount > 0).length;
   const effectiveCanvasLens: "operator" | "engineer" =
-    activeChannelId ? "engineer"
-      : canvasLens === "engineer" ? "engineer"
-        : builtPipelineCount >= 2 ? "operator"
-          : "engineer";
+    // Candidate shapes live as dashed lanes in the woven Operator canvas — force it so they weave in
+    // (docs/INTERTWINED-CANVAS.md decision 4, the retired candidate board), never the single-motion editor.
+    canvasCandidates.length > 0 ? "operator"
+      : activeChannelId ? "engineer"
+        : canvasLens === "engineer" ? "engineer"
+          : builtPipelineCount >= 2 ? "operator"
+            : "engineer";
 
   const gtmCanvasModel = useMemo<GtmCanvasModel>(() => ({
     projectId: activeProject?.id ?? null,
@@ -2639,7 +2749,7 @@ export default function App() {
       onDeleteNode: handleDeleteNode,
       onClose: () => setSelection(null),
     },
-    multiPipeline: { channels, channelGraphs, channelRunResults },
+    multiPipeline: wovenMultiPipeline,
     panTo: panSignal,
     channels,
     activeChannelId,
@@ -2658,12 +2768,24 @@ export default function App() {
     operatingView,
     onFlyToGate: (t) => void flyToGate(t),
     onOpenLane: openLane,
+    // ── The intertwined canvas (docs/INTERTWINED-CANVAS.md) ──
+    woven: operatingView?.woven ?? null,
+    wovenAxis,
+    wovenFocus,
+    onWovenAxisChange: setWovenAxis,
+    onWovenSelect: setWovenFocus,
+    onWireObject: handleWireObject,
+    // Candidates as dashed lanes in the one graph (the retired candidate board).
+    candidateLaneIds: candidateLanes?.ids,
+    onPickCandidate: handlePickCandidateLane,
   }), [
     canvasGraph, connectors, contractAudits, runResult, graphRunning, runningNodeId, nodeBeats, selection,
     dismissOverlays, proposedNodeIds, proposedEdgeIds, revealedNodeIds, proposalActive, operatorCursor,
     handleResolveProposal, submitGateReview, approveGate, handleAddNode, handleGraphConnect, handleDeleteEdges,
-    handleNodePositionChange, flowRuns, runNode, updateGraph, handleDeleteNode, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, recordItemOutcome, refineGateItem, decideGateDelta, runSummary, transportConnected,
+    handleNodePositionChange, flowRuns, runNode, updateGraph, handleDeleteNode, channels, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, recordItemOutcome, refineGateItem, decideGateDelta, runSummary, transportConnected,
     operatingView, flyToGate, openLane,
+    wovenAxis, wovenFocus, handleWireObject,
+    wovenMultiPipeline, candidateLanes, handlePickCandidateLane,
   ]);
 
   // First-run team setup. Gated on Convex being configured AND no team chosen yet, so a local/solo
@@ -3017,19 +3139,17 @@ export default function App() {
               onStartOver={() => void handleOperatorCancel()}
               onSteer={(note) => handleDriveSteer(note)}
             />
-          ) : canvasCandidates.length > 0 ? (
-            // The goal forked into 2–3 candidate pipeline SHAPES — lay them out ON THE CANVAS, side by
-            // side, as the founder's pick-and-refine surface. This sits ABOVE the built-graph and
-            // launcher branches so a parked ambiguous goal always shows its shapes here, never falls
-            // through to an empty launcher. Picking one runs the SAME authorized build path the composer
-            // echo uses (resolveCandidatesAndSync → compose_and_run → the founder gate — nothing sends).
-            <CandidatePipelinesCanvas
-              candidates={canvasCandidates}
-              productName={activeProject?.name ?? "your product"}
-              pickedId={pickedCandidateId}
-              onPick={(c) => void resolveCandidatesAndSync(c.id, { nodes: c.nodes, edges: c.edges })}
-            />
-          ) : (canvasGraph || (activeProjectId && channels.length > 0)) ? (
+          ) : (canvasGraph || (activeProjectId && channels.length > 0) || canvasCandidates.length > 0) ? (
+            // A product with real work to show — a graph to watch assemble, built pipelines, OR candidate
+            // shapes the goal forked into — SHOWS THE ONE WOVEN CANVAS even while Claude is driving the loop.
+            // Candidates now render as DASHED LANES in that one graph (docs/INTERTWINED-CANVAS.md decision 4,
+            // the retired candidate board), so a parked ambiguous goal weaves its shapes in beside the live
+            // motions instead of taking over a separate board. Picking one runs the SAME authorized build
+            // path (resolveCandidatesAndSync → compose_and_run → the founder gate — nothing sends).
+            // A freshly-grounded product with NO goal yet, no graph and no pipelines falls through instead to
+            // the goal launcher below, so the founder is asked "what do you want to happen" on the canvas
+            // rather than landing on a barren object graph. `projectBusy` covers the open/load window, so a
+            // product that does have pipelines never flashes the launcher before its graph resolves.
             // A product with real work to show — a graph to watch assemble, or built pipelines — SHOWS THE
             // CANVAS even while Claude is driving the loop, its live reasoning streaming in the co-pilot rail.
             // A freshly-grounded product with NO goal yet, no graph and no pipelines falls through instead to
