@@ -11,7 +11,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { query as agentQuery, createSdkMcpServer, tool as sdkTool } from "@anthropic-ai/claude-agent-sdk";
 import { createStepRuntime, createMcpStepRunner, BUILTIN_CODE_TRANSFORMS } from "./step-runners.mjs";
 import { getServer, effectiveClass } from "./mcp-store.mjs";
@@ -514,6 +514,47 @@ export function createClaudeAgentInvoker({ cwd = process.cwd(), model, maxTurns 
     }
     return { ok: true, items: parseAgentItems(text), reasoning, meta: { invoked: ref, contextManifest: built.manifest, ...toolMeta } };
   };
+}
+
+// ── Synchronous model call — the wake-scorer's rented judgment (live subscription) ───────────────────
+// The always-on inbox drain (ambient-scheduler.mjs) routes captured signals through the PURE, SYNCHRONOUS
+// input router (input-router.mjs), whose wakeScorer seam is called synchronously — a signal is scored and
+// the verdict read in the same tick, with no await. So the rented judgment behind that seam must resolve
+// synchronously. This is the one place a model call is made blocking: a read-only `claude -p` subprocess
+// (the same subscription, OAuth-first — the API key is stripped so it bills the subscription, not a key),
+// invoked ONLY when the router reaches a candidate signal. An idle tick with an empty inbox never reaches
+// here, so it makes zero model calls — the always-on cost invariant.
+//
+// It mirrors createCodexAgentInvoker's spawn discipline but is synchronous (spawnSync) and read-only: no
+// tool grant, no send/publish/approve path — it returns TEXT the caller parses into a wake verdict; it can
+// never itself act. Any failure (CLI missing, non-zero exit, empty output) returns null, and the caller
+// treats a null as "no verdict" → no wake, so a scorer failure degrades to today's blank behavior, never
+// a crash or a blind wake. `runSync` is injectable so a fake subscription can be supplied in tests.
+export function runClaudeQuerySync({ prompt, cwd = process.cwd(), model, binary = "claude", timeoutMs = 30000 } = {}) {
+  const childEnv = { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: "gtm-ide/0.3.0" };
+  delete childEnv.ANTHROPIC_API_KEY; // subscription, not a raw key
+  const args = [
+    "-p",
+    "--output-format", "text",
+    ...(model ? ["--model", model] : []),
+  ];
+  let result;
+  try {
+    result = spawnSync(binary, args, {
+      cwd,
+      env: childEnv,
+      input: prompt,
+      encoding: "utf8",
+      timeout: timeoutMs,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+  } catch {
+    return null;
+  }
+  if (!result || result.status !== 0 || typeof result.stdout !== "string" || !result.stdout.trim()) {
+    return null;
+  }
+  return result.stdout;
 }
 
 // ── Microproduct producer invoker (live, OAuth-first subscription) ───────────

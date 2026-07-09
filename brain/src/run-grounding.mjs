@@ -10,7 +10,7 @@
 // scanned workspace is ungrounded and says so, rather than inventing product facts.
 import { getProductModel } from "./product-model-store.mjs";
 import { dedupeAcrossChannels } from "./cross-reference.mjs";
-import { getObjectTouch } from "./gtm-store.mjs";
+import { getObjectTouch, listObjectTouches, resultStore } from "./gtm-store.mjs";
 import { objectKey as computeObjectKey, inferKind } from "./object-identity.mjs";
 import { bucketFor } from "./object-funnel.mjs";
 import { learnedSignal, renderLearnedSignal } from "./reallocation.mjs";
@@ -107,6 +107,63 @@ export function deriveSuppression(projectId = "default", entrants = [], options 
   };
 }
 
+// ── workedContext — Area 2's thin projection over Area 1's touch ledger ─────────────────────────────
+// The always-on runtime needs the composing model to know, per object the machine has touched: how many
+// times, when last, and whether anything came back. This is a THIN PROJECTION over Area 1's durable touch
+// ledger — NOT a parallel person-store fold. Per touched object it returns:
+//   { objectKey, kind, label, touchCount, lastSeenAt, lastOutcomeKind }
+// lastOutcomeKind is READ from the Result ledger by the object's key (a Result's buyerRef/joinKey that
+// equals the object key), taking the most-recent joined outcome's kind — no new field on the object, and
+// null when nothing has joined back (honest blank). It is a STRONG STEER folded into the run grounding as
+// a `worked` slice; it NEVER filters what runs and NEVER gates. Any failure yields an empty projection so
+// composition is never blocked. Deterministic code (a fold over stored records), never a model call.
+export function workedContext(projectId = "default", options = {}) {
+  let records = [];
+  try {
+    records = listObjectTouches(projectId, options);
+  } catch {
+    records = [];
+  }
+  if (!Array.isArray(records) || !records.length) return { projectId, objects: [] };
+
+  // The most-recent joined outcome kind per object key, read straight off the Result ledger. A Result
+  // joins to an object when its buyerRef or joinKey equals the object's key (the same honest, narrow join
+  // object-funnel uses). "Most recent" is by observedAt — the newest outcome wins.
+  const lastOutcomeByKey = new Map();
+  let results = [];
+  try {
+    results = resultStore.list({ ...options, projectId });
+  } catch {
+    results = [];
+  }
+  for (const result of Array.isArray(results) ? results : []) {
+    if (!result) continue;
+    const kind = String(result.outcomeKind ?? "").trim();
+    if (!kind) continue;
+    const at = String(result.observedAt ?? "");
+    for (const rawKey of [result.buyerRef, result.joinKey]) {
+      const key = String(rawKey ?? "").trim();
+      if (!key) continue;
+      const prior = lastOutcomeByKey.get(key);
+      if (!prior || at > prior.at) lastOutcomeByKey.set(key, { kind, at });
+    }
+  }
+
+  const objects = records.map((record) => {
+    const touches = Array.isArray(record?.touches) ? record.touches : [];
+    const last = lastOutcomeByKey.get(record.objectKey) ?? null;
+    return {
+      objectKey: record.objectKey,
+      kind: record.kind ?? null,
+      label: record.label ?? null,
+      touchCount: touches.length,
+      lastSeenAt: record.lastSeenAt ?? null,
+      lastOutcomeKind: last?.kind ?? null,
+    };
+  });
+  return { projectId, objects };
+}
+
 export function buildRunGrounding(project, report = null) {
   const sc = project?.sharedContext ?? {};
   // The derived interpretive product model, read directly from its store (no signature change, no
@@ -138,6 +195,17 @@ export function buildRunGrounding(project, report = null) {
   } catch {
     learn = null;
   }
+  // The optional WORKED slice (Area 2): a thin projection over Area 1's touch ledger — per object the
+  // machine has touched, how many times, when last, and whether an outcome came back. It steers a
+  // self-sourcing discovery agent away from re-working who's already handled or in-flight. Null on a
+  // fresh project (nothing touched → no slice, never faked). Best-effort: a read failure yields no slice.
+  let worked = null;
+  try {
+    const wc = project?.id ? workedContext(project.id) : null;
+    worked = wc && wc.objects.length ? wc : null;
+  } catch {
+    worked = null;
+  }
   const base = {
     productName: project?.name || sc.product?.name || pc?.pkg?.name || "product",
     headline: [productDescription, posDesc, icpDesc ? `Ideal customer: ${icpDesc}` : ""]
@@ -148,6 +216,9 @@ export function buildRunGrounding(project, report = null) {
       : null,
     // The learn steer (null when nothing measured yet). Every return path carries it via base.
     learn,
+    // The worked steer (null when nothing touched yet). Carried via base on every return path — so both
+    // the direct-run and gate-resume grounding paths get the same suppression-aware slice.
+    worked,
   };
   if (!report) {
     // No scanned workspace — stay honestly blind rather than implying proven attribution.

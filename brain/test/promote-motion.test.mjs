@@ -195,7 +195,7 @@ describe("promote-motion — runDueMotions (the scheduler seam wired to a real c
     promoteRun(r2.id, { cadence: "manual-only-string", nowMs: promoteAt }, options); // manual: never fires
 
     const runsBefore = runStore.list(options).length;
-    const staged = runDueMotions({ ...options, nowMs: promoteAt + 8 * 24 * 60 * 60 * 1000 });
+    const { staged } = runDueMotions({ ...options, nowMs: promoteAt + 8 * 24 * 60 * 60 * 1000 });
 
     assert.equal(staged.length, 1, "only the weekly motion is due; the manual one never fires");
     const runsAfter = runStore.list(options);
@@ -226,7 +226,7 @@ describe("promote-motion — runDueMotions (the scheduler seam wired to a real c
     assert.equal(broken.nextRunTemplate.steps.length, 1);
 
     const before = runStore.list(options).length;
-    const staged = runDueMotions({ ...options, nowMs: promoteAt + 8 * 24 * 60 * 60 * 1000 });
+    const { staged } = runDueMotions({ ...options, nowMs: promoteAt + 8 * 24 * 60 * 60 * 1000 });
     assert.equal(staged.length, 0, "a wall-failing motion is skipped, not staged");
     assert.equal(runStore.list(options).length, before, "no run was staged");
 

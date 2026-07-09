@@ -27,9 +27,13 @@ import {
   repeatableMotionStore,
   learningStore,
   gtmPathStore,
+  getObjectTouch,
 } from "./gtm-store.mjs";
 import { gateReviewForRun } from "./run-compile.mjs";
 import { assertGateWall } from "./workflow-composer.mjs";
+import { objectKey as computeObjectKey, inferKind } from "./object-identity.mjs";
+import { bucketFor } from "./object-funnel.mjs";
+import { learnedSignal } from "./reallocation.mjs";
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
@@ -211,11 +215,104 @@ export function motionDue(motion, nowMs = Date.now()) {
   return Number.isFinite(nextAt) && nextAt <= nowMs;
 }
 
+// Does this motion's topology have a self-sourcing / discovery ENTRY — an entry node that FINDS its own
+// items live (an `agent`-kind node with no inbound edge), rather than carrying a fixed population forward?
+// A discovery motion re-sources every cycle; a multi-touch motion carries a population and works it down.
+// Deterministic read of the compiled steps + edges — no model call. An entry node is one with no inbound
+// edge; the motion is self-sourcing when that entry (or any entry) is an agent-kind node.
+function hasSelfSourcingEntry(steps, edges) {
+  const nodes = Array.isArray(steps) ? steps : [];
+  if (!nodes.length) return false;
+  const withInbound = new Set((Array.isArray(edges) ? edges : []).map((e) => e?.target).filter(Boolean));
+  const entries = nodes.filter((n) => n && !withInbound.has(n.id));
+  const roots = entries.length ? entries : nodes;
+  return roots.some((n) => String(n?.kind || "").toLowerCase() === "agent");
+}
+
+// Compute WHICH objects flow THIS cycle — the runtime's one decision (the topology stays the model's).
+// Instead of replaying a frozen item snapshot verbatim, we suppression-filter the carried-forward items
+// against Area 1's LIVE touch ledger (via deriveSuppression → dedupeAcrossChannels → the ledger): an item
+// whose object already drew a joined outcome or is set aside is a RESPONDER and DROPS; an item whose
+// object has not resolved is a NON-RESPONDER and ADVANCES. This is what makes cycle-2's item set differ
+// from cycle-1 as outcomes land — non-responders advance, responders drop — without a stored state field,
+// derived fresh from the ledger every cycle. For a self-sourcing/discovery motion the same filter applies
+// to the last discovered batch, so a re-source never re-works who's already handled. Returns the advancing
+// items (joinKeys already stripped by the caller's mapping is preserved here by re-stripping). Honest
+// fallback: if the ledger read yields nothing to suppress, every carried item advances (today's behavior).
+// The set of objectKeys a real outcome has already joined back to for this project — the RESPONDERS. The
+// honest, narrow join object-funnel uses: a Result's buyerRef or joinKey that equals an object's key. Read
+// once per cycle. A read failure yields an empty set (nothing drops — today's behavior).
+function respondedKeys(projectId, options) {
+  const keys = new Set();
+  let results = [];
+  try {
+    results = resultStore.list({ ...options, projectId });
+  } catch {
+    results = [];
+  }
+  for (const result of Array.isArray(results) ? results : []) {
+    if (!result) continue;
+    const ref = String(result.buyerRef ?? "").trim();
+    if (ref) keys.add(ref);
+    const joinKey = String(result.joinKey ?? "").trim();
+    if (joinKey) keys.add(joinKey);
+  }
+  return keys;
+}
+
+export function computeCycleItems(template, projectId, options = {}) {
+  const carried = (Array.isArray(template?.items) ? template.items : []).map((item) => {
+    const { joinKey, ...rest } = item && typeof item === "object" ? item : {};
+    void joinKey;
+    return rest;
+  });
+  if (!carried.length) return carried;
+
+  let convertedKeySet;
+  try {
+    convertedKeySet = respondedKeys(projectId, options);
+  } catch {
+    convertedKeySet = new Set();
+  }
+  const asOf = new Date().toISOString();
+
+  // An item ADVANCES unless its object is a RESPONDER — resolved by a joined outcome (handled) or an active
+  // founder set-aside (suppressed). Both are read fresh from the ledger + the converted-key set, so the
+  // cycle set is derived every cycle, never a stored state field. An un-keyable item always advances.
+  const advancing = carried.filter((item) => {
+    const kind = inferKind(item) || "person";
+    const key = computeObjectKey(kind, item);
+    if (!key) return true;
+    if (convertedKeySet.has(key)) return false; // responded (a joined outcome) → drop
+    let record = null;
+    try {
+      record = getObjectTouch(projectId, key, options);
+    } catch {
+      record = null;
+    }
+    if (!record) return true; // never touched → advance
+    const bucket = bucketFor(record, { convertedKeySet, asOf });
+    // Drop only what's genuinely resolved for THIS founder: a joined outcome (handled) or an active
+    // set-aside (suppressed). in_flight / seen are non-responders → they advance.
+    return bucket !== "handled" && bucket !== "suppressed";
+  });
+
+  // If nothing dropped (a fresh ledger with no responders), the advancing set equals the carried set — the
+  // honest identity that keeps cycle-1 exactly today's behavior.
+  return advancing;
+}
+
 // Re-stage a due motion's template as a fresh Run — the scheduler's one action. THE WALL: the re-run
 // stages at the founder gate (status "staged", gate pending) and never sends. The carried-forward steps
 // already passed the wall in the source run; we re-assert it here (belt and suspenders) and refuse to
 // stage a topology that could send without a gate. Appends the new run to the motion's scorekeeping and
 // arms the next cadence. Returns { run, motion, gate }.
+//
+// LIVE CYCLE SET (GTM-MACHINE.md Area 2): instead of replaying the frozen item snapshot verbatim, the
+// cycle's items are computed from Area 1's live touch ledger — responders (a joined outcome / a set-aside)
+// drop, non-responders advance — so a promoted multi-touch motion's cycle-2 item set genuinely differs
+// from cycle-1, and a self-sourcing motion never re-works who's already handled. Topology is untouched;
+// only WHICH objects flow this cycle is decided here.
 export function runMotionOnce(motion, { nowMs = Date.now() } = {}, options = {}) {
   const projectId = options.projectId ?? motion.projectId ?? "default";
   const template = motion.nextRunTemplate;
@@ -226,20 +323,20 @@ export function runMotionOnce(motion, { nowMs = Date.now() } = {}, options = {})
   // Re-assert the wall on the carried-forward topology before staging anything.
   assertGateWall(Array.isArray(template.steps) ? template.steps : [], Array.isArray(template.edges) ? template.edges : []);
 
-  // Stage the re-run. Items keep whatever shape they had, minus joinKeys — the run store mints fresh
-  // ones so this run's Results never collide with the source run's.
-  const items = (Array.isArray(template.items) ? template.items : []).map((item) => {
-    const { joinKey, ...rest } = item && typeof item === "object" ? item : {};
-    void joinKey;
-    return rest;
-  });
+  // The live cycle set: suppression-filtered against the ledger (joinKeys already stripped inside
+  // computeCycleItems), so the run store mints fresh keys and this run's Results never collide with the
+  // source run's. `selfSourcing` is recorded on the run so a downstream discovery step knows to re-source.
+  const selfSourcing = hasSelfSourcingEntry(template.steps, template.edges);
+  const items = computeCycleItems(template, projectId, options);
   const run = runStore.create(
     {
       projectId,
       pathId: template.pathId,
       steps: Array.isArray(template.steps) ? template.steps : [],
       edges: Array.isArray(template.edges) ? template.edges : [],
-      gateState: { status: "pending", awaitingReview: items.length },
+      // selfSourcing rides on gateState (a free-form object the run store round-trips) so a downstream
+      // discovery step can tell whether this cycle should re-source live vs. work the carried population.
+      gateState: { status: "pending", awaitingReview: items.length, selfSourcing },
       measurementContract: template.measurementContract ?? null,
       measurementContractId: template.measurementContractId ?? null,
       items,
@@ -271,23 +368,72 @@ export function runMotionOnce(motion, { nowMs = Date.now() } = {}, options = {})
   return { run, motion: updated, gate: gateReviewForRun(run) };
 }
 
+// The set of starved motion refs for a project — a motion shape that has cleared the observation floor of
+// STAGED actions yet measured NOTHING back. This CONSUMES Area 3's learnedSignal read (the one owner of
+// the learned signal); Area 2 owns only the mechanics of what to DO with it. Cached per project within one
+// tick so the ledger is read once, not once per due motion. A read failure yields an empty set — the tick
+// never breaks, it just doesn't flag. Match key is motionRef (the motion's pathId — the stable per-motion
+// ref Results carry), so a due motion is matched to its own measured record.
+function starvedRefsFor(projectId, cache, options) {
+  if (cache.has(projectId)) return cache.get(projectId);
+  let refs = new Set();
+  try {
+    const signal = learnedSignal(projectId, options);
+    const floor = signal.minObservations;
+    for (const m of Array.isArray(signal.motions) ? signal.motions : []) {
+      if (m.motionRef && m.staged >= floor && m.measured === 0) refs.add(m.motionRef);
+    }
+  } catch {
+    refs = new Set();
+  }
+  cache.set(projectId, refs);
+  return refs;
+}
+
 // ── The scheduler seam ────────────────────────────────────────────────────────────────────────────
 // The background tick the HOST calls (the same server heartbeat that drives ambient wakes) — NOT a
 // module-scope timer. It re-stages every motion whose cadence is due, driving each to the founder gate.
 // It only STAGES; it never sends, and a motion that throws (a bad template, a stale run) is skipped, not
-// allowed to break the tick. Returns the { motionId, runId } pairs it staged so the caller can observe.
+// allowed to break the tick.
+//
+// STARVE FLAG (GTM-MACHINE.md Area 2, consuming Area 3): a due motion whose shape has staged enough to
+// clear the observation floor yet measured NOTHING back is FLAGGED FOR REVIEW instead of re-staged — it
+// becomes a correctable receipt in the founder's batch ("cold email: 0 of 41 measured in 3 weeks"), never
+// silently re-run forever and NEVER silently killed. The founder decides in the batch. Advisory only: the
+// flag suppresses this ONE re-stage; the motion stays live and standing on its cadence for the founder to
+// resume, retune, or retire. Overdrive-shaped, per the settled open decision (advisory-batched, not auto).
+//
+// Returns { staged: [{ motionId, runId }], flagged: [{ motionId, motionRef, projectId, reason }] } so the
+// caller (the heartbeat, the batch surface) can both observe the re-stages and render the flags.
 export function runDueMotions(options = {}) {
   const nowMs = options.nowMs ?? Date.now();
   const staged = [];
+  const flagged = [];
+  const starvedCache = new Map();
   for (const motion of repeatableMotionStore.list(options)) {
     if (!motionDue(motion, nowMs)) continue;
+    const projectId = motion.projectId ?? options.projectId ?? "default";
+    const motionRef = trimOrNull(motion.nextRunTemplate?.pathId);
+    // Consult the learned signal: a starved shape is flagged, not re-staged.
+    if (motionRef) {
+      const starved = starvedRefsFor(projectId, starvedCache, { ...options, projectId });
+      if (starved.has(motionRef)) {
+        flagged.push({
+          motionId: motion.id,
+          motionRef,
+          projectId,
+          reason: "this motion shape has staged work but measured nothing back — flagged for your review rather than run again",
+        });
+        continue;
+      }
+    }
     try {
-      const { run } = runMotionOnce(motion, { nowMs }, { ...options, projectId: motion.projectId ?? options.projectId });
+      const { run } = runMotionOnce(motion, { nowMs }, { ...options, projectId });
       staged.push({ motionId: motion.id, runId: run.id });
     } catch {
       // A motion with a broken template or a topology that fails the wall is skipped — never send, never
       // break the tick for the other due motions.
     }
   }
-  return staged;
+  return { staged, flagged };
 }
