@@ -18,6 +18,7 @@ export function ProductEntryColumn({
   onOpenFull,
   deriving = false,
   onReread,
+  defaultOpen = true,
 }: {
   productName: string;
   model: ProductModel | null;
@@ -29,8 +30,15 @@ export function ProductEntryColumn({
   deriving?: boolean;
   // Manually re-read the product — an explicit refresh of the picture. Hidden when not supplied.
   onReread?: () => void;
+  // Whether the column starts expanded. The caller collapses it (thin tab) on the Operator lens so the
+  // fleet-wide shared map isn't starved of width by a 300px gutter; the founder can still open it. When
+  // this changes (the founder switches lenses), the column follows it, but manual toggles in between win.
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(defaultOpen);
+  // Follow the caller's default when the lens it reflects changes — collapse on entering the Operator
+  // lens, expand on returning to Engineer — without stomping a manual toggle within the same lens.
+  useEffect(() => { setOpen(defaultOpen); }, [defaultOpen]);
 
   // Honest progress for the read: it's one open-ended pass (the model decides how many files to open),
   // so there is no truthful percentage to show. What IS real is how long it has been working — a live

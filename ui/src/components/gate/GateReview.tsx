@@ -18,7 +18,7 @@ import {
   gateItemEvidenceLines,
 } from "@/lib/gateItem";
 import type { GateEvidenceLine, GatePromote, GateReceiptLine } from "@/lib/gateItem";
-import { buildGateDelta, gateItemIsCodeNative } from "@/lib/gateDelta";
+import { buildGateDelta, gateItemHasDelta } from "@/lib/gateDelta";
 import { GateDeltaCard } from "@/components/gate/GateDeltaCard";
 import type { GateDecision, GateDeltaDecision, GTMItem, GTMRunResult } from "@/types";
 import "@/styles/canvas-gate.css";
@@ -601,11 +601,13 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
               </div>
             );
           }
-          // Code-native staged item (a microproduct, an in-repo change, a page generator): render the
-          // multi-modal delta card — the CHANGE, shown (a rendered page, a diff, a sampled corpus) — with
-          // the heavier "Ship it live" second authorization for an in-repo change. Only when the host wired
-          // onDecideDelta; otherwise it falls through to the normal draft card below.
-          if (onDecideDelta && gateItemIsCodeNative(item)) {
+          // Content-bearing staged item: render the multi-modal delta card — the CHANGE, shown as the
+          // change itself (a verbatim outbound message, a rendered page, a diff, a sampled corpus) — with
+          // the heavier "Ship it live" second authorization for an in-repo code change. This fires whenever
+          // the item carries a body, a page, or a diff; a truly hollow/thin item (a claim-audit verdict
+          // with no body) returns no delta and falls through to the plain decision card below. Only when
+          // the host wired onDecideDelta (the operator gate path); the plain draft gate is unaffected.
+          if (onDecideDelta && gateItemHasDelta(item)) {
             const delta = buildGateDelta(item, { motionLabel: offer ?? null, transportConnected });
             if (delta) {
               return (

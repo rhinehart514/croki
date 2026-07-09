@@ -339,9 +339,13 @@ export function OperatorLens({ view, onFlyToGate, onOpenLane, onComposeFirst }: 
                 : "Every person, place, and page your motions touch, drawn once."}
             </span>
           </div>
-          {mapObjects.map((obj) => (
-            <ObjectRow key={obj.objectKey} obj={obj} laneNames={laneNames} onOpenLane={onOpenLane} />
-          ))}
+          {mapObjects.length > 0 ? (
+            <div className="op-map-objects">
+              {mapObjects.map((obj) => (
+                <ObjectRow key={obj.objectKey} obj={obj} laneNames={laneNames} onOpenLane={onOpenLane} />
+              ))}
+            </div>
+          ) : null}
           {view && mapObjects.length === 0 ? (
             <div className="op-prov">Nothing touched yet — objects appear as your motions run.</div>
           ) : null}

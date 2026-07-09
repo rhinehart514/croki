@@ -10,11 +10,15 @@
 //   microproduct    → kind:"change" without deployConfirmable when it's a standalone artifact preview,
 //                     shown as the built HTML (the founder reviews the real page)
 //
-// A NON-code-native item returns null — the caller renders the normal draft card. This never changes the
-// wall: the card decides nothing; it hands the founder's call back, and only a "ship" carries
+// A fileless item still gets a delta when it carries real content the founder reviews AS the change: a
+// unified diff (kind:"change", plain approve — no repo to ship to) or a verbatim outbound message body
+// (kind:"outbound"). Only a truly hollow/thin item (no files, no diff, no body — e.g. a claim-audit
+// verdict with nothing to send) returns null, and the caller renders the plain decision card. This never
+// changes the wall: the card decides nothing; it hands the founder's call back, and only a "ship" carries
 // deployConfirmed:true through to the real gate resolve.
 
 import type { GateDelta, GateDeltaFile, GateDeltaPage, GTMItem } from "@/types";
+import { gateItemView } from "@/lib/gateItem";
 
 type StagedFile = { path?: unknown; contents?: unknown; additions?: unknown; deletions?: unknown };
 type ArtifactSpec = {
@@ -48,6 +52,17 @@ function filesOf(item: StagedCodeItem): StagedFile[] {
 // producer artifact: it carries files. A plain outbound draft never does.
 export function gateItemIsCodeNative(item: GTMItem): boolean {
   return filesOf(item as StagedCodeItem).length > 0;
+}
+
+// Does this item carry a real delta — a change the founder should review AS the change (a rendered page,
+// a diff, or a verbatim outbound message body), not as a plain field list? True when it's code-native
+// (files), carries a unified diff, or carries a message body. A truly hollow/thin item (a claim-audit
+// verdict with no body, a bare subject) returns false and keeps the simple decision card. This is the
+// routing signal the gate uses to pick the rich GateDeltaCard over the plain draft card.
+export function gateItemHasDelta(item: GTMItem): boolean {
+  if (gateItemIsCodeNative(item)) return true;
+  if (str((item as StagedCodeItem).diff)) return true;
+  return !!gateItemView(item).body;
 }
 
 // The entry HTML file's full text, for a standalone microproduct preview (the same static-preview
@@ -94,7 +109,54 @@ export function buildGateDelta(
 ): GateDelta | null {
   const it = item as StagedCodeItem;
   const files = filesOf(it);
-  if (!files.length) return null;
+
+  // No producer files, but the item still carries a real delta the founder reviews AS the change. Two
+  // fileless deltas reach the card here so a content-bearing item never falls back to the plain draft
+  // card: an in-repo change that carries only a unified diff, and a plain outbound message body. Both use
+  // the same multi-modal card; neither is deploy-confirmable on its own (a diff-only change with no repo
+  // stages, an outbound message sends). A hollow/thin item has neither and returns null → simple card.
+  if (!files.length) {
+    const filelessSpec = it.artifactSpec ?? null;
+    const filelessTitle = str(filelessSpec?.name) ?? str(item.plainLanguageTitle) ?? str(filelessSpec?.summary) ?? null;
+    const filelessSummary = str(filelessSpec?.summary) ?? str(item.whatYourYesDoes) ?? null;
+    const filelessProv = Array.isArray(filelessSpec?.groundedClaims) && filelessSpec!.groundedClaims!.length
+      ? `Grounded on: ${(filelessSpec!.groundedClaims as unknown[]).map(str).filter(Boolean).join("; ")}`
+      : null;
+    const diff = str(it.diff);
+    if (diff) {
+      const path = str(it.path) ?? str(filelessSpec?.entry);
+      return {
+        kind: "change",
+        title: filelessTitle ?? "A change from your product",
+        whatYourYesDoes: str(item.whatYourYesDoes),
+        motionLabel: ctx.motionLabel ?? null,
+        provenance: filelessProv,
+        summary: filelessSummary,
+        diff,
+        files: [],
+        change: path ? { verb: "Change", object: path } : null,
+        deployConfirmable: false,
+        transportConnected: ctx.transportConnected ?? false,
+      };
+    }
+    // A plain outbound draft — the verbatim message being sent, shown AS the message. The body is read
+    // through gateItemView so every drafter alias (draft / message / post_text …) resolves the same way
+    // the draft card would, and the card shows exactly what reaches the world. No body → not a delta.
+    const view = gateItemView(item);
+    if (view.body) {
+      return {
+        kind: "outbound",
+        title: filelessTitle ?? view.subject,
+        whatYourYesDoes: str(item.whatYourYesDoes),
+        motionLabel: ctx.motionLabel ?? null,
+        provenance: filelessProv,
+        body: view.body,
+        offer: ctx.motionLabel ?? null,
+        transportConnected: ctx.transportConnected ?? false,
+      };
+    }
+    return null;
+  }
 
   const spec = it.artifactSpec ?? null;
   const title = str(spec?.name) ?? str(item.plainLanguageTitle) ?? str(spec?.summary) ?? "A change from your product";

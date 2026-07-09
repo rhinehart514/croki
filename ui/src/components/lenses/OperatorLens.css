@@ -70,15 +70,44 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  /* Give the shared map real presence beside the lanes — it's the centerpiece, not a rail. At full
+     operating width the split is roughly even, with the map allowed to grow wider than the lanes. */
+  grid-template-columns: minmax(0, 0.9fr) minmax(400px, 1.1fr);
   gap: 0;
 }
-/* Narrow operating width (crew dock + product column both open) — stack the shared map BELOW the lanes so
-   a lane card never gets crushed to an unreadable sliver. The map stays the money shot, just full-width
-   under the lanes instead of a squeezed side rail. */
-@container oplens (max-width: 840px) {
+/* The map is the money shot — the moment the operating surface is anything short of wide (the crew dock
+   and/or the product column open), a side-by-side split crushes both halves. So below a generous width we
+   stack the map BELOW the lanes and let it become ONE monumental, full-width focal object: its shared
+   objects flow as a grid that fills the whole surface, not a thin scrolling column. This is deliberately a
+   HIGH breakpoint — the map earns the full width as soon as the lens is squeezed at all. */
+@container oplens (max-width: 1080px) {
   .op-body { grid-template-columns: minmax(0, 1fr); }
-  .op-map { border-left: none; border-top: 1px solid var(--line-2); }
+  .op-map {
+    border-left: none;
+    border-top: 1px solid var(--line-2);
+    padding-top: var(--space-8);
+  }
+  /* The map's objects laid out as a wide grid — the shared ties draw across the whole operating surface
+     as one map, instead of stacking into a narrow list. Auto-fills as many columns as fit. */
+  .op-map-objects {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--space-4);
+    align-items: start;
+  }
+  /* The map head spans the full grid width and reads a size up — it's a section title now, not a caption. */
+  .op-map-head { grid-column: 1 / -1; }
+  .op-map-title { font-size: 11px; }
+  .op-map-sub { font-size: var(--text-md); max-width: 60ch; }
+  /* A shared object (touched by 2+ motions) is the point of the map — let it span two columns so the ties
+     read as the focal moment, not one more equal tile. */
+  .op-obj[data-shared="true"] { grid-column: span 2; }
+}
+/* When the map is genuinely narrow (both panels open on a smaller display), don't force a 2-col span that
+   would overflow — shared objects go back to a single column so nothing clips. */
+@container oplens (max-width: 620px) {
+  .op-map-objects { grid-template-columns: minmax(0, 1fr); }
+  .op-obj[data-shared="true"] { grid-column: auto; }
 }
 .op-lanes {
   padding: var(--space-6) var(--space-6) 140px var(--space-8);
@@ -150,12 +179,20 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  min-width: 0;
 }
 .op-lane-name {
   font-size: var(--text-md);
   font-weight: 600;
   color: var(--ink);
   letter-spacing: var(--tracking-tight);
+  /* The name is the anchor of the row — it holds its space and never collapses to a one-word-per-line
+     column when a long motion-kind pill sits beside it. It gets what it needs, then ellipsizes. */
+  flex: 1 1 auto;
+  min-width: 8ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .op-lane-kind {
   font-family: var(--font-mono);
@@ -166,7 +203,15 @@
   background: var(--surface-2);
   border: 1px solid var(--line-2);
   white-space: nowrap;
+  /* The kind is context, not the headline — it yields to the name and truncates rather than pushing the
+     name into a vertical stack. Capped so a pill that echoes a long name can't dominate the row. */
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+.op-health { flex: none; }
 
 /* Health dot — semantic, small, calm. Green good, amber watch, red hurt, grey no-signal. */
 .op-health {

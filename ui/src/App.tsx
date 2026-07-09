@@ -2836,6 +2836,11 @@ export default function App() {
               model={productModel}
               deriving={productDeriving}
               onReread={() => void handleRereadProduct()}
+              // On the Operator lens — the fleet-wide operating view whose shared map is the centerpiece —
+              // the product column starts collapsed to its thin tab so it doesn't hold a 300px gutter that
+              // starves the map. The founder can still open "Where wins enter" any time; it just doesn't
+              // crowd the operating surface by default. On the single-motion Engineer lens it stays open.
+              defaultOpen={effectiveCanvasLens !== "operator"}
             />
           ) : null}
 
