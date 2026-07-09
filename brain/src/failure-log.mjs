@@ -72,6 +72,19 @@ export function failureSignature({ category, errorKind, nodeKind, nodeLabel, gra
 const LIMIT_RE = /session limit|usage limit|rate limit|reset|quota/i;
 const TIMEOUT_RE = /timed out|timeout/i;
 const NETWORK_RE = /ECONN|ENOTFOUND|fetch failed|socket|EAI_AGAIN|network/i;
+// A provider-side model failure — the single most common real transient the classifier used to miss:
+// an Anthropic "Overloaded" (HTTP 529) or a 500/502/503 "Internal server error" / "Service unavailable"
+// carries NONE of the limit/timeout/network tokens above, so without this branch it fell through to
+// code_throw and was filed as a self-inflicted bug. These clear on a retry — wait it out, don't fix.
+//
+// The 5xx token is deliberately NOT matched bare. A bare `\b5\d{2}\b` fires on ordinary content inside a
+// genuine JS exception — a stack frame ("at line 523"), a JSON parse offset ("position 512"), an array
+// bound ("index 512"), a source location ("foo.js:512:8"), a plain count ("500 characters") — filing a
+// real code-throw bug as transient and hiding it behind the transient filter, the exact opposite of this
+// feature's job. So a 5xx status is only recognized when an HTTP/status cue sits right next to it
+// (HTTP 500, status 503, error code 502, "500 Internal Server Error"). 529 stays explicit because it is
+// itself a distinctive, non-coincidental provider code, and the named phrases below cover the real cases.
+const MODEL_ERROR_RE = /overloaded|(?:\b(?:http|status|code)\b|error)[^0-9a-z]{0,6}\b5\d{2}\b|\b5\d{2}\b\s+(?:internal server error|service unavailable|bad gateway|gateway timeout)|internal server error|service unavailable|server_error|api error|too many requests|\b529\b/i;
 
 // Map a raw failure to a normalized errorKind token. `meta` carries whatever structured signal the run
 // path already has (result.errorKind from classifyAgentError, result.timedOut from the node timeout). We

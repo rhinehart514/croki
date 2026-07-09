@@ -114,6 +114,63 @@ describe("classifyErrorKind — raw error/meta → token", () => {
     assert.equal(classifyErrorKind(new Error("socket hang up")), "network");
     assert.equal(classifyErrorKind(new Error("boom in the drafter")), "code_throw");
   });
+
+  // A provider overload / 5xx is the most common REAL transient model failure. It must be recognized as a
+  // model_error (transient), never fall through to code_throw and get filed as a self-inflicted bug.
+  it("an Anthropic overload / 5xx model error → 'model_error', not 'code_throw'", () => {
+    assert.equal(classifyErrorKind("Overloaded"), "model_error", "an Anthropic 529 overload is transient, not a bug");
+    assert.equal(classifyErrorKind("API error: 500 Internal server error"), "model_error");
+    assert.equal(classifyErrorKind("503 Service Unavailable"), "model_error");
+    assert.equal(classifyErrorKind("Too Many Requests"), "model_error");
+    // A 5xx status IS recognized when a real HTTP/status cue sits next to it.
+    assert.equal(classifyErrorKind("HTTP 500"), "model_error");
+    assert.equal(classifyErrorKind("status 503"), "model_error");
+    assert.equal(classifyErrorKind("error code 502"), "model_error");
+  });
+
+  // Regression: a bare 500–599 number inside a genuine JS-exception message must NOT be read as a provider
+  // 5xx. A stack frame, a JSON parse offset, an array bound, a source location, or a plain count all carry
+  // three-digit 5xx-range numbers; filing them as transient would bury a real code-throw bug behind the
+  // transient filter — the exact opposite of self-inflicted-bug detection.
+  it("a bare 5xx-range number in a code-throw message stays 'code_throw' (self_inflicted), never transient", () => {
+    for (const message of [
+      "at line 523",
+      "Unexpected token < in JSON at position 512",
+      "index 512 out of bounds",
+      "  at parseItems (foo.js:512:8)",
+      "500 characters exceeded",
+      "550 malformed rows",
+    ]) {
+      assert.equal(classifyErrorKind(message), "code_throw", `"${message}" is a real bug, not a 5xx`);
+      assert.equal(classifyFault(classifyErrorKind(message), "node-error"), "self_inflicted", `"${message}" must surface as self_inflicted`);
+    }
+  });
+
+  it("classifyAgentError's generic kind:'error' bucket maps to model_error (a provider error, not our code)", () => {
+    assert.equal(classifyErrorKind("Overloaded", { errorKind: "error" }), "model_error");
+    // Even an unrecognized generic provider-error message stays model_error, never code_throw — the SDK is
+    // not our code, so an is_error result we could not name is treated as a provider-side model error.
+    assert.equal(classifyErrorKind("some provider hiccup", { errorKind: "error" }), "model_error");
+    // But a real transient token inside a generic error is pulled out to its precise kind.
+    assert.equal(classifyErrorKind("rate limit reached", { errorKind: "error" }), "limit");
+    assert.equal(classifyErrorKind("fetch failed", { errorKind: "error" }), "network");
+  });
+
+  it("a structured model_error / network errorKind is honored straight", () => {
+    assert.equal(classifyErrorKind("anything", { errorKind: "model_error" }), "model_error");
+    assert.equal(classifyErrorKind("anything", { errorKind: "network" }), "network");
+  });
+
+  it("the bad-output OBSERVATION signal (meta.badOutput) classifies without any errorKind flip", () => {
+    assert.equal(classifyErrorKind("", { badOutput: "empty_output" }), "empty_output");
+    assert.equal(classifyErrorKind("", { badOutput: "unparseable_output" }), "unparseable_output");
+  });
+
+  // A genuine JS exception must STILL be a code_throw — the model_error carve-out must not swallow real bugs.
+  it("a genuine JS exception is still code_throw (the model_error branch never swallows a real bug)", () => {
+    assert.equal(classifyErrorKind("Cannot read properties of undefined (reading 'name')"), "code_throw");
+    assert.equal(classifyErrorKind("x is not a function"), "code_throw");
+  });
 });
 
 // ─── classifyFault — the self-inflicted vs transient split (HARD REQ #2) ─────────
