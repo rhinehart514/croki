@@ -51,8 +51,16 @@ export default async function handle({ req, res, url }) {
     return true;
   }
 
+  // GET /api/friction — the founder surface reads the auto-logged failure queue here, GROUPED by dedup
+  // signature and SPLIT self-inflicted vs transient (see ui/src/api.ts FailureLogView — the frozen shape).
+  // A self-observed failure carries a signature/failureClass in its frontmatter; a manual friction report
+  // (no signature) is not a self-observed failure and is left OUT of the groups. Read-only; never runs.
+  //
+  // SCAFFOLD (lane: SURFACE): this shapes listFrictionQueue()'s raw reports into { groups, selfInflictedCount,
+  // transientCount }. The grouping is by signature — dedup already collapsed recurrences into one file with
+  // an occurrences count, so one open self-observed file == one group. Newest lastSeen first.
   if (req.method === "GET" && url.pathname === "/api/friction") {
-    try { json(res, 200, listFrictionQueue()); }
+    try { json(res, 200, buildFailureLogView(listFrictionQueue())); }
     catch (err) { json(res, 500, { error: err instanceof Error ? err.message : String(err) }); }
     return true;
   }
@@ -129,4 +137,36 @@ export default async function handle({ req, res, url }) {
   }
 
   return false;
+}
+
+// Shape the raw friction queue into the FailureLogView the founder surface reads (ui/src/api.ts). Only
+// self-observed failures (those carrying a signature) become groups; manual friction is excluded. Dedup
+// already collapsed recurrences into one file per signature, so this maps one open self-observed report to
+// one group, sorts newest lastSeen first, and counts the self-inflicted vs transient split.
+//
+// SCAFFOLD (lane: SURFACE): pure and deterministic — no model, no IO beyond the reports handed in. The
+// SURFACE builder owns this file; keep the returned shape byte-compatible with FailureLogView.
+export function buildFailureLogView({ reports = [] } = {}) {
+  const failures = reports.filter((r) => r.signature && r.status !== "resolved");
+  const groups = failures
+    .map((r) => ({
+      signature: r.signature,
+      category: r.category ?? null,
+      failureClass: r.failureClass === "transient" ? "transient" : "self_inflicted",
+      errorKind: null, // errorKind isn't surfaced in frontmatter yet; the surface reads category for now.
+      occurrences: Number.isFinite(r.occurrences) ? r.occurrences : 1,
+      firstSeen: r.firstSeen ?? null,
+      lastSeen: r.lastSeen ?? r.capturedAt ?? null,
+      pipeline: null, // pipeline/step live in the item's Context JSON; the SURFACE builder can surface them.
+      step: null,
+      errorSnippet: r.errorSnippet ?? null,
+      file: r.file,
+      status: r.status ?? "open",
+    }))
+    .sort((a, b) => String(b.lastSeen ?? "").localeCompare(String(a.lastSeen ?? "")));
+  return {
+    groups,
+    selfInflictedCount: groups.filter((g) => g.failureClass === "self_inflicted").length,
+    transientCount: groups.filter((g) => g.failureClass === "transient").length,
+  };
 }

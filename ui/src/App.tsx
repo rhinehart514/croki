@@ -120,6 +120,7 @@ import { ReferencesPanel, type ReferenceKind } from "@/components/ReferencesPane
 import { IssuesCard } from "@/components/IssuesCard";
 import { InputsInbox } from "@/components/InputsInbox";
 import { DecisionInbox } from "@/components/DecisionInbox";
+import { FailureLogPanel } from "@/components/FailureLogPanel";
 import { MicroproductFace, type Microproduct } from "@/components/MicroproductFace";
 import { MarketLayers } from "@/components/MarketLayers";
 
@@ -328,6 +329,9 @@ export default function App() {
   // The Issues panel — the system's problem list, now a first-class always-present indicator on the
   // dock (no longer a summoned card). Opens from its toolbar badge, mutually exclusive with Approvals.
   const [issuesOpen, setIssuesOpen] = useState(false);
+  // The self-observed failure log panel (Drover watching its own runs). Hidden by default; the SURFACE
+  // builder wires the real open affordance. Scaffold state so the mount below compiles and renders.
+  const [failureLogOpen, setFailureLogOpen] = useState(false);
   // The pending-decision inbox — everything waiting on the founder across EVERY product and pipeline,
   // polled cross-project (independent of the focused session) so a run reaching the gate or dying in a
   // pipeline you're not looking at still bumps the dock badge. The panel is toggled from that badge and
@@ -3493,6 +3497,15 @@ export default function App() {
           graph={graph}
         /> : null}
       </div>
+
+      {/* ── Self-observed failure log — Drover watching its OWN runs ──
+          SCAFFOLD MOUNT (lane: SURFACE). The panel is mounted so its import is exercised and it renders
+          without error; the SURFACE builder wires the real toggle/placement (a dock button, a right-rail
+          aside — its call) and the final design. Gated to the canvas view and hidden by default so this
+          placeholder never disturbs the live layout. */}
+      {view === "canvas" && failureLogOpen ? (
+        <FailureLogPanel onClose={() => setFailureLogOpen(false)} />
+      ) : null}
 
       {/* ── Artifact editor — full markdown for the subagent/skill a step runs ── */}
       {artifactEdit && (

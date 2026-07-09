@@ -945,3 +945,40 @@ export const routeInput = (
     `/api/projects/${encodeURIComponent(projectId)}/inputs/route`,
     body,
   );
+
+// ── Self-observed failure log — Drover watching its OWN runs ──────────────────────
+// The founder surface reads the auto-logged failure queue (the same dogfood/queue reportFriction writes,
+// grouped by dedup signature). GET /api/friction returns this shape (the route groups + splits the raw
+// queue). This is the FROZEN contract every lane depends on — the route builds it, the panel consumes it.
+//
+// One distinct failure = one group, keyed by signature. `occurrences` is bumped in place when the same
+// failure recurs (dedup), so a group is one bug seen N times, not N rows. `failureClass` splits a real bug
+// (self_inflicted) from a retry-clears-it condition (transient); the surface defaults to self_inflicted
+// with transient behind a filter. Every field is honest — a missing piece is null, never invented.
+export type FailureClass = "self_inflicted" | "transient";
+export type FailureCategory = "run-crash" | "run-stall" | "node-error" | "bad-output";
+
+export type FailureGroup = {
+  signature: string;            // the stable dedup key (category|errorKind|node|graph)
+  category: FailureCategory | string;
+  failureClass: FailureClass;   // self_inflicted (a real bug) vs transient (retry/reset clears it)
+  errorKind: string | null;     // normalized token: code_throw, timeout, unparseable_output, limit, …
+  occurrences: number;          // how many times this exact failure has been seen (dedup count)
+  firstSeen: string | null;     // ISO — when this signature first appeared
+  lastSeen: string | null;      // ISO — the newest occurrence (the sort key, newest first)
+  pipeline: string | null;      // graph label or id — which pipeline it happened in
+  step: string | null;          // node label — which step failed (null for a crash/stall)
+  errorSnippet: string | null;  // the trimmed raw error/output line (monospace on the surface)
+  file: string;                 // the queue file basename (the item's identity)
+  status: string;               // "open" while it still needs a fix
+};
+
+export type FailureLogView = {
+  groups: FailureGroup[];       // one per distinct signature, newest lastSeen first
+  selfInflictedCount: number;   // distinct self_inflicted groups (the default view)
+  transientCount: number;       // distinct transient groups (behind the filter)
+};
+
+// Read the self-observed failure log. GET /api/friction returns the richer grouped shape above (the route
+// extends listFrictionQueue's raw reports into groups). Read-only; never triggers a run.
+export const getFailureLog = () => get<FailureLogView>("/api/friction");
