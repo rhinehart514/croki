@@ -3129,9 +3129,12 @@ export default function App() {
               onOpen={handleProjectOpen}
               projects={projects}
             />
-          ) : operatorSession && (operatorSession.status === "failed" || operatorSession.status === "blocked") ? (
+          ) : operatorSession && (operatorSession.status === "failed" || operatorSession.status === "blocked") && !(canvasGraph || (activeProjectId && channels.length > 0) || canvasCandidates.length > 0) ? (
             // The drive STOPPED (a cold start with no runtime, a hit session limit, an error). Surface the
-            // reason and a way to pick the loop back up front-and-center, because the founder must act on it.
+            // reason and a way to pick the loop back up front-and-center ONLY when there is no canvas to show —
+            // a failed run on a product that HAS pipelines must NOT seize the whole woven canvas (that hid the
+            // operating view entirely); the failure stays reachable in the crew co-pilot rail, and the canvas
+            // keeps rendering. Takeover is reserved for a cold-start failure with nothing else to draw.
             <OperatorDriveState
               session={operatorSession}
               productName={activeProject?.name ?? "your product"}
