@@ -1,0 +1,78 @@
+/* The candidate pipelines board, laid out on the canvas ground.
+   When a goal forks, the 2–3 candidate SHAPES render here side by side — the founder's pick-and-refine
+   surface, not a launcher. Design system only: light ground, white surfaces, monochrome zinc, Geist;
+   amber (var(--gap)) reserved for the founder gate. Desktop only (1440). Each lane reuses EmbodiedFlow,
+   so the shape reads identically to its composer echo. */
+
+.cand-canvas {
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  padding: 56px 40px 48px;
+  /* the workspace dot ground, same as the canvas it replaces */
+  background:
+    radial-gradient(circle at 1px 1px, var(--canvas-dot) 1px, transparent 0) 0 0 / 22px 22px,
+    var(--canvas);
+}
+
+.cand-canvas-head {
+  max-width: 720px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cand-canvas-title {
+  margin: 0;
+  font-size: var(--text-2xl);
+  font-weight: 640;
+  letter-spacing: var(--tracking-tight);
+  color: var(--ink);
+}
+
+.cand-canvas-sub {
+  margin: 0;
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--muted);
+}
+
+/* The board — 2 or 3 lanes side by side. Each lane is a fixed, readable pipeline column; they wrap
+   only if the viewport can't hold them (desktop 1440 holds three comfortably). */
+.cand-canvas-board {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: stretch;
+  gap: 20px;
+  width: 100%;
+  max-width: 1200px;
+}
+
+.cand-canvas-lane {
+  flex: 1 1 340px;
+  max-width: 380px;
+  min-width: 300px;
+  transition: opacity 140ms ease;
+}
+
+/* A picked build dims the roads not taken — the chosen one leads. */
+.cand-canvas-lane[data-dim="true"] { opacity: 0.5; }
+
+/* The lane's card fills the column height so the three read as an even board, not ragged. */
+.cand-canvas-lane .composer-card2 { height: 100%; }
+
+.cand-canvas-foot {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--faint);
+}
+
+.cand-canvas-foot svg { color: var(--gap); flex: none; }

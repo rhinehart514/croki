@@ -107,6 +107,8 @@ import { agentPersona } from "@/lib/agentPersona";
 import { STEP_DRAG_MIME } from "@/lib/objectPalette";
 const ProductUnderstanding = lazy(() => import("@/components/ProductUnderstanding").then((m) => ({ default: m.ProductUnderstanding })));
 import { GtmCanvas, type GtmCanvasModel } from "@/components/canvas/GtmCanvas";
+import { CandidatePipelinesCanvas } from "@/components/canvas/CandidatePipelinesCanvas";
+import { sessionCandidates } from "@/lib/sessionCandidates";
 import { CanvasHistoryControl } from "@/components/CanvasHistoryControl";
 import { useCanvasHistory, describeOperations, describeGraphDiff } from "@/lib/canvasHistory";
 import { ProductEntryColumn } from "@/components/ProductEntryColumn";
@@ -2559,6 +2561,16 @@ export default function App() {
   }, [channels, channelGraphs]);
   const canvasGraph = displayGraph ?? graph ?? firstBuiltGraph;
 
+  // The candidate pipeline SHAPES an ambiguous goal produced, read off the parked session. When present
+  // (status "waiting_for_candidates"), the canvas shows them side by side for the founder to pick — never
+  // the empty launcher. `assembling.key` holds the id of a shape already picked (its build is underway),
+  // so the board can dim the roads not taken and read "Building…" on the chosen one.
+  const canvasCandidates = useMemo(
+    () => (operatorSession?.status === "waiting_for_candidates" ? sessionCandidates(operatorSession) : []),
+    [operatorSession],
+  );
+  const pickedCandidateId = assembling?.key ?? null;
+
   // Which lens is actually on screen. Decided-question 5: the Operator lens replaces the old merged-lane
   // overview as the default MANY-motion view; the Engineer lens is the single-motion editor. So: a focused
   // single motion (activeChannelId set) is always Engineer; a founder who opened a lane/gate is put in
@@ -3004,6 +3016,18 @@ export default function App() {
               onResume={() => void handleComposerSend("Continue.")}
               onStartOver={() => void handleOperatorCancel()}
               onSteer={(note) => handleDriveSteer(note)}
+            />
+          ) : canvasCandidates.length > 0 ? (
+            // The goal forked into 2–3 candidate pipeline SHAPES — lay them out ON THE CANVAS, side by
+            // side, as the founder's pick-and-refine surface. This sits ABOVE the built-graph and
+            // launcher branches so a parked ambiguous goal always shows its shapes here, never falls
+            // through to an empty launcher. Picking one runs the SAME authorized build path the composer
+            // echo uses (resolveCandidatesAndSync → compose_and_run → the founder gate — nothing sends).
+            <CandidatePipelinesCanvas
+              candidates={canvasCandidates}
+              productName={activeProject?.name ?? "your product"}
+              pickedId={pickedCandidateId}
+              onPick={(c) => void resolveCandidatesAndSync(c.id, { nodes: c.nodes, edges: c.edges })}
             />
           ) : (canvasGraph || (activeProjectId && channels.length > 0)) ? (
             // A product with real work to show — a graph to watch assemble, or built pipelines — SHOWS THE

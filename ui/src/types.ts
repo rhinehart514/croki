@@ -779,6 +779,7 @@ export type OperatorStatus =
   | "waiting_for_gate"
   | "waiting_for_proposal"
   | "waiting_for_ideas"
+  | "waiting_for_candidates"
   | "waiting_for_input"
   | "interrupted"
   | "completed"

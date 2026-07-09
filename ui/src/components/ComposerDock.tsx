@@ -33,61 +33,13 @@ import "@/styles/composer-posture.css";
 import "@/styles/composer-candidates.css";
 import "@/styles/chat-tabs.css";
 import "@/styles/our-chat.css";
-import type { CapabilityInventory, ClarityKind, GateDecision, GTMEdge, GTMGraph, GTMItem, GTMNode, OperatorEvent, OperatorSession, OperatorSessionSummary, OperatorStatus } from "@/types";
+import type { CapabilityInventory, ClarityKind, GateDecision, GTMGraph, GTMItem, OperatorEvent, OperatorSession, OperatorSessionSummary, OperatorStatus } from "@/types";
 
 // A pipeline SHAPE the operator returns when a goal admits more than one way through — a named shape the
 // founder can pick from, not a draft to approve. Mirrors the backend's candidate result: each carries its
 // full crew (nodes with kind/ref/connector) and a gate, so it renders embodied — a chain of faces/marks —
 // not as prose. Picking one starts the build (which still stops at the founder gate downstream).
-type Candidate = { id: string; label: string; rationale: string; nodes: GTMNode[]; edges: GTMEdge[] };
-
-// ─── The ONE seam where the backend's candidate result is read off the session ──────────────────────────
-// The operator surfaces ideation exclusively via embodied candidates now (the prose ideate path was
-// retired from the operator's toolset). This reads them off whichever field the session carries them on —
-// a `pendingCandidates` bag, a top-level `candidates`, or a staged event whose `data.kind === "candidates"`
-// — and returns [] when absent, so the dock degrades to the plain conversation.
-function normalizeCandidates(raw: unknown): Candidate[] {
-  if (!Array.isArray(raw)) return [];
-  const out: Candidate[] = [];
-  for (const item of raw) {
-    if (!item || typeof item !== "object") continue;
-    const c = item as Record<string, unknown>;
-    const id = typeof c.id === "string" ? c.id : null;
-    const label = typeof c.label === "string" ? c.label : null;
-    if (!id || !label) continue;
-    const nodes = (Array.isArray(c.nodes) ? c.nodes : []).map((n) => {
-      const node = n as GTMNode;
-      // Candidate nodes may arrive un-laid-out; a missing position would crash the flow-order sort.
-      return node.position ? node : { ...node, position: { x: 0, y: 0 } };
-    });
-    out.push({
-      id,
-      label,
-      rationale: typeof c.rationale === "string" ? c.rationale : "",
-      nodes,
-      edges: Array.isArray(c.edges) ? (c.edges as GTMEdge[]) : [],
-    });
-  }
-  return out;
-}
-function candidatesFromEvents(events: OperatorEvent[]): unknown {
-  for (let i = events.length - 1; i >= 0; i--) {
-    const data = events[i].data;
-    if (data && typeof data === "object" && (data as Record<string, unknown>).kind === "candidates") {
-      return (data as Record<string, unknown>).candidates;
-    }
-  }
-  return null;
-}
-function sessionCandidates(session: OperatorSession | null): Candidate[] {
-  if (!session) return [];
-  const bag = session as unknown as { pendingCandidates?: { candidates?: unknown } | null; candidates?: unknown };
-  const raw =
-    (Array.isArray(bag.pendingCandidates?.candidates) ? bag.pendingCandidates!.candidates : null) ??
-    (Array.isArray(bag.candidates) ? bag.candidates : null) ??
-    candidatesFromEvents(session.events);
-  return normalizeCandidates(raw);
-}
+import { sessionCandidates, type Candidate } from "@/lib/sessionCandidates";
 
 // Minimal shape of the Web Speech API's SpeechRecognition we touch — the DOM lib types it behind
 // a vendor-prefixed global that isn't in our tsconfig's lib, so we declare just the surface we use.
