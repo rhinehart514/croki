@@ -12,7 +12,8 @@ import { auditGraphContracts } from "../contracts.mjs";
 import { buildDraftMemory, extractDecisions } from "../memory.mjs";
 import { ideaTasteForProject } from "../feedback-ledger.mjs";
 import { getDesignState } from "../design-state-store.mjs";
-import { buildRunGrounding } from "../run-grounding.mjs";
+import { buildRunGrounding, reportForProject } from "../run-grounding.mjs";
+import { awaitProductModelReady } from "../product-model-ready.mjs";
 import { buildMarketContext } from "../market-research.mjs";
 import { marketObjectStore } from "../gtm-store.mjs";
 import { createDerivedSourceLoader } from "../cross-reference.mjs";
@@ -134,13 +135,20 @@ export default async function handle({ req, res, url }) {
       if (body.resumeRunId && !resumeRecord) {
         throw new Error(`Run not found for gate resume: ${body.resumeRunId}`);
       }
+      // Close the ordering window: if the deep product-model derive is still in flight from a just-
+      // grounded/activated project, wait briefly (bounded) so this run drafts from the rich model
+      // rather than only the cheap scan facts. Degrades gracefully — never blocks past the budget.
+      await awaitProductModelReady(project.id);
       const result = await runGraph(runtimeGraph, {
         targetNodeId: typeof body.targetNodeId === "string" ? body.targetNodeId : undefined,
         approvals: body.approvals && typeof body.approvals === "object" ? body.approvals : {},
         decisions: body.decisions && typeof body.decisions === "object" ? body.decisions : {},
         memory,
         designState: getDesignState(project.id),
-        grounding: buildRunGrounding(project),
+        // Ground on the real scan report — the SAME cited product truth the operator path threads in —
+        // so a direct/streaming run drafts from the win event, attribution, and gaps with their
+        // file:line citations instead of returning evidenceState "blind" with no evidence.
+        grounding: buildRunGrounding(project, reportForProject(project)),
         // The researched buyer picture — the run grounds on real MarketObjects, not just founder-typed
         // guesses. A projection over the stored objects; null (an honest blank) when none are researched.
         market: buildMarketContext(marketObjectStore.list({ projectId: project.id })),
@@ -210,6 +218,9 @@ export default async function handle({ req, res, url }) {
         : null;
       if (body.resumeRunId && !resumeRecord) throw new Error(`Run not found for gate resume: ${body.resumeRunId}`);
 
+      // Same ordering-window close as the non-streaming path: wait briefly (bounded) for an in-flight
+      // product-model derive so streamed drafts ground on the rich model, degrading gracefully.
+      await awaitProductModelReady(project.id);
       send({ type: "run_start", nodeIds: runtimeGraph.nodes.map((n) => n.id) });
       const result = await runGraph(runtimeGraph, {
         targetNodeId: typeof body.targetNodeId === "string" ? body.targetNodeId : undefined,
@@ -217,7 +228,8 @@ export default async function handle({ req, res, url }) {
         decisions: body.decisions && typeof body.decisions === "object" ? body.decisions : {},
         memory,
         designState: getDesignState(project.id),
-        grounding: buildRunGrounding(project),
+        // Same cited product truth on the streaming path — the real scan report, not a blind grounding.
+        grounding: buildRunGrounding(project, reportForProject(project)),
         // The researched buyer picture — same projection the non-streaming run uses; honest blank when
         // nothing has been researched yet.
         market: buildMarketContext(marketObjectStore.list({ projectId: project.id })),

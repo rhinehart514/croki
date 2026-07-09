@@ -331,11 +331,15 @@ const LENSES: LensDef<GtmCanvasModel, never>[] = [
 ];
 
 export function GtmCanvas({
-  model, activeLensId, chromeless,
+  model, activeLensId, onLensChange, chromeless,
 }: {
   model: GtmCanvasModel;
   // "operator" = the fleet-wide operating view (default many-motion); "engineer" = the single-motion editor.
   activeLensId: "operator" | "engineer";
+  // The founder's lens toggle, reported UP so App's canvasLens is the real source of truth. Without
+  // this the lens tab was a controlled input with nowhere to send its change — the click was silently
+  // discarded and the lens was decided entirely by structural state (a focused motion, candidates).
+  onLensChange?: (id: "operator" | "engineer") => void;
   chromeless?: boolean;
 }) {
   return (
@@ -344,6 +348,7 @@ export function GtmCanvas({
       lenses={LENSES}
       defaultLensId={activeLensId}
       activeLensId={activeLensId}
+      onLensChange={onLensChange ? (id) => onLensChange(id === "engineer" ? "engineer" : "operator") : undefined}
       layoutId="gtm-lens"
       isEmpty={false}
       empty={null}

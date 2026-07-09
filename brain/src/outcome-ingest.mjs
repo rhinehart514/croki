@@ -125,18 +125,85 @@ function writeLearningForResult({ result, run, item, projectId, options }) {
   );
 }
 
+// ── Cross-tick dedupe ────────────────────────────────────────────────────────────────────────────
+// A single real signal — one reply, one bounce — is observed REPEATEDLY by the automatic inbox reader:
+// it polls every heartbeat and re-reads the same thread each tick. Without a durable seen-state that
+// re-observation would create a fresh Result (+ Learning) every tick, fabricating hundreds of duplicate
+// "wins" a day off ONE real reply. This is the durable dedupe: the persisted Result ledger IS the
+// seen-state. A signal's identity is (joinKey, outcomeKind, messageId, source) — the exact tuple a
+// re-poll of the same sent message reproduces. If a Result with that identity already exists for the
+// project, this outcome has already been recorded and re-ingesting it is a no-op.
+//
+// This holds the "numbers derive from real signals, never seeded/fake" invariant from the other side: a
+// real reply produces EXACTLY one Result, and re-seeing it adds nothing. The identity is deliberately
+// tight — a genuinely distinct signal (a different outcome kind on the same thread, a different sent
+// message, a founder-entered note that carries no messageId) has a different tuple and still records, so
+// dedupe never swallows a real second outcome. Deterministic code over stored records; no model call.
+function outcomeIdentity({ joinKey, outcomeKind, messageId, source }) {
+  return [
+    trimOrNull(joinKey) ?? "",
+    trimOrNull(outcomeKind) ?? "",
+    trimOrNull(messageId) ?? "",
+    trimOrNull(source) ?? "",
+  ].join("::");
+}
+
+// Is a Result with this outcome's identity already in the ledger? A found match means the same real
+// signal was already recorded on an earlier tick, so this ingest should be skipped. `existingResults`
+// may be passed in so a batch (or the poller) reads the ledger once instead of per-outcome.
+function findExistingResult({ projectId, outcome, options, existingResults }) {
+  const identity = outcomeIdentity(outcome);
+  // Dedupe ONLY when the outcome carries a messageId — the durable id of the exact message the signal was
+  // read off. That is precisely what the automatic inbox reader supplies and re-supplies every tick (the
+  // sent message's provider id), so re-observing one real reply collapses to one Result. A founder-entered
+  // note carries NO messageId, so two manual entries of the same kind on the same run are BOTH kept — the
+  // founder recording a genuine second reply is never silently swallowed. Deterministic; no model call.
+  if (!trimOrNull(outcome.messageId)) return null;
+  const results = Array.isArray(existingResults)
+    ? existingResults
+    : resultStore.list({ ...options, projectId });
+  for (const r of results) {
+    if (
+      outcomeIdentity({
+        joinKey: r.joinKey,
+        outcomeKind: r.outcomeKind,
+        messageId: r.messageId,
+        source: r.source,
+      }) === identity
+    ) {
+      return r;
+    }
+  }
+  return null;
+}
+
 // ── Ingest one outcome ─────────────────────────────────────────────────────────────────────────────
 // Take a raw outcome from any source, join it on its joinKey back to the run + item that produced it,
 // record a Result that ties to run/path/asset/message/channel/buyer/offer (derived from the joined
 // run + item, with any explicit field on the outcome winning), and write the paired Learning. An
 // outcome whose key matches nothing staged is still captured honestly — the Result records runId/pathId
 // as null and `joined` is false — so an out-of-band reply is never silently dropped.
+//
+// A signal already recorded on an earlier tick (same joinKey/outcomeKind/messageId/source) is a durable
+// no-op: it returns the existing Result with `deduped:true` and writes NOTHING new, so the automatic
+// reader re-polling the same reply every heartbeat can never inflate the win count.
 export function ingestOutcome(outcome = {}, options = {}) {
   const projectId = options.projectId ?? outcome.projectId ?? "default";
   const joinKey = trimOrNull(outcome.joinKey);
   if (!joinKey) {
     throw new Error("An outcome needs a joinKey to join back to what was sent.");
   }
+
+  // Durable dedupe FIRST — before any write. The persisted Result ledger is the seen-state; a signal
+  // already recorded (same identity tuple) on an earlier tick is returned as-is, joined per that Result,
+  // and no second Result/Learning is minted. This is what stops one real reply becoming ~288/day.
+  if (options.dedupe !== false) {
+    const already = findExistingResult({ projectId, outcome: { ...outcome, joinKey }, options, existingResults: options.existingResults });
+    if (already) {
+      return { result: already, learning: null, joined: Boolean(already.runId), run: null, item: null, loop: { closed: false }, deduped: true };
+    }
+  }
+
   // Reuse a passed-in run snapshot (a batch reads once), else read the project's runs now.
   const runs = Array.isArray(options.runs) ? options.runs : runStore.list({ ...options, projectId });
   const match = joinToRun({ joinKey, runs });

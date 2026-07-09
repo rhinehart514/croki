@@ -5,14 +5,20 @@
 // inbox drains itself — all without an external cron. The manual route stays as the external/manual hook —
 // this file does not touch it.
 //
-// THREE heartbeat drivers now run per tick, each isolated in its own try/catch so a throw in one can never
+// FOUR heartbeat drivers now run per tick, each isolated in its own try/catch so a throw in one can never
 // stall the loop or break the others:
-//   1. runDueAmbientTicks   — standing-brief wakes (operator-runtime.mjs)
-//   2. runDueMotions        — promoted-motion re-runs (promote-motion.mjs)
-//   3. runDueInputRouting   — drain the captured-signal inbox per active project (this file), routing each
-//                             signal and, when a real wake scorer warrants it, composing-and-running a
+//   1. runDueAmbientTicks       — standing-brief wakes (operator-runtime.mjs)
+//   2. runDueMotions            — promoted-motion re-runs (promote-motion.mjs)
+//   3. runDueInputRouting       — drain the captured-signal inbox per active project (this file), routing
+//                             each signal and, when a real wake scorer warrants it, composing-and-running a
 //                             next-step draft TO THE GATE. With no scorer wired the router refuses to wake,
 //                             so behavior is byte-identical to today.
+//   4. runDueInboxReads         — the AUTOMATIC outcome reader (connectors/measure/inbox-reader.mjs):
+//                             read-only, it polls each connected inbox for replies / bounces on the threads
+//                             of what Drover sent and ingests any detected signal back to its run through
+//                             the existing outcome-ingest path. With no connected Gmail it reads nothing; a
+//                             send-only or revoked grant reports blind and ingests nothing. It NEVER sends —
+//                             it records what already happened, honest-blind when it cannot attribute.
 //
 // SAFETY: this only DRIVES / STAGES standing work — it never sends, publishes, or approves. Every due item
 // still stops at the founder gate exactly as it would from a manual tick. There is deliberately no send
@@ -32,6 +38,7 @@
 import { runDueAmbientTicks } from "./operator-runtime.mjs";
 import { runDueMotions } from "./promote-motion.mjs";
 import { routeUnroutedInputs } from "./input-routing.mjs";
+import { runDueInboxOutcomeReads } from "./connectors/measure/inbox-reader.mjs";
 import { listProjects } from "./project-store.mjs";
 import { getReallocationTunables } from "./reallocation-tunables-store.mjs";
 import { createAmbientWakeScorer } from "./ambient-wake-scorer.mjs";
@@ -217,9 +224,25 @@ export function runDueInputRouting(options = {}) {
 }
 
 /**
+ * The fourth heartbeat driver: the AUTOMATIC outcome read.
+ *
+ * Read-only. For each active project it polls the connected inbox for replies / bounces on the threads of
+ * what Drover sent and ingests any detected signal back to its run (connectors/measure/inbox-reader.mjs).
+ * A project with no connected Gmail reads nothing; a project whose grant is send-only or revoked reports
+ * blind and ingests nothing — never a fabricated attribution. It NEVER sends. Per-project failures are
+ * isolated inside the reader. Async because the read is a real (mocked-in-test) network call; returns the
+ * per-project reports so a caller can observe/log. `projectIds` is injectable for the test; the live
+ * heartbeat walks the active projects.
+ */
+export function runDueInboxReads(options = {}) {
+  const projectIds = options.projectIds ?? activeProjectIds(options);
+  return runDueInboxOutcomeReads({ ...options, projectIds });
+}
+
+/**
  * Start the in-process ambient heartbeat.
  *
- * On each tick it calls the THREE due-work drivers independently — a throw in one never breaks the loop or
+ * On each tick it calls the FOUR due-work drivers independently — a throw in one never breaks the loop or
  * the process, and none keeps the process alive (timer is unref'd). When nothing is due the underlying
  * functions no-op, so an idle heartbeat is cheap: an empty inbox routes nothing, so the scorer is never
  * invoked and no paid probe is ever charged.
@@ -250,6 +273,11 @@ export function startAmbientScheduler(options = {}) {
     } catch {}
     try {
       runDueInputRouting({ maxScorerPerTick: options.maxScorerPerTick, scorer: options.scorer });
+    } catch {}
+    try {
+      // The automatic outcome read is async (a network read); fire-and-forget with an isolated catch so a
+      // read failure or a rejected promise never stalls the heartbeat or the other drivers. Read-only.
+      Promise.resolve(runDueInboxReads()).catch(() => {});
     } catch {}
   }, intervalMs);
 

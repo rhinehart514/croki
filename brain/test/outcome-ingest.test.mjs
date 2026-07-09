@@ -286,3 +286,46 @@ describe("outcome report — honest measurement", () => {
     assert.equal(report.paths[1].pathId, a.pathId);
   });
 });
+
+// ── Durable cross-tick dedupe ─────────────────────────────────────────────────────────────────────
+// The automatic inbox reader re-reads the same sent message every heartbeat, re-ingesting the same
+// signal each tick. Without durable dedupe, one real reply would mint a fresh Result every tick
+// (~288/day), fabricating win counts. The persisted Result ledger IS the seen-state: a signal already
+// recorded (same joinKey + outcomeKind + messageId + source) is a no-op. A founder-entered note, which
+// carries no messageId, is never deduped — a genuine second manual entry is always kept.
+describe("outcome ingest — durable dedupe on a re-observed signal", () => {
+  it("records a messageId-bearing signal once, then no-ops on a re-ingest of the same signal", () => {
+    const options = freshRoot();
+    const { projectId } = seedRun(options);
+    const signal = { joinKey: "handle-ada", outcomeKind: "reply", source: "connected-account", messageId: "gmsg-ada" };
+
+    const first = ingestOutcome({ ...signal }, { ...options, projectId });
+    assert.equal(first.deduped ?? false, false, "the first observation records a real Result");
+    assert.equal(resultStore.list({ ...options, projectId }).length, 1);
+
+    const second = ingestOutcome({ ...signal }, { ...options, projectId });
+    assert.equal(second.deduped, true, "re-observing the same signal is a durable no-op");
+    assert.equal(second.result.id, first.result.id, "the existing Result is returned, not a new one");
+    assert.equal(resultStore.list({ ...options, projectId }).length, 1, "still exactly one Result — never a duplicate per tick");
+  });
+
+  it("still records a genuinely distinct signal (a different messageId or outcome kind)", () => {
+    const options = freshRoot();
+    const { projectId } = seedRun(options);
+    ingestOutcome({ joinKey: "handle-ada", outcomeKind: "reply", source: "connected-account", messageId: "gmsg-1" }, { ...options, projectId });
+    // A different sent message (different id) is a distinct real signal — recorded, not deduped.
+    ingestOutcome({ joinKey: "handle-ada", outcomeKind: "reply", source: "connected-account", messageId: "gmsg-2" }, { ...options, projectId });
+    // A different outcome kind on the same message is also distinct.
+    ingestOutcome({ joinKey: "handle-ada", outcomeKind: "bounce", source: "connected-account", messageId: "gmsg-1" }, { ...options, projectId });
+    assert.equal(resultStore.list({ ...options, projectId }).length, 3);
+  });
+
+  it("never dedupes a founder-entered outcome (no messageId), so a second manual entry is kept", () => {
+    const options = freshRoot();
+    const { projectId } = seedRun(options);
+    // Two manual entries of the same kind on the same run — both real, both kept.
+    ingestOutcome({ joinKey: "handle-ada", outcomeKind: "reply", source: "founder-entered" }, { ...options, projectId });
+    ingestOutcome({ joinKey: "handle-ada", outcomeKind: "reply", source: "founder-entered" }, { ...options, projectId });
+    assert.equal(resultStore.list({ ...options, projectId }).length, 2, "manual entries are never silently swallowed");
+  });
+});

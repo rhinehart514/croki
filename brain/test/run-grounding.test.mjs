@@ -1,8 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
-import { buildRunGrounding, inferProductSummary } from "../src/run-grounding.mjs";
+import { buildRunGrounding, inferProductSummary, reportForProject } from "../src/run-grounding.mjs";
 import { createProductProvider } from "../src/context/providers.mjs";
+import { saveWorkspace } from "../src/workspace.mjs";
 
 describe("buildRunGrounding", () => {
   it("assembles the headline from repo headline, positioning promise, and ICP description", () => {
@@ -202,5 +206,91 @@ describe("createProductProvider — inferred understanding reaches the crew, unc
     const { text, meta } = createProductProvider(understanding).contribute();
     assert.doesNotMatch(text, /INFERRED PRODUCT UNDERSTANDING/);
     assert.equal(meta.inferredPositioning, false);
+  });
+});
+
+describe("reportForProject — the direct/streaming run paths now ground on cited product truth", () => {
+  let root;
+  const isolate = () => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-report-for-project-"));
+    return { root };
+  };
+
+  // A durable workspace carrying a proven scan report, saved to an isolated store — exactly the shape
+  // openWorkspace persists after a real scan. saveWorkspace lets the test avoid running scanRepo.
+  const seedProvenWorkspace = (options, { id = "ws-proven" } = {}) =>
+    saveWorkspace({
+      schemaVersion: 1,
+      id,
+      name: "rodentradar · project_created",
+      repo: "/tmp/rodentradar",
+      outcome: "project_created",
+      createdAt: new Date().toISOString(),
+      report: {
+        headline: "Tracking gap proven: attribution captured but missing from project_created.",
+        filesScanned: 42,
+        productContext: {
+          readme: "RodentRadar turns pest-control sensor data into a monitored feed.",
+          pkg: { name: "rodentradar", description: "sensor feed", keywords: ["pest", "iot"] },
+          sampleDataFiles: [],
+        },
+        stack: ["package.json", "vercel.json"],
+        winEvent: { name: "project_created", found: true, attributionProperties: ["utm_source"], citations: [{ file: "a.ts", line: 3 }] },
+        gaps: [{ title: "Source missing from project_created", summary: "the gap", citations: [{ file: "b.ts", line: 9 }] }],
+        funnel: { stages: [] },
+      },
+      revisions: [],
+      decisions: [],
+      runs: [],
+    }, options);
+
+  it("resolves the report from the project's linked workspaceId, so grounding cites file:line evidence", () => {
+    const options = isolate();
+    seedProvenWorkspace(options, { id: "ws-linked" });
+    // A project grounded in that workspace carries its id on sharedContext.repository.workspaceId.
+    const project = { id: "p1", name: "RodentRadar", sharedContext: { repository: { workspaceId: "ws-linked" } } };
+
+    const report = reportForProject(project, options);
+    assert.ok(report, "the linked workspace's scan report is resolved");
+
+    // This is the EXACT call the direct/streaming endpoints now make. Before the fix they passed no
+    // report and got evidenceState "blind" with empty evidence — losing every draft citation.
+    const grounding = buildRunGrounding(project, report);
+    assert.equal(grounding.evidenceState, "proven", "carried attribution makes the run's evidence proven, not blind");
+    assert.equal(grounding.evidence.length, 2, "win-event citation + gap citation both reach the run");
+    assert.deepEqual(grounding.evidence, [{ file: "a.ts", line: 3 }, { file: "b.ts", line: 9 }]);
+    assert.deepEqual(grounding.winEvent, { name: "project_created", found: true, attributionProperties: ["utm_source"] });
+  });
+
+  it("falls back to the newest workspace when the project has no linked workspaceId (still cited, not blind)", () => {
+    const options = isolate();
+    seedProvenWorkspace(options, { id: "ws-unlinked" });
+    // A scanned-but-not-yet-linked project (no workspaceId) still grounds on the fresh scan.
+    const project = { id: "p2", name: "RodentRadar", sharedContext: { repository: {} } };
+
+    const report = reportForProject(project, options);
+    assert.ok(report, "the newest workspace's report is resolved when nothing is linked");
+    assert.equal(buildRunGrounding(project, report).evidenceState, "proven");
+  });
+
+  it("returns null (grounding stays honestly blind) when there is no workspace at all", () => {
+    const options = isolate();
+    const project = { id: "p3", name: "Bare", sharedContext: { repository: {} } };
+    assert.equal(reportForProject(project, options), null, "no workspace → no report, an honest blank");
+    const grounding = buildRunGrounding(project, reportForProject(project, options));
+    assert.equal(grounding.evidenceState, "blind", "with no report the run is honestly blind, never fabricated");
+    assert.deepEqual(grounding.evidence, []);
+  });
+
+  it("never throws on a dangling linked workspaceId — degrades to blind", () => {
+    const options = isolate();
+    const project = { id: "p4", name: "Bare", sharedContext: { repository: { workspaceId: "does-not-exist" } } };
+    // No fallback workspace exists either, so this resolves null rather than throwing.
+    assert.doesNotThrow(() => reportForProject(project, options));
+    assert.equal(reportForProject(project, options), null);
+  });
+
+  it("returns null for a null project without throwing", () => {
+    assert.equal(reportForProject(null), null);
   });
 });

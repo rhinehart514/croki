@@ -29,6 +29,7 @@ import { openWorkspace } from "../workspace.mjs";
 import { listPeople, getPerson } from "../person-store.mjs";
 import { executeDomainCommand } from "../domain-commands.mjs";
 import { createClaudeProductModeler } from "../product-model-generator.mjs";
+import { registerProductModelDerive } from "../product-model-ready.mjs";
 
 // Fire-and-forget: after a project is grounded or activated, derive its interpretive product model
 // in the background so the picture panel and run grounding are populated without the founder having
@@ -38,7 +39,7 @@ function kickProductModelDerive(project, repo) {
   if (!project?.id) return;
   const cwd = typeof repo === "string" ? repo.trim() : "";
   if (!cwd || cwd === process.cwd()) return;
-  Promise.resolve()
+  const derive = Promise.resolve()
     .then(() =>
       executeDomainCommand(
         "DeriveProductModel",
@@ -47,6 +48,10 @@ function kickProductModelDerive(project, repo) {
       ),
     )
     .catch(() => {});
+  // Register the in-flight derive so a run started right after grounding/activation can briefly wait
+  // for the rich model to land (bounded) instead of silently grounding on only cheap scan facts. This
+  // closes the ordering window without making the kick blocking — the derive still runs in background.
+  registerProductModelDerive(project.id, derive);
 }
 
 export default async function handle({ req, res, url }) {

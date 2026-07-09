@@ -22,6 +22,7 @@
 //     back to an outcome. Failures are recorded as failures, never swallowed.
 
 import { resolveCredentialToken } from "../../credential-store.mjs";
+import { needsConnectionResult } from "./channels.mjs";
 
 // Resolve the outbound auth header the BYO way: a founder-pasted credential for this project wins,
 // the GTM_IDE_SEND_AUTH env var is the fallback (the engineer path still works). projectId + persistence
@@ -63,16 +64,23 @@ export async function run(node, upstream, context) {
   // founder pasted through the app, then the GTM_IDE_SEND_ENDPOINT env var (resolveSendEndpoint folds the
   // env var in as its own fallback). A founder who connected a transport no longer needs an env var.
   const endpoint = node.config.endpoint || resolveSendEndpoint(context);
+  const approved = upstream.filter((item) => item.approved === true);
   if (!endpoint) {
-    // No destination from any of the three sources — never send blind. Honest refusal, not a silent no-op.
-    return {
-      ok: false,
-      items: [],
-      error: "No send endpoint configured. Connect a transport in the app, or set GTM_IDE_SEND_ENDPOINT to a real destination.",
-    };
+    // No destination from any of the three sources — never send blind. This is the SAME honest
+    // needs-connection contract Gmail uses: an explicit BLOCKED status the founder is prompted to clear by
+    // connecting a transport, with the approved items carried through intact — never a silent no-op that
+    // reads like success. With nothing approved either, it is a plain no-op (nothing to block on).
+    if (approved.length === 0) {
+      return { ok: true, items: [], meta: { sent: 0, failed: 0, note: "No approved items to send." } };
+    }
+    return needsConnectionResult({
+      channel: node.config.channel || "http",
+      reason: "needs_connection",
+      message: "No send endpoint connected — connect a transport in the app (or set GTM_IDE_SEND_ENDPOINT) to send these approved items.",
+      items: approved,
+    });
   }
 
-  const approved = upstream.filter((item) => item.approved === true);
   if (approved.length === 0) {
     return { ok: true, items: [], meta: { sent: 0, failed: 0, endpoint, note: "No approved items to send." } };
   }

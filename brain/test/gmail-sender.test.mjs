@@ -88,7 +88,7 @@ test("INVARIANT — approval is read from the ITEM, never from composition-writa
 
 // ─── Honest no-op without a credential (never a fake "sent") ───────────────────────────────────
 
-test("without a resolved credential, an approved item is STAGED — honest no-op, never a fake send", async () => {
+test("without a resolved credential, an approved item is BLOCKED needs_connection — honest, never a silent stage or a fake send", async () => {
   const prior = { g: process.env.GMAIL_OAUTH_TOKEN, go: process.env.GOOGLE_OAUTH_TOKEN };
   delete process.env.GMAIL_OAUTH_TOKEN;
   delete process.env.GOOGLE_OAUTH_TOKEN;
@@ -98,25 +98,37 @@ test("without a resolved credential, an approved item is STAGED — honest no-op
     const result = await gmail.run(node({ transport: t.impl }), [approvedItem()], context);
     assert.equal(t.count, 0, "no credential → the transport is never called");
     assert.equal(result.meta.sent, 0);
-    assert.equal(result.meta.staged, 1);
-    assert.equal(result.meta.blocked, "missing_credential");
+    // The fix: an unconnected approved item is an honest BLOCKED needs-connection, not a silent staged
+    // no-op that reads like success. The engine sees a blocked node, not a green one.
+    assert.equal(result.ok, false);
+    assert.equal(result.blocked, true);
+    assert.equal(result.blockedReason, "needs_connection");
+    assert.equal(result.needsConnection, true);
+    assert.equal(result.meta.needsConnection, 1);
+    assert.equal(result.meta.blocked, "needs_connection");
     const item = result.items[0];
     assert.equal(item.applied, false);
-    assert.equal(item.executionStatus, "staged");
+    assert.equal(item.executionStatus, "needs_connection");
+    assert.equal(item.needsConnection, true);
     assert.notEqual(item.executionStatus, "sent");
+    assert.notEqual(item.executionStatus, "staged");
+    // The approved item's content is carried through intact — the founder loses no work.
+    assert.equal(item.draft, "Hello there.");
   } finally {
     if (prior.g !== undefined) process.env.GMAIL_OAUTH_TOKEN = prior.g;
     if (prior.go !== undefined) process.env.GOOGLE_OAUTH_TOKEN = prior.go;
   }
 });
 
-test("with a credential but NO wired transport, an approved item is staged (honest no-op)", async () => {
+test("with a credential but NO wired transport, an approved item is BLOCKED needs_connection (honest, never a silent stage)", async () => {
   const { context } = credentialedContext();
   const result = await gmail.run(node({}), [approvedItem()], context); // no transport
+  assert.equal(result.ok, false);
+  assert.equal(result.blocked, true);
   assert.equal(result.meta.sent, 0);
-  assert.equal(result.meta.staged, 1);
-  assert.equal(result.meta.blocked, "missing_transport");
-  assert.equal(result.items[0].executionStatus, "staged");
+  assert.equal(result.meta.needsConnection, 1);
+  assert.equal(result.meta.blocked, "needs_connection");
+  assert.equal(result.items[0].executionStatus, "needs_connection");
 });
 
 // ─── The happy path: credential + transport + gate stamp → a real (faked) send ─────────────────

@@ -2127,6 +2127,34 @@ svg {
   z-index: 10;
 }
 
+/* HOME anchor — the persistent "back to the whole operation" chip pinned to the canvas top-left.
+   Opaque (a control you read against the canvas beneath it), monochrome, matches the brand mark. */
+.canvas-home {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  z-index: 11;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px 4px 5px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.92);
+  cursor: pointer;
+  transition: border-color 120ms, background 120ms;
+}
+
+.canvas-home:hover { border-color: var(--accent); background: #fff; }
+
+.canvas-home-label {
+  font-size: 11px;
+  font-weight: 680;
+  color: var(--muted);
+}
+
+.canvas-home:hover .canvas-home-label { color: var(--accent); }
+
 .loop-save-chip,
 .loop-run-chip {
   display: flex;

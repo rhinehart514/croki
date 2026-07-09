@@ -9,6 +9,7 @@
 // their file:line citations. Absent a report the grounding stays honestly blind — a run with no
 // scanned workspace is ungrounded and says so, rather than inventing product facts.
 import { getProductModel } from "./product-model-store.mjs";
+import { getWorkspace, listWorkspaces } from "./workspace.mjs";
 import { dedupeAcrossChannels } from "./cross-reference.mjs";
 import { getObjectTouch, listObjectTouches, resultStore } from "./gtm-store.mjs";
 import { objectKey as computeObjectKey, inferKind } from "./object-identity.mjs";
@@ -266,6 +267,32 @@ export function workedContext(projectId = "default", options = {}) {
     };
   });
   return { projectId, objects };
+}
+
+// Resolve the real scan report for a project so a run path grounds on cited product truth — the same
+// report the operator path threads in. The project's shared-context repository carries the linked
+// workspaceId (set at grounding time); that workspace holds the durable scan report. Falls back to the
+// most-recently-updated workspace when the project isn't linked yet (mirroring the operator's
+// latestWorkspace), so a scanned-but-not-yet-linked project still grounds cited rather than blind.
+// Returns null (an honest blank → the grounding stays blind) when no workspace/report can be resolved.
+// Pure read, best-effort — never throws, so a missing/corrupt workspace never breaks a run.
+export function reportForProject(project, options = {}) {
+  if (!project) return null;
+  const linkedId = project?.sharedContext?.repository?.workspaceId || null;
+  const tryLoad = (id) => {
+    if (!id) return null;
+    try { return getWorkspace(id, options)?.report ?? null; } catch { return null; }
+  };
+  const linked = tryLoad(linkedId);
+  if (linked) return linked;
+  // Not linked (or the linked workspace is gone) — fall back to the newest workspace, exactly as the
+  // operator's latestWorkspace does, so a fresh scan still reaches the run.
+  try {
+    const newest = listWorkspaces(options)[0];
+    return tryLoad(newest?.id);
+  } catch {
+    return null;
+  }
 }
 
 export function buildRunGrounding(project, report = null) {

@@ -298,6 +298,53 @@ export function gateReviewForRun(run) {
   };
 }
 
+// ── Persist the send facts back onto the run ─────────────────────────────────────────────────────────
+// After a founder-approved run runs to completion, the execute node's output items carry the delivery
+// facts a real send produced — the provider's message id (Gmail's, handed back at send time) and the
+// sentAt timestamp — but the run is persisted from the GATE node's items, which never saw those facts. So
+// the fields the automatic inbox reader keys its sent-item index on (item.providerMessageId + item.joinKey)
+// are absent from the stored run, and every poll no-ops against an empty index.
+//
+// This merges the execute output back onto the gate items by their durable joinKey: for each staged item,
+// if an execute-node output item with the same joinKey carried a providerMessageId, copy providerMessageId
+// (and sentAt) onto it. It ONLY copies the two delivery facts and only when a real provider id exists — the
+// gate items stay the persistence spine (they carry the decided/approved state); nothing else is overwritten,
+// and an item that was never actually sent (staged locally, blocked for needs_connection, rate-limited)
+// gets no fabricated id. Deterministic code over the run result; no model call.
+function collectSentFactsByJoinKey(result) {
+  const byJoinKey = new Map();
+  const nodes = result?.nodes ?? {};
+  for (const nodeResult of Object.values(nodes)) {
+    if (nodeResult?.category !== "execute" && !Array.isArray(nodeResult?.items)) continue;
+    for (const item of Array.isArray(nodeResult?.items) ? nodeResult.items : []) {
+      const joinKey = String(item?.joinKey ?? "").trim();
+      const providerMessageId = String(item?.providerMessageId ?? "").trim();
+      // Only a truly-sent item — one carrying a real provider message id AND a joinKey to attribute it —
+      // contributes a delivery fact. A staged/blocked/rate-limited item has no provider id and is skipped.
+      if (!joinKey || !providerMessageId) continue;
+      byJoinKey.set(joinKey, { providerMessageId, sentAt: item.sentAt ?? null });
+    }
+  }
+  return byJoinKey;
+}
+
+export function mergeSendOutputOntoItems(items, result) {
+  const list = Array.isArray(items) ? items : [];
+  const sentFacts = collectSentFactsByJoinKey(result);
+  if (sentFacts.size === 0) return list;
+  return list.map((item) => {
+    const joinKey = String(item?.joinKey ?? "").trim();
+    const facts = joinKey ? sentFacts.get(joinKey) : null;
+    if (!facts) return item;
+    return {
+      ...item,
+      providerMessageId: facts.providerMessageId,
+      // Keep an already-stamped sentAt on the item; else adopt the send's timestamp.
+      sentAt: item.sentAt ?? facts.sentAt ?? null,
+    };
+  });
+}
+
 // ── Approve → run: release a staged compiled run through the SAME engine ─────────────────────────────
 // A compiled run stages at the founder gate (compileRunFromPath). This is the other half: the founder's
 // per-item decisions (approve / reject / edit) release it. It reuses runGraph — NOT a parallel runtime —
@@ -320,6 +367,12 @@ export async function approveCompiledRun({
   memory = null,
   loadLastRunItems = null,
   authorizeRelease = null,
+  // The live delivery seam — HOW an approved item actually leaves (e.g. a real Gmail send). Host-supplied,
+  // never composition. When present, a founder-approved item reaches the real send transport and gets back
+  // a provider message id; without it the default execute connector stages locally (no id). Threading it
+  // here matches the operator gate-resume path, which already passes it — and is what makes the compiled-run
+  // approval able to genuinely send, and therefore able to persist the provider id the inbox reader needs.
+  sendRunners = null,
   options = {},
 } = {}) {
   const staged = run ?? runStore.get(runId, { ...options, projectId });
@@ -385,6 +438,10 @@ export async function approveCompiledRun({
     projectId,
     credentialOptions: options,
     authorizeRelease,
+    // Only pass a send-runner map when one was supplied. Absent it, the execute connector stages locally
+    // (the compiled-run default). Present, an approved item reaches the real transport and returns a
+    // provider message id, which the merge below persists onto the run for the automatic inbox reader.
+    ...(sendRunners ? { sendRunners } : {}),
   });
 
   // Persist the resolved run. Undecided items keep it staged (the gate still holds them); a fully
@@ -396,7 +453,13 @@ export async function approveCompiledRun({
   const gateResult = result.nodes[primaryGate.id];
   // The gate's stamped items (each now approved / rejected) become the run's items so a re-open shows the
   // decided state; fall back to the reviewed items if the gate produced none.
-  const decidedItems = Array.isArray(gateResult?.items) ? gateResult.items : reviewedItems;
+  const gateItems = Array.isArray(gateResult?.items) ? gateResult.items : reviewedItems;
+  // Merge the execute node's send output — providerMessageId + sentAt, keyed on the durable joinKey — back
+  // onto the persisted items. Without this, a truly-sent item's Gmail message id lives only in the transient
+  // run result and is thrown away at save time, so the automatic inbox reader's sent-item index is always
+  // empty live and every poll no-ops. The gate items are the persistence spine (they carry the decided
+  // state); this only stamps the delivery facts a send produced onto the exact item that was sent.
+  const decidedItems = mergeSendOutputOntoItems(gateItems, result);
   const awaitingReview = stillPending
     ? (typeof gateResult?.meta?.awaitingReview === "number"
         ? gateResult.meta.awaitingReview

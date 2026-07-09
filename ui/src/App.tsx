@@ -22,8 +22,6 @@ import {
   addClarity,
   removeClarity,
   listPeople,
-  findReferences,
-  getPerson,
   getChannelFeeds,
   getDirectedFeeds,
   deriveChannelFrom,
@@ -49,7 +47,6 @@ import {
   setActiveWorkflow,
   getProductModel,
   deriveProductModel,
-  composeMicroproduct,
   promoteChannel,
   revokeChannel,
   getPendingInbox,
@@ -112,40 +109,25 @@ import { sessionCandidates, type Candidate } from "@/lib/sessionCandidates";
 import type { WovenFocus } from "@/lib/wovenOverlay";
 import { CanvasHistoryControl } from "@/components/CanvasHistoryControl";
 import { useCanvasHistory, describeOperations, describeGraphDiff } from "@/lib/canvasHistory";
+import { useNavigationLayers, describeSurface } from "@/lib/navigation";
 import { ProductEntryColumn } from "@/components/ProductEntryColumn";
 import { CanvasCard } from "@/components/CanvasCard";
 import { ClarityCard } from "@/components/ClarityCard";
-import { ExperimentMatrixLens } from "@/components/lenses/ExperimentMatrixLens";
 import type { CanvasSubject } from "@/lib/cardDetail";
-import { ReferencesPanel, type ReferenceKind } from "@/components/ReferencesPanel";
 import { IssuesCard } from "@/components/IssuesCard";
 import { InputsInbox } from "@/components/InputsInbox";
 import { DecisionInbox } from "@/components/DecisionInbox";
 import { FailureLogPanel } from "@/components/FailureLogPanel";
-import { MicroproductFace, type Microproduct } from "@/components/MicroproductFace";
-import { MarketLayers } from "@/components/MarketLayers";
 
-// The views you can summon onto the GTM canvas as draggable cards — the agentic replacement for
-// lens tabs. You pop one up, drag it, dismiss it; Claude can summon the same cards.
-// Only canvas-work surfaces summon now. The admin surfaces (workspace, team, self-built tools) moved
-// out of this junk drawer into a single Settings overlay reached from the dock's gear.
+// The views you can summon onto the GTM canvas as draggable cards. The dock's Summon menu was removed,
+// so the ONLY kind anything still summons is "inbox" (a world-signal decision opens it via summonView).
+// The old terminal / query / web / experiments / microproduct / market kinds had no reachable trigger
+// after that menu went away — some rendered empty cards, the rest were dead render bodies — so they're
+// gone. Re-adding one is a deliberate act: give it a real trigger AND its render body, not a menu entry.
 const SUMMON_GTM = [
-  { id: "terminal", label: "Terminal", desc: "A live shell on the canvas. Run commands by hand and pipe the output into the graph." },
-  { id: "query", label: "Query", desc: "Interrogate your own data: everyone your pipelines touched, filtered and sorted live." },
-  { id: "web", label: "Web", desc: "A research browser on the canvas. Pull up a prospect's site while you work." },
-  { id: "experiments", label: "Experiment matrix", desc: "ICP × claim × pipeline: your live hypotheses." },
   { id: "inbox", label: "Inbox", desc: "Every world-signal that came in (a commit, a signup, a reply), captured and waiting for you to route or set aside." },
-  { id: "microproduct", label: "Microproduct", desc: "Cut a working artifact from your product for a goal. It stages behind your gate; nothing deploys until you approve." },
-  { id: "market", label: "Market picture", desc: "Build your buyer picture one layer at a time (ICP, pain, trigger, offer), picking from real alternatives at each." },
 ];
 
-// Pull the built microproduct preview out of the staged run the compose door returns. The producer's
-// artifact (spec + files) and a built preview (entry file + file list) ride the staged gate item — the
-// run's summarized nodes carry them through verbatim. We scan every node's items for the one that is a
-// microproduct (it has artifactFiles), then use the entry page's full HTML as the inline preview so
-// MicroproductFace can render the real page in a sandboxed iframe with no served URL. Defensive by
-// construction: `staged` is typed `unknown`, so every hop is shape-checked and a miss degrades to null
-// (the face simply shows "No preview yet"), never a throw.
 // Lay out a picked candidate's shape for the assembling preview. Candidate nodes often arrive without
 // real positions (0,0); step them left-to-right by their longest incoming chain so a fork still moves
 // rightward and the preview reads as a pipeline, not a pile. The real built graph carries its own layout
@@ -175,46 +157,6 @@ function layoutAssemblingShape(nodes: GTMNode[], edges: GTMEdge[]): GTMNode[] {
   });
 }
 
-type StagedFile = { path?: unknown; contents?: unknown };
-type StagedMicroproductItem = {
-  artifactSpec?: { name?: unknown; summary?: unknown; entry?: unknown } | null;
-  artifactFiles?: unknown;
-  preview?: { entry?: unknown } | null;
-};
-function extractMicroproductPreview(
-  staged: unknown,
-): { name: string | null; summary: string | null; previewHtml: string | null } | null {
-  if (!staged || typeof staged !== "object") return null;
-  const nodes = (staged as { nodes?: Record<string, { items?: unknown[] }> }).nodes;
-  if (!nodes || typeof nodes !== "object") return null;
-  for (const node of Object.values(nodes)) {
-    for (const raw of node?.items ?? []) {
-      if (!raw || typeof raw !== "object") continue;
-      const item = raw as StagedMicroproductItem;
-      const files = (Array.isArray(item.artifactFiles) ? item.artifactFiles : []) as StagedFile[];
-      if (!files.length) continue; // not the microproduct item
-      const entryName =
-        (typeof item.preview?.entry === "string" && item.preview.entry) ||
-        (typeof item.artifactSpec?.entry === "string" && item.artifactSpec.entry) ||
-        "index.html";
-      const isHtml = (p: unknown) => typeof p === "string" && /\.html?$/i.test(p);
-      const entryFile =
-        files.find((f) => f.path === entryName) ??
-        files.find((f) => isHtml(f.path)) ??
-        files[0];
-      const previewHtml =
-        entryFile && isHtml(entryFile.path) && typeof entryFile.contents === "string"
-          ? entryFile.contents
-          : null;
-      return {
-        name: typeof item.artifactSpec?.name === "string" ? item.artifactSpec.name : null,
-        summary: typeof item.artifactSpec?.summary === "string" ? item.artifactSpec.summary : null,
-        previewHtml,
-      };
-    }
-  }
-  return null;
-}
 import { ProjectPicker } from "@/components/ProjectPicker";
 import { ProductEntry } from "@/components/ProductEntry";
 import { ConnectClaude } from "@/components/ConnectClaude";
@@ -223,7 +165,7 @@ import type {
   ChannelMeta, ConnectorMeta, Decisions, EngineState, GateDecision, GateDeltaDecision, GraphOperation, GtmLibrary, GTMContractAudit, GTMEdge, GTMGraph, GTMItem, GTMNode, GTMNodeCategory,
   GTMProject, GTMRunResult, NodeSelection, OperatorSession, OperatorSessionSummary, ProjectSummary,
   ProductModel,
-  Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
+  Person, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, ComposerPosture,
   PendingDecision, PendingInbox, OperatingView,
 } from "@/types";
@@ -281,15 +223,35 @@ export default function App() {
   // shows a calm "loading your workspace" instead of flashing the cold-start goal launcher for the
   // 1–2s before the project's graph arrives.
   const [booting, setBooting] = useState(true);
-  const [overlay, setOverlay] = useState<"understand" | "settings" | null>(null);
+  // ── The navigation brain (lib/navigation) ──────────────────────────────────
+  // ONE source of truth for the floating layers over the canvas: the full-screen
+  // overlay drawer (understand | settings) and the mutually-exclusive right-rail
+  // popover (issues | decisions | failureLog). Mutual exclusion lives IN this
+  // model, not in a dozen scattered setX(false) calls across the toggle handlers.
+  const nav = useNavigationLayers();
+  const overlay = nav.overlay;
+  const issuesOpen = nav.issuesOpen;
+  const decisionsOpen = nav.decisionsOpen;
+  const failureLogOpen = nav.failureLogOpen;
+  // The layer mutators are stable (useCallback inside the hook), so destructure the ones the domain
+  // handlers (focusChannel, clearCanvasLayers, jumpToNode…) depend on — a stable identity keeps their
+  // dependency arrays clean instead of listing the whole `nav` object, which changes every render.
+  const {
+    closeAllLayers: navCloseAllLayers,
+    closePopover: navClosePopover,
+    closeOverlay: navCloseOverlay,
+    openOverlay: navOpenOverlay,
+  } = nav;
   // Which Settings section is showing — the three admin surfaces (workspace index, team + release
   // roles, self-built tools) live behind one overlay now, switched by these tabs.
   const [settingsTab, setSettingsTab] = useState<"workspace" | "team" | "tools">("workspace");
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
-  // Which canvas lens is on screen: "operator" = the fleet-wide operating view (the default many-motion
-  // view), "engineer" = the single-motion pipeline editor. Focusing a lane or a parked gate drops into
-  // Engineer; the whole-operation view is Operator.
-  const [canvasLens, setCanvasLens] = useState<"operator" | "engineer">("operator");
+  // The founder's EXPLICIT lens choice, or null to follow the built-in default (Operator once there are
+  // two-plus built pipelines, Engineer otherwise). "operator" = the fleet-wide operating view, "engineer"
+  // = the single-motion editor. Focusing a lane or parked gate sets it to Engineer; the whole-operation
+  // view sets it back to Operator. Kept nullable so a fresh product still opens on its natural default
+  // instead of a stuck prior choice, while a real toggle sticks (the lens tab reports up now — bug (d)).
+  const [canvasLens, setCanvasLens] = useState<"operator" | "engineer" | null>(null);
   // The intertwined canvas's view state (docs/INTERTWINED-CANVAS.md) — the projection axis (objects = the
   // moat view, type = the forms/spread view) and the focus-to-trace selection. Pure view state; nothing
   // persists. The canvas OPENS on the broad type/forms map, drilling to the object axis as you focus.
@@ -327,13 +289,10 @@ export default function App() {
   // shows it as the subject chip and the next message is framed with that node's context, so "make this
   // shorter" / "why did this come up empty" resolves to a real canvas object — no describing it by hand.
   const [composerSubject, setComposerSubject] = useState<CanvasSubject | null>(null);
-  // The Issues panel — the system's problem list, now a first-class always-present indicator on the
-  // dock (no longer a summoned card). Opens from its toolbar badge, mutually exclusive with Approvals.
-  const [issuesOpen, setIssuesOpen] = useState(false);
-  // The self-observed failure log panel (Drover watching its own runs). Opened from a small on-canvas chip
-  // that appears ONLY when a self-observed failure exists (so a clean machine shows nothing — no noise on
-  // an empty canvas). Mutually exclusive with Issues and Decisions: at most one right-rail panel is open.
-  const [failureLogOpen, setFailureLogOpen] = useState(false);
+  // The Issues panel, the self-observed failure log, and the pending-decision inbox are the three
+  // mutually-exclusive right-rail popovers — their open/closed state (issuesOpen / decisionsOpen /
+  // failureLogOpen) is owned by `nav` above, so at most one is ever open and no toggle handler has to
+  // remember to close the other two.
   // How many distinct self-inflicted failures Drover has logged watching itself — the chip's count. A
   // lightweight cross-run poll (a badge, not a live thread), like the pending-decision poll below. Zero
   // keeps the chip hidden entirely. Transient failures don't drive the chip — the founder shouldn't be
@@ -344,7 +303,6 @@ export default function App() {
   // pipeline you're not looking at still bumps the dock badge. The panel is toggled from that badge and
   // is mutually exclusive with Issues (at most one dock popover open at a time).
   const [pendingInbox, setPendingInbox] = useState<PendingInbox | null>(null);
-  const [decisionsOpen, setDecisionsOpen] = useState(false);
   // The space I'm acting in (stamped on requests via lib/identity). The founder personal space is the
   // default; switching in TeamSpace re-scopes my release authority (resolved via canApproveApi below).
   const [acting, setActing] = useState<ActingIdentity>(getIdentity());
@@ -352,11 +310,9 @@ export default function App() {
   // member no). Drives the role-gated release control in the approval queue. Defaults true for the
   // solo founder (personal space) so nothing changes for a single-player install.
   const [canReleaseGate, setCanReleaseGate] = useState(true);
-  // The Problems popover — the engine's investigations, surfaced as a compact toolbar chip now that
-  // the Problems rail section is gone with the explorer. The Issues indicator (its own dock button +
-  // the issuesOpen panel) is the visible home for these now; this setter is kept because several
-  // handlers still defensively close the legacy popover state.
-  const [, setProblemsOpen] = useState(false);
+  // (The old write-only `problemsOpen` state is gone: it was set in ~6 places and never read. The
+  // Issues indicator — the dock button plus the `issuesOpen` panel `nav` owns — is the sole home for
+  // the engine's investigations now.)
   // The base canvas per mode (no lens taxonomy): GTM shows the engine on the overview and a channel's
   // flow when one is open, chosen by channel state alone (no GTM lens state); Product drives its one
   // lens from the command dock. Everything else is summoned as a card.
@@ -370,28 +326,8 @@ export default function App() {
     setSummoned((cur) => cur.filter((k) => k !== kind));
   }, []);
 
-  // Find references — the canvas moat made reachable. Selecting a person / experiment on a lens opens
-  // a drill-down of every place that entity appears across channels (plus the Person detail). Read-only.
-  const [reference, setReference] = useState<{
-    kind: ReferenceKind; id: string; loading: boolean;
-    result: CrossReferenceResult | null; person: Person | null;
-  } | null>(null);
-  const openReference = useCallback((kind: ReferenceKind, id: string) => {
-    if (!activeProjectId || !id) return;
-    setReference({ kind, id, loading: true, result: null, person: null });
-    void (async () => {
-      try {
-        const result = await findReferences(activeProjectId, kind, id);
-        let person: Person | null = result.person ?? null;
-        if (kind === "person" && !person) {
-          try { person = (await getPerson(activeProjectId, id)).person; } catch { /* detail optional */ }
-        }
-        setReference((cur) => (cur && cur.kind === kind && cur.id === id ? { ...cur, loading: false, result, person } : cur));
-      } catch {
-        setReference((cur) => (cur && cur.kind === kind && cur.id === id ? { ...cur, loading: false } : cur));
-      }
-    })();
-  }, [activeProjectId]);
+  // (Find-references state lived here; removed with its only trigger, the experiments summon card. The
+  // findReferences server call and its ReferencesPanel component remain for a future on-lens re-wire.)
 
   // Ideate — the composer's thinking posture, and the durable clarity it pins onto the canvas.
   const [composerPosture, setComposerPosture] = useState<ComposerPosture>("build");
@@ -496,6 +432,17 @@ export default function App() {
   const [runningNodeId, setRunningNodeId] = useState<string | null>(null);
   const [graphError, setGraphError] = useState<string | null>(null);
   const [selection, setSelection] = useState<NodeSelection>(null);
+  // One consistent reset for a canvas switch — opening a project, focusing another pipeline, or starting
+  // a fresh one. Before this, focusChannel / handleNewChannel / handleProjectOpen each cleared a DIFFERENT
+  // subset of the floating layers (one closed the overlay, one closed nothing, none closed the summoned
+  // cards), so a switch could leave a card, a popover, or a node selection stranded over the new surface.
+  // Now every switch clears the same set: open summon cards, the nav overlay + right-rail popover, and any
+  // selected node. Durable per-project state (clarity pins, graphs) is untouched — those reload on their own.
+  const clearCanvasLayers = useCallback(() => {
+    setSummoned([]);
+    setSelection(null);
+    navCloseAllLayers();
+  }, [navCloseAllLayers]);
   // Select a node that belongs to a specific pipeline (defaults to the currently FOCUSED one, `graph`)
   // — the common case, since a run result, a jump-from-Problems, or a newly added node all name a bare
   // id from whichever channel's graph is already on screen. Namespaces it `channelId::nodeId` so it
@@ -679,21 +626,20 @@ export default function App() {
   const [panSignal, setPanSignal] = useState<{ channelId: string; token: number; nodeId?: string } | null>(null);
   const focusChannel = useCallback((channelId: string) => {
     if (!channelGraphs.has(channelId)) { void loadChannel(channelId); return; }
-    setOverlay(null);
+    clearCanvasLayers();
     setOverviewActive(false);
-    setSelection(null);
     setActiveChannelId(channelId);
     setPanSignal((prev) => ({ channelId, token: (prev?.token ?? 0) + 1 }));
     const projectId = activeProjectIdRef.current;
     if (projectId) window.history.replaceState(null, "", `/projects/${encodeURIComponent(projectId)}`);
     void setActiveWorkflow(channelId).catch(() => {}); // best-effort — persists the founder's focus server-side
-  }, [channelGraphs, loadChannel]);
+  }, [channelGraphs, loadChannel, clearCanvasLayers]);
   // Fly the camera to a specific node without opening its editor — the "chat drives the canvas" move
   // lands you looking AT the step, in place, not inside a modal.
   const flyToNode = useCallback((nodeId: string, channelId: string) => {
-    setOverlay(null);
+    navCloseOverlay();
     setPanSignal((prev) => ({ channelId, nodeId, token: (prev?.token ?? 0) + 1 }));
-  }, []);
+  }, [navCloseOverlay]);
   // Deterministic canvas navigation from the composer: "go to / show me / focus / open <X>" resolves X
   // against the REAL pipeline names and node labels — no model call (nav is code's job, not judgment).
   // Pure: returns the camera target or null, with NO side effect, so the composer can ask "is this a
@@ -779,11 +725,12 @@ export default function App() {
     if (!built.length) { setOverviewActive(false); return false; }
     setOverviewActive(true);
     setActiveChannelId(null);
-    // Returning to the whole operation resets the lens to Operator — the default many-motion view — so a
-    // prior forced-Engineer focus (from opening a lane or a gate) doesn't stick on the overview.
-    setCanvasLens("operator");
+    // Returning to the whole operation clears any forced lens so the built-count default applies
+    // (Engineer under two pipelines, Operator at two-plus) — a prior focus from opening a lane or a
+    // gate doesn't stick, and a single-pipeline product lands on Engineer instead of the fleet view.
+    setCanvasLens(null);
     setSelection(null);
-    setOverlay(null);
+    navCloseOverlay();
     setView("canvas");
     // Clear the URL back to the project root so a reload from the overview stays on the overview.
     // Skipped during boot, when the ref isn't set yet and the URL is already root.
@@ -792,7 +739,7 @@ export default function App() {
       window.history.replaceState(null, "", `/projects/${encodeURIComponent(projectId)}`);
     }
     return true;
-  }, []);
+  }, [navCloseOverlay]);
 
   const refreshProjectScope = useCallback(async () => {
     const [catalog, projectResponse] = await Promise.all([listProjects(), getProject()]);
@@ -1100,17 +1047,9 @@ export default function App() {
   // graph in lockstep even if the panel is closed and reopened.
   const operatorSessionId = operatorSession?.id ?? null;
   const operatorSessionStatus = operatorSession?.status ?? null;
-  // The cold-start front door is showing: no project open at all, no channel graph, no active operator
-  // session, not mid-boot. When this is true the GoalLauncher owns the screen and the docked co-pilot
-  // must stay hidden — otherwise both inputs stack (the cancelled-session overlap bug). Now that the GTM
-  // map is the default canvas for ANY open project, the launcher only owns the screen when no project is
-  // open; on the map the composer (the harness) stays docked, so this keys off activeProjectId.
-  const showGoalLauncher =
-    !activeProjectId &&
-    !graph &&
-    !["ready", "running", "failed", "blocked"].includes(operatorSessionStatus ?? "") &&
-    !booting &&
-    !projectBusy;
+  // (The GoalLauncher / ComposerDock "which input owns the screen" decision no longer lives in a
+  // separate `showGoalLauncher` boolean — it reads the ONE surface model at render time, so the
+  // launcher and the dock can never both claim the screen. See the ComposerDock gate below.)
   useEffect(() => {
     if (!operatorSessionId || !operatorSessionStatus
       || ["completed", "blocked", "failed", "cancelled"].includes(operatorSessionStatus)) return;
@@ -1636,6 +1575,37 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [handleUndoBoard, handleRedoBoard, view, overlay]);
 
+  // A synchronous mirror of the payloaded closer state (the modals + the reference card) so the
+  // Escape handler reads current values without re-subscribing the listener on every change.
+  const escapeStateRef = useRef({ artifactEdit: false, agentProfileRef: false, outcomeOpen: false });
+  escapeStateRef.current = {
+    artifactEdit: !!artifactEdit,
+    agentProfileRef: !!agentProfileRef,
+    outcomeOpen,
+  };
+  // Global Escape: close the TOPMOST open floating thing, one layer per press, top to bottom —
+  // a centered modal (agent profile, artifact editor, outcome logger), then the right-rail popover,
+  // then the full-screen overlay drawer. Before this there was no
+  // Escape at all (the only keydown was undo/redo), so the founder could stack panels with no
+  // keyboard way back to the canvas. It never touches the base surface — Escape only peels layers.
+  // Skipped while typing in a field so a text input keeps its own Escape behavior.
+  useEffect(() => {
+    const onEsc = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      // Payloaded closers App owns, topmost first.
+      if (escapeStateRef.current.artifactEdit) { setArtifactEdit(null); event.preventDefault(); return; }
+      if (escapeStateRef.current.agentProfileRef) { setAgentProfileRef(null); event.preventDefault(); return; }
+      if (escapeStateRef.current.outcomeOpen) { setOutcomeOpen(false); event.preventDefault(); return; }
+      // Then the nav-owned layers (popover above overlay). `anyLayerOpen` is fresh here because the
+      // effect re-subscribes whenever `nav` changes (a new object each render).
+      if (nav.anyLayerOpen) { nav.closeTopLayer(); event.preventDefault(); }
+    };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [nav]);
+
   useEffect(() => {
     if (!graph) return;
     const timer = window.setTimeout(() => {
@@ -1781,7 +1751,6 @@ export default function App() {
   const dismissOverlays = useCallback(() => {
     setSelection(null);
     setAgentProfileRef(null);
-    setProblemsOpen(false);
     setArtifactEdit(null);
   }, []);
 
@@ -1906,13 +1875,13 @@ export default function App() {
         if (channelId) await loadChannel(channelId);
       }
       setView("canvas");
-      setOverlay(null);
+      clearCanvasLayers();
     } catch (error) {
       setGraphError(error instanceof Error ? error.message : String(error));
     } finally {
       setProjectBusy(false);
     }
-  }, [loadChannel, loadProjectOverview, refreshProjectScope]);
+  }, [loadChannel, loadProjectOverview, refreshProjectScope, clearCanvasLayers]);
 
   // Act on a pending decision from the inbox: jump the founder to where they actually decide it. This
   // never decides anything itself — it opens the owning product (if it isn't already active), which the
@@ -1920,13 +1889,13 @@ export default function App() {
   // the ghost proposal, the ideate pause). A signal opens the inbox card in that product. The decision
   // still happens on the existing gate / review surface, unchanged.
   const openDecision = useCallback(async (d: PendingDecision) => {
-    setDecisionsOpen(false);
+    navClosePopover();
     if (d.projectId && d.projectId !== activeProjectId) {
       await handleProjectOpen(d.projectId);
     }
     if (d.kind === "signal") summonView("inbox");
     void refreshPendingInbox();
-  }, [activeProjectId, handleProjectOpen, summonView, refreshPendingInbox]);
+  }, [activeProjectId, handleProjectOpen, summonView, refreshPendingInbox, navClosePopover]);
 
   // Remove a duplicate product. The switcher only offers it on non-active rows, so the active scope
   // never vanishes underfoot — a refresh of the project list is all that's needed.
@@ -1949,12 +1918,12 @@ export default function App() {
     // Build ANOTHER pipeline for this product: detach the active pipeline + conversation so the next
     // goal composes a fresh channel that joins the others on the overview, and focus the composer.
     freshPipelineIntent.current = true;
-    setOverlay(null);
+    clearCanvasLayers();
     setView("canvas");
     setActiveChannelId(null);
     setOperatorSession(null);
     setComposerFocus((n) => n + 1);
-  }, []);
+  }, [clearCanvasLayers]);
 
   // Switch the active conversation to another pipeline's tab: load that session's full detail, make it
   // the one on screen, and FOLLOW it to its own pipeline graph on the canvas (so the tab and the board
@@ -2014,13 +1983,13 @@ export default function App() {
       setActiveChannelId(null);
       await refreshProjectScope();
       setView("canvas");
-      setOverlay("understand");
+      navOpenOverlay("understand");
     } catch (error) {
       setGraphError(error instanceof Error ? error.message : String(error));
     } finally {
       setProjectBusy(false);
     }
-  }, [refreshProjectScope]);
+  }, [refreshProjectScope, navOpenOverlay]);
 
   // The one-prompt front door: point at a product (scan), then the goal becomes the operator's
   // durable goal, which composes the loop to the gate — the whole stranger path in one action.
@@ -2149,8 +2118,8 @@ export default function App() {
   const jumpToNode = useCallback((nodeId: string) => {
     setView("canvas");
     selectInGraph(nodeId);
-    setProblemsOpen(false);
-  }, [selectInGraph]);
+    navClosePopover();
+  }, [selectInGraph, navClosePopover]);
 
   const runCount = graph?.store?.runs ?? flowRuns.length;
 
@@ -2223,35 +2192,10 @@ export default function App() {
     return parts.length ? parts.join(" / ") : null;
   }, [gateChannel, activeProject]);
 
-  // The microproduct build door — a goal cuts a working artifact that STAGES behind the founder gate
-  // (pause:true). Nothing deploys; the live ship happens only at the gate. Held in App state so the
-  // summon card can show the staged face after composing.
-  const [microproduct, setMicroproduct] = useState<Microproduct | null>(null);
-  const [microproductGoal, setMicroproductGoal] = useState("");
-  const [microproductBusy, setMicroproductBusy] = useState(false);
-  const [microproductError, setMicroproductError] = useState<string | null>(null);
-  const handleComposeMicroproduct = useCallback(async () => {
-    if (!activeProjectId || !microproductGoal.trim() || microproductBusy) return;
-    setMicroproductBusy(true);
-    setMicroproductError(null);
-    try {
-      const r = await composeMicroproduct(activeProjectId, { goal: microproductGoal.trim() });
-      // Thread the built preview off the staged gate item so the face shows the real page, not a
-      // placeholder. The deploy graph always pauses at the founder gate, so this lands `staged`.
-      const staged = extractMicroproductPreview(r.staged);
-      setMicroproduct({
-        id: r.session.id,
-        name: staged?.name ?? microproductGoal.trim(),
-        state: r.pause ? "staged" : "built",
-        summary: staged?.summary ?? r.session.summary ?? null,
-        previewHtml: staged?.previewHtml ?? null,
-      });
-    } catch (err) {
-      setMicroproductError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setMicroproductBusy(false);
-    }
-  }, [activeProjectId, microproductGoal, microproductBusy]);
+  // (The microproduct build door — its state, its compose handler, and the staged-preview extractor —
+  // lived only inside the microproduct summon card, which lost its trigger when the dock's Summon menu
+  // was removed. Removed with the card. The compose_and_stage path still exists server-side and behind
+  // the gate; re-surfacing it in the UI is a deliberate re-add with a real trigger, not a dead menu item.)
 
   // On-canvas proposals: when the operator stages a graph change, render the would-be graph with the
   // new nodes/edges ghosted and let the founder accept or discard. "Vibe up to the gate" now covers
@@ -2706,20 +2650,21 @@ export default function App() {
     return { channels: mergedChannels, channelGraphs: mergedGraphs, channelRunResults, draggedByNode: mergedDragOverrides };
   }, [candidateLanes, channels, channelGraphs, channelRunResults, mergedDragOverrides]);
 
-  // Which lens is actually on screen. Decided-question 5: the Operator lens replaces the old merged-lane
-  // overview as the default MANY-motion view; the Engineer lens is the single-motion editor. So: a focused
-  // single motion (activeChannelId set) is always Engineer; a founder who opened a lane/gate is put in
-  // Engineer via canvasLens; otherwise, with more than one built pipeline, Operator is the default. A
-  // product with zero or one pipeline has no fleet to operate, so it lands in Engineer (its landing/editor).
+  // Which lens is actually on screen. Two STRUCTURAL constraints override the founder's toggle because
+  // the other lens has nothing coherent to draw: candidate shapes only make sense woven into the Operator
+  // canvas, and a focused single motion (activeChannelId set) is the Engineer editor by definition. Those
+  // aside, the founder's explicit `canvasLens` choice is authoritative — the lens tab now reports its
+  // change up (GtmCanvas.onLensChange → setCanvasLens), so a click actually sticks. `canvasLens` seeds to
+  // null, so with no explicit choice the built-count default decides: Engineer under two pipelines,
+  // Operator at two-plus (the fleet view). The founder can switch either way.
   const builtPipelineCount = channels.filter((c) => c.nodeCount > 0).length;
   const effectiveCanvasLens: "operator" | "engineer" =
-    // Candidate shapes live as dashed lanes in the woven Operator canvas — force it so they weave in
-    // (docs/INTERTWINED-CANVAS.md decision 4, the retired candidate board), never the single-motion editor.
+    // Candidate shapes live as dashed lanes in the woven Operator canvas (docs/INTERTWINED-CANVAS.md
+    // decision 4, the retired candidate board), never the single-motion editor.
     canvasCandidates.length > 0 ? "operator"
       : activeChannelId ? "engineer"
-        : canvasLens === "engineer" ? "engineer"
-          : builtPipelineCount >= 2 ? "operator"
-            : "engineer";
+        // A real founder choice wins; otherwise fall back to the many-motion default.
+        : canvasLens ?? (builtPipelineCount >= 2 ? "operator" : "engineer");
 
   const gtmCanvasModel = useMemo<GtmCanvasModel>(() => ({
     projectId: activeProject?.id ?? null,
@@ -2816,28 +2761,38 @@ export default function App() {
     wovenMultiPipeline, candidateLanes, handlePickCandidateLane,
   ]);
 
-  // First-run team setup. Gated on Convex being configured AND no team chosen yet, so a local/solo
-  // install never sees it. All hooks above have already run, so this early return is rules-of-hooks safe.
-  if (convexEnabled && !teamIdentity) {
-    return <TeamOnboarding onDone={setTeamIdentity} />;
-  }
-
-  // Hard first-run gate: Drover's intelligence runs on the founder's own Claude subscription, so with no
-  // signed-in Claude the product can do no real work. Rather than a silent no-op behind a dismissible
-  // banner, we stop here and walk the founder through connecting — the goal launcher, composer, ideation,
-  // and operator are all unreachable until Claude answers, so no fake/blank intelligence is ever served.
-  // The re-check flows a fresh connection status up to `setConnection`; the moment it reads connected this
-  // early return stops firing and the app renders exactly as before. `connection` stays null until the
-  // status resolves, so a connected founder never flashes this screen and their flow is unchanged.
-  if (booted && connection && !connection.connected) {
-    return <ConnectClaude connection={connection} onResult={setConnection} />;
-  }
-
-  // Hard gate: nothing in the IDE is usable until a real codebase is grounded. Until the active
-  // product has a scanned workspace, the only screen is the folder picker — point it at your product.
+  // ── The base surface, computed ONCE ────────────────────────────────────────
+  // `describeSurface` (lib/navigation) is the single source of truth for "what screen am I on",
+  // replacing the ~20 ad-hoc guard combos that each re-derived it from overlapping flags. Every
+  // base-surface branch below — the hard-gate early returns AND the inner canvas/drive/launcher
+  // chain — reads `surface.kind` instead of re-testing the raw booleans, so no two can disagree.
   const productGrounded = !!activeProject?.sharedContext?.repository?.workspaceId;
   const groundedProjects = projects.filter((p) => p.repo);
-  if (booted && !productGrounded) {
+  // "There is a canvas to show" — a graph assembling, built pipelines, or candidate shapes forked
+  // from a goal. The one composite the old chain re-tested in three separate branches.
+  const hasCanvas = !!(canvasGraph || (activeProjectId && channels.length > 0) || canvasCandidates.length > 0);
+  const surface = describeSurface({
+    convexEnabled,
+    teamIdentity,
+    booted,
+    connectionResolvedDisconnected: !!(booted && connection && !connection.connected),
+    productGrounded,
+    view,
+    hasCanvas,
+    operatorStatus: operatorSession?.status ?? null,
+    booting,
+    projectBusy,
+  });
+
+  // Hard first-run gates — team setup, then connecting Claude, then grounding a codebase. All hooks
+  // above have already run, so these early returns are rules-of-hooks safe.
+  if (surface.kind === "teamOnboarding") {
+    return <TeamOnboarding onDone={setTeamIdentity} />;
+  }
+  if (surface.kind === "connectClaude") {
+    return <ConnectClaude connection={connection!} onResult={setConnection} />;
+  }
+  if (surface.kind === "productEntry") {
     return (
       <ProductEntry
         busy={projectBusy}
@@ -2935,6 +2890,26 @@ export default function App() {
         {/* Center — the canvas IS the workspace. Only the cold-start picker replaces it. The canvas-area
             wrapper is the drop target for Crew/Skill steps dragged from the rail (step MIME only). */}
         <section className="loop-canvas-area" onDragOver={onStepDragOver} onDrop={onStepDrop}>
+          {/* HOME anchor — the always-present "back to the whole operation" affordance, pinned to the
+              canvas itself. Before this the only "back to canvas" was the brand logo in the top toolbar,
+              which renders ONLY off-canvas (the picker / cold-start views), so on the main surface there
+              was no home at all: a founder deep in a focused pipeline had no one-click way back to the
+              fleet view and no visible anchor. This chip zooms out to the fleet overview and clears any
+              open layer, and Escape peels layers down to it. Shown only when the computed canvas surface
+              is on screen — not over the launcher/booting/drive/takeover base surfaces where it's a
+              near-no-op. */}
+          {surface.kind === "canvas" ? (
+            <button
+              type="button"
+              className="canvas-home"
+              onClick={() => { clearCanvasLayers(); void loadProjectOverview(channels); }}
+              title="Back to the whole operation"
+              aria-label="Back to the whole operation"
+            >
+              <span className="loop-brand-mark">G</span>
+              <span className="canvas-home-label">Home</span>
+            </button>
+          ) : null}
           {/* What happened — the run's real numbers now ride the pipeline's Measure node (their single
               home on the canvas), so the floating strip no longer repeats them. What stays here is only
               the loop-closer: a low-emphasis door to log a real outcome, which refreshes the summary.
@@ -3032,14 +3007,14 @@ export default function App() {
               // behind a button. The card components still exist and still render when something summons
               // them (e.g. a signal opening the Inbox card); context-summon (cards appearing where the
               // founder clicks on the canvas) is a later canvas concern. So no summonItems / onSummon.
-              onOpenSettings={() => { setOverlay("settings"); setProblemsOpen(false); setIssuesOpen(false); }}
+              onOpenSettings={() => nav.openOverlay("settings")}
               problems={issueCount}
               issuesOpen={issuesOpen}
-              onToggleIssues={() => { setIssuesOpen((v) => !v); setDecisionsOpen(false); setProblemsOpen(false); setFailureLogOpen(false); }}
+              onToggleIssues={() => nav.togglePopover("issues")}
               pendingDecisions={pendingCount}
               decisionsOpen={decisionsOpen}
-              onToggleDecisions={() => { setDecisionsOpen((v) => { const next = !v; if (next) { void refreshPendingInbox(); void refreshReallocation(); } return next; }); setIssuesOpen(false); setProblemsOpen(false); setFailureLogOpen(false); }}
-              onCloseMenus={() => { setProblemsOpen(false); setIssuesOpen(false); setDecisionsOpen(false); setFailureLogOpen(false); }}
+              onToggleDecisions={() => { const willOpen = !decisionsOpen; nav.togglePopover("decisions"); if (willOpen) { void refreshPendingInbox(); void refreshReallocation(); } }}
+              onCloseMenus={() => nav.closePopover()}
               graph={graph}
               running={graphRunning}
               runningNodeId={runningNodeId}
@@ -3047,8 +3022,9 @@ export default function App() {
             />
           ) : null}
 
-          {/* Summoned views — they pop up ON the canvas as draggable cards (the agentic replacement
-              for lens tabs). One card per kind; drag by the head, dismiss with ×. */}
+          {/* Summoned views — they pop up ON the canvas as draggable cards. Only the Inbox summons now
+              (a world-signal decision opens it); the other kinds lost their trigger with the dock's
+              Summon menu and were removed. One card per kind; drag by the head, dismiss with ×. */}
           {view === "canvas" && summoned.map((kind, i) => {
             const item = SUMMON_GTM.find((s) => s.id === kind);
             return (
@@ -3057,77 +3033,20 @@ export default function App() {
                 title={item?.label ?? kind}
                 onDismiss={() => dismissCard(kind)}
                 initial={{ x: 150 + i * 46, y: 92 + i * 46 }}
-                width={kind === "experiments" ? 640 : kind === "market" ? 468 : 440}
-                height={kind === "experiments" ? 460 : kind === "market" ? 580 : 520}
+                width={440}
+                height={520}
               >
-                {kind === "experiments" ? (
-                  <ExperimentMatrixLens experiments={gtmCanvasModel.experiments} claims={gtmCanvasModel.claims} icp={gtmCanvasModel.icp} channels={gtmCanvasModel.channels} selected={reference?.kind === "experiment" ? reference.id : null} onSelect={(id) => openReference("experiment", id)} />
-                ) : null}
                 {kind === "inbox" && activeProjectId ? (
                   <InputsInbox projectId={activeProjectId} channels={channels} />
-                ) : null}
-                {kind === "market" && activeProjectId ? (
-                  <MarketLayers projectId={activeProjectId} />
-                ) : null}
-                {kind === "microproduct" ? (
-                  microproduct ? (
-                    <div style={{ padding: 16, display: "flex", justifyContent: "center" }}>
-                      <MicroproductFace microproduct={microproduct} />
-                    </div>
-                  ) : (
-                    <div className="microproduct-compose">
-                      <p className="microproduct-compose-lede">
-                        Name a goal. A read-only producer cuts a working artifact from your product and stages
-                        it behind your gate — nothing deploys until you approve there.
-                      </p>
-                      <textarea
-                        className="microproduct-compose-input"
-                        value={microproductGoal}
-                        onChange={(e) => setMicroproductGoal(e.target.value)}
-                        placeholder="e.g. a one-page ROI calculator for the pricing page"
-                        rows={3}
-                      />
-                      {microproductError ? (
-                        <p className="microproduct-compose-error">{microproductError}</p>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="microproduct-compose-btn"
-                        disabled={!activeProjectId || !microproductGoal.trim() || microproductBusy}
-                        onClick={() => void handleComposeMicroproduct()}
-                      >
-                        {microproductBusy ? <LoaderCircle size={14} className="spin" /> : null}
-                        {microproductBusy ? "Building…" : "Build microproduct"}
-                      </button>
-                    </div>
-                  )
                 ) : null}
               </CanvasCard>
             );
           })}
 
-          {/* Find references — the cross-channel drill-down for a selected person / experiment, opened
-              from a lens. A draggable opaque CanvasCard like the summoned views; read-only. */}
-          {view === "canvas" && reference && (
-            <CanvasCard
-              key="references"
-              title="Find references"
-              subtitle={reference.kind}
-              onDismiss={() => setReference(null)}
-              initial={{ x: 220, y: 120 }}
-              width={420}
-              height={560}
-            >
-              <ReferencesPanel
-                kind={reference.kind}
-                result={reference.result}
-                person={reference.person}
-                loading={reference.loading}
-                channels={gtmCanvasModel.channels}
-                onOpenChannel={(channelId) => void loadChannel(channelId)}
-              />
-            </CanvasCard>
-          )}
+          {/* (The find-references card was reachable only from the experiments summon card's lens, which
+              was removed with the other trigger-less summon kinds. Its state, its opener, and this card
+              went with it — findReferences is still a live server capability to re-wire behind a real
+              on-lens trigger, not a dead card kept alive by a lint-suppress.) */}
 
           {/* Clarity cards — the durable residue of Ideate sessions, pinned onto the canvas. Draggable
               and dismissible like any summoned card; persisted per-project. */}
@@ -3142,13 +3061,16 @@ export default function App() {
               <ClarityCard item={item} />
             </CanvasCard>
           ))}
-          {view === "start" ? (
+          {/* The base surface, decided once by describeSurface — the render just switches on its kind
+              instead of re-deriving canvas/drive/launcher from the raw flags. The order matches the
+              model's precedence exactly. */}
+          {surface.kind === "newProduct" ? (
             <ProductEntry
               busy={projectBusy}
               onStart={handleProductStart}
               onSeePortfolio={projects.length ? () => setView("projects") : undefined}
             />
-          ) : view === "projects" ? (
+          ) : surface.kind === "projects" ? (
             <ProjectPicker
               activeProjectId={activeProject?.id ?? null}
               busy={projectBusy}
@@ -3157,52 +3079,43 @@ export default function App() {
               onOpen={handleProjectOpen}
               projects={projects}
             />
-          ) : operatorSession && (operatorSession.status === "failed" || operatorSession.status === "blocked") && !(canvasGraph || (activeProjectId && channels.length > 0) || canvasCandidates.length > 0) ? (
+          ) : surface.kind === "operatorTakeover" ? (
             // The drive STOPPED (a cold start with no runtime, a hit session limit, an error). Surface the
             // reason and a way to pick the loop back up front-and-center ONLY when there is no canvas to show —
             // a failed run on a product that HAS pipelines must NOT seize the whole woven canvas (that hid the
             // operating view entirely); the failure stays reachable in the crew co-pilot rail, and the canvas
             // keeps rendering. Takeover is reserved for a cold-start failure with nothing else to draw.
             <OperatorDriveState
-              session={operatorSession}
+              session={operatorSession!}
               productName={activeProject?.name ?? "your product"}
               onResume={() => void handleComposerSend("Continue.")}
               onStartOver={() => void handleOperatorCancel()}
               onSteer={(note) => handleDriveSteer(note)}
             />
-          ) : (canvasGraph || (activeProjectId && channels.length > 0) || canvasCandidates.length > 0) ? (
+          ) : surface.kind === "canvas" ? (
             // A product with real work to show — a graph to watch assemble, built pipelines, OR candidate
             // shapes the goal forked into — SHOWS THE ONE WOVEN CANVAS even while Claude is driving the loop.
             // Candidates now render as DASHED LANES in that one graph (docs/INTERTWINED-CANVAS.md decision 4,
             // the retired candidate board), so a parked ambiguous goal weaves its shapes in beside the live
             // motions instead of taking over a separate board. Picking one runs the SAME authorized build
             // path (resolveCandidatesAndSync → compose_and_run → the founder gate — nothing sends).
-            // A freshly-grounded product with NO goal yet, no graph and no pipelines falls through instead to
-            // the goal launcher below, so the founder is asked "what do you want to happen" on the canvas
-            // rather than landing on a barren object graph. `projectBusy` covers the open/load window, so a
-            // product that does have pipelines never flashes the launcher before its graph resolves.
-            // A product with real work to show — a graph to watch assemble, or built pipelines — SHOWS THE
-            // CANVAS even while Claude is driving the loop, its live reasoning streaming in the co-pilot rail.
-            // A freshly-grounded product with NO goal yet, no graph and no pipelines falls through instead to
-            // the goal launcher below, so the founder is asked "what do you want to happen" on the canvas
-            // rather than landing on a barren object graph. `projectBusy` covers the open/load window, so a
-            // product that does have pipelines never flashes the launcher before its graph resolves.
             <GtmCanvas
               model={gtmCanvasModel}
               activeLensId={effectiveCanvasLens}
+              onLensChange={setCanvasLens}
               chromeless
             />
-          ) : operatorSession && (operatorSession.status === "ready" || operatorSession.status === "running") ? (
+          ) : surface.kind === "operatorDrive" ? (
             // True cold start: a goal was given but there is no product/graph yet to watch, so the drive's
             // live reasoning IS the surface here until the first nodes exist.
             <OperatorDriveState
-              session={operatorSession}
+              session={operatorSession!}
               productName={activeProject?.name ?? "your product"}
               onResume={() => void handleComposerSend("Continue.")}
               onStartOver={() => void handleOperatorCancel()}
               onSteer={(note) => handleDriveSteer(note)}
             />
-          ) : (booting || projectBusy) ? (
+          ) : surface.kind === "booting" ? (
             // Still resolving the workspace (initial boot, or switching products) — a calm loading
             // state, never the cold-start goal launcher flashing before the real graph arrives.
             <div className="building-state">
@@ -3295,13 +3208,13 @@ export default function App() {
             <div className="canvas-overlay" role="dialog" aria-modal="true">
               <div className="canvas-overlay-bar">
                 <span className="canvas-overlay-title">Product grounding</span>
-                <button className="canvas-overlay-close" onClick={() => setOverlay(null)} type="button" title="Back to the canvas">×</button>
+                <button className="canvas-overlay-close" onClick={() => nav.closeOverlay()} type="button" title="Back to the canvas">×</button>
               </div>
               <div className="canvas-overlay-body">
                 <Suspense fallback={null}>
                   <ProductUnderstanding
                     busy={projectBusy}
-                    onGenerate={() => { setOverlay(null); setComposerPosture("ideate"); }}
+                    onGenerate={() => { nav.closeOverlay(); setComposerPosture("ideate"); }}
                     project={activeProject}
                   />
                 </Suspense>
@@ -3334,7 +3247,7 @@ export default function App() {
                     </button>
                   ))}
                 </div>
-                <button className="canvas-overlay-close" onClick={() => setOverlay(null)} type="button" title="Back to the canvas">×</button>
+                <button className="canvas-overlay-close" onClick={() => nav.closeOverlay()} type="button" title="Back to the canvas">×</button>
               </div>
               <div className="canvas-overlay-body">
                 <div className="settings-overlay-panel">
@@ -3343,18 +3256,18 @@ export default function App() {
                       <WorkspaceView
                         library={library}
                         onOpenArtifact={(type, ref) => {
-                          setOverlay(null);
+                          nav.closeOverlay();
                           if (type === "agent") setAgentProfileRef(ref);
                           else setArtifactEdit({ type, ref });
                         }}
-                        onNewArtifact={(type) => { setOverlay(null); handleNewArtifact(type); }}
-                        onClose={() => setOverlay(null)}
+                        onNewArtifact={(type) => { nav.closeOverlay(); handleNewArtifact(type); }}
+                        onClose={() => nav.closeOverlay()}
                       />
                     </Suspense>
                   ) : null}
                   {settingsTab === "team" ? (
                     <Suspense fallback={null}>
-                      <TeamSpace onClose={() => setOverlay(null)} onTeamChange={handleTeamChange} />
+                      <TeamSpace onClose={() => nav.closeOverlay()} onTeamChange={handleTeamChange} />
                     </Suspense>
                   ) : null}
                   {settingsTab === "tools" ? (
@@ -3418,7 +3331,7 @@ export default function App() {
                 <strong>Waiting on you</strong>
                 {pendingCount > 0 ? <span className="loop-issues-count">{pendingCount}</span> : null}
               </div>
-              <button className="loop-issues-close" onClick={() => setDecisionsOpen(false)} type="button" aria-label="Close decisions">
+              <button className="loop-issues-close" onClick={() => nav.closePopover()} type="button" aria-label="Close decisions">
                 <X />
               </button>
             </header>
@@ -3449,7 +3362,7 @@ export default function App() {
                 <strong>Issues</strong>
                 {issueCount > 0 ? <span className="loop-issues-count">{issueCount}</span> : null}
               </div>
-              <button className="loop-issues-close" onClick={() => setIssuesOpen(false)} type="button" aria-label="Close issues">
+              <button className="loop-issues-close" onClick={() => nav.closePopover()} type="button" aria-label="Close issues">
                 <X />
               </button>
             </header>
@@ -3459,17 +3372,20 @@ export default function App() {
                 audits={contractAudits}
                 graph={graph}
                 nodeForSubsystem={nodeForSubsystem}
-                onFix={(instruction) => { setIssuesOpen(false); void handleComposerSend(instruction); }}
-                onJump={(nodeId) => { setIssuesOpen(false); jumpToNode(nodeId); }}
+                onFix={(instruction) => { nav.closePopover(); void handleComposerSend(instruction); }}
+                onJump={(nodeId) => { nav.closePopover(); jumpToNode(nodeId); }}
               />
             </div>
           </aside>
         ) : null}
 
         {/* Persistent Claude co-pilot — channels + conversation + composer. Docked whenever a
-            channel or run is in play, but hidden behind the cold-start GoalLauncher so the two
-            input surfaces never stack. */}
-        {view === "canvas" && !showGoalLauncher ? <ComposerDock
+            channel or run is in play, but hidden whenever the GoalLauncher IS the base surface so the
+            two input surfaces never stack. Keyed off the ONE surface model (not a second parallel
+            `showGoalLauncher` boolean that could drift): the launcher shows exactly when
+            surface.kind === "goalLauncher", so the dock hides in exactly that case — including a
+            project that's open with no pipelines yet, which was the stacked-input bug. */}
+        {view === "canvas" && surface.kind !== "goalLauncher" ? <ComposerDock
           session={operatorSession}
           running={graphRunning}
           // The founder's crew — the same bench the rail reads. Feeds the @-mention roster and the
@@ -3531,7 +3447,7 @@ export default function App() {
         <button
           type="button"
           className="flog-chip"
-          onClick={() => { setFailureLogOpen(true); setIssuesOpen(false); setDecisionsOpen(false); setProblemsOpen(false); }}
+          onClick={() => nav.openPopover("failureLog")}
           aria-label={`${failuresToFix} self-observed ${failuresToFix === 1 ? "failure" : "failures"} to fix`}
         >
           <AlertTriangle size={13} />
@@ -3539,7 +3455,7 @@ export default function App() {
         </button>
       ) : null}
       {view === "canvas" && failureLogOpen ? (
-        <FailureLogPanel onClose={() => setFailureLogOpen(false)} />
+        <FailureLogPanel onClose={() => nav.closePopover()} />
       ) : null}
 
       {/* ── Artifact editor — full markdown for the subagent/skill a step runs ── */}

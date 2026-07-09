@@ -117,7 +117,7 @@ test("an access token within ~1 min of expiry is re-minted, not served stale", a
 
 // ─── (c) invalid_grant → needsReconnect, never a fake send ─────────────────────────────────────────
 
-test("a revoked refresh token (invalid_grant) stages a reconnect and never fakes a send", async () => {
+test("a revoked refresh token (invalid_grant) surfaces needs_reconnect and never fakes a send", async () => {
   clearAccessTokenCache();
   const root = freshRoot();
   setOAuthCredential("p-test", { provider: "gmail", clientId: "cid", clientSecret: "csecret", refreshToken: "rt-revoked" }, { root });
@@ -135,7 +135,10 @@ test("a revoked refresh token (invalid_grant) stages a reconnect and never fakes
 
   assert.equal(transport.count, 0, "a revoked grant NEVER reaches the send transport");
   assert.equal(result.meta.sent, 0);
-  assert.equal(result.items[0].executionStatus, "staged");
+  // Honest blocked needs-reconnect — not a silent staged no-op that reads like success.
+  assert.equal(result.ok, false);
+  assert.equal(result.blocked, true);
+  assert.equal(result.items[0].executionStatus, "needs_reconnect");
   assert.equal(result.items[0].needsReconnect, true);
   assert.equal(result.meta.blocked, "needs_reconnect");
 });

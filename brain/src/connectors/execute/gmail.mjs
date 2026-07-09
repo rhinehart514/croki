@@ -29,15 +29,19 @@
 //      the recall leg has a real seam to wire (the same posture as deploy's not-yet-wired live runner).
 //
 // THE TRANSPORT IS INJECTABLE. With BOTH a resolved credential AND a wired transport it sends; WITHOUT
-// either it returns an HONEST staged no-op (`applied: false`, executionStatus "staged"), NEVER a fake
-// "sent". This mirrors the default local connector: staging is the honest default, sending is the
-// exception that requires the founder's key and a wired runner.
+// either it CANNOT send, and it says so HONESTLY: it returns an explicit BLOCKED `needs_connection` result
+// (ok:false, blocked:true, per-item executionStatus "needs_connection"), NEVER a fake "sent" and — the fix
+// here — never a silent `staged` no-op that reads like success. An approved item the founder released can
+// no longer quietly disappear into a local stage: the run surfaces "connect Gmail to send these", the
+// approved items are carried through intact, and the founder is prompted to connect. A stale/expired grant
+// surfaces the sharper `needs_reconnect` variant.
 //
 // SECURITY: the resolved token is handed to the transport and NOTHING else — it is never logged, never
 // placed on a returned item, never echoed in meta. The connector emits no console output.
 
 import { resolveCredentialToken, getCredential } from "../../credential-store.mjs";
 import { getFreshAccessToken } from "./gmail-oauth.mjs";
+import { needsConnectionResult } from "./channels.mjs";
 
 export const DEFAULT_RATE_LIMIT = 50;
 export const DEFAULT_RECALL_WINDOW_MS = 30_000;
@@ -156,37 +160,26 @@ export async function run(node, upstream, context = {}) {
     return { ok: true, items: [], meta: { sent: 0, staged: 0, note: "No founder-approved items to send." } };
   }
 
-  // Resolve the founder's credential and the wired transport. Either missing → honest STAGED no-op:
-  // every approved item is staged (applied:false), the transport is NEVER called, nothing is faked sent.
-  // For a durable OAuth connection this is also where a fresh access token is minted from the banked
-  // refresh token; a revoked grant returns needsReconnect so we stage a reconnect prompt, never a fake send.
+  // Resolve the founder's credential and the wired transport. Either missing → the send CANNOT happen, and
+  // we say so honestly: an explicit BLOCKED `needs_connection` result (never a silent `staged` no-op that
+  // reads like success, never a faked send). The transport is NEVER called; the approved items are carried
+  // through intact so the founder loses no work, and the run surfaces "connect Gmail to send these".
+  // For a durable OAuth connection this is also where a fresh access token is minted from the banked refresh
+  // token; a revoked grant returns needsReconnect so we surface the sharper `needs_reconnect` variant.
   const resolvedToken = await resolveGmailToken(node, context);
   const token = resolvedToken?.token ?? null;
   const transport = typeof config.transport === "function"
     ? config.transport
     : (typeof context?.sendRunners?.gmail === "function" ? context.sendRunners.gmail : null);
   if (!token || !transport) {
-    const reason = !token
+    // A stale/expired grant is a RECONNECT; anything else (never connected, no transport wired) is a
+    // first-time CONNECT. Both are honest blocked states, distinguished for the founder-facing prompt.
+    const reason = resolvedToken?.needsReconnect ? "needs_reconnect" : "needs_connection";
+    const message = !token
       ? (resolvedToken?.reason
-        || "No Gmail credential resolved — connect Gmail (or set GMAIL_OAUTH_TOKEN) to send.")
-      : "No Gmail transport wired — the send leg is staged until a transport is injected.";
-    const blocked = !token
-      ? (resolvedToken?.needsReconnect ? "needs_reconnect" : "missing_credential")
-      : "missing_transport";
-    return {
-      ok: true,
-      items: approved.map((item) => ({
-        ...item,
-        channel: "gmail",
-        applied: false,
-        executionStatus: "staged",
-        stagedReason: reason,
-        // Surface the reconnect signal on the item so the UI can prompt a re-connect, not a re-paste.
-        ...(resolvedToken?.needsReconnect ? { needsReconnect: true } : {}),
-        sentAt: null,
-      })),
-      meta: { sent: 0, staged: approved.length, note: reason, blocked, ...(resolvedToken?.needsReconnect ? { needsReconnect: true } : {}) },
-    };
+        || "No Gmail account connected — connect Gmail (or set GMAIL_OAUTH_TOKEN) to send these approved items.")
+      : "No Gmail transport wired — connect Gmail to send these approved items.";
+    return needsConnectionResult({ channel: "gmail", reason, message, items: approved });
   }
 
   // GUARDRAIL 1 — the per-run rate cap. Subtract any window budget already consumed; the transport is
