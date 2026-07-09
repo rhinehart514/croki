@@ -1082,6 +1082,45 @@ export type BoardView = {
   groups: Record<BoardPhase, LayerBelief[]>;
 };
 
+// ─── Reallocation receipt — the Overdrive batch card (GTM-MACHINE.md Area 3) ────
+//
+// The plain-language object the founder's batch/gate stream renders as a correctable receipt: what the
+// machine tilted toward, drawn from which real outcomes, plus the motions flagged as drawing nothing —
+// all overturnable, never a hidden policy. Mirrors reallocationReceipt() in brain/src/reallocation.mjs
+// EXACTLY (and the ReallocationReceipt payload in api.ts). `applied` is false and `weights === base`
+// when nothing cleared the observation floor. Additive-only — no existing type changes.
+
+// One motion the machine is leaning toward: it cleared the floor and earned outcomes at/above the
+// product's average. `outcomesByKind` is its provenance — the real wins, by kind, that earned the lean.
+export type ReallocationWorkingMotion = {
+  motionKind: string;
+  motionRef: string | null;
+  observed: number;
+  outcomesByKind: Record<string, number>;
+};
+
+// One motion flagged for the founder's call: staged real work, measured nothing. FLAGGED, never cut —
+// `reason` is the plain-count receipt ("41 actions staged, 0 measured"). The founder keeps or pauses it.
+export type ReallocationStarvedMotion = {
+  motionKind: string;
+  motionRef: string | null;
+  staged: number;
+  measured: number;
+  reason: string;
+};
+
+export type ReallocationReceiptData = {
+  projectId: string;
+  applied: boolean;
+  base: Record<string, number>;
+  weights: Record<string, number>;
+  tilt: Record<string, number>;
+  reasons: string[];
+  working: ReallocationWorkingMotion[];
+  starved: ReallocationStarvedMotion[];
+  minObservations: number;
+};
+
 // How solid a claim is, on the shared evidence ladder (strongest first). An open label — the UI must
 // treat an unknown value gracefully, never reject it.
 type Solidity = "observed" | "researched" | "inferred" | "speculative" | (string & {});
@@ -1179,4 +1218,208 @@ export type ObjectGraphView = {
     reason?: string;
     weights?: Record<string, number>;
   };
+};
+
+// ─── The multi-modal gate delta (GateDeltaCard) ──────────────────────────────
+//
+// One approval card that renders the CHANGE a motion staged, whatever kind it is: an outbound draft is a
+// body, a programmatic page is a rendered sample, an in-repo product change is a diff. All three are the
+// same object on screen — the difference is only what the delta pane shows. The card never fabricates: a
+// field that isn't present simply doesn't render. Provenance (which run / which grounding) shows on
+// inspection where the host supplies it.
+//
+// This type is a READ-ONLY projection the integrator builds from a staged gate item; the card decides
+// nothing about the wall — it only surfaces the delta and routes the founder's call back out through the
+// same approve / send-back / ship handlers the gate already owns.
+
+export type GateDeltaKind = "outbound" | "page" | "change";
+
+// One file changed by a code-native motion, named for the pill above the diff. `additions`/`deletions`
+// are the real line counts when the host computed them; null when only the raw diff is known.
+export type GateDeltaFile = {
+  path: string;
+  additions?: number | null;
+  deletions?: number | null;
+};
+
+// The change named in a pill for a code-native delta: a plain verb ("Add", "Edit", "Generate") and the
+// object it acts on ("per-city listing pages", "share link on every sale page"). Derived by the host from
+// the motion shape — never typed by the founder, never a closed enum.
+export type GateDeltaChange = {
+  verb: string;
+  object: string;
+};
+
+// A sampled rendered page for a programmatic-page motion: its route and the self-contained HTML the
+// generator emits for it. The card renders it inline in a sandboxed, script-less iframe — the same
+// read-only preview MicroproductFace uses. `sampledFrom`/`total` say honestly "3 of 1,240 real pages",
+// because the gate shows a sample of a generator's output, never the whole minted corpus.
+export type GateDeltaPage = {
+  route: string;
+  html: string;
+  label?: string | null;
+};
+
+// The delta a single staged item carries, normalized to one shape the card can render regardless of
+// motion kind. Exactly one of `body` / `pages` / `diff` is the primary pane; the others stay null.
+export type GateDelta = {
+  kind: GateDeltaKind;
+  // A founder-plain headline for the change and the one-line consequence of a yes (mirrors the gate's
+  // plainLanguageTitle / whatYourYesDoes). Both optional — the card falls back to the subject.
+  title: string;
+  whatYourYesDoes?: string | null;
+  // Which lane / motion staged this, in plain words ("Per-city pages", "Estate-company outreach"), and
+  // the receipt on inspection — which run produced it, what grounding it stood on. Provenance is the part
+  // a screenshot can't clone, so it's always available to open, never fabricated.
+  motionLabel?: string | null;
+  provenance?: string | null;
+
+  // ── outbound ──: the verbatim message being sent. Never paraphrased by the card.
+  body?: string | null;
+  // The offer/deal the draft rides, shown so the founder reviews the copy against it. Optional.
+  offer?: string | null;
+
+  // ── page ──: sampled rendered pages from a generator. `pages` is the sample; `sampledFrom` is how many
+  // were shown and `total` how many the generator would mint, so the card can say "3 of 1,240".
+  pages?: GateDeltaPage[] | null;
+  sampledFrom?: number | null;
+  total?: number | null;
+
+  // ── change (code-native) ──: the in-repo product change. `diff` is the unified diff text (verbatim from
+  // git), `files` names the touched files for the pill row, `change` names the change itself, and
+  // `summary` is the model's plain account of what it did. `deployConfirmable` marks this as needing the
+  // heavier second authorization: an approve alone stages it; a yes here must also carry deployConfirmed.
+  diff?: string | null;
+  diffStat?: string | null;
+  files?: GateDeltaFile[] | null;
+  change?: GateDeltaChange | null;
+  summary?: string | null;
+  // Whether the delta is code-native and needs the SECOND authorization to go live. When true the card
+  // renders the heavier "Ship it live" confirm; when false/absent a plain approve releases it.
+  deployConfirmable?: boolean;
+  // The ship path in plain words for the confirm copy ("opens a pull request on your repo",
+  // "deploys to Vercel"). Optional — falls back to a neutral "ships it live".
+  shipPath?: string | null;
+
+  // Whether a real send/ship transport is wired, so the card's action copy is honest about what a yes
+  // does (send for real vs stage on the machine). Never changes the wall — only the words.
+  transportConnected?: boolean;
+};
+
+// The decision the card hands back. For outbound/page it's a plain approve/send-back/edit. For a
+// code-native change, an "approve" stages the change; a "ship" carries deployConfirmed:true — the
+// explicit SECOND authorization the deploy connector requires. `editedBody` rides an outbound edit.
+export type GateDeltaDecision = {
+  decision: "approve" | "send-back" | "ship";
+  deployConfirmed?: boolean;
+  editedBody?: string;
+  note?: string;
+};
+
+// The persisted receipt an already-decided delta collapses to — the chip that stays in the transcript
+// ("Sent", "Shipped", "Sent back") so the decision reads as a durable record, not a vanished action.
+export type GateDeltaReceipt = "sent" | "shipped" | "sent-back";
+
+// ─── The operating view — one Operator lens over the whole fleet (GTM-MACHINE.md Area 6) ─────────────
+//
+// A pure cross-fleet READ: every go-to-market motion drawn as a uniform lane, the shared objects the
+// lanes both touched drawn once with ties between them, the plan's not-yet-run motions as proposed
+// lanes, and the pending founder decisions tagged to the lane they belong to. Composed by the backend
+// from getEngineState (stages + health), the touch ledger (shared objects), deriveMotionEfficiency
+// (the outcome rows), project status (parked state), and getPendingInbox — never re-derived on the
+// client, never seeded. An outbound lane, a programmatic-page lane, and a product-change lane are the
+// SAME shape here on purpose: one visual grammar, color for STATE only. Mirrors
+// brain/src/operating-view.mjs getOperatingView({ projectId }).
+
+// Where a health number / derived state came from — the receipt shown on inspection. `basis` names the
+// derivation in plain words ("from 3 outcomes on this motion"); the ids let the lens route to the real
+// run/outcome. Every OperatingLane health and OperatingObject bucket carries one; a bet with no signal
+// reads honestly ("no signal yet") rather than borrowing confidence it hasn't earned.
+export type OperatingProvenance = {
+  basis: string;
+  runId?: string | null;
+  outcomeId?: string | null;
+  probe?: string | null;
+  // "grounded" = derived from a real run/outcome/probe reading; "bet" = a proposed-but-unmeasured
+  // motion or object with no observation behind it yet. The lens renders the two visibly differently.
+  kind: "grounded" | "bet";
+};
+
+// One stage on a lane's emergent stage strip — the plain-language step name getEngineState derived for
+// THIS motion (an outbound lane and a page lane get their own stages, never a shared skeleton). `state`
+// is the derived flow state; `active` marks the one currently working (its label is spoken on the lane).
+export type OperatingStage = {
+  id: string;
+  label: string;
+  state: "done" | "active" | "waiting" | "blind" | "idle";
+  active?: boolean;
+};
+
+// One measured-efficiency reading for a lane, straight from deriveMotionEfficiency — honest-unmeasured
+// (measured 0, coverage null) never a fabricated rate. Rendered as tabular numbers that hold still.
+export type OperatingEfficiency = {
+  motionKind: string | null;
+  staged: number;
+  measured: number;
+  coverage: number | null;
+  outcomesByKind: Record<string, number>;
+  lastOutcomeAt: string | null;
+};
+
+// One motion, drawn as a uniform lane. `runState` lights the lane and, when parked, routes one click to
+// the real gate. `proposed` marks an Area 4 plan lane that isn't running yet (rendered as a proposed-
+// state lane in the same grammar). `objectKeys` ties the lane to the shared objects it has touched.
+export type OperatingLane = {
+  channelId: string;
+  name: string;
+  motionKind: string | null;
+  // The lane's derived health (same figure the engine node badge shows) + where it came from.
+  health: number;
+  healthProvenance: OperatingProvenance;
+  stages: OperatingStage[];
+  efficiency: OperatingEfficiency | null;
+  // Live/parked state — the ONLY place color earns its use on a lane. "parked" = a run waiting at the
+  // founder gate (the lane pulses; one click flies to it). "running" = a live run. "idle" = at rest.
+  runState: "running" | "parked" | "idle" | "error";
+  // When parked: the pending decision this lane routes to (its id in the inbox, and the gate location).
+  parked?: { decisionId: string; sessionId: string | null; pipelineId: string | null; waitingSince: string | null } | null;
+  // A not-yet-run plan motion (Area 4) rendered in the same grammar as a proposed lane. `origin` mirrors
+  // the plan's derived-vs-speculative label so a grounded code-native motion looks different from a bet.
+  proposed?: boolean;
+  origin?: "derived" | "speculative";
+  rationale?: string | null;
+  // The shared-object keys this lane has touched — the tie endpoints the map draws.
+  objectKeys: string[];
+};
+
+// One shared object drawn ONCE — a person, a keyword+geo, a page, a partner, a proposed change. `lanes`
+// are the lane channelIds that touched it (2+ = the money-shot tie: "one person, many motions"). The
+// emergent bucket is derived at read time (deriveFunnel), never a stored state. `touchCount` reads the
+// touch ledger so the map can say "never worked twice".
+export type OperatingObject = {
+  objectKey: string;
+  kind: string;
+  label: string | null;
+  bucket: "seen" | "in_flight" | "handled" | "suppressed";
+  lanes: string[];
+  motionCount: number;
+  touchCount: number;
+  lastSeenAt: string | null;
+  provenance: OperatingProvenance;
+};
+
+export type OperatingView = {
+  projectId: string;
+  // Real lanes first (running / parked / idle), then proposed plan lanes. The lens keeps this order but
+  // the founder can reorder (drag-organize moved here from the old merged-lane overview).
+  lanes: OperatingLane[];
+  // The shared map: every touched object once, with ties to the lanes that touched it.
+  objects: OperatingObject[];
+  // The pending founder decisions across the fleet — the same rows getPendingInbox returns, so the lens
+  // can pulse the right lane and route a click to the real gate.
+  pending: PendingDecision[];
+  // Whether the plan lanes are older than the last scan (Area 4's staleness flag) — the lens shows a
+  // quiet "plan older than your last scan" marker, never auto-refreshes.
+  planStale?: boolean;
+  generatedAt: string;
 };

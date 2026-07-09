@@ -1,0 +1,383 @@
+/* OperatorLens — the one operating view over the whole fleet (GTM-MACHINE.md Area 6).
+   ONE visual grammar over motions that are nothing alike: an outbound lane, a programmatic-page lane,
+   and a product-change lane are the SAME lane, the SAME calm stage strip, the SAME card. Color earns its
+   place ONLY for state (live / needs-you), never to decorate or distinguish motion kinds. Near-white
+   ground, one accent used rarely, tabular numbers that hold still, whitespace taken then doubled. Opaque
+   reading surfaces. No gradients, no glass, no bounce. Desktop (1440). */
+
+.operator-lens {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(circle, var(--canvas-dot) 1.1px, transparent 1.1px) 0 0 / 26px 26px,
+    var(--canvas);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── The fleet header — the calm banner, honest counts, staleness marker ── */
+.op-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-8) var(--space-4);
+  border-bottom: 1px solid var(--line-2);
+  background: var(--surface);
+}
+.op-head-title {
+  font-size: var(--text-xl);
+  font-weight: 640;
+  letter-spacing: var(--tracking-tight);
+  color: var(--ink);
+}
+.op-head-counts {
+  display: flex;
+  gap: var(--space-4);
+  margin-left: auto;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+.op-head-count b {
+  color: var(--ink);
+  font-weight: 620;
+  margin-right: 4px;
+}
+.op-stale {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  color: var(--gap);
+  padding: 2px 9px;
+  border: 1px solid color-mix(in oklch, var(--gap) 30%, var(--line-2));
+  border-radius: 999px;
+  background: var(--gap-soft);
+}
+
+/* ── The body: lanes on the left, the shared map on the right ── */
+.op-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 348px;
+  gap: 0;
+}
+.op-lanes {
+  padding: var(--space-6) var(--space-6) 140px var(--space-8);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+.op-lanes-group-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--faint);
+  margin: var(--space-2) 0 calc(-1 * var(--space-2));
+}
+
+/* ── One lane — the uniform card every motion kind gets ── */
+.op-lane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  scroll-margin: var(--space-8);
+}
+/* State is the ONLY color on a lane. Parked = needs you (the founder gate's amber, and its alone). */
+.op-lane[data-state="parked"] {
+  border-color: color-mix(in oklch, var(--gap) 42%, var(--line-2));
+  cursor: pointer;
+}
+.op-lane[data-state="parked"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: var(--space-4);
+  bottom: var(--space-4);
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--gap);
+  animation: op-park-pulse 2.4s var(--ease) infinite;
+}
+.op-lane[data-state="parked"]:hover {
+  border-color: color-mix(in oklch, var(--gap) 58%, var(--line-2));
+}
+.op-lane[data-state="error"] { border-color: color-mix(in oklch, var(--danger) 40%, var(--line-2)); }
+/* Proposed plan lane — not running yet. Rendered in the SAME grammar, quieted with a dashed edge. */
+.op-lane[data-proposed="true"] {
+  background: var(--canvas);
+  border-style: dashed;
+  box-shadow: none;
+}
+
+@keyframes op-park-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .op-lane[data-state="parked"]::before { animation: none; opacity: 0.9; }
+  .op-live-dot::after { animation: none; }
+}
+
+.op-lane-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.op-lane-name {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: var(--tracking-tight);
+}
+.op-lane-kind {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  white-space: nowrap;
+}
+
+/* Health dot — semantic, small, calm. Green good, amber watch, red hurt, grey no-signal. */
+.op-health {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  cursor: help;
+}
+.op-health-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex: none;
+}
+.op-health[data-band="good"] .op-health-dot { background: var(--proven); }
+.op-health[data-band="watch"] .op-health-dot { background: var(--gap); }
+.op-health[data-band="hurt"] .op-health-dot { background: var(--danger); }
+.op-health[data-band="blind"] .op-health-dot { background: var(--blind); }
+.op-health-num { color: var(--ink); font-weight: 600; }
+
+/* Live/parked run pill — state, spoken. */
+.op-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.op-run[data-state="running"] { color: var(--ink); background: var(--surface-2); border: 1px solid var(--line-2); }
+.op-run[data-state="parked"] { color: var(--gap); background: var(--gap-soft); border: 1px solid color-mix(in oklch, var(--gap) 30%, var(--line-2)); }
+.op-run[data-state="error"] { color: var(--danger); background: var(--danger-soft); border: 1px solid color-mix(in oklch, var(--danger) 28%, var(--line-2)); }
+.op-live-dot { position: relative; width: 7px; height: 7px; }
+.op-live-dot::before { content: ""; position: absolute; inset: 0; border-radius: 999px; background: var(--ink); }
+.op-live-dot::after {
+  content: ""; position: absolute; inset: -3px; border-radius: 999px;
+  border: 1.5px solid var(--ink); opacity: 0; animation: op-live-ring 1.8s var(--ease) infinite;
+}
+@keyframes op-live-ring { 0% { opacity: 0.5; transform: scale(0.7); } 100% { opacity: 0; transform: scale(1.4); } }
+
+/* ── The emergent stage strip — this motion's OWN steps, checking off ── */
+.op-stages {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-wrap: wrap;
+}
+.op-stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  color: var(--faint);
+  padding: 3px 0;
+}
+.op-stage-dot {
+  width: 6px; height: 6px; border-radius: 999px; background: var(--ghost); flex: none;
+}
+.op-stage[data-state="done"] { color: var(--muted); }
+.op-stage[data-state="done"] .op-stage-dot { background: var(--muted); }
+.op-stage[data-state="active"] { color: var(--ink); font-weight: 600; }
+.op-stage[data-state="active"] .op-stage-dot { background: var(--ink); box-shadow: 0 0 0 3px var(--surface-2); }
+.op-stage[data-state="waiting"] { color: var(--gap); font-weight: 600; }
+.op-stage[data-state="waiting"] .op-stage-dot { background: var(--gap); }
+.op-stage-sep {
+  width: 14px; height: 1px; background: var(--line-2); margin: 0 8px; flex: none;
+}
+
+/* ── The efficiency read — tabular, honest, ordered by observed outcomes ── */
+.op-eff {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--line);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.op-eff-metric b { color: var(--ink); font-weight: 620; font-variant-numeric: tabular-nums; }
+.op-eff-unmeasured { color: var(--faint); font-style: normal; }
+.op-eff-outcomes { display: inline-flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.op-eff-outcome {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--proven);
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--proven-soft);
+  border: 1px solid color-mix(in oklch, var(--proven) 22%, var(--line-2));
+}
+
+/* Proposed-lane rationale + origin */
+.op-lane-rationale { font-size: var(--text-sm); color: var(--ink-2); line-height: var(--leading-normal); }
+.op-origin {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+.op-origin[data-origin="derived"] { color: var(--proven); background: var(--proven-soft); border: 1px solid color-mix(in oklch, var(--proven) 22%, var(--line-2)); }
+.op-origin[data-origin="speculative"] { color: var(--gap); background: var(--gap-soft); border: 1px solid color-mix(in oklch, var(--gap) 24%, var(--line-2)); }
+
+/* Parked call-to-open — the one click that flies to the real gate. */
+.op-park-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--gap);
+}
+
+/* ── The shared map — the money shot. One object drawn once, tied to the lanes it touched. ── */
+.op-map {
+  border-left: 1px solid var(--line-2);
+  background: var(--surface);
+  padding: var(--space-6) var(--space-5) 140px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.op-map-head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.op-map-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--faint);
+}
+.op-map-sub { font-size: var(--text-sm); color: var(--muted); line-height: var(--leading-normal); }
+
+.op-obj {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+/* An object touched by 2+ lanes is the tie — the "one person, many motions" money shot. Marked, not
+   decorated: a single ink hairline on the leading edge, never a colored card. */
+.op-obj[data-shared="true"] { border-left: 2px solid var(--ink); }
+.op-obj[data-bucket="handled"] { background: var(--proven-soft); border-color: color-mix(in oklch, var(--proven) 20%, var(--line-2)); }
+.op-obj[data-bucket="suppressed"] { opacity: 0.6; }
+
+.op-obj-top { display: flex; align-items: center; gap: 8px; }
+.op-obj-kind {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--faint);
+}
+.op-obj-label {
+  font-size: var(--text-sm);
+  font-weight: 560;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.op-obj-bucket {
+  margin-left: auto;
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+}
+.op-obj[data-bucket="handled"] .op-obj-bucket { color: var(--proven); background: var(--surface); border-color: color-mix(in oklch, var(--proven) 22%, var(--line-2)); }
+.op-obj[data-bucket="in_flight"] .op-obj-bucket { color: var(--ink); }
+
+/* The ties — which lanes touched this object, as quiet chips that route to the lane. */
+.op-obj-ties { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.op-tie {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  color: var(--muted);
+  padding: 1px 8px 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  cursor: pointer;
+}
+.op-tie::before { content: ""; width: 5px; height: 5px; border-radius: 999px; background: var(--faint); }
+.op-tie:hover { border-color: var(--ghost); color: var(--ink); }
+.op-obj-worked {
+  font-size: 10px;
+  color: var(--faint);
+}
+.op-obj-worked b { color: var(--muted); font-weight: 600; }
+
+/* ── Provenance popover — the receipt on inspection. The part a screenshot can't clone. ── */
+.op-prov {
+  font-size: 10px;
+  color: var(--faint);
+}
+.op-prov[data-kind="bet"] { font-style: italic; }
+
+/* ── Empty / loading ── */
+.op-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  text-align: center;
+  color: var(--muted);
+  padding: var(--space-12);
+}
+.op-empty strong { font-size: var(--text-lg); font-weight: 600; color: var(--ink); }
+.op-empty span { max-width: 40ch; font-size: var(--text-sm); line-height: var(--leading-normal); }
