@@ -36,7 +36,12 @@
 import { getCredential } from "../../credential-store.mjs";
 import { getFreshAccessToken } from "../execute/gmail-oauth.mjs";
 import { runStore, resultStore } from "../../gtm-store.mjs";
+import { persistence } from "../../persistence.mjs";
 import { ingestOutcome } from "../../outcome-ingest.mjs";
+
+// The flow store's collection name (flow-store.mjs COLLECTION). Read directly here rather than importing
+// flow-store's writer, so this read-only reader never pulls in the write path.
+const FLOW_COLLECTION = "flows";
 
 // Gmail REST read endpoints. Listing/reading threads needs a read scope (gmail.readonly or
 // gmail.metadata); the durable send grant is gmail.send only, so a send-scoped token gets a 403 here —
@@ -94,6 +99,75 @@ export function joinSentItems(runs) {
     }
   }
   return byMessageId;
+}
+
+// ── Where a REAL live send actually lands ──────────────────────────────────────────────────────────
+// The path-compile pipeline persists approved runs to runStore with a flat `items` array (what
+// joinSentItems above walks). But the THREE live send paths — the direct and streaming graph runs
+// (routes/graph.mjs) and the operator gate-resume (operator-runtime.mjs) — do NOT write runStore. They
+// persist through recordFlowRun into the FLOW store, and a real send's delivery facts (providerMessageId,
+// sentAt) live inside that run's transient graph result, on the EXECUTE node's output items
+// (result.nodes[executeNodeId].items[].providerMessageId), NOT on any flat top-level items array.
+//
+// So the poller's sent-item index, if it only read runStore, would be permanently empty for every live
+// send — the exact inertness this closes. This projects each stored flow run into the SAME flat sent-item
+// shape joinSentItems consumes: for each flow run, walk its result's execute-node output items and surface
+// every one that carries a real providerMessageId AND a durable joinKey (i.e. was truly delivered). The
+// run's id comes from the flow record so a projected sent item attributes to its run exactly as a runStore
+// item does. Pure over the flow records passed in; no network, no model — the test drives it with plain
+// records shaped exactly like recordFlowRun writes.
+export function projectFlowRunsToSentRuns(flowRecords) {
+  const sentRuns = [];
+  for (const record of Array.isArray(flowRecords) ? flowRecords : []) {
+    for (const flowRun of Array.isArray(record?.runs) ? record.runs : []) {
+      const nodes = flowRun?.result?.nodes ?? {};
+      const items = [];
+      for (const nodeResult of Object.values(nodes)) {
+        // A send lands on an execute node's output. Guard on category when present, but stay tolerant:
+        // any node result carrying items with a provider id + joinKey is a real delivery fact, never faked.
+        if (nodeResult?.category && nodeResult.category !== "execute" && !Array.isArray(nodeResult?.items)) continue;
+        for (const item of Array.isArray(nodeResult?.items) ? nodeResult.items : []) {
+          const messageId = trimOrNull(item?.providerMessageId);
+          const joinKey = trimOrNull(item?.joinKey);
+          // Only a truly-sent, joinable item contributes — a staged-locally / blocked / rate-limited item
+          // has no provider id and is skipped, exactly as joinSentItems skips an unsent runStore item.
+          if (!messageId || !joinKey) continue;
+          items.push(item);
+        }
+      }
+      if (items.length) {
+        // Carry the compiled topology through so the downstream ingest derives the motion dimension from
+        // the run's own shape exactly as it does for a runStore run — nodes in `steps`, wiring in `edges`.
+        // The flow run stores a graphSnapshot; the flow record carries the live graph as a fallback.
+        const snapshot = flowRun?.graphSnapshot ?? record?.graph ?? {};
+        sentRuns.push({
+          id: trimOrNull(flowRun?.id) ?? trimOrNull(flowRun?.result?.runId),
+          steps: Array.isArray(snapshot.nodes) ? snapshot.nodes : [],
+          edges: Array.isArray(snapshot.edges) ? snapshot.edges : [],
+          pathId: trimOrNull(snapshot.id) ?? trimOrNull(record?.graph?.id),
+          items,
+        });
+      }
+    }
+  }
+  return sentRuns;
+}
+
+// Read every stored flow run for a project's poll and project its truly-sent items into the flat
+// sent-run shape. The flow store is keyed per graph (not per project) and a flow record carries no
+// projectId, so this reads all flows in the store — matching how the live send paths persist (they write
+// recordFlowRun with no project scoping). An out-of-band item still ingests honestly as unattributed
+// downstream, so reading broadly never fabricates an attribution. Injectable via options.flowRecords so
+// the test drives it with plain records and no store.
+function loadSentRunsFromFlowStore(options = {}) {
+  if (Array.isArray(options.flowRecords)) return projectFlowRunsToSentRuns(options.flowRecords);
+  let records = [];
+  try {
+    records = persistence(options).list(FLOW_COLLECTION) ?? [];
+  } catch {
+    records = [];
+  }
+  return projectFlowRunsToSentRuns(records);
 }
 
 // A single header value off a Gmail message payload, case-insensitive on the header name. Gmail returns
@@ -243,7 +317,16 @@ async function resolveReadToken(projectId, options = {}) {
 // as unattributed and still ingested honestly (joined:false), never credited to a run it did not come
 // from — the same honest-blind posture as connectors/measure/default.mjs.
 export async function pollInboxOutcomes(projectId = "default", options = {}) {
-  const runs = options.runs ?? runStore.list({ ...options, projectId });
+  // The sent-item substrate is the UNION of both stores a delivery can land in:
+  //   - runStore — the path-compile pipeline's approved runs (flat items[]).
+  //   - the flow store — where the three LIVE send paths actually persist (direct + streaming graph runs
+  //     and the operator gate-resume), whose delivery facts live on execute-node output items inside each
+  //     run's result. Without this half the index is permanently empty on every real live send.
+  // The union is what BOTH the sent-item index AND the downstream ingest join walk, so a flow-store-sent
+  // item joins back to its own run exactly as a runStore item does.
+  const runStoreRuns = options.runs ?? runStore.list({ ...options, projectId });
+  const flowSentRuns = loadSentRunsFromFlowStore({ ...options, projectId });
+  const runs = [...runStoreRuns, ...flowSentRuns];
   const sentIndex = joinSentItems(runs);
   if (sentIndex.size === 0) {
     return { ok: true, ingested: [], unattributed: 0, reason: "Nothing sent to read outcomes for yet." };
