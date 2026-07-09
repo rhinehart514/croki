@@ -38,10 +38,13 @@ export function ProductEntryColumn({
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     if (!deriving) { setElapsed(0); return; }
-    setElapsed(0);
-    const started = Date.now();
-    const id = window.setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
-    return () => window.clearInterval(id);
+    let secs = 0;
+    let timer = window.setTimeout(function tick() {
+      secs += 1;
+      setElapsed(secs);
+      timer = window.setTimeout(tick, 1000);
+    }, 1000);
+    return () => window.clearTimeout(timer);
   }, [deriving]);
   const elapsedLabel = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`;
 

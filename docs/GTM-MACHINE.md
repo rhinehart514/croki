@@ -1,0 +1,187 @@
+# Drover — the go-to-market machine
+
+## Mission
+
+Drover lets one founder run the entire go-to-market of many products as a single living machine: many motions of every kind operating at once — outbound, programmatic content minted from the product's own data, in-product loops, microproducts, AI visibility, partnerships, and shipped product changes — all moving over one shared map of everything the go-to-market touches, learning what earns wins and pouring effort there, all behind one approval gate that is yours alone.
+
+Not a tool that builds one campaign. The operator that runs the whole operation.
+
+The unfair advantage is where Drover sits: inside the product's codebase. It reads what the product actually does, with the receipts to prove it, and it can propose, scaffold, and — only with your explicit yes — ship changes to the product itself. That makes a whole class of go-to-market motions possible that no tool sitting outside the code can run: the motion IS a product change, or an asset generated from the product's own data. A thousand real pages minted from real records. A share loop built into the product. A public calculator cut from the real thing. Every one of them stops at the same gate everything else does.
+
+## Vision
+
+You point Drover at your estate-sale marketplace and state a goal: more seller signups in your top metros.
+
+Drover reads the product — the actual code — and hands you the operation, not a campaign. A ranked list of motions, each one a plain card: *"Mint a listing page for every active estate sale and every city you cover, generated from your own sale records — you already hold the data; that's thousands of real pages your competitors write by hand."* Next to it: *"Add a share link to every sale page so buyers pull in other buyers."* Next to that: *"Get cited when someone asks ChatGPT 'estate sales near me in Buffalo'."* And yes, one card for reaching out to estate-sale companies directly — but it sits in the list as one motion among eight, not the whole product. Cards grounded in what your code really holds say so and show the receipt; cards that are bets are labeled bets. You cut two, reorder three, and say go.
+
+Now the machine runs, and you watch it as one map. Every motion is a lane, and each lane speaks its own language: the pages lane reads *generate from your data → your gate → publish → watch rankings*; the outreach lane reads *find → draft → your gate → send → measure*. The people, cities, search terms, pages, and partners the machine touches all live on one shared map — so when a seller your outreach lane was warming up signs up through a listing page your pages lane minted, the map shows one seller touched by two lanes, and the outreach lane quietly drops her instead of emailing someone who already converted. Nothing gets worked twice. Nothing gets re-worked by motion seven that motion three already handled.
+
+It never sleeps, and it never slips past you. A reply lands overnight — the machine routes it, drafts the next step for exactly that person, and parks it at your gate. Sunday's page refresh runs on its own and parks at your gate. The gate is one room: what wants to go out, why, and two buttons. Your yes sends it; your no teaches it.
+
+And it learns where the wins actually come from. Two weeks in, it tells you plainly: *"The per-city pages earned 9 of your last 12 seller signups. The cold email drew nothing in three weeks. I'm proposing we double the page coverage and pause the email — your call."* You tap yes, and the machine reshapes itself around what your market actually answered. That is the feeling: not running campaigns, but steering an operation that gets sharper every week you run it.
+
+## The eval we set to
+
+This is the graded definition of "working at full efficiency" — pass/fail, not aspiration. Each dimension is written so a product-led or code-native motion grades exactly as legibly as an outbound one.
+
+**1. One shared map.** Run motion A that touches object X (a person, a keyword+geo like `estate sales near me | Buffalo`, a page, a partner domain, a proposed product change). Compose motion B over a set containing X. PASS: X carries one stable object key with touches from both motions; B's composer receives X flagged as handled/in-flight with the reason; the run is never blocked by it. FAIL: X exists twice, or B re-works X blind, or the flag becomes a pre-gate contract.
+
+**2. Always-on.** POST a real signal (a reply, a signup) and touch nothing. PASS: within one heartbeat tick the signal is routed, the machine wakes, and a next-step draft for exactly the object it concerns is parked at the gate — never sent. A promoted multi-touch motion's cycle-2 item set differs from cycle-1, derived from live object state (non-responders advance, responders drop), not a frozen snapshot. An idle tick with an empty inbox makes zero model calls and zero paid probe calls.
+
+**3. Learn and reallocate.** Record a positive outcome joined to a run. PASS: the next compose's grounding contains a plain-language "what's working" block naming that motion shape; ranking weights tilt toward it only past a minimum-observations floor (one lucky send never reallocates); a non-outbound outcome kind (`ranked`, `activated`, `cited`) moves the signal identically to `reply`; a motion whose shape drew nothing measured over N cycles is flagged for the founder's batch — never silently killed, never silently re-run forever. FAIL: outcomes recorded and read by nobody (today's state).
+
+**4. The read produces the plan.** Point Drover at a repo. PASS: the operation plan returns at least 6 motions spanning at least 4 kinds, including at least one code-native motion derived from the product's real data model with a real file:line citation, and at least one motion wiring a connected MCP capability by its real ref. A "derived" motion with a fake citation is demoted to a labeled bet by the host. FAIL: four attribution bullets, or an all-outbound list.
+
+**5. A portfolio you can see and steer.** With an outbound motion and a programmatic-page (or product-change) motion running for one product: PASS: the Operator lens renders both as lanes, each with its own emergent stage strip (the page motion is never drawn in an outbound skeleton); a shared object renders once with ties to both lanes; a run parked at the gate pulses on its lane and one click opens the real gate; every health number and object state carries its provenance (which run, which outcome) on inspection; the surface is provably read-only and emits no next-move prose.
+
+**6. Honest measurement across kinds.** PASS: outcomes aggregate into one per-motion efficiency table keyed by a shape-derived, open motion kind; a motion with staged work and no measured outcome reads "nothing measured yet" — no fabricated rate anywhere; an external probe reading (a rank, an AI mention, a review) ingests through the same join and lands in its motion's row. Exactly one efficiency reader exists in the codebase.
+
+**7. The ship leg is alive.** PASS: from the live UI, a founder composes a microproduct or in-repo product change, reviews the built preview and diff at the gate, gives the explicit second authorization, and it actually goes live (branch pushed / deploy returned). With the gate approved but the second authorization absent, the deploy connector still refuses.
+
+**The EstateSaleUSA acceptance case (the integration eval no unit suite substitutes for).** Point Drover at EstateSaleUSA (working hypotheses only — never invent its internals). It must: (a) produce a plan spanning outbound, programmatic per-sale/per-city pages from its own data model, an in-product seller-referral or buyer-share loop, and AI visibility for near-me queries; (b) run at least two motions of different kinds that share at least one object, with the shared map preventing double-work; (c) join at least one real outcome back to the motion that earned it via the connected measurement stack (rank, traffic, review velocity — within a stated probe budget); (d) have that outcome visibly shape the next compose; (e) keep every outward step behind the one gate. Seven green unit suites do not pass this; only the walked loop does.
+
+**The alpha bet.** One real, attributable go-to-market win — a seller signup, a booked call, a page that ranks and converts — driven to the gate and out the other side, where the machine can show which motion earned it. That closes alpha.
+
+## What has to change — the operator layer
+
+Drover today is a strong composer-and-runner with real guardrails. What's missing is the connective tissue that makes many motions behave as one machine. The review of the seven area specs found the plans individually sound but colliding on three shared objects. So the spine of this spec is ownership: **three shared objects, one owner each, everyone else a consumer.**
+
+| Shared object | Owner | Consumers |
+|---|---|---|
+| Object identity + touch ledger (`objectKey` + touches at the run-derivation seam) | Area 1 | Area 2 (worked/suppression grounding), Area 5 (change objects), Area 6 (the lens) |
+| Motion dimension + efficiency table (`Result.motionKind` + one `deriveMotionEfficiency`) | Area 7 (Measurement) | Area 3 (reallocation), Area 6 (the funnel) |
+| The operating surface (one Operator lens) | Area 6 | Area 4's plan renders inside it; Area 1's funnel is it zoomed to objects |
+
+And one honest naming, resolved up front: **reallocation is Overdrive-shaped.** The machine computes the reallocation, proposes it, and applies it to advisory signals (compose grounding, ranking tilt) on its own — but pausing or killing a motion is a batched, correctable founder decision, not an autonomous act, unless the founder later promotes reallocation up the existing autonomy ladder. We say "the machine proposes reallocation and the founder confirms in the batch," not "the machine gets efficient on its own." Whether to ride the ladder is an open founder decision (below).
+
+### Area 1 — The shared object graph: identity + touch ledger (the foundation)
+
+**Today.** Only a Person persists across motions (`person-store.mjs` — `promoteEntrantsFromRun` at the single `recordRunDerivations` seam in `run-derivation.mjs`). Every other object — a geo, a keyword, a page, a partner, a product change — lives and dies as a run-keyed projection node (`object-graph-projection.mjs`, `obj-<runId>:item:...`). The exact suppression primitive the operation needs, `dedupeAcrossChannels` (`cross-reference.mjs`), is built, tested (`cross-channel-dedup.test.mjs`), and has zero production callers. `findReferences` is a closed 4-kind switch.
+
+**Target.** A generic object identity and a durable touch ledger — and deliberately NOT a state machine. The review flagged the originally proposed `gtm-object-state` overlay with stored lifecycle transitions (`active → in_flight → handled → converted`) as the nearest re-grown cage: a fixed stage skeleton in open-string costume. Cut. What ships instead:
+
+- `objectKey(kind, fields)` (extend `person-store.mjs` or a small `object-identity.mjs`): delegates to the existing `extractIdentity().identityKey` for people; composes deterministic keys for other kinds from their natural identifier (`geo:<locality>`, `keyword:<query>[|geo]`, `page:<path>`, `partner:<domain>`, `change:<repo>#<path>`); open kind string; identifier-less items fall back to a private key exactly as `dedupeAcrossChannels` already does.
+- A **touch ledger**: the person appearance shape generalized to any object key — `{ objectKey, kind, label, touches: [{motionId, runId, verb, at}], firstSeenAt, lastSeenAt }` — written as one more wrapped best-effort deriver inside `recordRunDerivations`, reusing the same extraction loop `promoteEntrantsFromRun` runs. People flow through as `kind:"person"`. **No stored `state` field, no transitions.** "In-flight," "handled," "suppressed," and funnel stages are derived at read time from touches + outcome joins. A founder set-aside is recorded as an explicit touch (`verb:"set-aside"`, with reason/until), and derived suppression reads it.
+- **Wire the dead primitive**: `dedupeAcrossChannels` consulted at the compose/run entry (via `run-grounding.mjs` / `operator-tool-exec.mjs`), cross-checked against the touch ledger, returning `{work, skipHandled, skipInFlight, reasons}` — advisory to the composing agent, never a pre-run contract.
+- `findReferences` generalized: keep the four fast paths, add a default that resolves any `{kind,id}` to its objectKey and returns its touches. Area 6's lens consumes this; it does not re-generalize `cross-reference.mjs`.
+- `deriveFunnel(projectId)`: a pure read-time projection grouping objects by kind × emergent advisory bucket. It renders inside the Operator lens (Area 6), not as a third surface.
+
+**Full stack.** Host state: the touch ledger on the existing `gtm-store.mjs` defineStore spine (the single new host noun in this whole spec, justified because no existing object carries cross-motion identity for non-people). Domain: `recordObjectTouch` (deterministic upsert+append), `setObjectSetAside`. Runtime: the dedup wire + the run-derivation deriver. MCP: generalize `find_references`; add read-only `get_funnel` / `get_next_objects`. Tests: touch-ledger store test; extend `cross-channel-dedup.test.mjs` to prove the primitive is invoked by a real run path; extend `anti-cage.test.mjs` to assert kind stays an open string, **no stored state/stage field exists**, and no run path reads the ledger to gate a run.
+
+### Area 2 — The always-on runtime
+
+**Today.** One safe 5-minute heartbeat (`ambient-scheduler.mjs`, started at `server.mjs:124`) drives promoted-motion replays (`promote-motion.mjs` — verbatim re-stage of a frozen `nextRunTemplate`) and standing-brief wakes (`operator-runtime.mjs`). Signals are captured (`routes/inputs.mjs`) but the inbox is drained only by a manual route; the `wakeScorer` seam (`input-router.mjs:101`) has no production scorer, so a routed signal can never advance anything. `find` connectors never consult who's been worked — People are write-only.
+
+**Target — three extensions, no new subsystem.**
+
+- **Suppression-aware grounding.** `workedContext(projectId)` is a **thin projection over Area 1's touch ledger** (per the review — not a parallel person-store fold): per object, key + lastSeenAt + touch count + last outcome kind (read from the Result ledger via Area 7's motionKind, not a new field). Threaded into `buildRunGrounding` (`run-grounding.mjs:41`) as a `worked` slice, in both the direct-run and gate-resume paths. A strong steer to the composing model; never a hard contract.
+- **The inbox drains itself.** A third heartbeat driver `runDueInputRouting()` in `ambient-scheduler.mjs`, isolated in its own try/catch, calling the existing `routeUnroutedInputs` per active project — with a real model-backed `wakeScorer` wired as a rented agent behind an open step (`agent-bridge.mjs`). A warranted wake composes-and-runs to the gate exactly as `wakeAmbientSession` already does. With no scorer wired, behavior is byte-identical to today.
+- **Motions that progress, not replay.** `runMotionOnce` (`promote-motion.mjs:219`): a motion with a discovery/self-sourcing entry re-sources live (suppression-filtered per the `worked` slice) instead of replaying frozen items; a multi-touch motion computes its cycle set from live touch-ledger state (non-responders advance, responders drop). Topology stays the model's; the runtime only decides which objects flow this cycle. Cadence stays an open string.
+- **Ownership of the starve seam (review fix):** Area 2 owns `runDueMotions` mechanics. It calls Area 3's `learnedSignal` read to decide whether a due motion gets flagged-for-review instead of re-staged. One function, one owner, one consumed signal.
+- **Budget (review gap, must land before the third driver turns on):** extend `ambient-scheduler.mjs` — not a new scheduler — with a simple per-tick budget: max scorer invocations per tick, per-motion probe cadence (probes are Area 7's, but the throttle lives here), and a hard daily cap on paid MCP probe calls (geogrid scans cost 50–162 credits). Idle ticks make zero model and zero probe calls.
+
+**Tests:** worked-suppression across runs; drain + wake to gate (both scorer-present and scorer-absent branches); cycle-2 differs from cycle-1; wall held on every path (`assertGateWall`); idle-cost; budget respected under load (`operator-runtime.test.mjs`, `promote-motion` sibling, `ambient-concurrency.test.mjs`).
+
+### Area 3 — The learn-and-reallocate loop
+
+**Today.** Outcomes join back to runs (`outcome-ingest.mjs`) and write Results + Learnings — then stop. `learningStore` has zero readers; `structuralProjection` (the cross-product PII-stripped pool, `gtm-store.mjs:453`) has zero consumers; composition grounds on taste (gate decisions) but never on a single Result. Write-only learning.
+
+**Target — one reader, no new store, consuming Area 7's table (review fix: no second derivation, no `structural.channel` keying).**
+
+- `brain/src/reallocation.mjs` (new, pure functions, no model calls): `learnedSignal(projectId)` **consumes `deriveMotionEfficiency`** (Area 7) and adds only what Measurement doesn't: the observation floor (`minObservations`, default 5; below it, lift is honest-null), lift-vs-project-mean, and the ignored-rate roll-up. `renderLearnedSignal` emits the compact plain-text "what's working / what's drawing nothing" block (mirrors `renderTasteProfile` in `memory.mjs`). `reallocationWeights(signal, baseWeights)` produces a bounded, clamped tilt of the ranking weights; founder-saved weights (`signal-weights-store.mjs`) are always the base and can never be inverted.
+- **Feed-forward seams (all existing):** `workflow-composer.mjs` folds `renderLearnedSignal` into compose grounding beside `tasteProfileFor` (line 38); `buildRunGrounding` gains the optional slice; `graph-intelligence/path-ranking.mjs:182` passes base weights through the tilt.
+- **Cross-product prior:** `learnedSignalAcross({excludeProjectId})` finally consumes `structuralProjection` — a weak prior for a new product, floored so it never overrides a project's own measured signal.
+- **Starve:** provided as a read; Area 2's `runDueMotions` consumes it to flag. The flag arrives as a correctable receipt in the founder's batch with plain counts ("cold email: 0 of 41 measured in 3 weeks"). Never auto-kill.
+- **UI:** the reallocation renders as a receipt card in the batch/gate surface (the Overdrive pattern): what was tilted, why, drawn from which outcomes — overturnable, never a hidden policy.
+
+**Tests:** `reallocation.test.mjs` — honest-null under the floor; non-outbound kinds lift identically; unmeasured stays unmeasured; cross-product pool strips identity; founder weights win. Add `reallocation.mjs` to anti-cage `CORE_ENGINE_FILES`.
+
+### Area 4 — The strategist read → the operation plan
+
+**Today.** The 8-layer product model is computed and stored (`product-model-generator.mjs`, `product-model-store.mjs`) but `compactProductModel` (`run-grounding.mjs:17`) discards the four product-led layers (ia/workflows/interactions/transitions) at the point of use. Ideation grounds on the scan headline only (`operator-run-core.mjs` `compactProduct`) — blind to the product model, the 41-tool local-SEO capability stack, and the microproduct producer. The right doctrine (`~/.claude/agents/gtm-ideate-channels.md` — no predefined shape, derived-vs-speculative labeling) is not wired to anything.
+
+**Target — a regenerated READ, not a persisted plan (review fix: no idea-store schema bump, no plan store).**
+
+- `productLedGrounding(model)` beside `compactProductModel` in `run-grounding.mjs`: retains the four discarded layers for the plan path only; the run path stays lean.
+- `brain/src/motion-plan.mjs`: `createClaudeMotionPlanner`, pattern-copied from `createClaudeProductModeler`/`createClaudeComposer` (injectable, blank default refuses). Its prompt is the `gtm-ideate-channels` doctrine. Inputs: full model incl. product-led layers, scan grounding, the capability inventory (the same `listCapabilities` block `composition.mjs` builds), taste, and prior plan edits. Output: ranked motion candidates in the doctrine's existing item shape (type as free text / rationale / origin derived-or-speculative / evidence), with derived-but-uncited motions demoted to speculative by the host (reusing the pollution-guard discipline from `product-model-store.mjs:77-81`).
+- **The plan does not persist as a new record.** It regenerates on demand and after a fresh scan (founder-triggered, with a "plan is older than your last scan" staleness flag). The founder's cuts/reorders/promotions are recorded as decisions in the **existing taste ledger** — the same place gate decisions live — and the next read replays them (a cut motion isn't re-proposed identically; a promoted one ranks higher).
+- **Surface:** the plan renders inside Area 6's Operator lens as proposed-state lanes — not a second panel. Picking a motion to run drops into the existing `compose_and_run` door; no new run path.
+- **MCP:** one read tool `derive_operation_plan` (twin of `derive_product_model`, `mcp.mjs:710`). It never composes, runs, or gates.
+
+**Tests:** both projections off one stored model; plan spans kinds with at least one derived code-native motion; fake citation demoted; plan provably absent from every run-gating path (extend anti-cage GUARD D); `motion-plan.mjs` added to READ_MODEL_FILES (no closed channel enum).
+
+### Area 5 — Product-development-as-GTM (the moat class)
+
+**Today.** The microproduct path is real up to the wall and then dead: `compose_microproduct` → read-only producer (`microproduct-composer.mjs`) → isolated worktree build stopping before commit (`build.mjs:231`, deploy verbs rejected) → gate → `deploy.mjs` with two independent founder authorizations. But GUARD 2 is unreachable — the UI gate resolve (`ui/src/App.tsx:1303/1321`) never sends `deployConfirmed`, `graph.mjs` never threads `deployRunners` onto context (only `sendRunners`, `graph.mjs:563-566`), and no live runner is populated. A composed, built, approved microproduct literally cannot ship. And only one shape exists: a standalone artifact — no path from the data model to a change in the founder's real product.
+
+**Target — three moves, smallest first, zero new subsystems.**
+
+- **MOVE 1 (parallel from day one — pure wiring).** UI: when the staged gate item is code-native (has `artifactFiles`/`buildWorktree`), render the built preview + diff and a distinct, heavier "Ship it live" confirm that sends `deployConfirmed:true` (`App.tsx`, `api.ts`). Runtime: populate a live `deployRunners` map beside `sendRunners` at `operator-runtime.mjs:535` (BYO git-push as the primary alpha path — zero new credentials; Vercel via the injected MCP deploy tool as the second); thread `deployRunners` onto run context in `graph.mjs` in exact parity with `sendRunners`; set `node.config.repo` to the build worktree at compose time (`operator-tool-exec.mjs:729-758`).
+- **MOVE 2.** Generalize the producer contract so returned files may target real in-repo paths: the same worktree cut off the real repo, the same local build against the product's own tests, the same stop-before-commit, the same double-authorized gate — the ship leg for an in-repo change is the BYO push/PR path `deploy.mjs:92` already implements. Programmatic pages are one instance: the producer reads the product's data model and emits the template + generator; grounded claims only. (Thousands-of-pages scale likely wants the generator shipped, minting pages at build/request time — not thousands of files in a worktree; open decision below.)
+- **MOVE 3 (review fix — one lifecycle, owned here, identified by Area 1).** A proposed/staged/shipped product change is ONE object: its identity is Area 1's `change:<repo>#<path>` key; the build path records touches (proposed, scaffolded, gated, shipped) at the same run-derivation seam everything else uses; a later win joins to it through Area 7's motionKind. No separate change registry — the touch ledger is the lifecycle. It thereby appears on the map, dedups, and feeds LEARN like any other motion object.
+
+**Tests:** deploy fires only with BOTH authorizations via the real UI payload; refuses with either absent; `deployRunners` reaches the connector; in-repo files stay inside the worktree and stop before commit except the gated ship; anti-cage green unchanged.
+
+### Area 6 — The operating surface (one Operator lens)
+
+**Today.** `GtmCanvas.tsx:189` has one lens (Engineer/Steps). The "overview" is N disconnected pipeline DAGs stacked as lanes (`buildMergedFlowGraph`). `getEngineState` (`engine.mjs:569`) already derives honest, emergent per-motion stages for any motion kind — but only per focused graph. `getBoard` (`board.mjs`) is wired and UI-dead. `getPendingInbox` is the live attention router, rendered as a flat list detached from the map.
+
+**Target — one new read, one new lens; two retirements.**
+
+- `brain/src/operating-view.mjs` — `getOperatingView({projectId})`, a pure cross-fleet read composing what exists: per channel, `getEngineState` stages+health, parked-state from `project-store.mjs` channel status, cross-motion touches from Area 1's ledger (consumed, not re-derived), pending decisions from `getPendingInbox`, and Area 7's efficiency rows. No writes, no triggers, guarded by anti-cage.
+- **Operator lens** (`OperatorLens.tsx`, added to LENSES): each motion a lane with its own plain-language stage strip, health dot, parked-state; shared objects drawn once with ties between the lanes touching them; Area 4's plan renders as proposed-state lanes in the same view; Area 1's funnel is this lens zoomed to objects. Attention pulses in place — a gated run lights its lane; one click flies to it (`panSignal`) and opens the real gate. Dock badge count unchanged; `DecisionInbox` demoted to fallback list.
+- **Provenance (review gap):** every health number and derived object state carries its receipt on inspection — which run, which outcome, which probe reading produced it; derived-at-read-time states visibly distinct from cited facts. This is DOCTRINE's receipt rule applied to the map, and it's the part a screenshot can't clone.
+- **Retire:** `getBoard`'s UI ambition (route stays until nothing reads it, then delete) and the `buildMergedFlowGraph` lane-stack as the overview (Engineer lens remains the single-motion editor; whether drag-organize needs a home is an open decision).
+- **MCP:** read-only `get_operating_view` so the operator agent steers against the same map the founder sees — "motion 7 duplicates motion 3" becomes something the agent can flag.
+- No prose recommender, ever: the lens renders state and routes to real decisions; it never emits "you should do X next."
+
+**Tests:** `operating-view.test.mjs` — a content motion reads observation-based, not blind-attribution; a shared object returns once with both touches; a pending decision tags the right lane; fleet health equals per-graph `engine.mjs` numbers exactly (no second figure); provably read-only.
+
+### Area 7 — Measurement & attribution at operation scale (owns the motion dimension)
+
+**Today.** `scan.mjs` is a single-purpose attribution-gap detector (fixed `ATTRIBUTION_KEYS`/`EVENT_CALL` regexes around one win event) — structurally blind to every non-outbound surface. The outcome join (`outcome-ingest.mjs`) is well-built and open, but a Result knows only its pathId — no motion dimension — and `outcomeReport` is display-only. `deriveMeasure` (`engine.mjs:360`) has a false binary: outbound-conversion or hollow observation. Nothing computes per-motion efficiency; grep for efficiency/winRate/reallocate returns zero.
+
+**Target — one field, one reader, one widened scan.**
+
+- **`Result.motionKind` + `motionRef`** (open strings, `gtm-store.mjs` normalizeResult): derived at ingest from the joined run's graph shape, reusing the shape-derivation `deriveMotionName` already does (`engine.mjs:547`) — the founder never types it; explicit stamp overrides; unjoined out-of-band outcomes carry null (honestly unattributed). **This is the single keying dimension** — Area 3 aggregates on it; the `structural.channel` keying is dead on arrival (review fix).
+- **`deriveMotionEfficiency(projectId)`** — the ONE reader, exported from `outcome-ingest.mjs` beside `outcomeReport`, reusing its counting spine and honest-unmeasured accounting: per motionKind, `{staged, measured, outcomesByKind, coverage, lastOutcomeAt, orderRank}`. Consumed by Area 3 (reallocation) and Area 6 (the funnel table). Deterministic code, no model call. The eval "grep confirms a single reader" now actually holds.
+- **Measurement probes:** rank / geogrid / AI-mention / review-velocity / page-traffic readings enter as outcomes with open outcomeKinds through the existing `ingestBatch` path, produced by rented MCP steps behind the wall (read-only), throttled by Area 2's budget. Motion-level probe outcomes join on the motion/page key (join convention to settle so a page isn't double-counted as staged and out-of-band).
+- **`deriveMotionMeasure`** replaces the two-frame split in `engine.mjs`: per motion, count staged actions and joined outcomes by kind; the win-event/UTM check becomes evidence for the outbound-conversion kind only; a motion with no send connector and no probe reads "no way to observe this yet" and names the probe that would fix it.
+- **Scan widened, still truth-only:** recognize demand-creating surfaces beyond one conversion event — per-object page routes, analytics on them, share/referral code paths, AI-crawlable pages — each file:line-cited, blind where unproven, feeding Area 4's plan as measurable candidates.
+- **UI:** the Measure surface renders the per-motion table (tabular numbers, honest "nothing measured yet" rows, ordered by observed outcomes) — the same rows the Operator lens consumes.
+
+**Tests:** novel motionKind persists untouched (open-shape guard); zero-with-reason, never a fabricated rate; two kinds attribute to separate rows; probe outcome lands in its row; scan cites a non-outbound surface where one exists and stays blind where it doesn't (`scan.test.mjs`, `engine.test.mjs`, anti-cage).
+
+## Staying out of the cage
+
+The machinery deleted on 2026-06-29 — outcome-programs, agent-creation policies, the capability foundry, the accept/reject board, portfolio composition, blocking input contracts — must not come back wearing operator-layer clothes. `brain/test/anti-cage.test.mjs` stays green throughout, extended, never weakened. The review's specific cage risks and their applied fixes:
+
+1. **The object-state lifecycle machine (Area 1's original overlay) — cut.** A stored `state` field advancing `active → in_flight → handled → converted` is a fixed stage skeleton in open-string costume. What ships is a touch ledger only; every state and funnel bucket is derived at read time from touches + outcome joins. Anti-cage gains a guard: no stored state/stage field, no transition table, and no run path reads the ledger to gate a run.
+2. **Three parallel efficiency derivations — collapsed to one.** Area 7 owns `Result.motionKind` and the single `deriveMotionEfficiency`. Area 3 consumes; Area 1's funnel and Area 6's table render it. One key, one table.
+3. **Three portfolio surfaces and two cross-reference generalizations — collapsed.** Area 1 owns object identity and the generalized appearance index end-to-end; Area 6 reads it. One Operator lens hosts the plan (Area 4), the funnel (Area 1), and the fleet (Area 6). `getBoard` retires rather than drift as a fourth portfolio read.
+4. **The plan as a persisted domain object — cut.** No idea-store schema bump, no plan store, no required pre-run object. The plan is a regenerated read; founder edits live in the existing taste ledger. `compose_and_run` reaches the gate on whatever it produced, plan present or not — guarded.
+5. **Reallocation as a policy engine — prevented by construction.** `reallocation.mjs` emits a signal (a table, a bounded weight tilt, a text block) that is consulted like taste, never obeyed; founder weights always win; a starved motion is flagged, never auto-killed; the file joins CORE_ENGINE_FILES so a closed motion enum fails the build.
+
+The standing invariants, restated as the contract: suppression, plans, funnels, and efficiency are all ADVISORY — the founder gate remains the only checkpoint, and no pre-gate anything blocks a run. Every number derives from a real run, gate decision, outcome, or probe reading — honest-blind on empty, never seeded. Every fuzzy judgment (the motion planner, the wake scorer, the producer, the probes) is a rented agent/MCP behind an open step — no new host connectors, no closed enums anywhere (kind, state, cadence, motionKind, outcomeKind all open strings). Net new host nouns across the entire layer: **one** (the object touch ledger) plus pure readers — everything else is a field, a wire, a lens, or the revival of dead code (`dedupeAcrossChannels`, `structuralProjection`, the deploy leg).
+
+## Sequencing
+
+Ordered to reach a real end-to-end EstateSaleUSA operation soonest; each step consumes the last.
+
+1. **Foundation.** Wire `dedupeAcrossChannels` into the compose/run seam (the highest-leverage change in the set is reviving dead code) and land `objectKey` + the touch ledger at the `recordRunDerivations` seam. No state machine. This is the identity-and-suppression spine everything else consumes.
+2. **Measurement dimension.** `Result.motionKind` (shape-derived) + the single `deriveMotionEfficiency`. Land before anything reads efficiency so there is one table, not three.
+3. **Feed-forward.** `reallocation.mjs` consuming step 2, folded into the compose grounding beside taste, plus the bounded ranking tilt. The first moment an outcome from motion A demonstrably shapes the next compose — the loop closes here.
+4. **Always-on.** Inbox drain + wake scorer + `workedContext` over the step-1 ledger + live re-sourcing in `runMotionOnce` — with the probe/scorer budget landed in `ambient-scheduler.mjs` **before** the third driver turns on.
+5. **Operating surface + plan.** One Operator lens rendering the ledger (1), the table (2), and the strategist plan (Area 4's planner + un-discarding the product-led model layers) as proposed lanes. Retire `getBoard` and the merged-lane overview. Last because it is the projection over everything the prior steps make real — built first it renders empty scaffolding.
+6. **In parallel from day one:** MOVE 1 of the code-native ship leg (thread `deployRunners` in `graph.mjs`, send `deployConfirmed` from the gate UI, BYO push runner) — isolated wiring of an existing wall, blocks nothing. MOVEs 2–3 (in-repo changes as first-class map objects) sequence after step 1 so a shipped change registers on the shared map.
+
+Gate the whole build on the EstateSaleUSA integration eval, not the unit suites — green tests aren't verification; the walked loop is.
+
+## Open decisions for the founder
+
+1. **How autonomous is reallocation?** Option A: advisory-batched only — the machine tilts grounding/ranking on its own but pausing or killing a motion always waits for your batch confirmation. Option B: ride the existing autonomy ladder — a motion you've promoted to `autonomous` can be auto-paused by a floor-clearing negative signal, logged as a correctable receipt. Recommendation: ship A for alpha (it's the Overdrive shape and needs no new ladder semantics), design the read so B is a promotion away — the ladder already exists for exactly this.
+2. **Ship leg for in-repo product changes: gated push or PR?** A PR keeps a second human checkpoint but adds a step the double-authorization already provides; a gated push is faster. Recommendation: PR for alpha — it costs one click, keeps the founder's normal review muscle in the loop for the riskiest motion class, and BYO git needs zero new credentials (Vercel deploy stays the microproduct path once an account is connected).
+3. **Plan refresh trigger.** Auto-regenerate after every scan (never stale, spends the subscription every scan) vs founder-triggered with a "plan is older than your last scan" staleness flag. Recommendation: founder-triggered + flag.
+4. **The aggressiveness numbers.** The observation floor (default 5), the weight-tilt clamp, and the daily probe-credit cap decide how fast the machine reallocates and what always-on costs. These are taste calls, not derivable. Recommendation: ship the stated defaults as visible, tunable values (beside the existing signal-weights surface), never hardcoded policy.
+5. **Does the Operator lens fully replace the merged-lane overview?** Replacing is less code and truer to one operating view, but the lane-stack is where you currently drag-organize pipelines. Recommendation: replace, and move drag-organize into the Operator lens's lane ordering — flag it the moment it feels worse in the live loop.
+6. **Programmatic pages at scale.** Mint all pages as files in the worktree (simple, honest diff at the gate) vs ship the generator and mint at build/request time (scales to thousands, smaller diff, less literal preview). Recommendation: ship the generator + a sampled preview of real rendered pages at the gate; whole-corpus file-minting won't survive a real product's build.

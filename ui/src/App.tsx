@@ -128,6 +128,35 @@ const SUMMON_GTM = [
 // MicroproductFace can render the real page in a sandboxed iframe with no served URL. Defensive by
 // construction: `staged` is typed `unknown`, so every hop is shape-checked and a miss degrades to null
 // (the face simply shows "No preview yet"), never a throw.
+// Lay out a picked candidate's shape for the assembling preview. Candidate nodes often arrive without
+// real positions (0,0); step them left-to-right by their longest incoming chain so a fork still moves
+// rightward and the preview reads as a pipeline, not a pile. The real built graph carries its own layout
+// and replaces this within seconds, so this only has to look like a flow while it assembles.
+function layoutAssemblingShape(nodes: GTMNode[], edges: GTMEdge[]): GTMNode[] {
+  const hasReal = nodes.some((n) => n.position && (n.position.x !== 0 || n.position.y !== 0));
+  if (hasReal) return nodes;
+  const incoming = new Map<string, string[]>();
+  for (const n of nodes) incoming.set(n.id, []);
+  for (const e of edges) if (incoming.has(e.target)) incoming.get(e.target)!.push(e.source);
+  const depth = new Map<string, number>();
+  const depthOf = (id: string, seen: Set<string>): number => {
+    if (depth.has(id)) return depth.get(id)!;
+    if (seen.has(id)) return 0;
+    seen.add(id);
+    const ins = incoming.get(id) ?? [];
+    const d = ins.length ? Math.max(...ins.map((s) => depthOf(s, seen) + 1)) : 0;
+    depth.set(id, d);
+    return d;
+  };
+  const perDepth = new Map<number, number>();
+  return nodes.map((n) => {
+    const d = depthOf(n.id, new Set());
+    const row = perDepth.get(d) ?? 0;
+    perDepth.set(d, row + 1);
+    return { ...n, position: { x: 80 + d * 280, y: 120 + row * 150 } };
+  });
+}
+
 type StagedFile = { path?: unknown; contents?: unknown };
 type StagedMicroproductItem = {
   artifactSpec?: { name?: unknown; summary?: unknown; entry?: unknown } | null;
@@ -1057,7 +1086,11 @@ export default function App() {
       }
     };
     void poll();
-    const timer = window.setInterval(() => void poll(), 900);
+    // Tighter cadence while the crew is actively driving so its reasoning and each node landing read as
+    // live, not laggy; back off to a calm tick once it's paused at a decision (gate/input/ideas), where
+    // updates are founder-driven and a fast poll would just burn requests.
+    const interval = operatorSessionStatus === "running" ? 400 : 900;
+    const timer = window.setInterval(() => void poll(), interval);
     return () => {
       live = false;
       window.clearInterval(timer);
@@ -2013,9 +2046,58 @@ export default function App() {
     return { ...graph, nodes: [...graph.nodes, ...ghostNodes], edges: [...graph.edges, ...ghostEdges] };
   }, [ghostsLive, graph, stagedGhosts]);
 
+  // ── Pick-to-canvas assembling (felt-speed) ──────────────────────────────────────────────────────────
+  // When the founder picks a candidate shape its nodes are ALREADY known, so we draw them onto the canvas
+  // immediately as a translucent preview that reveals one node at a time — the founder watches their chosen
+  // system take shape while the real build runs server-side, instead of a spinner then a pop at the gate.
+  // Display-only: the pick already chose, so there are no per-node accept chips (proposalActive is false and
+  // no ghostResolve is registered, so neither the proposal pill nor the ghost controls render). Honest —
+  // every node shown is a node the picked shape defines. Cleared the instant the real built graph lands.
+  const [assembling, setAssembling] = useState<{ nodes: GTMNode[]; edges: GTMEdge[]; key: string; baseGraphId: string | null } | null>(null);
+  const assemblingGraph = useMemo<GTMGraph | null>(() => {
+    if (!assembling) return null;
+    const laid = layoutAssemblingShape(assembling.nodes, assembling.edges);
+    return {
+      id: "__assembling__",
+      name: "Building…",
+      version: "0",
+      nodes: laid.map((n) => ({ ...n, proposed: true })),
+      edges: assembling.edges.map((e) => ({ ...e, proposed: true })),
+    };
+  }, [assembling]);
+  const assemblingOrder = useMemo(() => (assemblingGraph ? assemblingGraph.nodes.map((n) => n.id) : []), [assemblingGraph]);
+  const [assemblingRevealCount, setAssemblingRevealCount] = useState(0);
+  useEffect(() => {
+    // Same staged reveal as the proposal path: surface the shape one node at a time so it visibly builds.
+    if (!assembling || assemblingOrder.length <= 1) { setAssemblingRevealCount(assemblingOrder.length); return; }
+    setAssemblingRevealCount(0);
+    let count = 0;
+    let timer = window.setTimeout(function tick() {
+      count += 1;
+      setAssemblingRevealCount(count);
+      if (count < assemblingOrder.length) timer = window.setTimeout(tick, 220);
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [assembling, assemblingOrder.length]);
+  // Drop the preview the moment the real built pipeline is on the canvas — a graph whose id matches the
+  // session's re-pointed graphId AND differs from whatever was focused when we started assembling (so a
+  // rebuild on the already-active pipeline can't clear it before the new work lands). Swaps with no flash.
+  useEffect(() => {
+    if (assembling && graph && operatorSession?.graphId
+      && graph.id === operatorSession.graphId && graph.id !== assembling.baseGraphId) {
+      setAssembling(null);
+    }
+  }, [assembling, graph, operatorSession?.graphId]);
+  // Safety: never let a preview stick if the build errors out without ever landing a matching graph.
+  useEffect(() => {
+    if (!assembling) return;
+    const t = window.setTimeout(() => setAssembling(null), 25000);
+    return () => window.clearTimeout(t);
+  }, [assembling]);
+
   const displayGraph = proposalActive && pendingProposal
     ? pendingProposal.preview
-    : (stagedGhostGraph ?? graph);
+    : (assemblingGraph ?? stagedGhostGraph ?? graph);
 
   // Stage a proposal onto the canvas as ghosts. THIS is the composer/Claude hook: when Claude proposes a
   // graph edit, it calls this with the new nodes/edges and the founder resolves them in place.
@@ -2108,6 +2190,8 @@ export default function App() {
   }, [stageGhostProposal]);
 
   const proposedNodeIds = useMemo(() => {
+    // The assembling preview is entirely proposed — every node draws translucent while it builds in.
+    if (assemblingGraph) return new Set(assemblingGraph.nodes.map((node) => node.id));
     if (proposalActive && pendingProposal && graph) {
       const current = new Set(graph.nodes.map((node) => node.id));
       return new Set(pendingProposal.preview.nodes.filter((node) => !current.has(node.id)).map((node) => node.id));
@@ -2116,15 +2200,16 @@ export default function App() {
     // accept/reject rides the module store, not this all-or-nothing operator path.
     if (ghostsLive && stagedGhosts) return new Set(stagedGhosts.nodes.map((node) => node.id));
     return undefined;
-  }, [proposalActive, pendingProposal, graph, ghostsLive, stagedGhosts]);
+  }, [assemblingGraph, proposalActive, pendingProposal, graph, ghostsLive, stagedGhosts]);
   const proposedEdgeIds = useMemo(() => {
+    if (assemblingGraph) return new Set(assemblingGraph.edges.map((edge) => edge.id));
     if (proposalActive && pendingProposal && graph) {
       const current = new Set(graph.edges.map((edge) => edge.id));
       return new Set(pendingProposal.preview.edges.filter((edge) => !current.has(edge.id)).map((edge) => edge.id));
     }
     if (ghostsLive && stagedGhosts) return new Set(stagedGhosts.edges.map((edge) => edge.id));
     return undefined;
-  }, [proposalActive, pendingProposal, graph, ghostsLive, stagedGhosts]);
+  }, [assemblingGraph, proposalActive, pendingProposal, graph, ghostsLive, stagedGhosts]);
 
   // Staged reveal: the operator hands back a whole proposal at once, but the founder shouldn't see it
   // pop in fully formed — the new ghost nodes surface one at a time so the workflow visibly builds onto
@@ -2156,11 +2241,15 @@ export default function App() {
   // The surfaced ghosts. Undefined once everything's in (or when no proposal is staging), so GraphCanvas
   // holds nothing back and the canvas reads normally.
   const revealedNodeIds = useMemo(() => {
-    if (!proposalActive || proposalRevealOrder.length === 0 || revealCount >= proposalRevealOrder.length) {
-      return undefined;
+    if (proposalActive && proposalRevealOrder.length > 0 && revealCount < proposalRevealOrder.length) {
+      return new Set(proposalRevealOrder.slice(0, revealCount));
     }
-    return new Set(proposalRevealOrder.slice(0, revealCount));
-  }, [proposalActive, proposalRevealOrder, revealCount]);
+    // The assembling preview reveals on the same staged cadence — hold back the not-yet-surfaced nodes.
+    if (assemblingOrder.length > 0 && assemblingRevealCount < assemblingOrder.length) {
+      return new Set(assemblingOrder.slice(0, assemblingRevealCount));
+    }
+    return undefined;
+  }, [proposalActive, proposalRevealOrder, revealCount, assemblingOrder, assemblingRevealCount]);
 
   const handleResolveProposal = useCallback(async (accept: boolean, note?: string) => {
     if (!operatorSession) return;
@@ -2182,8 +2271,11 @@ export default function App() {
   // The founder picks one of the candidate pipeline shapes an ambiguous goal produced. The pick is the
   // founder act — it resumes the operator to build that one shape through compose_and_run, still
   // stopping at the founder gate. Nothing ran until this call.
-  const resolveCandidatesAndSync = useCallback(async (pick: string) => {
+  const resolveCandidatesAndSync = useCallback(async (pick: string, shape?: { nodes: GTMNode[]; edges: GTMEdge[] }) => {
     if (!operatorSession) return;
+    // The picked shape is already in hand — draw it onto the canvas now so the founder watches it assemble
+    // through the build, instead of a spinner. Cleared when the real built graph lands (or on error).
+    if (shape && shape.nodes.length) setAssembling({ nodes: shape.nodes, edges: shape.edges ?? [], key: pick, baseGraphId: graph?.id ?? null });
     try {
       // The build runs on the SAME authorized path (resolveOperatorCandidates → compose_and_run →
       // executeGraphRun, pausing at the founder gate — nothing sends). What WI-C changes is only where
@@ -2199,9 +2291,24 @@ export default function App() {
       operatorRunId.current = null;
       syncOperator(built);
     } catch (error) {
+      setAssembling(null); // the build failed — drop the preview rather than leave it hanging
       setGraphError(error instanceof Error ? error.message : String(error));
     }
-  }, [operatorSession, syncOperator, refreshRoster]);
+  }, [operatorSession, syncOperator, refreshRoster, graph]);
+
+  // Redirect mid-run from the cold-start watch surface: nudge the crew's course without stopping and
+  // starting over. Routes through the steer path (never a resume, never a release — nothing crosses the
+  // wall); the session syncs and the crew adjusts on its next turn.
+  const handleDriveSteer = useCallback(async (note: string) => {
+    const s = operatorSession;
+    if (!s) return;
+    try {
+      const response = await steerOperatorSession(s.id, operatorProjectId(s), note);
+      syncOperator(response.session);
+    } catch (error) {
+      setGraphError(error instanceof Error ? error.message : String(error));
+    }
+  }, [operatorSession, syncOperator]);
 
   // The live operator presence: Claude's cursor travels the canvas as it stages each node (camera
   // following), then rests on the lead ghost where the ✓/✕/note sits. Once the pipeline is composed
@@ -2712,6 +2819,7 @@ export default function App() {
               productName={activeProject?.name ?? "your product"}
               onResume={() => void handleComposerSend("Continue.")}
               onStartOver={() => void handleOperatorCancel()}
+              onSteer={(note) => handleDriveSteer(note)}
             />
           ) : (canvasGraph || (activeProjectId && channels.length > 0)) ? (
             // A product with real work to show — a graph to watch assemble, or built pipelines — SHOWS THE
@@ -2733,6 +2841,7 @@ export default function App() {
               productName={activeProject?.name ?? "your product"}
               onResume={() => void handleComposerSend("Continue.")}
               onStartOver={() => void handleOperatorCancel()}
+              onSteer={(note) => handleDriveSteer(note)}
             />
           ) : (booting || projectBusy) ? (
             // Still resolving the workspace (initial boot, or switching products) — a calm loading
@@ -3007,7 +3116,7 @@ export default function App() {
           isNavCommand={isCanvasCommand}
           onSend={handleComposerSend}
           briefing={composerBriefing}
-          onBuildCandidate={(c) => void resolveCandidatesAndSync(c.id)}
+          onBuildCandidate={(c) => void resolveCandidatesAndSync(c.id, { nodes: c.nodes, edges: c.edges })}
           onCancel={handleOperatorCancel}
           onReviewGate={(nodeId) => selectInGraph(nodeId, operatorSession?.graphId ?? null)}
           // The gate, brought INTO the chat: "Review & send" opens the real GateReview in-thread, and these
