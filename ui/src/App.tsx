@@ -53,6 +53,7 @@ import {
   promoteChannel,
   revokeChannel,
   getPendingInbox,
+  getFailureLog,
   getOperatingView,
   getMotionEfficiency,
   getReallocation,
@@ -329,9 +330,15 @@ export default function App() {
   // The Issues panel — the system's problem list, now a first-class always-present indicator on the
   // dock (no longer a summoned card). Opens from its toolbar badge, mutually exclusive with Approvals.
   const [issuesOpen, setIssuesOpen] = useState(false);
-  // The self-observed failure log panel (Drover watching its own runs). Hidden by default; the SURFACE
-  // builder wires the real open affordance. Scaffold state so the mount below compiles and renders.
+  // The self-observed failure log panel (Drover watching its own runs). Opened from a small on-canvas chip
+  // that appears ONLY when a self-observed failure exists (so a clean machine shows nothing — no noise on
+  // an empty canvas). Mutually exclusive with Issues and Decisions: at most one right-rail panel is open.
   const [failureLogOpen, setFailureLogOpen] = useState(false);
+  // How many distinct self-inflicted failures Drover has logged watching itself — the chip's count. A
+  // lightweight cross-run poll (a badge, not a live thread), like the pending-decision poll below. Zero
+  // keeps the chip hidden entirely. Transient failures don't drive the chip — the founder shouldn't be
+  // nudged to "fix" a usage limit or a network blip; those still live one tap away behind the panel filter.
+  const [failuresToFix, setFailuresToFix] = useState(0);
   // The pending-decision inbox — everything waiting on the founder across EVERY product and pipeline,
   // polled cross-project (independent of the focused session) so a run reaching the gate or dying in a
   // pipeline you're not looking at still bumps the dock badge. The panel is toggled from that badge and
@@ -1195,6 +1202,23 @@ export default function App() {
   }, [refreshPendingInbox]);
   const pendingCount = pendingInbox?.total ?? 0;
   const pendingDecisions = pendingInbox?.decisions ?? [];
+
+  // Self-observed failure poll — reads how many distinct self-inflicted failures Drover has logged
+  // watching its own runs, so the on-canvas chip can appear the moment one lands and disappear when the
+  // queue is clean. Read-only and best-effort (a failed read keeps the last count); slow cadence, since
+  // this is a badge, not a live thread. Pure observation — reading the log never triggers or changes a run.
+  useEffect(() => {
+    let live = true;
+    const tick = async () => {
+      try {
+        const log = await getFailureLog();
+        if (live) setFailuresToFix(log.selfInflictedCount ?? 0);
+      } catch { /* keep the last known count; the next tick may recover */ }
+    };
+    void tick();
+    const timer = window.setInterval(() => void tick(), 8000);
+    return () => { live = false; window.clearInterval(timer); };
+  }, []);
 
   // The operating view — the ONE Operator lens read (Area 6). A pure cross-fleet projection the lens
   // renders: every motion as a uniform lane, the shared objects drawn once with lane ties, the parked-
@@ -3011,11 +3035,11 @@ export default function App() {
               onOpenSettings={() => { setOverlay("settings"); setProblemsOpen(false); setIssuesOpen(false); }}
               problems={issueCount}
               issuesOpen={issuesOpen}
-              onToggleIssues={() => { setIssuesOpen((v) => !v); setDecisionsOpen(false); setProblemsOpen(false); }}
+              onToggleIssues={() => { setIssuesOpen((v) => !v); setDecisionsOpen(false); setProblemsOpen(false); setFailureLogOpen(false); }}
               pendingDecisions={pendingCount}
               decisionsOpen={decisionsOpen}
-              onToggleDecisions={() => { setDecisionsOpen((v) => { const next = !v; if (next) { void refreshPendingInbox(); void refreshReallocation(); } return next; }); setIssuesOpen(false); setProblemsOpen(false); }}
-              onCloseMenus={() => { setProblemsOpen(false); setIssuesOpen(false); setDecisionsOpen(false); }}
+              onToggleDecisions={() => { setDecisionsOpen((v) => { const next = !v; if (next) { void refreshPendingInbox(); void refreshReallocation(); } return next; }); setIssuesOpen(false); setProblemsOpen(false); setFailureLogOpen(false); }}
+              onCloseMenus={() => { setProblemsOpen(false); setIssuesOpen(false); setDecisionsOpen(false); setFailureLogOpen(false); }}
               graph={graph}
               running={graphRunning}
               runningNodeId={runningNodeId}
@@ -3499,10 +3523,21 @@ export default function App() {
       </div>
 
       {/* ── Self-observed failure log — Drover watching its OWN runs ──
-          SCAFFOLD MOUNT (lane: SURFACE). The panel is mounted so its import is exercised and it renders
-          without error; the SURFACE builder wires the real toggle/placement (a dock button, a right-rail
-          aside — its call) and the final design. Gated to the canvas view and hidden by default so this
-          placeholder never disturbs the live layout. */}
+          A small on-canvas chip appears bottom-left ONLY when Drover has logged a self-inflicted failure
+          watching itself (a clean machine shows nothing — the empty canvas stays empty). Tapping it opens
+          the right-rail panel, mutually exclusive with Issues and Decisions. The panel itself renders the
+          grouped, split, newest-first failure list. Pure observation — nothing here runs, sends, or gates. */}
+      {view === "canvas" && failuresToFix > 0 && !failureLogOpen ? (
+        <button
+          type="button"
+          className="flog-chip"
+          onClick={() => { setFailureLogOpen(true); setIssuesOpen(false); setDecisionsOpen(false); setProblemsOpen(false); }}
+          aria-label={`${failuresToFix} self-observed ${failuresToFix === 1 ? "failure" : "failures"} to fix`}
+        >
+          <AlertTriangle size={13} />
+          <span className="flog-chip-label">Drover saw {failuresToFix === 1 ? "a failure" : `${failuresToFix} failures`}</span>
+        </button>
+      ) : null}
       {view === "canvas" && failureLogOpen ? (
         <FailureLogPanel onClose={() => setFailureLogOpen(false)} />
       ) : null}
