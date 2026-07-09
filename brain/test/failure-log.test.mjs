@@ -114,15 +114,55 @@ describe("classifyErrorKind — raw error/meta → token", () => {
     assert.equal(classifyErrorKind(new Error("socket hang up")), "network");
     assert.equal(classifyErrorKind(new Error("boom in the drafter")), "code_throw");
   });
+
+  // A provider overload / 5xx is the most common REAL transient model failure. It must be recognized as a
+  // model_error (transient), never fall through to code_throw and get filed as a self-inflicted bug.
+  it("an Anthropic overload / 5xx model error → 'model_error', not 'code_throw'", () => {
+    assert.equal(classifyErrorKind("Overloaded"), "model_error", "an Anthropic 529 overload is transient, not a bug");
+    assert.equal(classifyErrorKind("API error: 500 Internal server error"), "model_error");
+    assert.equal(classifyErrorKind("503 Service Unavailable"), "model_error");
+    assert.equal(classifyErrorKind("Too Many Requests"), "model_error");
+  });
+
+  it("classifyAgentError's generic kind:'error' bucket maps to model_error (a provider error, not our code)", () => {
+    assert.equal(classifyErrorKind("Overloaded", { errorKind: "error" }), "model_error");
+    // Even an unrecognized generic provider-error message stays model_error, never code_throw — the SDK is
+    // not our code, so an is_error result we could not name is treated as a provider-side model error.
+    assert.equal(classifyErrorKind("some provider hiccup", { errorKind: "error" }), "model_error");
+    // But a real transient token inside a generic error is pulled out to its precise kind.
+    assert.equal(classifyErrorKind("rate limit reached", { errorKind: "error" }), "limit");
+    assert.equal(classifyErrorKind("fetch failed", { errorKind: "error" }), "network");
+  });
+
+  it("a structured model_error / network errorKind is honored straight", () => {
+    assert.equal(classifyErrorKind("anything", { errorKind: "model_error" }), "model_error");
+    assert.equal(classifyErrorKind("anything", { errorKind: "network" }), "network");
+  });
+
+  it("the bad-output OBSERVATION signal (meta.badOutput) classifies without any errorKind flip", () => {
+    assert.equal(classifyErrorKind("", { badOutput: "empty_output" }), "empty_output");
+    assert.equal(classifyErrorKind("", { badOutput: "unparseable_output" }), "unparseable_output");
+  });
+
+  // A genuine JS exception must STILL be a code_throw — the model_error carve-out must not swallow real bugs.
+  it("a genuine JS exception is still code_throw (the model_error branch never swallows a real bug)", () => {
+    assert.equal(classifyErrorKind("Cannot read properties of undefined (reading 'name')"), "code_throw");
+    assert.equal(classifyErrorKind("x is not a function"), "code_throw");
+  });
 });
 
 // ─── classifyFault — the self-inflicted vs transient split (HARD REQ #2) ─────────
 
 describe("classifyFault — self_inflicted vs transient", () => {
   it("transient kinds map to transient", () => {
-    for (const kind of ["max_turns", "max_budget", "limit", "timeout", "network"]) {
+    for (const kind of ["max_turns", "max_budget", "limit", "timeout", "network", "model_error"]) {
       assert.equal(classifyFault(kind, "node-error"), "transient", `${kind} is a retry-clears-it failure`);
     }
+  });
+
+  it("a provider overload (model_error) is transient — a wait-it-out outage, never a self-inflicted bug", () => {
+    assert.equal(classifyFault("model_error", "node-error"), "transient");
+    assert.equal(classifyFault("model_error", "run-crash"), "transient", "an overload mid-drive is a limit to wait out");
   });
 
   it("real bugs map to self_inflicted", () => {

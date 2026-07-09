@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { buildAgentPrompt, createProviderAgentInvoker, loadAgentDefinition, loadSkillGuidance, parseAgentItems, parseAgentReasoning, parseDeclaredTools, resolveAgentTools, DEFAULT_AGENT_TOOLS } from "../src/agent-bridge.mjs";
+import { buildAgentPrompt, classifyAgentError, classifyEmptyItems, createClaudeAgentInvoker, createProviderAgentInvoker, loadAgentDefinition, loadSkillGuidance, parseAgentItems, parseAgentReasoning, parseDeclaredTools, resolveAgentTools, DEFAULT_AGENT_TOOLS } from "../src/agent-bridge.mjs";
 import { createStepRuntime } from "../src/step-runners.mjs";
 import { buildDesignState } from "../src/design-state-store.mjs";
 
@@ -284,5 +284,89 @@ describe("provider-aware agent invocation", () => {
     const unknown = await invoke({ config: { provider: "other" } });
     assert.equal(unknown.ok, false);
     assert.match(unknown.error, /Unknown agent provider/);
+  });
+});
+
+// classifyEmptyItems is the pure read the bad-output OBSERVATION rides on. It must draw the honest-empty
+// carve-out exactly: a parseable [] (or an object coercing to []) is a legitimate empty result (null — not
+// bad output), blank text is empty_output, and non-empty prose with nothing parseable is unparseable_output.
+describe("classifyEmptyItems — honest-empty vs unusable output (the bad-output observation read)", () => {
+  it("a parseable empty array is an honest empty result → null (never bad output)", () => {
+    assert.equal(classifyEmptyItems("[]"), null);
+    assert.equal(classifyEmptyItems("Here's what I found:\n```json\n[]\n```"), null);
+  });
+  it("blank / whitespace-only text → empty_output (the model said nothing)", () => {
+    assert.equal(classifyEmptyItems(""), "empty_output");
+    assert.equal(classifyEmptyItems("   \n  "), "empty_output");
+    assert.equal(classifyEmptyItems(null), "empty_output");
+  });
+  it("the honest-empty-in-PROSE case is flagged unparseable, and the INVOKER carve-out keeps it passing through", () => {
+    // classifyEmptyItems alone cannot tell honest-empty-prose from garbage, so it returns unparseable_output
+    // for "I could not find any operators." The regression the fix prevents lives at the INVOKER (below),
+    // which keeps ok:true/items:[] for exactly this text — this pins the shape the invoker relies on.
+    assert.equal(classifyEmptyItems("I could not find any operators."), "unparseable_output");
+  });
+  it("non-empty prose with nothing JSON-parseable → unparseable_output", () => {
+    assert.equal(classifyEmptyItems("total garbage, no json here"), "unparseable_output");
+  });
+});
+
+// The Claude agent invoker is now injectable via runQuery. These tests drive the REAL invoker transform and
+// pin the never-change-run-behavior guarantee: an empty result (honest or unusable) still returns
+// ok:true/items:[] — it never flips to ok:false and never halts the branch — while an unusable empty carries
+// a meta.badOutput observation the self-observation sink reads.
+describe("createClaudeAgentInvoker — bad output is pure observation, never a behavior change", () => {
+  const fakeQuery = (text) => async () => ({ text, error: null, toolCalls: [] });
+
+  it("a parseable [] keeps ok:true with items:[] and NO badOutput signal (honest empty)", async () => {
+    const invoke = createClaudeAgentInvoker({ runQuery: fakeQuery("```json\n[]\n```") });
+    const out = await invoke({ ref: "gtm-find" });
+    assert.equal(out.ok, true, "an honest empty result stays ok:true — the branch is never halted");
+    assert.deepEqual(out.items, []);
+    assert.equal(out.meta.badOutput, undefined, "a parseable [] is not bad output");
+  });
+
+  it("honest-empty-in-PROSE ('I could not find any operators.') still passes through as ok:true/items:[] (the finding #5 regression, now fixed)", async () => {
+    const invoke = createClaudeAgentInvoker({ runQuery: fakeQuery("I could not find any operators.") });
+    const out = await invoke({ ref: "gtm-find" });
+    assert.equal(out.ok, true, "a polite empty-in-prose result must NOT flip to ok:false and kill the branch");
+    assert.deepEqual(out.items, []);
+    // It IS observed as bad output (the invoker can't distinguish it from garbage) but ok:true is preserved,
+    // so control flow is unchanged — the observation is filed without touching the run.
+    assert.equal(out.meta.badOutput, "unparseable_output");
+  });
+
+  it("blank output → ok:true/items:[] with a meta.badOutput of empty_output (observed, not halted)", async () => {
+    const invoke = createClaudeAgentInvoker({ runQuery: fakeQuery("") });
+    const out = await invoke({ ref: "gtm-find" });
+    assert.equal(out.ok, true);
+    assert.deepEqual(out.items, []);
+    assert.equal(out.meta.badOutput, "empty_output");
+  });
+
+  it("real items keep ok:true and carry no badOutput signal", async () => {
+    const invoke = createClaudeAgentInvoker({ runQuery: fakeQuery('```json\n[{"name":"Ada"}]\n```') });
+    const out = await invoke({ ref: "gtm-find" });
+    assert.equal(out.ok, true);
+    assert.equal(out.items.length, 1);
+    assert.equal(out.meta.badOutput, undefined);
+  });
+
+  it("a quota/turn error from the query still returns ok:false with its errorKind (unchanged)", async () => {
+    const invoke = createClaudeAgentInvoker({
+      runQuery: async () => ({ text: "", error: { kind: "limit", retriable: true, message: "usage limit reached" }, toolCalls: [] }),
+    });
+    const out = await invoke({ ref: "gtm-find" });
+    assert.equal(out.ok, false, "a real quota error is still a failure — this path is unchanged");
+    assert.equal(out.meta.errorKind, "limit");
+  });
+});
+
+// classifyAgentError's generic is_error bucket must stay kind:"error" (the retriable-unknown model error),
+// which the self-observation sink maps to a transient model error — never a self-inflicted JS bug.
+describe("classifyAgentError — a generic provider error stays the retriable-unknown 'error' kind", () => {
+  it("an is_error result with no known token is kind:'error' (the sink treats it as a transient model error)", () => {
+    const c = classifyAgentError({ result: "Overloaded", is_error: true });
+    assert.equal(c.kind, "error");
   });
 });

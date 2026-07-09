@@ -30,7 +30,8 @@ import { composeIdeas, createClaudeAngleProposer, createClaudeIdeaGenerator } fr
 import { createClaudeIdeaBar } from "./idea-bar.mjs";
 import { attachBuildWiring, createGtmIdea, getGtmIdea, listGtmIdeas, saveGtmIdea } from "./idea-store.mjs";
 import { compareChannelRuns } from "./run-compare.mjs";
-import { safeLogFailure } from "./failure-log.mjs";
+import { makeFailureSink } from "./failure-log.mjs";
+import { resolveGitShaAsync } from "./friction.mjs";
 import {
   addEvent,
   compactProduct,
@@ -238,6 +239,23 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
         }
       }
     : null;
+  // Resolve the repo's git sha ONCE, off the run's node loop, and thread it into the failure sink so
+  // reportFriction never shells out to git synchronously inside a node failure. A test that pins
+  // options.gitSha (isolated queue) keeps that value and never resolves. Best-effort — a resolve failure
+  // yields null (honest absence), never a throw.
+  let failureGitSha;
+  if ("gitSha" in options) {
+    failureGitSha = options.gitSha;
+  } else {
+    try { failureGitSha = await resolveGitShaAsync(); } catch { failureGitSha = null; }
+  }
+  const onFailure = makeFailureSink({
+    graphId: flow.graph?.id ?? null,
+    graphLabel: session.goal ?? null,
+    session,
+    gitSha: failureGitSha,
+    options,
+  });
   const result = await runGraph(flow.graph, {
     targetNodeId,
     memory: memoryFor(flow.runs, options, session.projectId),
@@ -269,26 +287,11 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
     projectId: session.projectId || "default",
     credentialOptions: options,
     onEvent,
-    // Self-observation sink: a genuinely failed node is filed into the dogfood queue. This is where the
-    // graph id, project, and session are all in scope. A bad-output failure (the model returned
-    // unusable/empty content — the agent bridge sets ok:false with an unparseable/empty errorKind) is
-    // tagged "bad-output"; every other node/step failure is "node-error". Never-throws and never branches
-    // the run — safeLogFailure swallows everything, and graph.mjs already wraps the call in its own catch.
-    onFailure: (node, result, graphId) => {
-      const errorKind = result?.meta?.errorKind ?? null;
-      const category = (errorKind === "unparseable_output" || errorKind === "empty_output")
-        ? "bad-output"
-        : "node-error";
-      safeLogFailure({
-        category,
-        node,
-        result,
-        errorKind,
-        graphId: graphId ?? flow.graph?.id ?? null,
-        graphLabel: session.goal ?? null,
-        session,
-      }, options);
-    },
+    // Self-observation sink: a genuinely failed node — or one whose model output was unusable — is filed
+    // into the dogfood queue. The SAME closure is used on the gate-resume run (resolveOperatorGate), so both
+    // run legs log identically. Pure observation: it never branches or slows the run (safeLogFailure swallows
+    // everything, graph.mjs wraps the call, and the git sha is pre-resolved off the hot path).
+    onFailure,
   });
   if (stream) session = live;
   // Ground the drafts the founder is about to review: attach evidence_lines to any item whose claim

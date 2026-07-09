@@ -40,7 +40,8 @@ import {
 } from "./operator-run-core.mjs";
 import { recallPriorSessions, systemPrompt } from "./operator-prompt.mjs";
 import { executeTool } from "./operator-tool-exec.mjs";
-import { safeLogFailure } from "./failure-log.mjs";
+import { safeLogFailure, makeFailureSink } from "./failure-log.mjs";
+import { resolveGitShaAsync } from "./friction.mjs";
 
 const activeSessions = new Map();
 
@@ -228,8 +229,18 @@ export async function runOperatorSession(id, runtime = {}) {
     const message = error instanceof Error ? error.message : String(error);
     // Self-observation: an uncaught crash in the drive loop is filed into the dogfood queue so the team
     // sees what to fix. Best-effort and never-throws — the session's failed status below is unchanged
-    // whether logging succeeds or not.
-    safeLogFailure({ category: "run-crash", error, session: getOperatorSession(id, options) }, options);
+    // whether logging succeeds or not. Git sha resolved off-thread (non-blocking) so the crash handler
+    // never spawns a synchronous git; a test that pins options.gitSha keeps that value.
+    let crashGitSha;
+    if ("gitSha" in options) {
+      crashGitSha = options.gitSha;
+    } else {
+      try { crashGitSha = await resolveGitShaAsync(); } catch { crashGitSha = null; }
+    }
+    safeLogFailure(
+      { category: "run-crash", error, session: getOperatorSession(id, options) },
+      crashGitSha !== undefined ? { ...options, gitSha: crashGitSha } : options,
+    );
     return addEvent({
       ...getOperatorSession(id, options),
       status: "failed",
@@ -271,10 +282,8 @@ export function launchOperatorSession(id, runtime = {}) {
       const current = getOperatorSession(id, options);
       if (operatorSessionStalled(current, Date.now())) {
         clearInterval(watchdog);
-        // Self-observation: a stalled drive the watchdog kills is filed into the dogfood queue. Inside the
-        // watchdog's own try/catch (a fourth backstop) and itself never-throws — it never affects the
-        // failed session status the watchdog sets below.
-        safeLogFailure({ category: "run-stall", session: current, error: "The run stalled and was ended by the watchdog." }, options);
+        // End the stalled session honestly FIRST so the founder is never left waiting — the observation log
+        // is best-effort and must never delay this.
         addEvent({
           ...current,
           status: "failed",
@@ -285,6 +294,19 @@ export function launchOperatorSession(id, runtime = {}) {
           detail: "No progress for several minutes; ended so you are not stuck waiting.",
         }, options);
         activeSessions.delete(id);
+        // Self-observation: a stalled drive the watchdog kills is filed into the dogfood queue. The git sha
+        // resolves off-thread (non-blocking) so the watchdog never spawns a synchronous git; safeLogFailure
+        // never-throws, so a logging failure can never affect the failed status set above. A test that pins
+        // options.gitSha keeps that value.
+        const logStall = (gitSha) => safeLogFailure(
+          { category: "run-stall", session: current, error: "The run stalled and was ended by the watchdog." },
+          gitSha !== undefined ? { ...options, gitSha } : options,
+        );
+        if ("gitSha" in options) {
+          logStall(options.gitSha);
+        } else {
+          resolveGitShaAsync().then(logStall).catch(() => logStall(null));
+        }
       }
     } catch {
       // Session gone or a transient store read — the finally cleanup below is the backstop.
@@ -511,8 +533,26 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
   const deployAuthorization = payload.deployConfirmed === true
     ? { confirmed: true, releasedBy: releasedBy.userId ?? null, userId: releasedBy.userId ?? null, name: releasedBy.name ?? null }
     : null;
+  // Self-observation on the gate-RESUME run — the most consequential leg, where approved items flow into
+  // execute/send/deploy connectors and re-drafted descendants run again. Without this the gate-resume run
+  // silently dropped every node-error and bad-output failure (it fell back to runGraph's no-op onFailure).
+  // The SAME shared sink the first run leg uses, so both log identically. Git sha resolved off the hot path.
+  let gateFailureGitSha;
+  if ("gitSha" in options) {
+    gateFailureGitSha = options.gitSha;
+  } else {
+    try { gateFailureGitSha = await resolveGitShaAsync(); } catch { gateFailureGitSha = null; }
+  }
+  const onFailure = makeFailureSink({
+    graphId: flow.graph?.id ?? null,
+    graphLabel: session.goal ?? null,
+    session,
+    gitSha: gateFailureGitSha,
+    options,
+  });
   const result = await runGraph(flow.graph, {
     approvals: payload.approvals && typeof payload.approvals === "object" ? payload.approvals : {},
+    onFailure,
     decisions: payload.decisions && typeof payload.decisions === "object" ? payload.decisions : {},
     memory: memoryFor(flow.runs, options, session.projectId),
     designState: designStateFor(session, options),

@@ -12,7 +12,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { execSync } from "node:child_process";
+import { execSync, execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -28,6 +28,29 @@ function readGitSha() {
   } catch {
     return null; // honest absence — never a fake value
   }
+}
+
+// Resolve the repo's git sha WITHOUT blocking the event loop, and cache it process-wide. The self-observing
+// failure sink runs synchronously inside the run's node loop; letting reportFriction fall to the synchronous
+// readGitSha (execSync spawns git and stalls the whole loop, 5-50ms and spiking to seconds under lock
+// contention) would add latency to the run and every concurrent session on each first-occurrence failure.
+// So the sink resolves the sha ONCE off the hot path via this async reader and threads it into options, and
+// reportFriction's `"gitSha" in options` skip then fires — no execSync on the run path. The first call
+// spawns `git rev-parse` non-blocking and memoizes the promise; every later call awaits the same resolved
+// value. A failure resolves to null (honest absence), never a fake sha.
+let gitShaPromise = null;
+export function resolveGitShaAsync() {
+  if (gitShaPromise) return gitShaPromise;
+  gitShaPromise = new Promise((resolve) => {
+    try {
+      execFile("git", ["rev-parse", "HEAD"], { cwd: REPO_ROOT }, (err, stdout) => {
+        resolve(err ? null : String(stdout).trim() || null);
+      });
+    } catch {
+      resolve(null);
+    }
+  });
+  return gitShaPromise;
 }
 
 export function slugify(text) {
@@ -125,6 +148,53 @@ export function updateFrictionItem(file, { fields = {}, appendSection } = {}) {
   }
   fs.writeFileSync(file, text);
   return { file };
+}
+
+// The dedup lookup the self-observing failure sink runs on the hot path — find the OPEN self-observed queue
+// entry whose signature matches, or null. It is deliberately LIGHTER than listFrictionQueue: it reads only
+// each file's frontmatter block (a bounded head slice, not the whole body), skips every file that carries no
+// `signature:` line (manual friction — never a dedup target), and SHORT-CIRCUITS on the first match instead
+// of building a report object for every file. The cost stays proportional to the self-observed queue up to
+// the match, and it never parses item bodies. Returns { file, occurrences } or null.
+export function findOpenFailureBySignature(signature, options = {}) {
+  if (!signature) return null;
+  const queueDir = options.queueDir ?? DEFAULT_QUEUE_DIR;
+  let entries;
+  try {
+    entries = fs.readdirSync(queueDir).filter((f) => f.endsWith(".md")).sort();
+  } catch {
+    return null;
+  }
+  for (const name of entries) {
+    let head;
+    try {
+      // Read only the head of the file — the frontmatter block lives at the top, so a small slice is enough
+      // to read status/signature/occurrences without pulling the whole body into memory.
+      const fd = fs.openSync(path.join(queueDir, name), "r");
+      try {
+        const buf = Buffer.alloc(2048);
+        const bytes = fs.readSync(fd, buf, 0, buf.length, 0);
+        head = buf.toString("utf8", 0, bytes);
+      } finally {
+        fs.closeSync(fd);
+      }
+    } catch {
+      continue;
+    }
+    const m = head.match(/^---\n([\s\S]*?)\n---/);
+    if (!m) continue;
+    const front = m[1];
+    // Skip manual friction fast — no signature line means it can never be a dedup target.
+    const sigMatch = front.match(/^signature:\s*(.*)$/m);
+    if (!sigMatch || sigMatch[1].trim() !== signature) continue;
+    const statusMatch = front.match(/^status:\s*(.*)$/m);
+    const status = statusMatch ? statusMatch[1].trim() : "open";
+    if (status !== "open") continue;
+    const occMatch = front.match(/^occurrences:\s*(.*)$/m);
+    const occurrences = occMatch && Number.isFinite(Number(occMatch[1])) ? Number(occMatch[1]) : 1;
+    return { file: name, occurrences };
+  }
+  return null;
 }
 
 // List open reports — lets a routine (or the founder) see the queue without parsing files.

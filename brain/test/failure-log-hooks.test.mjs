@@ -22,8 +22,8 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { defaultGraphTemplate, runGraph } from "../src/graph.mjs";
 import { saveFlow } from "../src/flow-store.mjs";
-import { createOperatorSession, getOperatorSession } from "../src/operator-store.mjs";
-import { runOperatorSession, operatorSessionStalled } from "../src/operator-runtime.mjs";
+import { createOperatorSession, getOperatorSession, saveOperatorSession } from "../src/operator-store.mjs";
+import { runOperatorSession, operatorSessionStalled, resolveOperatorGate } from "../src/operator-runtime.mjs";
 import { safeLogFailure } from "../src/failure-log.mjs";
 import { listFrictionQueue, reportFriction } from "../src/friction.mjs";
 import { buildFailureLogView } from "../src/routes/system.mjs";
@@ -111,13 +111,17 @@ describe("self-observing failure capture — the four paths, dedup, split, never
     };
   }
 
-  // The onFailure the host injects (verbatim shape from operator-tool-exec.mjs): route bad-output vs
-  // node-error by result.meta.errorKind, then hand to safeLogFailure with the run's options.
+  // The onFailure the host injects, mirroring makeFailureSink's routing: a result whose model output was
+  // unusable (meta.badOutput OR a directly-supplied unparseable/empty errorKind) is "bad-output"; every
+  // other genuine failure is "node-error". Then hand to safeLogFailure with the run's options.
   function hostOnFailure(graphLabel = "Outbound pipeline") {
     return (node, result, graphId) => {
+      const badOutput = result?.meta?.badOutput ?? null;
       const errorKind = result?.meta?.errorKind ?? null;
-      const category = (errorKind === "unparseable_output" || errorKind === "empty_output") ? "bad-output" : "node-error";
-      safeLogFailure({ category, node, result, errorKind, graphId, graphLabel, session: { id: "sess-hooks" } }, options);
+      const category = (badOutput === "unparseable_output" || badOutput === "empty_output"
+        || errorKind === "unparseable_output" || errorKind === "empty_output")
+        ? "bad-output" : "node-error";
+      safeLogFailure({ category, node, result, graphId, graphLabel, session: { id: "sess-hooks" } }, options);
     };
   }
 
@@ -296,6 +300,90 @@ describe("self-observing failure capture — the four paths, dedup, split, never
     });
     assert.equal(failed.status, "failed", "the session still fails honestly");
     assert.match(failed.error, /crash while the log is poisoned/);
+  });
+
+  // ── (c/d) GATE-RESUME run — the most consequential leg logs failures too (finding #1) ───────────
+  // The post-approval continuation (resolveOperatorGate) runs downstream execute/send/deploy nodes and
+  // re-drafted descendants. Before the fix it omitted onFailure and silently dropped every node-error and
+  // bad-output failure on this leg. This drives a real gate-resume with a failing downstream node and
+  // asserts the failure reaches the queue.
+  it("(c) gate-resume: a downstream node that fails AFTER approval files a node-error entry (was silently dropped)", async () => {
+    // A graph that pends at a gate, then runs a downstream agent step that fails on the resume run.
+    const graph = {
+      id: "g-gate-resume",
+      name: "Gate resume pipeline",
+      version: "1",
+      nodes: [
+        { id: "ctx", category: "context", connector: "product", label: "Prepared", position: { x: 0, y: 0 }, config: { name: "Artifact" } },
+        { id: "gate", category: "gate", connector: "default", label: "Founder gate", position: { x: 200, y: 0 }, config: {} },
+        { id: "downstream", kind: "agent", ref: "drafter", category: "generate", label: "Re-draft downstream", position: { x: 400, y: 0 }, config: {} },
+      ],
+      edges: [
+        { id: "a", source: "ctx", target: "gate", edgeType: "data" },
+        { id: "b", source: "gate", target: "downstream", edgeType: "data" },
+      ],
+    };
+    saveFlow(graph, options);
+
+    // Seed a session paused at the gate with a real runResult carrying an approved item, so the resume run
+    // continues past the gate into the downstream node.
+    const session = createOperatorSession({ goal: "Ship the approved artifact.", graphId: graph.id }, options);
+    const pendingGate = {
+      runId: "run-resume",
+      nodeIds: ["gate"],
+      runResult: {
+        runId: "run-resume",
+        pendingGates: ["gate"],
+        nodes: {
+          gate: {
+            category: "gate",
+            items: [{ id: "staged-1", name: "Jane Doe", subject: "Quick question", approvalStatus: "pending" }],
+          },
+        },
+      },
+    };
+    saveOperatorSession({ ...getOperatorSession(session.id, options), status: "waiting_for_gate", pendingGate, lastRunId: "run-resume" }, options);
+
+    // Inject a stepRuntime whose downstream agent fails — a re-drafted descendant throwing on the resume run.
+    // A benign runtime keeps the post-resume drive from erroring (it launches only if no gate pends).
+    const stepRuntime = {
+      agent: async () => ({ ok: false, items: [], error: "the downstream re-draft threw on resume: cannot read properties of undefined" }),
+    };
+    const benignRuntime = { id: "cap", label: "Capture", isAvailable: () => ({ ok: true }), drive: async () => ({ kind: "completed", summary: "done" }) };
+
+    await resolveOperatorGate(session.id, { approvals: { gate: true } }, {
+      options: { ...options, stepRuntime },
+      runtime: benignRuntime,
+    });
+    // Let any async follow-up settle.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const logged = failures(queueDir);
+    assert.equal(logged.length, 1, "the gate-resume run's downstream failure IS filed — the hole is closed");
+    assert.equal(logged[0].category, "node-error");
+    assert.match(logged[0].errorSnippet, /downstream re-draft threw on resume/);
+  });
+
+  // ── (d) BAD OUTPUT as PURE OBSERVATION — ok:true carries meta.badOutput (finding #5) ───────────
+  // The invoker keeps ok:true/items:[] for an unusable-empty result so the branch is never halted; the sink
+  // still observes it via result.meta.badOutput. This drives runGraph with such a result and asserts BOTH:
+  // the run behaves as a success (ok:true) AND a bad-output entry is filed.
+  it("(d) bad-output observation: an ok:true result carrying meta.badOutput is observed WITHOUT halting the run", async () => {
+    const graph = nodeErrorGraph();
+    // The invoker's pure-observation shape: ok:true, empty items, a meta.badOutput signal.
+    const stepRuntime = {
+      agent: async () => ({ ok: true, items: [], meta: { badOutput: "unparseable_output" } }),
+    };
+    const result = await runGraph(graph, { stepRuntime, onFailure: hostOnFailure("Bad output pipeline") });
+
+    // Run behavior is UNCHANGED — the node stayed ok:true, the branch never halted.
+    assert.equal(result.nodes.draft.ok, true, "an unusable-empty result stays ok:true — pure observation never halts the run");
+
+    // But it WAS observed as bad output.
+    const logged = failures(queueDir);
+    assert.equal(logged.length, 1, "the bad-output signal is filed even though the node stayed ok:true");
+    assert.equal(logged[0].category, "bad-output");
+    assert.equal(logged[0].failureClass, "self_inflicted", "unusable model output is a real bug to fix");
   });
 
   // ── ANTI-CAGE holds (HARD REQ #5) ───────────────────────────────────────────────

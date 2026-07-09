@@ -682,7 +682,14 @@ export async function runGraph(graph, opts = {}) {
     // on input that never arrived), not a pending gate, not blind (measurement that can't attribute yet) —
     // is handed to the injected onFailure logger. This is the single aggregation point, so the four
     // scattered runNode catch blocks stay untouched. It never branches the run and can never throw into it.
-    if (result.ok === false && !result.blocked && !result.pendingReview && !result.blind) {
+    //
+    // A BAD-OUTPUT case (the model handed back unusable/empty content) is observed here TOO, even though the
+    // invoker keeps ok:true so an honest-empty result never halts the branch: result.meta.badOutput is a
+    // pure observation signal, read here without changing control flow. So path (d) is captured without the
+    // feature ever altering what the run does.
+    const isGenuineFailure = result.ok === false && !result.blocked && !result.pendingReview && !result.blind;
+    const isBadOutput = result.ok !== false && (result.meta?.badOutput === "unparseable_output" || result.meta?.badOutput === "empty_output");
+    if (isGenuineFailure || isBadOutput) {
       try { onFailure(node, result, graphId); } catch { /* observation never touches the run */ }
     }
 

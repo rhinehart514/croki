@@ -448,6 +448,26 @@ export function classifyAgentError(message) {
   return { kind: "error", retriable: false, message: raw.trim() || "The agent returned an error result." };
 }
 
+// Classify a raw THROWN error (the SDK/stream throwing mid-run, not an is_error result) so a provider
+// overload or a transient network blip that surfaces as an exception is normalized to a retriable kind
+// instead of propagating as a bare, unclassified throw that the self-observation sink files as a
+// self-inflicted code bug. A provider overload (Anthropic "Overloaded" / HTTP 529) or a 5xx is retriable;
+// so is a quota/limit or a network error. Anything else stays a plain error (kind:"error"), which the sink
+// still treats as a provider-side model error, never a JS bug — the SDK is not our code.
+function classifyThrownAgentError(err) {
+  const raw = err instanceof Error ? err.message : String(err ?? "");
+  if (/overloaded|\b5\d{2}\b|internal server error|service unavailable|too many requests|529/i.test(raw)) {
+    return { kind: "model_error", retriable: true, message: `The model provider is overloaded: ${raw.trim()}. This is a temporary outage, not a product failure — retry shortly.` };
+  }
+  if (/session limit|usage limit|rate limit|reset|quota/i.test(raw)) {
+    return { kind: "limit", retriable: true, message: `Model usage limit reached: ${raw.trim()}. Retry after it resets.` };
+  }
+  if (/ECONN|ENOTFOUND|fetch failed|socket|EAI_AGAIN|network/i.test(raw)) {
+    return { kind: "network", retriable: true, message: `A network error reached the model call: ${raw.trim()}. Retry shortly.` };
+  }
+  return { kind: "error", retriable: false, message: raw.trim() || "The model call threw an unexpected error." };
+}
+
 // ── Agent invoker (live, OAuth-first subscription) ───────────────────────────
 // Runs a focused, read-only subagent task headlessly on the founder's Claude Code
 // subscription. OAuth-first: the API key is stripped from the child env so the run bills
@@ -496,27 +516,36 @@ export async function runClaudeQuery({ prompt, cwd = process.cwd(), model, maxTu
     const bare = name.includes("__") ? name.slice(name.lastIndexOf("__") + 2) : null;
     if (bare) toolCalls.add(bare);
   };
-  for await (const message of stream) {
-    if (message.type === "stream_event") {
-      const ev = message.event;
-      if (ev?.type === "content_block_delta" && ev.delta?.type === "text_delta" && ev.delta.text && typeof onText === "function") {
-        try { onText(ev.delta.text); } catch { /* a consumer error never breaks the run */ }
+  // Guard the stream iteration: a provider overload or transient blip can THROW out of the async iterator
+  // rather than arriving as an is_error result. Catch it and classify it as a retriable model error, so a
+  // wait-it-out outage returns a tagged { error } like every other transient — never a bare unclassified
+  // throw that the self-observation sink would file as a self-inflicted code bug. A partial `text` gathered
+  // before the throw is still returned; the caller reads `error` first.
+  try {
+    for await (const message of stream) {
+      if (message.type === "stream_event") {
+        const ev = message.event;
+        if (ev?.type === "content_block_delta" && ev.delta?.type === "text_delta" && ev.delta.text && typeof onText === "function") {
+          try { onText(ev.delta.text); } catch { /* a consumer error never breaks the run */ }
+        }
+        if (ev?.type === "content_block_start" && ev.content_block?.type === "tool_use") {
+          recordToolName(ev.content_block.name);
+        }
+        continue;
       }
-      if (ev?.type === "content_block_start" && ev.content_block?.type === "tool_use") {
-        recordToolName(ev.content_block.name);
+      if (message.type === "assistant" && Array.isArray(message.message?.content)) {
+        for (const block of message.message.content) {
+          if (block?.type === "tool_use") recordToolName(block.name);
+        }
       }
-      continue;
-    }
-    if (message.type === "assistant" && Array.isArray(message.message?.content)) {
-      for (const block of message.message.content) {
-        if (block?.type === "tool_use") recordToolName(block.name);
+      if (message.type !== "result") continue;
+      if (typeof message.result === "string") text = message.result;
+      if (message.is_error || message.subtype === "error_max_turns" || message.subtype === "error_max_budget_usd") {
+        error = classifyAgentError(message);
       }
     }
-    if (message.type !== "result") continue;
-    if (typeof message.result === "string") text = message.result;
-    if (message.is_error || message.subtype === "error_max_turns" || message.subtype === "error_max_budget_usd") {
-      error = classifyAgentError(message);
-    }
+  } catch (thrown) {
+    error = classifyThrownAgentError(thrown);
   }
   return { text, error, toolCalls: [...toolCalls] };
 }
@@ -525,7 +554,9 @@ export async function runClaudeQuery({ prompt, cwd = process.cwd(), model, maxTu
 // research) routinely needs more than 12 turns and was hitting the cap — one of the real run
 // failures in the ledger. Cheap item-transform steps finish early regardless; ideation still
 // overrides higher. A step can always set config.maxTurns.
-export function createClaudeAgentInvoker({ cwd = process.cwd(), model, maxTurns = 20, onText } = {}) {
+// `runQuery` is injectable (defaults to the real read-only subscription call) so a fake subscription can be
+// supplied in tests — the same seam the microproduct + gate-translator invokers already expose.
+export function createClaudeAgentInvoker({ cwd = process.cwd(), model, maxTurns = 20, onText, runQuery = runClaudeQuery } = {}) {
   return async function invoke({ ref, prompt, items, context, config = {}, artifactPath }) {
     const built = buildAgentPrompt({ ref, prompt, items, context, artifactPath: artifactPath ?? config.artifactPath, agenticRetrieval: config.agenticRetrieval, agenticProviders: config.agenticProviders });
     // Agentic mode: expose the context tools as an in-process MCP server and permit their
@@ -534,7 +565,7 @@ export function createClaudeAgentInvoker({ cwd = process.cwd(), model, maxTurns 
     const allowedTools = mcpServers
       ? [...built.tools.allowed, ...built.retrievalTools.map((t) => `mcp__gtm_context__${t.name}`)]
       : built.tools.allowed;
-    const { text, error, toolCalls = [] } = await runClaudeQuery({
+    const { text, error, toolCalls = [] } = await runQuery({
       prompt: built.prompt,
       cwd,
       model: config.model || model,
@@ -552,21 +583,20 @@ export function createClaudeAgentInvoker({ cwd = process.cwd(), model, maxTurns 
       return { ok: false, items: [], reasoning, error: error.message, meta: { invoked: ref, contextManifest: built.manifest, errorKind: error.kind, retriable: error.retriable, ...toolMeta } };
     }
     const resultItems = parseAgentItems(text);
-    // Path (d) — bad model output. The call succeeded (no quota/turn error) but produced no usable items.
-    // Distinguish a genuine honest-empty result (the model returned a parseable [] — keep ok:true, items []
-    // is correct) from unusable output (blank text, or non-empty prose with nothing parseable). The latter
-    // is a real bug: fail the step loudly with an errorKind the self-observation sink tags as "bad-output",
-    // instead of masquerading as an empty success the way this path used to.
-    if (resultItems.length === 0) {
-      const badKind = classifyEmptyItems(text);
-      if (badKind) {
-        const reason = badKind === "empty_output"
-          ? "The agent returned no output at all — the model produced nothing to hand back."
-          : "The agent returned output that could not be read as result items — the model's reply was not usable.";
-        return { ok: false, items: [], reasoning, error: reason, meta: { invoked: ref, contextManifest: built.manifest, errorKind: badKind, retriable: false, ...toolMeta } };
-      }
-    }
-    return { ok: true, items: resultItems, reasoning, meta: { invoked: ref, contextManifest: built.manifest, ...toolMeta } };
+    // Path (d) — bad model output, captured as PURE OBSERVATION. This must NEVER change run behavior: a
+    // step that produced no usable items keeps returning ok:true with items:[] exactly as it did before
+    // this feature, so an honest-empty result ("I could not find any operators.") passes through the branch
+    // unchanged instead of halting it. When the empty came from output that was genuinely unusable (blank
+    // text, or non-empty prose with nothing parseable), we ATTACH a badOutput signal to meta — an
+    // observation the self-observation sink reads to file a "bad-output" entry — without flipping ok. The
+    // sink is isolated and never touches control flow, so this stays observation, not a behavior change.
+    const badOutput = resultItems.length === 0 ? classifyEmptyItems(text) : null;
+    return {
+      ok: true,
+      items: resultItems,
+      reasoning,
+      meta: { invoked: ref, contextManifest: built.manifest, ...(badOutput ? { badOutput } : {}), ...toolMeta },
+    };
   };
 }
 
@@ -737,19 +767,16 @@ export function createCodexAgentInvoker({ cwd = process.cwd(), model, binary = "
       };
     }
     const resultItems = parseAgentItems(text);
-    // Path (d) — bad model output on the codex path, mirroring the Claude invoker: a clean exit with no
-    // usable items is either an honest empty ([]) or unusable output. Only the latter fails the step with a
-    // bad-output errorKind the self-observation sink can tag.
-    if (resultItems.length === 0) {
-      const badKind = classifyEmptyItems(text);
-      if (badKind) {
-        const reason = badKind === "empty_output"
-          ? `Codex agent "${ref}" returned no output at all.`
-          : `Codex agent "${ref}" returned output that could not be read as result items.`;
-        return { ok: false, items: [], error: reason, meta: { provider: "codex", invoked: ref, contextManifest: built.manifest, errorKind: badKind, retriable: false } };
-      }
-    }
-    return { ok: true, items: resultItems, meta: { provider: "codex", invoked: ref, contextManifest: built.manifest } };
+    // Path (d) — bad model output on the codex path, mirroring the Claude invoker: PURE OBSERVATION, never a
+    // behavior change. A clean exit with no usable items keeps ok:true/items:[] (an honest empty passes
+    // through unchanged); when the empty came from genuinely unusable output we attach a badOutput signal to
+    // meta for the self-observation sink, without flipping ok.
+    const badOutput = resultItems.length === 0 ? classifyEmptyItems(text) : null;
+    return {
+      ok: true,
+      items: resultItems,
+      meta: { provider: "codex", invoked: ref, contextManifest: built.manifest, ...(badOutput ? { badOutput } : {}) },
+    };
   };
 }
 

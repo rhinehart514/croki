@@ -15,7 +15,7 @@
 // reimplements the markdown-file queue.
 
 import path from "node:path";
-import { reportFriction, updateFrictionItem, listFrictionQueue, slugify, DEFAULT_QUEUE_DIR } from "./friction.mjs";
+import { reportFriction, updateFrictionItem, findOpenFailureBySignature, resolveGitShaAsync, slugify, DEFAULT_QUEUE_DIR } from "./friction.mjs";
 
 // Resolve where this failure gets filed. An explicit options.queueDir always wins. Otherwise, when the
 // caller isolates its session to a store root (options.root — every operator unit test does this, and the
@@ -72,6 +72,11 @@ export function failureSignature({ category, errorKind, nodeKind, nodeLabel, gra
 const LIMIT_RE = /session limit|usage limit|rate limit|reset|quota/i;
 const TIMEOUT_RE = /timed out|timeout/i;
 const NETWORK_RE = /ECONN|ENOTFOUND|fetch failed|socket|EAI_AGAIN|network/i;
+// A provider-side model failure — the single most common real transient the classifier used to miss:
+// an Anthropic "Overloaded" (HTTP 529) or a 500/502/503 "Internal server error" / "Service unavailable"
+// carries NONE of the limit/timeout/network tokens above, so without this branch it fell through to
+// code_throw and was filed as a self-inflicted bug. These clear on a retry — wait it out, don't fix.
+const MODEL_ERROR_RE = /overloaded|\b5\d{2}\b|internal server error|service unavailable|server_error|api error|too many requests|529/i;
 
 // Map a raw failure to a normalized errorKind token. `meta` carries whatever structured signal the run
 // path already has (result.errorKind from classifyAgentError, result.timedOut from the node timeout). We
@@ -79,13 +84,31 @@ const NETWORK_RE = /ECONN|ENOTFOUND|fetch failed|socket|EAI_AGAIN|network/i;
 export function classifyErrorKind(rawError, meta = {}) {
   const message = typeof rawError === "string" ? rawError : (rawError?.message ?? String(rawError ?? ""));
 
-  // A bad-output path carries an explicit kind the caller computed (unparseable/empty output).
+  // A bad-output path carries an explicit signal the caller computed (unparseable/empty output). The
+  // invoker now attaches it as meta.badOutput (an observation that never flips the node's ok); the older
+  // meta.errorKind spelling is still honored so a directly-supplied result classifies the same way.
+  if (meta.badOutput === "unparseable_output" || meta.badOutput === "empty_output") return meta.badOutput;
   if (meta.errorKind === "unparseable_output" || meta.errorKind === "empty_output") return meta.errorKind;
 
-  // The agent bridge's own classification (classifyAgentError) rides on result.meta.errorKind.
+  // The agent bridge's own classification (classifyAgentError / classifyThrownAgentError) rides on
+  // result.meta.errorKind. These are already-named transients — honor them straight, never re-derive from
+  // text (a "model provider is overloaded" message could otherwise be re-matched, but the structured
+  // signal is authoritative).
   if (meta.errorKind === "max_turns") return "max_turns";
   if (meta.errorKind === "max_budget") return "max_budget";
   if (meta.errorKind === "limit") return "limit";
+  if (meta.errorKind === "network") return "network";
+  if (meta.errorKind === "model_error") return "model_error";
+  // classifyAgentError's generic, retriable-unknown bucket for an is_error SDK result (kind:"error"). The
+  // provider handed back an error we could not name from structure — most often a transient overload/5xx.
+  // Match the message to pull out a real transient (overload/5xx/limit/network); anything left is treated
+  // as a provider-side model error (transient), NOT a self-inflicted JS bug — the SDK is not our code.
+  if (meta.errorKind === "error") {
+    if (LIMIT_RE.test(message)) return "limit";
+    if (TIMEOUT_RE.test(message)) return "timeout";
+    if (NETWORK_RE.test(message)) return "network";
+    return "model_error";
+  }
 
   // A node that ran past its wall-clock ceiling.
   if (meta.timedOut === true) return "timeout";
@@ -96,16 +119,24 @@ export function classifyErrorKind(rawError, meta = {}) {
   if (/max_budget|cost budget/i.test(message)) return "max_budget";
   if (TIMEOUT_RE.test(message)) return "timeout";
   if (NETWORK_RE.test(message)) return "network";
+  // The specific self-inflicted spine failures — a missing connector, an unknown step kind, an unset
+  // required key. Matched BEFORE the broad provider-overload pattern so a precise "No connector …" bug is
+  // never swallowed as a generic model error.
   if (/No connector .* registered/i.test(message)) return "no_connector";
   if (/No step runtime for kind/i.test(message)) return "no_step_runtime";
   if (/requires .* Set it in your environment|requires [A-Z_]+\./i.test(message)) return "missing_env_key";
+  // A provider overload / 5xx that reached us as a bare thrown message (an SDK throw with no structured
+  // meta) — recognized so a wait-it-out model outage is never filed as a self-inflicted bug.
+  if (MODEL_ERROR_RE.test(message)) return "model_error";
 
   // A genuine thrown message that matches no transient pattern is a code throw — a real bug.
   return message.trim() ? "code_throw" : "unknown";
 }
 
 // The transient errorKind set — a retry/reset clears it. Everything else is self-inflicted (a real bug).
-const TRANSIENT_KINDS = new Set(["max_turns", "max_budget", "limit", "timeout", "network"]);
+// model_error (a provider overload / 5xx — Anthropic "Overloaded", an internal server error) is transient:
+// it is the provider's outage to wait out, never our code to fix.
+const TRANSIENT_KINDS = new Set(["max_turns", "max_budget", "limit", "timeout", "network", "model_error"]);
 
 // Map an errorKind + category to self_inflicted or transient. Pure, deterministic lookup with two
 // category overrides:
@@ -146,9 +177,21 @@ export function buildFailureContext(input = {}) {
   const { category, node = null, result = null, graphId = null, graphLabel = null, session = null, error = null } = input;
 
   // The raw failure text: the node result's error, or the crash/stall error, or an explicit output snippet.
-  const rawError = result?.error ?? (error instanceof Error ? error.message : (typeof error === "string" ? error : null));
+  // A pure-observation bad-output result keeps ok:true and carries no error string, so synthesize a plain
+  // one-line description from the badOutput signal — never the raw model text (which could carry a draft).
+  const badOutputText = result?.meta?.badOutput === "empty_output"
+    ? "The model returned no output at all — nothing to hand back."
+    : result?.meta?.badOutput === "unparseable_output"
+      ? "The model's reply could not be read as result items — the output was not usable."
+      : null;
+  const rawError = result?.error
+    ?? badOutputText
+    ?? (error instanceof Error ? error.message : (typeof error === "string" ? error : null));
   const meta = {
     errorKind: input.errorKind ?? result?.meta?.errorKind ?? null,
+    // The invoker's pure-observation bad-output signal (meta.badOutput) rides through so classifyErrorKind
+    // tags an unusable-output failure without ever needing the invoker to flip the node's ok flag.
+    badOutput: result?.meta?.badOutput ?? null,
     timedOut: result?.timedOut === true,
   };
   const errorKind = classifyErrorKind(rawError, meta);
@@ -209,13 +252,14 @@ export function logFailure(input = {}, rawOptions = {}) {
   const stamp = now.toISOString();
   const ctx = buildFailureContext(input);
 
-  const existing = listFrictionQueue(options).reports.find(
-    (r) => r.signature === ctx.signature && r.status === "open",
-  );
+  // Bounded, frontmatter-only dedup lookup — never the full-queue body scan. It reads only each file's head
+  // and short-circuits on the first open matching signature, so the sink's hot-path cost does not grow with
+  // the manual friction queue and does not parse item bodies.
+  const existing = findOpenFailureBySignature(ctx.signature, options);
 
   if (existing) {
-    // listFrictionQueue returns the basename; updateFrictionItem needs the full path. Resolve it against
-    // the same queue dir reportFriction wrote to.
+    // findOpenFailureBySignature returns the basename; updateFrictionItem needs the full path. Resolve it
+    // against the same queue dir reportFriction wrote to.
     const queueDir = options.queueDir ?? DEFAULT_QUEUE_DIR;
     const filePath = path.join(queueDir, existing.file);
     const occurrences = (Number.isFinite(existing.occurrences) ? existing.occurrences : 1) + 1;
@@ -272,4 +316,38 @@ export function safeLogFailure(input = {}, options = {}) {
   } catch {
     // Observation must never alter the run it observes. Swallow silently.
   }
+}
+
+// Route a node result's failure signal to a capture category. A node whose model output was genuinely
+// unusable (the invoker attached meta.badOutput, or a directly-supplied result carries an
+// unparseable/empty errorKind) is "bad-output"; every other genuine node failure is "node-error".
+function failureCategoryFor(result) {
+  const badOutput = result?.meta?.badOutput ?? null;
+  const errorKind = result?.meta?.errorKind ?? null;
+  if (badOutput === "unparseable_output" || badOutput === "empty_output") return "bad-output";
+  if (errorKind === "unparseable_output" || errorKind === "empty_output") return "bad-output";
+  return "node-error";
+}
+
+// The ONE runGraph onFailure closure both run sites share — the compose-and-run leg (executeGraphRun) AND
+// the gate-resume leg (resolveOperatorGate). Extracting it here keeps the two sites byte-identical, so a
+// failure on the gate-resume run (a send/deploy connector failing, a re-drafted descendant throwing, the
+// model returning unusable output there) is filed exactly like a failure on the first run — closing the
+// hole where the most consequential run, the one that crosses the wall, logged nothing.
+//
+// It is PURE OBSERVATION: safeLogFailure swallows everything and graph.mjs already wraps the call in its own
+// try/catch, so it can never branch or slow the run. The resolved git sha is threaded into options ONCE per
+// run (off the hot path) so reportFriction never shells out to git synchronously inside the node loop.
+export function makeFailureSink({ graphId = null, graphLabel = null, session = null, gitSha, options = {} } = {}) {
+  const sinkOptions = gitSha !== undefined ? { ...options, gitSha } : options;
+  return (node, result, runGraphId) => {
+    safeLogFailure({
+      category: failureCategoryFor(result),
+      node,
+      result,
+      graphId: runGraphId ?? graphId,
+      graphLabel,
+      session,
+    }, sinkOptions);
+  };
 }

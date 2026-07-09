@@ -59,6 +59,7 @@ const ERROR_KIND_LABEL: Record<string, string> = {
   missing_env_key: "missing key",
   timeout: "timed out",
   network: "network",
+  model_error: "model overloaded",
   limit: "usage limit",
   max_turns: "hit turn cap",
   max_budget: "hit cost cap",
@@ -92,7 +93,9 @@ function GroupRow({ group }: { group: FailureGroup }) {
           </>
         ) : null}
       </p>
-      {group.errorSnippet ? <p className="flog-row-snippet">{group.errorSnippet}</p> : null}
+      {group.errorSnippet ? (
+        <p className="flog-row-snippet" title={group.errorSnippet}>{group.errorSnippet}</p>
+      ) : null}
     </li>
   );
 }
