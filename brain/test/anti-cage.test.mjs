@@ -90,6 +90,10 @@ const CORE_ENGINE_FILES = [
   "step-runners.mjs",
   "source-entry.mjs",
   "composition.mjs",
+  // Area 3's reallocation loop joins the guard so a closed motion enum fails the build: reallocation
+  // must emit an ADVISORY signal keyed on the open motionKind string, never a policy engine that obeys
+  // a fixed list of motions (GTM-MACHINE.md §"Staying out of the cage" #5).
+  "reallocation.mjs",
 ];
 
 // ─── Guard A: No closed GTM channel enum ─────────────────────────────────────

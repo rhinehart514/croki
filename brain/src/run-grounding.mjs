@@ -13,6 +13,7 @@ import { dedupeAcrossChannels } from "./cross-reference.mjs";
 import { getObjectTouch } from "./gtm-store.mjs";
 import { objectKey as computeObjectKey, inferKind } from "./object-identity.mjs";
 import { bucketFor } from "./object-funnel.mjs";
+import { learnedSignal, renderLearnedSignal } from "./reallocation.mjs";
 
 // The compact slice of the derived product model that discovery/research/draft agents actually need:
 // the core objects (things), how they relate, and what users are trying to do — NOT the whole raw
@@ -127,6 +128,16 @@ export function buildRunGrounding(project, report = null) {
   const pc = report?.productContext ?? null;
   const productDescription =
     pc?.readme || pc?.pkg?.description || repo.headline || sc.product?.description || "";
+  // The optional LEARN slice (Area 3): the plain-text "what's working / what drew nothing" block from
+  // the machine's recorded outcomes, so a self-sourcing discovery agent leans toward the motion shapes
+  // that earn wins. Strong steer only; null on a fresh project (nothing measured → no block, never faked).
+  // Best-effort: a read failure yields no slice, never a broken grounding.
+  let learn = null;
+  try {
+    learn = project?.id ? renderLearnedSignal(learnedSignal(project.id)) || null : null;
+  } catch {
+    learn = null;
+  }
   const base = {
     productName: project?.name || sc.product?.name || pc?.pkg?.name || "product",
     headline: [productDescription, posDesc, icpDesc ? `Ideal customer: ${icpDesc}` : ""]
@@ -135,6 +146,8 @@ export function buildRunGrounding(project, report = null) {
     productContext: pc
       ? { keywords: pc.pkg?.keywords ?? [], sampleDataFiles: pc.sampleDataFiles ?? [] }
       : null,
+    // The learn steer (null when nothing measured yet). Every return path carries it via base.
+    learn,
   };
   if (!report) {
     // No scanned workspace — stay honestly blind rather than implying proven attribution.

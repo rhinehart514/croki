@@ -49,7 +49,7 @@ A data edge leaving a "switch" node ALSO carries "predicate": { "field": "<itemF
 // Live composer: reads the repo on the founder's subscription and returns a { nodes, edges }
 // graph spec. The host (workflow-composer.mjs) normalizes, enforces the gate wall, and validates.
 export function createClaudeComposer({ cwd = process.cwd(), model, maxTurns = 24, onText } = {}) {
-  return async function compose({ goal, channel, agents, grounding, enginePool, capabilities, taste }) {
+  return async function compose({ goal, channel, agents, grounding, enginePool, capabilities, taste, learn }) {
     // The live capability inventory (agents ∪ connected MCP tools). When present, the model composes
     // from what ACTUALLY exists — real MCP tool refs — instead of inventing them. Only MCP tools are
     // rendered here; the reusable agent pool has its own block above.
@@ -71,6 +71,12 @@ export function createClaudeComposer({ cwd = process.cwd(), model, maxTurns = 24
       // execute still needs a founder gate) and NEVER licenses inventing product facts.
       taste
         ? "\nFounder taste to match (learned from what they approved/rejected — compose the crew and steps to fit it, do not re-ask what this already settles; it never overrides the founder gate and never licenses inventing product facts):\n" + taste
+        : "",
+      // What the machine's recorded OUTCOMES have taught it (Area 3): which motion shapes earn wins and
+      // which drew nothing. Lean toward the working shapes; don't repeat the dead ones. A strong steer,
+      // not a contract — it never overrides the founder gate and never licenses inventing product facts.
+      learn
+        ? "\nWhat your outcomes have taught the machine (lean toward the motion shapes earning wins; don't lean on the ones drawing nothing — this is measured signal, not a rule that overrides your gate):\n" + learn
         : "",
     ].filter(Boolean).join("\n");
     const { text, error } = await runClaudeQuery({ prompt, cwd, model, maxTurns, onText });

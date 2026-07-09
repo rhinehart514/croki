@@ -9,6 +9,7 @@ import { distillTaste, renderDistilledTaste } from "./taste-distill.mjs";
 import { buildTasteProfile } from "./memory.mjs";
 import { mergeSharedDecisions } from "./shared-judgments.mjs";
 import { ideaTasteForProject } from "./feedback-ledger.mjs";
+import { learnedSignal, renderLearnedSignal } from "./reallocation.mjs";
 
 // Fold the founder's pinned clarity into the product grounding the composer sees, under an explicit
 // founderDirection key so the model reads it as real founder steering (claims to honor, ICP,
@@ -40,6 +41,21 @@ function tasteProfileFor(project, options = {}) {
   try {
     const decisions = mergeSharedDecisions({}, options);
     return buildTasteProfile(decisions, { ideaTaste: ideaTasteForProject(projectId, options) });
+  } catch {
+    return null;
+  }
+}
+
+// The learn block for THIS project (Area 3): the plain-text "what's working / what drew nothing" block,
+// folded into the compose grounding beside taste so an outcome from one motion demonstrably shapes the
+// next compose — the LEARN loop closing on the compose side. It is a STRONG STEER, never a contract: it
+// tells the composer which motion SHAPES have earned wins and which drew nothing, exactly as taste tells
+// it which voice landed. Returns "" (no block) when nothing is measured yet, so a fresh project is
+// unchanged. Best-effort: a read failure yields no block, never a broken compose.
+function learnBlockFor(project, options = {}) {
+  const projectId = project?.id || options.projectId || "default";
+  try {
+    return renderLearnedSignal(learnedSignal(projectId, options)) || null;
   } catch {
     return null;
   }
@@ -276,7 +292,7 @@ function bindIO(nodes, channel, inputAdapter, outputAdapter) {
 // gate wall — returns { nodes, edges } with NO persistence and no status mutation. Used by both
 // the streaming compose preview (compose each channel's real graph, live) and the
 // persisting compose below. The model owns topology; the host owns the wall.
-export async function composeGraphForChannel({ channel, agents = [], grounding = null, clarity = null, enginePool = [], capabilities = null, taste = null, input, output, compose = blankCompose }) {
+export async function composeGraphForChannel({ channel, agents = [], grounding = null, clarity = null, enginePool = [], capabilities = null, taste = null, learn = null, input, output, compose = blankCompose }) {
   const spec = await compose({
     goal: input?.objective || channel.objective,
     channel,
@@ -289,6 +305,9 @@ export async function composeGraphForChannel({ channel, agents = [], grounding =
     // The founder's distilled taste (voice guidance only; the gate still decides what sends) so the
     // composer shapes the crew and steps to fit what they've approved/rejected, not re-asking it.
     taste,
+    // The LEARN block (Area 3): which motion shapes the machine's outcomes show are working / drawing
+    // nothing. A strong steer beside taste; never a contract, never overrides the wall.
+    learn,
   });
   if (spec?.ok === false) {
     throw new Error(spec.error === "blank"
@@ -358,6 +377,11 @@ export async function composeNakedGraph(input, options = {}) {
   // when they've taught nothing yet). Voice guidance only — never overrides the wall or invents facts.
   const taste = renderDistilledTaste(distillTaste(tasteProfileFor(project, options))) || null;
 
+  // The LEARN block (Area 3): what the machine's recorded outcomes have taught it — which motion shapes
+  // earn wins, which drew nothing. Folded in BESIDE taste so an outcome from one motion shapes the next
+  // compose. Strong steer only (never a contract), and null on a fresh project so nothing is faked.
+  const learn = learnBlockFor(project, options);
+
   const { nodes, edges } = await composeGraphForChannel({
     channel,
     agents,
@@ -365,6 +389,7 @@ export async function composeNakedGraph(input, options = {}) {
     // The full live inventory (agents ∪ skills ∪ connected MCP tools) reaches the compose prompt.
     capabilities: listCapabilities(options),
     taste,
+    learn,
     grounding: input.grounding ?? null,
     clarity: clarityGrounding(project.id, options),
     input: input.input,

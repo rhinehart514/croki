@@ -1,5 +1,5 @@
 import { compositeRank } from "../path-portfolio.mjs";
-import { getSignalWeights } from "../signal-weights-store.mjs";
+import { tiltedSignalWeights } from "../reallocation.mjs";
 import { solidityRank, SOLIDITY_LADDER } from "../evidence.mjs";
 import { primaryWeakness } from "./weakness.mjs";
 
@@ -176,10 +176,13 @@ export function scorePath(candidate, graph = {}, weights) {
 }
 
 export function recommend(graph = {}, { limit = 8, ...options } = {}) {
-  // The founder-tunable ranking weights: the store lookup resolves the seed defaults out of the box
-  // and a gate-tuned table once one is saved. Scoped to this graph's project, honoring any test root
-  // passed through options so an isolated run never reads the real store.
-  const weights = getSignalWeights({ ...options, projectId: options.projectId ?? graph.projectId });
+  // The founder-tunable ranking weights, passed through the LEARN tilt (Area 3): the founder's saved
+  // base (seed defaults out of the box, a gate-tuned table once saved) is the anchor, and the machine's
+  // measured outcomes nudge it — bounded, clamped, never inverted — toward the ranking dimensions that
+  // correlate with motions actually converting. With nothing measured the tilt is a no-op and `weights`
+  // is byte-identical to the founder's base. Scoped to this graph's project, honoring any test root in
+  // options so an isolated run never reads the real store.
+  const { weights } = tiltedSignalWeights({ ...options, projectId: options.projectId ?? graph.projectId });
   const candidates = enumerateCandidates(graph);
   if (!candidates.length) {
     return {

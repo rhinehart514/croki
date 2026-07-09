@@ -425,6 +425,50 @@ export const saveSignalWeights = (weights: SignalWeights) =>
     return payload as { weights: SignalWeights };
   });
 
+// ── Reallocation tunables — the aggressiveness knobs the founder owns (Area 3) ──
+// LEARN's reallocation loop is governed by three taste-call numbers beside signal-weights: the
+// observation floor, the tilt clamp, and the daily probe cap. Same read/write shape as signal-weights.
+export type ReallocationTunables = Record<string, number>;
+export const getReallocationTunables = () =>
+  get<{ tunables: ReallocationTunables; keys: string[]; defaults: ReallocationTunables }>(
+    "/api/reallocation-tunables",
+  );
+
+export const saveReallocationTunables = (tunables: ReallocationTunables) =>
+  fetch("/api/reallocation-tunables", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...identityHeaders() },
+    body: JSON.stringify({ tunables }),
+  }).then(async (res) => {
+    const payload = (await res.json().catch(() => ({}))) as {
+      tunables?: ReallocationTunables;
+      error?: string;
+    };
+    if (!res.ok) throw new Error(payload.error || `Saving tunables failed (${res.status}).`);
+    return payload as { tunables: ReallocationTunables };
+  });
+
+// ── Reallocation receipt — the Overdrive card the batch renders (Area 3) ────────
+// What the machine tilted, why, from which outcomes, plus the motions flagged as starved. Pure read;
+// overturnable, never a hidden policy. `applied` is false and weights === base when nothing is measured.
+export type ReallocationReceipt = {
+  projectId: string;
+  applied: boolean;
+  base: Record<string, number>;
+  weights: Record<string, number>;
+  tilt: Record<string, number>;
+  reasons: string[];
+  working: Array<{
+    motionKind: string;
+    motionRef: string | null;
+    observed: number;
+    outcomesByKind: Record<string, number>;
+  }>;
+  starved: Array<{ motionKind: string; motionRef: string | null; staged: number; measured: number; reason: string }>;
+  minObservations: number;
+};
+export const getReallocation = () => get<ReallocationReceipt>("/api/reallocation");
+
 // ── Connection status — is a live Claude available for compose/ideate/operator ──
 export type ConnectionStatus = { connected: boolean; label: string | null; reason: string | null };
 export const getConnection = () => get<ConnectionStatus>("/api/connection");
