@@ -8,9 +8,10 @@ import type {
   ProductModel, ProductModelEdit,
   CapabilityServer, CapabilityInventory, SenderCredential, Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole, BoardView,
-  ChannelMeta, Input, ObjectGraphView, GTMItem, PendingInbox,
+  ChannelMeta, Input, ObjectGraphView, GTMItem, PendingInbox, OperatingView,
 } from "@/types";
 import { identityHeaders } from "@/lib/identity";
+import type { MotionEfficiencyData } from "@/components/MotionEfficiencyTable";
 
 async function post<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(path, {
@@ -564,6 +565,20 @@ export const getPendingInbox = (projectId?: string) =>
 
 export const getObjectGraph = (projectId: string) =>
   get<ObjectGraphView>(`/api/projects/${encodeURIComponent(projectId)}/object-graph`);
+
+// ── The operating view — the one Operator lens read over the whole fleet (Area 6) ──────────────────────
+// Every motion as a uniform lane, the shared objects drawn once with lane ties, the parked-at-gate state,
+// and each lane's efficiency row. A pure cross-fleet read: it composes existing reads, never writes, never
+// triggers a run, never gates one. Scoped to one project.
+export const getOperatingView = (projectId?: string) =>
+  get<OperatingView>(`/api/operating-view${projectId ? `?project=${encodeURIComponent(projectId)}` : ""}`);
+
+// ── The one per-motion efficiency table (Area 7) ───────────────────────────────────────────────────────
+// deriveMotionEfficiency: every real outcome aggregated by the motion that earned it (a shape-derived
+// kind), honest-unmeasured never a fabricated rate. The same rows the Operator lens's lanes read. Pure
+// read: it never writes, sends, or gates. The row/table shape lives on the presentational component.
+export const getMotionEfficiency = (projectId: string) =>
+  get<MotionEfficiencyData>(`/api/projects/${encodeURIComponent(projectId)}/motion-efficiency`);
 
 // Apply typed, validated graph mutations (add / promote / update / retire a block). The host normalizes
 // each op, re-asserts the Wall, saves, and hands back the refreshed graph + recommendation — the same

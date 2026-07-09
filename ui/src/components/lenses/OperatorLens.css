@@ -8,6 +8,11 @@
 .operator-lens {
   position: absolute;
   inset: 0;
+  /* Start to the RIGHT of the product-entry column (published as --pentry-gutter, 0 when unmounted), the
+     same way the Engineer lens does — an absolutely-positioned fill ignores parent padding, so the gutter
+     has to live on the lens's own left edge or the map slides under the column. */
+  left: var(--pentry-gutter, 0px);
+  transition: left 180ms ease;
   overflow: auto;
   display: flex;
   flex-direction: column;
@@ -15,6 +20,10 @@
     radial-gradient(circle, var(--canvas-dot) 1.1px, transparent 1.1px) 0 0 / 26px 26px,
     var(--canvas);
   font-variant-numeric: tabular-nums;
+  /* Measure the lens's own width, not the viewport — the crew dock and product column overlay the canvas,
+     so the real operating width is far less than the screen. The body layout responds to THIS. */
+  container-type: inline-size;
+  container-name: oplens;
 }
 
 /* ── The fleet header — the calm banner, honest counts, staleness marker ── */
@@ -61,8 +70,15 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 348px;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
   gap: 0;
+}
+/* Narrow operating width (crew dock + product column both open) — stack the shared map BELOW the lanes so
+   a lane card never gets crushed to an unreadable sliver. The map stays the money shot, just full-width
+   under the lanes instead of a squeezed side rail. */
+@container oplens (max-width: 840px) {
+  .op-body { grid-template-columns: minmax(0, 1fr); }
+  .op-map { border-left: none; border-top: 1px solid var(--line-2); }
 }
 .op-lanes {
   padding: var(--space-6) var(--space-6) 140px var(--space-8);

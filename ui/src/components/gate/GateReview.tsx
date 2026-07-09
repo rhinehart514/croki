@@ -18,7 +18,9 @@ import {
   gateItemEvidenceLines,
 } from "@/lib/gateItem";
 import type { GateEvidenceLine, GatePromote, GateReceiptLine } from "@/lib/gateItem";
-import type { GateDecision, GTMItem, GTMRunResult } from "@/types";
+import { buildGateDelta, gateItemIsCodeNative } from "@/lib/gateDelta";
+import { GateDeltaCard } from "@/components/gate/GateDeltaCard";
+import type { GateDecision, GateDeltaDecision, GTMItem, GTMRunResult } from "@/types";
 import "@/styles/canvas-gate.css";
 
 // Split a draft body into sentences for the evidence pass, keeping each sentence's own trailing
@@ -391,7 +393,7 @@ const GATE_CARD_CAP = 6;
 // Fields the reasoning rail owns in stage mode — dropped from the decision card there so the two halves
 // don't say the same thing twice (labels are compared lowercased, post-humanize).
 const REASON_OWNED_LABELS = new Set(["verdict", "composite score", "score", "dimensions", "dimension", "dims"]);
-export function GateReview({ items, onSubmit, learned, promote, offer, transportConnected = false, onRecordOutcome, onRefineItem, variant = "bloom" }: {
+export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, offer, transportConnected = false, onRecordOutcome, onRefineItem, variant = "bloom" }: {
   items: GTMItem[];
   // The full run. Retained on the props for callers, but the pure-decision room no longer renders a reel
   // from it — watchability lives on the run surface, not stacked on the gate.
@@ -403,6 +405,12 @@ export function GateReview({ items, onSubmit, learned, promote, offer, transport
   // May be async — GateReview awaits it so a failed release/return reverts the optimistic verdict and
   // surfaces the error instead of silently losing the founder's decision.
   onSubmit?: (decisions: Record<string, GateDecision>) => void | Promise<void>;
+  // Area 5 MOVE 1 — the founder's call on a code-native staged item (a microproduct, an in-repo change, a
+  // page generator), routed through the multi-modal GateDeltaCard. An "approve" stages; a "ship" carries
+  // deployConfirmed:true — the explicit SECOND authorization the deploy connector requires. The host wires
+  // this to the real gate resolve (resolveOperatorGate); a "send-back" re-drives the crew like a refine.
+  // When absent, a code-native item falls back to the normal draft card (no ship path).
+  onDecideDelta?: (item: GTMItem, itemKey: string, decision: GateDeltaDecision) => void | Promise<void>;
   learned: number;
   promote?: GatePromote;
   // The deal the staged work carries — shown so the founder reviews drafts against the offer they ride.
@@ -592,6 +600,26 @@ export function GateReview({ items, onSubmit, learned, promote, offer, transport
                 {canRecord ? <RecordOutcome item={item} onRecord={onRecordOutcome!} /> : null}
               </div>
             );
+          }
+          // Code-native staged item (a microproduct, an in-repo change, a page generator): render the
+          // multi-modal delta card — the CHANGE, shown (a rendered page, a diff, a sampled corpus) — with
+          // the heavier "Ship it live" second authorization for an in-repo change. Only when the host wired
+          // onDecideDelta; otherwise it falls through to the normal draft card below.
+          if (onDecideDelta && gateItemIsCodeNative(item)) {
+            const delta = buildGateDelta(item, { motionLabel: offer ?? null, transportConnected });
+            if (delta) {
+              return (
+                <GateDeltaCard
+                  key={key}
+                  delta={delta}
+                  busy={busy}
+                  onDecide={async (d) => {
+                    if (d.decision === "send-back") { await sendBack(item, key, d.note ?? ""); return; }
+                    await onDecideDelta(item, key, d);
+                  }}
+                />
+              );
+            }
           }
           if (isContextItem(item)) {
             // Grounding that slipped into the decision list — shown as reference, never as an approvable

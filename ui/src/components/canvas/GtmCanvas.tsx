@@ -3,10 +3,11 @@ import type { NodeEditorBridge } from "@/components/nodeEditorBridge";
 import type { GatePromote } from "@/lib/gateItem";
 import { CanvasShell, type LensDef, type LensProps } from "@/components/canvas/CanvasShell";
 import type {
-  ChannelFeed, ChannelMeta, Claim, ConnectorMeta, DirectedFeed, GateDecision, GtmExperiment, GTMContractAudit, GTMGraph, GTMItem, GTMNode,
-  GTMRunResult, NodeSelection, Person,
+  ChannelFeed, ChannelMeta, Claim, ConnectorMeta, DirectedFeed, GateDecision, GateDeltaDecision, GtmExperiment, GTMContractAudit, GTMGraph, GTMItem, GTMNode,
+  GTMRunResult, NodeSelection, OperatingView, Person,
 } from "@/types";
 import type { RunSummary } from "@/api";
+import { OperatorLens as OperatorLensView } from "@/components/lenses/OperatorLens";
 
 // GtmCanvas — GTM mode's instance of the generic CanvasShell. It projects the GTM operational object
 // model through two lenses, chosen by channel state alone (no in-canvas switcher):
@@ -57,6 +58,9 @@ export type GtmCanvasModel = {
   onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
   // Veto-as-loop on the gate: send a staged item back to the crew to rework in the Composer.
   onRefineItem?: (item: GTMItem, note: string) => void | Promise<void>;
+  // Area 5 MOVE 1 — the code-native gate delta decision: approve stages a microproduct/in-repo change;
+  // ship carries deployConfirmed:true (the second authorization the deploy connector requires).
+  onDecideDelta?: (item: GTMItem, itemKey: string, decision: GateDeltaDecision) => void | Promise<void>;
   onAskClaude?: (node: GTMNode) => void;
   // Open an agent's profile sheet from its monogram face on a step — the home of the deleted crew strip.
   onOpenAgentProfile?: (ref: string) => void;
@@ -99,6 +103,14 @@ export type GtmCanvasModel = {
   // invitation instead of a separate ranked-bets page. This focuses the goal composer so the founder
   // states the outcome and Claude composes the first pipeline.
   onComposeFirst?: () => void;
+  // ── Operator lens: the ONE operating view over the whole fleet (Area 6) ──
+  // The cross-fleet read the Operator lens renders. Null before the first read resolves. This lens is the
+  // default many-motion view; the Engineer lens stays the single-motion editor.
+  operatingView?: OperatingView | null;
+  // Fly to a parked run's real gate — the one click that opens the founder gate for a pulsing lane.
+  onFlyToGate?: (target: { decisionId: string; sessionId: string | null; pipelineId: string | null; channelId: string }) => void;
+  // Open a lane's pipeline in the Engineer lens (the single-motion editor) — a quiet route, never forced.
+  onOpenLane?: (channelId: string) => void;
 };
 
 type GtmLensProps = LensProps<GtmCanvasModel, never>;
@@ -144,6 +156,7 @@ function EngineerLens({ model: m }: GtmLensProps) {
         gateOffer={m.gateOffer}
         onRecordOutcome={m.onRecordOutcome}
         onRefineItem={m.onRefineItem}
+        onDecideDelta={m.onDecideDelta}
         onAskClaude={m.onAskClaude}
         onOpenAgentProfile={m.onOpenAgentProfile}
         runSummary={m.runSummary}
@@ -182,11 +195,33 @@ function EngineerLens({ model: m }: GtmLensProps) {
   );
 }
 
-// One surface: ENGINEER — the executable pipeline node canvas, where agents, tools, and data sources are
-// dropped, wired, and organized. The old Story ("Move") object-graph altitude and the Move/Engineer
-// toggle were removed; Engineer is now the whole canvas. It stays a single-lens CanvasShell so the shell's
-// chrome and layout stay identical.
+// OPERATOR — the one operating view over the whole fleet (GTM-MACHINE.md Area 6). Every motion drawn as a
+// uniform lane in one grammar, the shared objects drawn once with lane ties, the parked-at-gate state that
+// routes one click to the real founder gate. This REPLACES the old merged-lane overview as the many-motion
+// view; the Engineer lens below stays the single-motion editor. Strictly read-only — it renders state and
+// routes to real decisions, never emitting next-move prose.
+function OperatorLensPane({ model: m }: GtmLensProps) {
+  // No gutter padding here — the lens fills this pane with position:absolute, so it owns the
+  // --pentry-gutter offset on its own left edge (see .operator-lens in OperatorLens.css). Padding the
+  // pane would be ignored by the absolute child and slide the map under the product column.
+  return (
+    <div className="operator-lens-pane" style={{ position: "relative", height: "100%", minHeight: 0, overflow: "auto" }}>
+      <OperatorLensView
+        view={m.operatingView ?? null}
+        onFlyToGate={m.onFlyToGate}
+        onOpenLane={m.onOpenLane}
+        onComposeFirst={m.onComposeFirst}
+      />
+    </div>
+  );
+}
+
+// Two lenses now: OPERATOR (the fleet-wide operating view — the default many-motion view) and ENGINEER
+// (the single-motion pipeline builder). The old merged-lane overview retired into the Operator lens; the
+// drag-organize it hosted now lives in the Operator lens's lane ordering. App chooses which lens by focus:
+// a focused single motion shows Engineer, the whole operation shows Operator.
 const LENSES: LensDef<GtmCanvasModel, never>[] = [
+  { id: "operator", label: "Operator", Component: OperatorLensPane },
   { id: "engineer", label: "Engineer", Component: EngineerLens },
 ];
 
@@ -194,8 +229,8 @@ export function GtmCanvas({
   model, activeLensId, chromeless,
 }: {
   model: GtmCanvasModel;
-  // Only one lens now (Steps/Engineer); kept as a prop so the shell's controlled-lens plumbing is untouched.
-  activeLensId: "engineer";
+  // "operator" = the fleet-wide operating view (default many-motion); "engineer" = the single-motion editor.
+  activeLensId: "operator" | "engineer";
   chromeless?: boolean;
 }) {
   return (

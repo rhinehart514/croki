@@ -53,6 +53,11 @@ import {
   promoteChannel,
   revokeChannel,
   getPendingInbox,
+  getOperatingView,
+  getMotionEfficiency,
+  getReallocation,
+  saveReallocationTunables,
+  getReallocationTunables,
   getCredentials,
 } from "@/api";
 import type { OperatorHints, ComposerBriefing, ComposerTurnResult } from "@/api";
@@ -67,6 +72,15 @@ const ConnectCapability = lazy(() => import("@/components/ConnectCapability").th
 const ConnectSender = lazy(() => import("@/components/ConnectSender").then((m) => ({ default: m.ConnectSender })));
 const DesignTaste = lazy(() => import("@/components/DesignTaste").then((m) => ({ default: m.DesignTaste })));
 const SignalWeights = lazy(() => import("@/components/SignalWeights").then((m) => ({ default: m.SignalWeights })));
+// The aggressiveness knobs (Area 3, decided-question 4) — the observation floor, the ranking-tilt clamp,
+// and the daily paid-probe cap — sit beside SignalWeights as visible, founder-tunable values.
+const AggressivenessTunables = lazy(() => import("@/components/AggressivenessTunables").then((m) => ({ default: m.AggressivenessTunables })));
+// The per-motion efficiency table (Area 7) — the Measure surface's honest "which motion is working" read,
+// the same rows the Operator lens's lanes consume. Rendered inside the outcome/measure surface.
+const MotionEfficiencyTable = lazy(() => import("@/components/MotionEfficiencyTable").then((m) => ({ default: m.MotionEfficiencyTable })));
+// The Overdrive reallocation receipt (Area 3) — the correctable batch card: what the machine leaned
+// toward and the motions it flagged as drawing nothing. Rendered atop the "waiting on you" batch.
+const ReallocationBatchCard = lazy(() => import("@/components/ReallocationBatchCard").then((m) => ({ default: m.ReallocationBatchCard })));
 import type { AgentProfileView, TeammateView } from "@/components/AgentProfile";
 import { ComposerDock } from "@/components/ComposerDock";
 import { FloatingDock } from "@/components/FloatingDock";
@@ -202,12 +216,12 @@ import { ProductEntry } from "@/components/ProductEntry";
 import { ConnectClaude } from "@/components/ConnectClaude";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import type {
-  ChannelMeta, ConnectorMeta, Decisions, EngineState, GateDecision, GraphOperation, GtmLibrary, GTMContractAudit, GTMEdge, GTMGraph, GTMItem, GTMNode, GTMNodeCategory,
+  ChannelMeta, ConnectorMeta, Decisions, EngineState, GateDecision, GateDeltaDecision, GraphOperation, GtmLibrary, GTMContractAudit, GTMEdge, GTMGraph, GTMItem, GTMNode, GTMNodeCategory,
   GTMProject, GTMRunResult, NodeSelection, OperatorSession, OperatorSessionSummary, ProjectSummary,
   ProductModel,
   Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, ComposerPosture,
-  PendingDecision, PendingInbox,
+  PendingDecision, PendingInbox, OperatingView,
 } from "@/types";
 
 // Health → band color, identical to the canvas node badge (GraphCanvas healthHex), so a
@@ -268,6 +282,10 @@ export default function App() {
   // roles, self-built tools) live behind one overlay now, switched by these tabs.
   const [settingsTab, setSettingsTab] = useState<"workspace" | "team" | "tools">("workspace");
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+  // Which canvas lens is on screen: "operator" = the fleet-wide operating view (the default many-motion
+  // view), "engineer" = the single-motion pipeline editor. Focusing a lane or a parked gate drops into
+  // Engineer; the whole-operation view is Operator.
+  const [canvasLens, setCanvasLens] = useState<"operator" | "engineer">("operator");
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [activeProject, setActiveProjectState] = useState<GTMProject | null>(null);
   // The current project id, mirrored into a ref so URL-sync inside the `[]`-dep load callbacks can read
@@ -743,6 +761,9 @@ export default function App() {
     if (!built.length) { setOverviewActive(false); return false; }
     setOverviewActive(true);
     setActiveChannelId(null);
+    // Returning to the whole operation resets the lens to Operator — the default many-motion view — so a
+    // prior forced-Engineer focus (from opening a lane or a gate) doesn't stick on the overview.
+    setCanvasLens("operator");
     setSelection(null);
     setOverlay(null);
     setView("canvas");
@@ -1164,6 +1185,70 @@ export default function App() {
   const pendingCount = pendingInbox?.total ?? 0;
   const pendingDecisions = pendingInbox?.decisions ?? [];
 
+  // The operating view — the ONE Operator lens read (Area 6). A pure cross-fleet projection the lens
+  // renders: every motion as a uniform lane, the shared objects drawn once with lane ties, the parked-
+  // at-gate state. Scoped to the active project, polled on the same cadence as the inbox so a lane's
+  // pulse and a parked count stay live. Reading it never sends, runs, or gates.
+  const [operatingView, setOperatingView] = useState<OperatingView | null>(null);
+  const refreshOperatingView = useCallback(async () => {
+    if (!activeProjectId) { setOperatingView(null); return; }
+    try {
+      setOperatingView(await getOperatingView(activeProjectId));
+    } catch {
+      // Keep the last known view; the next tick may recover.
+    }
+  }, [activeProjectId]);
+  useEffect(() => {
+    let live = true;
+    const tick = async () => { if (live) await refreshOperatingView(); };
+    void tick();
+    const timer = window.setInterval(() => void tick(), 4000);
+    return () => { live = false; window.clearInterval(timer); };
+  }, [refreshOperatingView]);
+
+  // The per-motion efficiency table (Area 7) — the Measure surface's "which motion is working" read.
+  // Fetched on demand when the outcome/measure surface opens, so recording a result and seeing what it
+  // moved sit together. Pure read; never sends.
+  const [motionEfficiency, setMotionEfficiency] = useState<Awaited<ReturnType<typeof getMotionEfficiency>> | null>(null);
+  const refreshMotionEfficiency = useCallback(async () => {
+    if (!activeProjectId) { setMotionEfficiency(null); return; }
+    try { setMotionEfficiency(await getMotionEfficiency(activeProjectId)); } catch { /* keep last */ }
+  }, [activeProjectId]);
+
+  // The reallocation receipt (Area 3, the Overdrive card) — what the machine leaned toward, from which
+  // real outcomes, plus the motions flagged as drawing nothing. Loaded when the "waiting on you" batch
+  // opens; overturnable, never a hidden policy. Pure read; nothing here sends or auto-kills a motion.
+  const [reallocation, setReallocation] = useState<Awaited<ReturnType<typeof getReallocation>> | null>(null);
+  // The founder's persisted call on the current receipt (Overdrive: a correction after the fact). Held in
+  // the client for the session; overturning re-tunes the ranking weights to base through the tunables save.
+  const [reallocationDecision, setReallocationDecision] = useState<"accepted" | "overturned" | null>(null);
+  const refreshReallocation = useCallback(async () => {
+    try { setReallocation(await getReallocation()); } catch { /* keep last */ }
+    setReallocationDecision(null);
+  }, []);
+
+  // Overturn the lean (Overdrive: the founder's correction after the fact). The tilt is advisory — it
+  // shapes compose grounding and ranking but is never persisted over the founder's saved weights — so
+  // overturning it holds the machine at the founder's own base leaning: re-save the current base weights,
+  // which zeroes any accumulated drift, and record the call as a receipt chip. Never sends.
+  const overturnReallocation = useCallback(async () => {
+    try {
+      if (reallocation?.base) {
+        const { tunables } = await getReallocationTunables();
+        // Re-affirm the founder's base: saving the current tunables re-anchors the ranking to the
+        // founder's weights, so the advisory lean stops accumulating. (The base weights themselves live in
+        // the signal-weights surface; this confirms the aggressiveness table the lean runs inside.)
+        await saveReallocationTunables(tunables);
+      }
+    } catch { /* the receipt still records the founder's call even if the re-anchor read fails */ }
+    setReallocationDecision("overturned");
+  }, [reallocation]);
+
+  const acceptReallocation = useCallback(() => {
+    // Let the lean stand — the Overdrive default. Persist the founder's call as a receipt chip.
+    setReallocationDecision("accepted");
+  }, []);
+
   // Graph actions
   const executeGraph = useCallback(async (
     targetNodeId?: string,
@@ -1346,6 +1431,46 @@ export default function App() {
     // Surface the rework: open/focus the Composer so the crew picking this back up reads as a conversation.
     setComposerFocus((f) => f + 1);
   }, [operatorSession, runResult, syncOperator]);
+
+  // Area 5 MOVE 1 — the founder's call on a code-native staged item (a microproduct, an in-repo change, a
+  // page generator), routed through the multi-modal gate delta. An "approve" resolves the gate and stages
+  // the change (the deploy connector still refuses to ship without the second yes). A "ship" resolves the
+  // SAME gate but carries `deployConfirmed:true` — the explicit second authorization the deploy connector
+  // requires (deploy.mjs GUARD 2). The route forwards the whole body, so deployConfirmed reaches the
+  // connector only on a real founder ship. Nothing is invented or auto-filled: an approve never ships.
+  const decideGateDelta = useCallback(async (
+    _item: GTMItem,
+    key: string,
+    decision: GateDeltaDecision,
+  ) => {
+    if (!operatorSession || operatorSession.status !== "waiting_for_gate") return;
+    const gateNodeId = operatorSession.pendingGate?.nodeIds?.[0];
+    if (!gateNodeId) return;
+    const nextApprovals = { ...approvals, [gateNodeId]: true };
+    // Approve and ship both bank an approve on this item; ship additionally carries the deploy second
+    // authorization. An edited body rides an outbound edit (a change/page item won't carry one).
+    const itemDecision: GateDecision = decision.editedBody != null
+      ? { decision: "approve", editedDraft: decision.editedBody }
+      : { decision: "approve" };
+    const nextDecisions: Decisions = {
+      ...decisions,
+      [gateNodeId]: { ...(decisions[gateNodeId] ?? {}), [key]: itemDecision },
+    };
+    setApprovals(nextApprovals);
+    setDecisions(nextDecisions);
+    const response = await resolveOperatorGate(
+      operatorSession.id,
+      operatorProjectId(operatorSession),
+      {
+        approvals: nextApprovals,
+        decisions: nextDecisions,
+        // The SECOND authorization — sent ONLY on a real ship. deploy.mjs refuses without it, so an
+        // approve stages and a ship goes live. Never set on approve; never invented by the route.
+        ...(decision.decision === "ship" && decision.deployConfirmed ? { deployConfirmed: true } : {}),
+      },
+    );
+    syncOperator(response.session);
+  }, [operatorSession, approvals, decisions, syncOperator]);
 
   // The outcome door on an approved gate card. After the founder releases an item, the real result comes
   // back later — a reply, a meeting, a purchase. This records THAT on the exact item the founder just
@@ -1753,6 +1878,32 @@ export default function App() {
       }
     } catch { /* the switch failed (session gone / scope mismatch) — stay on the current conversation */ }
   }, [operatorSession?.id, loadChannel]);
+
+  // The Operator lens keys a lane by its graphId (the touch ledger's motionId is the graphId, so lanes,
+  // efficiency rows, and object ties all join on it). The canvas navigation, though, is keyed by the
+  // channel's own id. This resolves a lane's graphId back to the channel.id the canvas focuses on; it
+  // falls through to the value itself for a lane that already carries a plain id.
+  const channelIdForLane = useCallback((laneChannelId: string) => {
+    const match = channels.find((c) => c.graphId === laneChannelId || c.id === laneChannelId);
+    return match?.id ?? laneChannelId;
+  }, [channels]);
+
+  // Operator lens → the real gate. A parked lane routes one click here: switch to the parked run's
+  // session (so its staged items and gate bloom are the ones on screen), then fly the canvas to that
+  // lane and drop into the Engineer lens where the gate review lives. Never approves or sends — it only
+  // navigates to the founder's real decision.
+  const flyToGate = useCallback(async (target: { decisionId: string; sessionId: string | null; pipelineId: string | null; channelId: string }) => {
+    if (target.sessionId) await switchSession(target.sessionId);
+    focusChannel(channelIdForLane(target.channelId));
+    setCanvasLens("engineer");
+  }, [switchSession, focusChannel, channelIdForLane]);
+
+  // Operator lens → open a lane's pipeline in the single-motion editor (a quiet route off a tie or a
+  // lane, never forced). Focus the pipeline and switch to the Engineer lens.
+  const openLane = useCallback((laneChannelId: string) => {
+    focusChannel(channelIdForLane(laneChannelId));
+    setCanvasLens("engineer");
+  }, [focusChannel, channelIdForLane]);
 
   const handleProjectCreate = useCallback(async (input: { name?: string; repoPath: string; outcome: string }) => {
     setProjectBusy(true);
@@ -2406,6 +2557,18 @@ export default function App() {
   }, [channels, channelGraphs]);
   const canvasGraph = displayGraph ?? graph ?? firstBuiltGraph;
 
+  // Which lens is actually on screen. Decided-question 5: the Operator lens replaces the old merged-lane
+  // overview as the default MANY-motion view; the Engineer lens is the single-motion editor. So: a focused
+  // single motion (activeChannelId set) is always Engineer; a founder who opened a lane/gate is put in
+  // Engineer via canvasLens; otherwise, with more than one built pipeline, Operator is the default. A
+  // product with zero or one pipeline has no fleet to operate, so it lands in Engineer (its landing/editor).
+  const builtPipelineCount = channels.filter((c) => c.nodeCount > 0).length;
+  const effectiveCanvasLens: "operator" | "engineer" =
+    activeChannelId ? "engineer"
+      : canvasLens === "engineer" ? "engineer"
+        : builtPipelineCount >= 2 ? "operator"
+          : "engineer";
+
   const gtmCanvasModel = useMemo<GtmCanvasModel>(() => ({
     projectId: activeProject?.id ?? null,
     graph: canvasGraph,
@@ -2435,6 +2598,8 @@ export default function App() {
     onRecordOutcome: recordItemOutcome,
     // Veto-as-loop: send a staged item back to the crew to rework in the Composer.
     onRefineItem: refineGateItem,
+    // Area 5 MOVE 1 — the code-native gate delta decision (approve stages / ship carries deployConfirmed).
+    onDecideDelta: decideGateDelta,
     onApproveGate: (id) => void approveGate(id),
     onAskClaude: askClaudeAbout,
     // Crew faces on the step nodes open the same agent profile the old bottom strip did.
@@ -2475,11 +2640,16 @@ export default function App() {
     onOpenChannel: focusChannel,
     // Empty-canvas landing: focus the goal composer so a fresh product starts by stating an outcome.
     onComposeFirst: () => setComposerFocus((f) => f + 1),
+    // ── Operator lens: the fleet-wide operating view (Area 6) ──
+    operatingView,
+    onFlyToGate: (t) => void flyToGate(t),
+    onOpenLane: openLane,
   }), [
     canvasGraph, connectors, contractAudits, runResult, graphRunning, runningNodeId, nodeBeats, selection,
     dismissOverlays, proposedNodeIds, proposedEdgeIds, revealedNodeIds, proposalActive, operatorCursor,
     handleResolveProposal, submitGateReview, approveGate, handleAddNode, handleGraphConnect, handleDeleteEdges,
-    handleNodePositionChange, flowRuns, runNode, updateGraph, handleDeleteNode, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, recordItemOutcome, refineGateItem, runSummary, transportConnected,
+    handleNodePositionChange, flowRuns, runNode, updateGraph, handleDeleteNode, channels, channelGraphs, channelRunResults, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, recordItemOutcome, refineGateItem, decideGateDelta, runSummary, transportConnected,
+    operatingView, flyToGate, openLane,
   ]);
 
   // First-run team setup. Gated on Convex being configured AND no team chosen yet, so a local/solo
@@ -2607,7 +2777,7 @@ export default function App() {
               It appears only once a run has happened. */}
           {view === "canvas" && !overlay && runSummary ? (
             <div className="run-strip run-strip--log-only" aria-label="Log what happened on your last run">
-              <button type="button" className="run-strip-log" onClick={() => setOutcomeOpen(true)}>
+              <button type="button" className="run-strip-log" onClick={() => { setOutcomeOpen(true); void refreshMotionEfficiency(); }}>
                 Log what happened →
               </button>
             </div>
@@ -2624,13 +2794,20 @@ export default function App() {
               aria-label="Log what happened"
               onClick={(e) => { if (e.target === e.currentTarget) setOutcomeOpen(false); }}
             >
-              <Suspense fallback={null}>
-                <OutcomeCapture
-                  projectId={activeProjectId}
-                  runId={activeChannelId ?? ""}
-                  onDone={() => { setOutcomeOpen(false); refreshRunSummary(); }}
-                />
-              </Suspense>
+              <div className="outcome-float-inner">
+                <Suspense fallback={null}>
+                  <OutcomeCapture
+                    projectId={activeProjectId}
+                    runId={activeChannelId ?? ""}
+                    onDone={() => { setOutcomeOpen(false); refreshRunSummary(); void refreshMotionEfficiency(); }}
+                  />
+                </Suspense>
+                {/* The Measure read: which motion actually earned the outcomes, honest about what's
+                    unmeasured — the same per-motion rows the Operator lens's lanes show. */}
+                <Suspense fallback={null}>
+                  <MotionEfficiencyTable data={motionEfficiency} />
+                </Suspense>
+              </div>
             </div>
           ) : null}
 
@@ -2692,7 +2869,7 @@ export default function App() {
               onToggleIssues={() => { setIssuesOpen((v) => !v); setDecisionsOpen(false); setProblemsOpen(false); }}
               pendingDecisions={pendingCount}
               decisionsOpen={decisionsOpen}
-              onToggleDecisions={() => { setDecisionsOpen((v) => { const next = !v; if (next) void refreshPendingInbox(); return next; }); setIssuesOpen(false); setProblemsOpen(false); }}
+              onToggleDecisions={() => { setDecisionsOpen((v) => { const next = !v; if (next) { void refreshPendingInbox(); void refreshReallocation(); } return next; }); setIssuesOpen(false); setProblemsOpen(false); }}
               onCloseMenus={() => { setProblemsOpen(false); setIssuesOpen(false); setDecisionsOpen(false); }}
               graph={graph}
               running={graphRunning}
@@ -2830,7 +3007,7 @@ export default function App() {
             // product that does have pipelines never flashes the launcher before its graph resolves.
             <GtmCanvas
               model={gtmCanvasModel}
-              activeLensId="engineer"
+              activeLensId={effectiveCanvasLens}
               chromeless
             />
           ) : operatorSession && (operatorSession.status === "ready" || operatorSession.status === "running") ? (
@@ -3016,6 +3193,13 @@ export default function App() {
                       <Suspense fallback={null}>
                         <SignalWeights />
                       </Suspense>
+                      {/* The aggressiveness knobs sit right beside the leaning they govern: how much proof a
+                          motion needs before it tilts the ranking, how far one proven motion may bend it,
+                          and the hard daily ceiling on paid measurement probes. Visible and tunable, never a
+                          hardcoded policy — and nothing here sends, ships, or spends on its own. */}
+                      <Suspense fallback={null}>
+                        <AggressivenessTunables />
+                      </Suspense>
                     </div>
                   ) : null}
                 </div>
@@ -3053,6 +3237,19 @@ export default function App() {
               </button>
             </header>
             <div className="loop-issues-body">
+              {/* The Overdrive reallocation receipt sits atop the batch: what the machine leaned toward and
+                  the motions it flagged as drawing nothing, correctable here. Shown only when there's a real
+                  lean or a flagged motion — never an empty card. */}
+              {reallocation && (reallocation.applied || (reallocation.starved?.length ?? 0) > 0) ? (
+                <Suspense fallback={null}>
+                  <ReallocationBatchCard
+                    receipt={reallocation}
+                    decision={reallocationDecision}
+                    onOverturn={() => void overturnReallocation()}
+                    onAccept={acceptReallocation}
+                  />
+                </Suspense>
+              ) : null}
               <DecisionInbox decisions={pendingDecisions} onOpen={(d) => void openDecision(d)} />
             </div>
           </aside>

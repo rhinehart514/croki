@@ -29,6 +29,7 @@ import {
 import { runDueMotions } from "../promote-motion.mjs";
 import { selectRuntime, authModeLabel } from "../runtimes/index.mjs";
 import { authorizeReleaseForRequest } from "./session-guard.mjs";
+import { getOperatingView } from "../operating-view.mjs";
 
 export default async function handle({ req, res, url }) {
   // Durable resident GTM operator sessions
@@ -91,6 +92,22 @@ export default async function handle({ req, res, url }) {
       json(res, 200, { woken, motions });
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return true;
+  }
+
+  // The operating view — the ONE Operator lens read (GTM-MACHINE.md Area 6). A pure cross-fleet
+  // projection: every motion as a uniform lane (its emergent stages + derived health), the shared objects
+  // the lanes both touched drawn once with lane ties, the parked-at-gate state that routes one click to
+  // the real gate, and each lane's efficiency row. Read-only: it composes existing reads, never writes,
+  // never triggers a run, never gates one. Proposed plan lanes (Area 4) are NOT fetched here — the plan
+  // regenerates on demand through its own route so a lens read never spends the subscription.
+  if (req.method === "GET" && url.pathname === "/api/operating-view") {
+    try {
+      const projectId = url.searchParams.get("project") || undefined;
+      json(res, 200, getOperatingView({ projectId }));
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
     }
     return true;
   }

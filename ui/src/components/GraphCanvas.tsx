@@ -28,7 +28,7 @@ import { CapabilityGlyph } from "@/components/CapabilityGlyph";
 import { CAPABILITIES } from "@/lib/capabilities";
 import type { NodeEditorBridge } from "@/components/nodeEditorBridge";
 import type {
-  ChannelMeta, ConnectorMeta, GateDecision, GTMEdge, GTMEdgeType, GTMGraph,
+  ChannelMeta, ConnectorMeta, GateDecision, GateDeltaDecision, GTMEdge, GTMEdgeType, GTMGraph,
   GTMContractAudit, GTMItem, GTMNode, GTMNodeCategory, GTMNodeResult, GTMRunResult, NodeSelection,
   Person, PersonAppearance,
 } from "@/types";
@@ -469,6 +469,9 @@ type GTMNodeData = {
   // Veto-as-loop: the founder sends an item back to the crew with a note; it reworks in the Composer and
   // returns to the gate. NOT a release — nothing sends. Rides only the focused gate.
   onRefineItem?: (item: GTMItem, note: string) => void | Promise<void>;
+  // The code-native gate delta decision: approve stages / ship carries deployConfirmed:true. Rides only
+  // the focused gate; the GateReview routes a microproduct/in-repo-change/page item through it.
+  onDecideDelta?: (item: GTMItem, itemKey: string, decision: GateDeltaDecision) => void | Promise<void>;
   // This gate is the one a run is paused at (staged drafts awaiting review). The node breathes an amber
   // ring AND blooms its GateReview cards open without needing selection — the review comes to the founder.
   bloomed?: boolean;
@@ -1438,7 +1441,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
                     <X size={16} aria-hidden />
                   </button>
                 </div>
-                <GateReview variant="stage" items={result.items} run={data.run} onSubmit={data.onSubmitReview} learned={gateLearned} promote={data.gatePromote} offer={data.gateOffer} transportConnected={data.transportConnected} onRecordOutcome={data.onRecordOutcome} onRefineItem={data.onRefineItem} />
+                <GateReview variant="stage" items={result.items} run={data.run} onSubmit={data.onSubmitReview} onDecideDelta={data.onDecideDelta} learned={gateLearned} promote={data.gatePromote} offer={data.gateOffer} transportConnected={data.transportConnected} onRecordOutcome={data.onRecordOutcome} onRefineItem={data.onRefineItem} />
               </div>
             </div>,
             document.body,
@@ -1911,6 +1914,8 @@ function buildFlowGraph(
   // nodeId → the crew's newest first-person heartbeat on that step. A running node shows its live beat
   // instead of an anonymous spinner. Empty/absent → the spinner fallback (render-if-present).
   nodeBeats?: Record<string, string>,
+  // Area 5 MOVE 1 — the code-native gate delta decision, threaded to the gate node's GateReview.
+  onDecideDelta?: (item: GTMItem, itemKey: string, decision: GateDeltaDecision) => void | Promise<void>,
 ): { nodes: Node[]; edges: Edge[] } {
   // A node is "revealed" unless it's a still-pending proposed ghost. Committed nodes are always
   // revealed (so an edge from a committed node to the first ghost shows immediately); a proposed node
@@ -1988,6 +1993,9 @@ function buildFlowGraph(
         // executed steps, and Send-back hands an item to the crew.
         run: n.category === "gate" ? (result ?? null) : undefined,
         onRefineItem: n.category === "gate" ? onRefineItem : undefined,
+        // Area 5 MOVE 1 — the code-native gate delta decision (approve stages / ship carries
+        // deployConfirmed:true), on the gate node only.
+        onDecideDelta: n.category === "gate" ? onDecideDelta : undefined,
         bloomed,
         onAskClaude: onAskClaude ? () => onAskClaude(n) : undefined,
         // The crew face opens the profile on every lane; the run numbers ride only the Measure node.
@@ -2127,6 +2135,8 @@ type MergedFlowFocus = {
   onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
   // Veto-to-refine — rides only the focused pipeline's gate, same scope as onSubmitReview.
   onRefineItem?: (item: GTMItem, note: string) => void | Promise<void>;
+  // The code-native gate delta decision — rides only the focused pipeline's gate.
+  onDecideDelta?: (item: GTMItem, itemKey: string, decision: GateDeltaDecision) => void | Promise<void>;
   revealedNodeIds?: Set<string>;
   onInspect?: (id: string) => void;
   // The project's latest run numbers, shown on the FOCUSED pipeline's Measure node only (there is one
@@ -2218,6 +2228,8 @@ function buildMergedFlowGraph(
       isFocused ? focus.onRefineItem : undefined,
       // Live beats only on the focused (running) lane — a dimmed lane isn't the one narrating.
       isFocused ? focus.nodeBeats : undefined,
+      // The code-native gate delta decision rides only the focused pipeline's gate.
+      isFocused ? focus.onDecideDelta : undefined,
     );
     for (const n of built.nodes) {
       nodes.push({
@@ -2495,7 +2507,7 @@ export function GraphCanvas({
   proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, refitNonce, highlightedNodeId = null,
   bloomNodeId = null, nodeEditor = null, revealedNodeIds, onPaneClick, operatorCursor = null, people = [],
   multiPipeline = null, panTo = null, onAskClaude, gatePromote, gateOffer = null, transportConnected = false, onRecordOutcome,
-  onRefineItem, onOpenAgentProfile, runSummary = null,
+  onRefineItem, onDecideDelta, onOpenAgentProfile, runSummary = null,
 }: {
   graph: GTMGraph;
   result: GTMRunResult | null;
@@ -2551,6 +2563,10 @@ export function GraphCanvas({
   // Veto-as-loop on the focused gate: the founder sends an item back to the crew with a note; it reworks
   // in the Composer and returns to the gate. NOT a release — nothing sends.
   onRefineItem?: (item: GTMItem, note: string) => void | Promise<void>;
+  // Area 5 MOVE 1 — the code-native gate delta decision on the focused gate: approve stages the change;
+  // ship carries deployConfirmed:true (the SECOND authorization the deploy connector requires). The host
+  // wires this to the real gate resolve. Absent → code-native items fall back to the normal draft card.
+  onDecideDelta?: (item: GTMItem, itemKey: string, decision: GateDeltaDecision) => void | Promise<void>;
   // Bump to re-fit the viewport after the container resizes (debugger drawer open/close).
   refitNonce?: number;
   // The run scrubber's current step — this node glows, the rest dim, so a replay reads node-by-node.
@@ -2694,7 +2710,7 @@ export function GraphCanvas({
         running, runningNodeId, selection,
         proposedNodeIds, proposedEdgeIds, proposalActive,
         onResolveProposal, onSubmitReview, onApproveGate, gatePromote, gateOffer, transportConnected, onRecordOutcome,
-        onRefineItem, revealedNodeIds, onInspect: toggleInspect, runSummary, nodeBeats,
+        onRefineItem, onDecideDelta, revealedNodeIds, onInspect: toggleInspect, runSummary, nodeBeats,
       },
       people,
       onAskClaude,
@@ -2703,13 +2719,13 @@ export function GraphCanvas({
     [
       multiPipeline, connectors, subsystemHealth, contractAudits, handleSelect, graph.id, running,
       runningNodeId, selection, proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal,
-      onSubmitReview, onApproveGate, gatePromote, gateOffer, transportConnected, onRecordOutcome, onRefineItem, revealedNodeIds, toggleInspect, people, onAskClaude, onOpenAgentProfile, runSummary, nodeBeats,
+      onSubmitReview, onApproveGate, gatePromote, gateOffer, transportConnected, onRecordOutcome, onRefineItem, onDecideDelta, revealedNodeIds, toggleInspect, people, onAskClaude, onOpenAgentProfile, runSummary, nodeBeats,
     ],
   );
 
   const singleFlow = useMemo(
-    () => buildFlowGraph(laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, transportConnected, onRecordOutcome, onOpenAgentProfile, runSummary, onRefineItem, nodeBeats),
-    [laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, transportConnected, onRecordOutcome, onOpenAgentProfile, runSummary, onRefineItem, nodeBeats],
+    () => buildFlowGraph(laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, transportConnected, onRecordOutcome, onOpenAgentProfile, runSummary, onRefineItem, nodeBeats, onDecideDelta),
+    [laidOutGraph, result, running, runningNodeId, selection, connectors, subsystemHealth, contractAudits, handleSelect, proposedNodeIds, proposedEdgeIds, highlightedNodeId, proposalActive, onResolveProposal, onSubmitReview, onApproveGate, bloomNodeId, revealedNodeIds, toggleInspect, people, onAskClaude, gatePromote, gateOffer, transportConnected, onRecordOutcome, onOpenAgentProfile, runSummary, onRefineItem, nodeBeats, onDecideDelta],
   );
 
   const baseNodes = merged ? merged.nodes : singleFlow.nodes;

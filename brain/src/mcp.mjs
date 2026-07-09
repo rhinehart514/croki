@@ -261,6 +261,15 @@ async function recordProductSignal(input = {}) {
   return brainPost("/api/product-model/signal", input);
 }
 
+// get_operating_view — the ONE Operator lens read (GTM-MACHINE.md Area 6), so the operator agent steers
+// against the SAME map the founder sees. A pure cross-fleet projection: every motion as a uniform lane
+// (its emergent stages + derived health + efficiency row), the shared objects drawn once with their lane
+// ties, the parked-at-gate state. Read-only: it composes existing reads and never writes, runs, or gates.
+async function getOperatingViewTool({ project } = {}) {
+  const qs = project ? `?project=${encodeURIComponent(project)}` : "";
+  return brainGet(`/api/operating-view${qs}`);
+}
+
 // ---------------------------------------------------------------------------
 // Outcomes — a founder's real outcomes are the systems (channels/flows) on the
 // canvas: each has a goal, a system, and a founder gate.
@@ -801,6 +810,18 @@ const TOOLS = [
       required: [],
     },
     handler: deriveOperationPlan,
+  },
+  {
+    name: "get_operating_view",
+    description: "Read the active project's OPERATING VIEW — the one map the founder sees: every go-to-market motion as a uniform lane (its own emergent stages, derived health, and per-motion efficiency row), the shared objects the lanes both touched drawn once with their lane ties (so you can flag 'motion 7 duplicates motion 3'), and which lanes are parked at the founder gate. Use to steer the whole operation against the same picture the founder has. Read-only: it never writes, runs, or gates. Honest-empty on a product with nothing wired yet.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: { type: "string", description: "Optional project id. Defaults to the active project." },
+      },
+      required: [],
+    },
+    handler: getOperatingViewTool,
   },
   {
     name: "revise_product_model",
