@@ -33,10 +33,25 @@ export function createProductProvider(understanding) {
       if (Array.isArray(understanding.stack) && understanding.stack.length) {
         lines.push(`Stack: ${understanding.stack.join(", ")}`);
       }
+      // When the founder never stated positioning, an INFERRED working summary + value-prop derived
+      // from the product's own model rides here — CLEARLY labeled inferred so the crew drafts from a
+      // real read of what the product does instead of going blind, and flags it for the founder to
+      // confirm rather than presenting it as an established claim. Never a cited fact (truth invariant).
+      const inferred = understanding.inferredSummary;
+      if (inferred && (inferred.summary || inferred.valueProp)) {
+        lines.push("");
+        lines.push("INFERRED PRODUCT UNDERSTANDING (from the product's derived model, NOT founder-stated — treat as a working read to confirm, never as a proven positioning claim):");
+        if (inferred.valueProp) lines.push(`Working value proposition (inferred): ${inferred.valueProp}`);
+        if (inferred.summary) lines.push(inferred.summary);
+        lines.push("Draft from this understanding; flag the positioning and value-prop as needing the founder's confirmation. Do NOT refuse for lack of stated positioning — you have a real read of the product to work from.");
+      }
       const win = understanding.winEvent;
       if (win?.name) {
+        // An unconfirmed win event is a FLAG for the founder to confirm, not a reason to go defensive or
+        // refuse. The crew proceeds on the product model's understanding; it simply names the attribution
+        // as unverified so the founder can close it, rather than treating the whole run as flying blind.
         const state = understanding.evidenceState === "blind"
-          ? "attribution BLIND — its source is not found in the product code"
+          ? "attribution UNCONFIRMED — its source isn't found in the product code yet; flag it for the founder to confirm, but keep drafting from the product understanding above"
           : "attribution proven from product code";
         lines.push(`Win event: ${win.name} (${state})`);
       }
@@ -48,6 +63,7 @@ export function createProductProvider(understanding) {
         text: lines.join("\n"),
         meta: {
           evidenceState: understanding.evidenceState ?? null,
+          inferredPositioning: Boolean(inferred && (inferred.summary || inferred.valueProp)),
           blindSpots: blind.length,
           citations: (understanding.evidence ?? []).length,
         },

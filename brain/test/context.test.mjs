@@ -64,7 +64,7 @@ test("assembles a layered base map from contributing providers and records a man
   assert.match(text, /Intent: ideate channels/);
   assert.match(text, /--- Grounded context ---/);
   assert.match(text, /\[product\]/);
-  assert.match(text, /attribution BLIND/); // honest about the blind win event
+  assert.match(text, /attribution UNCONFIRMED/); // honest about the unconfirmed win event — flag to confirm, not fly blind
   assert.match(text, /\[taste\]/);
   assert.match(text, /\[state\]/);
 
@@ -267,7 +267,7 @@ test("buildAgentPrompt assembles recognized context and passes the rest through 
   assert.match(prompt, /Grounded context:/);
   assert.match(prompt, /\[product\]/);
   assert.match(prompt, /\[taste\]/);
-  assert.match(prompt, /attribution BLIND/);
+  assert.match(prompt, /attribution UNCONFIRMED/);
   // Unrecognized context (the __run marker) is preserved as JSON, never lost.
   assert.match(prompt, /Additional workflow context \(JSON\):/);
   assert.match(prompt, /run-9/);

@@ -43,6 +43,68 @@ function compactProductModel(model) {
   return { things, relationships, userGoals, states };
 }
 
+// Derive an HONEST, clearly-labeled INFERRED product summary + working value proposition from the
+// already-derived product model — used ONLY as a fallback when the founder's shared-context
+// positioning is absent, so the crew drafts from a real understanding of what the product does
+// rather than starting blind. Everything here is composed generically from the model the reader
+// extracted (userGoals, things) — NOTHING product-specific is hardcoded, and the result is marked
+// `inferred: true` so it can never be mistaken for a proven/cited positioning claim. The truth
+// invariant holds: this is interpretation of the founder's own repo read, explicitly flagged as a
+// guess the founder must confirm, never presented as fact. Returns null when the model is too thin
+// to say anything real (no goals and no things) — an honest blank, never a fabricated pitch.
+export function inferProductSummary(core, productName) {
+  if (!core || typeof core !== "object") return null;
+  const goals = Array.isArray(core.userGoals) ? core.userGoals : [];
+  const things = Array.isArray(core.things) ? core.things : [];
+  if (!goals.length && !things.length) return null;
+
+  const name = (typeof productName === "string" && productName.trim()) ? productName.trim() : "This product";
+
+  // Who it serves: the distinct actors the reader saw pursuing a goal (the product's user roles).
+  const actors = [...new Set(goals.map((g) => (g.actor || "").trim()).filter(Boolean))];
+  // What users are hired to do: the goals themselves, each with the outcome they're really after.
+  const jobs = goals
+    .map((g) => {
+      const goal = (g.goal || "").trim();
+      if (!goal) return null;
+      const outcome = (g.outcome || "").trim();
+      return outcome ? `${goal} (so they can ${outcome})` : goal;
+    })
+    .filter(Boolean);
+  // The product's core nouns, so the crew names the real objects rather than generic placeholders.
+  const nouns = things.map((t) => (t.name || "").trim()).filter(Boolean);
+
+  // A one-line working value prop composed from the primary job + its actor. This is the single
+  // sentence a drafting agent leans on; it is explicitly a working draft for the founder to confirm.
+  let valueProp = null;
+  if (jobs.length) {
+    const primaryActor = actors.length ? actors[0] : "its users";
+    const primaryGoal = (goals[0]?.goal || "").trim();
+    const primaryOutcome = (goals[0]?.outcome || "").trim();
+    if (primaryGoal) {
+      valueProp = primaryOutcome
+        ? `${name} helps ${primaryActor} ${primaryGoal} so they can ${primaryOutcome}.`
+        : `${name} helps ${primaryActor} ${primaryGoal}.`;
+    }
+  }
+
+  const summaryBits = [];
+  if (actors.length) summaryBits.push(`Serves: ${actors.join(", ")}`);
+  if (jobs.length) summaryBits.push(`What users come to do: ${jobs.slice(0, 6).join("; ")}`);
+  if (nouns.length) summaryBits.push(`Core objects in the product: ${nouns.slice(0, 8).join(", ")}`);
+  if (!summaryBits.length && !valueProp) return null;
+
+  return {
+    inferred: true,
+    summary: summaryBits.join(". "),
+    valueProp,
+    actors,
+    jobs,
+    // A plain instruction the provider surfaces to the crew: this is a read, not a proven claim.
+    note: "Inferred from the product's derived model (its read of the codebase), NOT founder-stated positioning. Draft from this understanding, and flag the positioning/value-prop as needing the founder's confirmation rather than presenting it as established.",
+  };
+}
+
 // The FULL slice of the derived product model the OPERATION PLAN path needs (Area 4). Unlike
 // compactProductModel — which discards ia/workflows/interactions/transitions to keep the RUN prompt
 // lean — the motion planner reasons about the product's whole shape (how it is organized, the flows a
@@ -220,6 +282,12 @@ export function buildRunGrounding(project, report = null) {
   const repo = sc.repository ?? {};
   const icpDesc = sc.icp?.description || sc.icp?.buyer || sc.icp?.summary || "";
   const posDesc = sc.positioning?.promise || sc.positioning?.category || sc.positioning?.summary || "";
+  // When the founder has NOT stated positioning/value-prop, derive an honest INFERRED summary + working
+  // value-prop from the already-derived product model (the goals/things the reader extracted), so the
+  // crew drafts from a real understanding instead of starting blind. Explicitly labeled inferred; the
+  // provider surfaces it as a guess the founder must confirm, never as a cited fact (truth invariant).
+  // Skipped when the founder DID state positioning (posDesc present) — real positioning always wins.
+  const inferredSummary = !posDesc ? inferProductSummary(productModel, project?.name || sc.product?.name) : null;
   // The plain-words product description. NOTE: report.headline is the scan's TRACKING-GAP verdict
   // ("attribution captured but missing from project_created"), NOT a product description — so it must
   // never seed the product headline. The real product picture comes from the scan's productContext
@@ -250,8 +318,17 @@ export function buildRunGrounding(project, report = null) {
   }
   const base = {
     productName: project?.name || sc.product?.name || pc?.pkg?.name || "product",
+    // The plain-words headline. When the founder stated nothing (no product description, no positioning)
+    // but the model DID read the product, fall back to the inferred working value-prop so the headline
+    // carries a real understanding instead of collapsing to the bare product name.
     headline: [productDescription, posDesc, icpDesc ? `Ideal customer: ${icpDesc}` : ""]
-      .filter(Boolean).join(" — ") || project?.name || "",
+      .filter(Boolean).join(" — ")
+      || inferredSummary?.valueProp
+      || project?.name || "",
+    // The inferred summary/value-prop (null when the founder stated positioning, or when the model is too
+    // thin to infer anything). Clearly labeled inferred; the product provider renders it as a founder-
+    // confirm guess, never a proven claim — so the crew drafts from a real read instead of going blind.
+    inferredSummary,
     // The founder's own domain/keywords + sample-data shape, so a discovery agent can go read them.
     productContext: pc
       ? { keywords: pc.pkg?.keywords ?? [], sampleDataFiles: pc.sampleDataFiles ?? [] }

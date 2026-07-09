@@ -599,6 +599,13 @@ export async function runGraph(graph, opts = {}) {
     // base layer for agent/skill steps. The assembler only renders a summary into the prompt, so
     // the full ledger never bloats the model call — just the cited product map and "what's tried".
     if (grounding) context.grounding = grounding;
+    // The derived interpretive product model (its read of the codebase: things, relationships, user
+    // goals, states) rides the SAME grounding object buildRunGrounding assembles. Thread it onto the
+    // node context as its own key so createProductModelProvider actually fires — without this the rich
+    // product understanding the modeler already extracted never reaches a drafting agent, and a run with
+    // empty founder positioning starts blind even though the repo was fully read. Additive: absent a
+    // model the key stays unset and the assembler is an honest blank, exactly as before.
+    if (grounding?.productModel) context.productModel = grounding.productModel;
     // The researched buyer picture, so the market provider renders who buys and where they gather (each
     // record labelled by how solid) into the base layer, instead of the run guessing the buyer.
     if (market) context.market = market;
