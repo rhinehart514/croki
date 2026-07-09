@@ -332,17 +332,52 @@ function isConversionMotion(graph) {
   return graph.nodes.some((n) => n.category === "source");
 }
 
-// Observation-based measurement for any non-outbound motion. Grades on whether the motion's measure
-// stage exists and is observing its outcome — never demands a product-code win event, so a content
-// or community motion is honestly measurable instead of permanently "blind".
-function deriveObservationMeasure(graph, runs) {
+// Which staged joinKeys this motion's runs put on the ledger, so a joined Result can be counted back
+// against exactly the actions this motion staged (never a Result from a different motion's run).
+function stagedJoinKeys(runs) {
+  const keys = new Set();
+  for (const run of Array.isArray(runs) ? runs : []) {
+    for (const item of Array.isArray(run?.items) ? run.items : []) {
+      const key = typeof item?.joinKey === "string" ? item.joinKey.trim() : "";
+      if (key) keys.add(key);
+    }
+  }
+  return keys;
+}
+
+// The joined-outcome counts, by open outcome kind, for this motion — from the real Result ledger, never
+// invented. A Result counts only when its joinKey matches one of this motion's staged items (in-motion),
+// so a probe reading (a rank, an AI mention) that joined on this motion's page/motion key lands here in
+// its own kind row, and an out-of-band Result attributed to a different motion never bleeds in.
+function joinedOutcomeCounts(runs, results) {
+  const keys = stagedJoinKeys(runs);
+  const byKind = {};
+  let total = 0;
+  let lastAt = null;
+  for (const r of Array.isArray(results) ? results : []) {
+    const key = typeof r?.joinKey === "string" ? r.joinKey.trim() : "";
+    if (!key || !keys.has(key)) continue;
+    const kind = (typeof r?.outcomeKind === "string" && r.outcomeKind.trim()) || "unlabeled";
+    byKind[kind] = (byKind[kind] ?? 0) + 1;
+    total += 1;
+    const at = r?.observedAt ?? null;
+    if (at && (!lastAt || at > lastAt)) lastAt = at;
+  }
+  return { byKind, total, lastAt };
+}
+
+// The observation-based measure for a NON-outbound motion — grades on whether the motion's own measure
+// stage exists and is observing its outcome, never demanding a product-code win event. (Preserved from
+// the prior deriveObservationMeasure; deriveMotionMeasure now augments its result with joined outcomes.)
+function observationMeasure(graph, runs) {
   const hasMeasureStage = graph.nodes.some((n) => n.category === "measure");
   const observations = countMeasureObservations(runs);
   if (!hasMeasureStage) {
     return subsystem("measure", {
       health: 40, confidence: 45, agentStatus: "investigating", throughput: 0,
-      activeIssues: ["No measure stage — this motion has no way to observe whether its outcome moved."],
-      suggestedActions: ["Add a measure step that captures this motion's real outcome (reach, activations, signups, members)."],
+      // "No way to observe this yet" — and it names the probe that would fix it (Area 7).
+      activeIssues: ["No way to observe this motion yet — it has no measure stage, so whether its outcome moved cannot be read."],
+      suggestedActions: ["Add a measure step (reach, activations, signups, members — or a rank / AI-mention / traffic / review probe) that reads this motion's real outcome."],
     });
   }
   if (observations > 0) {
@@ -357,12 +392,9 @@ function deriveObservationMeasure(graph, runs) {
   });
 }
 
-export function deriveMeasure(report = null, runs = [], connectors = [], graph = null) {
-  // Non-outbound motions measure their own outcome through their measure stage — the general path
-  // that makes the product work for any project, not just conversion-attribution outbound.
-  if (!isConversionMotion(graph)) {
-    return deriveObservationMeasure(graph, runs);
-  }
+// The outbound-conversion measure — the win-event/UTM check is EVIDENCE for the outbound-conversion kind
+// (preserved verbatim from the prior deriveMeasure so the founder-facing health bands never shift).
+function conversionMeasure(report, runs, connectors) {
   const sends = countStagedSends(runs);
   const sendReady = connectors.some(
     (c) => c.category === "execute" && c.configured && !c.stub && isRealSender(c),
@@ -393,21 +425,16 @@ export function deriveMeasure(report = null, runs = [], connectors = [], graph =
       issues.push(`Win event "${winName}" is not proven in production code — outcomes cannot be measured.`);
       actions.push(`Emit one canonical "${winName}" event where the outcome is committed.`);
     } else if (!carries) {
-      // The Buffalo-Projects acceptance case: the win event fires, but with no
-      // source on it, so a send can never be attributed to the outcome.
       health = 40;
       confidence = 72;
       agentStatus = "investigating";
       issues.push(`Attribution is blind — "${winName}" is emitted without a source, so sends cannot be connected to outcomes.`);
       actions.push(`Carry the captured source into "${winName}" so outcomes attribute back to a channel.`);
     } else if (sendReady && sends > 0) {
-      // Substrate proven and real sends are flowing — outcomes are observable.
       health = 86;
       confidence = 88;
       agentStatus = "monitoring";
     } else {
-      // Substrate proven, but either no real send connector is wired or nothing
-      // has been sent yet — staged-locally items are not measured outcomes.
       health = 72;
       confidence = 88;
       agentStatus = "idle";
@@ -425,14 +452,63 @@ export function deriveMeasure(report = null, runs = [], connectors = [], graph =
 
   return subsystem("measure", {
     health,
-    // Real outcomes captured. Stays 0 until a real send connector closes the
-    // loop — staged-but-unsent items are not measured outcomes.
     throughput: 0,
     confidence,
     agentStatus,
     activeIssues: issues,
     suggestedActions: actions,
   });
+}
+
+// deriveMotionMeasure — the UNIFIED per-motion measure deriver (GTM-MACHINE.md Area 7). It ends the old
+// two-frame SPLIT-AT-THE-CALLER by routing both frames through one function and augmenting BOTH with the
+// real joined-outcome counts: a non-outbound motion grades on its own observation stage; an outbound one
+// keeps the win-event/UTM check as evidence for the conversion kind. On top of whichever frame applies,
+// it folds in the actual outcomes that joined back to this motion by kind (outcomesByKind + lastOutcomeAt)
+// — real observations, honestly labeled, never a fabricated rate. When a real joined outcome exists, the
+// measure reads at least "monitoring" (a joined win IS an observation) and its throughput reflects the
+// real count. Every number is a real count or an honest zero-with-reason.
+function deriveMotionMeasure(graph, runs, connectors = [], report = null, results = []) {
+  const base = isConversionMotion(graph)
+    ? conversionMeasure(report, runs, connectors)
+    : observationMeasure(graph, runs);
+
+  const { total: measured, byKind, lastAt } = joinedOutcomeCounts(runs, results);
+  // Always carry the per-kind outcome counts (empty when nothing joined) so the Measure surface and the
+  // Operator funnel read the same honest shape for every motion.
+  base.outcomesByKind = byKind;
+  base.lastOutcomeAt = lastAt;
+
+  // A real joined outcome is a real observation — surface it. It lifts a not-yet-observed motion into
+  // "monitoring" with the real measured count, but never overrides an honest blind/critical band that is
+  // about the motion having NO WAY to observe (that stays the more important signal to the founder).
+  if (measured > 0) {
+    base.throughput = measured;
+    if (base.health >= 50) {
+      base.agentStatus = "monitoring";
+      if (base.health < 84) base.health = 84;
+      base.confidence = Math.max(base.confidence, 82);
+    }
+  }
+  return base;
+}
+
+// deriveMeasure — the engine's measure subsystem. It now delegates to the unified deriveMotionMeasure
+// (Area 7): one honest per-motion read for any kind, folding the outbound win-event check in as evidence
+// for the conversion kind only. `results` is optional — the real Result ledger, threaded so joined
+// outcomes are counted per kind; absent, the measure reads staged-and-observable but not-yet-measured
+// (never a fabricated rate). The signature stays backward-compatible for existing callers.
+export function deriveMeasure(report = null, runs = [], connectors = [], graph = null, results = []) {
+  // Legacy project-wide read (no graph, no report): nothing to observe yet — keep the honest "open a
+  // workspace" prompt rather than inventing a motion measure over an absent graph.
+  if (!graph && !report) {
+    return subsystem("measure", {
+      health: 0, confidence: 0, throughput: 0, agentStatus: "idle",
+      activeIssues: ["No outcome defined — open a workspace and scan a repo to set the win event."],
+      suggestedActions: ["Open a workspace: point at a repo and name the win event you sell on."],
+    });
+  }
+  return deriveMotionMeasure(graph, runs, connectors, report, results);
 }
 
 // ─── Investigations / findings / recommendations — all derived ─────────────────
@@ -544,11 +620,25 @@ function categoryMinX(graph, cat) {
 // FALLBACK for a graph with no name: it names the motion after its own first stage, with zero keyword
 // taxonomy (Wave 6 removed the hardcoded content/outbound/paid/community map — a fixed motion enum was
 // the same cage as a fixed channel enum, and it mislabelled motions the list didn't anticipate).
-function deriveMotionName(cats, graphName = null) {
+export function deriveMotionName(cats, graphName = null) {
   const named = typeof graphName === "string" ? graphName.trim() : "";
   if (named) return named;
   if (cats.length) return `${stageLabel(cats[0])} loop`;
   return "GTM loop";
+}
+
+// The motion's SHAPE-DERIVED kind — the single keying dimension Area 7 stamps onto every Result and
+// Area 3 aggregates on. It reuses deriveMotionName over the emergent stage categories a graph actually
+// contains (its own composed steps, never a fixed taxonomy), so two runs of the same-shaped motion key
+// to the same row and a novel shape keys to its own untouched. Pure over the graph; no store, no model.
+// A graph with a composer-given name keeps it (the real, goal-specific identity); an unnamed graph
+// falls back to naming after its first emergent stage ("Content loop"), exactly as the engine already
+// labels a motion. Returns null for a shapeless/absent graph so an unjoined outcome stays honestly
+// unattributed rather than forced into a bucket.
+export function deriveMotionKind(graph = null) {
+  if (!graph || !Array.isArray(graph.nodes) || graph.nodes.length === 0) return null;
+  const stages = motionStageMetas(graph).map((m) => m.id);
+  return deriveMotionName(stages, graph.name);
 }
 
 function composeState(subsystems, report, runs, motion) {
@@ -566,7 +656,7 @@ function composeState(subsystems, report, runs, motion) {
   };
 }
 
-export function getEngineState({ report = null, runs = [], connectors = [], graph = null } = {}) {
+export function getEngineState({ report = null, runs = [], connectors = [], graph = null, results = [] } = {}) {
   // Emergent path — a graph is supplied, so the motion declares its OWN stages. The four universals
   // (Ground · Gate · Measure · Learn) frame it; the middle is exactly the graph's stages, in flow
   // order, partitioned around the gate so the wall sits between the pre-gate work and any send.
@@ -584,7 +674,7 @@ export function getEngineState({ report = null, runs = [], connectors = [], grap
       ...preGate,
       deriveGate(runs),
       ...postGate,
-      deriveMeasure(report, runs, connectors, graph),
+      deriveMeasure(report, runs, connectors, graph, results),
       deriveLearn(runs),
     ];
     const stages = metas.map((m) => m.id);
@@ -607,7 +697,7 @@ export function getEngineState({ report = null, runs = [], connectors = [], grap
     deriveFlowStage("generate", runs, connectors, true),
     deriveGate(runs),
     deriveFlowStage("execute", runs, connectors, true),
-    deriveMeasure(report, runs, connectors),
+    deriveMeasure(report, runs, connectors, null, results),
     deriveLearn(runs),
   ];
   return composeState(subsystems, report, runs, null);

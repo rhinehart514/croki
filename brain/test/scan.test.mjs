@@ -255,3 +255,49 @@ test("product context is null when a repo carries no README, manifest, or sample
   const report = scanRepo(root, { winEvent: "project_created" });
   assert.equal(report.productContext, null, "no invented product facts when the repo has none");
 });
+
+// ── Demand-creating surfaces (GTM-MACHINE.md Area 7 scan-widen) ────────────────────────────────────
+// The legacy scan proves ONE conversion event. These prove it now ALSO recognizes demand-creating
+// surfaces beyond it — per-object page routes, share/referral paths, AI-crawlable surfaces — each
+// file:line-cited from a real code shape, and honestly BLIND (empty) where the shape is absent. It
+// never invents a surface.
+
+test("scan cites a per-object page route where the file-path shape proves one", () => {
+  const root = fixture({
+    "app/sales/[id]/page.tsx": `export default function SalePage(){ return null }`,
+    "pages/city/[slug].tsx": `export default function CityPage(){ return null }`,
+    "src/router.ts": `router.get("/estate/:saleId", handler);`,
+  });
+  const report = scanRepo(root, { winEvent: "project_created" });
+  assert.equal(report.demandSurfaces.pageRoute.proven, true);
+  const files = report.demandSurfaces.pageRoute.citations.map((c) => c.file);
+  assert.ok(files.some((f) => f.includes("[id]")), "the dynamic segment route is cited by its real path");
+  assert.ok(files.some((f) => f.includes("router")), "the router :param route is cited by its real line");
+  // Every citation carries a real file:line.
+  for (const c of report.demandSurfaces.pageRoute.citations) {
+    assert.equal(typeof c.file, "string");
+    assert.ok(Number.isInteger(c.line) && c.line >= 1, "a demand-surface citation carries a real line number");
+  }
+});
+
+test("scan cites a share/referral path and an AI-crawlable surface where the code shape proves them", () => {
+  const root = fixture({
+    "src/share.ts": `export function generateShareLink(sale){ return referralCode(sale); }\nconst inviteToken = mintInvite();`,
+    "src/seo.ts": `export function generateSitemap(){ return "<urlset/>"; }\nconst ld = { "@context": "https://schema.org" };`,
+  });
+  const report = scanRepo(root, { winEvent: "project_created" });
+  assert.equal(report.demandSurfaces.share.proven, true, "a referral/share/invite path is recognized");
+  assert.equal(report.demandSurfaces.aiCrawlable.proven, true, "a sitemap / structured-data surface is recognized");
+});
+
+test("scan stays honestly blind on demand surfaces a repo does not ship", () => {
+  const root = fixture({
+    // A repo with only a plain conversion path — no dynamic routes, no share code, no crawlable surface.
+    "services/project.ts": `await recordDiscoveryEvent("project_created", { builderId });`,
+  });
+  const report = scanRepo(root, { winEvent: "project_created" });
+  assert.equal(report.demandSurfaces.pageRoute.proven, false);
+  assert.equal(report.demandSurfaces.share.proven, false);
+  assert.equal(report.demandSurfaces.aiCrawlable.proven, false);
+  assert.deepEqual(report.demandSurfaces.pageRoute.citations, [], "no surface invented where none exists");
+});

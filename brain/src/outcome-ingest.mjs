@@ -28,6 +28,7 @@
 import { runStore, resultStore, learningStore, gtmPathStore } from "./gtm-store.mjs";
 import { closeOutcomeLoop } from "./object-graph-projection.mjs";
 import { recordOutcomeIntoSoul } from "./soul-wiring.mjs";
+import { deriveMotionKind } from "./engine.mjs";
 
 // The three canonical sources an outcome can arrive from. These are NAMES, not a gate — a source label
 // is an open string (§2.2); ingestion accepts any label. These exist so callers spell the common three
@@ -57,6 +58,23 @@ export function joinToRun({ joinKey, runs }) {
     }
   }
   return null;
+}
+
+// ── The motion dimension (GTM-MACHINE.md Area 7) ───────────────────────────────────────────────────
+// Every Result carries ONE keying dimension: which motion earned it. It is DERIVED, never typed — from
+// the joined run's own graph shape, reusing engine.deriveMotionKind (the same shape-derivation the engine
+// already uses to name a motion), so two runs of the same-shaped motion key to one row and a novel shape
+// keys to its own. The run stores its compiled topology (`steps` = nodes, `edges` = wiring), so the shape
+// reconstructs from the run itself — no store re-read. `motionRef` is the stable per-motion ref: the run's
+// pathId (the motion's durable identity across its runs). An outcome that joined to no run → both null,
+// honestly unattributed. An explicit stamp on the outcome always overrides the derivation.
+function deriveMotionForRun(run) {
+  if (!run) return { motionKind: null, motionRef: null };
+  const graph = { nodes: Array.isArray(run.steps) ? run.steps : [], edges: Array.isArray(run.edges) ? run.edges : [] };
+  return {
+    motionKind: deriveMotionKind(graph),
+    motionRef: trimOrNull(run.pathId) ?? trimOrNull(run.id),
+  };
 }
 
 // ── The Learning write ───────────────────────────────────────────────────────────────────────────
@@ -125,6 +143,9 @@ export function ingestOutcome(outcome = {}, options = {}) {
   const run = match?.run ?? null;
   const item = match?.item ?? null;
 
+  // The motion dimension — derived from the joined run's shape, with an explicit stamp winning.
+  const derivedMotion = deriveMotionForRun(run);
+
   const result = resultStore.create(
     {
       projectId,
@@ -137,6 +158,10 @@ export function ingestOutcome(outcome = {}, options = {}) {
       channel: outcome.channel ?? item?.channel ?? null,
       buyerRef: outcome.buyerRef ?? item?.buyer ?? null,
       offerRef: outcome.offerRef ?? item?.offer ?? null,
+      // The single motion-keying dimension: explicit stamp overrides the shape-derivation; a run that
+      // joined to nothing carries null (honestly unattributed).
+      motionKind: outcome.motionKind ?? derivedMotion.motionKind,
+      motionRef: outcome.motionRef ?? derivedMotion.motionRef,
       outcomeKind: outcome.outcomeKind ?? null,
       value: outcome.value ?? null,
       observedAt: outcome.observedAt ?? undefined,
@@ -311,6 +336,129 @@ export function outcomeReport({ projectId = "default" } = {}, options = {}) {
       unmeasured: staged - measured,
       results: results.length,
       unjoinedResults,
+    },
+  };
+}
+
+// ── deriveMotionEfficiency — the ONE per-motion efficiency reader (GTM-MACHINE.md Area 7) ────────────
+//
+// This is the SINGLE keying dimension the whole operation aggregates on. There is exactly ONE efficiency
+// reader in the codebase (the eval greps for it): Area 3's reallocation and Area 6's funnel table both
+// consume THIS, never a second derivation. It reuses outcomeReport's counting spine and its honest-
+// unmeasured accounting — deterministic code over stored records, no model call anywhere.
+//
+// Per motionKind (the shape-derived open string on each Result / each run's shape):
+//   - staged            — how many actions this motion's runs put on the ledger
+//   - measured          — how many of them drew a real, joined outcome
+//   - outcomesByKind    — the per-outcome-kind counts (reply / signup / ranked / cited / … — open)
+//   - coverage          — measured / staged, or null when nothing is staged (NEVER a fabricated rate)
+//   - lastOutcomeAt     — the most recent observed outcome, or null
+//   - orderRank         — 0-based rank when ordered by observed outcomes (most-observed first)
+//
+// A motion with staged work and zero measured outcomes reads honestly (measured 0, coverage 0), never a
+// made-up win rate. An out-of-band Result whose motionKind is null lands in its own "unattributed" bucket,
+// kept apart so nothing is silently credited to a motion it did not come from.
+export function deriveMotionEfficiency({ projectId = "default" } = {}, options = {}) {
+  const runs = runStore.list({ ...options, projectId });
+  const results = resultStore.list({ ...options, projectId });
+
+  // Each run's motion identity, derived from its own stored shape — the same derivation ingest stamps
+  // onto a Result, so a run's staged items and the outcomes joined to it land in the SAME motion row.
+  const rows = new Map();
+  const rowFor = (motionKind) => {
+    const key = motionKind ?? "__unattributed__";
+    if (!rows.has(key)) {
+      rows.set(key, {
+        motionKind: motionKind ?? null,
+        motionRef: null,
+        staged: 0,
+        measured: 0,
+        outcomesByKind: {},
+        lastOutcomeAt: null,
+      });
+    }
+    return rows.get(key);
+  };
+
+  // Index results by joinKey so a staged item's measurement is a lookup.
+  const resultsByJoinKey = new Map();
+  for (const r of results) {
+    const key = trimOrNull(r.joinKey);
+    if (!key) continue;
+    if (!resultsByJoinKey.has(key)) resultsByJoinKey.set(key, []);
+    resultsByJoinKey.get(key).push(r);
+  }
+
+  const stagedJoinKeys = new Set();
+  for (const run of runs) {
+    const { motionKind: runKind, motionRef } = deriveMotionForRun(run);
+    const runRow = rowFor(runKind);
+    if (!runRow.motionRef && motionRef) runRow.motionRef = motionRef;
+    for (const item of Array.isArray(run.items) ? run.items : []) {
+      const key = trimOrNull(item?.joinKey);
+      if (!key) continue;
+      stagedJoinKeys.add(key);
+      // Staged count + coverage belong to the run's own shape row (what was actually put on the ledger).
+      runRow.staged += 1;
+      const attached = resultsByJoinKey.get(key) ?? [];
+      if (attached.length) {
+        for (const r of attached) {
+          // A measured outcome attributes to the RESULT's motionKind — the resolved stamp-or-derived
+          // truth ingest already settled. In the common case it equals the run's shape kind, so measured
+          // and staged land in the SAME row; an explicit re-stamp credits the outcome to the kind the
+          // founder named while staged/coverage stay honest to the run that produced it.
+          const outcomeRow = rowFor(trimOrNull(r.motionKind) ?? runKind);
+          if (!outcomeRow.motionRef && trimOrNull(r.motionRef)) outcomeRow.motionRef = trimOrNull(r.motionRef);
+          outcomeRow.measured += 1;
+          const kind = r.outcomeKind ?? "unlabeled";
+          outcomeRow.outcomesByKind[kind] = (outcomeRow.outcomesByKind[kind] ?? 0) + 1;
+          if (r.observedAt && (!outcomeRow.lastOutcomeAt || r.observedAt > outcomeRow.lastOutcomeAt)) {
+            outcomeRow.lastOutcomeAt = r.observedAt;
+          }
+        }
+      }
+    }
+  }
+
+  // Out-of-band Results — joined to no staged item — keyed by their OWN stamped motionKind (a probe
+  // reading that named its motion), or the unattributed bucket. They contribute measured outcomes their
+  // motion earned even when the staging run isn't in this snapshot; never credited to a wrong motion.
+  for (const r of results) {
+    const key = trimOrNull(r.joinKey);
+    if (key && stagedJoinKeys.has(key)) continue;
+    const row = rowFor(trimOrNull(r.motionKind));
+    if (!row.motionRef && trimOrNull(r.motionRef)) row.motionRef = trimOrNull(r.motionRef);
+    row.measured += 1;
+    const kind = r.outcomeKind ?? "unlabeled";
+    row.outcomesByKind[kind] = (row.outcomesByKind[kind] ?? 0) + 1;
+    if (r.observedAt && (!row.lastOutcomeAt || r.observedAt > row.lastOutcomeAt)) {
+      row.lastOutcomeAt = r.observedAt;
+    }
+  }
+
+  const motions = [...rows.values()]
+    .map((row) => ({
+      ...row,
+      // Coverage is measured/staged — null (not 0, not a guessed rate) when nothing is staged, so an
+      // out-of-band-only or unattributed row reads honestly rather than as a fabricated 0% or 100%.
+      coverage: row.staged > 0 ? row.measured / row.staged : null,
+    }))
+    // Order by observed outcomes (most first), then by measured, then staged — "which motion is working"
+    // answered by real results, never an invented score.
+    .sort((a, b) => {
+      const ao = Object.values(a.outcomesByKind).reduce((s, n) => s + n, 0);
+      const bo = Object.values(b.outcomesByKind).reduce((s, n) => s + n, 0);
+      return bo - ao || b.measured - a.measured || b.staged - a.staged;
+    })
+    .map((row, index) => ({ ...row, orderRank: index }));
+
+  return {
+    projectId,
+    motions,
+    totals: {
+      motions: motions.length,
+      staged: motions.reduce((s, m) => s + m.staged, 0),
+      measured: motions.reduce((s, m) => s + m.measured, 0),
     },
   };
 }

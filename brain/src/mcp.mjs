@@ -268,6 +268,16 @@ async function listOutcomes({ projectId } = {}) {
 }
 
 /**
+ * get_motion_efficiency — the ONE per-motion efficiency table (GTM-MACHINE.md Area 7). Aggregates every
+ * outcome by the motion that earned it (a shape-derived, open motionKind), so the operator agent reads
+ * "which kind of motion is working" from the same honest table the founder sees. Read-only.
+ */
+async function getMotionEfficiency({ projectId } = {}) {
+  const id = await resolveProjectId(projectId);
+  return brainGet(`/api/projects/${encodeURIComponent(id)}/motion-efficiency`);
+}
+
+/**
  * get_outcome — one path's outcome readout (by path id or its plain-language summary) from the
  * Result-based report: how much was staged, how much drew a real outcome, and the count per kind.
  */
@@ -441,6 +451,16 @@ const TOOLS = [
       required: ["outcomeId"],
     },
     handler: getOutcome,
+  },
+  {
+    name: "get_motion_efficiency",
+    description: "Read the one per-motion efficiency table: every real outcome aggregated by the motion that earned it (a shape-derived motion kind — outbound loop, content loop, an AI-visibility motion — an open set, never a fixed list). Per motion: how much was staged, how much drew a real joined outcome, the count per outcome kind, coverage (null when nothing is staged — never a fabricated rate), the last observed outcome, and an order rank. This is the single honest answer to 'which kind of go-to-market is working'. Defaults to the active project; pass projectId to target another. Read-only.",
+    inputSchema: {
+      type: "object",
+      properties: { projectId: { type: "string", description: "Optional. Defaults to the active project." } },
+      required: [],
+    },
+    handler: getMotionEfficiency,
   },
   {
     name: "run_market_research",

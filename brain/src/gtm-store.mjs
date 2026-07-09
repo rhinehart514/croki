@@ -366,7 +366,14 @@ export const runStore = defineStore("gtm-runs", "run", normalizeRun);
 // ── Result — an outcome joined back to what was sent ───────────────────────────────────────────────
 // outcomeKind is an OPEN label (reply / meeting / signup / activation / purchase / retention / manual /
 // anything). Ties to run/path/asset/message/channel/buyer/offer via refs + the joinKey.
-
+//
+// motionKind + motionRef (GTM-MACHINE.md Area 7) are the SINGLE keying dimension the whole operation
+// aggregates on. Both are OPEN strings — motionKind is the shape-derived name of the motion that earned
+// the outcome (e.g. "Outbound loop", "Content loop", or a composer-given pipeline name), motionRef the
+// stable ref to that motion (its pathId). They are NOT typed by the founder: outcome-ingest derives them
+// at ingest from the joined run's own graph shape (reusing engine.deriveMotionKind); an explicit stamp
+// on the outcome overrides; an out-of-band outcome that joined to no run carries null — honestly
+// unattributed, never forced into a bucket. No closed enum: a novel motionKind persists verbatim.
 function normalizeResult(input, prefix) {
   const joinKey = trimOrNull(input.joinKey);
   if (!joinKey) throw new Error("A Result must carry a joinKey to join back to its run.");
@@ -379,6 +386,9 @@ function normalizeResult(input, prefix) {
     channel: trimOrNull(input.channel),
     buyerRef: trimOrNull(input.buyerRef),
     offerRef: trimOrNull(input.offerRef),
+    // The single motion-keying dimension — open strings, null when unattributed.
+    motionKind: trimOrNull(input.motionKind),
+    motionRef: trimOrNull(input.motionRef),
     outcomeKind: trimOrNull(input.outcomeKind),
     value: input.value ?? null,
     observedAt: input.observedAt || now(),

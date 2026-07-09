@@ -38,6 +38,41 @@ const ATTRIBUTION_KEYS = new Set([
   "utm_source", "utm_campaign", "utm_medium", "campaign", "channel",
 ]);
 
+// ── Demand-creating surfaces (GTM-MACHINE.md Area 7 scan-widen) ────────────────────────────────────
+// The legacy scan proves ONE thing: the outbound conversion event. That makes it structurally blind to
+// every non-outbound, demand-creating surface a product already ships — the exact motions the operation
+// plan needs as measurable candidates. This adds truth-only recognition of four such surface classes,
+// each file:line-cited from a concrete code shape, blind (absent) where unproven. It NEVER invents a
+// surface: no match → the class stays empty, honestly. Each is a candidate the plan can measure, not a
+// claim that it works.
+//
+//   pageRoute      — a per-object dynamic page route (Next.js/Remix/SvelteKit [param] segments, or an
+//                    Express/router `:param` route). Thousands of these minted from real records IS a
+//                    programmatic-content motion; here we only prove the route SHAPE exists.
+//   share          — a share / referral / invite code path: a generated ref code, a share link builder,
+//                    an invite token. The in-product loop motion rests on one of these existing.
+//   aiCrawlable    — a surface built to be read by an AI crawler: sitemap generation, robots directives,
+//                    JSON-LD / structured-data emission, an llms.txt. AI-visibility motions measure here.
+//
+// (Per-object-page ANALYTICS reuses the existing ANALYTICS_CALLS detection — a page route plus analytics
+// on it is a measurable content surface, surfaced by the plan, not re-detected here.)
+const DEMAND_SURFACE_PATTERNS = [
+  // Filesystem-routed dynamic segments: app/blog/[slug]/page.tsx, pages/sales/[id].tsx, routes/[city]/+page.svelte
+  ["pageRoute", /[\\/]\[[.\w-]+\][\\/]/, "file"],
+  ["pageRoute", /[\\/]\[[.\w-]+\]\.(?:tsx?|jsx?|svelte|vue)$/, "file"],
+  // Router-declared params: router.get("/sale/:id"), <Route path="/city/:name">
+  ["pageRoute", /\b(?:app|router|route)\.(?:get|use|route)\s*\(\s*["'][^"']*:[A-Za-z]/i, "line"],
+  ["pageRoute", /\bpath\s*[:=]\s*["'][^"']*:[A-Za-z][^"']*["']/i, "line"],
+  // Share / referral / invite code paths.
+  ["share", /\b(?:referral|referralCode|shareLink|shareUrl|inviteCode|inviteToken|invite_link)\b/i, "line"],
+  ["share", /\b(?:generate|create|build|make)(?:Referral|Share|Invite)(?:Code|Link|Url|Token)\b/i, "line"],
+  ["share", /\butm_source\s*=\s*["']share["']/i, "line"],
+  // AI-crawlable surfaces: sitemaps, robots, structured data, llms.txt.
+  ["aiCrawlable", /\b(?:generateSitemap|sitemap\.xml|robots\.txt|next-sitemap)\b/i, "line"],
+  ["aiCrawlable", /\b(?:application\/ld\+json|@context["']?\s*:\s*["']https?:\/\/schema\.org|JsonLd|jsonLd|structuredData)\b/i, "line"],
+  ["aiCrawlable", /\bllms?\.txt\b/i, "line"],
+];
+
 function walk(dir, files = []) {
   let entries;
   try {
@@ -269,11 +304,23 @@ export function scanRepo(inputRoot, options = {}) {
   const analytics = [];
   const attribution = [];
   const events = [];
+  // Demand-creating surfaces, by class — each a file:line-cited candidate, blind (empty) where unproven.
+  const demand = { pageRoute: [], share: [], aiCrawlable: [] };
 
   for (const file of files) {
     const source = readSource(file);
     if (source === null) continue;
     const lines = source.split("\n");
+    const relFile = path.relative(root, file);
+
+    // File-path-shaped surfaces (a dynamic route segment IS the file path, not a line of code). Cited to
+    // the file's first line so the surface carries a real file:line, blind unless the path shape proves it.
+    for (const [cls, pattern, scope] of DEMAND_SURFACE_PATTERNS) {
+      if (scope !== "file") continue;
+      if (pattern.test(relFile) || pattern.test(file)) {
+        demand[cls].push(citation(root, file, 0, lines[0] ?? relFile, `${cls} route`));
+      }
+    }
 
     for (let index = 0; index < lines.length; index += 1) {
       const clean = stripLineComment(lines[index]);
@@ -305,11 +352,28 @@ export function scanRepo(inputRoot, options = {}) {
           citation: citation(root, file, index, lines[index], eventMatch[2]),
         });
       }
+
+      // Per-line demand-creating surfaces — a share code path, an AI-crawlable emission, a router param
+      // route. Each cited to its real line, matched outside strings so a mention in a literal is ignored.
+      for (const [cls, pattern, scope] of DEMAND_SURFACE_PATTERNS) {
+        if (scope !== "line") continue;
+        if (matchOutsideString(clean, pattern)) {
+          demand[cls].push(citation(root, file, index, lines[index], cls));
+        }
+      }
     }
   }
 
   const analyticsCitations = uniqueByLocation(analytics);
   const attributionCitations = uniqueByLocation(attribution);
+  // Dedupe each demand-surface class by location; a class with no proof stays honestly empty (blind).
+  const demandSurfaces = {};
+  for (const cls of Object.keys(demand)) {
+    demandSurfaces[cls] = {
+      proven: demand[cls].length > 0,
+      citations: uniqueByLocation(demand[cls]).slice(0, MAX_CITATIONS),
+    };
+  }
   const winEvents = events.filter((event) => event.name === winEventName);
   const winCitations = winEvents.map((event) => event.citation);
   const winProperties = [...new Set(winEvents.flatMap((event) => event.properties))];
@@ -423,6 +487,11 @@ export function scanRepo(inputRoot, options = {}) {
       keys: [...new Set(attributionCitations.map((item) => item.key))],
       citations: attributionCitations.slice(0, MAX_CITATIONS),
     },
+    // Demand-creating surfaces beyond the one conversion event (Area 7 scan-widen). Each class is a
+    // truth-only, file:line-cited candidate feeding Area 4's plan as a MEASURABLE motion — a per-object
+    // page route (programmatic content), a share/referral path (in-product loop), an AI-crawlable surface
+    // (AI visibility). A class with no proof reads blind (proven:false, no citations) — never invented.
+    demandSurfaces,
     winEvent: {
       name: winEventName,
       found: winFound,

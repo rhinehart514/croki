@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { getEngineState, deriveMeasure } from "../src/engine.mjs";
+import { getEngineState, deriveMeasure, deriveMotionKind } from "../src/engine.mjs";
 
 function subsystemOf(state, id) {
   return state.subsystems.find((s) => s.id === id);
@@ -344,5 +344,58 @@ describe("engine — gate and learn derive from founder decisions", () => {
     ] } } } }];
     const learned = subsystemOf(getEngineState({ runs }), "learn");
     assert.ok(learned.health > empty.health, `expected ${learned.health} > ${empty.health}`);
+  });
+});
+
+// ── Area 7 (GTM-MACHINE.md): the motion dimension + joined-outcome augmentation ────────────────────
+
+describe("engine — deriveMotionKind names a motion by its emergent shape, never a fixed enum", () => {
+  it("names an outbound-shaped graph and a content-shaped graph by their own first stage", () => {
+    const outbound = { nodes: [
+      { id: "s", category: "source", position: { x: 0 } },
+      { id: "g", category: "gate", position: { x: 1 } },
+      { id: "x", category: "execute", position: { x: 2 } },
+    ] };
+    const content = { nodes: [
+      { id: "gen", category: "generate", position: { x: 0 } },
+      { id: "g", category: "gate", position: { x: 1 } },
+    ] };
+    assert.equal(deriveMotionKind(outbound), "Source loop");
+    assert.equal(deriveMotionKind(content), "Generate loop");
+  });
+
+  it("prefers a composer-given graph name over the shape fallback, and is null for an absent graph", () => {
+    const named = { name: "Per-city page mint", nodes: [{ id: "gen", category: "generate", position: { x: 0 } }] };
+    assert.equal(deriveMotionKind(named), "Per-city page mint");
+    assert.equal(deriveMotionKind(null), null);
+    assert.equal(deriveMotionKind({ nodes: [] }), null);
+  });
+});
+
+describe("engine — Measure augments any motion with the real joined outcomes by kind", () => {
+  const contentGraph = () => ({ nodes: [
+    { id: "gen", category: "generate", position: { x: 0 } },
+    { id: "g", category: "gate", position: { x: 200 } },
+    { id: "pub", category: "execute", position: { x: 400 } },
+    { id: "m", category: "measure", position: { x: 600 } },
+  ] });
+
+  it("folds joined outcome counts into the measure subsystem for a non-outbound motion", () => {
+    const runs = [{ items: [{ joinKey: "pg-1" }, { joinKey: "pg-2" }], result: { nodes: {} } }];
+    const results = [
+      { joinKey: "pg-1", outcomeKind: "signup", observedAt: "2026-07-08T00:00:00Z" },
+      { joinKey: "pg-2", outcomeKind: "ranked", observedAt: "2026-07-08T01:00:00Z" },
+    ];
+    const m = deriveMeasure(null, runs, [], contentGraph(), results);
+    assert.deepEqual(m.outcomesByKind, { signup: 1, ranked: 1 });
+    assert.equal(m.throughput, 2);
+    assert.equal(m.agentStatus, "monitoring");
+    assert.equal(m.lastOutcomeAt, "2026-07-08T01:00:00Z");
+  });
+
+  it("with no joined outcome, outcomesByKind is an honest empty object — never a fabricated rate", () => {
+    const m = deriveMeasure(null, [], [], contentGraph(), []);
+    assert.deepEqual(m.outcomesByKind, {});
+    assert.equal(m.lastOutcomeAt, null);
   });
 });

@@ -11,7 +11,7 @@ import {
   gtmPathStore,
   measurementContractStore,
 } from "../gtm-store.mjs";
-import { outcomeReport, ingestOutcome, ingestBatch, OUTCOME_SOURCES } from "../outcome-ingest.mjs";
+import { outcomeReport, deriveMotionEfficiency, ingestOutcome, ingestBatch, OUTCOME_SOURCES } from "../outcome-ingest.mjs";
 import { upsertStatedExperiment } from "../stated-experiment.mjs";
 import { applyExperimentVerdict, suggestVerdictFromOutcomes } from "../belief-writeback.mjs";
 
@@ -89,6 +89,22 @@ export default async function handle({ req, res, url }) {
     try {
       const projectId = decodeURIComponent(projectOutcomesMatch[1]);
       json(res, 200, outcomeReport({ projectId }));
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return true;
+  }
+
+  // Motion efficiency — the ONE per-motion efficiency table (GTM-MACHINE.md Area 7). Aggregates every
+  // Result by its shape-derived motionKind: per motion, how much was staged, how much drew a real joined
+  // outcome, the per-outcome-kind counts, coverage (or null when nothing staged — never a fabricated
+  // rate), the last observed outcome, and an order rank. This is the single keying dimension Area 3's
+  // reallocation and Area 6's funnel both consume. Pure read: it never writes, sends, or gates.
+  const projectMotionEfficiencyMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/motion-efficiency$/);
+  if (req.method === "GET" && projectMotionEfficiencyMatch) {
+    try {
+      const projectId = decodeURIComponent(projectMotionEfficiencyMatch[1]);
+      json(res, 200, deriveMotionEfficiency({ projectId }));
     } catch (err) {
       json(res, 404, { error: err instanceof Error ? err.message : String(err) });
     }

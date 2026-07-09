@@ -46,6 +46,7 @@ import {
   marketObjectStore,
   gtmPathStore,
   measurementContractStore,
+  runStore,
   resultStore,
   learningStore,
   objectTouchStore,
@@ -54,6 +55,7 @@ import {
   getObjectTouch,
 } from "../src/gtm-store.mjs";
 import { objectKey } from "../src/object-identity.mjs";
+import { ingestOutcome, deriveMotionEfficiency } from "../src/outcome-ingest.mjs";
 import { effectiveSolidity } from "../src/evidence.mjs";
 import { deriveVoiceBrief, renderVoiceForNarration } from "../src/teammate-soul.mjs";
 import { teammateSoulStore } from "../src/teammate-soul-store.mjs";
@@ -899,5 +901,63 @@ describe("anti-cage: the Area 1 touch ledger is a ledger, never a stored state m
     // A genuinely new motion touching the same object appends — one object, many motions.
     const third = recordObjectTouch("proj", { kind: "keyword", fields: { query: "estate sale", geo: "buffalo" }, motionId: "m2", runId: "r2", verb: "worked" }, options);
     assert.equal(third.touches.length, 2, "a distinct motion appends a touch to the same durable object");
+  });
+});
+
+// GUARD J — Result.motionKind is the SINGLE keying dimension, and it stays an OPEN string (GTM-MACHINE.md
+// Area 7 + §"Staying out of the cage" #2). A closed motionKind enum is the same cage as a closed channel
+// enum, one dimension up: it would collapse every non-outbound motion into a fixed list the moment the
+// operation keyed on it. This guard pins two facts:
+//   (1) a novel motionKind stamped onto an outcome persists verbatim — the ingest/normalizer never
+//       validates it against a fixed set;
+//   (2) there is EXACTLY ONE efficiency reader (deriveMotionEfficiency) in the source tree — the eval
+//       greps for it; a second derivation is the "three parallel efficiency derivations" cage regrowing.
+describe("anti-cage: Result.motionKind is a single, open keying dimension", () => {
+  function freshRoot() {
+    return { root: fs.mkdtempSync(path.join(os.tmpdir(), "anti-cage-motion-")) };
+  }
+
+  it("a novel motionKind stamped onto an outcome persists verbatim — no closed motionKind enum", () => {
+    const options = freshRoot();
+    const projectId = "proj";
+    const gtmPath = gtmPathStore.create({ projectId, summary: "x", status: "selected" }, options);
+    runStore.create(
+      { projectId, pathId: gtmPath.id, status: "staged", steps: [], edges: [], items: [{ joinKey: "k-1" }] },
+      options,
+    );
+    const { result } = ingestOutcome(
+      { joinKey: "k-1", outcomeKind: "a_novel_outcome_kind", motionKind: "a_wildly_novel_motion_kind" },
+      { ...options, projectId },
+    );
+    assert.equal(result.motionKind, "a_wildly_novel_motion_kind", "a novel motionKind is stored verbatim — no closed enum");
+    assert.equal(result.outcomeKind, "a_novel_outcome_kind", "the outcome kind is equally open");
+
+    // And it aggregates into its own row untouched — a novel kind is never remapped to a known bucket.
+    const eff = deriveMotionEfficiency({ projectId }, options);
+    assert.ok(
+      eff.motions.some((m) => m.motionKind === "a_wildly_novel_motion_kind"),
+      "the novel motionKind gets its own efficiency row, never collapsed into a fixed set",
+    );
+  });
+
+  it("EXACTLY ONE deriveMotionEfficiency reader exists in the source tree (the eval greps for it)", () => {
+    // The whole point of the single-keying-dimension collapse: one table, not three. A second
+    // implementation is the parallel-efficiency-derivation cage regrowing.
+    const srcDir = SRC;
+    let definitions = 0;
+    const stack = [srcDir];
+    while (stack.length) {
+      const dir = stack.pop();
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) { stack.push(full); continue; }
+        if (!entry.name.endsWith(".mjs")) continue;
+        const src = stripComments(fs.readFileSync(full, "utf8"));
+        // Count DEFINITIONS only (function/const declarations), never call sites or imports.
+        const matches = src.match(/(?:export\s+)?(?:function|const)\s+deriveMotionEfficiency\b/g) ?? [];
+        definitions += matches.length;
+      }
+    }
+    assert.equal(definitions, 1, `expected exactly one deriveMotionEfficiency definition, found ${definitions} — a second efficiency derivation is the cage regrowing`);
   });
 });
