@@ -298,9 +298,31 @@ export function getOperatingView({ projectId } = {}, options = {}) {
   // ledger the store already holds. Nothing new is read from disk; it's a reshape of what this view built.
   // Attached so the canvas gets real ties (with ledger verbs) and kinds without a second round trip. A
   // failure here never breaks the base read — the canvas degrades to the raw lanes/objects.
+  // The woven projection MUST speak the same lane-id space the client canvas namespaces its step nodes with:
+  // the BARE channel.id (App keys channelGraphs, and the merged canvas keys step nodes as `${channel.id}::…`).
+  // This view's lanes/objects/channelGraphs above are keyed by graphId (and the ledger may stamp either), so
+  // normalize every lane key to the bare channel.id for the woven build ONLY — the base lanes/objects stay
+  // untouched for their other consumers. Without this, a tie references `${graphId}::step` while the canvas
+  // node is `${channelId}::step`, so every tie and every object chip is silently dropped and the weave renders
+  // empty (docs/INTERTWINED-CANVAS.md id-namespace defect).
   view.woven = (() => {
-    try { return buildWovenGraph(view, { channelGraphs, storeOptions: options }); }
-    catch { return null; }
+    try {
+      const bareIdOf = new Map();
+      for (const channel of channels) {
+        if (!channel?.id) continue;
+        bareIdOf.set(String(channel.id), String(channel.id));
+        if (channel.graphId) bareIdOf.set(String(channel.graphId), String(channel.id));
+      }
+      const norm = (k) => (k == null ? k : (bareIdOf.get(String(k)) ?? String(k)));
+      const wovenView = {
+        ...view,
+        lanes: (view.lanes ?? []).map((l) => ({ ...l, channelId: norm(l.channelId) })),
+        objects: (view.objects ?? []).map((o) => ({ ...o, lanes: (o.lanes ?? []).map(norm) })),
+      };
+      const wovenChannelGraphs = new Map();
+      for (const [gid, g] of channelGraphs) wovenChannelGraphs.set(norm(gid), g);
+      return buildWovenGraph(wovenView, { channelGraphs: wovenChannelGraphs, storeOptions: options });
+    } catch { return null; }
   })();
 
   return view;
