@@ -10,8 +10,9 @@ import { storeRoot } from "./store-fs.mjs";
 import { createClaudeComposer } from "./composition.mjs";
 import { createClaudeProductModeler } from "./product-model-generator.mjs";
 import { recordFlowRun, saveFlow } from "./flow-store.mjs";
-import { buildRunGrounding } from "./run-grounding.mjs";
+import { buildRunGrounding, deriveSuppression } from "./run-grounding.mjs";
 import { createDerivedSourceLoader } from "./cross-reference.mjs";
+import { getProjectChannels } from "./project-store.mjs";
 import { recordRunDerivations } from "./run-derivation.mjs";
 import { buildMarketContext } from "./market-research.mjs";
 import { marketObjectStore } from "./gtm-store.mjs";
@@ -75,6 +76,36 @@ function bindComposedChannelToIdea({ projectId = null, ideaId = null, goal = "",
 // microproduct-composer/agent-bridge producer legs land (they are built in parallel). The producer is
 // read-only: it cuts an artifact (spec + files) from the scanned product on the founder's subscription
 // and never deploys. A test injects options.produceMicroproduct to run keyless; this is the live default.
+// The dead-primitive revival wire (Area 1): before composing another pipeline, gather the entrants the
+// project's EXISTING pipelines most recently produced and cross-check them against the durable touch
+// ledger, so the composing model knows who's already been worked, who's set aside, and who another motion
+// is already in flight on. Pure read + advisory: it reads each channel's last-run output through the same
+// derived-source loader a run uses, then runs deriveSuppression (→ dedupeAcrossChannels → the ledger). It
+// NEVER filters what runs and NEVER gates — it is one more strong steer folded into the grounding. Any
+// failure yields null so composition is never blocked. This is the first production caller of the
+// previously-dead dedupeAcrossChannels primitive.
+async function crossMotionSuppression(project, projectId, options) {
+  try {
+    const channels = getProjectChannels(project, options).filter((c) => c.graphId);
+    if (!channels.length) return null;
+    const load = createDerivedSourceLoader(options);
+    const entrants = [];
+    for (const channel of channels) {
+      const items = await load(channel.graphId);
+      for (const item of Array.isArray(items) ? items : []) {
+        if (item && typeof item === "object") entrants.push({ ...item, channelId: item.channelId ?? channel.id });
+      }
+    }
+    if (!entrants.length) return null;
+    const suppression = deriveSuppression(projectId, entrants, options);
+    // Only surface it when it actually says something — an all-new batch adds no steer.
+    if (suppression.stats.skipHandledCount === 0 && suppression.stats.skipInFlightCount === 0) return null;
+    return suppression;
+  } catch {
+    return null;
+  }
+}
+
 async function liveProduceMicroproduct({ goal, grounding, repo, options }) {
   const { produceMicroproduct, createClaudeMicroproductProducer } = await import("./microproduct-composer.mjs");
   const { createClaudeMicroproductInvoker } = await import("./agent-bridge.mjs");
@@ -519,11 +550,16 @@ export async function executeTool(session, tool, options = {}) {
       // The composer sees the SAME real product grounding a run does — the cited scan report when a
       // workspace is open — so it composes against proven product truth instead of an empty {} .
       const composeWorkspace = latestWorkspace(working, options);
+      // Fold cross-motion suppression (Area 1's revived dedup primitive) into the compose grounding as a
+      // strong advisory steer — who's already been worked, set aside, or is in flight in another pipeline.
+      const suppression = await crossMotionSuppression(composeProject, session.projectId || "default", options);
+      const composeGrounding = buildRunGrounding(composeProject, composeWorkspace?.report ?? null);
+      if (suppression) composeGrounding.suppression = suppression;
       const composed = await composeNakedGraph({
         title: firstNonEmpty(input.title, seededShape?.label, goal),
         objective: goal,
         agents: Array.isArray(input.agents) ? input.agents : [],
-        grounding: buildRunGrounding(composeProject, composeWorkspace?.report ?? null),
+        grounding: composeGrounding,
       }, {
         ...options,
         compose: composeFn,

@@ -77,8 +77,14 @@ describe("cross-reference index — where does X appear across channels", () => 
     assert.equal(ref.channelCount, 2);
   });
 
-  it("rejects an unsupported reference kind", () => {
-    assert.throws(() => findReferences(projectId, { kind: "widget", id: "x" }, options), /Unsupported cross-reference kind/);
+  it("resolves any other kind through the generalized touch-ledger default (no longer throws)", () => {
+    // The default is now generalized (GTM-MACHINE.md §Area 1): a kind outside the four fast paths resolves
+    // to its object identity and returns its touches — honest-blank when nothing has touched it, rather
+    // than throwing. An EMPTY kind is still an error.
+    const ref = findReferences(projectId, { kind: "widget", id: "x" }, options);
+    assert.equal(ref.referenceCount, 0);
+    assert.equal(ref.object, null);
+    assert.throws(() => findReferences(projectId, { kind: "", id: "x" }, options), /needs a kind/);
   });
 });
 

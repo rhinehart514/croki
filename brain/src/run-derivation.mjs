@@ -13,10 +13,39 @@
 // a derivation failure is swallowed and reported as null, exactly as the underlying derivers already do.
 
 import { recordFeedbackSignalsFromRun } from "./feedback-ledger.mjs";
-import { promoteEntrantsFromRun } from "./person-store.mjs";
+import { promoteEntrantsFromRun, extractRunItems } from "./person-store.mjs";
 import { recordExperimentFromRun } from "./experiment-derivation.mjs";
 import { recordIdeaOutcomeFromRun } from "./idea-derivation.mjs";
 import { ingestBatch } from "./outcome-ingest.mjs";
+import { recordObjectTouch } from "./gtm-store.mjs";
+import { inferKind } from "./object-identity.mjs";
+
+// Area 1 touch deriver: for every object a run touched, append one touch to the durable touch ledger,
+// keyed by the object's deterministic objectKey so the SAME object collapses to one record across every
+// motion. It reuses the SAME extraction loop the person promoter runs (extractRunItems) — People flow
+// through as kind:"person" (their objectKey IS their durable Person identityKey), and every other
+// discovered object (geo/keyword/page/partner/change/any open kind) is filed the same way. The touch's
+// motion is the run's channel/graph id; its verb defaults to "worked" (the object was produced/handled by
+// this run). Best-effort by design: an item with no stable identity is skipped, and any failure is
+// swallowed so a derivation never breaks a run. NOTHING here reads the ledger to gate a run — it only
+// WRITES touches; suppression is derived separately at read time (GTM-MACHINE.md §Area 1).
+function recordObjectTouchesFromRun({ projectId = "default", motionId, runId, result } = {}, options = {}) {
+  const items = extractRunItems(result);
+  let touched = 0;
+  for (const item of items) {
+    const kind = inferKind(item);
+    if (!kind) continue; // no stable identity to key on — skip rather than mint a noise record
+    // A discovered object's verb reads its role when meaningful; otherwise it was "worked" by this run.
+    const verb = String(item.role || "").trim() && item.role !== "entrant" ? String(item.role).trim() : "worked";
+    const record = recordObjectTouch(
+      projectId,
+      { kind, fields: item, motionId, runId, verb },
+      options,
+    );
+    if (record) touched += 1;
+  }
+  return { touched };
+}
 
 // The fifth derivation is outcome ingestion (Phase 5): when a run completion carries real outcomes —
 // a product event, a founder-entered note, a connected-account signal — they join back to the run's
@@ -39,6 +68,18 @@ export function recordRunDerivations({ projectId = "default", graph, result, out
     promotion = promoteEntrantsFromRun({ projectId, channelId, result }, options);
   } catch {
     promotion = null;
+  }
+
+  // Area 1 — the durable touch ledger. Every object this run touched gets one appended touch, keyed by
+  // its deterministic objectKey (People included, as kind:"person"). Wrapped best-effort like the others.
+  let touches = null;
+  try {
+    touches = recordObjectTouchesFromRun(
+      { projectId, motionId: channelId, runId: result?.runId ?? null, result },
+      options,
+    );
+  } catch {
+    touches = null;
   }
 
   let experiment = null;
@@ -67,5 +108,5 @@ export function recordRunDerivations({ projectId = "default", graph, result, out
     outcome = null;
   }
 
-  return { feedback, promotion, experiment, idea, outcome };
+  return { feedback, promotion, touches, experiment, idea, outcome };
 }

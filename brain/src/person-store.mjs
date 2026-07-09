@@ -257,10 +257,11 @@ export function promoteEntrants(projectId = "default", channelId, runId, items =
   return { promoted, peopleCount: promoted.length, appearancesAdded };
 }
 
-// Run-completion bridge: pull every entrant item out of a run result and promote it. Best-effort and
-// never throws, so a promotion failure can never break a run. This is the seam wired into the
-// run-completion path next to feedback recording — promotion is read-derived GTM state, NOT health.
-export function promoteEntrantsFromRun({ projectId = "default", channelId, runId, result } = {}, options = {}) {
+// Pull every entrant/output item out of a run result, each tagged with the role/category of the node it
+// came from. This is the ONE extraction loop shared by the person promoter and Area 1's touch deriver
+// (run-derivation.mjs) so both read exactly the same items out of a run — never two divergent readers.
+// Best-effort: a malformed result yields [], never throws.
+export function extractRunItems(result) {
   try {
     const nodes = result?.nodes ?? {};
     const items = [];
@@ -271,6 +272,18 @@ export function promoteEntrantsFromRun({ projectId = "default", channelId, runId
         }
       }
     }
+    return items;
+  } catch {
+    return [];
+  }
+}
+
+// Run-completion bridge: pull every entrant item out of a run result and promote it. Best-effort and
+// never throws, so a promotion failure can never break a run. This is the seam wired into the
+// run-completion path next to feedback recording — promotion is read-derived GTM state, NOT health.
+export function promoteEntrantsFromRun({ projectId = "default", channelId, runId, result } = {}, options = {}) {
+  try {
+    const items = extractRunItems(result);
     if (!items.length) return { promoted: [], peopleCount: 0, appearancesAdded: 0 };
     return promoteEntrants(projectId, channelId, runId ?? result?.runId ?? null, items, options);
   } catch {

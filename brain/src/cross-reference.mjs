@@ -2,6 +2,8 @@ import { loadProject, getProjectChannels } from "./project-store.mjs";
 import { getPerson, listPeople, extractIdentity } from "./person-store.mjs";
 import { loadFlow } from "./flow-store.mjs";
 import { isSourceNode } from "./source-entry.mjs";
+import { objectKey as computeObjectKey } from "./object-identity.mjs";
+import { getObjectTouch } from "./gtm-store.mjs";
 
 // Cross-reference index — "where does X appear across channels" as one real query. Simple and
 // derived: Person references come straight from its promoted appearances (authoritative); ICP / Claim
@@ -104,11 +106,45 @@ function icpReferences(projectId, id, options = {}) {
   return { references, icp };
 }
 
+// The generalized default: resolve ANY { kind, id } to its deterministic objectKey (Area 1) and return
+// the object's touches from the durable touch ledger. This is what lets find_references answer "where has
+// this geo / keyword / page / partner / change been touched" — every object kind, one index — without
+// re-generalizing the four fast paths above. Honest-blank (references: []) for an object nothing has
+// touched. `id` may be an already-composed objectKey (contains a ":") or the object's natural identifier.
+function objectReferences(projectId, kind, id, options = {}) {
+  const raw = String(id ?? "").trim();
+  // An id that already looks like a composed key (kind:identifier) is used verbatim; otherwise compose one
+  // from the kind + the id, offered to EVERY natural-identifier field the per-kind composers read (locality,
+  // query, path, domain, …) so a bare natural identifier resolves regardless of which kind it is.
+  const asFields = {
+    id: raw, name: raw, label: raw, identifier: raw,
+    locality: raw, query: raw, keyword: raw, term: raw,
+    path: raw, route: raw, page: raw, url: raw, domain: raw, partner: raw,
+  };
+  const key = raw.includes(":") ? raw : computeObjectKey(kind, asFields);
+  const record = getObjectTouch(projectId, key, options);
+  if (!record) return { references: [], object: null };
+  const references = (record.touches ?? []).map((touch) => ({
+    where: "touch",
+    motionId: touch.motionId ?? null,
+    runId: touch.runId ?? null,
+    verb: touch.verb ?? null,
+    at: touch.at ?? null,
+  }));
+  return {
+    references,
+    object: { objectKey: record.objectKey, kind: record.kind ?? kind, label: record.label ?? null, firstSeenAt: record.firstSeenAt ?? null, lastSeenAt: record.lastSeenAt ?? null },
+  };
+}
+
 // Answer "where does X appear across channels". `target` is { kind, id }:
 // - person     → its durable appearances (authoritative, from person-store)
 // - experiment → the channel it runs in, plus same-variable siblings
 // - claim      → channels whose program/metadata text carries the claim
 // - icp        → channels that name the ICP (or all, since ICP is shared)
+// - any other kind (geo/keyword/page/partner/change/…) → its touches from Area 1's ledger, resolved by
+//   objectKey. The four fast paths stay; the default is generalized rather than throwing (GTM-MACHINE.md
+//   §Area 1). A run path never calls this to gate a run — it is a pure read.
 export function findReferences(projectId = "default", target = {}, options = {}) {
   const kind = String(target.kind || "").trim();
   const id = target.id;
@@ -119,10 +155,15 @@ export function findReferences(projectId = "default", target = {}, options = {})
     case "claim": result = claimReferences(projectId, id, options); break;
     case "icp": result = icpReferences(projectId, id, options); break;
     default:
-      throw new Error(`Unsupported cross-reference kind: ${kind || "(none)"}. Use person, icp, claim, or experiment.`);
+      if (!kind) throw new Error("A cross-reference target needs a kind.");
+      result = objectReferences(projectId, kind, id, options);
+      break;
   }
   const references = result.references ?? [];
   const channelIds = [...new Set(references.map((ref) => ref.channelId).filter(Boolean))];
+  // The generalized touch path identifies by motion, not channel — surface the motions it touched too so a
+  // consumer of the generic default gets the same "where has this been touched" answer the fast paths give.
+  const motionIds = [...new Set(references.map((ref) => ref.motionId).filter(Boolean))];
   return {
     kind,
     id: id ?? null,
@@ -130,11 +171,13 @@ export function findReferences(projectId = "default", target = {}, options = {})
     referenceCount: references.length,
     channelIds,
     channelCount: channelIds.length,
+    ...(motionIds.length ? { motionIds, motionCount: motionIds.length } : {}),
     ...(result.person !== undefined ? { person: result.person } : {}),
     ...(result.experiment !== undefined ? { experiment: result.experiment } : {}),
     ...(result.claim !== undefined ? { claim: result.claim } : {}),
     ...(result.claimId !== undefined ? { claimId: result.claimId } : {}),
     ...(result.icp !== undefined ? { icp: result.icp } : {}),
+    ...(result.object !== undefined ? { object: result.object } : {}),
   };
 }
 

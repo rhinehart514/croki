@@ -20,6 +20,7 @@ import crypto from "node:crypto";
 import { persistence } from "./persistence.mjs";
 import { safeId, now } from "./store-fs.mjs";
 import { effectiveSolidity, normalizeEvidenceList } from "./evidence.mjs";
+import { objectKey as computeObjectKey } from "./object-identity.mjs";
 
 const SCHEMA_VERSION = 1;
 
@@ -457,4 +458,172 @@ export function structuralProjection(learning) {
     capturedAt: learning.capturedAt ?? null,
     ...(learning.structural && typeof learning.structural === "object" ? learning.structural : {}),
   };
+}
+
+// ── ObjectTouch — the durable touch ledger (Area 1, the single new host noun in the whole spec) ────
+// One record per distinct object (person / geo / keyword / page / partner / change / any open kind) that
+// any motion has touched, keyed on the deterministic objectKey so the SAME object collapses to one record
+// across every motion — exactly as a Person already does, generalized to everything. It is a LEDGER, not
+// a state machine: it stores WHAT touched an object and WHEN, and NOTHING else. There is DELIBERATELY no
+// stored `state`/`stage` field and no transition table (GTM-MACHINE.md §"Staying out of the cage" #1) —
+// "in-flight", "handled", "suppressed", and every funnel bucket are DERIVED at read time from these
+// touches + outcome joins (see deriveFunnel / the worked-suppression wire), never stored here.
+//
+//   { objectKey, kind, label, touches: [{ motionId, runId, verb, at, reason?, until? }],
+//     firstSeenAt, lastSeenAt }
+//
+// `kind` and `verb` are OPEN strings (guarded by anti-cage). A founder set-aside is recorded as one more
+// touch (verb:"set-aside", carrying reason/until), so derived suppression reads it like any other touch —
+// there is no separate suppression flag to keep in sync.
+
+const MAX_TOUCHES = 500;
+
+function normalizeTouch(raw) {
+  const touch = raw && typeof raw === "object" ? raw : {};
+  const out = {
+    motionId: trimOrNull(touch.motionId),
+    runId: trimOrNull(touch.runId),
+    verb: trimOrNull(touch.verb),
+    at: touch.at || now(),
+  };
+  // A set-aside touch carries the founder's reason and an optional until — kept only when present so a
+  // plain touch stays lean. These are DATA on the touch, never a stored state field on the object.
+  const reason = trimOrNull(touch.reason);
+  if (reason) out.reason = reason;
+  const until = trimOrNull(touch.until);
+  if (until) out.until = until;
+  return out;
+}
+
+function normalizeObjectTouch(input, prefix) {
+  const key = trimOrNull(input.objectKey);
+  if (!key) throw new Error("An ObjectTouch record requires an objectKey.");
+  const touches = (Array.isArray(input.touches) ? input.touches : [])
+    .map(normalizeTouch)
+    .slice(-MAX_TOUCHES);
+  const times = touches.map((t) => t.at).filter(Boolean).sort();
+  return {
+    ...base(input, prefix),
+    objectKey: key,
+    // `kind` is an open string — never validated against an enum (anti-cage). Empty is allowed for an
+    // object whose kind was never stated.
+    kind: trimOrNull(input.kind),
+    label: trimOrNull(input.label),
+    touches,
+    firstSeenAt: input.firstSeenAt || times[0] || now(),
+    lastSeenAt: input.lastSeenAt || times[times.length - 1] || now(),
+  };
+}
+
+export const objectTouchStore = defineStore("gtm-object-touches", "obj", normalizeObjectTouch);
+
+// The record id is derived deterministically from projectId + objectKey so an upsert always addresses the
+// same document (no create-new-each-time). safeId is applied by the store on write; we pre-hash the key so
+// two objectKeys that safeId would collapse can never share a record.
+function touchRecordId(projectId, key) {
+  const scope = String(projectId ?? "default");
+  const hash = crypto.createHash("sha1").update(`${scope}::${key}`).digest("hex").slice(0, 16);
+  return `obj-${hash}`;
+}
+
+// Read one object's ledger record by its key, scoped to a project. Returns null when the object has never
+// been touched (honest blank — never a seeded record).
+export function getObjectTouch(projectId = "default", key, options = {}) {
+  const trimmed = String(key ?? "").trim();
+  if (!trimmed) return null;
+  try {
+    return objectTouchStore.get(touchRecordId(projectId, trimmed), options);
+  } catch {
+    return null;
+  }
+}
+
+export function listObjectTouches(projectId = "default", options = {}) {
+  return objectTouchStore.list({ ...options, projectId });
+}
+
+// Deterministic upsert + append: record that a motion touched an object. Resolves the object's identity
+// from (kind, fields) via objectKey unless an explicit objectKey is passed, then appends one touch to the
+// object's ledger (creating the record on first touch). Pure bookkeeping — it NEVER sends, runs, or gates.
+// Dedups an identical (motionId, runId, verb) touch so the same run re-recording is idempotent.
+//
+//   recordObjectTouch("proj", { kind: "person", fields: item, motionId, runId, verb: "worked" })
+//   recordObjectTouch("proj", { objectKey: "geo:buffalo", kind: "geo", label: "Buffalo, NY", verb: "targeted", runId })
+export function recordObjectTouch(
+  projectId = "default",
+  { objectKey: explicitKey, kind = null, fields = {}, label = null, motionId = null, runId = null, verb = null, reason = null, until = null, at = null } = {},
+  options = {},
+) {
+  const key = trimOrNull(explicitKey) || computeObjectKey(kind, fields);
+  if (!key) return null;
+  const touch = normalizeTouch({ motionId, runId, verb, at, reason, until });
+  const existing = getObjectTouch(projectId, key, options);
+  const derivedLabel = trimOrNull(label) || (existing?.label ?? null) || labelFor(kind, fields);
+
+  if (existing) {
+    const already = existing.touches.some(
+      (t) => t.motionId === touch.motionId && t.runId === touch.runId && t.verb === touch.verb,
+    );
+    const touches = already ? existing.touches : [...existing.touches, touch];
+    return objectTouchStore.save(
+      {
+        ...existing,
+        kind: existing.kind || trimOrNull(kind),
+        label: derivedLabel,
+        touches,
+        lastSeenAt: touch.at > (existing.lastSeenAt ?? "") ? touch.at : existing.lastSeenAt,
+      },
+      options,
+    );
+  }
+
+  return objectTouchStore.create(
+    {
+      id: touchRecordId(projectId, key),
+      projectId,
+      objectKey: key,
+      kind: trimOrNull(kind),
+      label: derivedLabel,
+      touches: [touch],
+      firstSeenAt: touch.at,
+      lastSeenAt: touch.at,
+    },
+    options,
+  );
+}
+
+// A plain-words label for an object, best-effort from its fields — a person's name/org, a geo's locality,
+// a keyword's query, a page's route. Never invented: falls back to null when nothing readable is present.
+function labelFor(kind, fields = {}) {
+  const f = fields && typeof fields === "object" ? fields : {};
+  const pick = (...keys) => {
+    for (const k of keys) {
+      const v = trimOrNull(f[k]);
+      if (v) return v;
+    }
+    return null;
+  };
+  return (
+    pick("label", "name", "decisionMaker", "contact", "fullName") ||
+    pick("locality", "geo", "city", "region") ||
+    pick("query", "keyword", "term") ||
+    pick("path", "route", "page", "url") ||
+    pick("partner", "domain", "org", "company") ||
+    null
+  );
+}
+
+// Record a founder set-aside as an explicit touch (verb:"set-aside"), carrying the reason and an optional
+// "until". Derived suppression reads this touch — there is no separate stored suppression flag to keep in
+// sync (that would be the stage-machine cage this design cut). A founder act, so it is a real touch.
+export function setObjectSetAside(
+  projectId = "default",
+  { objectKey: explicitKey, kind = null, fields = {}, reason = null, until = null, motionId = null, runId = null } = {},
+  options = {},
+) {
+  return recordObjectTouch(
+    projectId,
+    { objectKey: explicitKey, kind, fields, motionId, runId, verb: "set-aside", reason, until },
+    options,
+  );
 }

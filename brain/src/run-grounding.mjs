@@ -9,6 +9,10 @@
 // their file:line citations. Absent a report the grounding stays honestly blind — a run with no
 // scanned workspace is ungrounded and says so, rather than inventing product facts.
 import { getProductModel } from "./product-model-store.mjs";
+import { dedupeAcrossChannels } from "./cross-reference.mjs";
+import { getObjectTouch } from "./gtm-store.mjs";
+import { objectKey as computeObjectKey, inferKind } from "./object-identity.mjs";
+import { bucketFor } from "./object-funnel.mjs";
 
 // The compact slice of the derived product model that discovery/research/draft agents actually need:
 // the core objects (things), how they relate, and what users are trying to do — NOT the whole raw
@@ -36,6 +40,70 @@ function compactProductModel(model) {
     name: s?.name ?? null,
   })).filter((s) => s.name);
   return { things, relationships, userGoals, states };
+}
+
+// ── The dead-primitive revival: cross-motion suppression, advisory only ─────────────────────────────
+// Wire dedupeAcrossChannels (built, tested, zero callers until now) into the compose/run entry and
+// cross-check its identities against Area 1's durable touch ledger. This answers, for a batch of
+// candidate entrants/objects a run is about to work: which are genuinely NEW work, which were already
+// HANDLED (a founder set-aside is still in force, or an outcome already joined), and which are already
+// IN FLIGHT (another motion touched them recently, unresolved). It is a STRONG STEER to the composing
+// agent, NEVER a pre-run contract and NEVER a gate — the founder gate stays the only checkpoint. It reads
+// the ledger; it never writes it and never blocks a run. Returns:
+//   { work, skipHandled, skipInFlight, reasons, stats }
+// where work/skipHandled/skipInFlight are the representative items (one per identity), and `reasons` maps
+// an objectKey to a plain-words why ("already handled — set aside 'not a fit'"; "in flight — worked by
+// another motion 2h ago"). Honest-empty for an empty batch; tolerant of junk (never throws).
+export function deriveSuppression(projectId = "default", entrants = [], options = {}) {
+  const asOf = new Date().toISOString();
+  const { identities } = dedupeAcrossChannels(Array.isArray(entrants) ? entrants : []);
+  const work = [];
+  const skipHandled = [];
+  const skipInFlight = [];
+  const reasons = {};
+
+  for (const identity of identities) {
+    const item = identity.item;
+    // Resolve the object's durable key. An identified person carries its identityKey directly; anything
+    // else is keyed from the item's fields via its inferred (open) kind. Un-keyable items are always work.
+    const kind = inferKind(item) || "person";
+    const key = identity.key || computeObjectKey(kind, item);
+    const record = key ? getObjectTouch(projectId, key, options) : null;
+
+    if (!record) {
+      work.push(item);
+      continue;
+    }
+
+    const bucket = bucketFor(record, { convertedKeySet: null, asOf });
+    if (bucket === "suppressed" || bucket === "handled") {
+      skipHandled.push(item);
+      const aside = (record.touches ?? []).find((t) => t.verb === "set-aside");
+      reasons[key] = aside?.reason
+        ? `already handled — set aside${aside.reason ? ` (${aside.reason})` : ""}`
+        : "already handled — an outcome already joined this object";
+    } else if (bucket === "in_flight") {
+      skipInFlight.push(item);
+      const otherMotions = new Set((record.touches ?? []).map((t) => t.motionId).filter(Boolean));
+      reasons[key] = `in flight — already worked by ${otherMotions.size} ${otherMotions.size === 1 ? "motion" : "motions"}`;
+    } else {
+      // Seen once but not by another motion — still new work for THIS run, just previously observed.
+      work.push(item);
+    }
+  }
+
+  return {
+    work,
+    skipHandled,
+    skipInFlight,
+    reasons,
+    stats: {
+      candidateCount: identities.length,
+      workCount: work.length,
+      skipHandledCount: skipHandled.length,
+      skipInFlightCount: skipInFlight.length,
+    },
+  };
 }
 
 export function buildRunGrounding(project, report = null) {

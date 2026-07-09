@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, it } from "node:test";
 import { dedupeAcrossChannels } from "../src/cross-reference.mjs";
 import { extractIdentity } from "../src/person-store.mjs";
+import { deriveSuppression } from "../src/run-grounding.mjs";
+import { recordObjectTouch, setObjectSetAside } from "../src/gtm-store.mjs";
 
 // E5.2 — cross-channel dedup. Several channels run at volume off different import sources; the same
 // human can surface in more than one. Before the consolidated approval queue, collapse the duplicates
@@ -104,5 +109,51 @@ describe("dedupeAcrossChannels — one person, many channels", () => {
     assert.equal(out.identities.length, 1);
     assert.deepEqual(out.identities[0].channels, [], "an untagged item has no channel and can never be a collision");
     assert.equal(out.identities[0].multiChannel, false);
+  });
+});
+
+// The dead primitive is now REVIVED: deriveSuppression (the compose/run-entry wire in run-grounding.mjs)
+// is the first real caller of dedupeAcrossChannels, cross-checking its identities against Area 1's durable
+// touch ledger. This proves the primitive is invoked by a real run-adjacent path and returns the
+// { work, skipHandled, skipInFlight, reasons } advisory the operation consumes — never a pre-run contract.
+describe("deriveSuppression — the revived dedup primitive, cross-checked against the touch ledger", () => {
+  function freshRoot() {
+    return { root: fs.mkdtempSync(path.join(os.tmpdir(), "suppression-")) };
+  }
+
+  it("splits a batch into new work vs. already-handled vs. in-flight using the ledger", () => {
+    const options = freshRoot();
+    // handled: a founder set aside this person
+    recordObjectTouch("proj", { kind: "person", fields: { email: "handled@x.com" }, motionId: "m1", runId: "r1", verb: "worked" }, options);
+    setObjectSetAside("proj", { kind: "person", fields: { email: "handled@x.com" }, reason: "already a customer" }, options);
+    // in-flight: two distinct motions already touched this person
+    recordObjectTouch("proj", { kind: "person", fields: { email: "inflight@x.com" }, motionId: "m1", runId: "r1", verb: "worked" }, options);
+    recordObjectTouch("proj", { kind: "person", fields: { email: "inflight@x.com" }, motionId: "m2", runId: "r2", verb: "worked" }, options);
+
+    const entrants = [
+      { channelId: "new", email: "fresh@x.com" }, // never touched → work
+      { channelId: "new", email: "handled@x.com" }, // set aside → skipHandled
+      { channelId: "new", email: "inflight@x.com" }, // two motions → skipInFlight
+    ];
+    const out = deriveSuppression("proj", entrants, options);
+
+    assert.equal(out.stats.workCount, 1);
+    assert.equal(out.stats.skipHandledCount, 1);
+    assert.equal(out.stats.skipInFlightCount, 1);
+    assert.equal(out.work[0].email, "fresh@x.com");
+    assert.equal(out.skipHandled[0].email, "handled@x.com");
+    assert.equal(out.skipInFlight[0].email, "inflight@x.com");
+    // The reasons carry plain-words why, keyed by objectKey.
+    assert.match(out.reasons["email:handled@x.com"], /already handled/);
+    assert.match(out.reasons["email:inflight@x.com"], /in flight/);
+  });
+
+  it("treats a wholly-new batch as all work, and never throws on junk", () => {
+    const options = freshRoot();
+    const out = deriveSuppression("proj", [{ channelId: "a", email: "a@x.com" }, { channelId: "b", email: "b@x.com" }], options);
+    assert.equal(out.stats.workCount, 2);
+    assert.equal(out.stats.skipHandledCount, 0);
+    assert.doesNotThrow(() => deriveSuppression("proj", null, options));
+    assert.doesNotThrow(() => deriveSuppression("proj", [null, 42, "x"], options));
   });
 });

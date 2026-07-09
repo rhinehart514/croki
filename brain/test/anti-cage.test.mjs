@@ -48,7 +48,12 @@ import {
   measurementContractStore,
   resultStore,
   learningStore,
+  objectTouchStore,
+  recordObjectTouch,
+  setObjectSetAside,
+  getObjectTouch,
 } from "../src/gtm-store.mjs";
+import { objectKey } from "../src/object-identity.mjs";
 import { effectiveSolidity } from "../src/evidence.mjs";
 import { deriveVoiceBrief, renderVoiceForNarration } from "../src/teammate-soul.mjs";
 import { teammateSoulStore } from "../src/teammate-soul-store.mjs";
@@ -795,5 +800,104 @@ describe("anti-cage: the Phase 0 GTM record model is open, evidence-disciplined 
     const options = freshRoot();
     const obj = marketObjectStore.create({ kind: "buyer", statement: "a guess", solidity: "observed" }, options);
     assert.equal(obj.solidity, "speculative", "declared solidity cannot outrun missing evidence");
+  });
+});
+
+// GUARD I — The Area 1 touch ledger is a LEDGER, not a state machine (GTM-MACHINE.md §"Staying out of
+// the cage" #1). The originally-proposed gtm-object-state overlay — a stored `state` field advancing
+// active → in_flight → handled → converted — was the nearest re-grown cage: a fixed stage skeleton in
+// open-string costume. It was cut. What ships is a touch ledger only; every state and funnel bucket is
+// DERIVED at read time from touches + outcome joins. This guard pins three facts:
+//   (1) `kind` (and the touch `verb`) stay OPEN strings — a novel value passes through untouched;
+//   (2) NO stored `state`/`stage` field, no transition table, exists on a written record;
+//   (3) NO run path imports or reads the touch ledger to gate a run — it is written by the run-derivation
+//       seam and read by pure projections, never consulted to decide whether/what a run runs.
+describe("anti-cage: the Area 1 touch ledger is a ledger, never a stored state machine", () => {
+  function freshLedgerRoot() {
+    return { root: fs.mkdtempSync(path.join(os.tmpdir(), "anti-cage-touch-")) };
+  }
+
+  it("object kind is an open string — a novel kind is keyed and stored untouched", () => {
+    // A kind that did not exist yesterday must compose a key and file onto the ledger without rejection.
+    const key = objectKey("midnight_barter_venue", { id: "warehouse-9" });
+    assert.equal(key, "midnight_barter_venue:warehouse-9", "a novel kind composes a key, never rejected");
+
+    const options = freshLedgerRoot();
+    const record = recordObjectTouch("proj", { kind: "swap_meet_stall", fields: { id: "stall-7" }, runId: "r1", verb: "worked" }, options);
+    assert.equal(record.kind, "swap_meet_stall", "a novel kind is stored verbatim — no closed kind enum");
+    // And the touch verb is equally open.
+    const record2 = recordObjectTouch("proj", { kind: "swap_meet_stall", fields: { id: "stall-7" }, runId: "r2", verb: "a_wildly_novel_verb" }, options);
+    assert.ok(record2.touches.some((t) => t.verb === "a_wildly_novel_verb"), "a novel touch verb is stored verbatim");
+  });
+
+  it("a written touch record carries NO stored state/stage field and no transition table", () => {
+    const options = freshLedgerRoot();
+    recordObjectTouch("proj", { kind: "geo", fields: { locality: "Buffalo, NY" }, runId: "r1", verb: "targeted" }, options);
+    setObjectSetAside("proj", { objectKey: "geo:buffalo-ny", reason: "not a fit" }, options);
+    const record = getObjectTouch("proj", "geo:buffalo-ny", options);
+    assert.ok(record, "the object was recorded");
+    // The whole point of the design: derived buckets, not a stored lifecycle. These keys must never exist
+    // on a record — their presence is the stage-machine cage regrowing in open-string costume.
+    for (const banned of ["state", "stage", "status", "lifecycle", "transition", "transitions", "phase"]) {
+      assert.equal(banned in record, false, `the touch ledger stored a "${banned}" field — that is the cut stage machine`);
+    }
+    // A set-aside is a TOUCH (verb:"set-aside"), never a stored suppression flag.
+    assert.ok(record.touches.some((t) => t.verb === "set-aside" && t.reason === "not a fit"), "a set-aside is recorded as a touch, not a flag");
+    assert.equal("suppressed" in record, false, "suppression is derived at read time, never a stored flag");
+  });
+
+  it("the touch ledger source carries no stored state/stage/transition field in its normalizer", () => {
+    // Static proof the schema itself never grows a stored lifecycle field. We scan the normalizer's
+    // written shape: an assignment of a `state:` / `stage:` / transition table into the persisted record.
+    const src = stripComments(readSrc("gtm-store.mjs"));
+    const STORED_STATE_PATTERNS = [
+      /normalizeObjectTouch[\s\S]*?\breturn\s*\{[\s\S]*?\bstate\s*:/,
+      /normalizeObjectTouch[\s\S]*?\breturn\s*\{[\s\S]*?\bstage\s*:/,
+      /TRANSITIONS?\s*=\s*\{/,
+      /STATE_MACHINE\s*=/,
+    ];
+    const violations = STORED_STATE_PATTERNS.filter((p) => p.test(src));
+    assert.equal(
+      violations.length, 0,
+      `gtm-store.mjs stores a lifecycle state/stage/transition on the touch ledger (${violations.map((p) => p.toString()).join(", ")}). ` +
+      `The ledger stores touches only; every bucket is derived at read time. This is the cut cage regrowing.`,
+    );
+  });
+
+  it("no run path imports the touch ledger reader/funnel to gate a run", () => {
+    // The run-adjacent files that decide whether/what a run runs must never READ the ledger to gate. They
+    // may WRITE touches (run-derivation records them post-run), but reading getObjectTouch / deriveFunnel /
+    // listObjectTouches to branch a run is the exact "no run path reads the ledger to gate a run" ban.
+    const RUN_PATH_FILES = [
+      "graph.mjs",
+      "graph-operations.mjs",
+      "step-runners.mjs",
+      "source-entry.mjs",
+      "workflow-composer.mjs",
+    ];
+    const LEDGER_READERS = ["getObjectTouch", "listObjectTouches", "deriveFunnel", "deriveNextObjects", "objectTouchStore"];
+    for (const filename of RUN_PATH_FILES) {
+      const src = stripComments(readSrc(filename));
+      for (const reader of LEDGER_READERS) {
+        assert.equal(
+          src.includes(reader), false,
+          `${filename} references ${reader} — a run path must never read the touch ledger to gate a run (GTM-MACHINE.md §Area 1).`,
+        );
+      }
+    }
+  });
+
+  it("recordObjectTouch is a pure upsert+append — the same run re-recording is idempotent, never a state advance", () => {
+    const options = freshLedgerRoot();
+    const first = recordObjectTouch("proj", { kind: "keyword", fields: { query: "estate sale", geo: "buffalo" }, motionId: "m1", runId: "r1", verb: "worked" }, options);
+    assert.equal(first.objectKey, "keyword:estate-sale|buffalo");
+    assert.equal(first.touches.length, 1);
+    // Re-recording the identical (motionId, runId, verb) touch must be idempotent — a ledger, not a counter
+    // that advances a stage.
+    const again = recordObjectTouch("proj", { kind: "keyword", fields: { query: "estate sale", geo: "buffalo" }, motionId: "m1", runId: "r1", verb: "worked" }, options);
+    assert.equal(again.touches.length, 1, "an identical touch is deduped — no phantom state advance");
+    // A genuinely new motion touching the same object appends — one object, many motions.
+    const third = recordObjectTouch("proj", { kind: "keyword", fields: { query: "estate sale", geo: "buffalo" }, motionId: "m2", runId: "r2", verb: "worked" }, options);
+    assert.equal(third.touches.length, 2, "a distinct motion appends a touch to the same durable object");
   });
 });

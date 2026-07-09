@@ -347,6 +347,23 @@ async function findReferences({ kind, id: refId, projectId }) {
   return brainGet(`/api/projects/${encodeURIComponent(id)}/references?${params.toString()}`);
 }
 
+// The shared object funnel — every object any motion has touched, grouped by kind × emergent bucket
+// (seen / in_flight / handled / suppressed), derived at read time from the touch ledger + outcome joins.
+async function getFunnel({ projectId } = {}) {
+  const id = await resolveProjectId(projectId);
+  return brainGet(`/api/projects/${encodeURIComponent(id)}/funnel`);
+}
+
+// The objects a motion should look at next — touched, not yet handled, not set aside — newest first.
+async function getNextObjects({ projectId, kind, limit } = {}) {
+  const id = await resolveProjectId(projectId);
+  const params = new URLSearchParams();
+  if (kind) params.set("kind", String(kind));
+  if (limit != null) params.set("limit", String(limit));
+  const qs = params.toString();
+  return brainGet(`/api/projects/${encodeURIComponent(id)}/next-objects${qs ? `?${qs}` : ""}`);
+}
+
 // SUGGEST a grouping of existing motions into the arms of one belief test. The founder confirms it on
 // the board; there is NO verdict tool on this surface (a verdict is the founder's hand alone). Never a
 // precondition, never a gate — post-hoc context only.
@@ -658,17 +675,43 @@ const TOOLS = [
   },
   {
     name: "find_references",
-    description: "Answer 'where does X appear across channels' for a person, icp, claim, or experiment. For a person it returns their durable appearances; for icp/claim/experiment it returns the channels that reference it. Use for focus-to-trace and to understand cross-channel reuse before changing a shared object. Defaults to the active project. Read-only; derived, never seeded.",
+    description: "Answer 'where has X been touched across motions' for ANY object. Fast paths: a person returns their durable appearances; icp/claim/experiment return the channels that reference them. Any other kind (geo, keyword, page, partner, change, or any open kind) resolves to its object identity and returns its touches from the shared touch ledger — every motion that worked it, with the verb and time. Use for focus-to-trace and to understand cross-motion reuse before changing a shared object. Defaults to the active project. Read-only; derived, never seeded.",
     inputSchema: {
       type: "object",
       properties: {
-        kind: { type: "string", description: "One of: person, icp, claim, experiment." },
-        id: { type: "string", description: "The object id (person id, experiment id, claim text or index, or icp identifier)." },
+        kind: { type: "string", description: "person, icp, claim, experiment, or any object kind (geo, keyword, page, partner, change, …)." },
+        id: { type: "string", description: "The object id or its natural identifier — a person id, experiment id, claim text/index, icp identifier, or an object's key/identifier (e.g. a locality, keyword, or page path)." },
         projectId: { type: "string", description: "Optional. Defaults to the active project." },
       },
       required: ["kind", "id"],
     },
     handler: findReferences,
+  },
+  {
+    name: "get_funnel",
+    description: "Read the shared object funnel: every object any motion has touched (people, geos, keywords, pages, partners, product changes, any open kind), grouped by kind and by an emergent advisory bucket — seen, in flight, handled, or set aside. The buckets are derived live from the touch ledger and outcome joins, never a stored stage. Use to see the operation's real cross-motion picture. Defaults to the active project. Read-only; honest-blind on a project nothing has touched yet.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string", description: "Optional. Defaults to the active project." },
+      },
+      required: [],
+    },
+    handler: getFunnel,
+  },
+  {
+    name: "get_next_objects",
+    description: "Read the objects a motion should look at next — those already seen or in flight (touched, not yet handled, not set aside), newest first, optionally scoped to a kind. A strong steer for composing the next run; it never gates or triggers anything. Defaults to the active project. Read-only.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        kind: { type: "string", description: "Optional. Scope to one object kind (e.g. geo, keyword, page)." },
+        limit: { type: "number", description: "Optional. Max objects to return (default 50)." },
+        projectId: { type: "string", description: "Optional. Defaults to the active project." },
+      },
+      required: [],
+    },
+    handler: getNextObjects,
   },
   {
     name: "group_experiment",

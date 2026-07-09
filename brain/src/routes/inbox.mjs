@@ -5,6 +5,7 @@ import { json, readBody } from "./util.mjs";
 import { getPendingInbox } from "../pending-inbox.mjs";
 import { loadProject } from "../project-store.mjs";
 import { findReferences, listSharedKernel } from "../cross-reference.mjs";
+import { deriveFunnel, deriveNextObjects } from "../object-funnel.mjs";
 import {
   createOperatorSession,
   listFlowsNeedingFounder,
@@ -92,6 +93,36 @@ export default async function handle({ req, res, url }) {
       const kind = url.searchParams.get("kind");
       const id = url.searchParams.get("id");
       json(res, 200, findReferences(projectId, { kind, id }));
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return true;
+  }
+
+  // Funnel — Area 1's read-time projection over the touch ledger: every touched object grouped by kind ×
+  // emergent advisory bucket (seen / in_flight / handled / suppressed). Derived on every read from touches
+  // + outcome joins; no stored state. Read-only; honest-blind on a project nothing has touched yet.
+  const projectFunnelMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/funnel$/);
+  if (req.method === "GET" && projectFunnelMatch) {
+    try {
+      const projectId = decodeURIComponent(projectFunnelMatch[1]);
+      json(res, 200, deriveFunnel(projectId));
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return true;
+  }
+
+  // Next objects — the objects a motion should look at next (seen or in-flight, not handled, not set
+  // aside), newest first, optionally scoped to a kind. A strong steer, never a gate. Read-only.
+  const projectNextObjectsMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/next-objects$/);
+  if (req.method === "GET" && projectNextObjectsMatch) {
+    try {
+      const projectId = decodeURIComponent(projectNextObjectsMatch[1]);
+      const kind = url.searchParams.get("kind");
+      const limitRaw = Number(url.searchParams.get("limit"));
+      const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 50;
+      json(res, 200, deriveNextObjects(projectId, { kind, limit }));
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
