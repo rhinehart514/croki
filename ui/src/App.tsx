@@ -1776,7 +1776,9 @@ export default function App() {
     // session touched (the dock renders it inline); act/run with a resumable session are resumed server-side
     // (delegation) and synced once; act/run without one return drive+null and fall through to the untouched
     // create path below. Ideate posture always skips the fast lane so ideate conversations are unchanged.
-    if (composerPosture !== "ideate") {
+    // A fresh-pipeline intent (the goal launcher / "new pipeline") ALSO skips this — otherwise the goal gets
+    // intent-routed against the leftover session's id and swallowed as a "fast" answer, never composing.
+    if (composerPosture !== "ideate" && !freshPipelineIntent.current) {
       const turn = await composerTurn({ projectId, sessionId: s?.id, input: framed, hints, allowDrive: !!(resumable && s) });
       if (turn.mode === "fast") return turn;
       if (turn.mode === "drive" && turn.session) { syncOperator(turn.session); return turn; }
@@ -3041,12 +3043,16 @@ export default function App() {
               sharedContext={activeProject?.sharedContext ?? null}
               peopleCount={people.length}
               pipelineCount={channels.length}
-              onSubmitGoal={(g) => void handleComposerSend(g)}
+              // The goal launcher is the "start new work" front door — it must ALWAYS compose fresh, never
+              // resume a leftover interrupted/failed session (which would silently swallow the new goal into
+              // a dead run). Signal fresh intent so handleComposerSend takes the create path.
+              onSubmitGoal={(g) => { freshPipelineIntent.current = true; void handleComposerSend(g); }}
               // "Ideate channels for me" is a do-it action, not a mode flip on a hidden dock: kick
               // off an ideate-framed session right now. The screen leaves the launcher for the live
               // operator drive state, so the click has a visible result. The kickoff is self-framing
               // because composerPosture is still "build" in this tick's closure.
               onIdeate={() => {
+                freshPipelineIntent.current = true;
                 setComposerPosture("ideate");
                 void handleComposerSend(
                   "Ideate go-to-market pipelines for this product. Read what it does, then think with me: propose a few distinct pipelines worth running and challenge anything weak. Don't compose or build a pipeline yet — let's get clear first.",
