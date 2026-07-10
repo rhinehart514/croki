@@ -5,7 +5,8 @@ what is actually wired: connected-transport sending under the gate, no nightly/s
 This is the front-door snapshot of
 where the product actually stands. When something material changes, update this file and re-date it.
 For the product pitch read `README.md`; for how the system works read `AGENTS.md`; for the
-current build direction read `docs/GTM-ENGINE-REBUILD.md`. Everything else in `docs/` is
+current build direction read `docs/GTM-ENGINE-REBUILD.md`; for the approved production target read
+`docs/production-direction/00-index.md`. Everything else in `docs/` is
 history (see the doc map below).
 
 ---
@@ -280,6 +281,8 @@ This is doctrine now — see the same bar in `AGENTS.md`.
 - `docs/VISION.md` — the north star: what Drover is for and the shape it's built toward.
 - `AGENTS.md` — how the system works and its guardrails.
 - `docs/GTM-ENGINE-REBUILD.md` — the current build direction (Phases 0–6 have landed as code).
+- `docs/production-direction/00-index.md` — the production target: GTM for product development, with a
+  persistent product-scoped crew and a thin host boundary.
 - `docs/ENGINE-COLLAPSE-PLAN.md` — the plan to collapse the two parallel execution engines into one; deferred (legacy path is still live).
 - `docs/DISTRIBUTION.md` — the honest distribution picture for the desktop build.
 - `docs/STATE.md` — this file.
