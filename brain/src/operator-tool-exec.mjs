@@ -7,8 +7,8 @@ import { getEngineState } from "./engine.mjs";
 import { liveStepRuntime, createGateTranslator } from "./agent-bridge.mjs";
 import { buildMicroproduct } from "./build.mjs";
 import { storeRoot } from "./store-fs.mjs";
-import { createClaudeComposer } from "./composition.mjs";
-import { createClaudeProductModeler } from "./product-model-generator.mjs";
+import { createComposer } from "./composition.mjs";
+import { generateProductModelForProject } from "./product-model-generator.mjs";
 import { recordFlowRun, saveFlow } from "./flow-store.mjs";
 import { buildRunGrounding, deriveSuppression } from "./run-grounding.mjs";
 import { createDerivedSourceLoader } from "./cross-reference.mjs";
@@ -591,11 +591,26 @@ export async function executeTool(session, tool, options = {}) {
   // inside the founder-gate wall.
   if (tool.name === "derive_product_model") {
     const project = loadProject(options);
-    const repo = options.cwd || project.sharedContext?.repository?.repo || process.cwd();
+    const workspace = latestWorkspace(session, options);
+    const repo = options.cwd || workspace?.repo || project.sharedContext?.repository?.repo || process.cwd();
+    const grounding = buildRunGrounding(project, workspace?.report ?? null);
+    const groundingRef = project.sharedContext?.repository?.workspaceId ?? workspace?.report?.scannedAt ?? null;
+    const draft = options.generate ? null : await generateProductModelForProject({
+      project,
+      report: workspace?.report ?? null,
+      repo,
+      model: input.model ?? session.model,
+      runtime: input.runtime ?? session.runtime,
+      market: input.market,
+    });
+    if (draft && !draft.ok) throw new Error(draft.meta?.error || "The selected runtime could not derive the product model.");
     const productModel = await executeDomainCommand("DeriveProductModel", {
       ...input,
       projectId: project.id,
-    }, { ...options, projectId: project.id, generate: options.generate || createClaudeProductModeler({ cwd: repo }) });
+      grounding,
+      groundingRef,
+      repo,
+    }, { ...options, projectId: project.id, generate: options.generate || (async () => draft) });
     const next = addEvent(session, {
       type: "product_model_derived",
       title: "Derived the product picture",
@@ -780,7 +795,7 @@ export async function executeTool(session, tool, options = {}) {
       const composeRepo = options.cwd || composeProject.sharedContext?.repository?.repo || process.cwd();
       const composeFn = seededShape
         ? async () => ({ ok: true, nodes: seededShape.nodes, edges: Array.isArray(seededShape.edges) ? seededShape.edges : [] })
-        : (options.compose || createClaudeComposer({ cwd: composeRepo }));
+        : (options.compose || createComposer({ cwd: composeRepo, model: working.model, runtime: working.runtime }));
       // The composer sees the SAME real product grounding a run does — the cited scan report when a
       // workspace is open — so it composes against proven product truth instead of an empty {} .
       const composeWorkspace = latestWorkspace(working, options);

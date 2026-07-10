@@ -58,11 +58,20 @@ export function compactProduct(workspace) {
 }
 
 export function latestWorkspace(session, options = {}) {
-  const summaries = listWorkspaces(options);
-  const id = session.workspaceId || summaries[0]?.id;
+  const scoped = operatorProjectOptions(session, options);
+  let linkedWorkspaceId = null;
+  try {
+    linkedWorkspaceId = loadProject(scoped).sharedContext?.repository?.workspaceId ?? null;
+  } catch {
+    linkedWorkspaceId = null;
+  }
+  // A project-scoped session must never borrow another product's newest workspace. Retain the global
+  // fallback only for legacy unscoped sessions that predate durable project ownership.
+  const summaries = session.projectId ? [] : listWorkspaces(scoped);
+  const id = session.workspaceId || linkedWorkspaceId || summaries[0]?.id;
   if (!id) return null;
   try {
-    return getWorkspace(id, options);
+    return getWorkspace(id, scoped);
   } catch {
     return null;
   }

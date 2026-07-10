@@ -249,6 +249,7 @@ describe("codexRuntime", () => {
       toolNames: ["inspect", "run"],
       sessionId: "operator-1",
       home: "/tmp/gtm-codex",
+      persistenceBackend: "json",
       prompt: "Find the first pilot.",
     });
     assert.deepEqual(args.slice(0, 2), ["exec", "--json"]);
@@ -258,7 +259,7 @@ describe("codexRuntime", () => {
     assert.ok(args.includes("features.apps=false"));
     assert.ok(args.includes("features.network_proxy.enabled=false"));
     assert.ok(args.includes('mcp_servers.gtm-operator.command="node"'));
-    assert.ok(args.includes('mcp_servers.gtm-operator.env={GTM_IDE_OPERATOR_SESSION="operator-1",GTM_IDE_HOME="/tmp/gtm-codex"}'));
+    assert.ok(args.includes('mcp_servers.gtm-operator.env={GTM_IDE_OPERATOR_SESSION="operator-1",GTM_IDE_HOME="/tmp/gtm-codex",GTM_IDE_PERSISTENCE="json"}'));
     assert.ok(args.includes('mcp_servers.gtm-operator.enabled_tools=["inspect","run"]'));
     assert.ok(args.includes('mcp_servers.gtm-operator.default_tools_approval_mode="approve"'));
     assert.ok(args.some((arg) => arg.includes("developer_instructions=")));

@@ -62,7 +62,7 @@ function learnBlockFor(project, options = {}) {
 }
 
 // Honest blank default: with no composer wired, compose nothing rather than fall back to a
-// hardcoded skeleton (the cage we removed). Live composition is createClaudeComposer.
+// hardcoded skeleton (the cage we removed). Live composition is createComposer.
 const blankCompose = async () => ({ ok: false, error: "blank", nodes: [], edges: [] });
 
 function slug(value) {

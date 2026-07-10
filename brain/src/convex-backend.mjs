@@ -241,6 +241,9 @@ export function createConvexBackend(options = {}) {
 
   return {
     name: "convex",
+    // Cross-process runtimes must pin themselves to the concrete local format this process actually
+    // opened. That can be JSON when the SQLite native module is unavailable under this Node binary.
+    localBackendName: local.name,
     // Exposed so a boot path can hydrate and a graceful shutdown / test can settle the queue. Null when
     // there is no team to mirror to.
     mirror,

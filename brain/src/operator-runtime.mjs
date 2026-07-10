@@ -44,6 +44,7 @@ import { recallPriorSessions, systemPrompt } from "./operator-prompt.mjs";
 import { executeTool } from "./operator-tool-exec.mjs";
 import { safeLogFailure, makeFailureSink } from "./failure-log.mjs";
 import { resolveGitShaAsync } from "./friction.mjs";
+import { persistence } from "./persistence.mjs";
 
 const OPERATOR_HALT_STATUSES = new Set([
   "waiting_for_gate",
@@ -113,6 +114,8 @@ export async function runOperatorSession(id, runtime = {}) {
   const adapter = selection.adapter;
   const workspace = latestWorkspace(session, options);
   const authLabel = authModeLabel(selection.auth);
+  const activePersistence = persistence(options);
+  const persistenceBackend = activePersistence.localBackendName || activePersistence.name;
 
   session = addEvent({
     ...session,
@@ -157,6 +160,9 @@ export async function runOperatorSession(id, runtime = {}) {
     client: selection.client ?? null,
     query: runtime.query ?? null,
     options,
+    // The MCP bridge may run under a Node binary with a different native SQLite ABI than the host.
+    // Pin both processes to the concrete local format the host actually opened.
+    persistenceBackend,
     env: process.env,
     initialMessages: session.modelMessages?.length ? session.modelMessages : null,
     // Conversation continuity for the Claude Code (subscription) runtime. The runtime resumes the

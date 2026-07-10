@@ -9,10 +9,11 @@ import { createOperatorSession, getOperatorSession, getOperatorSessionFresh, sav
 import { jsonPersistence } from "../src/persistence.mjs";
 import { operatorTools, resolveOperatorGate, resolveOperatorGateRefine, resolveOperatorProposal, runOperatorSession, operatorSessionStalled, steerOperatorSession } from "../src/operator-runtime.mjs";
 import { loadFlow } from "../src/flow-store.mjs";
-import { createProject, loadProject, saveProject } from "../src/project-store.mjs";
-import { founderSafeValue, recallTaste } from "../src/operator-run-core.mjs";
+import { createProject, groundProjectInWorkspace, loadProject, saveProject } from "../src/project-store.mjs";
+import { founderSafeValue, latestWorkspace, recallTaste } from "../src/operator-run-core.mjs";
 import { run as gateRun, buildGateFraming } from "../src/connectors/gate/default.mjs";
 import { itemReviewText } from "../src/memory.mjs";
+import { openWorkspace } from "../src/workspace.mjs";
 
 function fakeClient(responses) {
   let index = 0;
@@ -119,6 +120,26 @@ describe("resident GTM operator runtime", () => {
       }]),
     });
     assert.equal(completed.runtime, "anthropic");
+  });
+
+  it("reads the session project's linked workspace instead of another product's newest scan", () => {
+    const repoA = path.join(parent, "product-a");
+    const repoB = path.join(parent, "product-b");
+    fs.mkdirSync(repoA);
+    fs.mkdirSync(repoB);
+    fs.writeFileSync(path.join(repoA, "app.mjs"), 'track("signup_completed");\n');
+    fs.writeFileSync(path.join(repoB, "app.mjs"), 'track("purchase_completed");\n');
+
+    const workspaceA = openWorkspace(repoA, "signup_completed", options);
+    const projectA = createProject({ name: "Product A" }, options).project;
+    groundProjectInWorkspace(workspaceA, { ...options, projectId: projectA.id });
+    const workspaceB = openWorkspace(repoB, "purchase_completed", options);
+    const projectB = createProject({ name: "Product B" }, options).project;
+    groundProjectInWorkspace(workspaceB, { ...options, projectId: projectB.id });
+
+    const session = createOperatorSession({ goal: "Work Product A", projectId: projectA.id }, options);
+    assert.equal(loadProject({ ...options, projectId: projectB.id }).sharedContext.repository.workspaceId, workspaceB.id);
+    assert.equal(latestWorkspace(session, options).id, workspaceA.id);
   });
 
   it("captures the runtime session id and threads it back on the next drive (chat memory)", async () => {

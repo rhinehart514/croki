@@ -78,6 +78,7 @@ export function buildCodexArgs({
   toolNames = [],
   sessionId,
   home,
+  persistenceBackend,
   resumeId,
   prompt,
 }) {
@@ -87,6 +88,7 @@ export function buildCodexArgs({
   const mcpEnv = tomlInlineTable({
     GTM_IDE_OPERATOR_SESSION: sessionId,
     GTM_IDE_HOME: home,
+    GTM_IDE_PERSISTENCE: persistenceBackend,
   });
   const shared = [
     "--json",
@@ -173,6 +175,7 @@ export const codexRuntime = {
       toolNames: (ctx.tools ?? []).map((tool) => tool.name),
       sessionId: ctx.sessionId,
       home: ctx.options?.root,
+      persistenceBackend: ctx.persistenceBackend,
       resumeId: ctx.runtimeSessionId || null,
       prompt,
     });
@@ -182,6 +185,7 @@ export const codexRuntime = {
       GTM_IDE_OPERATOR_SESSION: ctx.sessionId,
     };
     if (ctx.options?.root) childEnv.GTM_IDE_HOME = ctx.options.root;
+    if (ctx.persistenceBackend) childEnv.GTM_IDE_PERSISTENCE = ctx.persistenceBackend;
 
     const run = ctx.spawn ?? spawn;
     return await new Promise((resolve, reject) => {

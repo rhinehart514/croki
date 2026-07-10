@@ -1,7 +1,14 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { blankGenerate, createClaudeProductModeler, createProductModeler, toModel, PRODUCT_MODEL_PROMPT } from "../src/product-model-generator.mjs";
+import {
+  blankGenerate,
+  createClaudeProductModeler,
+  createProductModeler,
+  generateProductModelForProject,
+  toModel,
+  PRODUCT_MODEL_PROMPT,
+} from "../src/product-model-generator.mjs";
 
 const LAYERS = ["things", "relationships", "userGoals", "states", "ia", "workflows", "interactions", "transitions"];
 
@@ -92,5 +99,44 @@ describe("provider-neutral product model factory", () => {
     assert.equal(request.runtime, "claude-code");
     assert.equal(request.readOnly, true);
     assert.equal(request.output, "object");
+  });
+
+  it("builds the draft from the active project's supplied scan and requested runtime", async () => {
+    let request;
+    const project = {
+      id: "project-b",
+      name: "Product B",
+      sharedContext: { repository: { workspaceId: "workspace-b", repo: "/repo/b", outcome: "signup_completed" } },
+    };
+    const report = {
+      scannedAt: "2026-07-10T12:00:00.000Z",
+      productContext: { pkg: { name: "product-b", description: "The B product" } },
+      stack: ["node"],
+      winEvent: {
+        name: "signup_completed",
+        found: true,
+        attributionProperties: ["source"],
+        citations: [{ file: "src/b.ts", line: 9, label: "B signup" }],
+      },
+      gaps: [],
+    };
+    const result = await generateProductModelForProject({
+      project,
+      report,
+      model: "gpt-test",
+      runtime: "codex",
+      runTask: async (value) => {
+        request = value;
+        return { ok: true, value: { things: [{ name: "Signup" }] }, runtime: "codex", model: "gpt-test" };
+      },
+    });
+
+    assert.equal(request.runtime, "codex");
+    assert.equal(request.model, "gpt-test");
+    assert.match(request.prompt, /signup_completed/);
+    assert.match(request.prompt, /src\/b\.ts/);
+    assert.equal(result.groundingRef, "workspace-b");
+    assert.equal(result.grounding.productName, "Product B");
+    assert.deepEqual(result.model.things, [{ name: "Signup" }]);
   });
 });
