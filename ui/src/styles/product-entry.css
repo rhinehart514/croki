@@ -34,8 +34,10 @@
   color: var(--faint);
 }
 .pentry-name {
-  font-size: 15px;
-  font-weight: 660;
+  font-family: var(--serif);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--ink);
   line-height: 1.15;
   overflow: hidden;

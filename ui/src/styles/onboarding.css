@@ -64,11 +64,13 @@
 }
 
 .onb-title {
-  font-size: 21px;
-  font-weight: 680;
-  line-height: 1.2;
-  color: var(--ink, #18181b);
-  margin: 6px 0 0;
+  font-family: var(--serif);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  color: var(--ink, #23211D);
+  margin: 8px 0 0;
 }
 .onb-sub {
   font-size: 13.5px;

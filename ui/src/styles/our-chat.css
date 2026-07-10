@@ -4,16 +4,25 @@
    are the approved mockup's (docs/design/composer-redesign + our-chat.html). Geist rides in from the
    global font stack; these only add the warm ground, the bubble shapes, and the settle timing. */
 
+/* WARM ATELIER remap (2026-07-09). The composer's prior "Warm Calm" pass used a cream
+   ground (#faf8f4) and an amber accent (#f59e0b) — both explicitly retired by the
+   founder-approved Warm Atelier identity: cream is banned as a ground, and the one accent
+   moved to spruce-teal. These locals now carry the grey-taupe stone grounds and the teal
+   accent, so the whole composer re-skins from here. The "amber" token names are kept but
+   now hold the gate OCHRE (the gate's own semantic), distinct from the teal live-edge. */
 .our-chat {
-  --oc-ground: #faf8f4; --oc-panel: #fffefb; --oc-line: #ece7df; --oc-line-soft: #f3efe8;
-  --oc-ink: #211f1b; --oc-ink-2: #5b554c; --oc-ink-3: #a39c90; --oc-ink-4: #cec7ba;
-  --oc-warm-50: #f8f5ef; --oc-warm-100: #f3efe7; --oc-warm-150: #ece7dd;
-  --oc-amber-ink: #b45309; --oc-amber: #f59e0b; --oc-amber-tint: #fffdf8; --oc-amber-tint2: #fff8ee; --oc-amber-line: #f3e2c4;
-  --oc-ok: #4a9d76;
-  --oc-sh-1: 0 1px 2px rgba(66,52,34,.06), 0 1px 1px rgba(66,52,34,.03);
-  --oc-sh-2: 0 8px 20px -10px rgba(66,52,34,.16), 0 2px 5px -3px rgba(66,52,34,.07);
-  --oc-sh-lift: 0 14px 30px -12px rgba(66,52,34,.20), 0 4px 8px -4px rgba(66,52,34,.09);
-  --oc-sh-warm: 0 10px 26px -12px rgba(180,120,40,.20);
+  --oc-ground: #E3E0DA; --oc-panel: #EFEDE8; --oc-line: #D3CFC6; --oc-line-soft: #DCD8D0;
+  --oc-ink: #23211D; --oc-ink-2: #4E4B44; --oc-ink-3: #847F75; --oc-ink-4: #ABA598;
+  --oc-warm-50: #E9E6E0; --oc-warm-100: #DCD8D0; --oc-warm-150: #D3CFC6;
+  /* gate ochre (the "your call" semantic) — kept apart from the teal live-edge accent */
+  --oc-amber-ink: #A9791A; --oc-amber: #A9791A; --oc-amber-tint: #F7F3E9; --oc-amber-tint2: #F1E6CD; --oc-amber-line: #E4D3A8;
+  /* the one live-edge accent — spruce/pine teal */
+  --oc-teal: #2E6E5E; --oc-teal-ink: #1E5245; --oc-teal-soft: #DCE7E2; --oc-teal-line: #B7CEC6;
+  --oc-ok: #5D7350;
+  --oc-sh-1: 0 1px 2px rgba(38,33,26,.05), 0 1px 1px rgba(38,33,26,.03);
+  --oc-sh-2: 0 8px 20px -10px rgba(38,33,26,.16), 0 2px 5px -3px rgba(38,33,26,.07);
+  --oc-sh-lift: 0 14px 30px -12px rgba(38,33,26,.20), 0 4px 8px -4px rgba(38,33,26,.09);
+  --oc-sh-warm: 0 10px 26px -12px rgba(169,121,26,.22);
   --oc-ease: cubic-bezier(.32,.72,0,1);        /* settle — no overshoot */
   --oc-ease-soft: cubic-bezier(.4,0,.2,1);
 }
@@ -29,7 +38,7 @@
   display: flex; align-items: center; gap: 11px;
   padding: 15px 18px; border-bottom: 1px solid var(--oc-line-soft);
 }
-.our-chat .oc-head-title { font-weight: 600; font-size: 14.5px; letter-spacing: -.014em; color: var(--oc-ink); }
+.our-chat .oc-head-title { font-family: var(--serif); font-weight: 600; font-size: 16px; letter-spacing: -.01em; color: var(--oc-ink); }
 .our-chat .oc-head-sub { font-size: 12px; color: var(--oc-ink-3); margin-left: auto; }
 .our-chat .oc-head-icon {
   width: 26px; height: 26px; border-radius: 8px; border: none; background: transparent;
@@ -43,7 +52,7 @@
 .our-chat .oc-presence { position: relative; width: 34px; height: 34px; flex: none; }
 .our-chat .oc-presence .oc-ring {
   position: absolute; inset: -4px; border-radius: 50%; opacity: 0;
-  background: conic-gradient(from 0deg, rgba(74,157,118,0), rgba(74,157,118,.55), rgba(74,157,118,0) 65%);
+  background: conic-gradient(from 0deg, rgba(46,110,94,0), rgba(46,110,94,.55), rgba(46,110,94,0) 65%);
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
   mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
   transition: opacity .3s var(--oc-ease-soft);
@@ -73,7 +82,7 @@
 .our-chat .oc-vrow { display: flex; align-items: center; gap: 11px; padding: 8px 0; }
 .our-chat .oc-vrow + .oc-vrow { border-top: 1px solid var(--oc-line-soft); }
 .our-chat .oc-vdot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-.our-chat .oc-vdot.needs { background: var(--oc-amber); box-shadow: 0 0 0 3px rgba(245,158,11,.15); }
+.our-chat .oc-vdot.needs { background: var(--oc-amber); box-shadow: 0 0 0 3px rgba(169,121,26,.15); }
 .our-chat .oc-vdot.work { background: var(--oc-ink-4); }
 .our-chat .oc-vdot.quiet { background: var(--oc-panel); box-shadow: inset 0 0 0 1.5px var(--oc-line); }
 .our-chat .oc-vname { font-weight: 600; font-size: 13px; width: 96px; flex: none; letter-spacing: -.01em; color: var(--oc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -192,12 +201,12 @@
 .our-chat .oc-gate-h { display: flex; align-items: center; gap: 11px; padding: 14px 16px 12px; }
 .our-chat .oc-gate-lock {
   width: 30px; height: 30px; border-radius: 10px; background: var(--oc-panel); border: 1px solid var(--oc-amber-line);
-  display: grid; place-items: center; color: var(--oc-amber-ink); flex: none; box-shadow: 0 2px 6px -3px rgba(245,158,11,.35);
+  display: grid; place-items: center; color: var(--oc-amber-ink); flex: none; box-shadow: 0 2px 6px -3px rgba(169,121,26,.30);
 }
 .our-chat .oc-gate-lock svg { width: 15px; height: 15px; }
-.our-chat .oc-gate-t { font-weight: 700; font-size: 13.5px; color: var(--oc-amber-ink); letter-spacing: -.01em; }
-.our-chat .oc-gate-s { font-size: 12px; color: #a06a24; margin-top: 1px; }
-.our-chat .oc-gate-f { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--oc-amber-line); background: rgba(255,255,255,.35); }
+.our-chat .oc-gate-t { font-family: var(--serif); font-weight: 700; font-size: 15px; color: var(--oc-amber-ink); letter-spacing: -.01em; }
+.our-chat .oc-gate-s { font-size: 12px; color: var(--oc-amber-ink); margin-top: 1px; }
+.our-chat .oc-gate-f { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--oc-amber-line); background: rgba(244,242,238,.5); }
 .our-chat .oc-gate .oc-btn.amber:disabled { opacity: .5; cursor: default; }
 
 /* ── Gate stage — the real founder review, IN the thread. The amber-at-the-gate register holds: a warm
@@ -221,11 +230,11 @@
 .our-chat .oc-gate-stage-h > div { min-width: 0; }
 .our-chat .oc-gate-stage-close {
   margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 5px;
-  font-family: inherit; font-size: 12px; font-weight: 600; color: #a06a24; cursor: pointer;
+  font-family: inherit; font-size: 12px; font-weight: 600; color: var(--oc-amber-ink); cursor: pointer;
   background: transparent; border: 1px solid transparent; border-radius: 9px; padding: 5px 9px;
   transition: background .16s var(--oc-ease-soft), border-color .16s var(--oc-ease-soft);
 }
-.our-chat .oc-gate-stage-close:hover { background: rgba(255,255,255,.5); border-color: var(--oc-amber-line); }
+.our-chat .oc-gate-stage-close:hover { background: rgba(244,242,238,.6); border-color: var(--oc-amber-line); }
 .our-chat .oc-gate-stage-close svg { width: 13px; height: 13px; }
 .our-chat .oc-gate-stage-body { padding: 4px; overflow-x: auto; }
 
@@ -354,7 +363,9 @@
 .our-chat .oc-btn:active { transform: translateY(0) scale(.98); }
 .our-chat .oc-btn.ghost { background: transparent; border-color: transparent; color: var(--oc-ink-2); box-shadow: none; }
 .our-chat .oc-btn.ghost:hover { background: var(--oc-warm-100); box-shadow: none; }
-.our-chat .oc-btn.amber { background: #b45309; border-color: #a04a08; color: #fff; box-shadow: 0 8px 18px -8px rgba(180,83,9,.5); }
+/* The gate's go-ahead is an INK pill (Warm Atelier: the accent never lands on an action; the
+   loud button is dark, the ochre stays chrome). Kept class name `.amber` for markup stability. */
+.our-chat .oc-btn.amber { background: var(--oc-ink); border-color: var(--oc-ink); color: var(--oc-panel); box-shadow: 0 8px 18px -10px rgba(38,33,26,.5); }
 
 /* ── Typing indicator (crew is composing) ───────────────────────────────── */
 .our-chat .oc-typing { display: inline-flex; align-items: center; gap: 4px; background: var(--oc-warm-50); border-radius: 5px 17px 17px 17px; padding: 12px 15px; box-shadow: var(--oc-sh-1); }

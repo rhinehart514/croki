@@ -4,51 +4,70 @@
 @import "@fontsource-variable/geist-mono";
 
 /* ════════════════════════════════════════════════════════════════════════
-   GTM IDE design system — workflow-builder native (Retool / ElevenLabs lens)
-   Clean light canvas, monochrome ink, semantic color ONLY, dark = primary.
-   Geist (vibe-coder-native, Vercel/v0). No decorative purple. Tokens, not hexes.
+   Drover design system — WARM ATELIER (founder-approved, 2026-07-09)
+   Grey-taupe stone grounds (deliberately NOT cream), one quiet spruce-teal
+   accent used only for the live edge, a warm serif for display, a clean
+   system sans for chrome, tabular numerals for anything that changes.
+   Reference of record: scratchpad/design-directions/warm-atelier-elevated.html
+   Tokens keep their names so the whole app re-skins from this block; only the
+   VALUES moved from zinc/Geist to Warm Atelier.
    ════════════════════════════════════════════════════════════════════════ */
 :root {
-  font-family: "Geist Variable", ui-sans-serif, -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #18181b;
-  background: #fafafa;
+  font-family: var(--sans);
+  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, "Roboto Mono", monospace;
+
+  /* Type stacks — a warm serif for display/headings/mission, a clean system
+     sans for chrome, mono/tabular for numerals. */
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  --mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, "Roboto Mono", monospace;
+
+  color: #23211D;
+  background: #E3E0DA;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 
-  /* Ink ramp — near-black to faint, monochrome (zinc), in OKLCH so the steps are
-     perceptually even and dark-mode/derivation stays honest. Values match the prior
-     zinc hexes 1:1, so nothing shifts visually. */
-  --ink: oklch(0.21 0.006 285.9);     /* #18181b — titles, primary text */
-  --ink-2: oklch(0.37 0.013 285.8);   /* #3f3f46 — body */
-  --muted: oklch(0.55 0.016 285.9);   /* #71717a — labels, secondary */
-  --faint: oklch(0.71 0.015 286.1);   /* #a1a1aa — placeholder, meta */
-  --ghost: oklch(0.87 0.009 286.3);   /* #d4d4d8 — disabled, dividers-strong */
+  /* Ink ramp — a deep cool umber-slate, not pure grey, not warm brown. Token
+     names kept 1:1 with the old zinc ramp so every reference re-skins here. */
+  --ink: #23211D;      /* titles, primary text */
+  --ink-2: #4E4B44;    /* body */
+  --muted: #847F75;    /* labels, secondary */
+  --faint: #ABA598;    /* placeholder, meta */
+  --ghost: #C6C1B6;    /* disabled, strong dividers */
 
-  /* Surfaces */
-  --line: oklch(0.929 0 0);           /* #ececec — hairline borders */
-  --line-2: oklch(0.92 0.004 286.3);  /* #e4e4e7 — card borders */
-  --surface: oklch(1 0 0);            /* #ffffff — cards, panels */
-  --surface-2: oklch(0.967 0.002 286.4); /* #f4f4f5 — inset, hover fills */
-  --canvas: oklch(0.985 0 0);         /* #fafafa — the workspace */
-  --canvas-dot: oklch(0.92 0.004 286.3); /* #e4e4e7 — dot grid */
-  --panel: oklch(1 0 0 / 0.86);
+  /* Surfaces — grey-taupe stone. room < workspace < panel < card, warmest-lifted. */
+  --line: #D3CFC6;                    /* hairline borders */
+  --line-2: #C6C1B6;                  /* card borders */
+  --surface: #F4F2EE;                 /* cards, panels — lifted taupe, never cream */
+  --surface-2: #DCD8D0;               /* inset, wells, hover fills */
+  --canvas: #E9E6E0;                  /* the workspace ground */
+  --canvas-dot: #D3CFC6;              /* dot grid */
+  --panel: #EFEDE8;                   /* raised crew panel (opaque — no glass) */
+  --room: #E3E0DA;                    /* the desk / room ground */
+  --card: #F4F2EE;                    /* cards on the canvas */
+  --inset: #DCD8D0;                   /* wells, hover fills (alias of surface-2) */
 
-  /* Primary = ink. Dark pill, white text — the Deploy/Publish/Run button. */
-  --primary: oklch(0.21 0.006 285.9);
-  --primary-hover: oklch(0 0 0);
-  --on-primary: oklch(1 0 0);
+  /* Primary = ink. Dark pill, warm-paper text — the Run/Send button. */
+  --primary: #23211D;
+  --primary-hover: #000000;
+  --on-primary: #E9E6E0;
 
-  /* One restrained link/interactive blue (Retool's fx/links). Not decoration. */
-  --link: oklch(0.546 0.245 262.9);   /* #2563eb */
+  /* The one grounded accent — a deep spruce/pine teal. Used rarely, only for the
+     live/interactive edge. Replaces the old link blue AND the old accent. */
+  --ember: #2E6E5E;
+  --ember-soft: #DCE7E2;
+  --ember-ink: #1E5245;
+  --ember-line: #B7CEC6;
+  --link: #1E5245;                    /* interactive text keys to the teal */
 
-  /* Semantic — color for MEANING only (status dots, edge pills, gates) */
-  --proven: oklch(0.627 0.17 149.2);  --proven-soft: oklch(0.982 0.018 155.8); /* #16a34a / #f0fdf4 */
-  --gap: oklch(0.667 0.157 58.3);     --gap-soft: oklch(0.987 0.022 95.3);     /* #d97706 / #fffbeb */
-  --danger: oklch(0.577 0.245 27.3);  --danger-soft: oklch(0.971 0.013 17.4);  /* #dc2626 / #fef2f2 */
-  --blind: oklch(0.71 0.015 286.1);   /* #a1a1aa — no signal */
-  --agent: oklch(0.21 0.006 285.9);   /* agent kind — ink, not purple */
+  /* Semantic — color for MEANING only (status, gates), kept apart from the accent.
+     proven = settled sage · gap = the gate ochre · danger = warm brick. */
+  --proven: #5D7350;  --proven-soft: #E1E7DB;
+  --gap: #A9791A;     --gap-soft: #F1E6CD;
+  --danger: #B4443A;  --danger-soft: #F1E0DC;
+  --blind: #ABA598;   /* no signal */
+  --agent: #23211D;   /* agent kind — ink */
 
   /* Type scale — Geist, ~1.22 modular, IDE-dense base. Use these, not raw px. */
   --text-xs: 0.6875rem;   /* 11px — meta, badges */
@@ -76,11 +95,11 @@
   /* Radius, elevation, motion — restrained. Elevation is a real register now: a node
      card rests low, a popover floats, a modal commands. */
   --r-sm: 6px;  --r-md: 9px;  --r-lg: 12px;  --r-xl: 16px;  --r-2xl: 24px;
-  --shadow-xs: 0 1px 1px oklch(0.21 0.006 285.9 / 0.05);
-  --shadow-sm: 0 1px 2px oklch(0.21 0.006 285.9 / 0.06);
-  --shadow-card: 0 1px 2px oklch(0.21 0.006 285.9 / 0.04), 0 1px 3px oklch(0.21 0.006 285.9 / 0.06);
-  --shadow-pop: 0 4px 12px oklch(0.21 0.006 285.9 / 0.08), 0 12px 32px oklch(0.21 0.006 285.9 / 0.10);
-  --shadow-modal: 0 8px 24px oklch(0.21 0.006 285.9 / 0.12), 0 24px 64px oklch(0.21 0.006 285.9 / 0.16);
+  --shadow-xs: 0 1px 1px rgba(38, 33, 26, 0.04);
+  --shadow-sm: 0 1px 2px rgba(38, 33, 26, 0.05);
+  --shadow-card: 0 1px 0 rgba(38, 33, 26, 0.03), 0 4px 12px -7px rgba(38, 33, 26, 0.16);
+  --shadow-pop: 0 4px 12px rgba(38, 33, 26, 0.07), 0 12px 32px -10px rgba(38, 33, 26, 0.18);
+  --shadow-modal: 0 8px 24px -12px rgba(38, 33, 26, 0.22), 0 24px 64px -20px rgba(38, 33, 26, 0.28);
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --dur-fast: 120ms;
@@ -91,11 +110,13 @@
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* soft overshoot — entrances, content-lands only */
   --dur-slow: 460ms;                                 /* panel/overlay entrances, stagger base — deliberate, not snappy */
   --dur-amb: 22s;                                    /* ambient pastel drift period */
-  --lift-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 16px 38px -16px rgba(20, 20, 25, 0.30);
+  --lift-shadow: 0 1px 2px rgba(38, 33, 26, 0.04), 0 16px 38px -16px rgba(38, 33, 26, 0.26);
 
-  /* Back-compat aliases (older classes referenced these) */
-  --accent: oklch(0.21 0.006 285.9);
-  --accent-soft: oklch(0.967 0.002 286.4);
+  /* Back-compat aliases (older classes referenced these). The old app used --accent
+     as a dark-ink primary; keep that meaning so existing dark pills stay dark. The
+     spruce accent is --ember, reached explicitly, never via --accent. */
+  --accent: #23211D;
+  --accent-soft: #DCD8D0;
 }
 
 * {
@@ -107,7 +128,20 @@ body {
   min-width: 320px;
   min-height: 100vh;
   overflow: hidden;
+  background: var(--room);
+  color: var(--ink);
+  font-family: var(--sans);
+  line-height: 1.5;
+  /* the quiet paper tooth — a barely-there dot grid on the room ground */
+  background-image: radial-gradient(circle at 1px 1px, rgba(38, 33, 26, 0.02) 1px, transparent 0);
+  background-size: 22px 22px;
 }
+
+/* Tabular numerals for anything that changes — clocks, counts, elapsed, percentages.
+   The reference keys every live number to mono/tabular so it holds still as it ticks. */
+.tnum { font-variant-numeric: tabular-nums; }
+.serif { font-family: var(--serif); }
+.mono { font-family: var(--mono); }
 
 button,
 input,
@@ -139,10 +173,13 @@ svg {
   align-items: center;
   gap: 13px;
   padding: 0 18px;
-  border-bottom: 1px solid rgba(23, 30, 46, 0.1);
-  background: rgba(252, 252, 253, 0.84);
-  backdrop-filter: blur(24px) saturate(160%);
+  border-bottom: 1px solid var(--line);
+  background: var(--room);
 }
+
+/* The wordmark reads in the warm serif, with the leading D carrying the one teal accent. */
+.brand-word { font-family: var(--serif); font-size: 17px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+.brand-word .d { color: var(--ember); }
 
 .brand,
 .scan-meta,
@@ -165,9 +202,9 @@ svg {
   height: 27px;
   place-items: center;
   border-radius: 8px;
-  color: white;
-  background: linear-gradient(145deg, #18181b, #18181b);
-  box-shadow: 0 5px 12px rgba(73, 75, 196, 0.22);
+  color: var(--on-primary);
+  background: var(--ink);
+  box-shadow: 0 4px 12px -6px rgba(38, 33, 26, 0.4);
 }
 
 .brand-mark svg {
@@ -5800,16 +5837,16 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 /* ── Goal launcher (the front door — say what you want) ────────────────────── */
 .goal-launcher { position: absolute; inset: 0; display: grid; place-items: center; padding: 32px; overflow-y: auto; }
 .goal-launcher-inner { width: 100%; max-width: 640px; text-align: center; }
-.goal-launcher-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
-.goal-launcher-title { font-size: 27px; font-weight: 650; color: var(--ink); margin: 8px 0 10px; letter-spacing: -0.01em; }
-.goal-launcher-sub { font-size: 14px; line-height: 1.55; color: var(--muted); max-width: 540px; margin: 0 auto 22px; }
+.goal-launcher-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.goal-launcher-title { font-family: var(--serif); font-size: 32px; font-weight: 600; color: var(--ink); margin: 12px 0 12px; letter-spacing: -0.015em; text-wrap: balance; }
+.goal-launcher-sub { font-size: 14px; line-height: 1.6; color: var(--muted); max-width: 540px; margin: 0 auto 22px; }
 .goal-launcher-box {
   display: flex; align-items: flex-end; gap: 8px; text-align: left;
   padding: 12px 12px 12px 16px; background: var(--surface);
   border: 1px solid var(--line-2); border-radius: var(--r-xl); box-shadow: var(--shadow-card);
   transition: border-color 140ms var(--ease), box-shadow 140ms var(--ease);
 }
-.goal-launcher-box:focus-within { border-color: var(--primary); box-shadow: var(--shadow-pop); }
+.goal-launcher-box:focus-within { border-color: var(--ember-line); box-shadow: 0 6px 18px -7px rgba(46, 110, 94, 0.28); }
 .goal-launcher-input {
   flex: 1; border: 0; outline: none; resize: none; background: none;
   font: inherit; font-size: 15px; line-height: 1.5; color: var(--ink); padding: 4px 0;

@@ -44,7 +44,7 @@
   border-bottom: 1px solid var(--line);
   flex: 0 0 auto;
 }
-.lr-head-title { font-size: 12px; font-weight: 640; color: var(--ink); letter-spacing: -0.005em; }
+.lr-head-title { font-family: var(--serif); font-size: 14px; font-weight: 600; color: var(--ink); letter-spacing: -0.005em; }
 
 .lr-body {
   flex: 1 1 auto;
