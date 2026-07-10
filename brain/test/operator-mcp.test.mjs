@@ -138,6 +138,89 @@ describe("operator MCP bridge — tool routing against the durable session", () 
     assert.deepEqual(persisted.focusRef, { type: "question", id: "q-1" });
   });
 
+  it("keeps terrain read and hypothesis ids as projection-only context across all canonical verbs", async () => {
+    const project = createProject({ id: "terrain-parity", name: "Terrain Parity" }, options).project;
+    const graph = {
+      id: "terrain-parity-graph", name: "Terrain parity graph", version: "1",
+      nodes: [
+        { id: "ctx", category: "context", connector: "product", label: "Prepared", position: { x: 0, y: 0 }, config: { name: "Draft" } },
+        { id: "gate", category: "gate", connector: "default", label: "Founder gate", position: { x: 200, y: 0 }, config: {} },
+        { id: "measure", category: "measure", connector: "default", label: "Measure", position: { x: 400, y: 0 }, config: {} },
+      ],
+      edges: [
+        { id: "a", source: "ctx", target: "gate", edgeType: "data" },
+        { id: "b", source: "gate", target: "measure", edgeType: "data" },
+      ],
+    };
+    saveFlow(graph, options);
+    saveProject({ ...project, channels: [{ id: "terrain-pipeline", graphId: graph.id, name: "Terrain", objective: "Test parity", kind: "custom", enabled: true }] }, options);
+    const scoped = createOperatorSession({ goal: "Use the terrain context.", projectId: project.id, graphId: graph.id }, options);
+    const readRef = { type: "terrain-read", id: "terrain-read-stable", projectId: project.id };
+    const hypothesisRef = { type: "terrain-hypothesis", id: "terrain-hypothesis-stable", projectId: project.id };
+    const bridge = createOperatorBridge({
+      sessionId: scoped.id,
+      options: { ...options, gateTranslator: null, askCrew: async () => ({ ok: true, reasoning: "Answer grounded in the supplied projection refs.", items: [] }) },
+    });
+
+    const beforeInspect = structuredClone(getOperatorSession(scoped.id, options));
+    const inspected = await bridge.callTool("inspect", { ref: hypothesisRef, refs: [readRef] });
+    assert.deepEqual(inspected.result.ref, { type: "terrain-hypothesis", id: hypothesisRef.id });
+    assert.deepEqual(inspected.result.value.projectionRef, { type: "terrain-hypothesis", id: hypothesisRef.id });
+    assert.equal(inspected.result.value.durable, false);
+    assert.equal(inspected.result.value.authority, false);
+    assert.deepEqual(getOperatorSession(scoped.id, options), beforeInspect, "terrain inspection remains read-only");
+
+    const focused = await bridge.callTool("focus", { ref: hypothesisRef, refs: [readRef] });
+    assert.deepEqual(focused.result.focusRef, { type: "terrain-hypothesis", id: hypothesisRef.id });
+    assert.ok(focused.result.contextRefs.some((ref) => ref.type === "terrain-read" && ref.id === readRef.id));
+
+    const asked = await bridge.callTool("ask", { prompt: "What would change this read?", ref: hypothesisRef, refs: [readRef], teammateRefs: ["researcher"] });
+    assert.ok(asked.result.refs.some((ref) => ref.type === "terrain-hypothesis" && ref.id === hypothesisRef.id));
+    assert.ok(asked.result.refs.some((ref) => ref.type === "terrain-read" && ref.id === readRef.id));
+
+    const recorded = await bridge.callTool("record", { kind: "session_note", value: "Keep the model read provisional.", ref: hypothesisRef, refs: [readRef] });
+    assert.ok(recorded.result.recorded.refs.some((ref) => ref.type === "terrain-hypothesis" && ref.id === hypothesisRef.id));
+
+    const proposed = await bridge.callTool("propose", {
+      rationale: "Stage a reversible label change.", ref: hypothesisRef, refs: [readRef],
+      operations: [{ type: "set_graph_name", name: "Terrain-context proposal" }],
+    });
+    assert.equal(proposed.pause, true);
+    assert.ok(proposed.result.refs.some((ref) => ref.type === "terrain-read" && ref.id === readRef.id));
+    assert.notEqual(loadFlow(graph.id, null, options).graph.name, "Terrain-context proposal", "terrain context cannot apply a proposal");
+
+    const runSession = createOperatorSession({ goal: "Run with terrain context.", projectId: project.id, graphId: graph.id }, options);
+    const runBridge = createOperatorBridge({ sessionId: runSession.id, options: { ...options, gateTranslator: null } });
+    const ran = await runBridge.callTool("run", { goal: "Run with terrain context.", ref: hypothesisRef, refs: [readRef] });
+    assert.equal(ran.pause, true);
+    assert.equal(ran.status, "waiting_for_gate");
+    assert.ok(ran.result.refs.some((ref) => ref.type === "terrain-hypothesis" && ref.id === hypothesisRef.id));
+    const runPersisted = getOperatorSession(runSession.id, options);
+    assert.ok(runPersisted.contextRefs.some((ref) => ref.type === "terrain-read" && ref.id === readRef.id));
+    assert.deepEqual(loadFounderDecisions(project.id, options), [], "canonical terrain verbs cannot forge a founder decision or clear the gate");
+  });
+
+  it("rejects explicitly foreign terrain refs across every canonical verb", async () => {
+    const projectA = createProject({ id: "terrain-a", name: "Terrain A" }, options).project;
+    createProject({ id: "terrain-b", name: "Terrain B" }, options);
+    const scoped = createOperatorSession({ goal: "Stay in terrain A.", projectId: projectA.id }, options);
+    const bridge = createOperatorBridge({ sessionId: scoped.id, options });
+    const foreign = { type: "terrain-hypothesis", id: "foreign-hypothesis", projectId: "terrain-b" };
+    const calls = [
+      ["inspect", { ref: foreign }],
+      ["focus", { ref: foreign }],
+      ["ask", { prompt: "Inspect this.", ref: foreign, teammateRefs: ["researcher"] }],
+      ["propose", { ref: foreign, operations: [{ type: "set_graph_name", name: "Foreign" }] }],
+      ["record", { kind: "session_note", value: "Foreign", ref: foreign }],
+      ["run", { goal: "Run foreign context.", ref: foreign }],
+    ];
+    for (const [name, input] of calls) {
+      await assert.rejects(() => bridge.callTool(name, input), /belongs to project terrain-b, not terrain-a/);
+    }
+    assert.deepEqual(getOperatorSession(scoped.id, options).contextRefs, []);
+    assert.deepEqual(loadFounderDecisions(projectA.id, options), []);
+  });
+
   it("rejects graph refs owned by another project before focus, inspection, or execution", async () => {
     const projectA = createProject({ id: "project-a", name: "Project A" }, options).project;
     const projectB = createProject({ id: "project-b", name: "Project B" }, options).project;

@@ -208,14 +208,16 @@ async function canonicalInspect(input = {}) {
   const projectId = await resolveProjectId(input.projectId);
   if (!input.sessionId) throw new Error("inspect requires a durable operator sessionId.");
   const ref = normalizeStableRef(input.ref ?? null, { projectId });
-  const response = await brainPost(`/api/operator/sessions/${encodeURIComponent(input.sessionId)}/verbs/inspect`, { projectId, ref });
+  const refs = normalizeStableRefs(input.refs, { projectId });
+  const response = await brainPost(`/api/operator/sessions/${encodeURIComponent(input.sessionId)}/verbs/inspect`, { projectId, ref, refs });
   return { classification: classifyOperatorVerb("inspect"), ...response };
 }
 
 async function canonicalFocus(input = {}) {
   const projectId = await resolveProjectId(input.projectId);
   const ref = normalizeStableRef(input.ref, { projectId });
-  const response = await brainPost(`/api/operator/sessions/${encodeURIComponent(input.sessionId)}/verbs/focus`, { projectId, ref, refs: input.refs });
+  const refs = normalizeStableRefs(input.refs, { projectId });
+  const response = await brainPost(`/api/operator/sessions/${encodeURIComponent(input.sessionId)}/verbs/focus`, { projectId, ref, refs });
   return { classification: classifyOperatorVerb("focus"), ...response };
 }
 
@@ -243,7 +245,8 @@ async function canonicalDriveVerb(verb, input = {}) {
 async function canonicalRecord(input = {}) {
   const projectId = await resolveProjectId(input.projectId);
   const refs = verbRefs(input, projectId);
-  const response = await brainPost(`/api/operator/sessions/${encodeURIComponent(input.sessionId)}/verbs/record`, { projectId, kind: input.kind, value: input.value, ref: input.ref, refs });
+  const ref = normalizeStableRef(input.ref ?? null, { projectId });
+  const response = await brainPost(`/api/operator/sessions/${encodeURIComponent(input.sessionId)}/verbs/record`, { projectId, kind: input.kind, value: input.value, ref, refs });
   return { classification: classifyOperatorVerb("record"), ...response };
 }
 
@@ -1006,8 +1009,8 @@ const REF_FIELDS = {
 };
 
 const CANONICAL_TOOLS = [
-  { name: "inspect", description: "Inspect a stable product-scoped reference through the durable operator service. Read-only; it never records, runs, approves, or releases anything.", inputSchema: { type: "object", properties: REF_FIELDS, required: ["sessionId"] }, handler: canonicalInspect },
-  { name: "focus", description: "Focus a durable operator conversation on a stable product-scoped reference. Writes session context only and never changes the referenced record.", inputSchema: { type: "object", properties: REF_FIELDS, required: ["sessionId", "ref"] }, handler: canonicalFocus },
+  { name: "inspect", description: "Inspect a stable product-scoped reference, including ephemeral terrain-read and terrain-hypothesis context, through the durable operator service. Read-only; it never records, runs, approves, or releases anything.", inputSchema: { type: "object", properties: REF_FIELDS, required: ["sessionId"] }, handler: canonicalInspect },
+  { name: "focus", description: "Focus a durable operator conversation on a stable product-scoped reference, including ephemeral terrain-read and terrain-hypothesis context. Writes session context only and never makes the projection authoritative.", inputSchema: { type: "object", properties: REF_FIELDS, required: ["sessionId", "ref"] }, handler: canonicalFocus },
   { name: "ask", description: "Ask the product crew a focused question through the durable operator service. Model-owned judgment may be recorded, but no action runs or crosses the founder wall.", inputSchema: { type: "object", properties: { ...REF_FIELDS, prompt: { type: "string" }, questionId: { type: "string" } }, required: ["sessionId", "prompt"] }, handler: (input) => canonicalDriveVerb("ask", input) },
   { name: "propose", description: "Propose reversible GTM or product moves through the durable operator service. Nothing is applied or run; later mutations remain founder-reviewable.", inputSchema: { type: "object", properties: { ...REF_FIELDS, prompt: { type: "string" }, questionId: { type: "string" }, rationale: { type: "string" }, operations: { type: "array", items: { type: "object" } } }, required: ["sessionId"] }, handler: (input) => canonicalDriveVerb("propose", input) },
   { name: "record", description: "Record an attributable session note, model artifact, or transient question proposal. Model callers cannot pin durable clarity or write founder/gate decisions.", inputSchema: { type: "object", properties: { ...REF_FIELDS, kind: { type: "string", enum: ["session_note", "model_artifact", "question_proposal"] }, value: {} }, required: ["sessionId", "kind", "value"] }, handler: canonicalRecord },

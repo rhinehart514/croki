@@ -48,13 +48,15 @@ describe("MCP canonical verb surface", () => {
       calls.push({ url: String(url), body: init.body ? JSON.parse(init.body) : null });
       return { ok: true, async json() { return { ok: true }; } };
     };
+    const hypothesisRef = { type: "terrain-hypothesis", id: "hypothesis-ui-1", projectId: "p-1" };
+    const readRef = { type: "terrain-read", id: "read-ui-1", projectId: "p-1" };
     try {
-      await TOOL_MAP.get("inspect").handler({ projectId: "p-1", sessionId: "s-1", ref: { type: "product", id: "p-1" } });
-      await TOOL_MAP.get("focus").handler({ projectId: "p-1", sessionId: "s-1", ref: { type: "question", id: "q-1" } });
-      await TOOL_MAP.get("ask").handler({ projectId: "p-1", sessionId: "s-1", prompt: "Who is this for?" });
-      await TOOL_MAP.get("propose").handler({ projectId: "p-1", sessionId: "s-1", prompt: "Show two moves." });
-      await TOOL_MAP.get("record").handler({ projectId: "p-1", sessionId: "s-1", kind: "session_note", value: "Keep this local." });
-      await TOOL_MAP.get("run").handler({ projectId: "p-1", sessionId: "s-1", goal: "Run the focused pipeline." });
+      await TOOL_MAP.get("inspect").handler({ projectId: "p-1", sessionId: "s-1", ref: hypothesisRef, refs: [readRef] });
+      await TOOL_MAP.get("focus").handler({ projectId: "p-1", sessionId: "s-1", ref: hypothesisRef, refs: [readRef] });
+      await TOOL_MAP.get("ask").handler({ projectId: "p-1", sessionId: "s-1", prompt: "Who is this for?", ref: hypothesisRef, refs: [readRef] });
+      await TOOL_MAP.get("propose").handler({ projectId: "p-1", sessionId: "s-1", prompt: "Show two moves.", ref: hypothesisRef, refs: [readRef] });
+      await TOOL_MAP.get("record").handler({ projectId: "p-1", sessionId: "s-1", kind: "session_note", value: "Keep this local.", ref: hypothesisRef, refs: [readRef] });
+      await TOOL_MAP.get("run").handler({ projectId: "p-1", sessionId: "s-1", goal: "Run the focused pipeline.", ref: hypothesisRef, refs: [readRef] });
     } finally {
       global.fetch = originalFetch;
     }
@@ -69,5 +71,24 @@ describe("MCP canonical verb surface", () => {
     assert.equal(calls[2].body.prompt, "Who is this for?");
     assert.equal(calls[3].body.prompt, "Show two moves.");
     assert.equal(calls[5].body.goal, "Run the focused pipeline.");
+    for (const call of calls) {
+      assert.deepEqual(call.body.ref, { type: "terrain-hypothesis", id: "hypothesis-ui-1" });
+      assert.ok(call.body.refs.some((ref) => ref.type === "terrain-read" && ref.id === "read-ui-1"));
+    }
+  });
+
+  it("rejects a terrain projection ref that names another project before making an HTTP request", async () => {
+    const originalFetch = global.fetch;
+    let fetched = false;
+    global.fetch = async () => { fetched = true; throw new Error("must not fetch"); };
+    try {
+      await assert.rejects(
+        () => TOOL_MAP.get("focus").handler({ projectId: "p-1", sessionId: "s-1", ref: { type: "terrain-hypothesis", id: "foreign", projectId: "p-2" } }),
+        /belongs to project p-2, not p-1/,
+      );
+      assert.equal(fetched, false);
+    } finally {
+      global.fetch = originalFetch;
+    }
   });
 });

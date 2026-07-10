@@ -75,6 +75,10 @@ function trimmedRationale(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function optionalWording(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
 // The open step kinds the composer may use — must match graph-operations.mjs's OPEN_KINDS, or
 // normalization silently deletes nodes the runtime fully supports (the mcp-node regression).
 const OPEN_KINDS = new Set(["agent", "skill", "code", "mcp"]);
@@ -351,6 +355,12 @@ function channelSpecFrom(input = {}) {
     questionId: input.questionId ?? base.questionId ?? null,
     participantRefs: input.participantRefs ?? base.participantRefs ?? [],
     productRefs: input.productRefs ?? base.productRefs ?? [],
+    contextRefs: input.contextRefs ?? base.contextRefs ?? [],
+    evidenceRefs: input.evidenceRefs ?? base.evidenceRefs ?? [],
+    founderWording: optionalWording(input.founderWording ?? base.founderWording),
+    intendedEffect: optionalWording(input.intendedEffect ?? base.intendedEffect),
+    uncertainty: optionalWording(input.uncertainty ?? base.uncertainty),
+    measurementIntent: optionalWording(input.measurementIntent ?? base.measurementIntent),
   };
 }
 
@@ -415,6 +425,12 @@ export async function composeNakedGraph(input, options = {}) {
     questionId: channel.questionId ?? null,
     participantRefs: Array.isArray(channel.participantRefs) ? channel.participantRefs : [],
     productRefs: Array.isArray(channel.productRefs) ? channel.productRefs : [],
+    contextRefs: Array.isArray(channel.contextRefs) ? channel.contextRefs : [],
+    evidenceRefs: Array.isArray(channel.evidenceRefs) ? channel.evidenceRefs : [],
+    founderWording: channel.founderWording ?? null,
+    intendedEffect: channel.intendedEffect ?? null,
+    uncertainty: channel.uncertainty ?? null,
+    measurementIntent: channel.measurementIntent ?? null,
   };
   const graph = {
     id: graphId,

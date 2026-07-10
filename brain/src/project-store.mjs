@@ -61,7 +61,17 @@ function normalizeChannelOffer(input) {
   return { ...rest, statement };
 }
 
-const WORK_CONTEXT_FIELDS = ["questionId", "participantRefs", "productRefs"];
+const WORK_CONTEXT_FIELDS = [
+  "questionId",
+  "participantRefs",
+  "productRefs",
+  "contextRefs",
+  "evidenceRefs",
+  "founderWording",
+  "intendedEffect",
+  "uncertainty",
+  "measurementIntent",
+];
 
 function normalizeWorkRefs(input) {
   if (!Array.isArray(input)) return [];
@@ -80,6 +90,10 @@ function normalizeWorkRefs(input) {
   return refs;
 }
 
+function normalizeOptionalWording(input) {
+  return typeof input === "string" && input.trim() ? input.trim() : null;
+}
+
 function workContextFor(input = {}, current = {}) {
   const owns = (key) => Object.prototype.hasOwnProperty.call(input, key);
   const questionId = owns("questionId")
@@ -89,6 +103,12 @@ function workContextFor(input = {}, current = {}) {
     questionId,
     participantRefs: normalizeWorkRefs(owns("participantRefs") ? input.participantRefs : current.participantRefs),
     productRefs: normalizeWorkRefs(owns("productRefs") ? input.productRefs : current.productRefs),
+    contextRefs: normalizeWorkRefs(owns("contextRefs") ? input.contextRefs : current.contextRefs),
+    evidenceRefs: normalizeWorkRefs(owns("evidenceRefs") ? input.evidenceRefs : current.evidenceRefs),
+    founderWording: normalizeOptionalWording(owns("founderWording") ? input.founderWording : current.founderWording),
+    intendedEffect: normalizeOptionalWording(owns("intendedEffect") ? input.intendedEffect : current.intendedEffect),
+    uncertainty: normalizeOptionalWording(owns("uncertainty") ? input.uncertainty : current.uncertainty),
+    measurementIntent: normalizeOptionalWording(owns("measurementIntent") ? input.measurementIntent : current.measurementIntent),
   };
 }
 

@@ -4,8 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
-import { saveFlow } from "../src/flow-store.mjs";
-import { loadProject, saveProject } from "../src/project-store.mjs";
+import { loadFlow, saveFlow } from "../src/flow-store.mjs";
+import { getProjectChannels, loadProject, saveProject } from "../src/project-store.mjs";
 import { createTeam, addMember } from "../src/team-store.mjs";
 import {
   createOperatorSession,
@@ -113,6 +113,46 @@ describe("autonomous operator + role-gated shared release", () => {
     assert.ok(types.includes("operator_running"), "emitted a running event");
     assert.ok(types.includes("operator_node_start"), "emitted per-node start events");
     assert.ok(types.includes("operator_reached_gate"), "emitted a reached-gate event");
+  });
+
+  it("carries a selected terrain move into pipeline metadata and stored run lineage without weakening the wall", async () => {
+    const session = createOperatorSession({
+      goal: "Compose a pipeline for this possible move: Lead with the grounded reveal. Intended effect: Reach first value sooner. Uncertainty: Visitors may miss it. Measurement intent: Observe first-session continuation.",
+      projectId: "default",
+      questionId: "question-activation",
+      focusRef: { type: "terrain-hypothesis", id: "hypothesis-activation" },
+      contextRefs: [
+        { type: "terrain-read", id: "read-activation" },
+        { type: "evidence", id: "truth-activation" },
+      ],
+      productRefs: [{ type: "productModel", id: "onboarding" }],
+      participantRefs: [{ type: "teammate", id: "activation-researcher" }],
+    }, options);
+
+    const paused = await runOperatorSession(session.id, {
+      options: { ...options, compose: fakeComposer, evaluate: async () => ({ ok: false }), stepRuntime: fakeStepRuntime },
+      client: fakeClient([{ content: [{ type: "tool_use", id: "terrain-go", name: "compose_and_run", input: {} }] }]),
+    });
+
+    assert.equal(paused.status, "waiting_for_gate");
+    const project = loadProject(options);
+    const pipeline = getProjectChannels(project, options).find((channel) => channel.graphId === paused.graphId);
+    assert.ok(pipeline);
+    assert.equal(pipeline.questionId, "question-activation");
+    assert.deepEqual(pipeline.productRefs, [{ type: "productmodel", id: "onboarding" }]);
+    assert.deepEqual(pipeline.participantRefs, [{ type: "teammate", id: "activation-researcher" }]);
+    assert.ok(pipeline.contextRefs.some((ref) => ref.type === "terrain-hypothesis" && ref.id === "hypothesis-activation"));
+    assert.equal(pipeline.intendedEffect, "Reach first value sooner");
+    assert.equal(pipeline.uncertainty, "Visitors may miss it");
+    assert.equal(pipeline.measurementIntent, "Observe first-session continuation.");
+
+    const flow = loadFlow(paused.graphId, null, options);
+    const run = flow.runs.at(-1);
+    assert.deepEqual(run.result.workContext.contextRefs, pipeline.contextRefs);
+    assert.equal(run.result.workContext.founderWording, pipeline.founderWording);
+    assert.equal(run.result.workContext.measurementIntent, pipeline.measurementIntent);
+    const execute = flow.graph.nodes.find((node) => node.category === "execute");
+    assert.ok(flow.graph.edges.some((edge) => edge.source === "gate" && edge.target === execute.id), "execute remains downstream of the founder gate");
   });
 
   // JOB 1 — the gate is a shared TEAM queue: only an owner/approver may release, a member cannot.

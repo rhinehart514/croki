@@ -137,10 +137,35 @@ describe("model-composed workflow (no fixed skeleton)", () => {
   });
 
   it("persists optional work context on the composed graph", async () => {
-    const composed = await composeNakedGraph(channelInput({ questionId: "question-1", participantRefs: ["researcher"], productRefs: ["onboarding"] }), { ...options, compose: branchedComposer });
+    const workContext = {
+      questionId: "question-1",
+      participantRefs: ["researcher"],
+      productRefs: ["onboarding"],
+      contextRefs: [{ type: "terrain-read", id: "read-1" }, { type: "terrain-hypothesis", id: "hypothesis-1" }],
+      evidenceRefs: [{ type: "evidence", id: "truth-1" }],
+      founderWording: "Try the grounded reveal before setup.",
+      intendedEffect: "Reach first value sooner.",
+      uncertainty: "We do not know whether visitors understand the reveal.",
+      measurementIntent: "Observe first-session continuation.",
+    };
+    let seenChannel = null;
+    const compose = (args) => {
+      seenChannel = args.channel;
+      return branchedComposer(args);
+    };
+    const composed = await composeNakedGraph(channelInput(workContext), { ...options, compose });
     assert.equal(composed.graph.questionId, "question-1");
     assert.deepEqual(composed.graph.participantRefs, ["researcher"]);
-    assert.equal(loadFlow(composed.channel.graphId, null, options).graph.questionId, "question-1");
+    assert.deepEqual(composed.graph.contextRefs, workContext.contextRefs);
+    assert.equal(composed.graph.founderWording, workContext.founderWording);
+    assert.equal(composed.graph.intendedEffect, workContext.intendedEffect);
+    assert.equal(composed.graph.uncertainty, workContext.uncertainty);
+    assert.equal(composed.graph.measurementIntent, workContext.measurementIntent);
+    assert.deepEqual(seenChannel.contextRefs, workContext.contextRefs, "advisory terrain refs reach composition");
+    const stored = loadFlow(composed.channel.graphId, null, options).graph;
+    assert.equal(stored.questionId, "question-1");
+    assert.deepEqual(stored.contextRefs, workContext.contextRefs);
+    assert.equal(stored.measurementIntent, workContext.measurementIntent);
   });
 
   it("enforces the wall on EVERY path: rejects a diamond that routes one branch around the gate", async () => {

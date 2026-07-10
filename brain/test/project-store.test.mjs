@@ -204,6 +204,9 @@ describe("multi-channel GTM project", () => {
     assert.equal(direct.questionId, null, "a question is never required");
     assert.deepEqual(direct.participantRefs, []);
     assert.deepEqual(direct.productRefs, []);
+    assert.deepEqual(direct.contextRefs, [], "terrain context is never required");
+    assert.equal(direct.intendedEffect, null);
+    assert.equal(direct.measurementIntent, null);
 
     const registered = registerComposedChannel({
       id: "activation-loop",
@@ -212,10 +215,20 @@ describe("multi-channel GTM project", () => {
       questionId: "question-1",
       participantRefs: [{ kind: "teammate", id: "activation-lead" }],
       productRefs: [{ type: "productElement", id: "onboarding" }],
+      contextRefs: [{ type: "terrain-read", id: "read-1" }, { type: "terrain-hypothesis", id: "hypothesis-1" }],
+      evidenceRefs: [{ type: "productTruth", id: "truth-1" }],
+      founderWording: "Try the activation reveal.",
+      intendedEffect: "Get more people to first value.",
+      uncertainty: "The reveal may be too subtle.",
+      measurementIntent: "Compare first-session continuation.",
     }, options).channel;
     assert.equal(registered.questionId, "question-1");
     assert.deepEqual(registered.participantRefs, [{ type: "teammate", id: "activation-lead" }]);
     assert.deepEqual(registered.productRefs, [{ type: "productElement", id: "onboarding" }]);
+    assert.deepEqual(registered.contextRefs, [{ type: "terrain-read", id: "read-1" }, { type: "terrain-hypothesis", id: "hypothesis-1" }]);
+    assert.equal(registered.founderWording, "Try the activation reveal.");
+    assert.equal(registered.uncertainty, "The reveal may be too subtle.");
+    assert.equal(registered.measurementIntent, "Compare first-session continuation.");
 
     const updated = updateChannel(registered.id, { questionId: null, productRefs: ["activation-step"] }, options).channel;
     assert.equal(updated.questionId, null);
@@ -223,6 +236,8 @@ describe("multi-channel GTM project", () => {
     const copy = duplicateChannel(updated.id, { name: "Activation loop copy" }, options).channel;
     assert.deepEqual(copy.productRefs, updated.productRefs);
     assert.deepEqual(copy.participantRefs, updated.participantRefs);
+    assert.deepEqual(copy.contextRefs, updated.contextRefs);
+    assert.equal(copy.intendedEffect, updated.intendedEffect);
   });
 
   it("the pipeline's offer rides into the run context, falling back to the project-level offer", () => {

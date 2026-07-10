@@ -34,7 +34,7 @@ import { attachBuildWiring, createGtmIdea, getGtmIdea, listGtmIdeas, saveGtmIdea
 import { compareChannelRuns } from "./run-compare.mjs";
 import { makeFailureSink } from "./failure-log.mjs";
 import { resolveGitShaAsync } from "./friction.mjs";
-import { classifyOperatorVerb, normalizeStableRef, normalizeStableRefs } from "./operator-tools.mjs";
+import { classifyOperatorVerb, isTerrainProjectionRef, normalizeStableRef, normalizeStableRefs } from "./operator-tools.mjs";
 import {
   addEvent,
   compactProduct,
@@ -57,6 +57,12 @@ function requestedStableRef(session, input = {}) {
   return normalizeStableRef(input.ref ?? session.focusRef ?? null, { projectId: session.projectId ?? null });
 }
 
+function retainTerrainContext(session, refs, options) {
+  const terrainRefs = normalizeStableRefs(refs, { projectId: session.projectId ?? null }).filter(isTerrainProjectionRef);
+  if (!terrainRefs.length) return session;
+  return bindOperatorSessionContext(session.id, { contextRefs: terrainRefs }, options);
+}
+
 function crewAnswer(result, teammateRef) {
   const first = Array.isArray(result?.items) ? result.items[0] : null;
   return founderSafeValue({ teammateRef, answer: result?.reasoning || first?.answer || first?.summary || first?.recommendation || "No answer was returned.", evidence: first?.evidence ?? [], uncertainty: first?.uncertainty ?? first?.unknowns ?? null, recommendation: first?.recommendation ?? null, wouldChangeMind: first?.wouldChangeMind ?? first?.falsifier ?? null, ok: result?.ok !== false, error: result?.ok === false ? result?.error ?? "The teammate could not answer." : null });
@@ -66,6 +72,59 @@ function recordText(value) {
   if (typeof value === "string") return value.trim();
   if (value && typeof value === "object") return String(value.text ?? value.wording ?? value.value ?? value.summary ?? "").trim();
   return String(value ?? "").trim();
+}
+
+function optionalWording(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function labeledWording(goal, label) {
+  const wording = optionalWording(goal);
+  if (!wording) return null;
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = wording.match(new RegExp(`(?:^|[.!?]\\s+)${escaped}:\\s*(.+?)(?=(?:[.!?]\\s+)(?:intended effect|uncertainty|measurement intent):|$)`, "i"));
+  return optionalWording(match?.[1]);
+}
+
+// The terrain is projection context, not a new authority. Copy the selected move's optional refs and
+// founder-visible brief onto the existing pipeline/graph metadata, then reuse that same open object as
+// run lineage. Missing fields stay honest null/empty values and never become pre-gate requirements.
+function compositionWorkContext(session, input = {}) {
+  const contextRefs = normalizeStableRefs([
+    ...(session.contextRefs ?? []),
+    ...(input.contextRefs ?? []),
+    ...(session.focusRef ? [session.focusRef] : []),
+  ], { projectId: session.projectId ?? null });
+  const evidenceRefs = normalizeStableRefs(
+    input.evidenceRefs ?? contextRefs.filter((ref) => /evidence|source-line|truth/i.test(ref.type)),
+    { projectId: session.projectId ?? null },
+  );
+  const founderWording = optionalWording(session.goal) ?? optionalWording(input.founderWording) ?? optionalWording(input.goal);
+  return {
+    questionId: session.questionId || input.questionId || null,
+    participantRefs: normalizeStableRefs([...(session.participantRefs ?? []), ...(input.participantRefs ?? [])], { projectId: session.projectId ?? null }),
+    productRefs: normalizeStableRefs([...(session.productRefs ?? []), ...(input.productRefs ?? [])], { projectId: session.projectId ?? null }),
+    contextRefs,
+    evidenceRefs,
+    founderWording,
+    intendedEffect: optionalWording(session.intendedEffect) ?? optionalWording(input.intendedEffect) ?? labeledWording(founderWording, "intended effect") ?? founderWording,
+    uncertainty: optionalWording(session.uncertainty) ?? optionalWording(input.uncertainty) ?? labeledWording(founderWording, "uncertainty"),
+    measurementIntent: optionalWording(session.measurementIntent) ?? optionalWording(input.measurementIntent) ?? labeledWording(founderWording, "measurement intent"),
+  };
+}
+
+function runWorkContext(graph = {}) {
+  return {
+    questionId: graph.questionId ?? null,
+    participantRefs: graph.participantRefs ?? [],
+    productRefs: graph.productRefs ?? [],
+    contextRefs: graph.contextRefs ?? [],
+    evidenceRefs: graph.evidenceRefs ?? [],
+    founderWording: graph.founderWording ?? null,
+    intendedEffect: graph.intendedEffect ?? null,
+    uncertainty: graph.uncertainty ?? null,
+    measurementIntent: graph.measurementIntent ?? null,
+  };
 }
 
 // Close the FRONT of the run→idea loop: once compose_and_run builds the channel for a founder-picked
@@ -319,6 +378,7 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
     // everything, graph.mjs wraps the call, and the git sha is pre-resolved off the hot path).
     onFailure,
   });
+  result.workContext = runWorkContext(flow.graph);
   if (stream) session = live;
   // Ground the drafts the founder is about to review: attach evidence_lines to any item whose claim
   // names a real scanned fact (file:line), drawn straight from the active scan report. Honest by
@@ -371,6 +431,7 @@ export async function executeTool(session, tool, options = {}) {
   if (tool.name === "inspect") {
     const classification = classifyOperatorVerb("inspect");
     const ref = requestedStableRef(session, input);
+    const refs = normalizeStableRefs([...(input.refs ?? []), ...(ref ? [ref] : [])], { projectId: session.projectId ?? null });
     const projectId = session.projectId ?? options.projectId ?? "default";
     let value;
     if (!ref || ref.type === "product") {
@@ -392,16 +453,21 @@ export async function executeTool(session, tool, options = {}) {
       const run = flowFor(session, options).runs.find((candidate) => candidate.id === ref.id);
       if (!run) throw new Error(`Run not found in the focused pipeline: ${ref.id}`);
       value = { run: run.result ? summarizeRun(run.result) : run };
+    } else if (isTerrainProjectionRef(ref)) {
+      value = typeof options.inspectRef === "function"
+        ? await options.inspectRef({ projectId, ref })
+        : { projectionRef: ref, projectId, durable: false, authority: false };
     } else if (typeof options.inspectRef === "function") value = await options.inspectRef({ projectId, ref });
     else throw new Error(`No read adapter is registered for ${ref.type}:${ref.id}.`);
-    return { session, result: { classification, ref, value: founderSafeValue(value) }, pause: false };
+    return { session, result: { classification, ref, refs, value: founderSafeValue(value) }, pause: false };
   }
 
   if (tool.name === "focus") {
     const classification = classifyOperatorVerb("focus");
     const ref = normalizeStableRef(input.ref, { projectId: session.projectId ?? null });
+    const refs = normalizeStableRefs([...(input.refs ?? []), ref], { projectId: session.projectId ?? null });
     const graphId = graphIdForRef(ref, options);
-    const next = bindOperatorSessionContext(session.id, { focusRef: ref, contextRefs: [ref], ...(ref.type === "question" ? { questionId: ref.id } : {}), ...(graphId ? { graphId } : {}), ...(ref.type === "run" ? { lastRunId: ref.id } : {}) }, options);
+    const next = bindOperatorSessionContext(session.id, { focusRef: ref, contextRefs: refs, ...(ref.type === "question" ? { questionId: ref.id } : {}), ...(graphId ? { graphId } : {}), ...(ref.type === "run" ? { lastRunId: ref.id } : {}) }, options);
     return { session: next, result: { classification, focusRef: ref, contextRefs: next.contextRefs }, pause: false };
   }
 
@@ -411,13 +477,14 @@ export async function executeTool(session, tool, options = {}) {
     if (!prompt) throw new Error("Ask needs a focused question.");
     const projectId = session.projectId ?? options.projectId ?? "default";
     const refs = stableRefsFor(session, input);
+    const working = retainTerrainContext(session, refs, options);
     let teammateRefs = refs.filter((ref) => ref.type === "teammate").map((ref) => ref.id);
     if (!teammateRefs.length) teammateRefs = getAgentBench(projectId, {}, options).slice(0, 3).map((row) => row.ref).filter(Boolean);
     teammateRefs = [...new Set(teammateRefs)].slice(0, 4);
     if (!teammateRefs.length) throw new Error("No product-scoped teammate is available to ask yet.");
     const project = loadProject(options);
     const workspace = latestWorkspace(session, options);
-    const context = { grounding: buildRunGrounding(project, workspace?.report ?? null), designState: designStateFor(session, options), __run: { projectId, questionId: session.questionId ?? null, contextRefs: refs } };
+    const context = { grounding: buildRunGrounding(project, workspace?.report ?? null), designState: designStateFor(working, options), __run: { projectId, questionId: working.questionId ?? null, contextRefs: refs } };
     const runtime = options.stepRuntime || liveStepRuntime({ cwd: options.cwd || project.sharedContext?.repository?.repo || process.cwd() });
     const answers = await Promise.all(teammateRefs.map(async (teammateRef) => crewAnswer(
       typeof options.askCrew === "function"
@@ -425,17 +492,18 @@ export async function executeTool(session, tool, options = {}) {
         : await runtime.agentInvoker({ ref: teammateRef, prompt, items: [], context, config: { maxTurns: 10 } }),
       teammateRef,
     )));
-    const next = addEvent(session, { type: "crew_asked", title: teammateRefs.length === 1 ? "Asked one teammate" : `Asked ${teammateRefs.length} teammates`, detail: prompt, data: { teammateRefs, refs, classification } }, options);
+    const next = addEvent(working, { type: "crew_asked", title: teammateRefs.length === 1 ? "Asked one teammate" : `Asked ${teammateRefs.length} teammates`, detail: prompt, data: { teammateRefs, refs, classification } }, options);
     return { session: next, result: { classification, refs, answers }, pause: false };
   }
 
   if (tool.name === "propose") {
     const classification = classifyOperatorVerb("propose");
     const refs = stableRefsFor(session, input);
-    if (Array.isArray(input.operations) && input.operations.length && session.graphId) assertSessionGraphProject(session, options);
+    const working = retainTerrainContext(session, refs, options);
+    if (Array.isArray(input.operations) && input.operations.length && working.graphId) assertSessionGraphProject(working, options);
     const execution = Array.isArray(input.operations) && input.operations.length
-      ? await executeTool(session, { ...tool, name: "propose_graph_changes", input: { rationale: input.rationale || input.prompt || "Proposed graph changes", operations: input.operations } }, options)
-      : await executeTool(session, { ...tool, name: "propose_candidates", input: { goal: firstNonEmpty(input.prompt, session.goal) } }, options);
+      ? await executeTool(working, { ...tool, name: "propose_graph_changes", input: { rationale: input.rationale || input.prompt || "Proposed graph changes", operations: input.operations } }, options)
+      : await executeTool(working, { ...tool, name: "propose_candidates", input: { goal: firstNonEmpty(input.prompt, working.goal) } }, options);
     return { ...execution, result: { classification, refs, ...execution.result } };
   }
 
@@ -443,23 +511,24 @@ export async function executeTool(session, tool, options = {}) {
     const classification = classifyOperatorVerb("record");
     const kind = String(input.kind ?? "").trim().toLowerCase().replaceAll("-", "_");
     const refs = stableRefsFor(session, input);
+    const working = retainTerrainContext(session, refs, options);
     if (kind === "session_note") {
       const text = recordText(input.value);
       if (!text) throw new Error("A session note needs text.");
-      const next = addEvent(session, { type: "session_note", title: "Recorded a note", detail: text, data: { refs, classification } }, options);
+      const next = addEvent(working, { type: "session_note", title: "Recorded a note", detail: text, data: { refs, classification } }, options);
       return { session: next, result: { classification, recorded: { type: kind, text, refs } }, pause: false };
     }
     if (kind === "model_artifact") {
       if (!input.value || typeof input.value !== "object" || Array.isArray(input.value)) throw new Error("A model artifact needs an object value.");
       const artifact = founderSafeValue(input.value);
-      const next = addEvent(session, { type: "model_artifact_recorded", title: "Recorded a model artifact", detail: recordText(input.value) || null, data: { artifact, refs, classification } }, options);
+      const next = addEvent(working, { type: "model_artifact_recorded", title: "Recorded a model artifact", detail: recordText(input.value) || null, data: { artifact, refs, classification } }, options);
       return { session: next, result: { classification, recorded: { type: kind, artifact, refs } }, pause: false };
     }
     if (kind === "question_proposal") {
       const text = recordText(input.value);
       if (!text) throw new Error("A question proposal needs text.");
-      const proposal = { text, refs, participantRefs: session.participantRefs ?? [], productRefs: session.productRefs ?? [] };
-      const next = addEvent(session, { type: "question_proposed", title: "Proposed a question", detail: text, data: { ...proposal, classification } }, options);
+      const proposal = { text, refs, participantRefs: working.participantRefs ?? [], productRefs: working.productRefs ?? [] };
+      const next = addEvent(working, { type: "question_proposed", title: "Proposed a question", detail: text, data: { ...proposal, classification } }, options);
       return { session: next, result: { classification, recorded: { type: kind, ...proposal, transient: true } }, pause: false };
     }
     throw new Error(`Record kind is not model-writable: ${kind || "(empty)"}. Use founder/browser routes for pins and founder decisions.`);
@@ -468,14 +537,15 @@ export async function executeTool(session, tool, options = {}) {
   if (tool.name === "run") {
     const classification = classifyOperatorVerb("run");
     const ref = requestedStableRef(session, input);
-    let working = session;
+    const refs = stableRefsFor(session, input);
+    let working = retainTerrainContext(session, refs, options);
     if (ref) {
       const graphId = graphIdForRef(ref, options);
-      working = bindOperatorSessionContext(session.id, { focusRef: ref, contextRefs: [ref], ...(graphId ? { graphId } : {}), ...(ref.type === "question" ? { questionId: ref.id } : {}) }, options);
+      working = bindOperatorSessionContext(session.id, { focusRef: ref, contextRefs: refs, ...(graphId ? { graphId } : {}), ...(ref.type === "question" ? { questionId: ref.id } : {}) }, options);
     }
     if (working.graphId) assertSessionGraphProject(working, options);
     const execution = await executeTool(working, { ...tool, name: "compose_and_run", input: { goal: input.goal, title: input.title, compose_new: input.composeNew === true, agents: input.agents } }, options);
-    return { ...execution, result: { classification, ref, ...execution.result } };
+    return { ...execution, result: { classification, ref, refs, ...execution.result } };
   }
 
   if (tool.name === "inspect_shared_context") {
@@ -686,6 +756,7 @@ export async function executeTool(session, tool, options = {}) {
     if (session.graphId && !input.compose_new) assertSessionGraphProject(session, options);
     const goal = firstNonEmpty(input.goal, session.goal);
     let working = session;
+    const workContext = compositionWorkContext(session, input);
 
     // A founder-picked candidate SHAPE to build (nodes/edges), passed by resolveOperatorCandidates or a
     // UI build call. When present, the model already sketched it and the founder chose it — build that
@@ -723,6 +794,7 @@ export async function executeTool(session, tool, options = {}) {
         objective: goal,
         agents: Array.isArray(input.agents) ? input.agents : [],
         grounding: composeGrounding,
+        ...workContext,
       }, {
         ...options,
         compose: composeFn,
@@ -734,6 +806,7 @@ export async function executeTool(session, tool, options = {}) {
         graphId: composed.channel.graphId,
         name: composed.channel.name,
         objective: goal,
+        ...workContext,
       }, options);
       // If this build came from a founder-picked idea, wire the channel back onto the idea so the run's
       // gate outcome closes the loop onto it (idea-derivation). Deterministic bookkeeping, best-effort.

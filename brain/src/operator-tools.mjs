@@ -8,11 +8,13 @@
 import { NODE_KINDS_LIST } from "./graph-operations.mjs";
 
 export const CANONICAL_OPERATOR_VERBS = Object.freeze(["inspect", "focus", "ask", "propose", "record", "run"]);
+export const TERRAIN_PROJECTION_REF_TYPES = Object.freeze(["terrain-read", "terrain-hypothesis"]);
+const TERRAIN_PROJECTION_REF_TYPE_SET = new Set(TERRAIN_PROJECTION_REF_TYPES);
 
 export const STABLE_REF_INPUT_SCHEMA = {
   type: "object",
   properties: {
-    type: { type: "string", description: "Open object type, such as product, question, teammate, pipeline, graph, run, or outcome." },
+    type: { type: "string", description: "Open object type, such as product, question, teammate, pipeline, graph, run, outcome, terrain-read, or terrain-hypothesis. Terrain refs are projection context only." },
     id: { type: "string", description: "Stable id owned by the referenced record." },
     projectId: { type: "string", description: "Owning project; when present it must match the requested scope." },
   },
@@ -49,6 +51,10 @@ export function normalizeStableRefs(inputs, options = {}) {
     refs.push(ref);
   }
   return refs;
+}
+
+export function isTerrainProjectionRef(ref) {
+  return Boolean(ref && TERRAIN_PROJECTION_REF_TYPE_SET.has(String(ref.type ?? ref.kind ?? "").trim().toLowerCase()));
 }
 
 export function classifyOperatorVerb(verb) {
@@ -137,13 +143,13 @@ export const GRAPH_OPERATIONS_INPUT_SCHEMA = {
 export const TOOLS = [
   {
     name: "inspect",
-    description: "Inspect the product-scoped record addressed by a stable reference, or current product context when omitted. Read-only; never focuses, records, composes, runs, or releases.",
-    input_schema: { type: "object", properties: { ref: STABLE_REF_INPUT_SCHEMA }, required: [] },
+    description: "Inspect the product-scoped record or ephemeral terrain projection context addressed by a stable reference, or current product context when omitted. Read-only; never focuses, records, composes, runs, or releases.",
+    input_schema: { type: "object", properties: { ref: STABLE_REF_INPUT_SCHEMA, refs: { type: "array", items: STABLE_REF_INPUT_SCHEMA } }, required: [] },
   },
   {
     name: "focus",
-    description: "Focus this durable conversation on one stable product, question, teammate, pipeline, graph, run, outcome, or open-kind reference. Changes session context only.",
-    input_schema: { type: "object", properties: { ref: STABLE_REF_INPUT_SCHEMA }, required: ["ref"] },
+    description: "Focus this durable conversation on one stable product, question, teammate, pipeline, graph, run, outcome, terrain projection, or open-kind reference. Changes session context only; terrain refs never become authority.",
+    input_schema: { type: "object", properties: { ref: STABLE_REF_INPUT_SCHEMA, refs: { type: "array", items: STABLE_REF_INPUT_SCHEMA } }, required: ["ref"] },
   },
   {
     name: "ask",
@@ -162,8 +168,8 @@ export const TOOLS = [
   },
   {
     name: "run",
-    description: "Run the focused pipeline or compose a requested action through the existing compose-and-run path. Always stops at the founder gate and cannot approve or release.",
-    input_schema: { type: "object", properties: { goal: { type: "string" }, ref: STABLE_REF_INPUT_SCHEMA, composeNew: { type: "boolean" }, title: { type: "string" }, agents: { type: "array", items: { type: "object" } } }, required: [] },
+    description: "Run the focused pipeline or compose a requested action with stable references as context through the existing compose-and-run path. Terrain refs remain projection context. Always stops at the founder gate and cannot approve or release.",
+    input_schema: { type: "object", properties: { goal: { type: "string" }, ref: STABLE_REF_INPUT_SCHEMA, refs: { type: "array", items: STABLE_REF_INPUT_SCHEMA }, composeNew: { type: "boolean" }, title: { type: "string" }, agents: { type: "array", items: { type: "object" } } }, required: [] },
   },
   {
     name: "inspect_shared_context",
