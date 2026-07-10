@@ -273,6 +273,37 @@ const CATEGORY_LABEL: Record<GTMNodeCategory, string> = {
   measure:  "Measure",
 };
 
+// Operator identity for the structural (non-teammate, non-gate) cards — the parts of the machine a
+// workflow tool would stamp with its raw engine verb (CONTEXT / EXECUTE / MEASURE). That enum IS the
+// mechanical tell we refuse: any node-graph app prints those exact words, so a stranger guesses them
+// before the card loads. Each of these reads instead as what it IS in the founder's go-to-market — the
+// brief the crew works from, the send that reaches the world (staged behind the wall until you approve),
+// the scoreboard of what that send drove. `eyebrow` is the quiet operator name, `headline` the plain job
+// it does, `idle` the honest present state before a run has given it real numbers. The Gate keeps its own
+// richer treatment (it's the signature card); this brings its neighbours up to the same register.
+const STRUCTURAL_CARD: Partial<Record<GTMNodeCategory, { eyebrow: string; headline: string; idle: string }>> = {
+  context: { eyebrow: "The brief",      headline: "Your product & who it's for", idle: "What your crew read to work from" },
+  execute: { eyebrow: "The send",       headline: "Send what you approved",       idle: "Staged on your machine — leaves only after you approve at the gate" },
+  measure: { eyebrow: "The scoreboard", headline: "What the send drove",          idle: "Scores the moment your send goes out" },
+};
+
+// A structural node whose composed label is just its engine category ("Execute", "Measure", "Context
+// product") carries no real information and doubles the eyebrow word — swap in the operator headline.
+// A label the composer actually wrote ("Send the first-contact emails") is meaningful and kept as-is.
+function isBareCategoryLabel(label: string, category: GTMNodeCategory): boolean {
+  const l = (label ?? "").trim().toLowerCase();
+  if (!l) return true;
+  const cat = category.toLowerCase();
+  return l === cat || l.startsWith(cat + " ") || l.endsWith(" " + cat);
+}
+
+// A summary string that carries a real, non-zero number ("6 items", "12 sent") is worth showing; a bare
+// status line ("Waiting for approval at gate.") or an empty "0 staged" is the mechanical filler an operator
+// card replaces with its honest idle state.
+function summaryHasCount(s: string | null | undefined): boolean {
+  return !!s && /[1-9]/.test(s);
+}
+
 // Open node kinds — the un-caging. An agent/skill/code step is not a connector from the
 // registry; it renders by its kind, not its category.
 const KIND_META: Record<string, { color: string; label: string; icon: React.ReactNode }> = {
@@ -510,8 +541,12 @@ type GTMNodeData = {
   // the focused gate; the GateReview routes a microproduct/in-repo-change/page item through it.
   onDecideDelta?: (item: GTMItem, itemKey: string, decision: GateDeltaDecision) => void | Promise<void>;
   // This gate is the one a run is paused at (staged drafts awaiting review). The node breathes an amber
-  // ring AND blooms its GateReview cards open without needing selection — the review comes to the founder.
+  // ring so the eye lands on the wall. EVERY pending gate rings; auto-opening the overlay is separate.
   bloomed?: boolean;
+  // The single gate whose review overlay auto-opens (false→true) so the decision comes TO the founder.
+  // Only one gate carries this even when several pipelines pause at once — otherwise the full-surface
+  // overlays stack into a pile of identical modals. On-demand opening from the count is always allowed.
+  autoOpen?: boolean;
   // Hand this node to Claude as the chat subject, straight from the card — the canvas→chat tie without
   // routing through the node-detail modal.
   onAskClaude?: () => void;
@@ -1101,11 +1136,17 @@ function ResourceNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
 function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
   const { node, selected, onSelect, result } = data;
   const status = getStatus(node, result, data.running);
+  // A real query/name the founder wrote is worth showing; the raw connector id ("product") is a slug the
+  // operator never reads, so it's dropped in favour of the honest idle line below.
   const preview = node.config.query
     ? String(node.config.query).slice(0, 55)
     : node.config.name
     ? String(node.config.name)
-    : node.connector;
+    : null;
+  // The context node is the crew's brief — read in operator language, never the raw "Context" engine word.
+  const brief = STRUCTURAL_CARD.context!;
+  const rawLabel = humanizeStepLabel(node.label ?? "") || node.label || "";
+  const headline = isBareCategoryLabel(rawLabel, node.category) ? brief.headline : rawLabel;
 
   const color = CATEGORY_COLOR[node.category];
 
@@ -1131,7 +1172,7 @@ function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
         <div className="loop-node-icon" style={{ background: `${color}18`, color }}>
           {CATEGORY_ICON[node.category]}
         </div>
-        <span className="loop-node-type-label">{CATEGORY_LABEL[node.category]}</span>
+        <span className="loop-node-type-label">{brief.eyebrow}</span>
         <div className="loop-node-header-right">
           {typeof data.health === "number" && data.health > 0 && (
             <HealthPill health={data.health} issue={data.healthIssue} />
@@ -1139,8 +1180,10 @@ function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
           {status !== "idle" && <StatusIcon status={status} />}
         </div>
       </div>
-      <span className="loop-node-label">{humanizeStepLabel(node.label ?? "") || node.label}</span>
-      {preview && <span className="loop-node-preview">{preview}</span>}
+      <span className="loop-node-label">{headline}</span>
+      {preview
+        ? <span className="loop-node-preview">{preview}</span>
+        : <span className="loop-node-idle">{brief.idle}</span>}
       <Handle type="source" position={Position.Right} id="s-r" />
       {data.explainMode && (data.explainRationale ?? node.rationale) ? <NodeWhyCaption rationale={(data.explainRationale ?? node.rationale)!} /> : null}
       {selected && (
@@ -1196,13 +1239,14 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
   // overlay: auto the moment a run pauses on it (bloomed), so the decision comes TO the founder, and on
   // demand from its own count when it's a completed/idle gate you want to revisit.
   const [reviewOpen, setReviewOpen] = useState(false);
-  // Open the room once per bloom transition (false→true). If the founder closes it, it stays closed
-  // until the NEXT time a run pauses here — the stage surfaces the moment, it doesn't nag.
-  const wasBloomed = useRef(false);
+  // Open the room once per auto-open transition (false→true). If the founder closes it, it stays closed
+  // until the NEXT time a run pauses here — the stage surfaces the moment, it doesn't nag. Only the one
+  // primary pending gate auto-opens; the rest ring but wait to be opened from their count.
+  const wasAutoOpen = useRef(false);
   useEffect(() => {
-    if (data.bloomed && !wasBloomed.current) setReviewOpen(true);
-    wasBloomed.current = !!data.bloomed;
-  }, [data.bloomed]);
+    if (data.autoOpen && !wasAutoOpen.current) setReviewOpen(true);
+    wasAutoOpen.current = !!data.autoOpen;
+  }, [data.autoOpen]);
   // Close the room on Escape while it's open — a full-surface overlay must always have a keyboard exit.
   // But NOT while the founder is typing: Escape in the send-back note or the draft editor closes that
   // field (handled locally in GateReview), never the whole room — so a stray Escape can't wipe their text.
@@ -1223,6 +1267,10 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
   const status  = getStatus(node, result, running);
   const summary = result ? itemSummary(result) : null;
   const hasErr  = status === "error" || status === "blocked";
+  // A node downstream of an un-approved gate is "blocked" — but that's the WALL doing its job, not a
+  // failure, so a structural card reads it as a calm honest state ("Staged — leaves only after you
+  // approve") rather than a red error. Only a genuine "error" status earns the danger read.
+  const isRealError = status === "error";
   const visual  = useMemo(() => nodeVisual(node), [node]);
   const color   = visual.color;
   const isOpenKind = !!node.kind && node.kind !== "tool";
@@ -1267,6 +1315,12 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
     () => (!isOpenKind && !isMcp && node.connector ? CAPABILITIES.find((c) => c.id === node.connector) ?? null : null),
     [isOpenKind, isMcp, node.connector],
   );
+  // A structural card (the brief / the send / the scoreboard) — only when it isn't a teammate, a grabbed
+  // capability, or an MCP call, all of which carry their own richer identity. When set, this card reads in
+  // operator language instead of its raw engine category. `structuralHeadline` keeps a composer-written
+  // title but replaces a bare doubled-up enum ("Execute") with the plain job.
+  const structural = !persona && !capability && !isMcp ? STRUCTURAL_CARD[node.category] : undefined;
+  const structuralHeadline = structural && isBareCategoryLabel(nodeLabel, node.category) ? structural.headline : nodeLabel;
 
   // A switch reads its branches off its OUTGOING data edges: each carries the routing predicate (the
   // rule) and points at the branch it feeds. Read from the live graph on context, not node data.
@@ -1339,7 +1393,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
         ) : (
           <span className="loop-node-coin-icon" style={{ color }} aria-hidden>{visual.icon}</span>
         )}
-        <span className="loop-node-coin-label">{persona ? persona.role : nodeLabel}</span>
+        <span className="loop-node-coin-label">{persona ? persona.role : structural ? structural.eyebrow : nodeLabel}</span>
         <Handle type="source" position={Position.Right} id="s-r" />
       </motion.div>
     );
@@ -1365,7 +1419,9 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
         // otherwise monochrome canvas.
         node.category === "gate" && "loop-node-gate",
         selected && "loop-node-selected",
-        hasErr && "loop-node-error",
+        // A structural card blocked ON the gate is the wall doing its job, not a failure — so it never
+        // wears the danger read. Only a genuine error paints it; other objects keep the prior behavior.
+        (structural ? isRealError : hasErr) && "loop-node-error",
         status === "running" && "loop-node-running",
         status === "done" && "loop-node-done loop-node-justdone",
         status === "pending" && "loop-node-pending",
@@ -1552,7 +1608,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
             )}
             <span className="loop-node-type-label">
               {persona ? "Teammate"
-                : obj === "measure" ? "Measure"
+                : structural ? structural.eyebrow
                 : capability ? capability.name
                 : isMcp ? (mcpGlyph?.title ?? mcpServer.replace(/^./, (c) => c.toUpperCase()))
                 : visual.label}
@@ -1577,7 +1633,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
               A spine step a teammate performs leads with the humanized STEP name ("Draft the first-contact
               email") — the character beside it already says who owns it — so the founder reads the work, not
               a code slug. Everything else reads its humanized label. No raw kebab ever reaches this line. */}
-          <span className="loop-node-label">{node.kind === "agent" && persona ? persona.role : nodeLabel}</span>
+          <span className="loop-node-label">{node.kind === "agent" && persona ? persona.role : structuralHeadline}</span>
           {/* The live per-node narrator: while this step runs, its teammate's newest first-person beat
               reads right on the card — what it's actually doing NOW, in the model's words — instead of a
               faceless spinner. Falls back to a plain "Working…" when the backend stamped no beat yet. */}
@@ -1599,15 +1655,26 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
             </span>
           )}
           {/* The slug is a technical identifier, not the headline. It rides as a faint, single-line
-              caption that never competes with the title; hover (the title attr) reveals the full ref. */}
-          {isOpenKind
+              caption that never competes with the title; hover (the title attr) reveals the full ref.
+              A structural card (the brief / the send / the scoreboard) drops it entirely — the operator
+              never reads a connector id; its honest state line below is the whole story. */}
+          {structural
+            ? null
+            : isOpenKind
             ? <span className="loop-node-connector" title={node.ref}>{node.ref}</span>
             : capability
               // A capability node already reads as its service from the logo + name — the connector slug
               // ("gmail") would just repeat it, so it's dropped for a cleaner, logo-forward card.
               ? null
               : node.connector && <span className="loop-node-connector" title={node.connector}>{node.connector}</span>}
-          {summary && !hasErr && (
+          {/* Structural honest state: an operator card states where it actually stands in plain words —
+              "Staged on your machine — leaves only after you approve", "What your crew read to work from" —
+              instead of the mechanical "Waiting for approval at gate." A real count (from a run) still wins;
+              the idle line only fills the gap before there are numbers. Measure keeps its own results block. */}
+          {structural && !isRealError && !(obj === "measure" && data.runSummary) && !summaryHasCount(summary) && (
+            <span className="loop-node-idle">{structural.idle}</span>
+          )}
+          {summary && !hasErr && !(structural && !summaryHasCount(summary)) && (
             result?.items?.length
               ? (
                 <button
@@ -1638,7 +1705,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
               )
               : null;
           })()}
-          {hasErr && result?.error && (
+          {(structural ? isRealError : hasErr) && result?.error && (
             <span className="loop-node-err-text">{result.error.slice(0, 55)}</span>
           )}
         </>
@@ -1983,6 +2050,10 @@ function buildFlowGraph(
   nodeBeats?: Record<string, string>,
   // Area 5 MOVE 1 — the code-native gate delta decision, threaded to the gate node's GateReview.
   onDecideDelta?: (item: GTMItem, itemKey: string, decision: GateDeltaDecision) => void | Promise<void>,
+  // May a paused gate in THIS graph auto-open its full-surface review overlay? True for a single-pipeline
+  // canvas. The merged "all pipelines" canvas passes this per-lane (only the focused lane), so several
+  // pipelines paused at gates don't each portal a modal and stack a pile over the founder.
+  allowAutoOpen: boolean = true,
 ): { nodes: Node[]; edges: Edge[] } {
   // A node is "revealed" unless it's a still-pending proposed ghost. Committed nodes are always
   // revealed (so an edge from a committed node to the first ghost shows immediately); a proposed node
@@ -2000,6 +2071,17 @@ function buildFlowGraph(
   const EDGE_INK: Record<GTMEdgeType, string> = {
     data: "#94a3c4", context: "#c4c7db", feedback: "#86b89a",
   };
+  // Pick the SINGLE gate whose review overlay auto-opens. Every pending gate still rings (see `bloomed`
+  // below), but when several pipelines pause at a gate in the merged canvas, auto-opening each one
+  // portals a stack of identical full-surface modals over the founder. An explicit bloomNodeId wins;
+  // otherwise the first pending gate in graph order is the one that opens — the rest wait on their count.
+  const isGatePending = (n: GTMNode) => {
+    if (n.category !== "gate") return false;
+    const r = result?.nodes[n.id];
+    return !!r && (r.pendingReview === true
+      || (typeof r.meta?.awaitingReview === "number" && r.meta.awaitingReview > 0));
+  };
+  const autoOpenGateId = allowAutoOpen ? ((bloomNodeId ?? graph.nodes.find(isGatePending)?.id) ?? null) : null;
   const nodes: Node[] = graph.nodes.map((n) => {
     const sub = subsystemHealth[n.category];
     const laneStatus = ideation && !!(n.config as Record<string, unknown>)?.laneStatus;
@@ -2007,10 +2089,7 @@ function buildFlowGraph(
     // A gate blooms when a run has paused on it with drafts to review — that's derivable from the
     // gate's own result (pendingReview / awaitingReview), so both the single-channel and merged canvases
     // bloom on pause without the host threading a pending-gate id. An explicit bloomNodeId still forces it.
-    const nodeResult = result?.nodes[n.id];
-    const gatePending = n.category === "gate" && !!nodeResult
-      && (nodeResult.pendingReview === true
-        || (typeof nodeResult.meta?.awaitingReview === "number" && nodeResult.meta.awaitingReview > 0));
+    const gatePending = isGatePending(n);
     const bloomed = (!!bloomNodeId && bloomNodeId === n.id) || gatePending;
     return {
       id: n.id,
@@ -2064,6 +2143,7 @@ function buildFlowGraph(
         // deployConfirmed:true), on the gate node only.
         onDecideDelta: n.category === "gate" ? onDecideDelta : undefined,
         bloomed,
+        autoOpen: n.id === autoOpenGateId,
         onAskClaude: onAskClaude ? () => onAskClaude(n) : undefined,
         // The crew face opens the profile on every lane; the run numbers ride only the Measure node.
         onOpenAgentProfile,
@@ -2319,6 +2399,9 @@ function buildMergedFlowGraph(
       isFocused ? focus.nodeBeats : undefined,
       // The code-native gate delta decision rides only the focused pipeline's gate.
       isFocused ? focus.onDecideDelta : undefined,
+      // Only the focused lane's gate may auto-open its review overlay — otherwise every pipeline paused
+      // at a gate portals a full-surface modal and they stack. Dimmed lanes ring but wait on their count.
+      isFocused,
     );
     for (const n of built.nodes) {
       nodes.push({

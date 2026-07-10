@@ -19,8 +19,12 @@
   padding: var(--space-4) var(--space-4) var(--space-3);
   border: 1px solid var(--line-2);
   border-radius: var(--r-lg);
-  background: var(--surface);
-  box-shadow: var(--shadow-card);
+  /* The card ground must clear the taupe canvas ground (--canvas #E9E6E0) — the shared --surface
+     (#F4F2EE) is only a hair above it, so cards read as faint smudges. A warm near-white lifts them
+     off the ground while staying inside the atelier palette (never cold white, never cream). The
+     firmer shadow gives the edge a real seat instead of the near-invisible default. */
+  background: #FCFAF6;
+  box-shadow: 0 1px 0 rgba(38, 33, 26, 0.04), 0 6px 16px -8px rgba(38, 33, 26, 0.20);
 }
 
 /* Quieter hover — a soft lift, not a heavy pop. */

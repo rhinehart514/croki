@@ -3504,6 +3504,21 @@ svg {
   -webkit-box-orient: vertical;
 }
 
+/* The honest present-state line on a structural card (the brief / the send / the scoreboard). It states
+   where the card actually stands in plain operator words instead of a mechanical status ("Waiting for
+   approval at gate."). Sits a touch quieter than the headline, a touch warmer than the mono slug it
+   replaced — the same calm body register the Gate's posture line uses. */
+.loop-node-idle {
+  margin-top: 5px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.42;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
 .loop-node-err-text {
   margin-top: 3px;
   overflow: hidden;
