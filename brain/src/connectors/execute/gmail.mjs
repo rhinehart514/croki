@@ -69,7 +69,8 @@ export const meta = {
 //   3. Nothing → { token: null }, an honest staged no-op upstream.
 // Returns `{ token, needsReconnect?, reason? }`. Async because minting is a real (mocked-in-test) call.
 // The projectId is read from the run context (host-supplied); persistence options (e.g. a test root) ride
-// context.credentialOptions. Never logs a token or a secret.
+// the shared context.credentials.options seam, with credentialOptions retained for direct-call compatibility.
+// Never logs a token or a secret.
 async function resolveGmailToken(node, context) {
   // Full injectable override (used by tests to supply a token without touching the store). Supports a
   // sync or async override so a test can hand back a token directly.
@@ -77,7 +78,11 @@ async function resolveGmailToken(node, context) {
     return { token: (await context.resolveCredential("gmail", node, context)) || null };
   }
   const projectId = context?.__run?.projectId ?? context?.projectId ?? node?.config?.projectId ?? null;
-  const credOptions = context?.credentialOptions ?? {};
+  // `runGraph` owns the shared credential context and carries persistence options under
+  // `context.credentials.options` (the same shape Clay, HTTP, and Slack consume). Keep the direct
+  // `credentialOptions` form as a compatibility seam for connector-level callers/tests, but prefer the
+  // graph-owned shape so an isolated run can never fall through to another store root.
+  const credOptions = context?.credentials?.options ?? context?.credentialOptions ?? {};
 
   // Path 1 — a durable OAuth credential (gmail first, then google), if one is banked for this project.
   const oauthCredential =

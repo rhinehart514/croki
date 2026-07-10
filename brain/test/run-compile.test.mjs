@@ -20,6 +20,7 @@ import path from "node:path";
 
 import {
   compileRunFromPath,
+  assertOrdinaryProductChangeBoundary,
   buildCompileGrounding,
   gateReviewForRun,
   isBindableContract,
@@ -226,8 +227,35 @@ describe("run-compile — RunPlan decomposition", () => {
     assert.ok(run.items.some((item) => item.reviewPayload === "list"));
     assert.ok(run.items.some((item) => item.reviewPayload === "copy"));
     assert.ok(run.items.some((item) => item.reviewPayload === "diff"));
-    assert.ok(gate.items.some((item) => item.protects === "apply_patch"));
+    assert.ok(gate.items.some((item) => item.protects === "prepare_diff"));
+    const patch = run.items.find((item) => item.kind === "patch");
+    assert.equal(patch.effectBoundary, "reviewed_diff_only");
+    assert.equal(patch.externalEffectAuthorized, false);
     assert.ok(gate.gates.some((item) => item.requiredApproval === "founder"));
+  });
+
+  it("rejects a deploy execute leg for an ordinary in-repo patch", () => {
+    assert.throws(() => assertOrdinaryProductChangeBoundary(
+      [{ id: "deploy", category: "execute", connector: "deploy" }],
+      { patch: { diff: "x" } },
+    ), /ordinary in-repo|reviewed diff/i);
+  });
+});
+
+describe("run-compile — optional work context", () => {
+  it("inherits path refs into the compiled run and gate review without requiring a question", async () => {
+    const options = freshRoot();
+    const { projectId, path } = seedPath(options);
+    const contextual = gtmPathStore.save({ ...path, questionId: "question-1", participantRefs: ["researcher"], productRefs: ["onboarding"] }, options);
+    const { run, gate } = await compileRunFromPath({ projectId, pathId: contextual.id, compose: gatedComposer(), options });
+    assert.equal(run.questionId, "question-1");
+    assert.deepEqual(run.participantRefs, [{ type: null, id: "researcher" }]);
+    assert.deepEqual(gate.productRefs, [{ type: null, id: "onboarding" }]);
+
+    const directPath = gtmPathStore.create({ projectId, summary: "Direct action" }, options);
+    const direct = await compileRunFromPath({ projectId, pathId: directPath.id, compose: gatedComposer(), options });
+    assert.equal(direct.run.questionId, null);
+    assert.deepEqual(direct.run.productRefs, []);
   });
 });
 

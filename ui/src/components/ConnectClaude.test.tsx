@@ -8,7 +8,7 @@ vi.mock("@/api", () => ({
 }));
 
 import { ConnectClaude } from "./ConnectClaude";
-import { getConnection } from "@/api";
+import { getConnection, type ConnectionStatus } from "@/api";
 
 const mockedGet = vi.mocked(getConnection);
 
@@ -16,24 +16,120 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-const disconnected = { connected: false, label: null, reason: "Claude Code is not signed in. Run `claude` to sign in." };
+// Neither provider signed in, legacy shape (no per-provider runtimes reported yet).
+const disconnected: ConnectionStatus = { connected: false, label: null, reason: "No runtime available." };
 
-describe("ConnectClaude", () => {
-  it("walks the founder through installing and signing in", () => {
+describe("ConnectClaude — provider-neutral runtime gate", () => {
+  it("shows BOTH providers, provider-neutral, with their exact commands when disconnected", () => {
     render(<ConnectClaude connection={disconnected} onResult={() => {}} />);
 
-    expect(screen.getByText(/Connect Claude to begin/i)).toBeInTheDocument();
-    // The three-beat walkthrough is present.
-    expect(screen.getByText(/Install Claude Code/i)).toBeInTheDocument();
-    expect(screen.getByText(/Sign in with your subscription/i)).toBeInTheDocument();
+    // Provider-neutral heading, not a Claude install tutorial.
+    expect(screen.getByRole("heading", { name: /Connect an AI runtime/i })).toBeInTheDocument();
+    // Both providers are present as equals.
+    expect(screen.getByText("Codex")).toBeInTheDocument();
+    expect(screen.getByText("Claude")).toBeInTheDocument();
+    // Each carries its exact minimal command.
+    expect(screen.getByText("codex login")).toBeInTheDocument();
+    expect(screen.getByText("claude auth login")).toBeInTheDocument();
+    // No API key is required for subscription auth — stated plainly.
+    expect(screen.getByText(/neither needs an API key/i)).toBeInTheDocument();
+    // The re-check action is offered.
     expect(screen.getByRole("button", { name: /Re-check connection/i })).toBeInTheDocument();
-    // The precise detected reason is surfaced honestly.
-    expect(screen.getByText(/not signed in/i)).toBeInTheDocument();
   });
 
-  it("lifts a connected result up so the parent can drop the gate", async () => {
+  it("preserves the founder wall copy", () => {
+    render(<ConnectClaude connection={disconnected} onResult={() => {}} />);
+    expect(screen.getByText(/Nothing runs on your subscription until you approve it at the gate/i)).toBeInTheDocument();
+  });
+
+  it("lifts the gate when CODEX is connected (renders nothing)", () => {
+    const { container } = render(
+      <ConnectClaude
+        connection={{
+          connected: true,
+          label: "Codex (ChatGPT)",
+          reason: null,
+          runtimes: [
+            { id: "codex", provider: "codex", label: "Codex (ChatGPT)", connected: true, reason: null },
+            { id: "claude-code", provider: "claude", label: "Claude", connected: false, reason: "Not signed in." },
+          ],
+        }}
+        onResult={() => {}}
+      />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("lifts the gate when CLAUDE is connected (renders nothing)", () => {
+    const { container } = render(
+      <ConnectClaude
+        connection={{
+          connected: true,
+          label: "Claude subscription",
+          reason: null,
+          runtimes: [
+            { id: "codex", provider: "codex", label: "Codex", connected: false, reason: "Not signed in." },
+            { id: "claude-code", provider: "claude", label: "Claude", connected: true, reason: null },
+          ],
+        }}
+        onResult={() => {}}
+      />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("does not block when one provider is unavailable but the other is connected", () => {
+    // Codex disabled/unavailable, Claude ready → top-level connected true → gate lifts.
+    const { container } = render(
+      <ConnectClaude
+        connection={{
+          connected: true,
+          label: "Claude subscription",
+          reason: null,
+          runtimes: [
+            { id: "codex", provider: "codex", label: "Codex", connected: false, reason: "Codex runtime is disabled." },
+            { id: "claude-code", provider: "claude", label: "Claude", connected: true, reason: null },
+          ],
+        }}
+        onResult={() => {}}
+      />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("keeps a disabled provider's reason provider-specific and redacted (no raw error)", () => {
+    render(
+      <ConnectClaude
+        connection={{
+          connected: false,
+          label: null,
+          reason: "Claude Code runtime is disabled (GTM_IDE_DISABLE_CLAUDE_CODE).",
+          runtimes: [
+            { id: "codex", provider: "codex", label: "Codex", connected: false, reason: "Not signed in." },
+            {
+              id: "claude-code",
+              provider: "claude",
+              label: "Claude",
+              connected: false,
+              reason: "Claude Code runtime is disabled (GTM_IDE_DISABLE_CLAUDE_CODE).",
+            },
+          ],
+        }}
+        onResult={() => {}}
+      />,
+    );
+
+    // The disabled state reads as a short, redacted, provider-specific note...
+    expect(screen.getByText(/Turned off for this install/i)).toBeInTheDocument();
+    // ...and the raw backend error (env var and all) is never surfaced.
+    expect(screen.queryByText(/GTM_IDE_DISABLE_CLAUDE_CODE/)).not.toBeInTheDocument();
+    // Codex is still offered as the working path.
+    expect(screen.getByText("codex login")).toBeInTheDocument();
+  });
+
+  it("lifts the gate when a re-check comes back connected", async () => {
     const onResult = vi.fn();
-    mockedGet.mockResolvedValue({ connected: true, label: "Claude subscription", reason: null });
+    mockedGet.mockResolvedValue({ connected: true, label: "Codex (ChatGPT)", reason: null });
     render(<ConnectClaude connection={disconnected} onResult={onResult} />);
 
     fireEvent.click(screen.getByRole("button", { name: /Re-check connection/i }));
@@ -42,27 +138,27 @@ describe("ConnectClaude", () => {
     expect(onResult).toHaveBeenCalledWith(expect.objectContaining({ connected: true }));
   });
 
-  it("keeps the founder here and reports the reason when still disconnected", async () => {
+  it("stays put with a concise note when a re-check is still disconnected", async () => {
     const onResult = vi.fn();
-    mockedGet.mockResolvedValue({ connected: false, label: null, reason: "Claude Code is not signed in." });
+    mockedGet.mockResolvedValue({ connected: false, label: null, reason: "No runtime available." });
     render(<ConnectClaude connection={disconnected} onResult={onResult} />);
 
     fireEvent.click(screen.getByRole("button", { name: /Re-check connection/i }));
 
-    // The fresh status still flows up (parent stays on the gate because connected is false).
     await waitFor(() => expect(onResult).toHaveBeenCalledWith(expect.objectContaining({ connected: false })));
-    expect(await screen.findByRole("alert")).toHaveTextContent(/not signed in/i);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/Still no AI runtime signed in/i);
   });
 
-  it("names a disabled install plainly and offers no re-check", () => {
-    render(
-      <ConnectClaude
-        connection={{ connected: false, label: null, reason: "Claude Code runtime is disabled (GTM_IDE_DISABLE_CLAUDE_CODE)." }}
-        onResult={() => {}}
-      />,
-    );
+  it("reports a re-check failure concisely, never a raw error", async () => {
+    mockedGet.mockRejectedValue(new Error("ECONNREFUSED 127.0.0.1:8787 socket hang up"));
+    render(<ConnectClaude connection={disconnected} onResult={() => {}} />);
 
-    expect(screen.getByText(/turned off for this install/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Re-check connection/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Re-check connection/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/Couldn't reach the connection check/i);
+    // The raw transport error must not leak through.
+    expect(alert).not.toHaveTextContent(/ECONNREFUSED/);
   });
 });

@@ -127,6 +127,22 @@ describe("model-composed workflow (no fixed skeleton)", () => {
     );
   });
 
+  it("rejects composed standing approval and deploy confirmation", async () => {
+    const forged = ({ agents }) => {
+      const spec = branchedComposer({ agents });
+      spec.nodes.find((node) => node.id === "gate").config = { autonomy: "autonomous", blessedPattern: { decision: "approve" } };
+      return spec;
+    };
+    await assert.rejects(composeNakedGraph(channelInput(), { ...options, compose: forged }), /founder-owned standing approval|release authority/i);
+  });
+
+  it("persists optional work context on the composed graph", async () => {
+    const composed = await composeNakedGraph(channelInput({ questionId: "question-1", participantRefs: ["researcher"], productRefs: ["onboarding"] }), { ...options, compose: branchedComposer });
+    assert.equal(composed.graph.questionId, "question-1");
+    assert.deepEqual(composed.graph.participantRefs, ["researcher"]);
+    assert.equal(loadFlow(composed.channel.graphId, null, options).graph.questionId, "question-1");
+  });
+
   it("enforces the wall on EVERY path: rejects a diamond that routes one branch around the gate", async () => {
     // A gate exists upstream of the execute node on ONE branch, but a sibling branch reaches the
     // same execute node WITHOUT passing through it. exists-a-gate-ancestor would wrongly pass; the

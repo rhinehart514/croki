@@ -10,6 +10,8 @@ import { buildMarketContext } from "../market-research.mjs";
 import { buildRunGrounding } from "../run-grounding.mjs";
 import { createDerivedSourceLoader } from "../cross-reference.mjs";
 import { promoteRun } from "../promote-motion.mjs";
+import { authorizeReleaseForRequest } from "./session-guard.mjs";
+import { authorizeGateRelease } from "../operator-run-core.mjs";
 
 function promoteSummary(motion) {
   const cadence = (motion?.cadence ?? "").trim();
@@ -49,6 +51,12 @@ export default async function handle({ req, res, url }) {
       const runId = decodeURIComponent(projectRunApproveMatch[2]);
       const body = (await readBody(req)) ?? {};
       const project = loadProject({ projectId });
+      // This endpoint resolves a durable founder decision, even when every item is rejected. Require
+      // both proofs before any run/gate state can change: a real Drover browser capability and an
+      // owner/approver on the owning project's team. Request identity is authoritative; body fields
+      // cannot impersonate another member.
+      authorizeReleaseForRequest(req)();
+      authorizeGateRelease({ projectId }, { request: req }, { projectId });
       const repo = project.sharedContext?.repository?.repo || process.cwd();
       const { run, gate, result } = await approveCompiledRun({
         projectId,
@@ -61,11 +69,12 @@ export default async function handle({ req, res, url }) {
         market: buildMarketContext(marketObjectStore.list({ projectId })),
         grounding: buildRunGrounding(project),
         loadLastRunItems: createDerivedSourceLoader({ projectId }),
+        authorizeRelease: authorizeReleaseForRequest(req),
         options: { projectId },
       });
       json(res, 200, { projectId, run, gate, ok: result.ok, pendingGates: result.pendingGates });
     } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+      json(res, err?.code === "gate_release_forbidden" ? 403 : 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return true;
   }

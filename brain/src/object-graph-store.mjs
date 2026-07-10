@@ -47,6 +47,10 @@ export const OBJECT_EDGE_STATUSES = [
 
 const COLLECTION = "object-graph";
 const LAYOUT_COLLECTION = "object-graph-layout";
+const LAYOUT_SCHEMA_VERSION = 2;
+
+export const PROJECT_CANVAS_LAYOUT_NAMESPACE = "project-canvas";
+export const OBJECT_GRAPH_LAYOUT_NAMESPACE = "object-graph";
 
 export function genObjectGraphId(prefix = "obj") {
   const stamp = now().replace(/\D/g, "").slice(0, 14);
@@ -211,6 +215,71 @@ export function normalizeObjectGraphPositions(input = {}) {
   return positions;
 }
 
+function canonicalLayoutNamespace(namespace) {
+  const value = trimOrNull(namespace) || PROJECT_CANVAS_LAYOUT_NAMESPACE;
+  return value === OBJECT_GRAPH_LAYOUT_NAMESPACE ? PROJECT_CANVAS_LAYOUT_NAMESPACE : value;
+}
+
+function normalizeStringList(input) {
+  if (!Array.isArray(input)) return [];
+  return [...new Set(input.map(trimOrNull).filter(Boolean))];
+}
+
+function normalizeViewport(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  const x = Number(input.x);
+  const y = Number(input.y);
+  const zoom = Number(input.zoom);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(zoom) || zoom <= 0) return null;
+  return { x, y, zoom };
+}
+
+export function normalizeProjectCanvasLayout(input = {}) {
+  return {
+    positions: normalizeObjectGraphPositions(input.positions ?? {}),
+    collapsedGroups: normalizeStringList(input.collapsedGroups),
+    pinnedCrew: normalizeStringList(input.pinnedCrew),
+    viewport: normalizeViewport(input.viewport),
+    updatedAt: input.updatedAt ?? null,
+  };
+}
+
+function layoutNamespaces(stored) {
+  const namespaces = {};
+  for (const [rawNamespace, rawLayout] of Object.entries(stored?.namespaces ?? {})) {
+    const namespace = canonicalLayoutNamespace(rawNamespace);
+    if (namespaces[namespace] && rawNamespace !== PROJECT_CANVAS_LAYOUT_NAMESPACE) continue;
+    namespaces[namespace] = normalizeProjectCanvasLayout(rawLayout);
+  }
+  if (!namespaces[PROJECT_CANVAS_LAYOUT_NAMESPACE]) {
+    namespaces[PROJECT_CANVAS_LAYOUT_NAMESPACE] = normalizeProjectCanvasLayout(stored ?? {});
+  }
+  return namespaces;
+}
+
+function saveLayoutDocument(projectId, namespaces, options = {}) {
+  const updatedAt = now();
+  const durableNamespaces = {};
+  for (const [namespace, layout] of Object.entries(namespaces)) {
+    durableNamespaces[canonicalLayoutNamespace(namespace)] = {
+      ...normalizeProjectCanvasLayout(layout),
+      updatedAt: layout?.updatedAt ?? updatedAt,
+    };
+  }
+  const canonical = durableNamespaces[PROJECT_CANVAS_LAYOUT_NAMESPACE]
+    ?? { ...normalizeProjectCanvasLayout(), updatedAt };
+  durableNamespaces[PROJECT_CANVAS_LAYOUT_NAMESPACE] = canonical;
+  const durable = {
+    schemaVersion: LAYOUT_SCHEMA_VERSION,
+    projectId,
+    positions: canonical.positions,
+    namespaces: durableNamespaces,
+    updatedAt,
+  };
+  persistence(options).set(LAYOUT_COLLECTION, safeId(projectId), durable);
+  return durable;
+}
+
 export function normalizeObjectGraph(input = {}, projectId = input.projectId ?? null) {
   return {
     schemaVersion: OBJECT_GRAPH_SCHEMA_VERSION,
@@ -242,25 +311,50 @@ export const objectGraphStore = {
 export const objectGraphLayoutStore = {
   collection: LAYOUT_COLLECTION,
   load(projectId = "default", options = {}) {
-    const stored = persistence(options).get(LAYOUT_COLLECTION, safeId(projectId));
+    const layout = this.loadNamespace(projectId, PROJECT_CANVAS_LAYOUT_NAMESPACE, options);
     return {
       projectId,
-      positions: normalizeObjectGraphPositions(stored?.positions ?? {}),
-      updatedAt: stored?.updatedAt ?? null,
+      positions: layout.positions,
+      updatedAt: layout.updatedAt,
     };
   },
   save(projectId = "default", positions = {}, options = {}) {
-    const normalized = {
-      projectId,
+    const current = this.loadNamespace(projectId, PROJECT_CANVAS_LAYOUT_NAMESPACE, options);
+    const layout = this.saveNamespace(projectId, PROJECT_CANVAS_LAYOUT_NAMESPACE, {
+      ...current,
       positions: normalizeObjectGraphPositions(positions),
-      updatedAt: now(),
-    };
-    persistence(options).set(LAYOUT_COLLECTION, safeId(projectId), normalized);
-    return normalized;
+    }, options);
+    return { projectId, positions: layout.positions, updatedAt: layout.updatedAt };
   },
   merge(projectId = "default", positions = {}, options = {}) {
     const current = this.load(projectId, options);
     return this.save(projectId, { ...current.positions, ...normalizeObjectGraphPositions(positions) }, options);
+  },
+  loadNamespace(projectId = "default", namespace = PROJECT_CANVAS_LAYOUT_NAMESPACE, options = {}) {
+    const stored = persistence(options).get(LAYOUT_COLLECTION, safeId(projectId));
+    const canonical = canonicalLayoutNamespace(namespace);
+    const layout = layoutNamespaces(stored)[canonical] ?? normalizeProjectCanvasLayout();
+    return { projectId, namespace: canonical, ...layout };
+  },
+  saveNamespace(projectId = "default", namespace = PROJECT_CANVAS_LAYOUT_NAMESPACE, layout = {}, options = {}) {
+    const stored = persistence(options).get(LAYOUT_COLLECTION, safeId(projectId));
+    const namespaces = layoutNamespaces(stored);
+    const canonical = canonicalLayoutNamespace(namespace);
+    const updatedAt = now();
+    namespaces[canonical] = { ...normalizeProjectCanvasLayout(layout), updatedAt };
+    const durable = saveLayoutDocument(projectId, namespaces, options);
+    return { projectId, namespace: canonical, ...durable.namespaces[canonical] };
+  },
+  mergeNamespace(projectId = "default", namespace = PROJECT_CANVAS_LAYOUT_NAMESPACE, patch = {}, options = {}) {
+    const current = this.loadNamespace(projectId, namespace, options);
+    return this.saveNamespace(projectId, namespace, {
+      positions: patch.positions === undefined
+        ? current.positions
+        : { ...current.positions, ...normalizeObjectGraphPositions(patch.positions) },
+      collapsedGroups: patch.collapsedGroups === undefined ? current.collapsedGroups : patch.collapsedGroups,
+      pinnedCrew: patch.pinnedCrew === undefined ? current.pinnedCrew : patch.pinnedCrew,
+      viewport: patch.viewport === undefined ? current.viewport : patch.viewport,
+    }, options);
   },
   delete(projectId = "default", options = {}) {
     return persistence(options).delete(LAYOUT_COLLECTION, safeId(projectId));

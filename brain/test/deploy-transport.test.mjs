@@ -41,8 +41,8 @@ test("createVercelRunner hands the built worktree + artifact to the injected MCP
   const runner = createVercelRunner({
     deployToVercel: async (args) => { seen = args; return { ok: true, url: "https://demo.vercel.app", detail: "shipped" }; },
   });
-  const node = { config: { repo: "/tmp/worktree", target: "staged" } };
-  const item = { artifactSpec: { name: "demo" }, artifactFiles: [{ path: "index.html", contents: "<html>" }] };
+  const node = { config: { target: "staged" } };
+  const item = { buildWorktree: "/tmp/worktree", artifactSpec: { name: "demo" }, artifactFiles: [{ path: "index.html", contents: "<html>" }] };
   const out = await runner(node, item, {});
   assert.equal(out.ok, true);
   assert.equal(out.url, "https://demo.vercel.app");

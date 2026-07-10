@@ -7,7 +7,7 @@ import { marketObjectStore } from "../gtm-store.mjs";
 import { compileRunFromPath } from "../run-compile.mjs";
 import { createClaudeComposer } from "../composition.mjs";
 import { ensureObjectGraphProductScan, objectGraphForProject } from "../object-graph-projection.mjs";
-import { objectGraphLayoutStore, objectGraphStore } from "../object-graph-store.mjs";
+import { PROJECT_CANVAS_LAYOUT_NAMESPACE, objectGraphLayoutStore, objectGraphStore } from "../object-graph-store.mjs";
 import { applyObjectGraphOperations } from "../object-graph-operations.mjs";
 import { ideateObjectCandidates, createClaudeIdeaGenerator, createClaudeObjectIdeaGenerator } from "../ideation.mjs";
 import {
@@ -74,8 +74,12 @@ export default async function handle({ req, res, url }) {
       const projectId = decodeURIComponent(projectObjectGraphPositionsMatch[1]);
       loadProject({ projectId });
       const body = await readBody(req);
-      const layout = objectGraphLayoutStore.merge(projectId, body?.positions ?? body ?? {});
-      json(res, 200, { projectId, positions: layout.positions, savedAt: layout.updatedAt });
+      const layout = objectGraphLayoutStore.mergeNamespace(
+        projectId,
+        PROJECT_CANVAS_LAYOUT_NAMESPACE,
+        body?.geometry ?? (body?.positions ? body : { positions: body ?? {} }),
+      );
+      json(res, 200, { projectId, positions: layout.positions, savedAt: layout.updatedAt, geometry: layout });
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }

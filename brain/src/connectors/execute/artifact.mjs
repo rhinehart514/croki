@@ -29,9 +29,18 @@ export const meta = {
   stub: false,
   outputKind: "artifact",
   allowed: ["stage_artifact", "export_for_manual_deploy"],
-  blocked: ["deploy", "publish", "push", "go_live"],
+  blocked: ["commit", "push", "pull_request", "merge", "deploy", "publish", "go_live"],
   approvalRequired: ["continue_from_gate"],
 };
+
+export function isOrdinaryInRepoChange(item) {
+  return item?.effectBoundary === "reviewed_diff_only"
+    || item?.artifactSpec?.inRepo === true
+    || item?.artifactSpec?.target === "in-repo"
+    || item?.kind === "change"
+    || item?.kind === "patch"
+    || Boolean(item?.repo && item?.path);
+}
 
 export async function run(node, upstream) {
   // Only founder-approved items are staged. Everything else is dropped, exactly
@@ -57,10 +66,20 @@ export async function run(node, upstream) {
     staged: true,
     deployed: false,
     live: false,
-    executionStatus: "staged_for_deploy",
-    deployStatus: "awaiting founder approval to deploy",
+    ...(isOrdinaryInRepoChange(item)
+      ? {
+          executionStatus: "staged_for_review",
+          deployStatus: "reviewed diff only — commit, push, pull request, merge, publish, and deploy remain blocked",
+          effectBoundary: "reviewed_diff_only",
+          externalEffectAuthorized: false,
+        }
+      : {
+          executionStatus: "staged_for_deploy",
+          deployStatus: "awaiting separate founder deploy confirmation",
+        }),
     stagedAt,
   }));
+  const ordinaryProductChanges = items.filter((item) => item.effectBoundary === "reviewed_diff_only").length;
 
   return {
     ok: true,
@@ -68,8 +87,12 @@ export async function run(node, upstream) {
     meta: {
       staged: items.length,
       deployed: 0,
+      ordinaryProductChanges,
+      deployableArtifacts: items.length - ordinaryProductChanges,
       target,
-      note: "Artifacts were staged locally and are awaiting founder approval to deploy. Nothing was deployed or published.",
+      note: ordinaryProductChanges
+        ? "Product changes were staged as reviewed local diffs. Nothing was committed, pushed, opened as a pull request, merged, published, or deployed."
+        : "Artifacts were staged locally and are awaiting a separate founder deploy confirmation. Nothing was deployed or published.",
     },
   };
 }

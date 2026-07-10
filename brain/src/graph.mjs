@@ -393,9 +393,16 @@ function normalizeRunContracts(graph) {
 // single source of truth for "this run releases a send", so every release-authority guard (the graph-run
 // path here and the operator gate's front guard) agrees on exactly what counts as a release. A pure
 // reject/skip carries no approve intent and is never treated as a release.
+function isApproveDecision(value) {
+  return value?.decision === "approve" || value?.pattern?.decision === "approve";
+}
+
 export function hasApproveIntent(approvals = {}, decisions = {}) {
   return Object.values(approvals).some((v) => v === true)
-    || Object.values(decisions).some((d) => d?.decision === "approve" || d?.pattern?.decision === "approve");
+    || Object.values(decisions).some((gateDecision) => (
+      isApproveDecision(gateDecision)
+      || Object.values(gateDecision ?? {}).some(isApproveDecision)
+    ));
 }
 
 // What approving at a gate actually DOES, read off the nearest downstream execute node. Deterministic
@@ -408,7 +415,7 @@ const EXECUTE_ACTION_BY_CONNECTOR = {
   "gmail-oauth": { verb: "send", willSend: true },
   "gmail-transport": { verb: "send", willSend: true },
   http: { verb: "send", willSend: true },
-  artifact: { verb: "publish", willSend: true },
+  artifact: { verb: "stage-artifact", willSend: false },
   deploy: { verb: "deploy", willSend: true },
 };
 

@@ -33,8 +33,11 @@ function freshRoot() {
 }
 
 // A Gmail message shape (as the read transport returns): payload.headers is [{ name, value }].
-function gmailMessage(headers = {}) {
-  return { payload: { headers: Object.entries(headers).map(([name, value]) => ({ name, value })) } };
+function gmailMessage(headers = {}, id = null) {
+  return {
+    ...(id ? { id } : {}),
+    payload: { headers: Object.entries(headers).map(([name, value]) => ({ name, value })) },
+  };
 }
 
 const OUR_PROVENANCE = JSON.stringify({ marker: "gtm-ide", runId: "run-1" });
@@ -88,10 +91,14 @@ describe("classifyThread", () => {
     const thread = {
       messages: [
         gmailMessage({ From: "founder@drover.co", [`X-GTM-IDE-Provenance`]: OUR_PROVENANCE }), // our outbound
-        gmailMessage({ From: "Ada <ada@acme.com>" }), // her reply
+        gmailMessage({ From: "Ada <ada@acme.com>" }, "gmail-reply-1"), // her reply
       ],
     };
-    assert.deepEqual(classifyThread(thread, sentToAda), { outcomeKind: "reply", signal: "positive" });
+    assert.deepEqual(classifyThread(thread, sentToAda), {
+      outcomeKind: "reply",
+      signal: "positive",
+      providerEventId: "gmail-reply-1",
+    });
   });
 
   it("never counts our own provenance-stamped outbound as a reply", () => {
@@ -169,7 +176,7 @@ describe("pollInboxOutcomes — automatic attribution", () => {
     const options = freshRoot();
     const { projectId } = seedSentRun(options);
 
-    const replyThread = { messages: [gmailMessage({ From: "ada@acme.com" })] };
+    const replyThread = { messages: [gmailMessage({ From: "ada@acme.com" }, "gmail-reply-1")] };
     const report = await pollInboxOutcomes(projectId, {
       ...options,
       token: "fake-access-token",
@@ -188,6 +195,8 @@ describe("pollInboxOutcomes — automatic attribution", () => {
     assert.equal(results[0].joinKey, "jk-ada");
     assert.equal(results[0].outcomeKind, "reply");
     assert.equal(results[0].source, "connected-account");
+    assert.equal(results[0].providerEventId, "gmail-reply-1");
+    assert.equal(results[0].providerSourceId, "thr-1");
   });
 
   it("reports blind and ingests nothing when Gmail refuses the read (send-only scope, 403)", async () => {

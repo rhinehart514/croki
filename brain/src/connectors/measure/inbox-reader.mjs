@@ -216,12 +216,15 @@ export function classifyThread(thread, sentItem = {}) {
   const messages = Array.isArray(thread?.messages) ? thread.messages : [];
   const recipient = trimOrNull(sentItem.recipient);
 
+  let bounceEventId = null;
+  let replyEventId = null;
   let sawBounce = false;
   let sawReply = false;
   for (const message of messages) {
     if (isOurOutbound(message)) continue; // our own outbound in the thread — never a signal
     if (isBounce(message)) {
       sawBounce = true;
+      bounceEventId = trimOrNull(message?.id) ?? bounceEventId;
       continue;
     }
     const from = extractEmail(headerValue(message, "From"));
@@ -230,12 +233,21 @@ export function classifyThread(thread, sentItem = {}) {
     // inbound that is not our own). Either way it is a real message we did not send.
     if (!recipient || from === recipient) {
       sawReply = true;
+      replyEventId = trimOrNull(message?.id) ?? replyEventId;
     }
   }
 
   // A bounce dominates: a send that bounced did not reach a human, so it can never also be a reply.
-  if (sawBounce) return { outcomeKind: "bounce", signal: "negative" };
-  if (sawReply) return { outcomeKind: "reply", signal: "positive" };
+  if (sawBounce) return {
+    outcomeKind: "bounce",
+    signal: "negative",
+    ...(bounceEventId ? { providerEventId: bounceEventId } : {}),
+  };
+  if (sawReply) return {
+    outcomeKind: "reply",
+    signal: "positive",
+    ...(replyEventId ? { providerEventId: replyEventId } : {}),
+  };
   return null;
 }
 
@@ -403,6 +415,8 @@ export async function pollInboxOutcomes(projectId = "default", options = {}) {
         source: "connected-account",
         channel: "gmail",
         messageId: sent.providerMessageId,
+        providerEventId: classification.providerEventId,
+        providerSourceId: threadId,
       },
       { ...options, projectId, runs, existingResults },
     );

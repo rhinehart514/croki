@@ -3,7 +3,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { loadClarity, addClarity, removeClarity } from "../src/clarity-store.mjs";
+import { loadClarity, addClarity, clarityGrounding, projectQuestions, removeClarity, updateClarity } from "../src/clarity-store.mjs";
+import { recordFounderDecision } from "../src/feedback-ledger.mjs";
 
 describe("clarity-store — durable pinned Ideate output", () => {
   let parent;
@@ -101,6 +102,119 @@ describe("clarity-store — durable pinned Ideate output", () => {
       removeClarity("alpha", alpha[0].id, options);
       assert.equal(loadClarity("alpha", options).length, 0);
       assert.equal(loadClarity("beta", options).length, 1);
+    });
+  });
+
+  describe("optional question anchors", () => {
+    it("keeps stable open refs for crew, evidence, and product context", () => {
+      const question = addClarity(projectId, {
+        id: "question-adoption",
+        kind: "question",
+        text: "Why do qualified founders stop before activation?",
+        participantRefs: ["buyer-researcher", { type: "teammate", id: "activation-lead" }, "buyer-researcher"],
+        evidenceRefs: ["signal-1", { type: "outcome", id: "result-1" }],
+        productRefs: [{ type: "product-element", id: "onboarding" }],
+      }, options);
+      assert.equal(question.id, "question-adoption");
+      assert.equal(question.status, "open");
+      assert.deepEqual(question.participantRefs, [
+        { type: null, id: "buyer-researcher" },
+        { type: "teammate", id: "activation-lead" },
+      ]);
+      assert.deepEqual(question.evidenceRefs, [
+        { type: null, id: "signal-1" },
+        { type: "outcome", id: "result-1" },
+      ]);
+
+      const updated = updateClarity(projectId, question.id, {
+        status: "waiting-on-evidence",
+        participantRefs: [{ type: "teammate", id: "activation-lead" }],
+      }, options);
+      assert.equal(updated.id, question.id);
+      assert.equal(updated.createdAt, question.createdAt);
+      assert.equal(updated.status, "waiting-on-evidence");
+      assert.deepEqual(updated.participantRefs, [{ type: "teammate", id: "activation-lead" }]);
+    });
+
+    it("projects transient questions without pinning and preserves disagreement as separate sourced positions", () => {
+      addClarity(projectId, {
+        id: "question-positioning",
+        kind: "question",
+        text: "Should the promise lead with speed or control?",
+        participantRefs: [{ type: "teammate", id: "positioning-lead" }],
+      }, options);
+      const decision = recordFounderDecision({
+        projectId,
+        kind: "branch.selected",
+        value: "Run the smallest control-first proof test.",
+        questionId: "question-positioning",
+        sourceRef: { type: "branch-choice", id: "choice-1" },
+      }, options).receipt;
+
+      const projected = projectQuestions(projectId, {
+        transientQuestions: [{ id: "operator-question-1", projectId, type: "operator-event", question: "Would a proof page settle this?" }],
+        positions: [
+          {
+            id: "artifact-speed", projectId, questionId: "question-positioning", agentRef: "positioning-lead",
+            statement: "Lead with speed.", relation: "supports-speed",
+            evidenceRefs: [{ type: "product-truth", id: "truth-fast-path" }], uncertainty: "No buyer language yet.",
+          },
+          {
+            id: "artifact-control", projectId, questionId: "question-positioning", agentRef: "buyer-researcher",
+            statement: "Lead with control.", relation: "challenges-speed",
+            evidenceRefs: [{ type: "market-source", id: "interviews" }], falsifier: "Speed wins the buyer test.",
+          },
+        ],
+        sourceRecords: [{ id: "pipeline-1", type: "pipeline", projectId, questionId: "question-positioning" }],
+      }, options);
+
+      assert.equal(projected.length, 2);
+      const pinned = projected.find((item) => item.id === "question-positioning");
+      assert.equal(pinned.pinned, true);
+      assert.equal(pinned.positions.length, 2);
+      assert.deepEqual(pinned.positions.map((item) => item.participantRef), [
+        { type: null, id: "positioning-lead" },
+        { type: null, id: "buyer-researcher" },
+      ]);
+      assert.ok(!Object.prototype.hasOwnProperty.call(pinned, "consensus"));
+      assert.deepEqual(pinned.backlinks, [
+        { type: "pipeline", id: "pipeline-1" },
+        { type: "decision", id: decision.id },
+      ]);
+      assert.equal(projected.find((item) => item.id === "operator-question-1").pinned, false);
+      assert.deepEqual(loadClarity(projectId, options).map((item) => item.id), ["question-positioning"]);
+    });
+
+    it("archives a referenced question, deletes an unreferenced one, and never crosses projects", () => {
+      const referenced = addClarity("alpha", { kind: "question", text: "Which gap matters?" }, options);
+      const loose = addClarity("alpha", { kind: "question", text: "Temporary" }, options);
+      recordFounderDecision({
+        projectId: "alpha",
+        kind: "question.deferred",
+        value: "Wait for an observed signup.",
+        questionId: referenced.id,
+        sourceRef: { type: "question-call", id: "defer-1" },
+      }, options);
+      recordFounderDecision({
+        projectId: "beta",
+        kind: "branch.selected",
+        value: "Beta only",
+        questionId: referenced.id,
+        sourceRef: { type: "choice", id: "beta-choice" },
+      }, options);
+
+      assert.equal(removeClarity("alpha", referenced.id, options), true);
+      assert.equal(removeClarity("alpha", loose.id, options), true);
+      const archived = loadClarity("alpha", options);
+      assert.equal(archived.length, 1);
+      assert.equal(archived[0].status, "archived");
+      assert.ok(archived[0].archivedAt);
+      assert.equal(clarityGrounding("alpha", options), null);
+      assert.deepEqual(projectQuestions("alpha", {}, options)[0].backlinks.length, 1);
+    });
+
+    it("keeps empty question state valid", () => {
+      assert.deepEqual(projectQuestions("never-touched", {}, options), []);
     });
   });
 });

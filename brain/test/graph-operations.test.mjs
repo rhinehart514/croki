@@ -100,5 +100,10 @@ describe("typed graph operations", () => {
       node: { id: "mcp-bad", kind: "mcp", label: "No ref", position: { x: 0, y: 0 }, config: {} },
     }]), /ref/i);
   });
-});
 
+  it("rejects deploy authority in typed config while allowing ordinary question context", () => {
+    const graph = defaultGraphTemplate();
+    assert.throws(() => applyGraphOperations(graph, [{ type: "update_node", nodeId: "exe-email", patch: { config: { deployConfirmed: true } } }]), /release authority/i);
+    assert.doesNotThrow(() => applyGraphOperations(graph, [{ type: "update_node", nodeId: "exe-email", patch: { config: { questionAnswered: true, implicationAccepted: true } } }]));
+  });
+});

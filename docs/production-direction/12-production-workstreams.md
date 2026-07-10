@@ -18,19 +18,21 @@ Acceptance:
 - no current doc presents the old program/policy/foundry model as load-bearing;
 - current code identifiers may remain historical but product UI language is consistent.
 
-## Workstream 1 — Product-room read model
+## Workstream 1 — Canvas projection read model
 
 Deliver:
 
-- product overview projection over current product model, truth, crew, questions/signals, actions, outcomes;
+- one product-scoped projection over current product model, truth, crew, pinned questions/signals, pipelines,
+  decisions, outcomes, and founder-owned geometry;
 - honest empty/partial states;
 - no new GTM intelligence subsystem;
-- API route and MCP read parity.
+- a tested backend projection contract that later UI and MCP work can consume.
 
 Acceptance:
 
-- a founder can understand product reality, active crew, open questions, recent actions, and outcomes from one
-  product room.
+- empty, partial, stale, archived-reference, and populated fixtures produce truthful project-isolated
+  projections;
+- no canvas rendering or MCP tool is required to complete this backend dependency.
 
 ## Workstream 2 — Product-level GTM crew
 
@@ -39,7 +41,7 @@ Deliver:
 - crew membership and teammate souls scoped to product;
 - relevant-pod projection for a question/action;
 - teammate contributions with evidence, uncertainty, recommendation, and founder response;
-- profile and crew-room redesign.
+- stable references that the canvas can later use for perimeter and work ownership.
 
 Acceptance:
 
@@ -47,28 +49,32 @@ Acceptance:
 - founder learning changes future teammate context;
 - teammates remain distinct and disagreement is preserved.
 
-## Workstream 3 — Question/context layer
+## Workstream 3 — Optional question, evidence, and disagreement focus
 
 Deliver:
 
-- optional product-scoped GTM question record/projection;
-- links to evidence, product elements, crew, decisions, actions, and outcomes;
-- question room UI;
-- founder decision writeback.
+- optional founder-pinned question anchors and transient run/operator question projections;
+- question-owned links to evidence, product elements, and crew, plus reverse-joined pipeline, run, outcome,
+  and founder-decision references owned by those source records;
+- question/evidence/disagreement projection data for the same canvas;
+- founder decision writeback through the existing feedback/gate/taste authority.
 
 Acceptance:
 
-- a question can start from UI, MCP, signal, or agent;
+- founder, operator, and signal paths can create or project a question with stable references that later UI
+  and MCP work can address;
 - a direct action can still bypass a question;
 - incomplete question context never blocks pre-gate work.
+- no separate question destination or mandatory question lifecycle is introduced.
 
-## Workstream 4 — Crew-aware operator
+## Workstream 4 — Crew-aware operator runtime
 
 Deliver:
 
 - operator can inspect product, ask crew, compare perspectives, propose moves, and then compose an action;
 - existing direct run path remains available;
-- durable conversation links to question and action records.
+- durable conversation links to a pinned question when present and to existing pipeline/graph/run records;
+- no public MCP redesign yet; that surface follows stable canvas references in Workstream 7.
 
 Acceptance:
 
@@ -76,19 +82,20 @@ Acceptance:
 - model-owned judgment remains in rented agent/tool steps;
 - all writes and external effects stay scoped and gated.
 
-## Workstream 5 — Product-shaped GTM actions
+## Workstream 5 — Product-shaped GTM pipelines
 
 Deliver:
 
-- action metadata for product changes, activation, instrumentation, public artifacts, microproducts, and other
-  open GTM moves;
+- open pipeline shapes for product changes, activation, instrumentation, public artifacts, microproducts, and
+  other GTM moves;
 - preview/diff/gate path for durable product changes;
 - product model and outcome links.
 
 Acceptance:
 
-- at least one code-native/product-shaped motion can be proposed, reviewed, authorized, executed, measured,
-  and returned to the same question and crew.
+- at least one code-native/product-shaped motion can be proposed, reviewed, and staged safely; any effect the
+  existing authority permits can then execute, be measured, and return to the originating pinned question
+  when present and to the same crew.
 
 ## Workstream 6 — Outcome-to-product learning
 
@@ -107,30 +114,37 @@ Acceptance:
 
 Deliver:
 
-- canonical tools for product, crew, question, evidence, decision, action, and outcome;
+- a small inspect/focus/ask/propose/record/run verb set over stable canvas references;
 - project-scoped reads and writes;
 - read/write classifier and wall enforcement;
 - operator prompts updated to use the new surface.
 
 Acceptance:
 
-- a coding session can inspect and advance the same product question visible in the UI;
-- no important UI-only state exists outside the shared durable model.
+- a coding session can inspect and advance the same pinned question and pipeline references exposed by the
+  canvas projection contract;
+- the later canvas UI can consume those records without an MCP-only state or translation layer.
 
-## Workstream 8 — Product-room UI reorientation
+## Workstream 8 — Semantic canvas reorientation
 
 Deliver:
 
-- product room as default home;
-- contextual crew and question surfaces;
-- graph/canvas demoted to action execution;
+- product, question, and action altitudes on the existing woven canvas;
+- focus-to-trace for crew, provenance, decisions, live runs, and outcomes;
+- persistent crew perimeter and contextual teammate embodiment;
+- execution graphs revealed at action altitude;
 - gate and outcome surfaces preserved and clarified;
 - responsive/accessibility/off-happy-path coverage.
 
 Acceptance:
 
-- the product no longer presents a pipeline fleet as its primary identity;
-- a founder can move from product question to crew to action to gate to outcome without losing context.
+- the product no longer presents a fleet dashboard, capability inventory, or duplicate count surface as its
+  primary identity;
+- a founder can move from product truth to question/disagreement to pipeline to gate to outcome without
+  leaving the canvas or losing context;
+- the browser flow and coding session address the same pinned question, pipeline, decision, and outcome
+  references;
+- no product-room dashboard, separate question page, or duplicate gate implementation is introduced.
 
 ## Workstream 9 — Reliability and deletion pass
 
@@ -162,4 +176,8 @@ Before coding, state: the current behavior, target behavior, files likely to cha
 module, the wedge advanced, the gate path, and the machinery explicitly excluded. Preserve current user
 changes and historical data. Stop if the implementation requires a program/policy/foundry layer, fixed GTM
 stages, a mandatory pre-run contract, or host-side fuzzy strategy; redesign it to stay thin.
+
+The canvas, persistent teammates, open pipelines/graphs, and founder gate are fixed product decisions. A
+workstream may enrich their projection and interaction model; it may not replace them with a dashboard,
+document hierarchy, or parallel product shell.
 ```

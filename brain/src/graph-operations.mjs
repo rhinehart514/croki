@@ -65,14 +65,26 @@ export const OUTPUT_KIND_HINTS = ["message", "artifact", "dataset", "signal", "n
 // every typed mutation path (add_node / update_node). The legitimate founder promotion never routes
 // through these operations, so it is untouched.
 const FOUNDER_OWNED_GATE_CONFIG_KEYS = ["autonomy", "blessedPattern"];
+const FOUNDER_OWNED_RUNTIME_CONFIG_KEYS = [
+  "approved",
+  "approvalStatus",
+  "approvals",
+  "decisions",
+  "authorizeRelease",
+  "deployAuthorization",
+  "deployConfirmed",
+];
 
-function assertNoForgedAutonomy(category, config) {
-  if (category !== "gate" || !config || typeof config !== "object") return;
-  const forged = FOUNDER_OWNED_GATE_CONFIG_KEYS.filter((key) => Object.prototype.hasOwnProperty.call(config, key));
+export function assertNoForgedAuthority(category, config) {
+  if (!config || typeof config !== "object" || Array.isArray(config)) return;
+  const protectedKeys = category === "gate"
+    ? [...FOUNDER_OWNED_GATE_CONFIG_KEYS, ...FOUNDER_OWNED_RUNTIME_CONFIG_KEYS]
+    : FOUNDER_OWNED_RUNTIME_CONFIG_KEYS;
+  const forged = protectedKeys.filter((key) => Object.prototype.hasOwnProperty.call(config, key));
   if (forged.length) {
     throw new Error(
-      `A gate node's ${forged.join(" / ")} is founder-owned standing approval and cannot be set through a graph operation. ` +
-      "Only an explicit founder channel promotion may grant a channel standing autonomy.",
+      `A node's ${forged.join(" / ")} is founder-owned standing approval or release authority and cannot be set through composition or a graph operation. ` +
+      "Only an explicit founder gate action or channel promotion may grant that authority.",
     );
   }
 }
@@ -208,7 +220,7 @@ function applyOne(graph, operation) {
     }
     node.label = requireString(node.label, "Node label");
     node.config = node.config && typeof node.config === "object" && !Array.isArray(node.config) ? node.config : {};
-    assertNoForgedAutonomy(node.category, node.config);
+    assertNoForgedAuthority(node.category, node.config);
     if (node.outputKind !== undefined) node.outputKind = requireString(node.outputKind, "Node outputKind");
     if (node.contract != null) node.contract = normalizeContract(node.contract);
     node.position = {
@@ -240,7 +252,7 @@ function applyOne(graph, operation) {
     const current = graph.nodes[index];
     // category is not a patchable field, so the node stays whatever it already is — guard the patch's
     // config against forging the founder-owned autonomy keys onto a gate node.
-    if (patch.config) assertNoForgedAutonomy(current.category, patch.config);
+    if (patch.config) assertNoForgedAuthority(current.category, patch.config);
     graph.nodes[index] = {
       ...current,
       ...clone(patch),

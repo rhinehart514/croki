@@ -81,3 +81,15 @@
   border-top: 1px solid var(--line);
   padding-top: 10px;
 }
+
+/* Focus this question → opens the question altitude in place (production-direction/09). Calm, monochrome,
+   never a decorative call-to-action; it reads as a quiet affordance under the pinned question. */
+.clarity-focus-btn {
+  margin-top: 10px; width: 100%;
+  font-family: inherit; font-size: 12.5px; font-weight: 560;
+  padding: 7px 10px; border-radius: var(--r-md, 9px);
+  border: 1px solid var(--line, #e5e2dc); background: #ffffff; color: var(--ink);
+  cursor: pointer; transition: background 120ms ease, border-color 120ms ease;
+}
+.clarity-focus-btn:hover { background: var(--surface-2, #f4f2ee); border-color: var(--ink-2); }
+.clarity-focus-btn:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 1px; }

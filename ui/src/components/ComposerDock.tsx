@@ -5,6 +5,7 @@ import {
   Lightbulb, Maximize2, Mic, Pin, Play, Plus, ShieldCheck, Square, X,
 } from "lucide-react";
 import { statusLabel } from "@/lib/status";
+import { composerStartsCollapsed } from "@/lib/composerCollapse";
 import { subjectActions } from "@/lib/subjectActions";
 import { kindIcon } from "@/lib/objectKindIcons";
 import { humanizeFieldLabel, humanizeSlugsInText } from "@/lib/labels";
@@ -676,7 +677,7 @@ export function ComposerDock({
   briefing = null,
   onSubmitGateReview, onRefineItem, onRecordItemOutcome,
   gateLearned = 0, gateOffer = null, gatePromote,
-  seed = null, startOpen = false,
+  seed = null, startOpen = false, preferCollapsed = false,
 }: {
   session: OperatorSession | null;
   running: boolean;
@@ -702,7 +703,7 @@ export function ComposerDock({
   isNavCommand?: (text: string) => boolean;
   // Send a turn to Claude. Carries the optional advisory @-mention hints (the teammates & capabilities the
   // founder named in the sentence) so composition prefers the named crew — never a contract, never blocking.
-  onSend: (text: string, hints?: OperatorHints) => void | Promise<void | { mode: "fast" | "drive"; intent: string; answer?: string }>;
+  onSend: (text: string, hints?: OperatorHints, model?: string) => void | Promise<void | { mode: "fast" | "drive"; intent: string; answer?: string }>;
   onCancel: () => void | Promise<void>;
   onReviewGate: (nodeId: string) => void;
   // The founder gate, brought INTO the chat. When a run pauses at the wall, "Review & send" opens the real
@@ -721,6 +722,12 @@ export function ComposerDock({
   // The cold landing of an empty product: the composer opens instead of resting as a slim edge rail, so
   // "State a go-to-market goal" points at a visible input. Only forces open on the rising edge.
   startOpen?: boolean;
+  // Product-altitude survey mode (docs/production-direction/16): the composer rests as the SLIM 48px
+  // perimeter rail by default — showing running and gate state (the orb and the shield) without consuming
+  // the canvas — even when a session is live. Explicit focus (focusSignal / a subject / the rail) opens it.
+  // This keeps exactly one persistent crew home (the left roster) at product altitude and the operation
+  // visually dominant. False at action altitude (Engineer), where the composer opens with its session.
+  preferCollapsed?: boolean;
   // A message the founder started from the canvas — the host pre-fills the input (and opens the dock) but
   // NEVER sends it: the founder reads, edits, and presses send. The token makes an identical re-ask re-seed.
   seed?: { text: string; token: number } | null;
@@ -747,7 +754,7 @@ export function ComposerDock({
   // one reason — the founder is needed — and never self-drives between the six shapes it used to. `floating`
   // keeps its own resting-pill model for the rare over-canvas usage; docked is closed/open only.
   const [collapsed, setCollapsed] = useState(
-    startOpen ? false : (floating || !session || TERMINAL.has(session.status)),
+    composerStartsCollapsed({ startOpen, preferCollapsed, floating, hasSession: !!session, terminal: !!session && TERMINAL.has(session.status) }),
   );
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -892,6 +899,18 @@ export function ComposerDock({
     setTrackedFocus(focusSignal);
     setCollapsed(false);
   }
+
+  // Product-altitude survey mode collapses the composer to its slim rail so the operation owns the canvas.
+  // A post-commit effect is deliberate and load-bearing: on a cold project-load or a newly-arriving gate on
+  // a LIVE session, a spurious focusSignal bump lands in a LATER render than the altitude settling, so the
+  // render-time reconciliation above can't catch it (its key doesn't change on that render) and the
+  // composer would sprawl across the canvas. This effect re-asserts the slim rail whenever the altitude or
+  // session/project changes — browser-verified on estatesaleusa and rodentradar. Its running/gate state
+  // still rides the rail's orb + shield; a founder who clicks the rail open at product altitude stays open
+  // (this effect does not re-run on that click). The lint rule against setState-in-effect is a general
+  // heuristic; here the effect exists precisely to synchronize the collapse to the altitude prop.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { if (preferCollapsed) setCollapsed(true); }, [preferCollapsed, session?.id]);
   useEffect(() => {
     if (focusSignal) inputRef.current?.focus();
   }, [focusSignal]);
@@ -1031,7 +1050,7 @@ export function ComposerDock({
     setPickedCandidateId(candidate.id);
     setCollapsed(false);
     if (onBuildCandidate) { void onBuildCandidate(candidate); return; }
-    void onSend(`Build this pipeline — ${candidate.label}. ${candidate.rationale} Compose it and run it to my gate.`);
+    void onSend(`Build this pipeline — ${candidate.label}. ${candidate.rationale} Compose it and run it to my gate.`, undefined, model);
   };
 
   // ── @-mention wiring ──────────────────────────────────────────────────────────────────────────────────
@@ -1101,7 +1120,7 @@ export function ComposerDock({
     setCollapsed(false);
     setMentionQuery(null);
     try {
-      const r = await onSend(value, hints);
+      const r = await onSend(value, hints, model);
       setInput("");
       setMentions([]);
       if (r && r.mode === "fast" && typeof r.answer === "string") {
@@ -1284,13 +1303,13 @@ export function ComposerDock({
             className="dock-rail-launcher"
             onClick={() => setCollapsed(false)}
             type="button"
-            title="Open Claude"
-            aria-label="Open the conversation with Claude"
+            title={`Open ${engineName}`}
+            aria-label={`Open the conversation with ${engineName}`}
           >
             <span className={`dock-rail-orb ${working ? "live" : ""}`} aria-hidden="true">
               {working ? <LoaderCircle className="spin" /> : <Bot size={16} />}
             </span>
-            <span className="dock-rail-label">Claude</span>
+            <span className="dock-rail-label">{engineName}</span>
             {waitingGate ? (
               <span className="dock-rail-gate" aria-hidden="true" title="Your review is required">
                 <ShieldCheck size={14} />
@@ -1599,7 +1618,7 @@ export function ComposerDock({
             {session?.error && !session.pendingQuestion ? (
               <div className="oc-error">
                 <span>Your crew hit a snag and paused. You can pick up where it left off.</span>
-                <button className="oc-btn" onClick={() => void onSend("continue")} type="button">
+                <button className="oc-btn" onClick={() => void onSend("continue", undefined, model)} type="button">
                   <Play size={13} aria-hidden="true" /> Try again
                 </button>
               </div>

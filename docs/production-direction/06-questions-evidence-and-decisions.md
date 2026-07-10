@@ -5,7 +5,7 @@
 Drover needs a durable place where the GTM crew can work on product-market questions without forcing every
 interaction into a pipeline run.
 
-The question layer is connective tissue, not a new cage.
+Questions are optional canvas anchors and connective tissue, not a new cage or destination hierarchy.
 
 ## Question behavior
 
@@ -23,7 +23,7 @@ start, and an action can exist without a question.
 
 ## Evidence behavior
 
-Every statement shown to the founder must carry one of:
+Every factual claim that could be mistaken for product or market truth must carry one of:
 
 - observed;
 - researched;
@@ -31,7 +31,9 @@ Every statement shown to the founder must carry one of:
 - inferred;
 - speculative.
 
-The host enforces structural provenance. Agents decide the interpretation.
+The host enforces structural provenance. Agents decide the interpretation. Recommendations and strategic
+judgment stay attributable to the teammate that made them; they do not receive fake evidence labels sentence
+by sentence.
 
 Evidence should be linkable to:
 
@@ -71,6 +73,19 @@ Examples:
 The founder can accept, reject, edit, or defer the implication. An accepted implication can become a coding
 task or a product-change action.
 
+On the canvas, an implication begins as a dashed proposed return edge from the outcome to the affected
+product truth, product element, or code area. Accepting it composes a founder-reviewable product-change
+pipeline. It never silently edits code, mutates the product model, or creates a parallel PM task system.
+
+## Canvas interaction
+
+- A founder may open or pin a question from the composer, a signal, a teammate, or a product gap.
+- Supporting and challenging evidence remain distinct around the question anchor.
+- Each teammate's claim, uncertainty, recommendation, and “what would change my mind” remain attributable.
+- A founder may choose a branch, defer the question, or run the smallest action that could settle it.
+- Founder calls are stamped where they occur and feed taste; answering a question never approves execution.
+- Unpinned internal questions may remain run artifacts. No question is required before a pipeline can run.
+
 ## Implementation prompt
 
 ```text
@@ -83,4 +98,3 @@ decisions must be durable and auditable, while routine agent work remains free t
 provenance demotion, question/project isolation, disagreement preservation, outcome-to-implication links,
 and founder decision writeback into teammate memory.
 ```
-

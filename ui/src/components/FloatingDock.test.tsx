@@ -57,4 +57,50 @@ describe("FloatingDock", () => {
     render(<FloatingDock {...baseProps} pendingDecisions={4} />);
     expect(screen.queryByTitle(/waiting on you/)).toBeNull();
   });
+
+  // The two discrete altitude controls (docs/production-direction/09) live on the dock because the canvas
+  // is chromeless. These pin: both controls render, the active one is exposed, and a click reports up.
+  it("renders both Operator and Engineer altitude controls, with the active one exposed", () => {
+    render(<FloatingDock {...baseProps} activeLens="operator" onLensChange={() => {}} />);
+    expect(screen.getByRole("group", { name: "Canvas altitude" })).toBeTruthy();
+    const operator = screen.getByRole("button", { name: "Operator" });
+    const engineer = screen.getByRole("button", { name: "Engineer" });
+    // Active state is exposed accessibly (aria-pressed) — Operator active here, Engineer not.
+    expect(operator).toHaveAttribute("aria-pressed", "true");
+    expect(engineer).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("reflects Engineer as the active altitude when that is the effective lens", () => {
+    render(<FloatingDock {...baseProps} activeLens="engineer" onLensChange={() => {}} />);
+    expect(screen.getByRole("button", { name: "Engineer" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Operator" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("calls onLensChange with the chosen altitude on click", () => {
+    const onLensChange = vi.fn();
+    render(<FloatingDock {...baseProps} activeLens="operator" onLensChange={onLensChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Engineer" }));
+    expect(onLensChange).toHaveBeenCalledWith("engineer");
+    fireEvent.click(screen.getByRole("button", { name: "Operator" }));
+    expect(onLensChange).toHaveBeenCalledWith("operator");
+  });
+
+  it("omits the altitude control when no lens change is wired (no dead affordance)", () => {
+    render(<FloatingDock {...baseProps} />);
+    expect(screen.queryByRole("group", { name: "Canvas altitude" })).toBeNull();
+  });
+
+  // The quiet one-line operation status (docs/production-direction/16) — a polite status region, never a
+  // command, omitted when there's nothing to orient with.
+  it("renders the operation status as a polite status region when provided", () => {
+    render(<FloatingDock {...baseProps} operationStatus="3 pipelines · 1 waiting on you · 2 back" />);
+    const status = screen.getByRole("status");
+    expect(status.textContent).toBe("3 pipelines · 1 waiting on you · 2 back");
+    expect(status).toHaveAttribute("aria-live", "polite");
+  });
+
+  it("omits the operation status when absent (no empty chrome)", () => {
+    render(<FloatingDock {...baseProps} />);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
 });

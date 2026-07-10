@@ -25,10 +25,18 @@
 // stays physically separate from the identifying text (path, offer, message), so a later cross-company
 // pool can strip PII at the write boundary. No aggregation across companies is performed here.
 
-import { runStore, resultStore, learningStore, gtmPathStore } from "./gtm-store.mjs";
+import {
+  runStore,
+  resultStore,
+  learningStore,
+  gtmPathStore,
+  productImplicationProjection,
+} from "./gtm-store.mjs";
 import { closeOutcomeLoop } from "./object-graph-projection.mjs";
 import { recordOutcomeIntoSoul } from "./soul-wiring.mjs";
 import { deriveMotionKind } from "./engine.mjs";
+import { getProjectChannels, loadProject, loadProjectRuns } from "./project-store.mjs";
+import { loadFlow } from "./flow-store.mjs";
 
 // The three canonical sources an outcome can arrive from. These are NAMES, not a gate — a source label
 // is an open string (§2.2); ingestion accepts any label. These exist so callers spell the common three
@@ -58,6 +66,96 @@ export function joinToRun({ joinKey, runs }) {
     }
   }
   return null;
+}
+
+// Project live flow-store receipts into the same joinable run shape as compiled gtm-store runs. Items
+// are merged by joinKey across gate/execute node receipts so the final delivery fields win without
+// duplicating one execution. Approval stamps remain lineage only; they never become outcomes.
+export function projectFlowRunReceipts(flowRuns = []) {
+  const projected = (Array.isArray(flowRuns) ? flowRuns : []).flatMap((receipt) => {
+    const result = receipt?.result ?? {};
+    const byJoinKey = new Map();
+    for (const nodeResult of Object.values(result.nodes ?? {})) {
+      for (const item of Array.isArray(nodeResult?.items) ? nodeResult.items : []) {
+        const key = trimOrNull(item?.joinKey);
+        if (!key) continue;
+        byJoinKey.set(key, { ...(byJoinKey.get(key) ?? {}), ...item });
+      }
+    }
+    if (!byJoinKey.size) return [];
+    const snapshot = receipt.graphSnapshot ?? {};
+    const executionRunId = trimOrNull(result.runId) ?? trimOrNull(receipt.id);
+    const pendingGates = Array.isArray(receipt.pendingGates)
+      ? receipt.pendingGates
+      : (Array.isArray(result.pendingGates) ? result.pendingGates : []);
+    return [{
+      id: executionRunId,
+      executionRunId,
+      pathId: trimOrNull(result.graphId),
+      questionId: trimOrNull(receipt.questionId ?? result.questionId ?? result.workContext?.questionId ?? snapshot.questionId),
+      participantRefs: receipt.participantRefs ?? result.participantRefs
+        ?? result.workContext?.participantRefs ?? snapshot.participantRefs ?? [],
+      productRefs: receipt.productRefs ?? result.productRefs
+        ?? result.workContext?.productRefs ?? snapshot.productRefs ?? [],
+      decisionRef: receipt.decisionRef ?? result.decisionRef ?? null,
+      steps: Array.isArray(snapshot.nodes) ? snapshot.nodes : [],
+      edges: Array.isArray(snapshot.edges) ? snapshot.edges : [],
+      items: [...byJoinKey.values()],
+      sourceStore: "flow",
+      completed: pendingGates.length === 0 && result.ok !== false,
+      receiptAt: receipt.createdAt ?? result.completedAt ?? result.updatedAt ?? null,
+    }];
+  });
+  // A joinKey can appear first on a pre-gate receipt and later on the completed resume. Completed
+  // executions win over pending ones; ties choose the latest receipt, then id, so selection is stable.
+  return projected.sort((a, b) =>
+    Number(b.completed) - Number(a.completed)
+    || String(b.receiptAt ?? "").localeCompare(String(a.receiptAt ?? ""))
+    || String(b.executionRunId ?? "").localeCompare(String(a.executionRunId ?? "")));
+}
+
+function reconciledOutcomeRuns(projectId, options = {}) {
+  const compiledRuns = runStore.list({ ...options, projectId });
+  let flowRuns = [];
+  try {
+    flowRuns = projectFlowRunReceipts(loadProjectRuns(projectId, options));
+  } catch {
+    flowRuns = [];
+  }
+  // Compiled Runs remain the durable owner where both stores carry the same item. Flow-only items are
+  // added once, from the completed/latest receipt selected by the ordering above.
+  const seenJoinKeys = new Set(compiledRuns.flatMap((run) =>
+    (run.items ?? []).map((item) => trimOrNull(item?.joinKey)).filter(Boolean)));
+  const flowOnlyRuns = [];
+  for (const run of flowRuns) {
+    const items = (run.items ?? []).filter((item) => {
+      const key = trimOrNull(item?.joinKey);
+      if (!key || seenJoinKeys.has(key)) return false;
+      seenJoinKeys.add(key);
+      return true;
+    });
+    if (items.length) flowOnlyRuns.push({ ...run, items });
+  }
+  return { compiledRuns, flowRuns, runs: [...compiledRuns, ...flowOnlyRuns] };
+}
+
+function joinStoredExecution({ joinKey, projectId, options }) {
+  const { compiledRuns, flowRuns } = reconciledOutcomeRuns(projectId, options);
+  const compiled = joinToRun({ joinKey, runs: compiledRuns });
+  const live = joinToRun({ joinKey, runs: flowRuns });
+  if (!compiled && !live) return null;
+  if (!compiled) return live;
+  if (!live) return compiled;
+  return {
+    run: {
+      ...live.run,
+      ...compiled.run,
+      executionRunId: live.run.executionRunId ?? live.run.id,
+      steps: live.run.steps?.length ? live.run.steps : compiled.run.steps,
+      edges: live.run.edges?.length ? live.run.edges : compiled.run.edges,
+    },
+    item: { ...compiled.item, ...live.item },
+  };
 }
 
 // ── The motion dimension (GTM-MACHINE.md Area 7) ───────────────────────────────────────────────────
@@ -115,10 +213,17 @@ function writeLearningForResult({ result, run, item, projectId, options }) {
         promotionDecision: null,
       },
       identifying: {
+        sourceResultId: result.id,
         pathId,
         marketObjectRefs,
         offer: result.offerRef ?? trimOrNull(path?.bet?.offer),
         message: trimOrNull(item?.message ?? item?.draft),
+        questionId: result.questionId,
+        productRefs: result.productRefs,
+        participantRefs: result.participantRefs,
+        decisionRef: result.decisionRef,
+        executionRunId: result.executionRunId,
+        proposalRef: result.proposalRef,
       },
     },
     { ...options, projectId },
@@ -130,17 +235,26 @@ function writeLearningForResult({ result, run, item, projectId, options }) {
 // it polls every heartbeat and re-reads the same thread each tick. Without a durable seen-state that
 // re-observation would create a fresh Result (+ Learning) every tick, fabricating hundreds of duplicate
 // "wins" a day off ONE real reply. This is the durable dedupe: the persisted Result ledger IS the
-// seen-state. A signal's identity is (joinKey, outcomeKind, messageId, source) — the exact tuple a
-// re-poll of the same sent message reproduces. If a Result with that identity already exists for the
-// project, this outcome has already been recorded and re-ingesting it is a no-op.
+// seen-state. When the provider supplies the inbound event and source identities, that pair is
+// authoritative. Older callers retain the prior (joinKey, outcomeKind, messageId, source) fallback.
+// If a Result with the selected identity already exists, re-ingesting it is a no-op.
 //
 // This holds the "numbers derive from real signals, never seeded/fake" invariant from the other side: a
 // real reply produces EXACTLY one Result, and re-seeing it adds nothing. The identity is deliberately
-// tight — a genuinely distinct signal (a different outcome kind on the same thread, a different sent
-// message, a founder-entered note that carries no messageId) has a different tuple and still records, so
-// dedupe never swallows a real second outcome. Deterministic code over stored records; no model call.
-function outcomeIdentity({ joinKey, outcomeKind, messageId, source }) {
+// tight — a genuinely distinct provider event or fallback tuple still records. Founder-entered receipts
+// never use the message fallback because their messageId may be contextual rather than an observation
+// identity; only an explicit provider event identity may merge them. Deterministic; no model call.
+function providerEventId(outcome = {}) {
+  return trimOrNull(outcome.providerEventId ?? outcome.sourceEventId ?? outcome.eventId);
+}
+
+function outcomeIdentity({ joinKey, outcomeKind, messageId, source, providerEventId: eventId, providerSourceId }) {
+  const providerEvent = trimOrNull(eventId);
+  if (providerEvent) {
+    return ["provider-event", trimOrNull(source) ?? "", trimOrNull(providerSourceId) ?? "", providerEvent].join("::");
+  }
   return [
+    "message-fallback",
     trimOrNull(joinKey) ?? "",
     trimOrNull(outcomeKind) ?? "",
     trimOrNull(messageId) ?? "",
@@ -153,12 +267,13 @@ function outcomeIdentity({ joinKey, outcomeKind, messageId, source }) {
 // may be passed in so a batch (or the poller) reads the ledger once instead of per-outcome.
 function findExistingResult({ projectId, outcome, options, existingResults }) {
   const identity = outcomeIdentity(outcome);
-  // Dedupe ONLY when the outcome carries a messageId — the durable id of the exact message the signal was
-  // read off. That is precisely what the automatic inbox reader supplies and re-supplies every tick (the
-  // sent message's provider id), so re-observing one real reply collapses to one Result. A founder-entered
-  // note carries NO messageId, so two manual entries of the same kind on the same run are BOTH kept — the
-  // founder recording a genuine second reply is never silently swallowed. Deterministic; no model call.
-  if (!trimOrNull(outcome.messageId)) return null;
+  // A true provider event id is an explicit merge identity for every source. The legacy message fallback
+  // is provider-only: founder-entered receipts may carry a contextual outbound message id, but repeated
+  // founder observations are separate facts and must not collapse merely because that context matches.
+  const explicitProviderIdentity = providerEventId(outcome);
+  const providerMessageFallback = trimOrNull(outcome.source) !== OUTCOME_SOURCES.founderEntered
+    && trimOrNull(outcome.messageId);
+  if (!explicitProviderIdentity && !providerMessageFallback) return null;
   const results = Array.isArray(existingResults)
     ? existingResults
     : resultStore.list({ ...options, projectId });
@@ -169,6 +284,8 @@ function findExistingResult({ projectId, outcome, options, existingResults }) {
         outcomeKind: r.outcomeKind,
         messageId: r.messageId,
         source: r.source,
+        providerEventId: r.providerEventId,
+        providerSourceId: r.providerSourceId,
       }) === identity
     ) {
       return r;
@@ -184,9 +301,8 @@ function findExistingResult({ projectId, outcome, options, existingResults }) {
 // outcome whose key matches nothing staged is still captured honestly — the Result records runId/pathId
 // as null and `joined` is false — so an out-of-band reply is never silently dropped.
 //
-// A signal already recorded on an earlier tick (same joinKey/outcomeKind/messageId/source) is a durable
-// no-op: it returns the existing Result with `deduped:true` and writes NOTHING new, so the automatic
-// reader re-polling the same reply every heartbeat can never inflate the win count.
+// A signal already recorded on an earlier tick (same provider identity, or same compatible fallback
+// tuple) is a durable no-op: it returns the existing Result with `deduped:true` and writes NOTHING new.
 export function ingestOutcome(outcome = {}, options = {}) {
   const projectId = options.projectId ?? outcome.projectId ?? "default";
   const joinKey = trimOrNull(outcome.joinKey);
@@ -205,13 +321,27 @@ export function ingestOutcome(outcome = {}, options = {}) {
   }
 
   // Reuse a passed-in run snapshot (a batch reads once), else read the project's runs now.
-  const runs = Array.isArray(options.runs) ? options.runs : runStore.list({ ...options, projectId });
-  const match = joinToRun({ joinKey, runs });
+  const match = Array.isArray(options.runs)
+    ? joinToRun({ joinKey, runs: options.runs })
+    : joinStoredExecution({ joinKey, projectId, options });
   const run = match?.run ?? null;
   const item = match?.item ?? null;
 
   // The motion dimension — derived from the joined run's shape, with an explicit stamp winning.
   const derivedMotion = deriveMotionForRun(run);
+  const participantRefs = [
+    ...(Array.isArray(run?.participantRefs) ? run.participantRefs : []),
+    ...(Array.isArray(item?.participantRefs) ? item.participantRefs : []),
+    ...(item?.agentRef ? [{ type: "teammate", id: item.agentRef }] : []),
+    ...(Array.isArray(outcome.participantRefs) ? outcome.participantRefs : []),
+    ...(Array.isArray(outcome.crewRefs) ? outcome.crewRefs : []),
+  ];
+  const productRefs = [
+    ...(Array.isArray(run?.productRefs) ? run.productRefs : []),
+    ...(Array.isArray(item?.productRefs) ? item.productRefs : []),
+    ...(Array.isArray(outcome.productRefs) ? outcome.productRefs : []),
+  ];
+  const decisionRef = outcome.decisionRef ?? item?.decisionRef ?? run?.decisionRef ?? null;
 
   const result = resultStore.create(
     {
@@ -219,9 +349,12 @@ export function ingestOutcome(outcome = {}, options = {}) {
       joinKey,
       // Ties resolved from the joined run + item; an explicit field on the outcome overrides.
       runId: run?.id ?? null,
+      executionRunId: run?.executionRunId ?? null,
       pathId: outcome.pathId ?? run?.pathId ?? null,
       assetId: outcome.assetId ?? item?.assetId ?? null,
       messageId: outcome.messageId ?? item?.messageId ?? null,
+      providerEventId: providerEventId(outcome),
+      providerSourceId: outcome.providerSourceId ?? outcome.sourceId ?? null,
       channel: outcome.channel ?? item?.channel ?? null,
       buyerRef: outcome.buyerRef ?? item?.buyer ?? null,
       offerRef: outcome.offerRef ?? item?.offer ?? null,
@@ -231,8 +364,14 @@ export function ingestOutcome(outcome = {}, options = {}) {
       motionRef: outcome.motionRef ?? derivedMotion.motionRef,
       outcomeKind: outcome.outcomeKind ?? null,
       value: outcome.value ?? null,
+      body: outcome.body ?? null,
+      productImplication: outcome.productImplication ?? null,
       observedAt: outcome.observedAt ?? undefined,
       source: outcome.source ?? null,
+      questionId: outcome.questionId ?? item?.questionId ?? run?.questionId ?? null,
+      productRefs,
+      participantRefs,
+      decisionRef,
     },
     { ...options, projectId },
   );
@@ -280,13 +419,12 @@ export function ingestOutcome(outcome = {}, options = {}) {
 // runs once and reuses that snapshot for every join, so a hundred outcomes cost one store read. Returns
 // what was ingested plus honest joined / unjoined tallies.
 export function ingestBatch({ projectId = "default", sources = {} } = {}, options = {}) {
-  const runs = runStore.list({ ...options, projectId });
   const ingested = [];
   for (const [sourceLabel, list] of Object.entries(sources || {})) {
     for (const raw of Array.isArray(list) ? list : []) {
       if (!raw || typeof raw !== "object") continue;
       const outcome = { ...raw, source: raw.source ?? sourceLabel };
-      ingested.push(ingestOutcome(outcome, { ...options, projectId, runs }));
+      ingested.push(ingestOutcome(outcome, { ...options, projectId }));
     }
   }
   return {
@@ -294,6 +432,159 @@ export function ingestBatch({ projectId = "default", sources = {} } = {}, option
     joined: ingested.filter((x) => x.joined).length,
     unjoined: ingested.filter((x) => !x.joined).length,
   };
+}
+
+function safeOperationId(value) {
+  const id = String(value ?? "outcome").trim().replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 64);
+  return `product-change-${id || "outcome"}`;
+}
+
+// Derive the one reviewable operation from durable implication lineage and the owning project's
+// pipeline registry. Outcome/client data may supply interpretation text and refs, but never graph ids,
+// operation types, node authority, or arbitrary config. If lineage cannot resolve an owning graph the
+// implication remains visible but deliberately has no actionable review plan.
+function productChangeReview(implication, projectId, options = {}) {
+  try {
+    const scoped = { ...options, projectId };
+    const project = loadProject(scoped);
+    const channels = getProjectChannels(project, scoped);
+    const attribution = implication?.attribution ?? {};
+    const compiledRun = runStore.list(scoped).find((candidate) => candidate?.id === attribution.runId) ?? null;
+    const receipt = loadProjectRuns(projectId, scoped).find((candidate) => {
+      const executionId = candidate?.id ?? candidate?.runId ?? candidate?.result?.runId;
+      return Boolean(executionId && (executionId === attribution.executionRunId
+        || (!attribution.executionRunId && executionId === attribution.runId)));
+    }) ?? null;
+    const graphCandidates = new Set([
+      receipt?.result?.graphId,
+      receipt?.graphId,
+      compiledRun?.pathId,
+    ].map((value) => trimOrNull(value)).filter(Boolean));
+    const channel = channels.find((candidate) => graphCandidates.has(candidate.graphId)
+      || graphCandidates.has(candidate.id));
+    if (!channel?.graphId) return null;
+    const graph = loadFlow(channel.graphId, null, scoped).graph;
+    if (!graph || graph.id !== channel.graphId) return null;
+    const rightmost = (graph.nodes ?? []).reduce((max, node) => Math.max(
+      max,
+      Number.isFinite(node?.position?.x) ? node.position.x : 0,
+    ), 0);
+    return {
+      kind: "product-change-proposal",
+      pipelineRef: { type: "pipeline", id: channel.id },
+      graphRef: { type: "graph", id: channel.graphId },
+      operations: [{
+        type: "add_node",
+        node: {
+          id: safeOperationId(implication.sourceOutcomeId),
+          category: "context",
+          connector: "product",
+          label: "Review product implication",
+          outputKind: "product-change",
+          position: { x: rightmost + 240, y: 180 },
+          config: {
+            implicationId: implication.id,
+            sourceOutcomeId: implication.sourceOutcomeId,
+            interpretation: implication.body,
+            questionId: implication.questionId ?? null,
+            productRefs: implication.productRefs ?? [],
+            participantRefs: implication.participantRefs ?? [],
+            evidenceRefs: implication.evidenceRefs ?? [],
+            authorRef: implication.authorRef ?? null,
+            artifactRef: implication.artifactRef ?? null,
+            reviewOnly: true,
+          },
+        },
+      }],
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Read-only product implications over explicit attributable model/agent interpretations linked to a
+// source Result. The Result body remains evidence only; body text alone never becomes a recommendation.
+// Nothing is persisted or applied by this projection.
+export function projectProductImplications({ projectId = "default" } = {}, options = {}) {
+  const learningByResult = new Map();
+  for (const learning of learningStore.list({ ...options, projectId })) {
+    const resultId = trimOrNull(learning?.identifying?.sourceResultId);
+    if (resultId && !learningByResult.has(resultId)) learningByResult.set(resultId, learning);
+  }
+  return resultStore.list({ ...options, projectId })
+    .map((result) => productImplicationProjection(result, learningByResult.get(result.id) ?? null))
+    .filter(Boolean)
+    .map((implication) => ({
+      ...implication,
+      review: productChangeReview(implication, projectId, options),
+    }));
+}
+
+// Attach lineage to a proposal that the existing operator authority has already staged. This function
+// neither creates nor applies the proposal. Repeating the same attachment is idempotent.
+export function attachProductChangeProposal(
+  { projectId = "default", implicationId, proposalSessionId, decisionRef = null } = {},
+  options = {},
+) {
+  const implication = projectProductImplications({ projectId }, options)
+    .find((candidate) => candidate.id === implicationId);
+  if (!implication) throw new Error(`Product implication not found: ${implicationId}`);
+  const sessionId = trimOrNull(proposalSessionId);
+  if (!sessionId) throw new Error("A staged product-change proposal session is required.");
+  const proposalRef = { type: "productChangeProposal", id: sessionId };
+
+  const result = resultStore.get(implication.sourceOutcomeId, { ...options, projectId });
+  resultStore.save({
+    ...result,
+    proposalRef,
+    proposalDisposition: "staged",
+    decisionRef: decisionRef ?? result.decisionRef,
+  }, { ...options, projectId });
+
+  if (implication.sourceLearningId) {
+    const learning = learningStore.get(implication.sourceLearningId, { ...options, projectId });
+    const identifying = learning.identifying && typeof learning.identifying === "object"
+      ? learning.identifying
+      : {};
+    learningStore.save({
+      ...learning,
+      identifying: {
+        ...identifying,
+        proposalRef,
+        proposalDisposition: "staged",
+        decisionRef: decisionRef ?? identifying.decisionRef,
+      },
+    }, { ...options, projectId });
+  }
+
+  return projectProductImplications({ projectId }, options)
+    .find((candidate) => candidate.id === implicationId);
+}
+
+// Resolve the projection status when the existing operator proposal is accepted or discarded. The
+// proposal session remains an audit reference; disposition is explicit so it never reads as still staged.
+export function settleProductChangeProposal(
+  { projectId = "default", proposalSessionId, disposition } = {},
+  options = {},
+) {
+  const sessionId = trimOrNull(proposalSessionId);
+  const resolved = trimOrNull(disposition);
+  if (!sessionId || !["accepted", "discarded"].includes(resolved)) return { updated: 0 };
+  const results = resultStore.list({ ...options, projectId })
+    .filter((result) => result.proposalRef?.type === "productChangeProposal" && result.proposalRef?.id === sessionId);
+  let updated = 0;
+  for (const result of results) {
+    resultStore.save({ ...result, proposalDisposition: resolved }, { ...options, projectId });
+    for (const learning of learningStore.list({ ...options, projectId })) {
+      if (learning?.identifying?.sourceResultId !== result.id) continue;
+      learningStore.save({
+        ...learning,
+        identifying: { ...learning.identifying, proposalDisposition: resolved },
+      }, { ...options, projectId });
+    }
+    updated += 1;
+  }
+  return { updated };
 }
 
 // ── Honest readback ────────────────────────────────────────────────────────────────────────────────
@@ -323,7 +614,7 @@ function plainSummary(entry, pathTitle) {
 }
 
 export function outcomeReport({ projectId = "default" } = {}, options = {}) {
-  const runs = runStore.list({ ...options, projectId });
+  const { runs } = reconciledOutcomeRuns(projectId, options);
   const results = resultStore.list({ ...options, projectId });
 
   // Index results by the key they joined on, so counting is a lookup per staged item.
@@ -395,6 +686,7 @@ export function outcomeReport({ projectId = "default" } = {}, options = {}) {
   return {
     projectId,
     paths: pathReadouts,
+    implications: projectProductImplications({ projectId }, options),
     totals: {
       runs: runs.length,
       staged,
@@ -426,7 +718,7 @@ export function outcomeReport({ projectId = "default" } = {}, options = {}) {
 // made-up win rate. An out-of-band Result whose motionKind is null lands in its own "unattributed" bucket,
 // kept apart so nothing is silently credited to a motion it did not come from.
 export function deriveMotionEfficiency({ projectId = "default" } = {}, options = {}) {
-  const runs = runStore.list({ ...options, projectId });
+  const { runs } = reconciledOutcomeRuns(projectId, options);
   const results = resultStore.list({ ...options, projectId });
 
   // Each run's motion identity, derived from its own stored shape — the same derivation ingest stamps

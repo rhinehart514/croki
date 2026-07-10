@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
 import { saveFlow } from "../src/flow-store.mjs";
+import { loadProject, saveProject } from "../src/project-store.mjs";
 import { createTeam, addMember } from "../src/team-store.mjs";
 import {
   createOperatorSession,
@@ -134,6 +135,14 @@ describe("autonomous operator + role-gated shared release", () => {
         ],
       };
       saveFlow(graph, options);
+      const project = loadProject({ ...options, projectId: "default" });
+      saveProject({
+        ...project,
+        channels: [
+          ...(project.channels ?? []).filter((channel) => channel.graphId !== graph.id),
+          { id: "gate-pipeline", graphId: graph.id, name: graph.name, objective: "Run to the gate", kind: "custom", enabled: true },
+        ],
+      }, options);
       let session = createOperatorSession({ goal: "Run to the gate.", graphId: graph.id, projectId: "default", teamId }, options);
       return session;
     }

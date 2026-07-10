@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
 import { saveFlow } from "../src/flow-store.mjs";
+import { loadProject, saveProject } from "../src/project-store.mjs";
 import { createOperatorSession, getOperatorSession } from "../src/operator-store.mjs";
 import { resolveOperatorGate, runOperatorSession } from "../src/operator-runtime.mjs";
 
@@ -58,6 +59,14 @@ describe("founder gate: concurrent resolves fire the gated action exactly once",
       ],
     };
     saveFlow(graph, options);
+    const project = loadProject({ ...options, projectId: "default" });
+    saveProject({
+      ...project,
+      channels: [
+        ...(project.channels ?? []).filter((channel) => channel.graphId !== graph.id),
+        { id: "gate-race-pipeline", graphId: graph.id, name: graph.name, objective: "Exercise concurrent gate release", kind: "custom", enabled: true },
+      ],
+    }, options);
     return createOperatorSession({ goal: "Run to the gate.", graphId: graph.id, projectId: "default" }, options);
   }
 

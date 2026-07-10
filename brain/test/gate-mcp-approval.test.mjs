@@ -46,6 +46,8 @@ process.env.PORT = String(PORT);
 const { server } = await import("../src/server.mjs");
 if (!server.listening) await once(server, "listening");
 const base = `http://127.0.0.1:${PORT}`;
+const { saveFlow } = await import("../src/flow-store.mjs");
+const { loadProject, saveProject } = await import("../src/project-store.mjs");
 
 after(() => {
   server.close();
@@ -85,6 +87,24 @@ function gatedGraph() {
     ],
   };
 }
+
+before(() => {
+  const graph = gatedGraph();
+  saveFlow(graph, { root: HOME, projectId: "default" });
+  const project = loadProject({ root: HOME, projectId: "default" });
+  saveProject({
+    ...project,
+    channels: [{
+      id: "gate-mcp-approval-pipeline",
+      graphId: graph.id,
+      name: graph.name,
+      objective: "Exercise the raw graph founder wall",
+      kind: "custom",
+      enabled: true,
+    }],
+    activeChannelId: "gate-mcp-approval-pipeline",
+  }, { root: HOME });
+});
 
 async function runGraphHttp({ graph, approvals, agent, cookie }) {
   const headers = { "Content-Type": "application/json" };

@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import { defaultGraphTemplate } from "../src/graph.mjs";
 import { saveFlow } from "../src/flow-store.mjs";
 import { appendInput, listInputs } from "../src/inputs-store.mjs";
-import { createProject } from "../src/project-store.mjs";
+import { createProject, saveProject } from "../src/project-store.mjs";
 import { createOperatorSession, getActiveSessionForProject, getOperatorSession, listOperatorSessions, saveOperatorSession } from "../src/operator-store.mjs";
 import { launchOperatorSession } from "../src/operator-runtime.mjs";
 import { actOnInput, routeUnroutedInputs } from "../src/input-routing.mjs";
@@ -103,8 +103,15 @@ describe("input routing — the actor that acts on a router decision", () => {
     const graphId = "ambient-route-gate";
     // The input belongs to a REAL project (compose_and_run / taste read it), with no channels so the
     // signal finds no flow match and the scorer's wake is what fires.
-    createProject({ id: project, name: "Route Ambient" }, options);
-    saveFlow(draftChannelGraph(graphId), options);
+    const ownedProject = createProject({ id: project, name: "Route Ambient" }, options).project;
+    const graph = draftChannelGraph(graphId);
+    saveFlow(graph, options);
+    saveProject({
+      ...ownedProject,
+      // This graph is owned and executable by the pre-bound ambient session, but it is not a normal
+      // signal-routing destination; disabling intake preserves the test's scorer-driven wake path.
+      channels: [{ id: "ambient-route-pipeline", graphId: graph.id, name: graph.name, objective: "Respond to competitor moves", kind: "custom", enabled: false }],
+    }, options);
 
     // Pre-create the project's ambient session bound to the draft channel, so the wake drives an existing
     // graph to the gate (no composer needed). The actor reuses this slot via getOrCreateSessionForProject.

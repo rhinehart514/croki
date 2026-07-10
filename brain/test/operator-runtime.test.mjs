@@ -8,8 +8,8 @@ import { recordFlowRun, saveFlow } from "../src/flow-store.mjs";
 import { createOperatorSession, getOperatorSession, saveOperatorSession } from "../src/operator-store.mjs";
 import { operatorTools, resolveOperatorGate, resolveOperatorGateRefine, resolveOperatorProposal, runOperatorSession, operatorSessionStalled, steerOperatorSession } from "../src/operator-runtime.mjs";
 import { loadFlow } from "../src/flow-store.mjs";
-import { createProject, loadProject } from "../src/project-store.mjs";
-import { recallTaste } from "../src/operator-run-core.mjs";
+import { createProject, loadProject, saveProject } from "../src/project-store.mjs";
+import { founderSafeValue, recallTaste } from "../src/operator-run-core.mjs";
 import { run as gateRun, buildGateFraming } from "../src/connectors/gate/default.mjs";
 import { itemReviewText } from "../src/memory.mjs";
 
@@ -450,6 +450,15 @@ describe("resident GTM operator runtime", () => {
 
 });
 
+describe("canonical operator response boundary", () => {
+  it("removes raw prompts, souls, credentials, and model transcripts", () => {
+    assert.deepEqual(founderSafeValue({
+      name: "Researcher", systemPrompt: "raw", soul: { secret: true }, credentials: { token: "x" },
+      modelMessages: [{ role: "user" }], answer: "The evidence is mixed.",
+    }), { name: "Researcher", answer: "The evidence is mixed." });
+  });
+});
+
 describe("operatorSessionStalled (hang watchdog)", () => {
   const T = 12 * 60 * 1000;
   const now = Date.parse("2026-07-06T01:00:00.000Z");
@@ -489,6 +498,8 @@ describe("recallTaste", () => {
   it("recalls approved gate decisions through the flow store", () => {
     const graph = defaultGraphTemplate();
     saveFlow(graph, options);
+    const project = loadProject({ ...options, projectId: "default" });
+    saveProject({ ...project, channels: [{ id: "default-pipeline", graphId: graph.id, name: "Default pipeline", objective: "Recall taste", kind: "custom", enabled: true }] }, options);
     const result = {
       runId: "r1",
       ok: true,

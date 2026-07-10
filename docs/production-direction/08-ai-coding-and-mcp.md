@@ -2,10 +2,17 @@
 
 ## Product principle
 
-Drover should be available inside the AI coding experience, but the MCP layer must expose the same durable
-product model as the UI. It is not a second product and not only a pipeline API.
+Drover should be available inside the AI coding experience, but the MCP layer must address the same stable
+canvas objects and durable records as the UI. It is not a second product and not only a pipeline API.
+
+Prefer a small verb surface—inspect, focus, ask, propose, record, and run—over one tool per new noun. Coding
+actions may focus a canvas anchor, illuminate its lineage, ask the same persistent crew, or stage the same
+dashed graph proposal without inventing a parallel workflow.
 
 ## Canonical capability groups
+
+These groups describe user capabilities, not one MCP tool or durable record per bullet. Implement them through
+the small verb surface over stable product/canvas references.
 
 ### Product reality
 
@@ -88,10 +95,10 @@ Turn this accepted GTM decision into a founder-reviewable product task. Do not e
 
 ```text
 Audit the operator tool surface against this document. Preserve the current inspect-product, product-model,
-graph, gate, run, and outcome capabilities. Add the smallest canonical tools needed for crew, question,
-evidence, decision, and product-implication work. Do not add a graph-specific alias for every concept. Keep
+graph, gate, run, and outcome capabilities. Extend the six canonical verbs over stable references so they
+cover crew, question, evidence, decision, and product-implication work; do not add noun-specific CRUD tools
+or a graph-specific alias for every concept. Keep
 the model's fuzzy work behind open agent/skill/MCP steps. Update the naked tool set so the operator can
 understand and ask the crew before it composes an action, while preserving direct run capability. Add route,
 tool-schema, wall, project-scope, and no-raw-machinery tests.
 ```
-

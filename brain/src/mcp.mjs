@@ -11,6 +11,7 @@
  */
 
 import { fileURLToPath } from "node:url";
+import { STABLE_REF_INPUT_SCHEMA, classifyOperatorVerb, normalizeStableRef, normalizeStableRefs } from "./operator-tools.mjs";
 
 const BRAIN = "http://localhost:4317";
 
@@ -183,8 +184,8 @@ async function listOperatorSessions() {
   return brainGet("/api/operator/sessions");
 }
 
-async function startOperatorSession({ goal, workflowId, channelId }) {
-  return brainPost("/api/operator/sessions", { goal, graphId: workflowId ?? channelId });
+async function startOperatorSession({ goal, workflowId, channelId, projectId, questionId, participantRefs, productRefs, ref, refs }) {
+  return brainPost("/api/operator/sessions", { goal, projectId, graphId: workflowId ?? channelId, questionId, participantRefs, productRefs, focusRef: ref, contextRefs: refs });
 }
 
 async function getOperatorSession({ sessionId }) {
@@ -197,6 +198,53 @@ async function resumeOperatorSession({ sessionId, input }) {
 
 async function cancelOperatorSession({ sessionId }) {
   return brainPost(`/api/operator/sessions/${encodeURIComponent(sessionId)}/cancel`, {});
+}
+
+function verbRefs(input, projectId) {
+  return normalizeStableRefs([...(input.refs ?? []), ...(input.ref ? [input.ref] : [])], { projectId });
+}
+
+async function canonicalInspect(input = {}) {
+  const projectId = await resolveProjectId(input.projectId);
+  if (!input.sessionId) throw new Error("inspect requires a durable operator sessionId.");
+  const ref = normalizeStableRef(input.ref ?? null, { projectId });
+  const response = await brainPost(`/api/operator/sessions/${encodeURIComponent(input.sessionId)}/verbs/inspect`, { projectId, ref });
+  return { classification: classifyOperatorVerb("inspect"), ...response };
+}
+
+async function canonicalFocus(input = {}) {
+  const projectId = await resolveProjectId(input.projectId);
+  const ref = normalizeStableRef(input.ref, { projectId });
+  const response = await brainPost(`/api/operator/sessions/${encodeURIComponent(input.sessionId)}/verbs/focus`, { projectId, ref, refs: input.refs });
+  return { classification: classifyOperatorVerb("focus"), ...response };
+}
+
+async function canonicalDriveVerb(verb, input = {}) {
+  const projectId = await resolveProjectId(input.projectId);
+  if (!input.sessionId) throw new Error(`${verb} requires a durable operator sessionId.`);
+  const refs = verbRefs(input, projectId);
+  const ref = normalizeStableRef(input.ref ?? null, { projectId });
+  const prompt = String(input.prompt ?? input.goal ?? "").trim();
+  const participantRefs = refs.filter((item) => item.type === "teammate");
+  const productRefs = refs.filter((item) => item.type === "product" || item.type === "product-element");
+  const questionId = input.questionId ?? refs.find((item) => item.type === "question")?.id ?? null;
+  const response = await brainPost(`/api/operator/sessions/${encodeURIComponent(input.sessionId)}/verbs/${verb}`, {
+    projectId, ref, refs, questionId, participantRefs, productRefs,
+    ...(prompt ? { prompt, goal: prompt } : {}),
+    rationale: input.rationale,
+    operations: input.operations,
+    composeNew: input.composeNew,
+    title: input.title,
+    agents: input.agents,
+  });
+  return { classification: classifyOperatorVerb(verb), ...response };
+}
+
+async function canonicalRecord(input = {}) {
+  const projectId = await resolveProjectId(input.projectId);
+  const refs = verbRefs(input, projectId);
+  const response = await brainPost(`/api/operator/sessions/${encodeURIComponent(input.sessionId)}/verbs/record`, { projectId, kind: input.kind, value: input.value, ref: input.ref, refs });
+  return { classification: classifyOperatorVerb("record"), ...response };
 }
 
 async function getSharedContext() {
@@ -412,7 +460,7 @@ async function groupExperiment({ projectId, targetLayer, hypothesis, heldConstan
 const WORKFLOW_ID = { type: "string", description: "Workflow id." };
 const NODE_ID = { type: "string", description: "Node id within the workflow graph (e.g. 'source-1')." };
 
-const TOOLS = [
+const LEGACY_TOOLS = [
   // ── Project scope ──────────────────────────────────────────────────────────
   {
     name: "list_projects",
@@ -952,9 +1000,24 @@ const TOOLS = [
   },
 ];
 
+const REF_FIELDS = {
+  projectId: { type: "string" }, sessionId: { type: "string" }, ref: STABLE_REF_INPUT_SCHEMA,
+  refs: { type: "array", items: STABLE_REF_INPUT_SCHEMA },
+};
+
+const CANONICAL_TOOLS = [
+  { name: "inspect", description: "Inspect a stable product-scoped reference through the durable operator service. Read-only; it never records, runs, approves, or releases anything.", inputSchema: { type: "object", properties: REF_FIELDS, required: ["sessionId"] }, handler: canonicalInspect },
+  { name: "focus", description: "Focus a durable operator conversation on a stable product-scoped reference. Writes session context only and never changes the referenced record.", inputSchema: { type: "object", properties: REF_FIELDS, required: ["sessionId", "ref"] }, handler: canonicalFocus },
+  { name: "ask", description: "Ask the product crew a focused question through the durable operator service. Model-owned judgment may be recorded, but no action runs or crosses the founder wall.", inputSchema: { type: "object", properties: { ...REF_FIELDS, prompt: { type: "string" }, questionId: { type: "string" } }, required: ["sessionId", "prompt"] }, handler: (input) => canonicalDriveVerb("ask", input) },
+  { name: "propose", description: "Propose reversible GTM or product moves through the durable operator service. Nothing is applied or run; later mutations remain founder-reviewable.", inputSchema: { type: "object", properties: { ...REF_FIELDS, prompt: { type: "string" }, questionId: { type: "string" }, rationale: { type: "string" }, operations: { type: "array", items: { type: "object" } } }, required: ["sessionId"] }, handler: (input) => canonicalDriveVerb("propose", input) },
+  { name: "record", description: "Record an attributable session note, model artifact, or transient question proposal. Model callers cannot pin durable clarity or write founder/gate decisions.", inputSchema: { type: "object", properties: { ...REF_FIELDS, kind: { type: "string", enum: ["session_note", "model_artifact", "question_proposal"] }, value: {} }, required: ["sessionId", "kind", "value"] }, handler: canonicalRecord },
+  { name: "run", description: "Run or compose an action through the preserved operator compose-and-run service. Execution always stops at the founder gate and cannot approve or release.", inputSchema: { type: "object", properties: { ...REF_FIELDS, goal: { type: "string" }, questionId: { type: "string" }, composeNew: { type: "boolean" }, title: { type: "string" }, agents: { type: "array", items: { type: "object" } } }, required: ["sessionId"] }, handler: (input) => canonicalDriveVerb("run", input) },
+];
+
+const TOOLS = [...CANONICAL_TOOLS, ...LEGACY_TOOLS];
 const TOOL_MAP = new Map(TOOLS.map((t) => [t.name, t]));
 
-export { TOOLS, TOOL_MAP };
+export { TOOLS, TOOL_MAP, LEGACY_TOOLS, CANONICAL_TOOLS };
 
 // ---------------------------------------------------------------------------
 // JSON-RPC 2.0 stdio transport

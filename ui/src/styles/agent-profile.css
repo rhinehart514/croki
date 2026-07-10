@@ -207,3 +207,13 @@
 .agentp-soul-ready-text { font-size: 14px; line-height: 1.5; color: var(--ink); margin: 0; }
 .agentp-soul-ready-why { font-size: 12.5px; line-height: 1.45; color: var(--muted); margin: 4px 0 0; }
 .agentp-soul-ready-acts { display: flex; gap: 8px; margin-top: 12px; }
+
+/* ── question-altitude position + falsifier + lesson receipt (production-direction/09) ── */
+.agentp-shead { position: relative; }
+.agentp-taught {
+  margin-left: auto; font-size: 11px; color: var(--faint); font-family: var(--font-mono);
+  white-space: nowrap;
+}
+.agentp-pos-q { font-style: normal; margin: 0 0 8px; }
+.agentp-pos-line { font-size: 13px; line-height: 1.5; color: var(--muted); margin: 6px 0 0; }
+.agentp-pos-line b { color: var(--ink); font-weight: 600; }

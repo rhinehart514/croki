@@ -94,6 +94,285 @@ function versByLaneFor(record) {
   return out;
 }
 
+function stableRef(type, id) {
+  const value = String(id ?? "").trim();
+  return value ? { type: type || null, id: value } : null;
+}
+
+function refKey(ref) {
+  return ref?.id ? `${ref.type ?? "record"}:${ref.id}` : null;
+}
+
+function outcomeDisplayKind(item) {
+  const kind = String(item?.outcomeKind ?? "").toLowerCase();
+  if (!kind) return "unmeasured";
+  if (["sent", "published", "released"].includes(kind)) return "sent";
+  if (["activation", "usage", "retention", "churn"].includes(kind)) return "product-activation";
+  if (["purchase", "revenue", "expansion", "conversion"].includes(kind)) return "business-outcome";
+  if (["reply", "meeting", "response", "objection", "ignored"].includes(kind)) return "observed-response";
+  return item?.source === "founder-entered" ? "founder-entered" : "observed-response";
+}
+
+// Result.channel is the delivery connector (gmail, slack, ...), not the pipeline that earned the
+// result. Resolve operating lineage only through records already present in the canonical read: the
+// compiled run owns the GTM path, while the matching flow receipt owns the executable graph and that
+// graph resolves to a project-registered pipeline. Missing joins remain null instead of inventing ids.
+function outcomeOperatingLineage(item, sources) {
+  const compiledRun = (sources.runs ?? []).find((run) => run?.id === item?.runId) ?? null;
+  const executionRun = (sources.executionRuns ?? []).find((receipt) => {
+    const receiptId = receipt?.id ?? receipt?.runId ?? receipt?.result?.runId;
+    return Boolean(receiptId && (receiptId === item?.executionRunId
+      || (!item?.executionRunId && !compiledRun && receiptId === item?.runId)));
+  }) ?? null;
+  const executionRunId = executionRun?.id ?? executionRun?.runId ?? executionRun?.result?.runId ?? null;
+  const graphCandidates = new Set([
+    executionRun?.result?.graphId,
+    executionRun?.graphId,
+    compiledRun?.pathId,
+  ].map((value) => String(value ?? "").trim()).filter(Boolean));
+  const pipeline = (sources.pipelines ?? []).find((candidate) => candidate?.sourceKind !== "path"
+    && (graphCandidates.has(String(candidate?.graphId ?? "")) || graphCandidates.has(String(candidate?.id ?? "")))) ?? null;
+  const path = (sources.pipelines ?? []).find((candidate) => candidate?.sourceKind === "path"
+    && candidate?.id === compiledRun?.pathId) ?? null;
+  return {
+    pipelineRef: stableRef("pipeline", pipeline?.id),
+    graphRef: stableRef("graph", pipeline?.graphId),
+    pathRef: stableRef("path", path?.id),
+    runRef: stableRef("run", compiledRun?.id),
+    executionRunRef: stableRef("execution-run", executionRunId),
+    deliveryRef: stableRef("delivery-connector", item?.channel),
+  };
+}
+
+function projectCanvas(view, knownWovenIds = []) {
+  const sources = view.canvasSources;
+  if (!sources) return { anchors: [], relationships: [], state: { kind: "empty", stale: false, issues: [] }, geometry: null };
+  const outcomeLineageById = new Map((sources.outcomes ?? []).map((item) => [
+    item.id,
+    outcomeOperatingLineage(item, sources),
+  ]));
+  const anchors = [];
+  const byRef = new Map();
+  const addAnchor = (ref, kind, label, body, owner, updatedAt = null) => {
+    const key = refKey(ref);
+    if (!key || byRef.has(key)) return;
+    const anchor = {
+      id: `anchor:${key}`,
+      ref,
+      kind,
+      label: String(label ?? "").trim() || ref.id,
+      body,
+      authority: { owner, id: ref.id, projectId: view.projectId, updatedAt },
+    };
+    byRef.set(key, anchor);
+    anchors.push(anchor);
+  };
+  addAnchor(stableRef("project", sources.project?.id), "product", sources.project?.name, sources.project, "project-store", sources.project?.updatedAt);
+  for (const item of sources.productTruth ?? []) addAnchor(stableRef("productTruth", item.id), "product-truth", item.statement, item, "gtm-product-truths", item.updatedAt);
+  const model = sources.productModel;
+  if (model) {
+    addAnchor(stableRef("productModel", model.id), "product-model", sources.project?.name, model, "product-model-store", model.updatedAt);
+    const bags = { things: "thing", relationships: "relationship", userGoals: "goal", states: "state", ia: "ia", workflows: "workflow", interactions: "interaction", transitions: "transition" };
+    for (const [bag, type] of Object.entries(bags)) {
+      for (const item of model[bag] ?? []) addAnchor(stableRef(type, item.id), `product-${type}`, item.name ?? item.goal ?? item.label, item, "product-model-store", model.updatedAt);
+    }
+  }
+  for (const item of sources.crew ?? []) addAnchor(stableRef("teammate", item.ref), "teammate", item.name || item.ref, item, "crew-roster/project-agent", item.addedAt);
+  for (const item of sources.questions ?? []) addAnchor(stableRef("question", item.id), "question", item.text, item, item.pinned ? "clarity-store" : "operator-artifact", item.updatedAt);
+  for (const item of sources.pipelines ?? []) {
+    const type = item.sourceKind === "path" ? "path" : "pipeline";
+    addAnchor(stableRef(type, item.id), "pipeline", item.name ?? item.summary, item, item.sourceKind === "path" ? "gtm-paths" : "project-store.channels", item.updatedAt);
+  }
+  for (const item of sources.runs ?? []) addAnchor(stableRef("run", item.id), "run", item.status, item, "gtm-runs", item.updatedAt);
+  for (const item of sources.executionRuns ?? []) addAnchor(stableRef("execution-run", item.id ?? item.runId), "run", item.status ?? (item.ok === false ? "failed" : "observed"), item, "flow-store", item.createdAt);
+  for (const item of sources.questionArtifacts ?? []) {
+    const ref = stableRef(item.sourceRef?.type ?? "question-artifact", item.sourceRef?.id ?? item.id);
+    if (ref) addAnchor(ref, "question-artifact", item.statement ?? item.title ?? item.text, item, ref.type === "operator-event" || ref.type === "operator-session" ? "operator-store" : "flow-store", item.createdAt);
+  }
+  for (const item of sources.decisions ?? []) addAnchor(stableRef("decision", item.id), "founder-decision", item.kind, item, "feedback-ledger", item.createdAt);
+  for (const item of sources.signals ?? []) addAnchor(stableRef("signal", item.id), "pinned-signal", item.summary ?? item.type, item, "product-model-store.pinnedSignals", item.observedAt);
+  for (const item of sources.outcomes ?? []) {
+    const { body: _body, ...metadata } = item;
+    const lineage = outcomeLineageById.get(item.id);
+    addAnchor(stableRef("outcome", item.id), "outcome", item.outcomeKind, {
+      ...metadata,
+      channelId: lineage?.pipelineRef?.id ?? null,
+      lineage,
+    }, "gtm-results", item.observedAt);
+  }
+  for (const item of sources.implications ?? []) {
+    const { body: _body, ...metadata } = item;
+    addAnchor(stableRef("implication", item.id), "product-implication", item.status, metadata, "outcome-ingest.implications", item.observedAt);
+  }
+
+  const relationships = [];
+  const seen = new Set();
+  const resolveKnownRef = (ref) => {
+    if (!ref || byRef.has(refKey(ref))) return ref;
+    const matches = anchors.filter((anchor) => anchor.ref.id === ref.id);
+    return matches.length === 1 ? matches[0].ref : ref;
+  };
+  const addRelationship = (rawSource, rawTarget, kind, owner) => {
+    const source = resolveKnownRef(rawSource);
+    const target = resolveKnownRef(rawTarget);
+    if (!source || !target) return;
+    const key = `${refKey(source)}|${kind}|${refKey(target)}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    relationships.push({
+      id: `relation:${key}`,
+      source,
+      target,
+      kind,
+      resolved: byRef.has(refKey(source)) && byRef.has(refKey(target)),
+      authority: { owner, projectId: view.projectId },
+    });
+  };
+  const typed = (raw, fallback) => raw && typeof raw === "object"
+    ? stableRef(raw.type ?? raw.kind ?? fallback, raw.id ?? raw.ref)
+    : stableRef(fallback, raw);
+  for (const question of sources.questions ?? []) {
+    const q = stableRef("question", question.id);
+    for (const ref of question.relevantParticipantRefs ?? question.participantRefs ?? []) addRelationship(q, typed(ref, "teammate"), "involves", "clarity-store");
+    for (const ref of question.productRefs ?? []) addRelationship(q, typed(ref, "productModel"), "about", "clarity-store");
+    for (const ref of question.evidenceRefs ?? []) addRelationship(typed(ref, "evidence"), q, "informs", "clarity-store");
+    for (const ref of question.backlinks ?? []) addRelationship(q, typed(ref, "record"), "has-context", "source-record");
+    for (const position of question.positions ?? []) {
+      const positionRef = typed(position.sourceRef, "question-artifact");
+      addRelationship(positionRef, q, position.relation ?? "position-on", positionRef?.type === "operator-event" ? "operator-store" : "flow-store");
+      if (position.participantRef) addRelationship(typed(position.participantRef, "teammate"), positionRef, "authored", positionRef?.type === "operator-event" ? "operator-store" : "flow-store");
+      for (const ref of position.evidenceRefs ?? []) addRelationship(typed(ref, "evidence"), positionRef, "supports", positionRef?.type === "operator-event" ? "operator-store" : "flow-store");
+    }
+  }
+  for (const pipeline of sources.pipelines ?? []) {
+    const p = stableRef(pipeline.sourceKind === "path" ? "path" : "pipeline", pipeline.id);
+    if (pipeline.questionId) addRelationship(stableRef("question", pipeline.questionId), p, "serves", pipeline.sourceKind === "path" ? "gtm-paths" : "project-store.channels");
+    for (const ref of pipeline.productRefs ?? []) addRelationship(typed(ref, "productModel"), p, "grounds", pipeline.sourceKind === "path" ? "gtm-paths" : "project-store.channels");
+    for (const ref of pipeline.participantRefs ?? []) addRelationship(typed(ref, "teammate"), p, "works-on", pipeline.sourceKind === "path" ? "gtm-paths" : "project-store.channels");
+    for (const ref of pipeline.restsOn ?? []) addRelationship(typed(ref, "record"), p, "supports", "gtm-paths");
+  }
+  for (const run of sources.runs ?? []) addRelationship(stableRef("path", run.pathId), stableRef("run", run.id), "produced", "gtm-runs");
+  for (const decision of sources.decisions ?? []) {
+    const d = stableRef("decision", decision.id);
+    if (decision.questionId) addRelationship(stableRef("question", decision.questionId), d, "settled-by", "feedback-ledger");
+    for (const ref of decision.contextRefs ?? []) {
+      if (decision.sourceRef && ref?.type === decision.sourceRef.type && ref?.id === decision.sourceRef.id) continue;
+      addRelationship(typed(ref, "record"), d, "context-for", "feedback-ledger");
+    }
+  }
+  for (const signal of sources.signals ?? []) {
+    addRelationship(stableRef("signal", signal.id), typed(signal.target, "productModel"), "pinned-to", "product-model-store");
+  }
+  for (const outcome of sources.outcomes ?? []) {
+    const o = stableRef("outcome", outcome.id);
+    const lineage = outcomeLineageById.get(outcome.id);
+    if (lineage?.pipelineRef) addRelationship(lineage.pipelineRef, o, "resulted-in", "gtm-results");
+    if (lineage?.pathRef) addRelationship(lineage.pathRef, o, "resulted-in", "gtm-results");
+    if (lineage?.runRef) addRelationship(lineage.runRef, o, "produced", "gtm-results");
+    if (lineage?.executionRunRef) addRelationship(lineage.executionRunRef, o, "produced", "gtm-results");
+    if (outcome.questionId) addRelationship(o, stableRef("question", outcome.questionId), "returns-to", "gtm-results");
+    for (const ref of outcome.productRefs ?? []) addRelationship(o, typed(ref, "productModel"), "returns-to", "gtm-results");
+    for (const ref of outcome.participantRefs ?? []) addRelationship(typed(ref, "teammate"), o, "contributed-to", "gtm-results");
+    for (const ref of outcome.decisionRefs ?? (outcome.decisionRef ? [outcome.decisionRef] : [])) addRelationship(typed(ref, "decision"), o, "authorized", "gtm-results");
+  }
+  for (const implication of sources.implications ?? []) {
+    const i = stableRef("implication", implication.id);
+    addRelationship(stableRef("outcome", implication.sourceOutcomeId), i, "suggests", "outcome-ingest.implications");
+    if (implication.questionId) addRelationship(i, stableRef("question", implication.questionId), "returns-to", "outcome-ingest.implications");
+    for (const ref of implication.productRefs ?? []) addRelationship(i, typed(ref, "productModel"), "affects", "outcome-ingest.implications");
+    for (const ref of implication.participantRefs ?? []) addRelationship(typed(ref, "teammate"), i, "interpreted", "outcome-ingest.implications");
+    for (const ref of implication.decisionRefs ?? (implication.decisionRef ? [implication.decisionRef] : [])) addRelationship(typed(ref, "decision"), i, "decided", "outcome-ingest.implications");
+    if (implication.proposalRef) addRelationship(i, typed(implication.proposalRef, "productChangeProposal"), "staged-as", "outcome-ingest.implications");
+  }
+
+  const issues = [...(sources.state?.issues ?? [])];
+  for (const relation of relationships.filter((item) => !item.resolved)) issues.push({ kind: "unresolved", ref: relation.id, owner: relation.authority.owner });
+  const geometry = sources.geometry ? {
+    namespace: sources.geometry.namespace ?? "project-canvas",
+    positions: sources.geometry.positions ?? {},
+    collapsedGroups: sources.geometry.collapsedGroups ?? [],
+    pinnedCrew: sources.geometry.pinnedCrew ?? [],
+    viewport: sources.geometry.viewport ?? null,
+    updatedAt: sources.geometry.updatedAt ?? null,
+  } : null;
+  const knownGeometryIds = new Set([...anchors.map((item) => item.id), ...knownWovenIds]);
+  if (geometry) {
+    geometry.compatibilityPositionRefs = Object.keys(geometry.positions).filter((id) => id.startsWith("obj-") && !knownGeometryIds.has(id));
+    geometry.detachedPositionRefs = Object.keys(geometry.positions).filter((id) => !knownGeometryIds.has(id) && !id.startsWith("obj-"));
+    for (const ref of geometry.detachedPositionRefs) issues.push({ kind: "unresolved", ref, owner: "object-graph-layout" });
+  }
+  const contentCount = anchors.filter((item) => item.kind !== "product").length;
+  const outcomes = (sources.outcomes ?? []).map((item) => {
+    const operatingLineage = outcomeLineageById.get(item.id) ?? {};
+    return {
+      id: item.id,
+      ref: stableRef("outcome", item.id),
+      body: item.body ?? null,
+      kind: outcomeDisplayKind(item),
+      label: item.body ?? item.outcomeKind ?? "Recorded outcome",
+      status: item.status ?? (item.runId || item.executionRunId ? "observed" : "unattributed"),
+      outcomeKind: item.outcomeKind ?? null,
+      value: item.value ?? null,
+      observedAt: item.observedAt ?? null,
+      channelId: operatingLineage.pipelineRef?.id ?? null,
+      questionId: item.questionId ?? null,
+      productRefs: (item.productRefs ?? []).map((ref) => ref?.id ?? ref).filter(Boolean),
+      crewRefs: (item.participantRefs ?? []).map((ref) => ref?.id ?? ref).filter(Boolean),
+      runId: operatingLineage.runRef?.id ?? operatingLineage.executionRunRef?.id ?? null,
+      authority: { owner: "gtm-results", id: item.id, projectId: view.projectId, updatedAt: item.updatedAt ?? item.observedAt ?? null },
+      lineage: {
+        ...operatingLineage,
+        questionRef: stableRef("question", item.questionId),
+        productRefs: item.productRefs ?? [],
+        participantRefs: item.participantRefs ?? [],
+        decisionRefs: item.decisionRefs ?? (item.decisionRef ? [item.decisionRef] : []),
+      },
+    };
+  });
+  const implications = (sources.implications ?? []).map((item) => ({
+    id: item.id,
+    ref: stableRef("implication", item.id),
+    body: item.body ?? null,
+    text: item.body ?? "",
+    status: item.status ?? "proposed",
+    observedAt: item.observedAt ?? null,
+    sourceOutcomeId: item.sourceOutcomeId ?? null,
+    questionId: item.questionId ?? null,
+    productRefs: (item.productRefs ?? []).map((ref) => ref?.id ?? ref).filter(Boolean),
+    disposition: item.status === "staged" ? "accepted" : "proposed",
+    review: item.review ?? null,
+    authority: {
+      owner: "outcome-ingest.implications",
+      id: item.id,
+      projectId: view.projectId,
+      sourceOutcomeRef: stableRef("outcome", item.sourceOutcomeId),
+      sourceLearningRef: stableRef("learning", item.sourceLearningId),
+    },
+    lineage: {
+      questionRef: stableRef("question", item.questionId),
+      productRefs: item.productRefs ?? [],
+      participantRefs: item.participantRefs ?? [],
+      decisionRefs: item.decisionRefs ?? (item.decisionRef ? [item.decisionRef] : []),
+      proposalRef: item.proposalRef ?? null,
+      attribution: item.attribution ?? null,
+      pipelineRef: item.review?.pipelineRef ?? null,
+      graphRef: item.review?.graphRef ?? null,
+    },
+  }));
+  return {
+    anchors,
+    relationships,
+    outcomes,
+    implications,
+    state: {
+      kind: !contentCount ? "empty" : issues.some((item) => item.kind !== "stale") ? "partial" : "ready",
+      stale: Boolean(sources.state?.stale),
+      issues,
+    },
+    geometry,
+  };
+}
+
 // buildWovenGraph(view, opts) — the projector.
 //
 //   view — exactly what getOperatingView returns: { projectId, lanes[], objects[], pending, ... }.
@@ -238,6 +517,11 @@ export function buildWovenGraph(view = {}, opts = {}) {
 
   const drawnObjectCount = objectNodes.filter((o) => o.draw).length;
   const drawnTieCount = ties.filter((t) => t.drawn).length;
+  const canvas = projectCanvas(view, [
+    ...objectNodes.map((item) => item.id),
+    ...ties.map((item) => item.id),
+    ...kindClusters.map((item) => item.id),
+  ]);
 
   return {
     projectId,
@@ -246,6 +530,7 @@ export function buildWovenGraph(view = {}, opts = {}) {
     kindClusters,
     laneKinds,
     collapsedByLane: Object.fromEntries(collapsedByLane),
+    canvas,
     stats: {
       objectCount: objectNodes.length,
       drawnObjectCount,

@@ -9,6 +9,7 @@ import type {
   CapabilityServer, CapabilityInventory, SenderCredential, Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole, BoardView,
   ChannelMeta, Input, ObjectGraphView, GTMItem, PendingInbox, OperatingView,
+  ProductImplication,
 } from "@/types";
 import { identityHeaders } from "@/lib/identity";
 import type { MotionEfficiencyData } from "@/components/MotionEfficiencyTable";
@@ -110,13 +111,19 @@ export const removeSender = (provider: string) =>
     .then((r) => r.json() as Promise<{ removed: boolean; credentials: SenderCredential[] }>);
 
 // ── GTM Graph (DAG — zoom 3) ────────────────────────────────────────────────
-export const getGraphTemplate = (channelId?: string) =>
-  get<{ graph: GTMGraph; runs?: GTMRunResult[] }>(
-    `/api/graph/template${channelId ? `?channel=${encodeURIComponent(channelId)}` : ""}`,
-  );
+// EXPLICIT PROJECT SCOPE (brain/src/routes/graph.mjs): every ownership-resolving graph route now resolves
+// the owning project from `projectId` (body) or `project` (query) and rejects cross-project or ambiguous
+// access. So the UI ALWAYS sends the owning project id — never relying on global active-project inference
+// or unique ownership. `projectId` is a REQUIRED argument on each of these so no unscoped call can compile.
+export const getGraphTemplate = (channelId: string | undefined, projectId: string) => {
+  const params = new URLSearchParams();
+  if (channelId) params.set("channel", channelId);
+  params.set("project", projectId);
+  return get<{ graph: GTMGraph; runs?: GTMRunResult[] }>(`/api/graph/template?${params.toString()}`);
+};
 
-export const saveGraph = (graph: GTMGraph) =>
-  post<{ graph: GTMGraph; savedAt: string }>("/api/graph/save", { graph });
+export const saveGraph = (graph: GTMGraph, projectId: string) =>
+  post<{ graph: GTMGraph; savedAt: string; projectId?: string }>("/api/graph/save", { graph, projectId });
 
 export const applyGraphOperations = (graph: GTMGraph, operations: GraphOperation[]) =>
   post<{ graph: GTMGraph; changes: Array<{ type: string; detail: string }> }>(
@@ -130,8 +137,8 @@ export const auditGraph = (graph: GTMGraph, runResult?: GTMRunResult | null) =>
 // Fill each node/edge with a one-line "why" (Explain mode). Idempotent server-side: no model call when
 // the graph is already annotated; `force` re-explains. Reasons over the real shape only — never invents
 // product facts, never runs the workflow. Returns the persisted graph with `rationale` merged on.
-export const explainGraph = (graphId: string, force = false) =>
-  post<{ graph: GTMGraph }>("/api/graph/explain", { graphId, force });
+export const explainGraph = (graphId: string, projectId: string, force = false) =>
+  post<{ graph: GTMGraph }>("/api/graph/explain", { graphId, force, projectId });
 
 // ── Artifacts — subagents & skills as real, fully-editable .md files ─────────
 export type ArtifactType = "agent" | "skill";
@@ -147,22 +154,25 @@ export const saveArtifact = (type: ArtifactType, ref: string, content: string) =
     "/api/artifact/save", { type, ref, content },
   );
 
+// `projectId` is required in the run options — the run route resolves graph ownership from it and rejects
+// cross-project runs, so a run can never fire against another project's graph by unique-ownership inference.
 export const runGraph = (
   graph: GTMGraph,
   options: {
+    projectId: string;
     targetNodeId?: string;
     approvals?: Record<string, boolean>;
     decisions?: Decisions;
     resumeRunId?: string;
-  } = {},
+  },
 ) => post<GTMRunResult>("/api/graph/run", { graph, ...options });
 
 // Run a SINGLE node — the "run just this step" loop. Hits the same node-run route the full run uses
 // (POST /api/graph/run with targetNodeId), so only this node executes and its produced items come back
 // on result.nodes[nodeId]. The wall is untouched: an execute node still stops at its gate. Takes the
 // live in-memory graph (not a stored id) so it runs exactly what's on the canvas, edits included.
-export const runWorkflowNode = (graph: GTMGraph, nodeId: string) =>
-  runGraph(graph, { targetNodeId: nodeId });
+export const runWorkflowNode = (graph: GTMGraph, nodeId: string, projectId: string) =>
+  runGraph(graph, { projectId, targetNodeId: nodeId });
 
 // Streaming run events — one per step, so the flow animates and content reveals live.
 type RunStreamEvent =
@@ -175,7 +185,7 @@ type RunStreamEvent =
 // Run the graph over SSE, calling onEvent for each step. Returns when the stream ends.
 export async function runGraphStream(
   graph: GTMGraph,
-  options: { targetNodeId?: string; approvals?: Record<string, boolean>; decisions?: Decisions; resumeRunId?: string },
+  options: { projectId: string; targetNodeId?: string; approvals?: Record<string, boolean>; decisions?: Decisions; resumeRunId?: string },
   onEvent: (event: RunStreamEvent) => void,
 ): Promise<void> {
   const res = await fetch("/api/graph/run/stream", {
@@ -223,10 +233,45 @@ export const getOperatorSession = (sessionId: string, projectId?: string) =>
 // (`reused: false`) when there is none — so the dock can only ever talk about the project on screen.
 // `fresh: true` (the "New channel" action) starts an unbound session so it composes an ADDITIONAL
 // pipeline for the product instead of re-driving the active one.
-export const createOperatorSession = (projectId: string, goal: string, graphId?: string, fresh?: boolean) =>
+// `context` binds a fresh composition to a canvas object without making it required — the operator route
+// (brain/src/routes/operator.mjs) reads questionId / participantRefs / productRefs and threads them into
+// the session's grounding. A direct pipeline still composes with no context (questions stay optional).
+export type OperatorSessionContext = {
+  questionId?: string | null;
+  participantRefs?: string[];
+  productRefs?: string[];
+};
+export const createOperatorSession = (
+  projectId: string, goal: string, graphId?: string, fresh?: boolean, context?: OperatorSessionContext, model?: string,
+) =>
   post<{ session: OperatorSession; reused: boolean }>("/api/operator/sessions", {
     projectId, reuse: !fresh, goal, graphId: fresh ? undefined : graphId, fresh,
+    ...(model ? { model } : {}),
+    ...(context?.questionId ? { questionId: context.questionId } : {}),
+    ...(context?.participantRefs?.length ? { participantRefs: context.participantRefs } : {}),
+    ...(context?.productRefs?.length ? { productRefs: context.productRefs } : {}),
   });
+
+// Accept a product implication (docs/production-direction/06 §Product implication). The route
+// (brain/src/routes/measure.mjs → outcome-implications/:id/accept) is now fully server-derived: it DERIVES
+// the one allowlisted add_node proposal from trusted outcome lineage, requires browser + owner authority,
+// and returns the pending-proposal review session. It NEVER applies a graph mutation, and it REJECTS any
+// client-supplied graphId or operations. So the client may send ONLY the founder's wording (optional) —
+// never a graph id, never operations. A proposed or already-staged implication both go through this door;
+// staged returns the existing session (deduped).
+export type ImplicationAcceptBody = { wording?: string };
+export type ImplicationAcceptResult = {
+  implication: ProductImplication & Record<string, unknown>;
+  sessionId: string;
+  proposal: unknown;
+  decision?: unknown;
+  deduped: boolean;
+};
+export const acceptProductImplication = (projectId: string, implicationId: string, body?: ImplicationAcceptBody) =>
+  post<ImplicationAcceptResult>(
+    `/api/projects/${encodeURIComponent(projectId)}/outcome-implications/${encodeURIComponent(implicationId)}/accept`,
+    { projectId, ...(body?.wording?.trim() ? { wording: body.wording.trim() } : {}) },
+  );
 
 // Advisory @-mention steering a founder message can carry: the specific teammates (crew refs) and
 // capabilities the founder named in the composer. Optional and never a contract — the backend folds it
@@ -470,8 +515,29 @@ export type ReallocationReceipt = {
 };
 export const getReallocation = () => get<ReallocationReceipt>("/api/reallocation");
 
-// ── Connection status — is a live Claude available for compose/ideate/operator ──
-export type ConnectionStatus = { connected: boolean; label: string | null; reason: string | null };
+// ── Connection status — is a live AI runtime available for compose/ideate/operator ──
+// Drover runs on whichever local AI subscription the founder already has: Codex (ChatGPT
+// login) or Claude (Anthropic login). Per-provider readiness is reported in `runtimes`;
+// the top-level fields stay for the parent gate (`connected`) and the toolbar (`label`).
+//
+// `runtimes` is OPTIONAL on purpose: it's backward-compatible with the legacy single-runtime
+// backend that returned only { connected, label, reason }. When the resident-runtime backend
+// is live it fills `runtimes` with one redacted readiness row per provider; until then the UI
+// falls back to a static Codex + Claude choice built from the top-level `connected` flag.
+export type RuntimeReadiness = {
+  id: string;               // stable runtime id (e.g. "codex", "claude-code", "anthropic")
+  provider?: string;        // provider-neutral group (e.g. "codex" | "claude" | "anthropic"); derived from id when absent
+  label: string;            // human label for this runtime
+  connected: boolean;       // is this provider signed in and ready
+  reason: string | null;    // redacted, provider-specific reason when not connected (never a raw error)
+};
+export type ConnectionStatus = {
+  connected: boolean;       // is ANY runtime ready — the parent gate keys off this
+  label: string | null;     // the selected/ready runtime's label, for the toolbar
+  reason: string | null;    // legacy single-reason field, retained for back-compat
+  selectedRuntime?: string | null;
+  runtimes?: RuntimeReadiness[];
+};
 export const getConnection = () => get<ConnectionStatus>("/api/connection");
 
 
@@ -759,6 +825,18 @@ export type CrewMemberProfile = {
   learned: CrewLesson[];
   stillFiguring: CrewLesson[];
   ready: CrewReadyLesson[];
+  // ── Teammate-position enrichment (docs/production-direction/05 §Teammate contract). All optional and
+  // additive: the current server omits them and the sidecar shows honest empties. When a question is
+  // focused, App passes the teammate's position on it so the sidecar reads its belief, uncertainty,
+  // recommendation, and — the part that makes the crew feel alive — "what would change my mind."
+  //
+  // The falsifier: the concrete, gatherable thing that would move this teammate off its position. Drives
+  // the spec-native "What would change your mind?" evidence action. Null when the teammate stated none.
+  falsifier?: string | null;
+  // The teammate's current position on the focused question (belief + next move), when one is focused.
+  position?: { claim: string; uncertainty?: string | null; recommendation?: string | null } | null;
+  // When and where the founder last taught this teammate — a stamped lesson receipt, not a live label.
+  lastTaughtAt?: string | null;
 };
 export const getCrewMemberProfile = (projectId: string, ref: string) =>
   get<{ profile: CrewMemberProfile }>(

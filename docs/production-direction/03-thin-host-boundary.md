@@ -70,19 +70,24 @@ Reject a proposed module if:
 
 Prefer a projection when a value can be derived from existing truth, touch, run, feedback, or result records.
 
+The product canvas is such a projection. It may persist founder-owned geometry and explicit durable links,
+but it never becomes a second source of product truth, action state, teammate history, or outcome state.
+Every visible status must be traceable to an authoritative record or runtime signal.
+
 ## Required host interfaces
 
-The host should expose small, composable seams:
+The host should expose small, composable seams through existing stores and application services. The names
+below are behavioral boundaries, not instructions to create one module or record per line:
 
 - `getProductTruth(projectId)`;
 - `getProductModel(projectId)`;
 - `getCrew(projectId)`;
-- `getQuestionContext(questionId)`;
-- `recordFounderDecision(input)`;
-- `proposeAction(input)`;
-- `runAction(input)`;
+- `getCanvasProjection(projectId, focus?)`;
+- `recordFounderFeedback(input)`;
+- `composePipeline(input)`;
+- `runPipeline(input)`;
 - `getOutcomeContext(input)`;
-- `recordProductImplication(input)`;
+- `recordOutcome(input)`;
 - `assertGateWall(graph)`.
 
 The names may differ in code. The boundary must not.
@@ -98,4 +103,3 @@ add a new subsystem merely to make a model response look structured. Preserve op
 external effects founder-gated. Add an anti-cage regression if the change could reintroduce a policy, program,
 fixed-stage, or pre-run contract layer.
 ```
-

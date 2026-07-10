@@ -18,6 +18,7 @@ import React from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { cn } from "@/lib/utils";
 import { degreeWeight, type ObjectChipData, type KindClusterData } from "@/lib/wovenLayout";
+import type { CanvasAnchorData } from "@/lib/wovenOverlay";
 import "@/styles/woven-canvas.css";
 
 // The one-line provenance receipt shown on hover (the title attr) — plain words plus the ids so a founder
@@ -143,5 +144,75 @@ function KindClusterComponent({ data }: NodeProps<Node<KindClusterData>>) {
 // the integrator adds those two keys, matching the shipped memoized-node discipline. (No node-types map is
 // exported here: a component file that also exports a plain object breaks Fast Refresh, so the map is the
 // integrator's one line, not this file's.)
+// ─── CanvasAnchor ───────────────────────────────────────────────────────────────────────────────────
+// A stable canvas landmark from operatingView.woven.canvas (fix 3): product truth, a question, or an
+// outcome. Rendered ADDITIVELY beside the object weaving — opaque zinc, monochrome, one semantic accent
+// (--gap/amber) reserved for the outcome-return landmark, never decoration. Selecting it runs anchor
+// focus-to-trace (the integrator wires the click → onWovenSelect({ kind:"anchor", anchorId })).
+const ANCHOR_KIND_LABEL: Record<string, string> = {
+  "product-truth": "Product truth",
+  "product-model": "Product",
+  "product-thing": "Product",
+  "product-goal": "User goal",
+  "product-state": "State",
+  "product-workflow": "Workflow",
+  "product-interaction": "Interaction",
+  question: "Open question",
+  outcome: "Outcome",
+};
+function CanvasAnchorComponent({ data }: NodeProps<Node<CanvasAnchorData>>) {
+  const isOutcome = data.kind === "outcome";
+  const isQuestion = data.kind === "question";
+  // A summary chip stands in for a collapsed kind's long tail: one compact card with the count, selectable
+  // to expand its members. It reads as a group (dashed outline, "N in this group"), never as a single item.
+  if (data.group) {
+    return (
+      <div
+        className={cn("woven-anchor is-group", data.focus === "focus" && "is-focus", data.focus === "dim" && "is-dim")}
+        title={`${data.count} ${data.label.toLowerCase()} — product detail summarized to keep the map legible. Click to expand.`}
+      >
+        <Handle type="target" position={Position.Left} id="anchor-in" />
+        <span className="woven-anchor-eyebrow">Product detail</span>
+        <span className="woven-anchor-label">{data.label} <b className="woven-anchor-count">{data.count}</b></span>
+        <span className="woven-anchor-more">Click to expand</span>
+        <Handle type="source" position={Position.Right} id="anchor-out" />
+      </div>
+    );
+  }
+  const eyebrow = ANCHOR_KIND_LABEL[data.kind] ?? "Landmark";
+  return (
+    <div
+      className={cn(
+        "woven-anchor",
+        isOutcome && "is-outcome",
+        isQuestion && "is-question",
+        data.focus === "focus" && "is-focus",
+        data.focus === "dim" && "is-dim",
+      )}
+      title={`${eyebrow}: ${data.label}`}
+    >
+      <Handle type="target" position={Position.Left} id="anchor-in" />
+      <span className="woven-anchor-eyebrow">{eyebrow}</span>
+      <span className="woven-anchor-label">{data.label}</span>
+      <Handle type="source" position={Position.Right} id="anchor-out" />
+    </div>
+  );
+}
+
+// ─── FounderWall ────────────────────────────────────────────────────────────────────────────────────
+// The single founder wall (docs/production-direction/16, P1): a thin vertical amber threshold every
+// pipeline crosses, drawn across the lane band at the shared gate x on the merged Operator canvas. It is
+// pure signal — non-interactive; the gate CARDS remain the actionable review path. One accent (amber), the
+// only color the wall earns, opaque, no glow.
+function FounderWallComponent({ data }: NodeProps<Node<{ height: number }>>) {
+  return (
+    <div className="woven-wall" style={{ height: data.height }} aria-hidden="true">
+      <span className="woven-wall-label">Your wall</span>
+    </div>
+  );
+}
+
 export const ObjectChip = React.memo(ObjectChipComponent);
 export const KindCluster = React.memo(KindClusterComponent);
+export const CanvasAnchor = React.memo(CanvasAnchorComponent);
+export const FounderWall = React.memo(FounderWallComponent);

@@ -34,7 +34,8 @@ export function createVercelRunner({ deployToVercel } = {}) {
       // produced (config.repo / buildWorktree) and the artifact spec/files off the approved item, letting
       // the injected MCP function map them onto its own deploy_to_vercel call shape.
       const result = await deployToVercel({
-        repo: node?.config?.repo ?? item?.buildWorktree ?? null,
+        // Repo-backed worktrees are ordinary product changes and are blocked before this runner.
+        repo: item?.buildWorktree ?? null,
         artifactSpec: item?.artifactSpec ?? null,
         artifactFiles: item?.artifactFiles ?? item?.files ?? null,
         target: node?.config?.target ?? null,

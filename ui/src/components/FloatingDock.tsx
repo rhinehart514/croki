@@ -18,6 +18,15 @@ export function FloatingDock({
   channels, activeChannelId,
   onOpenChannel, onNewChannel,
   onShowOverview, overviewActive,
+  // The two discrete altitude controls (docs/production-direction/09): Operator (product / question
+  // altitude) vs Engineer (action altitude). CanvasShell renders the canvas chromeless, so the switcher
+  // lives here on the dock. `activeLens` is App's effective lens (automatic focus still wins — a focused
+  // pipeline is Engineer, candidates are Operator); a click reports the founder's choice up via onLensChange.
+  activeLens, onLensChange,
+  // A quiet, one-line plain-language operation status (docs/production-direction/16) — "3 pipelines ·
+  // 1 waiting on you · 2 back". Orients the founder without a dashboard; a polite status region, never a
+  // command. Absent → omitted (no empty chrome).
+  operationStatus,
   // motionName is still accepted in the props type but no longer destructured or rendered — the "…loop"
   // pill it drove was removed from the bar (see the render note below).
   // The admin door — opens the Settings overlay (workspace index, team + release roles, self-built
@@ -45,6 +54,12 @@ export function FloatingDock({
   onNewChannel: () => void;
   onShowOverview?: () => void;
   overviewActive?: boolean;
+  // The active altitude lens and its change reporter. Optional so the dock still renders (and existing
+  // tests still pass) when a caller hasn't wired the lens; the control is simply omitted then.
+  activeLens?: "operator" | "engineer";
+  onLensChange?: (id: "operator" | "engineer") => void;
+  // A quiet plain-language operation status line. Optional; omitted when absent.
+  operationStatus?: string | null;
   motionName?: string | null;
   summonItems?: { id: string; label: string; desc?: string }[];
   onSummon?: (id: string) => void;
@@ -99,6 +114,37 @@ export function FloatingDock({
           onShowOverview={onShowOverview}
           overviewActive={overviewActive}
         />
+        {/* The two altitude controls. Operator = the whole woven operation (product / question altitude);
+            Engineer = the single-pipeline editor (action altitude). A segmented control, not a third mode
+            or a second bar — the same two-way switch the chromeless CanvasShell would have carried. */}
+        {onLensChange ? (
+          <>
+            <span className="fdock-sep">·</span>
+            <div className="fdock-lens" role="group" aria-label="Canvas altitude">
+              <button
+                type="button"
+                className={activeLens === "operator" ? "on" : ""}
+                aria-pressed={activeLens === "operator"}
+                onClick={() => onLensChange("operator")}
+              >
+                Operator
+              </button>
+              <button
+                type="button"
+                className={activeLens === "engineer" ? "on" : ""}
+                aria-pressed={activeLens === "engineer"}
+                onClick={() => onLensChange("engineer")}
+              >
+                Engineer
+              </button>
+            </div>
+          </>
+        ) : null}
+        {/* A quiet one-line operation status — orients without a dashboard. Polite live region so a change
+            ("1 waiting on you") is announced, never a command. */}
+        {operationStatus ? (
+          <span className="fdock-status" role="status" aria-live="polite">{operationStatus}</span>
+        ) : null}
         {/* The "…loop" motion pill was removed from the bar: naming the pipeline "Outbound loop" is
             internal machinery vocabulary that reads as jargon here, and it sat right next to the Run
             control where it looked like a second, confusing thing to act on. The kind-of-motion signal,

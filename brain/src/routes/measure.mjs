@@ -11,9 +11,57 @@ import {
   gtmPathStore,
   measurementContractStore,
 } from "../gtm-store.mjs";
-import { outcomeReport, deriveMotionEfficiency, ingestOutcome, ingestBatch, OUTCOME_SOURCES } from "../outcome-ingest.mjs";
+import {
+  outcomeReport,
+  deriveMotionEfficiency,
+  ingestOutcome,
+  ingestBatch,
+  projectProductImplications,
+  attachProductChangeProposal,
+  OUTCOME_SOURCES,
+} from "../outcome-ingest.mjs";
+import { createOperatorSession, getOperatorSession } from "../operator-store.mjs";
+import { executeOperatorTool } from "../operator-runtime.mjs";
+import { authorizeGateRelease } from "../operator-run-core.mjs";
+import { recordFounderDecision } from "../feedback-ledger.mjs";
+import { authorizeReleaseForRequest } from "./session-guard.mjs";
 import { upsertStatedExperiment } from "../stated-experiment.mjs";
 import { applyExperimentVerdict, suggestVerdictFromOutcomes } from "../belief-writeback.mjs";
+
+function canonicalProductChangeReview(implication) {
+  const review = implication?.review;
+  const operation = review?.operations?.[0];
+  const node = operation?.node;
+  const config = node?.config;
+  const allowedNodeFields = new Set(["id", "category", "connector", "label", "outputKind", "position", "config"]);
+  const allowedConfigFields = new Set([
+    "implicationId", "sourceOutcomeId", "interpretation", "questionId", "productRefs",
+    "participantRefs", "evidenceRefs", "authorRef", "artifactRef", "reviewOnly",
+  ]);
+  if (review?.kind !== "product-change-proposal"
+    || review?.pipelineRef?.type !== "pipeline"
+    || review?.graphRef?.type !== "graph"
+    || !review.pipelineRef.id
+    || !review.graphRef.id
+    || review.operations?.length !== 1
+    || operation?.type !== "add_node"
+    || Object.keys(operation ?? {}).some((key) => !["type", "node"].includes(key))
+    || !node?.id
+    || node.category !== "context"
+    || node.connector !== "product"
+    || node.outputKind !== "product-change"
+    || Object.keys(node ?? {}).some((key) => !allowedNodeFields.has(key))
+    || !config || Object.keys(config).some((key) => !allowedConfigFields.has(key))
+    || config.implicationId !== implication.id
+    || config.sourceOutcomeId !== implication.sourceOutcomeId
+    || config.reviewOnly !== true) {
+    throw new Error("This implication has no safe product-change review plan for its owning pipeline.");
+  }
+  return {
+    graphId: review.graphRef.id,
+    operations: [structuredClone(operation)],
+  };
+}
 
 export default async function handle({ req, res, url }) {
   // GTM Board — the nine belief layers (Strategy / Motion / Loop), derived purely from real state.
@@ -52,8 +100,18 @@ export default async function handle({ req, res, url }) {
     try {
       const projectId = decodeURIComponent(projectOutcomeMatch[1]);
       const body = (await readBody(req)) ?? {};
-      recordFounderOutcome(projectId, { runId: body.runId ?? null, happened: body.happened, learned: body.learned }, { projectId });
-      json(res, 200, { ok: true });
+      const recorded = recordFounderOutcome(projectId, {
+        runId: body.runId ?? null,
+        happened: body.happened,
+        learned: body.learned,
+        questionId: body.questionId ?? null,
+        productRefs: body.productRefs ?? [],
+        participantRefs: body.participantRefs ?? [],
+        crewRefs: body.crewRefs ?? [],
+        decisionRefs: body.decisionRefs ?? [],
+        decisionRef: body.decisionRef ?? null,
+      }, { projectId });
+      json(res, 200, recorded);
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
@@ -138,6 +196,107 @@ export default async function handle({ req, res, url }) {
       json(res, 200, result);
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return true;
+  }
+
+  // Accepting an implication stages typed graph operations through the existing pending-proposal
+  // authority. The product graph remains unchanged until its founder-only resolver accepts that
+  // proposal; repeated acceptance returns the same durable review session.
+  const projectImplicationAcceptMatch = url.pathname.match(
+    /^\/api\/projects\/([^/]+)\/outcome-implications\/([^/]+)\/accept$/,
+  );
+  if (req.method === "POST" && projectImplicationAcceptMatch) {
+    try {
+      const projectId = decodeURIComponent(projectImplicationAcceptMatch[1]);
+      const implicationId = decodeURIComponent(projectImplicationAcceptMatch[2]);
+      const body = (await readBody(req)) ?? {};
+      // Accepting an implication is a founder decision even though its product change is only staged.
+      // Require both the browser capability and the project's owner/approver role before any write.
+      authorizeReleaseForRequest(req)();
+      authorizeGateRelease({ projectId }, { ...body, request: req }, { projectId });
+      const implication = projectProductImplications({ projectId })
+        .find((candidate) => candidate.id === implicationId);
+      if (!implication) throw new Error(`Product implication not found: ${implicationId}`);
+
+      if (implication.proposalRef?.id) {
+        const existing = getOperatorSession(implication.proposalRef.id, { projectId });
+        json(res, 200, {
+          implication,
+          sessionId: existing.id,
+          proposal: existing.pendingProposal,
+          deduped: true,
+        });
+        return true;
+      }
+
+      if (Object.prototype.hasOwnProperty.call(body, "graphId")
+        || Object.prototype.hasOwnProperty.call(body, "operations")) {
+        throw new Error("Product implication graph targets and operations are derived server-side from outcome lineage.");
+      }
+      // The canonical projection owns both the target and the single allowlisted operation. The client
+      // may clarify founder wording, but cannot select a graph or smuggle graph mutations through this door.
+      const { graphId, operations } = canonicalProductChangeReview(implication);
+
+      const session = createOperatorSession({
+        projectId,
+        graphId,
+        goal: `Stage a product-change proposal from outcome ${implication.sourceOutcomeId}.`,
+        questionId: implication.questionId,
+        participantRefs: implication.participantRefs,
+        productRefs: implication.productRefs,
+        contextRefs: [
+          { type: "product-implication", id: implication.id },
+          { type: "outcome", id: implication.sourceOutcomeId },
+        ],
+      }, { projectId });
+      const staged = await executeOperatorTool(session, {
+        id: `implication-${Date.now()}`,
+        name: "propose_graph_changes",
+        input: {
+          rationale: `Product implication ${implication.id} should be reviewed as a product change.`,
+          operations,
+        },
+      }, { projectId });
+      if (staged.session?.status !== "waiting_for_proposal" || !staged.session?.pendingProposal) {
+        throw new Error("The product-change proposal did not reach founder review.");
+      }
+      const decision = recordFounderDecision({
+        projectId,
+        kind: "product-implication.accepted",
+        value: body.wording ?? implication.body,
+        disposition: "accepted",
+        sourceOutcomeId: implication.sourceOutcomeId,
+        sourceRef: { type: "product-implication", id: implication.id },
+        contextRefs: [
+          { type: "outcome", id: implication.sourceOutcomeId },
+          { type: "operator-session", id: staged.session.id },
+          { type: "graph-proposal", id: staged.session.pendingProposal.id },
+        ],
+        questionId: implication.questionId,
+        participantRefs: implication.participantRefs.map((ref) => ref.id),
+        productRefs: implication.productRefs,
+      }, { projectId });
+      const linked = attachProductChangeProposal(
+        {
+          projectId,
+          implicationId,
+          proposalSessionId: staged.session.id,
+          decisionRef: { type: "founder-decision", id: decision.receipt.id },
+        },
+        { projectId },
+      );
+      json(res, 200, {
+        implication: linked,
+        sessionId: staged.session.id,
+        proposal: staged.session.pendingProposal,
+        decision: decision.receipt,
+        deduped: false,
+      });
+    } catch (err) {
+      json(res, err?.status ?? (err?.code === "gate_release_forbidden" ? 403 : 400), {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
     return true;
   }

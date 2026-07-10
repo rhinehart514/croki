@@ -9,7 +9,7 @@
   "scripts": {
     "mirror": "node src/mirror.mjs",
     "start": "node src/server.mjs",
-    "test": "node --test",
+    "test": "node --test --test-concurrency=1 --test-force-exit",
     "test:live": "GTM_LIVE=1 node --test test/live.test.mjs"
   },
   "dependencies": {

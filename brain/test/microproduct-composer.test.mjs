@@ -231,7 +231,7 @@ describe("the wall: a produced microproduct only deploys after a founder gate ap
     assert.equal(staged.items.length, 1);
     assert.equal(staged.items[0].deployed, false);
     assert.equal(staged.items[0].live, false);
-    assert.equal(staged.items[0].deployStatus, "awaiting founder approval to deploy");
+    assert.equal(staged.items[0].deployStatus, "awaiting separate founder deploy confirmation");
     assert.deepEqual(staged.items[0].artifact.files, artifactFiles);
   });
 });

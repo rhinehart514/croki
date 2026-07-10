@@ -17,13 +17,20 @@
 // provenance receipt so a founder can trace it back to the run/outcome that produced it.
 
 import { getEngineState } from "./engine.mjs";
-import { getProjectChannels, loadProject } from "./project-store.mjs";
+import { getProjectChannels, loadProject, projectAgents } from "./project-store.mjs";
 import { loadFlow } from "./flow-store.mjs";
 import { listConnectors } from "./connectors/registry.mjs";
-import { deriveMotionEfficiency } from "./outcome-ingest.mjs";
+import { deriveMotionEfficiency, projectProductImplications } from "./outcome-ingest.mjs";
 import { deriveFunnel } from "./object-funnel.mjs";
 import { getPendingInbox } from "./pending-inbox.mjs";
 import { buildWovenGraph } from "./woven-graph.mjs";
+import { getProductModel } from "./product-model-store.mjs";
+import { crewRosterStore } from "./crew-roster-store.mjs";
+import { projectQuestions } from "./clarity-store.mjs";
+import { loadFeedbackLedger } from "./feedback-ledger.mjs";
+import { gtmPathStore, productTruthStore, resultStore, runStore } from "./gtm-store.mjs";
+import { objectGraphLayoutStore, PROJECT_CANVAS_LAYOUT_NAMESPACE } from "./object-graph-store.mjs";
+import { getOperatorSession, listOperatorSessions } from "./operator-store.mjs";
 
 // Map a subsystem's derived health onto the lens's stage vocabulary. getEngineState exposes per-
 // subsystem health only (no explicit state word); the lens needs done / active / waiting / blind. The
@@ -183,6 +190,174 @@ function proposedLaneFromMotion(motion, index) {
   };
 }
 
+function sourceRead(owner, fallback, read) {
+  try { return { owner, available: true, value: read() }; }
+  catch { return { owner, available: false, value: fallback }; }
+}
+
+function operatorQuestionArtifacts(projectId, options) {
+  const transientQuestions = [];
+  const positions = [];
+  const sourceRecords = [];
+  const summaries = listOperatorSessions({ ...options, projectId });
+  for (const summary of summaries) {
+    let session;
+    try { session = getOperatorSession(summary.id, options); } catch { continue; }
+    sourceRecords.push({ ...session, projectId, sourceRef: { type: "operator-session", id: session.id } });
+    if (session.pendingQuestion) {
+      const pending = typeof session.pendingQuestion === "object" ? session.pendingQuestion : { question: session.pendingQuestion };
+      transientQuestions.push({
+        ...pending,
+        id: pending.id ?? `${session.id}:pending-question`,
+        projectId,
+        participantRefs: pending.participantRefs ?? session.participantRefs,
+        productRefs: pending.productRefs ?? session.productRefs,
+        sourceRef: { type: "operator-session", id: session.id },
+        createdAt: pending.createdAt ?? session.updatedAt,
+      });
+    }
+    for (const event of session.events ?? []) {
+      const data = event?.data && typeof event.data === "object" ? event.data : {};
+      const position = data.position && typeof data.position === "object" ? data.position : data;
+      const questionId = position.questionId ?? data.questionId ?? session.questionId;
+      const statement = position.statement ?? position.claim ?? position.answer ?? position.recommendation;
+      if (questionId && statement) {
+        positions.push({
+          ...position,
+          id: position.id ?? event.id,
+          projectId,
+          questionId,
+          statement,
+          participantRef: position.participantRef ?? position.teammateRef ?? position.agentRef ?? data.ref,
+          sourceRef: { type: "operator-event", id: event.id },
+          createdAt: event.createdAt,
+        });
+      }
+      if (questionId) sourceRecords.push({
+        ...event,
+        projectId,
+        questionId,
+        sourceRef: { type: "operator-event", id: event.id },
+      });
+    }
+  }
+  return { transientQuestions, positions, sourceRecords };
+}
+
+function executionQuestionArtifacts(projectId, flowRuns) {
+  const positions = [];
+  const sourceRecords = [];
+  for (const run of flowRuns) {
+    const questionId = run.questionId ?? run.result?.questionId ?? run.result?.workContext?.questionId ?? null;
+    const runId = run.id ?? run.runId ?? run.result?.runId;
+    if (questionId && runId) sourceRecords.push({
+      ...run,
+      id: runId,
+      projectId,
+      questionId,
+      sourceRef: { type: "execution-run", id: runId },
+    });
+    for (const [nodeId, node] of Object.entries(run.result?.nodes ?? {})) {
+      for (const [index, item] of (node?.items ?? []).entries()) {
+        const itemQuestionId = item?.questionId ?? node?.questionId ?? questionId;
+        const statement = item?.statement ?? item?.claim ?? item?.answer ?? item?.recommendation;
+        if (!itemQuestionId || !statement) continue;
+        positions.push({
+          ...item,
+          id: item.id ?? `${runId}:${nodeId}:${index}`,
+          projectId,
+          questionId: itemQuestionId,
+          statement,
+          participantRef: item.participantRef ?? item.teammateRef ?? item.agentRef,
+          sourceRef: { type: "run-item", id: item.id ?? `${runId}:${nodeId}:${index}` },
+          createdAt: run.createdAt ?? null,
+        });
+      }
+    }
+  }
+  return { positions, sourceRecords };
+}
+
+function canvasSources(project, channels, flowRuns, options) {
+  const projectId = project.id;
+  const truth = sourceRead("gtm-product-truths", [], () => productTruthStore.list({ ...options, projectId }));
+  const model = sourceRead("product-model-store", null, () => getProductModel(projectId, { ...options, projectId }));
+  const paths = sourceRead("gtm-paths", [], () => gtmPathStore.list({ ...options, projectId }));
+  const runs = sourceRead("gtm-runs", [], () => runStore.list({ ...options, projectId }));
+  const outcomes = sourceRead("gtm-results", [], () => resultStore.list({ ...options, projectId }));
+  const implications = sourceRead("outcome-ingest.implications", [], () => projectProductImplications({ projectId }, options));
+  const feedback = sourceRead("feedback-ledger", { signals: [], decisions: [] }, () => loadFeedbackLedger(projectId, options));
+  const operatorArtifacts = sourceRead("operator-store", { transientQuestions: [], positions: [], sourceRecords: [] }, () => operatorQuestionArtifacts(projectId, options));
+  const executionArtifacts = executionQuestionArtifacts(projectId, flowRuns);
+  const questions = sourceRead("clarity-store", [], () => projectQuestions(projectId, {
+    transientQuestions: operatorArtifacts.value.transientQuestions,
+    positions: [...operatorArtifacts.value.positions, ...executionArtifacts.positions],
+    sourceRecords: [
+      ...paths.value, ...runs.value, ...outcomes.value,
+      ...operatorArtifacts.value.sourceRecords, ...executionArtifacts.sourceRecords,
+    ],
+  }, options));
+  const usedCrew = sourceRead("project-agent-projection", [], () => projectAgents(projectId, options));
+  const roster = sourceRead("crew-roster-store", { members: [] }, () => crewRosterStore.load(projectId, options));
+  const geometry = sourceRead("object-graph-layout", {
+    positions: {}, collapsedGroups: [], pinnedCrew: [], viewport: null, updatedAt: null,
+  }, () => objectGraphLayoutStore.loadNamespace(projectId, PROJECT_CANVAS_LAYOUT_NAMESPACE, options));
+  const crew = new Map();
+  for (const member of [...usedCrew.value, ...(roster.value.members ?? [])]) {
+    if (!member?.ref) continue;
+    crew.set(member.ref, { ...crew.get(member.ref), ...member, ref: member.ref });
+  }
+  const scanTimes = truth.value.map((item) => Date.parse(item?.scanRef?.scannedAt ?? "")).filter(Number.isFinite);
+  const latestScanAt = scanTimes.length ? new Date(Math.max(...scanTimes)).toISOString() : null;
+  const issues = [truth, model, paths, runs, outcomes, implications, feedback, operatorArtifacts, questions, usedCrew, roster, geometry]
+    .filter((read) => !read.available)
+    .map((read) => ({ kind: "unavailable", owner: read.owner }));
+  if (project.sharedContext?.repository?.repo && !truth.value.length && truth.available) {
+    issues.push({ kind: "missing", owner: truth.owner, detail: "Repository configured with no cited product truth." });
+  }
+  if (latestScanAt && Date.now() - Date.parse(latestScanAt) > 6 * 60 * 60 * 1000) {
+    issues.push({ kind: "stale", owner: truth.owner, at: latestScanAt });
+  }
+  if (model.value?.groundingRef?.scannedAt && latestScanAt
+    && Date.parse(model.value.groundingRef.scannedAt) < Date.parse(latestScanAt)) {
+    issues.push({ kind: "stale", owner: model.owner, at: model.value.groundingRef.scannedAt });
+  }
+  for (const pin of model.value?.pinnedSignals ?? []) {
+    if (!(feedback.value.signals ?? []).some((item) => item.id === pin.signalId)) {
+      issues.push({ kind: "unresolved", owner: feedback.owner, ref: pin.signalId });
+    }
+  }
+  return {
+    project,
+    productTruth: truth.value,
+    productModel: model.value,
+    crew: [...crew.values()],
+    questions: questions.value,
+    pipelines: [...channels.map((item) => ({ ...item, sourceKind: "channel" })), ...paths.value.map((item) => ({ ...item, sourceKind: "path" }))],
+    runs: runs.value,
+    executionRuns: flowRuns,
+    questionArtifacts: [
+      ...operatorArtifacts.value.positions,
+      ...operatorArtifacts.value.sourceRecords,
+      ...executionArtifacts.positions,
+      ...executionArtifacts.sourceRecords,
+    ],
+    decisions: feedback.value.decisions ?? [],
+    signals: (model.value?.pinnedSignals ?? []).map((pin) => ({
+      ...pin,
+      resolved: (feedback.value.signals ?? []).some((item) => item.id === pin.signalId),
+    })),
+    outcomes: outcomes.value,
+    implications: implications.value,
+    geometry: geometry.value,
+    state: {
+      kind: issues.some((item) => item.kind !== "stale") ? "partial" : "ready",
+      stale: issues.some((item) => item.kind === "stale"),
+      issues,
+    },
+  };
+}
+
 export function getOperatingView({ projectId } = {}, options = {}) {
   const project = loadProject(projectId ? { ...options, projectId } : options);
   const resolvedProjectId = project.id;
@@ -249,6 +424,7 @@ export function getOperatingView({ projectId } = {}, options = {}) {
   // buildWovenGraph reuses these (already in hand for the engine read, so no second disk read) to anchor
   // ties on real steps and derive each lane's kind. Keyed by graphId, the same key lanes carry.
   const channelGraphs = new Map();
+  const flowRuns = [];
   const lanes = [];
   for (const channel of channels) {
     if (!channel.graphId) continue;
@@ -257,6 +433,7 @@ export function getOperatingView({ projectId } = {}, options = {}) {
       catch { return { graph: null, runs: [] }; }
     })();
     if (graph) channelGraphs.set(channel.graphId, graph);
+    flowRuns.push(...(runs ?? []));
     const engine = getEngineState({ graph, runs: runs ?? [], connectors, results: [] });
     // The motion's shape-derived name IS its efficiency-table key (both go through deriveMotionName over
     // the same graph). The engine puts it on `motion.name`; fall back to the channel name only for a lane
@@ -283,6 +460,7 @@ export function getOperatingView({ projectId } = {}, options = {}) {
   // it itself (that would spend the subscription on every lens read). When absent, no proposed lanes.
   const planMotions = Array.isArray(options.planMotions) ? options.planMotions : [];
   planMotions.forEach((motion, i) => lanes.push(proposedLaneFromMotion(motion, i)));
+  const projectedCanvasSources = canvasSources(project, channels, flowRuns, options);
 
   const view = {
     projectId: resolvedProjectId,
@@ -316,6 +494,7 @@ export function getOperatingView({ projectId } = {}, options = {}) {
       const norm = (k) => (k == null ? k : (bareIdOf.get(String(k)) ?? String(k)));
       const wovenView = {
         ...view,
+        canvasSources: projectedCanvasSources,
         lanes: (view.lanes ?? []).map((l) => ({ ...l, channelId: norm(l.channelId) })),
         objects: (view.objects ?? []).map((o) => ({ ...o, lanes: (o.lanes ?? []).map(norm) })),
       };

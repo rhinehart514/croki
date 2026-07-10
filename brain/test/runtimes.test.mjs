@@ -1,10 +1,20 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
 import { describe, it } from "node:test";
 import {
   anthropicRuntime,
   claudeCodeRuntime,
+  codexRuntime,
+  runtimeForModel,
   selectRuntime,
 } from "../src/runtimes/index.mjs";
+import {
+  buildCodexArgs,
+  codexAuthModeLabel,
+  detectCodexAuth,
+  parseCodexEvent,
+} from "../src/runtimes/codex.mjs";
 import {
   authModeLabel,
   buildClaudeArgs,
@@ -213,6 +223,97 @@ describe("selectRuntime", () => {
     assert.equal(selection.adapter, null);
     assert.match(selection.reason, /Claude Code/);
     assert.match(selection.reason, /ANTHROPIC_API_KEY/);
+  });
+
+  it("maps the founder's selected model to its local runtime", () => {
+    assert.equal(runtimeForModel("gpt-5.5-codex"), "codex");
+    assert.equal(runtimeForModel("gpt-5.6-sol"), "codex");
+    assert.equal(runtimeForModel("claude-opus-4-8"), "claude-code");
+    assert.equal(runtimeForModel("unknown"), null);
+  });
+});
+
+describe("codexRuntime", () => {
+  it("recognizes a redacted CLI login without requiring an API key", () => {
+    assert.equal(detectCodexAuth({}, () => true).mode, "chatgpt-login");
+    assert.equal(detectCodexAuth({}, () => false).mode, "none");
+    assert.match(codexAuthModeLabel("chatgpt-login"), /ChatGPT subscription/);
+    assert.equal(codexRuntime.isAvailable({ env: {}, probe: () => true }).ok, true);
+  });
+
+  it("builds a Codex invocation limited to the safe Drover MCP bridge", () => {
+    const args = buildCodexArgs({
+      model: "gpt-5.5-codex",
+      system: "Operate the GTM desk.",
+      mcpPath: "/tmp/operator-mcp.mjs",
+      toolNames: ["inspect", "run"],
+      sessionId: "operator-1",
+      home: "/tmp/gtm-codex",
+      prompt: "Find the first pilot.",
+    });
+    assert.deepEqual(args.slice(0, 2), ["exec", "--json"]);
+    assert.ok(args.includes("--ignore-user-config"));
+    assert.ok(args.includes('sandbox_mode="read-only"'));
+    assert.ok(args.includes("features.shell_tool=false"));
+    assert.ok(args.includes("features.apps=false"));
+    assert.ok(args.includes("features.network_proxy.enabled=false"));
+    assert.ok(args.includes('mcp_servers.gtm-operator.command="node"'));
+    assert.ok(args.includes('mcp_servers.gtm-operator.env={GTM_IDE_OPERATOR_SESSION="operator-1",GTM_IDE_HOME="/tmp/gtm-codex"}'));
+    assert.ok(args.includes('mcp_servers.gtm-operator.enabled_tools=["inspect","run"]'));
+    assert.ok(args.includes('mcp_servers.gtm-operator.default_tools_approval_mode="approve"'));
+    assert.ok(args.some((arg) => arg.includes("developer_instructions=")));
+  });
+
+  it("parses durable session, text, tool, and terminal JSONL events", () => {
+    assert.deepEqual(parseCodexEvent('{"type":"thread.started","thread_id":"thread-1"}'), { type: "thread", id: "thread-1" });
+    assert.deepEqual(parseCodexEvent('{"type":"item.completed","item":{"type":"agent_message","text":"Checking."}}'), { type: "text", text: "Checking." });
+    assert.deepEqual(parseCodexEvent('{"type":"item.started","item":{"type":"mcp_tool_call","name":"inspect"}}'), { type: "tool", name: "inspect" });
+    assert.deepEqual(parseCodexEvent('{"type":"turn.completed","summary":"Done."}'), { type: "completed", summary: "Done." });
+  });
+
+  it("drives through the session MCP and records the Codex thread for a later resume", async () => {
+    let seen;
+    const spawn = (_binary, args) => {
+      seen = args;
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.killed = false;
+      child.kill = () => { child.killed = true; };
+      queueMicrotask(() => {
+        child.stdout.write('{"type":"thread.started","thread_id":"codex-thread"}\n');
+        child.stdout.write('{"type":"item.completed","item":{"type":"agent_message","text":"Inspecting."}}\n');
+        child.stdout.write('{"type":"item.started","item":{"type":"mcp_tool_call","name":"inspect"}}\n');
+        child.stdout.write('{"type":"turn.completed","summary":"Ready for the wall."}\n');
+        child.emit("close", 0);
+      });
+      return child;
+    };
+    const seenText = [];
+    const seenTools = [];
+    const runtimeIds = [];
+    const outcome = await codexRuntime.drive({
+      sessionId: "operator-1",
+      goal: "Find the first pilot.",
+      model: "gpt-5.5-codex",
+      system: "Operate the GTM desk.",
+      tools: [{ name: "inspect" }],
+      env: { GTM_IDE_CODEX_PATH: process.execPath },
+      options: { cwd: process.cwd(), root: "/tmp/gtm-codex" },
+      spawn,
+      isCancelled: () => false,
+      currentStatus: () => "running",
+      onRuntimeSession: (id) => runtimeIds.push(id),
+      onText: (text) => seenText.push(text),
+      onToolStart: (name) => seenTools.push(name),
+      onTurn: () => 1,
+    });
+    assert.equal(outcome.kind, "completed");
+    assert.equal(outcome.summary, "Ready for the wall.");
+    assert.deepEqual(runtimeIds, ["codex-thread"]);
+    assert.deepEqual(seenText, ["Inspecting."]);
+    assert.deepEqual(seenTools, ["inspect"]);
+    assert.ok(seen.includes("--ignore-user-config"));
   });
 });
 

@@ -95,13 +95,18 @@ describe("measure lane — send → persist execute output → poll → attribut
       // transport returns a provider message id. sendRunners is the live delivery seam.
       const providerMessageId = "gmsg-ada-real";
       const sends = { calls: 0 };
+      const releases = { calls: 0 };
       const { run: approved, result } = await approveCompiledRun({
         projectId,
         run: staged,
         decisions: { [recipient]: { decision: "approve" } },
+        // Engine-level stand-in for the browser capability the HTTP route validates before supplying
+        // this callback. Compiled-run approval must not reach a sender without the host release seam.
+        authorizeRelease: () => { releases.calls += 1; },
         sendRunners: fakeSendRunner(providerMessageId, sends),
         options,
       });
+      assert.equal(releases.calls, 1, "the host authorized the founder's release before delivery");
       assert.equal(sends.calls, 1, "the send transport was actually invoked for the approved item");
       assert.equal(approved.status, "completed");
       // The execute node genuinely reported a sent item carrying the provider id.

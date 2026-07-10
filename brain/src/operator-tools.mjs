@@ -7,6 +7,60 @@
 // not create mcp/switch/terminal/query/web nodes the graph validator already allows.
 import { NODE_KINDS_LIST } from "./graph-operations.mjs";
 
+export const CANONICAL_OPERATOR_VERBS = Object.freeze(["inspect", "focus", "ask", "propose", "record", "run"]);
+
+export const STABLE_REF_INPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    type: { type: "string", description: "Open object type, such as product, question, teammate, pipeline, graph, run, or outcome." },
+    id: { type: "string", description: "Stable id owned by the referenced record." },
+    projectId: { type: "string", description: "Owning project; when present it must match the requested scope." },
+  },
+  required: ["type", "id"],
+};
+
+const REF_KIND_ALIASES = new Map([
+  ["project", "product"], ["workflow", "pipeline"], ["channel", "pipeline"],
+  ["agent", "teammate"], ["crew-member", "teammate"], ["clarity", "question"], ["result", "outcome"],
+]);
+
+export function normalizeStableRef(input, { projectId = null, defaultKind = null } = {}) {
+  if (input == null || input === "") return null;
+  const source = typeof input === "string" ? { kind: defaultKind, id: input } : input;
+  if (!source || typeof source !== "object") throw new Error("A stable reference must be an object with type and id.");
+  const rawType = String(source.type ?? source.kind ?? defaultKind ?? "").trim().toLowerCase();
+  const id = String(source.id ?? source.ref ?? source.key ?? "").trim();
+  if (!rawType || !id) throw new Error("A stable reference requires type and id.");
+  const owner = String(source.projectId ?? source.project ?? projectId ?? "").trim() || null;
+  if (projectId && owner && owner !== projectId) throw new Error(`Reference ${rawType}:${id} belongs to project ${owner}, not ${projectId}.`);
+  return { type: REF_KIND_ALIASES.get(rawType) ?? rawType, id };
+}
+
+export function normalizeStableRefs(inputs, options = {}) {
+  const values = Array.isArray(inputs) ? inputs : inputs == null ? [] : [inputs];
+  const refs = [];
+  const seen = new Set();
+  for (const value of values) {
+    const ref = normalizeStableRef(value, options);
+    if (!ref) continue;
+    const key = `${ref.type}:${ref.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    refs.push(ref);
+  }
+  return refs;
+}
+
+export function classifyOperatorVerb(verb) {
+  const name = String(verb ?? "").trim().toLowerCase();
+  if (!CANONICAL_OPERATOR_VERBS.includes(name)) throw new Error(`Unknown operator verb: ${name || "(empty)"}`);
+  if (name === "inspect" || name === "ask") return { verb: name, access: "read", boundary: name === "ask" ? "model-owned judgment; no product mutation" : "read-only" };
+  if (name === "run") return { verb: name, access: "write", boundary: "runs only to the founder gate; no approval or external release" };
+  if (name === "propose") return { verb: name, access: "write", boundary: "reversible proposal only; founder review before application" };
+  if (name === "focus") return { verb: name, access: "write", boundary: "session context only; referenced records are unchanged" };
+  return { verb: name, access: "write", boundary: "model/session artifacts only; no durable clarity pin, founder decision, approval, or external effect" };
+}
+
 export const GRAPH_OPERATIONS_INPUT_SCHEMA = {
   type: "object",
   properties: {
@@ -81,6 +135,36 @@ export const GRAPH_OPERATIONS_INPUT_SCHEMA = {
 };
 
 export const TOOLS = [
+  {
+    name: "inspect",
+    description: "Inspect the product-scoped record addressed by a stable reference, or current product context when omitted. Read-only; never focuses, records, composes, runs, or releases.",
+    input_schema: { type: "object", properties: { ref: STABLE_REF_INPUT_SCHEMA }, required: [] },
+  },
+  {
+    name: "focus",
+    description: "Focus this durable conversation on one stable product, question, teammate, pipeline, graph, run, outcome, or open-kind reference. Changes session context only.",
+    input_schema: { type: "object", properties: { ref: STABLE_REF_INPUT_SCHEMA }, required: ["ref"] },
+  },
+  {
+    name: "ask",
+    description: "Ask product-scoped teammates a focused question using read-only model-owned judgment. Records attributable answers but never composes, runs, sends, or changes product state.",
+    input_schema: { type: "object", properties: { prompt: { type: "string" }, ref: STABLE_REF_INPUT_SCHEMA, refs: { type: "array", items: STABLE_REF_INPUT_SCHEMA }, teammateRefs: { type: "array", items: { type: "string" } } }, required: ["prompt"] },
+  },
+  {
+    name: "propose",
+    description: "Propose reversible GTM or product moves around stable references without applying them. Fuzzy judgment stays model-owned; graph changes remain founder-reviewable.",
+    input_schema: { type: "object", properties: { prompt: { type: "string" }, ref: STABLE_REF_INPUT_SCHEMA, refs: { type: "array", items: STABLE_REF_INPUT_SCHEMA }, rationale: { type: "string" }, operations: GRAPH_OPERATIONS_INPUT_SCHEMA.properties.operations }, required: [] },
+  },
+  {
+    name: "record",
+    description: "Record an attributable session note, model artifact, or transient question proposal. Model callers cannot pin durable clarity or write founder/gate decisions.",
+    input_schema: { type: "object", properties: { kind: { type: "string", enum: ["session_note", "model_artifact", "question_proposal"] }, value: {}, ref: STABLE_REF_INPUT_SCHEMA, refs: { type: "array", items: STABLE_REF_INPUT_SCHEMA } }, required: ["kind", "value"] },
+  },
+  {
+    name: "run",
+    description: "Run the focused pipeline or compose a requested action through the existing compose-and-run path. Always stops at the founder gate and cannot approve or release.",
+    input_schema: { type: "object", properties: { goal: { type: "string" }, ref: STABLE_REF_INPUT_SCHEMA, composeNew: { type: "boolean" }, title: { type: "string" }, agents: { type: "array", items: { type: "object" } } }, required: [] },
+  },
   {
     name: "inspect_shared_context",
     description: "Inspect the shared repository evidence, product, positioning, ICP, founder taste, contacts, outcomes, experiments, artifacts, and product feedback used by every workflow.",
@@ -297,6 +381,12 @@ export const TOOLS = [
 // its allowed MCP tools to exactly these NAKED names). `ideate` remains a routable tool for the
 // taste-learning loop and back-compat callers, but it is no longer a shape the operator reaches for.
 export const NAKED_TOOL_NAMES = new Set([
+  "inspect",
+  "focus",
+  "ask",
+  "propose",
+  "record",
+  "run",
   "inspect_product",          // truth — read what the product actually is
   "inspect_shared_context",   // taste/memory — ICP, positioning, what's been tried
   "update_shared_context",    // record inferred taste/positioning rather than duplicating into graphs

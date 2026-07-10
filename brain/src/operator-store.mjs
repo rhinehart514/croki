@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
 import { persistence } from "./persistence.mjs";
+import { normalizeStableRef, normalizeStableRefs } from "./operator-tools.mjs";
+import { graphIdForRef } from "./operator-project-scope.mjs";
 
 const SCHEMA_VERSION = 1;
 const COLLECTION = "operator-sessions";
@@ -45,6 +47,35 @@ function safeId(value) {
   return String(value || "").replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 100);
 }
 
+function contextFromInput(input = {}, current = {}, options = {}) {
+  const projectId = input.projectId ?? current.projectId ?? null;
+  const questionId = String(input.questionId ?? current.questionId ?? "").trim() || null;
+  const requestedGraphId = String(input.graphId ?? input.workflowId ?? input.channelId ?? current.graphId ?? "").trim() || null;
+  const requestedGraphType = input.pipelineId || input.workflowId || input.channelId ? "pipeline" : "graph";
+  const graphId = requestedGraphId && projectId
+    ? graphIdForRef({ type: requestedGraphType, id: requestedGraphId }, { ...options, projectId })
+    : requestedGraphId;
+  const lastRunId = String(input.lastRunId ?? input.runId ?? current.lastRunId ?? "").trim() || null;
+  const focusInput = input.focusRef ?? input.ref ?? current.focusRef ?? null;
+  const focusRef = focusInput ? normalizeStableRef(focusInput, { projectId }) : null;
+  const participantInput = input.participantRefs ?? input.crewRefs ?? current.participantRefs ?? [];
+  const productInput = input.productRefs ?? current.productRefs ?? [];
+  const participantRefs = normalizeStableRefs(Array.isArray(participantInput)
+    ? participantInput.map((value) => typeof value === "string" ? { type: "teammate", id: value } : { type: value?.type ?? value?.kind ?? "teammate", id: value?.ref ?? value?.id })
+    : [], { projectId });
+  const productRefs = normalizeStableRefs(Array.isArray(productInput)
+    ? productInput.map((value) => typeof value === "string" ? { type: "product-element", id: value } : value)
+    : [], { projectId });
+  const contextRefs = normalizeStableRefs([
+    ...(current.contextRefs ?? []), ...(input.contextRefs ?? input.refs ?? []), ...participantRefs, ...productRefs,
+    ...(questionId ? [{ type: "question", id: questionId }] : []),
+    ...(input.pipelineId || input.channelId || input.workflowId ? [{ type: "pipeline", id: input.pipelineId ?? input.channelId ?? input.workflowId }] : []),
+    ...(graphId ? [{ type: "graph", id: graphId }] : []),
+    ...(lastRunId ? [{ type: "run", id: lastRunId }] : []), ...(focusRef ? [focusRef] : []),
+  ], { projectId });
+  return { projectId, questionId, participantRefs, productRefs, graphId, lastRunId, focusRef, contextRefs };
+}
+
 export function appendOperatorEvent(session, event) {
   const entry = {
     id: event.id || `event-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`,
@@ -64,6 +95,7 @@ export function appendOperatorEvent(session, event) {
 export function createOperatorSession(input, options = {}) {
   const kind = sessionKind(input);
   const goal = String(input.goal || "").trim();
+  const context = contextFromInput(input, {}, options);
   // An ambient session is woken by a standing brief, not a founder-typed goal, so it does NOT require a
   // goal at creation — the standing brief takes the goal's place as the wake instruction. A goal session
   // still requires a goal exactly as before. Loosening goal-required for ambient does NOT relax the
@@ -72,8 +104,8 @@ export function createOperatorSession(input, options = {}) {
   const standingBrief = String(input.standingBrief || "").trim();
   if (kind === "ambient") {
     if (!standingBrief) throw new Error("An ambient operator session requires a standing brief.");
-  } else if (!goal) {
-    throw new Error("An operator goal is required.");
+  } else if (!goal && !context.questionId) {
+    throw new Error("An operator goal or pinned question is required.");
   }
   // A recurring standing brief carries a cadence in ms (e.g. hourly). Null for an event-only ambient
   // session (the input router wakes it on a signal) and for every goal session. Owned here as durable
@@ -95,19 +127,24 @@ export function createOperatorSession(input, options = {}) {
     // store's armNextWake after each wake; the standing-brief tick fires when it arrives. Null when
     // there is no cadence (event-only) — that session is woken only by the input router, never the tick.
     nextWakeAt: kind === "ambient" ? armNextWake({ wakeIntervalMs }, Date.parse(createdAt)) : null,
-    graphId: input.graphId || null,
+    graphId: context.graphId,
     // The program this session is driving, when the founder opened it from a program (e.g. the
     // "Build the first agent" button). Lets the program tools bind to the intended program instead
     // of guessing the newest one.
     programId: input.programId || null,
-    projectId: input.projectId || null,
+    projectId: context.projectId,
+    questionId: context.questionId,
+    participantRefs: context.participantRefs,
+    productRefs: context.productRefs,
+    focusRef: context.focusRef,
+    contextRefs: context.contextRefs,
     // The team that owns this session, optional and backward-compatible. Null for a solo founder's
     // local session (a team of one), set when the project is owned by a real multi-member team so the
     // Convex sync layer can attribute the conversation. Never gates anything on its own.
     teamId: input.teamId || null,
     workspaceId: input.workspaceId || null,
     model: input.model || process.env.GTM_IDE_OPERATOR_MODEL || "claude-opus-4-8",
-    runtime: null,
+    runtime: input.runtime || null,
     status: "ready",
     createdAt,
     updatedAt: createdAt,
@@ -119,11 +156,10 @@ export function createOperatorSession(input, options = {}) {
     spentUsd: 0,
     maxSteps: Math.max(4, Math.min(Number(input.maxSteps) || 18, 40)),
     graphRevision: Number(input.graphRevision) || 0,
-    lastRunId: null,
-    // The Claude Code (subscription) runtime's persisted SDK session id. Captured on the first
-    // drive and resumed on every later one so the operator's conversation survives founder gates,
-    // input pauses, and full process restarts — the model remembers the chat, GTM IDE owns the
-    // durable state around it. Null until a Claude Code drive establishes a session.
+    lastRunId: context.lastRunId,
+    // The local runtime's persisted conversation id. Captured on the first drive and resumed on every
+    // later one so Claude Code or Codex remembers the chat across founder gates, input pauses, and
+    // full process restarts. GTM IDE still owns the durable state around it.
     runtimeSessionId: null,
     summary: null,
     error: null,
@@ -155,6 +191,11 @@ export function saveOperatorSession(session, options = {}) {
   return updated;
 }
 
+export function bindOperatorSessionContext(id, input = {}, options = {}) {
+  const session = getOperatorSession(id, options);
+  return saveOperatorSession({ ...session, ...contextFromInput(input, session, options) }, options);
+}
+
 export function getOperatorSession(id, options = {}) {
   const session = persistence(options).get(COLLECTION, safeId(id));
   if (!session) throw new Error(`Operator session not found: ${id}`);
@@ -177,6 +218,12 @@ export function listOperatorSessions(options = {}) {
         standingBrief: session.standingBrief ?? null,
         graphId: session.graphId,
         projectId: session.projectId ?? null,
+        questionId: session.questionId ?? null,
+        participantRefs: session.participantRefs ?? [],
+        productRefs: session.productRefs ?? [],
+        focusRef: session.focusRef ?? null,
+        contextRefs: session.contextRefs ?? [],
+        lastRunId: session.lastRunId ?? null,
         workspaceId: session.workspaceId,
         status: session.status,
         createdAt: session.createdAt,
@@ -251,9 +298,61 @@ export function assertOperatorSessionProject(sessionId, projectId, options = {})
   return session;
 }
 
+const PRIVATE_SESSION_KEY = /(?:prompt|soul|credential|transcript|internal|plumbing)|^_|^(runtimeSessionId|modelMessages|tokens?|apiKey|sourcePath|artifactPath|graphSnapshot|raw)$/i;
+
+function sanitizePublicSessionValue(value, seen = new WeakSet()) {
+  if (value == null || typeof value !== "object") return value;
+  if (seen.has(value)) return null;
+  seen.add(value);
+  if (Array.isArray(value)) return value.map((item) => sanitizePublicSessionValue(item, seen));
+  return Object.fromEntries(Object.entries(value).flatMap(([key, item]) =>
+    PRIVATE_SESSION_KEY.test(key) ? [] : [[key, sanitizePublicSessionValue(item, seen)]]));
+}
+
+function publicGateRunResult(runResult) {
+  if (!runResult || typeof runResult !== "object") return null;
+  const nodes = Object.fromEntries(Object.entries(runResult.nodes ?? {}).map(([id, node]) => [id, {
+    nodeId: node?.nodeId ?? id,
+    category: node?.category ?? null,
+    ok: node?.ok === true,
+    blocked: node?.blocked === true,
+    pendingReview: node?.pendingReview === true,
+    error: node?.error ?? null,
+    items: Array.isArray(node?.items) ? node.items : [],
+  }]));
+  return sanitizePublicSessionValue({
+    runId: runResult.runId ?? null,
+    graphId: runResult.graphId ?? null,
+    graphRevision: runResult.graphRevision ?? null,
+    createdAt: runResult.createdAt ?? null,
+    completedAt: runResult.completedAt ?? null,
+    ok: runResult.ok === true,
+    targetNodeId: runResult.targetNodeId ?? null,
+    pendingGates: Array.isArray(runResult.pendingGates) ? runResult.pendingGates : [],
+    memoryApplied: runResult.memoryApplied ?? null,
+    nodes,
+  });
+}
+
+function publicPendingGate(pendingGate) {
+  if (!pendingGate || typeof pendingGate !== "object") return pendingGate ?? null;
+  const safe = sanitizePublicSessionValue(Object.fromEntries(Object.entries(pendingGate).filter(([key]) => key !== "runResult")));
+  const runResult = publicGateRunResult(pendingGate.runResult);
+  return runResult ? { ...safe, runResult } : safe;
+}
+
 export function publicOperatorSession(session) {
-  const { modelMessages: _modelMessages, ...publicSession } = session;
-  return publicSession;
+  const publicFields = [
+    "id", "kind", "goal", "standingBrief", "wakeIntervalMs", "nextWakeAt", "graphId", "projectId",
+    "questionId", "participantRefs", "productRefs", "focusRef", "contextRefs", "workspaceId", "status",
+    "createdAt", "updatedAt", "startedAt", "completedAt", "stepCount", "maxSteps", "graphRevision",
+    "lastRunId", "summary", "error", "pendingQuestion", "pendingGate", "pendingProposal", "pendingIdeas",
+    "pendingCandidates", "events",
+  ];
+  const projected = Object.fromEntries(publicFields.flatMap((key) =>
+    Object.prototype.hasOwnProperty.call(session, key) ? [[key, session[key]]] : []));
+  if (Object.prototype.hasOwnProperty.call(projected, "pendingGate")) projected.pendingGate = publicPendingGate(projected.pendingGate);
+  return sanitizePublicSessionValue(projected);
 }
 
 // Cross-flow projection: "which flows need you". Every session currently PAUSED at a founder gate,

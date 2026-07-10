@@ -1,4 +1,4 @@
-import { validateGraph } from "./graph-operations.mjs";
+import { assertNoForgedAuthority, validateGraph } from "./graph-operations.mjs";
 import { listCapabilities } from "./artifact-store.mjs";
 import { channelIdFor } from "./channel-graph.mjs";
 import { getProjectChannels, loadProject } from "./project-store.mjs";
@@ -103,6 +103,7 @@ export function normalizeComposedGraph(spec) {
   const nodes = [];
   rawNodes.forEach((raw, index) => {
     if (!raw || typeof raw !== "object") return;
+    assertNoForgedAuthority(raw.category, raw.config);
     let id = slug(raw.id || raw.label || `node-${index + 1}`);
     while (usedIds.has(id)) id = `${id}-${index + 1}`;
     // One plain sentence — why this teammate/step exists and why it sits here. Optional and
@@ -341,7 +342,16 @@ function channelSpecFrom(input = {}) {
   const title = input.title || input.name || base.title || "Channel";
   const objective = input.objective || base.objective || "";
   const id = input.channelId || input.id || base.id || `channel:${slug(title)}`;
-  return { ...base, id, title, objective, kind: input.kind || base.kind || null };
+  return {
+    ...base,
+    id,
+    title,
+    objective,
+    kind: input.kind || base.kind || null,
+    questionId: input.questionId ?? base.questionId ?? null,
+    participantRefs: input.participantRefs ?? base.participantRefs ?? [],
+    productRefs: input.productRefs ?? base.productRefs ?? [],
+  };
 }
 
 // Normalize the inline agent specs the request carries. Each is a plain `{ ref, role?, objective?,
@@ -401,11 +411,17 @@ export async function composeNakedGraph(input, options = {}) {
   const channelObjective = input.objective || channel.objective;
   const channelId = channelIdFor(channelName, getProjectChannels(project, options).map((item) => item.id));
   const graphId = project.id === "default" ? channelId : `${project.id}--${channelId}`;
+  const workContext = {
+    questionId: channel.questionId ?? null,
+    participantRefs: Array.isArray(channel.participantRefs) ? channel.participantRefs : [],
+    productRefs: Array.isArray(channel.productRefs) ? channel.productRefs : [],
+  };
   const graph = {
     id: graphId,
     name: channelName,
     kind: input.kind || "composed",
     objective: channelObjective,
+    ...workContext,
     version: "1.0.0",
     revision: 1,
     nodes,
@@ -417,6 +433,5 @@ export async function composeNakedGraph(input, options = {}) {
   const validation = validateGraph(graph);
   if (!validation.ok) throw new Error(`Composed workflow is invalid: ${validation.errors.join(" ")}`);
   saveFlow(graph, options);
-  return { channel: { id: channelId, name: channelName, graphId }, graph, validation };
+  return { channel: { id: channelId, name: channelName, graphId, ...workContext }, graph, validation };
 }
-

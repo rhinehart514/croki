@@ -15,6 +15,8 @@ import "@/styles/product-entry.css";
 export function ProductEntryColumn({
   productName,
   model,
+  truths = [],
+  unknowns = [],
   onOpenFull,
   deriving = false,
   onReread,
@@ -22,6 +24,13 @@ export function ProductEntryColumn({
 }: {
   productName: string;
   model: ProductModel | null;
+  // The compact left-headwaters SOURCE (docs/production-direction/16): a few CITED, grounded product
+  // truths and the important OPEN unknowns, alongside the product name and where wins enter. Both are
+  // canonical projections passed in — truths from the woven-canvas product-truth anchors, unknowns from
+  // the founder's pinned questions — never fabricated here. Bounded so the source stays a compact source,
+  // not a taxonomy ladder; the product-model detail stays relevance-only on the canvas.
+  truths?: string[];
+  unknowns?: string[];
   // Optionally open a deeper product view. When omitted, the "full picture" button is hidden — the
   // product's understanding now lives on the main canvas, so there's no separate screen to open.
   onOpenFull?: () => void;
@@ -68,6 +77,9 @@ export function ProductEntryColumn({
     return () => { document.documentElement.style.removeProperty("--pentry-gutter"); };
   }, [open]);
 
+  // Keep the source COMPACT (docs/production-direction/16): a truth or an unknown is a short signal, not a
+  // paragraph. Long pinned-question text is clipped so the source stays a headwaters, never a wall of text.
+  const clip = (s: string, n = 88): string => { const t = (s ?? "").trim(); return t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t; };
   const goals = model?.userGoals ?? [];
   const things = model?.things ?? [];
   // A win enters where a real person accomplishes something. Prefer the user goals (who does what);
@@ -134,6 +146,31 @@ export function ProductEntryColumn({
           flows out from here.
         </p>
       )}
+
+      {/* Cited, grounded truths — the compact source's "what we know" (bounded). Only real product-truth
+          anchors appear; absent → the section is omitted, never a fabricated fact. */}
+      {truths.length ? (
+        <div className="pentry-facts" aria-label="What we know">
+          <span className="pentry-facts-label">What we know</span>
+          <ul className="pentry-facts-list">
+            {truths.slice(0, 3).map((t, i) => (
+              <li key={`truth-${i}`} className="pentry-fact"><span className="pentry-fact-dot" aria-hidden="true" />{clip(t)}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {/* The important open unknowns — the founder's pinned questions, the honest gaps the crew works. */}
+      {unknowns.length ? (
+        <div className="pentry-facts is-unknown" aria-label="Open unknowns">
+          <span className="pentry-facts-label">Open unknowns</span>
+          <ul className="pentry-facts-list">
+            {unknowns.slice(0, 2).map((u, i) => (
+              <li key={`unknown-${i}`} className="pentry-fact"><span className="pentry-fact-q" aria-hidden="true">?</span>{clip(u)}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {onOpenFull ? (
         <button type="button" className="pentry-open" onClick={onOpenFull}>

@@ -60,6 +60,41 @@ function normalizeChannelOffer(input) {
   return { ...rest, statement };
 }
 
+const WORK_CONTEXT_FIELDS = ["questionId", "participantRefs", "productRefs"];
+
+function normalizeWorkRefs(input) {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set();
+  const refs = [];
+  for (const raw of input) {
+    const id = String(typeof raw === "string" ? raw : raw?.id ?? raw?.ref ?? "").trim();
+    if (!id) continue;
+    const typeValue = typeof raw === "string" ? null : raw?.type ?? raw?.kind ?? null;
+    const type = String(typeValue ?? "").trim() || null;
+    const key = `${type ?? ""}::${id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    refs.push({ type, id });
+  }
+  return refs;
+}
+
+function workContextFor(input = {}, current = {}) {
+  const owns = (key) => Object.prototype.hasOwnProperty.call(input, key);
+  const questionId = owns("questionId")
+    ? String(input.questionId ?? "").trim() || null
+    : current.questionId ?? null;
+  return {
+    questionId,
+    participantRefs: normalizeWorkRefs(owns("participantRefs") ? input.participantRefs : current.participantRefs),
+    productRefs: normalizeWorkRefs(owns("productRefs") ? input.productRefs : current.productRefs),
+  };
+}
+
+function hasWorkContextPatch(input = {}) {
+  return WORK_CONTEXT_FIELDS.some((key) => Object.prototype.hasOwnProperty.call(input, key));
+}
+
 function slug(value) {
   return String(value || "")
     .toLowerCase()
@@ -258,6 +293,7 @@ function migrateProject(project, options = {}) {
     return {
       ...project,
       teamId: project.teamId ?? null,
+      channels: project.channels.map((channel) => ({ ...channel, ...workContextFor(channel) })),
       sharedContext: ensureStatedDefaults(normalizeSharedContextClaims(project.sharedContext ?? emptySharedContext())),
     };
   }
@@ -268,6 +304,7 @@ function migrateProject(project, options = {}) {
     channels: Array.isArray(project?.channels) ? project.channels : [],
     sharedContext: project?.sharedContext ?? emptySharedContext(),
   };
+  next.channels = next.channels.map((channel) => ({ ...channel, ...workContextFor(channel) }));
   if (!next.channels.length && Array.isArray(project?.channelIds)) {
     next.channels = project.channelIds.map((id) => ({
       id,
@@ -319,12 +356,12 @@ function ensureChannelFlows(project, options = {}) {
   for (const channel of project.channels) {
     const current = loadFlow(channel.graphId, null, options);
     if (current.graph) continue;
-    saveFlow(createBlankChannelGraph({
+    saveFlow({ ...createBlankChannelGraph({
       id: channel.graphId,
       name: channel.name,
       objective: channel.objective,
       kind: channel.kind,
-    }), options);
+    }), ...workContextFor(channel) }, options);
   }
 }
 
@@ -449,6 +486,7 @@ function channelFromLegacy(project, channel, options = {}) {
   const lastRun = runs.at(-1) ?? null;
   return {
     ...channel,
+    ...workContextFor(channel, flow.graph ?? {}),
     // Default a legacy channel (written before the autonomy ladder) to the safe rung: draft, no
     // standing pattern, so the gate holds everything until the founder explicitly promotes it.
     autonomy: AUTONOMY_LEVELS.has(channel.autonomy) ? channel.autonomy : "draft",
@@ -646,6 +684,7 @@ export function createChannel(input, options = {}) {
     objective: String(input.objective || "").trim(),
     kind: String(input.kind || "custom").trim() || "custom",
     offer: input.offer,
+    ...workContextFor(input),
   }, options);
 }
 
@@ -658,8 +697,18 @@ export function registerComposedChannel(input, options = {}) {
   const existing = (project.channels ?? []).find(
     (channel) => channel.id === input.id || channel.graphId === input.graphId,
   );
-  if (existing) return { project, channel: getChannel(project, existing.id, options) };
+  const flow = loadFlow(input.graphId, null, options);
+  const contextInput = hasWorkContextPatch(input) ? input : flow.graph ?? {};
+  if (existing) {
+    if (!hasWorkContextPatch(contextInput)) return { project, channel: getChannel(project, existing.id, options) };
+    const nextRecord = { ...existing, ...workContextFor(contextInput, existing) };
+    const channels = (project.channels ?? []).map((channel) => channel.id === existing.id ? nextRecord : channel);
+    if (flow.graph) saveFlow({ ...flow.graph, ...workContextFor(nextRecord) }, options);
+    const saved = saveProject({ ...project, channels }, options);
+    return { project: saved, channel: getChannel(saved, existing.id, options) };
+  }
   const offer = normalizeChannelOffer(input.offer ?? null);
+  const workContext = workContextFor(contextInput);
   const channel = {
     id: input.id,
     graphId: input.graphId,
@@ -667,6 +716,7 @@ export function registerComposedChannel(input, options = {}) {
     objective: String(input.objective ?? "").trim(),
     kind: String(input.kind || "custom").trim() || "custom",
     ...(offer ? { offer } : {}),
+    ...workContext,
     enabled: true,
     // A freshly composed channel starts at the bottom of the autonomy ladder: draft, no standing
     // pattern. The founder promotes it deliberately once a run has earned trust.
@@ -674,6 +724,7 @@ export function registerComposedChannel(input, options = {}) {
     blessedPattern: null,
     createdAt: now(),
   };
+  if (flow.graph) saveFlow({ ...flow.graph, ...workContext }, options);
   const channels = [...(project.channels ?? []), channel];
   const saved = saveProject({
     ...project,
@@ -704,6 +755,7 @@ export function duplicateChannel(channelId, input = {}, options = {}) {
     name,
     objective,
     kind,
+    ...workContextFor(input, source),
     workflowGraph: { ...graph, id: graphId },
   }, options);
 }
@@ -711,10 +763,11 @@ export function duplicateChannel(channelId, input = {}, options = {}) {
 export function updateChannel(channelId, patch, options = {}) {
   const project = loadProject(options);
   const current = getChannel(project, channelId, options);
-  const allowed = new Set(["name", "objective", "kind", "enabled", "offer"]);
+  const allowed = new Set(["name", "objective", "kind", "enabled", "offer", ...WORK_CONTEXT_FIELDS]);
   const unknown = Object.keys(patch ?? {}).filter((key) => !allowed.has(key));
   if (unknown.length) throw new Error(`Unsupported channel fields: ${unknown.join(", ")}`);
   const channel = { ...current, ...structuredClone(patch ?? {}) };
+  Object.assign(channel, workContextFor(patch ?? {}, current));
   if (patch && Object.prototype.hasOwnProperty.call(patch, "offer")) {
     const offer = normalizeChannelOffer(patch.offer);
     if (offer) channel.offer = offer;
@@ -727,6 +780,7 @@ export function updateChannel(channelId, patch, options = {}) {
     name: channel.name,
     objective: channel.objective,
     kind: channel.kind,
+    ...workContextFor(channel),
   } : null;
   if (workflowGraph) saveFlow(workflowGraph, options);
   const legacyChannels = (project.channels ?? []).map((item) => item.id === current.id ? channel : item);
@@ -834,12 +888,14 @@ function createFlowChannel(project, input = {}, options = {}) {
   const graphId = input.graphId || (project.id === "default" ? input.id : `${project.id}--${input.id}`);
   const name = input.name;
   const objective = input.objective ?? "";
+  const workContext = workContextFor(input);
   const workflowGraph = {
     ...(input.workflowGraph ?? createBlankChannelGraph({ id: graphId, name, objective, kind })),
     id: graphId,
     name,
     objective,
     kind,
+    ...workContext,
   };
   saveFlow(workflowGraph, options);
   const offer = normalizeChannelOffer(input.offer ?? null);
@@ -850,6 +906,7 @@ function createFlowChannel(project, input = {}, options = {}) {
     objective,
     kind,
     ...(offer ? { offer } : {}),
+    ...workContext,
     enabled: input.enabled !== false,
     // New channels start at the bottom of the autonomy ladder: draft, no standing pattern. The gate
     // holds everything until the founder explicitly promotes the channel (promoteChannel).

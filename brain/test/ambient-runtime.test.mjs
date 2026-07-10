@@ -14,7 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
-import { createProject } from "../src/project-store.mjs";
+import { createProject, saveProject } from "../src/project-store.mjs";
 import { appendInput, listInputs } from "../src/inputs-store.mjs";
 import { saveFlow } from "../src/flow-store.mjs";
 import { createOperatorSession, getOperatorSession, saveOperatorSession } from "../src/operator-store.mjs";
@@ -187,8 +187,15 @@ describe("Area 2 — runDueInputRouting (the inbox drains itself, the wall holds
   it("scorer-present branch: a warranted signal drives a standing brief TO THE GATE and stops", async () => {
     const projectId = "wake-drain";
     const graphId = "drain-gate";
-    createProject({ id: projectId, name: "Wake Drain" }, options);
-    saveFlow(draftGraph(graphId), options);
+    const project = createProject({ id: projectId, name: "Wake Drain" }, options).project;
+    const graph = draftGraph(graphId);
+    saveFlow(graph, options);
+    saveProject({
+      ...project,
+      // Owned and executable by the standing-brief session, but disabled as normal intake so the
+      // scorer-present branch remains the authority that warrants this ambient wake.
+      channels: [{ id: "drain-pipeline", graphId: graph.id, name: graph.name, objective: "Drain warranted ambient signals", kind: "custom", enabled: false }],
+    }, options);
     const seed = createOperatorSession({ goal: "seed", graphId, projectId }, options);
     saveOperatorSession({ ...seed, goal: null, kind: "ambient", standingBrief: "Watch for competitor moves.", brief: "Watch for competitor moves." }, options);
 

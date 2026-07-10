@@ -80,9 +80,17 @@ refine the teammate’s evidence-backed record. Neither should silently mutate t
 
 Keep versioned lineage where the source or durable learned guidance changes. Do not introduce a policy factory.
 
-## UI requirements
+## Canvas embodiment
 
-The crew surface must show, in context:
+The crew is persistently embodied on and around the product canvas. A teammate appears where it holds a
+belief, supplied evidence, owns a pipeline step, or learned from an outcome. Faces communicate identity,
+authorship, or responsibility—never decoration.
+
+Selecting a teammate focuses every connected contribution, action, decision, and outcome without removing
+the surrounding product context. The relevant pod becomes visually primary while the full product-scoped
+crew remains reachable at the canvas perimeter.
+
+In context, the canvas and teammate sidecar must show:
 
 - who is working on the current question;
 - their current contribution;
@@ -92,7 +100,10 @@ The crew surface must show, in context:
 - their current recommendation;
 - a direct “ask this teammate” path.
 
-The whole roster remains available, but the relevant pod should be primary.
+The whole roster remains available, but the relevant pod should be primary. A teammate with no history says
+“No decisions or outcomes yet,” not a synthetic performance label. Working state is limited to the current
+step, elapsed time, and one contextual line. Disagreement renders as separate claims and evidence paths,
+never a blended summary or decorative debate.
 
 ## Implementation prompt
 
@@ -106,4 +117,3 @@ Ensure each teammate has evidence, uncertainty, recommendation, founder-learning
 Add tests for product isolation, agent-memory isolation, founder edits, disagreement preservation, and no
 raw prompt/soul internals reaching founder-facing surfaces.
 ```
-

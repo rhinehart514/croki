@@ -134,7 +134,7 @@ describe("compose_microproduct — an in-repo product change (Area 5 MOVE 2 + MO
     assert.ok((record.touches ?? []).length >= 1, "it carries at least one touch (proposed at the run-derivation seam)");
   });
 
-  it("with BOTH founder authorizations, the BYO push runner fires against the cut worktree (real ship leg is live)", async () => {
+  it("even both authorizations leave the in-repo change staged without attempting a push", async () => {
     const session = createOperatorSession({ goal: "Add a share link.", projectId: "default" }, options);
     const execution = await executeOperatorTool(
       session,
@@ -155,9 +155,10 @@ describe("compose_microproduct — an in-repo product change (Area 5 MOVE 2 + MO
     const confirmedRun = loadFlow(graphId, null, options).runs.at(-1).result;
     const deployNode = confirmedRun.nodes.deploy;
     assert.ok(deployNode, "the deploy node ran on resume");
-    assert.notEqual(deployNode.meta?.reason, "missing_founder_deploy_authorization", "the founder confirmation cleared GUARD 2");
-    assert.equal(deployNode.ok, false, "the push failed honestly (no remote configured) — never a fake ship");
-    assert.equal((deployNode.items ?? [])[0]?.deployed, false, "nothing was marked live on a failed push");
+    assert.equal(deployNode.ok, true);
+    assert.equal(deployNode.meta?.reason, "ordinary_product_change_boundary");
+    assert.equal((deployNode.items ?? [])[0]?.executionStatus, "staged_for_review");
+    assert.equal((deployNode.items ?? [])[0]?.deployed, false);
   });
 
   it("a standalone microproduct (inRepo absent) leaves config.repo unset — its ship path is the hosted runner", async () => {

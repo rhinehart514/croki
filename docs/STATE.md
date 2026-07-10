@@ -1,12 +1,14 @@
 # STATE — Drover (Alpha)
 
-**Stage: Alpha.** Logged 2026-07-03, updated 2026-07-08 (sending + dogfood-loop copy reconciled to
-what is actually wired: connected-transport sending under the gate, no nightly/scheduled agent).
+**Stage: Alpha.** Logged 2026-07-03, updated 2026-07-10 (the production-direction build is integrated:
+one product room, persistent crew, questions and decisions, product-shaped pipelines, the founder wall,
+and attributable outcome return).
 This is the front-door snapshot of
 where the product actually stands. When something material changes, update this file and re-date it.
 For the product pitch read `README.md`; for how the system works read `AGENTS.md`; for the
-current build direction read `docs/GTM-ENGINE-REBUILD.md`; for the approved production target read
-`docs/production-direction/00-index.md`. Everything else in `docs/` is
+current build direction read `docs/GTM-ENGINE-REBUILD.md`; for the approved production target and its
+implemented canvas mental model read `docs/production-direction/00-index.md` and
+`docs/production-direction/16-product-room-ux-plan.md`. Everything else in `docs/` is
 history (see the doc map below).
 
 ---
@@ -49,8 +51,9 @@ measured result.
 |---|---|---|
 | The three-rail harness | **Real** | Truth scan, founder gate, taste memory — the spine works. |
 | Goal → composed pipeline → gate | **Real** | A goal composes a graph that runs to the wall; the wall is enforced on every path. |
+| Local AI runtimes | **Built & browser-verified** | Drover detects either a locally authenticated Codex (ChatGPT subscription) or Claude Code (Claude subscription). The founder chooses the model on the first goal and in the composer; that choice binds the durable session to Codex or Claude. The runtime gets only Drover's safe, session-scoped MCP bridge, so the Wall remains structural. |
 | Node-flow canvas (primary surface) | **Real** | The wired-steps diagram is the default landing; card detail-on-zoom shipped. |
-| Living GTM graph (ordered canvas) | **Building** | The reimagined surface: one map of the whole go-to-market picture, arranged left-to-right, the strongest path lit as the spine, drag / reorganize. Ordered layout landed on main 07-03; verified on one dogfood product, not a live founder. |
+| Living GTM graph (product room) | **Built & browser-verified** | One woven canvas now projects product truth, questions, crew, pipelines, the founder wall, runs, attributable outcomes, and proposed implications. Operator renders one readable canvas-native lane per pipeline; selecting a lane opens its full execution graph in Engineer. Verified at 1440 on the dense RodentRadar and estatesaleusa states; not yet survived by an outside founder. |
 | GTM engine rebuild | **Landed, unexercised** | Evidence graph, market research, path portfolio, outcome ingest, promotion, run-compile — merged and tested, not yet run end-to-end on a live goal. Note: this is fuzzy work; by doctrine it belongs in rented agents behind open steps, not hosted modules — keep it thin and collapse toward agents, never grow it into a subsystem. |
 | Dogfood loop | **Landed, unexercised** | Drover captures friction and feature requests into its own repo queue; an agent can later work a queued item into a gated branch that waits for review. Nothing drains the queue on a schedule — there is no nightly agent. |
 | The learning loop closes (machinery) | **Built & verified** | On branch `lean-rebuild`: outcome-door, compile→approve→run, outcome-proposed verdicts — a real outcome can now flow back and shape the next run. Audited alpha-loop-ready; not yet exercised by a real founder. |
@@ -80,8 +83,9 @@ all in the mainline (corrected 2026-07-08 — an earlier note here wrongly said 
   send path staged locally and nothing ever left.
 - **Install works for a stranger.** A root post-install step now installs the two subprojects (the
   brain and the interface) so a fresh clone comes up without hand-holding.
-- **First run refuses to start half-broken.** If no signed-in Claude is available, first run stops
-  with a clear message instead of failing mid-run.
+- **First run refuses to start half-broken.** If neither a signed-in Codex nor Claude Code runtime is
+  available, first run stops with a clear local-login path instead of failing mid-run. Either existing
+  subscription works; no API key is required for subscription auth.
 - **The gate can't approve itself.** Closed the hole where an agent could release its own gate over
   the agent front door, and the raw-request bypass — the browser now mints a session token that the
   gate release path checks, so only a real founder action clears the wall.
@@ -99,9 +103,9 @@ all in the mainline (corrected 2026-07-08 — an earlier note here wrongly said 
   into per-domain route modules, and the operator runtime split into separate tools, run-core, prompt,
   and tool-execution modules. Tests stayed green across both splits.
 - Removed confirmed-dead code, relocated stray root screenshots, pruned stale docs.
-- Investigated collapsing the two parallel execution engines into one and wrote the plan
-  (`docs/ENGINE-COLLAPSE-PLAN.md`); **deferred on purpose** — the legacy path is still the live one, so
-  the collapse is a scoped follow-up, not something to rush mid-sprint.
+- Resolved the apparent "two engines" split. Drover has one shared graph runner and two
+  lineage-preserving ledgers (flow receipts and compiled GTM-action receipts), not two competing
+  execution engines. The old collapse plan is historical context, not current work.
 
 **What this does not change:** the alpha bet is still unproven. The machine can now send for real under
 the gate, install for a stranger, and can't wave itself through — but no real founder has driven a real
@@ -152,6 +156,54 @@ is currently scoped to the composer; warming the canvas and rails to match is th
 **What this does not change:** the alpha bet is still unproven. No outside founder has driven a real
 go-to-market win to the gate. Built and tested, not validated in the market.
 
+## 2026-07-10 — the product room and the complete production loop
+
+This pass refined the original Drover vision from the existing code, then filled the missing seams. It did
+not replace the product with a new ontology. The existing scanner, open graph, graph runner, operator,
+canvas, founder gate, crew records, and ledgers remain the system; the work makes them read as one product.
+
+**What now works that did not work as one coherent loop:**
+
+- **One product room, three altitudes.** Operator shows the whole product and its go-to-market operation;
+  selecting a canonical question focuses its causal neighborhood in place; Engineer opens the selected
+  pipeline's real execution graph. Operator is a semantic canvas projection — source → readable crew-owned
+  pipeline lanes → one founder wall → real joined returns — rather than the Engineer graph zoomed until it
+  is unreadable. Focus-to-trace keeps unrelated work present but quiet.
+- **Questions are durable work, not chat residue.** Questions can be pinned or transient, preserve multiple
+  teammate positions and disagreement, link evidence and unknowns, and accumulate append-only founder
+  decision receipts. A question can ask the crew, send a teammate to find the evidence that would change
+  its mind, settle a call, or become a pipeline without becoming a required setup object.
+- **The crew is persistent and product-scoped.** Teammates remain identities across pipelines, carry their
+  real contribution record, consult taste, and can bank a durable lesson. The useful surprise is a
+  falsifier loop: a teammate states what would change its view, then the founder can dispatch it to look
+  specifically for that evidence instead of asking for another generic answer.
+- **Pipelines say what they are before exposing machinery.** A focused pipeline now names its objective,
+  relevant crew, intended external effect, measurement, evidence and unknowns, and exactly what the
+  founder's yes will do. Its graph remains open underneath; there is no fixed GTM stage skeleton.
+- **The Wall is unchanged and stronger at the seams.** Every outward action still requires the founder gate.
+  Ordinary in-repo product changes stop at reviewed diffs. A standalone microproduct deploy still requires
+  two founder authorizations. Operator sessions and graph proposals are now strictly scoped to the owning
+  project, including legacy and MCP paths.
+- **Outcomes return to their causes.** Joined outcomes carry pipeline, question, product, crew, run, and
+  decision lineage. Only an explicit attributable interpretation can propose a product implication. The
+  founder may stage one server-derived, allowlisted product-change proposal for review; the browser cannot
+  choose its graph or operations, and accepting an implication never mutates the graph directly. Operator
+  outcome nodes show only real joined returns (or `No outcome yet`), never internal item throughput.
+- **The agent front door is simpler without deleting compatibility.** Six preferred verbs cover the normal
+  job — inspect, ask, compose, run, review, and record — while the complete legacy MCP surface remains
+  discoverable. Model-authored records cannot forge founder decisions, pins, gate approvals, or autonomy.
+- **One canonical projection feeds the UI.** `/api/operating-view` now supplies the woven canvas projection,
+  including typed anchors, relationships, geometry, questions, outcomes, and implications. The interface
+  consumes that shape rather than inventing a parallel canvas model.
+- **The local harness is provider-neutral.** Codex and Claude Code are first-class resident runtimes. The
+  first goal and the composer expose the same model choice; the selected model binds the durable session
+  to its runtime. Codex receives only the session-scoped Drover MCP bridge with shell tools, app connectors,
+  and sandboxed networking disabled, so it cannot route around the founder wall.
+
+This is feature-complete machinery, not market proof. RodentRadar dogfood data exercises the map, questions,
+crew, focused pipelines, and gates in the browser. It still does not count as the alpha exit: a stranger has
+not yet survived the loop, and no real attributable founder win has returned through it.
+
 ## 2026-07-08 — the not-wired audit, and wiring the promised loop
 
 A four-lane audit found the recurring shape behind "the machine runs but I still don't see it":
@@ -193,18 +245,20 @@ step, never a new hosted subsystem. A new feature is an agent plus a step, not n
 When something starts looking like an engine of modules, that's the smell — collapse it to
 agents. This is the anti-cage rule in `AGENTS.md`, restated because it's easy to drift off.
 
-## Build health (2026-07-08)
+## Build health (2026-07-10)
 
-- **Tests:** backend suite — 1,313 pass / 1 fail / 1 skipped, and the full `npm test` chain
-  (backend tests → lint → build) exits green as of 2026-07-08. The one failure is the pre-existing,
-  unrelated `project-merge` case (connections-universal); nothing in the wiring pass broke.
+- **Tests:** the canonical `npm test` chain exits green: backend 1,597 pass / 0 fail / 1 skipped;
+  interface 200 pass / 0 fail across 33 files; typecheck, lint, and production build are green. Browser
+  verification covered the dense RodentRadar and estatesaleusa Operator canvases plus the focused Engineer
+  graph and founder-gate path, with the source open, one wall, a slim composer, and truthful outcome states.
 - **Backend:** the two god-files are gone — the server and the operator runtime were each split into
   focused modules this sprint (behavior-preserving). The GTM-engine modules present and tested:
   evidence, gtm-store, market-research, path-portfolio, outcome-ingest, promote-motion, run-compile.
 - **Interface:** node-flow diagram as the default canvas. The IA was collapsed toward the
   vision's "one canvas + a composer" shape (see the note below) — the two hand-pick pickers are
   gone and the full-screen overlays dropped from four to three.
-- **Agent front door:** 40 tools over the MCP server (`npm run mcp`).
+- **Agent front door:** six preferred verbs over the MCP server (`npm run mcp`), with all legacy tools still
+  discoverable for compatibility.
 - **Run:** `npm start` (builds the interface, serves API + client on port 4317).
 - **Version:** 0.3.3 (root), pre-1.0 by design.
 - **On `main`:** sprint-alpha (real send, stranger-safe install, gate-self-approval fix) is
@@ -283,13 +337,13 @@ This is doctrine now — see the same bar in `AGENTS.md`.
 - `docs/GTM-ENGINE-REBUILD.md` — the current build direction (Phases 0–6 have landed as code).
 - `docs/production-direction/00-index.md` — the production target: GTM for product development, with a
   persistent product-scoped crew and a thin host boundary.
-- `docs/ENGINE-COLLAPSE-PLAN.md` — the plan to collapse the two parallel execution engines into one; deferred (legacy path is still live).
 - `docs/DISTRIBUTION.md` — the honest distribution picture for the desktop build.
 - `docs/STATE.md` — this file.
 
 **History (kept for the record, superseded — do not treat as current):**
 `PRODUCT-SPEC.md`, `docs/history/BUILD-PLAN.md`, `CANVAS.md`, `docs/history/DDD.md`, `EXPERIENCE.md`, `GOAL.md`,
-`MODEL.md`, `PRODUCT-MODEL.md`, `docs/history/CURSOR_GTM_UX_PLAN.md`, `EVALS.md`. These
+`MODEL.md`, `PRODUCT-MODEL.md`, `docs/history/CURSOR_GTM_UX_PLAN.md`, `EVALS.md`,
+`docs/ENGINE-COLLAPSE-PLAN.md`. These
 describe the earlier "IDE for GTM" framing and, in several cases, two machinery layers that
 were deliberately deleted — the outcome-program / policy / capability-foundry / portfolio
 layer, and the opportunity accept-list. If any of these read as load-bearing, the doc is

@@ -45,6 +45,7 @@ const base = `http://127.0.0.1:${PORT}`;
 // The same store + runtime the server uses, resolved against the same GTM_IDE_HOME, so a session driven to
 // the gate in-process is the one the HTTP handler resolves.
 const { saveFlow } = await import("../src/flow-store.mjs");
+const { loadProject, saveProject } = await import("../src/project-store.mjs");
 const { createOperatorSession, getOperatorSession } = await import("../src/operator-store.mjs");
 const { runOperatorSession } = await import("../src/operator-runtime.mjs");
 
@@ -105,6 +106,14 @@ async function browserSessionCookie() {
 async function sessionAtGate() {
   const graph = gatedGraph();
   saveFlow(graph, { root: HOME });
+  const project = loadProject({ root: HOME, projectId: "default" });
+  saveProject({
+    ...project,
+    channels: [
+      ...(project.channels ?? []).filter((channel) => channel.graphId !== graph.id),
+      { id: "operator-gate-browser-only-pipeline", graphId: graph.id, name: graph.name, objective: "Exercise browser-only gate release", kind: "custom", enabled: true },
+    ],
+  }, { root: HOME });
   const session = createOperatorSession(
     { goal: "Run to the gate.", graphId: graph.id, projectId: "default" },
     { root: HOME },

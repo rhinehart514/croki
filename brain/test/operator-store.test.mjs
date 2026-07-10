@@ -3,10 +3,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import { defaultGraphTemplate } from "../src/graph.mjs";
+import { saveFlow } from "../src/flow-store.mjs";
+import { createProject, saveProject } from "../src/project-store.mjs";
 import {
   appendOperatorEvent,
   armNextWake,
   assertOperatorSessionProject,
+  bindOperatorSessionContext,
   createOperatorSession,
   getActiveSessionForProject,
   getOperatorSession,
@@ -51,6 +55,90 @@ describe("durable operator sessions", () => {
     const loaded = getOperatorSession(session.id, options);
     assert.equal(loaded.status, "interrupted");
     assert.match(loaded.error, /resume/i);
+  });
+
+  it("binds optional question, crew, product, focus, graph, and run pointers without copying their records", () => {
+    const graph = { ...defaultGraphTemplate(), id: "graph-1" };
+    saveFlow(graph, options);
+    const project = createProject({ id: "product-a", name: "Product A" }, options).project;
+    saveProject({ ...project, channels: [{ id: "pipeline-1", graphId: graph.id, name: "Pipeline 1", objective: "Activation", kind: "custom", enabled: true }] }, options);
+    const session = createOperatorSession({
+      goal: "Investigate activation.", projectId: "product-a", questionId: "q-1",
+      participantRefs: [{ type: "teammate", id: "researcher" }],
+      productRefs: [{ type: "product-element", id: "activation" }],
+      focusRef: { type: "question", id: "q-1" }, graphId: "graph-1", runId: "run-1",
+    }, options);
+    assert.equal(session.questionId, "q-1");
+    assert.deepEqual(session.participantRefs, [{ type: "teammate", id: "researcher" }]);
+    assert.deepEqual(session.productRefs, [{ type: "product-element", id: "activation" }]);
+    assert.ok(session.contextRefs.some((ref) => ref.type === "graph" && ref.id === "graph-1"));
+    assert.ok(session.contextRefs.some((ref) => ref.type === "run" && ref.id === "run-1"));
+
+    const focused = bindOperatorSessionContext(session.id, { focusRef: { type: "teammate", id: "researcher" } }, options);
+    assert.equal(focused.focusRef.type, "teammate");
+    assert.throws(() => bindOperatorSessionContext(session.id, { focusRef: { type: "question", id: "q-other", projectId: "product-b" } }, options), /belongs to project product-b, not product-a/);
+  });
+
+  it("refuses cross-project graph ids when a session is created or rebound", () => {
+    const graphA = { ...defaultGraphTemplate(), id: "graph-a" };
+    const graphB = { ...defaultGraphTemplate(), id: "graph-b" };
+    saveFlow(graphA, options);
+    saveFlow(graphB, options);
+    const projectA = createProject({ id: "project-a", name: "Project A" }, options).project;
+    const projectB = createProject({ id: "project-b", name: "Project B" }, options).project;
+    saveProject({ ...projectA, channels: [{ id: "pipeline-a", graphId: graphA.id, name: "A", objective: "A", kind: "custom", enabled: true }] }, options);
+    saveProject({ ...projectB, channels: [{ id: "pipeline-b", graphId: graphB.id, name: "B", objective: "B", kind: "custom", enabled: true }] }, options);
+
+    assert.throws(
+      () => createOperatorSession({ goal: "Cross the boundary.", projectId: projectA.id, graphId: graphB.id }, options),
+      /Graph graph-b does not belong to project project-a/,
+    );
+    const session = createOperatorSession({ goal: "Stay in A.", projectId: projectA.id, graphId: graphA.id }, options);
+    assert.throws(
+      () => bindOperatorSessionContext(session.id, { graphId: graphB.id }, options),
+      /Graph graph-b does not belong to project project-a/,
+    );
+    assert.equal(getOperatorSession(session.id, options).graphId, graphA.id);
+  });
+
+  it("sanitizes the entire public session envelope while preserving founder-useful state and refs", () => {
+    const session = createOperatorSession({ goal: "Review this.", projectId: "product-a", questionId: "q-1" }, options);
+    const publicSession = publicOperatorSession({
+      ...session,
+      runtimeSessionId: "sdk-secret",
+      runtime: "claude-code",
+      model: "internal-model",
+      spentUsd: 9,
+      modelMessages: [{ role: "user", content: "raw transcript" }],
+      pendingGate: {
+        runId: "run-1",
+        nodeIds: ["gate-1"],
+        runResult: {
+          runId: "run-1", graphId: "graph-1", ok: true, pendingGates: ["gate-1"], runtimeSessionId: "nested-runtime",
+          nodes: {
+            "gate-1": {
+              nodeId: "gate-1", category: "gate", ok: true, pendingReview: true,
+              items: [{ id: "draft-1", subject: "Founder review", plainLanguageTitle: "Send this note", whatYourYesDoes: "Stages this note for release", agentPrompt: "raw prompt", transcript: "raw transcript" }],
+              credentials: { token: "secret" },
+            },
+          },
+        },
+      },
+      pendingProposal: { id: "proposal-1", rationale: "Try this", preview: { nodes: [{ id: "n-1", soul: "raw soul", label: "Research" }] } },
+      events: [{ type: "note", title: "Useful", data: { systemPrompt: "raw", status: "ready" } }],
+    });
+    assert.equal(publicSession.status, "ready");
+    assert.equal(publicSession.questionId, "q-1");
+    const gateItem = publicSession.pendingGate.runResult.nodes["gate-1"].items[0];
+    assert.equal(gateItem.id, "draft-1");
+    assert.equal(gateItem.plainLanguageTitle, "Send this note");
+    assert.equal(gateItem.whatYourYesDoes, "Stages this note for release");
+    assert.deepEqual(publicSession.pendingGate.runResult.pendingGates, ["gate-1"]);
+    assert.equal(publicSession.pendingProposal.preview.nodes[0].label, "Research");
+    const json = JSON.stringify(publicSession);
+    for (const privateValue of ["runtimeSessionId", "sdk-secret", "nested-runtime", "raw transcript", "credentials", "secret", "agentPrompt", "raw prompt", "raw soul", "systemPrompt", "internal-model"]) {
+      assert.ok(!json.includes(privateValue), `public session leaked ${privateValue}`);
+    }
   });
 });
 
@@ -180,7 +268,7 @@ describe("ambient (standing-brief) operator sessions", () => {
   });
 
   it("still requires a goal for a goal session, and a standing brief for an ambient one", () => {
-    assert.throws(() => createOperatorSession({}, options), /goal is required/);
+    assert.throws(() => createOperatorSession({}, options), /goal or pinned question is required/);
     assert.throws(() => createOperatorSession({ kind: "ambient" }, options), /standing brief/i);
     // A legacy session (no kind) defaults to "goal".
     assert.equal(sessionKind({}), "goal");

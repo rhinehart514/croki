@@ -137,6 +137,47 @@ describe("run-approve — a staged compiled run releases through the engine to t
     assert.equal((result.nodes.out?.items ?? []).length, 0);
   });
 
+  it("calls the release-authority guard once for normal per-item UI decisions", async () => {
+    const options = freshRoot();
+    const { projectId, run } = await stageRun(options);
+    const [alice, bob] = run.items;
+    let guardCalls = 0;
+    const { run: released } = await approveCompiledRun({
+      projectId,
+      runId: run.id,
+      decisions: {
+        [stableActionId(run, alice)]: { decision: "approve" },
+        [stableActionId(run, bob)]: { decision: "reject" },
+      },
+      authorizeRelease: () => { guardCalls += 1; },
+      options,
+    });
+    assert.equal(guardCalls, 1, "the nested compiled-run decision payload invokes the guard exactly once");
+    assert.equal(released.status, "completed");
+  });
+
+  it("does not release normal per-item UI decisions when the release-authority guard refuses the caller", async () => {
+    const options = freshRoot();
+    const { projectId, run } = await stageRun(options);
+    const [alice, bob] = run.items;
+    let guardCalls = 0;
+    await assert.rejects(approveCompiledRun({
+      projectId,
+      runId: run.id,
+      decisions: {
+        [stableActionId(run, alice)]: { decision: "approve" },
+        [stableActionId(run, bob)]: { decision: "reject" },
+      },
+      authorizeRelease: () => {
+        guardCalls += 1;
+        throw new Error("founder release required");
+      },
+      options,
+    }), /founder release required/);
+    assert.equal(guardCalls, 1);
+    assert.equal(runStore.get(run.id, options).status, "staged");
+  });
+
   it("refuses to approve a run that has no founder gate (no wall, nothing to release)", async () => {
     const options = freshRoot();
     const projectId = "strelva";

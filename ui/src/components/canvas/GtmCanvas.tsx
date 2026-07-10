@@ -1,4 +1,5 @@
 import { GraphCanvas, type OperatorCursorState } from "@/components/GraphCanvas";
+import { FocusedPipelineReadout } from "@/components/canvas/FocusedPipelineReadout";
 import type { NodeEditorBridge } from "@/components/nodeEditorBridge";
 import type { GatePromote } from "@/lib/gateItem";
 import type { WovenAxis, WovenFocus } from "@/lib/wovenOverlay";
@@ -53,6 +54,10 @@ export type GtmCanvasModel = {
   // The deal the focused pipeline's staged work carries, in plain words — its own offer, or the
   // project's standing one. Shown on the gate's inline review.
   gateOffer?: string | null;
+  // Whether a real sender is connected. The action-altitude readout uses it to state the EXACT gate
+  // consequence honestly ("sends to real recipients" vs "stages locally, nothing sends until you
+  // connect a sender"). App already passes it; declaring it here makes the readout's derivation real.
+  transportConnected?: boolean;
   // The outcome door on an approved gate card — record what came back on a sent item. Both lenses use
   // it: the Engineer lens threads it into GraphCanvas, the Move lens rides it on the gate bag.
   onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
@@ -157,8 +162,28 @@ function EngineerLens({ model: m }: GtmLensProps) {
   // is focused, drop the merge so that ONE pipeline fills the canvas at a readable size — the old
   // always-merged mount rendered a focused pipeline as a cramped lane crushed among the others.
   const multiPipeline = m.activeChannelId ? null : m.multiPipeline;
+  // The action-altitude brief — shown when a single pipeline is focused, stating its meaning before the
+  // graph machinery (docs/production-direction/09 §Focused pipeline readout). Derived from real records;
+  // absent at the all-pipelines overview and on the empty landing.
+  const focusedChannel = m.activeChannelId ? m.channels.find((c) => c.id === m.activeChannelId) ?? null : null;
+  const focusedLane = m.activeChannelId ? m.operatingView?.lanes.find((l) => l.channelId === m.activeChannelId) ?? null : null;
+  const showReadout = !landing && !!m.activeChannelId && graph.nodes.length > 0;
   return (
     <div className="engineer-lens" style={{ position: "relative", height: "100%", minHeight: 0, ...GUTTER_STYLE }}>
+      {showReadout ? (
+        <FocusedPipelineReadout
+          channel={focusedChannel}
+          graph={graph}
+          connectors={m.connectors}
+          result={m.result}
+          lane={focusedLane}
+          runSummary={m.runSummary ?? null}
+          gateOffer={m.gateOffer}
+          transportConnected={m.transportConnected}
+          running={m.running}
+          onOpenAgentProfile={m.onOpenAgentProfile}
+        />
+      ) : null}
       <GraphCanvas
         connectors={m.connectors}
         contractAudits={m.contractAudits}
@@ -196,6 +221,7 @@ function EngineerLens({ model: m }: GtmLensProps) {
         nodeBeats={m.nodeBeats}
         selection={m.selection}
         subsystemHealth={m.subsystemHealth}
+        projectId={m.projectId}
       />
       {graph.nodes.length === 0 ? (
         <div className="blank-channel-guide">
@@ -308,6 +334,7 @@ function OperatorLensPane({ model: m }: GtmLensProps) {
         nodeBeats={m.nodeBeats}
         selection={m.selection}
         subsystemHealth={m.subsystemHealth}
+        projectId={m.projectId}
         // The intertwining itself.
         woven={m.woven}
         wovenAxis={axis}
@@ -316,6 +343,10 @@ function OperatorLensPane({ model: m }: GtmLensProps) {
         onWireObject={m.onWireObject}
         candidateLaneIds={m.candidateLaneIds}
         onPickCandidate={m.onPickCandidate}
+        // Operator IS the semantic operation projection (docs/production-direction/16): one bounded lane
+        // per pipeline, not the full merged Engineer graph. A lane click opens Engineer for the full graph.
+        operationMode
+        onOpenLane={m.onOpenLane}
       />
     </div>
   );

@@ -310,3 +310,95 @@
   width: 22px;
   height: 22px;
 }
+
+/* ── Canvas anchors (fix 3): stable product/question/outcome landmarks overlaid beside the object weaving.
+   Opaque zinc, monochrome, one semantic accent (--gap / amber) reserved for the outcome-return landmark.
+   Never glass, no gradient. React Flow positions them; these style the chip. */
+.woven-anchor {
+  display: flex; flex-direction: column; gap: 3px;
+  min-width: 150px; max-width: 220px;
+  padding: 8px 11px;
+  background: #ffffff;
+  border: 1px solid var(--muted);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-card);
+  font-family: "Geist Variable", ui-sans-serif, -apple-system, sans-serif;
+  transition: box-shadow 140ms ease, border-color 140ms ease, opacity 160ms ease;
+}
+.woven-anchor:hover { box-shadow: var(--shadow-pop); border-color: var(--ink-2); }
+.woven-anchor.is-question { border-left: 3px solid var(--ink-2); }
+.woven-anchor.is-outcome { border-left: 3px solid var(--gap, #b45309); background: color-mix(in srgb, var(--gap, #b45309) 5%, #ffffff); }
+.woven-anchor.is-focus { border-color: var(--ink); box-shadow: var(--shadow-pop); }
+.woven-anchor.is-dim { opacity: 0.32; }
+.woven-anchor-eyebrow {
+  font-size: 10px; font-weight: 640; letter-spacing: 0.03em; text-transform: uppercase; color: var(--muted);
+}
+.woven-anchor-label {
+  font-size: var(--text-sm); font-weight: 560; line-height: 1.3; color: var(--ink);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.woven-anchor .react-flow__handle { opacity: 0; }
+
+/* Return edge: a dashed thread from an outcome back to the question / product it returned to. */
+.woven-return { stroke: var(--gap, #b45309); stroke-width: 1.5; stroke-dasharray: 5 4; opacity: 0.7; }
+.woven-return.is-dim { opacity: 0.14; }
+
+/* A product-detail SUMMARY chip — the collapsed long tail (semantic collapse). Dashed outline reads as a
+   group standing in for many, clickable to expand. Light monochrome, no accent (it's neutral context). */
+.woven-anchor.is-group {
+  border-style: dashed;
+  border-color: var(--line-2, #d9d5cd);
+  background: #fbfaf7;
+}
+.woven-anchor.is-group:hover { border-color: var(--ink-2); }
+.woven-anchor-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  font-weight: 680;
+}
+.woven-anchor-more {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* Demote the axis toggle to a quiet in-Operator REFINEMENT (docs/production-direction/16). It is a filter,
+   not an altitude — it must read as subordinate to the dock's Operator/Engineer control, never a peer.
+   Always visible and keyboard reachable (accessibility preserved); just quieter chrome and a lighter active
+   state than the dock's segmented control. The parked "N need you" chip is NOT demoted — it stays prominent. */
+.woven-axisseg {
+  box-shadow: none;
+  border-color: color-mix(in srgb, var(--line-2) 62%, transparent);
+}
+.woven-axisseg button {
+  font-size: 11px;
+  padding: 3px 8px;
+  color: var(--faint);
+  font-weight: 520;
+}
+.woven-axisseg button.on { color: var(--ink-2); background: var(--surface-2); }
+.woven-clearfocus { font-size: 11px; padding: 3px 8px; color: var(--muted); box-shadow: none; }
+
+/* The single founder wall (docs/production-direction/16, P1) — one vertical amber threshold every pipeline
+   crosses on the merged Operator canvas. Thin, opaque, the one accent the wall earns; non-interactive. */
+.woven-wall {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--gate, #d97706);
+  opacity: 0.9;
+  position: relative;
+  pointer-events: none;
+}
+.woven-wall-label {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: "Geist Variable", ui-sans-serif, -apple-system, sans-serif;
+  font-size: 10px;
+  font-weight: 640;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--gate, #d97706);
+  white-space: nowrap;
+}

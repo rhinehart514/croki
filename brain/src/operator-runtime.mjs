@@ -11,6 +11,7 @@ import { createDerivedSourceLoader } from "./cross-reference.mjs";
 import { recordRunDerivations } from "./run-derivation.mjs";
 import { buildMarketContext } from "./market-research.mjs";
 import { marketObjectStore } from "./gtm-store.mjs";
+import { settleProductChangeProposal } from "./outcome-ingest.mjs";
 import { applyGraphOperations } from "./graph-operations.mjs";
 import { hasApproveIntent, runGraph } from "./graph.mjs";
 import { defaultSendRunners } from "./connectors/execute/gmail-transport.mjs";
@@ -23,7 +24,7 @@ import {
 } from "./operator-store.mjs";
 import { loadProject, updateSharedContext } from "./project-store.mjs";
 import { getGtmIdea, saveGtmIdea } from "./idea-store.mjs";
-import { recordIdeaDecisions } from "./feedback-ledger.mjs";
+import { recordFounderDecision, recordIdeaDecisions } from "./feedback-ledger.mjs";
 import { authModeLabel, selectRuntime } from "./runtimes/index.mjs";
 import { filterSafeTools } from "./tool-safety.mjs";
 import { NAKED_TOOLS } from "./operator-tools.mjs";
@@ -84,12 +85,13 @@ export async function runOperatorSession(id, runtime = {}) {
     client: runtime.client,
     runtime: runtime.runtime,
     forced: runtime.forced || session.runtime,
+    model: session.model,
   });
   if (!selection.adapter) {
     return addEvent({
       ...session,
       status: "failed",
-      error: `No operator runtime is available. ${selection.reason} Sign in to Claude Code (the preferred local runtime) or set ANTHROPIC_API_KEY, then resume this durable session.`,
+      error: `No operator runtime is available. ${selection.reason} Sign in to Codex or Claude Code, or set ANTHROPIC_API_KEY, then resume this durable session.`,
     }, {
       type: "session_failed",
       title: "No operator runtime connected",
@@ -751,6 +753,10 @@ export function resolveOperatorProposal(id, payload = {}, runtime = {}) {
   }
   const proposal = session.pendingProposal;
   const accept = payload.accept === true || payload.decision === "accept";
+  // Applying or discarding a reviewed proposal is a founder call. Enforce the same team role and
+  // browser capability as the founder gate before mutating the graph or clearing the proposal.
+  authorizeGateRelease(session, payload, options);
+  if (typeof runtime.authorizeReleaseForRequest === "function") runtime.authorizeReleaseForRequest();
   // The founder's note on the decision. On reject it's a redirect (Claude comes back and changes it);
   // on accept it's a quiet annotation — the operator reads it, and the learning loop can pick it up
   // later. The note never makes the decision; the founder's ✓/✕ does, and the note only colors it.
@@ -779,6 +785,21 @@ export function resolveOperatorProposal(id, payload = {}, runtime = {}) {
       detail: note || proposal.rationale,
       data: { revision: saved.graph.revision, changes: patched.changes, proposalId: proposal.id, note: note || undefined },
     }, options);
+    recordFounderDecision({
+      projectId: session.projectId ?? "default",
+      kind: "graph-proposal.accepted",
+      value: note || "accepted",
+      sourceRef: { type: "graph-proposal", id: proposal.id },
+      contextRefs: [
+        { type: "operator-session", id: session.id },
+        { type: "graph", id: proposal.graphId },
+      ],
+    }, { ...options, projectId: session.projectId ?? "default" });
+    settleProductChangeProposal({
+      projectId: session.projectId ?? "default",
+      proposalSessionId: session.id,
+      disposition: "accepted",
+    }, options);
     launchOperatorSession(id, runtime);
     return next;
   }
@@ -800,6 +821,21 @@ export function resolveOperatorProposal(id, payload = {}, runtime = {}) {
     title: note ? "Founder redirected the changes" : "Founder discarded proposed changes",
     detail: note || proposal.rationale,
     data: { proposalId: proposal.id, note: note || undefined },
+  }, options);
+  recordFounderDecision({
+    projectId: session.projectId ?? "default",
+    kind: "graph-proposal.discarded",
+    value: note || "discarded",
+    sourceRef: { type: "graph-proposal", id: proposal.id },
+    contextRefs: [
+      { type: "operator-session", id: session.id },
+      { type: "graph", id: proposal.graphId },
+    ],
+  }, { ...options, projectId: session.projectId ?? "default" });
+  settleProductChangeProposal({
+    projectId: session.projectId ?? "default",
+    proposalSessionId: session.id,
+    disposition: "discarded",
   }, options);
   launchOperatorSession(id, runtime);
   return next;

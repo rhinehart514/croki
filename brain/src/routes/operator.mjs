@@ -6,8 +6,10 @@ import { handleComposerTurn } from "../composer-turn.mjs";
 import { buildComposerBriefing } from "../composer-briefing.mjs";
 import { loadProject } from "../project-store.mjs";
 import { loadFlow } from "../flow-store.mjs";
+import { graphIdForRef } from "../operator-project-scope.mjs";
 import {
   assertOperatorSessionProject,
+  bindOperatorSessionContext,
   createOperatorSession,
   getActiveSessionForProject,
   getOperatorSession,
@@ -25,9 +27,10 @@ import {
   resumeOperatorSession,
   runDueAmbientTicks,
   steerOperatorSession,
+  executeOperatorTool,
 } from "../operator-runtime.mjs";
 import { runDueMotions } from "../promote-motion.mjs";
-import { selectRuntime, authModeLabel } from "../runtimes/index.mjs";
+import { selectRuntime, authModeLabel, runtimeStatuses } from "../runtimes/index.mjs";
 import { authorizeReleaseForRequest } from "./session-guard.mjs";
 import { getOperatingView } from "../operating-view.mjs";
 
@@ -59,7 +62,12 @@ export default async function handle({ req, res, url }) {
       // `fresh: true` starts a session bound to NO pipeline, so compose_and_run composes a brand-new
       // one — this is how a founder builds an ADDITIONAL pipeline for a product (the "New channel"
       // action) without re-driving the active pipeline. Otherwise bind to the requested/active channel.
-      const graphId = body.fresh ? null : (body.graphId || project.activeChannelId || null);
+      const pipeline = body.pipelineId ? (project.channels ?? []).find((item) => item.id === body.pipelineId || item.graphId === body.pipelineId) : null;
+      const requestedGraphId = body.graphId || body.workflowId || body.channelId || pipeline?.graphId || null;
+      const unscopedGraphId = body.fresh ? null : (requestedGraphId || project.activeChannelId || null);
+      const graphId = unscopedGraphId
+        ? graphIdForRef({ type: body.graphId ? "graph" : "pipeline", id: unscopedGraphId }, { projectId: project.id })
+        : null;
       const flow = graphId ? loadFlow(graphId, null) : { graph: null };
       const session = createOperatorSession({
         goal: body.goal,
@@ -69,7 +77,15 @@ export default async function handle({ req, res, url }) {
         graphRevision: flow.graph?.revision ?? 0,
         workspaceId: body.workspaceId,
         model: body.model,
+        runtime: body.runtime,
         maxSteps: body.maxSteps,
+        questionId: body.questionId ?? body.question?.id ?? null,
+        participantRefs: body.participantRefs ?? body.teammateRefs ?? body.crewRefs ?? [],
+        productRefs: body.productRefs ?? [],
+        focusRef: body.focusRef ?? body.ref ?? null,
+        contextRefs: body.contextRefs ?? body.refs ?? [],
+        pipelineId: body.pipelineId ?? body.channelId ?? body.workflowId ?? null,
+        runId: body.runId ?? null,
       });
       launchOperatorSession(session.id);
       json(res, 202, { session: publicOperatorSession(session), reused: false });
@@ -127,15 +143,75 @@ export default async function handle({ req, res, url }) {
     return true;
   }
 
-  // Connection status — does the founder have a live Claude the operator/composer can use?
-  // Drives the cold-start state so an unconnected user gets a clear path, not a dead-end error.
+  // Connection status — does the founder have a local AI runtime the operator can use?
+  // Return each redacted runtime state so the product can explain its real options
+  // without forcing an installed Codex user through a Claude-only setup wall.
   if (req.method === "GET" && url.pathname === "/api/connection") {
     const selection = selectRuntime({});
     json(res, 200, {
       connected: !!selection.adapter,
-      label: selection.adapter ? (selection.auth ? authModeLabel(selection.auth) : selection.adapter.label) : null,
+      label: selection.adapter
+        ? [selection.adapter.label, authModeLabel(selection.auth)].filter(Boolean).join(" · ")
+        : null,
       reason: selection.adapter ? null : selection.reason,
+      selectedRuntime: selection.adapter?.id ?? null,
+      runtimes: runtimeStatuses(),
     });
+    return true;
+  }
+
+  // Canonical MCP/operator verbs. Each one executes its typed service directly; none is routed through
+  // the composer's semantic /ask lane, so asking cannot accidentally run and an explicit run cannot be
+  // reclassified as chat. The browser's existing /ask route below remains unchanged.
+  const operatorVerbMatch = url.pathname.match(/^\/api\/operator\/sessions\/([^/]+)\/verbs\/(inspect|focus|ask|propose|record|run)$/);
+  if (req.method === "POST" && operatorVerbMatch) {
+    try {
+      const body = await readBody(req);
+      const [, sessionId, verb] = operatorVerbMatch;
+      if (body.projectId) assertOperatorSessionProject(sessionId, body.projectId);
+      if (verb !== "inspect" && (body.questionId || body.participantRefs || body.productRefs)) {
+        bindOperatorSessionContext(sessionId, {
+          projectId: body.projectId,
+          questionId: body.questionId,
+          participantRefs: body.participantRefs,
+          productRefs: body.productRefs,
+        });
+      }
+      const execution = await executeOperatorTool(getOperatorSession(sessionId), {
+        id: `route-${Date.now()}`,
+        name: verb,
+        input: body,
+      });
+      json(res, 200, { session: publicOperatorSession(execution.session), result: execution.result, paused: execution.pause === true });
+    } catch (err) {
+      json(res, 409, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return true;
+  }
+
+  const operatorContextMatch = url.pathname.match(/^\/api\/operator\/sessions\/([^/]+)\/(inspect|focus|record)$/);
+  if (req.method === "POST" && operatorContextMatch) {
+    try {
+      const body = await readBody(req);
+      const [, sessionId, action] = operatorContextMatch;
+      if (body.projectId) assertOperatorSessionProject(sessionId, body.projectId);
+      if (action === "focus") {
+        bindOperatorSessionContext(sessionId, {
+          projectId: body.projectId,
+          contextRefs: body.refs ?? body.contextRefs ?? [],
+          questionId: body.questionId,
+          participantRefs: body.participantRefs ?? body.teammateRefs,
+          productRefs: body.productRefs,
+        });
+        const execution = await executeOperatorTool(getOperatorSession(sessionId), { id: `route-${Date.now()}`, name: "focus", input: { ref: body.ref ?? body.focusRef } });
+        json(res, 200, { session: publicOperatorSession(execution.session), result: execution.result });
+      } else {
+        const execution = await executeOperatorTool(getOperatorSession(sessionId), { id: `route-${Date.now()}`, name: action, input: body });
+        json(res, 200, { session: publicOperatorSession(execution.session), result: execution.result });
+      }
+    } catch (err) {
+      json(res, 409, { error: err instanceof Error ? err.message : String(err) });
+    }
     return true;
   }
 
@@ -165,7 +241,11 @@ export default async function handle({ req, res, url }) {
       // Send ONE staged item back to the crew to rework, with the founder's note. Releases nothing — it
       // re-drives to a fresh gate — so it takes the same authorizers as `gate` but never crosses the wall.
       else if (action === "gate-refine") session = await resolveOperatorGateRefine(sessionId, { ...body, request: req }, { authorizeReleaseForRequest: authorizeReleaseForRequest(req) });
-      else if (action === "proposal") session = resolveOperatorProposal(sessionId, body);
+      else if (action === "proposal") session = resolveOperatorProposal(
+        sessionId,
+        { ...body, request: req },
+        { authorizeReleaseForRequest: authorizeReleaseForRequest(req) },
+      );
       // The founder kills/keeps the paused ideas — a founder act, never an agent tool. Picking ideas
       // resumes the operator to build each kept survivor through its pre-wired compose_and_run.
       else if (action === "ideas") session = resolveOperatorIdeas(sessionId, body);
@@ -191,6 +271,9 @@ export default async function handle({ req, res, url }) {
       const sessionId = operatorAskMatch[1];
       // Same project-ownership guard the existing action routes use.
       if (body.projectId) assertOperatorSessionProject(sessionId, body.projectId);
+      if (body.questionId || body.ref || body.refs || body.participantRefs || body.productRefs) {
+        bindOperatorSessionContext(sessionId, { projectId: body.projectId, questionId: body.questionId, focusRef: body.ref, contextRefs: body.refs, participantRefs: body.participantRefs, productRefs: body.productRefs });
+      }
       const result = await handleComposerTurn(
         { projectId: body.projectId, sessionId, text: body.input, hints: body.hints },
         {},

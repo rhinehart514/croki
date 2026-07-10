@@ -291,8 +291,8 @@ describe("outcome report — honest measurement", () => {
 // The automatic inbox reader re-reads the same sent message every heartbeat, re-ingesting the same
 // signal each tick. Without durable dedupe, one real reply would mint a fresh Result every tick
 // (~288/day), fabricating win counts. The persisted Result ledger IS the seen-state: a signal already
-// recorded (same joinKey + outcomeKind + messageId + source) is a no-op. A founder-entered note, which
-// carries no messageId, is never deduped — a genuine second manual entry is always kept.
+// recorded (same joinKey + outcomeKind + messageId + provider source) is a no-op. Founder-entered
+// receipts never use that fallback, even when they carry the outbound messageId as context.
 describe("outcome ingest — durable dedupe on a re-observed signal", () => {
   it("records a messageId-bearing signal once, then no-ops on a re-ingest of the same signal", () => {
     const options = freshRoot();
@@ -320,12 +320,26 @@ describe("outcome ingest — durable dedupe on a re-observed signal", () => {
     assert.equal(resultStore.list({ ...options, projectId }).length, 3);
   });
 
-  it("never dedupes a founder-entered outcome (no messageId), so a second manual entry is kept", () => {
+  it("keeps identical founder-entered receipts with a contextual messageId while provider fallback stays idempotent", () => {
     const options = freshRoot();
     const { projectId } = seedRun(options);
-    // Two manual entries of the same kind on the same run — both real, both kept.
-    ingestOutcome({ joinKey: "handle-ada", outcomeKind: "reply", source: "founder-entered" }, { ...options, projectId });
-    ingestOutcome({ joinKey: "handle-ada", outcomeKind: "reply", source: "founder-entered" }, { ...options, projectId });
-    assert.equal(resultStore.list({ ...options, projectId }).length, 2, "manual entries are never silently swallowed");
+    const contextual = {
+      joinKey: "handle-ada",
+      outcomeKind: "reply",
+      source: "founder-entered",
+      messageId: "same-outbound-context",
+    };
+    const firstManual = ingestOutcome(contextual, { ...options, projectId });
+    const secondManual = ingestOutcome(contextual, { ...options, projectId });
+    assert.notEqual(secondManual.result.id, firstManual.result.id);
+    assert.equal(secondManual.deduped ?? false, false);
+
+    const provider = { ...contextual, source: "connected-account" };
+    const firstProvider = ingestOutcome(provider, { ...options, projectId });
+    const replayedProvider = ingestOutcome(provider, { ...options, projectId });
+    assert.equal(replayedProvider.deduped, true);
+    assert.equal(replayedProvider.result.id, firstProvider.result.id);
+    assert.equal(resultStore.list({ ...options, projectId }).length, 3,
+      "two manual observations remain separate while one provider fallback replay collapses");
   });
 });

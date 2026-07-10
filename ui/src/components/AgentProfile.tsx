@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Crosshair, FileCode2, GraduationCap, ShieldCheck, X,
+  Crosshair, FileCode2, GraduationCap, Lightbulb, MessageSquare, ShieldCheck, X,
 } from "lucide-react";
 import { agentPersona, humanizeRef, agentOrigin, AGENT_ORIGIN_LABEL } from "@/lib/agentPersona";
 import { CrewFace } from "@/components/crew/CrewFace";
@@ -63,17 +63,33 @@ function cleanJob(job: string | undefined): string {
   return TEMPLATE_MARKERS.some((m) => low.includes(m)) ? "" : text;
 }
 
+// A plain, non-alarming date stamp for a lesson receipt — "taught Jul 8", never a raw ISO string.
+function taughtStamp(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return `Taught ${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+}
+
 export function AgentProfile({
-  open, view, team, projectId, onClose, onEditSource, onAddToCanvas, onSelectTeammate,
+  open, view, team, projectId, focusedQuestion, onClose, onEditSource, onAddToCanvas, onSelectTeammate, onGatherEvidence,
 }: {
   open: boolean;
   view: AgentProfileView | null;
   team: TeammateView[];
   projectId?: string | null;
+  // The question currently focused on the canvas, when any (question altitude). When present, the sidecar
+  // reads this teammate's position ON it — its belief, uncertainty, next move, and "what would change my
+  // mind." Absent → the sidecar shows the teammate's standing profile only. Honest either way.
+  focusedQuestion?: { id: string; text: string } | null;
   onClose: () => void;
   onEditSource: (ref: string) => void;
   onAddToCanvas?: (ref: string) => void;
   onSelectTeammate: (ref: string) => void;
+  // The spec-native evidence action: turn "what would change my mind" into a real, reversible move —
+  // it focuses the composer to gather that exact evidence, grounded in the teammate's real falsifier.
+  // Absent → the action still shows, honestly disabled. Never sends; it stages a discovery step.
+  onGatherEvidence?: (ref: string, falsifier: string) => void;
 }) {
   // Escape closes — the founder's expected way out of a centered sheet.
   useEffect(() => {
@@ -192,8 +208,54 @@ export function AgentProfile({
             <p className="agentp-lead">{mission}</p>
           </section>
 
+          {/* ── My position (question altitude) — this teammate's attributable belief on the focused
+              question, kept distinct from every other teammate's (never a blended consensus). Shown only
+              when a question is focused; honest empty until a position is recorded. ── */}
+          {focusedQuestion ? (
+            <section className="agentp-section">
+              <div className="agentp-shead"><span className="agentp-sicon"><MessageSquare size={13} /></span><h3>My position</h3></div>
+              <p className="agentp-quiet agentp-pos-q">On: “{focusedQuestion.text}”</p>
+              {soulData?.position?.claim ? (
+                <>
+                  <p className="agentp-lead">{soulData.position.claim}</p>
+                  {soulData.position.uncertainty ? (
+                    <p className="agentp-pos-line"><b>Still unsure:</b> {soulData.position.uncertainty}</p>
+                  ) : null}
+                  {soulData.position.recommendation ? (
+                    <p className="agentp-pos-line"><b>I'd do next:</b> {soulData.position.recommendation}</p>
+                  ) : null}
+                </>
+              ) : (
+                <p className="agentp-quiet">No position recorded on this question yet. Ask me and I'll take one — with my evidence and what would change my mind.</p>
+              )}
+            </section>
+          ) : null}
+
+          {/* ── What would change my mind — the falsifier, turned into a real, reversible evidence move
+              (the spec-native "what would change my mind" action). Never theater: the button stages a
+              discovery step in the composer; it never sends. ── */}
+          {soulData?.falsifier ? (
+            <section className="agentp-section">
+              <div className="agentp-shead"><span className="agentp-sicon"><Lightbulb size={13} /></span><h3>What would change my mind</h3></div>
+              <p className="agentp-lead">{soulData.falsifier}</p>
+              <div className="agentp-actions">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!onGatherEvidence}
+                  onClick={() => onGatherEvidence?.(view.ref, soulData.falsifier ?? "")}
+                >
+                  <Lightbulb size={14} /> Go find that evidence
+                </Button>
+              </div>
+            </section>
+          ) : null}
+
           <section className="agentp-section">
-            <div className="agentp-shead"><span className="agentp-sicon"><GraduationCap size={13} /></span><h3>What I've learned from you</h3></div>
+            <div className="agentp-shead">
+              <span className="agentp-sicon"><GraduationCap size={13} /></span><h3>What I've learned from you</h3>
+              {taughtStamp(soulData?.lastTaughtAt) ? <span className="agentp-taught">{taughtStamp(soulData?.lastTaughtAt)}</span> : null}
+            </div>
 
             {soulPending ? (
               <p className="agentp-quiet">Reading my track record…</p>

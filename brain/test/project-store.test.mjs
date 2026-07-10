@@ -199,6 +199,32 @@ describe("multi-channel GTM project", () => {
     assert.equal(registered.offer.statement, "Redeem DROVER50 for half off");
   });
 
+  it("persists optional work context across create, registration, update, and duplication", () => {
+    const direct = createChannel({ name: "Direct pipeline" }, options).channel;
+    assert.equal(direct.questionId, null, "a question is never required");
+    assert.deepEqual(direct.participantRefs, []);
+    assert.deepEqual(direct.productRefs, []);
+
+    const registered = registerComposedChannel({
+      id: "activation-loop",
+      graphId: "activation-loop",
+      name: "Activation loop",
+      questionId: "question-1",
+      participantRefs: [{ kind: "teammate", id: "activation-lead" }],
+      productRefs: [{ type: "productElement", id: "onboarding" }],
+    }, options).channel;
+    assert.equal(registered.questionId, "question-1");
+    assert.deepEqual(registered.participantRefs, [{ type: "teammate", id: "activation-lead" }]);
+    assert.deepEqual(registered.productRefs, [{ type: "productElement", id: "onboarding" }]);
+
+    const updated = updateChannel(registered.id, { questionId: null, productRefs: ["activation-step"] }, options).channel;
+    assert.equal(updated.questionId, null);
+    assert.deepEqual(updated.productRefs, [{ type: null, id: "activation-step" }]);
+    const copy = duplicateChannel(updated.id, { name: "Activation loop copy" }, options).channel;
+    assert.deepEqual(copy.productRefs, updated.productRefs);
+    assert.deepEqual(copy.participantRefs, updated.participantRefs);
+  });
+
   it("the pipeline's offer rides into the run context, falling back to the project-level offer", () => {
     const project = loadProject(options);
     const graph = {

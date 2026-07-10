@@ -34,8 +34,11 @@ import type {
   Person, PersonAppearance,
 } from "@/types";
 import { computeChannelLanes, type ChannelLane } from "@/lib/channelLanes";
-import { ObjectChip, KindCluster } from "@/components/canvas/wovenNodes";
-import { buildWovenOverlay, focusIsEffective, type WovenAxis, type WovenFocus } from "@/lib/wovenOverlay";
+import { ObjectChip, KindCluster, CanvasAnchor, FounderWall } from "@/components/canvas/wovenNodes";
+import { OpGoal, OpWork, OpGate, OpOutcome } from "@/components/canvas/operationNodes";
+import { buildOperationLanes } from "@/lib/operationLanes";
+import { canvasOutcomes } from "@/lib/canvasProjection";
+import { alignGatesToWall, buildWovenOverlay, focusIsEffective, type WovenAxis, type WovenFocus } from "@/lib/wovenOverlay";
 import type { WovenGraph } from "@/types";
 import type { RunSummary } from "@/api";
 import { explainGraph } from "@/api";
@@ -1913,6 +1916,17 @@ const NODE_TYPES = {
   // and kind-cluster regions, overlaid on the merged lanes. Already memoized at their own export.
   objectChip:     ObjectChip,
   kindCluster:    KindCluster,
+  // Stable product/question/outcome landmarks from operatingView.woven.canvas (fix 3), overlaid beside
+  // the object weaving. Focusing one traces its related anchors.
+  canvasAnchor:   CanvasAnchor,
+  // The single founder-wall threshold across the lane band (P1).
+  founderWall:    FounderWall,
+  // The Operator semantic lane (docs/production-direction/16): goal · work · gate · outcome, one per
+  // pipeline. The operation altitude, not the full Engineer step graph.
+  opGoal:         OpGoal,
+  opWork:         OpWork,
+  opGate:         OpGate,
+  opOutcome:      OpOutcome,
 };
 
 // ─── Feedback edge ── a return/learning edge (measure → context, switch → architect) routes UNDER the
@@ -2705,7 +2719,7 @@ export function GraphCanvas({
   multiPipeline = null, panTo = null, onAskClaude, gatePromote, gateOffer = null, transportConnected = false, onRecordOutcome,
   onRefineItem, onDecideDelta, onOpenAgentProfile, runSummary = null,
   woven = null, wovenAxis = "objects", wovenFocus = null, onWovenSelect, onWireObject,
-  candidateLaneIds, onPickCandidate,
+  candidateLaneIds, onPickCandidate, operationMode = false, onOpenLane, projectId = null,
 }: {
   graph: GTMGraph;
   result: GTMRunResult | null;
@@ -2815,6 +2829,14 @@ export function GraphCanvas({
   // crew turns into real steps), never a literal targeting edge. `sourceStepId` is the namespaced step id;
   // `targetId` is the synthetic obj:/kind: id. Absent → the gesture is inert.
   onWireObject?: (sourceStepId: string, targetId: string) => void;
+  // Operator semantic projection (docs/production-direction/16): render one bounded lane per pipeline
+  // (goal · work · gate · outcome) instead of the full merged Engineer step graph. onOpenLane routes a
+  // lane click into Engineer for the full graph + GateReview.
+  operationMode?: boolean;
+  onOpenLane?: (channelId: string) => void;
+  // The owning project id — threaded so the explain route (and any scoped graph call) is always
+  // project-scoped rather than relying on global active-project inference.
+  projectId?: string | null;
   // Candidate lanes (docs/INTERTWINED-CANVAS.md decision 4): synthetic channel ids in multiPipeline that are
   // candidate SHAPES, rendered as dashed proposed lanes in the one woven graph. Picking one commits it live.
   candidateLaneIds?: Set<string>;
@@ -2914,7 +2936,11 @@ export function GraphCanvas({
   // unconditionally alongside the single-channel flow below (cheap — one channel's worth of nodes) so
   // both memos stay unconditional hooks; only the RENDERED nodes/edges pick one or the other.
   const merged = useMemo(
-    () => (multiPipeline ? buildMergedFlowGraph(
+    () => {
+      // Operator altitude renders the semantic operation lanes instead of the full merged Engineer graph,
+      // so skip building (and framing on) the heavy merged graph entirely.
+      if (!multiPipeline || operationMode) return null;
+      const raw = buildMergedFlowGraph(
       multiPipeline.channels,
       multiPipeline.channelGraphs,
       multiPipeline.channelRunResults,
@@ -2934,12 +2960,17 @@ export function GraphCanvas({
       onAskClaude,
       onOpenAgentProfile,
       multiPipeline.draggedByNode,
-    ) : null),
+      );
+      // One founder wall (P1): align every lane's gate onto one shared x so the overview reads as a single
+      // amber threshold every pipeline crosses. No-op with fewer than two gated lanes.
+      const aligned = alignGatesToWall(raw.nodes, raw.lanes);
+      return { ...raw, nodes: aligned.nodes, wall: aligned.wall };
+    },
     [
       multiPipeline, connectors, subsystemHealth, contractAudits, handleSelect, graph.id, running,
       runningNodeId, selection, proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal,
       onSubmitReview, onApproveGate, gatePromote, gateOffer, transportConnected, onRecordOutcome, onRefineItem, onDecideDelta, revealedNodeIds, toggleInspect, people, onAskClaude, onOpenAgentProfile, runSummary, nodeBeats,
-      candidateLaneIds, onPickCandidate,
+      candidateLaneIds, onPickCandidate, operationMode,
     ],
   );
 
@@ -3003,6 +3034,8 @@ export function GraphCanvas({
       axis: wovenAxis,
       zoom: wovenZoom,
       focus: wovenFocus,
+      // The stable-anchor projection rides on the same woven read; render its landmarks additively (fix 3).
+      canvas: woven.canvas ?? null,
     });
   }, [merged, woven, laneGraphNodes, wovenAxis, wovenZoom, wovenFocus]);
 
@@ -3017,8 +3050,35 @@ export function GraphCanvas({
     () => (focusIsEffective(wovenFocus, woven) ? wovenFocus : null),
     [wovenFocus, woven],
   );
+  // The single founder-wall bar (P1) — a thin vertical amber threshold across the lane band at the shared
+  // gate x. Rendered behind the cards; non-interactive (the gate CARDS stay the actionable review path).
+  // Only present on the merged Operator canvas with 2+ gated lanes (object axis, lanes visible).
+  // The OPERATOR semantic projection (docs/production-direction/16): one bounded lane per pipeline instead
+  // of the full merged Engineer graph. Built from the same channels + graphs; the Engineer path is
+  // untouched. Present only in operationMode with a multiPipeline read.
+  const operationLanes = useMemo(
+    () => (operationMode && multiPipeline
+      // The outcome node means a REAL joined market return, matched by the backend's typed pipeline
+      // channelId from the canonical woven-canvas outcome projection — never internal produced throughput.
+      ? buildOperationLanes(multiPipeline.channels, multiPipeline.channelGraphs, canvasOutcomes(woven?.canvas ?? null))
+      : null),
+    [operationMode, multiPipeline, woven],
+  );
+  const wallNode = useMemo((): Node | null => {
+    const wall = operationLanes?.wall ?? merged?.wall;
+    if (!wall) return null;
+    return {
+      id: "founder-wall", type: "founderWall",
+      position: { x: wall.x - 3, y: wall.top },
+      data: { height: Math.max(0, wall.bottom - wall.top) },
+      draggable: false, selectable: false, focusable: false, zIndex: 0,
+    };
+  }, [operationLanes?.wall, merged?.wall]);
   const nodes = useMemo(() => {
-    if (!wovenOverlay) return laneGraphNodes;
+    const wall = wallNode ? [wallNode] : [];
+    // Operator altitude: the compressed operation lanes ARE the surface (goal · work · gate · outcome).
+    if (operationLanes) return [...wall, ...operationLanes.nodes];
+    if (!wovenOverlay) return [...wall, ...laneGraphNodes];
     if (typeAxisActive) return wovenOverlay.nodes;
     // Object axis: dim the lane cards when a focus isolates a crossing set (spatial focus-to-trace).
     const laneNodes = effectiveFocus
@@ -3031,13 +3091,14 @@ export function GraphCanvas({
           return lit ? n : { ...n, className: cn((n as Node).className, "woven-lane-dim") };
         })
       : laneGraphNodes;
-    return [...laneNodes, ...wovenOverlay.nodes];
-  }, [wovenOverlay, laneGraphNodes, typeAxisActive, effectiveFocus, woven]);
+    return [...wall, ...laneNodes, ...wovenOverlay.nodes];
+  }, [wovenOverlay, laneGraphNodes, typeAxisActive, effectiveFocus, woven, wallNode, operationLanes]);
   const edges = useMemo(() => {
+    if (operationLanes) return operationLanes.edges;
     if (!wovenOverlay) return laneGraphEdges;
     if (typeAxisActive) return wovenOverlay.edges;
     return [...laneGraphEdges, ...wovenOverlay.edges];
-  }, [wovenOverlay, laneGraphEdges, typeAxisActive]);
+  }, [wovenOverlay, laneGraphEdges, typeAxisActive, operationLanes]);
 
   // The "N worth a look" chip steps the camera through each flagged card in turn (selecting it centers
   // it via NodeFocuser) — the fast path from "something's off" to the exact spot, no side list to scan.
@@ -3059,13 +3120,13 @@ export function GraphCanvas({
   // already annotated); a graph that already ships rationale skips the fetch entirely. Failure is quiet
   // — Explain still renders whatever reasons the graph already has.
   useEffect(() => {
-    if (!explainMode || !singlePipeline) return;
+    if (!explainMode || !singlePipeline || !projectId) return;
     const gid = graph.id;
     if (!gid || explainedRef.current === gid) return;
     const hasAny = graph.nodes.some((n) => n.rationale) || graph.edges.some((e) => e.rationale);
     if (hasAny) return;
     explainedRef.current = gid;
-    explainGraph(gid)
+    explainGraph(gid, projectId)
       .then((res) => {
         const nMap = new Map<string, string>();
         const eMap = new Map<string, string>();
@@ -3074,7 +3135,7 @@ export function GraphCanvas({
         if (nMap.size || eMap.size) setFetchedRat({ n: nMap, e: eMap });
       })
       .catch(() => { explainedRef.current = null; });
-  }, [explainMode, singlePipeline, graph.id, graph.nodes, graph.edges]);
+  }, [explainMode, singlePipeline, graph.id, graph.nodes, graph.edges, projectId]);
 
   // The woven canvas (a live `woven` read on the merged overview) is the product's hero and must land
   // LEGIBLE — a confident weave that fills the frame, never tiny cards stranded in an empty field. So even
@@ -3157,9 +3218,25 @@ export function GraphCanvas({
         const motionKind = (node.data as { label?: string } | undefined)?.label ?? node.id.slice(5);
         const same = wovenFocus?.kind === "cluster" && wovenFocus.motionKind === motionKind;
         onWovenSelect(same ? null : { kind: "cluster", motionKind });
+      } else if (node.id.startsWith("canchor:")) {
+        // A stable canvas anchor (fix 3): focus traces it and the anchors it relates to. Re-click clears.
+        const data = node.data as { anchorId?: string; ref?: { type: string | null; id: string } } | undefined;
+        const anchorId = data?.anchorId ?? node.id;
+        const same = wovenFocus?.kind === "anchor" && wovenFocus.anchorId === anchorId;
+        onWovenSelect(same ? null : { kind: "anchor", anchorId, ref: data?.ref });
       }
     },
     [onWovenSelect, wovenFocus],
+  ) as Parameters<typeof ReactFlow>[0]["onNodeClick"];
+
+  // Operator altitude: clicking any part of a lane (goal / crew / gate / outcome) opens that pipeline in
+  // Engineer — the full step graph and the one GateReview action path. The lane id is `${channelId}::op-*`.
+  const handleOperationNodeClick = useCallback(
+    (_event: unknown, node: Node) => {
+      const sep = node.id.indexOf("::op-");
+      if (sep > 0 && onOpenLane) onOpenLane(node.id.slice(0, sep));
+    },
+    [onOpenLane],
   ) as Parameters<typeof ReactFlow>[0]["onNodeClick"];
 
   const handleConnect = useCallback((connection: Connection) => {
@@ -3201,7 +3278,7 @@ export function GraphCanvas({
       edgeTypes={EDGE_TYPES}
       onNodesChange={onNodesChange}
       onNodeDragStop={handleNodeDragStop}
-      onNodeClick={woven ? handleWovenNodeClick : undefined}
+      onNodeClick={operationMode ? handleOperationNodeClick : woven ? handleWovenNodeClick : undefined}
       onConnect={handleConnect}
       onEdgesDelete={(deleted) => onDeleteEdges?.(deleted.map((edge) => edge.id))}
       onPaneClick={onPaneClick}
@@ -3224,10 +3301,10 @@ export function GraphCanvas({
       <NodeFocuser selection={selection} panelOpen={!!panelOpen} active={!running && !operatorCursor} />
       {merged ? <LanePanner panTo={panTo} lanes={merged.lanes} /> : null}
       {woven ? <WovenZoomReporter onZoom={setWovenZoom} /> : null}
-      {operatorCursor ? (
+      {operatorCursor && !operationMode ? (
         <OperatorCursor graph={cursorGraph} state={operatorCursor} followBroken={followBroken} recenterSignal={recenterSignal} />
       ) : null}
-      {operatorCursor && followBroken ? (
+      {operatorCursor && followBroken && !operationMode ? (
         <Panel position="top-right">
           <button
             type="button"

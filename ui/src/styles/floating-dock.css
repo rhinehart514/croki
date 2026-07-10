@@ -362,3 +362,44 @@
 .fdock-summon-item:hover { background: var(--surface-2); }
 .fdock-summon-item strong { font-size: 12.5px; font-weight: 600; color: var(--ink); }
 .fdock-summon-item span { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+
+/* The Operator / Engineer altitude control — a compact segmented switch, same idiom as the woven axis
+   bar (opaque, monochrome, one filled active segment). It reads as part of the "where am I" cluster next
+   to the breadcrumb, never a second floating bar. */
+.fdock-lens {
+  display: inline-flex;
+  flex-shrink: 0;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+.fdock-lens button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 4px 10px;
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: 560;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 120ms ease, color 120ms ease;
+}
+.fdock-lens button + button { border-left: 1px solid var(--line-2); }
+.fdock-lens button.on { background: var(--surface-2); color: var(--ink); }
+.fdock-lens button:hover:not(.on) { color: var(--ink-2); }
+.fdock-lens button:focus-visible { outline: 2px solid var(--ink-2); outline-offset: -2px; }
+
+/* Quiet one-line operation status (docs/production-direction/16) — a plain-language orienting line, muted
+   and subordinate to the breadcrumb and altitude control. Never a command, never a badge. */
+.fdock-status {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 260px;
+  padding-left: 2px;
+}

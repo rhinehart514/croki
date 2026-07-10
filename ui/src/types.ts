@@ -203,6 +203,64 @@ export type ClarityObject = {
   text: string;
   note?: string;
   createdAt: string;
+  // ── Question-altitude enrichment (docs/production-direction/06). All optional and additive: the
+  // current server omits them, and the question focus degrades to its honest "nothing recorded yet"
+  // states. A founder-pinned question reuses this same record and stable id (doc 06 §Questions); these
+  // fields carry its focus state without a second store. Populated by the canvas projection when the
+  // parallel backend lands it; never fabricated on the client.
+  status?: "open" | "answered" | "archived";
+  updatedAt?: string;
+  // The teammate positions around this question — each a distinct, attributable claim with its own
+  // evidence, uncertainty, recommendation, and falsifier. Disagreement is preserved as separate
+  // entries, NEVER blended into one summary (doc 05 §Disagreement is a feature).
+  positions?: TeammatePosition[];
+  // Evidence gathered for/against, kept distinct by stance (doc 06 §Evidence behavior).
+  evidence?: QuestionEvidence[];
+  // What is still unknown, sitting visibly beyond the current evidence (doc 09 question altitude).
+  unknowns?: string[];
+  // Founder calls stamped where they settled or redirected this question — a receipt, not a second
+  // decision authority (doc 04 §Founder decisions). Answering a question never approves execution.
+  decisions?: FounderDecisionReceipt[];
+  // The crew and product elements this question involves (teammate/product ref ids). Used to bind context
+  // when the founder turns the question into a pipeline. Present on the normalized canvas projection.
+  participantRefs?: string[];
+  productRefs?: string[];
+};
+
+// One teammate's attributable position on a question. Every teammate contribution answers: what I
+// believe, what supports it, what I'm uncertain about, what I'd do next, and what would change my
+// mind (doc 05 §Teammate contract). Faces mean authorship, never decoration.
+export type TeammatePosition = {
+  ref: string;                 // the teammate's stable agent ref (drives its face + profile)
+  claim: string;               // what this teammate believes
+  evidenceRefs?: string[];     // ids into the question's evidence, or plain source pointers
+  uncertainty?: string | null; // what it is unsure about
+  recommendation?: string | null; // what it would do next
+  // The falsifier — "what would change my mind." The spec-native evidence action hangs off this: it is
+  // the concrete, gatherable thing that would move the position. Null when the teammate stated none.
+  falsifier?: string | null;
+  // Refs of teammates this position directly contradicts — drawn as separate branches, never merged.
+  disagreesWith?: string[];
+  provenance?: OperatingProvenance | null;
+};
+
+export type QuestionEvidence = {
+  id: string;
+  stance: "supporting" | "challenging";
+  claim: string;
+  // Provenance label — the same five the host enforces structurally (doc 06 §Evidence behavior).
+  tag: "observed" | "researched" | "founder-stated" | "inferred" | "speculative";
+  ref?: string | null;         // file:line, market source, person, artifact, or outcome pointer
+};
+
+// A stamped founder-decision receipt — the append-only audit index over the existing feedback/gate/
+// taste authority (doc 04 §Founder decisions). Never a second generic decision store on the client.
+export type FounderDecisionReceipt = {
+  id: string;
+  kind: string;                // open string: "branch", "made-the-call", "accepted-implication", …
+  wording: string;             // the founder's exact words or the selected value
+  createdAt: string;
+  supersedesId?: string | null;
 };
 
 // The composer's stance. "build" is the normal vibe-to-the-gate composer; "ideate" is the thinking
@@ -1443,6 +1501,152 @@ export type WovenKindCluster = {
   laneKeys: string[];
   laneCount: number;
 };
+// ── The canonical canvas projection (brain/src/woven-graph.mjs → projectCanvas). This is the ONE
+// authoritative shape for stable product/question/outcome/decision/pipeline anchors and the durable
+// relationships between them. The UI consumes THIS (operatingView.woven.canvas) when present and falls
+// back to raw clarity/records otherwise. A ref is `{type,id}`; an anchor carries the real record `body`.
+export type WovenRef = { type: string | null; id: string };
+// Anchor kinds the backend emits: "product" | "product-truth" | "product-model" | "product-<element>" |
+// "teammate" | "question" | "pipeline" | "path" | "run" | "founder-decision" | "pinned-signal" |
+// "outcome" (and, forward-compatibly, "product-implication"/"implication" once the backend adds them).
+export type WovenCanvasAnchor = {
+  id: string;                 // "anchor:<type>:<id>"
+  ref: WovenRef;
+  kind: string;               // open string — never a closed enum
+  label: string;
+  body: unknown;              // the authoritative record (question, outcome, product-truth, …)
+  authority: { owner: string; id: string; projectId: string; updatedAt: string | null };
+};
+export type WovenCanvasRelationship = {
+  id: string;
+  source: WovenRef;
+  target: WovenRef;
+  kind: string;               // "returns-to" | "serves" | "involves" | "about" | "contributed-to" | …
+  resolved: boolean;
+  authority: { owner: string; projectId: string };
+};
+// The canonical joined-outcome projection carried on the canvas (brain/src/woven-graph.mjs → projectCanvas
+// `outcomes`). Its fields are AUTHORITATIVE — kind/channelId/lineage are computed by the backend; the UI
+// consumes them verbatim rather than re-deriving from anchors + relationships.
+export type WovenCanvasOutcome = {
+  id: string;
+  ref: WovenRef;
+  body: string | null;
+  kind: JoinedOutcome["kind"];   // outcomeDisplayKind — the backend's own classification
+  label: string;
+  status?: string;
+  outcomeKind?: string | null;
+  value?: number | null;
+  observedAt?: string | null;
+  channelId?: string | null;     // the pipeline it returns to (item.channel) — preserved exactly
+  questionId?: string | null;
+  productRefs?: string[];         // already flattened to ids by the backend
+  crewRefs?: string[];
+  runId?: string | null;
+  authority?: unknown;
+  lineage?: unknown;             // runRef / pathRef / questionRef / productRefs / … — preserved verbatim
+};
+// The canonical product-implication projection (projectCanvas `implications`).
+export type WovenCanvasImplication = {
+  id: string;
+  ref: WovenRef;
+  body: string | null;
+  text: string;
+  status: "proposed" | "staged";
+  observedAt?: string | null;
+  sourceOutcomeId?: string | null;
+  questionId?: string | null;
+  productRefs?: string[];
+  disposition: "proposed" | "accepted";
+  // The server-derived review descriptor (brain woven-graph → implications[].review). Preserved for
+  // status/display/dedupe ONLY — it is never client-executable authority; the accept route derives the
+  // real graph target and operations server-side and rejects any client graphId/operations.
+  review?: unknown;
+  authority?: unknown;
+  lineage?: {
+    questionRef?: WovenRef | null;
+    productRefs?: WovenRef[];
+    participantRefs?: WovenRef[];
+    decisionRefs?: WovenRef[];
+    proposalRef?: { type: string; id: string } | null;
+    // Typed pipeline/graph the backend will review the change against — display/dedupe only, not executable.
+    pipelineRef?: WovenRef | null;
+    graphRef?: WovenRef | null;
+    attribution?: unknown;
+  };
+};
+
+export type WovenCanvas = {
+  anchors: WovenCanvasAnchor[];
+  relationships: WovenCanvasRelationship[];
+  // The canonical joined outcomes + product implications, computed by the backend. Present on the current
+  // projection; when absent (an older server) the UI falls back to reading the anchor bodies.
+  outcomes?: WovenCanvasOutcome[];
+  implications?: WovenCanvasImplication[];
+  state: { kind: "empty" | "partial" | "ready"; stale: boolean; issues: unknown[] };
+  geometry: {
+    namespace: string;
+    positions: Record<string, { x: number; y: number }>;
+    collapsedGroups?: unknown[];
+    pinnedCrew?: unknown[];
+    viewport?: unknown;
+    updatedAt?: string | null;
+  } | null;
+};
+
+// The canonical backend question body carried on a "question" anchor (brain/src/clarity-store.mjs →
+// projectQuestions). The UI normalizes this into what QuestionFocus renders.
+export type CanvasQuestionBody = {
+  id: string;
+  kind?: "question";
+  text: string;
+  note?: string;
+  status?: "open" | "answered" | "archived";
+  createdAt?: string;
+  updatedAt?: string;
+  pinned?: boolean;
+  positions?: CanvasPosition[];
+  relevantParticipantRefs?: WovenRef[];
+  participantRefs?: WovenRef[];
+  productRefs?: WovenRef[];
+  evidenceRefs?: WovenRef[];
+  backlinks?: WovenRef[];
+};
+
+// A teammate's attributable position on a question — the REAL backend shape (normalizePosition):
+// participantRef is a `{type,id}` ref (its id is the teammate ref), and the belief is `statement`.
+export type CanvasPosition = {
+  id: string;
+  questionId: string;
+  participantRef?: WovenRef;
+  statement: string;
+  relation?: string;          // stance, e.g. "supporting" / "challenging" — open string
+  uncertainty?: string | null;
+  unknowns?: string[] | string | null;
+  recommendation?: string | null;
+  falsifier?: string | null;
+  evidenceRefs?: WovenRef[];
+  provenance?: string | null;
+  createdAt?: string | null;
+};
+
+// The canonical backend product-implication (brain/src/gtm-store.mjs → productImplicationProjection).
+export type CanvasImplicationBody = {
+  id: string;
+  kind: "product-change";
+  status: "proposed" | "staged";
+  body: string;               // the implication text, in plain words
+  sourceOutcomeId: string;
+  sourceLearningId?: string | null;
+  questionId?: string | null;
+  productRefs?: WovenRef[];
+  participantRefs?: WovenRef[];
+  proposalRef?: { type: string; id: string } | null;
+  observedAt?: string | null;
+  graphId?: string | null;    // present only when the backend attaches the target graph
+  operations?: unknown[];     // present only when the backend attaches reviewable product-change ops
+};
+
 export type WovenGraph = {
   projectId: string;
   objectNodes: WovenObjectNode[];
@@ -1450,6 +1654,9 @@ export type WovenGraph = {
   kindClusters: WovenKindCluster[];
   laneKinds: Record<string, string[]>;              // laneKey → every kind it belongs to (2+ = blended)
   collapsedByLane: Record<string, { count: number; objectKeys: string[] }>;
+  // The stable-anchor canvas projection, attached by the backend alongside the object/tie weaving.
+  // Additive: when absent the UI degrades to raw clarity/records; when present it is the canonical source.
+  canvas?: WovenCanvas | null;
   stats: {
     objectCount: number; drawnObjectCount: number; collapsedObjectCount: number;
     tieCount: number; drawnTieCount: number; kindCount: number;
@@ -1473,4 +1680,50 @@ export type OperatingView = {
   // The woven projection over the same lanes + objects (docs/INTERTWINED-CANVAS.md §2). Present when the
   // backend could build it; absent → the canvas degrades to the raw lanes/objects.
   woven?: WovenGraph | null;
+  // ── Canvas projection enrichment (docs/production-direction/04, 06, 07). All optional and additive —
+  // the current server omits them and every consuming surface degrades to an honest empty state. These
+  // are projections/references over existing truth, run, feedback, clarity, and outcome authorities,
+  // never new stored bodies on the client. Populated as the parallel backend projection work lands.
+  //
+  // Founder-pinned questions as durable canvas anchors (the clarity record, extended). Unpinned/
+  // transient crew questions stay run artifacts and never appear here.
+  questions?: ClarityObject[];
+  // Joined outcomes that returned toward a run/question/product/crew (doc 07 §Outcome return).
+  outcomes?: JoinedOutcome[];
+  // Model-proposed product implications awaiting the founder's accept/edit/dismiss/defer (doc 06
+  // §Product implication). A projection, never an applied change.
+  implications?: ProductImplication[];
+};
+
+// A joined outcome — references the run/item/path that produced it and returns spatially toward the
+// pipeline, question, product element, and contributing crew (doc 07 §Outcome return). Never reports a
+// gate approval as market success; an unjoined signal stays explicitly unattributed.
+export type JoinedOutcome = {
+  id: string;
+  // What class of outcome this is — kept honest and distinct (doc 07 §Measurement).
+  kind: "sent" | "observed-response" | "product-activation" | "business-outcome" | "founder-entered" | "unmeasured";
+  label: string;               // plain-words summary of what came back
+  value?: number | null;
+  observedAt?: string | null;
+  channelId?: string | null;   // the pipeline it returns to
+  questionId?: string | null;  // the question it reopens, when any
+  productRefs?: string[];       // product-model elements it touches
+  crewRefs?: string[];          // teammates it credits
+  runId?: string | null;
+};
+
+// A product implication: a model-owned hypothesis over an outcome/signal, initially unaccepted. On the
+// canvas it begins as a dashed proposed return edge from the outcome to the affected product truth.
+// Accepting it stages a founder-reviewable product-change pipeline; it never silently edits code.
+export type ProductImplication = {
+  id: string;
+  text: string;                // the hypothesis, in plain words
+  sourceOutcomeId?: string | null;
+  productRefs?: string[];
+  questionId?: string | null;
+  disposition?: "proposed" | "accepted" | "edited" | "dismissed" | "deferred";
+  // Raw backend status ("proposed" | "staged") and the server-derived review descriptor, preserved for
+  // display/status/dedupe. NEVER executable client authority: the accept route is fully server-derived.
+  status?: "proposed" | "staged";
+  review?: unknown;
 };

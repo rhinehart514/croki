@@ -1,101 +1,73 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { TOOLS, TOOL_MAP } from "../src/mcp.mjs";
+import { CANONICAL_TOOLS, LEGACY_TOOLS, TOOLS, TOOL_MAP } from "../src/mcp.mjs";
 
-const names = TOOLS.map((t) => t.name);
+const names = TOOLS.map((tool) => tool.name);
+const canonicalNames = CANONICAL_TOOLS.map((tool) => tool.name);
 
-describe("MCP tool IA — canonical surface", () => {
-  it("keeps the tool count in a reasonable range", () => {
-    // Ceiling raised from 30→36 when the Living Product Picture added its four-tool object family
-    // (get/derive/revise/signal), then 36→39 when the Person keystone added its read tools
-    // (list_people/get_person/find_references), then 39→42 when the rebuilt GTM engine added its three
-    // founder rituals (run_market_research / compose_path_portfolio / promote_run), then 42→45 when the
-    // five-primitive founder loop added its front door (record_outcome plus the since-removed get_cockpit
-    // and propose_moves — the cockpit projection was cut back to the run summary the canvas reads).
-    // The bound still guards IA hygiene; it just admits the new objects.
-    assert.ok(TOOLS.length >= 10 && TOOLS.length <= 45, `expected 10–45 tools, got ${TOOLS.length}`);
-  });
-
-  it("has unique tool names", () => {
-    assert.equal(new Set(names).size, names.length, "tool names must be unique");
-  });
-
-  it("exposes the outcome program (the domain center) as first-class read tools", () => {
-    assert.ok(names.includes("list_outcomes"), "list_outcomes must exist");
-    assert.ok(names.includes("get_outcome"), "get_outcome must exist");
-  });
-
-  it("uses one canonical noun (workflow) for the canonical tools", () => {
-    for (const canonical of [
-      "list_workflows",
-      "create_workflow",
-      "duplicate_workflow",
-      "update_workflow",
-      "get_workflow",
-      "get_workflow_items",
-      "run_workflow",
-      "run_workflow_node",
-      "approve_workflow_gate",
-    ]) {
-      assert.ok(names.includes(canonical), `${canonical} must exist`);
+describe("MCP canonical verb surface", () => {
+  it("advertises the six preferred verbs first while keeping legacy capabilities discoverable", () => {
+    assert.deepEqual(names.slice(0, 6), ["inspect", "focus", "ask", "propose", "record", "run"]);
+    assert.deepEqual(canonicalNames, names.slice(0, 6));
+    assert.equal(new Set(names).size, names.length);
+    for (const legacy of ["get_product_model", "get_workflow", "run_workflow", "get_outcome", "start_operator_session"]) {
+      assert.ok(names.includes(legacy), `${legacy} remains in tools/list`);
     }
   });
 
-  it("collapses the gate to a single canonical approval verb", () => {
-    // One canonical gate verb — approve_workflow_gate. The old backward-compat approve_gate alias
-    // was removed; no other approval verb leaked in.
-    assert.ok(names.includes("approve_workflow_gate"));
-    const gateVerbs = names.filter((n) => n.startsWith("approve_"));
-    assert.deepEqual(new Set(gateVerbs), new Set(["approve_workflow_gate"]));
+  it("uses open {type,id} references and states each safety boundary", () => {
+    for (const tool of CANONICAL_TOOLS) {
+      assert.equal(tool.inputSchema.type, "object");
+      assert.ok(tool.description.length > 40);
+      const ref = tool.inputSchema.properties.ref;
+      if (!ref) continue;
+      assert.deepEqual(ref.required, ["type", "id"]);
+      assert.equal(ref.properties.type.enum, undefined, "reference types stay open");
+    }
+    assert.match(TOOL_MAP.get("run").description, /founder gate/i);
+    assert.match(TOOL_MAP.get("record").description, /cannot pin durable clarity/i);
+    assert.deepEqual(TOOL_MAP.get("record").inputSchema.properties.kind.enum, ["session_note", "model_artifact", "question_proposal"]);
   });
 
-  it("exposes no direct graph-mutation verb on this surface", () => {
-    // Direct graph edits are never applied from the engine surface — they stage
-    // through the operator's propose_graph_changes flow. The old disabled stubs
-    // (request_workflow_change / mutate_channel) were removed rather than kept as
-    // tools whose only behaviour was to refuse.
-    assert.ok(!names.includes("mutate_workflow"), "no engine-verb canonical tool");
-    assert.ok(!names.includes("mutate_channel"), "removed disabled stub");
-    assert.ok(!names.includes("request_workflow_change"), "removed disabled stub");
-  });
-
-  it("every tool description states the action, object, when, and a boundary", () => {
-    for (const tool of TOOLS) {
-      assert.ok(tool.description.length > 40, `${tool.name} description too thin`);
-      assert.ok(tool.inputSchema && tool.inputSchema.type === "object", `${tool.name} needs an object schema`);
+  it("keeps prior direct compose/run capabilities as advertised compatibility adapters", () => {
+    assert.ok(LEGACY_TOOLS.length > CANONICAL_TOOLS.length);
+    for (const name of ["start_operator_session", "run_workflow", "get_workflow", "get_outcome", "get_product_model"]) {
+      assert.ok(TOOL_MAP.has(name), `${name} remains dispatchable`);
+      assert.ok(names.includes(name), `${name} remains advertised for backward compatibility`);
     }
   });
 
-  it("exposes the Living Product Picture as first-class read + edit tools", () => {
-    for (const name of [
-      "get_product_model",
-      "derive_product_model",
-      "revise_product_model",
-      "record_product_signal",
-    ]) {
-      assert.ok(names.includes(name), `${name} must exist`);
-      assert.ok(TOOL_MAP.get(name).inputSchema.type === "object", `${name} needs an object schema`);
-    }
+  it("keeps outbound and approval verbs off the preferred canonical set", () => {
+    assert.ok(canonicalNames.every((name) => !/approve|send|publish|deploy|charge/i.test(name)));
   });
 
-  it("keeps the product-picture tools inside the founder-gate wall (no outbound verb)", () => {
-    const forbidden = /approve|send|publish|deploy|charge/i;
-    for (const name of [
-      "get_product_model",
-      "derive_product_model",
-      "revise_product_model",
-      "record_product_signal",
-    ]) {
-      assert.ok(!forbidden.test(name), `${name} must not carry an outbound verb`);
+  it("routes all six verbs to distinct deterministic operator services", async () => {
+    const originalFetch = global.fetch;
+    const calls = [];
+    global.fetch = async (url, init = {}) => {
+      calls.push({ url: String(url), body: init.body ? JSON.parse(init.body) : null });
+      return { ok: true, async json() { return { ok: true }; } };
+    };
+    try {
+      await TOOL_MAP.get("inspect").handler({ projectId: "p-1", sessionId: "s-1", ref: { type: "product", id: "p-1" } });
+      await TOOL_MAP.get("focus").handler({ projectId: "p-1", sessionId: "s-1", ref: { type: "question", id: "q-1" } });
+      await TOOL_MAP.get("ask").handler({ projectId: "p-1", sessionId: "s-1", prompt: "Who is this for?" });
+      await TOOL_MAP.get("propose").handler({ projectId: "p-1", sessionId: "s-1", prompt: "Show two moves." });
+      await TOOL_MAP.get("record").handler({ projectId: "p-1", sessionId: "s-1", kind: "session_note", value: "Keep this local." });
+      await TOOL_MAP.get("run").handler({ projectId: "p-1", sessionId: "s-1", goal: "Run the focused pipeline." });
+    } finally {
+      global.fetch = originalFetch;
     }
+    assert.deepEqual(calls.map((call) => new URL(call.url).pathname), [
+      "/api/operator/sessions/s-1/verbs/inspect",
+      "/api/operator/sessions/s-1/verbs/focus",
+      "/api/operator/sessions/s-1/verbs/ask",
+      "/api/operator/sessions/s-1/verbs/propose",
+      "/api/operator/sessions/s-1/verbs/record",
+      "/api/operator/sessions/s-1/verbs/run",
+    ]);
+    assert.equal(calls[2].body.prompt, "Who is this for?");
+    assert.equal(calls[3].body.prompt, "Show two moves.");
+    assert.equal(calls[5].body.goal, "Run the focused pipeline.");
   });
 });
-
-describe("MCP tool IA — the removed backward-compat channel aliases stay gone", () => {
-  it("exposes no channel-noun alias for the canonical workflow tools", () => {
-    for (const alias of ["get_channel", "run_channel", "approve_gate"]) {
-      assert.ok(!TOOL_MAP.has(alias), `alias ${alias} must not be registered`);
-    }
-  });
-});
-

@@ -35,9 +35,10 @@ The highest-leverage actions may change the product itself:
 
 These actions use the same founder wall as sends, publishes, and deploys.
 
-## Graph position
+## Canvas and graph position
 
-The open graph remains the action execution plan:
+Pipelines remain persistent, editable, watchable action hypotheses on the canvas. Their open graphs remain
+the execution plans. The sequence below is one possible path through the product, not a fixed journey:
 
 ```text
 Question or direct request
@@ -50,7 +51,8 @@ Question or direct request
   → outcome
 ```
 
-The graph may take any shape. There is no fixed stage skeleton.
+The graph may take any shape and may begin from a direct request, product element, question, signal, or prior
+outcome. There is no fixed stage skeleton.
 
 ## Measurement
 
@@ -79,6 +81,8 @@ Every outcome should be able to return to:
 - the founder decision that enabled it.
 
 The next crew composition should be able to see what happened without re-reading an unstructured transcript.
+On the canvas, a joined outcome returns to the relevant gate or Measure node, illuminates the path that
+produced it, and may propose a dashed implication back to the product.
 
 ## Repeatable motions
 
@@ -97,4 +101,3 @@ available. Keep measurement honest and optional before the gate. Support product
 in-product loops, public artifacts, instrumentation, and code changes, but never allow composition to forge
 authorization. Add end-to-end tests for action → gate → outcome → product implication.
 ```
-

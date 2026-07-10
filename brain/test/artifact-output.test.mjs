@@ -24,7 +24,7 @@ test("artifact connector stages approved items and NEVER marks anything deployed
   assert.equal(item.deployed, false);
   assert.equal(item.live, false);
   assert.equal(item.executionStatus, "staged_for_deploy");
-  assert.match(item.deployStatus, /awaiting founder approval to deploy/i);
+  assert.match(item.deployStatus, /awaiting separate founder deploy confirmation/i);
   // Nothing in the run meta claims a deploy happened.
   assert.equal(result.meta.deployed, 0);
   assert.equal(result.meta.staged, 1);

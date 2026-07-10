@@ -159,13 +159,18 @@ describe("measure lane — LIVE send via recordFlowRun → poll → attribute on
       // provider message id. Mirrors routes/graph.mjs (resumeResult + approvals + sendRunners) and the
       // operator gate-resume.
       const sends = { calls: 0 };
+      const releases = { calls: 0 };
       const resumed = await runGraph(graph, {
         projectId,
         credentialOptions: options,
         approvals: { gate: true },
         resumeResult: pending,
+        // Engine-level stand-in for the browser capability the HTTP route validates before supplying
+        // this callback. The transport test must cross that same host-owned release seam.
+        authorizeRelease: () => { releases.calls += 1; },
         sendRunners: fakeSendRunner(providerMessageId, sends),
       });
+      assert.equal(releases.calls, 1, "the host authorized the founder's release before delivery");
       assert.equal(sends.calls, 1, "the send transport was actually invoked for the approved item");
       assert.equal(resumed.nodes.out.items[0].executionStatus, "sent");
       assert.equal(resumed.nodes.out.items[0].providerMessageId, providerMessageId);

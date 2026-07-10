@@ -16,6 +16,7 @@
 import type { Node, Edge } from "@xyflow/react";
 import type {
   WovenGraph, WovenObjectNode, OperatingObject, OperatingProvenance,
+  WovenCanvas, WovenCanvasAnchor, WovenRef,
 } from "@/types";
 import type { ChannelLane } from "@/lib/channelLanes";
 import {
@@ -30,7 +31,247 @@ export type WovenFocus =
   | { kind: "object"; objectKey: string }
   | { kind: "lane"; channelId: string }
   | { kind: "cluster"; motionKind: string }
+  // A stable canvas anchor (product truth, a question, an outcome, …) from operatingView.woven.canvas.
+  // Focusing one lights it and the anchors it relates to; object/tie/kind weaving stays neutral.
+  | { kind: "anchor"; anchorId: string; ref?: WovenRef }
   | null;
+
+// ── Canvas anchors (fix 3) — the stable product/question/outcome landmarks the backend projects onto the
+// woven canvas (brain/src/woven-graph.mjs → projectCanvas), rendered ADDITIVELY beside the object/tie/kind
+// weaving. Product truth and questions sit in a left landmark column; outcomes sit in a right column and
+// grow dashed "return" edges back to the question/product they returned to. Never replaces the weaving.
+//
+// SEMANTIC COLLAPSE (the long-tail product taxonomy): a canonical projection can carry ~60+ product-model
+// detail anchors (things / goals / states / IA / workflows / interactions / transitions). Laying all of
+// them into one vertical ladder buried the three real pipelines and the questions under a wall of
+// postage-stamp cards at Fit View. So the layer keeps the HIGH-SIGNAL anchors individual — the product
+// root, every product truth, every question, every outcome — and any product detail that is CAUSALLY
+// CONNECTED to real GTM work (a question, pipeline, run, outcome, teammate, or decision references it).
+// The remaining unconnected detail taxonomy folds into ONE compact summary chip PER KIND ("Things · 42"),
+// which stays selectable: focusing a summary expands its members individually (zoom/focus access to the
+// tail). Canonical data is never discarded — only its default rendering is summarized. Deterministic and
+// stable: the same projection always yields the same bounded set.
+
+const ROOT_KINDS = new Set(["product", "product-model"]);
+const ANCHOR_RIGHT_KINDS = new Set(["outcome"]);
+// A product DETAIL is any "product-*" kind that is not the root, a truth, or an implication (implications
+// live on the outcome-return rail, not here). These are the long-tail the layer summarizes.
+function isDetailKind(kind: string): boolean {
+  return kind.startsWith("product-") && kind !== "product-truth" && kind !== "product-model" && kind !== "product-implication";
+}
+// The endpoint types that make a product detail causally relevant — connected to real GTM work.
+const SIGNAL_ENDPOINT_TYPES = new Set(["question", "pipeline", "path", "run", "outcome", "teammate", "decision"]);
+const GROUP_PREFIX = "canchor:group:";
+export function groupNodeId(kind: string): string { return `${GROUP_PREFIX}${kind}`; }
+
+const DETAIL_PLURAL: Record<string, string> = {
+  "product-thing": "Things", "product-goal": "User goals", "product-state": "States", "product-ia": "IA areas",
+  "product-workflow": "Workflows", "product-interaction": "Interactions", "product-transition": "Transitions",
+  "product-relationship": "Relationships",
+};
+function detailLabel(kind: string): string {
+  return DETAIL_PLURAL[kind]
+    ?? `${kind.replace(/^product-/, "").replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}s`;
+}
+
+export function anchorNodeId(ref: WovenRef): string {
+  return `canchor:${ref.type ?? ""}:${ref.id}`;
+}
+
+export type CanvasAnchorData = {
+  anchorId: string;
+  ref: WovenRef;
+  kind: string;
+  label: string;
+  focus?: "focus" | "dim";
+  // Set on a summary chip standing in for a collapsed kind's tail — its member count. Selecting it expands.
+  count?: number;
+  group?: boolean;
+};
+
+// The lit set for a real-anchor focus: the anchor itself plus every anchor it relates to (either direction).
+function anchorLitSet(canvas: WovenCanvas, focus: Extract<WovenFocus, { kind: "anchor" }>): Set<string> {
+  const lit = new Set<string>([focus.anchorId]);
+  const target = canvas.anchors.find((a) => anchorNodeId(a.ref) === focus.anchorId);
+  if (!target) return lit;
+  for (const rel of canvas.relationships ?? []) {
+    if (rel.source.id === target.ref.id) {
+      const other = canvas.anchors.find((a) => a.ref.id === rel.target.id);
+      if (other) lit.add(anchorNodeId(other.ref));
+    }
+    if (rel.target.id === target.ref.id) {
+      const other = canvas.anchors.find((a) => a.ref.id === rel.source.id);
+      if (other) lit.add(anchorNodeId(other.ref));
+    }
+  }
+  return lit;
+}
+
+// ── One founder wall (docs/production-direction/16, P1) ──────────────────────────────────────────────
+// On the Operator merged canvas with 2+ pipelines, each lane carries its own gate at its own causal depth,
+// so the overview reads as scattered gates. This aligns every lane's gate onto ONE shared x by shifting
+// each lane horizontally so its gate lands on the rightmost gate column, and returns the wall geometry so a
+// single vertical amber threshold can be drawn across the whole lane band. The gate cards stay individually
+// actionable (this only moves them); backend and authorization are untouched. Pure and testable.
+export type WallAlignInput = {
+  nodes: Array<{ id: string; position: { x: number; y: number }; data?: unknown }>;
+  lanes: Map<string, { offsetY: number; height: number; centerX: number }>;
+};
+export type FounderWall = { x: number; top: number; bottom: number } | null;
+
+function nodeChannelId(n: { data?: unknown }): string | null {
+  const d = n.data as { channelId?: string } | undefined;
+  return typeof d?.channelId === "string" ? d.channelId : null;
+}
+function nodeIsGate(n: { data?: unknown }): boolean {
+  const d = n.data as { node?: { category?: string } } | undefined;
+  return d?.node?.category === "gate";
+}
+
+export function alignGatesToWall<T extends WallAlignInput["nodes"][number]>(
+  nodes: T[], lanes: WallAlignInput["lanes"],
+): { nodes: T[]; wall: FounderWall } {
+  // Each lane's gate x (the leftmost gate if a lane somehow has more than one).
+  const gateXByChannel = new Map<string, number>();
+  for (const n of nodes) {
+    if (!nodeIsGate(n)) continue;
+    const ch = nodeChannelId(n);
+    if (!ch) continue;
+    const prev = gateXByChannel.get(ch);
+    if (prev == null || n.position.x < prev) gateXByChannel.set(ch, n.position.x);
+  }
+  // A single wall only reads when 2+ lanes actually cross it.
+  if (gateXByChannel.size < 2) return { nodes, wall: null };
+  const targetX = Math.max(...gateXByChannel.values());
+  const shifted = nodes.map((n) => {
+    const ch = nodeChannelId(n);
+    const gateX = ch ? gateXByChannel.get(ch) : undefined;
+    if (gateX == null) return n;
+    const dx = targetX - gateX;
+    return dx === 0 ? n : { ...n, position: { x: n.position.x + dx, y: n.position.y } };
+  });
+  // The wall spans the full band of the lanes that carry a gate.
+  const gated = [...gateXByChannel.keys()].map((ch) => lanes.get(ch)).filter(Boolean) as Array<{ offsetY: number; height: number }>;
+  const top = gated.length ? Math.min(...gated.map((l) => l.offsetY)) : 0;
+  const bottom = gated.length ? Math.max(...gated.map((l) => l.offsetY + l.height)) : 0;
+  return { nodes: shifted, wall: { x: targetX, top, bottom } };
+}
+
+export function buildCanvasAnchorLayer(
+  canvas: WovenCanvas | null | undefined,
+  laneBand: { top: number; bottom: number; minX: number; maxX: number } | null,
+  focus: WovenFocus,
+): { nodes: Node[]; edges: Edge[] } {
+  const nodes: Node[] = [];
+  const edges: Edge[] = [];
+  if (!canvas?.anchors?.length) return { nodes, edges };
+
+  const band = laneBand ?? { top: 0, bottom: 480, minX: 0, maxX: 0 };
+  const leftX = band.minX - 560;
+  const rightX = band.maxX + 380;
+  const rowH = 92;
+
+  // Which detail kind (if any) the founder has focused-open — that kind renders individually (tail access).
+  const expandedKind = focus && focus.kind === "anchor" && focus.anchorId.startsWith(GROUP_PREFIX)
+    ? focus.anchorId.slice(GROUP_PREFIX.length) : null;
+
+  // Causally-connected product-detail ids — connected to a question/pipeline/run/outcome/teammate/decision.
+  const connectedDetailIds = new Set<string>();
+  for (const rel of canvas.relationships ?? []) {
+    if (rel.target.type && SIGNAL_ENDPOINT_TYPES.has(rel.target.type)) connectedDetailIds.add(rel.source.id);
+    if (rel.source.type && SIGNAL_ENDPOINT_TYPES.has(rel.source.type)) connectedDetailIds.add(rel.target.id);
+  }
+
+  const roots = canvas.anchors.filter((a) => ROOT_KINDS.has(a.kind));
+  const truths = canvas.anchors.filter((a) => a.kind === "product-truth");
+  const questions = canvas.anchors.filter((a) => a.kind === "question");
+  const details = canvas.anchors.filter((a) => isDetailKind(a.kind));
+  const outcomes = canvas.anchors.filter((a) => ANCHOR_RIGHT_KINDS.has(a.kind));
+  const byId = (a: WovenCanvasAnchor, b: WovenCanvasAnchor) => a.ref.id.localeCompare(b.ref.id);
+
+  // A detail renders individually when it is causally connected OR its kind is expanded; the rest form the
+  // per-kind tail that a summary chip stands in for.
+  const keptDetail = (a: WovenCanvasAnchor) => connectedDetailIds.has(a.ref.id) || a.kind === expandedKind;
+  const keptDetails = details.filter(keptDetail);
+  const tailByKind = new Map<string, WovenCanvasAnchor[]>();
+  for (const a of details) {
+    if (keptDetail(a)) continue;
+    const list = tailByKind.get(a.kind) ?? [];
+    list.push(a);
+    tailByKind.set(a.kind, list);
+  }
+
+  // ── focus lighting ──
+  let lit: Set<string> | null = null;
+  if (focus && focus.kind === "anchor") {
+    if (expandedKind) {
+      lit = new Set<string>();
+      for (const a of details) if (a.kind === expandedKind) lit.add(anchorNodeId(a.ref));
+    } else {
+      lit = anchorLitSet(canvas, focus);
+    }
+  }
+  const stateFor = (id: string): "focus" | "dim" | undefined => (!lit ? undefined : lit.has(id) ? "focus" : "dim");
+
+  // ── the left landmark column — a BOUNDED, ordered set: root, questions, truths, then per detail kind
+  // (kept individuals + one summary chip). Questions sit high so they stay large and clickable at Fit View.
+  const detailKinds = [...new Set(details.map((a) => a.kind))].sort();
+  const left: Node[] = [];
+  const pushAnchor = (a: WovenCanvasAnchor) => {
+    const id = anchorNodeId(a.ref);
+    left.push({
+      id, type: "canvasAnchor", position: { x: 0, y: 0 }, draggable: false, selectable: true,
+      data: { anchorId: id, ref: a.ref, kind: a.kind, label: a.label, focus: stateFor(id) } satisfies CanvasAnchorData,
+    });
+  };
+  [...roots].sort(byId).forEach(pushAnchor);
+  [...questions].sort(byId).forEach(pushAnchor);
+  [...truths].sort(byId).forEach(pushAnchor);
+  for (const kind of detailKinds) {
+    keptDetails.filter((a) => a.kind === kind).sort(byId).forEach(pushAnchor);
+    const tail = tailByKind.get(kind);
+    if (tail && tail.length) {
+      const gid = groupNodeId(kind);
+      left.push({
+        id: gid, type: "canvasAnchor", position: { x: 0, y: 0 }, draggable: false, selectable: true,
+        data: { anchorId: gid, ref: { type: "group", id: kind }, kind, label: detailLabel(kind), count: tail.length, group: true, focus: stateFor(gid) } satisfies CanvasAnchorData,
+      });
+    }
+  }
+  // Assign the bounded column's real y positions now that its length is known.
+  left.forEach((n, i) => { n.position = { x: leftX, y: band.top + i * rowH }; nodes.push(n); });
+
+  // ── the right outcome column ──
+  [...outcomes].sort(byId).forEach((a, i) => {
+    const id = anchorNodeId(a.ref);
+    nodes.push({
+      id, type: "canvasAnchor", position: { x: rightX, y: band.top + i * rowH }, draggable: false, selectable: true,
+      data: { anchorId: id, ref: a.ref, kind: a.kind, label: a.label, focus: stateFor(id) } satisfies CanvasAnchorData,
+    });
+  });
+
+  const drawnIds = new Set(nodes.map((n) => n.id));
+  const byRefId = new Map(canvas.anchors.map((a) => [a.ref.id, anchorNodeId(a.ref)]));
+  // Return edges: an outcome returns to the question / product it names (relationship kind "returns-to").
+  for (const rel of canvas.relationships ?? []) {
+    if (rel.kind !== "returns-to") continue;
+    const source = byRefId.get(rel.source.id);
+    const target = byRefId.get(rel.target.id);
+    if (!source || !target || !drawnIds.has(source) || !drawnIds.has(target)) continue;
+    const dim = lit ? !(lit.has(source) && lit.has(target)) : false;
+    edges.push({
+      id: `return:${rel.id}`,
+      source,
+      target,
+      type: "default",
+      className: `woven-return${dim ? " is-dim" : ""}`,
+      selectable: false,
+      focusable: false,
+      data: { kind: rel.kind },
+    });
+  }
+  return { nodes, edges };
+}
 
 // The lit set for a focus: which object keys and which lane keys stay bright. Everything else dims.
 function litSetsFor(focus: WovenFocus, woven: WovenGraph): { objects: Set<string>; lanes: Set<string> } {
@@ -69,6 +310,9 @@ export function focusIsEffective(focus: WovenFocus, woven: WovenGraph | null | u
   if (focus.kind === "cluster") {
     return woven.kindClusters.some((c) => c.motionKind === focus.motionKind);
   }
+  // An anchor focus is NOT an object-weave focus — it drives the anchor layer separately, so it never
+  // dims the object/tie/kind weaving. Reporting it "ineffective" here keeps object weaving neutral.
+  if (focus.kind === "anchor") return false;
   // lane
   return (
     woven.objectNodes.some((o) => o.laneKeys.includes(focus.channelId)) ||
@@ -132,12 +376,32 @@ export type WovenOverlayInput = {
   focus: WovenFocus;
   // The lane keys whose single-touch collapse the founder popped open (the "+N touched once" expand).
   expandedLaneIds?: ReadonlySet<string>;
+  // The canonical stable-anchor projection (operatingView.woven.canvas). When present, product/question/
+  // outcome anchors render additively beside the weaving (fix 3). Absent → weaving-only, exactly as before.
+  canvas?: WovenCanvas | null;
 };
 
 export function buildWovenOverlay(input: WovenOverlayInput): { nodes: Node[]; edges: Edge[] } {
   const { woven, lanes, mergedNodes, axis, zoom, expandedLaneIds = new Set() } = input;
   const nodes: Node[] = [];
   const edges: Edge[] = [];
+
+  // The canvas anchor layer (fix 3) — additive stable landmarks, computed once and included on EVERY axis
+  // (they are altitude-independent). Placed against the real lane band so they never reshuffle. Anchor
+  // focus lights the anchor and its related anchors without touching the object/tie/kind weaving below.
+  const laneVals = [...lanes.values()];
+  const laneBand = laneVals.length
+    ? {
+        top: Math.min(...laneVals.map((l) => l.offsetY)),
+        bottom: Math.max(...laneVals.map((l) => l.offsetY + l.height)),
+        minX: Math.min(...laneVals.map((l) => l.centerX)),
+        maxX: Math.max(...laneVals.map((l) => l.centerX)),
+      }
+    : null;
+  const anchorLayer = buildCanvasAnchorLayer(input.canvas, laneBand, input.focus);
+  nodes.push(...anchorLayer.nodes);
+  edges.push(...anchorLayer.edges);
+
   // A focus that matches nothing on the current weave (a stale/restored selection) is treated as no focus,
   // so the canvas boots fully lit instead of dimming every chip against an empty lit set (the ghost field).
   const focus = focusIsEffective(input.focus, woven) ? input.focus : null;

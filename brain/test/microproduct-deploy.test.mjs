@@ -6,8 +6,13 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 import * as deploy from "../src/connectors/execute/deploy.mjs";
+import { isOrdinaryInRepoChange } from "../src/connectors/execute/artifact.mjs";
 import { getConnector, defaultGraphTemplate } from "../src/connectors/registry.mjs";
 import { runGraph } from "../src/graph.mjs";
 
@@ -98,6 +103,67 @@ test("with founder authorization AND gate-approved items, the microproduct ships
   assert.equal(item.deploymentUrl, "https://demo.example.dev");
   assert.equal(item.deployedBy, "founder-jacob");
   assert.equal(item.outputKind, "artifact");
+});
+
+test("ordinary in-repo changes stay reviewed diffs even with both authorizations", async () => {
+  const runner = fakeRunner();
+  const item = approvedItem({ kind: "change", repo: "/tmp/product", path: "app/share.tsx", artifactSpec: { inRepo: true } });
+  assert.equal(isOrdinaryInRepoChange(item), true, "the source item's in-repo provenance owns the boundary");
+  const result = await deploy.run(
+    node({ deployImpl: runner.impl, repo: "/tmp/change", runner: "byo" }, { deployAuthorization: FOUNDER_AUTH }),
+    [item],
+    {},
+  );
+  assert.equal(result.ok, true);
+  assert.equal(runner.calls, 0);
+  assert.equal(result.meta.reason, "ordinary_product_change_boundary");
+  assert.equal(result.items[0].effectBoundary, "reviewed_diff_only");
+  assert.equal(result.items[0].deployed, false);
+});
+
+test("legacy BYO standalone microproduct deploys from its configured repo after both authorizations", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "microproduct-byo-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const repo = path.join(root, "standalone");
+  const remote = path.join(root, "standalone.git");
+  fs.mkdirSync(repo);
+  execFileSync("git", ["init", "--bare", "-q", remote]);
+  execFileSync("git", ["-C", repo, "init", "-q"]);
+  execFileSync("git", ["-C", repo, "config", "user.name", "Drover Test"]);
+  execFileSync("git", ["-C", repo, "config", "user.email", "drover-test@example.invalid"]);
+  fs.writeFileSync(path.join(repo, "index.html"), "<h1>Standalone microproduct</h1>\n");
+  execFileSync("git", ["-C", repo, "add", "index.html"]);
+  execFileSync("git", ["-C", repo, "commit", "-q", "-m", "Build standalone microproduct"]);
+  execFileSync("git", ["-C", repo, "branch", "-M", "microproduct-live"]);
+  execFileSync("git", ["-C", repo, "remote", "add", "origin", remote]);
+
+  const item = approvedItem();
+  const deployNode = node(
+    { repo, remote: "origin", branch: "microproduct-live", runner: "byo" },
+    { deployAuthorization: FOUNDER_AUTH },
+  );
+  assert.equal(
+    isOrdinaryInRepoChange(item),
+    false,
+    "a deploy worktree in node config does not rewrite standalone artifact provenance",
+  );
+
+  const result = await deploy.run(deployNode, [item], {});
+  assert.equal(result.ok, true);
+  assert.equal(result.meta.deployed, 1);
+  assert.equal(result.items[0].deployRunner, "byo");
+  assert.equal(result.items[0].deployedBy, "founder-jacob");
+  const localHead = execFileSync("git", ["-C", repo, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  const remoteHead = execFileSync("git", ["--git-dir", remote, "rev-parse", "refs/heads/microproduct-live"], { encoding: "utf8" }).trim();
+  assert.equal(remoteHead, localHead, "the built-in BYO runner pushed the standalone branch");
+});
+
+test("question answers and implication acceptance cannot forge deploy confirmation", async () => {
+  const runner = fakeRunner();
+  const result = await deploy.run(node({ deployImpl: runner.impl }), [approvedItem({ questionAnswered: true, implicationAccepted: true, deployConfirmed: true })], {});
+  assert.equal(result.ok, false);
+  assert.equal(runner.calls, 0);
+  assert.equal(result.meta.reason, "missing_founder_deploy_authorization");
 });
 
 test("the deploy authorization is NOT honored from the run context — that surface is composition-forgeable", async () => {

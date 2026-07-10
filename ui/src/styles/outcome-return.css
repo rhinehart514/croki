@@ -1,0 +1,101 @@
+/* outcome-return.css — the OUTCOME-RETURN rail (docs/production-direction/07 §Outcome return, 09 action
+   altitude). A joined outcome returns spatially toward the pipeline, question, product element, and crew
+   that produced it; a product implication proposes a DASHED change that accepting only stages for review —
+   it never edits code or product truth. Design system to the letter: opaque zinc surface (never glass),
+   white ground, monochrome ink, Geist, one semantic accent (--ember) for the founder-review threshold,
+   no gradients / glow / card-grid slop. Every field is real; a missing signal reads as an honest empty. */
+
+.oret {
+  position: absolute;
+  left: calc(var(--pentry-gutter, 0px) + var(--space-3));
+  bottom: var(--space-3);
+  width: 360px;
+  max-width: calc(100vw - 2 * var(--space-3));
+  max-height: 46vh;
+  /* Above the ambient draggable canvas cards (z 38); the return rail is a primary product-altitude surface. */
+  z-index: 41;
+  display: flex; flex-direction: column;
+  background: #ffffff;
+  border: 1px solid var(--muted);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-pop);
+  font-family: "Geist Variable", ui-sans-serif, -apple-system, sans-serif;
+  color: var(--ink);
+  overflow: hidden;
+}
+.oret-head {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--surface-2);
+}
+.oret-eyebrow {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  font-size: var(--text-xs); font-weight: 620; letter-spacing: 0.02em; text-transform: uppercase;
+  color: var(--muted); flex: 1;
+}
+.oret-close {
+  border: 0; background: transparent; cursor: pointer; color: var(--muted); padding: 2px;
+  border-radius: var(--r-sm); line-height: 0;
+}
+.oret-close:hover { color: var(--ink); background: var(--surface-2); }
+.oret-close:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 1px; }
+
+.oret-body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-3) var(--space-4) var(--space-4); }
+.oret-sec { margin-top: var(--space-4); }
+.oret-sec:first-child { margin-top: 0; }
+.oret-slabel {
+  font-size: var(--text-xs); font-weight: 620; letter-spacing: 0.02em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: var(--space-2);
+}
+
+/* ── a joined outcome ── */
+.oret-out { border: 1px solid var(--muted); border-radius: var(--r-md); padding: var(--space-2) var(--space-3); margin-bottom: var(--space-2); background: #fbfaf7; }
+.oret-out-top { display: flex; align-items: center; gap: var(--space-2); }
+.oret-out-label { flex: 1; font-size: var(--text-sm); font-weight: 560; line-height: 1.35; color: var(--ink); }
+.oret-badge {
+  flex-shrink: 0; font-size: 10px; font-weight: 640; text-transform: uppercase; letter-spacing: 0.03em;
+  padding: 2px 6px; border-radius: var(--r-sm); font-family: var(--font-mono);
+  background: var(--surface-2); color: var(--ink-2);
+}
+.oret-badge.is-observed { color: var(--ink); }
+.oret-badge.is-none { color: var(--muted); }
+.oret-badge.is-unmeasured { color: var(--muted); font-style: italic; }
+/* the return edges, rendered as routing chips — each returns the outcome toward a real object */
+.oret-returns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--space-2); }
+.oret-return {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 540; font-family: inherit;
+  padding: 3px 8px; border-radius: 999px;
+  border: 1px solid var(--muted); background: #ffffff; color: var(--ink-2); cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.oret-return:hover { background: var(--surface-2); border-color: var(--ink-2); color: var(--ink); }
+.oret-return:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 1px; }
+.oret-return .ar { color: var(--muted); }
+
+/* ── a dashed product implication (proposed, never applied) ── */
+.oret-impl {
+  border: 1px dashed color-mix(in srgb, var(--ember) 40%, var(--muted));
+  border-radius: var(--r-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-2);
+  background: color-mix(in srgb, var(--ember) 4%, #ffffff);
+}
+.oret-impl-text { font-size: var(--text-sm); line-height: 1.4; color: var(--ink); margin: 0; }
+.oret-impl-note { font-size: 11px; color: var(--muted); margin: var(--space-2) 0 0; line-height: 1.4; }
+.oret-impl-acts { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
+.oret-impl-act {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: var(--text-xs); font-weight: 560; font-family: inherit;
+  padding: 6px 10px; border-radius: var(--r-md); cursor: pointer;
+  border: 1px solid var(--muted); background: #ffffff; color: var(--ink);
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.oret-impl-act.is-accept { border-color: color-mix(in srgb, var(--ember) 45%, var(--muted)); color: var(--ember); }
+.oret-impl-act.is-accept:hover { background: color-mix(in srgb, var(--ember) 8%, #ffffff); }
+.oret-impl-act:hover { background: var(--surface-2); border-color: var(--ink-2); }
+.oret-impl-act:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 1px; }
+
+.oret-empty { font-size: var(--text-sm); color: var(--muted); line-height: 1.4; }
+.oret-face { border: 0; background: transparent; padding: 0; cursor: pointer; border-radius: 50%; line-height: 0; }
+.oret-face:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 2px; }

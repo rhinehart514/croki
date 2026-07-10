@@ -4,8 +4,16 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { objectGraphLayoutStore, objectGraphStore, normalizeObjectNode, normalizeObjectEdge } from "../src/object-graph-store.mjs";
+import {
+  OBJECT_GRAPH_LAYOUT_NAMESPACE,
+  PROJECT_CANVAS_LAYOUT_NAMESPACE,
+  objectGraphLayoutStore,
+  objectGraphStore,
+  normalizeObjectNode,
+  normalizeObjectEdge,
+} from "../src/object-graph-store.mjs";
 import { applyObjectGraphOperations, validateObjectGraph } from "../src/object-graph-operations.mjs";
+import { persistence } from "../src/persistence.mjs";
 
 function freshRoot() {
   return { root: fs.mkdtempSync(path.join(os.tmpdir(), "object-graph-")) };
@@ -64,6 +72,29 @@ describe("object graph store", () => {
     assert.deepEqual(layout.positions, { "node-1": { x: 12, y: -4 } });
     assert.equal(objectGraphStore.load("drover", options).nodes[0].payload.x, undefined);
     assert.deepEqual(objectGraphLayoutStore.load("drover", options).positions["node-1"], { x: 12, y: -4 });
+  });
+
+  it("aliases legacy positions into namespaced founder geometry without breaking rollback reads", () => {
+    const options = freshRoot();
+    persistence(options).set("object-graph-layout", "drover", {
+      positions: { "obj-old": { x: 8, y: 13 } },
+      updatedAt: "2026-07-01T00:00:00.000Z",
+    });
+    assert.deepEqual(
+      objectGraphLayoutStore.loadNamespace("drover", OBJECT_GRAPH_LAYOUT_NAMESPACE, options).positions,
+      objectGraphLayoutStore.loadNamespace("drover", PROJECT_CANVAS_LAYOUT_NAMESPACE, options).positions,
+    );
+    const saved = objectGraphLayoutStore.mergeNamespace("drover", PROJECT_CANVAS_LAYOUT_NAMESPACE, {
+      positions: { "anchor:question:q-1": { x: 21, y: 34 } },
+      collapsedGroups: ["questions"],
+      pinnedCrew: ["crew:researcher"],
+      viewport: { x: -10, y: 4, zoom: 0.8 },
+    }, options);
+    assert.deepEqual(saved.collapsedGroups, ["questions"]);
+    assert.deepEqual(saved.pinnedCrew, ["crew:researcher"]);
+    assert.deepEqual(saved.viewport, { x: -10, y: 4, zoom: 0.8 });
+    assert.deepEqual(objectGraphLayoutStore.load("drover", options).positions, saved.positions);
+    assert.deepEqual(persistence(options).get("object-graph-layout", "drover").positions, saved.positions);
   });
 
   it("keeps edge type as a closed union and requires a basis receipt", () => {

@@ -6,9 +6,9 @@ Drover is alpha. The truth scan, founder gate, taste memory, graph execution, na
 machinery, MCP surface, and dogfood spine are substantially built. The real market loop is not yet proven
 by an outside founder.
 
-The strategic bottleneck is not lack of features. It is the wrong center of gravity: the product still
-reads as a pipeline/graph runner even though its highest-leverage assets are the GTM crew, product truth,
-market evidence, and the learning loop.
+The strategic bottleneck is not lack of features or an incorrect canvas. The canvas does not yet make the
+full product-to-market loop legible: product truth, crew judgment, unresolved questions, pipeline execution,
+founder decisions, and returned outcomes still read as adjacent systems instead of one operation.
 
 ## Keep
 
@@ -17,7 +17,7 @@ market evidence, and the learning loop.
 | Repository scan | Keep and elevate | It is the truth boundary and the code-native advantage. |
 | Product model | Keep and connect | It is the founder-editable interpretation of product reality. |
 | Evidence/provenance | Keep as a shared contract | It prevents market interpretation from laundering into fact. |
-| Open graph | Keep as execution detail | It lets model-owned actions take any shape. |
+| Open graph and woven canvas | Keep and enrich | They are Drover's distinctive action and observation grammar. |
 | Founder gate | Keep untouched | It is the trust wall and the core product promise. |
 | Crew roster and souls | Keep and promote | Teammates are a product-level differentiator. |
 | Taste memory | Keep and widen | It must shape teammates, composition, and interpretation. |
@@ -28,17 +28,17 @@ market evidence, and the learning loop.
 
 | Existing area | Required change |
 | --- | --- |
-| Project → channel → graph hierarchy | Project remains root; questions and crew become first-class context; graph becomes an action execution plan. |
+| Project → channel → graph hierarchy | Project remains root; the canvas becomes its connected GTM projection; pipelines remain open action paths and graphs remain their editable execution plans. |
 | Pipeline-specific crew | Make the durable crew product-scoped; assemble temporary pods for a question or action. |
 | Operator goal session | Let it work on a GTM/product question as well as a direct run goal. |
 | Product model | Link signals and decisions to GTM questions, teammates, actions, and outcomes. |
 | Outcome learning | Feed implications back into product interpretation, teammate memory, and coding context. |
-| Canvas | Make it a question/evidence/action projection; keep graph detail as a focused view. |
+| Canvas | Enrich the woven coordinate space with product truth, optional questions, evidence, crew positions, decisions, outcomes, and return edges. |
 | MCP tools | Put product, crew, questions, evidence, decisions, and outcomes beside graph tools. |
 
 ## Demote
 
-- all-pipeline overview as the default home;
+- fleet dashboards that reduce the canvas to pipeline counts or activity summaries;
 - capability inventory as primary navigation;
 - generic run controls as the main call to action;
 - agent bench as a standalone destination;
@@ -75,4 +75,3 @@ rename-only migration. Trace each proposed change to a real user-visible product
 working-tree changes. If an old DDD object is absent from the current code, do not recreate it for symmetry.
 If a new object can be a projection over existing stores, prefer the projection.
 ```
-

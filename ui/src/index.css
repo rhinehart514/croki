@@ -4552,8 +4552,12 @@ svg {
 
 /* ── Persistent Claude co-pilot dock (rightmost column of loop-body) ────────── */
 .composer-dock {
-  flex: 0 0 340px;
+  /* A COMPACT crew/composer perimeter (docs/production-direction/16): 340px at the 1440 desktop target
+     (~24%), but capped to at most ~a third of the viewport so it never consumes ~40% and never crowds the
+     canvas / founder wall at tablet or narrow widths. The canvas stays the primary object. */
+  flex: 0 1 340px;
   width: 340px;
+  max-width: 34vw;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -5861,11 +5865,14 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .goal-launcher-title { font-family: var(--serif); font-size: 32px; font-weight: 600; color: var(--ink); margin: 12px 0 12px; letter-spacing: -0.015em; text-wrap: balance; }
 .goal-launcher-sub { font-size: 14px; line-height: 1.6; color: var(--muted); max-width: 540px; margin: 0 auto 22px; }
 .goal-launcher-box {
-  display: flex; align-items: flex-end; gap: 8px; text-align: left;
+  display: flex; flex-direction: column; align-items: stretch; gap: 8px; text-align: left;
   padding: 12px 12px 12px 16px; background: var(--surface);
   border: 1px solid var(--line-2); border-radius: var(--r-xl); box-shadow: var(--shadow-card);
   transition: border-color 140ms var(--ease), box-shadow 140ms var(--ease);
 }
+/* The bottom control row inside the input: the runtime picker sits left, the send button right —
+   one calm composition, not a separate settings strip. */
+.goal-launcher-controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .goal-launcher-box:focus-within { border-color: var(--ember-line); box-shadow: 0 6px 18px -7px rgba(46, 110, 94, 0.28); }
 .goal-launcher-input {
   flex: 1; border: 0; outline: none; resize: none; background: none;
@@ -6641,7 +6648,25 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .product-entry-read-win code{font-family:var(--font-mono);font-size:12px;padding:1px 5px;border-radius:4px;
   background:#f4f4f5;border:1px solid var(--line);color:var(--ink)}
 
-/* ── Connect Claude: the hard first-run gate's numbered walkthrough ──────────── */
+/* ── Connect a runtime: the cold-start gate's two equal provider choices (Codex / Claude).
+   No numbered tutorial, no favoritism — both rows share one style. ───────────── */
+.connect-runtimes{list-style:none;margin:6px 0 20px;padding:0;display:grid;gap:12px}
+.connect-runtime{display:flex;align-items:flex-start;gap:14px;padding:14px 15px;border:1px solid var(--line-2);
+  border-radius:12px;background:var(--surface)}
+.connect-runtime-main{display:grid;gap:5px;min-width:0;flex:1}
+.connect-runtime-head{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+.connect-runtime-name{font-size:15px;font-weight:600;color:var(--ink)}
+.connect-runtime-provider{font-size:12px;color:var(--faint)}
+.connect-runtime-hint{font-size:12.5px;color:var(--muted);line-height:1.55}
+.connect-runtime-cmd{font-family:var(--font-mono);font-size:11.5px;padding:1px 5px;border-radius:4px;
+  background:#f4f4f5;border:1px solid var(--line);color:var(--ink)}
+.connect-runtime-status{margin-left:auto;display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;
+  font-size:12px;color:var(--muted);white-space:nowrap}
+.connect-runtime-dot{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:0 0 auto}
+.connect-runtime-dot.on{background:var(--proven)}
+.connect-fallback{margin:-6px 0 18px;font-size:12px;color:var(--faint);line-height:1.5}
+
+/* ── Connect Claude: the hard first-run gate's numbered walkthrough (legacy) ──── */
 .connect-steps{list-style:none;margin:6px 0 22px;padding:0;display:grid;gap:16px}
 .connect-step{display:flex;align-items:flex-start;gap:12px}
 .connect-step-num{flex:0 0 auto;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;

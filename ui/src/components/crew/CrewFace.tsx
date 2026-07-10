@@ -3,10 +3,8 @@
 //
 //   • the default "character" face draws the hand-drawn crew character (CrewAvatar), degrading to the
 //     two-letter monogram in the agent's family tint if it can't render;
-//   • the "roundel" variant (opt-in, used on the crew/composer surfaces) draws the teammate as a clean
-//     MONOGRAM roundel — initials in the sleek display sans — the way the Warm Atelier reference presents
-//     the crew: a settled sage presence dot when idle, a spruce ring and a breathing spruce dot while it
-//     works. This is the register that reads as "named teammates, real people," not photo thumbnails.
+//   • the "roundel" variant (opt-in) draws the teammate as a clean monogram roundel for deliberately
+//     compact, authorship-first surfaces such as message threads.
 //
 // Keeping the monogram as the fallback for the character face is deliberate: a broken character must
 // degrade to a legible identity, not to nothing.

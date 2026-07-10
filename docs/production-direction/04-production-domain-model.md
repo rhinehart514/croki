@@ -2,140 +2,145 @@
 
 ## Design rule
 
-The domain model should be small, product-scoped, and open. It should connect records without forcing the
-founder through a prescribed GTM journey.
+The domain model stays small, product-scoped, open, and subordinate to the existing canvas/pipeline grammar.
+Add links and projections before records. A canvas object does not earn a new store merely because it is
+visible.
 
-## Core records
+## Authority model
 
-### Product / Project
+### Durable authorities
 
-Existing project root. Owns the repository, product context, crew, and all product-scoped GTM records.
+- **Product / Project** — existing project root and repository identity.
+- **Product truth** — existing read-only scan and cited truth records.
+- **Product interpretation** — existing founder-editable product model.
+- **Crew identity and taste** — existing product roster, teammate souls, run history, and founder learning.
+- **Pipeline / graph** — existing open action definition and execution plan.
+- **Run / Result / Learning** — existing execution, observed outcome, and durable learning records.
+- **Founder gate decisions** — existing gate, feedback, and taste history. Do not create a second general
+  decision authority.
+- **Founder-owned geometry** — only explicit positions, collapsed groups, pins, and viewport choices that must
+  survive reload.
 
-### GTM Crew
+Founder-owned geometry extends the current `objectGraphLayoutStore` into a namespaced project canvas layout:
+stable object positions, collapsed groups, pinned crew, and viewport preferences. Keep the existing
+object-graph layout API as a backward-compatible namespace/alias; do not create competing layout stores.
 
-The persistent product-level roster. Reuses `crew-roster-store.mjs`, `teammate-soul-store.mjs`, and memory.
+### Projections
 
-Minimum durable facts:
+- teammate presence, activity, and track record;
+- open questions not explicitly pinned by the founder;
+- relevant crew pods;
+- disagreement branches;
+- problems and health;
+- product implications before a founder accepts, edits, dismisses, or defers them;
+- canvas relationships derived from truth, runs, feedback, and outcomes.
 
-- teammate reference and origin;
-- product association;
-- founder name/role override;
-- soul/stance/voice;
-- track record;
-- learned founder guidance;
-- questions and actions contributed to.
+Every projected field must name the authoritative record or runtime signal that produced it.
 
-### GTM Question
+## Canvas anchors and references
 
-A thin durable context record, not a program and not a required pre-run object.
+The canvas may address product truth, product elements, teammates, pinned questions, pipelines, graph nodes,
+gate decisions, artifacts, outcomes, and accepted implications through stable references. References point to
+authoritative bodies; they never copy evidence, run output, or outcome content into a parallel canvas store.
 
-```text
-GtmQuestion {
-  id
-  projectId
-  question                 // open plain-language question
-  summary                  // current model-generated readout; never authoritative truth
-  status                   // minimal record lifecycle; not a GTM stage skeleton
-  participantRefs[]
-  evidenceRefs[]
-  decisionRefs[]
-  actionRefs[]
-  outcomeRefs[]
-  productRefs[]            // model/product elements or code references
-  unknowns[]
-  createdAt
-  updatedAt
-}
-```
+Persist a relationship only when it carries founder intent or durable lineage that cannot be recovered from
+existing records. Relationship kinds remain open strings. Derived proximity, visual grouping, status, and
+focus are not durable domain state.
 
-Use this as a linkable context layer. A question may be created by a founder, agent, signal, or action. It
-may be absent when a founder directly requests a run.
+## Questions
 
-### Evidence
+Questions are optional anchors, not a required lifecycle or top-level program.
 
-Use the existing evidence contract for:
+- Internal or transient questions may remain operator/run artifacts.
+- A teammate- or model-opened question remains an attributable operator/run artifact until the founder pins
+  it. Pinning is the founder act that creates or promotes the clarity record.
+- A founder-pinned question reuses the existing clarity record and stable id, extended additively with
+  `status`, `updatedAt`, `participantRefs`, `evidenceRefs`, and `productRefs`.
+- Once another durable record references a pinned question, closing or unpinning it archives the clarity
+  record instead of deleting its stable id. Existing unreferenced pins may retain the current remove behavior.
+- Pipeline/run metadata owns optional `questionId`, `participantRefs`, and `productRefs`. Results inherit
+  optional `questionId`, `productRefs`, and a typed reference to the existing feedback/gate decision from the
+  joined run. The question does not
+  mirror pipeline, result, or decision backlink arrays; the canvas projection reverse-joins them.
+- A direct pipeline may exist and run without a question.
+- Question completeness, status, or evidence never blocks pre-gate work.
 
-- repository truth;
-- researched market facts;
-- founder-stated information;
-- observed outcomes;
-- inferred interpretations;
-- speculative hypotheses.
+The canvas presentation may show teammate claims, evidence, uncertainty, recommendations, and falsifiers
+around a question. That presentation contract does not require an `AgentContribution` store. Prefer
+attributable operator events, feedback records, artifacts, and run outputs until a concrete cross-session use
+case proves a missing durable owner.
 
-Evidence is the source of trust, not a score engine.
+## Founder decisions
 
-### Agent Contribution
+Founder calls remain stamped where they occur: a branch choice, feedback edit, accepted proposal, gate
+decision, blessed teammate lesson, or accepted implication. Existing feedback/gate/taste records are the
+authority. Corrections append; they do not erase the earlier receipt.
 
-Use a thin record or append-only contribution projection:
+Within that existing feedback authority, durable founder calls use an append-only `decisions` partition that
+is not subject to the observational `signals` cap. Each receipt carries `id`, `projectId`, `kind`, exact
+founder wording or selected value, `contextRefs`, `createdAt`, and optional `supersedesId`. The source gate,
+feedback item, implication, branch, or lesson remains the authoritative body; the receipt is its stable audit
+and correction index, not a second generic `FounderDecision` store. Compatibility reads may synthesize
+receipts from legacy gate results, shared judgments, and qualifying feedback signals by stable source id;
+materialization is additive and idempotent, and never deletes the legacy source.
 
-```text
-AgentContribution {
-  id
-  projectId
-  questionId?
-  agentRef
-  statement
-  evidenceRefs[]
-  confidence?
-  unknowns[]
-  recommendation?
-  actionRefs[]
-  createdAt
-}
-```
+Answering a question is never equivalent to approving execution. Taste may learn from a decision but cannot
+invent future authorization.
 
-The host stores attribution and provenance. The model writes the judgment.
+## Actions
 
-### Founder Decision
+An action is the founder-facing meaning of an existing pipeline, graph, operator drive, or product-shaped
+build. It is not a new generic record. Research, product changes, instrumentation, outreach, content,
+partnerships, proof artifacts, activation work, and microproducts remain open graph shapes.
 
-Use the existing gate/feedback/taste machinery and extend its projection to question and product context.
+## Evidence
 
-```text
-FounderDecision {
-  id
-  projectId
-  questionId?
-  agentRef?
-  actionRef?
-  decision              // open founder language plus normalized audit kind
-  editedFields[]
-  reason?
-  createdAt
-}
-```
+Use the existing evidence and citation contracts. Product facts, researched market facts, founder statements,
+observed outcomes, inferences, and speculation stay visibly distinct. Store references to evidence rather
+than copied evidence bodies.
 
-### Action
+## Outcomes and implications
 
-An open product/GTM move. Existing GTM paths, graphs, and operator sessions project here.
+Keep the existing Result and Learning system. A joined outcome references the run/item/path that produced it;
+an unjoined signal remains explicitly unattributed. Approval or release is never reported as market success.
 
-Examples: research, product change, instrumentation, outreach, content, partner motion, microproduct,
-activation change, proof artifact, or code task.
+A product implication begins as a model-owned projection over evidence and outcomes. Persist only the
+founder's acceptance, edit, dismissal, or deferral using existing feedback/decision machinery. An accepted
+implication may compose a dashed product-change pipeline; it does not mutate code or product truth directly.
 
-### Run / Outcome / Learning
-
-Keep `Run`, `Result`, `RepeatableMotion`, and `Learning` from `gtm-store.mjs` where useful. Add links to
-question, product elements, teammates, and founder decisions. Do not create a second result system.
+The accepted/edited implication body and disposition live as a stable append-only founder-decision receipt
+inside the feedback authority, carrying
+`sourceOutcomeId`, `productRefs`, `questionId?`, `disposition`, and exact founder wording. Accepted decisions
+must not disappear behind the feedback ledger's rolling observational-signal cap.
 
 ## Persistence rule
 
-Do not convert the entire repository to event sourcing. Use existing atomic stores and domain events where
-lineage or auditability is already required. A new question/contribution layer may begin as a thin store or
-projection over existing records. Add event types only when rebuildability is genuinely load-bearing.
+Do not convert the repository to event sourcing or introduce a generic link/knowledge platform. For any new
+field or record, state:
+
+- authoritative owner;
+- product scope and stable id;
+- creation and mutation path;
+- provenance and idempotency;
+- archival and historical-reference behavior;
+- why existing truth, run, feedback, clarity, layout, or result records cannot own it.
+
+Empty new state must be valid. Existing products, pipelines, runs, gates, and teammate history must load
+without migration. Historical references survive archival.
 
 ## No cross-record lie
 
-Never infer that an action worked because a gate was approved. A market outcome must be observed and joined.
-Never infer that a product change caused a market response without an explicit attribution path.
+Never infer that an action worked because a gate was approved, that a teammate is active without a real
+signal, or that a product change caused a response without an attribution path.
 
 ## Implementation prompt
 
 ```text
-Design the smallest durable record/projection needed for this product behavior.
+Design the smallest record, reference, or projection needed for the canvas behavior.
 
-Start from existing project-store, gtm-store, feedback-ledger, product-model, operator-session, and soul
-records. Show the read/write owner for every field. Keep question/context records advisory and optional. Do
-not introduce OutcomeProgram, AgentCreationPolicy, PersonalizationProfile, AgentInstance, CapabilityFoundry,
-or a fixed GTM stage machine. Preserve open kinds and provenance. Add round-trip tests, project isolation
-tests, and a no-fabrication test for every new read model.
+Start from project-store, flow/run state, gtm-store, feedback-ledger, clarity-store, product-model, operator
+events, crew/soul, layout, and outcome records. Prefer projections and references. Do not add GtmQuestion,
+AgentContribution, FounderDecision, generic Action, link-platform, program, policy, profile, instance,
+foundry, or fixed-stage records without first proving a concrete use case that existing authorities cannot
+support. Preserve open kinds, provenance, question optionality, historical reads, and the founder wall.
 ```
-

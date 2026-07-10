@@ -18,24 +18,48 @@
 // subprocess) is actually reasoning.
 
 import { anthropicRuntime } from "./anthropic.mjs";
-import { authModeLabel, claudeCodeRuntime } from "./claude-code.mjs";
+import { authModeLabel as claudeAuthModeLabel, claudeCodeRuntime } from "./claude-code.mjs";
+import { codexAuthModeLabel, codexRuntime } from "./codex.mjs";
 
-export { anthropicRuntime, claudeCodeRuntime, authModeLabel };
+export { anthropicRuntime, claudeCodeRuntime, codexRuntime };
+
+export function authModeLabel(mode) {
+  return claudeAuthModeLabel(mode) ?? codexAuthModeLabel(mode);
+}
 
 const REGISTRY = {
   [anthropicRuntime.id]: anthropicRuntime,
   [claudeCodeRuntime.id]: claudeCodeRuntime,
-  // Codex is the planned optional third runtime. It would slot in here as a
-  // sibling subprocess adapter (same drive contract) with no other changes.
+  [codexRuntime.id]: codexRuntime,
 };
 
 // Preference order when nothing is forced: the bundled Claude Code Agent SDK is
-// the preferred runtime (founder subscription, local harness), then the direct
-// Anthropic API as the keyed fallback.
-const PREFERENCE = [claudeCodeRuntime, anthropicRuntime];
+// subscription runtimes first, then the direct Anthropic API as a keyed
+// fallback. A session bound through the model picker overrides this order.
+const PREFERENCE = [claudeCodeRuntime, codexRuntime, anthropicRuntime];
 
 export function getRuntime(id) {
   return REGISTRY[id] ?? null;
+}
+
+export function runtimeForModel(model) {
+  if (typeof model !== "string") return null;
+  if (/^gpt-/i.test(model)) return codexRuntime.id;
+  if (/^claude-/i.test(model)) return claudeCodeRuntime.id;
+  return null;
+}
+
+export function runtimeStatuses({ env = process.env } = {}) {
+  return PREFERENCE.map((adapter) => {
+    const availability = adapter.isAvailable({ env });
+    return {
+      id: adapter.id,
+      label: adapter.label,
+      connected: availability.ok,
+      auth: availability.ok ? availability.auth ?? null : null,
+      reason: availability.ok ? null : availability.reason ?? "Not available.",
+    };
+  });
 }
 
 // Decide which runtime drives this session.
@@ -45,11 +69,11 @@ export function getRuntime(id) {
 //   - Otherwise: first available in PREFERENCE order.
 // Returns { adapter, client?, auth?, reason? }. A null adapter carries an
 // honest reason; `auth` names the credential mode the adapter will use.
-export function selectRuntime({ client, runtime, forced, env = process.env } = {}) {
+export function selectRuntime({ client, runtime, forced, model, env = process.env } = {}) {
   if (client) return { adapter: anthropicRuntime, client, auth: "client" };
   if (runtime && typeof runtime.drive === "function") return { adapter: runtime };
 
-  const forcedId = forced || env.GTM_IDE_OPERATOR_RUNTIME;
+  const forcedId = forced || runtimeForModel(model) || env.GTM_IDE_OPERATOR_RUNTIME;
   if (forcedId) {
     const adapter = getRuntime(forcedId);
     if (!adapter) {

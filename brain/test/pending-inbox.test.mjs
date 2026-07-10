@@ -3,7 +3,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { createProject } from "../src/project-store.mjs";
+import { defaultGraphTemplate } from "../src/graph.mjs";
+import { saveFlow } from "../src/flow-store.mjs";
+import { createProject, saveProject } from "../src/project-store.mjs";
 import { createOperatorSession, saveOperatorSession, getOperatorSession } from "../src/operator-store.mjs";
 import { appendInput, markRouted } from "../src/inputs-store.mjs";
 import { getPendingInbox } from "../src/pending-inbox.mjs";
@@ -24,8 +26,28 @@ describe("pending-decision inbox projection", () => {
   beforeEach(() => {
     parent = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-pending-inbox-"));
     options = { root: parent };
-    p1 = createProject({ name: "RodentRadar" }, options).project.id;
-    p2 = createProject({ name: "Strelva" }, options).project.id;
+    const project1 = createProject({ name: "RodentRadar" }, options).project;
+    const project2 = createProject({ name: "Strelva" }, options).project;
+    p1 = project1.id;
+    p2 = project2.id;
+
+    const graphA = { ...defaultGraphTemplate(), id: "pipeline-a", name: "Pipeline A" };
+    const graphB = { ...defaultGraphTemplate(), id: "pipeline-b", name: "Pipeline B" };
+    const graphC = { ...defaultGraphTemplate(), id: "pipeline-c", name: "Pipeline C" };
+    for (const graph of [graphA, graphB, graphC]) saveFlow(graph, options);
+    saveProject({
+      ...project1,
+      channels: [
+        { id: "pipeline-a", graphId: graphA.id, name: graphA.name, objective: "Pest-control pilot", kind: "custom", enabled: true },
+        { id: "pipeline-b", graphId: graphB.id, name: graphB.name, objective: "Content angle", kind: "custom", enabled: true },
+      ],
+    }, options);
+    saveProject({
+      ...project2,
+      channels: [
+        { id: "pipeline-c", graphId: graphC.id, name: graphC.name, objective: "Warm intro", kind: "custom", enabled: true },
+      ],
+    }, options);
   });
 
   afterEach(() => fs.rmSync(parent, { recursive: true, force: true }));

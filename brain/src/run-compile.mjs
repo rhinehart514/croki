@@ -124,7 +124,7 @@ export function buildCompileGrounding({ path, projectId = "default", productTrut
 
 // The channel the compose engine composes for — objective drawn from the path's own bet, so the model
 // designs the topology THIS bet needs. Reuses the engine's channel shape; no new object.
-function channelForPath(path) {
+function channelForPath(path, contextRefs = {}) {
   const bet = path?.bet ?? {};
   const objective = [
     path?.summary,
@@ -140,6 +140,9 @@ function channelForPath(path) {
     title: path?.summary ? path.summary.slice(0, 60) : "GTM path run",
     objective: objective || path?.summary || "",
     kind: "gtm-path-run",
+    questionId: contextRefs.questionId ?? path?.questionId ?? null,
+    participantRefs: contextRefs.participantRefs ?? path?.participantRefs ?? [],
+    productRefs: contextRefs.productRefs ?? path?.productRefs ?? [],
   };
 }
 
@@ -185,6 +188,20 @@ function gateBindingsForGraph(nodes, edges, items) {
   return [...byProtects.values()];
 }
 
+export function assertOrdinaryProductChangeBoundary(nodes, runPlan) {
+  if (!runPlan?.patch) return;
+  const unsafe = (Array.isArray(nodes) ? nodes : []).filter(
+    (node) => node?.category === "execute" && !["local", "artifact"].includes(node.connector || "local"),
+  );
+  if (unsafe.length) {
+    throw new Error(
+      `An ordinary in-repo product change may prepare a worktree and reviewed diff only; ` +
+      `execute node${unsafe.length === 1 ? "" : "s"} ${unsafe.map((node) => `"${node.id}" (${node.connector || "unknown"})`).join(", ")} ` +
+      "would cross into commit, push, pull request, merge, publish, deploy, or another external effect.",
+    );
+  }
+}
+
 // ── Staging the execution actions ──────────────────────────────────────────────────────────────────
 // What the founder reviews at the gate. The old spine staged one planned-action item; the graph path
 // compile generalizes that into RunPlan sections while preserving the open item shape and joinKey rule.
@@ -223,10 +240,13 @@ function stageItemsForRun({ path, input, runPlan, measurementWeakness }) {
   if (runPlan?.patch) {
     staged.push({
       kind: "patch",
-      reviewPayload: "diff",
-      protects: "apply_patch",
       pathId: path?.id ?? null,
       ...runPlan.patch,
+      reviewPayload: "diff",
+      protects: "prepare_diff",
+      effectBoundary: "reviewed_diff_only",
+      externalEffectAuthorized: false,
+      blockedEffects: ["commit", "push", "pull_request", "merge", "publish", "deploy"],
     });
   }
   for (const step of runPlan?.execution ?? []) {
@@ -274,6 +294,9 @@ export function gateReviewForRun(run) {
   return {
     runId: run?.id ?? null,
     pathId: run?.pathId ?? null,
+    questionId: run?.questionId ?? null,
+    participantRefs: Array.isArray(run?.participantRefs) ? run.participantRefs : [],
+    productRefs: Array.isArray(run?.productRefs) ? run.productRefs : [],
     status: run?.gateState?.status ?? "pending",
     // The bound measurement contract travels with the review, so the founder sees how this run will be
     // measured at the moment they approve it — measurement is set before, not after, the send.
@@ -491,6 +514,9 @@ export async function compileRunFromPath({
   marketObjects = null,
   input = null,
   output = null,
+  questionId = undefined,
+  participantRefs = undefined,
+  productRefs = undefined,
   runPlan = null,
   decompose = null,
   compose,
@@ -514,14 +540,20 @@ export async function compileRunFromPath({
       : {}),
     { pathId: resolvedPath.id, contract: resolvedContract },
   );
+  const runContext = {
+    questionId: questionId === undefined ? resolvedPath.questionId ?? null : questionId,
+    participantRefs: participantRefs === undefined ? resolvedPath.participantRefs ?? [] : participantRefs,
+    productRefs: productRefs === undefined ? resolvedPath.productRefs ?? [] : productRefs,
+  };
 
   // 4. Reuse the proven compose-to-gate engine to design the executable steps. It asserts the founder
   //    gate on every path to an execute node; a run that could send without a gate never compiles.
-  const channel = channelForPath(resolvedPath);
+  const channel = channelForPath(resolvedPath, runContext);
   const { nodes, edges } = await composeGraphForChannel({ channel, grounding, input, output, compose, capabilities: listCapabilities(options) });
 
   // 5. Re-assert the wall on the compiled topology (belt and suspenders — the wall is untouched).
   assertGateWall(nodes, edges);
+  assertOrdinaryProductChangeBoundary(nodes, normalizedRunPlan);
 
   // 6. Stage the run: compiled-steps snapshot + the contract bound BEFORE execution + a pending gate.
   //    Nothing sends — the status is "staged" and the gate awaits the founder.
@@ -531,6 +563,7 @@ export async function compileRunFromPath({
     {
       projectId,
       pathId: resolvedPath.id,
+      ...runContext,
       steps: nodes,
       edges,
       gateState: { status: "pending", awaitingReview: items.length },

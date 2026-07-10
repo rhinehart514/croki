@@ -7,7 +7,7 @@
 // It records what ALREADY happened. It never sends, publishes, charges, or runs anything, so the wall
 // is untouched.
 
-import { ingestOutcome } from "./outcome-ingest.mjs";
+import { ingestOutcome, projectFlowRunReceipts } from "./outcome-ingest.mjs";
 import { loadProjectRuns } from "./project-store.mjs";
 import { runStore } from "./gtm-store.mjs";
 
@@ -46,10 +46,9 @@ function happenedCount(happened) {
 
 // Resolve the joinKey the outcome joins on, plus a run snapshot to join against. When a real staged
 // GTM run matches `runId`, we join to its first item's key so the outcome ties to what was actually
-// sent; the founder's lesson is injected as that item's message so the paired Learning captures it.
-// Otherwise we mint a founder-authored snapshot keyed by the runId (or a fresh key), so the outcome and
-// its lesson are still recorded — captured honestly as an out-of-band note rather than dropped.
-function resolveJoin(projectId, runId, learnedText, options) {
+// sent. Otherwise no synthetic run is created: the receipt is stored honestly as unattributed rather
+// than manufacturing a join merely to retain the lesson.
+function resolveJoin(projectId, runId, options) {
   if (runId) {
     let realRun = null;
     try {
@@ -60,34 +59,64 @@ function resolveJoin(projectId, runId, learnedText, options) {
     if (realRun && Array.isArray(realRun.items) && realRun.items.length) {
       const first = realRun.items[0];
       const joinKey = first.joinKey || realRun.id;
-      const items = realRun.items.map((item, index) =>
-        index === 0 && learnedText ? { ...item, message: learnedText } : item,
-      );
-      return { joinKey, pathId: realRun.pathId ?? null, runsSnapshot: [{ ...realRun, items }] };
+      return { joinKey, pathId: realRun.pathId ?? null, runsSnapshot: [realRun] };
+    }
+    try {
+      const liveRun = projectFlowRunReceipts(loadProjectRuns(projectId, options))
+        .find((candidate) => candidate.id === runId || candidate.executionRunId === runId);
+      if (liveRun?.items?.length) {
+        return {
+          joinKey: liveRun.items[0].joinKey,
+          pathId: liveRun.pathId ?? null,
+          runsSnapshot: [liveRun],
+        };
+      }
+    } catch {
+      // Fall through to an honest unattributed receipt.
     }
   }
   const joinKey = runId || `founder-${Date.now()}`;
-  const item = { joinKey };
-  if (learnedText) {
-    item.message = learnedText;
-    item.draft = learnedText;
-  }
-  const runsSnapshot = [{ id: runId || "founder-note", status: "founder-entered", pathId: null, items: [item] }];
-  return { joinKey, pathId: null, runsSnapshot };
+  return { joinKey, pathId: null, runsSnapshot: [] };
 }
 
 // Record one founder-entered outcome for a run. `happened` is a plain label (optionally an object with
 // a count); `learned` is free text — the lesson. Returns the recorded Result + Learning and whether it
 // joined back to a real staged run.
-export function recordFounderOutcome(projectId = "default", { runId = null, happened, learned } = {}, options = {}) {
+export function recordFounderOutcome(
+  projectId = "default",
+  {
+    runId = null,
+    happened,
+    learned,
+    questionId = null,
+    productRefs = [],
+    participantRefs = [],
+    crewRefs = [],
+    decisionRefs = [],
+    decisionRef = null,
+  } = {},
+  options = {},
+) {
   const label = happenedLabel(happened);
   const outcomeKind = HAPPENED_TO_KIND[label.toLowerCase()] ?? (label ? label.toLowerCase() : "other");
   const value = happenedCount(happened);
   const learnedText = String(learned ?? "").trim() || null;
 
-  const { joinKey, pathId, runsSnapshot } = resolveJoin(projectId, runId, learnedText, options);
+  const { joinKey, pathId, runsSnapshot } = resolveJoin(projectId, runId, options);
   const ingested = ingestOutcome(
-    { joinKey, outcomeKind, value, source: "founder-entered", pathId },
+    {
+      joinKey,
+      outcomeKind,
+      value,
+      source: "founder-entered",
+      pathId,
+      body: learnedText,
+      questionId,
+      productRefs,
+      participantRefs: [...participantRefs, ...crewRefs],
+      decisionRefs,
+      decisionRef,
+    },
     { ...options, projectId, runs: runsSnapshot },
   );
   return { ok: true, result: ingested.result, learning: ingested.learning, joined: ingested.joined };

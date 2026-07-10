@@ -33,6 +33,7 @@ import {
   cancelOperatorSession,
   createProject,
   createOperatorSession,
+  acceptProductImplication,
   composerTurn,
   getComposerBriefing,
   listOperatorSessions,
@@ -102,10 +103,15 @@ import { statusLabel } from "@/lib/status";
 import { humanizeOperatorSession } from "@/lib/operatorLanguage";
 import { itemKey } from "@/lib/itemKey";
 import { gateItemView, channelOfferLine, type GatePromote, type GateReplayDecision } from "@/lib/gateItem";
-import { agentPersona } from "@/lib/agentPersona";
+import { agentPersona, humanizeRef } from "@/lib/agentPersona";
 import { STEP_DRAG_MIME } from "@/lib/objectPalette";
 const ProductUnderstanding = lazy(() => import("@/components/ProductUnderstanding").then((m) => ({ default: m.ProductUnderstanding })));
 import { GtmCanvas, type GtmCanvasModel } from "@/components/canvas/GtmCanvas";
+import { QuestionFocus } from "@/components/canvas/QuestionFocus";
+import { OutcomeReturn } from "@/components/canvas/OutcomeReturn";
+import { resolveFocusedQuestion, canvasQuestions, canvasOutcomes, canvasImplications, clarityFallbackItems, questionIdFromFocus } from "@/lib/canvasProjection";
+import { showSelfObservedFailureChip } from "@/lib/failureChipVisibility";
+import { anchorNodeId } from "@/lib/wovenOverlay";
 import { sessionCandidates, type Candidate } from "@/lib/sessionCandidates";
 import type { WovenFocus } from "@/lib/wovenOverlay";
 import { CanvasHistoryControl } from "@/components/CanvasHistoryControl";
@@ -169,6 +175,7 @@ import type {
   Person, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, ComposerPosture,
   PendingDecision, PendingInbox, OperatingView,
+  ProductImplication,
 } from "@/types";
 
 // Health → band color, identical to the canvas node badge (GraphCanvas healthHex), so a
@@ -258,6 +265,16 @@ export default function App() {
   // persists. The canvas OPENS on the broad type/forms map, drilling to the object axis as you focus.
   const [wovenAxis, setWovenAxis] = useState<"objects" | "type">("type");
   const [wovenFocus, setWovenFocus] = useState<WovenFocus>(null);
+  // Question altitude (docs/production-direction/09): focusing a pinned question expands its causal
+  // neighborhood in place — teammate positions, evidence, unknowns, and founder receipts — WITHOUT leaving
+  // the woven canvas or switching to a third route/mode. The Operator control stays selected; this is an
+  // in-place focus state, not a new surface. Null → whole-product (product altitude).
+  const [focusedQuestionId, setFocusedQuestionId] = useState<string | null>(null);
+  // Whether the founder collapsed the outcome-return rail, and which proposed implications they dismissed
+  // this session. Dismissal is ephemeral view state — the durable disposition lives in the feedback
+  // authority (backend, parallel work); on reload a still-open implication reappears, honestly.
+  const [outcomeRailClosed, setOutcomeRailClosed] = useState(false);
+  const [dismissedImplications, setDismissedImplications] = useState<Set<string>>(() => new Set());
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [activeProject, setActiveProjectState] = useState<GTMProject | null>(null);
   // The current project id, mirrored into a ref so URL-sync inside the `[]`-dep load callbacks can read
@@ -589,11 +606,13 @@ export default function App() {
   }, []);
 
   const loadChannel = useCallback(async (channelId: string) => {
+    const projectId = activeProjectIdRef.current;
+    if (!projectId) return; // the channel is loaded scoped to the project that owns it
     setGraphRunning(true);
     setGraphError(null);
     try {
       const [graphResponse, engineResponse] = await Promise.all([
-        getGraphTemplate(channelId),
+        getGraphTemplate(channelId, projectId),
         getEngineState(channelId),
         setActiveWorkflow(channelId),
       ]);
@@ -615,10 +634,7 @@ export default function App() {
       // Sync the URL to the focused project so a reload restores it instead of falling back to the
       // overview. Channels are plain flows now — the URL routes by project; the project's active
       // channel (persisted server-side via setActiveWorkflow above) decides the focus on reload.
-      const projectId = activeProjectIdRef.current;
-      if (projectId) {
-        window.history.replaceState(null, "", `/projects/${encodeURIComponent(projectId)}`);
-      }
+      window.history.replaceState(null, "", `/projects/${encodeURIComponent(projectId)}`);
     } catch (error) {
       setGraphError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -714,6 +730,36 @@ export default function App() {
     setComposerFocus((f) => f + 1);
   }, []);
 
+  // The spec-native evidence action (docs/production-direction/09 teammate experience): turn a teammate's
+  // "what would change my mind" into a real, reversible move. It scopes the composer to gather exactly
+  // that evidence and lands the founder in the chat — a discovery step, never a send. Reuses the same
+  // composer-subject channel every canvas → chat handoff uses; nothing new crosses the wall.
+  const gatherEvidence = useCallback((ref: string, falsifier: string) => {
+    const who = humanizeRef(ref);
+    setComposerSubject({ id: `evidence:${ref}`, label: `Find what would change ${who}'s mind: ${falsifier}`, kind: "evidence" });
+    setAgentProfileRef(null);
+    setComposerFocus((f) => f + 1);
+  }, []);
+
+  // Three question-altitude actions that only scope the composer (doc 09) — reversible, nothing sends.
+  // Answering a question never approves execution (doc 06 §Founder decisions). (Turn-into-pipeline and the
+  // implication accept live below, after the operator-drive machinery they call is declared.)
+  const askCrewAboutQuestion = useCallback((q: ClarityObject) => {
+    setComposerSubject({ id: `q:${q.id}`, label: `Ask the crew: ${q.text}`, kind: "question" });
+    setComposerFocus((f) => f + 1);
+  }, []);
+  const findEvidenceForQuestion = useCallback((q: ClarityObject) => {
+    setComposerSubject({ id: `q-ev:${q.id}`, label: `Find evidence for or against: ${q.text}`, kind: "question" });
+    setComposerFocus((f) => f + 1);
+  }, []);
+  const makeCallOnQuestion = useCallback((q: ClarityObject) => {
+    setComposerSubject({ id: `q-call:${q.id}`, label: `Make the call on: ${q.text}`, kind: "question" });
+    setComposerFocus((f) => f + 1);
+  }, []);
+  const dismissImplication = useCallback((impl: ProductImplication) => {
+    setDismissedImplications((prev) => { const next = new Set(prev); next.add(impl.id); return next; });
+  }, []);
+
   // Re-target the composer to a Related card from the composer's own card face: point composerSubject at
   // that card (light identity only). Flipping subjectId makes the object graph select that card and emit
   // its full detail back up, which re-scopes the card face — the founder walks the graph without the
@@ -766,9 +812,11 @@ export default function App() {
   useEffect(() => {
     const missing = channels.filter((c) => c.nodeCount > 0 && !channelGraphs.has(c.id));
     if (!missing.length) return;
+    const projectId = activeProjectIdRef.current;
+    if (!projectId) return; // these lanes belong to the active project; load them scoped to it
     let live = true;
     void Promise.all(
-      missing.map((c) => getGraphTemplate(c.id)
+      missing.map((c) => getGraphTemplate(c.id, projectId)
         .then((r) => [c.id, r.graph, r.runs ?? []] as const)
         .catch(() => null)),
     ).then((results) => {
@@ -837,7 +885,8 @@ export default function App() {
         return;
       }
       const [graphResponse, engineResponse] = await Promise.all([
-        getGraphTemplate(channelId),
+        // Boot loads the channel scoped to the project it belongs to (the ref lags a render here).
+        getGraphTemplate(channelId, projectResponse.project.id),
         getEngineState(channelId),
       ]);
       if (!live) return;
@@ -1028,7 +1077,8 @@ export default function App() {
     if (operatorGraphRevision.current !== next.graphRevision) {
       operatorGraphRevision.current = next.graphRevision;
       if (activeChannelId !== next.graphId) setActiveChannelId(next.graphId);
-      void getGraphTemplate(next.graphId).then((response) => {
+      // The operator session owns its project id — load its graph scoped to that, not the stale active ref.
+      void getGraphTemplate(next.graphId, operatorProjectId(next)).then((response) => {
         // A crew edit: the operator revised the board server-side. Record the structural delta so the
         // founder can undo an agent move exactly like their own. `describeGraphDiff` returns null when
         // nothing structural changed (a pure run/store refresh), so those never land in the history.
@@ -1260,11 +1310,14 @@ export default function App() {
     resumeRunId?: string,
   ) => {
     if (!graph) return;
+    const projectId = activeProjectIdRef.current;
+    if (!projectId) return; // a run must be scoped to its owning project — never an unscoped active-project guess
     setGraphRunning(true);
     setRunningNodeId(targetNodeId ?? null);
     setGraphError(null);
     try {
       const result = await runGraph(graph, {
+        projectId,
         targetNodeId,
         approvals: nextApprovals,
         decisions: nextDecisions,
@@ -1305,11 +1358,13 @@ export default function App() {
   // it." Uses the dedicated single-node run; nothing sends (an execute step still stops at its gate).
   const runNode = useCallback(async (nodeId: string) => {
     if (!graph) return;
+    const projectId = activeProjectIdRef.current;
+    if (!projectId) return;
     setGraphRunning(true);
     setRunningNodeId(nodeId);
     setGraphError(null);
     try {
-      const result = await runWorkflowNode(graph, nodeId);
+      const result = await runWorkflowNode(graph, nodeId, projectId);
       setRunResult(result);
       setFlowRuns((current) => [...current, result].slice(-10));
       if (result.storedRunCount !== undefined) {
@@ -1341,12 +1396,14 @@ export default function App() {
   // content lands the moment it succeeds, instead of one batch at the end.
   const streamRun = useCallback(async () => {
     if (!graph) return;
+    const projectId = activeProjectIdRef.current;
+    if (!projectId) return;
     setGraphRunning(true);
     setRunningNodeId(null);
     setGraphError(null);
     setRunResult({ runId: `live-${Date.now()}`, graphId: graph.id, ok: false, nodes: {}, executionOrder: [], pendingGates: [], feedbackEdges: [] });
     try {
-      await runGraphStream(graph, { approvals, decisions }, (ev) => {
+      await runGraphStream(graph, { projectId, approvals, decisions }, (ev) => {
         if (ev.type === "node_start") {
           setRunningNodeId(ev.nodeId);
         } else if (ev.type === "node_done") {
@@ -1496,9 +1553,11 @@ export default function App() {
 
   const persistGraph = useCallback(async () => {
     if (!graph) return;
+    const projectId = activeProjectIdRef.current;
+    if (!projectId) return; // save scoped to the owning project — new-graph creation requires explicit scope
     setGraphRunning(true);
     try {
-      const response = await saveGraph(graph);
+      const response = await saveGraph(graph, projectId);
       setGraph(response.graph);
       setGraphSavedAt(response.savedAt);
     } catch (error) {
@@ -1587,11 +1646,12 @@ export default function App() {
 
   // A synchronous mirror of the payloaded closer state (the modals + the reference card) so the
   // Escape handler reads current values without re-subscribing the listener on every change.
-  const escapeStateRef = useRef({ artifactEdit: false, agentProfileRef: false, outcomeOpen: false });
+  const escapeStateRef = useRef({ artifactEdit: false, agentProfileRef: false, outcomeOpen: false, focusedQuestion: false });
   escapeStateRef.current = {
     artifactEdit: !!artifactEdit,
     agentProfileRef: !!agentProfileRef,
     outcomeOpen,
+    focusedQuestion: !!focusedQuestionId,
   };
   // Global Escape: close the TOPMOST open floating thing, one layer per press, top to bottom —
   // a centered modal (agent profile, artifact editor, outcome logger), then the right-rail popover,
@@ -1608,6 +1668,9 @@ export default function App() {
       if (escapeStateRef.current.artifactEdit) { setArtifactEdit(null); event.preventDefault(); return; }
       if (escapeStateRef.current.agentProfileRef) { setAgentProfileRef(null); event.preventDefault(); return; }
       if (escapeStateRef.current.outcomeOpen) { setOutcomeOpen(false); event.preventDefault(); return; }
+      // Question altitude steps outward to whole-product (doc 09: Escape steps outward through action
+      // focus, question focus, whole-product context). Sits below the modals, above the nav layers.
+      if (escapeStateRef.current.focusedQuestion) { setFocusedQuestionId(null); event.preventDefault(); return; }
       // Then the nav-owned layers (popover above overlay). `anyLayerOpen` is fresh here because the
       // effect re-subscribes whenever `nav` changes (a new object each render).
       if (nav.anyLayerOpen) { nav.closeTopLayer(); event.preventDefault(); }
@@ -1767,7 +1830,7 @@ export default function App() {
   // Set by "New channel": the next goal starts a fresh, unbound session that composes another pipeline.
   const freshPipelineIntent = useRef(false);
 
-  const handleCommandSubmit = useCallback(async (goal: string) => {
+  const handleCommandSubmit = useCallback(async (goal: string, model?: string) => {
     // The composer is LOCKED to the project on screen — the project id is threaded explicitly and
     // `reuse: true` returns the project's one live thread instead of spawning a parallel conversation.
     const projectId = activeProjectIdRef.current;
@@ -1782,16 +1845,139 @@ export default function App() {
     // fresh composition instead: talking to Claude composes a real, persisted pipeline for the product.
     const isScratch = !!graph?.id?.startsWith("scratch-");
     const boundGraphId = fresh || isScratch ? undefined : graph?.id;
-    const response = await createOperatorSession(projectId, goal, boundGraphId, fresh || isScratch);
+    const response = await createOperatorSession(projectId, goal, boundGraphId, fresh || isScratch, undefined, model);
     operatorGraphRevision.current = response.session.graphRevision;
     operatorRunId.current = null;
     setOperatorSession(response.session);
     void refreshRoster(); // a fresh pipeline gets its tab in the strip immediately
   }, [graph?.id, refreshRoster]);
 
+  // ── Question altitude: the focused question, resolved from the CANONICAL canvas projection first
+  // (operatingView.woven.canvas → normalized positions/participants), falling back to the raw clarity pin
+  // when the projection is absent (docs/production-direction/09, fix 2). A stale id collapses to null so
+  // the canvas never traps the founder on a ghost question.
+  const focusedQuestion = useMemo(
+    () => resolveFocusedQuestion(focusedQuestionId, operatingView?.woven?.canvas ?? null, clarityItems),
+    [focusedQuestionId, operatingView, clarityItems],
+  );
+
+  // Turn a question into a pipeline through the REAL create-or-run API (fix 1). It binds the questionId and
+  // the question's crew/product context to a FRESH operator session so composition grounds in the
+  // question, then drives it to the founder gate — questions stay optional (a direct pipeline still
+  // composes with no question). Nothing sends; the composed pipeline stops at the wall.
+  const turnQuestionIntoPipeline = useCallback(async (q: ClarityObject) => {
+    const projectId = activeProjectIdRef.current;
+    if (!projectId) return;
+    const goal = `Compose a go-to-market pipeline that answers or acts on this open question: ${q.text}`;
+    setFocusedQuestionId(null);
+    // Scope the chat to the question too, so the founder sees what the crew is composing from.
+    setComposerSubject({ id: `q-pipe:${q.id}`, label: `Turn into a pipeline: ${q.text}`, kind: "question" });
+    freshPipelineIntent.current = true;
+    try {
+      const response = await createOperatorSession(projectId, goal, undefined, true, {
+        questionId: q.id,
+        participantRefs: q.participantRefs ?? [],
+        productRefs: q.productRefs ?? [],
+      });
+      operatorGraphRevision.current = response.session.graphRevision;
+      operatorRunId.current = null;
+      syncOperator(response.session);
+      void refreshRoster();
+    } catch {
+      // The drive failed to start; the composer subject remains so the founder can compose by hand.
+      freshPipelineIntent.current = false;
+    }
+    setComposerFocus((f) => f + 1);
+  }, [syncOperator, refreshRoster]);
+
+  // Accept a product implication through the now fully SERVER-DERIVED staging route. The client never
+  // selects a graph or supplies operations: the backend derives the one allowlisted add_node proposal from
+  // trusted outcome lineage, requires browser + owner authority, and returns the pending-proposal review
+  // session (deduping when already staged). We call it directly for a proposed OR already-staged
+  // implication, load (never drive) the returned session, and enter the EXISTING proposal-review canvas
+  // path. The honest composer fallback is used ONLY when the backend says the lineage is not actionable
+  // yet — never to smuggle graph authority. Dismiss stays session-local; the durable decision is the
+  // server-recorded founder decision.
+  const acceptImplication = useCallback(async (impl: ProductImplication) => {
+    const projectId = activeProjectIdRef.current;
+    if (!projectId) return;
+    try {
+      const result = await acceptProductImplication(projectId, impl.id);
+      if (result.sessionId) {
+        const loaded = await getOperatorSession(result.sessionId, projectId).catch(() => null);
+        if (loaded?.session) syncOperator(loaded.session);
+      }
+      void refreshOperatingView();
+      return;
+    } catch {
+      // The backend judged the lineage not actionable (no derivable product-change target): scope the
+      // composer so the crew can compose a reviewable change through the same wall. Never a graph mutation.
+      setComposerSubject({ id: `impl:${impl.id}`, label: `Stage a product change to review: ${impl.text}`, kind: "implication" });
+      setComposerFocus((f) => f + 1);
+    }
+  }, [syncOperator, refreshOperatingView]);
+
+  // Focus the EXACT product anchor an outcome returned to (fix 4) — resolve the product ref to its stable
+  // canvas anchor and trace it in place, instead of opening the generic product-grounding overlay. Falls
+  // back to the overlay only when the projection doesn't carry that anchor.
+  const focusProductAnchor = useCallback((productRefId: string) => {
+    const anchor = (operatingView?.woven?.canvas?.anchors ?? []).find((a) => a.ref.id === productRefId);
+    if (anchor) {
+      setWovenFocus({ kind: "anchor", anchorId: anchorNodeId(anchor.ref), ref: anchor.ref });
+    } else {
+      navOpenOverlay("understand");
+    }
+  }, [operatingView, navOpenOverlay]);
+
+  // Woven focus-to-trace selection. Selecting a CANONICAL question anchor both traces it (wovenFocus) AND
+  // opens the in-place QuestionFocus sidecar (focusedQuestionId) — the anchor is the primary way into the
+  // question altitude. Toggling that same anchor off closes the sidecar. Every other selection (object /
+  // lane / cluster / non-question anchor) is trace-only and never touches the question sidecar.
+  const handleWovenSelect = useCallback((focus: WovenFocus) => {
+    const qId = questionIdFromFocus(focus);
+    if (qId) setFocusedQuestionId(qId);
+    else if (!focus && questionIdFromFocus(wovenFocus)) setFocusedQuestionId(null);
+    setWovenFocus(focus);
+  }, [wovenFocus]);
+
+  // The question ids that actually resolve to a focusable question — the canvas question anchors plus the
+  // raw clarity pins. The outcome rail only offers a "question" return chip for these (no no-op, fix 5).
+  const resolvableQuestionIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const q of canvasQuestions(operatingView?.woven?.canvas ?? null)) ids.add(q.id);
+    for (const c of clarityItems) if (c.kind === "question") ids.add(c.id);
+    return ids;
+  }, [operatingView, clarityItems]);
+
+  // The quiet one-line operation status (docs/production-direction/16): built pipelines, how many wait on
+  // the founder, and how many outcomes have returned — plain language, only the non-zero parts, derived
+  // from real state. Null (omitted) when there is nothing to orient with.
+  const operationStatus = useMemo(() => {
+    const pipelines = channels.filter((c) => c.nodeCount > 0).length;
+    const waiting = pendingCount;
+    const back = canvasOutcomes(operatingView?.woven?.canvas ?? null).length;
+    const parts: string[] = [];
+    if (pipelines) parts.push(`${pipelines} pipeline${pipelines === 1 ? "" : "s"}`);
+    if (waiting) parts.push(`${waiting} waiting on you`);
+    if (back) parts.push(`${back} back`);
+    return parts.length ? parts.join(" · ") : null;
+  }, [channels, pendingCount, operatingView]);
+
+  // The compact source's cited truths and open unknowns (docs/production-direction/16), from the canonical
+  // canvas: truths are the product-truth anchor labels; the important unknowns ARE the founder's pinned
+  // questions. Both bounded and real — never fabricated.
+  const productTruthLines = useMemo(() => {
+    const anchors = operatingView?.woven?.canvas?.anchors ?? [];
+    return anchors.filter((a) => a.kind === "product-truth").map((a) => a.label).filter(Boolean).slice(0, 3);
+  }, [operatingView]);
+  const productUnknownLines = useMemo(
+    () => canvasQuestions(operatingView?.woven?.canvas ?? null).map((q) => q.text).filter(Boolean).slice(0, 2),
+    [operatingView],
+  );
+
   // One conversation: talking to Claude continues the live session, or starts a new one
   // when idle. The dock decides nothing about safety — App owns create vs. resume.
-  const handleComposerSend = useCallback(async (text: string, hints?: OperatorHints): Promise<ComposerTurnResult | void> => {
+  const handleComposerSend = useCallback(async (text: string, hints?: OperatorHints, model?: string): Promise<ComposerTurnResult | void> => {
     // Chat drives the canvas: a bare navigation command ("go to the gate") moves the camera and never
     // reaches Claude — it was steering, not a question. Anything else falls through to the operator.
     if (composerPosture !== "ideate" && runCanvasCommand(text)) return;
@@ -1838,7 +2024,7 @@ export default function App() {
       const response = await resumeOperatorSession(s.id, operatorProjectId(s), framed, hints);
       syncOperator(response.session);
     } else {
-      await handleCommandSubmit(framed);
+      await handleCommandSubmit(framed, model);
     }
   }, [operatorSession, handleCommandSubmit, syncOperator, composerPosture, composerSubject, runCanvasCommand]);
 
@@ -2756,7 +2942,7 @@ export default function App() {
     wovenAxis,
     wovenFocus,
     onWovenAxisChange: setWovenAxis,
-    onWovenSelect: setWovenFocus,
+    onWovenSelect: handleWovenSelect,
     onWireObject: handleWireObject,
     // Candidates as dashed lanes in the one graph (the retired candidate board).
     candidateLaneIds: candidateLanes?.ids,
@@ -2767,7 +2953,7 @@ export default function App() {
     handleResolveProposal, submitGateReview, approveGate, handleAddNode, handleGraphConnect, handleDeleteEdges,
     handleNodePositionChange, flowRuns, runNode, updateGraph, handleDeleteNode, channels, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, recordItemOutcome, refineGateItem, decideGateDelta, runSummary, transportConnected,
     operatingView, flyToGate, openLane,
-    wovenAxis, wovenFocus, handleWireObject,
+    wovenAxis, wovenFocus, handleWovenSelect, handleWireObject,
     wovenMultiPipeline, candidateLanes, handlePickCandidateLane,
   ]);
 
@@ -2861,14 +3047,14 @@ export default function App() {
         <div className="loop-toolbar-right">
           <div
             className={`loop-model-btn ${operatorSession ? "operator-present" : ""} ${connection && !connection.connected ? "disconnected" : ""}`}
-            title={connection && !connection.connected ? connection.reason ?? "Claude is not connected." : connection?.label ?? undefined}
+            title={connection && !connection.connected ? "No AI runtime connected — connect Codex or Claude." : connection?.label ?? undefined}
           >
             <span className={`loop-model-dot ${operatorSession ? "live" : ""} ${connection && !connection.connected ? "off" : ""}`} />
             {operatorSession
-              ? `Claude · ${statusLabel(operatorSession.status)}`
+              ? `${connection?.label ?? "AI runtime"} · ${statusLabel(operatorSession.status)}`
               : connection && !connection.connected
-                ? "Claude · not connected"
-                : "Claude · subscription"}
+                ? "AI runtime · not connected"
+                : connection?.label ?? "AI runtime · subscription"}
           </div>
         </div>
       </header>
@@ -2983,13 +3169,15 @@ export default function App() {
             <ProductEntryColumn
               productName={activeProject.name}
               model={productModel}
+              truths={productTruthLines}
+              unknowns={productUnknownLines}
               deriving={productDeriving}
               onReread={() => void handleRereadProduct()}
-              // On the Operator lens — the fleet-wide operating view whose shared map is the centerpiece —
-              // the product column starts collapsed to its thin tab so it doesn't hold a 300px gutter that
-              // starves the map. The founder can still open "Where wins enter" any time; it just doesn't
-              // crowd the operating surface by default. On the single-motion Engineer lens it stays open.
-              defaultOpen={effectiveCanvasLens !== "operator"}
+              // The compact SOURCE (docs/production-direction/16): expanded at Operator/product altitude so
+              // the founder sees the product root, where wins enter, cited truths, and open unknowns as the
+              // left headwaters; collapsed to its thin tab at Engineer (action altitude) to give the single
+              // pipeline the width. The composer resting slim frees the room this now occupies.
+              defaultOpen={effectiveCanvasLens === "operator"}
             />
           ) : null}
 
@@ -3012,6 +3200,12 @@ export default function App() {
               onNewChannel={handleNewChannel}
               onShowOverview={overviewActive ? () => { void loadProjectOverview(channels); } : undefined}
               overviewActive={overviewActive && !activeChannelId}
+              // The two discrete altitude controls, surfaced on the dock (the canvas is chromeless). The
+              // effective lens reflects automatic focus (a focused pipeline is Engineer, candidates are
+              // Operator); a click reports the founder's choice up — the same setCanvasLens GtmCanvas uses.
+              activeLens={effectiveCanvasLens}
+              onLensChange={setCanvasLens}
+              operationStatus={operationStatus}
               motionName={engine?.motion?.name ?? null}
               // The Summon menu is retired from the dock — the eight-item card menu is no longer offered
               // behind a button. The card components still exist and still render when something summons
@@ -3060,7 +3254,10 @@ export default function App() {
 
           {/* Clarity cards — the durable residue of Ideate sessions, pinned onto the canvas. Draggable
               and dismissible like any summoned card; persisted per-project. */}
-          {view === "canvas" && clarityItems.map((item, i) => (
+          {/* Raw clarity cards. A pinned question that has a CANONICAL woven-canvas anchor renders THERE
+              (as the anchor), so we drop its redundant raw card — the canonical anchor is primary. Question
+              pins with no anchor still render here as the fallback; non-question pins are unaffected. */}
+          {view === "canvas" && clarityFallbackItems(clarityItems, operatingView?.woven?.canvas ?? null).map((item, i) => (
             <CanvasCard
               key={item.id}
               title={item.kind === "icp" ? "ICP" : item.kind === "question" ? "Open question" : item.kind === "direction" ? "Direction" : "Claim"}
@@ -3069,8 +3266,48 @@ export default function App() {
               width={380}
             >
               <ClarityCard item={item} />
+              {/* A pinned question is a durable canvas anchor: focusing it opens the question altitude in
+                  place (teammate positions, evidence, unknowns, your calls) without leaving the canvas. */}
+              {item.kind === "question" ? (
+                <button type="button" className="clarity-focus-btn" onClick={() => setFocusedQuestionId(item.id)}>
+                  Focus this question
+                </button>
+              ) : null}
             </CanvasCard>
           ))}
+          {/* Question altitude — the in-place focus sidecar. The Operator control stays selected; this is a
+              focus state, not a third route. Escape steps back out to product altitude. */}
+          {view === "canvas" && focusedQuestion ? (
+            <QuestionFocus
+              question={focusedQuestion}
+              onClose={() => setFocusedQuestionId(null)}
+              onOpenTeammate={(ref) => setAgentProfileRef(ref)}
+              onAskCrew={askCrewAboutQuestion}
+              onFindEvidence={findEvidenceForQuestion}
+              onMakeCall={makeCallOnQuestion}
+              onTurnIntoPipeline={turnQuestionIntoPipeline}
+            />
+          ) : null}
+          {/* Outcome return + dashed implications (product altitude). Returns what came back toward the
+              pipeline, question, product, and crew that produced it; accepting an implication only stages a
+              reviewable change. Hidden behind a focused question so the two panels never overlap. Empty
+              (the current server omits outcomes/implications) → the rail doesn't mount. */}
+          {view === "canvas" && !focusedQuestion && !outcomeRailClosed
+            && (canvasOutcomes(operatingView?.woven?.canvas ?? null).length > 0
+              || canvasImplications(operatingView?.woven?.canvas ?? null).some((i) => (!i.disposition || i.disposition === "proposed") && !dismissedImplications.has(i.id))) ? (
+            <OutcomeReturn
+              outcomes={canvasOutcomes(operatingView?.woven?.canvas ?? null)}
+              implications={canvasImplications(operatingView?.woven?.canvas ?? null).filter((i) => !dismissedImplications.has(i.id))}
+              resolvableQuestionIds={resolvableQuestionIds}
+              onClose={() => setOutcomeRailClosed(true)}
+              onOpenPipeline={focusChannel}
+              onFocusQuestion={(qid) => setFocusedQuestionId(qid)}
+              onOpenTeammate={(ref) => setAgentProfileRef(ref)}
+              onOpenProduct={focusProductAnchor}
+              onAcceptImplication={acceptImplication}
+              onDismissImplication={dismissImplication}
+            />
+          ) : null}
           {/* The base surface, decided once by describeSurface — the render just switches on its kind
               instead of re-deriving canvas/drive/launcher from the raw flags. The order matches the
               model's precedence exactly. */}
@@ -3146,16 +3383,18 @@ export default function App() {
               // The goal launcher is the "start new work" front door — it must ALWAYS compose fresh, never
               // resume a leftover interrupted/failed session (which would silently swallow the new goal into
               // a dead run). Signal fresh intent so handleComposerSend takes the create path.
-              onSubmitGoal={(g) => { freshPipelineIntent.current = true; void handleComposerSend(g); }}
+              onSubmitGoal={(g, model) => { freshPipelineIntent.current = true; void handleComposerSend(g, undefined, model); }}
               // "Ideate channels for me" is a do-it action, not a mode flip on a hidden dock: kick
               // off an ideate-framed session right now. The screen leaves the launcher for the live
               // operator drive state, so the click has a visible result. The kickoff is self-framing
               // because composerPosture is still "build" in this tick's closure.
-              onIdeate={() => {
+              onIdeate={(model) => {
                 freshPipelineIntent.current = true;
                 setComposerPosture("ideate");
                 void handleComposerSend(
                   "Ideate go-to-market pipelines for this product. Read what it does, then think with me: propose a few distinct pipelines worth running and challenge anything weak. Don't compose or build a pipeline yet — let's get clear first.",
+                  undefined,
+                  model,
                 );
               }}
             />
@@ -3420,6 +3659,11 @@ export default function App() {
           // Cold landing of an empty product (no pipeline built yet, no run going): open the composer so
           // the "State a go-to-market goal" invitation points at a visible input, not a slim edge rail.
           startOpen={!canvasGraph && !operatorSession}
+          // Product-altitude survey mode (docs/production-direction/16): at Operator the composer rests as
+          // the slim 48px perimeter rail (running/gate state still visible) so the operation owns the
+          // canvas and the left roster is the single persistent crew home; the founder's explicit focus
+          // opens it. At Engineer (action altitude) it opens with its session as before.
+          preferCollapsed={effectiveCanvasLens === "operator"}
           recede={proposalActive}
           subject={composerSubject}
           onClearSubject={() => setComposerSubject(null)}
@@ -3451,11 +3695,13 @@ export default function App() {
       </div>
 
       {/* ── Self-observed failure log — Drover watching its OWN runs ──
-          A small on-canvas chip appears bottom-left ONLY when Drover has logged a self-inflicted failure
-          watching itself (a clean machine shows nothing — the empty canvas stays empty). Tapping it opens
-          the right-rail panel, mutually exclusive with Issues and Decisions. The panel itself renders the
-          grouped, split, newest-first failure list. Pure observation — nothing here runs, sends, or gates. */}
-      {view === "canvas" && failuresToFix > 0 && !failureLogOpen ? (
+          This is a BUILDER diagnostic (Drover logging its own run failures for the person building Drover),
+          NOT a failure in the founder's go-to-market operation. Overlaying "Drover saw a failure" at
+          product altitude reads as the product being broken, so it is AUDIENCE-AWARE (docs/production-
+          direction/16): hidden on Operator/product altitude to keep the founder operation clean, and
+          reachable on Engineer/builder altitude when failures exist — the only entry point to the
+          FailureLogPanel, which stays fully intact. Derived from the effective canvas lens, not a flag. */}
+      {showSelfObservedFailureChip({ view, effectiveLens: effectiveCanvasLens, failuresToFix, failureLogOpen }) ? (
         <button
           type="button"
           className="flog-chip"
@@ -3496,6 +3742,8 @@ export default function App() {
               setAgentProfileRef(null);
             } : undefined}
             onSelectTeammate={(ref) => setAgentProfileRef(ref)}
+            focusedQuestion={focusedQuestion}
+            onGatherEvidence={gatherEvidence}
           />
         </Suspense>
       )}

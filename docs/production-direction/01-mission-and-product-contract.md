@@ -2,7 +2,8 @@
 
 ## Mission
 
-Drover is a persistent AI GTM team embedded in the AI coding experience.
+Drover is a persistent AI GTM team embodied on a living product canvas and available inside the AI coding
+experience. The canvas and coding session steer the same durable operation.
 
 The crew works across the full product-development relationship with the market:
 
@@ -64,6 +65,14 @@ The most valuable GTM actions are often product changes themselves:
 6. No pre-run object or contract blocks a freely composed action before the gate.
 7. The model owns fuzzy GTM judgment; the host owns truth, wall, taste, persistence, and typed mutations.
 8. The system must remain useful when intelligence is unavailable: it reports an honest blank or refusal.
+9. Product truth, crew judgment, questions, pipelines, gates, outcomes, and product implications remain
+   spatially connected; no dashboard or transcript becomes a second product.
+10. Pipelines remain open, editable action hypotheses. They are never reduced to a fixed campaign taxonomy
+    or made mandatory before the crew can think with the founder.
+11. The living product-market terrain is the primary product object. The active GTM operation is its worked
+    layer, and a pipeline is one chosen executable move within it.
+12. A newly grounded product proves what Drover understood and exposes credible, clearly labeled areas of
+    focus before requiring the founder to invent a goal.
 
 ## Non-goals
 
@@ -98,4 +107,3 @@ Before editing, name the existing code paths you will preserve, the wedge dimens
 machinery you are explicitly not adding. Then implement, test, and browser-verify the complete user-visible
 flow. Report observed facts, inferred decisions, and any unresolved product judgment separately.
 ```
-

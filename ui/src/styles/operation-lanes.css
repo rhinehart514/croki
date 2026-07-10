@@ -1,0 +1,57 @@
+/* operation-lanes.css — the OPERATOR semantic lane nodes (docs/production-direction/16). Opaque zinc,
+   monochrome, Geist, one accent (amber) for the founder gate. Bounded, readable at 1440. No gradient/glow. */
+
+.op-goal, .op-work, .op-gate, .op-outcome {
+  font-family: "Geist Variable", ui-sans-serif, -apple-system, sans-serif;
+  background: #ffffff;
+  border: 1px solid var(--muted, #d4d4d8);
+  border-radius: var(--r-md, 9px);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transition: box-shadow 140ms ease, border-color 140ms ease;
+  cursor: pointer;
+}
+.op-goal:hover, .op-work:hover, .op-gate:hover, .op-outcome:hover { box-shadow: var(--shadow-pop); border-color: var(--ink-2); }
+.op-goal .react-flow__handle, .op-work .react-flow__handle, .op-gate .react-flow__handle, .op-outcome .react-flow__handle { opacity: 0; }
+
+/* ── goal / name ── */
+.op-goal { width: 250px; padding: 11px 13px; }
+.op-goal-eyebrow { font-size: 10px; font-weight: 640; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.op-goal-name { font-size: 14px; font-weight: 620; line-height: 1.25; color: var(--ink); }
+.op-goal-desc {
+  font-size: 12px; line-height: 1.35; color: var(--ink-2);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.op-goal-status { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 560; color: var(--muted); margin-top: 2px; }
+.op-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.op-goal-status.tone-gate { color: var(--gate, #d97706); }
+.op-goal-status.tone-error { color: #b91c1c; }
+.op-goal-status.tone-done { color: var(--ink-2); }
+.op-goal.tone-gate { border-left: 3px solid var(--gate, #d97706); }
+
+/* ── work / crew ── */
+.op-work { width: 224px; padding: 11px 13px; }
+.op-work-eyebrow { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 640; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.op-work-faces { display: flex; gap: 4px; margin: 3px 0; }
+.op-work-face { line-height: 0; }
+.op-work-none { font-size: 12px; color: var(--muted); }
+.op-work-sub { font-size: 11.5px; color: var(--ink-2); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── gate — the one accent ── */
+.op-gate { width: 150px; padding: 11px 13px; align-items: flex-start; background: color-mix(in srgb, var(--gate, #d97706) 5%, #ffffff); border-color: color-mix(in srgb, var(--gate, #d97706) 32%, var(--muted)); }
+.op-gate.is-waiting { border-color: color-mix(in srgb, var(--gate, #d97706) 55%, var(--muted)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--gate,#d97706) 30%, transparent), var(--shadow-card); }
+.op-gate-lock { font-size: 15px; color: var(--gate, #d97706); line-height: 1; }
+.op-gate-label { font-size: 12px; font-weight: 640; color: var(--gate, #d97706); text-transform: uppercase; letter-spacing: 0.02em; }
+.op-gate-sub { font-size: 11.5px; font-weight: 560; color: var(--ink-2); }
+.op-gate.is-waiting .op-gate-sub { color: var(--gate, #d97706); }
+
+/* ── outcome ── */
+.op-outcome { width: 180px; padding: 11px 13px; }
+.op-outcome-eyebrow { font-size: 10px; font-weight: 640; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.op-outcome-val { font-size: 14px; font-weight: 620; color: var(--ink); font-variant-numeric: tabular-nums; }
+.op-outcome-none { font-size: 12px; color: var(--muted); }
+
+/* the gate-crossing edge reads in the wall's amber */
+.react-flow__edge.op-edge-gate .react-flow__edge-path { stroke: var(--gate, #d97706); stroke-width: 1.5; }

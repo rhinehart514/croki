@@ -66,13 +66,55 @@ function normalizeLabels(list) {
 // path, run, …) so a path can rest on anything without a closed ref-type enum.
 function normalizeRefs(list) {
   if (!Array.isArray(list)) return [];
-  return list.flatMap((raw) => {
+  const refs = list.flatMap((raw) => {
     if (!raw) return [];
     if (typeof raw === "string") return [{ type: null, id: raw }];
     const id = trimOrNull(raw.id);
     if (!id) return [];
     return [{ type: trimOrNull(raw.type), id }];
   });
+  const seen = new Set();
+  return refs.filter((ref) => {
+    const key = `${ref.type ?? ""}::${ref.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function normalizeOutcomeLineage(input = {}) {
+  const decisionRef = normalizeRefs([
+    ...(input.decisionRef ? [input.decisionRef] : []),
+    ...(Array.isArray(input.decisionRefs) ? input.decisionRefs : []),
+  ])[0] ?? null;
+  return {
+    questionId: trimOrNull(input.questionId),
+    productRefs: normalizeRefs(input.productRefs),
+    participantRefs: normalizeRefs(input.participantRefs ?? input.crewRefs),
+    decisionRef,
+  };
+}
+
+// A recommendation is not an outcome body. Only an explicit, attributable model/agent interpretation
+// qualifies for the product-implication projection. `authorRef` identifies the interpreting teammate or
+// model; `artifactRef` permits an existing attributable interpretation artifact. At least one is required.
+function normalizeProductImplication(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  const body = trimOrNull(input.body ?? input.text ?? input.statement);
+  const authorRef = normalizeRefs([
+    input.authorRef ?? input.participantRef ?? input.agentRef ?? input.modelRef,
+  ])[0] ?? null;
+  const artifactRef = normalizeRefs([
+    input.artifactRef ?? input.interpretationRef ?? input.sourceRef,
+  ])[0] ?? null;
+  if (!body || (!authorRef && !artifactRef)) return null;
+  return {
+    body,
+    authorRef,
+    artifactRef,
+    evidenceRefs: normalizeRefs(input.evidenceRefs ?? input.sourceEvidenceRefs),
+    sourceOutcomeId: trimOrNull(input.sourceOutcomeId),
+  };
 }
 
 function clampConfidence(value) {
@@ -295,6 +337,9 @@ function normalizeGtmPath(input, prefix) {
     confidence: clampConfidence(input.confidence),
     rankingSignals: normalizeRankingSignals(input.rankingSignals),
     measurementContractId: trimOrNull(input.measurementContractId),
+    questionId: trimOrNull(input.questionId),
+    participantRefs: normalizeRefs(input.participantRefs),
+    productRefs: normalizeRefs(input.productRefs),
     status: trimOrNull(input.status) || "proposed",
   };
 }
@@ -356,6 +401,7 @@ function normalizeRun(input, prefix) {
     measurementWeakness: input.measurementWeakness && typeof input.measurementWeakness === "object" ? input.measurementWeakness : null,
     runPlan: input.runPlan && typeof input.runPlan === "object" ? input.runPlan : null,
     items: normalizeRunItems(input.items),
+    ...normalizeOutcomeLineage(input),
     status: trimOrNull(input.status) || "staged",
     startedAt: input.startedAt || b.createdAt,
   };
@@ -380,9 +426,12 @@ function normalizeResult(input, prefix) {
   return {
     ...base(input, prefix),
     runId: trimOrNull(input.runId),
+    executionRunId: trimOrNull(input.executionRunId),
     pathId: trimOrNull(input.pathId),
     assetId: trimOrNull(input.assetId),
     messageId: trimOrNull(input.messageId),
+    providerEventId: trimOrNull(input.providerEventId),
+    providerSourceId: trimOrNull(input.providerSourceId),
     channel: trimOrNull(input.channel),
     buyerRef: trimOrNull(input.buyerRef),
     offerRef: trimOrNull(input.offerRef),
@@ -391,9 +440,17 @@ function normalizeResult(input, prefix) {
     motionRef: trimOrNull(input.motionRef),
     outcomeKind: trimOrNull(input.outcomeKind),
     value: input.value ?? null,
+    // Result is the authoritative owner of the observed/founder-entered outcome body. Learning and
+    // projections retain only a reference to this record. A recommendation, when explicitly supplied,
+    // is a separate attributable artifact and never inferred from this body.
+    body: trimOrNull(input.body),
+    productImplication: normalizeProductImplication(input.productImplication),
     observedAt: input.observedAt || now(),
     source: trimOrNull(input.source),
     joinKey,
+    ...normalizeOutcomeLineage(input),
+    proposalRef: normalizeRefs(input.proposalRef ? [input.proposalRef] : [])[0] ?? null,
+    proposalDisposition: trimOrNull(input.proposalDisposition),
   };
 }
 
@@ -452,6 +509,25 @@ function normalizeLearning(input, prefix) {
       marketObjectRefs: normalizeRefs(identifyingIn.marketObjectRefs ?? pick("marketObjectRefs")),
       offer: trimOrNull(identifyingIn.offer ?? pick("offer")),
       message: trimOrNull(identifyingIn.message ?? pick("message")),
+      sourceResultId: trimOrNull(identifyingIn.sourceResultId ?? pick("sourceResultId")),
+      executionRunId: trimOrNull(identifyingIn.executionRunId ?? pick("executionRunId")),
+      ...normalizeOutcomeLineage({
+        questionId: identifyingIn.questionId ?? pick("questionId"),
+        productRefs: identifyingIn.productRefs ?? pick("productRefs"),
+        participantRefs: identifyingIn.participantRefs ?? identifyingIn.crewRefs
+          ?? pick("participantRefs") ?? pick("crewRefs"),
+        decisionRef: identifyingIn.decisionRef ?? pick("decisionRef"),
+        decisionRefs: identifyingIn.decisionRefs ?? pick("decisionRefs"),
+      }),
+      proposalRef: normalizeRefs(
+        (identifyingIn.proposalRef ?? pick("proposalRef"))
+          ? [identifyingIn.proposalRef ?? pick("proposalRef")]
+          : [],
+      )[0] ?? null,
+      proposalDisposition: trimOrNull(identifyingIn.proposalDisposition ?? pick("proposalDisposition")),
+      productImplication: normalizeProductImplication(
+        identifyingIn.productImplication ?? pick("productImplication"),
+      ),
     },
   };
 }
@@ -467,6 +543,58 @@ export function structuralProjection(learning) {
     schemaVersion: learning.schemaVersion ?? SCHEMA_VERSION,
     capturedAt: learning.capturedAt ?? null,
     ...(learning.structural && typeof learning.structural === "object" ? learning.structural : {}),
+  };
+}
+
+// A product implication is a read projection over an explicit outcome interpretation. A bare metric
+// projects nothing: strategic interpretation remains model/founder work, not deterministic host code.
+// A durable proposal reference changes the projected status but never applies product or code state.
+export function productImplicationProjection(result, learning = null) {
+  const identifying = learning?.identifying && typeof learning.identifying === "object"
+    ? learning.identifying
+    : {};
+  const interpretation = normalizeProductImplication(
+    result?.productImplication ?? identifying.productImplication,
+  );
+  if (!result?.id || !interpretation) return null;
+  if (interpretation.sourceOutcomeId && interpretation.sourceOutcomeId !== result.id) return null;
+  const decisionRef = result.decisionRef ?? identifying.decisionRef ?? null;
+  const proposalRef = result.proposalRef ?? identifying.proposalRef ?? null;
+  const proposalDisposition = trimOrNull(result.proposalDisposition ?? identifying.proposalDisposition)
+    ?? (proposalRef ? "staged" : null);
+  return {
+    id: `implication-${result.id}`,
+    projectId: result.projectId ?? learning?.projectId ?? null,
+    kind: "product-change",
+    status: proposalDisposition ?? "proposed",
+    body: interpretation.body,
+    sourceOutcomeId: result.id,
+    sourceLearningId: learning?.id ?? null,
+    evidenceRefs: interpretation.evidenceRefs,
+    authorRef: interpretation.authorRef,
+    artifactRef: interpretation.artifactRef,
+    questionId: result.questionId ?? identifying.questionId ?? null,
+    productRefs: normalizeRefs([
+      ...(Array.isArray(result.productRefs) ? result.productRefs : []),
+      ...(Array.isArray(identifying.productRefs) ? identifying.productRefs : []),
+    ]),
+    participantRefs: normalizeRefs([
+      ...(Array.isArray(result.participantRefs) ? result.participantRefs : []),
+      ...(Array.isArray(identifying.participantRefs) ? identifying.participantRefs : []),
+      ...(interpretation.authorRef ? [interpretation.authorRef] : []),
+    ]),
+    decisionRef,
+    proposalRef,
+    proposalDisposition,
+    observedAt: result.observedAt ?? null,
+    attribution: result.runId || result.executionRunId
+      ? {
+          joined: true,
+          runId: result.runId ?? null,
+          executionRunId: result.executionRunId ?? null,
+          pathId: result.pathId ?? null,
+        }
+      : { joined: false, runId: null, executionRunId: null, pathId: result.pathId ?? null },
   };
 }
 

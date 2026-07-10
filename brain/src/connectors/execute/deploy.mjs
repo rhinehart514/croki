@@ -57,18 +57,23 @@
 // unforgeable by composition — is real and enforced now.
 
 import { execFileSync } from "node:child_process";
+import { isOrdinaryInRepoChange } from "./artifact.mjs";
 
 export const meta = {
   id: "deploy",
   name: "Deploy microproduct",
   category: "execute",
   description:
-    "Ships a founder-approved microproduct (BYO git push/hook, or a hosted Vercel fallback). It refuses to deploy anything the founder did not explicitly approve at the gate, and nothing it ships can be triggered by composition or a run.",
+    "Ships a founder-approved standalone microproduct through a configured deploy runner. Ordinary in-repo changes remain reviewed diffs and can never commit, push, open a pull request, merge, publish, or deploy here.",
   envKey: null,
   stub: false,
   outputKind: "artifact",
-  allowed: ["deploy_after_explicit_gate_approval"],
-  blocked: ["deploy_without_approval", "deploy_from_composition", "deploy_from_run", "go_live_unapproved"],
+  allowed: ["deploy_standalone_microproduct_after_two_authorizations"],
+  blocked: [
+    "deploy_without_approval", "deploy_from_composition", "deploy_from_run", "go_live_unapproved",
+    "commit_product_change", "push_product_change", "open_product_change_pr", "merge_product_change",
+    "publish_product_change", "deploy_product_change",
+  ],
   approvalRequired: ["continue_from_gate", "explicit_deploy_confirmation"],
 };
 
@@ -88,9 +93,9 @@ function readDeployAuthorization(node) {
 }
 
 // BYO primary path: a real git push to the founder's configured remote/branch (mirrors revision.mjs's
-// execFileSync git helper). Only ever reached AFTER both authorizations pass. Injectable for tests via
-// node.config.deployImpl so the suite never performs a real push.
-function defaultByoDeploy(node, item) {
+// execFileSync git helper). Only ever reached AFTER both authorizations pass. A custom deployImpl remains
+// injectable; the built-in runner regression pushes only to a temporary local bare repository.
+function defaultByoDeploy(node) {
   const repo = node.config?.repo;
   const remote = node.config?.remote || "origin";
   const branch = node.config?.branch || "main";
@@ -115,6 +120,35 @@ function resolveVercelRunner(node, context) {
 
 export async function run(node, upstream, context) {
   const deployedAt = new Date().toISOString();
+  const approved = upstream.filter((item) => item.approved === true);
+  const ordinaryProductChanges = approved.filter((item) => isOrdinaryInRepoChange(item));
+  const deployable = approved.filter((item) => !isOrdinaryInRepoChange(item));
+  const heldChanges = ordinaryProductChanges.map((item) => ({
+    ...item,
+    outputKind: "artifact",
+    staged: true,
+    deployed: false,
+    live: false,
+    executionStatus: "staged_for_review",
+    deployStatus: "reviewed diff only — commit, push, pull request, merge, publish, and deploy remain blocked",
+    effectBoundary: "reviewed_diff_only",
+    externalEffectAuthorized: false,
+  }));
+  if (deployable.length === 0) {
+    return {
+      ok: true,
+      items: heldChanges,
+      meta: {
+        deployed: 0,
+        failed: 0,
+        staged: heldChanges.length,
+        reason: heldChanges.length ? "ordinary_product_change_boundary" : "no_gate_approved_items",
+        note: heldChanges.length
+          ? "Ordinary in-repo changes remain reviewed local diffs. No commit, push, pull request, merge, publish, or deploy was attempted."
+          : "No gate-approved microproducts were present to deploy.",
+      },
+    };
+  }
 
   // GUARD 2 — the explicit founder deploy confirmation. Checked FIRST so an unauthorized run ships
   // nothing at all (it never even filters to "what would deploy"). Refuse loudly, stage nothing.
@@ -122,40 +156,34 @@ export async function run(node, upstream, context) {
   if (!authorization) {
     return {
       ok: false,
-      items: upstream.map((item) => ({
-        ...item,
-        outputKind: "artifact",
-        deployed: false,
-        live: false,
-        executionStatus: "deploy_refused",
-        deployStatus: "refused — a microproduct deploys ONLY after an explicit founder gate approval; none was supplied.",
-      })),
+      items: [
+        ...heldChanges,
+        ...deployable.map((item) => ({
+          ...item,
+          outputKind: "artifact",
+          deployed: false,
+          live: false,
+          executionStatus: "deploy_refused",
+          deployStatus: "refused — a standalone microproduct deploys only after an explicit founder gate approval and a separate deploy confirmation; the confirmation was not supplied.",
+        })),
+      ],
       error:
         "Deploy refused: no explicit founder deploy authorization. A microproduct deploys only after the founder explicitly approves the deploy at the gate — never from composition and never from a run.",
-      meta: { deployed: 0, refused: upstream.length, reason: "missing_founder_deploy_authorization" },
+      meta: { deployed: 0, staged: heldChanges.length, refused: deployable.length, reason: "missing_founder_deploy_authorization" },
     };
   }
 
   // GUARD 1 — the gate stamp. Only founder-approved items ship; everything else is dropped, exactly
   // like local/http/artifact. The gate is the release, not this node.
-  const approved = upstream.filter((item) => item.approved === true);
-  if (approved.length === 0) {
-    return {
-      ok: true,
-      items: [],
-      meta: { deployed: 0, refused: 0, note: "Founder authorized a deploy, but no gate-approved items were present to ship." },
-    };
-  }
-
   const runner = node.config?.deployImpl
     ? "custom"
     : (node.config?.runner || "byo"); // "byo" (git push/hook) | "vercel" (hosted fallback)
   const vercelRunner = runner === "vercel" ? resolveVercelRunner(node, context) : null;
 
-  const items = [];
+  const items = [...heldChanges];
   let deployed = 0;
   let failed = 0;
-  for (const item of approved) {
+  for (const item of deployable) {
     let outcome;
     if (typeof node.config?.deployImpl === "function") {
       // Injectable runner (tests, or a founder's custom deploy command).
@@ -165,7 +193,7 @@ export async function run(node, upstream, context) {
         ? await vercelRunner(node, item, context)
         : { ok: false, error: "Hosted Vercel deploy is the fallback, but no Vercel MCP runner is wired (context.deployRunners.vercel). Nothing shipped." };
     } else {
-      outcome = defaultByoDeploy(node, item);
+      outcome = defaultByoDeploy(node);
     }
 
     if (outcome?.ok) {
@@ -202,9 +230,10 @@ export async function run(node, upstream, context) {
     meta: {
       deployed,
       failed,
+      staged: heldChanges.length,
       runner: typeof node.config?.deployImpl === "function" ? "custom" : runner,
       authorizedBy: authorization.releasedBy ?? authorization.userId ?? "founder",
-      note: `${deployed} of ${approved.length} founder-approved microproduct${approved.length === 1 ? "" : "s"} deployed via ${runner}.`,
+      note: `${deployed} of ${deployable.length} founder-approved standalone microproduct${deployable.length === 1 ? "" : "s"} deployed via ${runner}; ${heldChanges.length} ordinary product change${heldChanges.length === 1 ? " remains" : "s remain"} staged as reviewed diffs.`,
     },
     ...(failed ? { error: `${failed} deploy${failed === 1 ? "" : "s"} failed.` } : {}),
   };

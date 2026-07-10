@@ -188,4 +188,32 @@ describe("buildWovenGraph — the woven projection (INTERTWINED-CANVAS §2)", ()
     const verbs = Object.fromEntries(woven.ties.map((t) => [t.channelId, t.verb]));
     assert.deepEqual(verbs, { "m-a": "worked", "m-b": "targeted" }, "verbs come from the real ledger when not passed in");
   });
+
+  it("preserves partial and archived anchors while marking unresolved lineage locally", () => {
+    const woven = buildWovenGraph({
+      projectId: "p",
+      lanes: [],
+      objects: [],
+      canvasSources: {
+        project: { id: "p", name: "Partial" },
+        productTruth: [],
+        productModel: null,
+        crew: [],
+        questions: [{ id: "q-archived", text: "Old question", status: "archived", pinned: true, backlinks: [{ type: "path", id: "missing" }] }],
+        pipelines: [],
+        runs: [],
+        decisions: [],
+        signals: [],
+        outcomes: [],
+        geometry: { namespace: "project-canvas", positions: { "anchor:question:q-archived": { x: 3, y: 4 }, "unknown:gone": { x: 5, y: 6 }, "obj-legacy": { x: 7, y: 8 } } },
+        state: { kind: "ready", stale: false, issues: [] },
+      },
+    }, { channelGraphs: new Map(), touchRecords: [] });
+
+    assert.ok(woven.canvas.anchors.some((item) => item.ref.id === "q-archived" && item.body.status === "archived"));
+    assert.equal(woven.canvas.relationships[0].resolved, false);
+    assert.equal(woven.canvas.state.kind, "partial");
+    assert.deepEqual(woven.canvas.geometry.detachedPositionRefs, ["unknown:gone"]);
+    assert.deepEqual(woven.canvas.geometry.compatibilityPositionRefs, ["obj-legacy"]);
+  });
 });

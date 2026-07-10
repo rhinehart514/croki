@@ -18,23 +18,22 @@ The product claim is:
 
 ## What this package changes
 
-The current product is centered on project → pipeline → graph → run → gate. That execution spine is
-valuable, but it is too narrow as the product's primary object.
+The current product already has the right grammar: one spatial canvas, persistent teammates, open pipelines,
+watchable graphs, and the founder gate. The production change is to make the full product-to-market loop
+legible inside that grammar instead of stopping at pipeline execution.
 
-The production product is centered on:
+The canvas projects one connected product-market terrain. The current GTM operation is the worked layer
+over that terrain:
 
 ```text
-Product
-├── GTM crew
-├── Questions
-├── Evidence
-├── Founder decisions
-├── Actions
-└── Outcomes
+Product truth → openings, tensions, and questions → chosen crew-owned moves → founder gate → outcomes
+       ↑                                                                                          │
+       └──────────────── product implications and next coding context ────────────────────────────┘
 ```
 
-Pipelines remain one open action shape. They are not the business object, the user journey, or the
-required starting point.
+Pipelines remain Drover's central action and observation grammar, not a closed campaign taxonomy or a
+required starting point. Product truth, questions, evidence, decisions, and outcomes enrich the same canvas;
+they do not replace it with a dashboard, product-management hierarchy, or parallel destination system.
 
 ## The thin-host rule
 
@@ -43,7 +42,7 @@ The host owns only what must be durable, deterministic, or enforceable:
 - repository and product identity;
 - cited product truth and provenance;
 - founder-owned crew identity and memory;
-- questions and durable links between existing records;
+- founder-pinned questions and explicit durable links between existing records;
 - founder decisions and audit history;
 - graph validation and execution;
 - the founder gate and autonomy wall;
@@ -96,8 +95,16 @@ Do not recreate the old program/policy/profile/instance/foundry machinery from
 13. `13-verification-and-acceptance.md`
 14. `14-implementation-prompt-pack.md`
 15. `15-file-level-task-map.md`
+16. `16-product-room-ux-plan.md`
+17. `17-product-market-terrain-completion-spec.md`
+
+The final item is the completion target for the product-market-terrain refinement. It supersedes the
+earlier statement that the living GTM operation itself is the canvas's primary object. File 16 remains the
+implementation receipt for the operation-layer canvas repair already performed.
 
 ## Working rule
 
 Every implementation must state which product contract it advances, which wedge dimension it moves,
-what existing behavior it preserves, and what machinery it deliberately does not introduce.
+what existing behavior it preserves, and what machinery it deliberately does not introduce. User-facing
+work must also explain how it inhabits the existing canvas and teammate grammar rather than creating a new
+top-level surface by default.

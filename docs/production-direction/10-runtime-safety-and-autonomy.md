@@ -32,6 +32,10 @@ The model may freely:
 These activities must not be blocked by a missing measurement field, incomplete question, or absent optional
 context. Contracts remain advisory before the gate.
 
+A dashed product implication or graph proposal is still a hypothesis and reversible preview. It may be
+generated freely. Applying, committing, publishing, deploying, or otherwise making its product/code effect
+durable requires the appropriate founder authorization.
+
 ## Autonomy
 
 Autonomy is explicit founder promotion only.
@@ -56,6 +60,15 @@ An in-repo change or microproduct action must show:
 - explicit founder authorization;
 - rollback or review path.
 
+Two runtime paths stay distinct:
+
+- **Ordinary in-repo product-change pipeline:** may create an isolated branch/worktree and a founder-reviewed
+  diff, but stops before commit, push, PR, merge, deploy, or publish. Each later effect requires its own
+  explicit authority according to repository doctrine.
+- **Gated microproduct deployment:** may deploy only through the existing exceptional path with gate approval
+  plus a separate explicit deploy confirmation. Composition and ordinary code-change approval cannot supply
+  either authorization.
+
 ## Failure behavior
 
 - model errors are transient and visible as such;
@@ -64,6 +77,8 @@ An in-repo change or microproduct action must show:
 - a missing connector is an honest readiness problem;
 - a failed outcome is not converted into a success metric;
 - no raw engine or prompt error reaches the founder without translation.
+- when several gates wait, only one review may seize focus; every other gate remains visible at its real
+  canvas position and no duplicate review implementation is created.
 
 ## Implementation prompt
 
@@ -75,4 +90,3 @@ Keep pre-gate work open and non-blocking. Add explicit founder review for durabl
 Preserve recovery, failure classification, idempotency, project scoping, and auditability. Extend anti-cage and
 gate-wall tests before adding new runtime behavior.
 ```
-

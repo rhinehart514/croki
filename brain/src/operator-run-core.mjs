@@ -12,7 +12,29 @@ import { ideaTasteForProject } from "./feedback-ledger.mjs";
 import { distillTaste } from "./taste-distill.mjs";
 import { appendOperatorEvent, saveOperatorSession } from "./operator-store.mjs";
 import { applySharedContextToGraph, loadProject, projectTeamId } from "./project-store.mjs";
+import { assertSessionGraphProject } from "./operator-project-scope.mjs";
 import { canApprove, getMember, resolveCurrentUser } from "./team-store.mjs";
+
+export function operatorProjectOptions(session, options = {}) {
+  const owner = session?.projectId ?? null;
+  const requested = options.projectId ?? null;
+  if (owner && requested && owner !== requested) throw new Error(`Operator session ${session.id} belongs to project ${owner}, not ${requested}.`);
+  return owner ? { ...options, projectId: owner } : options;
+}
+
+const RAW_MACHINERY_KEY = /^(agentPrompt|systemPrompt|prompt|soul|modelMessages|runtimeSessionId|credentials|token|apiKey|sourcePath|artifactPath|raw)$/i;
+
+export function founderSafeValue(value, seen = new WeakSet()) {
+  if (value == null || typeof value !== "object") return value;
+  if (seen.has(value)) return null;
+  seen.add(value);
+  if (Array.isArray(value)) return value.map((item) => founderSafeValue(item, seen));
+  const safe = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (!RAW_MACHINERY_KEY.test(key)) safe[key] = founderSafeValue(item, seen);
+  }
+  return safe;
+}
 
 export function compactProduct(workspace) {
   if (!workspace) {
@@ -47,7 +69,8 @@ export function latestWorkspace(session, options = {}) {
 }
 
 export function flowFor(session, options = {}) {
-  const graphId = session.graphId;
+  options = operatorProjectOptions(session, options);
+  const graphId = assertSessionGraphProject(session, options) ?? session.graphId;
   if (!graphId) throw new Error("No active channel. Create or switch to a channel first.");
   const flow = loadFlow(graphId, null, options);
   if (!flow.graph) throw new Error(`Graph not found: ${graphId}`);

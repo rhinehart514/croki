@@ -211,3 +211,19 @@
   font-weight: 640;
   letter-spacing: 0.04em;
 }
+
+/* The compact source's cited truths + open unknowns (docs/production-direction/16). Bounded, quiet, light
+   monochrome; the one accent is reserved for the unknown marker. Never a taxonomy ladder. */
+.pentry-facts { margin: 12px 0 0; }
+.pentry-facts-label {
+  display: block; font-size: 10px; font-weight: 640; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--faint, #8a8f99); margin-bottom: 6px;
+}
+.pentry-facts-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.pentry-fact {
+  display: flex; gap: 7px; align-items: baseline;
+  font-size: 12px; line-height: 1.4; color: var(--ink-2, #52525b);
+}
+.pentry-fact-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--ink-3, #a1a1aa); flex: none; transform: translateY(-1px); }
+.pentry-fact-q { color: var(--gap, #b45309); font-weight: 680; flex: none; font-size: 12px; }
+.pentry-facts.is-unknown .pentry-fact { color: var(--ink-2, #52525b); }
