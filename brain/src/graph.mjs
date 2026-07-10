@@ -682,7 +682,11 @@ export async function runGraph(graph, opts = {}) {
     // on input that never arrived), not a pending gate, not blind (measurement that can't attribute yet) —
     // is handed to the injected onFailure logger. This is the single aggregation point, so the four
     // scattered runNode catch blocks stay untouched. It never branches the run and can never throw into it.
-    if (result.ok === false && !result.blocked && !result.pendingReview && !result.blind) {
+    // A bad-output OBSERVATION rides an ok:TRUE result — the model returned unusable/empty content but the
+    // branch was never halted. It is still filed (pure observation, the run is unchanged), so the gate fires
+    // on it as well as on a genuine ok:false failure.
+    const badOutputObserved = result?.meta?.badOutput === "unparseable_output" || result?.meta?.badOutput === "empty_output";
+    if (((result.ok === false && !result.blocked) || badOutputObserved) && !result.pendingReview && !result.blind) {
       try { onFailure(node, result, graphId); } catch { /* observation never touches the run */ }
     }
 

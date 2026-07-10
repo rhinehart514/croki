@@ -40,7 +40,7 @@ import {
 } from "./operator-run-core.mjs";
 import { recallPriorSessions, systemPrompt } from "./operator-prompt.mjs";
 import { executeTool } from "./operator-tool-exec.mjs";
-import { safeLogFailure } from "./failure-log.mjs";
+import { safeLogFailure, makeFailureSink } from "./failure-log.mjs";
 
 const activeSessions = new Map();
 
@@ -523,6 +523,15 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
     grounding: buildRunGrounding(flow.project, runWorkspace?.report ?? null),
     runs: flow.runs,
     resumeResult: session.pendingGate.runResult,
+    // Self-observation on the gate-resume leg: a downstream node that fails AFTER approval re-runs live
+    // here, so without this sink its failure fell to runGraph's no-op onFailure and was silently dropped.
+    // Same shared sink shape both operator legs use — files node-error / bad-output, never touches the run.
+    onFailure: makeFailureSink({
+      graphId: flow.graph?.id ?? null,
+      graphLabel: session.goal ?? null,
+      session,
+      options,
+    }),
     deployAuthorization,
     stepRuntime: options.stepRuntime || liveStepRuntime({ cwd: runCwd }),
     // Live plain-language gate translator for any items re-staged on this resume. Auto-created only for a

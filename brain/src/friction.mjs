@@ -12,8 +12,11 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { execSync } from "node:child_process";
+import { execSync, execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+
+const execFileAsync = promisify(execFile);
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const DEFAULT_QUEUE_DIR = path.join(REPO_ROOT, "dogfood", "queue");
@@ -25,6 +28,18 @@ function readGitSha() {
     return execSync("git rev-parse HEAD", { cwd: REPO_ROOT, stdio: ["ignore", "pipe", "ignore"] })
       .toString()
       .trim();
+  } catch {
+    return null; // honest absence — never a fake value
+  }
+}
+
+// The async twin of readGitSha, for callers that resolve the sha OFF a run's hot path (the compiled-run
+// approve leg does this once, before runGraph, so a failure sink can stamp git_sha without the run ever
+// shelling out to git synchronously). Same honest-absence contract: null, never a fake value.
+export async function resolveGitShaAsync() {
+  try {
+    const { stdout } = await execFileAsync("git", ["rev-parse", "HEAD"], { cwd: REPO_ROOT });
+    return stdout.trim() || null;
   } catch {
     return null; // honest absence — never a fake value
   }

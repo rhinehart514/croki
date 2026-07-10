@@ -86,24 +86,9 @@ const NETWORK_RE = /ECONN|ENOTFOUND|fetch failed|socket|EAI_AGAIN|network/i;
 // itself a distinctive, non-coincidental provider code, and the named phrases below cover the real cases.
 const MODEL_ERROR_RE = /overloaded|(?:\b(?:http|status|code)\b|error)[^0-9a-z]{0,6}\b5\d{2}\b|\b5\d{2}\b\s+(?:internal server error|service unavailable|bad gateway|gateway timeout)|internal server error|service unavailable|server_error|api error|too many requests|\b529\b/i;
 
-// Map a raw failure to a normalized errorKind token. `meta` carries whatever structured signal the run
-// path already has (result.errorKind from classifyAgentError, result.timedOut from the node timeout). We
-// prefer that structured signal, then fall back to matching the message text.
-export function classifyErrorKind(rawError, meta = {}) {
-  const message = typeof rawError === "string" ? rawError : (rawError?.message ?? String(rawError ?? ""));
-
-  // A bad-output path carries an explicit kind the caller computed (unparseable/empty output).
-  if (meta.errorKind === "unparseable_output" || meta.errorKind === "empty_output") return meta.errorKind;
-
-  // The agent bridge's own classification (classifyAgentError) rides on result.meta.errorKind.
-  if (meta.errorKind === "max_turns") return "max_turns";
-  if (meta.errorKind === "max_budget") return "max_budget";
-  if (meta.errorKind === "limit") return "limit";
-
-  // A node that ran past its wall-clock ceiling.
-  if (meta.timedOut === true) return "timeout";
-
-  // Fall back to the message text.
+// The precise transient/known tokens carried in an error MESSAGE. Returns null when the text matches no
+// known pattern, so the caller can decide the fallback (a genuine code throw vs a provider model error).
+function classifyMessage(message) {
   if (LIMIT_RE.test(message)) return "limit";
   if (/max turns|turn budget/i.test(message)) return "max_turns";
   if (/max_budget|cost budget/i.test(message)) return "max_budget";
@@ -112,13 +97,56 @@ export function classifyErrorKind(rawError, meta = {}) {
   if (/No connector .* registered/i.test(message)) return "no_connector";
   if (/No step runtime for kind/i.test(message)) return "no_step_runtime";
   if (/requires .* Set it in your environment|requires [A-Z_]+\./i.test(message)) return "missing_env_key";
+  return null;
+}
+
+// Map a raw failure to a normalized errorKind token. `meta` carries whatever structured signal the run
+// path already has (result.errorKind from classifyAgentError, result.timedOut from the node timeout, and
+// meta.badOutput when the caller observed unusable model output). We prefer the structured signal, then
+// the precise message tokens, and only then decide between a provider model error and our own code throw.
+export function classifyErrorKind(rawError, meta = {}) {
+  const message = typeof rawError === "string" ? rawError : (rawError?.message ?? String(rawError ?? ""));
+
+  // The bad-output OBSERVATION signal: the caller SAW unusable model output and tags it directly. This is
+  // not an error flip — it is what we observed — so it wins outright, independent of any errorKind.
+  if (meta.badOutput === "unparseable_output" || meta.badOutput === "empty_output") return meta.badOutput;
+
+  // A bad-output path carries an explicit kind the caller computed (unparseable/empty output).
+  if (meta.errorKind === "unparseable_output" || meta.errorKind === "empty_output") return meta.errorKind;
+
+  // Structured kinds the run path already named ride on result.meta.errorKind — honored straight.
+  if (meta.errorKind === "max_turns") return "max_turns";
+  if (meta.errorKind === "max_budget") return "max_budget";
+  if (meta.errorKind === "limit") return "limit";
+  if (meta.errorKind === "network") return "network";
+  if (meta.errorKind === "model_error") return "model_error";
+
+  // A node that ran past its wall-clock ceiling.
+  if (meta.timedOut === true) return "timeout";
+
+  // The precise transient tokens in the message text — checked before the generic buckets so a real
+  // limit/network/timeout inside a generic provider error is pulled out to its exact kind.
+  const messageKind = classifyMessage(message);
+  if (messageKind) return messageKind;
+
+  // classifyAgentError's generic kind:'error' bucket: the SDK returned an is_error result we could not
+  // name. The SDK is not our code, so an unnamed provider error is a provider-side model error — never a
+  // code_throw filed as our own bug.
+  if (meta.errorKind === "error") return "model_error";
+
+  // A provider-side model failure recognizable in the message text (an Anthropic overload, an
+  // HTTP/status-adjacent 5xx, "too many requests"). MODEL_ERROR_RE deliberately does NOT match a bare
+  // 5xx number, so a real code-throw carrying "512" in a stack frame stays a code_throw below.
+  if (MODEL_ERROR_RE.test(message)) return "model_error";
 
   // A genuine thrown message that matches no transient pattern is a code throw — a real bug.
   return message.trim() ? "code_throw" : "unknown";
 }
 
 // The transient errorKind set — a retry/reset clears it. Everything else is self-inflicted (a real bug).
-const TRANSIENT_KINDS = new Set(["max_turns", "max_budget", "limit", "timeout", "network"]);
+// model_error (an Anthropic overload / provider 5xx) belongs here: it clears on a retry and is the
+// provider's fault, not our code — filing it as a bug to fix would be the opposite of this feature's job.
+const TRANSIENT_KINDS = new Set(["max_turns", "max_budget", "limit", "timeout", "network", "model_error"]);
 
 // Map an errorKind + category to self_inflicted or transient. Pure, deterministic lookup with two
 // category overrides:
@@ -285,4 +313,32 @@ export function safeLogFailure(input = {}, options = {}) {
   } catch {
     // Observation must never alter the run it observes. Swallow silently.
   }
+}
+
+// The shared node-failure sink for a run. runGraph calls onFailure(node, result, graphId) at its single
+// aggregation point for every genuinely failed non-gate node; this binds the run-level context (graph
+// id/label, session, git sha, and the store-isolation options) ONCE and files each failure via
+// safeLogFailure. A bad-output result — the model returned unusable/empty content, which the agent bridge
+// surfaces as ok:false with an unparseable_output/empty_output errorKind — is tagged "bad-output"; every
+// other node/step failure is a "node-error". Both operator legs (the live drive and the gate-resume
+// compiled run) build their sink here so a failure logs identically wherever it happens. Never throws.
+export function makeFailureSink({ graphId = null, graphLabel = null, session = null, gitSha = null, options = {} } = {}) {
+  const sinkOptions = gitSha == null ? options : { ...options, gitSha };
+  return (node, result, runGraphId) => {
+    // errorKind rides result.meta.errorKind for a hard bad-output failure; a PURE OBSERVATION (ok:true,
+    // unusable/empty content) rides result.meta.badOutput instead. Either one tags the entry "bad-output".
+    const errorKind = result?.meta?.errorKind ?? result?.meta?.badOutput ?? null;
+    const category = (errorKind === "unparseable_output" || errorKind === "empty_output")
+      ? "bad-output"
+      : "node-error";
+    safeLogFailure({
+      category,
+      node,
+      result,
+      errorKind,
+      graphId: graphId ?? runGraphId ?? null,
+      graphLabel,
+      session,
+    }, sinkOptions);
+  };
 }

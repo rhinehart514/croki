@@ -22,8 +22,8 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { defaultGraphTemplate, runGraph } from "../src/graph.mjs";
 import { saveFlow } from "../src/flow-store.mjs";
-import { createOperatorSession, getOperatorSession } from "../src/operator-store.mjs";
-import { runOperatorSession, operatorSessionStalled } from "../src/operator-runtime.mjs";
+import { createOperatorSession, getOperatorSession, saveOperatorSession } from "../src/operator-store.mjs";
+import { runOperatorSession, operatorSessionStalled, resolveOperatorGate } from "../src/operator-runtime.mjs";
 import { safeLogFailure } from "../src/failure-log.mjs";
 import { listFrictionQueue, reportFriction } from "../src/friction.mjs";
 import { buildFailureLogView } from "../src/routes/system.mjs";
@@ -117,7 +117,7 @@ describe("self-observing failure capture — the four paths, dedup, split, never
   // node-error by result.meta.errorKind, then hand to safeLogFailure with the run's options.
   function hostOnFailure(graphLabel = "Outbound pipeline") {
     return (node, result, graphId) => {
-      const errorKind = result?.meta?.errorKind ?? null;
+      const errorKind = result?.meta?.errorKind ?? result?.meta?.badOutput ?? null;
       const category = (errorKind === "unparseable_output" || errorKind === "empty_output") ? "bad-output" : "node-error";
       safeLogFailure({ category, node, result, errorKind, graphId, graphLabel, session: { id: "sess-hooks" } }, options);
     };

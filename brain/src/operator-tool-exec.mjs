@@ -275,7 +275,7 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
     // tagged "bad-output"; every other node/step failure is "node-error". Never-throws and never branches
     // the run — safeLogFailure swallows everything, and graph.mjs already wraps the call in its own catch.
     onFailure: (node, result, graphId) => {
-      const errorKind = result?.meta?.errorKind ?? null;
+      const errorKind = result?.meta?.errorKind ?? result?.meta?.badOutput ?? null;
       const category = (errorKind === "unparseable_output" || errorKind === "empty_output")
         ? "bad-output"
         : "node-error";
