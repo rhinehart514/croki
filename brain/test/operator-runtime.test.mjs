@@ -5,7 +5,8 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { defaultGraphTemplate } from "../src/graph.mjs";
 import { recordFlowRun, saveFlow } from "../src/flow-store.mjs";
-import { createOperatorSession, getOperatorSession, saveOperatorSession } from "../src/operator-store.mjs";
+import { createOperatorSession, getOperatorSession, getOperatorSessionFresh, saveOperatorSession } from "../src/operator-store.mjs";
+import { jsonPersistence } from "../src/persistence.mjs";
 import { operatorTools, resolveOperatorGate, resolveOperatorGateRefine, resolveOperatorProposal, runOperatorSession, operatorSessionStalled, steerOperatorSession } from "../src/operator-runtime.mjs";
 import { loadFlow } from "../src/flow-store.mjs";
 import { createProject, loadProject, saveProject } from "../src/project-store.mjs";
@@ -183,6 +184,24 @@ describe("resident GTM operator runtime", () => {
     assert.equal(paused.pendingCandidates.id, "candidate-set");
     assert.ok(paused.events.some((event) => event.detail === "The approaches are ready for your pick."));
     assert.ok(!paused.events.some((event) => event.type === "session_completed"));
+  });
+
+  it("fresh operator reads see a separate process write past the document cache", () => {
+    const jsonOptions = { ...options, backend: "json" };
+    const session = createOperatorSession({ goal: "Choose a direction." }, jsonOptions);
+    assert.equal(getOperatorSession(session.id, jsonOptions).status, "ready"); // warm the host cache
+
+    // jsonPersistence bypasses the shared document cache, matching a separate MCP process writing disk.
+    jsonPersistence(jsonOptions).set("operator-sessions", session.id, {
+      ...session,
+      status: "waiting_for_candidates",
+      pendingCandidates: { id: "external-candidates", candidates: [] },
+    });
+
+    assert.equal(getOperatorSession(session.id, jsonOptions).status, "ready", "ordinary reads stay cached");
+    const fresh = getOperatorSessionFresh(session.id, jsonOptions);
+    assert.equal(fresh.status, "waiting_for_candidates");
+    assert.equal(fresh.pendingCandidates.id, "external-candidates");
   });
 
   it("recalls prior sessions in the same project (cross-session memory)", async () => {

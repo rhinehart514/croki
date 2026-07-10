@@ -202,6 +202,14 @@ export function getOperatorSession(id, options = {}) {
   return session;
 }
 
+// Codex's stdio MCP bridge is a separate process. Use this only at that runtime boundary so a tool's
+// newly persisted founder wall is visible before the host appends narration or decides the turn ended.
+export function getOperatorSessionFresh(id, options = {}) {
+  const session = persistence(options).getFresh(COLLECTION, safeId(id));
+  if (!session) throw new Error(`Operator session not found: ${id}`);
+  return session;
+}
+
 export function listOperatorSessions(options = {}) {
   // When a projectId is passed, scope the list to that project's sessions.
   // Legacy sessions written before project scoping have projectId === null and

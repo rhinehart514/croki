@@ -19,6 +19,7 @@ import { defaultDeployRunners } from "./connectors/execute/deploy-transport.mjs"
 import {
   armNextWake,
   getOperatorSession,
+  getOperatorSessionFresh,
   listOperatorSessions,
   saveOperatorSession,
 } from "./operator-store.mjs";
@@ -130,7 +131,7 @@ export async function runOperatorSession(id, runtime = {}) {
   // while the host still holds an older in-memory copy. Refresh before every callback write so narration,
   // turn counts, and the final model message can never erase a pending gate, proposal, idea, or candidate.
   const refreshSession = () => {
-    session = getOperatorSession(id, options);
+    session = getOperatorSessionFresh(id, options);
     return session;
   };
 
@@ -183,8 +184,8 @@ export async function runOperatorSession(id, runtime = {}) {
     },
     maxSteps: session.maxSteps,
     stepCount: session.stepCount,
-    isCancelled: () => getOperatorSession(id, options).status === "cancelled",
-    currentStatus: () => getOperatorSession(id, options).status,
+    isCancelled: () => getOperatorSessionFresh(id, options).status === "cancelled",
+    currentStatus: () => getOperatorSessionFresh(id, options).status,
     onTurn: () => {
       const current = refreshSession();
       session = saveOperatorSession({ ...current, stepCount: current.stepCount + 1 }, options);
@@ -221,9 +222,9 @@ export async function runOperatorSession(id, runtime = {}) {
 
   try {
     const outcome = await adapter.drive(ctx);
-    if (outcome.kind === "cancelled") return getOperatorSession(id, options);
+    if (outcome.kind === "cancelled") return getOperatorSessionFresh(id, options);
     if (outcome.kind === "completed") {
-      const current = getOperatorSession(id, options);
+      const current = getOperatorSessionFresh(id, options);
       if (OPERATOR_HALT_STATUSES.has(current.status)) return current;
       return addEvent({
         ...current,
@@ -252,7 +253,7 @@ export async function runOperatorSession(id, runtime = {}) {
     }
     // "paused" — executeTool already set waiting_for_gate / waiting_for_input or
     // completed (via the complete tool) and persisted it. Return the truth on disk.
-    return getOperatorSession(id, options);
+    return getOperatorSessionFresh(id, options);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     // Self-observation: an uncaught crash in the drive loop is filed into the dogfood queue so the team

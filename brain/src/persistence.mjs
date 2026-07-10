@@ -341,6 +341,15 @@ function withDocumentCache(backend, root) {
       cache.set(ck, value == null ? null : value);
       return value == null ? null : structuredClone(value);
     },
+    // Re-read one document from the selected backend and replace the process-local cache entry. MCP
+    // servers run out of process, so their durable writes are invisible to this map until a caller
+    // explicitly crosses that boundary. Normal in-process reads keep using get() and its hot cache.
+    getFresh(collection, key) {
+      const ck = `${collection} ${key}`;
+      const value = backend.get(collection, key);
+      cache.set(ck, value == null ? null : value);
+      return value == null ? null : structuredClone(value);
+    },
     set(collection, key, data) {
       const stored = backend.set(collection, key, data);
       // Store a pristine copy so a later mutation of `data` by the caller cannot bleed into the cache.
