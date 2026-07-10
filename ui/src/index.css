@@ -6,8 +6,8 @@
 /* ════════════════════════════════════════════════════════════════════════
    Drover design system — WARM ATELIER (founder-approved, 2026-07-09)
    Grey-taupe stone grounds (deliberately NOT cream), one quiet spruce-teal
-   accent used only for the live edge, a warm serif for display, a clean
-   system sans for chrome, tabular numerals for anything that changes.
+   accent used only for the live edge, a sleek technical sans for display, a
+   system sans for chrome, mono/tabular numerals for anything that changes.
    Reference of record: scratchpad/design-directions/warm-atelier-elevated.html
    Tokens keep their names so the whole app re-skins from this block; only the
    VALUES moved from zinc/Geist to Warm Atelier.
@@ -16,9 +16,12 @@
   font-family: var(--sans);
   --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, "Roboto Mono", monospace;
 
-  /* Type stacks — a warm serif for display/headings/mission, a clean system
-     sans for chrome, mono/tabular for numerals. */
-  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  /* Type stacks — TECH-SLEEK register (founder call 2026-07-09): a sleek
+     technical sans (Geist) for display/headings/mission, a system sans for
+     chrome, mono/tabular for numerals. NOTE: the --serif token name is retained
+     so the whole app re-skins from one place, but it now holds a SANS, not a
+     serif — display type is sleek/technical, never editorial serif. */
+  --serif: "Geist Variable", Geist, ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
   --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
   --mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, "Roboto Mono", monospace;
 
@@ -6679,6 +6682,33 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .building-state .spin{width:26px;height:26px;color:var(--proven)}
 .building-state strong{font-size:18px}
 .building-state span{color:var(--muted);font-size:14px;max-width:440px;line-height:1.5}
+
+/* ── The contextual boot state (WorkspaceBooting) — a plan checking off with a running clock, in the
+   crew's voice, replacing the anonymous "Loading your workspace…" spinner. Warm Atelier: taupe ground,
+   serif title, mono/tabular clock, spruce accent used ONLY on the live step's spinner. ── */
+.boot-state{display:flex;align-items:center;justify-content:center;height:100%;padding:48px 24px;background:var(--room)}
+.boot-card{width:100%;max-width:420px;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  padding:24px 26px 20px;box-shadow:0 1px 0 rgba(38,33,26,.03),0 14px 40px -22px rgba(38,33,26,.28)}
+.boot-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.boot-eyebrow{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
+.boot-clock{font-size:11.5px;color:var(--ink-2);letter-spacing:.02em}
+.boot-title{font-family:var(--serif);font-size:22px;font-weight:600;letter-spacing:-.015em;color:var(--ink);margin:0 0 20px}
+.boot-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.boot-step{display:flex;align-items:flex-start;gap:11px;padding:7px 0}
+.boot-mk{width:16px;height:16px;flex:none;border-radius:50%;display:grid;place-items:center;margin-top:1px}
+.boot-step.done .boot-mk{background:var(--proven-soft);color:var(--proven)}
+.boot-step.next .boot-mk{border:1.5px dashed var(--line-2)}
+.boot-spin{width:16px;height:16px;border-radius:50%;border:1.7px solid var(--ember-line);border-top-color:var(--ember);
+  animation:boot-spin .9s linear infinite}
+@keyframes boot-spin{to{transform:rotate(360deg)}}
+.boot-step-body{display:flex;flex-direction:column;gap:2px;min-width:0}
+.boot-step-label{font-size:13px;font-weight:600;color:var(--faint)}
+.boot-step-hint{font-size:11.5px;color:transparent;line-height:1.4;height:0;overflow:hidden;transition:none}
+.boot-step.done .boot-step-label{color:var(--ink-2);font-weight:500}
+.boot-step.now .boot-step-label{color:var(--ink)}
+.boot-step.now .boot-step-hint{color:var(--muted);height:auto}
+.boot-foot{margin:18px 0 0;font-size:11.5px;color:var(--faint);line-height:1.5}
+@media (prefers-reduced-motion: reduce){.boot-spin{animation:none;border-top-color:var(--ember-line)}}
 
 /* Operator drive — the watchable build. The header is the building/failed status; below it the
    operator's reasoning streams as a live, opaque, scrollable trail so the founder watches it think
