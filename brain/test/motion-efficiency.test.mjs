@@ -158,17 +158,19 @@ describe("deriveMotionEfficiency — the ONE per-motion table", () => {
     assert.equal(row.lastOutcomeAt, null);
   });
 
-  it("coverage is null (not 0%) when nothing is staged — an out-of-band-only row reads honestly", () => {
+  it("an out-of-band stamped signal stays in the unattributed row and claims no move", () => {
     const options = freshRoot();
     const projectId = "estatesale";
-    // No run at all. An outcome that joins to nothing but carries its own stamped motionKind.
+    // No run at all. A caller-supplied motion stamp cannot manufacture attribution.
     ingestOutcome(
       { joinKey: "probe-1", outcomeKind: "ranked", motionKind: "AI visibility" },
       { ...options, projectId },
     );
     const eff = deriveMotionEfficiency({ projectId }, options);
-    const row = eff.motions.find((m) => m.motionKind === "AI visibility");
-    assert.ok(row, "the stamped out-of-band outcome lands in its own row");
+    const row = eff.motions.find((m) => m.motionKind === null);
+    assert.ok(row, "the out-of-band outcome remains visible in the unattributed row");
+    assert.equal(eff.motions.some((m) => m.motionKind === "AI visibility"), false);
+    assert.equal(row.motionRef, null);
     assert.equal(row.staged, 0);
     assert.equal(row.measured, 1);
     assert.equal(row.coverage, null, "coverage is null when nothing is staged — never a fabricated 0/100%");

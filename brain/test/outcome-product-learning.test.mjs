@@ -16,6 +16,7 @@ import { recordFounderOutcome } from "../src/outcome-capture.mjs";
 import { gtmPathStore, learningStore, resultStore, runStore } from "../src/gtm-store.mjs";
 import { createChannel } from "../src/project-store.mjs";
 import { loadFlow, recordFlowRun } from "../src/flow-store.mjs";
+import { terrainInputFingerprint } from "../src/terrain-read.mjs";
 
 function freshRoot() {
   return { root: fs.mkdtempSync(path.join(os.tmpdir(), "outcome-product-learning-")) };
@@ -75,6 +76,20 @@ describe("outcome-to-product learning lineage", () => {
     assert.equal(learning.identifying.body, undefined, "Learning references Result instead of copying its body");
     assert.deepEqual(projectProductImplications({ projectId }, options), [],
       "an outcome body is evidence and does not become a recommendation");
+  });
+
+  it("retains a plural decision reference when no singular decision reference is supplied", () => {
+    const options = freshRoot();
+    const { projectId } = seedRun(options);
+    const decisionRef = { type: "founder-decision", id: "decision-from-list" };
+    const { result, learning } = ingestOutcome({
+      joinKey: "activation-1",
+      outcomeKind: "activation",
+      decisionRefs: [decisionRef],
+    }, { ...options, projectId });
+
+    assert.deepEqual(result.decisionRef, decisionRef);
+    assert.deepEqual(learning.identifying.decisionRef, decisionRef);
   });
 
   it("keeps repeated manual receipts separate and leaves an unknown run honestly unattributed", () => {
@@ -272,6 +287,25 @@ describe("product implications are projections", () => {
     assert.deepEqual(before.evidenceRefs, [{ type: "market-signal", id: "signal-activation-1" }]);
     assert.equal(before.status, "proposed");
     assert.equal(before.attribution.joined, true);
+    assert.ok(before.updatedAt, "the projection exposes its source authority revision");
+
+    const originalFingerprint = terrainInputFingerprint({
+      projectId,
+      joinedOutcomes: resultStore.list({ ...options, projectId }),
+      implications: [before],
+    });
+    assert.notEqual(terrainInputFingerprint({
+      projectId,
+      joinedOutcomes: resultStore.list({ ...options, projectId }).map((outcome) => (
+        outcome.id === result.id ? { ...outcome, updatedAt: "2099-01-01T00:00:00.000Z" } : outcome
+      )),
+      implications: [before],
+    }), originalFingerprint, "a changed outcome authority stales the prior terrain input");
+    assert.notEqual(terrainInputFingerprint({
+      projectId,
+      joinedOutcomes: resultStore.list({ ...options, projectId }),
+      implications: [{ ...before, updatedAt: "2099-01-01T00:00:00.000Z" }],
+    }), originalFingerprint, "a changed implication authority stales the prior terrain input");
 
     const staged = attachProductChangeProposal({
       projectId,

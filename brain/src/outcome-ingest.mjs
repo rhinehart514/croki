@@ -12,9 +12,9 @@
 //   - Deterministic code (§2.4). The join, the tie resolution, the aggregation, and the plain-language
 //     readback are all plain functions over stored records. There is no model call anywhere here —
 //     joining an outcome to its run is a lookup, not a judgment.
-//   - Open shapes (§2.2). Source labels and outcomeKinds are OPEN strings; a source or outcome kind
-//     that did not exist yesterday ingests without being rejected. Nothing is validated against a
-//     closed enum.
+//   - Open shapes (§2.2). Source labels and market outcomeKinds are OPEN strings; a source or outcome
+//     kind that did not exist yesterday ingests without being rejected. Gate approval/release receipts
+//     are excluded by authority, not by a closed market-outcome enum.
 //   - Honest measurement (Phase 5 guard). Unmeasured is shown as unmeasured. No conversion rate is
 //     invented, no success is declared from free-text criteria a function cannot evaluate; the report
 //     carries the real counts and lets the founder read which path actually produced outcomes.
@@ -50,6 +50,17 @@ export const OUTCOME_SOURCES = {
 function trimOrNull(value) {
   const text = String(value ?? "").trim();
   return text || null;
+}
+
+// Gate/release receipts belong to the founder-decision and execution ledgers. Letting one enter the
+// market-outcome ledger would make approval look measured and could teach terrain, composition, or a
+// teammate that a move worked before anything came back from the market.
+function isAdministrativeReceipt(outcome = {}) {
+  const kind = String(outcome.outcomeKind ?? outcome.kind ?? outcome.type ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, "-");
+  return /^(?:(?:founder|gate)-)?(?:approval|approved|release|released)$/.test(kind);
 }
 
 // ── The join ─────────────────────────────────────────────────────────────────────────────────────
@@ -309,6 +320,9 @@ export function ingestOutcome(outcome = {}, options = {}) {
   if (!joinKey) {
     throw new Error("An outcome needs a joinKey to join back to what was sent.");
   }
+  if (isAdministrativeReceipt(outcome)) {
+    throw new Error("A gate approval or release receipt is not a market outcome.");
+  }
 
   // Durable dedupe FIRST — before any write. The persisted Result ledger is the seen-state; a signal
   // already recorded (same identity tuple) on an earlier tick is returned as-is, joined per that Result,
@@ -341,7 +355,12 @@ export function ingestOutcome(outcome = {}, options = {}) {
     ...(Array.isArray(item?.productRefs) ? item.productRefs : []),
     ...(Array.isArray(outcome.productRefs) ? outcome.productRefs : []),
   ];
-  const decisionRef = outcome.decisionRef ?? item?.decisionRef ?? run?.decisionRef ?? null;
+  const decisionRef = outcome.decisionRef
+    ?? (Array.isArray(outcome.decisionRefs) ? outcome.decisionRefs.find(Boolean) : null)
+    ?? item?.decisionRef
+    ?? (Array.isArray(item?.decisionRefs) ? item.decisionRefs.find(Boolean) : null)
+    ?? run?.decisionRef
+    ?? null;
 
   const result = resultStore.create(
     {
@@ -350,7 +369,9 @@ export function ingestOutcome(outcome = {}, options = {}) {
       // Ties resolved from the joined run + item; an explicit field on the outcome overrides.
       runId: run?.id ?? null,
       executionRunId: run?.executionRunId ?? null,
-      pathId: outcome.pathId ?? run?.pathId ?? null,
+      // A caller may refine move attribution only after the join establishes a real originating run.
+      // An unmatched signal stays visible, but cannot claim which move earned it.
+      pathId: run ? (outcome.pathId ?? run.pathId ?? null) : null,
       assetId: outcome.assetId ?? item?.assetId ?? null,
       messageId: outcome.messageId ?? item?.messageId ?? null,
       providerEventId: providerEventId(outcome),
@@ -360,8 +381,8 @@ export function ingestOutcome(outcome = {}, options = {}) {
       offerRef: outcome.offerRef ?? item?.offer ?? null,
       // The single motion-keying dimension: explicit stamp overrides the shape-derivation; a run that
       // joined to nothing carries null (honestly unattributed).
-      motionKind: outcome.motionKind ?? derivedMotion.motionKind,
-      motionRef: outcome.motionRef ?? derivedMotion.motionRef,
+      motionKind: run ? (outcome.motionKind ?? derivedMotion.motionKind) : null,
+      motionRef: run ? (outcome.motionRef ?? derivedMotion.motionRef) : null,
       outcomeKind: outcome.outcomeKind ?? null,
       value: outcome.value ?? null,
       body: outcome.body ?? null,
@@ -512,12 +533,20 @@ export function projectProductImplications({ projectId = "default" } = {}, optio
     if (resultId && !learningByResult.has(resultId)) learningByResult.set(resultId, learning);
   }
   return resultStore.list({ ...options, projectId })
-    .map((result) => productImplicationProjection(result, learningByResult.get(result.id) ?? null))
-    .filter(Boolean)
-    .map((implication) => ({
-      ...implication,
-      review: productChangeReview(implication, projectId, options),
-    }));
+    .map((result) => {
+      const learning = learningByResult.get(result.id) ?? null;
+      const implication = productImplicationProjection(result, learning);
+      if (!implication) return null;
+      return {
+        ...implication,
+        // The implication is a projection, so expose the newest source-authority revision instead of
+        // inventing a second stored timestamp. Terrain freshness can now become stale when either the
+        // source Result or its Learning lineage changes.
+        updatedAt: [result?.updatedAt, learning?.updatedAt].filter(Boolean).sort().at(-1) ?? null,
+        review: productChangeReview(implication, projectId, options),
+      };
+    })
+    .filter(Boolean);
 }
 
 // Attach lineage to a proposal that the existing operator authority has already staged. This function

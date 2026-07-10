@@ -121,6 +121,41 @@ describe("outcome ingest — join on one key", () => {
     assert.equal(result.joinKey, "unknown-key");
   });
 
+  it("an unattributed signal cannot claim a caller-supplied move", () => {
+    const options = freshRoot();
+    const { projectId } = seedRun(options);
+    const { result, joined } = ingestOutcome(
+      {
+        joinKey: "unknown-move-key",
+        outcomeKind: "reply",
+        pathId: "move-not-earned",
+        motionKind: "Move not earned",
+        motionRef: "move-not-earned",
+      },
+      { ...options, projectId },
+    );
+    assert.equal(joined, false);
+    assert.equal(result.pathId, null);
+    assert.equal(result.motionKind, null);
+    assert.equal(result.motionRef, null);
+  });
+
+  it("a gate approval alone is not accepted as measured work", () => {
+    const options = freshRoot();
+    const { projectId } = seedRun(options);
+    assert.throws(
+      () => ingestOutcome(
+        { joinKey: "handle-ada", outcomeKind: "gate-approved", source: "founder-gate" },
+        { ...options, projectId },
+      ),
+      /not a market outcome/i,
+    );
+    const report = outcomeReport({ projectId }, options);
+    assert.equal(report.totals.results, 0);
+    assert.equal(report.totals.measured, 0);
+    assert.equal(report.totals.unmeasured, 3);
+  });
+
   it("refuses an outcome with no joinKey", () => {
     const options = freshRoot();
     seedRun(options);
@@ -269,6 +304,21 @@ describe("outcome report — honest measurement", () => {
     // Only the joined outcome is attributed to the path.
     const total = report.paths.reduce((s, p) => s + Object.values(p.outcomes).reduce((a, n) => a + n, 0), 0);
     assert.equal(total, 1);
+  });
+
+  it("keeps positive, negative, no-response, unmeasured, and unattributed signals distinct", () => {
+    const options = freshRoot();
+    const { projectId, pathId } = seedRun(options);
+    ingestOutcome({ joinKey: "handle-ada", outcomeKind: "reply" }, { ...options, projectId });
+    ingestOutcome({ joinKey: "handle-bo", outcomeKind: "objection" }, { ...options, projectId });
+    ingestOutcome({ joinKey: "handle-bo", outcomeKind: "no-response" }, { ...options, projectId });
+    ingestOutcome({ joinKey: "off-band", outcomeKind: "reply" }, { ...options, projectId });
+
+    const report = outcomeReport({ projectId }, options);
+    const path = report.paths.find((entry) => entry.pathId === pathId);
+    assert.deepEqual(path.outcomes, { reply: 1, objection: 1, "no-response": 1 });
+    assert.equal(path.unmeasured, 1);
+    assert.equal(report.totals.unjoinedResults, 1);
   });
 
   it("orders paths by observed outcomes so 'which path worked' comes from real results", () => {
