@@ -16,7 +16,7 @@ import {
   drainTeamMirror,
   __resetTeamSync,
 } from "../src/convex-backend.mjs";
-import { persistence, closePersistence, registerConvexBackend } from "../src/persistence.mjs";
+import { persistence, jsonPersistence, closePersistence, registerConvexBackend } from "../src/persistence.mjs";
 
 // A fake Convex client exposing exactly the calls the live ConvexHttpClient does — mutation(ref, args)
 // and query(ref, args) — backed by an in-memory team document table. It proves the adapter round-trips
@@ -164,6 +164,7 @@ describe("convex backend (provider interface, fake client)", () => {
 
   it("satisfies the synchronous provider interface", () => {
     assert.equal(typeof backend.get, "function");
+    assert.equal(typeof backend.getFresh, "function");
     assert.equal(typeof backend.set, "function");
     assert.equal(typeof backend.list, "function");
     assert.equal(typeof backend.delete, "function");
@@ -171,6 +172,22 @@ describe("convex backend (provider interface, fake client)", () => {
     const out = backend.set("flows", "g1", { id: "g1", n: 1 });
     assert.deepEqual(out, { id: "g1", n: 1 });
     assert.deepEqual(backend.get("flows", "g1"), { id: "g1", n: 1 });
+  });
+
+  it("getFresh bypasses the wrapped local provider cache", () => {
+    const local = persistence({ root: home, backend: "json" });
+    const nested = createConvexBackend({ root: home, convexUrl: options.convexUrl, local });
+    nested.set("operator-sessions", "s1", { id: "s1", status: "running" });
+    assert.equal(nested.get("operator-sessions", "s1").status, "running");
+
+    // A cache-free provider is the same boundary as a separate MCP process writing the shared DB.
+    jsonPersistence({ root: home }).set("operator-sessions", "s1", {
+      id: "s1",
+      status: "waiting_for_candidates",
+    });
+
+    assert.equal(nested.get("operator-sessions", "s1").status, "running");
+    assert.equal(nested.getFresh("operator-sessions", "s1").status, "waiting_for_candidates");
   });
 
   it("round-trips set / get / list / delete locally AND mirrors each write to Convex", async () => {

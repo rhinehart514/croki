@@ -247,6 +247,14 @@ export function createConvexBackend(options = {}) {
     get(collection, key) {
       return local.get(collection, key);
     },
+    // A session-scoped MCP tool writes through a separate process. The host must be able to bypass
+    // both its outer Convex provider cache and the wrapped local SQLite provider cache before it
+    // appends narration or decides the model turn is complete.
+    getFresh(collection, key) {
+      return typeof local.getFresh === "function"
+        ? local.getFresh(collection, key)
+        : local.get(collection, key);
+    },
     set(collection, key, data) {
       const stored = local.set(collection, key, data);
       if (mirror) mirror.pushSet(collection, key, stored);

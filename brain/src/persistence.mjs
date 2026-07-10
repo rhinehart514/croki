@@ -346,7 +346,12 @@ function withDocumentCache(backend, root) {
     // explicitly crosses that boundary. Normal in-process reads keep using get() and its hot cache.
     getFresh(collection, key) {
       const ck = `${collection} ${key}`;
-      const value = backend.get(collection, key);
+      // Composite backends may wrap another cached provider (Convex wraps the local SQLite
+      // provider). Let the backend carry the fresh read through every cache layer instead of
+      // stopping at the wrapper's stale local cache.
+      const value = typeof backend.getFresh === "function"
+        ? backend.getFresh(collection, key)
+        : backend.get(collection, key);
       cache.set(ck, value == null ? null : value);
       return value == null ? null : structuredClone(value);
     },
