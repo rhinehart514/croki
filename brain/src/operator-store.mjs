@@ -47,8 +47,35 @@ function safeId(value) {
   return String(value || "").replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 100);
 }
 
+const VIEW_SURFACES = new Set(["terrain", "pipeline"]);
+const VIEW_LENSES = new Set(["operator", "engineer"]);
+
+function semanticViewValue(input, current, key, allowed) {
+  if (!Object.prototype.hasOwnProperty.call(input, key) || input[key] == null || input[key] === "") return current ?? null;
+  const value = String(input[key] ?? "").trim().toLowerCase();
+  if (!allowed.has(value)) throw new Error(`Operator ${key} must be one of: ${[...allowed].join(", ")}.`);
+  return value;
+}
+
+// The canvas wire format is `type:id`; internal callers generally pass { type, id }. Decode only the
+// typed wire form here, then hand both forms to the canonical stable-ref validator below. An untyped
+// string still fails validation instead of being guessed into an object kind.
+function stableRefInput(value) {
+  if (typeof value !== "string") return value;
+  const separator = value.indexOf(":");
+  if (separator <= 0 || separator === value.length - 1) return value;
+  return { type: value.slice(0, separator), id: value.slice(separator + 1) };
+}
+
 function contextFromInput(input = {}, current = {}, options = {}) {
-  const projectId = input.projectId ?? current.projectId ?? null;
+  const currentProjectId = current.projectId ?? null;
+  const requestedProjectId = input.projectId ?? currentProjectId;
+  if (currentProjectId && requestedProjectId && requestedProjectId !== currentProjectId) {
+    throw new Error(`Operator session belongs to project ${currentProjectId}, not ${requestedProjectId}.`);
+  }
+  const projectId = requestedProjectId ?? null;
+  const surface = semanticViewValue(input, current.surface, "surface", VIEW_SURFACES);
+  const lens = semanticViewValue(input, current.lens, "lens", VIEW_LENSES);
   const questionId = String(input.questionId ?? current.questionId ?? "").trim() || null;
   const requestedGraphId = String(input.graphId ?? input.workflowId ?? input.channelId ?? current.graphId ?? "").trim() || null;
   const requestedGraphType = input.pipelineId || input.workflowId || input.channelId ? "pipeline" : "graph";
@@ -56,8 +83,10 @@ function contextFromInput(input = {}, current = {}, options = {}) {
     ? graphIdForRef({ type: requestedGraphType, id: requestedGraphId }, { ...options, projectId })
     : requestedGraphId;
   const lastRunId = String(input.lastRunId ?? input.runId ?? current.lastRunId ?? "").trim() || null;
-  const focusInput = input.focusRef ?? input.ref ?? current.focusRef ?? null;
-  const focusRef = focusInput ? normalizeStableRef(focusInput, { projectId }) : null;
+  const hasFocusInput = Object.prototype.hasOwnProperty.call(input, "focusRef")
+    || Object.prototype.hasOwnProperty.call(input, "ref");
+  const focusInput = hasFocusInput ? (input.focusRef ?? input.ref ?? null) : (current.focusRef ?? null);
+  const focusRef = focusInput ? normalizeStableRef(stableRefInput(focusInput), { projectId }) : null;
   const participantInput = input.participantRefs ?? input.crewRefs ?? current.participantRefs ?? [];
   const productInput = input.productRefs ?? current.productRefs ?? [];
   const participantRefs = normalizeStableRefs(Array.isArray(participantInput)
@@ -67,13 +96,13 @@ function contextFromInput(input = {}, current = {}, options = {}) {
     ? productInput.map((value) => typeof value === "string" ? { type: "product-element", id: value } : value)
     : [], { projectId });
   const contextRefs = normalizeStableRefs([
-    ...(current.contextRefs ?? []), ...(input.contextRefs ?? input.refs ?? []), ...participantRefs, ...productRefs,
+    ...(current.contextRefs ?? []), ...(input.contextRefs ?? input.refs ?? []).map(stableRefInput), ...participantRefs, ...productRefs,
     ...(questionId ? [{ type: "question", id: questionId }] : []),
     ...(input.pipelineId || input.channelId || input.workflowId ? [{ type: "pipeline", id: input.pipelineId ?? input.channelId ?? input.workflowId }] : []),
     ...(graphId ? [{ type: "graph", id: graphId }] : []),
     ...(lastRunId ? [{ type: "run", id: lastRunId }] : []), ...(focusRef ? [focusRef] : []),
   ], { projectId });
-  return { projectId, questionId, participantRefs, productRefs, graphId, lastRunId, focusRef, contextRefs };
+  return { projectId, surface, lens, questionId, participantRefs, productRefs, graphId, lastRunId, focusRef, contextRefs };
 }
 
 export function appendOperatorEvent(session, event) {
@@ -133,6 +162,8 @@ export function createOperatorSession(input, options = {}) {
     // of guessing the newest one.
     programId: input.programId || null,
     projectId: context.projectId,
+    surface: context.surface,
+    lens: context.lens,
     questionId: context.questionId,
     participantRefs: context.participantRefs,
     productRefs: context.productRefs,
@@ -226,6 +257,8 @@ export function listOperatorSessions(options = {}) {
         standingBrief: session.standingBrief ?? null,
         graphId: session.graphId,
         projectId: session.projectId ?? null,
+        surface: session.surface ?? null,
+        lens: session.lens ?? null,
         questionId: session.questionId ?? null,
         participantRefs: session.participantRefs ?? [],
         productRefs: session.productRefs ?? [],
@@ -352,7 +385,7 @@ function publicPendingGate(pendingGate) {
 export function publicOperatorSession(session) {
   const publicFields = [
     "id", "kind", "goal", "standingBrief", "wakeIntervalMs", "nextWakeAt", "graphId", "projectId",
-    "questionId", "participantRefs", "productRefs", "focusRef", "contextRefs", "workspaceId", "status",
+    "surface", "lens", "questionId", "participantRefs", "productRefs", "focusRef", "contextRefs", "workspaceId", "status",
     "createdAt", "updatedAt", "startedAt", "completedAt", "stepCount", "maxSteps", "graphRevision",
     "lastRunId", "summary", "error", "pendingQuestion", "pendingGate", "pendingProposal", "pendingIdeas",
     "pendingCandidates", "events",

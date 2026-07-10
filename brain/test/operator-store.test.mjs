@@ -57,7 +57,7 @@ describe("durable operator sessions", () => {
     assert.match(loaded.error, /resume/i);
   });
 
-  it("binds optional question, crew, product, focus, graph, and run pointers without copying their records", () => {
+  it("binds semantic view context and stable pointers without copying their records", () => {
     const graph = { ...defaultGraphTemplate(), id: "graph-1" };
     saveFlow(graph, options);
     const project = createProject({ id: "product-a", name: "Product A" }, options).project;
@@ -66,17 +66,33 @@ describe("durable operator sessions", () => {
       goal: "Investigate activation.", projectId: "product-a", questionId: "q-1",
       participantRefs: [{ type: "teammate", id: "researcher" }],
       productRefs: [{ type: "product-element", id: "activation" }],
-      focusRef: { type: "question", id: "q-1" }, graphId: "graph-1", runId: "run-1",
+      surface: "terrain", lens: "operator", focusRef: "question:q-1", graphId: "graph-1", runId: "run-1",
+      contextRefs: ["product-truth:truth-1"],
     }, options);
+    assert.equal(session.surface, "terrain");
+    assert.equal(session.lens, "operator");
     assert.equal(session.questionId, "q-1");
+    assert.deepEqual(session.focusRef, { type: "question", id: "q-1" });
     assert.deepEqual(session.participantRefs, [{ type: "teammate", id: "researcher" }]);
     assert.deepEqual(session.productRefs, [{ type: "product-element", id: "activation" }]);
     assert.ok(session.contextRefs.some((ref) => ref.type === "graph" && ref.id === "graph-1"));
     assert.ok(session.contextRefs.some((ref) => ref.type === "run" && ref.id === "run-1"));
+    assert.ok(session.contextRefs.some((ref) => ref.type === "product-truth" && ref.id === "truth-1"));
+    assert.equal(listOperatorSessions({ ...options, projectId: "product-a" })[0].surface, "terrain");
+    assert.equal(publicOperatorSession(session).lens, "operator");
 
-    const focused = bindOperatorSessionContext(session.id, { focusRef: { type: "teammate", id: "researcher" } }, options);
-    assert.equal(focused.focusRef.type, "teammate");
+    const focused = bindOperatorSessionContext(session.id, {
+      surface: "pipeline", lens: "engineer", focusRef: "pipeline:pipeline-1",
+    }, options);
+    assert.equal(focused.surface, "pipeline");
+    assert.equal(focused.lens, "engineer");
+    assert.equal(focused.focusRef.type, "pipeline");
+    const cleared = bindOperatorSessionContext(session.id, { surface: "terrain", lens: "operator", focusRef: null }, options);
+    assert.equal(cleared.focusRef, null, "an explicit empty focus clears stale question or pipeline focus");
     assert.throws(() => bindOperatorSessionContext(session.id, { focusRef: { type: "question", id: "q-other", projectId: "product-b" } }, options), /belongs to project product-b, not product-a/);
+    assert.throws(() => bindOperatorSessionContext(session.id, { projectId: "product-b" }, options), /belongs to project product-a, not product-b/);
+    assert.throws(() => bindOperatorSessionContext(session.id, { surface: "viewport", lens: "operator" }, options), /surface must be one of/);
+    assert.throws(() => bindOperatorSessionContext(session.id, { focusRef: "untyped-focus" }, options), /requires type and id/);
   });
 
   it("refuses cross-project graph ids when a session is created or rebound", () => {
@@ -128,6 +144,8 @@ describe("durable operator sessions", () => {
       events: [{ type: "note", title: "Useful", data: { systemPrompt: "raw", status: "ready" } }],
     });
     assert.equal(publicSession.status, "ready");
+    assert.equal(publicSession.surface, null);
+    assert.equal(publicSession.lens, null);
     assert.equal(publicSession.questionId, "q-1");
     const gateItem = publicSession.pendingGate.runResult.nodes["gate-1"].items[0];
     assert.equal(gateItem.id, "draft-1");

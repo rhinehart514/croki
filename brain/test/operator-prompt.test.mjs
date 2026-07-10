@@ -56,4 +56,28 @@ describe("operator system prompt taste block", () => {
     assert.ok(prompt.includes("propose_candidates"));
     assert.ok(prompt.includes("ONLY way you offer options"));
   });
+
+  it("names whole-terrain, question, and one-move view context without guessing", () => {
+    const terrain = systemPrompt({
+      ...session, surface: "terrain", lens: "operator", focusRef: null,
+      contextRefs: [{ type: "product-truth", id: "truth-1" }],
+    }, workspace, [], null);
+    assert.match(terrain, /Active view: whole-terrain Operator/);
+    assert.match(terrain, /Current focus: none/);
+    assert.match(terrain, /Context: product-truth:truth-1/);
+
+    const question = systemPrompt({
+      ...session, surface: "terrain", lens: "operator", questionId: "q-1",
+      focusRef: { type: "question", id: "q-1" }, contextRefs: [],
+    }, workspace, [], null);
+    assert.match(question, /Active view: question focus/);
+    assert.match(question, /Pinned question: question:q-1/);
+
+    const engineer = systemPrompt({
+      ...session, surface: "pipeline", lens: "engineer",
+      focusRef: { type: "pipeline", id: "pipeline-1" }, contextRefs: [],
+    }, workspace, [], null);
+    assert.match(engineer, /Active view: one-move Engineer/);
+    assert.match(engineer, /Current focus: pipeline:pipeline-1/);
+  });
 });

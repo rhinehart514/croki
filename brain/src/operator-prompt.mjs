@@ -27,6 +27,27 @@ export function renderPriorSessions(priorSessions = []) {
     .join("\n");
 }
 
+export function renderOperatorViewContext(session) {
+  const focusRef = session.focusRef ?? null;
+  const questionFocus = focusRef?.type === "question"
+    || (!focusRef && !session.surface && !session.lens && session.questionId);
+  const activeMode = questionFocus
+    ? "question focus"
+    : session.surface === "pipeline" || session.lens === "engineer"
+      ? "one-move Engineer"
+      : session.surface === "terrain" || session.lens === "operator"
+        ? "whole-terrain Operator"
+        : "not supplied";
+  return [
+    `Active view: ${activeMode}`,
+    session.surface ? `Surface: ${session.surface}` : null,
+    session.lens ? `Lens: ${session.lens}` : null,
+    session.questionId ? `Pinned question: question:${session.questionId}` : null,
+    focusRef ? `Current focus: ${focusRef.type}:${focusRef.id}` : "Current focus: none",
+    ...(session.contextRefs ?? []).map((ref) => `Context: ${ref.type}:${ref.id}`),
+  ].filter(Boolean).join("\n");
+}
+
 export function systemPrompt(session, workspace, priorSessions = [], distilledTaste = null) {
   const tasteBlock = renderDistilledTaste(distilledTaste);
   const grounding = workspace
@@ -36,11 +57,7 @@ export function systemPrompt(session, workspace, priorSessions = [], distilledTa
   // driven by a standing brief — it was woken by a change in the world, not handed a fresh goal. The
   // brief replaces the goal as the objective; everything else (the wall, the toolset) is identical.
   const objective = firstNonEmpty(session.goal, session.standingBrief, session.questionId ? `Investigate the pinned question ${session.questionId}.` : "");
-  const linkedContext = [
-    session.questionId ? `Pinned question: question:${session.questionId}` : null,
-    session.focusRef ? `Current focus: ${session.focusRef.type}:${session.focusRef.id}` : null,
-    ...(session.contextRefs ?? []).map((ref) => `Context: ${ref.type}:${ref.id}`),
-  ].filter(Boolean).join("\n");
+  const linkedContext = renderOperatorViewContext(session);
   const objectiveBlock = session.kind === "ambient"
     ? `Standing brief (this is an AMBIENT wake — a change in the world triggered you, not a one-off goal. React to it, build the work it calls for, and drive it to the founder gate. The wall is identical: nothing sends, deploys, or charges without the founder approving at the gate, and you never approve yourself.):
 ${objective}`
@@ -51,7 +68,7 @@ ${objective}`;
 ${objectiveBlock}
 
 What you can read (the product's truth — your claims come from here):
-${grounding}${linkedContext ? `\n\nDurable context for this conversation:\n${linkedContext}` : ""}
+${grounding}\n\nDurable view context for this conversation:\n${linkedContext}
 
 What you've already done in this project (build on it, don't redo it):
 ${renderPriorSessions(priorSessions)}${tasteBlock ? `\n\n${tasteBlock}` : ""}

@@ -36,7 +36,7 @@ async function freePort() {
 const PORT = await freePort();
 process.env.PORT = String(PORT);
 
-const { listOperatorSessions } = await import("../src/operator-store.mjs");
+const { createOperatorSession, getOperatorSession, listOperatorSessions } = await import("../src/operator-store.mjs");
 const { server } = await import("../src/server.mjs");
 
 if (!server.listening) await once(server, "listening");
@@ -123,5 +123,36 @@ describe("composer fast-lane routes — briefing read + turn", () => {
     assert.equal(out.mode, "fast");
     assert.equal(out.intent, "converse", "ambiguous/empty is a chat turn, not a silent build");
     assert.ok(typeof out.answer === "string" && out.answer.length > 0, "the founder still gets a reply");
+  });
+
+  it("binds semantic view context on the next composer turn without starting work", async () => {
+    const session = createOperatorSession({ goal: "Read the terrain.", projectId: "view-project" });
+    const res = await fetch(`${base}/api/operator/turn`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        projectId: "view-project", sessionId: session.id, input: "draft a terrain move", allowDrive: false,
+        surface: "terrain", lens: "operator", focusRef: "question:q-1",
+        contextRefs: ["question:q-1", "product-truth:truth-1"],
+      }),
+    });
+    assert.equal(res.status, 202);
+    const persisted = getOperatorSession(session.id);
+    assert.equal(persisted.surface, "terrain");
+    assert.equal(persisted.lens, "operator");
+    assert.deepEqual(persisted.focusRef, { type: "question", id: "q-1" });
+    assert.ok(persisted.contextRefs.some((ref) => ref.type === "product-truth" && ref.id === "truth-1"));
+    assert.equal(persisted.status, "ready", "a view update rides the turn and does not launch the operator");
+
+    const crossed = await fetch(`${base}/api/operator/turn`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        projectId: "other-project", sessionId: session.id, input: "what is waiting?", allowDrive: false,
+        surface: "pipeline", lens: "engineer", focusRef: "pipeline:other-pipeline",
+      }),
+    });
+    assert.equal(crossed.status, 409);
+    assert.deepEqual(getOperatorSession(session.id).focusRef, { type: "question", id: "q-1" }, "another project cannot replace the focus");
   });
 });

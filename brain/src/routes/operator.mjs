@@ -55,7 +55,10 @@ export default async function handle({ req, res, url }) {
       if (body.reuse === true) {
         const existing = getActiveSessionForProject(project.id);
         if (existing) {
-          json(res, 200, { session: publicOperatorSession(existing), reused: true });
+          const bound = hasSessionContext(body)
+            ? bindOperatorSessionContext(existing.id, sessionContextFromBody(body, project.id))
+            : existing;
+          json(res, 200, { session: publicOperatorSession(bound), reused: true });
           return true;
         }
       }
@@ -74,6 +77,8 @@ export default async function handle({ req, res, url }) {
         graphId: flow.graph?.id ?? null,
         programId: body.programId ?? null,
         projectId: project.id,
+        surface: body.surface,
+        lens: body.lens,
         graphRevision: flow.graph?.revision ?? 0,
         workspaceId: body.workspaceId,
         model: body.model,
@@ -198,6 +203,8 @@ export default async function handle({ req, res, url }) {
       if (action === "focus") {
         bindOperatorSessionContext(sessionId, {
           projectId: body.projectId,
+          surface: body.surface,
+          lens: body.lens,
           contextRefs: body.refs ?? body.contextRefs ?? [],
           questionId: body.questionId,
           participantRefs: body.participantRefs ?? body.teammateRefs,
@@ -227,7 +234,10 @@ export default async function handle({ req, res, url }) {
       // `body.hints` (optional) carries the founder's @-mentioned teammates/capabilities from the
       // composer — advisory steering only, folded into the operator's context so composition prefers the
       // named crew. It never blocks or contracts the run (the no-cage invariant).
-      if (action === "resume") session = resumeOperatorSession(sessionId, body.input, { hints: body.hints });
+      if (action === "resume") {
+        if (hasSessionContext(body)) bindOperatorSessionContext(sessionId, sessionContextFromBody(body));
+        session = resumeOperatorSession(sessionId, body.input, { hints: body.hints });
+      }
       // Role-gated release: pass the acting user (request headers, else founder) so resolveOperatorGate
       // can authorize the send. A viewer/member release throws gate_release_forbidden → 403. Also pass the
       // browser-only release guard (W2b): the same session-token/agent-header check the raw graph-run path
@@ -271,9 +281,7 @@ export default async function handle({ req, res, url }) {
       const sessionId = operatorAskMatch[1];
       // Same project-ownership guard the existing action routes use.
       if (body.projectId) assertOperatorSessionProject(sessionId, body.projectId);
-      if (body.questionId || body.ref || body.refs || body.participantRefs || body.productRefs) {
-        bindOperatorSessionContext(sessionId, { projectId: body.projectId, questionId: body.questionId, focusRef: body.ref, contextRefs: body.refs, participantRefs: body.participantRefs, productRefs: body.productRefs });
-      }
+      if (hasSessionContext(body)) bindOperatorSessionContext(sessionId, sessionContextFromBody(body));
       const result = await handleComposerTurn(
         { projectId: body.projectId, sessionId, text: body.input, hints: body.hints },
         {},
@@ -309,6 +317,9 @@ export default async function handle({ req, res, url }) {
     try {
       const body = await readBody(req);
       if (body.sessionId && body.projectId) assertOperatorSessionProject(body.sessionId, body.projectId);
+      if (body.sessionId && hasSessionContext(body)) {
+        bindOperatorSessionContext(body.sessionId, sessionContextFromBody(body));
+      }
       const allowDrive = body.allowDrive === true && !!body.sessionId;
       const runtime = allowDrive ? {} : { resume: () => null };
       const result = await handleComposerTurn(
@@ -328,6 +339,36 @@ export default async function handle({ req, res, url }) {
   }
 
   return false;
+}
+
+function hasSessionContext(body = {}) {
+  return [
+    "surface", "lens", "focusRef", "ref", "contextRefs", "refs", "questionId", "question",
+    "participantRefs", "teammateRefs", "crewRefs", "productRefs",
+  ].some((key) => Object.prototype.hasOwnProperty.call(body, key));
+}
+
+function sessionContextFromBody(body = {}, projectId = body.projectId) {
+  return {
+    projectId,
+    ...(Object.prototype.hasOwnProperty.call(body, "surface") ? { surface: body.surface } : {}),
+    ...(Object.prototype.hasOwnProperty.call(body, "lens") ? { lens: body.lens } : {}),
+    ...(Object.prototype.hasOwnProperty.call(body, "focusRef")
+      ? { focusRef: body.focusRef }
+      : Object.prototype.hasOwnProperty.call(body, "ref") ? { focusRef: body.ref } : {}),
+    ...(Object.prototype.hasOwnProperty.call(body, "contextRefs")
+      ? { contextRefs: body.contextRefs }
+      : Object.prototype.hasOwnProperty.call(body, "refs") ? { contextRefs: body.refs } : {}),
+    ...(Object.prototype.hasOwnProperty.call(body, "questionId") || body.question?.id
+      ? { questionId: body.questionId ?? body.question.id }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(body, "participantRefs")
+      || Object.prototype.hasOwnProperty.call(body, "teammateRefs")
+      || Object.prototype.hasOwnProperty.call(body, "crewRefs")
+      ? { participantRefs: body.participantRefs ?? body.teammateRefs ?? body.crewRefs }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(body, "productRefs") ? { productRefs: body.productRefs } : {}),
+  };
 }
 
 // Maps a buildComposerBriefing() result to the composer's `briefing` prop shape. Mirrors ComposerDock's
