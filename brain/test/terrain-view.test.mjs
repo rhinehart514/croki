@@ -95,6 +95,9 @@ describe("getTerrainView — deterministic project terrain", () => {
     assert.equal(view.product.truths.length, 2);
     assert.equal(view.product.truths[0].projectId, project.id);
     assert.ok(view.product.truths.every((truth) => truth.evidence[0].source.includes(":")));
+    assert.ok(view.product.truths.every((truth) => truth.claim === truth.statement && truth.claim.length > 0));
+    assert.ok(view.product.truths.every((truth) => truth.provenance === "observed"));
+    assert.ok(view.product.truths.every((truth) => truth.evidenceRefs[0]?.type === "evidence"));
     assert.deepEqual(view.product.repository, { path: `/tmp/${project.id}`, winEvent: "project_created" });
     assert.equal(view.state.kind, "partial");
     assert.ok(view.state.issues.some((issue) => issue.owner === "terrain-read" && issue.kind === "unavailable"));

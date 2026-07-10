@@ -558,6 +558,25 @@ function terrainRefs(values, fallbackType, projectId) {
   return normalized;
 }
 
+function terrainObservation(anchor) {
+  const body = anchor?.body ?? {};
+  const evidence = Array.isArray(body.evidence) ? body.evidence : [];
+  const claim = String(body.claim ?? body.statement ?? anchor?.label ?? "").trim();
+  return {
+    ref: anchor.ref,
+    ...body,
+    id: String(body.id ?? anchor.ref.id),
+    claim,
+    label: String(anchor?.label || claim || "Product truth"),
+    provenance: evidence.some((item) => item?.solidity === "observed") ? "observed" : "founder-stated",
+    evidenceRefs: evidence
+      .map((item) => ref("evidence", item?.source))
+      .filter(Boolean),
+    productRefs: Array.isArray(body.productRefs) ? body.productRefs : [],
+    source: evidence[0]?.source ?? null,
+  };
+}
+
 function terrainOverlay(projectId, read, canvas) {
   const issues = [];
   if (!read) return { hypotheses: [], relationships: [], issues, readRef: null };
@@ -677,7 +696,7 @@ export function getTerrainView({ projectId } = {}, options = {}) {
     product: {
       projectRef: ref("project", projectId),
       repository: { path: repository.repo ?? null, winEvent: repository.outcome ?? null },
-      truths: truthAnchors.map((item) => ({ ref: item.ref, ...item.body })),
+      truths: truthAnchors.map(terrainObservation),
       modelRef: modelAnchor?.ref ?? null,
       model: modelAnchor?.body ?? null,
     },
