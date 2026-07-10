@@ -17,22 +17,22 @@ import { json, readBody } from "./util.mjs";
 import { loadProject } from "../project-store.mjs";
 import { getProductModel } from "../product-model-store.mjs";
 import { productLedGrounding, buildRunGrounding } from "../run-grounding.mjs";
-import { createClaudeMotionPlanner } from "../motion-plan.mjs";
+import { createTerrainMotionPlanner } from "../motion-plan.mjs";
 import { listCapabilities } from "../artifact-store.mjs";
-import { listWorkspaces, getWorkspace } from "../workspace.mjs";
+import { getWorkspace } from "../workspace.mjs";
 import { recordIdeaDecisions, ideaTasteForProject } from "../feedback-ledger.mjs";
 import { buildTasteProfile, buildDraftMemory, renderDraftMemory } from "../memory.mjs";
 import { distillTaste, renderDistilledTaste } from "../taste-distill.mjs";
 import { mergeSharedDecisions } from "../shared-judgments.mjs";
 
-// The most-recent scan report + its timestamp, for the plan's grounding and its staleness flag. Honest
-// null when nothing has been scanned — an ungrounded plan says so rather than implying a scan.
-function latestScan() {
+// The active project's linked scan report + timestamp. Never substitute a global/latest workspace:
+// that can silently ground one product's judgment in another product's repository.
+export function projectScan(project, workspaceReader = getWorkspace) {
   try {
-    const summary = listWorkspaces()[0];
-    if (!summary) return { report: null, scannedAt: null };
-    const workspace = getWorkspace(summary.id);
-    return { report: workspace.report ?? null, scannedAt: workspace.updatedAt ?? summary.updatedAt ?? null };
+    const workspaceId = project?.sharedContext?.repository?.workspaceId;
+    if (!workspaceId) return { report: null, scannedAt: null };
+    const workspace = workspaceReader(workspaceId);
+    return { report: workspace.report ?? null, scannedAt: workspace.report?.scannedAt ?? workspace.updatedAt ?? null };
   } catch {
     return { report: null, scannedAt: null };
   }
@@ -68,27 +68,45 @@ function isStale(generatedAt, scannedAt) {
   return String(scannedAt) > String(generatedAt);
 }
 
+// Provider-neutral compatibility read. Dependency hooks keep the route contract testable without a
+// live subscription; production defaults still use the linked project authorities and terrain reader.
+export async function operationPlanForProject(project, url, {
+  workspaceReader = getWorkspace,
+  plannerFactory = createTerrainMotionPlanner,
+  productModelReader = getProductModel,
+  capabilityReader = listCapabilities,
+} = {}) {
+  const repo = project.sharedContext?.repository?.repo || process.cwd();
+  const { report, scannedAt } = projectScan(project, workspaceReader);
+  const model = url.searchParams.get("model") || undefined;
+  const runtime = url.searchParams.get("runtime") || undefined;
+  const planner = plannerFactory({ cwd: repo, model, runtime });
+  const { plan, meta, error } = await planner({
+    projectId: project.id,
+    goal: url.searchParams.get("goal") || project.sharedContext?.goal || "",
+    productModel: productLedGrounding(productModelReader(project.id)),
+    scan: report,
+    grounding: buildRunGrounding(project, report),
+    capabilities: capabilityReader(),
+    taste: tasteFor(project.id),
+    priorEdits: priorEditsFor(project.id),
+    scannedAt,
+  });
+  return {
+    plan: { ...plan, stale: isStale(plan.generatedAt, scannedAt) },
+    meta: { ...meta, ...(error ? { error } : {}) },
+  };
+}
+
 export default async function handle({ req, res, url }) {
   // Regenerate the plan on demand. Founder-triggered (GTM-MACHINE.md open decision #3: founder-triggered
   // + staleness flag, never auto-regenerate every scan). Optional ?goal= narrows the plan to a stated goal.
   if (req.method === "GET" && url.pathname === "/api/operation-plan") {
     try {
       const project = loadProject();
-      const repo = project.sharedContext?.repository?.repo || process.cwd();
-      const { report, scannedAt } = latestScan();
-      const planner = createClaudeMotionPlanner({ cwd: repo });
-      const { plan, meta } = await planner({
-        goal: url.searchParams.get("goal") || project.sharedContext?.goal || "",
-        productModel: productLedGrounding(getProductModel(project.id)),
-        grounding: buildRunGrounding(project, report),
-        capabilities: listCapabilities(),
-        taste: tasteFor(project.id),
-        priorEdits: priorEditsFor(project.id),
-        scannedAt,
-      });
       // The staleness flag is computed against the plan's OWN generatedAt — a plan generated now against
       // this scan is never stale; it only goes stale once a NEWER scan lands.
-      json(res, 200, { plan: { ...plan, stale: isStale(plan.generatedAt, scannedAt) }, meta });
+      json(res, 200, await operationPlanForProject(project, url));
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }

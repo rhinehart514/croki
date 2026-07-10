@@ -13,6 +13,7 @@
 //   - an honest blank default (blankGenerate) that refuses rather than fabricates.
 
 import { runStructuredTask } from "./structured-task-runtime.mjs";
+import { buildRunGrounding } from "./run-grounding.mjs";
 
 // The modeling doctrine, passed to the product-model agent. Edit
 // ~/.claude/agents/gtm-model-product.md to change how it interprets the product — the instruction
@@ -97,6 +98,19 @@ export function createProductModeler({ cwd = process.cwd(), model, runtime, maxT
     }
     return { ok: true, model: toModel(result.value), meta: { parsed: true, provider, runtime: result.runtime, model: result.model ?? model ?? null } };
   };
+}
+
+// Assemble the one project-scoped draft every HTTP/background derive path uses. Callers supply the
+// linked workspace report explicitly, so this helper cannot silently ground one product in another
+// project's latest scan. It does not persist; the domain command remains the write boundary.
+export async function generateProductModelForProject({ project, report = null, repo, model, runtime, market, runTask = runStructuredTask } = {}) {
+  if (!project?.id) throw new Error("Product-model derivation needs a project.");
+  const cwd = String(repo || project.sharedContext?.repository?.repo || process.cwd()).trim() || process.cwd();
+  const grounding = buildRunGrounding(project, report);
+  const groundingRef = project.sharedContext?.repository?.workspaceId ?? report?.scannedAt ?? null;
+  const generate = createProductModeler({ cwd, model, runtime, runTask });
+  const result = await generate({ grounding, market });
+  return { ...result, grounding, groundingRef, repo: cwd };
 }
 
 // Public compatibility wrapper. Existing callers keep their name and Claude selection, while all

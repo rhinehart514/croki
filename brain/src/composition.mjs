@@ -8,11 +8,12 @@
 // must not let the model violate: a valid graph, and a founder gate before anything that
 // reaches the world.
 //
-// Injectable: a fake composer in tests, createClaudeComposer() live
+// Injectable: a fake composer in tests, createComposer() live through either local runtime,
+// createClaudeComposer() as a compatibility wrapper,
 // on the subscription, an honest blank default that composes nothing rather than falling back
 // to a template.
 
-import { runClaudeQuery, parseAgentObject } from "./agent-bridge.mjs";
+import { runStructuredTask } from "./structured-task-runtime.mjs";
 
 // The composition doctrine. Edit ~/.claude/agents/gtm-compose-workflow.md to change how
 // graphs are composed — the instruction is a markdown artifact, not host code.
@@ -46,9 +47,28 @@ Each node: { "id": "kebab-id", plus the kind/category fields above, "label": "..
 Each edge: { "source": "node-id", "target": "node-id", "edgeType": "data" | "context" | "feedback", "rationale": "one plain sentence on why this ordering" }.
 A data edge leaving a "switch" node ALSO carries "predicate": { "field": "<itemField>", "op": "eq"|"ne"|"gt"|"gte"|"lt"|"lte"|"exists"|"missing"|"contains"|"in", "value": <v> } — only items matching it take that branch. An unconditional fall-through branch omits the predicate.`;
 
-// Live composer: reads the repo on the founder's subscription and returns a { nodes, edges }
-// graph spec. The host (workflow-composer.mjs) normalizes, enforces the gate wall, and validates.
-export function createClaudeComposer({ cwd = process.cwd(), model, maxTurns = 24, onText } = {}) {
+function providerForRuntime(runtime) {
+  if (runtime === "codex") return "codex";
+  if (runtime === "claude-code" || runtime === "anthropic") return "claude";
+  return "blank";
+}
+
+function resultMeta(result, fallbackModel) {
+  return {
+    provider: providerForRuntime(result?.runtime),
+    runtime: result?.runtime ?? null,
+    model: result?.model ?? fallbackModel ?? null,
+    ...(result?.error ? {
+      errorKind: result.error.kind,
+      retriable: result.error.retriable === true,
+    } : {}),
+  };
+}
+
+// Live composer: reads the repo on the founder's selected/available subscription runtime and returns
+// a { nodes, edges } graph spec. This read-only one-shot produces a spec only; the host
+// (workflow-composer.mjs) separately normalizes it, enforces the gate wall, and validates it.
+export function createComposer({ cwd = process.cwd(), model, runtime, maxTurns = 24, onText, runTask = runStructuredTask } = {}) {
   return async function compose({ goal, channel, agents, grounding, enginePool, capabilities, taste, learn }) {
     // The live capability inventory (agents ∪ connected MCP tools). When present, the model composes
     // from what ACTUALLY exists — real MCP tool refs — instead of inventing them. Only MCP tools are
@@ -62,6 +82,17 @@ export function createClaudeComposer({ cwd = process.cwd(), model, maxTurns = 24
     const prompt = [
       COMPOSE_PROMPT,
       `\nChannel objective:\n${goal || channel?.objective || ""}`,
+      `\nSelected move context (founder wording and stable references are advisory lineage, not required fields or authorization):\n${JSON.stringify({
+        founderWording: channel?.founderWording ?? null,
+        intendedEffect: channel?.intendedEffect ?? null,
+        uncertainty: channel?.uncertainty ?? null,
+        measurementIntent: channel?.measurementIntent ?? null,
+        questionId: channel?.questionId ?? null,
+        contextRefs: channel?.contextRefs ?? [],
+        evidenceRefs: channel?.evidenceRefs ?? [],
+        productRefs: channel?.productRefs ?? [],
+        participantRefs: channel?.participantRefs ?? [],
+      }, null, 2)}`,
       `\nAccepted agents (use these refs):\n${JSON.stringify(agents ?? [], null, 2)}`,
       `\nEngine agent pool — reuse an existing ref when it already covers the capability, don't duplicate:\n${JSON.stringify(enginePool ?? [], null, 2)}`,
       capabilityBlock,
@@ -79,14 +110,31 @@ export function createClaudeComposer({ cwd = process.cwd(), model, maxTurns = 24
         ? "\nWhat your outcomes have taught the machine (lean toward the motion shapes earning wins; don't lean on the ones drawing nothing — this is measured signal, not a rule that overrides your gate):\n" + learn
         : "",
     ].filter(Boolean).join("\n");
-    const { text, error } = await runClaudeQuery({ prompt, cwd, model, maxTurns, onText });
-    if (error) return { ok: false, error: error.message };
-    const graph = parseAgentObject(text);
+    const result = await runTask({
+      task: "composition",
+      prompt,
+      cwd,
+      model,
+      runtime,
+      output: "object",
+      readOnly: true,
+      maxTurns,
+      onText,
+    });
+    const meta = resultMeta(result, model);
+    if (!result.ok) return { ok: false, error: result.error?.message ?? "Composer could not complete this read.", meta };
+    const graph = result.value;
     if (!graph || !Array.isArray(graph.nodes)) {
-      return { ok: false, error: "Composer did not return a { nodes, edges } graph." };
+      return { ok: false, error: "Composer did not return a { nodes, edges } graph.", meta };
     }
-    return { ok: true, nodes: graph.nodes, edges: Array.isArray(graph.edges) ? graph.edges : [] };
+    return { ok: true, nodes: graph.nodes, edges: Array.isArray(graph.edges) ? graph.edges : [], meta };
   };
+}
+
+// Public compatibility wrapper. Existing callers keep their name and Claude selection while using
+// the same structured-task parsing, read-only safety, and error contract as every other runtime.
+export function createClaudeComposer(options = {}) {
+  return createComposer({ ...options, runtime: "claude-code" });
 }
 
 // The explain doctrine — the twin of COMPOSE_PROMPT for an already-composed graph that predates
@@ -110,7 +158,7 @@ Key every entry by the exact id given. No prose, no preamble.`;
 // Live explainer: reads only the graph structure handed in and returns the rationale maps. The host
 // (workflow-composer.mjs explainComposedGraph) merges these onto the stored graph and persists.
 // maxTurns is low — this is a single structured reply over data already in the prompt, no tool use.
-export function createClaudeExplainer({ cwd = process.cwd(), model, maxTurns = 2, onText } = {}) {
+export function createExplainer({ cwd = process.cwd(), model, runtime, maxTurns = 2, onText, runTask = runStructuredTask } = {}) {
   return async function explain({ graph }) {
     const nodes = (Array.isArray(graph?.nodes) ? graph.nodes : []).map((n) => ({
       id: n.id,
@@ -128,14 +176,30 @@ export function createClaudeExplainer({ cwd = process.cwd(), model, maxTurns = 2
       `\nNodes:\n${JSON.stringify(nodes, null, 2)}`,
       `\nEdges:\n${JSON.stringify(edges, null, 2)}`,
     ].join("\n");
-    const { text, error } = await runClaudeQuery({ prompt, cwd, model, maxTurns, onText });
-    if (error) return { ok: false, error: error.message };
-    const parsed = parseAgentObject(text);
-    if (!parsed) return { ok: false, error: "Explainer did not return a { nodes, edges } rationale object." };
+    const result = await runTask({
+      task: "composition-explanation",
+      prompt,
+      cwd,
+      model,
+      runtime,
+      output: "object",
+      readOnly: true,
+      maxTurns,
+      onText,
+    });
+    const meta = resultMeta(result, model);
+    if (!result.ok) return { ok: false, error: result.error?.message ?? "Explainer could not complete this read.", meta };
+    const parsed = result.value;
+    if (!parsed) return { ok: false, error: "Explainer did not return a { nodes, edges } rationale object.", meta };
     return {
       ok: true,
       nodes: parsed.nodes && typeof parsed.nodes === "object" ? parsed.nodes : {},
       edges: parsed.edges && typeof parsed.edges === "object" ? parsed.edges : {},
+      meta,
     };
   };
+}
+
+export function createClaudeExplainer(options = {}) {
+  return createExplainer({ ...options, runtime: "claude-code" });
 }

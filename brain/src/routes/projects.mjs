@@ -25,28 +25,37 @@ import {
   resolveCurrentUser,
   teamsForUser,
 } from "../team-store.mjs";
-import { openWorkspace } from "../workspace.mjs";
+import { getWorkspace, openWorkspace } from "../workspace.mjs";
 import { listPeople, getPerson } from "../person-store.mjs";
 import { executeDomainCommand } from "../domain-commands.mjs";
-import { createClaudeProductModeler } from "../product-model-generator.mjs";
+import { generateProductModelForProject } from "../product-model-generator.mjs";
 import { registerProductModelDerive } from "../product-model-ready.mjs";
 
 // Fire-and-forget: after a project is grounded or activated, derive its interpretive product model
 // in the background so the picture panel and run grounding are populated without the founder having
 // to click "derive". NON-BLOCKING and error-swallowing — a failed derive must never break grounding.
 // Skipped when there is no real repo to read (a blank cwd would be a pointless model call).
-function kickProductModelDerive(project, repo) {
+function linkedScanReport(project) {
+  const workspaceId = project?.sharedContext?.repository?.workspaceId;
+  if (!workspaceId) return null;
+  try { return getWorkspace(workspaceId)?.report ?? null; } catch { return null; }
+}
+
+function kickProductModelDerive(project, repo, { model, runtime, report = linkedScanReport(project) } = {}) {
   if (!project?.id) return;
   const cwd = typeof repo === "string" ? repo.trim() : "";
   if (!cwd || cwd === process.cwd()) return;
   const derive = Promise.resolve()
-    .then(() =>
-      executeDomainCommand(
+    .then(async () => {
+      const draft = await generateProductModelForProject({ project, report, repo: cwd, model, runtime });
+      if (!draft.ok) return draft;
+      const productModel = await executeDomainCommand(
         "DeriveProductModel",
-        { projectId: project.id },
-        { projectId: project.id, generate: createClaudeProductModeler({ cwd }) },
-      ),
-    )
+        { projectId: project.id, grounding: draft.grounding, groundingRef: draft.groundingRef, repo: cwd },
+        { projectId: project.id, generate: async () => draft },
+      );
+      return { ...draft, productModel };
+    })
     .catch(() => {});
   // Register the in-flight derive so a run started right after grounding/activation can briefly wait
   // for the rich model to land (bounded) instead of silently grounding on only cheap scan facts. This
@@ -74,13 +83,13 @@ export default async function handle({ req, res, url }) {
         setActiveProject(existing.id);
         const project = groundProjectInWorkspace(workspace, { projectId: existing.id });
         json(res, 200, { project, workspace, activeProjectId: existing.id });
-        kickProductModelDerive(project, workspace.repo);
+        kickProductModelDerive(project, workspace.repo, { model: body.model, runtime: body.runtime, report: workspace.report });
         return true;
       }
       const created = createProject({ name });
       const project = groundProjectInWorkspace(workspace, { projectId: created.project.id });
       json(res, 201, { project, workspace, activeProjectId: created.project.id });
-      kickProductModelDerive(project, workspace.repo);
+      kickProductModelDerive(project, workspace.repo, { model: body.model, runtime: body.runtime, report: workspace.report });
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
@@ -90,9 +99,10 @@ export default async function handle({ req, res, url }) {
   const activateProjectMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/activate$/);
   if (req.method === "POST" && activateProjectMatch) {
     try {
+      const body = await readBody(req);
       const project = setActiveProject(decodeURIComponent(activateProjectMatch[1]));
       json(res, 200, { project, activeProjectId: project.id });
-      kickProductModelDerive(project, project.sharedContext?.repository?.repo || process.cwd());
+      kickProductModelDerive(project, project.sharedContext?.repository?.repo || process.cwd(), { model: body.model, runtime: body.runtime });
     } catch (err) {
       json(res, 404, { error: err instanceof Error ? err.message : String(err) });
     }

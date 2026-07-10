@@ -4,12 +4,19 @@ import { json, readBody } from "./util.mjs";
 import { loadProject } from "../project-store.mjs";
 import { executeDomainCommand } from "../domain-commands.mjs";
 import { getProductModel } from "../product-model-store.mjs";
-import { createClaudeProductModeler } from "../product-model-generator.mjs";
+import { generateProductModelForProject } from "../product-model-generator.mjs";
+import { getWorkspace } from "../workspace.mjs";
+
+function linkedScanReport(project) {
+  const workspaceId = project?.sharedContext?.repository?.workspaceId;
+  if (!workspaceId) return null;
+  try { return getWorkspace(workspaceId)?.report ?? null; } catch { return null; }
+}
 
 export default async function handle({ req, res, url }) {
   // Living Product Picture — the founder-editable interpretation aggregate. Three state-changing
   // commands funnel through executeDomainCommand (the single chokepoint), plus a read. derive injects
-  // the live createClaudeProductModeler generator; revise/signal are pure host state moves. This is
+  // the provider-neutral one-shot generator; revise/signal are pure host state moves. This is
   // Door 1 (human HTTP); the brain MCP is an HTTP client to these routes, so they exist first.
   if (req.method === "GET" && url.pathname === "/api/product-model") {
     try {
@@ -26,11 +33,29 @@ export default async function handle({ req, res, url }) {
       const body = await readBody(req);
       const project = loadProject();
       const repo = project.sharedContext?.repository?.repo || process.cwd();
+      const draft = await generateProductModelForProject({
+        project,
+        report: linkedScanReport(project),
+        repo,
+        model: body.model,
+        runtime: body.runtime,
+        market: body.market,
+      });
+      if (!draft.ok) {
+        json(res, 503, {
+          error: draft.meta?.error || "The selected runtime could not derive the product model.",
+          meta: draft.meta,
+        });
+        return true;
+      }
       const productModel = await executeDomainCommand("DeriveProductModel", {
         ...body,
         projectId: project.id,
-      }, { projectId: project.id, generate: createClaudeProductModeler({ cwd: repo }) });
-      json(res, 200, { productModel });
+        grounding: draft.grounding,
+        groundingRef: draft.groundingRef,
+        repo,
+      }, { projectId: project.id, generate: async () => draft });
+      json(res, 200, { productModel, meta: draft.meta });
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
