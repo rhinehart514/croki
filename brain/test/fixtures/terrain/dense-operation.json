@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-10T12:00:00.000Z",
+  "products": [
+    { "id": "dense-acme", "name": "Acme", "repository": "samples/acme-saas" },
+    { "id": "dense-orbit", "name": "Orbit", "repository": "fixture://orbit" }
+  ],
+  "pipelines": [
+    { "id": "pipeline-product-brief", "projectId": "dense-acme", "shape": ["agent", "code", "gate", "execute"], "status": "waiting" },
+    { "id": "pipeline-attribution", "projectId": "dense-acme", "shape": ["code", "gate", "execute", "measure"], "status": "active" },
+    { "id": "pipeline-partnership", "projectId": "dense-orbit", "shape": ["mcp", "agent", "gate", "execute"], "status": "waiting" },
+    { "id": "pipeline-research", "projectId": "dense-orbit", "shape": ["web", "query", "agent"], "status": "completed" }
+  ],
+  "sharedObjects": [
+    { "type": "market-evidence", "id": "shared-recipient-research" },
+    { "type": "teammate", "id": "market-skeptic" }
+  ],
+  "pendingGates": [
+    { "projectId": "dense-acme", "runId": "run-product-brief", "gateId": "gate-product-brief" },
+    { "projectId": "dense-orbit", "runId": "run-partnership", "gateId": "gate-partnership" }
+  ],
+  "disagreement": {
+    "questionId": "question-brief-entry",
+    "positions": ["product-strategist", "market-skeptic"]
+  },
+  "outcomes": [
+    { "id": "result-positive", "projectId": "dense-acme", "kind": "positive", "pipelineId": "pipeline-attribution" },
+    { "id": "result-negative", "projectId": "dense-acme", "kind": "negative", "pipelineId": "pipeline-product-brief" },
+    { "id": "result-unmeasured", "projectId": "dense-orbit", "kind": "unmeasured", "pipelineId": "pipeline-research" },
+    { "id": "result-unattributed", "projectId": "dense-orbit", "kind": "signal", "pipelineId": null }
+  ],
+  "terrain": [
+    { "projectId": "dense-acme", "readId": "read-acme-old", "stale": true },
+    { "projectId": "dense-orbit", "readId": "read-orbit-current", "stale": false }
+  ]
+}

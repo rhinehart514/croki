@@ -1,0 +1,175 @@
+{
+  "schemaVersion": 1,
+  "projectId": "sample-acme",
+  "inputFingerprint": "fixture:sample-acme:grounding-v1",
+  "runtime": { "id": "fixture-runtime", "model": "deterministic" },
+  "cases": [
+    {
+      "id": "valid-derived-opening",
+      "description": "A code-supported product-shaped opening stays inferred and keeps its receipts.",
+      "response": {
+        "hypotheses": [{
+          "stance": "opening",
+          "title": "Make the project brief carry the workspace",
+          "claim": "The existing read-only brief could become a collaboration entry point for recipients who do not yet use Acme.",
+          "whyItMatters": "It uses a product surface that already crosses the workspace boundary instead of inventing a generic outbound motion.",
+          "provenance": "inferred",
+          "evidenceRefs": [
+            { "type": "source-line", "id": "src/app/w/share/actions.ts:18" },
+            { "type": "source-line", "id": "src/app/w/share/actions.ts:37" }
+          ],
+          "productRefs": [{ "type": "product", "id": "sample-acme" }],
+          "marketRefs": [],
+          "counterEvidenceRefs": [],
+          "unknown": "Whether a recipient has enough reason to create a workspace after viewing one brief.",
+          "falsifier": "Brief recipients view the link but do not start or join a workspace in a bounded test.",
+          "suggestedMove": {
+            "title": "Add a recipient-owned follow-through to the read-only brief",
+            "intendedEffect": "Let a recipient carry the shared project into a new or existing workspace.",
+            "measurementIntent": "Join project_brief_viewed to a later workspace signup without treating the view itself as success."
+          },
+          "crewRefs": [{ "type": "teammate", "id": "product-strategist" }]
+        }]
+      },
+      "expect": { "hypothesisCount": 1, "provenance": "inferred", "demoted": false }
+    },
+    {
+      "id": "speculative-opening",
+      "description": "A market-side claim without market evidence remains speculative.",
+      "response": {
+        "hypotheses": [{
+          "stance": "opening",
+          "title": "Agencies may want client-ready briefs",
+          "claim": "Small agencies may adopt Acme for client reporting.",
+          "whyItMatters": "A client-facing use could widen the product's entry point.",
+          "provenance": "speculative",
+          "evidenceRefs": [],
+          "productRefs": [{ "type": "product", "id": "sample-acme" }],
+          "marketRefs": [],
+          "counterEvidenceRefs": [],
+          "unknown": "No buyer record supports agency demand.",
+          "falsifier": "Relevant agencies reject the brief as insufficient for client reporting.",
+          "suggestedMove": null,
+          "crewRefs": []
+        }]
+      },
+      "expect": { "hypothesisCount": 1, "provenance": "speculative", "demoted": false }
+    },
+    {
+      "id": "tension-with-counterevidence",
+      "description": "A tension preserves evidence against its own claim.",
+      "response": {
+        "hypotheses": [{
+          "stance": "tension",
+          "title": "Acquisition enters the product but disappears at signup",
+          "claim": "Acme captures campaign context and drops it before the signup win event.",
+          "whyItMatters": "The founder cannot tell which acquisition work produced a workspace.",
+          "provenance": "inferred",
+          "evidenceRefs": [
+            { "type": "source-line", "id": "src/lib/attribution.ts:16" },
+            { "type": "source-line", "id": "src/app/signup/actions.ts:29" }
+          ],
+          "productRefs": [{ "type": "product", "id": "sample-acme" }],
+          "marketRefs": [],
+          "counterEvidenceRefs": [{ "type": "source-line", "id": "src/app/w/share/actions.ts:20" }],
+          "unknown": "Whether another analytics destination joins campaign data after the event leaves this repository.",
+          "falsifier": "A configured downstream join reliably attaches the captured campaign to signup_completed.",
+          "suggestedMove": {
+            "title": "Carry first-touch attribution into the signup receipt",
+            "intendedEffect": "Make the existing win event attributable.",
+            "measurementIntent": "Confirm campaign fields appear on signup_completed."
+          },
+          "crewRefs": [{ "type": "teammate", "id": "market-skeptic" }]
+        }]
+      },
+      "expect": { "hypothesisCount": 1, "counterEvidenceCount": 1, "demoted": false }
+    },
+    {
+      "id": "fake-citation",
+      "description": "A nonexistent code receipt cannot support inferred provenance.",
+      "response": {
+        "hypotheses": [{
+          "stance": "opening",
+          "title": "Automated client billing",
+          "claim": "Acme already bills clients from a shared project brief.",
+          "whyItMatters": "It would create a transaction surface.",
+          "provenance": "inferred",
+          "evidenceRefs": [{ "type": "source-line", "id": "src/app/billing/automatic.ts:999" }],
+          "productRefs": [{ "type": "product", "id": "sample-acme" }],
+          "marketRefs": [],
+          "counterEvidenceRefs": [],
+          "unknown": null,
+          "falsifier": null,
+          "suggestedMove": null,
+          "crewRefs": []
+        }]
+      },
+      "expect": { "hypothesisCount": 1, "provenance": "speculative", "demoted": true }
+    },
+    {
+      "id": "empty-response",
+      "description": "A valid empty response is not a terrain failure.",
+      "response": { "hypotheses": [] },
+      "expect": { "hypothesisCount": 0, "error": null }
+    },
+    {
+      "id": "malformed-response",
+      "description": "Malformed model output yields an honest partial read.",
+      "response": "not-json-and-not-a-terrain-read",
+      "expect": { "hypothesisCount": 0, "error": "malformed_response" }
+    },
+    {
+      "id": "provider-error",
+      "description": "A provider error does not erase deterministic terrain.",
+      "providerResult": { "ok": false, "error": { "code": "quota", "message": "Fixture provider unavailable." } },
+      "expect": { "hypothesisCount": 0, "error": "provider_unavailable", "deterministicTerrainAvailable": true }
+    },
+    {
+      "id": "outcome-changed-read",
+      "description": "A joined negative result changes the fingerprint and the next read without rewriting truth.",
+      "inputFingerprint": "fixture:sample-acme:joined-outcome-v2",
+      "response": {
+        "hypotheses": [{
+          "stance": "tension",
+          "title": "The brief is viewed but does not yet create a workspace",
+          "claim": "The joined fixture result weakens the brief-as-entry-point opening.",
+          "whyItMatters": "The product-shaped surface earned attention but not the intended downstream result.",
+          "provenance": "inferred",
+          "evidenceRefs": [{ "type": "outcome", "id": "outcome-brief-zero-conversion" }],
+          "productRefs": [{ "type": "product", "id": "sample-acme" }],
+          "marketRefs": [],
+          "counterEvidenceRefs": [{ "type": "terrain-hypothesis", "id": "fixture-valid-derived-opening" }],
+          "unknown": "Whether the offer, timing, or recipient role caused the zero conversion result.",
+          "falsifier": "A revised brief produces attributable workspace starts in the next bounded run.",
+          "suggestedMove": null,
+          "crewRefs": [{ "type": "teammate", "id": "market-skeptic" }]
+        }]
+      },
+      "expect": { "hypothesisCount": 1, "fingerprintChanged": true, "truthMutation": false }
+    }
+  ],
+  "disagreement": {
+    "question": "Should the read-only project brief become Acme's next product-led entry point?",
+    "positions": [
+      {
+        "teammateRef": { "type": "teammate", "id": "product-strategist" },
+        "position": "Test the brief because it already crosses a workspace boundary.",
+        "evidenceRefs": [{ "type": "source-line", "id": "src/app/w/share/actions.ts:18" }],
+        "uncertainty": "Recipient intent is unknown.",
+        "recommendation": "Add a reversible recipient follow-through and measure workspace starts.",
+        "falsifier": "Recipients view but never continue into a workspace."
+      },
+      {
+        "teammateRef": { "type": "teammate", "id": "market-skeptic" },
+        "position": "Fix attribution before treating the brief as a growth surface.",
+        "evidenceRefs": [
+          { "type": "source-line", "id": "src/lib/attribution.ts:16" },
+          { "type": "source-line", "id": "src/app/signup/actions.ts:29" }
+        ],
+        "uncertainty": "A downstream system may already repair attribution.",
+        "recommendation": "Close the measurement gap, then test the brief.",
+        "falsifier": "A downstream join already attributes every signup reliably."
+      }
+    ]
+  }
+}

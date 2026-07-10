@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "projectId": "sample-acme",
+  "generatedAt": "2026-07-10T12:00:00.000Z",
+  "state": {
+    "kind": "ready",
+    "stale": false,
+    "issues": []
+  },
+  "product": {
+    "projectRef": { "type": "product", "id": "sample-acme" },
+    "repository": {
+      "path": "samples/acme-saas",
+      "winEvent": "signup_completed"
+    },
+    "truths": [
+      {
+        "id": "truth-win-event",
+        "claim": "A workspace signup emits signup_completed.",
+        "provenance": "observed",
+        "evidenceRefs": [{ "type": "source-line", "id": "src/app/signup/actions.ts:29" }]
+      },
+      {
+        "id": "truth-attribution-gap",
+        "claim": "The signup event omits the campaign fields captured before signup.",
+        "provenance": "observed",
+        "evidenceRefs": [
+          { "type": "source-line", "id": "src/lib/attribution.ts:16" },
+          { "type": "source-line", "id": "src/app/signup/actions.ts:29" }
+        ]
+      },
+      {
+        "id": "truth-share-surface",
+        "claim": "A workspace owner can create a signed read-only project brief and record its first view.",
+        "provenance": "observed",
+        "evidenceRefs": [
+          { "type": "source-line", "id": "src/app/w/share/actions.ts:18" },
+          { "type": "source-line", "id": "src/app/w/share/actions.ts:37" }
+        ]
+      }
+    ],
+    "modelRef": { "type": "product-model", "id": "sample-acme-model-v1" }
+  },
+  "hypotheses": [],
+  "questions": [{ "type": "question", "id": "question-brief-conversion" }],
+  "moves": [],
+  "outcomes": [],
+  "implications": [],
+  "crew": [
+    { "type": "teammate", "id": "product-strategist" },
+    { "type": "teammate", "id": "market-skeptic" }
+  ],
+  "relationships": [],
+  "geometry": {
+    "nodes": {},
+    "viewport": { "x": 0, "y": 0, "zoom": 1 }
+  }
+}

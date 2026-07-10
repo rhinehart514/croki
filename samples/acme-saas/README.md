@@ -1,7 +1,7 @@
 # Acme
 
-A small team task tracker. Create a workspace, invite a couple of teammates, and
-track who's doing what. This is a bundled **sample product** that ships with Drover
+A small team task tracker. Create a workspace, invite a couple of teammates, share
+a read-only project brief, and track who's doing what. This is a bundled **sample product** that ships with Drover
 so a founder without an instrumented codebase of their own can still watch the
 read-only scan work on real code.
 
@@ -20,3 +20,11 @@ campaign, post, or referral produced it. The data is captured at the front door
 and thrown away at the finish line.
 
 That is the attribution gap Drover proves from the code itself.
+
+## The product-shaped opening
+
+Acme already turns a live project into a signed, read-only brief that a teammate
+can share outside the workspace (`src/app/w/share/actions.ts`). The code records
+both the share and the recipient's first view. That supports a concrete product
+hypothesis: make the brief useful enough to carry Acme into the next collaborator's
+workspace. It is an opening to investigate, not evidence that recipients convert.

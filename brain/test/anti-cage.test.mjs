@@ -60,6 +60,7 @@ import { effectiveSolidity } from "../src/evidence.mjs";
 import { deriveVoiceBrief, renderVoiceForNarration } from "../src/teammate-soul.mjs";
 import { teammateSoulStore } from "../src/teammate-soul-store.mjs";
 import { createTeammateNarrator } from "../src/teammate-narrator.mjs";
+import { classifyOperatorVerb, normalizeStableRef } from "../src/operator-tools.mjs";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -976,5 +977,80 @@ describe("anti-cage: Result.motionKind is a single, open keying dimension", () =
       }
     }
     assert.equal(definitions, 1, `expected exactly one deriveMotionEfficiency definition, found ${definitions} — a second efficiency derivation is the cage regrowing`);
+  });
+});
+
+// TERRAIN COMPLETION — the model-generated read is context, never a fourth harness constraint. These
+// static checks deliberately guard authority boundaries rather than prescribing another domain model.
+describe("anti-cage: terrain remains a projection and cannot become authority", () => {
+  it("adds no required Opportunity, TerrainItem, program, policy, or stage store", () => {
+    const bannedStore = /^(?:opportunity|terrain[-_]?item|program|policy|stage)[-_]?store\.(?:mjs|js|ts)$/i;
+    const violations = [];
+    const pending = [SRC];
+    while (pending.length) {
+      const directory = pending.pop();
+      for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+        const full = path.join(directory, entry.name);
+        if (entry.isDirectory()) pending.push(full);
+        else if (bannedStore.test(entry.name)) violations.push(path.relative(SRC, full));
+      }
+    }
+    assert.deepEqual(
+      violations,
+      [],
+      `terrain completion introduced a required lifecycle store: ${violations.join(", ")}. Terrain is a projection over existing authorities.`,
+    );
+
+    const runtimeFiles = ["graph.mjs", "graph-operations.mjs", "workflow-composer.mjs", "operator-tool-exec.mjs"];
+    const bannedImport = /from\s+["'][^"']*(?:opportunity|terrain[-_]?item|program|policy|stage)[-_]?store\.(?:mjs|js|ts)["']/i;
+    for (const filename of runtimeFiles) {
+      assert.equal(bannedImport.test(stripComments(readSrc(filename))), false, `${filename} imports a banned terrain lifecycle store`);
+    }
+  });
+
+  it("terrain references are focusable context but never approval or gate authority", () => {
+    assert.deepEqual(
+      normalizeStableRef({ type: "terrain-hypothesis", id: "hypothesis-1", projectId: "project-1" }, { projectId: "project-1" }),
+      { type: "terrain-hypothesis", id: "hypothesis-1" },
+    );
+    assert.equal(classifyOperatorVerb("focus").boundary, "session context only; referenced records are unchanged");
+    assert.match(classifyOperatorVerb("run").boundary, /founder gate/);
+
+    for (const relative of ["routes/session-guard.mjs", "connectors/gate/default.mjs", "gate-pattern.mjs"]) {
+      const source = stripComments(readSrc(relative));
+      assert.doesNotMatch(
+        source,
+        /terrain[-_ ]?(?:read|hypothesis|item)/i,
+        `${relative} consults terrain context while deciding authorization; only founder/browser authority may clear the wall`,
+      );
+    }
+  });
+
+  it("the deterministic terrain projection cannot spend a model call", () => {
+    const projectionFiles = ["operating-view.mjs", "woven-graph.mjs", "routes/operator.mjs"];
+    const forbidden = /\b(?:runClaudeQuery|runStructuredTask|createClaude\w*|selectRuntime)\s*\(/;
+    for (const relative of projectionFiles) {
+      let source = stripComments(readSrc(relative));
+      if (relative === "routes/operator.mjs") {
+        const start = source.indexOf('req.method === "GET" && url.pathname === "/api/operating-view"');
+        assert.ok(start >= 0, "the canonical deterministic operating-view GET disappeared without a replacement guard");
+        source = source.slice(start, source.indexOf("const operatorSessionMatch", start));
+      }
+      assert.doesNotMatch(source, forbidden, `${relative} spends rented intelligence while serving deterministic terrain`);
+    }
+
+    for (const candidate of ["terrain-view.mjs", "routes/terrain-view.mjs"]) {
+      const full = path.join(SRC, candidate);
+      if (!fs.existsSync(full)) continue;
+      assert.doesNotMatch(stripComments(fs.readFileSync(full, "utf8")), forbidden, `${candidate} spends rented intelligence in the deterministic view`);
+    }
+  });
+
+  it("motion kinds remain open strings rather than a terrain-era enum", () => {
+    const guarded = ["graph.mjs", "graph-operations.mjs", "workflow-composer.mjs", "outcome-ingest.mjs"];
+    const closedMotionKinds = /(?:MOTION_KINDS|ALLOWED_MOTIONS|TERRAIN_MOTIONS)\s*=\s*(?:Object\.freeze\s*\()?\s*\[/;
+    for (const filename of guarded) {
+      assert.doesNotMatch(stripComments(readSrc(filename)), closedMotionKinds, `${filename} introduced a closed motion-kind list`);
+    }
   });
 });
