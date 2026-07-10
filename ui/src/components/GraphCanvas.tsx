@@ -19,7 +19,8 @@ import QueryNode from "@/components/QueryNode";
 import WebNode from "@/components/WebNode";
 import { cn } from "@/lib/utils";
 import { healthHex } from "@/lib/health";
-import { agentPersona } from "@/lib/agentPersona";
+import { agentPersona, type AgentPersona } from "@/lib/agentPersona";
+import { humanizeStepLabel } from "@/lib/labels";
 import { CrewAvatar } from "@/components/crew/CrewAvatar";
 import { CrewFace } from "@/components/crew/CrewFace";
 import { useBrandGlyph } from "@/lib/brandGlyph";
@@ -321,6 +322,39 @@ function cardObject(node: GTMNode): CardObject {
   if (node.kind === "switch") return "switch";
   if (node.kind === "agent") return "teammate";
   return "step";
+}
+
+// The plain-English name for ANY node on the canvas. The composer usually writes a real title ("Find
+// Buffalo estate-sale operators"), but some steps still arrive carrying their raw node id as the label
+// ("generate-referral-links") — machinery a founder must never read. humanizeStepLabel leaves written
+// prose untouched and only rewrites a kebab/snake slug into words, so this is safe to apply everywhere a
+// node label renders (the full card AND the far-zoom coin). One rule, no slug leaks anywhere on the canvas.
+function canvasLabel(node: GTMNode): string {
+  return humanizeStepLabel(node.label ?? "") || node.label || "";
+}
+
+// The teammate that RUNS a step — the crew made visible on the canvas. An `agent` node IS a teammate, so
+// its persona is read the way every crew surface reads it (name wins, then the ref, then the job). But a
+// step a teammate PERFORMS — a draft, an enrich, a filter, a skill/code beat — has no `kind:"agent"` yet
+// still belongs to a crew member; we derive that member's character from the step's own job so the founder
+// sees WHO owns it, as a character, not a faceless mechanical card. Structural nodes are deliberately
+// characterless: the gate is the founder's own wall, Measure is the scoreboard, a Source is the audience,
+// a Switch is automatic logic, Execute is the send, and context/resource are reference — none is a teammate.
+// The seed is the node's ref → id so the same step always draws the same face and two steps never collide.
+function stepTeammate(node: GTMNode): { persona: AgentPersona; seed: string } | null {
+  if (node.kind === "agent" && node.ref) {
+    return { persona: agentPersona(node.ref, undefined, node.label), seed: node.ref };
+  }
+  // The working categories a crew member actually carries out. Everything else keeps its semantic icon.
+  const TEAMMATE_WORK = new Set<GTMNodeCategory>(["enrich", "filter", "generate"]);
+  const worksByKind = node.kind === "skill" || node.kind === "code";
+  if (!TEAMMATE_WORK.has(node.category) && !worksByKind) return null;
+  // No agent ref on a spine step — derive the role from the step's own job (its ref, then its written
+  // label) through the same regex table the crew rail uses, so "Draft the first-contact email" reads as
+  // an Outreach Writer and "generate-referral-links" as a Referral Designer, matching the rail exactly.
+  const seed = node.ref || node.id;
+  const persona = agentPersona(node.ref || node.id, node.label);
+  return { persona, seed };
 }
 
 // Source mode mirrors brain/src/source-entry.mjs `sourceMode()`: an agent-kind source self-sources
@@ -1036,7 +1070,7 @@ function ResourceNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
       >
         <div className="loop-node-resource-inner">
           <span className={cn("loop-node-dot", configured ? "dot-ready" : "dot-missing")} />
-          <span className="loop-node-resource-name">{node.label}</span>
+          <span className="loop-node-resource-name">{humanizeStepLabel(node.label ?? "") || node.label}</span>
           {!configured && conn?.envKey && (
             <span className="loop-node-resource-key">{conn.envKey}</span>
           )}
@@ -1105,7 +1139,7 @@ function ContextNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
           {status !== "idle" && <StatusIcon status={status} />}
         </div>
       </div>
-      <span className="loop-node-label">{node.label}</span>
+      <span className="loop-node-label">{humanizeStepLabel(node.label ?? "") || node.label}</span>
       {preview && <span className="loop-node-preview">{preview}</span>}
       <Handle type="source" position={Position.Right} id="s-r" />
       {data.explainMode && (data.explainRationale ?? node.rationale) ? <NodeWhyCaption rationale={(data.explainRationale ?? node.rationale)!} /> : null}
@@ -1207,11 +1241,18 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
   );
   // The judgment verdict replaces the bare health number — derived from real signals only.
   const verdict = nodeVerdict(data.health, data.contractAudit, mode);
-  // An agent node reads as a person: the role name is the headline and the teammate's own crew face is
-  // the icon, with the raw ref demoted to the faint slug below. Other kinds keep their connector icon.
-  // node.label is the model-given / founder-chosen NAME — passed as the name (3rd arg) so it wins outright
-  // over the regex table, which used to rename a well-named agent by an incidental keyword.
-  const persona = node.kind === "agent" && node.ref ? agentPersona(node.ref, undefined, node.label) : null;
+  // The teammate that runs this step reads as a person: the role name is the headline and the crew member's
+  // own hand-drawn character is the icon. This now covers BOTH a `kind:"agent"` teammate AND the working
+  // spine steps a crew member performs (a draft, an enrich, a filter, a skill/code beat) — so the founder
+  // looks at the canvas and sees WHICH teammate owns each step, as a character, never a bare mechanical
+  // card. Structural nodes (gate/measure/source/switch/execute/context) return null and keep their semantic
+  // icon — none is run by a named teammate. `seed` is the character seed (the agent ref, or the step id).
+  const teammate = stepTeammate(node);
+  const persona = teammate?.persona ?? null;
+  const teammateSeed = teammate?.seed ?? node.ref ?? node.id;
+  // The plain-English headline for this node — humanized so a raw slug id ("generate-referral-links") never
+  // leaks onto the canvas. A teammate step still leads with the ROLE; everything else leads with this label.
+  const nodeLabel = canvasLabel(node);
   // External MCP capability: this step calls a real service (Notion, Gmail, Slack…). Show that
   // service's real logo, and whether it runs free (read) or sits behind your gate (write) — the wall,
   // legible on the card itself.
@@ -1277,16 +1318,28 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
         role="button"
         tabIndex={0}
         onClick={onSelect}
-        title={node.label}
+        title={persona ? `${persona.role} · ${nodeLabel}` : nodeLabel}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
       >
         <Handle type="target" position={Position.Left} id="t-l" />
-        {capability ? (
+        {/* At overview altitude the founder still sees WHO owns each step: a teammate step wears its crew
+            member's character; a structural node keeps its semantic icon; a capability keeps its brand mark. */}
+        {persona ? (
+          <span className="loop-node-coin-icon loop-node-coin-face" aria-hidden>
+            <CrewFace
+              agentRef={teammateSeed}
+              family={persona.family}
+              monogram={persona.monogram}
+              size={20}
+              state={status === "running" ? "working" : "idle"}
+            />
+          </span>
+        ) : capability ? (
           <span className="loop-node-coin-icon loop-node-coin-brand" aria-hidden><CapabilityGlyph cap={capability} size={17} /></span>
         ) : (
           <span className="loop-node-coin-icon" style={{ color }} aria-hidden>{visual.icon}</span>
         )}
-        <span className="loop-node-coin-label">{node.label}</span>
+        <span className="loop-node-coin-label">{persona ? persona.role : nodeLabel}</span>
         <Handle type="source" position={Position.Right} id="s-r" />
       </motion.div>
     );
@@ -1335,7 +1388,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
               <span className="loop-node-status"><StatusIcon status={status} /></span>
             </div>
           </div>
-          <span className="loop-node-label">{node.label}</span>
+          <span className="loop-node-label">{nodeLabel}</span>
           <div className="loop-node-switch-branches">
             {switchBranches.length === 0 ? (
               <span className="loop-node-switch-empty">No branches yet — connect this switch to its paths</span>
@@ -1364,7 +1417,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
             {verdict ? <VerdictBadge {...verdict} /> : null}
             <span className="loop-node-status"><StatusIcon status={status} /></span>
           </div>
-          <span className="loop-node-headline">{node.label}</span>
+          <span className="loop-node-headline">{nodeLabel}</span>
           {trigger ? (
             <span className="loop-node-trigger" title={entrants.length ? "Observed — confirmed on the people who entered" : "Assumed — not yet confirmed by a run"}>
               <span className={cn("loop-node-trigger-dot", entrants.length ? "is-observed" : "is-assumed")} aria-hidden />
@@ -1401,7 +1454,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
               <span className="loop-node-status"><StatusIcon status={status} /></span>
             </div>
           </div>
-          <span className="loop-node-label">{node.label}</span>
+          <span className="loop-node-label">{nodeLabel}</span>
           <div className="loop-gate-threshold" role="group" aria-label="Gate throughput">
             <span className="loop-gate-side is-waiting"><b>{gateWaiting}</b><span>waiting</span></span>
             <span className="loop-gate-seam" aria-hidden />
@@ -1455,10 +1508,10 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
         // agent, the brand mark for an MCP step), the quiet object label, the verdict, and status.
         <>
           <div className="loop-node-header">
-            {persona && data.onOpenAgentProfile && node.ref ? (
-              // The crew face, on the step it runs: the teammate's own character is a real button that
-              // opens this teammate's profile sheet (the deleted crew strip's exact behavior). It bobs
-              // while the step runs, and degrades to the family-tinted monogram if it can't render.
+            {persona && node.kind === "agent" && node.ref && data.onOpenAgentProfile ? (
+              // A real teammate node: the crew member's own character is a real button that opens their
+              // profile sheet (the deleted crew strip's exact behavior). It bobs while the step runs, and
+              // degrades to the family-tinted monogram if it can't render.
               <button
                 type="button"
                 className="loop-node-face"
@@ -1467,16 +1520,19 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
                 onClick={(e) => { e.stopPropagation(); data.onOpenAgentProfile!(node.ref!); }}
               >
                 <CrewFace
-                  agentRef={node.ref}
+                  agentRef={teammateSeed}
                   family={persona.family}
                   monogram={persona.monogram}
                   size={28}
                   state={status === "running" ? "working" : "idle"}
                 />
               </button>
-            ) : persona && node.ref ? (
+            ) : persona ? (
+              // A spine step a teammate PERFORMS (a draft/enrich/filter/skill/code beat): show the crew
+              // member's character so the founder sees who owns it. It isn't a profile-backed agent node,
+              // so the face is presentational — not a button — but reads in the same crew visual language.
               <CrewFace
-                agentRef={node.ref}
+                agentRef={teammateSeed}
                 family={persona.family}
                 monogram={persona.monogram}
                 size={28}
@@ -1495,7 +1551,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
               </div>
             )}
             <span className="loop-node-type-label">
-              {obj === "teammate" ? "Teammate"
+              {persona ? "Teammate"
                 : obj === "measure" ? "Measure"
                 : capability ? capability.name
                 : isMcp ? (mcpGlyph?.title ?? mcpServer.replace(/^./, (c) => c.toUpperCase()))
@@ -1517,7 +1573,11 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
               <span className="loop-node-status"><StatusIcon status={status} /></span>
             </div>
           </div>
-          <span className="loop-node-label">{persona ? persona.role : node.label}</span>
+          {/* Headline: a real teammate node leads with the crew member's ROLE (their identity is the job).
+              A spine step a teammate performs leads with the humanized STEP name ("Draft the first-contact
+              email") — the character beside it already says who owns it — so the founder reads the work, not
+              a code slug. Everything else reads its humanized label. No raw kebab ever reaches this line. */}
+          <span className="loop-node-label">{node.kind === "agent" && persona ? persona.role : nodeLabel}</span>
           {/* The live per-node narrator: while this step runs, its teammate's newest first-person beat
               reads right on the card — what it's actually doing NOW, in the model's words — instead of a
               faceless spinner. Falls back to a plain "Working…" when the backend stamped no beat yet. */}

@@ -12,7 +12,7 @@ export type AgentFamily =
   | "content" | "community" | "growth"
   | "general";
 
-type AgentPersona = {
+export type AgentPersona = {
   role: string;        // the human role name shown everywhere — "Prospect Researcher"
   family: AgentFamily;  // the function family — drives the one tint, by meaning
   monogram: string;     // two letters for the round identity mark — "PR"

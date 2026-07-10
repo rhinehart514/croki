@@ -323,12 +323,24 @@
 .our-chat .oc-gate-stage .cgate-sendback:hover:not(:disabled),
 .our-chat .oc-gate-stage .cgate-edit:hover:not(:disabled) { background: var(--oc-warm-50); border-color: #e2dcd0; }
 
-/* batch approve — a quiet warm-neutral secondary, never amber */
+/* batch approve — the effortless clean-clear, front and center. In the chat it's the founder's default
+   move (clear the clean pile, slow down only for exceptions), so it reads as the primary action: a full
+   ink bar spanning the column with the ↵ hint. Warm register keeps it ink, never amber (amber is chrome).
+   The non-stage fallback (bloom-in-chat) stays the quiet warm-neutral secondary. */
 .our-chat .oc-gate-stage .cgate-approve-all {
   color: var(--oc-ink); background: var(--oc-warm-50);
   border: 1px solid var(--oc-line); box-shadow: none; border-radius: 12px;
 }
 .our-chat .oc-gate-stage .cgate-approve-all:hover:not(:disabled) { background: var(--oc-warm-100); }
+.our-chat .oc-gate-stage .cgate-approve-all.cgate-approve-all-stage {
+  align-self: stretch; justify-content: center;
+  color: #fff; background: var(--oc-ink);
+  border-color: transparent;
+}
+.our-chat .oc-gate-stage .cgate-approve-all.cgate-approve-all-stage:hover:not(:disabled) { background: #000; }
+.our-chat .oc-gate-stage .cgate-approve-all-kbd {
+  color: rgba(255,255,255,.8); background: rgba(255,255,255,.16);
+}
 
 /* a settled decision collapses to a calm green receipt */
 .our-chat .oc-gate-stage .cgate-card-stage.is-decided { background: var(--oc-warm-50); border-color: var(--oc-line); }

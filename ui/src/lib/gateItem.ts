@@ -276,6 +276,45 @@ export function gateItemView(item: GTMItem): GateItemView {
   return { subject, body, evidence, trigger, who, sourceUrl, fields, receipt, hollow };
 }
 
+// ─── The item's NATURE — what a "yes" actually does, so the button never lies ──
+// The gate's primary button must name the real consequence. "Send it" on a strategy note or a content
+// plan is a lie — that item has nothing that crosses the wall; approving it just accepts the plan. Three
+// natures, inferred deterministically from the item's OWN shape (never a model call):
+//   "send"     — a real outbound artifact with a recipient/target: an email, a DM, a post, a message.
+//                A yes releases it to the world. → "Send it" / "Post it".
+//   "ship"     — a code-native deploy the founder is authorizing live (the second authorization).
+//                → "Ship it live".
+//   "approve"  — a plan, strategy, list, or artifact with NO sendable body: a content plan, a positioning
+//                note, a prospect list, a scored roster. A yes accepts the work; nothing sends. → "Approve".
+// The distinction turns on whether the item carries a genuinely SENDABLE body — one promoted from a real
+// artifact key (post/email/message/…), the same allowlist gateItemView uses — plus, for "send", some
+// signal of a recipient (a Who, a source, or an outbound-shaped title). A body that reads as an internal
+// document (a plan's prose) does not make an item sendable.
+// "send" vs "approve" is the honest yes/no of the wall; the send/post wording split lives in the verb
+// deriver (deriveGateVerb), not here.
+export type GateItemNature = "send" | "ship" | "approve";
+
+export function gateItemNature(item: GTMItem): GateItemNature {
+  const it = item as Record<string, unknown>;
+  // A code-native deploy the founder ships live. Marked by producer files + a deploy target — the same
+  // signal gateDelta reads. Kept here as a light shape-check so the plain card (no delta path) still
+  // reads honestly: an item carrying files reads "Ship it live", never "Send it".
+  const files = it.files;
+  const hasFiles = Array.isArray(files) && files.length > 0;
+  const deployTarget = pickStr(it.deployTarget, it.deploy_target, (it.artifactSpec as { deploy?: unknown })?.deploy as string);
+  if (hasFiles && deployTarget) return "ship";
+
+  // The single honest signal for "does this cross the wall": does the item carry a real sendable BODY? A
+  // populated `v.body` only ever comes from a known draft alias (draft_note/message/…) or a field under
+  // gateItemView's ARTIFACT_KEY allowlist — i.e. an actual outbound artifact. A plan/list/strategy item
+  // carries its content in non-artifact fields (positioning/sequencing/scoring), so its `body` stays null:
+  // there is nothing to release, and it must read "Approve", never a "Send it" it can't honor. This mirrors
+  // exactly the promote-to-body rule the rest of the gate already trusts, so the verb never disagrees with
+  // whether the card even shows a sendable draft.
+  const v = gateItemView(item);
+  return v.body ? "send" : "approve";
+}
+
 // ─── The case behind a ranked item — the reasoning rail's real source ─────────
 // The Split-Stage gate stands the founder's decision beside WHY each option got where it did. That
 // "why" is not fabricated crew dialogue — it is the real reasoning the run already stamped on the

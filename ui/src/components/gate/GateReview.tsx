@@ -15,7 +15,7 @@ import { itemKey } from "@/lib/itemKey";
 import { humanizeFieldLabel } from "@/lib/labels";
 import {
   gateItemView, gateItemPatternCleared, gateItemIsException, gateItemExceptionReasons, gateItemProvenance,
-  gateItemEvidenceLines,
+  gateItemEvidenceLines, gateItemNature,
 } from "@/lib/gateItem";
 import type { GateEvidenceLine, GatePromote, GateReceiptLine } from "@/lib/gateItem";
 import { buildGateDelta, gateItemHasDelta } from "@/lib/gateDelta";
@@ -32,10 +32,16 @@ function splitSentences(text: string): string[] {
 
 const normalizeClaim = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
 
-// The primary button names the real-world effect, not "Approve". Derived deterministically from what the
-// item says a yes does (or the subject) so the founder reads the consequence off the button: a social post
-// reads "Post it", anything else reads "Send it". Deterministic code, never a model call.
-function deriveSendVerb(...hints: (string | null | undefined)[]): string {
+// The primary button names the real-world effect — and NEVER lies. It reads off the item's nature (does
+// this actually cross the wall, or is it a plan the founder merely accepts?) so a strategy note or a
+// content plan can never wear a "Send it" button it doesn't earn. Deterministic code, never a model call.
+//   send  → "Post it" for a social artifact, else "Send it" (a real outbound release)
+//   ship  → "Ship it live" (a code-native deploy — the second authorization)
+//   approve → "Approve" (a plan/list/artifact with no sendable body — nothing sends)
+function deriveGateVerb(item: GTMItem, ...hints: (string | null | undefined)[]): string {
+  const nature = gateItemNature(item);
+  if (nature === "ship") return "Ship it live";
+  if (nature === "approve") return "Approve";
   const text = hints.filter(Boolean).join(" ").toLowerCase();
   if (/\b(post|publish|tweet|thread)\b|linkedin/.test(text)) return "Post it";
   return "Send it";
@@ -538,6 +544,27 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
   const cleanUndecided = bloom.reduce((n, { it, i }) => n + (!isContextItem(it) && !gateItemView(it).hollow && !gateItemIsException(it) && !decided[itemKey(it, i)] ? 1 : 0), 0);
   const shown = bloom.slice(0, GATE_CARD_CAP);
   const lean = variant === "stage";
+  // Effortless clean-approve: in the immersive room, Enter clears every clean draft at once (unless the
+  // founder is typing in an edit/refine field, or a submit is already in flight). This is the whole point
+  // of the gate — the founder isn't bottlenecked by exceptions. The room is keyboard-first: one keystroke
+  // releases the clean pile; the exceptions still demand individual eyes. Bloom keeps its click-only flow.
+  useEffect(() => {
+    if (!lean) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Enter" || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      // Never hijack Enter while the founder is composing an edit or a send-back note.
+      if (tag === "TEXTAREA" || tag === "INPUT" || el?.isContentEditable) return;
+      if (busy || cleanUndecided < 1) return;
+      e.preventDefault();
+      void approveAllClean();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // approveAllClean is stable enough per render; re-bind on the gates that change what Enter would do.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lean, busy, cleanUndecided]);
   // What a "yes" actually does, in plain words — read off the connected transport so the founder never
   // guesses. Connected → a yes really sends; not connected → a yes stages on the machine (honest, not a
   // no-op dressed as a send). The wall is identical either way; this line only names the consequence.
@@ -548,16 +575,19 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
     <div className={cn("cgate-review", variant === "stage" && "cgate-review-stage")} onClick={(e) => e.stopPropagation()}>
       <div className="cgate-review-lead">
         <span className="cgate-review-count">
-          {/* One count, always the total blooming here (bloom.length) — the same number the gate node on
-              the canvas shows, so a founder never reads "1" on one surface and "5" on another for the same
-              gate. Exceptions are named as a qualifier on that total, never as a competing headline count. */}
+          {/* One headline count, reconciled with the gate node. The node counts every not-yet-resolved
+              item as "waiting" — that's bloom.length (the items needing eyes) PLUS clearedCount (items the
+              founder's standing pattern already released, which still sit in the run unresolved). Naming
+              the cleared count here means the top line always adds up to what the node shows: the founder
+              never reads "1 to decide" against a node saying "5 waiting" without seeing the "4 cleared"
+              that closes the gap. Exceptions are a qualifier on the to-decide number, never a rival count. */}
           {bloom.length === 0
-            ? "Everything here cleared — nothing needs your eyes"
-            : lean
-              ? `${bloom.length} to decide · nothing goes until you say so, then ${yesEffect}`
-              : exceptionCount > 0
-                ? `${bloom.length} to decide · ${exceptionCount} need${exceptionCount === 1 ? "s" : ""} your eyes · ${yesEffect}`
-                : `${bloom.length} staged · ${yesEffect}`}
+            ? clearedCount > 0
+              ? `All ${clearedCount} cleared by your pattern — nothing needs your eyes`
+              : "Everything here cleared — nothing needs your eyes"
+            : `${bloom.length} to decide${clearedCount > 0 ? ` · ${clearedCount} cleared by your pattern` : ""}`
+              + (exceptionCount > 0 ? ` · ${exceptionCount} need${exceptionCount === 1 ? "s" : ""} your eyes` : "")
+              + ` · ${yesEffect}`}
         </span>
         {/* Pure-decision gate: the taste counter and the offer line are context, not the call — they
             leave the decision room. Both stay on the compact bloom, which is a working surface. */}
@@ -571,9 +601,24 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
         ) : null}
         {error ? <p className="cgate-review-error" role="alert">{error}</p> : null}
       </div>
-      {cleanUndecided > 1 && onSubmit ? (
-        <button className="cgate-approve-all" type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); void approveAllClean(); }}>
-          <Check size={12} aria-hidden /> Approve all {cleanUndecided} clean drafts
+      {/* Effortless clean-approve, front and center. In the immersive room it's the primary action and
+          shows for even a single clean draft — the founder's default move is "clear the clean pile", and
+          exceptions are what they slow down for. The compact bloom keeps the quieter ">1" threshold so it
+          doesn't duplicate a lone card's own Approve button. */}
+      {onSubmit && ((lean && cleanUndecided >= 1) || cleanUndecided > 1) ? (
+        <button
+          className={cn("cgate-approve-all", lean && "cgate-approve-all-stage")}
+          type="button"
+          disabled={busy}
+          onClick={(e) => { e.stopPropagation(); void approveAllClean(); }}
+        >
+          <Check size={13} aria-hidden />
+          <span className="cgate-approve-all-label">
+            {exceptionCount > 0
+              ? `Approve the ${cleanUndecided} clean draft${cleanUndecided === 1 ? "" : "s"}`
+              : `Approve all ${cleanUndecided} clean draft${cleanUndecided === 1 ? "" : "s"}`}
+          </span>
+          {lean ? <kbd className="cgate-approve-all-kbd" aria-hidden>↵</kbd> : null}
         </button>
       ) : null}
       <div className="cgate-cards">
@@ -671,7 +716,7 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
             ? item.plainLanguageTitle : v.subject;
           const yesDoes = (lean && typeof item.whatYourYesDoes === "string" && item.whatYourYesDoes.trim())
             ? item.whatYourYesDoes : null;
-          const sendVerb = deriveSendVerb(yesDoes, cardTitle, v.body);
+          const sendVerb = deriveGateVerb(item, yesDoes, cardTitle, v.body);
           return (
             <div className={cn("cgate-card", lean && "cgate-card-stage", isException && "is-exception")} key={key}>
               <span className="cgate-card-to">

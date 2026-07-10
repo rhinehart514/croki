@@ -76,7 +76,7 @@ describe("ComposerDock — gate in chat", () => {
 
     // The GateReview stage's count lead proves the review opened (not the summary card, not an empty stage).
     // With no transport connected, the lead names what a yes does honestly: it stages locally.
-    expect(screen.getByText(/2 to decide · nothing goes until you say so, then a yes stages it on your machine/i)).toBeTruthy();
+    expect(screen.getByText(/2 to decide .* a yes stages it on your machine/i)).toBeTruthy();
     // The staged draft body renders — the founder is now reading the real work in the thread.
     expect(screen.getByText(/saw your launch/i)).toBeTruthy();
   });

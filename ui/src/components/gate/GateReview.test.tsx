@@ -135,6 +135,34 @@ describe("GateReview outcome return on a sent item", () => {
   });
 });
 
+describe("GateReview honest verb (stage) — the button never lies", () => {
+  // A real outbound draft (a message with a recipient signal) reads "Send it".
+  it("shows 'Send it' on a sendable draft with a recipient", () => {
+    render(<GateReview variant="stage" items={[
+      { type: "draft", id: "s1", subject: "Intro to Acme", who: "Head of Ops, Acme", draft: "Hi — wanted to reach out about your rollout to your team." },
+    ]} onSubmit={vi.fn()} learned={0} />);
+    expect(screen.getByRole("button", { name: /Send it/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Approve$/i })).toBeNull();
+  });
+
+  // A plan/strategy artifact with no sendable body must NOT wear "Send it" — it reads "Approve".
+  it("shows 'Approve', never 'Send it', on a plan with no sendable body", () => {
+    render(<GateReview variant="stage" items={[
+      { type: "context", id: "p1", title: "Audit-Panic Field Notes — content plan", positioning: "Lead with the attribution blind spot", sequencing: "asset-1 first as a pain-validation test" },
+    ]} onSubmit={vi.fn()} learned={0} />);
+    // The card is a plan: it must not offer a "Send it"/"Post it" button.
+    expect(screen.queryByRole("button", { name: /Send it|Post it/i })).toBeNull();
+  });
+
+  // A social artifact reads "Post it".
+  it("shows 'Post it' on a social post", () => {
+    render(<GateReview variant="stage" items={[
+      { type: "draft", id: "x1", subject: "LinkedIn post", post_text: "Shipping a new way to see your GTM. Here's what changed and why it matters to founders." },
+    ]} onSubmit={vi.fn()} learned={0} />);
+    expect(screen.getByRole("button", { name: /Post it/i })).toBeTruthy();
+  });
+});
+
 describe("GateReview failed submit (the Phase 1 busy/error fix)", () => {
   it("locks the actions while a submit is in flight, then unlocks", async () => {
     // A submit we resolve by hand so we can observe the in-flight (busy) window.

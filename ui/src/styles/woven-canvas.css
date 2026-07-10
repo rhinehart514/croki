@@ -294,3 +294,19 @@
 @media (prefers-reduced-motion: reduce) {
   .woven-chip, .woven-cluster, .woven-lane-dim { transition: none; }
 }
+
+/* ─── The crew, made visible on the far-zoom coin ─────────────────────────────────────────────────────
+   At overview altitude a teammate step wears its crew member's hand-drawn character instead of the tinted
+   category icon, so the founder sees WHO owns each step even zoomed all the way out. The CrewFace carries
+   its own family-tinted chip, so this variant drops the coin icon's doubled background/tint and just holds
+   the face at the coin's icon size. Everything else about the coin is unchanged. */
+.loop-node-coin-icon.loop-node-coin-face {
+  background: transparent;
+  overflow: visible;
+}
+.loop-node-coin-icon.loop-node-coin-face .crew-face,
+.loop-node-coin-icon.loop-node-coin-face .crew-avatar,
+.loop-node-coin-icon.loop-node-coin-face .crew-face-monogram {
+  width: 22px;
+  height: 22px;
+}

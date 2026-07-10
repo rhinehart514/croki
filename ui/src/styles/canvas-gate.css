@@ -990,8 +990,14 @@
 .cgate-stage-shell {
   display: flex;
   flex-direction: column;
-  width: min(1160px, 94vw);
-  height: min(880px, 92vh);
+  /* The decision column is 780px; the shell hugs it plus its gutter instead of stretching to a fixed
+     wide box that dwarfs one card. */
+  width: min(840px, 94vw);
+  /* Size to CONTENT, not to a fixed 880px. One clean draft + the batch-approve should read as a tight,
+     confident card — not a small fragment floating in the top third of a near-empty void. The cap only
+     bites when there are enough drafts to fill the room, and then the inner .cgate-stage scrolls. */
+  height: auto;
+  max-height: min(880px, 92vh);
   background: var(--surface);
   border: 1px solid var(--line-2);
   border-radius: var(--r-2xl, 24px);
@@ -1224,14 +1230,39 @@
   gap: var(--space-4);
 }
 .cgate-review-stage .cgate-cards { gap: var(--space-4); }
-/* Bulk-approve is a quiet secondary in the room — never amber. Amber on the loudest button would put the
-   reserved "needs you" accent on an action, not on chrome. Neutral outline keeps the one accent scarce. */
-.cgate-review-stage .cgate-approve-all {
-  color: var(--ink);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--line-2);
+/* Effortless clean-approve, front and center. In the immersive room this is the PRIMARY move — the whole
+   point of the gate is that the founder clears the clean pile in one action and only slows down for the
+   exceptions. So it reads as a confident ink-filled bar spanning the column, with the ↵ hint that Enter
+   fires it. Not amber: amber stays the "your call" chrome accent; the action itself is ink. */
+.cgate-review-stage .cgate-approve-all.cgate-approve-all-stage {
+  align-self: stretch;
+  justify-content: center;
+  gap: 8px;
+  padding: 0.7rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 620;
+  color: var(--on-primary, #fff);
+  background: var(--ink);
+  border: 0;
+  border-radius: var(--r-md, 10px);
+  box-shadow: none;
 }
-.cgate-review-stage .cgate-approve-all:hover:not(:disabled) { background: var(--surface-2); }
+.cgate-review-stage .cgate-approve-all.cgate-approve-all-stage:hover:not(:disabled) { background: #000; }
+.cgate-approve-all-kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  margin-left: 2px;
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1;
+  color: color-mix(in srgb, var(--on-primary, #fff) 82%, transparent);
+  background: color-mix(in srgb, #fff 16%, transparent);
+  border-radius: 4px;
+}
 
 /* A stage decision card reads big and plain: headline, one "what your yes does" line, the verbatim
    artifact, then the call. Airier than the bloom card; opaque; one accent for state only. */
