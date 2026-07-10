@@ -57,13 +57,11 @@ export async function runClaudeStructuredTask({ prompt, cwd, model, maxTurns, on
   return runClaudeQuery({ prompt, cwd, model, maxTurns, onText, allowedTools: READ_ONLY_TOOLS });
 }
 
-export async function runCodexStructuredTask({ prompt, cwd = process.cwd(), model, onText, env = process.env, spawnProcess = spawn } = {}) {
-  const binary = findCodexBinary(env);
-  if (!binary.ok) return { text: "", error: { kind: "unavailable" } };
-  const outputFile = path.join(os.tmpdir(), `drover-structured-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`);
-  const args = [
+export function buildCodexStructuredArgs({ outputFile, model } = {}) {
+  return [
     "exec", "--ephemeral", "--skip-git-repo-check",
-    "--sandbox", "read-only", "--ask-for-approval", "never",
+    "--sandbox", "read-only",
+    "-c", 'approval_policy="never"',
     "--output-last-message", outputFile,
     "--ignore-user-config",
     "-c", "features.apps=false",
@@ -71,6 +69,13 @@ export async function runCodexStructuredTask({ prompt, cwd = process.cwd(), mode
     ...(model ? ["--model", model] : []),
     "-",
   ];
+}
+
+export async function runCodexStructuredTask({ prompt, cwd = process.cwd(), model, onText, env = process.env, spawnProcess = spawn } = {}) {
+  const binary = findCodexBinary(env);
+  if (!binary.ok) return { text: "", error: { kind: "unavailable" } };
+  const outputFile = path.join(os.tmpdir(), `drover-structured-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`);
+  const args = buildCodexStructuredArgs({ outputFile, model });
   try {
     const result = await new Promise((resolve) => {
       const child = spawnProcess(binary.path, args, {

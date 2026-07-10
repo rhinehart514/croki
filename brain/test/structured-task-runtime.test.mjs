@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createStructuredTaskRunner, parseStructuredValue } from "../src/structured-task-runtime.mjs";
+import { buildCodexStructuredArgs, createStructuredTaskRunner, parseStructuredValue } from "../src/structured-task-runtime.mjs";
 
 function runnerFor(id, reply, capture = []) {
   return createStructuredTaskRunner({
@@ -11,6 +11,13 @@ function runnerFor(id, reply, capture = []) {
 }
 
 describe("provider-neutral structured tasks", () => {
+  it("uses the installed Codex CLI approval config rather than a removed flag", () => {
+    const args = buildCodexStructuredArgs({ outputFile: "/tmp/read.txt", model: "gpt-test" });
+    assert.equal(args.includes("--ask-for-approval"), false);
+    assert.ok(args.includes('approval_policy="never"'));
+    assert.deepEqual(args.slice(-3), ["--model", "gpt-test", "-"]);
+  });
+
   it("normalizes the same fake Codex and Claude object identically", async () => {
     const reply = { text: "Here is the read:\n```json\n{\"things\":[{\"name\":\"Sale\"}]}\n```" };
     const codex = await runnerFor("codex", reply)({ task: "model", prompt: "read", output: "object", readOnly: true });
