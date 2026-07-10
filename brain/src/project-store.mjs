@@ -9,6 +9,7 @@ import { loadFlow, saveFlow, summarizeRunResult } from "./flow-store.mjs";
 import { defaultTeamId } from "./team-store.mjs";
 import { buildAgentProfile, buildAgentBench } from "./memory.mjs";
 import { crewRosterStore } from "./crew-roster-store.mjs";
+import { persistProductTruthsFromScan } from "./gtm-store.mjs";
 
 const SCHEMA_VERSION = 4;
 const CATALOG_SCHEMA_VERSION = 1;
@@ -375,6 +376,18 @@ export function loadProjectCatalog(options = {}) {
   return catalog;
 }
 
+// Projection-only catalog read. Unlike loadProjectCatalog this never materializes missing flows and
+// never writes an in-memory migration back to disk. Canonical GET projections use this path so merely
+// opening the terrain cannot mutate project state. Mutating callers keep using loadProjectCatalog.
+export function loadProjectReadOnly(options = {}) {
+  const stored = loadCatalogRaw(options);
+  const catalog = migrateCatalog(stored, options);
+  const projectId = options.projectId || catalog.activeProjectId;
+  const project = catalog.projects.find((item) => item.id === projectId);
+  if (!project) throw new Error(`Project not found: ${projectId}`);
+  return project;
+}
+
 export function loadProject(options = {}) {
   const catalog = loadProjectCatalog(options);
   const projectId = options.projectId || catalog.activeProjectId;
@@ -549,7 +562,11 @@ export function getAgentProfile(projectId, agentRef, options = {}) {
 export function projectAgents(projectId, options = {}) {
   const byRef = new Map();
   let project;
-  try { project = loadProject({ ...options, projectId }); } catch { return []; }
+  try {
+    project = options.project?.id === projectId
+      ? options.project
+      : loadProject({ ...options, projectId });
+  } catch { return []; }
   for (const channel of getProjectChannels(project, options)) {
     if (!channel.graphId) continue;
     let flow;
@@ -991,7 +1008,7 @@ export function groundProjectInWorkspace(workspace, options = {}) {
     ...(report.winEvent?.citations ?? []),
     ...(report.gaps ?? []).flatMap((gap) => gap.citations ?? []),
   ];
-  return updateSharedContext({
+  const project = updateSharedContext({
     repository: {
       workspaceId: workspace.id,
       repo: workspace.repo,
@@ -1000,6 +1017,11 @@ export function groundProjectInWorkspace(workspace, options = {}) {
       evidence,
     },
   }, options);
+  // The workspace already contains the scanner's complete report. Copy its cited observations into
+  // the existing truth authority now, idempotently, rather than rescanning or waiting for another
+  // surface to be opened. This is the first-grounding truth wire used by the terrain GET.
+  persistProductTruthsFromScan(report, { projectId: project.id, options });
+  return project;
 }
 
 function deriveChannelStatus(runs) {

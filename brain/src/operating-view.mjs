@@ -17,7 +17,7 @@
 // provenance receipt so a founder can trace it back to the run/outcome that produced it.
 
 import { getEngineState } from "./engine.mjs";
-import { getProjectChannels, loadProject, projectAgents } from "./project-store.mjs";
+import { getProjectChannels, loadProject, loadProjectReadOnly, projectAgents } from "./project-store.mjs";
 import { loadFlow } from "./flow-store.mjs";
 import { listConnectors } from "./connectors/registry.mjs";
 import { deriveMotionEfficiency, projectProductImplications } from "./outcome-ingest.mjs";
@@ -280,16 +280,20 @@ function executionQuestionArtifacts(projectId, flowRuns) {
 
 function canvasSources(project, channels, flowRuns, options) {
   const projectId = project.id;
-  const truth = sourceRead("gtm-product-truths", [], () => productTruthStore.list({ ...options, projectId }));
-  const model = sourceRead("product-model-store", null, () => getProductModel(projectId, { ...options, projectId }));
-  const paths = sourceRead("gtm-paths", [], () => gtmPathStore.list({ ...options, projectId }));
-  const runs = sourceRead("gtm-runs", [], () => runStore.list({ ...options, projectId }));
-  const outcomes = sourceRead("gtm-results", [], () => resultStore.list({ ...options, projectId }));
-  const implications = sourceRead("outcome-ingest.implications", [], () => projectProductImplications({ projectId }, options));
-  const feedback = sourceRead("feedback-ledger", { signals: [], decisions: [] }, () => loadFeedbackLedger(projectId, options));
-  const operatorArtifacts = sourceRead("operator-store", { transientQuestions: [], positions: [], sourceRecords: [] }, () => operatorQuestionArtifacts(projectId, options));
+  const overrides = options.terrainSourceReaders ?? {};
+  const read = (key, owner, fallback, reader) => sourceRead(owner, fallback, () => (
+    typeof overrides[key] === "function" ? overrides[key]({ projectId, project, options }) : reader()
+  ));
+  const truth = read("productTruth", "gtm-product-truths", [], () => productTruthStore.list({ ...options, projectId }));
+  const model = read("productModel", "product-model-store", null, () => getProductModel(projectId, { ...options, projectId }));
+  const paths = read("paths", "gtm-paths", [], () => gtmPathStore.list({ ...options, projectId }));
+  const runs = read("runs", "gtm-runs", [], () => runStore.list({ ...options, projectId }));
+  const outcomes = read("outcomes", "gtm-results", [], () => resultStore.list({ ...options, projectId }));
+  const implications = read("implications", "outcome-ingest.implications", [], () => projectProductImplications({ projectId }, options));
+  const feedback = read("feedback", "feedback-ledger", { signals: [], decisions: [] }, () => loadFeedbackLedger(projectId, options));
+  const operatorArtifacts = read("operatorArtifacts", "operator-store", { transientQuestions: [], positions: [], sourceRecords: [] }, () => operatorQuestionArtifacts(projectId, options));
   const executionArtifacts = executionQuestionArtifacts(projectId, flowRuns);
-  const questions = sourceRead("clarity-store", [], () => projectQuestions(projectId, {
+  const questions = read("questions", "clarity-store", [], () => projectQuestions(projectId, {
     transientQuestions: operatorArtifacts.value.transientQuestions,
     positions: [...operatorArtifacts.value.positions, ...executionArtifacts.positions],
     sourceRecords: [
@@ -297,9 +301,9 @@ function canvasSources(project, channels, flowRuns, options) {
       ...operatorArtifacts.value.sourceRecords, ...executionArtifacts.sourceRecords,
     ],
   }, options));
-  const usedCrew = sourceRead("project-agent-projection", [], () => projectAgents(projectId, options));
-  const roster = sourceRead("crew-roster-store", { members: [] }, () => crewRosterStore.load(projectId, options));
-  const geometry = sourceRead("object-graph-layout", {
+  const usedCrew = read("projectAgents", "project-agent-projection", [], () => projectAgents(projectId, options));
+  const roster = read("crewRoster", "crew-roster-store", { members: [] }, () => crewRosterStore.load(projectId, options));
+  const geometry = read("geometry", "object-graph-layout", {
     positions: {}, collapsedGroups: [], pinnedCrew: [], viewport: null, updatedAt: null,
   }, () => objectGraphLayoutStore.loadNamespace(projectId, PROJECT_CANVAS_LAYOUT_NAMESPACE, options));
   const crew = new Map();
@@ -358,16 +362,18 @@ function canvasSources(project, channels, flowRuns, options) {
   };
 }
 
-export function getOperatingView({ projectId } = {}, options = {}) {
-  const project = loadProject(projectId ? { ...options, projectId } : options);
+function buildOperatingView(project, options = {}) {
   const resolvedProjectId = project.id;
+  // Projection readers that need the project receive this already-scoped snapshot. In particular,
+  // projectAgents must not fall back to the mutable active-project catalog during a terrain read.
+  const sourceOptions = { ...options, project };
 
-  const channels = getProjectChannels(project, options);
+  const channels = getProjectChannels(project, sourceOptions);
   const connectors = (() => { try { return listConnectors(); } catch { return []; } })();
 
   // The one efficiency table, indexed by motionKind so each lane picks up its own row.
   const efficiency = (() => {
-    try { return deriveMotionEfficiency({ projectId: resolvedProjectId }, options); }
+    try { return deriveMotionEfficiency({ projectId: resolvedProjectId }, sourceOptions); }
     catch { return { motions: [] }; }
   })();
   const effByKind = new Map();
@@ -378,7 +384,7 @@ export function getOperatingView({ projectId } = {}, options = {}) {
   // The pending founder decisions across this project — the parked lanes and the inbox rows the lens
   // routes to. Scoped to this project so a lane pulses only for its own gate.
   const inbox = (() => {
-    try { return getPendingInbox({ projectId: resolvedProjectId }, options); }
+    try { return getPendingInbox({ projectId: resolvedProjectId }, sourceOptions); }
     catch { return { decisions: [] }; }
   })();
   const parkedByPipeline = new Map();
@@ -389,10 +395,10 @@ export function getOperatingView({ projectId } = {}, options = {}) {
 
   // The shared map: every touched object once (deriveFunnel), with the lane keys that touched it.
   const funnel = (() => {
-    try { return deriveFunnel(resolvedProjectId, options); }
+    try { return deriveFunnel(resolvedProjectId, sourceOptions); }
     catch { return { kinds: [] }; }
   })();
-  const laneKeys = laneKeysByObject(resolvedProjectId, options);
+  const laneKeys = laneKeysByObject(resolvedProjectId, sourceOptions);
 
   const objects = [];
   for (const group of funnel.kinds ?? []) {
@@ -429,7 +435,7 @@ export function getOperatingView({ projectId } = {}, options = {}) {
   for (const channel of channels) {
     if (!channel.graphId) continue;
     const { graph, runs } = (() => {
-      try { return loadFlow(channel.graphId, null, options); }
+      try { return loadFlow(channel.graphId, null, sourceOptions); }
       catch { return { graph: null, runs: [] }; }
     })();
     if (graph) channelGraphs.set(channel.graphId, graph);
@@ -460,7 +466,7 @@ export function getOperatingView({ projectId } = {}, options = {}) {
   // it itself (that would spend the subscription on every lens read). When absent, no proposed lanes.
   const planMotions = Array.isArray(options.planMotions) ? options.planMotions : [];
   planMotions.forEach((motion, i) => lanes.push(proposedLaneFromMotion(motion, i)));
-  const projectedCanvasSources = canvasSources(project, channels, flowRuns, options);
+  const projectedCanvasSources = canvasSources(project, channels, flowRuns, sourceOptions);
 
   const view = {
     projectId: resolvedProjectId,
@@ -500,9 +506,189 @@ export function getOperatingView({ projectId } = {}, options = {}) {
       };
       const wovenChannelGraphs = new Map();
       for (const [gid, g] of channelGraphs) wovenChannelGraphs.set(norm(gid), g);
-      return buildWovenGraph(wovenView, { channelGraphs: wovenChannelGraphs, storeOptions: options });
+      return buildWovenGraph(wovenView, { channelGraphs: wovenChannelGraphs, storeOptions: sourceOptions });
     } catch { return null; }
   })();
 
   return view;
+}
+
+// Compatibility read. It deliberately keeps the historical active-project fallback and response shape.
+export function getOperatingView({ projectId } = {}, options = {}) {
+  const project = loadProject(projectId ? { ...options, projectId } : options);
+  return buildOperatingView(project, options);
+}
+
+function ref(type, id) {
+  const value = String(id ?? "").trim();
+  return value ? { type, id: value } : null;
+}
+
+function refKey(value) {
+  return value?.type && value?.id ? `${value.type}:${value.id}` : null;
+}
+
+function terrainRef(raw, fallbackType, projectId) {
+  if (!raw) return null;
+  const value = typeof raw === "string" ? { type: fallbackType, id: raw } : raw;
+  const rawType = String(value.type ?? value.kind ?? fallbackType ?? "record").trim();
+  const canonicalTypes = new Map([
+    ["producttruth", "productTruth"],
+    ["productmodel", "productModel"],
+    ["terrain-read", "terrain-read"],
+    ["terrain-hypothesis", "terrain-hypothesis"],
+  ]);
+  const type = canonicalTypes.get(rawType.toLowerCase()) ?? rawType.toLowerCase();
+  const id = String(value.id ?? value.ref ?? value.key ?? "").trim();
+  if (!type || !id) return null;
+  const owner = String(value.projectId ?? value.project ?? "").trim() || null;
+  return { ref: { type, id }, inProject: !owner || owner === projectId, owner };
+}
+
+function terrainRefs(values, fallbackType, projectId) {
+  const seen = new Set();
+  const normalized = [];
+  for (const raw of Array.isArray(values) ? values : []) {
+    const value = terrainRef(raw, fallbackType, projectId);
+    const key = refKey(value?.ref);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    normalized.push(value);
+  }
+  return normalized;
+}
+
+function terrainOverlay(projectId, read, canvas) {
+  const issues = [];
+  if (!read) return { hypotheses: [], relationships: [], issues, readRef: null };
+  if (read.projectId && read.projectId !== projectId) {
+    issues.push({ kind: "unresolved", owner: "terrain-read", ref: `terrain-read:${read.id ?? "unknown"}`, detail: `Read belongs to project ${read.projectId}.` });
+    return { hypotheses: [], relationships: [], issues, readRef: null };
+  }
+  const readRef = ref("terrain-read", read.id);
+  const known = new Set((canvas?.anchors ?? []).map((item) => refKey(item.ref)).filter(Boolean));
+  if (readRef) known.add(refKey(readRef));
+  const hypotheses = [];
+  const relationships = [];
+  const seenRelations = new Set();
+  const addRelationship = (sourceValue, targetValue, kind, inProject = true) => {
+    if (!sourceValue || !targetValue) return;
+    const key = `${refKey(sourceValue)}|${kind}|${refKey(targetValue)}`;
+    if (seenRelations.has(key)) return;
+    seenRelations.add(key);
+    const resolved = inProject && known.has(refKey(sourceValue)) && known.has(refKey(targetValue));
+    const relation = {
+      id: `relation:${key}`,
+      source: sourceValue,
+      target: targetValue,
+      kind,
+      resolved,
+      authority: { owner: "terrain-read", projectId },
+    };
+    relationships.push(relation);
+    if (!resolved) issues.push({ kind: "unresolved", owner: "terrain-read", ref: relation.id });
+  };
+  for (const raw of Array.isArray(read.hypotheses) ? read.hypotheses : []) {
+    if (!raw?.id) continue;
+    const hypothesisRef = ref("terrain-hypothesis", raw.id);
+    known.add(refKey(hypothesisRef));
+    const evidence = terrainRefs(raw.evidenceRefs, "evidence", projectId);
+    const products = terrainRefs(raw.productRefs, "productmodel", projectId);
+    const market = terrainRefs(raw.marketRefs, "market", projectId);
+    const counter = terrainRefs(raw.counterEvidenceRefs, "evidence", projectId);
+    const crew = terrainRefs(raw.crewRefs, "teammate", projectId);
+    const hypothesis = {
+      ...raw,
+      ref: hypothesisRef,
+      readRef,
+      evidenceRefs: evidence.map((item) => item.ref),
+      productRefs: products.map((item) => item.ref),
+      marketRefs: market.map((item) => item.ref),
+      counterEvidenceRefs: counter.map((item) => item.ref),
+      crewRefs: crew.map((item) => item.ref),
+    };
+    hypotheses.push(hypothesis);
+    if (readRef) addRelationship(readRef, hypothesisRef, "contains");
+    for (const item of evidence) addRelationship(item.ref, hypothesisRef, "supports", item.inProject);
+    for (const item of products) addRelationship(item.ref, hypothesisRef, "grounds", item.inProject);
+    for (const item of market) addRelationship(item.ref, hypothesisRef, "supports", item.inProject);
+    for (const item of counter) addRelationship(item.ref, hypothesisRef, "challenges", item.inProject);
+    for (const item of crew) addRelationship(item.ref, hypothesisRef, "authored", item.inProject);
+  }
+  return { hypotheses, relationships, issues, readRef };
+}
+
+// Canonical deterministic terrain projection. The project id is mandatory: this path never consults
+// the mutable active project. `readTerrainProjection`, when supplied by the Lane A integration, must be
+// a synchronous read of an already-produced TerrainRead; GET never generates one or persists anything.
+export function getTerrainView({ projectId } = {}, options = {}) {
+  if (!projectId) throw new Error("A projectId is required for the terrain read.");
+  const project = loadProjectReadOnly({ ...options, projectId });
+  const operating = buildOperatingView(project, options);
+  const canvas = operating.woven?.canvas ?? { anchors: [], relationships: [], outcomes: [], implications: [], state: { kind: "empty", stale: false, issues: [] }, geometry: null };
+  const suppliedRead = typeof options.readTerrainProjection === "function"
+    ? options.readTerrainProjection({ projectId })
+    : options.terrainRead ?? null;
+  const overlay = terrainOverlay(projectId, suppliedRead, canvas);
+  const anchors = canvas.anchors ?? [];
+  const anchorsOf = (types) => anchors.filter((item) => types.has(item.ref?.type));
+  const truthAnchors = anchorsOf(new Set(["productTruth"]));
+  const modelAnchor = anchors.find((item) => item.ref?.type === "productModel") ?? null;
+  const questions = anchorsOf(new Set(["question"])).map((item) => item.ref);
+  const moves = anchorsOf(new Set(["pipeline", "path"])).map((item) => item.ref);
+  const outcomes = (canvas.outcomes ?? []).map((item) => item.ref).filter(Boolean);
+  const implications = (canvas.implications ?? []).map((item) => item.ref).filter(Boolean);
+  const crew = anchorsOf(new Set(["teammate"])).map((item) => item.ref);
+  const repository = project.sharedContext?.repository ?? {};
+  const grounded = Boolean(repository.repo);
+  const issues = [...(canvas.state?.issues ?? []), ...overlay.issues];
+  if (grounded && !modelAnchor) issues.push({ kind: "missing", owner: "product-model-store", detail: "No interpretive product model is available yet." });
+  if (grounded && !suppliedRead) {
+    issues.push({
+      kind: options.runtimeAvailable === false ? "unavailable" : "missing",
+      owner: "terrain-read",
+      detail: options.runtimeAvailable === false
+        ? "No runtime is connected; cited product terrain remains available."
+        : "No model-owned terrain read has been supplied.",
+    });
+  }
+  const stale = Boolean(
+    canvas.state?.stale
+    || suppliedRead?.stale === true
+    || options.terrainReadStale === true
+    || (options.terrainInputFingerprint && suppliedRead?.inputFingerprint
+      && options.terrainInputFingerprint !== suppliedRead.inputFingerprint),
+  );
+  if (stale && !issues.some((item) => item.kind === "stale" && item.owner === "terrain-read")) {
+    issues.push({ kind: "stale", owner: "terrain-read", at: suppliedRead?.generatedAt ?? null });
+  }
+  const contentCount = truthAnchors.length + (modelAnchor ? 1 : 0) + overlay.hypotheses.length
+    + questions.length + moves.length + outcomes.length + implications.length + crew.length;
+  const state = {
+    kind: contentCount === 0 ? "empty" : issues.some((item) => item.kind !== "stale") ? "partial" : "ready",
+    stale,
+    issues,
+  };
+  return {
+    schemaVersion: 1,
+    projectId,
+    generatedAt: new Date().toISOString(),
+    state,
+    product: {
+      projectRef: ref("project", projectId),
+      repository: { path: repository.repo ?? null, winEvent: repository.outcome ?? null },
+      truths: truthAnchors.map((item) => ({ ref: item.ref, ...item.body })),
+      modelRef: modelAnchor?.ref ?? null,
+      model: modelAnchor?.body ?? null,
+    },
+    hypotheses: overlay.hypotheses,
+    questions,
+    moves,
+    outcomes,
+    implications,
+    crew,
+    relationships: [...(canvas.relationships ?? []), ...overlay.relationships],
+    geometry: canvas.geometry,
+    terrainReadRef: overlay.readRef,
+  };
 }
