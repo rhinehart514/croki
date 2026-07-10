@@ -28,7 +28,7 @@ import ideaRoutes from "./routes/ideas.mjs";
 import channelRoutes from "./routes/channels.mjs";
 import inboxRoutes from "./routes/inbox.mjs";
 import productModelRoutes from "./routes/product-model.mjs";
-import terrainRoutes from "./routes/terrain.mjs";
+import createTerrainRoutes from "./routes/terrain.mjs";
 import operationPlanRoutes from "./routes/operation-plan.mjs";
 import tasteRoutes from "./routes/taste.mjs";
 import signalWeightsRoutes from "./routes/signal-weights.mjs";
@@ -68,6 +68,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT || 4317);
 const host = process.env.HOST || "127.0.0.1";
 recoverInterruptedOperatorSessions();
+const terrainRoutes = createTerrainRoutes();
 
 // The route groups, in the original route order. The dispatch tries each until one claims the request.
 const ROUTE_GROUPS = [
