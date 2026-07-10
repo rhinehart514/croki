@@ -192,6 +192,11 @@
 .woven-cluster.is-focus { border-color: var(--ink); border-style: solid; box-shadow: var(--shadow-pop); }
 .woven-cluster.is-dim { opacity: 0.34; }
 
+/* Terrain reads sit between cited product truth and worked lanes. Dashed means inferred, not incomplete;
+   speculative reads are distinguished in the focus panel where the full provenance boundary is visible. */
+.woven-anchor.is-terrain { border-style: dashed; background: var(--surface); }
+.woven-anchor.is-terrain .woven-anchor-eyebrow { color: var(--muted); }
+
 /* The tie handles are invisible anchors — the converging lines are the intertwining, the handle isn't a
    visible dot. Both node types share this. */
 .woven-chip .react-flow__handle,
@@ -218,6 +223,40 @@
   align-items: center;
   gap: var(--space-2);
   font-family: "Geist Variable", ui-sans-serif, -apple-system, sans-serif;
+}
+.terrain-canvas-hint {
+  position: absolute;
+  z-index: 5;
+  left: calc(var(--space-3) + 300px);
+  bottom: var(--space-6);
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.terrain-canvas-hint strong { font-size: var(--text-sm); color: var(--ink); }
+.terrain-canvas-hint span, .terrain-canvas-hint small { font-size: var(--text-xs); line-height: var(--leading-normal); color: var(--muted); }
+.terrain-state-note {
+  position: absolute;
+  z-index: 6;
+  top: var(--space-12);
+  left: var(--space-3);
+  max-width: 360px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+@media (max-width: 640px) {
+  .terrain-canvas-hint { left: var(--space-2); right: var(--space-2); bottom: calc(var(--space-12) + var(--space-3)); max-width: none; }
+  .terrain-state-note { left: var(--space-2); right: var(--space-2); top: var(--space-12); max-width: none; }
 }
 .woven-axisseg {
   display: inline-flex;

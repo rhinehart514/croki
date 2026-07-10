@@ -54,6 +54,7 @@ export type WovenFocus =
 
 const ROOT_KINDS = new Set(["product", "product-model"]);
 const ANCHOR_RIGHT_KINDS = new Set(["outcome"]);
+const TERRAIN_KINDS = new Set(["terrain-opening", "terrain-tension", "terrain-hypothesis"]);
 // A product DETAIL is any "product-*" kind that is not the root, a truth, or an implication (implications
 // live on the outcome-return rail, not here). These are the long-tail the layer summarizes.
 function isDetailKind(kind: string): boolean {
@@ -187,6 +188,7 @@ export function buildCanvasAnchorLayer(
   const questions = canvas.anchors.filter((a) => a.kind === "question");
   const details = canvas.anchors.filter((a) => isDetailKind(a.kind));
   const outcomes = canvas.anchors.filter((a) => ANCHOR_RIGHT_KINDS.has(a.kind));
+  const terrain = canvas.anchors.filter((a) => TERRAIN_KINDS.has(a.kind));
   const byId = (a: WovenCanvasAnchor, b: WovenCanvasAnchor) => a.ref.id.localeCompare(b.ref.id);
 
   // A detail renders individually when it is causally connected OR its kind is expanded; the rest form the
@@ -240,6 +242,17 @@ export function buildCanvasAnchorLayer(
   }
   // Assign the bounded column's real y positions now that its length is known.
   left.forEach((n, i) => { n.position = { x: leftX, y: band.top + i * rowH }; nodes.push(n); });
+
+  // Model-owned openings and tensions sit between product truth and worked pipeline lanes. They remain
+  // bounded upstream to five and visibly typed as reads, never promoted into the product landmark.
+  [...terrain].sort(byId).forEach((a, i) => {
+    const id = anchorNodeId(a.ref);
+    nodes.push({
+      id, type: "canvasAnchor", position: { x: leftX + 300, y: band.top + 42 + i * rowH },
+      draggable: false, selectable: true,
+      data: { anchorId: id, ref: a.ref, kind: a.kind, label: a.label, focus: stateFor(id) } satisfies CanvasAnchorData,
+    });
+  });
 
   // ── the right outcome column ──
   [...outcomes].sort(byId).forEach((a, i) => {

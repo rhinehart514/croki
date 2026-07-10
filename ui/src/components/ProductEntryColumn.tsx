@@ -17,6 +17,8 @@ export function ProductEntryColumn({
   model,
   truths = [],
   unknowns = [],
+  onFocusTruth,
+  onFocusUnknown,
   onOpenFull,
   deriving = false,
   onReread,
@@ -31,6 +33,8 @@ export function ProductEntryColumn({
   // not a taxonomy ladder; the product-model detail stays relevance-only on the canvas.
   truths?: string[];
   unknowns?: string[];
+  onFocusTruth?: (index: number) => void;
+  onFocusUnknown?: (index: number) => void;
   // Optionally open a deeper product view. When omitted, the "full picture" button is hidden — the
   // product's understanding now lives on the main canvas, so there's no separate screen to open.
   onOpenFull?: () => void;
@@ -154,7 +158,9 @@ export function ProductEntryColumn({
           <span className="pentry-facts-label">What we know</span>
           <ul className="pentry-facts-list">
             {truths.slice(0, 3).map((t, i) => (
-              <li key={`truth-${i}`} className="pentry-fact"><span className="pentry-fact-dot" aria-hidden="true" />{clip(t)}</li>
+              <li key={`truth-${i}`} className="pentry-fact"><span className="pentry-fact-dot" aria-hidden="true" />
+                <button type="button" onClick={() => onFocusTruth?.(i)} disabled={!onFocusTruth}>{clip(t)}</button>
+              </li>
             ))}
           </ul>
         </div>
@@ -166,7 +172,9 @@ export function ProductEntryColumn({
           <span className="pentry-facts-label">Open unknowns</span>
           <ul className="pentry-facts-list">
             {unknowns.slice(0, 2).map((u, i) => (
-              <li key={`unknown-${i}`} className="pentry-fact"><span className="pentry-fact-q" aria-hidden="true">?</span>{clip(u)}</li>
+              <li key={`unknown-${i}`} className="pentry-fact"><span className="pentry-fact-q" aria-hidden="true">?</span>
+                <button type="button" onClick={() => onFocusUnknown?.(i)} disabled={!onFocusUnknown}>{clip(u)}</button>
+              </li>
             ))}
           </ul>
         </div>

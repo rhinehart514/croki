@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { acceptProductImplication, createOperatorSession } from "@/api";
+import { acceptProductImplication, composerTurn, createOperatorSession, getTerrainView, resumeOperatorSession } from "@/api";
 
 // A fetch spy that captures the last request and returns an ok JSON envelope. This proves the client
 // wiring for fix 1 (question → pipeline binds the real questionId/context) and fix 4 (accept hits the
@@ -42,6 +42,33 @@ describe("createOperatorSession — binds question context (fix 1)", () => {
   it("threads the selected Codex model into session creation instead of treating the picker as cosmetic", async () => {
     await createOperatorSession("proj", "Build a pipeline", undefined, true, undefined, "gpt-5.5-codex");
     expect(lastBody.model).toBe("gpt-5.5-codex");
+  });
+
+  it("threads terrain surface, lens, focus, and context refs into session creation", async () => {
+    await createOperatorSession("proj", "Investigate this", undefined, true, {
+      surface: "terrain", lens: "operator", focusRef: "terrain-hypothesis:h1",
+      contextRefs: ["product-truth:t1", "market-evidence:e1"],
+    });
+    expect(lastBody).toMatchObject({
+      surface: "terrain", lens: "operator", focusRef: "terrain-hypothesis:h1",
+      contextRefs: ["product-truth:t1", "market-evidence:e1"],
+    });
+  });
+
+  it("threads current canvas context into resume and intent-routed turns", async () => {
+    await resumeOperatorSession("s1", "proj", "Continue", undefined, {
+      surface: "pipeline", lens: "engineer", focusRef: "pipeline:ch1", contextRefs: ["question:q1"],
+    });
+    expect(lastBody).toMatchObject({ surface: "pipeline", lens: "engineer", focusRef: "pipeline:ch1", contextRefs: ["question:q1"] });
+    await composerTurn({ projectId: "proj", input: "Explain this", surface: "terrain", lens: "operator", focusRef: "product-truth:t1" });
+    expect(lastBody).toMatchObject({ surface: "terrain", lens: "operator", focusRef: "product-truth:t1" });
+  });
+});
+
+describe("terrain API", () => {
+  it("uses the project-scoped deterministic route", async () => {
+    await getTerrainView("proj / one");
+    expect(lastUrl).toBe("/api/projects/proj%20%2F%20one/terrain");
   });
 });
 

@@ -159,10 +159,14 @@ const ANCHOR_KIND_LABEL: Record<string, string> = {
   "product-interaction": "Interaction",
   question: "Open question",
   outcome: "Outcome",
+  "terrain-opening": "Inferred opening",
+  "terrain-tension": "Inferred tension",
+  "terrain-hypothesis": "Working hypothesis",
 };
 function CanvasAnchorComponent({ data }: NodeProps<Node<CanvasAnchorData>>) {
   const isOutcome = data.kind === "outcome";
   const isQuestion = data.kind === "question";
+  const isTerrain = data.kind.startsWith("terrain-");
   // A summary chip stands in for a collapsed kind's long tail: one compact card with the count, selectable
   // to expand its members. It reads as a group (dashed outline, "N in this group"), never as a single item.
   if (data.group) {
@@ -186,6 +190,7 @@ function CanvasAnchorComponent({ data }: NodeProps<Node<CanvasAnchorData>>) {
         "woven-anchor",
         isOutcome && "is-outcome",
         isQuestion && "is-question",
+        isTerrain && "is-terrain",
         data.focus === "focus" && "is-focus",
         data.focus === "dim" && "is-dim",
       )}

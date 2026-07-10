@@ -1506,6 +1506,78 @@ export type WovenKindCluster = {
 // relationships between them. The UI consumes THIS (operatingView.woven.canvas) when present and falls
 // back to raw clarity/records otherwise. A ref is `{type,id}`; an anchor carries the real record `body`.
 export type WovenRef = { type: string | null; id: string };
+
+// The canonical product-market terrain contracts. The deterministic view is a read-only projection over
+// existing authorities; the rented read is an ephemeral overlay. Terrain hypotheses are addressable
+// context, not durable strategy records.
+export type TerrainIssue = {
+  owner?: string | null;
+  code?: string | null;
+  message: string;
+  ref?: WovenRef | null;
+};
+
+export type TerrainObservation = {
+  id: string;
+  claim: string;
+  label?: string;
+  provenance: "observed" | "founder-stated";
+  evidenceRefs: WovenRef[];
+  productRefs?: WovenRef[];
+  source?: string | null;
+};
+
+export type TerrainHypothesis = {
+  id: string;
+  stance: "opening" | "tension" | "hypothesis";
+  title: string;
+  claim: string;
+  whyItMatters: string;
+  provenance: "inferred" | "speculative";
+  evidenceRefs: WovenRef[];
+  productRefs: WovenRef[];
+  marketRefs: WovenRef[];
+  counterEvidenceRefs: WovenRef[];
+  unknown: string | null;
+  falsifier: string | null;
+  suggestedMove: {
+    title: string;
+    intendedEffect: string;
+    measurementIntent: string | null;
+  } | null;
+  crewRefs: WovenRef[];
+};
+
+export type TerrainView = {
+  schemaVersion: 1;
+  projectId: string;
+  generatedAt: string;
+  state: { kind: "ready" | "partial" | "empty"; stale: boolean; issues: TerrainIssue[] };
+  product: {
+    projectRef: WovenRef;
+    repository: { path: string | null; winEvent: string | null };
+    truths: TerrainObservation[];
+    modelRef: WovenRef | null;
+  };
+  hypotheses: TerrainHypothesis[];
+  questions: WovenRef[];
+  moves: WovenRef[];
+  outcomes: WovenRef[];
+  implications: WovenRef[];
+  crew: WovenRef[];
+  relationships: WovenCanvasRelationship[];
+  geometry: WovenCanvas["geometry"];
+};
+
+export type TerrainRead = {
+  schemaVersion: 1;
+  id: string;
+  projectId: string;
+  generatedAt: string;
+  inputFingerprint: string;
+  runtime: { id: string; model: string | null };
+  hypotheses: TerrainHypothesis[];
+};
 // Anchor kinds the backend emits: "product" | "product-truth" | "product-model" | "product-<element>" |
 // "teammate" | "question" | "pipeline" | "path" | "run" | "founder-decision" | "pinned-signal" |
 // "outcome" (and, forward-compatibly, "product-implication"/"implication" once the backend adds them).

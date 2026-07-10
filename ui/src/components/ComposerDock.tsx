@@ -1209,7 +1209,7 @@ export function ComposerDock({
           ref={inputRef}
           className="oc-input-text"
           aria-label="Message your crew"
-          placeholder={subject ? `Ask about “${subject.label}” — make it shorter, why it's empty, run it…` : sendDisabled ? "Your crew is working — you can still say “go to …” to move the canvas" : steerable ? "Redirect your crew mid-run — “focus on enterprise”, “drop the third one”… nothing sends" : ideating ? "Think through your GTM — who's the real buyer, where's the wedge, why now" : session ? "Reply, redirect, or @-mention a teammate…" : "Message your crew — build, run, or change anything"}
+          placeholder={subject ? `Ask about “${subject.label}”: make it shorter, explain it, or act on it…` : sendDisabled ? "Your crew is working. You can still say “go to …” to move the canvas" : steerable ? "Redirect your crew mid-run: “focus on enterprise”, “drop the third one”… nothing sends" : ideating ? "Think through your GTM: who's the real buyer, where's the wedge, why now" : session ? "Reply, redirect, or @-mention a teammate…" : "What should we understand, change, or pursue?"}
           value={input}
           disabled={submitting}
           onChange={(e) => {

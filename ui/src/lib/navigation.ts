@@ -32,15 +32,13 @@ export type NavLayers = {
 // not in a fragile ?:-chain.
 export type Surface =
   | { kind: "teamOnboarding" }
-  | { kind: "connectClaude" }
   | { kind: "productEntry" }
   | { kind: "newProduct" } // the "start" view — add another product
   | { kind: "projects" } // the product picker
   | { kind: "operatorTakeover" } // a cold-start drive that failed/blocked with no canvas to show
   | { kind: "canvas" } // the woven GTM canvas (the home surface)
   | { kind: "operatorDrive" } // a live cold-start drive with no graph yet
-  | { kind: "booting" }
-  | { kind: "goalLauncher" }; // freshly-grounded product, no goal yet
+  | { kind: "booting" };
 
 export type SurfaceInputs = {
   convexEnabled: boolean;
@@ -65,25 +63,37 @@ export function describeSurface(i: SurfaceInputs): Surface {
   // identity the instant Convex is on) and set up or join a shared team later, from Settings — or at the
   // moment something first sends. The teamOnboarding surface stays in the union as that later, opt-in
   // setup screen, but it is no longer a wall in front of the product. Prove value first, ask after.
-  if (i.connectionResolvedDisconnected) return { kind: "connectClaude" };
   if (i.booted && !i.productGrounded) return { kind: "productEntry" };
 
   if (i.view === "start") return { kind: "newProduct" };
   if (i.view === "projects") return { kind: "projects" };
 
-  const driving = ["ready", "running", "failed", "blocked"].includes(i.operatorStatus ?? "");
-  const stopped = i.operatorStatus === "failed" || i.operatorStatus === "blocked";
-
-  // A cold-start drive that stopped with no canvas seizes the screen; a stopped
-  // drive on a product that HAS a canvas keeps the canvas (the error lives in the
-  // crew rail). This mirrors the old failed/blocked branch precisely.
-  if (stopped && !i.hasCanvas) return { kind: "operatorTakeover" };
-  if (i.hasCanvas) return { kind: "canvas" };
-  if (driving && (i.operatorStatus === "ready" || i.operatorStatus === "running")) {
-    return { kind: "operatorDrive" };
-  }
   if (i.booting || i.projectBusy) return { kind: "booting" };
-  return { kind: "goalLauncher" };
+  // A grounded product always has a meaningful terrain canvas, even with zero pipelines and no runtime.
+  // Operator progress and failures render contextually on that canvas instead of replacing product truth.
+  return { kind: "canvas" };
+}
+
+export function resolveCanvasLens(activeChannelId: string | null, hasCandidates = false): "operator" | "engineer" {
+  return hasCandidates || !activeChannelId ? "operator" : "engineer";
+}
+
+export function resolveLensSelection(
+  requested: "operator" | "engineer",
+  activeChannelId: string | null,
+  builtChannelIds: string[],
+): { lens: "operator" | "engineer"; channelId: string | null } {
+  if (requested === "operator") return { lens: "operator", channelId: null };
+  const channelId = activeChannelId ?? builtChannelIds[0] ?? null;
+  return channelId ? { lens: "engineer", channelId } : { lens: "operator", channelId: null };
+}
+
+export function resolveEngineerEscape<T>(originatingFocus: T | null): {
+  lens: "operator";
+  channelId: null;
+  focus: T | null;
+} {
+  return { lens: "operator", channelId: null, focus: originatingFocus };
 }
 
 // ── The layer reducer ───────────────────────────────────────────────────────

@@ -133,6 +133,14 @@ export type GtmCanvasModel = {
   // commits it live.
   candidateLaneIds?: Set<string>;
   onPickCandidate?: (channelId: string) => void;
+  terrainState?: {
+    loading: boolean;
+    stale: boolean;
+    partial: boolean;
+    hypothesisCount: number;
+    runtimeConnected: boolean;
+    error: string | null;
+  };
 };
 
 type GtmLensProps = LensProps<GtmCanvasModel, never>;
@@ -225,11 +233,11 @@ function EngineerLens({ model: m }: GtmLensProps) {
       />
       {graph.nodes.length === 0 ? (
         <div className="blank-channel-guide">
-          <strong>{landing ? "Start your first pipeline" : "Tell Claude what this pipeline should accomplish"}</strong>
-          <span>Describe the outcome you want and Claude composes the steps that reach it, stopping at your gate. Nothing has been chosen for you, and nothing sends without you.</span>
+          <strong>{landing ? "Choose a focus before building" : "Direct what this pipeline should accomplish"}</strong>
+          <span>Describe the outcome you want and your crew composes the steps that reach it, stopping at your gate. Nothing has been chosen for you, and nothing sends without you.</span>
           {landing && m.onComposeFirst ? (
             <button type="button" className="blank-channel-compose" onClick={m.onComposeFirst}>
-              State a go-to-market goal
+              What should we understand, change, or pursue?
             </button>
           ) : null}
         </div>
@@ -249,29 +257,7 @@ function EngineerLens({ model: m }: GtmLensProps) {
 // absolute through every edit. Two altitudes: the object axis (the moat view) and the type axis (the
 // forms/spread view); semantic zoom fans clusters into lanes as you zoom in.
 function OperatorLensPane({ model: m }: GtmLensProps) {
-  // Nothing wired yet → the compose invitation on the empty node ground, never empty scaffolding. The
-  // woven canvas has nothing to weave with no lanes.
   const hasLanes = (m.operatingView?.lanes.length ?? 0) > 0 || m.channels.length > 0;
-  if (m.operatingView && !hasLanes) {
-    return (
-      <div className="operator-lens-pane" style={{ position: "relative", height: "100%", minHeight: 0, ...GUTTER_STYLE }}>
-        <div className="blank-channel-guide">
-          <strong>Your operation lives here</strong>
-          <span>
-            Every go-to-market motion you run shows up as a lane on one canvas — outbound, pages minted from
-            your data, product changes — with the people, places, and pages they share drawn once where the
-            motions cross. State a goal and the first motion appears. Nothing sends without you.
-          </span>
-          {m.onComposeFirst ? (
-            <button type="button" className="blank-channel-compose" onClick={m.onComposeFirst}>
-              State a go-to-market goal
-            </button>
-          ) : null}
-        </div>
-      </div>
-    );
-  }
-
   const axis = m.wovenAxis ?? "objects";
   // The parked lane count — surfaced on the axis bar so a waiting decision is never buried under the map.
   const parkedCount = (m.operatingView?.lanes ?? []).filter((l) => l.runState === "parked").length;
@@ -296,6 +282,21 @@ function OperatorLensPane({ model: m }: GtmLensProps) {
         ) : null}
         {parkedCount ? <span className="woven-parked"><b>{parkedCount}</b> need you</span> : null}
       </div>
+      {!hasLanes ? (
+        <div className="terrain-canvas-hint" role="status">
+          <strong>Your product-market terrain</strong>
+          <span>Start with what Drover found in the product. A pipeline appears only after you choose a move.</span>
+          {m.terrainState?.loading ? <small>Reading possible openings…</small>
+            : !m.terrainState?.runtimeConnected ? <small>Grounded truth is ready. Connect a runtime to read possible openings.</small>
+              : m.terrainState?.error ? <small>{m.terrainState.error}</small>
+                : m.terrainState?.hypothesisCount === 0 ? <small>No credible opening was returned yet. Product truth remains available.</small> : null}
+        </div>
+      ) : null}
+      {m.terrainState?.stale || m.terrainState?.partial ? (
+        <div className="terrain-state-note" role="status">
+          {m.terrainState.stale ? "Terrain read is older than the latest product or market evidence." : "Some terrain sources are unavailable; loaded truth remains usable."}
+        </div>
+      ) : null}
       <GraphCanvas
         connectors={m.connectors}
         contractAudits={m.contractAudits}

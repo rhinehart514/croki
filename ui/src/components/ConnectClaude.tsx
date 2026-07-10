@@ -55,9 +55,10 @@ function viewFor(runtime: RuntimeReadiness | undefined): ProviderView {
   return { status: "off", note: "Not signed in" };
 }
 
-export function ConnectClaude({ connection, onResult }: {
+export function ConnectClaude({ connection, onResult, contextual = false }: {
   connection: ConnectionStatus;
   onResult: (status: ConnectionStatus) => void;
+  contextual?: boolean;
 }) {
   const [checking, setChecking] = useState(false);
   const [stillOff, setStillOff] = useState<string | null>(null);
@@ -88,14 +89,14 @@ export function ConnectClaude({ connection, onResult }: {
   };
 
   return (
-    <div className="product-entry">
+    <div className={contextual ? "runtime-context" : "product-entry"}>
       <div className="product-entry-inner">
-        <span className="product-entry-eyebrow">Drover</span>
-        <h1 className="product-entry-title">Connect an AI runtime.</h1>
+        <span className="product-entry-eyebrow">{contextual ? "Optional intelligence" : "Drover"}</span>
+        <h1 className="product-entry-title">{contextual ? "Read possible openings" : "Connect an AI runtime."}</h1>
         <p className="product-entry-sub">
-          Drover reads your market, shapes your pipelines, drafts, and runs a goal to your gate — all on
-          your own AI subscription, right here on this machine. Connect Codex or Claude to begin. Either
-          one works, and neither needs an API key.
+          {contextual
+            ? "Grounded product truth and existing work stay available. Connect a local runtime when you want the crew to read possible openings or take a turn."
+            : "Drover reads your market, shapes your pipelines, drafts, and runs a goal to your gate on your own AI subscription, right here on this machine. Connect Codex or Claude to begin. Either one works, and neither needs an API key."}
         </p>
 
         <ul className="connect-runtimes" aria-label="Connect a runtime">
@@ -141,7 +142,7 @@ export function ConnectClaude({ connection, onResult }: {
         {stillOff ? <p className="product-entry-error" role="alert">{stillOff}</p> : null}
 
         <p className="product-entry-foot">
-          Nothing runs on your subscription until you approve it at the gate.
+          Nothing runs on your subscription until you ask. Nothing reaches the world until you approve it at the gate.
         </p>
       </div>
     </div>

@@ -707,8 +707,8 @@ function ProposalControls({ data }: { data: GTMNodeData }) {
             className="loop-proposal-note-input"
             rows={2}
             value={note}
-            placeholder="Tell Claude what to change, or note why you're keeping it…"
-            aria-label="Note for Claude"
+            placeholder="Tell the crew what to change, or note why you're keeping it…"
+            aria-label="Note for the crew"
             onChange={(e) => setNote(e.target.value)}
             onKeyDown={(e) => {
               e.stopPropagation(); // keep typing off React Flow's canvas keyboard shortcuts (delete-node, etc.)
@@ -1503,8 +1503,8 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
                 <button
                   type="button"
                   className="loop-node-ask"
-                  title="Ask Claude about this gate"
-                  aria-label="Ask Claude about this gate"
+                  title="Ask the crew about this gate"
+                  aria-label="Ask the crew about this gate"
                   onClick={(e) => { e.stopPropagation(); data.onAskClaude!(); }}
                 >
                   <MessageSquare size={12} />
@@ -1621,8 +1621,8 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
                 <button
                   type="button"
                   className="loop-node-ask"
-                  title="Ask Claude about this step"
-                  aria-label="Ask Claude about this step"
+                  title="Ask the crew about this step"
+                  aria-label="Ask the crew about this step"
                   onClick={(e) => { e.stopPropagation(); data.onAskClaude!(); }}
                 >
                   <MessageSquare size={12} />
@@ -2579,7 +2579,7 @@ function OperatorCursor({ graph, state, followBroken, recenterSignal }: {
   const isGate = target.category === "gate";
   // target.label is the model-given name — passed as name (3rd arg) so it wins over the regex table.
   const persona = !isGate && target.ref ? agentPersona(target.ref, undefined, target.label) : null;
-  const operatorName = persona?.role ?? "Claude";
+  const operatorName = persona?.role ?? "Your crew";
   const characterRef = persona ? target.ref! : "claude";
   const family = persona?.family ?? "general";
   // The character is visibly working while a step is actively being composed or executed; at the
@@ -3311,7 +3311,7 @@ export function GraphCanvas({
             className="op-cursor-back"
             onClick={() => { setFollowBroken(false); setRecenterSignal((n) => n + 1); }}
           >
-            <MousePointer2 size={13} /> Back to Claude
+            <MousePointer2 size={13} /> Back to the crew
           </button>
         </Panel>
       ) : null}

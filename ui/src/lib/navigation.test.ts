@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { describeSurface, useNavigationLayers, type SurfaceInputs } from "./navigation";
+import { describeSurface, resolveCanvasLens, resolveEngineerEscape, resolveLensSelection, useNavigationLayers, type SurfaceInputs } from "./navigation";
 
 const base: SurfaceInputs = {
   convexEnabled: false,
@@ -24,8 +24,8 @@ describe("describeSurface", () => {
     expect(describeSurface({ ...base, convexEnabled: true, teamIdentity: { id: "t" } }).kind).not.toBe("teamOnboarding");
   });
 
-  it("gates on connecting Claude before grounding", () => {
-    expect(describeSurface({ ...base, connectionResolvedDisconnected: true }).kind).toBe("connectClaude");
+  it("does not let a missing runtime replace grounded product truth", () => {
+    expect(describeSurface({ ...base, connectionResolvedDisconnected: true }).kind).toBe("canvas");
   });
 
   it("shows product entry when booted with no grounded product", () => {
@@ -43,14 +43,14 @@ describe("describeSurface", () => {
     expect(describeSurface({ ...base, hasCanvas: true, operatorStatus: "failed" }).kind).toBe("canvas");
   });
 
-  it("hands the whole screen to a stopped cold-start drive only when there is no canvas", () => {
-    expect(describeSurface({ ...base, hasCanvas: false, operatorStatus: "failed" }).kind).toBe("operatorTakeover");
-    expect(describeSurface({ ...base, hasCanvas: false, operatorStatus: "blocked" }).kind).toBe("operatorTakeover");
+  it("keeps grounded terrain visible when an operator drive stops", () => {
+    expect(describeSurface({ ...base, hasCanvas: false, operatorStatus: "failed" }).kind).toBe("canvas");
+    expect(describeSurface({ ...base, hasCanvas: false, operatorStatus: "blocked" }).kind).toBe("canvas");
   });
 
-  it("shows the live drive on a true cold start (running, no canvas yet)", () => {
-    expect(describeSurface({ ...base, hasCanvas: false, operatorStatus: "running" }).kind).toBe("operatorDrive");
-    expect(describeSurface({ ...base, hasCanvas: false, operatorStatus: "ready" }).kind).toBe("operatorDrive");
+  it("shows the grounded terrain while a first move is being composed", () => {
+    expect(describeSurface({ ...base, hasCanvas: false, operatorStatus: "running" }).kind).toBe("canvas");
+    expect(describeSurface({ ...base, hasCanvas: false, operatorStatus: "ready" }).kind).toBe("canvas");
   });
 
   it("shows a calm loading state while the workspace resolves", () => {
@@ -58,8 +58,24 @@ describe("describeSurface", () => {
     expect(describeSurface({ ...base, projectBusy: true }).kind).toBe("booting");
   });
 
-  it("falls through to the goal launcher for a grounded product with no goal yet", () => {
-    expect(describeSurface(base).kind).toBe("goalLauncher");
+  it("opens a grounded zero-pipeline product on the canvas", () => {
+    expect(describeSurface(base).kind).toBe("canvas");
+  });
+});
+
+describe("terrain altitude navigation", () => {
+  it("defaults to Operator until a pipeline is explicitly focused", () => {
+    expect(resolveCanvasLens(null)).toBe("operator");
+    expect(resolveCanvasLens(null, true)).toBe("operator");
+    expect(resolveCanvasLens("pipeline-1")).toBe("engineer");
+  });
+
+  it("cannot enter an empty Engineer graph and returns outward by clearing the pipeline", () => {
+    expect(resolveLensSelection("engineer", null, [])).toEqual({ lens: "operator", channelId: null });
+    expect(resolveLensSelection("engineer", null, ["pipeline-1"])).toEqual({ lens: "engineer", channelId: "pipeline-1" });
+    expect(resolveLensSelection("operator", "pipeline-1", ["pipeline-1"])).toEqual({ lens: "operator", channelId: null });
+    const origin = { kind: "anchor", ref: { type: "terrain-hypothesis", id: "h1" } };
+    expect(resolveEngineerEscape(origin)).toEqual({ lens: "operator", channelId: null, focus: origin });
   });
 });
 

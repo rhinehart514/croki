@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { ProductEntryColumn } from "./ProductEntryColumn";
 import type { ProductModel } from "@/types";
 
@@ -39,5 +39,15 @@ describe("ProductEntryColumn — the compact source", () => {
   it("collapses to the quiet 'Where wins enter' tab, demoted, when not expanded", () => {
     render(<ProductEntryColumn productName="estatesaleusa" model={model} defaultOpen={false} />);
     expect(screen.getByRole("button", { name: "Show where wins enter" })).toBeTruthy();
+  });
+
+  it("makes truths and unknowns keyboard-reachable focus actions", () => {
+    const onFocusTruth = vi.fn();
+    const onFocusUnknown = vi.fn();
+    render(<ProductEntryColumn productName="p" model={model} truths={["Observed truth"]} unknowns={["Open question"]} onFocusTruth={onFocusTruth} onFocusUnknown={onFocusUnknown} />);
+    fireEvent.click(screen.getByRole("button", { name: "Observed truth" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open question" }));
+    expect(onFocusTruth).toHaveBeenCalledWith(0);
+    expect(onFocusUnknown).toHaveBeenCalledWith(0);
   });
 });

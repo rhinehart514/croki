@@ -39,7 +39,14 @@ describe("ConnectClaude — provider-neutral runtime gate", () => {
 
   it("preserves the founder wall copy", () => {
     render(<ConnectClaude connection={disconnected} onResult={() => {}} />);
-    expect(screen.getByText(/Nothing runs on your subscription until you approve it at the gate/i)).toBeInTheDocument();
+    expect(screen.getByText(/Nothing reaches the world until you approve it at the gate/i)).toBeInTheDocument();
+  });
+
+  it("renders as contextual recovery without hiding grounded truth", () => {
+    const { container } = render(<ConnectClaude connection={disconnected} onResult={() => {}} contextual />);
+    expect(container.querySelector(".runtime-context")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Read possible openings/i })).toBeInTheDocument();
+    expect(screen.getByText(/Grounded product truth and existing work stay available/i)).toBeInTheDocument();
   });
 
   it("lifts the gate when CODEX is connected (renders nothing)", () => {

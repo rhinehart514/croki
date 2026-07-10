@@ -9,7 +9,7 @@ import type {
   CapabilityServer, CapabilityInventory, SenderCredential, Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole, BoardView,
   ChannelMeta, Input, ObjectGraphView, GTMItem, PendingInbox, OperatingView,
-  ProductImplication,
+  ProductImplication, TerrainRead, TerrainView,
 } from "@/types";
 import { identityHeaders } from "@/lib/identity";
 import type { MotionEfficiencyData } from "@/components/MotionEfficiencyTable";
@@ -240,6 +240,10 @@ export type OperatorSessionContext = {
   questionId?: string | null;
   participantRefs?: string[];
   productRefs?: string[];
+  surface?: "terrain" | "pipeline";
+  lens?: "operator" | "engineer";
+  focusRef?: string | null;
+  contextRefs?: string[];
 };
 export const createOperatorSession = (
   projectId: string, goal: string, graphId?: string, fresh?: boolean, context?: OperatorSessionContext, model?: string,
@@ -250,6 +254,10 @@ export const createOperatorSession = (
     ...(context?.questionId ? { questionId: context.questionId } : {}),
     ...(context?.participantRefs?.length ? { participantRefs: context.participantRefs } : {}),
     ...(context?.productRefs?.length ? { productRefs: context.productRefs } : {}),
+    ...(context?.surface ? { surface: context.surface } : {}),
+    ...(context?.lens ? { lens: context.lens } : {}),
+    ...(context?.focusRef ? { focusRef: context.focusRef } : {}),
+    ...(context?.contextRefs?.length ? { contextRefs: context.contextRefs } : {}),
   });
 
 // Accept a product implication (docs/production-direction/06 §Product implication). The route
@@ -286,11 +294,16 @@ export const resumeOperatorSession = (
   projectId: string,
   input: string,
   hints?: OperatorHints,
+  context?: OperatorSessionContext,
 ) =>
   post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/resume`, {
     projectId,
     input,
     ...(hints ? { hints } : {}),
+    ...(context?.surface ? { surface: context.surface } : {}),
+    ...(context?.lens ? { lens: context.lens } : {}),
+    ...(context?.focusRef ? { focusRef: context.focusRef } : {}),
+    ...(context?.contextRefs?.length ? { contextRefs: context.contextRefs } : {}),
   });
 
 export const resolveOperatorGate = (
@@ -373,6 +386,10 @@ export const composerTurn = (input: {
   input: string;
   hints?: OperatorHints;
   allowDrive?: boolean;
+  surface?: "terrain" | "pipeline";
+  lens?: "operator" | "engineer";
+  focusRef?: string | null;
+  contextRefs?: string[];
 }) => post<ComposerTurnResult>("/api/operator/turn", input);
 
 // ── The outcome door — record what actually happened ──────────────────────────
@@ -638,6 +655,15 @@ export const getObjectGraph = (projectId: string) =>
 // triggers a run, never gates one. Scoped to one project.
 export const getOperatingView = (projectId?: string) =>
   get<OperatingView>(`/api/operating-view${projectId ? `?project=${encodeURIComponent(projectId)}` : ""}`);
+
+// The deterministic terrain read never spends a model call. Null is the integration fallback while an
+// older backend exposes only /api/operating-view; the existing woven canvas remains available in that case.
+export const getTerrainView = (projectId: string): Promise<TerrainView | null> =>
+  get<TerrainView>(`/api/projects/${encodeURIComponent(projectId)}/terrain`).catch(() => null);
+
+// A rented, provider-neutral overlay read. It changes no product, pipeline, graph, gate, or outcome state.
+export const readTerrain = (projectId: string, input: { model?: string; focusRef?: string } = {}) =>
+  post<TerrainRead>(`/api/projects/${encodeURIComponent(projectId)}/terrain/read`, input);
 
 // ── The one per-motion efficiency table (Area 7) ───────────────────────────────────────────────────────
 // deriveMotionEfficiency: every real outcome aggregated by the motion that earned it (a shape-derived
