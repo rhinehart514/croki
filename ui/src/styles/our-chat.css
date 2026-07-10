@@ -432,7 +432,7 @@
 .our-chat .oc-input-picker { display: inline-flex; align-items: center; }
 .our-chat .oc-hint { font-size: 11px; color: var(--oc-ink-4); margin-top: 9px; text-align: center; }
 .our-chat .oc-heard { margin-top: 8px; font-size: 13px; color: var(--oc-ink-2); font-style: italic; }
-.our-chat .oc-voice-error { margin: 8px 0 0; font-size: 11.5px; color: #b45309; }
+.our-chat .oc-voice-error { margin: 8px 0 0; font-size: 11.5px; color: var(--danger); }
 
 /* ── The work, made beautiful — a live step-tracker (pending→✓ done) + a shimmering "producing now"
    line. Soft, settling, stream-don't-spin; motion shows causality, never performs. ─────────────── */

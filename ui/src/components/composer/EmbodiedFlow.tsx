@@ -9,6 +9,7 @@
 
 import { ChevronRight, Shield } from "lucide-react";
 import { RosterTile } from "./RosterTile";
+import { humanizeStepLabel } from "@/lib/labels";
 import type { GTMEdge, GTMNode } from "@/types";
 import "@/styles/composer-embodied.css";
 
@@ -46,7 +47,7 @@ export function EmbodiedFlow({
     <div className="composer-card2">
       <div className="ef-opt">
         <div className="ef-opt-h">
-          <span className="ef-ol">{title}</span>
+          <span className="ef-ol">{humanizeStepLabel(title)}</span>
           {onBuild ? (
             <button
               className={`ef-ob ${dimmed ? "dim" : ""}`}

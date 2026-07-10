@@ -12,6 +12,7 @@
 
 import { CrewFace } from "@/components/crew/CrewFace";
 import { CAPABILITIES, capabilityMark, type Capability } from "@/lib/capabilities";
+import { humanizeStepLabel } from "@/lib/labels";
 import type { GTMNode } from "@/types";
 import "@/styles/composer-embodied.css";
 
@@ -107,11 +108,13 @@ export function RosterTile({ size = "sm", state = "idle", className, title, ...s
       </span>
     );
   }
-  // Never a blank tile: an unresolved step degrades to a neutral monogram of its label.
+  // Never a blank tile: an unresolved step degrades to a neutral monogram of its label. The hover title
+  // and aria label read the step in plain words, never the raw slug ("draft-referral-ask").
   const mono = resolved.label.replace(/[^a-zA-Z0-9]/g, "").slice(0, 2).toUpperCase() || "··";
+  const readable = humanizeStepLabel(resolved.label) || resolved.label;
   return (
     <span className={wrap}>
-      <span className={`rt rt-mark rt-unknown rt-${size}`} title={title ?? resolved.label} aria-label={resolved.label}>
+      <span className={`rt rt-mark rt-unknown rt-${size}`} title={title ?? readable} aria-label={readable}>
         <span className="rt-letter">{mono}</span>
       </span>
     </span>

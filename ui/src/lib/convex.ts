@@ -51,3 +51,25 @@ export function saveTeamIdentity(value: TeamIdentity): void {
   }
 }
 
+// The solo/local identity — the founder proceeds as a party of one, no name or email asked. Identity
+// is deferred: this is what seeds `teamIdentity` so the founder is never gated on "who are you" before
+// seeing their product. It resolves to the personal space the server already defaults to (teamId
+// "local"), so nothing about release authority or scoping changes. A real name/email is captured later,
+// only when it's actually needed (setting up a shared team in Settings, or the moment something sends).
+export function localTeamIdentity(): TeamIdentity {
+  return {
+    identity: "founder@local",
+    name: "Founder",
+    teamId: "local",
+    teamName: "Local workspace",
+    role: "owner",
+  };
+}
+
+// Has the founder explicitly set up (or joined) a real shared team? A locally-seeded solo identity has
+// teamId "local"; anything else means they went through team setup and chose to share. Used to decide
+// whether to keep offering the (now-deferred, dismissible) "set up your team" prompt.
+export function isSoloIdentity(id: TeamIdentity | null): boolean {
+  return !id || id.teamId === "local";
+}
+

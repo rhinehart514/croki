@@ -16,9 +16,11 @@ const base: SurfaceInputs = {
 };
 
 describe("describeSurface", () => {
-  it("gates on team onboarding first when Convex is on and no team is chosen", () => {
-    expect(describeSurface({ ...base, convexEnabled: true, teamIdentity: null }).kind).toBe("teamOnboarding");
-    // A chosen team clears the gate.
+  it("never gates on team onboarding — identity is deferred, the founder proceeds solo", () => {
+    // Convex on and no identity chosen used to wall the founder behind "Set up your workspace"; now they
+    // pass straight through to the product surface (App seeds a local identity), so no path ever resolves
+    // to the teamOnboarding surface as a first gate.
+    expect(describeSurface({ ...base, convexEnabled: true, teamIdentity: null }).kind).not.toBe("teamOnboarding");
     expect(describeSurface({ ...base, convexEnabled: true, teamIdentity: { id: "t" } }).kind).not.toBe("teamOnboarding");
   });
 

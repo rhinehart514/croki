@@ -548,12 +548,15 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
     <div className={cn("cgate-review", variant === "stage" && "cgate-review-stage")} onClick={(e) => e.stopPropagation()}>
       <div className="cgate-review-lead">
         <span className="cgate-review-count">
+          {/* One count, always the total blooming here (bloom.length) — the same number the gate node on
+              the canvas shows, so a founder never reads "1" on one surface and "5" on another for the same
+              gate. Exceptions are named as a qualifier on that total, never as a competing headline count. */}
           {bloom.length === 0
             ? "Everything here cleared — nothing needs your eyes"
             : lean
               ? `${bloom.length} to decide · nothing goes until you say so, then ${yesEffect}`
               : exceptionCount > 0
-                ? `${exceptionCount} exception${exceptionCount === 1 ? "" : "s"} for your eyes · ${yesEffect}`
+                ? `${bloom.length} to decide · ${exceptionCount} need${exceptionCount === 1 ? "s" : ""} your eyes · ${yesEffect}`
                 : `${bloom.length} staged · ${yesEffect}`}
         </span>
         {/* Pure-decision gate: the taste counter and the offer line are context, not the call — they

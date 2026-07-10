@@ -34,7 +34,7 @@ import type {
 } from "@/types";
 import { computeChannelLanes, type ChannelLane } from "@/lib/channelLanes";
 import { ObjectChip, KindCluster } from "@/components/canvas/wovenNodes";
-import { buildWovenOverlay, type WovenAxis, type WovenFocus } from "@/lib/wovenOverlay";
+import { buildWovenOverlay, focusIsEffective, type WovenAxis, type WovenFocus } from "@/lib/wovenOverlay";
 import type { WovenGraph } from "@/types";
 import type { RunSummary } from "@/api";
 import { explainGraph } from "@/api";
@@ -2451,11 +2451,14 @@ function OperatorCursor({ graph, state, followBroken, recenterSignal }: {
 // ─── Run zoom — the loop "leans in" while the flywheel turns ──────────────────
 // On run start the whole diagram scales up a touch; when the run settles it frames
 // back to fit. A physical cue that the system is live, not a static wireframe.
-function RunZoom({ running }: { running: boolean }) {
+function RunZoom({ running, suspended }: { running: boolean; suspended?: boolean }) {
   const { getZoom, zoomTo, fitView } = useReactFlow();
   const baseZoom = useRef<number | null>(null);
 
   useEffect(() => {
+    // On the woven canvas the live edge reads in teal, not by punching in — a zoom-in would shove lanes
+    // off the frame the founder is watching. Leave the framing to FitOnGraph there.
+    if (suspended) return;
     if (running) {
       baseZoom.current = getZoom();
       const target = Math.min(1.8, (baseZoom.current ?? 1) * 1.14);
@@ -2464,7 +2467,7 @@ function RunZoom({ running }: { running: boolean }) {
       baseZoom.current = null;
       fitView({ padding: 0.14, maxZoom: 1, duration: 560 });
     }
-  }, [running, getZoom, zoomTo, fitView]);
+  }, [running, suspended, getZoom, zoomTo, fitView]);
 
   return null;
 }
@@ -2475,7 +2478,12 @@ function RunZoom({ running }: { running: boolean }) {
 // Shared framing options. On the merged overview the fit is allowed to shrink to hold every lane; on a
 // single FOCUSED pipeline (Engineer's default landing) a `minZoom` floor keeps the fit above the coin
 // threshold so the founder lands on full-size, legible node cards instead of unreadable specks.
-type FitOpts = { padding: number; maxZoom: number; minZoom?: number };
+// `padding` accepts React Flow's per-side form so the woven fit can leave extra room at the top-left for the
+// floating axis toggle (otherwise the top lane's source card slides under that chrome). PaddingUnit mirrors
+// React Flow's own `PaddingWithUnit` template literal (a bare number, or "<n>px" / "<n>%").
+type PaddingUnit = number | `${number}px` | `${number}%`;
+type FitPadding = PaddingUnit | { top?: PaddingUnit; right?: PaddingUnit; bottom?: PaddingUnit; left?: PaddingUnit };
+type FitOpts = { padding: FitPadding; maxZoom: number; minZoom?: number };
 
 function Refitter({ nonce, fitOptions }: { nonce?: number; fitOptions: FitOpts }) {
   const { fitView } = useReactFlow();
@@ -2859,22 +2867,29 @@ export function GraphCanvas({
   // graph entirely and show only the kind clusters. On the OBJECT axis the lanes stay and the chips/ties
   // overlay them. Focus-to-trace dims the lanes when a chip/lane/cluster is isolated.
   const typeAxisActive = !!(merged && woven && wovenAxis === "type");
+  // A persisted focus that lights nothing on the current weave (a stale parked-lane selection carried in on
+  // project open) is collapsed to "no focus" here too, so the lane cards boot fully lit instead of every card
+  // getting woven-lane-dim against an empty lit set. Matches buildWovenOverlay's own empty-match collapse.
+  const effectiveFocus = useMemo(
+    () => (focusIsEffective(wovenFocus, woven) ? wovenFocus : null),
+    [wovenFocus, woven],
+  );
   const nodes = useMemo(() => {
     if (!wovenOverlay) return laneGraphNodes;
     if (typeAxisActive) return wovenOverlay.nodes;
     // Object axis: dim the lane cards when a focus isolates a crossing set (spatial focus-to-trace).
-    const laneNodes = wovenFocus
+    const laneNodes = effectiveFocus
       ? laneGraphNodes.map((n) => {
           const channelId = (n.data as GTMNodeData | undefined)?.channelId as string | undefined;
-          const lit = wovenFocus.kind === "lane" ? channelId === wovenFocus.channelId
-            : wovenFocus.kind === "object" ? (woven?.objectNodes.find((o) => o.objectKey === wovenFocus.objectKey)?.laneKeys ?? []).includes(channelId ?? "")
-            : wovenFocus.kind === "cluster" ? (woven?.kindClusters.find((c) => c.motionKind === wovenFocus.motionKind)?.laneKeys ?? []).includes(channelId ?? "")
+          const lit = effectiveFocus.kind === "lane" ? channelId === effectiveFocus.channelId
+            : effectiveFocus.kind === "object" ? (woven?.objectNodes.find((o) => o.objectKey === effectiveFocus.objectKey)?.laneKeys ?? []).includes(channelId ?? "")
+            : effectiveFocus.kind === "cluster" ? (woven?.kindClusters.find((c) => c.motionKind === effectiveFocus.motionKind)?.laneKeys ?? []).includes(channelId ?? "")
             : true;
           return lit ? n : { ...n, className: cn((n as Node).className, "woven-lane-dim") };
         })
       : laneGraphNodes;
     return [...laneNodes, ...wovenOverlay.nodes];
-  }, [wovenOverlay, laneGraphNodes, typeAxisActive, wovenFocus, woven]);
+  }, [wovenOverlay, laneGraphNodes, typeAxisActive, effectiveFocus, woven]);
   const edges = useMemo(() => {
     if (!wovenOverlay) return laneGraphEdges;
     if (typeAxisActive) return wovenOverlay.edges;
@@ -2918,9 +2933,24 @@ export function GraphCanvas({
       .catch(() => { explainedRef.current = null; });
   }, [explainMode, singlePipeline, graph.id, graph.nodes, graph.edges]);
 
+  // The woven canvas (a live `woven` read on the merged overview) is the product's hero and must land
+  // LEGIBLE — a confident weave that fills the frame, never tiny cards stranded in an empty field. So even
+  // the multi-lane fit carries a `minZoom` floor here: the frame is allowed to leave a lane off-screen
+  // (pan to reach it) rather than shrink every card below the readable threshold. A bare multi-lane
+  // overview with no woven read keeps the old shrink-to-fit-all behavior.
+  const wovenActive = !!(merged && woven);
+  // The TYPE axis (the forms/spread map) is a handful of big cluster cards, not a dense lane field — so it
+  // gets to zoom IN to fill the frame (a couple of cards must not shrink to specks), while the dense OBJECT
+  // axis keeps a tighter ceiling so the whole weave stays on screen.
+  const wovenTypeAxis = wovenActive && wovenAxis === "type";
   const fitOptions = useMemo<FitOpts>(
-    () => (singlePipeline ? { padding: 0.16, maxZoom: 1, minZoom: 0.72 } : { padding: 0.14, maxZoom: 1 }),
-    [singlePipeline],
+    () => (singlePipeline ? { padding: 0.16, maxZoom: 1, minZoom: 0.72 }
+      // The woven fits leave extra room at the top and left so the top lane's source card clears the floating
+      // axis toggle (top-left chrome). Per-side padding, in px on the chrome sides and % elsewhere for air.
+      : wovenTypeAxis ? { padding: { top: 96, left: 200, right: "8%", bottom: "10%" }, maxZoom: 1.15, minZoom: 0.7 }
+      : wovenActive ? { padding: { top: 96, left: 200, right: "6%", bottom: "8%" }, maxZoom: 0.92, minZoom: 0.66 }
+      : { padding: 0.14, maxZoom: 1 }),
+    [singlePipeline, wovenActive, wovenTypeAxis],
   );
 
   // Re-fit the viewport whenever the flow's structure changes (load, compose) — the merged canvas
@@ -3098,8 +3128,8 @@ export function GraphCanvas({
         </Panel>
       ) : null}
       <MeasureGuard nodeIds={measureNodeIds} />
-      <RunZoom running={running} />
-      <FitOnGraph topology={fitSignature} bounds={boundsSignature} running={running} suspended={!!operatorCursor} fitOptions={fitOptions} />
+      <RunZoom running={running} suspended={wovenActive} />
+      <FitOnGraph topology={fitSignature} bounds={boundsSignature} running={wovenActive ? false : running} suspended={!!operatorCursor} fitOptions={fitOptions} />
       <Refitter nonce={refitNonce} fitOptions={fitOptions} />
       {result?.memoryApplied
         && (result.memoryApplied.approved + result.memoryApplied.rejected + result.memoryApplied.edits) > 0 && (

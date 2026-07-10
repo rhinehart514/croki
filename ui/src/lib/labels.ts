@@ -42,3 +42,48 @@ export function humanizeFieldLabel(key: string): string {
   // Restore the same acronyms humanizeRef protects, so keys read like names not typos.
   return sentence.replace(/\b(ai|icp|seo|pco|gtm|url|cta|roi)\b/gi, (m) => m.toUpperCase());
 }
+
+// A step / pipeline-shape title the founder reads in the composer ("A few ways to shape this"). The
+// backend hands these back as free text, but a shape sometimes arrives as its raw node id — a kebab or
+// snake slug like "draft-referral-ask" — which is machinery, not a title. This turns such a slug into
+// plain words ("Draft referral ask"); a title already written as prose (it has spaces) is returned
+// untouched. Reuses humanizeFieldLabel's splitter and acronym repair so one rule governs both surfaces.
+export function humanizeStepLabel(label: string): string {
+  const raw = (label ?? "").trim();
+  if (!raw) return "";
+  // Already a written title — anything with a space, or ordinary punctuation — is left exactly as-is,
+  // EXCEPT any kebab/snake slug tokens riding inside it ("On it — identify-referral-partners." →
+  // "On it — Identify referral partners.") which are machinery a founder must never read.
+  if (/\s/.test(raw)) return humanizeSlugsInText(raw);
+  // A single plain word ("Draft", "Outreach") is a fine title; only a multi-part slug needs humanizing.
+  if (!/[-_]/.test(raw) && !/[a-z][A-Z]/.test(raw)) {
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  }
+  return humanizeFieldLabel(raw);
+}
+
+// A machine slug token embedded in a prose line — a kebab or snake identifier a backend beat baked into
+// otherwise-human text ("Completed identify-referral-partners · 3 items", "On it — warm-inbound-users.").
+// Two or more separator-joined lowercase parts, no internal spaces. Matched inside a sentence so the
+// surrounding prose is left untouched and only the slug is rewritten to plain words. A single hyphenated
+// English word ("go-to-market", "read-only") stays intact — it needs THREE+ parts or a triggering
+// non-word part to read as a machine id, so ordinary compounds are never mangled.
+const EMBEDDED_SLUG = /\b[a-z][a-z0-9]*(?:[_-][a-z0-9]+){2,}\b/g;
+
+// Rewrite every embedded machine slug in a line to plain words, leaving the human prose around it exactly
+// as written. Reuses humanizeFieldLabel so one splitter/acronym rule governs slugs everywhere. Idempotent
+// on already-human text (no slug matches → returns the input unchanged).
+export function humanizeSlugsInText(text: string): string {
+  const raw = text ?? "";
+  if (!raw) return "";
+  return raw.replace(EMBEDDED_SLUG, (slug, offset: number) => {
+    const words = humanizeFieldLabel(slug); // sentence-cased, acronyms restored ("Warm inbound SEO")
+    // A slug that opens the whole line keeps its capital; embedded mid-sentence it reads better
+    // lower-cased ("On it — identify referral partners."). An acronym-leading token (SEO-…, ICP-…)
+    // keeps its caps either way — never lower-case an all-caps first word.
+    const firstWord = words.split(" ")[0];
+    const isAcronym = firstWord.length > 1 && firstWord === firstWord.toUpperCase();
+    if (offset === 0 || isAcronym) return words;
+    return words.charAt(0).toLowerCase() + words.slice(1);
+  });
+}

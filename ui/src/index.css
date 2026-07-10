@@ -2050,8 +2050,10 @@ svg {
   display: flex;
   align-items: center;
   gap: 7px;
+  font-family: var(--serif);
   font-size: 12px;
   font-weight: 680;
+  letter-spacing: -0.005em;
   color: var(--ink);
 }
 
@@ -5047,7 +5049,7 @@ svg {
   padding: 12px 14px; border-bottom: 1px solid var(--line);
 }
 .loop-issues-head-title { display: flex; align-items: center; gap: 8px; }
-.loop-issues-head-title strong { font-size: 13.5px; color: var(--ink); }
+.loop-issues-head-title strong { font-family: var(--serif); font-size: 13.5px; letter-spacing: -.01em; color: var(--ink); }
 .loop-issues-head-title svg { width: 16px; height: 16px; color: var(--muted); }
 .loop-issues-count {
   min-width: 16px; padding: 1px 6px; border-radius: 999px;
@@ -6565,7 +6567,7 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .product-entry{display:flex;align-items:center;justify-content:center;min-height:100%;padding:56px 24px;overflow:auto}
 .product-entry-inner{width:100%;max-width:560px}
 .product-entry-eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--proven);font-weight:600}
-.product-entry-title{font-size:30px;line-height:1.12;letter-spacing:-.01em;margin:10px 0 8px;color:var(--ink)}
+.product-entry-title{font-family:var(--serif);font-size:30px;line-height:1.12;letter-spacing:-.01em;margin:10px 0 8px;color:var(--ink)}
 .product-entry-sub{color:var(--muted);font-size:15px;line-height:1.5;margin:0 0 28px}
 .product-entry-field{display:block;margin-bottom:16px}
 .product-entry-label{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:6px}
@@ -6606,7 +6608,9 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .product-entry-progress{display:flex;align-items:flex-start;gap:11px;margin:18px 0 4px;padding:14px 15px;
   border:1px solid var(--line-2);border-radius:11px;background:var(--surface)}
 .product-entry-progress .spin{flex:0 0 auto;margin-top:1px;color:var(--proven)}
-.product-entry-progress-steps{display:grid;gap:3px}
+.product-entry-progress-steps{display:grid;gap:3px;flex:1;min-width:0}
+.product-entry-progress-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.product-entry-progress-clock{font-size:11.5px;color:var(--ink-2);letter-spacing:.02em;flex:none}
 .product-entry-progress-steps strong{font-size:14px;color:var(--ink)}
 .product-entry-progress-steps span{font-size:12.5px;color:var(--muted);line-height:1.45}
 .product-entry-error{margin:14px 0 0;font-size:13px;color:#b91c1c}
@@ -6677,12 +6681,6 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .scan-preview-foot svg{color:var(--proven)}
 
 /* Building state — shown while the operator composes from the goal just given (never re-ask). */
-.building-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;
-  height:100%;padding:48px;color:var(--ink)}
-.building-state .spin{width:26px;height:26px;color:var(--proven)}
-.building-state strong{font-size:18px}
-.building-state span{color:var(--muted);font-size:14px;max-width:440px;line-height:1.5}
-
 /* ── The contextual boot state (WorkspaceBooting) — a plan checking off with a running clock, in the
    crew's voice, replacing the anonymous "Loading your workspace…" spinner. Warm Atelier: taupe ground,
    serif title, mono/tabular clock, spruce accent used ONLY on the live step's spinner. ── */
@@ -6698,7 +6696,7 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .boot-mk{width:16px;height:16px;flex:none;border-radius:50%;display:grid;place-items:center;margin-top:1px}
 .boot-step.done .boot-mk{background:var(--proven-soft);color:var(--proven)}
 .boot-step.next .boot-mk{border:1.5px dashed var(--line-2)}
-.boot-spin{width:16px;height:16px;border-radius:50%;border:1.7px solid var(--ember-line);border-top-color:var(--ember);
+.boot-spin{width:16px;height:16px;border-radius:50%;border:2px solid var(--ember-soft);border-top-color:var(--ember);
   animation:boot-spin .9s linear infinite}
 @keyframes boot-spin{to{transform:rotate(360deg)}}
 .boot-step-body{display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -6718,7 +6716,7 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .operator-drive-head{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center}
 .operator-drive-icon{width:26px;height:26px;color:var(--proven)}
 .operator-drive-icon.stopped{color:var(--gap,#b9740a)}
-.operator-drive-head strong{font-size:18px;color:var(--ink)}
+.operator-drive-head strong{font-family:var(--serif);font-size:18px;letter-spacing:-.01em;color:var(--ink)}
 .operator-drive-sub{color:var(--muted);font-size:14px;max-width:520px;line-height:1.5}
 .operator-drive.is-stopped .operator-drive-sub{color:var(--ink-2,var(--ink))}
 .operator-drive-elapsed{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;letter-spacing:.01em}

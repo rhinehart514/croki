@@ -34,7 +34,7 @@
 @media (prefers-reduced-motion: reduce) { .crewc-drawer { animation: none; } }
 
 .crewc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.crewc-title { margin: 0; font-size: 16px; font-weight: 650; color: var(--ink); }
+.crewc-title { margin: 0; font-family: var(--serif); font-size: 16px; font-weight: 650; letter-spacing: -.01em; color: var(--ink); }
 .crewc-sub { margin: 4px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
 .crewc-close {
   flex: none;
@@ -99,7 +99,7 @@
 .crewc-desc-input:focus-visible { outline: none; background: var(--surface); border-color: var(--line-2); }
 .crewc-imported-note { margin: 8px 2px 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); text-align: center; }
 
-.crewc-error { margin: 0; font-size: 12px; line-height: 1.45; color: var(--gap, #b45309); }
+.crewc-error { margin: 0; font-size: 12px; line-height: 1.45; color: var(--danger); }
 
 /* Composer — the talk-to-shape input + the decision buttons */
 .crewc-composer { display: flex; flex-direction: column; gap: 10px; }

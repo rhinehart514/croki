@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Check, FolderOpen, LoaderCircle, PackageOpen, ScanSearch } from "lucide-react";
 import { getSampleProduct, pickFolder, scanPreview } from "@/api";
 import type { ScanPreview as ScanPreviewData } from "@/types";
@@ -22,6 +22,18 @@ export function ProductEntry({ busy, onStart, onSeePortfolio }: {
   const [loadingSample, setLoadingSample] = useState(false);
   const [report, setReport] = useState<ScanPreviewData | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
+
+  // A live elapsed clock for the read — the scan is one open-ended pass (no honest percentage), so what's
+  // real is how long the crew has been working. It keeps the read reading as alive-and-working, never a
+  // hung spinner. Runs only while scanning; resets each time.
+  const [scanElapsed, setScanElapsed] = useState(0);
+  useEffect(() => {
+    if (phase !== "scanning") return;
+    const start = Date.now();
+    const t = window.setInterval(() => setScanElapsed(Date.now() - start), 200);
+    return () => window.clearInterval(t);
+  }, [phase]);
+  const scanClock = `${Math.floor(scanElapsed / 1000)}s`;
 
   const runScan = async (path: string, winOverride?: string) => {
     setPhase("scanning");
@@ -151,10 +163,13 @@ export function ProductEntry({ busy, onStart, onSeePortfolio }: {
             </div>
 
             {phase === "scanning" ? (
-              <div className="product-entry-progress" role="status">
+              <div className="product-entry-progress" role="status" aria-live="polite">
                 <LoaderCircle className="spin" size={16} />
                 <div className="product-entry-progress-steps">
-                  <strong>Reading your product…</strong>
+                  <div className="product-entry-progress-head">
+                    <strong>Reading your product…</strong>
+                    <span className="product-entry-progress-clock tnum mono">{scanClock}</span>
+                  </div>
                   <span>Walking the codebase, detecting your stack, finding where wins fire. Read-only — nothing changes.</span>
                 </div>
               </div>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowUp, Check, RotateCcw } from "lucide-react";
 import type { OperatorSession } from "@/types";
+import { humanizeSlugsInText } from "@/lib/labels";
 
 // The operator's drive, made watchable. This is the COLD-START surface — a goal was given but there is
 // no graph yet to watch assemble, so the plan-as-loading-state lives here: the few real steps of the
@@ -148,7 +149,7 @@ export function OperatorDriveState({ session, productName, onResume, onStartOver
         <div className="operator-drive-trail" ref={trailRef} aria-label="Operator reasoning">
           {events.map((ev) => (
             <div key={ev.id} className={`operator-drive-line ${ev.type === "operator_note" ? "is-note" : ""} ${ev.type === "session_failed" ? "is-fail" : ""}`}>
-              <span className="operator-drive-line-title">{ev.title}</span>
+              <span className="operator-drive-line-title">{humanizeSlugsInText(ev.title)}</span>
               {ev.detail ? <span className="operator-drive-line-detail">{ev.detail}</span> : null}
             </div>
           ))}

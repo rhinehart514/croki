@@ -52,6 +52,7 @@
 }
 .crewroom-headings { min-width: 0; flex: 1; }
 .crewroom-title {
+  font-family: var(--serif);
   font-size: 19px; font-weight: 600; line-height: 1.15; letter-spacing: -0.02em; color: var(--ink);
   margin: 0;
 }

@@ -1,8 +1,15 @@
 // One teammate's face, everywhere a teammate appears — the rail, the canvas node, the profile sheet
-// and its team grid, the crew room. It draws the hand-drawn crew character (CrewAvatar). If that ever
-// can't render, it falls back — gracefully, never a blank tile — to the two-letter monogram in the
-// agent's family tint, the mark this product showed before the crew grew faces. Keeping the monogram
-// as the fallback is deliberate: a broken character must degrade to a legible identity, not to nothing.
+// and its team grid, the crew room. Two registers, one identity:
+//
+//   • the default "character" face draws the hand-drawn crew character (CrewAvatar), degrading to the
+//     two-letter monogram in the agent's family tint if it can't render;
+//   • the "roundel" variant (opt-in, used on the crew/composer surfaces) draws the teammate as a clean
+//     MONOGRAM roundel — initials in the sleek display sans — the way the Warm Atelier reference presents
+//     the crew: a settled sage presence dot when idle, a spruce ring and a breathing spruce dot while it
+//     works. This is the register that reads as "named teammates, real people," not photo thumbnails.
+//
+// Keeping the monogram as the fallback for the character face is deliberate: a broken character must
+// degrade to a legible identity, not to nothing.
 
 import { Component, type ReactNode } from "react";
 import { agentPersona, FAMILY_TINT, type AgentFamily } from "@/lib/agentPersona";
@@ -18,7 +25,7 @@ class FaceBoundary extends Component<{ fallback: ReactNode; children: ReactNode 
 }
 
 export function CrewFace({
-  agentRef, job, family: familyProp, monogram: monogramProp, size = 28, state = "idle", className,
+  agentRef, job, family: familyProp, monogram: monogramProp, size = 28, state = "idle", variant = "character", className,
 }: {
   agentRef: string;
   job?: string;
@@ -28,12 +35,31 @@ export function CrewFace({
   monogram?: string;
   size?: number;
   state?: "idle" | "working";
+  // "character" = the hand-drawn crew face (default, unchanged everywhere it already renders). "roundel"
+  // = the monogram roundel presentation the crew/composer surfaces use.
+  variant?: "character" | "roundel";
   className?: string;
 }) {
   const persona = familyProp && monogramProp ? null : agentPersona(agentRef, job);
   const family = familyProp ?? persona!.family;
   const monogram = monogramProp ?? persona!.monogram;
   const tint = FAMILY_TINT[family];
+
+  // The monogram roundel — the Warm Atelier crew presentation. Initials in the sleek display sans; a
+  // spruce ring + breathing dot mark a working teammate, a settled sage dot marks one that's idle/done.
+  if (variant === "roundel") {
+    const working = state === "working";
+    return (
+      <span
+        className={className ? `crew-roundel ${className}${working ? " is-working" : ""}` : `crew-roundel${working ? " is-working" : ""}`}
+        style={{ width: size, height: size, fontSize: Math.max(10, Math.round(size * 0.38)) }}
+        aria-hidden="true"
+      >
+        <span className="crew-roundel-mono">{monogram}</span>
+        <span className="crew-roundel-breath" />
+      </span>
+    );
+  }
 
   const fallback = (
     <span

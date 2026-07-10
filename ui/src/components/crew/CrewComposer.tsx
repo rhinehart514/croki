@@ -128,7 +128,7 @@ export function CrewComposer({
                     onClick={() => { setMode("build"); setBaseRef(r.ref); }}
                     title={`Start from ${crewName(r)}`}
                   >
-                    <CrewFace agentRef={r.ref} job={r.job} family={p.family} monogram={p.monogram} size={18} />
+                    <CrewFace variant="roundel" agentRef={r.ref} job={r.job} family={p.family} monogram={p.monogram} size={18} />
                     <span>{crewName(r)}</span>
                   </button>
                 );
@@ -141,7 +141,7 @@ export function CrewComposer({
           {draft ? (
             <div className="crewc-card">
               <span className="crewc-face">
-                <CrewFace agentRef={draft.ref} job={draft.description} family={persona?.family} monogram={persona?.monogram} size={64} />
+                <CrewFace variant="roundel" agentRef={draft.ref} job={draft.description} family={persona?.family} monogram={persona?.monogram} size={64} />
               </span>
               <input
                 className="crewc-name-input"

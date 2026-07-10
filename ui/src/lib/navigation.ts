@@ -60,7 +60,11 @@ export type SurfaceInputs = {
 // Order matters: the hard gates (team, Claude, grounding) win first, exactly as
 // the old early-returns did, then the in-app surfaces.
 export function describeSurface(i: SurfaceInputs): Surface {
-  if (i.convexEnabled && !i.teamIdentity) return { kind: "teamOnboarding" };
+  // Identity is DEFERRED, never a first gate. A founder used to land on "Set up your workspace" (name +
+  // work email) before seeing anything; now they proceed as a solo party of one (App seeds a local
+  // identity the instant Convex is on) and set up or join a shared team later, from Settings — or at the
+  // moment something first sends. The teamOnboarding surface stays in the union as that later, opt-in
+  // setup screen, but it is no longer a wall in front of the product. Prove value first, ask after.
   if (i.connectionResolvedDisconnected) return { kind: "connectClaude" };
   if (i.booted && !i.productGrounded) return { kind: "productEntry" };
 

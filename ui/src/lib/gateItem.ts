@@ -193,21 +193,46 @@ type GateItemView = {
 // its note) rather than a labeled detail line; shorter strings keep their field label for context.
 const BODY_PROMOTE_LENGTH = 30;
 
+// When an item carries no KNOWN draft alias, the longest free-form string can stand in as the reviewable
+// body — but ONLY when its key affirmatively names a sendable ARTIFACT (a post, a message, an email, a
+// page's copy…), never strategy ABOUT the work. Inverting to an allowlist is what stops a "Run asset-1
+// first as a low-cost pain-validation test…" sequencing note, or an "INFERRED: audit-evidence wedge…"
+// positioning note, from being promoted to the body and wearing a "Send it" button. A strategy/plan item
+// (only positioning/buyer-moment/sequencing fields) has NO artifact key, so nothing promotes: it reads
+// honestly as a plan with labeled details, never as a sendable draft it isn't.
+const ARTIFACT_KEY = /(post|posttext|message|msg|email|body|copy|text|content|caption|tweet|thread|dm|reply|comment|note|blurb|snippet|headline|subject|script|answer|article|blog|page|abstract|excerpt|summary|paragraph|opener|outreach|pitch|draft)/i;
+function isArtifactKey(key: string): boolean {
+  const k = key.toLowerCase().replace(/[\s_-]+/g, "");
+  return ARTIFACT_KEY.test(k);
+}
+
 export function gateItemView(item: GTMItem): GateItemView {
   const it = item as Record<string, unknown>;
-  let body = pickStr(it.draft_note, it.draft, it.message, it.summary, it.text, it.content, it.body, it.verdictWhy, it.highestLeverageFix, it.recommendation);
+  // The SENDABLE draft only — the actual thing that crosses the wall. A critique/revision item carries
+  // reasoning fields (verdictWhy / highestLeverageFix / recommendation) but NO real draft; those are the
+  // run's argument for the item, and they belong to the reasoning rail (gateItemReason.theCase), NOT the
+  // gate body. Picking them here made a bare revision note ("Trade the frictionless '15 minutes' …")
+  // masquerade as the staged draft. Now a draft-less item reads honestly as hollow ("still drafting"),
+  // never a critique dressed up as the thing about to send.
+  let body = pickStr(it.draft_note, it.draft, it.message, it.summary, it.text, it.content, it.body);
   // `type` is a valid subject fallback for display, but NOT a real subject for the hollow test — a bare
   // output-kind label ("outreach-draft") must never make an empty item look approvable.
   const realSubject = pickStr(it.suggested_subject_line, it.subject, it.founder_name, it.name, it.handle);
-  // No real subject? The title reads off the item's own CONTENT — the first line of its message/body —
-  // never the raw `type` word ("context" / "signal" / "draft"), which is an internal enum, not a headline.
-  // Only when there's truly no content does it fall to the generic "Staged action".
-  const rawSubject = realSubject ?? firstLine(body) ?? "Staged action";
+  // A written `title` ("Audit-Panic Field Notes — content plan…") is a real, human headline for the card —
+  // used for DISPLAY only, never as a real subject for the hollow test (so a bare type-label can't fake
+  // approvability). Without it, a strategy/plan item fell through to the generic "Staged action".
+  const displayTitle = pickStr(it.title);
+  // No real subject? The title reads off the item's own written `title`, then its content (first line of
+  // the body), never the raw `type` word ("context" / "signal") which is an internal enum, not a headline.
+  // Only when there's truly nothing does it fall to the generic "Staged action".
+  const rawSubject = realSubject ?? displayTitle ?? firstLine(body) ?? "Staged action";
   // A title never reads as a code identifier — a raw key like "planner_meta" becomes "Planner Meta".
   const subject = looksLikeRawKey(rawSubject) ? titleCase(humanizeKey(rawSubject)) : rawSubject;
   const evidence = pickStr(it.grounding_citation, it.icpFitRationale, it.fitRationale, it.nowTrigger);
   const trigger = pickStr(it.nowTrigger, it.now_trigger);
-  const who = pickStr(it.role, it.title, it.company);
+  // `title` can be a person's job title (a real "who") OR a content headline. When it's already serving as
+  // the card's display subject (no realSubject beat it), it must NOT also duplicate into the Who line.
+  const who = realSubject ? pickStr(it.role, it.title, it.company) : pickStr(it.role, it.company);
   const sourceUrl = pickStr(it.sourceUrl, it.url, it.founder_github_or_url);
   // Everything else the item actually carries, rendered plainly — the open half of the view. Two kinds:
   // flat scalar fields land in `fields` (shown as labeled lines on the card); nested structure (objects,
@@ -229,17 +254,25 @@ export function gateItemView(item: GTMItem): GateItemView {
     if (!rendered) continue;
     if (isMachineryValue(rendered)) continue; // a machine id hiding under an innocent key
     fields.push({ label: humanizeKey(key), value: rendered });
-    if (typeof value === "string" && (bestStringIdx === -1 || rendered.length > fields[bestStringIdx].value.length)) {
+    // Only a string under an ARTIFACT-shaped key can stand in as the sendable body. A field naming
+    // strategy about the work (positioning, buyer moment, sequencing) is never the artifact — it stays a
+    // labeled row, never the draft, so a plan can't wear a "Send it" button.
+    if (typeof value === "string" && isArtifactKey(key) && (bestStringIdx === -1 || rendered.length > fields[bestStringIdx].value.length)) {
       bestStringIdx = fields.length - 1;
     }
   }
-  // No known body alias? The most substantial free-form string field IS the reviewable content —
-  // a { post_text } post reads as a post, not as a hollow outreach draft.
+  // No known body alias? The most substantial free-form (non-planning) string field IS the reviewable
+  // content — a { post_text } post reads as a post, not as a hollow outreach draft.
   if (!body && bestStringIdx >= 0 && fields[bestStringIdx].value.length >= BODY_PROMOTE_LENGTH) {
     body = fields[bestStringIdx].value;
     fields.splice(bestStringIdx, 1);
   }
-  const hollow = !body && !realSubject && !evidence && !trigger && !who && !sourceUrl && !fields.length && !receipt.length;
+  // Hollow = nothing to actually review. A real sendable item ALWAYS carries a body, or outreach framing
+  // (who/trigger/source), or attached detail (fields/receipt/evidence). An item that carries ONLY a
+  // subject line — the case a stripped critique note leaves — is a placeholder, not a staged draft: it
+  // reads as "Nothing to review" (Return only), never an empty card wearing an Approve button. A lone
+  // subject no longer rescues an otherwise-empty item from the hollow test.
+  const hollow = !body && !evidence && !trigger && !who && !sourceUrl && !fields.length && !receipt.length;
   return { subject, body, evidence, trigger, who, sourceUrl, fields, receipt, hollow };
 }
 

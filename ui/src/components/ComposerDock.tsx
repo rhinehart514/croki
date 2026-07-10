@@ -7,7 +7,7 @@ import {
 import { statusLabel } from "@/lib/status";
 import { subjectActions } from "@/lib/subjectActions";
 import { kindIcon } from "@/lib/objectKindIcons";
-import { humanizeFieldLabel } from "@/lib/labels";
+import { humanizeFieldLabel, humanizeSlugsInText } from "@/lib/labels";
 import type { CanvasSubject, CardDetail } from "@/lib/cardDetail";
 import { getCapabilityInventory, type AgentBenchRow, type OperatorHints } from "@/api";
 import { motion } from "motion/react";
@@ -195,7 +195,7 @@ function ToolCluster({ events, idBase, live = false }: { events: OperatorEvent[]
         <ChevronRight className="oc-steps-chev" size={13} aria-hidden="true" />
         <span className={`oc-steps-dot ${dotState}`} aria-hidden="true" />
         <span className="oc-steps-count">{events.length} step{events.length === 1 ? "" : "s"}</span>
-        {!open ? <span className="oc-steps-peek">{events[events.length - 1].title}</span> : null}
+        {!open ? <span className="oc-steps-peek">{humanizeSlugsInText(events[events.length - 1].title)}</span> : null}
       </button>
       <Collapse open={open}>
         <ul className="oc-steps-list" id={listId}>
@@ -208,7 +208,7 @@ function ToolCluster({ events, idBase, live = false }: { events: OperatorEvent[]
                   {stepFailed ? <X size={7} strokeWidth={3} /> : <Check size={8} strokeWidth={3} />}
                 </span>
                 <span className="oc-step-text">
-                  <span className="oc-step-title"><span className="oc-step-kind">{verb}</span>{e.title}</span>
+                  <span className="oc-step-title"><span className="oc-step-kind">{verb}</span>{humanizeSlugsInText(e.title)}</span>
                   {e.detail ? <span className="oc-step-detail">{e.detail}</span> : null}
                 </span>
               </li>
@@ -610,7 +610,17 @@ function voiceForRef(ref: string | null | undefined, bench: AgentBenchRow[] | nu
   const resolved = ref || "gtm-compose-workflow";
   const row = bench?.find((b) => b.ref === resolved) ?? null;
   const persona = agentPersona(resolved, row?.job);
-  return { ref: resolved, job: row?.job, name: nameHint?.trim() || row?.name?.trim() || persona.role, role: persona.role };
+  // The node's label is a valid name hint ONLY when it's real prose — a founder-chosen name. A raw
+  // kebab/snake slug ("local-trigger-scout") is the node id, machinery, and must never surface as a
+  // teammate's name; when the hint is slug-shaped it's dropped so the derived plain-English role stands in.
+  const hint = nameHint?.trim();
+  const usableHint = hint && !isSlugName(hint) ? hint : null;
+  return { ref: resolved, job: row?.job, name: usableHint || row?.name?.trim() || persona.role, role: persona.role };
+}
+// A raw ref slug ("local-trigger-scout", "contentStrategist") — no spaces, kebab/snake/camel — never a
+// founder-facing name.
+function isSlugName(s: string): boolean {
+  return !/\s/.test(s) && (/[a-z0-9]+[_-][a-z0-9]/i.test(s) || /[a-z][A-Z]/.test(s));
 }
 // The session-level voice for a `say` turn. Only a teammate ACTUALLY in the running pipeline speaks as
 // themselves — the specialist doing the work. General chat with no running pipeline is the whole crew
@@ -1296,7 +1306,7 @@ export function ComposerDock({
           <button className="composer-peek" onClick={() => setCollapsed(false)} type="button" title="Open the conversation" aria-label="Open the conversation with your crew">
             <span className={`composer-peek-dot ${working ? "live" : ""}`} aria-hidden="true" />
             <span className="composer-peek-text">
-              {recede ? "Staged on the canvas — keep, change, or note it there" : working ? "Your crew is working…" : session.events.length ? session.events[session.events.length - 1].title : `Your crew · ${statusLabel(session.status)}`}
+              {recede ? "Staged on the canvas — keep, change, or note it there" : working ? "Your crew is working…" : session.events.length ? humanizeSlugsInText(session.events[session.events.length - 1].title) : `Your crew · ${statusLabel(session.status)}`}
             </span>
             <Maximize2 size={13} />
           </button>
@@ -1388,7 +1398,7 @@ export function ComposerDock({
               <div className="oc-you-t tnum">{clockTime(t.at)}</div>
             </div>
             <div className="oc-msg">
-              <CrewFace className="oc-msg-face" agentRef={voice.ref} job={voice.job} size={32} />
+              <CrewFace className="oc-msg-face" variant="roundel" agentRef={voice.ref} job={voice.job} size={32} />
               <div className="oc-msg-body">
                 <div className="oc-who">
                   <span className="oc-who-n">{voice.name}</span>
@@ -1419,7 +1429,7 @@ export function ComposerDock({
               ) : seg.kind === "say" ? (
                 <StaggerItem key={seg.id}>
                   <div className="oc-msg">
-                    <CrewFace className="oc-msg-face" agentRef={voice.ref} job={voice.job} size={32} />
+                    <CrewFace className="oc-msg-face" variant="roundel" agentRef={voice.ref} job={voice.job} size={32} />
                     <div className="oc-msg-body">
                       <div className="oc-who">
                         <span className="oc-who-n">{voice.name}</span>
@@ -1427,7 +1437,11 @@ export function ComposerDock({
                         <span className="oc-who-t tnum">{clockTime(seg.event.createdAt)}</span>
                       </div>
                       <div className={`oc-bubble ${seg.id === streamingSayId ? "streaming" : ""}`}>
-                        {seg.event.detail ? <MarkdownLite text={seg.event.detail} /> : <p>{seg.event.title}</p>}
+                        {/* Claude's reasoning names its crew — and often names them by their raw ref
+                            ("a `local-trigger-scout` pulling the events"). Run the prose through the slug
+                            translator before markdown so a founder reads "a local trigger scout", never the
+                            kebab id, even inside inline-code spans. */}
+                        {seg.event.detail ? <MarkdownLite text={humanizeSlugsInText(seg.event.detail)} /> : <p>{humanizeSlugsInText(seg.event.title)}</p>}
                       </div>
                       {onPin ? <div className="oc-pin"><PinControl text={(seg.event.detail ?? seg.event.title).trim()} onPin={onPin} /></div> : null}
                     </div>
@@ -1443,7 +1457,7 @@ export function ComposerDock({
                     const v = voiceForRef(d?.ref, bench, d?.label);
                     return (
                       <div className="oc-msg beat">
-                        <CrewFace className="oc-msg-face" agentRef={v.ref} job={v.job} size={28} state={seg.id === streamingCrewId ? "working" : "idle"} />
+                        <CrewFace className="oc-msg-face" variant="roundel" agentRef={v.ref} job={v.job} size={28} state={seg.id === streamingCrewId ? "working" : "idle"} />
                         <div className="oc-msg-body">
                           <div className="oc-who">
                             <span className="oc-who-n">{v.name}</span>
@@ -1451,8 +1465,8 @@ export function ComposerDock({
                             <span className="oc-who-t tnum">{clockTime(seg.event.createdAt)}</span>
                           </div>
                           <div className={`oc-bubble beat ${seg.id === streamingCrewId ? "streaming" : ""}`}>
-                            <p>{seg.event.title}</p>
-                            {seg.event.detail ? <MarkdownLite text={seg.event.detail} /> : null}
+                            <p>{humanizeSlugsInText(seg.event.title)}</p>
+                            {seg.event.detail ? <MarkdownLite text={humanizeSlugsInText(seg.event.detail)} /> : null}
                           </div>
                         </div>
                       </div>
@@ -1491,7 +1505,7 @@ export function ComposerDock({
               ) : (
                 <StaggerItem key={seg.id}>
                   <div className="oc-sys">
-                    <span>{seg.event.detail || seg.event.title}</span>
+                    <span>{seg.event.detail || humanizeSlugsInText(seg.event.title)}</span>
                   </div>
                 </StaggerItem>
               ),

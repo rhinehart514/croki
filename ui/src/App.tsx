@@ -87,9 +87,10 @@ import { CAP_STAGE_CATEGORY } from "@/lib/capabilities";
 import { type OperatorCursorState } from "@/components/GraphCanvas";
 import { setGhostResolve } from "@/lib/ghostResolve";
 import { TeamOnboarding } from "@/components/TeamOnboarding";
-import { convexEnabled, loadTeamIdentity, type TeamIdentity } from "@/lib/convex";
+import { convexEnabled, loadTeamIdentity, localTeamIdentity, type TeamIdentity } from "@/lib/convex";
 import { GoalLauncher } from "@/components/GoalLauncher";
 import { OperatorDriveState } from "@/components/OperatorDriveState";
+import { WorkspaceBooting } from "@/components/WorkspaceBooting";
 const TeamSpace = lazy(() => import("@/components/TeamSpace").then((m) => ({ default: m.TeamSpace })));
 import { canApprove as canApproveApi } from "@/api";
 import { getIdentity, FOUNDER_USER_ID, type ActingIdentity } from "@/lib/identity";
@@ -458,6 +459,15 @@ export default function App() {
   // engages when a deployment is configured (VITE_CONVEX_URL). Seeded from localStorage so a returning
   // teammate lands straight in the workspace, not back through onboarding.
   const [teamIdentity, setTeamIdentity] = useState<TeamIdentity | null>(() => loadTeamIdentity());
+  // Identity is DEFERRED, never a first gate. When the team layer is on but the founder hasn't chosen a
+  // team, seed a solo/local identity so they proceed straight to their product instead of hitting the
+  // old "Set up your workspace" wall. This resolves to the personal space the server already defaults to,
+  // so nothing about scoping or release authority changes. Real team setup lives in Settings now, and the
+  // solo seed is NOT persisted — a returning founder who never set up a team gets the same clean solo
+  // start, and one who did set up a real team keeps it (loadTeamIdentity already restored it above).
+  useEffect(() => {
+    if (convexEnabled && !teamIdentity) setTeamIdentity(localTeamIdentity());
+  }, [teamIdentity]);
   const [connectors, setConnectors] = useState<ConnectorMeta[]>([]);
   const [approvals, setApprovals] = useState<Record<string, boolean>>({});
   const [decisions, setDecisions] = useState<Decisions>({});
@@ -3116,12 +3126,14 @@ export default function App() {
               onSteer={(note) => handleDriveSteer(note)}
             />
           ) : surface.kind === "booting" ? (
-            // Still resolving the workspace (initial boot, or switching products) — a calm loading
-            // state, never the cold-start goal launcher flashing before the real graph arrives.
-            <div className="building-state">
-              <LoaderCircle className="spin" />
-              <strong>Loading your workspace…</strong>
-            </div>
+            // Still resolving the workspace — a contextual, plan-based loading state that names what the
+            // crew is doing (finding the workspace, reading pipelines, weaving the canvas) with a running
+            // clock, never an anonymous spinner. `booting` is the initial cold load; a bare `projectBusy`
+            // (booting already resolved) is a product switch, which reads in its own register.
+            <WorkspaceBooting
+              productName={activeProject?.name ?? null}
+              mode={!booting && projectBusy ? "switch" : "boot"}
+            />
           ) : (
             // No channel selected yet and nothing composing — the goal-driven front door.
             <GoalLauncher

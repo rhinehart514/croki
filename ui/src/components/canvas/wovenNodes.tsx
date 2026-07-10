@@ -76,16 +76,24 @@ function ObjectChipComponent({ data }: NodeProps<Node<ObjectChipData>>) {
           also feed a downstream step if the integrator wires an outgoing tie. Kept invisible via CSS; the
           converging lines are the intertwining, drawn once. */}
       <Handle type="target" position={Position.Left} id="obj-in" />
+      {/* The reuse badge — the moat, named: a shared object is drawn ONCE and every motion that reuses it
+          converges here. On a 2+-touch chip it floats as the one teal accent the weave earns; it's the
+          "in N motions" pill the reference hangs on the convergence point. */}
+      {shared ? (
+        <span className="woven-chip-reuse" aria-label={`reused in ${degree} motions`}>
+          <span className="woven-chip-reuse-dot" aria-hidden />
+          in <b>{degree}</b> motions
+        </span>
+      ) : null}
       <div className="woven-chip-head">
         <span className="woven-chip-kind">{data.kind}</span>
-        {shared ? <span className="woven-chip-degree" aria-hidden>{degree}</span> : null}
       </div>
       <span className="woven-chip-label" title={data.objectKey}>
         {data.label ?? data.objectKey}
       </span>
       <span className="woven-chip-foot">
         {shared
-          ? <>touched by <b>{degree}</b> motions</>
+          ? <>{bucketLabel(data.bucket)}</>
           : <>touched once · {bucketLabel(data.bucket)}</>}
       </span>
       <Handle type="source" position={Position.Right} id="obj-out" />

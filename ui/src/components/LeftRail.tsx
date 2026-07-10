@@ -58,9 +58,16 @@ const ROLE_BLURB: Record<string, string> = {
   "Referral Designer": "Builds a reason for users to invite others — reach for it to grow by word of mouth.",
 };
 
+// A raw kebab/snake ref slug ("content-strategist") is machinery, not a description — the bench often
+// carries the ref itself as `job` when the teammate has no written blurb. A founder must never read that
+// slug on the rail, so a slug-shaped job is treated as absent and the plain-English role blurb stands in.
+function isRawSlug(s: string): boolean {
+  return !/\s/.test(s) && (/[a-z0-9]+[_-][a-z0-9]/i.test(s) || /[a-z][A-Z]/.test(s));
+}
+
 function agentBlurb(row: AgentBenchRow): string {
   const job = row.job?.trim();
-  if (job) return job;
+  if (job && !isRawSlug(job)) return job;
   const { role } = agentPersona(row.ref, row.job);
   return ROLE_BLURB[role] ?? "A teammate you can drop into a pipeline — open it to see what it does.";
 }

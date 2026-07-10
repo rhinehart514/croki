@@ -203,3 +203,193 @@
   outline: 2px solid var(--link);
   outline-offset: 2px;
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   The payoff receipt — what came back, landed and held.
+   After the founder logs a real win, the log flips to this: the mission reads
+   complete, the numbers that came back stand in tabular figures, and the lesson
+   is stamped underneath. Warm Atelier — taupe panel, one spruce accent on the
+   win seal, sage ticks for what landed. Honest: a silence-only run reuses this
+   frame WITHOUT the win crown or warmth (no .is-win), so nothing celebrates
+   what didn't happen.
+   ════════════════════════════════════════════════════════════════════════ */
+.oc-receipt {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 420px;
+  padding: var(--space-6) var(--space-5) var(--space-5);
+  background: var(--surface); /* opaque taupe panel, never glass */
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-pop);
+  animation: oc-receipt-land var(--dur-slow) var(--ease-spring) both;
+}
+/* A real win lifts the whole panel a touch and keys its top edge to the spruce accent — the one
+   place the accent earns a moment. */
+.oc-receipt.is-win {
+  border-top: 2px solid var(--ember);
+  box-shadow: var(--shadow-pop), 0 20px 48px -28px color-mix(in srgb, var(--ember) 55%, transparent);
+}
+@keyframes oc-receipt-land {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .oc-receipt { animation: none; }
+}
+
+/* The seal — a settled check. Sage by default (a logged result), spruce on a real win. */
+.oc-receipt-crown {
+  display: flex;
+  justify-content: center;
+}
+.oc-receipt-seal {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--proven-soft);
+  color: var(--proven);
+  border: 1px solid color-mix(in srgb, var(--proven) 30%, var(--line-2));
+}
+.oc-receipt.is-win .oc-receipt-seal {
+  background: var(--ember-soft);
+  color: var(--ember-ink);
+  border-color: var(--ember-line);
+  animation: oc-seal-pop var(--dur-slow) var(--ease-spring) both;
+}
+@keyframes oc-seal-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.08); }
+  100% { transform: scale(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .oc-receipt.is-win .oc-receipt-seal { animation: none; }
+}
+.oc-receipt-seal svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.6;
+}
+
+.oc-receipt-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  text-align: center;
+}
+.oc-receipt-eyebrow {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 620;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.oc-receipt.is-win .oc-receipt-eyebrow { color: var(--ember-ink); }
+/* The mission, named in the sleek display sans — the goal completing, not a generic "done". */
+.oc-receipt-mission {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: 1.16;
+  letter-spacing: var(--tracking-tight);
+  color: var(--ink);
+  max-width: 22ch;
+  text-wrap: balance;
+}
+
+/* What landed — one line per outcome, its count in tabular figures pinned right. */
+.oc-receipt-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3) 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.oc-receipt-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-base);
+  color: var(--ink-2);
+}
+.oc-receipt-tick {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--inset);
+  color: var(--faint);
+}
+.oc-receipt-line.is-win .oc-receipt-tick {
+  background: var(--proven-soft);
+  color: var(--proven);
+}
+.oc-receipt-tick svg {
+  width: 10px;
+  height: 10px;
+  stroke-width: 3;
+}
+.oc-receipt-what { flex: 1; }
+.oc-receipt-line.is-win .oc-receipt-what { color: var(--ink); font-weight: 560; }
+.oc-receipt-count {
+  flex: none;
+  font-family: var(--mono);
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The lesson, stamped — the one thing the market taught, kept for the next run. */
+.oc-receipt-lesson {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--inset);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.oc-receipt-lesson-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.oc-receipt-lesson-text {
+  margin: 0;
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--ink);
+}
+
+.oc-receipt-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+.oc-receipt-foot svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--proven);
+}
+.oc-receipt-done { margin-left: auto; }

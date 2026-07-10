@@ -1251,6 +1251,7 @@
 }
 .cgate-card-stage .cgate-approve:hover:not(:disabled) { background: #000; }
 .cgate-card-stage .cgate-card-to {
+  font-family: var(--serif);
   font-size: 1.0625rem;
   font-weight: 620;
   letter-spacing: var(--tracking-tight);
