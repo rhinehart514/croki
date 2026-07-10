@@ -158,6 +158,33 @@ describe("resident GTM operator runtime", () => {
     assert.equal(secondCtx.runtimeSessionId, "sdk-session-1", "the next drive resumes the same conversation");
   });
 
+  it("preserves a founder wall written by an out-of-process MCP tool", async () => {
+    const session = createOperatorSession({ goal: "Choose a GTM direction." }, options);
+    const externalBridge = {
+      id: "external-bridge",
+      label: "External bridge",
+      isAvailable: () => ({ ok: true }),
+      drive: async (ctx) => {
+        const current = getOperatorSession(session.id, options);
+        saveOperatorSession({
+          ...current,
+          status: "waiting_for_candidates",
+          pendingCandidates: { id: "candidate-set", candidates: [{ id: "outbound", title: "Direct outreach" }] },
+        }, options);
+        // Codex emits its final narration after the MCP process has persisted the wall. This callback used
+        // to write the host's stale `running` copy over pendingCandidates, then mark the session completed.
+        ctx.onText("The approaches are ready for your pick.");
+        return { kind: "completed", summary: "Codex finished the turn." };
+      },
+    };
+
+    const paused = await runOperatorSession(session.id, { options, runtime: externalBridge });
+    assert.equal(paused.status, "waiting_for_candidates");
+    assert.equal(paused.pendingCandidates.id, "candidate-set");
+    assert.ok(paused.events.some((event) => event.detail === "The approaches are ready for your pick."));
+    assert.ok(!paused.events.some((event) => event.type === "session_completed"));
+  });
+
   it("recalls prior sessions in the same project (cross-session memory)", async () => {
     // A first session that finishes with a summary becomes part of the operator's memory.
     const first = createOperatorSession({ goal: "Stand up the pest-control outbound channel.", projectId: "rodentradar" }, options);

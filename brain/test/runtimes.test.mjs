@@ -525,7 +525,7 @@ describe("claudeCodeRuntime availability + helpers", () => {
     // The subprocess adapter polls currentStatus() to know when to stop; any status that
     // means "the founder must act before another model turn" has to be here. Drift in this
     // set is exactly the bug that orphaned a staged proposal.
-    for (const wall of ["waiting_for_gate", "waiting_for_proposal", "waiting_for_input"]) {
+    for (const wall of ["waiting_for_gate", "waiting_for_proposal", "waiting_for_input", "waiting_for_ideas", "waiting_for_candidates"]) {
       assert.ok(PAUSE_STATUSES.has(wall), `${wall} must halt the drive`);
     }
   });

@@ -44,6 +44,17 @@ import { executeTool } from "./operator-tool-exec.mjs";
 import { safeLogFailure, makeFailureSink } from "./failure-log.mjs";
 import { resolveGitShaAsync } from "./friction.mjs";
 
+const OPERATOR_HALT_STATUSES = new Set([
+  "waiting_for_gate",
+  "waiting_for_proposal",
+  "waiting_for_input",
+  "waiting_for_ideas",
+  "waiting_for_candidates",
+  "completed",
+  "cancelled",
+  "blocked",
+]);
+
 const activeSessions = new Map();
 
 // The latest "what changed" instruction to feed a resumed conversation. The resume entry points
@@ -64,7 +75,7 @@ function latestResumeInstruction(session) {
 export async function runOperatorSession(id, runtime = {}) {
   const options = runtime.options ?? {};
   let session = getOperatorSession(id, options);
-  if (["waiting_for_gate", "waiting_for_proposal", "waiting_for_input", "waiting_for_ideas", "waiting_for_candidates", "completed", "cancelled", "blocked"].includes(session.status)) {
+  if (OPERATOR_HALT_STATUSES.has(session.status)) {
     return session;
   }
   if (session.stepCount >= session.maxSteps) {
@@ -115,6 +126,14 @@ export async function runOperatorSession(id, runtime = {}) {
     detail: `Running ${session.model} via ${adapter.label}${authLabel ? ` on the ${authLabel}` : ""}.`,
   }, options);
 
+  // Codex runs the MCP bridge in a separate process. A tool call can therefore persist a founder wall
+  // while the host still holds an older in-memory copy. Refresh before every callback write so narration,
+  // turn counts, and the final model message can never erase a pending gate, proposal, idea, or candidate.
+  const refreshSession = () => {
+    session = getOperatorSession(id, options);
+    return session;
+  };
+
   // The context handed to the runtime. Every callback persists through GTM IDE's
   // own stores, so the runtime never touches session state, the ledger, gates,
   // or cancellation directly — that boundary is what the provider-neutral split
@@ -146,8 +165,9 @@ export async function runOperatorSession(id, runtime = {}) {
     runtimeSessionId: session.runtimeSessionId ?? null,
     resumePrompt: latestResumeInstruction(session),
     onRuntimeSession: (sid) => {
-      if (sid && sid !== session.runtimeSessionId) {
-        session = saveOperatorSession({ ...session, runtimeSessionId: sid }, options);
+      const current = refreshSession();
+      if (sid && sid !== current.runtimeSessionId) {
+        session = saveOperatorSession({ ...current, runtimeSessionId: sid }, options);
       }
     },
     // Cumulative dollars this session has already spent across all prior drives — the runtime uses it
@@ -156,21 +176,25 @@ export async function runOperatorSession(id, runtime = {}) {
     spentUsd: Number(session.spentUsd) || 0,
     onCost: (usd) => {
       const add = Number(usd) || 0;
-      if (add > 0) session = saveOperatorSession({ ...session, spentUsd: (Number(session.spentUsd) || 0) + add }, options);
+      if (add > 0) {
+        const current = refreshSession();
+        session = saveOperatorSession({ ...current, spentUsd: (Number(current.spentUsd) || 0) + add }, options);
+      }
     },
     maxSteps: session.maxSteps,
     stepCount: session.stepCount,
     isCancelled: () => getOperatorSession(id, options).status === "cancelled",
     currentStatus: () => getOperatorSession(id, options).status,
     onTurn: () => {
-      session = saveOperatorSession({ ...session, stepCount: session.stepCount + 1 }, options);
+      const current = refreshSession();
+      session = saveOperatorSession({ ...current, stepCount: current.stepCount + 1 }, options);
       return session.stepCount;
     },
     onText: (text) => {
-      session = addEvent(session, { type: "operator_note", title: "Operator reasoning", detail: text }, options);
+      session = addEvent(refreshSession(), { type: "operator_note", title: "Operator reasoning", detail: text }, options);
     },
     onToolStart: (name) => {
-      session = addEvent(session, {
+      session = addEvent(refreshSession(), {
         type: "tool_started",
         title: `Using ${name.replaceAll("_", " ")}`,
         detail: null,
@@ -178,7 +202,7 @@ export async function runOperatorSession(id, runtime = {}) {
       }, options);
     },
     onToolError: (name, message) => {
-      session = addEvent(session, {
+      session = addEvent(refreshSession(), {
         type: "tool_failed",
         title: `${name.replaceAll("_", " ")} failed`,
         detail: message,
@@ -186,12 +210,12 @@ export async function runOperatorSession(id, runtime = {}) {
       }, options);
     },
     runTool: async ({ id: toolId, name, input }) => {
-      const execution = await executeTool(session, { id: toolId, name, input }, options);
+      const execution = await executeTool(refreshSession(), { id: toolId, name, input }, options);
       session = execution.session;
       return { result: execution.result, pause: execution.pause };
     },
     persistMessages: (messages) => {
-      session = saveOperatorSession({ ...session, modelMessages: messages }, options);
+      session = saveOperatorSession({ ...refreshSession(), modelMessages: messages }, options);
     },
   };
 
@@ -199,8 +223,10 @@ export async function runOperatorSession(id, runtime = {}) {
     const outcome = await adapter.drive(ctx);
     if (outcome.kind === "cancelled") return getOperatorSession(id, options);
     if (outcome.kind === "completed") {
+      const current = getOperatorSession(id, options);
+      if (OPERATOR_HALT_STATUSES.has(current.status)) return current;
       return addEvent({
-        ...getOperatorSession(id, options),
+        ...current,
         status: "completed",
         summary: outcome.summary,
         completedAt: new Date().toISOString(),

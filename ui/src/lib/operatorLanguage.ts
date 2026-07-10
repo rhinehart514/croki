@@ -4,7 +4,7 @@ import type { OperatorEvent, OperatorSession } from "@/types";
 // for the machine ("Using inspect product", "compose and run failed", "Composed workflow is invalid:
 // Edge … has an unknown source", "Running claude-opus-4-8 via Claude Code (Agent SDK)"). A founder
 // running a go-to-market desk should never read any of that. This seam rewrites the machine-named
-// status/tool/error lines into plain words and leaves genuine reasoning prose untouched, so both the
+// status/tool/error lines into plain words and translates recurring engine jargon in reasoning, so both the
 // canvas drive-state and the conversation thread show the same clean narration without either
 // component knowing the machine vocabulary existed. Rules are anchored to the exact machine phrasings,
 // so a sentence of Claude's own reasoning can never match one by accident.
@@ -56,6 +56,27 @@ function rewriteDetail(detail: string): { text: string; rewritten: boolean } {
   return { text: detail, rewritten: false };
 }
 
+// Model narration is allowed to stay first-person and specific, but the founder should never have to
+// decode the engine's nouns. This is a narrow backstop for the recurring vocabulary the prompt already
+// bans, including old persisted sessions written before that prompt rule existed.
+function rewriteReasoning(detail: string): string {
+  return detail
+    .replace(/access requests preserve a\s+`?ref`?\s+source/gi, "access requests record where someone came from")
+    .replace(/the actual\s+`?project_created`?\s+conversion is still blind/gi, "we still cannot see whether those people go on to create a project")
+    .replace(/`([a-z][a-z0-9]*(?:_[a-z0-9]+)+)`/g, (_match, id: string) => id.replaceAll("_", " "))
+    .replace(/\bGTM primitive\b/gi, "useful clue")
+    .replace(/\battribution\b/gi, "the source trail")
+    .replace(/\bproduct positioning\b/gi, "how to explain the product")
+    .replace(/\bbuyer fit\b/gi, "who it is really for")
+    .replace(/\bhypotheses\b/gi, "things we still need to test")
+    .replace(/\ba real fork\b/gi, "several genuinely different ways to go")
+    .replace(/\brunnable shapes\b/gi, "approaches")
+    .replace(/\bshapes\b/gi, "approaches")
+    .replace(/\bthe motion\b/gi, "one")
+    .replace(/\bapproval gate\b/gi, "review before anything goes out")
+    .replace(/\bbeing composed\b/gi, "being laid out");
+}
+
 function humanizeOperatorEvent(ev: OperatorEvent): OperatorEvent {
   const rawTitle = ev.title ?? "";
   const rawDetail = ev.detail ?? "";
@@ -66,9 +87,11 @@ function humanizeOperatorEvent(ev: OperatorEvent): OperatorEvent {
   }
   title = swapLabelWords(title);
 
-  // Only rewritten details get the word swap — untouched detail is reasoning prose and stays authentic.
+  // Reasoning stays authentic, with only the recurring engine vocabulary translated.
   const detailResult = rawDetail ? rewriteDetail(rawDetail) : { text: "", rewritten: false };
-  const detail = detailResult.rewritten ? swapLabelWords(detailResult.text) : rawDetail;
+  const detail = ev.type === "operator_note"
+    ? rewriteReasoning(detailResult.text)
+    : (detailResult.rewritten ? swapLabelWords(detailResult.text) : rawDetail);
 
   if (title === rawTitle && detail === rawDetail) return ev;
   return { ...ev, title, detail: detail || null };
