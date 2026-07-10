@@ -39,7 +39,7 @@ export async function DeriveProductModel(input = {}, options = {}) {
   const model = buildProductModel({
     ...proposed,
     projectId,
-    generatedBy: result?.meta?.blank ? "blank" : (input.generatedBy ?? "claude"),
+    generatedBy: result?.meta?.blank ? "blank" : (input.generatedBy ?? result?.meta?.provider ?? "claude"),
     groundingRef: input.groundingRef,
   }, { ...options, projectId });
   appendDomainEvent(projectId, {

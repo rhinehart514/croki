@@ -8,10 +8,11 @@
 //
 // The runtime is injectable, like the other rented generators (composition, eval):
 //   - a fake generator in tests,
-//   - createClaudeProductModeler() live on the founder's subscription,
+//   - createProductModeler() over Codex or Claude Code on the founder's subscription,
+//   - createClaudeProductModeler() as a compatibility wrapper,
 //   - an honest blank default (blankGenerate) that refuses rather than fabricates.
 
-import { runClaudeQuery, parseAgentObject } from "./agent-bridge.mjs";
+import { runStructuredTask } from "./structured-task-runtime.mjs";
 
 // The modeling doctrine, passed to the product-model agent. Edit
 // ~/.claude/agents/gtm-model-product.md to change how it interprets the product — the instruction
@@ -52,7 +53,7 @@ Return empty bags for any layer you genuinely cannot ground or responsibly inter
 export const blankGenerate = async () => ({
   ok: true,
   model: { things: [], relationships: [], userGoals: [], states: [], ia: [], workflows: [], interactions: [], transitions: [] },
-  meta: { blank: true },
+  meta: { blank: true, provider: "blank", runtime: null, model: null },
 });
 
 const EMPTY_MODEL = { things: [], relationships: [], userGoals: [], states: [], ia: [], workflows: [], interactions: [], transitions: [] };
@@ -74,24 +75,32 @@ export function toModel(parsed) {
   };
 }
 
-// Live generator: reads the repo on the founder's subscription and returns the four bags.
-// It calls runClaudeQuery directly (read-only Read/Glob/Grep tools at the repo cwd) and parses a
-// JSON OBJECT with parseAgentObject — NOT createClaudeAgentInvoker, whose buildAgentPrompt forces
-// a "return a JSON array" instruction and parses an array. The product model is a single object,
-// so the array path returned empty bags; this is the object path, mirroring the composer's
-// parseAgentObject use. OAuth-first, no key, no send path.
-export function createClaudeProductModeler({ cwd = process.cwd(), model, maxTurns = 30, onText } = {}) {
+function providerForRuntime(runtime) {
+  if (runtime === "codex") return "codex";
+  if (runtime === "claude-code" || runtime === "anthropic") return "claude";
+  return "blank";
+}
+
+// Provider-neutral live generator. The one-shot runtime owns selection and parsing; this module owns
+// only the product-model prompt and its deterministic eight-bag normalization.
+export function createProductModeler({ cwd = process.cwd(), model, runtime, maxTurns = 30, onText, runTask = runStructuredTask } = {}) {
   return async function generate({ grounding, market } = {}) {
     const contextBlock = [
       grounding ? `\nThe product's grounded reality (cited code facts — win event, attribution, stack, blind spots):\n${JSON.stringify(grounding, null, 2)}` : "",
       market ? `\nBuyer/market context:\n${JSON.stringify(market, null, 2)}` : "",
     ].filter(Boolean).join("\n");
     const prompt = `${PRODUCT_MODEL_PROMPT}${contextBlock}`;
-    const { text, error } = await runClaudeQuery({ prompt, cwd, model, maxTurns, onText });
-    if (error) {
-      return { ok: false, model: { ...EMPTY_MODEL }, meta: { error: error.message, errorKind: error.kind, retriable: error.retriable } };
+    const result = await runTask({ task: "product-model", prompt, cwd, model, runtime, maxTurns, onText, output: "object", readOnly: true });
+    const provider = providerForRuntime(result.runtime);
+    if (!result.ok) {
+      return { ok: false, model: { ...EMPTY_MODEL }, meta: { provider, runtime: result.runtime ?? null, model: result.model ?? model ?? null, error: result.error?.message, errorKind: result.error?.kind, retriable: result.error?.retriable === true } };
     }
-    const parsed = parseAgentObject(text);
-    return { ok: true, model: toModel(parsed), meta: { parsed: !!parsed } };
+    return { ok: true, model: toModel(result.value), meta: { parsed: true, provider, runtime: result.runtime, model: result.model ?? model ?? null } };
   };
+}
+
+// Public compatibility wrapper. Existing callers keep their name and Claude selection, while all
+// parsing and safety now pass through the shared provider-neutral seam.
+export function createClaudeProductModeler(options = {}) {
+  return createProductModeler({ ...options, runtime: "claude-code" });
 }

@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { blankGenerate, toModel, PRODUCT_MODEL_PROMPT } from "../src/product-model-generator.mjs";
+import { blankGenerate, createClaudeProductModeler, createProductModeler, toModel, PRODUCT_MODEL_PROMPT } from "../src/product-model-generator.mjs";
 
 const LAYERS = ["things", "relationships", "userGoals", "states", "ia", "workflows", "interactions", "transitions"];
 
@@ -56,5 +56,41 @@ describe("product-model toModel coercion", () => {
   it("the modeling doctrine tells the agent the model is interpretation, not proven truth", () => {
     assert.match(PRODUCT_MODEL_PROMPT, /INTERPRETATION/);
     assert.match(PRODUCT_MODEL_PROMPT, /derived|speculative/);
+  });
+});
+
+describe("provider-neutral product model factory", () => {
+  it("normalizes Codex and Claude results to the same product model while recording the honest provider", async () => {
+    const value = { things: [{ name: "Sale" }], relationships: [], userGoals: [], states: [], ia: [], workflows: [], interactions: [], transitions: [] };
+    const make = (runtime) => createProductModeler({
+      runTask: async (request) => ({ ok: true, value, runtime, model: runtime === "codex" ? "gpt-test" : "claude-test" }),
+    });
+    const codex = await make("codex")({ grounding: { product: "x" } });
+    const claude = await make("claude-code")({ grounding: { product: "x" } });
+    assert.deepEqual(codex.model, claude.model);
+    assert.equal(codex.meta.provider, "codex");
+    assert.equal(claude.meta.provider, "claude");
+  });
+
+  it("degrades provider errors to an empty shaped model without losing safe metadata", async () => {
+    const generate = createProductModeler({
+      runTask: async () => ({ ok: false, value: null, runtime: "codex", model: "gpt-test", error: { kind: "limit", message: "Usage limit reached.", retriable: true } }),
+    });
+    const result = await generate({});
+    assert.equal(result.ok, false);
+    assert.equal(result.meta.provider, "codex");
+    assert.equal(result.meta.errorKind, "limit");
+    for (const layer of LAYERS) assert.deepEqual(result.model[layer], []);
+  });
+
+  it("keeps createClaudeProductModeler as a compatibility wrapper over the shared seam", async () => {
+    let request;
+    const generate = createClaudeProductModeler({
+      runTask: async (value) => { request = value; return { ok: true, value: {}, runtime: "claude-code", model: null }; },
+    });
+    await generate({});
+    assert.equal(request.runtime, "claude-code");
+    assert.equal(request.readOnly, true);
+    assert.equal(request.output, "object");
   });
 });

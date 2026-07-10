@@ -43,6 +43,12 @@ describe("product model store", () => {
     assert.equal(model.createdAt, model.updatedAt);
   });
 
+  it("records Codex generation honestly while retaining legacy Claude and blank values", () => {
+    assert.equal(buildProductModel({ projectId: "p1", generatedBy: "codex" }, options).generatedBy, "codex");
+    assert.equal(buildProductModel({ projectId: "p1", generatedBy: "claude" }, options).generatedBy, "claude");
+    assert.equal(buildProductModel({ projectId: "p1", generatedBy: "blank" }, options).generatedBy, "blank");
+  });
+
   it("normalizeProductModel demotes a derived-without-evidence element to speculative", () => {
     const normalized = normalizeProductModel({
       things: [

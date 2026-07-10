@@ -7,6 +7,8 @@ import {
   rankMotions,
   planSpan,
   createClaudeMotionPlanner,
+  createTerrainMotionPlanner,
+  terrainReadToPlan,
   MOTION_PLAN_PROMPT,
 } from "../src/motion-plan.mjs";
 import { productLedGrounding } from "../src/run-grounding.mjs";
@@ -172,5 +174,30 @@ describe("createClaudeMotionPlanner — injectable factory (no live model call i
     assert.equal(plan.generatedAt, "2026-07-08T00:00:00.000Z");
     // A scan newer than the plan's generation is the staleness condition the route flags.
     assert.ok(String(plan.scannedAt) > String(plan.generatedAt));
+  });
+});
+
+describe("motion-plan terrain compatibility", () => {
+  it("projects only optional terrain suggested moves and preserves the old plan exports", () => {
+    const plan = terrainReadToPlan({
+      generatedAt: "2026-07-10T00:00:00.000Z",
+      hypotheses: [
+        { title: "No move", provenance: "speculative", suggestedMove: null },
+        { title: "Opening", whyItMatters: "The product can travel.", provenance: "speculative", suggestedMove: { title: "Publish a field guide", intendedEffect: "Learn what gets shared.", measurementIntent: null } },
+      ],
+    });
+    assert.equal(plan.motions.length, 1);
+    assert.equal(plan.motions[0].title, "Publish a field guide");
+    assert.equal(plan.motions[0].kind, "terrain-suggested-move");
+  });
+
+  it("offers a clean planner adapter over an injected terrain reader", async () => {
+    const planner = createTerrainMotionPlanner({
+      readTerrain: async () => ({ ok: true, terrainRead: { generatedAt: "2026-07-10T00:00:00.000Z", hypotheses: [] }, meta: { provider: "codex" } }),
+    });
+    const result = await planner({ projectId: "p", scannedAt: "2026-07-10T00:00:00.000Z" });
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.plan.motions, []);
+    assert.equal(result.meta.provider, "codex");
   });
 });

@@ -20,6 +20,7 @@
 //   - an honest blank default (blankPlan) that REFUSES rather than fabricates a motion list.
 
 import { runClaudeQuery, parseAgentItems, parseAgentReasoning } from "./agent-bridge.mjs";
+import { createTerrainReader } from "./terrain-read.mjs";
 
 // The planning doctrine, passed to the motion planner. Its prompt IS the gtm-ideate-channels doctrine
 // (~/.claude/agents/gtm-ideate-channels.md — no predefined shape, derived-vs-speculative labeling), so
@@ -189,6 +190,53 @@ export function toPlan(items, meta = {}) {
 // fabricate a motion list. Refusing-rather-than-faking is the same discipline as blankGenerate and the
 // blank composer.
 export const blankPlan = async () => ({ ok: true, plan: toPlan([]), meta: { blank: true } });
+
+// Compatibility projection for callers that still render the old motion-plan shape. New product
+// code reads TerrainRead directly; this adapter exposes only the optional moves the rented terrain
+// judgment supplied. It never invents a move, motion kind, rank, or durable prerequisite object.
+export function terrainReadToPlan(terrainRead, meta = {}) {
+  const raw = (terrainRead?.hypotheses ?? []).flatMap((hypothesis) => {
+    const move = hypothesis?.suggestedMove;
+    if (!move) return [];
+    return [{
+      // Terrain suggested moves intentionally have no closed kind. Preserve a model-provided open
+      // kind when a future contract carries one; otherwise use the generic compatibility label.
+      kind: String(move.kind || "terrain-suggested-move"),
+      title: move.title,
+      objective: move.intendedEffect,
+      rationale: hypothesis.whyItMatters,
+      origin: hypothesis.provenance === "inferred" ? "derived" : "speculative",
+      confidence: hypothesis.provenance === "inferred" ? "medium" : "low",
+      codeNative: false,
+      evidence: [],
+      capabilityRefs: [],
+    }];
+  });
+  return toPlan(raw, { generatedAt: terrainRead?.generatedAt, ...meta });
+}
+
+export function createTerrainMotionPlanner(options = {}) {
+  const readTerrain = options.readTerrain ?? createTerrainReader(options);
+  return async function plan(input = {}) {
+    const result = await readTerrain({
+      ...input,
+      projectId: input.projectId ?? "default",
+      productModel: input.productModel,
+      scan: input.scan ?? input.grounding,
+      scannedAt: input.scannedAt,
+      capabilities: input.capabilities,
+      taste: input.taste,
+      founderDecisions: input.founderDecisions ?? input.priorEdits,
+    });
+    return {
+      ok: result.ok,
+      plan: terrainReadToPlan(result.terrainRead, { scannedAt: input.scannedAt }),
+      terrainRead: result.terrainRead,
+      meta: result.meta,
+      ...(result.error ? { error: result.error } : {}),
+    };
+  };
+}
 
 // Live planner: reads the repo on the founder's subscription and returns the ranked plan. It calls
 // runClaudeQuery directly (read-only Read/Glob/Grep tools at the repo cwd) and parses a JSON ARRAY with

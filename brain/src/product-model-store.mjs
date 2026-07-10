@@ -34,7 +34,8 @@ const EDITABLE_BAGS = [
 ];
 
 const PROVENANCE = new Set(["derived", "speculative"]);
-const GENERATED_BY = new Set(["claude", "blank", "founder"]);
+// `claude` is retained for old records; Codex and Claude now arrive through the same generator.
+const GENERATED_BY = new Set(["codex", "claude", "blank", "founder"]);
 
 function now() {
   return new Date().toISOString();
