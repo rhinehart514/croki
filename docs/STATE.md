@@ -58,7 +58,7 @@ alpha.
 | Deterministic terrain | **Built and tested** | The project-scoped read combines existing truth, questions, moves, outcomes, implications, crew, relationships, and geometry without spending a model call or writing state. Partial and stale owners are reported honestly. |
 | Cited first grounding | **Built and tested** | The initial repository scan is persisted into product truth, so the first terrain view does not depend on opening another surface or running AI. Cross-project receipts are rejected. |
 | Rented terrain read | **Built and tested with adapters and fixtures** | Model output produces openings and tensions as inferences, keeps uncertainty and falsifiers, demotes unsupported citations, and may return no hypotheses without breaking the terrain. |
-| Codex and Claude support | **Implemented; contract-tested** | One provider-neutral task path supports both local CLIs and subscription authentication. Product reading, terrain reading, composition, and operator paths honor the selected runtime. |
+| Codex and Claude support | **Implemented; contract-tested; Codex smoke-tested** | One provider-neutral task path supports both local CLIs and subscription authentication. Product reading, terrain reading, composition, and operator paths honor the selected runtime. A signed-in Codex subscription completed the opt-in project-scoped terrain read on 2026-07-10 without touching the founder wall. |
 | No-runtime use | **Built and fixture-tested** | Cited product terrain and existing work remain available without Codex or Claude. Missing model interpretation is local and explicit rather than a full-product connection wall. |
 | Terrain to pipeline | **Built and tested** | A selected opening, question, or direct request can become the existing open pipeline. Its evidence, wording, intended effect, uncertainty, and measurement intent travel as advisory context, never as a prerequisite or approval. |
 | Operator and Engineer context | **Built and tested** | Surface, view, and focus survive operator turns and resume. Leaving one pipeline returns to the originating terrain focus when available. |
@@ -80,9 +80,10 @@ The completion specification separates four gates so lower-level proof cannot st
   hard refresh, and no-runtime modes. It covers cited truth before a goal, progressive terrain, distinct
   crew positions, pipeline handoff, the wall, an explicit founder decision, outcome return, and recovery
   without spending a subscription.
-- **Gate C — local-runtime smoke:** the opt-in smoke exists, but this document does not claim that the full
-  core journey has been recorded separately with Codex only, Claude Code only, neither, and an explicit
-  choice with both available.
+- **Gate C — local-runtime smoke:** the Codex-only project-scoped terrain read passed through a signed-in
+  ChatGPT subscription on 2026-07-10, and the harness confirmed that it made no approval or release request.
+  The full matrix is still open: Claude Code only, neither runtime, and an explicit choice with both
+  available have not all been recorded as live subscription runs.
 - **Gate D — real-product alpha evaluation:** not run to a pass. There is no stranger-survival receipt and no
   attributable real-world result.
 
