@@ -1,350 +1,118 @@
 # STATE — Drover (Alpha)
 
-**Stage: Alpha.** Logged 2026-07-03, updated 2026-07-10 (the production-direction build is integrated:
-one product room, persistent crew, questions and decisions, product-shaped pipelines, the founder wall,
-and attributable outcome return).
-This is the front-door snapshot of
-where the product actually stands. When something material changes, update this file and re-date it.
-For the product pitch read `README.md`; for how the system works read `AGENTS.md`; for the
-current build direction read `docs/GTM-ENGINE-REBUILD.md`; for the approved production target and its
-implemented canvas mental model read `docs/production-direction/00-index.md` and
-`docs/production-direction/16-product-room-ux-plan.md`. Everything else in `docs/` is
-history (see the doc map below).
+**Stage: Alpha. Updated 2026-07-10.** The terrain-first implementation is built in the current tree.
+Deterministic contracts and the fixture browser evaluation pass; the real-founder and
+attributable-outcome acceptance gate has not passed.
 
----
+This is the front-door record of what the product currently proves. [README.md](../README.md) explains the
+product, [VISION.md](VISION.md) gives the north star, and
+[17-product-market-terrain-completion-spec.md](production-direction/17-product-market-terrain-completion-spec.md)
+is the approved completion target.
 
-## What Drover is
+## What Drover is now
 
-The go-to-market desk for a founder running more than one product. Point it at a product's
-codebase and it reads what the product actually does. State a go-to-market goal in plain
-words. A frontier model composes the agents and steps that goal needs, and runs them up to
-a founder approval gate. Nothing sends, publishes, or charges until the founder approves.
-Every gate decision trains taste for the next run.
+Drover opens on a living product-market terrain, not a goal form or an empty pipeline editor. The terrain
+combines cited product truth with clearly labeled model reads, open questions, crew positions, chosen moves,
+founder decisions, and returned outcomes.
 
-It holds the rented model on a short leash for exactly three things and lets it run free on
-everything else:
+The terrain is primary. The operation is the active work laid over it. A pipeline is one move the founder
+chooses to make real. Operator keeps the whole terrain visible; Engineer opens the selected pipeline's
+editable execution flow.
 
-- **Truth.** A read-only scan cites what the product does to real evidence, or labels it
-  inferred. The model cannot invent product facts.
-- **The Wall.** Every step that reaches the outside world needs a founder gate upstream, on
-  every path. The gate graduates by explicit founder promotion; it never disappears.
-- **Taste.** Every approve, reject, and edit at the gate becomes durable memory that shapes
-  the next run.
+The harness still owns only three constraints:
 
----
+- **Truth:** a read-only scan produces cited product facts. Already-grounded truth renders without an AI
+  runtime or model call.
+- **The founder wall:** every outward effect remains behind founder authorization. Terrain context and model
+  work cannot grant approval.
+- **Taste:** founder approvals, rejections, and edits become durable memory for later work.
 
-## What "Alpha" means here
+Codex and Claude Code are both local sources of rented intelligence through the founder's existing
+subscription. The selected runtime can read the terrain, work with the crew, compose a pipeline, and drive
+it to the same wall. Provider choice does not own product records, decisions, outcomes, or authorization.
 
-The spine works and the code is green, but no real founder has driven a real go-to-market
-win to the gate yet. Alpha is honest about that line: the machine runs, the outcome is
-unproven. Read every "real" below as "built and tested," not "validated in the market."
+## What “Alpha” means
 
-**The alpha bet:** a first attributable win — a real founder states a goal, the composed
-pipeline reaches the gate, they approve, something goes out, and the outcome joins back as a
-measured result.
+The product can be built, green, and browser-tested while the market bet remains unproven. No outside
+founder has yet completed the full terrain-to-market loop without help, and no attributable real-world win
+has returned through that loop.
 
----
+The alpha test is:
 
-## Where it stands
+1. A founder opens a real product and understands cited truth before supplying a goal.
+2. They investigate or correct a credible opening with the crew.
+3. They choose a move, turn it into a real pipeline, and run it to the founder wall.
+4. They approve a real outward effect.
+5. A real positive, negative, or no-response result returns with honest attribution.
+6. That result changes the next terrain read and the next work.
+7. An outside founder survives the same path without intervention.
 
-| Area | State | Note |
+That human test is T11 and Gate D in the completion specification. It has **not passed**. The stage remains
+alpha.
+
+## Shipped on this branch
+
+| Area | State | What is proved |
 |---|---|---|
-| The three-rail harness | **Real** | Truth scan, founder gate, taste memory — the spine works. |
-| Goal → composed pipeline → gate | **Real** | A goal composes a graph that runs to the wall; the wall is enforced on every path. |
-| Local AI runtimes | **Built & browser-verified** | Drover detects either a locally authenticated Codex (ChatGPT subscription) or Claude Code (Claude subscription). The founder chooses the model on the first goal and in the composer; that choice binds the durable session to Codex or Claude. The runtime gets only Drover's safe, session-scoped MCP bridge, so the Wall remains structural. |
-| Node-flow canvas (primary surface) | **Real** | The wired-steps diagram is the default landing; card detail-on-zoom shipped. |
-| Living GTM graph (product room) | **Built & browser-verified** | One woven canvas now projects product truth, questions, crew, pipelines, the founder wall, runs, attributable outcomes, and proposed implications. Operator renders one readable canvas-native lane per pipeline; selecting a lane opens its full execution graph in Engineer. Verified at 1440 on the dense RodentRadar and estatesaleusa states; not yet survived by an outside founder. |
-| GTM engine rebuild | **Landed, unexercised** | Evidence graph, market research, path portfolio, outcome ingest, promotion, run-compile — merged and tested, not yet run end-to-end on a live goal. Note: this is fuzzy work; by doctrine it belongs in rented agents behind open steps, not hosted modules — keep it thin and collapse toward agents, never grow it into a subsystem. |
-| Dogfood loop | **Landed, unexercised** | Drover captures friction and feature requests into its own repo queue; an agent can later work a queued item into a gated branch that waits for review. Nothing drains the queue on a schedule — there is no nightly agent. |
-| The learning loop closes (machinery) | **Built & verified** | On branch `lean-rebuild`: outcome-door, compile→approve→run, outcome-proposed verdicts — a real outcome can now flow back and shape the next run. Audited alpha-loop-ready; not yet exercised by a real founder. |
-| The two new surfaces | **Built & browser-verified** | The agent face (derived per-agent record, honest "no runs yet") and the market picture built layer by layer (co-construct picker) — both on `lean-rebuild`. |
-| Agent bench + crew view | **Built & browser-verified** | Added 2026-07-05. The bench is the whole roster as one lens over the run ledger — every specialist with a track record derived from real gate decisions, honest "no runs yet" when unrun; reached from the dock. The crew strip shows a focused pipeline's agents left-to-right, ending on the gate. Both are projections over data the host already keeps, not new stored objects. `get_bench` MCP tool mirrors `get_board`. |
-| A first attributable win | **Unproven** | The alpha bet. The machinery is in place and verified; no real founder outcome has closed the loop yet. This is what earns "alpha". |
+| Terrain-first home | **Built and fixture-tested** | A grounded product opens on the canvas in Operator, including with zero pipelines. Cited truth appears before a goal is required. |
+| Deterministic terrain | **Built and tested** | The project-scoped read combines existing truth, questions, moves, outcomes, implications, crew, relationships, and geometry without spending a model call or writing state. Partial and stale owners are reported honestly. |
+| Cited first grounding | **Built and tested** | The initial repository scan is persisted into product truth, so the first terrain view does not depend on opening another surface or running AI. Cross-project receipts are rejected. |
+| Rented terrain read | **Built and tested with adapters and fixtures** | Model output produces openings and tensions as inferences, keeps uncertainty and falsifiers, demotes unsupported citations, and may return no hypotheses without breaking the terrain. |
+| Codex and Claude support | **Implemented; contract-tested** | One provider-neutral task path supports both local CLIs and subscription authentication. Product reading, terrain reading, composition, and operator paths honor the selected runtime. |
+| No-runtime use | **Built and fixture-tested** | Cited product terrain and existing work remain available without Codex or Claude. Missing model interpretation is local and explicit rather than a full-product connection wall. |
+| Terrain to pipeline | **Built and tested** | A selected opening, question, or direct request can become the existing open pipeline. Its evidence, wording, intended effect, uncertainty, and measurement intent travel as advisory context, never as a prerequisite or approval. |
+| Operator and Engineer context | **Built and tested** | Surface, view, and focus survive operator turns and resume. Leaving one pipeline returns to the originating terrain focus when available. |
+| Founder wall | **Built and security-tested** | Every execution path still requires upstream founder authorization. Browser-only gate release, project isolation, self-approval rejection, and the second deploy authorization have regression coverage. |
+| Outcome return | **Built and tested** | Joined outcomes return to their product, question, move, crew, run, and decision context when those links exist. Approval alone is not treated as a market result; unjoined signals remain unattributed. |
+| Taste loop | **Built and tested** | Gate decisions feed durable taste into later composition and agent work. Terrain reads can consume founder corrections without turning them into authorization. |
+| UI and agent-client parity | **Built and contract-tested** | Terrain references can be inspected, focused, discussed, recorded, proposed, and run through both the interface and MCP without becoming durable authority. |
+| Real founder alpha loop | **Unproven** | T11, Gate D, and the named alpha-loop evaluation remain open. |
 
----
+## Evaluation status
 
-## Sprint-alpha (2026-07-07) — the three named blockers are closed
+The completion specification separates four gates so lower-level proof cannot stand in for market proof.
 
-The 2026-07-06 full-codebase review found the alpha bet blocked by three concrete things: the
-product never actually sent anything (the email transport was not wired to the send path), the
-install broke for a stranger, and the founder gate could approve itself. This sprint closed all
-three, then hardened the codebase. It shipped from the `sprint-alpha` branch and is now **merged
-into `main`**: the real send path, the stranger-safe install, and the gate-self-approval fix are
-all in the mainline (corrected 2026-07-08 — an earlier note here wrongly said it was unmerged).
+- **Gate A — deterministic contracts:** implemented in the canonical test chain. Coverage includes terrain
+  normalization and projection, provider adapters, project isolation, operator context, open pipeline
+  composition, wall security, outcome learning, anti-cage rules, interface tests, lint, type checking, and
+  the production build.
+- **Gate B — deterministic browser journey:** passed for desktop, compact, narrow mobile, keyboard-only,
+  hard refresh, and no-runtime modes. It covers cited truth before a goal, progressive terrain, distinct
+  crew positions, pipeline handoff, the wall, an explicit founder decision, outcome return, and recovery
+  without spending a subscription.
+- **Gate C — local-runtime smoke:** the opt-in smoke exists, but this document does not claim that the full
+  core journey has been recorded separately with Codex only, Claude Code only, neither, and an explicit
+  choice with both available.
+- **Gate D — real-product alpha evaluation:** not run to a pass. There is no stranger-survival receipt and no
+  attributable real-world result.
 
-**What now works that didn't:**
+The exact current test receipt belongs in the commit or handoff that ran it. Do not turn changing test counts
+into product claims here.
 
-- **It actually sends.** Real transport is wired into the live send path, behind the founder gate.
-  A founder who has connected a transport can send for real once the gate approves: Gmail (a durable
-  bring-your-own-OAuth-client loopback sign-in that mints and refreshes its own token, so they
-  connect their own Gmail once) and, as of 2026-07-08, a connected HTTP endpoint. Sending is not
-  fully general — it reaches only a transport the founder has actually connected, only after gate
-  approval, and there is still no scheduled or nightly agent that sends on its own. Before this, the
-  send path staged locally and nothing ever left.
-- **Install works for a stranger.** A root post-install step now installs the two subprojects (the
-  brain and the interface) so a fresh clone comes up without hand-holding.
-- **First run refuses to start half-broken.** If neither a signed-in Codex nor Claude Code runtime is
-  available, first run stops with a clear local-login path instead of failing mid-run. Either existing
-  subscription works; no API key is required for subscription auth.
-- **The gate can't approve itself.** Closed the hole where an agent could release its own gate over
-  the agent front door, and the raw-request bypass — the browser now mints a session token that the
-  gate release path checks, so only a real founder action clears the wall.
-- **One decision inbox.** A single pending-decision queue across every pipeline, with a live count on
-  the dock and one notification when anything reaches the wall — instead of per-pipeline scatter.
-- **Something to scan on first run.** A bundled sample product and a one-click sample scan, so a
-  stranger with no repo of their own still has a real thing to point Drover at.
-- **Manual outcome return.** A minimal way to mark what happened to a sent item, so a real outcome can
-  close the loop by hand while the automatic path is still unproven.
-- **Desktop branding.** The desktop build now reads as Drover, with an honest distribution doc.
+## What remains
 
-**Hardening (behavior-preserving, no feature change):**
+The next milestone is evidence, not another product layer:
 
-- Split the two oversized files the 07-06 review flagged as the real illegibility: the server split
-  into per-domain route modules, and the operator runtime split into separate tools, run-core, prompt,
-  and tool-execution modules. Tests stayed green across both splits.
-- Removed confirmed-dead code, relocated stray root screenshots, pruned stale docs.
-- Resolved the apparent "two engines" split. Drover has one shared graph runner and two
-  lineage-preserving ledgers (flow receipts and compiled GTM-action receipts), not two competing
-  execution engines. The old collapse plan is historical context, not current work.
+- run and record the complete Gate C matrix through normal local subscription setup;
+- drive a real founder product from terrain to an outward effect and return the actual response;
+- preserve negative or no-response results as outcomes rather than renaming them success;
+- observe an outside founder completing the same path without explanation;
+- record where the terrain, crew, pipeline handoff, or wall causes hesitation and fix only what blocks
+  understanding or trust.
 
-**What this does not change:** the alpha bet is still unproven. The machine can now send for real under
-the gate, install for a stranger, and can't wave itself through — but no real founder has driven a real
-go-to-market win to the gate. The honest line holds: built and tested, not validated in the market.
+Passing deterministic tests means the terrain-first product is implemented. Only T11 and Gate D can prove
+the alpha bet.
 
-## 2026-07-08 — the composer invert and the watchable run
+## Current document map
 
-The chat was the weak surface: a generic panel that took a goal, disappeared into an autonomous
-model drive, and handed back a finished pipeline — while leaking raw engine errors (a founder
-literally saw "Reached maximum number of turns"). A machinery audit found the cause: the operator
-ran as a Claude Code subprocess *inside* the app, so the app's own turn budget and the model's
-turn budget collided. This pass reshaped the whole chat experience around one idea — the founder
-should watch a colleague work, not hand a machine a prompt.
+- `README.md` — the product and local setup.
+- `docs/VISION.md` — the terrain-first north star.
+- `docs/STATE.md` — this honest build and evaluation snapshot.
+- `AGENTS.md` — engineering invariants and repository rules.
+- `docs/production-direction/17-product-market-terrain-completion-spec.md` — the approved completion and
+  evaluation contract.
+- `docs/production-direction/00-index.md` — the production-direction index.
 
-**What now works that didn't:**
-
-- **"Our chat" — the composer, rebuilt.** A warm, calm chat surface (the "Warm Calm" register:
-  warm off-white ground, opaque cards, amber reserved for the gate, motion that settles and never
-  springs). It opens with a briefing over the founder's real cross-pipeline state instead of a
-  blank box; every reply comes from a named teammate with a real face, not a faceless "Claude";
-  decisions and the gate live in the thread and settle into stamped receipts. The old machinery —
-  a parts tray, a plan mirror, a verb-picker send button, a heavy voice waveform — was deleted.
-- **A fast lane instead of a tower.** A plain-code router reads the founder's message: status and
-  "what happened" questions are answered instantly from real state with no model drive; only a
-  build or an explicit "run it" reaches the autonomous path. This ended the colliding-budget
-  failure — the "max turns" leak is stripped at the source and can never reach a founder again.
-- **Taste finally reaches composition.** The founder's gate decisions are distilled into short
-  rules and pre-packed into the prompt that composes the pipeline — closing the long-standing gap
-  where the taste memory existed but never shaped the work.
-- **The run narrates itself, in each teammate's voice.** As a pipeline runs, each teammate speaks
-  in the first person, in its own voice, with real stakes drawn from its soul (a stance, never a
-  destructive auto-fire). Tool steps render as a live tracker that checks off. The prose ideation
-  path was retired in favor of embodied pipeline shapes the founder picks from.
-- **The gate opens in the chat.** The dead "Review & send" button is fixed the right way: the real
-  review — the drafts, what a yes does, the crew's steps — opens inside the conversation and
-  releases through the same authorized wall, instead of punting to a canvas that never bloomed.
-- **Chats you can run and control.** Building a picked idea opens its own thread so the founder
-  sees where it is heading; threads can be closed and stopped.
-
-Built across several codex-first workflows with Opus review and adversarial verification; `npm test`
-is green (see build health). Version moved to **0.3.2**, still alpha.
-
-**What only a live run settles (the founder's eyes):** the *felt* quality — whether the teammate
-voices read as distinct people, whether the calmer cards feel low-friction, whether the motion
-feels beautiful — can only be judged by driving a real goal, not by a green suite. The warm register
-is currently scoped to the composer; warming the canvas and rails to match is the next visual step.
-
-**What this does not change:** the alpha bet is still unproven. No outside founder has driven a real
-go-to-market win to the gate. Built and tested, not validated in the market.
-
-## 2026-07-10 — the product room and the complete production loop
-
-This pass refined the original Drover vision from the existing code, then filled the missing seams. It did
-not replace the product with a new ontology. The existing scanner, open graph, graph runner, operator,
-canvas, founder gate, crew records, and ledgers remain the system; the work makes them read as one product.
-
-**What now works that did not work as one coherent loop:**
-
-- **One product room, three altitudes.** Operator shows the whole product and its go-to-market operation;
-  selecting a canonical question focuses its causal neighborhood in place; Engineer opens the selected
-  pipeline's real execution graph. Operator is a semantic canvas projection — source → readable crew-owned
-  pipeline lanes → one founder wall → real joined returns — rather than the Engineer graph zoomed until it
-  is unreadable. Focus-to-trace keeps unrelated work present but quiet.
-- **Questions are durable work, not chat residue.** Questions can be pinned or transient, preserve multiple
-  teammate positions and disagreement, link evidence and unknowns, and accumulate append-only founder
-  decision receipts. A question can ask the crew, send a teammate to find the evidence that would change
-  its mind, settle a call, or become a pipeline without becoming a required setup object.
-- **The crew is persistent and product-scoped.** Teammates remain identities across pipelines, carry their
-  real contribution record, consult taste, and can bank a durable lesson. The useful surprise is a
-  falsifier loop: a teammate states what would change its view, then the founder can dispatch it to look
-  specifically for that evidence instead of asking for another generic answer.
-- **Pipelines say what they are before exposing machinery.** A focused pipeline now names its objective,
-  relevant crew, intended external effect, measurement, evidence and unknowns, and exactly what the
-  founder's yes will do. Its graph remains open underneath; there is no fixed GTM stage skeleton.
-- **The Wall is unchanged and stronger at the seams.** Every outward action still requires the founder gate.
-  Ordinary in-repo product changes stop at reviewed diffs. A standalone microproduct deploy still requires
-  two founder authorizations. Operator sessions and graph proposals are now strictly scoped to the owning
-  project, including legacy and MCP paths.
-- **Outcomes return to their causes.** Joined outcomes carry pipeline, question, product, crew, run, and
-  decision lineage. Only an explicit attributable interpretation can propose a product implication. The
-  founder may stage one server-derived, allowlisted product-change proposal for review; the browser cannot
-  choose its graph or operations, and accepting an implication never mutates the graph directly. Operator
-  outcome nodes show only real joined returns (or `No outcome yet`), never internal item throughput.
-- **The agent front door is simpler without deleting compatibility.** Six preferred verbs cover the normal
-  job — inspect, ask, compose, run, review, and record — while the complete legacy MCP surface remains
-  discoverable. Model-authored records cannot forge founder decisions, pins, gate approvals, or autonomy.
-- **One canonical projection feeds the UI.** `/api/operating-view` now supplies the woven canvas projection,
-  including typed anchors, relationships, geometry, questions, outcomes, and implications. The interface
-  consumes that shape rather than inventing a parallel canvas model.
-- **The local harness is provider-neutral.** Codex and Claude Code are first-class resident runtimes. The
-  first goal and the composer expose the same model choice; the selected model binds the durable session
-  to its runtime. Codex receives only the session-scoped Drover MCP bridge with shell tools, app connectors,
-  and sandboxed networking disabled, so it cannot route around the founder wall.
-
-This is feature-complete machinery, not market proof. RodentRadar dogfood data exercises the map, questions,
-crew, focused pipelines, and gates in the browser. It still does not count as the alpha exit: a stranger has
-not yet survived the loop, and no real attributable founder win has returned through it.
-
-## 2026-07-08 — the not-wired audit, and wiring the promised loop
-
-A four-lane audit found the recurring shape behind "the machine runs but I still don't see it":
-Drover was built to be *read from* but not *written into*. Everywhere an agent consults truth or
-taste, the read was wired — but the feedback-writes and the recurring triggers that would let the
-product learn and come back on its own were not. Seven promised features were built but sat
-disconnected. This pass wired all seven, laned by file-owner so parallel work could not collide,
-and verified each wire end-to-end (traced the actual connecting call, not just a green suite).
-
-**Now wired that wasn't:**
-
-- **The product reader runs on scan and reaches the crew.** Activating a product now derives the
-  living product picture in the background, and that picture is folded into run grounding — so the
-  discovery, research, and drafting agents work from what the product actually *is*, not just a
-  README paragraph and one tracking gap. (Before, the reader existed but nothing triggered it and
-  its output never reached a run.)
-- **Promoted motions re-fire on their own.** An in-process scheduler wakes due cadence motions and
-  ambient briefs; every re-fire still stops at the founder gate. (Before, promotion wired to nothing.)
-- **Design taste persists.** The founder can name the house style, the feeling, and pin reference
-  screens, and it saves — so visual agents follow the founder's taste instead of seed defaults.
-- **Ranking weights are tunable per venture** and persist. (Before, frozen on defaults for everyone.)
-- **Gate decisions shape composition.** Distilled taste now reaches the compose prompt, not only the
-  drafting agents — the founder's judgment shapes *how* a pipeline is built, not just what it writes.
-- **Sending reaches a connected transport** (Gmail or an HTTP endpoint) after gate approval, with no
-  env var to set; the gate copy now names honestly what a "yes" does.
-- **The overclaim copy is gone** — no more "nightly loop" the product never had.
-
-**What only a live run settles:** the three new founder-facing surfaces (design taste, ranking
-weights, the product picture) are wired and unit-green but not yet browser-verified; two of the new
-wires lack a regression test; and a run fired within a second of activating a product can race ahead
-of the reader. None of this is market validation — the alpha bet (a real founder, a real win to the
-gate) is unchanged. Built, wired, and proven-connected — not validated in the market.
-
-## How we build (the standing rule)
-
-Less is more. The harness — truth, the gate, taste — is the only thing we host. Every fuzzy
-capability (research, enrich, rank, ideate, draft) is a rented agent reached through an open
-step, never a new hosted subsystem. A new feature is an agent plus a step, not new plumbing.
-When something starts looking like an engine of modules, that's the smell — collapse it to
-agents. This is the anti-cage rule in `AGENTS.md`, restated because it's easy to drift off.
-
-## Build health (2026-07-10)
-
-- **Tests:** the canonical `npm test` chain exits green: backend 1,597 pass / 0 fail / 1 skipped;
-  interface 200 pass / 0 fail across 33 files; typecheck, lint, and production build are green. Browser
-  verification covered the dense RodentRadar and estatesaleusa Operator canvases plus the focused Engineer
-  graph and founder-gate path, with the source open, one wall, a slim composer, and truthful outcome states.
-- **Backend:** the two god-files are gone — the server and the operator runtime were each split into
-  focused modules this sprint (behavior-preserving). The GTM-engine modules present and tested:
-  evidence, gtm-store, market-research, path-portfolio, outcome-ingest, promote-motion, run-compile.
-- **Interface:** node-flow diagram as the default canvas. The IA was collapsed toward the
-  vision's "one canvas + a composer" shape (see the note below) — the two hand-pick pickers are
-  gone and the full-screen overlays dropped from four to three.
-- **Agent front door:** six preferred verbs over the MCP server (`npm run mcp`), with all legacy tools still
-  discoverable for compatibility.
-- **Run:** `npm start` (builds the interface, serves API + client on port 4317).
-- **Version:** 0.3.3 (root), pre-1.0 by design.
-- **On `main`:** sprint-alpha (real send, stranger-safe install, gate-self-approval fix) is
-  merged; the composer invert and the watchable run (2026-07-08) land on top of it.
-
-## The IA collapse (2026-07-03)
-
-The interface had drifted far from the vision's own shape — a founder faced dozens of surfaces
-(views, overlays, lenses, pop-over cards, modals) to run a product whose whole idea rests on four
-ideas: a pipeline, a gate, an agent, a run. This pass pulled it back toward "one canvas you work on,
-plus one composer you talk to," mostly by deletion:
-
-- **The two hand-pick pickers are gone.** The founder no longer opens a panel to hand-drop an agent,
-  a lead, or a reference onto a pipeline. Claude composes what a pipeline needs and the founder
-  approves at the gate; the objects live on the canvas. (One of the two pickers was already dead
-  code — its only opener was a control the canvas never invoked.)
-- **The "Ideate" button now lives in one place.** It was duplicated in the top control bar and the
-  composer; the composer is the one place you talk to Claude, so the top-bar copy was removed.
-- **One product read-out.** The onboarding scan preview and the "Product grounding" panel now render
-  the same read-out component, so they can't drift into two different pictures of the product.
-- **Full-screen overlays: four → three.** Connecting external tools was its own takeover overlay
-  (and, after the pickers were deleted, unreachable); it folded into Settings › Tools.
-
-Deferred by design, as its own later pass: folding the Product-view vs. GTM-view switch into a zoom
-level of one canvas (the two project different object models and that is a real rebuild). Known
-pre-existing polish issue observed during this pass: the Settings/grounding overlays let the canvas
-path-header bleed through at the top — a z-index cleanup for a future design pass, not introduced here.
-
-## Hardening pass (2026-07-03)
-
-A production-focused subtraction pass on top of the IA collapse: reduce lines of code and organize
-the codebase technically, without changing behavior. Net effect: about **5,300 lines removed**, the
-full test suite still green, verified in the browser.
-
-- **Dead code removed.** Six unreferenced files, four genuinely-unused dependencies (kept the ones a
-  JS-only scanner can't see are used in CSS), one undeclared dependency (`zod`) properly declared.
-- **Dead CSS purged.** `ui/src/index.css` went from 11,721 to 7,415 lines — more than half its
-  selectors were debris from long-deleted features. Removed with a PostCSS pass that only drops
-  selectors whose class never appears in any component, with runtime-injected library classes held
-  back; browser-verified.
-- **Unused exports removed.** ~600 lines across the frontend (a whole abandoned "workspace/revision"
-  feature) and backend, driven by the `knip` dead-code scanner, each sweep gated by its test suite.
-- **A standing dead-code check** (`knip.json` + `npx knip`) is now committed, so this debris can't
-  silently re-accumulate.
-
-Not done, flagged as follow-ups: the seven files over 1,000 lines (splitting them is real risk, needs
-its own scoped pass); the one backend "cage" smell (`curation-engine`) that belongs in a rented
-agent; and a couple of `.mjs` files with non-ASCII em-dash bytes worth normalizing.
-
----
-
-## The standing bar for product & design
-
-From here, product and design work is not done when it functions. It is judged against how
-it lands in the market and whether it meets a beautiful-design standard.
-
-- **Market-first.** The question is not "does it work," it is "does it matter, would a
-  founder choose it, is it positioned clearly enough to decide on." A strong build with a
-  weak position is unfinished.
-- **Beautiful by default.** Reference-grade craft, held to a frontier-lab bar — not generic
-  startup or template output. Work inside the product's real system (light ground,
-  monochrome zinc, Geist, semantic color only, no decorative gradients).
-- **Off the mean.** If a stranger could guess the design before the screen finishes loading,
-  it is still the average. Ship the specific, not the default.
-
-This is doctrine now — see the same bar in `AGENTS.md`.
-
----
-
-## Doc map — current vs. history
-
-**Current (read these):**
-- `README.md` — the product, plainly.
-- `docs/VISION.md` — the north star: what Drover is for and the shape it's built toward.
-- `AGENTS.md` — how the system works and its guardrails.
-- `docs/GTM-ENGINE-REBUILD.md` — the current build direction (Phases 0–6 have landed as code).
-- `docs/production-direction/00-index.md` — the production target: GTM for product development, with a
-  persistent product-scoped crew and a thin host boundary.
-- `docs/DISTRIBUTION.md` — the honest distribution picture for the desktop build.
-- `docs/STATE.md` — this file.
-
-**History (kept for the record, superseded — do not treat as current):**
-`PRODUCT-SPEC.md`, `docs/history/BUILD-PLAN.md`, `CANVAS.md`, `docs/history/DDD.md`, `EXPERIENCE.md`, `GOAL.md`,
-`MODEL.md`, `PRODUCT-MODEL.md`, `docs/history/CURSOR_GTM_UX_PLAN.md`, `EVALS.md`,
-`docs/ENGINE-COLLAPSE-PLAN.md`. These
-describe the earlier "IDE for GTM" framing and, in several cases, two machinery layers that
-were deliberately deleted — the outcome-program / policy / capability-foundry / portfolio
-layer, and the opportunity accept-list. If any of these read as load-bearing, the doc is
-stale, not the code.
+Earlier goal-first, Claude-only, pipeline-as-product, operation-primary, board-primary, program, policy,
+foundry, portfolio, and opportunity-list documents are historical. They do not override the terrain-first
+mental model or the current code.

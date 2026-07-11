@@ -1,154 +1,127 @@
 # Drover
 
-**Alpha · v0.3.2** — the product runs end to end and the test suite is green, but no outside
-founder has driven a real go-to-market win through it yet. `docs/STATE.md` has the honest,
-dated snapshot.
+**Alpha · v0.3.3** — the terrain-first product is built and tested, but no outside founder has yet
+used Drover to produce an attributable real-world win. [The state document](docs/STATE.md) keeps the
+dated, honest line between working software and market proof.
 
-**Drover turns frontier models into your go-to-market team — and gets better every time the
-models do.** Point it at your product, tell it what you want in plain English, and it builds
-and runs the pipelines to get there — outreach, content, campaigns — while you stay the one
-making the calls.
+**Drover reads your product, shows where it may have leverage, gives you a crew to work through the
+uncertainty, turns your choice into a safe go-to-market move, and brings the market's answer back to
+what you build.**
 
-Everyone running AI agents hits the same wall: the agents can do the work, but *you* become
-the bottleneck — reviewing every output, re-feeding context, babysitting loops that don't
-share what they know. Drover is the structure that fixes that. You run many agent pipelines
-at once and stay the **taste executor**: the person deciding what's good enough, what needs
-to change, and where to point the system next.
+## The product
 
-## Why it grows with the models
+You point Drover at a product repository and name the event that counts as a win. It opens on a
+living product-market terrain: what the code proves, where the product may meet the market, what is
+still uncertain, what you have chosen to try, and what came back.
 
-Drover rents the intelligence and owns the harness. The agents run on frontier Claude, on
-your own subscription — so every model release makes them smarter with no change on your
-side. What Drover holds is the part that *doesn't* get obsoleted:
+The first useful view does not require you to invent a goal. Cited product truth appears directly
+from a read-only scan, even when no AI runtime is connected. With Codex or Claude Code available,
+Drover adds clearly labeled openings and tensions. These are informed reads, not facts dressed up as
+facts, and each can show the evidence, uncertainty, and what would change the read.
 
-- **It reads your actual product.** A read-only scan of your codebase produces claims about
-  what your product really does, cited to `file:line`. The model can't invent facts about
-  your product, so the work it produces is true to what you built, not generic.
-- **Nothing sends without you.** Every step that touches the outside world sits behind your
-  approval. Drafts stage locally; nothing sends, publishes, or charges until you say go. As
-  you come to trust a pipeline, you can let it handle the routine cases on its own and only
-  pull you in on the exceptions.
-- **It learns your taste.** Every approval, rejection, and edit becomes durable memory that
-  shapes the next run — so the tenth draft sounds like you without re-explaining.
+From there:
 
-Rent the intelligence, own the harness. The models get better; everything you run inside
-Drover gets better with them. The judgment stays yours — the volume stops being your problem.
+- The **terrain** is the living picture of the product and market. It remains useful before any work
+  begins and changes as decisions and outcomes accumulate.
+- An **operation** is the worked layer over that terrain: the questions, crew positions, active
+  moves, founder decisions, and results currently in play.
+- A **pipeline** is one move you choose to make real. It is an open, editable flow of agents, tools,
+  code, and other steps that runs to your approval wall.
 
-Intelligence is rented, not hosted: research, enrichment, ideation, and drafting run as
-agents and skills on your Claude subscription, keyless. Code is the deterministic spine —
-the truth, the wall, and the taste memory — and nothing more.
+The canvas has two working distances. Operator keeps the whole terrain in view so you can understand,
+question, correct, and choose. Engineer opens one selected move so you can inspect its real pipeline,
+watch it run, and review the exact outward effect before approval.
 
-## The dogfood loop
+## What stays yours
 
-Drover files and builds its own improvements. From any codebase, in any Claude session
-connected to Drover's MCP server:
+Drover rents intelligence and owns a small, durable harness:
 
-- `report_friction` — a complaint or wish, said mid-flow, lands as agent-readable markdown
-  in `dogfood/queue/` with the current project, run, and gate state attached.
-- `request_feature` — spins up a headless builder agent in an isolated git worktree, one
-  build at a time. The result is a `dogfood/*` branch that **waits for founder review** —
-  nothing merges, pushes, or ships from the loop. Crash recovery at boot salvages interrupted
-  work and marks its queue item honestly.
-- `get_dogfood_queue` — what's open, queued, building, ready for review, declined, failed.
+- **Truth.** Claims about what the product already does come from a read-only scan with `file:line`
+  receipts, or are plainly labeled as inference. Deterministic truth does not require an AI runtime.
+- **The founder wall.** Nothing sends, publishes, deploys, or charges without founder authorization.
+  A pipeline may earn more autonomy for routine cases only through an explicit founder promotion;
+  exceptions still return to the wall.
+- **Taste.** Every approval, rejection, and edit becomes durable memory that shapes later work.
 
-## Run
+Research, interpretation, composition, and drafting come from a frontier model running locally through
+the founder's existing subscription. Codex and Claude Code are both supported; choosing either should
+not change Drover's product model or safety boundary. The intelligence can improve or be replaced while
+the cited truth, wall, decisions, and learned taste remain.
 
-Requirements: Node.js, Git, and a Claude Code login (the intelligence runs on your
-subscription; with no connection Drover refuses rather than templating).
+## Run locally
 
-Install once (this also installs the `brain/` and `ui/` subprojects), then start:
+Requirements: Node.js and Git. Codex or Claude Code is optional for the deterministic product scan and
+existing terrain; connect one when you want model-generated reads or agent work.
 
 ```sh
 npm install
 npm start
 ```
 
-First run needs a signed-in Claude: Drover runs every act of intelligence on your own Claude
-subscription through the local Claude Code harness. If no Claude is signed in, Drover shows a
-blocking "Connect Claude" screen and does no AI work until it connects — install Claude Code
-and run `claude` to sign in, or set `CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_API_KEY`.
+Open [http://127.0.0.1:4317](http://127.0.0.1:4317), add a product repository, and name the event or
+result that counts as a win.
 
-Open [http://127.0.0.1:4317](http://127.0.0.1:4317). Register a product by pointing the
-folder picker at its repo and naming the event that counts as a real win.
+For rented intelligence, sign in through a local CLI using either subscription:
 
-Use Drover as tools from any Claude session (the MCP front door):
+- Codex: install Codex CLI and sign in with ChatGPT.
+- Claude: install Claude Code and sign in with Claude.
+
+No API key is required when the local CLI already has subscription authentication. Provider-specific
+environment credentials remain available for supported setups.
+
+Run Drover's agent-facing tools from a compatible local agent client:
 
 ```sh
 npm run mcp
 ```
 
-Scan a repository directly:
+Scan a repository without starting the interface:
 
 ```sh
 node brain/src/mirror.mjs <repo> --win <event>
 ```
 
-The acceptance case: scanning `~/Buffalo-Projects` with `project_created` reports a proven
-attribution gap — the win event fires with no acquisition source attached — from cited
-evidence.
+The bundled acceptance fixture demonstrates the truth layer: scanning the sample product finds cited
+product behavior and a measurable attribution gap. That fixture is a software evaluation, not customer
+validation.
 
-## Desktop app (macOS)
+## Desktop app for macOS
 
-The desktop shell (`electron/`) wraps the same brain and client — no terminal. It repairs
-the Finder PATH (so the operator can find `claude` and `git`), boots the brain on a free
-loopback port, waits for `/api/health`, then opens the window. State lives in `~/.gtm-ide`
-and `~/.claude`, shared with the `npm start` dev server.
-
-One-time setup (rebuilds and ad-hoc signs the native SQLite module against Electron's ABI —
-without the signature, macOS Library Validation kills the engine on launch):
+The desktop shell wraps the same local brain and interface. State stays on the machine in
+`~/.gtm-ide`; the historical directory name is intentional.
 
 ```sh
 npm install
 npm run app:rebuild
+npm run app
 ```
 
-Run windowed: `npm run app` · Build the unsigned local `.dmg` (output in `release/`):
-`npm run app:dist`. On first launch, right-click the app and choose **Open** to clear
-Gatekeeper. With no `.env.local` present it runs fully local — no team sync, no onboarding
-gate.
+Build an unsigned local disk image with `npm run app:dist`. On first launch, macOS may require you to
+right-click the app and choose **Open**.
 
 ## Verify
 
 ```sh
 npm test
+npm run test:terrain:browser
 ```
 
-Runs the brain test suite (scanner regressions, gate-wall and connector invariants, the
-autonomy ladder, taste-consult enforcement, operator lifecycle, persistence, the anti-cage
-doctrine tests, the dogfood spine), then frontend lint and the production build.
-
-## Architecture
-
-```text
-brain/src/scan.mjs             read-only repository analysis with file:line citations
-brain/src/workflow-composer.mjs model-owned composition; assertGateWall re-asserted by the host
-brain/src/composition.mjs      injectable composer (live: Claude on the founder's subscription)
-brain/src/graph.mjs            dependency-aware graph execution (tool/agent/skill/code/mcp steps)
-brain/src/graph-operations.mjs validated typed graph patches; founder-owned gate config protected
-brain/src/agent-bridge.mjs     rented intelligence: subagents + skills on the subscription
-brain/src/operator-runtime.mjs the resident operator: goal → compose → run → pause at the gate
-brain/src/project-store.mjs    products, pipelines, shared intelligence, the autonomy ladder
-brain/src/memory.mjs           taste: gate decisions → durable memory → next composition
-brain/src/board.mjs            belief/health derivations from real signals only, never seeded
-brain/src/friction.mjs         dogfood queue (agent-readable markdown items)
-brain/src/feature-builder.mjs  request_feature: isolated-worktree builder, branch waits for review
-brain/src/mcp.mjs              the MCP front door bridging to the local brain
-brain/src/server.mjs           local API + static client
-ui/                            React, Tailwind, React Flow — the canvas and the gate
-```
-
-In code the pipeline unit is still identified as `channel`, and package names / storage
-paths keep the old `gtm-ide` identifier — historical, not a concept. Product language says
-"pipeline." See `AGENTS.md` for engineering doctrine and the invariants a change must
-preserve.
+The main suite covers cited truth, project isolation, terrain normalization, both runtime adapters,
+open pipeline composition, the founder wall, taste, outcome return, interface tests, lint, and the
+production build. The deterministic browser journey exercises the terrain-first path with fixtures at
+desktop, compact, and narrow widths. Local subscription smokes and the real-founder alpha evaluation
+are separate gates; see [docs/STATE.md](docs/STATE.md).
 
 ## Safety boundary
 
-- Scanning is read-only; a private repo never leaves the machine.
-- GTM execution stops at founder gates; the included execution connector stages approved
-  actions locally.
-- Real sends (e.g. Gmail) run only on per-item gate stamps that config cannot forge, with a
-  rate cap and a provenance header tracing every message to its run and item.
-- The gated microproduct deploy ships only under two explicit founder authorizations.
-- The dogfood builder works in isolated worktrees on `dogfood/*` branches and never merges,
-  pushes, or touches the founder's working tree.
+- Repository scanning is read-only and local.
+- A deterministic terrain read spends no model subscription and writes no state.
+- Terrain hypotheses are context for judgment, never authority to approve work.
+- Every outward path retains the founder wall. Agents cannot approve themselves through the browser,
+  API, or MCP surface.
+- Approved sends can reach only a transport the founder connected. Product changes stop at review, and
+  a standalone deploy requires a second explicit authorization.
+- The dogfood builder works in isolated branches and never merges, pushes, or ships on its own.
+
+Package names, the MCP server key, storage paths, and some code identifiers still use `gtm-ide` or
+`channel`. Those are historical identifiers. Founder-facing language says Drover and pipeline.
