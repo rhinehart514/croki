@@ -48,36 +48,38 @@ describe("operator system prompt taste block", () => {
     assert.ok(prompt.includes("stops at the gate"));
   });
 
-  it("makes the embodied SHAPE the opening move via propose_candidates", () => {
+  it("keeps open work native and reserves candidate shapes for real executable forks", () => {
     const prompt = systemPrompt(session, workspace, [], null);
-    // Shape-first is the default opening move on a build.
-    assert.ok(prompt.includes("Lead with the SHAPE"));
-    // propose_candidates remains the only way options are offered.
+    assert.ok(prompt.includes("dozens of independent goals"));
+    assert.ok(prompt.includes("durable open work"));
     assert.ok(prompt.includes("propose_candidates"));
-    assert.ok(prompt.includes("ONLY way you offer options"));
+    assert.ok(prompt.includes("genuinely distinct executable pipeline shapes"));
+    assert.ok(prompt.includes("many goals need none"));
+    assert.ok(prompt.includes("status \"partial\""));
+    assert.ok(prompt.includes("expectedArtifactRevision"));
   });
 
-  it("names whole-terrain, question, and one-move view context without guessing", () => {
+  it("names terrain, question, and pipeline focus on the same canvas without guessing", () => {
     const terrain = systemPrompt({
-      ...session, surface: "terrain", lens: "operator", focusRef: null,
+      ...session, surface: "terrain", lens: "canvas", focusRef: null,
       contextRefs: [{ type: "product-truth", id: "truth-1" }],
     }, workspace, [], null);
-    assert.match(terrain, /Active view: whole-terrain Operator/);
+    assert.match(terrain, /Active view: product terrain on the canvas/);
     assert.match(terrain, /Current focus: none/);
     assert.match(terrain, /Context: product-truth:truth-1/);
 
     const question = systemPrompt({
-      ...session, surface: "terrain", lens: "operator", questionId: "q-1",
+      ...session, surface: "terrain", lens: "canvas", questionId: "q-1",
       focusRef: { type: "question", id: "q-1" }, contextRefs: [],
     }, workspace, [], null);
     assert.match(question, /Active view: question focus/);
     assert.match(question, /Pinned question: question:q-1/);
 
-    const engineer = systemPrompt({
-      ...session, surface: "pipeline", lens: "engineer",
+    const pipeline = systemPrompt({
+      ...session, surface: "pipeline", lens: "canvas",
       focusRef: { type: "pipeline", id: "pipeline-1" }, contextRefs: [],
     }, workspace, [], null);
-    assert.match(engineer, /Active view: one-move Engineer/);
-    assert.match(engineer, /Current focus: pipeline:pipeline-1/);
+    assert.match(pipeline, /Active view: focused pipeline on the canvas/);
+    assert.match(pipeline, /Current focus: pipeline:pipeline-1/);
   });
 });

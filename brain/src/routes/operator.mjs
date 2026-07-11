@@ -10,10 +10,13 @@ import { graphIdForRef } from "../operator-project-scope.mjs";
 import {
   assertOperatorSessionProject,
   bindOperatorSessionContext,
+  branchOperatorSessionForBoth,
   createOperatorSession,
   getActiveSessionForProject,
   getOperatorSession,
+  listOperatorComparisonGroups,
   listOperatorSessions,
+  handoffOperatorSession,
   publicOperatorSession,
 } from "../operator-store.mjs";
 import {
@@ -38,7 +41,10 @@ export default async function handle({ req, res, url }) {
   // Durable resident GTM operator sessions
   if (req.method === "GET" && url.pathname === "/api/operator/sessions") {
     const projectId = url.searchParams.get("project") || undefined;
-    json(res, 200, { sessions: listOperatorSessions({ projectId }) }); return true;
+    json(res, 200, {
+      sessions: listOperatorSessions({ projectId }),
+      comparisonGroups: projectId ? listOperatorComparisonGroups({ projectId }) : [],
+    }); return true;
   }
 
   if (req.method === "POST" && url.pathname === "/api/operator/sessions") {
@@ -53,7 +59,7 @@ export default async function handle({ req, res, url }) {
       // parallel conversation; only create when there is no live thread. Default (reuse omitted) keeps
       // the historical "always create a fresh session" behavior for back-compat callers.
       if (body.reuse === true) {
-        const existing = getActiveSessionForProject(project.id);
+        const existing = getActiveSessionForProject(project.id, { threadRef: body.threadRef ?? "project" });
         if (existing) {
           const bound = hasSessionContext(body)
             ? bindOperatorSessionContext(existing.id, sessionContextFromBody(body, project.id))
@@ -75,7 +81,6 @@ export default async function handle({ req, res, url }) {
       const session = createOperatorSession({
         goal: body.goal,
         graphId: flow.graph?.id ?? null,
-        programId: body.programId ?? null,
         projectId: project.id,
         surface: body.surface,
         lens: body.lens,
@@ -88,6 +93,7 @@ export default async function handle({ req, res, url }) {
         participantRefs: body.participantRefs ?? body.teammateRefs ?? body.crewRefs ?? [],
         productRefs: body.productRefs ?? [],
         focusRef: body.focusRef ?? body.ref ?? null,
+        threadRef: body.threadRef ?? "project",
         contextRefs: body.contextRefs ?? body.refs ?? [],
         pipelineId: body.pipelineId ?? body.channelId ?? body.workflowId ?? null,
         runId: body.runId ?? null,
@@ -144,6 +150,30 @@ export default async function handle({ req, res, url }) {
       json(res, 200, { session: publicOperatorSession(getOperatorSession(operatorSessionMatch[1])) });
     } catch (err) {
       json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return true;
+  }
+
+  const handoffMatch = url.pathname.match(/^\/api\/operator\/sessions\/([^/]+)\/(handoff|ask-both)$/);
+  if (req.method === "POST" && handoffMatch) {
+    try {
+      const body = await readBody(req);
+      const sessionId = decodeURIComponent(handoffMatch[1]);
+      if (!body.projectId) throw new Error("projectId is required.");
+      if (handoffMatch[2] === "handoff") {
+        const session = handoffOperatorSession(sessionId, body);
+        json(res, 200, { session: publicOperatorSession(session) });
+      } else {
+        const branches = branchOperatorSessionForBoth(sessionId, body);
+        for (const branch of branches) launchOperatorSession(branch.id);
+        json(res, 202, { branches: branches.map(publicOperatorSession), branchGroupId: branches[0]?.branchGroupId ?? null });
+      }
+    } catch (err) {
+      const status = err?.code === "OPERATOR_HANDOFF_CONFLICT" ? 409 : 400;
+      json(res, status, {
+        error: err instanceof Error ? err.message : String(err),
+        ...(err?.code ? { code: err.code, expectedRevision: err.expectedRevision, actualRevision: err.actualRevision } : {}),
+      });
     }
     return true;
   }
@@ -345,6 +375,7 @@ function hasSessionContext(body = {}) {
   return [
     "surface", "lens", "focusRef", "ref", "contextRefs", "refs", "questionId", "question",
     "participantRefs", "teammateRefs", "crewRefs", "productRefs",
+    "threadRef",
   ].some((key) => Object.prototype.hasOwnProperty.call(body, key));
 }
 
@@ -368,6 +399,7 @@ function sessionContextFromBody(body = {}, projectId = body.projectId) {
       ? { participantRefs: body.participantRefs ?? body.teammateRefs ?? body.crewRefs }
       : {}),
     ...(Object.prototype.hasOwnProperty.call(body, "productRefs") ? { productRefs: body.productRefs } : {}),
+    ...(Object.prototype.hasOwnProperty.call(body, "threadRef") ? { threadRef: body.threadRef } : {}),
   };
 }
 

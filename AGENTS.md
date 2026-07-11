@@ -31,15 +31,15 @@ Everything below is engineering register — file names, identifiers, data-flow 
 
 ## Product purpose
 
-The product's name is **Drover** — the go-to-market desk for founders running more than one product (renamed 2026-07-01; display strings say Drover, while package names, the MCP server key `gtm-ide`, storage paths like `~/.gtm-ide`, and provenance markers deliberately keep the old identifier — do not "fix" them). Drover is the IDE for go-to-market. Point it at a product's codebase; it reads what the product does and where wins enter; the founder states a GTM goal in plain words; it composes the agents and steps the goal needs behind a founder approval gate and runs to that gate. Nothing sends, publishes, or charges until the founder approves. Every gate decision trains taste for the next run. There is no required setup — no program to stand up, no policy, no template.
+The product's name is **Drover** — the visual product-development and go-to-market desk for founders running more than one product (renamed 2026-07-01; display strings say Drover, while package names, the MCP server key `gtm-ide`, storage paths like `~/.gtm-ide`, and provenance markers deliberately keep the old identifier — do not "fix" them). Point Drover at a product's codebase and it gives Claude and Codex one living canvas where dozens of independent and related product/GTM goals can be understood, created, changed, run safely, and learned from. Model work becomes editable canvas material; only work that needs execution or repeatability expands into a pipeline. Nothing sends, publishes, deploys, merges, or charges until the founder approves. Every decision and edit trains taste for later work. There is no required mission, primary goal, program, policy, template, or pipeline before useful work begins. `docs/OPEN-CANVAS-SPEC.md` is the target product contract; `docs/STATE.md` separates that target from what is currently built.
 
 ## Stage: Alpha
 
 STAGE: alpha
 
-Drover is in **alpha** (v0.3.1). The three-rail spine runs and `npm test` is green, but no real founder has driven a real go-to-market win to the gate yet — that first attributable win is the alpha bet. Treat "built" as "built and tested," never "validated in the market." The honest, dated snapshot lives in `docs/STATE.md`; keep it current when something material changes.
+Drover is in **alpha** (v0.3.1). Alpha describes its market maturity, not permission to lower the build standard. No real founder has yet driven a real go-to-market win to the gate, so that first attributable win remains the alpha bet. Every slice called built must be production-ready for its declared scope: reliable, coherent, tested, and safe for a real founder. Keep "production-ready" separate from "market-validated." The honest, dated snapshot lives in `docs/STATE.md`; keep it current when something material changes.
 
-Per-stage behavior rules live in the global DOCTRINE.md ("Stages"): at alpha — speed over ceremony, rewrite freely, no polish that doesn't unblock understanding or trust, and the weekly question is what gets this in front of a stranger sooner. Exit test: feature-complete and a stranger Jacob didn't recruit survives it.
+Per-stage behavior rules live in the global DOCTRINE.md ("Stages"). At alpha, narrow the bet and move quickly: rewrite freely, cut speculative breadth and unnecessary operational machinery, but do not cut correctness, trust, or craft. The weekly question is what smallest production-ready slice gets Drover in front of a stranger sooner. Exit test: feature-complete and a stranger Jacob didn't recruit survives it.
 
 ## The bar for product & design work
 
@@ -74,7 +74,7 @@ The outcome-program / agent-creation-policy / capability-foundry machinery, the 
 
 ## Vocabulary
 
-The unit the founder builds and runs is a **pipeline** — a staged flow to the gate. In code it is still identified as `channel` (`channel-store`, `composeGraphForChannel`, `promoteChannel`) — a historical identifier, not a concept. Product, UI, and operator language say "pipeline"; a deeper `channel` → `pipeline` rename is a deferred refactor with no functional change.
+A **goal** is one thing the founder wants to understand, change, make, achieve, or learn; each product has zero to many, with no privileged singleton mission. A **pipeline** is only an executable or repeatable path to the wall. In code it is still identified as `channel` (`channel-store`, `composeGraphForChannel`, `promoteChannel`) — a historical identifier, not a concept. Product, UI, and operator language say "pipeline" only when execution is actually being discussed; a deeper `channel` → `pipeline` rename remains a deferred refactor with no functional change.
 
 ## Invariants (non-obvious — a coding agent will break these without knowing)
 
@@ -83,14 +83,14 @@ The unit the founder builds and runs is a **pipeline** — a staged flow to the 
 - Scanning is read-only. Build may create a local branch and worktree but stops before commit, push, deploy, or PR — except a founder-approved, gated microproduct deploy.
 - Intelligence is rented, not hosted. Fuzzy work (research, enrich, ideate, draft) is a skill or subagent reached through an open step (`agent` / `skill` / `code` / `mcp`), never a new Node connector. Code is the deterministic spine only.
 - Composition is the model's, not a fixed skeleton (`composition.mjs`, injectable; live `createClaudeComposer`; doctrine in the editable `~/.claude/agents/gtm-compose-workflow.md`). The host normalizes the spec, binds the founder's I/O, and re-asserts the wall. The blank default refuses rather than falling back to a template.
-- The canvas is a projection over an object model, not a fixed diagram. GTM mode and Product mode project two object models that never cross (see `docs/CANVAS.md`).
+- The canvas is a projection over durable authorities, not a second source of truth or a fixed diagram. Product and GTM authorities remain distinct internally where truth and permissions require it, but goals, work artifacts, product context, paths, decisions, and outcomes coexist and relate on one founder-facing canvas (see `docs/OPEN-CANVAS-SPEC.md`).
 
 ## Verification
 
 - Scanner changes → regression coverage in `brain/test/scan.test.mjs`.
 - Engine-derivation changes → `brain/test/engine.test.mjs`; the taste loop → `brain/test/memory.test.mjs`.
 - Operator-runtime changes → `brain/test/operator-runtime.test.mjs`; typed graph changes and persistence → their corresponding tests.
-- UI changes → `npm test` plus browser-verify the loop (goal launcher → operator "Go" → the run reaching the founder gate), node health + Problems rail, find-references, and partial-failure flows.
+- UI changes → `npm test` plus browser-verify the loop (plain-language goal → visible canvas work → local correction → optional path reaching the founder wall → outcome return), multi-goal independence and conflicts, node health + Problems rail, find-references, and partial-failure flows.
 - Acceptance case: `~/Buffalo-Projects` with `project_created` → the expected result is a proven attribution gap, reported by the Measure subsystem from that same scanned win event.
 
 ## Definition of done

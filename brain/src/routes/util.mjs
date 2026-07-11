@@ -54,12 +54,22 @@ export function json(res, status, payload) {
 export function readBody(req) {
   return new Promise((resolve, reject) => {
     let body = "";
+    let receivedBytes = 0;
+    let tooLarge = false;
     req.setEncoding("utf8");
     req.on("data", (chunk) => {
+      if (tooLarge) return;
+      receivedBytes += Buffer.byteLength(chunk, "utf8");
+      if (receivedBytes > 100_000) {
+        tooLarge = true;
+        body = "";
+        reject(new Error("Request body too large."));
+        return;
+      }
       body += chunk;
-      if (body.length > 100_000) reject(new Error("Request body too large."));
     });
     req.on("end", () => {
+      if (tooLarge) return;
       try { resolve(body ? JSON.parse(body) : {}); }
       catch { reject(new Error("Request body must be valid JSON.")); }
     });
@@ -72,12 +82,23 @@ export function readBody(req) {
 export function readRawBody(req) {
   return new Promise((resolve, reject) => {
     let body = "";
+    let receivedBytes = 0;
+    let tooLarge = false;
     req.setEncoding("utf8");
     req.on("data", (chunk) => {
+      if (tooLarge) return;
+      receivedBytes += Buffer.byteLength(chunk, "utf8");
+      if (receivedBytes > 100_000) {
+        tooLarge = true;
+        body = "";
+        reject(new Error("Request body too large."));
+        return;
+      }
       body += chunk;
-      if (body.length > 100_000) reject(new Error("Request body too large."));
     });
-    req.on("end", () => resolve(body));
+    req.on("end", () => {
+      if (!tooLarge) resolve(body);
+    });
     req.on("error", reject);
   });
 }

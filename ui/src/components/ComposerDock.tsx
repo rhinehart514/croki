@@ -29,6 +29,8 @@ import {
 import { STEP_DRAG_MIME } from "@/lib/objectPalette";
 import type { StepDragPayload } from "@/components/LeftRail";
 import { GateReview } from "@/components/gate/GateReview";
+import { RuntimeBranchComparison } from "@/components/RuntimeBranchComparison";
+import type { RuntimeBranchComparisonModel } from "@/lib/runtimeBranchComparison";
 import type { GatePromote } from "@/lib/gateItem";
 import "@/styles/composer-posture.css";
 import "@/styles/composer-candidates.css";
@@ -667,6 +669,8 @@ function deriveBriefing(roster: OperatorSessionSummary[]): Briefing {
 
 export function ComposerDock({
   session, running, onSend, onCancel, onReviewGate,
+  onHandoff, onAskBoth,
+  runtimeComparison = null, runtimeComparisonStarting = false, onChooseRuntimeBranch, onKeepBothRuntimeBranches, onRuntimeComparisonMaterialized,
   bench = null,
   roster = [], activeSessionId = null, onSwitchSession, onNewChat, onStopSession, onCloseSession,
   floating = false, focusSignal = 0, recede = false,
@@ -704,6 +708,13 @@ export function ComposerDock({
   // Send a turn to Claude. Carries the optional advisory @-mention hints (the teammates & capabilities the
   // founder named in the sentence) so composition prefers the named crew — never a contract, never blocking.
   onSend: (text: string, hints?: OperatorHints, model?: string) => void | Promise<void | { mode: "fast" | "drive"; intent: string; answer?: string }>;
+  onHandoff?: (model: string) => void | Promise<void>;
+  onAskBoth?: () => void | Promise<void>;
+  runtimeComparison?: RuntimeBranchComparisonModel | null;
+  runtimeComparisonStarting?: boolean;
+  onChooseRuntimeBranch?: (sessionId: string) => void | Promise<void>;
+  onKeepBothRuntimeBranches?: () => void;
+  onRuntimeComparisonMaterialized?: (ref: { type: "work-artifact"; id: string }) => void;
   onCancel: () => void | Promise<void>;
   onReviewGate: (nodeId: string) => void;
   // The founder gate, brought INTO the chat. When a run pauses at the wall, "Review & send" opens the real
@@ -797,7 +808,13 @@ export function ComposerDock({
   const [model, setModel] = useState<string>(() =>
     (typeof localStorage !== "undefined" && localStorage.getItem("gtm.model")) || DEFAULT_MODEL);
   const pickModel = (id: string) => { setModel(id); try { localStorage.setItem("gtm.model", id); } catch { /* private mode */ } };
-  const engineName = modelById(model).agent === "codex" ? "Codex" : "Claude";
+  const chosenAgent = modelById(model).agent;
+  const engineName = chosenAgent === "codex" ? "Codex" : chosenAgent === "claude" ? "Claude" : "Auto";
+  const assignedModel = session?.worker?.model ?? null;
+  const assignedRuntime = session?.worker?.runtime ?? "auto";
+  const chosenRuntime = chosenAgent;
+  const handoffNeeded = !!session && !TERMINAL.has(session.status) && assignedRuntime !== "auto"
+    && (assignedRuntime !== chosenRuntime || assignedModel !== model);
   const timelineRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -1263,6 +1280,16 @@ export function ComposerDock({
           <span className="oc-input-picker" title={sessionActive ? `${engineName} is on this outcome` : "The engine and model working this outcome"}>
             <AgentPicker value={model} onChange={pickModel} />
           </span>
+          {handoffNeeded && onHandoff && session?.status !== "running" ? (
+            <button className="oc-runtime-action" type="button" onClick={() => void onHandoff(model)}>
+              Hand to {engineName}
+            </button>
+          ) : null}
+          {sessionActive && onAskBoth && session?.status !== "running" ? (
+            <button className="oc-runtime-action" type="button" disabled={runtimeComparisonStarting} onClick={() => void onAskBoth()}>
+              {runtimeComparisonStarting ? "Starting both…" : "Ask both"}
+            </button>
+          ) : null}
           <button
             className={`oc-ib ${voiceOn ? "active" : ""}`}
             type="button"
@@ -1410,6 +1437,15 @@ export function ComposerDock({
           </div>
         ) : null}
 
+        {runtimeComparison && onChooseRuntimeBranch && onKeepBothRuntimeBranches ? (
+          <RuntimeBranchComparison
+            comparison={runtimeComparison}
+            onChoose={onChooseRuntimeBranch}
+            onKeepBoth={onKeepBothRuntimeBranches}
+            onMaterialized={onRuntimeComparisonMaterialized}
+          />
+        ) : null}
+
         {fastTurns.map((t) => (
           <div key={t.id} className="oc-fast">
             <div className="oc-you-wrap">
@@ -1431,7 +1467,7 @@ export function ComposerDock({
 
         {!session ? (
           <div className="oc-idle">
-            <p className="oc-idle-lead">Tell your crew the outcome you want. They compose the teammates that chase it, run them, and stop at your gate.</p>
+            <p className="oc-idle-lead">Tell Claude or Codex what you want to understand, make, change, achieve, or learn. Their work appears on the canvas; anything that reaches outside your product stops at your gate.</p>
             <div className="oc-idle-starters">
               {STARTERS.map((s) => (
                 <button key={s} className="oc-idle-starter" onClick={() => setInput(s)} type="button">{s}</button>

@@ -478,9 +478,12 @@ function classifyThrownAgentError(err) {
 // run bills the subscription, not a key. Read-only tools only; no send/publish/approve path.
 // onText (optional) fires with each assistant text delta as the model writes — token-level "watch
 // it think". Enabled via includePartialMessages; we read content_block_delta text_delta events.
-export async function runClaudeQuery({ prompt, cwd = process.cwd(), model, maxTurns = 12, onText, allowedTools = DEFAULT_AGENT_TOOLS, mcpServers } = {}) {
-  const childEnv = { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: "gtm-ide/0.3.0" };
-  delete childEnv.ANTHROPIC_API_KEY; // subscription, not a raw key
+export async function runClaudeQuery({ prompt, cwd = process.cwd(), model, maxTurns = 12, onText, allowedTools = DEFAULT_AGENT_TOOLS, mcpServers, canUseTool, env = process.env, allowApiKey = false } = {}) {
+  const childEnv = { ...env, CLAUDE_AGENT_SDK_CLIENT_APP: "gtm-ide/0.3.0" };
+  // Generic agent work is subscription-first and never silently spends a raw key. A runtime that
+  // explicitly selected the documented API-key fallback may opt in; feature-builder does so only
+  // after detectClaudeAuth has proved that no OAuth credential is available.
+  if (!allowApiKey) delete childEnv.ANTHROPIC_API_KEY;
   const stream = agentQuery({
     prompt,
     options: {
@@ -495,6 +498,7 @@ export async function runClaudeQuery({ prompt, cwd = process.cwd(), model, maxTu
       // In-process context tools (agentic retrieval, E1.2). Omitted entirely in the default
       // pre-pack path, so this never changes a non-agentic run.
       ...(mcpServers ? { mcpServers } : {}),
+      ...(typeof canUseTool === "function" ? { canUseTool } : {}),
       settingSources: [],
       persistSession: false,
       includePartialMessages: typeof onText === "function",

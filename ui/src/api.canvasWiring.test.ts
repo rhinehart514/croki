@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { acceptProductImplication, composerTurn, createOperatorSession, getTerrainView, resumeOperatorSession } from "@/api";
+import { acceptProductImplication, askBothOperatorRuntimes, composerTurn, createOperatorSession, getGoalRelationHistory, getTerrainView, handoffOperatorSession, restoreGoalRelation, reviseGoalRelation, resumeOperatorSession, saveObjectGraphGeometry, saveObjectGraphPositions } from "@/api";
 
 // A fetch spy that captures the last request and returns an ok JSON envelope. This proves the client
 // wiring for fix 1 (question → pipeline binds the real questionId/context) and fix 4 (accept hits the
@@ -46,22 +46,22 @@ describe("createOperatorSession — binds question context (fix 1)", () => {
 
   it("threads terrain surface, lens, focus, and context refs into session creation", async () => {
     await createOperatorSession("proj", "Investigate this", undefined, true, {
-      surface: "terrain", lens: "operator", focusRef: "terrain-hypothesis:h1",
-      contextRefs: ["product-truth:t1", "market-evidence:e1"],
+      surface: "terrain", lens: "canvas", focusRef: "terrain-hypothesis:h1",
+      contextRefs: ["product-truth:t1", "market-evidence:e1"], threadRef: "goal:activation",
     });
     expect(lastBody).toMatchObject({
-      surface: "terrain", lens: "operator", focusRef: "terrain-hypothesis:h1",
-      contextRefs: ["product-truth:t1", "market-evidence:e1"],
+      surface: "terrain", lens: "canvas", focusRef: "terrain-hypothesis:h1",
+      contextRefs: ["product-truth:t1", "market-evidence:e1"], threadRef: "goal:activation",
     });
   });
 
   it("threads current canvas context into resume and intent-routed turns", async () => {
     await resumeOperatorSession("s1", "proj", "Continue", undefined, {
-      surface: "pipeline", lens: "engineer", focusRef: "pipeline:ch1", contextRefs: ["question:q1"],
+      surface: "pipeline", lens: "canvas", focusRef: "pipeline:ch1", contextRefs: ["question:q1"],
     });
-    expect(lastBody).toMatchObject({ surface: "pipeline", lens: "engineer", focusRef: "pipeline:ch1", contextRefs: ["question:q1"] });
-    await composerTurn({ projectId: "proj", input: "Explain this", surface: "terrain", lens: "operator", focusRef: "product-truth:t1" });
-    expect(lastBody).toMatchObject({ surface: "terrain", lens: "operator", focusRef: "product-truth:t1" });
+    expect(lastBody).toMatchObject({ surface: "pipeline", lens: "canvas", focusRef: "pipeline:ch1", contextRefs: ["question:q1"] });
+    await composerTurn({ projectId: "proj", input: "Explain this", surface: "terrain", lens: "canvas", focusRef: "product-truth:t1" });
+    expect(lastBody).toMatchObject({ surface: "terrain", lens: "canvas", focusRef: "product-truth:t1" });
   });
 });
 
@@ -69,6 +69,68 @@ describe("terrain API", () => {
   it("uses the project-scoped deterministic route", async () => {
     await getTerrainView("proj / one");
     expect(lastUrl).toBe("/api/projects/proj%20%2F%20one/terrain");
+  });
+});
+
+describe("provider-neutral runtime continuation API", () => {
+  it("hands the same session to another runtime with optimistic concurrency", async () => {
+    await handoffOperatorSession("session / one", "proj", "codex", 3, "gpt-5.5-codex");
+    expect(lastUrl).toBe("/api/operator/sessions/session%20%2F%20one/handoff");
+    expect(lastBody).toEqual({
+      projectId: "proj", target: "codex", model: "gpt-5.5-codex", expectedRevision: 3,
+      idempotencyKey: "handoff:session / one:3:codex:gpt-5.5-codex",
+    });
+  });
+
+  it("creates deliberate separate Claude and Codex branches", async () => {
+    await askBothOperatorRuntimes("s1", "proj", 4);
+    expect(lastUrl).toBe("/api/operator/sessions/s1/ask-both");
+    expect(lastBody).toEqual({ projectId: "proj", expectedRevision: 4, idempotencyKey: "ask-both:s1:4" });
+  });
+});
+
+describe("canvas layout API", () => {
+  it("sends the optimistic revision and idempotency receipt with founder placement", async () => {
+    await saveObjectGraphPositions("proj / one", { "anchor:goal:g1": { x: 12, y: 34 } }, {
+      expectedRevision: 7,
+      idempotencyKey: "drag:g1:7",
+    });
+    expect(lastUrl).toBe("/api/projects/proj%20%2F%20one/object-graph/positions");
+    expect(lastBody).toEqual({
+      positions: { "anchor:goal:g1": { x: 12, y: 34 } },
+      expectedRevision: 7,
+      idempotencyKey: "drag:g1:7",
+    });
+  });
+
+  it("persists the founder's pan and zoom through the same revisioned geometry authority", async () => {
+    await saveObjectGraphGeometry("proj / one", { viewport: { x: -120, y: 44, zoom: 0.72 } }, {
+      expectedRevision: 8,
+      idempotencyKey: "viewport:8",
+    });
+    expect(lastUrl).toBe("/api/projects/proj%20%2F%20one/object-graph/positions");
+    expect(lastBody).toEqual({
+      geometry: { viewport: { x: -120, y: 44, zoom: 0.72 } },
+      expectedRevision: 8,
+      idempotencyKey: "viewport:8",
+    });
+  });
+});
+
+describe("goal relationship revision API", () => {
+  it("uses one project-scoped authority for history, revision, and restoration", async () => {
+    await getGoalRelationHistory("proj / one", "rel / one");
+    expect(lastUrl).toBe("/api/projects/proj%20%2F%20one/goal-relations/rel%20%2F%20one/history");
+    await reviseGoalRelation("proj / one", "rel / one", {
+      expectedRevision: 2, revisionAuthor: "founder", idempotencyKey: "revise:2", label: "Needs proof",
+    });
+    expect(lastUrl).toBe("/api/projects/proj%20%2F%20one/goal-relations/rel%20%2F%20one");
+    expect(lastBody).toMatchObject({ expectedRevision: 2, idempotencyKey: "revise:2", label: "Needs proof" });
+    await restoreGoalRelation("proj / one", "rel / one", {
+      expectedRevision: 3, revisionAuthor: "founder", idempotencyKey: "restore:3",
+    });
+    expect(lastUrl).toBe("/api/projects/proj%20%2F%20one/goal-relations/rel%20%2F%20one/restore");
+    expect(lastBody).toMatchObject({ expectedRevision: 3, idempotencyKey: "restore:3" });
   });
 });
 

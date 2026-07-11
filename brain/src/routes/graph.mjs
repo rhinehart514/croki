@@ -10,7 +10,7 @@ import {
   registerComposedChannel,
 } from "../project-store.mjs";
 import { loadFlow, recordFlowRun, saveFlow } from "../flow-store.mjs";
-import { applyGraphOperations, validateGraph } from "../graph-operations.mjs";
+import { applyGraphOperations, assertGraphAuthorityMatches, validateGraph } from "../graph-operations.mjs";
 import { assertGateWall, explainComposedGraph } from "../workflow-composer.mjs";
 import { createClaudeExplainer } from "../composition.mjs";
 import { auditGraphContracts } from "../contracts.mjs";
@@ -29,7 +29,7 @@ import { recordRunDerivations } from "../run-derivation.mjs";
 import { listConnectors } from "../connectors/registry.mjs";
 import { listServers, getServer, recordServer, removeServer, reclassifyTool, serverView } from "../mcp-store.mjs";
 import { connectStdioServer } from "../mcp-client.mjs";
-import { authorizeReleaseForRequest } from "./session-guard.mjs";
+import { authorizeFounderWriteForRequest, authorizeReleaseForRequest } from "./session-guard.mjs";
 import { authorizeGateRelease } from "../operator-run-core.mjs";
 
 function routeError(message, { status = 400, code = null } = {}) {
@@ -129,11 +129,12 @@ async function prepareGraphRun(body) {
   if (!body.graph || !Array.isArray(body.graph.nodes)) {
     throw routeError("Request must include a graph object with a nodes array.");
   }
-  validateWallGraph(body.graph);
   const scope = resolveScopedGraph(body.graph.id, { projectId: explicitProjectId(body) });
   const options = { projectId: scope.project.id };
   const prior = loadFlow(scope.graphId, null, options);
   if (!prior.graph) throw routeError(`Graph not found: ${scope.graphId}.`, { status: 404 });
+  assertGraphAuthorityMatches(body.graph, prior.graph);
+  validateWallGraph(body.graph);
   const runtimeGraph = applySharedContextToGraph(body.graph, scope.project.sharedContext, {
     channelOffer: channelOfferFor(scope.project, scope.graphId),
   });
@@ -195,10 +196,12 @@ export default async function handle({ req, res, url }) {
       if (!body.graph || !Array.isArray(body.graph.nodes)) {
         throw new Error("Request must include a graph object with a nodes array.");
       }
-      validateWallGraph(body.graph);
       const projectId = explicitProjectId(body);
       const scope = resolveScopedGraph(body.graph.id, { projectId, allowNew: true });
       const options = { projectId: scope.project.id };
+      const prior = loadFlow(scope.graphId, null, options);
+      assertGraphAuthorityMatches(body.graph, prior.graph);
+      validateWallGraph(body.graph);
       const saved = saveFlow(body.graph, options);
       if (scope.isNew) {
         const channelId = String(body.channelId ?? body.graph.id).trim();
@@ -404,6 +407,7 @@ export default async function handle({ req, res, url }) {
 
   if (req.method === "POST" && url.pathname === "/api/capabilities/connect") {
     try {
+      authorizeFounderWriteForRequest(req, "Connecting an external capability");
       const body = await readBody(req);
       if (!body.id && !body.name) throw new Error("connect requires an id or name");
       let tools = Array.isArray(body.tools) ? body.tools : null;
@@ -427,7 +431,7 @@ export default async function handle({ req, res, url }) {
       const server = recordServer({ ...body, tools }, {});
       json(res, 200, { server: serverView(server) });
     } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+      json(res, statusFor(err), { error: err instanceof Error ? err.message : String(err) });
     }
     return true;
   }
@@ -440,6 +444,7 @@ export default async function handle({ req, res, url }) {
       const existing = getServer(serverId, {});
       const tool = existing?.tools.find((t) => t.name === body.tool);
       const loosening = body.lane === "read" && tool && tool.class === "write";
+      if (loosening) authorizeFounderWriteForRequest(req, "Loosening a capability wall");
       // Loosening the wall is the weighty act — the founder must confirm explicitly.
       if (loosening && body.confirm !== true) {
         json(res, 409, { error: "Loosening the wall needs confirmation", needsConfirm: true });
@@ -448,7 +453,7 @@ export default async function handle({ req, res, url }) {
       const { server, loosenedWall } = reclassifyTool(serverId, body.tool, body.lane, {});
       json(res, 200, { server: serverView(server), loosenedWall });
     } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+      json(res, statusFor(err), { error: err instanceof Error ? err.message : String(err) });
     }
     return true;
   }

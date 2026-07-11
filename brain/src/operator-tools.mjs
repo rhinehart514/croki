@@ -163,8 +163,12 @@ export const TOOLS = [
   },
   {
     name: "record",
-    description: "Record an attributable session note, model artifact, or transient question proposal. Model callers cannot pin durable clarity or write founder/gate decisions.",
-    input_schema: { type: "object", properties: { kind: { type: "string", enum: ["session_note", "model_artifact", "question_proposal"] }, value: {}, ref: STABLE_REF_INPUT_SCHEMA, refs: { type: "array", items: STABLE_REF_INPUT_SCHEMA } }, required: ["kind", "value"] },
+    description: "Record attributable work on the shared canvas: a goal, open work artifact, open relationship, session note, or transient question proposal. Kinds and content stay open. For long work, record an early artifact with status partial, then revise that same artifact with artifactId + expectedArtifactRevision in bounded patches. Model callers cannot write founder/gate decisions or release anything.",
+    input_schema: { type: "object", properties: {
+      kind: { type: "string", enum: ["session_note", "model_artifact", "work_artifact", "canvas_proposal", "goal", "goal_relation", "work_relationship", "question_proposal"] },
+      value: {}, idempotencyKey: { type: "string" }, ref: STABLE_REF_INPUT_SCHEMA,
+      refs: { type: "array", items: STABLE_REF_INPUT_SCHEMA },
+    }, required: ["kind", "value"] },
   },
   {
     name: "run",

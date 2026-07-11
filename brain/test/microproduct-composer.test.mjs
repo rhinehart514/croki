@@ -118,7 +118,7 @@ describe("produceMicroproduct — host orchestration", () => {
   it("throws an honest blocked error on the blank default (no subscription)", async () => {
     await assert.rejects(
       () => produceMicroproduct({ goal: "g" }),
-      /needs a live Claude subscription/,
+      /needs a connected Claude or Codex runtime/,
     );
   });
 

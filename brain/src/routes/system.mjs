@@ -8,8 +8,52 @@ import { loadProject } from "../project-store.mjs";
 import { reportFriction, listFrictionQueue, DEFAULT_QUEUE_DIR } from "../friction.mjs";
 import { enqueueFeatureRequest } from "../feature-builder.mjs";
 import { listFlowsNeedingFounder } from "../operator-store.mjs";
+import { applyProductChange, discardProductChange, inspectProductChangeReadiness, listProductChangeReceipts, reviewProductChange, stageProductChangeProposal } from "../product-change-receipts.mjs";
+import { authorizeFounderWriteForRequest, claimFounderSession, requestHasSessionToken } from "./session-guard.mjs";
 
 export default async function handle({ req, res, url }) {
+  if (url.pathname === "/api/founder-session" && req.method === "GET") {
+    json(res, 200, { authenticated: requestHasSessionToken(req) });
+    return true;
+  }
+  if (url.pathname === "/api/founder-session" && req.method === "POST") {
+    try {
+      const body = await readBody(req);
+      if (!claimFounderSession(req, res, body?.code)) {
+        json(res, 403, { error: "That founder action code was not accepted." });
+        return true;
+      }
+      json(res, 200, { authenticated: true });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return true;
+  }
+  const changesMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/product-changes(?:\/([^/]+)\/(discard|stage|review|readiness|apply))?$/);
+  if (changesMatch && req.method === "GET" && !changesMatch[2]) {
+    try { json(res, 200, { changes: listProductChangeReceipts(decodeURIComponent(changesMatch[1])) }); }
+    catch (err) { json(res, 400, { error: err instanceof Error ? err.message : String(err) }); }
+    return true;
+  }
+  if (changesMatch && req.method === "GET" && changesMatch[2] && changesMatch[3] === "readiness") {
+    try { json(res, 200, { readiness: inspectProductChangeReadiness(decodeURIComponent(changesMatch[1]), decodeURIComponent(changesMatch[2])) }); }
+    catch (err) { json(res, Number.isInteger(err?.status) ? err.status : 400, { error: err instanceof Error ? err.message : String(err) }); }
+    return true;
+  }
+  if (changesMatch && req.method === "POST" && changesMatch[2]) {
+    try {
+      const body = await readBody(req);
+      const projectId = decodeURIComponent(changesMatch[1]);
+      const receiptId = decodeURIComponent(changesMatch[2]);
+      const action = changesMatch[3];
+      if (action === "stage") json(res, 201, { proposal: stageProductChangeProposal(projectId, receiptId) });
+      else if (action === "discard") { authorizeFounderWriteForRequest(req, "Discarding isolated product work"); json(res, 200, { change: discardProductChange(projectId, receiptId, body) }); }
+      else if (action === "review") { authorizeFounderWriteForRequest(req, "Reviewing isolated product work"); json(res, 200, { revision: reviewProductChange(projectId, receiptId, body) }); }
+      else if (action === "apply") { authorizeFounderWriteForRequest(req, "Applying isolated product work"); json(res, 200, { revision: applyProductChange(projectId, receiptId, body) }); }
+      else json(res, 405, { error: "Unsupported product change action." });
+    } catch (err) { json(res, Number.isInteger(err?.status) ? err.status : 400, { error: err instanceof Error ? err.message : String(err) }); }
+    return true;
+  }
   // Health
   if (req.method === "GET" && url.pathname === "/api/health") {
     json(res, 200, { ok: true }); return true;
@@ -71,7 +115,8 @@ export default async function handle({ req, res, url }) {
   // Feature request — "the house fixes itself": the founder, from any codebase, asks GTM IDE for a
   // new capability. The request lands in the same dogfood queue (the receipt returns immediately),
   // then a builder agent works it headless in an ISOLATED worktree on a dogfood/* branch, one build
-  // at a time. The branch WAITS for founder review — this route can build, never merge or ship.
+  // at a time. The uncommitted worktree WAITS for founder review — this route cannot run shell,
+  // test, commit, merge, push, deploy, or publish.
   if (req.method === "POST" && url.pathname === "/api/feature-request") {
     try {
       const body = await readBody(req);
@@ -83,12 +128,19 @@ export default async function handle({ req, res, url }) {
         snapshot.project = { id: project.id, activeChannelId: project.activeChannelId ?? null };
       } catch { /* no active project — leave absent */ }
       if (body?.snapshot && typeof body.snapshot === "object") snapshot.caller = body.snapshot;
-      const record = enqueueFeatureRequest({ report, context: body?.context, snapshot, source: body?.source ?? "api" });
+      const record = enqueueFeatureRequest({
+        report,
+        context: body?.context,
+        snapshot,
+        source: body?.source ?? "api",
+        provider: body?.provider,
+        model: body?.model,
+      });
       json(res, 202, {
         file: record.file,
         status: record.status,
         capturedAt: record.capturedAt,
-        note: "Build queued. Track it via GET /api/friction; the result is a dogfood/* branch waiting for your review — nothing merges without you.",
+        note: "Build queued. Track it via GET /api/friction; any result remains an uncommitted isolated worktree for your review.",
       });
     } catch (err) {
       json(res, 400, { error: err instanceof Error ? err.message : String(err) });

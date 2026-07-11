@@ -14,6 +14,8 @@ import { addClarity } from "../src/clarity-store.mjs";
 import { recordFeedbackSignals, recordFounderDecision } from "../src/feedback-ledger.mjs";
 import { objectGraphLayoutStore, PROJECT_CANVAS_LAYOUT_NAMESPACE } from "../src/object-graph-store.mjs";
 import { appendOperatorEvent, createOperatorSession, saveOperatorSession } from "../src/operator-store.mjs";
+import { createGoal } from "../src/goal-store.mjs";
+import { createWorkArtifact } from "../src/work-artifact-store.mjs";
 
 // Area 6 — the ONE Operator lens read. getOperatingView is a pure cross-fleet projection: it composes the
 // engine stages, the one efficiency table, and Area 1's touch ledger into lanes + a shared object map, and
@@ -104,6 +106,33 @@ describe("getOperatingView — the shared-map read (Area 6)", () => {
     assert.equal(view.woven.canvas.state.kind, "empty", "the enriched canvas is also honestly empty");
     assert.deepEqual(view.woven.canvas.outcomes, []);
     assert.deepEqual(view.woven.canvas.implications, []);
+  });
+
+  it("projects many goals and open work onto the same canonical canvas without requiring a pipeline", () => {
+    const options = { ...freshRoot(), actor: "founder:jacob" };
+    createProject({ name: "Open desk" }, options);
+    const first = createGoal({
+      id: "position", projectId: "open-desk", statement: "Clarify the position",
+      createdBy: "founder:jacob", idempotencyKey: "goal:position",
+    }, options);
+    createGoal({
+      id: "activation", projectId: "open-desk", statement: "Improve activation",
+      createdBy: "founder:jacob", idempotencyKey: "goal:activation",
+      currentWorkRefs: [{ type: "work-artifact", id: "brief" }],
+    }, options);
+    createWorkArtifact("open-desk", {
+      id: "brief", kind: "positioning-brief", title: "Positioning brief", content: { promise: "Make the work visible" },
+      createdBy: { type: "founder", id: "jacob" }, expectedStoreRevision: 0, idempotencyKey: "work:brief",
+    }, options);
+
+    const view = getOperatingView({ projectId: "open-desk" }, options);
+    const canvas = view.woven.canvas;
+    assert.equal(view.lanes.length, 0, "goals do not manufacture pipelines");
+    assert.ok(canvas.anchors.some((item) => item.ref.type === "goal" && item.ref.id === first.id));
+    assert.ok(canvas.anchors.some((item) => item.ref.type === "goal" && item.ref.id === "activation"));
+    assert.ok(canvas.anchors.some((item) => item.ref.type === "work-artifact" && item.ref.id === "brief"));
+    assert.ok(canvas.relationships.some((item) => item.kind === "current-work"
+      && item.source.id === "activation" && item.target.id === "brief" && item.resolved));
   });
 
   it("resolves outcome pipeline lineage from the execution graph, never the Gmail or Slack connector", () => {

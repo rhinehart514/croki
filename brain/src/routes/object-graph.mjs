@@ -7,7 +7,8 @@ import { marketObjectStore } from "../gtm-store.mjs";
 import { compileRunFromPath } from "../run-compile.mjs";
 import { createClaudeComposer } from "../composition.mjs";
 import { ensureObjectGraphProductScan, objectGraphForProject } from "../object-graph-projection.mjs";
-import { PROJECT_CANVAS_LAYOUT_NAMESPACE, objectGraphLayoutStore, objectGraphStore } from "../object-graph-store.mjs";
+import { CanvasLayoutConflictError, PROJECT_CANVAS_LAYOUT_NAMESPACE, objectGraphLayoutStore, objectGraphStore } from "../object-graph-store.mjs";
+import { CanvasStructureHistoryConflictError, canvasStructureHistoryStore } from "../canvas-structure-history.mjs";
 import { applyObjectGraphOperations } from "../object-graph-operations.mjs";
 import { ideateObjectCandidates, createClaudeIdeaGenerator, createClaudeObjectIdeaGenerator } from "../ideation.mjs";
 import {
@@ -74,14 +75,37 @@ export default async function handle({ req, res, url }) {
       const projectId = decodeURIComponent(projectObjectGraphPositionsMatch[1]);
       loadProject({ projectId });
       const body = await readBody(req);
-      const layout = objectGraphLayoutStore.mergeNamespace(
+      if (!Number.isInteger(body?.expectedRevision) || body.expectedRevision < 0) {
+        throw new Error("expectedRevision must be a non-negative integer.");
+      }
+      const headerIdempotencyKey = String(req.headers["idempotency-key"] ?? "").trim();
+      const bodyIdempotencyKey = String(body?.idempotencyKey ?? "").trim();
+      if (headerIdempotencyKey && bodyIdempotencyKey && headerIdempotencyKey !== bodyIdempotencyKey) {
+        throw new Error("Idempotency-Key header and body idempotencyKey must match.");
+      }
+      const idempotencyKey = headerIdempotencyKey || bodyIdempotencyKey;
+      if (!idempotencyKey) throw new Error("An idempotencyKey is required for canvas layout writes.");
+      const result = canvasStructureHistoryStore.applyLayout(
         projectId,
-        PROJECT_CANVAS_LAYOUT_NAMESPACE,
         body?.geometry ?? (body?.positions ? body : { positions: body ?? {} }),
+        { ...body, idempotencyKey, revisionAuthor: body?.revisionAuthor || "founder" },
       );
-      json(res, 200, { projectId, positions: layout.positions, savedAt: layout.updatedAt, geometry: layout });
+      const layout = result.layout;
+      json(res, 200, { projectId, positions: layout.positions, savedAt: layout.updatedAt, geometry: layout, historyReceipt: result.receipt, historyRevision: result.history.revision });
     } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+      const status = err instanceof CanvasLayoutConflictError || err instanceof CanvasStructureHistoryConflictError || /Stale canvas layout revision/i.test(err instanceof Error ? err.message : String(err)) ? 409 : 400;
+      json(res, status, {
+        error: err instanceof Error ? err.message : String(err),
+        ...(err instanceof CanvasLayoutConflictError ? {
+          code: err.code,
+          expectedRevision: err.expectedRevision,
+          actualRevision: err.actualRevision,
+        } : err instanceof CanvasStructureHistoryConflictError ? {
+          code: err.code,
+          expectedRevision: err.expectedRevision,
+          actualRevision: err.actualRevision,
+        } : {}),
+      });
     }
     return true;
   }

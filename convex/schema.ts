@@ -5,7 +5,7 @@ import { v } from "convex/values";
 // synchronous (it reads/writes ~/.gtm-ide on each machine); these tables are its shared MIRROR, so
 // a team works one set of programs, graphs, runs, gate decisions and taste together. Nothing here
 // replaces the local gate — the wall still holds on each machine; this only syncs the state around
-// it. See brain/src/convex-sync.mjs for the write-behind/pull syncer.
+// it. See brain/src/convex-backend.mjs for the write-behind/pull syncer.
 export default defineSchema({
   // The unit of shared state. Everything (the project catalog and every per-project store) is
   // scoped to one team.
@@ -42,8 +42,9 @@ export default defineSchema({
   // relative to the local store root (e.g. "project.json", "programs/rodentradar.json",
   // "operator-sessions/op-….json"). This one table backs the engine's entire durable state with no
   // per-store schema — the engine never learns about Convex; the syncer pushes here on write and
-  // pulls back on boot. `data` is exactly the JSON the store serialized. last-write-wins by
-  // `updatedAt` keeps two machines convergent without a merge engine (per-document granularity).
+  // pulls back on boot. `data` is exactly the JSON the store serialized. Revisioned documents use
+  // atomic server-side CAS; `updatedAt` is metadata and only remains a compatibility tie-breaker for
+  // legacy unversioned stores.
   documents: defineTable({
     teamId: v.id("teams"),
     key: v.string(),

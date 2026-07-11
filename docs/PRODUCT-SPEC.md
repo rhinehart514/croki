@@ -1,7 +1,7 @@
-> **SUPERSEDED — 2026-07-01.** This spec describes the earlier "IDE for GTM" version
-> of the product (a living canvas as cockpit). The current plan of record is
-> **docs/GTM-ENGINE-REBUILD.md**, which reframes Drover as a GTM engine and compiler.
-> Where this doc conflicts with that spec, the spec wins. Kept for history only.
+> **SUPERSEDED — 2026-07-11.** This is implementation history for an earlier,
+> pipeline-first version of Drover. The current plan of record is
+> **docs/OPEN-CANVAS-SPEC.md**. File names, inventories, and roadmap items below
+> are intentionally not current and must not be used as build instructions.
 
 ---
 
@@ -207,7 +207,7 @@ The **engine is largely built. The cockpit is half‑built. The strategy/ideatio
 - Taste — `feedback-ledger.mjs`, `memory.mjs`, `belief-writeback.mjs` (verdicts → learning).
 - Truth — `scan.mjs`, `product-understanding.mjs`.
 - Intertwining substrate — `person-store.mjs`, `cross-reference.mjs` (shared people, find‑references).
-- Team substrate — `convex-sync.mjs`, `team-store.mjs` (multiplayer base, currently guarded off).
+- Team substrate — `convex-backend.mjs`, `team-store.mjs` (local-first multiplayer base).
 - The board read‑model and the spatial canvas + the pipeline `GraphCanvas` (the n8n‑style flow view), the composer dock (chat).
 
 **Partial / split:**
@@ -243,7 +243,7 @@ The **engine is largely built. The cockpit is half‑built. The strategy/ideatio
 
 **H. Ground the stages in real GTM + kill jargon.** Adopt the researched model — strategy (who/why/say/offer) → **motion** → funnel → **keep/grow (onboard/retain/expand)** → measure → learn‑loop — and replace every internal label with plain words. *Files: `board.mjs` stage model, all node copy.*
 
-**I. (Later) Build + sell on one canvas, multiplayer.** Product/build nodes wired next to GTM nodes (shipping triggers go‑to‑market); turn on the `convex`/`team` substrate for shared canvases. *Files: build/`mcp` nodes, `convex-sync.mjs`.*
+**I. (Later) Build + sell on one canvas, multiplayer.** Product/build nodes wired next to GTM nodes (shipping triggers go‑to‑market); strengthen the `convex`/`team` substrate for shared canvases. *Files: build/`mcp` nodes, `convex-backend.mjs`.*
 
 **J. Make ideation a first‑class visible loop.** Today ideation is implicit inside compose. Surface it: the bar, the fan‑out of angles, the adversarial kill, the surviving ideas (each pre‑wired to build + test), all steerable on the canvas — and wire the close‑the‑loop (build → ship → measure → next round). Reuse the `crucible` / `ideate` machinery the founder already built. *Files: new ideation loop in the composer/operator, the `ideate`/`crucible` skills, the run‑derivation feedback into the next ideation.*
 

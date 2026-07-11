@@ -11,6 +11,7 @@ import path from "node:path";
 const HOME = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-compiled-run-browser-only-"));
 process.env.GTM_IDE_HOME = HOME;
 process.env.HOST = "127.0.0.1";
+process.env.GTM_IDE_FOUNDER_CODE = "compiled-run-founder";
 
 async function freePort() {
   const probe = net.createServer();
@@ -83,12 +84,16 @@ function decisionsFor(run) {
 }
 
 async function browserSessionCookie() {
-  const response = await fetch(`${base}/api/health`);
+  const response = await fetch(`${base}/api/founder-session`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code: "compiled-run-founder" }),
+  });
   const setCookie = typeof response.headers.getSetCookie === "function"
     ? response.headers.getSetCookie().join("; ")
     : (response.headers.get("set-cookie") ?? "");
   const match = setCookie.match(/gtm_session=[^;]+/);
-  assert.ok(match, "the page-load GET issues the browser session cookie");
+  assert.ok(match, "claiming the founder session with the one-time code issues the browser session cookie");
   return match[0];
 }
 

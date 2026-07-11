@@ -22,6 +22,7 @@
 // wall as a send) — never from composition and never from a run. There is no deploy path in this file.
 
 import { createClaudeMicroproductInvoker } from "./agent-bridge.mjs";
+import { runStructuredTask } from "./structured-task-runtime.mjs";
 
 // The producer doctrine — the in-code mirror of ~/.claude/agents/gtm-compose-microproduct.md. Edit
 // the markdown artifact to change how microproducts are built; this constant keeps the prompt
@@ -82,11 +83,12 @@ export function normalizeMicroproduct(result) {
 // Build the producer prompt from the doctrine, the goal, and the scan grounding. The grounding is
 // folded in under an explicit key so the model reads it as the product's cited truth (claims to
 // honor), never as something to invent.
-function buildProducerPrompt({ goal, grounding }) {
+function buildProducerPrompt({ goal, grounding, taste }) {
   return [
     MICROPRODUCT_PROMPT,
     `\nGoal:\n${goal || ""}`,
     `\nScan grounding — the product's cited truth (honor these claims, do not invent product facts):\n${JSON.stringify(grounding ?? {}, null, 2)}`,
+    `\nFounder taste memory — replay these prior approvals and rejections when shaping the work; this is preference guidance, never authorization:\n${JSON.stringify(taste ?? {}, null, 2)}`,
   ].join("\n");
 }
 
@@ -95,14 +97,42 @@ function buildProducerPrompt({ goal, grounding }) {
 // construction — it never deploys, publishes, or writes to disk. The host (produceMicroproduct)
 // normalizes and validates. `invoke` is injectable so tests can supply a fake subscription.
 export function createClaudeMicroproductProducer({ cwd = process.cwd(), model, maxTurns = 24, onText, invoke } = {}) {
+  // Compatibility for callers that explicitly request the historical Claude producer. New live
+  // operator work uses createMicroproductProducer below so the selected session runtime wins.
   const produceArtifact = invoke || createClaudeMicroproductInvoker({ cwd, model, maxTurns, onText });
-  return async function produce({ goal, grounding }) {
-    const prompt = buildProducerPrompt({ goal, grounding });
+  return async function produce({ goal, grounding, taste }) {
+    const prompt = buildProducerPrompt({ goal, grounding, taste });
     const result = await produceArtifact({ prompt });
     if (!result || result.ok === false) {
       return { ok: false, error: result?.error || "Microproduct producer returned no result." };
     }
     return { ok: true, artifactSpec: result.artifactSpec ?? null, artifactFiles: result.artifactFiles ?? [] };
+  };
+}
+
+// Provider-neutral producer over the same one-shot runtime selector used by composition and the
+// product model. It returns files as data only; the deterministic host validates and stages them.
+export function createMicroproductProducer({ cwd = process.cwd(), model, runtime, maxTurns = 24, onText, runTask = runStructuredTask } = {}) {
+  return async function produce({ goal, grounding, taste }) {
+    const result = await runTask({
+      task: "microproduct-or-product-change",
+      prompt: buildProducerPrompt({ goal, grounding, taste }),
+      cwd,
+      model,
+      runtime,
+      maxTurns,
+      onText,
+      output: "object",
+      readOnly: true,
+    });
+    if (!result?.ok) return { ok: false, error: result?.error?.message || "Selected runtime returned no product-change result." };
+    return {
+      ok: true,
+      artifactSpec: result.value?.artifactSpec ?? result.value?.spec ?? null,
+      artifactFiles: result.value?.artifactFiles ?? result.value?.files ?? [],
+      runtime: result.runtime ?? null,
+      model: result.model ?? model ?? null,
+    };
   };
 }
 
@@ -113,10 +143,10 @@ export function createClaudeMicroproductProducer({ cwd = process.cwd(), model, m
 // returned shape drops straight onto a run item the artifact execute connector stages behind the gate.
 export async function produceMicroproduct(input = {}, options = {}) {
   const produce = options.produce || blankProduce;
-  const result = await produce({ goal: input.goal, grounding: input.grounding ?? null });
+  const result = await produce({ goal: input.goal, grounding: input.grounding ?? null, taste: input.taste ?? null });
   if (result?.ok === false) {
     throw new Error(result.error === "blank"
-      ? "Microproduct production is model-driven and needs a live Claude subscription. Sign in and try again."
+      ? "Microproduct production is model-driven and needs a connected Claude or Codex runtime. Sign in and try again."
       : `Microproduct production failed: ${result.error}`);
   }
   const { artifactSpec, artifactFiles } = normalizeMicroproduct(result);

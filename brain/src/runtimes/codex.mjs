@@ -108,11 +108,104 @@ export function buildCodexArgs({
     "-c", 'mcp_servers.gtm-operator.default_tools_approval_mode="approve"',
     "-c", "mcp_servers.gtm-operator.required=true",
     "-c", `developer_instructions=${JSON.stringify(codexDeveloperInstructions(system))}`,
-    "-m", model,
+    ...(model ? ["-m", model] : []),
   ];
   return resumeId
     ? ["exec", "resume", ...shared, resumeId, prompt]
     : ["exec", ...shared, prompt];
+}
+
+// Product changes use the same authenticated Codex adapter but a different, intentionally
+// tiny door from the operator MCP runtime: the isolated worktree is writable, while shell,
+// apps, network, inherited MCP servers, hooks, and approvals are disabled. Codex can use its
+// built-in patch tool; it cannot execute generated code or reach an outward action.
+export function buildCodexProductChangeArgs({ prompt, model }) {
+  return [
+    "exec",
+    "--json",
+    "--ephemeral",
+    "--ignore-user-config",
+    "--ignore-rules",
+    "--strict-config",
+    "-s", "workspace-write",
+    "-c", 'approval_policy="never"',
+    "-c", "features.shell_tool=false",
+    "-c", "features.unified_exec=false",
+    "-c", "features.apps=false",
+    "-c", "features.hooks=false",
+    "-c", "features.plugin_sharing=false",
+    "-c", "features.computer_use=false",
+    "-c", "features.browser_use=false",
+    "-c", "features.in_app_browser=false",
+    "-c", "features.network_proxy.enabled=false",
+    ...(model ? ["-m", model] : []),
+    prompt,
+  ];
+}
+
+export async function runCodexProductChange({
+  prompt,
+  cwd,
+  model,
+  env = process.env,
+  spawnProcess = spawn,
+  timeoutMs = Number(env.GTM_IDE_CODEX_TIMEOUT_MS) || 600_000,
+} = {}) {
+  const binary = findCodexBinary(env);
+  if (!binary.ok) return { text: "", error: { kind: "unavailable", message: binary.reason } };
+  const args = buildCodexProductChangeArgs({ prompt, model });
+  return new Promise((resolve) => {
+    const child = spawnProcess(binary.path, args, {
+      cwd,
+      env: { ...env },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    let text = "";
+    let terminalError = "";
+    let settled = false;
+    let timedOut = false;
+    let forceKill = null;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (forceKill) clearTimeout(forceKill);
+      resolve(result);
+    };
+    const consume = (line) => {
+      const event = parseCodexEvent(line);
+      if (event?.type === "text" && event.text) text = String(event.text);
+      if (event?.type === "completed" && event.summary) text ||= String(event.summary);
+      if (event?.type === "error") terminalError = String(event.message || "Codex failed.");
+    };
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      child.kill?.("SIGTERM");
+      // Do not hand the worktree back to feature-builder while the writer may still be alive.
+      // A resistant child gets a bounded grace period, then SIGKILL; settlement happens on close.
+      forceKill = setTimeout(() => child.kill?.("SIGKILL"), 2_000);
+      if (typeof forceKill.unref === "function") forceKill.unref();
+    }, timeoutMs);
+    child.stdout?.setEncoding?.("utf8");
+    child.stdout?.on?.("data", (chunk) => {
+      stdout += chunk;
+      const lines = stdout.split("\n");
+      stdout = lines.pop() ?? "";
+      for (const line of lines) consume(line);
+    });
+    child.stderr?.setEncoding?.("utf8");
+    child.stderr?.on?.("data", (chunk) => { stderr += chunk; });
+    child.on("error", (error) => finish({ text, error: { kind: "error", message: error.message } }));
+    child.on("close", (code) => {
+      if (stdout.trim()) consume(stdout);
+      if (timedOut) finish({ text, error: { kind: "budget", message: "Codex reached the product-change time limit and was stopped before the worktree was inspected." } });
+      else if (terminalError) finish({ text, error: { kind: "error", message: terminalError } });
+      else if (code === 0) finish({ text, error: null });
+      else finish({ text, error: { kind: "error", message: stderr.trim().slice(-2_000) || `Codex exited with status ${code}.` } });
+    });
+  });
 }
 
 // JSONL events are decoded defensively: Codex emits stable thread/turn/item
@@ -153,6 +246,10 @@ function unavailableReason(env, probe) {
 export const codexRuntime = {
   id: "codex",
   label: "Codex",
+
+  async runProductChange(input) {
+    return runCodexProductChange(input);
+  },
 
   isAvailable({ env = process.env, probe } = {}) {
     if (env.GTM_IDE_DISABLE_CODEX) {

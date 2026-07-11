@@ -26,9 +26,9 @@ import {
 import { loadProject, updateSharedContext } from "./project-store.mjs";
 import { getGtmIdea, saveGtmIdea } from "./idea-store.mjs";
 import { recordFounderDecision, recordIdeaDecisions } from "./feedback-ledger.mjs";
-import { authModeLabel, selectRuntime } from "./runtimes/index.mjs";
+import { authModeLabel, getRuntime, selectRuntime } from "./runtimes/index.mjs";
 import { filterSafeTools } from "./tool-safety.mjs";
-import { NAKED_TOOLS } from "./operator-tools.mjs";
+import { NAKED_TOOLS, TOOLS } from "./operator-tools.mjs";
 import {
   addEvent,
   authorizeGateRelease,
@@ -42,6 +42,7 @@ import {
 } from "./operator-run-core.mjs";
 import { recallPriorSessions, systemPrompt } from "./operator-prompt.mjs";
 import { executeTool } from "./operator-tool-exec.mjs";
+import { createOperatorCapabilityRegistry, DISPATCH_ONLY_OPERATOR_TOOLS } from "./operator-capabilities.mjs";
 import { safeLogFailure, makeFailureSink } from "./failure-log.mjs";
 import { resolveGitShaAsync } from "./friction.mjs";
 import { persistence } from "./persistence.mjs";
@@ -91,6 +92,7 @@ export async function runOperatorSession(id, runtime = {}) {
     }, options);
   }
 
+  const automaticRuntime = !session.runtime && !session.model;
   // Pick the runtime that will reason this session. GTM IDE keeps owning every
   // durable and safety decision below; the runtime only produces turns and asks
   // GTM IDE (via ctx callbacks) to execute the tool calls it proposes.
@@ -127,7 +129,7 @@ export async function runOperatorSession(id, runtime = {}) {
   }, {
     type: "operator_started",
     title: session.stepCount ? "Operator resumed" : "Operator started",
-    detail: `Running ${session.model} via ${adapter.label}${authLabel ? ` on the ${authLabel}` : ""}.`,
+    detail: `Running ${session.model || "its default model"} via ${adapter.label}${authLabel ? ` on the ${authLabel}` : ""}.`,
   }, options);
 
   // Codex runs the MCP bridge in a separate process. A tool call can therefore persist a founder wall
@@ -142,6 +144,18 @@ export async function runOperatorSession(id, runtime = {}) {
   // own stores, so the runtime never touches session state, the ledger, gates,
   // or cancellation directly — that boundary is what the provider-neutral split
   // is for.
+  const modelTools = filterSafeTools(NAKED_TOOLS);
+  // Compatibility tools remain dispatchable for resumed historical sessions and direct adapters, while
+  // only the naked subset is advertised to a fresh model.
+  const capabilities = createOperatorCapabilityRegistry([
+    ...filterSafeTools(TOOLS),
+    ...DISPATCH_ONLY_OPERATOR_TOOLS,
+  ], (tool, input, context) => executeTool(
+    context.session,
+    { id: context.toolCallId, name: tool.name, input },
+    context.options,
+  ));
+  let toolInvoked = false;
   const ctx = {
     sessionId: id,
     // The objective the runtime drives toward. A goal session uses its goal; an ambient session uses
@@ -156,7 +170,7 @@ export async function runOperatorSession(id, runtime = {}) {
     // filterSafeTools re-asserts the outbound/approval guard over the list the model actually sees, so
     // the direct-Anthropic runtime path gets the SAME refusal the MCP bridge already applies — a future
     // tool named like send/approve/deploy can never reach the model on either door.
-    tools: filterSafeTools(NAKED_TOOLS),
+    tools: modelTools,
     client: selection.client ?? null,
     query: runtime.query ?? null,
     options,
@@ -201,6 +215,7 @@ export async function runOperatorSession(id, runtime = {}) {
       session = addEvent(refreshSession(), { type: "operator_note", title: "Operator reasoning", detail: text }, options);
     },
     onToolStart: (name) => {
+      toolInvoked = true;
       session = addEvent(refreshSession(), {
         type: "tool_started",
         title: `Using ${name.replaceAll("_", " ")}`,
@@ -217,7 +232,11 @@ export async function runOperatorSession(id, runtime = {}) {
       }, options);
     },
     runTool: async ({ id: toolId, name, input }) => {
-      const execution = await executeTool(refreshSession(), { id: toolId, name, input }, options);
+      toolInvoked = true;
+      const execution = await capabilities.invoke(name, input, {
+        actor: "model", exposure: "operator", session: refreshSession(), options,
+        toolCallId: toolId, idempotencyKey: toolId,
+      });
       session = execution.session;
       return { result: execution.result, pause: execution.pause };
     },
@@ -261,6 +280,35 @@ export async function runOperatorSession(id, runtime = {}) {
     // completed (via the complete tool) and persisted it. Return the truth on disk.
     return getOperatorSessionFresh(id, options);
   } catch (error) {
+    // Auto may switch providers only before any Drover tool ran. Once a tool has been invoked, retrying
+    // with another model could repeat a durable mutation under a new provider tool-call id; fail honestly
+    // instead. Tests may inject fallbackRuntime; production probes the other registered adapters.
+    //
+    // Failover is a PROVIDER-selection recovery: it only makes sense when the adapter that just crashed
+    // was a real registered runtime the selector chose (codex/claude-code/anthropic). A directly-injected
+    // custom adapter — a test drive loop or a custom transport — crashing must fail honestly here, never
+    // silently switch to a live provider (which is how a unit test reached the real Codex CLI). An explicit
+    // fallbackRuntime still opts a caller in.
+    const adapterIsRegistered = getRuntime(adapter.id) === adapter;
+    const canFailover = runtime.fallbackRuntime != null || adapterIsRegistered;
+    if (automaticRuntime && !runtime.autoFailoverAttempted && !toolInvoked && canFailover) {
+      let fallback = runtime.fallbackRuntime ?? null;
+      if (!fallback) {
+        const candidates = adapter.id === "codex" ? ["claude-code", "anthropic"] : ["codex", "anthropic"];
+        for (const forced of candidates) {
+          const candidate = selectRuntime({ forced });
+          if (candidate.adapter && candidate.adapter.id !== adapter.id) { fallback = candidate.adapter; break; }
+        }
+      }
+      if (fallback) {
+        addEvent({ ...getOperatorSession(id, options), status: "ready", runtime: null }, {
+          type: "runtime_failover",
+          title: `Auto switched from ${adapter.label} to ${fallback.label}`,
+          detail: "The first runtime stopped before using any Drover tool, so switching cannot duplicate work.",
+        }, options);
+        return runOperatorSession(id, { ...runtime, runtime: fallback, forced: undefined, autoFailoverAttempted: true });
+      }
+    }
     const message = error instanceof Error ? error.message : String(error);
     // Self-observation: an uncaught crash in the drive loop is filed into the dogfood queue so the team
     // sees what to fix. Best-effort and never-throws — the session's failed status below is unchanged

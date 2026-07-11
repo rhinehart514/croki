@@ -1,11 +1,21 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CANONICAL_TOOLS, LEGACY_TOOLS, TOOLS, TOOL_MAP } from "../src/mcp.mjs";
+import { createOperatorCapabilityRegistry } from "../src/operator-capabilities.mjs";
 
 const names = TOOLS.map((tool) => tool.name);
 const canonicalNames = CANONICAL_TOOLS.map((tool) => tool.name);
 
 describe("MCP canonical verb surface", () => {
+  it("uses the shared provider-neutral policy for all six canonical verbs", () => {
+    const registry = createOperatorCapabilityRegistry(CANONICAL_TOOLS);
+    assert.deepEqual(
+      registry.viewForActor("model", "publicMcp").map((item) => item.id),
+      ["ask", "focus", "inspect", "propose", "record", "run"],
+    );
+    assert.equal(registry.get("inspect").lane, "read-only");
+    assert.equal(registry.get("run").lane, "reversible-local");
+  });
   it("advertises the six preferred verbs first while keeping legacy capabilities discoverable", () => {
     assert.deepEqual(names.slice(0, 6), ["inspect", "focus", "ask", "propose", "record", "run"]);
     assert.deepEqual(canonicalNames, names.slice(0, 6));
@@ -25,8 +35,8 @@ describe("MCP canonical verb surface", () => {
       assert.equal(ref.properties.type.enum, undefined, "reference types stay open");
     }
     assert.match(TOOL_MAP.get("run").description, /founder gate/i);
-    assert.match(TOOL_MAP.get("record").description, /cannot pin durable clarity/i);
-    assert.deepEqual(TOOL_MAP.get("record").inputSchema.properties.kind.enum, ["session_note", "model_artifact", "question_proposal"]);
+    assert.match(TOOL_MAP.get("record").description, /shared canvas/i);
+    assert.deepEqual(TOOL_MAP.get("record").inputSchema.properties.kind.enum, ["session_note", "model_artifact", "work_artifact", "goal", "goal_relation", "work_relationship", "question_proposal"]);
   });
 
   it("keeps prior direct compose/run capabilities as advertised compatibility adapters", () => {

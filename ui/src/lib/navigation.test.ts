@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { describeSurface, resolveCanvasLens, resolveEngineerEscape, resolveLensSelection, useNavigationLayers, type SurfaceInputs } from "./navigation";
+import { describeSurface, resolveCanvasFocusEscape, useNavigationLayers, type SurfaceInputs } from "./navigation";
 
 const base: SurfaceInputs = {
   convexEnabled: false,
@@ -63,19 +63,10 @@ describe("describeSurface", () => {
   });
 });
 
-describe("terrain altitude navigation", () => {
-  it("defaults to Operator until a pipeline is explicitly focused", () => {
-    expect(resolveCanvasLens(null)).toBe("operator");
-    expect(resolveCanvasLens(null, true)).toBe("operator");
-    expect(resolveCanvasLens("pipeline-1")).toBe("engineer");
-  });
-
-  it("cannot enter an empty Engineer graph and returns outward by clearing the pipeline", () => {
-    expect(resolveLensSelection("engineer", null, [])).toEqual({ lens: "operator", channelId: null });
-    expect(resolveLensSelection("engineer", null, ["pipeline-1"])).toEqual({ lens: "engineer", channelId: "pipeline-1" });
-    expect(resolveLensSelection("operator", "pipeline-1", ["pipeline-1"])).toEqual({ lens: "operator", channelId: null });
+describe("continuous canvas navigation", () => {
+  it("steps outward by clearing pipeline focus without changing canvas surface", () => {
     const origin = { kind: "anchor", ref: { type: "terrain-hypothesis", id: "h1" } };
-    expect(resolveEngineerEscape(origin)).toEqual({ lens: "operator", channelId: null, focus: origin });
+    expect(resolveCanvasFocusEscape(origin)).toEqual({ channelId: null, focus: origin });
   });
 });
 

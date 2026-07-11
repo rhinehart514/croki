@@ -3,17 +3,12 @@
 // changed. The prior guard (A4) refused an approval stamped `x-gtm-actor: agent`, but that trusts the
 // caller to incriminate itself with the header. A capable agent holding raw loopback HTTP can POST an
 // approval with NO header and be treated as the founder — the brain server has no auth otherwise. This
-// closes that residual hole with a capability the real page holds and a header-less raw caller does not:
-// a per-process random token, minted server-side at startup and handed ONLY to a browser that actually
-// loaded a page (delivered as an HttpOnly, SameSite=Strict cookie on GET responses). An approval must
-// carry it or it is refused — INDEPENDENT of the agent header, so a blind raw-curl POST with no cookie
-// cannot release.
+// closes that residual hole with a capability the founder explicitly claims using the one-time code shown
+// in the Drover terminal. A successful claim receives an HttpOnly, SameSite=Strict cookie. No GET or API
+// read emits the token. An approval must carry it or it is refused, independently of the agent header.
 //
-// Scope: this is the header-less blind-POST defense. It is not cryptographic browser-proof against a local
-// process that scripts a GET to scrape the Set-Cookie and replays it — no client-side secret can be, on an
-// unauthenticated loopback, and a login system is explicitly out of scope for this single-founder desktop
-// app. It composes with A4 (agent-stamped OR missing-token both refused) so the SANCTIONED agent front door
-// (mcp.mjs, always stamped) is closed regardless of any token it might harvest.
+// This composes with the agent stamp: agent-stamped traffic is refused even if it somehow obtains the
+// founder cookie. The separate terminal code is the authentication boundary for the loopback service.
 import crypto from "node:crypto";
 
 const SESSION_COOKIE = "gtm_session";
@@ -21,6 +16,11 @@ const SESSION_COOKIE = "gtm_session";
 // caller that never loaded a page in this process lifetime never received the cookie. This module is
 // imported once at startup, so the token is minted exactly once — the same "once per process" guarantee.
 const SESSION_TOKEN = crypto.randomBytes(32).toString("hex");
+const FOUNDER_CODE = String(process.env.GTM_IDE_FOUNDER_CODE || crypto.randomBytes(6).toString("hex")).trim();
+const CLAIM_WINDOW_MS = 60_000;
+const CLAIM_LIMIT = 8;
+let claimWindowStartedAt = 0;
+let claimAttempts = 0;
 
 function parseCookies(header) {
   const jar = Object.create(null);
@@ -46,18 +46,36 @@ export function requestHasSessionToken(req) {
   }
 }
 
-// Hand the session token to a browser that actually loaded a page. Only on GET (page load / asset / read),
-// and only when the request does not already carry it — so the write/approval POST never emits the token in
-// its own response, steady-state requests stay cacheable, and the very first GET / establishes the cookie
-// before any approval UI can exist. Set via setHeader BEFORE any handler's writeHead, which Node merges
-// (writeHead wins only on fields it also sets, and none set Set-Cookie).
-export function issueSessionCookie(req, res) {
-  if (req.method !== "GET") return;
-  if (requestHasSessionToken(req)) return;
+export function founderBootstrapCode() {
+  return FOUNDER_CODE;
+}
+
+function sameSecret(left, right) {
+  const a = Buffer.from(String(left ?? ""));
+  const b = Buffer.from(String(right ?? ""));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+// A founder capability is claimed through a separate local code shown in the terminal that launched
+// Drover. No GET, health probe, asset request, or model fetch ever receives it. This is an actual
+// authentication boundary for the otherwise unauthenticated loopback service, not a browser-shape guess.
+export function claimFounderSession(req, res, code) {
+  const isAgent = String(req?.headers?.["x-gtm-actor"] ?? "").trim().toLowerCase() === "agent";
+  if (isAgent) return false;
+  const now = Date.now();
+  if (!claimWindowStartedAt || now - claimWindowStartedAt > CLAIM_WINDOW_MS) {
+    claimWindowStartedAt = now;
+    claimAttempts = 0;
+  }
+  claimAttempts += 1;
+  if (claimAttempts > CLAIM_LIMIT || !sameSecret(code, FOUNDER_CODE)) return false;
   res.setHeader(
     "Set-Cookie",
     `${SESSION_COOKIE}=${SESSION_TOKEN}; Path=/; HttpOnly; SameSite=Strict`,
   );
+  claimAttempts = 0;
+  claimWindowStartedAt = now;
+  return true;
 }
 
 // The release-authority guard for a raw graph run (/api/graph/run + /stream). A gate approval is a
@@ -93,4 +111,19 @@ export function authorizeReleaseForRequest(req) {
       throw error;
     }
   };
+}
+
+// Immediate form for other founder-only local mutations (discarding an isolated worktree,
+// reviewing/applying/reverting a code revision). Same two-factor local boundary as a gate:
+// sanctioned agent traffic is refused even if it somehow carries a cookie, and raw tokenless
+// loopback traffic is refused even when it omits the agent header.
+export function authorizeFounderWriteForRequest(req, action = "This decision") {
+  const isAgent = String(req?.headers?.["x-gtm-actor"] ?? "").trim().toLowerCase() === "agent";
+  if (!isAgent && requestHasSessionToken(req)) return;
+  const error = new Error(isAgent
+    ? `${action} is founder-only. A model or MCP session cannot make this decision.`
+    : `${action} must come from the Drover page. This request carries no founder browser session.`);
+  error.code = "founder_decision_forbidden";
+  error.status = 403;
+  throw error;
 }

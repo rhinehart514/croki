@@ -95,12 +95,15 @@ describe("resident GTM operator runtime", () => {
     const session = createOperatorSession({ goal: "Work the goal.", graphId: defaultGraphTemplate().id }, options);
     const priorKey = process.env.ANTHROPIC_API_KEY;
     const priorDisable = process.env.GTM_IDE_DISABLE_CLAUDE_CODE;
+    const priorDisableCodex = process.env.GTM_IDE_DISABLE_CODEX;
     delete process.env.ANTHROPIC_API_KEY;
     process.env.GTM_IDE_DISABLE_CLAUDE_CODE = "1";
+    process.env.GTM_IDE_DISABLE_CODEX = "1";
     try {
       const failed = await runOperatorSession(session.id, { options });
       assert.equal(failed.status, "failed");
       assert.match(failed.error, /Claude Code/);
+      assert.match(failed.error, /Codex/);
       assert.match(failed.error, /ANTHROPIC_API_KEY/);
       assert.ok(failed.events.some((event) => event.type === "session_failed"));
     } finally {
@@ -108,6 +111,8 @@ describe("resident GTM operator runtime", () => {
       else process.env.ANTHROPIC_API_KEY = priorKey;
       if (priorDisable === undefined) delete process.env.GTM_IDE_DISABLE_CLAUDE_CODE;
       else process.env.GTM_IDE_DISABLE_CLAUDE_CODE = priorDisable;
+      if (priorDisableCodex === undefined) delete process.env.GTM_IDE_DISABLE_CODEX;
+      else process.env.GTM_IDE_DISABLE_CODEX = priorDisableCodex;
     }
   });
 
@@ -120,6 +125,30 @@ describe("resident GTM operator runtime", () => {
       }]),
     });
     assert.equal(completed.runtime, "anthropic");
+  });
+
+  it("Auto switches providers only when the first runtime fails before using a Drover tool", async () => {
+    const session = createOperatorSession({ goal: "Choose the safe runtime.", graphId: defaultGraphTemplate().id }, options);
+    let fallbackCalls = 0;
+    const first = { id: "first", label: "First runtime", async drive() { throw new Error("provider unavailable"); } };
+    const fallback = { id: "fallback", label: "Fallback runtime", async drive() { fallbackCalls += 1; return { kind: "completed", summary: "Recovered safely." }; } };
+
+    const completed = await runOperatorSession(session.id, { runtime: first, fallbackRuntime: fallback, options });
+    assert.equal(completed.status, "completed");
+    assert.equal(fallbackCalls, 1);
+    assert.ok(completed.events.some((event) => event.type === "runtime_failover"));
+  });
+
+  it("Auto never switches providers after a tool starts", async () => {
+    const session = createOperatorSession({ goal: "Do not duplicate work.", graphId: defaultGraphTemplate().id }, options);
+    let fallbackCalls = 0;
+    const first = { id: "first", label: "First runtime", async drive(ctx) { ctx.onToolStart("inspect"); throw new Error("failed after tool start"); } };
+    const fallback = { id: "fallback", label: "Fallback runtime", async drive() { fallbackCalls += 1; return { kind: "completed" }; } };
+
+    const failed = await runOperatorSession(session.id, { runtime: first, fallbackRuntime: fallback, options, gitSha: null });
+    assert.equal(failed.status, "failed");
+    assert.equal(fallbackCalls, 0);
+    assert.ok(!failed.events.some((event) => event.type === "runtime_failover"));
   });
 
   it("reads the session project's linked workspace instead of another product's newest scan", () => {
@@ -372,6 +401,8 @@ describe("resident GTM operator runtime", () => {
     assert.equal(resolved.pendingProposal, null);
     assert.equal(loadFlow(graphId, null, options).graph.nodes.length, baseNodeCount, "reject changed nothing");
     assert.ok(resolved.events.some((event) => event.type === "graph_proposal_discarded"));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(getOperatorSession(session.id, options).status, "completed");
   });
 
   // Craft a session paused at a gate with one hand-built staged item, so the refine resolver can be

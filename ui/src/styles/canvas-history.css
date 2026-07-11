@@ -116,3 +116,42 @@
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* Durable project-canvas structure history. It deliberately sits beside, rather than merges into, the
+   pipeline graph's session-only history: the label names its scope and its trail explains the boundary. */
+.chist-structure.with-pipeline-history { left: calc(var(--space-12) * 3); }
+.chist-structure-label {
+  padding: 0 var(--space-1) 0 var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.chist-structure-trail { width: calc(var(--space-12) * 6 + var(--space-4)); }
+.chist-structure-note,
+.chist-structure-error,
+.chist-structure-empty {
+  margin: 0;
+  padding: 0 var(--space-2) var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+.chist-structure-error { color: var(--danger); }
+.chist-structure-empty { padding-block: var(--space-3); }
+.chist-structure-dot {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--muted);
+}
+.chist-scope {
+  display: inline-block;
+  margin-right: var(--space-1);
+  color: var(--ink-2);
+  font-weight: 620;
+}
+
+@media (max-width: 640px) {
+  .chist-structure.with-pipeline-history {
+    left: var(--space-3);
+    bottom: calc(var(--space-12) + var(--space-4));
+  }
+}

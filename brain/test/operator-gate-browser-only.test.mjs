@@ -25,6 +25,7 @@ import path from "node:path";
 const HOME = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-operator-gate-browser-only-"));
 process.env.GTM_IDE_HOME = HOME;
 process.env.HOST = "127.0.0.1";
+process.env.GTM_IDE_FOUNDER_CODE = "operator-gate-founder";
 
 async function freePort() {
   const probe = net.createServer();
@@ -93,12 +94,16 @@ function gatedGraph() {
 // What a real browser does on first contact: a GET lands the HttpOnly session cookie. Read it back and
 // replay it as the Cookie header, exactly as the browser auto-sends it on the later approval POST.
 async function browserSessionCookie() {
-  const res = await fetch(`${base}/api/health`);
+  const res = await fetch(`${base}/api/founder-session`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code: "operator-gate-founder" }),
+  });
   const setCookie = typeof res.headers.getSetCookie === "function"
     ? res.headers.getSetCookie().join("; ")
     : (res.headers.get("set-cookie") ?? "");
   const match = setCookie.match(/gtm_session=[^;]+/);
-  assert.ok(match, "the server issues a session cookie on a GET");
+  assert.ok(match, "claiming the founder session with the one-time code issues a session cookie");
   return match[0];
 }
 

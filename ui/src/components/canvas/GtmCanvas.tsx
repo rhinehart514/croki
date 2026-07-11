@@ -3,26 +3,18 @@ import { FocusedPipelineReadout } from "@/components/canvas/FocusedPipelineReado
 import type { NodeEditorBridge } from "@/components/nodeEditorBridge";
 import type { GatePromote } from "@/lib/gateItem";
 import type { WovenAxis, WovenFocus } from "@/lib/wovenOverlay";
-import { CanvasShell, type LensDef, type LensProps } from "@/components/canvas/CanvasShell";
 import type {
   ChannelFeed, ChannelMeta, Claim, ConnectorMeta, DirectedFeed, GateDecision, GateDeltaDecision, GtmExperiment, GTMContractAudit, GTMGraph, GTMItem, GTMNode,
   GTMRunResult, NodeSelection, OperatingView, Person, WovenGraph,
 } from "@/types";
 import type { RunSummary } from "@/api";
+import type { CanvasCreateRequest, CanvasRegionCreateRequest, CanvasRelationshipRequest } from "@/lib/canvasNativeActions";
+import type { Viewport } from "@xyflow/react";
 
-// GtmCanvas — GTM mode's instance of the generic CanvasShell. It projects the GTM operational object
-// model through two lenses, chosen by channel state alone (no in-canvas switcher):
-//   - "channel-flow" IS the existing GraphCanvas (one channel's Source → … → Gate → Measure). Single-
-//     channel behavior is unchanged — this lens just forwards the same prop bag App used to mount the
-//     bare GraphCanvas with.
-//   - "engine" is the single GTM OVERVIEW: every built channel as a node in one network, the feeds
-//     between them, and the shared ICP/claim context header. An earlier separate channel-grid
-//     tile view was merged into this lens (its only unique value was the context header), so there is
-//     one overview altitude, not two near-identical ones.
-//
-// People and Experiments are reached as summoned cards in App, not as lenses here. The shell's
-// layoutId is "gtm-lens" — distinct from Product mode's "product-lens" so the SlidingTabs pills never
-// spring into each other across modes.
+// GtmCanvas is one continuous coordinate space. Goals, work, shared objects, regions, executable
+// pipeline steps, founder gates, and outcomes coexist in one React Flow surface. Focusing a pipeline
+// changes camera emphasis and the contextual readout only; it never swaps the founder into a different
+// renderer or product mode.
 
 export type GtmCanvasModel = {
   // The active project — the board lens reads GET /api/projects/:id/board with it. Null before a
@@ -58,8 +50,7 @@ export type GtmCanvasModel = {
   // consequence honestly ("sends to real recipients" vs "stages locally, nothing sends until you
   // connect a sender"). App already passes it; declaring it here makes the readout's derivation real.
   transportConnected?: boolean;
-  // The outcome door on an approved gate card — record what came back on a sent item. Both lenses use
-  // it: the Engineer lens threads it into GraphCanvas, the Move lens rides it on the gate bag.
+  // The outcome door on an approved gate card records what came back on a sent item in place.
   onRecordOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
   // Veto-as-loop on the gate: send a staged item back to the crew to rework in the Composer.
   onRefineItem?: (item: GTMItem, note: string) => void | Promise<void>;
@@ -75,6 +66,9 @@ export type GtmCanvasModel = {
   onApproveGate?: (nodeId: string) => void;
   onAddNode?: (spec: Partial<GTMNode> & { label: string }) => void;
   onConnectNodes?: (source: string, target: string) => void;
+  onCreateCanvasObject?: (request: CanvasCreateRequest) => void | Promise<void>;
+  onConnectCanvasObjects?: (request: CanvasRelationshipRequest) => void | Promise<void>;
+  onCreateCanvasRegion?: (request: CanvasRegionCreateRequest) => void | Promise<void>;
   onDeleteEdges?: (edgeIds: string[]) => void;
   onNodePositionChange?: (nodeId: string, position: { x: number; y: number }, origin?: "drag" | "layout") => void;
   nodeEditor?: NodeEditorBridge | null;
@@ -108,17 +102,11 @@ export type GtmCanvasModel = {
   // invitation instead of a separate ranked-bets page. This focuses the goal composer so the founder
   // states the outcome and Claude composes the first pipeline.
   onComposeFirst?: () => void;
-  // ── Operator lens: the ONE operating view over the whole fleet (Area 6) ──
-  // The cross-fleet read the Operator lens renders. Null before the first read resolves. This lens is the
-  // default many-motion view; the Engineer lens stays the single-motion editor.
+  // The cross-fleet operating read. Null before the first read resolves.
   operatingView?: OperatingView | null;
   // Fly to a parked run's real gate — the one click that opens the founder gate for a pulsing lane.
   onFlyToGate?: (target: { decisionId: string; sessionId: string | null; pipelineId: string | null; channelId: string }) => void;
-  // Open a lane's pipeline in the Engineer lens (the single-motion editor) — a quiet route, never forced.
-  onOpenLane?: (channelId: string) => void;
-  // ── The intertwined canvas (docs/INTERTWINED-CANVAS.md) — the Operator lens IS the woven canvas ──
-  // The woven projection over the same lanes + objects (object chips, tie edges, kind clusters), attached to
-  // the operating view by the backend. The Operator lens renders it as one GraphCanvas over the merged lanes.
+  // The woven projection over the same lanes and objects: object chips, tie edges, and kind clusters.
   woven?: WovenGraph | null;
   // The projection axis (objects = the moat view, type = the spread/forms view) and the focus-to-trace
   // selection — pure view state the host owns so the toggle persists across renders.
@@ -126,6 +114,12 @@ export type GtmCanvasModel = {
   wovenFocus?: WovenFocus;
   onWovenAxisChange?: (axis: WovenAxis) => void;
   onWovenSelect?: (focus: WovenFocus) => void;
+  onCanvasAnchorPositionChange?: (nodeId: string, position: { x: number; y: number }) => void;
+  onCanvasAuthorityChanged?: () => void | Promise<void>;
+  onCanvasRegionChange?: (regionId: string, patch: { position?: { x: number; y: number }; size?: { width: number; height: number }; collapsed?: boolean }) => void;
+  onCanvasRegionArchive?: (regionId: string) => void;
+  initialViewport?: Viewport | null;
+  onViewportChange?: (viewport: Viewport) => void;
   // Drag-to-wire a step onto an object chip / kind region — a composer steer, filled in by the crew.
   onWireObject?: (sourceStepId: string, targetId: string) => void;
   // Candidate lanes folded into the woven graph (docs/INTERTWINED-CANVAS.md decision 4) — the retired
@@ -143,49 +137,50 @@ export type GtmCanvasModel = {
   };
 };
 
-type GtmLensProps = LensProps<GtmCanvasModel, never>;
-
 // The left gutter the product-entry column occupies, published by ProductEntryColumn as --pentry-gutter
-// (0 when that column isn't mounted). Both lens panes pad their left edge by it so the canvas starts to
+// (0 when that column isn't mounted). The canvas pads its left edge by it so the canvas starts to
 // the RIGHT of the column — no node renders under it, and the column can't intercept a node's click.
 const GUTTER_STYLE = { paddingLeft: "var(--pentry-gutter, 0px)", transition: "padding-left 180ms ease" } as const;
 
-// ENGINEER — the pipeline builder. This is where the founder drops agents, tools, and data sources and
-// wires them into an executable pipeline: the node canvas (GraphCanvas), one pipeline's Source → … →
-// Gate → Measure, full-bleed and laid out left-to-right by causal depth. No story bands and no belief
-// spine here — the "why" lives in Move; Engineer is the machinery, where every input and data source
-// reads as its own node with its own grounding. A focused pipeline fills the canvas so you can build it;
-// the All-pipelines overview stacks every pipeline as a lane so you can organize the whole set.
-// A stable empty graph for the landing of a product with nothing wired yet: the same node canvas renders
-// its dotted ground so the founder never lands on a separate page — just an empty flow with a compose
-// invitation. A fixed id keeps GraphCanvas's layout memo from thrashing.
+// A stable empty graph keeps GraphCanvas's layout memo from thrashing before the first pipeline exists.
 const LANDING_EMPTY_GRAPH: GTMGraph = { id: "__landing-empty__", name: "New pipeline", version: "0", nodes: [], edges: [] };
 
-function EngineerLens({ model: m }: GtmLensProps) {
-  // No pipeline wired yet (the landing of a fresh product) → render the empty node canvas with a compose
-  // invitation, NOT a ranked-bets page. Once anything is built, the real graph takes over.
+function UnifiedCanvas({ model: m }: { model: GtmCanvasModel }) {
   const landing = !m.graph;
   const graph = m.graph ?? LANDING_EMPTY_GRAPH;
-  // Merge every pipeline into stacked lanes ONLY at the overview (no pipeline focused). Once a pipeline
-  // is focused, drop the merge so that ONE pipeline fills the canvas at a readable size — the old
-  // always-merged mount rendered a focused pipeline as a cramped lane crushed among the others.
-  const multiPipeline = m.activeChannelId ? null : m.multiPipeline;
-  // The action-altitude brief — shown when a single pipeline is focused, stating its meaning before the
-  // graph machinery (docs/production-direction/09 §Focused pipeline readout). Derived from real records;
-  // absent at the all-pipelines overview and on the empty landing.
+  const hasLanes = (m.operatingView?.lanes.length ?? 0) > 0 || m.channels.length > 0;
+  const axis = m.wovenAxis ?? "objects";
+  const parkedCount = (m.operatingView?.lanes ?? []).filter((lane) => lane.runState === "parked").length;
   const focusedChannel = m.activeChannelId ? m.channels.find((c) => c.id === m.activeChannelId) ?? null : null;
   const focusedLane = m.activeChannelId ? m.operatingView?.lanes.find((l) => l.channelId === m.activeChannelId) ?? null : null;
   const showReadout = !landing && !!m.activeChannelId && graph.nodes.length > 0;
+
   return (
     <div
-      className="engineer-lens"
-      data-testid="engineer-view"
+      className={`unified-gtm-canvas${showReadout ? " has-pipeline-focus" : ""}`}
+      data-testid="unified-canvas"
       data-channel-id={m.activeChannelId ?? ""}
       data-graph-id={graph.id}
       data-run-id={m.result?.runId ?? ""}
       data-pending-gates={m.result?.pendingGates?.join(",") ?? ""}
       style={{ position: "relative", height: "100%", minHeight: 0, ...GUTTER_STYLE }}
     >
+      <div className="woven-axisbar">
+        <div className="woven-axisseg" role="group" aria-label="Arrange canvas">
+          <button type="button" className={axis === "objects" ? "on" : ""} aria-pressed={axis === "objects"} onClick={() => m.onWovenAxisChange?.("objects")}>
+            Shared work
+          </button>
+          <button type="button" className={axis === "type" ? "on" : ""} aria-pressed={axis === "type"} onClick={() => m.onWovenAxisChange?.("type")}>
+            Work types
+          </button>
+        </div>
+        {m.wovenFocus ? (
+          <button type="button" className="woven-clearfocus" onClick={() => m.onWovenSelect?.(null)}>
+            Show everything
+          </button>
+        ) : null}
+        {parkedCount ? <span className="woven-parked"><b>{parkedCount}</b> need you</span> : null}
+      </div>
       {showReadout ? (
         <FocusedPipelineReadout
           channel={focusedChannel}
@@ -199,6 +194,21 @@ function EngineerLens({ model: m }: GtmLensProps) {
           running={m.running}
           onOpenAgentProfile={m.onOpenAgentProfile}
         />
+      ) : null}
+      {!hasLanes ? (
+        <div className="terrain-canvas-hint" role="status">
+          <strong>Your product-market terrain</strong>
+          <span>Start with what Drover found in the product. A pipeline appears only after you choose a move.</span>
+          {m.terrainState?.loading ? <small>Reading possible openings…</small>
+            : !m.terrainState?.runtimeConnected ? <small>Grounded truth is ready. Connect a runtime to read possible openings.</small>
+              : m.terrainState?.error ? <small>{m.terrainState.error}</small>
+                : m.terrainState?.hypothesisCount === 0 ? <small>No credible opening was returned yet. Product truth remains available.</small> : null}
+        </div>
+      ) : null}
+      {m.terrainState?.stale || m.terrainState?.partial ? (
+        <div className="terrain-state-note" role="status">
+          {m.terrainState.stale ? "Terrain updated; the model read is stale against newer product or market evidence." : "Some terrain sources are unavailable; loaded truth remains usable."}
+        </div>
       ) : null}
       <GraphCanvas
         connectors={m.connectors}
@@ -221,118 +231,17 @@ function EngineerLens({ model: m }: GtmLensProps) {
         onApproveGate={m.onApproveGate}
         onAddNode={m.onAddNode}
         onConnectNodes={m.onConnectNodes}
+        onCreateCanvasObject={m.onCreateCanvasObject}
+        onConnectCanvasObjects={m.onConnectCanvasObjects}
+        onCreateCanvasRegion={m.onCreateCanvasRegion}
         onDeleteEdges={m.onDeleteEdges}
         onNodePositionChange={m.onNodePositionChange}
         onSelect={m.onSelect}
         onPaneClick={m.onPaneClick}
         operatorCursor={m.operatorCursor}
         nodeEditor={m.nodeEditor}
-        multiPipeline={multiPipeline}
-        panTo={m.panTo}
-        people={m.people}
-        panelOpen={false}
-        result={m.result}
-        running={m.running}
-        runningNodeId={m.runningNodeId}
-        nodeBeats={m.nodeBeats}
-        selection={m.selection}
-        subsystemHealth={m.subsystemHealth}
-        projectId={m.projectId}
-      />
-      {graph.nodes.length === 0 ? (
-        <div className="blank-channel-guide">
-          <strong>{landing ? "Choose a focus before building" : "Direct what this pipeline should accomplish"}</strong>
-          <span>Describe the outcome you want and your crew composes the steps that reach it, stopping at your gate. Nothing has been chosen for you, and nothing sends without you.</span>
-          {landing && m.onComposeFirst ? (
-            <button type="button" className="blank-channel-compose" onClick={m.onComposeFirst}>
-              What should we understand, change, or pursue?
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-// OPERATOR — the INTERTWINED CANVAS (docs/INTERTWINED-CANVAS.md). The whole fleet as ONE woven graph:
-// every motion still a lane in one grammar, but now the shared objects are drawn once ON the canvas as
-// chips with tie edges converging from the steps that touched them — the intertwining drawn once, where the
-// threads meet. The old three-region OperatorLens (stacked lanes + a separate shared-map band + the
-// candidate board) collapses into this single surface: candidates are dashed lanes, the shared map is the
-// object chips, and the type-axis forms map is one toggle away. It reuses GraphCanvas's React Flow engine,
-// the merged-lane layout, the parked-gate pulse + fly-to, and every editing handler — a lane is a real
-// editable graph, and every edit re-derives the projection so new touches draw new ties live. The gate is
-// absolute through every edit. Two altitudes: the object axis (the moat view) and the type axis (the
-// forms/spread view); semantic zoom fans clusters into lanes as you zoom in.
-function OperatorLensPane({ model: m }: GtmLensProps) {
-  const hasLanes = (m.operatingView?.lanes.length ?? 0) > 0 || m.channels.length > 0;
-  const axis = m.wovenAxis ?? "objects";
-  // The parked lane count — surfaced on the axis bar so a waiting decision is never buried under the map.
-  const parkedCount = (m.operatingView?.lanes ?? []).filter((l) => l.runState === "parked").length;
-  return (
-    <div className="operator-lens-pane" style={{ position: "relative", height: "100%", minHeight: 0, ...GUTTER_STYLE }}>
-      {/* The one axis toggle — by shared objects (the moat) vs by GTM type (the forms/spread). Pure view
-          state; selection persists across it. The parked chip rides here so a needs-you decision is always
-          visible above the canvas. Opaque chrome, monochrome — the only color is the parked state. */}
-      <div className="woven-axisbar">
-        <div className="woven-axisseg" role="group" aria-label="Canvas axis">
-          <button type="button" className={axis === "objects" ? "on" : ""} aria-pressed={axis === "objects"} onClick={() => m.onWovenAxisChange?.("objects")}>
-            By shared objects
-          </button>
-          <button type="button" className={axis === "type" ? "on" : ""} aria-pressed={axis === "type"} onClick={() => m.onWovenAxisChange?.("type")}>
-            By GTM type
-          </button>
-        </div>
-        {m.wovenFocus ? (
-          <button type="button" className="woven-clearfocus" onClick={() => m.onWovenSelect?.(null)}>
-            Clear focus
-          </button>
-        ) : null}
-        {parkedCount ? <span className="woven-parked"><b>{parkedCount}</b> need you</span> : null}
-      </div>
-      {!hasLanes ? (
-        <div className="terrain-canvas-hint" role="status">
-          <strong>Your product-market terrain</strong>
-          <span>Start with what Drover found in the product. A pipeline appears only after you choose a move.</span>
-          {m.terrainState?.loading ? <small>Reading possible openings…</small>
-            : !m.terrainState?.runtimeConnected ? <small>Grounded truth is ready. Connect a runtime to read possible openings.</small>
-              : m.terrainState?.error ? <small>{m.terrainState.error}</small>
-                : m.terrainState?.hypothesisCount === 0 ? <small>No credible opening was returned yet. Product truth remains available.</small> : null}
-        </div>
-      ) : null}
-      {m.terrainState?.stale || m.terrainState?.partial ? (
-        <div className="terrain-state-note" role="status">
-          {m.terrainState.stale ? "Terrain updated; the model read is stale against newer product or market evidence." : "Some terrain sources are unavailable; loaded truth remains usable."}
-        </div>
-      ) : null}
-      <GraphCanvas
-        connectors={m.connectors}
-        contractAudits={m.contractAudits}
-        graph={m.graph ?? LANDING_EMPTY_GRAPH}
-        proposedNodeIds={m.proposedNodeIds}
-        proposedEdgeIds={m.proposedEdgeIds}
-        revealedNodeIds={m.revealedNodeIds}
-        proposalActive={m.proposalActive}
-        onResolveProposal={m.onResolveProposal}
-        onSubmitReview={m.onSubmitReview}
-        gatePromote={m.gatePromote}
-        gateOffer={m.gateOffer}
-        onRecordOutcome={m.onRecordOutcome}
-        onRefineItem={m.onRefineItem}
-        onDecideDelta={m.onDecideDelta}
-        onAskClaude={m.onAskClaude}
-        onOpenAgentProfile={m.onOpenAgentProfile}
-        runSummary={m.runSummary}
-        onApproveGate={m.onApproveGate}
-        onAddNode={m.onAddNode}
-        onConnectNodes={m.onConnectNodes}
-        onDeleteEdges={m.onDeleteEdges}
-        onNodePositionChange={m.onNodePositionChange}
-        onSelect={m.onSelect}
-        onPaneClick={m.onPaneClick}
-        operatorCursor={m.operatorCursor}
-        nodeEditor={m.nodeEditor}
-        // The whole fleet as merged lanes — the substrate the woven overlay hangs on.
+        // Always render the complete fleet. ActiveChannelId changes which lane owns live run/editor state;
+        // panTo moves the camera to it without unmounting the surrounding canvas.
         multiPipeline={m.multiPipeline}
         panTo={m.panTo}
         people={m.people}
@@ -344,55 +253,39 @@ function OperatorLensPane({ model: m }: GtmLensProps) {
         selection={m.selection}
         subsystemHealth={m.subsystemHealth}
         projectId={m.projectId}
-        // The intertwining itself.
         woven={m.woven}
         wovenAxis={axis}
         wovenFocus={m.wovenFocus}
         onWovenSelect={m.onWovenSelect}
+        onCanvasAnchorPositionChange={m.onCanvasAnchorPositionChange}
+        onCanvasAuthorityChanged={m.onCanvasAuthorityChanged}
+        onCanvasRegionChange={m.onCanvasRegionChange}
+        onCanvasRegionArchive={m.onCanvasRegionArchive}
+        initialViewport={m.initialViewport}
+        onViewportChange={m.onViewportChange}
         onWireObject={m.onWireObject}
         candidateLaneIds={m.candidateLaneIds}
         onPickCandidate={m.onPickCandidate}
-        // Operator IS the semantic operation projection (docs/production-direction/16): one bounded lane
-        // per pipeline, not the full merged Engineer graph. A lane click opens Engineer for the full graph.
-        operationMode
-        onOpenLane={m.onOpenLane}
       />
+      {graph.nodes.length === 0 && !hasLanes ? (
+        <div className="blank-channel-guide">
+          <strong>Start with something you want to understand, change, make, or learn</strong>
+          <span>Your work appears here. Add an executable path only when the work needs to run or repeat. Nothing sends without your approval.</span>
+          {m.onComposeFirst ? (
+            <button type="button" className="blank-channel-compose" onClick={m.onComposeFirst}>
+              Start open work
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-// Two lenses now: OPERATOR (the fleet-wide operating view — the default many-motion view) and ENGINEER
-// (the single-motion pipeline builder). The old merged-lane overview retired into the Operator lens; the
-// drag-organize it hosted now lives in the Operator lens's lane ordering. App chooses which lens by focus:
-// a focused single motion shows Engineer, the whole operation shows Operator.
-const LENSES: LensDef<GtmCanvasModel, never>[] = [
-  { id: "operator", label: "Operator", Component: OperatorLensPane },
-  { id: "engineer", label: "Engineer", Component: EngineerLens },
-];
-
 export function GtmCanvas({
-  model, activeLensId, onLensChange, chromeless,
+  model,
 }: {
   model: GtmCanvasModel;
-  // "operator" = the fleet-wide operating view (default many-motion); "engineer" = the single-motion editor.
-  activeLensId: "operator" | "engineer";
-  // The founder's lens toggle, reported UP so App's canvasLens is the real source of truth. Without
-  // this the lens tab was a controlled input with nowhere to send its change — the click was silently
-  // discarded and the lens was decided entirely by structural state (a focused motion, candidates).
-  onLensChange?: (id: "operator" | "engineer") => void;
-  chromeless?: boolean;
 }) {
-  return (
-    <CanvasShell<GtmCanvasModel, never>
-      model={model}
-      lenses={LENSES}
-      defaultLensId={activeLensId}
-      activeLensId={activeLensId}
-      onLensChange={onLensChange ? (id) => onLensChange(id === "engineer" ? "engineer" : "operator") : undefined}
-      layoutId="gtm-lens"
-      isEmpty={false}
-      empty={null}
-      chromeless={chromeless}
-    />
-  );
+  return <UnifiedCanvas model={model} />;
 }

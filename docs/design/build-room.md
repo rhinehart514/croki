@@ -1,3 +1,6 @@
+> **SUPERSEDED.** This separate build-room direction predates the open canvas. See
+> **docs/OPEN-CANVAS-SPEC.md** and the current `ComposerDock` implementation.
+
 # The build room — composer expanded view
 
 Status: BUILT in the product (2026-06-28). Reference-grade prototype

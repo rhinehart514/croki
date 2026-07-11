@@ -3,14 +3,16 @@
 This folder is the team's shared GTM brain-state. The engine stays local-first and synchronous; these
 functions are its shared **mirror**, so a team works one set of programs, graphs, runs, gate decisions
 and taste together. Nothing here sends or replaces the local founder gate — it only syncs the state
-around it. The push/pull syncer lives in `brain/src/convex-sync.mjs`; the seam it hooks is the single
+around it. The push/pull syncer lives in `brain/src/convex-backend.mjs`; the seam it hooks is the single
 `atomicWrite` in `brain/src/store-fs.mjs`.
 
 ## Tables
 
 - `teams`, `members` — identity + membership (the onboarding flow). `role` gates who can approve.
 - `documents` — the thin layer: every local store file mirrored as one row, keyed by its path
-  relative to `~/.gtm-ide`. Backs the whole engine with no per-store schema.
+  relative to `~/.gtm-ide`. Backs the whole engine with no per-store schema. Stores that carry a
+  document `revision` publish through atomic compare-and-set of both revision and base content: concurrent machines cannot silently
+  overwrite the same base revision, and ambiguous boot hydration is retained locally as a conflict.
 - `approvals` — the first reactive multiplayer surface: the gate queue an approver resolves from the web.
 
 ## Activate it (one-time, ~2 min — needs your login)

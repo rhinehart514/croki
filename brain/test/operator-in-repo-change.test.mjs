@@ -81,7 +81,10 @@ describe("compose_microproduct — an in-repo product change (Area 5 MOVE 2 + MO
     options = { root: path.join(parent, "state"), claudeDir: path.join(parent, "claude"), cwd: repo };
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // The operator records presentation-only teammate narration after returning the durable gate
+    // result. Let that bounded callback settle before deleting this test's isolated session store.
+    await new Promise((resolve) => setTimeout(resolve, 20));
     // The build cut a worktree off `repo`; prune registrations before removing the tree.
     try { git(repo, ["worktree", "prune"]); } catch { /* best-effort cleanup */ }
     fs.rmSync(parent, { recursive: true, force: true });

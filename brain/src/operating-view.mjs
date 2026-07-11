@@ -31,6 +31,12 @@ import { loadFeedbackLedger } from "./feedback-ledger.mjs";
 import { gtmPathStore, productTruthStore, resultStore, runStore } from "./gtm-store.mjs";
 import { objectGraphLayoutStore, PROJECT_CANVAS_LAYOUT_NAMESPACE } from "./object-graph-store.mjs";
 import { getOperatorSession, listOperatorSessions } from "./operator-store.mjs";
+import { listGoalRelations, listGoals } from "./goal-store.mjs";
+import { listWorkArtifacts, listWorkRelationships } from "./work-artifact-store.mjs";
+import { listCanvasRegions } from "./canvas-region-store.mjs";
+import { listGoalConflictDecisions } from "./goal-conflict-decision-store.mjs";
+import { projectOpenCanvas } from "./open-canvas-projection.mjs";
+import { listProductChangeReceipts } from "./product-change-receipts.mjs";
 
 // Map a subsystem's derived health onto the lens's stage vocabulary. getEngineState exposes per-
 // subsystem health only (no explicit state word); the lens needs done / active / waiting / blind. The
@@ -304,7 +310,7 @@ function canvasSources(project, channels, flowRuns, options) {
   const usedCrew = read("projectAgents", "project-agent-projection", [], () => projectAgents(projectId, options));
   const roster = read("crewRoster", "crew-roster-store", { members: [] }, () => crewRosterStore.load(projectId, options));
   const geometry = read("geometry", "object-graph-layout", {
-    positions: {}, collapsedGroups: [], pinnedCrew: [], viewport: null, updatedAt: null,
+    revision: 0, positions: {}, collapsedGroups: [], pinnedCrew: [], viewport: null, updatedAt: null,
   }, () => objectGraphLayoutStore.loadNamespace(projectId, PROJECT_CANVAS_LAYOUT_NAMESPACE, options));
   const crew = new Map();
   for (const member of [...usedCrew.value, ...(roster.value.members ?? [])]) {
@@ -506,7 +512,33 @@ function buildOperatingView(project, options = {}) {
       };
       const wovenChannelGraphs = new Map();
       for (const [gid, g] of channelGraphs) wovenChannelGraphs.set(norm(gid), g);
-      return buildWovenGraph(wovenView, { channelGraphs: wovenChannelGraphs, storeOptions: sourceOptions });
+      const woven = buildWovenGraph(wovenView, { channelGraphs: wovenChannelGraphs, storeOptions: sourceOptions });
+      // Goals and open work are independent authorities projected onto the same canvas. An empty
+      // authority is ordinary; a corrupt/unavailable authority degrades the read through the outer
+      // catch without changing any of the established truth, gate, outcome, or geometry authorities.
+      const authorityIssues = [];
+      const safeRead = (owner, read) => {
+        try { return read(); }
+        catch (error) {
+          authorityIssues.push({ kind: "unavailable", owner, detail: error instanceof Error ? error.message : String(error) });
+          return [];
+        }
+      };
+      woven.canvas = projectOpenCanvas(woven.canvas, {
+        projectId: resolvedProjectId,
+        goals: safeRead("goal-store", () => listGoals(resolvedProjectId, sourceOptions)),
+        goalRelations: safeRead("goal-store", () => listGoalRelations(resolvedProjectId, sourceOptions)),
+        artifacts: safeRead("work-artifact-store", () => listWorkArtifacts(resolvedProjectId, sourceOptions)),
+        workRelationships: safeRead("work-artifact-store", () => listWorkRelationships(resolvedProjectId, sourceOptions)),
+        productChanges: safeRead("product-change-receipts", () => listProductChangeReceipts(resolvedProjectId, sourceOptions)),
+        regions: safeRead("canvas-region-store", () => listCanvasRegions(resolvedProjectId, sourceOptions)),
+        conflictDecisions: safeRead("goal-conflict-decision-store", () => listGoalConflictDecisions(resolvedProjectId, sourceOptions).decisions),
+      });
+      if (authorityIssues.length) {
+        woven.canvas.state.issues.push(...authorityIssues);
+        woven.canvas.state.kind = "partial";
+      }
+      return woven;
     } catch { return null; }
   })();
 

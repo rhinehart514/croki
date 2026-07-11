@@ -42,6 +42,9 @@ describe("durable GTM workspace", () => {
     execFileSync("git", ["-C", repo, "config", "user.name", "GTM IDE Test"]);
     execFileSync("git", ["-C", repo, "add", "."]);
     execFileSync("git", ["-C", repo, "commit", "-qm", "fixture"]);
+    // openWorkspace canonicalizes the repo path via realpathSync (symlink hardening); on macOS the
+    // system temp dir is a symlink (/var → /private/var), so match the canonical form for comparison.
+    repo = fs.realpathSync(repo);
   });
 
   afterEach(() => {

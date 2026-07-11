@@ -34,7 +34,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { applyGraphOperations } from "../src/graph-operations.mjs";
+import { applyGraphOperations, assertGraphAuthorityMatches } from "../src/graph-operations.mjs";
 import { loadFlow, saveFlow } from "../src/flow-store.mjs";
 import { createChannel, getChannel, loadProject, promoteChannel, registerComposedChannel } from "../src/project-store.mjs";
 import * as deploy from "../src/connectors/execute/deploy.mjs";
@@ -345,6 +345,21 @@ describe("anti-cage: fixed stage skeleton not re-introduced as live code", () =>
         /founder-owned standing approval/,
         "a model-driven updateNode must not self-promote a gate past the wall",
       );
+    });
+
+    it("whole-graph save/run snapshots cannot introduce or change founder authority", () => {
+      const trusted = { id: "g", name: "g", revision: 1, nodes: [GATE()], edges: [] };
+      const forged = structuredClone(trusted);
+      forged.nodes[0].config = { autonomy: "autonomous", blessedPattern: { decision: "approve" } };
+      assert.throws(() => assertGraphAuthorityMatches(forged, trusted), /founder-owned release authority/);
+      assert.throws(() => assertGraphAuthorityMatches(forged, null), /founder-owned release authority/);
+    });
+
+    it("an unchanged persisted founder promotion survives ordinary whole-graph edits", () => {
+      const trusted = { id: "g", name: "g", revision: 1, nodes: [GATE({ autonomy: "trusted", blessedPattern: { note: "approved pattern" } })], edges: [] };
+      const submitted = structuredClone(trusted);
+      submitted.name = "A clearer name";
+      assert.doesNotThrow(() => assertGraphAuthorityMatches(submitted, trusted));
     });
 
     it("the autonomy guard is gate-scoped, not a blanket cage (a non-gate node may carry any config)", () => {

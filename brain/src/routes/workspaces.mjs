@@ -20,6 +20,7 @@ import {
   reviewRevision,
   revertRevision,
 } from "../revision.mjs";
+import { authorizeFounderWriteForRequest } from "./session-guard.mjs";
 
 export default async function handle({ req, res, url }) {
   // Durable GTM workspaces
@@ -33,7 +34,7 @@ export default async function handle({ req, res, url }) {
       const workspace = openWorkspace(expandHome(body.repoPath), body.outcome || body.winEvent);
       groundProjectInWorkspace(workspace);
       json(res, 200, { workspace });
-    } catch (err) { json(res, 400, { error: err instanceof Error ? err.message : String(err) }); }
+    } catch (err) { json(res, Number.isInteger(err?.status) ? err.status : 400, { error: err instanceof Error ? err.message : String(err) }); }
     return true;
   }
 
@@ -75,6 +76,7 @@ export default async function handle({ req, res, url }) {
   const reviewMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/revisions\/([^/]+)\/review$/);
   if (req.method === "POST" && reviewMatch) {
     try {
+      authorizeFounderWriteForRequest(req, "Code review");
       const body = await readBody(req);
       const workspace = updateRevision(
         reviewMatch[1],
@@ -90,7 +92,7 @@ export default async function handle({ req, res, url }) {
         summary: `${body.decision === "approve" ? "Approved" : "Rejected"} ${reviewMatch[2]}.`,
       });
       json(res, 200, { workspace: withDecision, revision: reviewed });
-    } catch (err) { json(res, 400, { error: err instanceof Error ? err.message : String(err) }); }
+    } catch (err) { json(res, Number.isInteger(err?.status) ? err.status : 400, { error: err instanceof Error ? err.message : String(err) }); }
     return true;
   }
 
@@ -108,6 +110,7 @@ export default async function handle({ req, res, url }) {
   const revisionActionMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/revisions\/([^/]+)\/(apply|revert)$/);
   if (req.method === "POST" && revisionActionMatch) {
     try {
+      authorizeFounderWriteForRequest(req, revisionActionMatch[3] === "apply" ? "Applying a code change" : "Reverting a code change");
       const body = await readBody(req);
       const workspace = getWorkspace(revisionActionMatch[1]);
       const revision = workspace.revisions.find((item) => item.id === revisionActionMatch[2]);
@@ -124,7 +127,7 @@ export default async function handle({ req, res, url }) {
         summary: `${action === "apply" ? "Applied" : "Reverted"} ${revision.id}.`,
       });
       json(res, 200, { workspace: withDecision, revision: nextRevision });
-    } catch (err) { json(res, 409, { error: err instanceof Error ? err.message : String(err) }); }
+    } catch (err) { json(res, Number.isInteger(err?.status) ? err.status : 409, { error: err instanceof Error ? err.message : String(err) }); }
     return true;
   }
 

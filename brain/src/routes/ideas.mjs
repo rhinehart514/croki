@@ -8,6 +8,16 @@ import { composeIdeas, createClaudeAngleProposer, createClaudeIdeaGenerator } fr
 import { createClaudeIdeaBar } from "../idea-bar.mjs";
 import { createGtmIdea, getGtmIdea, saveGtmIdea, listGtmIdeas } from "../idea-store.mjs";
 import { recordIdeaDecisions } from "../feedback-ledger.mjs";
+import { authorizeFounderWriteForRequest } from "./session-guard.mjs";
+
+function ideaInProject(idea, projectId) {
+  if ((idea?.projectId ?? null) !== projectId) {
+    const error = new Error(`GtmIdea not found in project ${projectId}.`);
+    error.status = 404;
+    throw error;
+  }
+  return idea;
+}
 
 export default async function handle({ req, res, url }) {
   // Ideas — the durable home for graded ideation output (idea-store.mjs). This is the FOUNDER door:
@@ -76,14 +86,15 @@ export default async function handle({ req, res, url }) {
   const projectIdeaKillMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/ideas\/([^/]+)\/kill$/);
   if (req.method === "POST" && projectIdeaKillMatch) {
     try {
+      authorizeFounderWriteForRequest(req, "Killing an idea");
       const projectId = decodeURIComponent(projectIdeaKillMatch[1]);
       const ideaId = decodeURIComponent(projectIdeaKillMatch[2]);
-      const idea = getGtmIdea(ideaId);
+      const idea = ideaInProject(getGtmIdea(ideaId), projectId);
       const updated = saveGtmIdea({ ...idea, verdict: "killed", killed: true });
       recordIdeaDecisions({ projectId, decisions: [{ idea: updated, decision: "kill" }] }, { projectId });
       json(res, 200, { idea: updated });
     } catch (err) {
-      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+      json(res, Number.isInteger(err?.status) ? err.status : 404, { error: err instanceof Error ? err.message : String(err) });
     }
     return true;
   }
@@ -93,9 +104,10 @@ export default async function handle({ req, res, url }) {
   const projectIdeaKeepMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/ideas\/([^/]+)\/keep$/);
   if (req.method === "POST" && projectIdeaKeepMatch) {
     try {
+      authorizeFounderWriteForRequest(req, "Keeping an idea");
       const projectId = decodeURIComponent(projectIdeaKeepMatch[1]);
       const ideaId = decodeURIComponent(projectIdeaKeepMatch[2]);
-      const idea = getGtmIdea(ideaId);
+      const idea = ideaInProject(getGtmIdea(ideaId), projectId);
       if (idea.killed) {
         json(res, 409, { error: `GtmIdea ${ideaId} was killed; a killed idea is not kept.` });
         return true;
@@ -104,7 +116,7 @@ export default async function handle({ req, res, url }) {
       recordIdeaDecisions({ projectId, decisions: [{ idea: updated, decision: "keep" }] }, { projectId });
       json(res, 200, { idea: updated });
     } catch (err) {
-      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+      json(res, Number.isInteger(err?.status) ? err.status : 404, { error: err instanceof Error ? err.message : String(err) });
     }
     return true;
   }

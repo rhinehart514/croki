@@ -1,6 +1,9 @@
+> **HISTORICAL SNAPSHOT.** The current design authority is the root **DESIGN.md** and
+> the shipped token layer. This June snapshot must not override either.
+
 # Drover — design system record
 
-The living index of the codebase's design system, extracted from the real code
+An archived index of the codebase's design system, extracted from the real code
 (`ui/src/index.css`, `ui/src/styles/*`). Refreshed as the system accretes, not rewritten.
 Last refreshed: 2026-06-27.
 

@@ -1,4 +1,7 @@
-# One canvas — the altitude ladder (flows redesign)
+> **SUPERSEDED — 2026-07-11.** This altitude-and-pipeline canvas is design history.
+> The current directly editable, multi-goal contract is **docs/OPEN-CANVAS-SPEC.md**.
+
+# One canvas — the altitude ladder (historical flows redesign)
 
 Chosen 2026-07-01. Collapses the four fighting flow surfaces (9-layer belief board, engine
 lens, single-pipeline flow, chat build-room) into ONE canvas navigated by zoom. Belief is folded

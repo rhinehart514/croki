@@ -15,6 +15,7 @@ import { Readable } from "node:stream";
 import handleCrew from "../src/routes/crew.mjs";
 import { teammateSoulStore as store } from "../src/teammate-soul-store.mjs";
 import { patternKeyFor } from "../src/teammate-soul.mjs";
+import { claimFounderSession, founderBootstrapCode } from "../src/routes/session-guard.mjs";
 
 const PROJECT = "rodentradar";
 const REF = "outreach-writer";
@@ -38,9 +39,16 @@ after(() => {
 });
 
 // Drive the real route handler with a minimal request/response, return { status, body }.
-async function call(method, pathname, payload) {
+function browserCookie() {
+  let value = "";
+  claimFounderSession({ headers: {} }, { setHeader(_name, next) { value = next; } }, founderBootstrapCode());
+  return value.split(";")[0];
+}
+
+async function call(method, pathname, payload, headers = method === "POST" ? { cookie: browserCookie() } : {}) {
   const req = Readable.from([payload ? JSON.stringify(payload) : ""]);
   req.method = method;
+  req.headers = headers;
   let status = 0;
   let raw = "";
   const res = {

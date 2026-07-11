@@ -23,6 +23,7 @@ import path from "node:path";
 const HOME = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-p6-routes-"));
 process.env.GTM_IDE_HOME = HOME;
 process.env.HOST = "127.0.0.1";
+process.env.GTM_IDE_FOUNDER_CODE = "p6-test-founder";
 
 async function freePort() {
   const probe = net.createServer();
@@ -45,6 +46,13 @@ if (!server.listening) await once(server, "listening");
 const base = `http://127.0.0.1:${PORT}`;
 const PROJECT = "default"; // the starter project always exists
 
+async function browserCookie() {
+  const response = await fetch(`${base}/api/founder-session`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: "p6-test-founder" }),
+  });
+  return (response.headers.get("set-cookie") ?? "").match(/gtm_session=[^;]+/)?.[0] ?? "";
+}
+
 after(() => {
   server.close();
   fs.rmSync(HOME, { recursive: true, force: true });
@@ -57,11 +65,58 @@ before(() => {
   channelId = channel.id;
 });
 
+describe("project canvas layout authority", () => {
+  it("requires revisioned idempotent writes and rejects stale placement", async () => {
+    const endpoint = `${base}/api/projects/${PROJECT}/object-graph/positions`;
+    const missing = await fetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ positions: { "anchor:goal:g1": { x: 1, y: 2 } } }),
+    });
+    assert.equal(missing.status, 400);
+
+    const firstBody = {
+      positions: { "anchor:goal:g1": { x: 1, y: 2 } },
+      expectedRevision: 0,
+      idempotencyKey: "route-drag-g1",
+    };
+    const first = await fetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(firstBody),
+    });
+    assert.equal(first.status, 200);
+    assert.equal((await first.json()).geometry.revision, 1);
+
+    const retry = await fetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(firstBody),
+    });
+    assert.equal(retry.status, 200);
+    assert.equal((await retry.json()).geometry.revision, 1);
+
+    const stale = await fetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        positions: { "anchor:goal:g2": { x: 3, y: 4 } },
+        expectedRevision: 0,
+        idempotencyKey: "route-drag-g2",
+      }),
+    });
+    assert.equal(stale.status, 409);
+    const conflict = await stale.json();
+    assert.equal(conflict.code, "CANVAS_LAYOUT_CONFLICT");
+    assert.equal(conflict.actualRevision, 1);
+  });
+});
+
 describe("channel autonomy — the founder ladder", () => {
   it("promotes a channel up the ladder behind a blessed pattern", async () => {
     const res = await fetch(`${base}/api/projects/${PROJECT}/channels/${channelId}/promote`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", cookie: await browserCookie() },
       body: JSON.stringify({ autonomy: "trusted", blessedPattern: { rule: "founders at dev-tool startups", note: "looks clean" } }),
     });
     assert.equal(res.status, 200);
@@ -76,7 +131,7 @@ describe("channel autonomy — the founder ladder", () => {
   it("refuses to promote without a blessed pattern (founder input is required)", async () => {
     const res = await fetch(`${base}/api/projects/${PROJECT}/channels/${channelId}/promote`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", cookie: await browserCookie() },
       body: JSON.stringify({ autonomy: "autonomous" }),
     });
     assert.equal(res.status, 400);
@@ -87,7 +142,7 @@ describe("channel autonomy — the founder ladder", () => {
   it("refuses a promote-to-draft (that is revoke's job)", async () => {
     const res = await fetch(`${base}/api/projects/${PROJECT}/channels/${channelId}/promote`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", cookie: await browserCookie() },
       body: JSON.stringify({ autonomy: "draft", blessedPattern: { rule: "x" } }),
     });
     assert.equal(res.status, 400);
@@ -96,7 +151,7 @@ describe("channel autonomy — the founder ladder", () => {
   });
 
   it("revokes a channel back to draft in one call, clearing the standing pattern", async () => {
-    const res = await fetch(`${base}/api/projects/${PROJECT}/channels/${channelId}/revoke`, { method: "POST" });
+    const res = await fetch(`${base}/api/projects/${PROJECT}/channels/${channelId}/revoke`, { method: "POST", headers: { cookie: await browserCookie() } });
     assert.equal(res.status, 200);
     const { channel } = await res.json();
     assert.equal(channel.autonomy, "draft");

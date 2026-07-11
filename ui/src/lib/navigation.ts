@@ -31,13 +31,10 @@ export type NavLayers = {
 // surface lives here (a discriminated union can only be one thing at a time),
 // not in a fragile ?:-chain.
 export type Surface =
-  | { kind: "teamOnboarding" }
   | { kind: "productEntry" }
   | { kind: "newProduct" } // the "start" view — add another product
   | { kind: "projects" } // the product picker
-  | { kind: "operatorTakeover" } // a cold-start drive that failed/blocked with no canvas to show
   | { kind: "canvas" } // the woven GTM canvas (the home surface)
-  | { kind: "operatorDrive" } // a live cold-start drive with no graph yet
   | { kind: "booting" };
 
 export type SurfaceInputs = {
@@ -61,8 +58,7 @@ export function describeSurface(i: SurfaceInputs): Surface {
   // Identity is DEFERRED, never a first gate. A founder used to land on "Set up your workspace" (name +
   // work email) before seeing anything; now they proceed as a solo party of one (App seeds a local
   // identity the instant Convex is on) and set up or join a shared team later, from Settings — or at the
-  // moment something first sends. The teamOnboarding surface stays in the union as that later, opt-in
-  // setup screen, but it is no longer a wall in front of the product. Prove value first, ask after.
+  // moment something first sends. Team setup is a later Settings action, not a base surface.
   if (i.booted && !i.productGrounded) return { kind: "productEntry" };
 
   if (i.view === "start") return { kind: "newProduct" };
@@ -74,26 +70,11 @@ export function describeSurface(i: SurfaceInputs): Surface {
   return { kind: "canvas" };
 }
 
-export function resolveCanvasLens(activeChannelId: string | null, hasCandidates = false): "operator" | "engineer" {
-  return hasCandidates || !activeChannelId ? "operator" : "engineer";
-}
-
-export function resolveLensSelection(
-  requested: "operator" | "engineer",
-  activeChannelId: string | null,
-  builtChannelIds: string[],
-): { lens: "operator" | "engineer"; channelId: string | null } {
-  if (requested === "operator") return { lens: "operator", channelId: null };
-  const channelId = activeChannelId ?? builtChannelIds[0] ?? null;
-  return channelId ? { lens: "engineer", channelId } : { lens: "operator", channelId: null };
-}
-
-export function resolveEngineerEscape<T>(originatingFocus: T | null): {
-  lens: "operator";
+export function resolveCanvasFocusEscape<T>(originatingFocus: T | null): {
   channelId: null;
   focus: T | null;
 } {
-  return { lens: "operator", channelId: null, focus: originatingFocus };
+  return { channelId: null, focus: originatingFocus };
 }
 
 // ── The layer reducer ───────────────────────────────────────────────────────

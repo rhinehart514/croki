@@ -10,7 +10,7 @@ import { listConnectors } from "./connectors/registry.mjs";
 import { recoverInterruptedOperatorSessions } from "./operator-store.mjs";
 import { startAmbientScheduler } from "./ambient-scheduler.mjs";
 import { json, serveFile } from "./routes/util.mjs";
-import { issueSessionCookie } from "./routes/session-guard.mjs";
+import { founderBootstrapCode } from "./routes/session-guard.mjs";
 
 // Per-domain route modules. The single request handler this file used to hold was split into these
 // cohesive groups (behavior-preserving, W8): each exports `handle({ req, res, url })` that runs its
@@ -29,6 +29,7 @@ import channelRoutes from "./routes/channels.mjs";
 import inboxRoutes from "./routes/inbox.mjs";
 import productModelRoutes from "./routes/product-model.mjs";
 import createTerrainRoutes from "./routes/terrain.mjs";
+import createOpenCanvasRoutes from "./routes/open-canvas.mjs";
 import operationPlanRoutes from "./routes/operation-plan.mjs";
 import tasteRoutes from "./routes/taste.mjs";
 import signalWeightsRoutes from "./routes/signal-weights.mjs";
@@ -84,6 +85,7 @@ const ROUTE_GROUPS = [
   inboxRoutes,
   productModelRoutes,
   terrainRoutes,
+  createOpenCanvasRoutes(),
   operationPlanRoutes,
   tasteRoutes,
   signalWeightsRoutes,
@@ -98,11 +100,6 @@ const ROUTE_GROUPS = [
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || "/", `http://${req.headers.host || `${host}:${port}`}`);
-
-  // Establish the browser-minted session capability on first contact (GET only, set-if-absent). The real
-  // page's GET / lands the cookie before any approval UI exists; a header-less raw approval POST holds none
-  // and is refused by authorizeReleaseForRequest.
-  issueSessionCookie(req, res);
 
   const ctx = { req, res, url };
   for (const group of ROUTE_GROUPS) {
@@ -126,6 +123,7 @@ let ambientScheduler = null;
 
 server.listen(port, host, () => {
   console.log(`Drover running at http://${host}:${port}`);
+  console.log(`Founder action code: ${founderBootstrapCode()}`);
   // Start the in-process heartbeat that re-fires promoted motions and ambient briefs on an interval.
   // It only DRIVES/STAGES standing work — every due item still stops at the founder gate; nothing sends.
   ambientScheduler = startAmbientScheduler();

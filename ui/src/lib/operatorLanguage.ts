@@ -66,11 +66,12 @@ export function rewriteFounderLanguage(detail: string): string {
     .replace(/the actual\s+`?project_created`?\s+conversion is still blind/gi, "we still cannot see whether those people go on to create a project")
     .replace(/`([a-z][a-z0-9]*(?:_[a-z0-9]+)+)`/g, (_match, id: string) => id.replaceAll("_", " "))
     .replace(/\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/g, (id) => id.replaceAll("_", " "))
-    .replace(/\bref[- ]tagged\b/gi, "source-tracked")
+    .replace(/\bearning inbound access-requests\b/gi, "bringing in requests from owners")
+    .replace(/\bref[- ]tagged\b/gi, "trackable")
     .replace(/\bref code\b/gi, "tracking link")
     .replace(/\bGTM primitive\b/gi, "useful clue")
     .replace(/\battribution\b/gi, "the source trail")
-    .replace(/\battributable\b/gi, "with a source you can see")
+    .replace(/\battributable\b/gi, "trackable")
     .replace(/\bproduct positioning\b/gi, "how to explain the product")
     .replace(/\bbuyer fit\b/gi, "who it is really for")
     .replace(/\bhypotheses\b/gi, "things we still need to test")
@@ -87,6 +88,9 @@ export function rewriteFounderLanguage(detail: string): string {
     .replace(/\bbeing composed\b/gi, "being laid out")
     .replace(/\bmint\b/gi, "create")
     .replace(/\bstage\b/gi, "prepare")
+    .replace(/\bCRM\b/g, "customer records")
+    .replace(/\bteardown\b/gi, "site review")
+    .replace(/\bfounder approves\b/gi, "you approve")
     .replace(/\binbound\b/gi, "people finding you");
 }
 

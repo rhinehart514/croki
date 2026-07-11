@@ -15,6 +15,8 @@ import {
   createOperatorBridge,
   safeOperatorTools,
 } from "../src/operator-mcp.mjs";
+import { listGoals } from "../src/goal-store.mjs";
+import { listWorkArtifacts } from "../src/work-artifact-store.mjs";
 
 describe("operator MCP bridge — safety surface", () => {
   it("exposes no outbound or approval tool to the subprocess", () => {
@@ -42,11 +44,21 @@ describe("operator MCP bridge — safety surface", () => {
     const tools = safeOperatorTools();
     const exposed = new Set(tools.map((tool) => tool.name));
     for (const name of ["inspect", "focus", "ask", "propose", "record", "run"]) assert.ok(exposed.has(name));
-    assert.deepEqual(tools.find((tool) => tool.name === "record").input_schema.properties.kind.enum, ["session_note", "model_artifact", "question_proposal"]);
+    assert.deepEqual(tools.find((tool) => tool.name === "record").input_schema.properties.kind.enum, ["session_note", "model_artifact", "work_artifact", "canvas_proposal", "goal", "goal_relation", "work_relationship", "question_proposal"]);
   });
 
   it("requires a session id", () => {
     assert.throws(() => createOperatorBridge({}), /GTM_IDE_OPERATOR_SESSION/);
+  });
+
+  it("derives its public MCP inventory from the shared capability policy", () => {
+    const bridge = createOperatorBridge({ sessionId: "inventory-only" });
+    const listed = bridge.tools.map((tool) => tool.name).sort();
+    const registered = bridge.capabilities.viewForActor("model", "publicMcp").map((item) => item.id).sort();
+    assert.deepEqual(listed, registered);
+    assert.equal(bridge.capabilities.get("inspect").lane, "read-only");
+    assert.equal(bridge.capabilities.get("record").lane, "reversible-local");
+    assert.equal(bridge.capabilities.has("patch_graph"), false, "retired dispatch-only verbs stay off MCP");
   });
 });
 
@@ -71,6 +83,41 @@ describe("operator MCP bridge — tool routing against the durable session", () 
     assert.equal(pause, false);
     const persisted = getOperatorSession(session.id, options);
     assert.ok(persisted.events.some((event) => event.type === "inspection"));
+  });
+
+  it("lets either model runtime put open goals and durable work on the shared canvas", async () => {
+    const bridge = createOperatorBridge({ sessionId: session.id, options });
+    const goal = await bridge.callTool("record", {
+      kind: "goal", idempotencyKey: "operator:goal",
+      value: { id: "activation", statement: "Understand activation" },
+    });
+    const artifact = await bridge.callTool("record", {
+      kind: "work_artifact", idempotencyKey: "operator:artifact",
+      refs: [{ type: "goal", id: "activation" }],
+      value: { id: "activation-map", kind: "activation-map", title: "Activation map", content: { openings: [] } },
+    });
+    const revisedGoal = await bridge.callTool("record", {
+      kind: "goal", idempotencyKey: "operator:goal:revise",
+      value: { id: "activation", expectedRevision: 0, statement: "Understand and improve activation" },
+    });
+    const revisedArtifact = await bridge.callTool("record", {
+      kind: "work_artifact", idempotencyKey: "operator:artifact:revise",
+      value: { id: "activation-map", expectedArtifactRevision: 1, content: { openings: ["invite"] } },
+    });
+    const canvasProposal = await bridge.callTool("record", {
+      kind: "canvas_proposal", idempotencyKey: "operator:canvas-proposal",
+      value: { id: "activation-region-proposal", title: "Group activation work", rationale: "Keep the goal and read together", operation: { type: "create-region", expectedStoreRevision: 0, title: "Activation", memberRefs: [{ type: "goal", id: "activation" }, { type: "work-artifact", id: "activation-map" }], position: { x: 40, y: 50 }, size: { width: 480, height: 300 } } },
+    });
+    assert.equal(goal.result.recorded.goal.id, "activation");
+    assert.equal(artifact.result.recorded.artifact.kind, "activation-map");
+    assert.equal(revisedGoal.result.recorded.goal.revision, 1);
+    assert.equal(revisedArtifact.result.recorded.artifact.revision, 2);
+    assert.equal(canvasProposal.result.recorded.artifact.kind, "canvas-change-proposal");
+    assert.equal(canvasProposal.result.recorded.artifact.status, "proposed");
+    assert.equal(listGoals(session.projectId ?? "default", options).length, 1);
+    assert.deepEqual(listWorkArtifacts(session.projectId ?? "default", options).map((item) => item.artifactId).sort(), ["activation-map", "activation-region-proposal"]);
+    const inspected = await bridge.callTool("inspect", { ref: { type: "work-artifact", id: "activation-map" } });
+    assert.equal(inspected.result.value.artifact.artifactId, "activation-map");
   });
 
   it("rejects an unknown tool", async () => {
@@ -267,11 +314,11 @@ describe("operator MCP bridge — tool routing against the durable session", () 
 
     await assert.rejects(
       () => bridge.callTool("record", { kind: "founder_decision", value: { kind: "gate.approved", value: "approve" } }),
-      /not model-writable/,
+      /declared values/,
     );
     await assert.rejects(
       () => bridge.callTool("record", { kind: "question", value: { text: "Pin this permanently" } }),
-      /not model-writable/,
+      /declared values/,
     );
     assert.deepEqual(loadFounderDecisions(project.id, options), []);
     assert.deepEqual(loadClarity(project.id, options), []);

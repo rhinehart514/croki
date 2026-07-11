@@ -31,7 +31,7 @@ function OutboundDelta({ body }: { body: string }) {
 }
 
 // A read-only, script-less iframe of one rendered page — the same static-preview technique
-// MicroproductFace uses (srcDoc + sandbox="" so nothing runs or reaches out). Pointer-events off inside
+// The gate preview uses srcDoc + sandbox="" so nothing runs or reaches out. Pointer-events off inside
 // so the surrounding card owns the click. The page is shown at real width, scaled down to a thumbnail.
 function PagePreview({ page }: { page: GateDeltaPage }) {
   return (

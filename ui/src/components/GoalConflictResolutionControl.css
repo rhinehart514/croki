@@ -1,0 +1,148 @@
+.goal-conflict-resolution {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  color: var(--ink);
+  background: var(--surface, oklch(0.985 0.004 260));
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  box-shadow: var(--shadow-card);
+}
+
+.goal-conflict-resolution .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.goal-conflict-resolution.is-resolved {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  box-shadow: none;
+}
+
+.goal-conflict-resolution__heading,
+.goal-conflict-resolution__footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.goal-conflict-resolution h3 {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-lg);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+}
+
+.goal-conflict-resolution__eyebrow,
+.goal-conflict-resolution__receipt,
+.goal-conflict-resolution__footer p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.goal-conflict-resolution__eyebrow {
+  color: var(--gap);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.goal-conflict-resolution.is-resolved .goal-conflict-resolution__eyebrow {
+  color: var(--proven);
+}
+
+.goal-conflict-resolution__context,
+.goal-conflict-resolution__decision,
+.goal-conflict-resolution__note {
+  max-width: 70ch;
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.goal-conflict-resolution__decision { margin-top: var(--space-1); font-weight: 600; }
+.goal-conflict-resolution__note { margin-top: var(--space-2); color: var(--ink-2); }
+.goal-conflict-resolution__receipt { margin-top: var(--space-2); }
+
+.goal-conflict-resolution__choices {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--line-2);
+}
+
+.goal-conflict-resolution__choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 40px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface, oklch(0.985 0.004 260));
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.goal-conflict-resolution__choice:has(input:checked) { color: var(--ink); background: var(--surface-2, oklch(0.965 0.006 260)); }
+.goal-conflict-resolution__choice input { accent-color: var(--ink); }
+
+.goal-conflict-resolution__field {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.goal-conflict-resolution__field > span { color: var(--muted); font-weight: 400; }
+.goal-conflict-resolution__field select,
+.goal-conflict-resolution__field textarea {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  color: var(--ink);
+  background: var(--surface, oklch(0.985 0.004 260));
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  font: inherit;
+}
+
+.goal-conflict-resolution :is(button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+
+.goal-conflict-resolution__error { margin: 0; color: var(--danger); font-size: var(--text-sm); }
+.goal-conflict-resolution__footer { align-items: center; border-top: 1px solid var(--line); padding-top: var(--space-3); }
+
+.goal-conflict-resolution__save,
+.goal-conflict-resolution__quiet {
+  min-height: 32px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 7px;
+  font: 600 var(--text-sm)/1 var(--font-sans, sans-serif);
+  cursor: pointer;
+}
+
+.goal-conflict-resolution__save { color: var(--surface); background: var(--ink); border: 1px solid var(--ink); }
+.goal-conflict-resolution__quiet { color: var(--ink-2); background: transparent; border: 1px solid var(--line-2); }
+.goal-conflict-resolution button:disabled { cursor: wait; opacity: 0.55; }
+
+@media (max-width: 520px) {
+  .goal-conflict-resolution__heading,
+  .goal-conflict-resolution__footer { align-items: stretch; flex-direction: column; }
+  .goal-conflict-resolution__save { width: 100%; }
+}

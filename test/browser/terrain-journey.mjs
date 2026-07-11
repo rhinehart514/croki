@@ -36,6 +36,9 @@ const VIEWPORTS = [
 ];
 
 const PIPELINE_ID = "fixture-terrain-pipeline";
+// Large enough to force the production canvas's visible-element virtualization path. These are durable
+// fixture goals created through the real API, not client-seeded cards or claimed user activity.
+const DENSE_GOAL_COUNT = 144;
 const FIXTURE_GRAPH = {
   id: PIPELINE_ID,
   name: "Project brief activation test",
@@ -88,6 +91,33 @@ function fixtureRun({ approved = false } = {}) {
     },
     executionOrder: ["source", "draft", "gate", ...(approved ? ["execute", "measure"] : [])],
     pendingGates: approved ? [] : ["gate"],
+    feedbackEdges: [],
+  };
+}
+
+function fixturePartialFailureRun() {
+  return {
+    runId: "fixture-partial-failure-run",
+    graphId: PIPELINE_ID,
+    ok: false,
+    error: "The drafting step stopped. The completed recipient lookup is still available.",
+    nodes: {
+      source: {
+        ok: true,
+        category: "source",
+        items: [{ id: "recipient-1", name: "Fixture recipient" }],
+      },
+      draft: {
+        ok: false,
+        items: [],
+        error: "Fixture drafting runtime stopped before producing copy.",
+      },
+      gate: { ok: false, blocked: true, items: [] },
+      execute: { ok: false, blocked: true, items: [] },
+      measure: { ok: false, blocked: true, items: [] },
+    },
+    executionOrder: ["source", "draft"],
+    pendingGates: [],
     feedbackEdges: [],
   };
 }
@@ -153,7 +183,7 @@ async function waitFor(url, child, label) {
 }
 
 function scrubbedEnvironment(home, port) {
-  const env = { ...process.env, GTM_IDE_HOME: home, GTM_IDE_PERSISTENCE: "json", GTM_IDE_OPERATOR_RUNTIME: "none", GTM_IDE_DISABLE_CLAUDE_CODE: "1", HOST: "127.0.0.1", PORT: String(port) };
+  const env = { ...process.env, GTM_IDE_HOME: home, GTM_IDE_PERSISTENCE: "json", GTM_IDE_OPERATOR_RUNTIME: "none", GTM_IDE_DISABLE_CLAUDE_CODE: "1", GTM_IDE_FOUNDER_CODE: "terrain-fixture-founder", HOST: "127.0.0.1", PORT: String(port) };
   for (const key of ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY", "CODEX_API_KEY"]) delete env[key];
   return env;
 }
@@ -179,6 +209,19 @@ async function bootDrover() {
     });
     if (!created.ok) assert.fail(`sample grounding failed: ${await created.text()}`);
     const body = await created.json();
+    const seededGoals = await Promise.all(Array.from({ length: DENSE_GOAL_COUNT }, (_, index) => fetch(`${base}/api/projects/${body.activeProjectId}/goals`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "idempotency-key": `fixture:dense-goal:${index + 1}` },
+      body: JSON.stringify({
+        statement: `Fixture goal ${String(index + 1).padStart(2, "0")}`,
+        desiredChange: `Keep independent workstream ${index + 1} addressable without a primary mission.`,
+        createdBy: "fixture-founder",
+        idempotencyKey: `fixture:dense-goal:${index + 1}`,
+      }),
+    })));
+    const seededGoalResults = await Promise.all(seededGoals.map(async (response) => ({ ok: response.ok, body: await response.text() })));
+    const failedGoal = seededGoalResults.find((response) => !response.ok);
+    if (failedGoal) assert.fail(`dense goal grounding failed: ${failedGoal.body}`);
     return {
       base,
       child,
@@ -223,6 +266,8 @@ async function bootFixtureProxy(drover, { runtimeConnected = true } = {}) {
   let runStarted = false;
   let gateApproved = false;
   let resultRecorded = false;
+  let partialFailureNext = false;
+  let partialFailureActive = false;
   const server = http.createServer(async (request, response) => {
     const url = new URL(request.url, `http://127.0.0.1:${port}`);
     if (process.env.TERRAIN_DEBUG === "1" && /terrain|operator\/sessions|graph\/(run|template)|outcome/.test(url.pathname)) {
@@ -341,7 +386,10 @@ async function bootFixtureProxy(drover, { runtimeConnected = true } = {}) {
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/graph/template" && url.searchParams.get("channel") === PIPELINE_ID) {
-        send(200, { graph: FIXTURE_GRAPH, runs: runStarted ? [fixtureRun({ approved: gateApproved })] : [] });
+        const latestRun = partialFailureActive
+          ? fixturePartialFailureRun()
+          : fixtureRun({ approved: gateApproved });
+        send(200, { graph: FIXTURE_GRAPH, runs: runStarted ? [latestRun] : [] });
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/graph/audit") {
@@ -363,10 +411,10 @@ async function bootFixtureProxy(drover, { runtimeConnected = true } = {}) {
               objective: "Test whether the read-only project brief becomes a product-led entry point.",
               kind: "terrain-selected-move",
               enabled: true,
-              status: gateApproved ? "done" : runStarted ? "waiting" : "idle",
+              status: partialFailureActive ? "failed" : gateApproved ? "done" : runStarted ? "waiting" : "idle",
               lastRunAt: runStarted ? "2026-07-10T12:05:00.000Z" : null,
               lastRunOk: gateApproved,
-              pendingGates: runStarted && !gateApproved ? 1 : 0,
+              pendingGates: runStarted && !gateApproved && !partialFailureActive ? 1 : 0,
               nodeCount: FIXTURE_GRAPH.nodes.length,
               runCount: runStarted ? 1 : 0,
               graphRevision: 1,
@@ -378,11 +426,14 @@ async function bootFixtureProxy(drover, { runtimeConnected = true } = {}) {
       }
       if (request.method === "POST" && url.pathname === "/api/graph/run/stream") {
         runStarted = true;
-        const result = fixtureRun();
+        partialFailureActive = partialFailureNext;
+        partialFailureNext = false;
+        const result = partialFailureActive ? fixturePartialFailureRun() : fixtureRun();
         response.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store" });
+        const streamedNodeIds = partialFailureActive ? ["source", "draft"] : ["source", "draft", "gate"];
         const events = [
           { type: "run_start", nodeIds: FIXTURE_GRAPH.nodes.map((node) => node.id) },
-          ...["source", "draft", "gate"].flatMap((nodeId) => [{ type: "node_start", nodeId }, { type: "node_done", nodeId, result: result.nodes[nodeId] }]),
+          ...streamedNodeIds.flatMap((nodeId) => [{ type: "node_start", nodeId }, { type: "node_done", nodeId, result: result.nodes[nodeId] }]),
           { type: "run_done", result },
         ];
         response.end(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(""));
@@ -416,7 +467,10 @@ async function bootFixtureProxy(drover, { runtimeConnected = true } = {}) {
       runStarted = false;
       gateApproved = false;
       resultRecorded = false;
+      partialFailureNext = false;
+      partialFailureActive = false;
     },
+    failNextRun() { partialFailureNext = true; },
     close: () => new Promise((resolve) => {
       server.closeAllConnections?.();
       server.close(resolve);
@@ -474,6 +528,82 @@ async function activate(client, testId, text, reason, keyboardOnly) {
   }
 }
 
+async function fillLabeledControl(client, labelText, value, reason) {
+  const changed = await client.evaluate(`(() => {
+    const label = [...document.querySelectorAll('label')].find((candidate) =>
+      window.__terrainEval.visible(candidate) && (candidate.textContent || '').toLowerCase().includes(${JSON.stringify(labelText.toLowerCase())}));
+    const control = label?.querySelector('input,textarea');
+    if (!control) return false;
+    const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(control), 'value')?.set;
+    if (!setter) return false;
+    setter.call(control, ${JSON.stringify(value)});
+    control.dispatchEvent(new Event('input', { bubbles: true }));
+    control.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  })()`);
+  assert.equal(changed, true, reason);
+}
+
+async function assertOpenCanvasGoal(client, viewport, keyboardOnly) {
+  const suffix = `${viewport.name}${keyboardOnly ? " keyboard" : ""}`;
+  const statement = `Keep ${suffix} canvas work visible`;
+  const closedFocus = await client.evaluate(`(() => {
+    const control = document.querySelector('[aria-label="Close terrain focus"]');
+    if (!control) return true;
+    if (${keyboardOnly ? "true" : "false"}) control.focus();
+    else control.click();
+    return true;
+  })()`);
+  assert.equal(closedFocus, true, `${suffix}: the terrain focus could not yield back to the shared canvas`);
+  if (keyboardOnly && await client.evaluate(`document.activeElement?.getAttribute('aria-label') === 'Close terrain focus'`)) {
+    await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter" });
+    await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter" });
+  }
+  await waitForDom(client, `!!document.querySelector('[aria-label="Add canvas work"]')`, `${suffix}: the open-canvas launcher did not appear`);
+  const denseReceipt = await client.evaluate(`(() => {
+    const flow = document.querySelector('.react-flow');
+    return {
+      projected: Number(flow?.getAttribute('data-canvas-node-count') || 0),
+      edges: Number(flow?.getAttribute('data-canvas-edge-count') || 0),
+      virtualized: flow?.getAttribute('data-canvas-virtualized'),
+      renderedGoals: document.querySelectorAll('[data-ref^="goal:"]').length,
+    };
+  })()`);
+  assert.ok(denseReceipt.projected >= DENSE_GOAL_COUNT, `${suffix}: ${DENSE_GOAL_COUNT} durable fixture goals did not remain in the complete canvas projection (${denseReceipt.projected})`);
+  assert.equal(denseReceipt.virtualized, "true", `${suffix}: the dense canvas did not enable off-screen node/edge virtualization`);
+  assert.ok(denseReceipt.renderedGoals > 0 && denseReceipt.renderedGoals < DENSE_GOAL_COUNT,
+    `${suffix}: visible-element virtualization did not bound dense goal DOM (${denseReceipt.renderedGoals}/${DENSE_GOAL_COUNT})`);
+  await activate(client, "", "New goal", `${suffix}: the canvas could not start an independent goal`, keyboardOnly);
+  await waitForDom(client, `!!document.querySelector('aside[aria-label="Canvas workbench"]')`, `${suffix}: the goal workbench did not open`);
+  await fillLabeledControl(client, "What do you want to change?", statement, `${suffix}: the goal statement was not editable`);
+  await fillLabeledControl(client, "What would be different?", "The goal survives as an addressable canvas object.", `${suffix}: the desired change was not editable`);
+  await activate(client, "", "Place on canvas", `${suffix}: the goal could not be placed on the canvas`, keyboardOnly);
+  await waitForDom(client, `(() => [...document.querySelectorAll('[data-ref^="goal:"]')].some((element) => (element.textContent || '').includes(${JSON.stringify(statement)})))()`, `${suffix}: the saved goal did not materialize on the canvas`);
+  const goalBounds = await client.evaluate(`(() => { const element = [...document.querySelectorAll('[data-ref^="goal:"]')].find((candidate) => (candidate.textContent || '').includes(${JSON.stringify(statement)})); const rect = element?.getBoundingClientRect(); return rect ? [rect.left, rect.top, rect.right, rect.bottom] : null; })()`);
+  assert.ok(goalBounds && goalBounds[0] >= 0 && goalBounds[1] >= 0 && goalBounds[2] <= viewport.width && goalBounds[3] <= viewport.height,
+    `${suffix}: the newly placed goal was not focused into the visible canvas (${goalBounds?.join("/") ?? "missing"})`);
+
+  const closeWorkbench = await client.evaluate(`(() => {
+    const control = document.querySelector('[aria-label="Close canvas workbench"]');
+    if (!control) return false;
+    if (${keyboardOnly ? "true" : "false"}) control.focus();
+    else control.click();
+    return true;
+  })()`);
+  assert.equal(closeWorkbench, true, `${suffix}: the created goal inspector could not return to the canvas`);
+  if (keyboardOnly) {
+    await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter" });
+    await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter" });
+  }
+  await waitForDom(client, `!!document.querySelector('[aria-label="Add canvas work"]')`, `${suffix}: the canvas launcher did not return after inspection`);
+  await activate(client, "", "Open work", `${suffix}: saved canvas work could not be reopened`, keyboardOnly);
+  const offscreenFixtureGoal = `Fixture goal ${String(DENSE_GOAL_COUNT).padStart(3, "0")}`;
+  await fillLabeledControl(client, "Find work", offscreenFixtureGoal, `${suffix}: dense off-screen canvas work could not be searched`);
+  await waitForDom(client, `(() => [...document.querySelectorAll('.open-canvas-browser-results button')].some((element) => (element.textContent || '').includes(${JSON.stringify(offscreenFixtureGoal)})))()`, `${suffix}: dense search did not resolve an addressable goal outside the bounded canvas DOM`);
+  await fillLabeledControl(client, "Find work", statement, `${suffix}: saved canvas work could not be searched`);
+  await waitForDom(client, `(() => [...document.querySelectorAll('.open-canvas-browser-results button')].some((element) => (element.textContent || '').includes(${JSON.stringify(statement)})))()`, `${suffix}: the saved goal did not appear in canvas search`);
+}
+
 async function assertAccessibility(client, viewport) {
   const failures = await client.evaluate(`(() => {
     const interactive = [...document.querySelectorAll('button,a[href],input,select,textarea,[role="button"]')]
@@ -490,7 +620,7 @@ async function assertAccessibility(client, viewport) {
     .filter((element) => { const r = element.getBoundingClientRect(); return r.left < 0 || r.top < 0 || r.right > innerWidth || r.bottom > innerHeight; })
     .map((element) => { const r = element.getBoundingClientRect(); return { id: element.getAttribute('data-testid') || element.textContent?.trim() || element.tagName, rect: [r.left, r.top, r.right, r.bottom], viewport: [innerWidth, innerHeight] }; }))()`);
   if (process.env.TERRAIN_DEBUG === "1" && viewport.name === "narrow") {
-    console.log("narrow layout", await client.evaluate(`(() => [...document.querySelectorAll('.fdock,.fdock-left,.fdock-right,.project-switcher-trigger,.osw-trigger,.fdock-lens,.tfocus,.tfocus-actions')].map((element) => { const r = element.getBoundingClientRect(); return { className: element.className, rect: [r.left, r.top, r.right, r.bottom], display: getComputedStyle(element).display, width: getComputedStyle(element).width }; }))()`));
+    console.log("narrow layout", await client.evaluate(`(() => [...document.querySelectorAll('.fdock,.fdock-left,.fdock-right,.project-switcher-trigger,.osw-trigger,.tfocus,.tfocus-actions')].map((element) => { const r = element.getBoundingClientRect(); return { className: element.className, rect: [r.left, r.top, r.right, r.bottom], display: getComputedStyle(element).display, width: getComputedStyle(element).width }; }))()`));
   }
   assert.deepEqual(clipped, [], `${viewport.name}: clipped primary controls: ${clipped.map((item) => `${item.id} @ ${item.rect.join("/")} in ${item.viewport.join("x")}`).join(", ")}`);
 }
@@ -500,6 +630,8 @@ async function runJourney(client, viewport, { keyboardOnly = false } = {}) {
   await client.evaluate("localStorage.clear()").catch(() => {});
   await client.send("Page.reload", { ignoreCache: true });
   await waitForDom(client, "document.readyState === 'complete' && !!document.querySelector('#root')", `${viewport.name}: Drover did not finish loading`);
+  const founderSession = await client.evaluate(`fetch('/api/founder-session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'terrain-fixture-founder' }) }).then((response) => response.status)`);
+  assert.equal(founderSession, 200, `${viewport.name}: browser fixture could not establish the founder action session`);
   await client.evaluate(browserHelpers());
 
   await waitForDom(
@@ -528,15 +660,15 @@ async function runJourney(client, viewport, { keyboardOnly = false } = {}) {
   assert.notEqual(positions[0], positions[1], `${viewport.name}: teammate disagreement collapsed into synthetic consensus`);
 
   await activate(client, "terrain-turn-into-pipeline", "Turn into pipeline", `${viewport.name}: Gate B step 6 could not turn the hypothesis into a pipeline`, keyboardOnly);
-  await waitForDom(client, `!!window.__terrainEval.byTestId("engineer-view")`, `${viewport.name}: Gate B step 7 failed — the chosen move did not open in Engineer`);
-  await waitForDom(client, `(() => { const view = window.__terrainEval.byTestId("engineer-view"); return /intended effect/i.test(view.textContent) && /gate|approval|wall/i.test(view.textContent); })()`, `${viewport.name}: Gate B step 7 failed — Engineer omitted intended effect or gate consequence`);
+  await waitForDom(client, `(() => { const view = window.__terrainEval.byTestId("unified-canvas"); return !!view?.dataset.channelId; })()`, `${viewport.name}: Gate B step 7 failed — the chosen move was not focused on the continuous canvas`);
+  await waitForDom(client, `(() => { const view = window.__terrainEval.byTestId("unified-canvas"); return /intended effect/i.test(view.textContent) && /gate|approval|wall/i.test(view.textContent); })()`, `${viewport.name}: Gate B step 7 failed — the focused pipeline omitted its intended effect or gate consequence`);
 
   await activate(client, "pipeline-run", "Run", `${viewport.name}: Gate B step 8 could not run the fixture pipeline`, keyboardOnly);
   try {
     await waitForDom(client, `!!window.__terrainEval.byTestId("founder-gate")`, `${viewport.name}: Gate B step 8 failed — the run did not stop at the founder wall`);
   } catch (error) {
     if (process.env.TERRAIN_DEBUG === "1") {
-      console.log(`${viewport.name}: wall diagnostics`, await client.evaluate(`({ engineer: (() => { const element = window.__terrainEval.byTestId("engineer-view"); return element ? { ...element.dataset } : null; })(), runButton: (() => { const element = window.__terrainEval.byTestId("pipeline-run"); if (!element) return null; const r = element.getBoundingClientRect(); return { disabled: element.disabled, rect: [r.left, r.top, r.right, r.bottom] }; })(), gates: [...document.querySelectorAll('[data-testid="founder-gate"]')].length, text: document.querySelector('#root')?.textContent?.slice(-1200) })`));
+      console.log(`${viewport.name}: wall diagnostics`, await client.evaluate(`({ canvas: (() => { const element = window.__terrainEval.byTestId("unified-canvas"); return element ? { ...element.dataset } : null; })(), runButton: (() => { const element = window.__terrainEval.byTestId("pipeline-run"); if (!element) return null; const r = element.getBoundingClientRect(); return { disabled: element.disabled, rect: [r.left, r.top,r.right, r.bottom] }; })(), gates: [...document.querySelectorAll('[data-testid="founder-gate"]')].length, text: document.querySelector('#root')?.textContent?.slice(-1200) })`));
     }
     throw error;
   }
@@ -555,8 +687,7 @@ async function runJourney(client, viewport, { keyboardOnly = false } = {}) {
   await waitForDom(client, `!!window.__terrainEval.byTestId("joined-outcome")`, `${viewport.name}: the fixture result was not visibly joined`);
   await activate(client, "", "Done", `${viewport.name}: the joined result receipt could not be closed`, keyboardOnly);
 
-  await activate(client, "operator-view-toggle", "Operator", `${viewport.name}: Gate B step 10 could not return to Operator`, keyboardOnly);
-  await waitForDom(client, `(() => { const root = document.querySelector('#root'); return /stale|updated|changed/i.test(root.textContent) && !!window.__terrainEval.byTestId("terrain-product-landmark"); })()`, `${viewport.name}: Gate B step 10 failed — the joined result did not return to affected terrain`);
+  await waitForDom(client, `(() => { const root = document.querySelector('#root'); return /stale|updated|changed/i.test(root.textContent) && !!window.__terrainEval.byTestId("terrain-product-landmark") && !!window.__terrainEval.byTestId("unified-canvas"); })()`, `${viewport.name}: Gate B step 10 failed — the joined result did not return to affected terrain on the same canvas`);
   const beforeRefresh = await client.evaluate(`({ project: !!document.querySelector('[data-testid="terrain-product-landmark"][data-ref="product-truth:truth-win-event"]'), focus: window.__terrainEval.byTestId("terrain-focus")?.getAttribute("data-ref"), gate: !!window.__terrainEval.byTestId("gate-approved-receipt"), outcome: !!window.__terrainEval.byTestId("joined-outcome") })`);
   if (process.env.TERRAIN_DEBUG === "1") {
     console.log(`${viewport.name}: refresh receipt before`, await client.evaluate(`({ storage: { ...localStorage }, focus: window.__terrainEval.byTestId("terrain-focus")?.getAttribute("data-ref") })`));
@@ -574,7 +705,47 @@ async function runJourney(client, viewport, { keyboardOnly = false } = {}) {
   }
   const afterRefresh = await client.evaluate(`({ project: !!document.querySelector('[data-testid="terrain-product-landmark"][data-ref="product-truth:truth-win-event"]'), focus: window.__terrainEval.byTestId("terrain-focus")?.getAttribute("data-ref"), gate: !!window.__terrainEval.byTestId("gate-approved-receipt"), outcome: !!window.__terrainEval.byTestId("joined-outcome") })`);
   assert.deepEqual(afterRefresh, beforeRefresh, `${viewport.name}: Gate B step 11 lost project, focus, gate, or outcome history after refresh`);
+  await assertOpenCanvasGoal(client, viewport, keyboardOnly);
   await assertAccessibility(client, viewport);
+}
+
+async function assertPartialFailureRecovery(client, proxyBase) {
+  const viewport = VIEWPORTS[0];
+  await client.send("Emulation.setDeviceMetricsOverride", { width: viewport.width, height: viewport.height, deviceScaleFactor: 1, mobile: false });
+  await client.send("Page.navigate", { url: proxyBase });
+  await waitForDom(client, "document.readyState === 'complete' && !!document.querySelector('#root')", "partial-failure pass did not load");
+  const founderSession = await client.evaluate(`fetch('/api/founder-session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'terrain-fixture-founder' }) }).then((response) => response.status)`);
+  assert.equal(founderSession, 200, "partial-failure pass could not establish the founder action session");
+  await client.evaluate(browserHelpers());
+
+  await waitForDom(client, `document.querySelectorAll('[data-testid="terrain-hypothesis"]').length === 3`, "partial-failure pass did not load the terrain hypotheses");
+  await activate(client, "terrain-hypothesis", "Make the project brief", "partial-failure pass could not focus a hypothesis", false);
+  await activate(client, "terrain-turn-into-pipeline", "Turn into pipeline", "partial-failure pass could not create the fixture pipeline", false);
+  await waitForDom(client, `(() => { const view = window.__terrainEval.byTestId("unified-canvas"); return !!view?.dataset.channelId; })()`, "partial-failure pass did not focus the fixture pipeline");
+  await activate(client, "pipeline-run", "Run", "partial-failure pass could not run the fixture pipeline", false);
+
+  const partialStateVisible = `(() => {
+    const node = (id) => document.querySelector('[data-id="' + id + '"]');
+    const source = node('source');
+    const draft = node('draft');
+    const downstream = ['gate', 'execute', 'measure'].map(node);
+    return !!source?.querySelector('.loop-node-done')
+      && !!draft?.querySelector('.loop-node-error')
+      && downstream.every((element) => !!element?.querySelector('.lucide-ban'));
+  })()`;
+  const attachedFailureVisible = `(() => { const draft = document.querySelector('[data-id="draft"]'); return (draft?.textContent || '').includes('Fixture drafting runtime stopped before producing copy.'); })()`;
+  await waitForDom(client, partialStateVisible, "partial failure did not preserve the completed source, attach the draft error, and block downstream work");
+  await waitForDom(client, attachedFailureVisible, "the streamed failure was not attached to the draft step");
+  await waitForDom(client, `(() => { const button = document.querySelector('[data-id="draft"] .loop-node-editor-run'); return window.__terrainEval.visible(button) && !button.disabled && /run step/i.test(button.textContent || ''); })()`, "the failed draft did not expose a usable retry action");
+
+  await client.send("Page.reload", { ignoreCache: true });
+  await waitForDom(client, "document.readyState === 'complete' && !!document.querySelector('#root')", "partial-failure refresh did not recover the app");
+  await client.evaluate(browserHelpers());
+  await waitForDom(client, partialStateVisible, "partial-failure refresh lost completed work or downstream blocked state");
+  const selectedDraft = await client.evaluate(`(() => { const draft = document.querySelector('[data-id="draft"] .loop-node'); if (!draft) return false; draft.click(); return true; })()`);
+  assert.equal(selectedDraft, true, "partial-failure refresh could not reopen the failed draft");
+  await waitForDom(client, attachedFailureVisible, "partial-failure refresh detached the failure from its step");
+  await waitForDom(client, `(() => { const button = document.querySelector('[data-id="draft"] .loop-node-editor-run'); return window.__terrainEval.visible(button) && !button.disabled && /run step/i.test(button.textContent || ''); })()`, "partial-failure refresh did not preserve the recovery action");
 }
 
 async function assertNoRuntimeValue(client, proxyBase) {
@@ -652,6 +823,15 @@ async function main() {
       catch (error) { errors.push(error instanceof Error ? error.message : String(error)); }
       await closeEvaluatedChrome(chrome, errors);
       chrome = null;
+
+      console.log("Gate B: partial-failure recovery");
+      proxy.reset();
+      proxy.failNextRun();
+      chrome = await launchEvaluatedChrome(proxy.base, errors);
+      try { await assertPartialFailureRecovery(chrome.client, proxy.base); }
+      catch (error) { errors.push(error instanceof Error ? error.message : String(error)); }
+      await closeEvaluatedChrome(chrome, errors);
+      chrome = null;
     }
 
     disconnectedProxy = await bootFixtureProxy(drover, { runtimeConnected: false });
@@ -662,7 +842,7 @@ async function main() {
     await closeEvaluatedChrome(chrome, errors);
     chrome = null;
     assert.deepEqual(errors, [], `Gate B deterministic browser failures:\n- ${errors.join("\n- ")}`);
-    console.log("Gate B passed at 1440x900, 1024x768, 390x844, keyboard-only, refresh, and no-runtime modes.");
+    console.log("Gate B passed at 1440x900, 1024x768, 390x844, keyboard-only, refresh, partial-failure recovery, and no-runtime modes.");
   } finally {
     await chrome?.close();
     await disconnectedProxy?.close();

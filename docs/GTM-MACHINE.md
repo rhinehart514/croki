@@ -1,3 +1,7 @@
+> **SUPERSEDED AS PRODUCT DIRECTION.** The truth, wall, outcome, and open-composition
+> invariants remain useful implementation history, but the current product contract is
+> **docs/OPEN-CANVAS-SPEC.md** and product development is co-equal with go-to-market.
+
 # Drover — the go-to-market machine
 
 ## Mission

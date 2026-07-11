@@ -18,6 +18,7 @@ import { loadFlow, saveFlow } from "../flow-store.mjs";
 import { applyGraphOperations, validateGraph } from "../graph-operations.mjs";
 import { deriveChannelFeeds, deriveDirectedFeeds } from "../cross-reference.mjs";
 import { compareChannelRuns } from "../run-compare.mjs";
+import { authorizeFounderWriteForRequest } from "./session-guard.mjs";
 
 export default async function handle({ req, res, url }) {
   // Channel autonomy — PROMOTE a channel up the ladder (draft → trusted → autonomous). This is a FOUNDER
@@ -30,6 +31,7 @@ export default async function handle({ req, res, url }) {
   const projectChannelPromoteMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/channels\/([^/]+)\/promote$/);
   if (req.method === "POST" && projectChannelPromoteMatch) {
     try {
+      authorizeFounderWriteForRequest(req, "Promoting pipeline trust");
       const projectId = decodeURIComponent(projectChannelPromoteMatch[1]);
       const channelId = decodeURIComponent(projectChannelPromoteMatch[2]);
       const body = await readBody(req);
@@ -45,7 +47,7 @@ export default async function handle({ req, res, url }) {
       const { channel } = promoteChannel(channelId, { autonomy, blessedPattern: body.blessedPattern }, { projectId });
       json(res, 200, { channel });
     } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+      json(res, Number.isInteger(err?.status) ? err.status : 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return true;
   }
@@ -56,12 +58,13 @@ export default async function handle({ req, res, url }) {
   const projectChannelRevokeMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/channels\/([^/]+)\/revoke$/);
   if (req.method === "POST" && projectChannelRevokeMatch) {
     try {
+      authorizeFounderWriteForRequest(req, "Revoking pipeline trust");
       const projectId = decodeURIComponent(projectChannelRevokeMatch[1]);
       const channelId = decodeURIComponent(projectChannelRevokeMatch[2]);
       const { channel } = revokeChannel(channelId, { projectId });
       json(res, 200, { channel });
     } catch (err) {
-      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+      json(res, Number.isInteger(err?.status) ? err.status : 404, { error: err instanceof Error ? err.message : String(err) });
     }
     return true;
   }
@@ -73,13 +76,14 @@ export default async function handle({ req, res, url }) {
   const projectChannelIcpMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/channels\/([^/]+)\/icp$/);
   if ((req.method === "POST" || req.method === "DELETE") && projectChannelIcpMatch) {
     try {
+      authorizeFounderWriteForRequest(req, "Changing a pipeline audience link");
       const projectId = decodeURIComponent(projectChannelIcpMatch[1]);
       const channelId = decodeURIComponent(projectChannelIcpMatch[2]);
       const icp = req.method === "DELETE" ? null : await readBody(req);
       const { channel } = setChannelIcp(channelId, icp, { projectId });
       json(res, 200, { channel });
     } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+      json(res, Number.isInteger(err?.status) ? err.status : 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return true;
   }

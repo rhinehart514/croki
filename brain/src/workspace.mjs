@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { compactAgentError } from "./build.mjs";
@@ -160,7 +161,9 @@ export function saveWorkspace(workspace, options = {}) {
 }
 
 export function openWorkspace(repoInput, outcomeInput, options = {}) {
-  const repo = path.resolve(repoInput);
+  // Persist a canonical repository identity. A lexical symlink can be retargeted after review and must
+  // never redirect an approved patch into another checkout.
+  const repo = fs.realpathSync(path.resolve(repoInput));
   const outcome = String(outcomeInput || "").trim();
   if (!outcome) throw new Error("A GTM outcome event is required.");
 

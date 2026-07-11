@@ -11,12 +11,15 @@ import {
   armNextWake,
   assertOperatorSessionProject,
   bindOperatorSessionContext,
+  branchOperatorSessionForBoth,
   createOperatorSession,
   getActiveSessionForProject,
   getOperatorSession,
   getOrCreateSessionForProject,
+  handoffOperatorSession,
   isAmbientSession,
   listFlowsNeedingFounder,
+  listOperatorComparisonGroups,
   listOperatorSessions,
   publicOperatorSession,
   recoverInterruptedOperatorSessions,
@@ -66,11 +69,11 @@ describe("durable operator sessions", () => {
       goal: "Investigate activation.", projectId: "product-a", questionId: "q-1",
       participantRefs: [{ type: "teammate", id: "researcher" }],
       productRefs: [{ type: "product-element", id: "activation" }],
-      surface: "terrain", lens: "operator", focusRef: "question:q-1", graphId: "graph-1", runId: "run-1",
+      surface: "terrain", lens: "canvas", focusRef: "question:q-1", graphId: "graph-1", runId: "run-1",
       contextRefs: ["product-truth:truth-1"],
     }, options);
     assert.equal(session.surface, "terrain");
-    assert.equal(session.lens, "operator");
+    assert.equal(session.lens, "canvas");
     assert.equal(session.questionId, "q-1");
     assert.deepEqual(session.focusRef, { type: "question", id: "q-1" });
     assert.deepEqual(session.participantRefs, [{ type: "teammate", id: "researcher" }]);
@@ -79,19 +82,19 @@ describe("durable operator sessions", () => {
     assert.ok(session.contextRefs.some((ref) => ref.type === "run" && ref.id === "run-1"));
     assert.ok(session.contextRefs.some((ref) => ref.type === "product-truth" && ref.id === "truth-1"));
     assert.equal(listOperatorSessions({ ...options, projectId: "product-a" })[0].surface, "terrain");
-    assert.equal(publicOperatorSession(session).lens, "operator");
+    assert.equal(publicOperatorSession(session).lens, "canvas");
 
     const focused = bindOperatorSessionContext(session.id, {
-      surface: "pipeline", lens: "engineer", focusRef: "pipeline:pipeline-1",
+      surface: "pipeline", lens: "canvas", focusRef: "pipeline:pipeline-1",
     }, options);
     assert.equal(focused.surface, "pipeline");
-    assert.equal(focused.lens, "engineer");
+    assert.equal(focused.lens, "canvas");
     assert.equal(focused.focusRef.type, "pipeline");
-    const cleared = bindOperatorSessionContext(session.id, { surface: "terrain", lens: "operator", focusRef: null }, options);
+    const cleared = bindOperatorSessionContext(session.id, { surface: "terrain", lens: "canvas", focusRef: null }, options);
     assert.equal(cleared.focusRef, null, "an explicit empty focus clears stale question or pipeline focus");
     assert.throws(() => bindOperatorSessionContext(session.id, { focusRef: { type: "question", id: "q-other", projectId: "product-b" } }, options), /belongs to project product-b, not product-a/);
     assert.throws(() => bindOperatorSessionContext(session.id, { projectId: "product-b" }, options), /belongs to project product-a, not product-b/);
-    assert.throws(() => bindOperatorSessionContext(session.id, { surface: "viewport", lens: "operator" }, options), /surface must be one of/);
+    assert.throws(() => bindOperatorSessionContext(session.id, { surface: "viewport", lens: "canvas" }, options), /surface must be one of/);
     assert.throws(() => bindOperatorSessionContext(session.id, { focusRef: "untyped-focus" }, options), /requires type and id/);
   });
 
@@ -158,9 +161,109 @@ describe("durable operator sessions", () => {
       assert.ok(!json.includes(privateValue), `public session leaked ${privateValue}`);
     }
   });
+
+  it("hands durable canvas context between runtimes without carrying provider conversation state", () => {
+    const project = createProject({ id: "handoff-project", name: "Handoff" }, options).project;
+    const session = createOperatorSession({
+      goal: "Fix activation", projectId: project.id, runtime: "claude-code", model: "claude-opus-4-8",
+      focusRef: { type: "goal", id: "activation" },
+      contextRefs: [{ type: "work-artifact", id: "onboarding-read" }],
+      modelMessages: [{ role: "assistant", content: "provider-private continuity" }],
+    }, options);
+    const handed = handoffOperatorSession(session.id, {
+      projectId: project.id, target: "codex", model: "gpt-5.5-codex",
+      expectedRevision: 0, idempotencyKey: "handoff-1",
+    }, options);
+
+    assert.equal(handed.runtime, "codex");
+    assert.equal(handed.model, "gpt-5.5-codex");
+    assert.equal(handed.runtimeSessionId, null);
+    assert.deepEqual(handed.modelMessages, []);
+    assert.deepEqual(handed.focusRef, { type: "goal", id: "activation" });
+    assert.ok(handed.contextRefs.some((ref) => ref.type === "work-artifact" && ref.id === "onboarding-read"));
+    assert.equal(handed.handoffRevision, 1);
+    assert.equal(handed.handoffs[0].blocking, false);
+    assert.equal(publicOperatorSession(handed).worker.runtime, "codex");
+    assert.equal(JSON.stringify(publicOperatorSession(handed)).includes("provider-private continuity"), false);
+    assert.equal(handoffOperatorSession(session.id, {
+      projectId: project.id, target: "codex", model: "gpt-5.5-codex",
+      expectedRevision: 0, idempotencyKey: "handoff-1",
+    }, options).handoffRevision, 1, "retry returns the existing receipt before revision validation");
+    assert.throws(() => handoffOperatorSession(session.id, {
+      projectId: project.id, target: "claude", expectedRevision: 0, idempotencyKey: "stale",
+    }, options), /Stale runtime handoff revision/);
+    assert.throws(() => handoffOperatorSession(session.id, {
+      projectId: "another-project", target: "claude", expectedRevision: 1, idempotencyKey: "foreign",
+    }, options), /belongs to project/);
+
+    const automatic = handoffOperatorSession(session.id, {
+      projectId: project.id, target: "auto", expectedRevision: 1, idempotencyKey: "handoff-auto",
+    }, options);
+    assert.equal(automatic.runtime, null);
+    assert.equal(automatic.model, null);
+    assert.equal(publicOperatorSession(automatic).worker.runtime, "auto");
+  });
+
+  it("creates explicit Claude and Codex branches from one identical durable context", () => {
+    const project = createProject({ id: "both-project", name: "Both" }, options).project;
+    const parent = createOperatorSession({
+      goal: "Challenge this positioning", projectId: project.id,
+      focusRef: { type: "work-artifact", id: "positioning" },
+      contextRefs: [{ type: "goal", id: "positioning-goal" }],
+    }, options);
+    const branches = branchOperatorSessionForBoth(parent.id, {
+      projectId: project.id, expectedRevision: 0, idempotencyKey: "both-1",
+    }, options);
+    assert.equal(branches.length, 2);
+    assert.deepEqual(branches.map((item) => item.runtime).sort(), ["claude-code", "codex"]);
+    assert.equal(branches[0].branchGroupId, branches[1].branchGroupId);
+    assert.ok(branches.every((item) => item.parentSessionId === parent.id));
+    assert.ok(branches.every((item) => item.focusRef.id === "positioning"));
+    assert.ok(branches.every((item) => item.contextRefs.some((ref) => ref.id === "positioning-goal")));
+    assert.equal(branchOperatorSessionForBoth(parent.id, {
+      projectId: project.id, expectedRevision: 0, idempotencyKey: "both-1",
+    }, options)[0].id, branches[0].id, "ask-both retry does not duplicate branches");
+  });
+
+  it("reconstructs bounded, project-scoped ask-both comparisons without creating or choosing work", () => {
+    const a = createProject({ id: "comparison-a", name: "A" }, options).project;
+    const b = createProject({ id: "comparison-b", name: "B" }, options).project;
+    const parentA = createOperatorSession({ goal: "Compare A", projectId: a.id }, options);
+    const parentB = createOperatorSession({ goal: "Compare B", projectId: b.id }, options);
+    const branchesA = branchOperatorSessionForBoth(parentA.id, {
+      projectId: a.id, expectedRevision: 0, idempotencyKey: "compare-a",
+    }, options);
+    branchOperatorSessionForBoth(parentB.id, {
+      projectId: b.id, expectedRevision: 0, idempotencyKey: "compare-b",
+    }, options);
+    const sessionCount = listOperatorSessions(options).length;
+
+    const groups = listOperatorComparisonGroups({ ...options, projectId: a.id });
+    assert.equal(groups.length, 1);
+    assert.equal(groups[0].parentSessionId, parentA.id);
+    assert.equal(groups[0].projectId, a.id);
+    assert.deepEqual(groups[0].branches.map((branch) => branch.id).sort(), branchesA.map((branch) => branch.id).sort());
+    assert.ok(groups[0].branches.every((branch) => branch.projectId === a.id));
+    assert.ok(groups[0].branches.every((branch) => branch.worker?.runtime === "claude" || branch.worker?.runtime === "codex"));
+    assert.equal(groups[0].selectedSessionId, undefined);
+    assert.equal(groups[0].winner, undefined);
+    assert.equal(listOperatorSessions(options).length, sessionCount, "the projection performs no writes or duplicate drives");
+    assert.deepEqual(listOperatorComparisonGroups({ ...options, projectId: "missing" }), []);
+    assert.deepEqual(listOperatorComparisonGroups(options), [], "an unscoped comparison read is refused closed");
+
+    const capped = createProject({ id: "comparison-cap", name: "Cap" }, options).project;
+    for (let index = 0; index < 27; index += 1) {
+      const parent = createOperatorSession({ goal: `Compare ${index}`, projectId: capped.id }, options);
+      branchOperatorSessionForBoth(parent.id, {
+        projectId: capped.id, expectedRevision: 0, idempotencyKey: `cap-${index}`,
+      }, options);
+    }
+    assert.equal(listOperatorComparisonGroups({ ...options, projectId: capped.id }).length, 25,
+      "the bootstrap projection remains bounded while durable sessions stay intact");
+  });
 });
 
-describe("one durable operator conversation per project", () => {
+describe("durable operator conversations per canvas work thread", () => {
   let parent;
   let options;
 
@@ -192,6 +295,23 @@ describe("one durable operator conversation per project", () => {
     // Each project resolves only its own thread.
     assert.equal(getActiveSessionForProject("rodentradar", options).id, a.session.id);
     assert.equal(getActiveSessionForProject("other-product", options).id, b.session.id);
+  });
+
+  it("keeps simultaneous goal and work threads independent inside one project", () => {
+    const activation = getOrCreateSessionForProject("rodentradar", {
+      goal: "Fix activation.", threadRef: "goal:activation",
+    }, options);
+    const positioning = getOrCreateSessionForProject("rodentradar", {
+      goal: "Rework positioning.", threadRef: "goal:positioning",
+    }, options);
+    const activationAgain = getOrCreateSessionForProject("rodentradar", {
+      goal: "Continue activation.", threadRef: "goal:activation",
+    }, options);
+
+    assert.notEqual(activation.session.id, positioning.session.id);
+    assert.equal(activationAgain.created, false);
+    assert.equal(activationAgain.session.id, activation.session.id);
+    assert.equal(getActiveSessionForProject("rodentradar", { ...options, threadRef: "goal:positioning" }).id, positioning.session.id);
   });
 
   it("honors the explicit projectId regardless of any global default", () => {

@@ -42,8 +42,8 @@ describe("operator language", () => {
 
     expect(candidate.label).toBe("people finding you referral approach");
     expect(candidate.rationale).toContain("create a tracking link");
-    expect(candidate.rationale).toContain("prepare a source-tracked ask");
-    expect(candidate.rationale).toContain("with a source you can see");
+    expect(candidate.rationale).toContain("prepare a trackable ask");
+    expect(candidate.rationale).toContain("make each introduction trackable");
     expect(`${candidate.label} ${candidate.rationale}`).not.toMatch(/inbound|motion|mint|ref code|ref-tagged|attributable/i);
   });
 });

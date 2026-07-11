@@ -28,6 +28,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
+import crypto from "node:crypto";
 
 // Resolves better-sqlite3 from brain/node_modules exactly as a CommonJS require would. Bound once at
 // module load; the native module itself is only required inside openDatabase, so a json-only run
@@ -44,6 +45,41 @@ export function storeRoot(options = {}) {
 // needs its own (collection, key) address. Every other store is per-id under a directory.
 export const PROJECT_COLLECTION = "project";
 export const PROJECT_KEY = "catalog";
+
+export class PersistenceConflictError extends Error {
+  constructor(message, details = {}) {
+    super(message);
+    this.name = "PersistenceConflictError";
+    this.code = "PERSISTENCE_CONFLICT";
+    Object.assign(this, details);
+  }
+}
+
+function revisionOf(value, { absent = 0 } = {}) {
+  if (value == null) return absent;
+  if (!Number.isInteger(value.revision) || value.revision < 0) {
+    throw new Error("CAS documents must carry a non-negative integer revision.");
+  }
+  return value.revision;
+}
+
+function assertCasInput(collection, key, expectedRevision, data) {
+  if (!Number.isInteger(expectedRevision) || expectedRevision < 0) {
+    throw new Error("expectedRevision must be a non-negative integer.");
+  }
+  const nextRevision = revisionOf(data);
+  if (nextRevision !== expectedRevision + 1) {
+    throw new Error(`CAS document revision must advance from ${expectedRevision} to ${expectedRevision + 1}.`);
+  }
+  return { collection, key, expectedRevision, nextRevision };
+}
+
+function conflict(details, actualRevision) {
+  return new PersistenceConflictError(
+    `Stale ${details.collection}/${details.key} document revision: expected ${details.expectedRevision}, current ${actualRevision}.`,
+    { ...details, actualRevision },
+  );
+}
 
 // The default SQLite database file, alongside the JSON it supersedes.
 export function databaseFile(options = {}) {
@@ -91,6 +127,42 @@ function atomicWriteFile(file, value) {
   fs.renameSync(tmp, file);
 }
 
+const LOCK_WAIT = new Int32Array(new SharedArrayBuffer(4));
+
+function withJsonDocumentLock(root, collection, key, fn) {
+  const digest = crypto.createHash("sha256").update(`${collection}\u0000${key}`).digest("hex");
+  const lock = path.join(root, ".locks", `${digest}.lock`);
+  fs.mkdirSync(path.dirname(lock), { recursive: true });
+  const deadline = Date.now() + 5_000;
+  while (true) {
+    try {
+      fs.mkdirSync(lock);
+      break;
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      try {
+        const age = Date.now() - fs.statSync(lock).mtimeMs;
+        if (age > 30_000) {
+          fs.rmSync(lock, { recursive: true, force: true });
+          continue;
+        }
+      } catch (statError) {
+        if (statError?.code === "ENOENT") continue;
+        throw statError;
+      }
+      if (Date.now() >= deadline) {
+        throw new Error(`Timed out acquiring persistence lock for ${collection}/${key}.`);
+      }
+      Atomics.wait(LOCK_WAIT, 0, 0, 10);
+    }
+  }
+  try {
+    return fn();
+  } finally {
+    fs.rmSync(lock, { recursive: true, force: true });
+  }
+}
+
 // Mirror a JSON-backend write to the team's single write-behind queue — the ONE mirror implementation,
 // in convex-backend.mjs (the SQLite-era seam). The dynamic import both breaks the import cycle
 // (convex-backend imports THIS module) and keeps a local-only engine from ever loading the sync layer.
@@ -101,7 +173,9 @@ function atomicWriteFile(file, value) {
 function mirrorJsonWrite(op, collection, key, data) {
   if (!(process.env.GTM_IDE_CONVEX_URL && process.env.GTM_IDE_TEAM_ID)) return;
   import("./convex-backend.mjs")
-    .then((m) => (op === "delete" ? m.enqueueDelete(collection, key) : m.enqueueDocument(collection, key, data)))
+    .then((m) => (op === "delete"
+      ? m.enqueueDelete(collection, key, Number.isInteger(data?.revision) ? data.revision : undefined)
+      : m.enqueueDocument(collection, key, data)))
     .catch(() => {});
 }
 
@@ -121,6 +195,40 @@ function createJsonBackend(root, { mirror = false } = {}) {
       atomicWriteFile(jsonFileFor(root, collection, key), data);
       if (mirror) mirrorJsonWrite("set", collection, key, data);
       return data;
+    },
+    compareAndSet(collection, key, expectedRevision, data) {
+      const details = assertCasInput(collection, key, expectedRevision, data);
+      return withJsonDocumentLock(root, collection, key, () => {
+        const file = jsonFileFor(root, collection, key);
+        let current = null;
+        if (fs.existsSync(file)) {
+          try {
+            current = JSON.parse(fs.readFileSync(file, "utf8"));
+          } catch {
+            throw new Error(`Cannot compare-and-set unreadable document ${collection}/${key}.`);
+          }
+        }
+        const actualRevision = revisionOf(current);
+        if (actualRevision !== expectedRevision) throw conflict(details, actualRevision);
+        atomicWriteFile(file, data);
+        if (mirror) mirrorJsonWrite("set", collection, key, data);
+        return data;
+      });
+    },
+    setIfAbsent(collection, key, data) {
+      return withJsonDocumentLock(root, collection, key, () => {
+        const file = jsonFileFor(root, collection, key);
+        if (fs.existsSync(file)) {
+          try {
+            return { inserted: false, value: JSON.parse(fs.readFileSync(file, "utf8")) };
+          } catch {
+            throw new Error(`Cannot initialize over unreadable document ${collection}/${key}.`);
+          }
+        }
+        atomicWriteFile(file, data);
+        if (mirror) mirrorJsonWrite("set", collection, key, data);
+        return { inserted: true, value: data };
+      });
     },
     list(collection) {
       if (collection === PROJECT_COLLECTION) {
@@ -148,10 +256,19 @@ function createJsonBackend(root, { mirror = false } = {}) {
     delete(collection, key) {
       const file = jsonFileFor(root, collection, key);
       const removed = fs.existsSync(file);
-      if (removed) fs.rmSync(file);
+      let current = null;
+      if (removed) {
+        try {
+          current = JSON.parse(fs.readFileSync(file, "utf8"));
+        } catch {
+          // The local delete remains valid; without a readable revision the remote delete is guarded
+          // by Convex when the shared document is versioned.
+        }
+        fs.rmSync(file);
+      }
       // Mirror the delete regardless of whether this machine still held the file — a remote remove is
       // idempotent, and a cross-machine delete must propagate even when the local copy was already gone.
-      if (mirror) mirrorJsonWrite("delete", collection, key);
+      if (mirror) mirrorJsonWrite("delete", collection, key, current);
       return removed;
     },
   };
@@ -228,6 +345,13 @@ function createSqliteBackend(root) {
   );
   const listStmt = db.prepare("SELECT collection, key, json FROM documents WHERE collection = ?");
   const deleteStmt = db.prepare("DELETE FROM documents WHERE collection = ? AND key = ?");
+  const insertCasStmt = db.prepare(
+    "INSERT INTO documents (collection, key, json) VALUES (?, ?, ?) ON CONFLICT(collection, key) DO NOTHING",
+  );
+  const updateCasStmt = db.prepare(
+    "UPDATE documents SET json = ? WHERE collection = ? AND key = ? " +
+    "AND CAST(json_extract(json, '$.revision') AS INTEGER) = ?",
+  );
 
   // The legacy JSON on disk, read through the JSON backend. SQLite is authoritative; this is the
   // read-through fallback that lets a document still in the JSON era (not yet migrated) be read. It
@@ -248,6 +372,39 @@ function createSqliteBackend(root) {
       .map((entry) => entry.slice(0, -".json".length));
   }
 
+  const compareAndSet = db.transaction((collection, key, expectedRevision, data) => {
+    const details = assertCasInput(collection, key, expectedRevision, data);
+    const json = JSON.stringify(data);
+    const row = getStmt.get(collection, key);
+    if (row) {
+      let current;
+      try {
+        current = JSON.parse(row.json);
+      } catch {
+        throw new Error(`Cannot compare-and-set unreadable document ${collection}/${key}.`);
+      }
+      const actualRevision = revisionOf(current);
+      if (actualRevision !== expectedRevision) throw conflict(details, actualRevision);
+      const info = updateCasStmt.run(json, collection, key, expectedRevision);
+      if (info.changes !== 1) {
+        const latest = getStmt.get(collection, key);
+        const latestRevision = latest ? revisionOf(JSON.parse(latest.json)) : 0;
+        throw conflict(details, latestRevision);
+      }
+      return data;
+    }
+
+    const legacyValue = legacy.get(collection, key);
+    const actualRevision = revisionOf(legacyValue);
+    if (actualRevision !== expectedRevision) throw conflict(details, actualRevision);
+    const info = insertCasStmt.run(collection, key, json);
+    if (info.changes !== 1) {
+      const latest = getStmt.get(collection, key);
+      throw conflict(details, latest ? revisionOf(JSON.parse(latest.json)) : 0);
+    }
+    return data;
+  });
+
   return {
     name: "sqlite",
     get(collection, key) {
@@ -265,6 +422,14 @@ function createSqliteBackend(root) {
     set(collection, key, data) {
       setStmt.run(collection, key, JSON.stringify(data));
       return data;
+    },
+    compareAndSet,
+    setIfAbsent(collection, key, data) {
+      const info = insertCasStmt.run(collection, key, JSON.stringify(data));
+      if (info.changes === 1) return { inserted: true, value: data };
+      const row = getStmt.get(collection, key);
+      if (!row) throw new Error(`Document ${collection}/${key} disappeared during initialization.`);
+      return { inserted: false, value: JSON.parse(row.json) };
     },
     list(collection) {
       const out = [];
@@ -361,6 +526,27 @@ function withDocumentCache(backend, root) {
       cache.set(`${collection} ${key}`, stored == null ? null : structuredClone(stored));
       return stored;
     },
+    compareAndSet(collection, key, expectedRevision, data) {
+      const ck = `${collection}\u0000${key}`;
+      try {
+        const stored = backend.compareAndSet(collection, key, expectedRevision, data);
+        cache.set(ck, stored == null ? null : structuredClone(stored));
+        return stored;
+      } catch (error) {
+        if (error instanceof PersistenceConflictError) {
+          const current = typeof backend.getFresh === "function"
+            ? backend.getFresh(collection, key)
+            : backend.get(collection, key);
+          cache.set(ck, current == null ? null : current);
+        }
+        throw error;
+      }
+    },
+    setIfAbsent(collection, key, data) {
+      const result = backend.setIfAbsent(collection, key, data);
+      cache.set(`${collection}\u0000${key}`, result.value == null ? null : structuredClone(result.value));
+      return { inserted: result.inserted, value: structuredClone(result.value) };
+    },
     list(collection) {
       // Not cached: list() unions in legacy on-disk keys and its result changes on any set/delete within
       // the collection. Left as a fresh read so it is never stale; the per-key get() cache is untouched.
@@ -379,6 +565,8 @@ function withDocumentCache(backend, root) {
 
 // get(collection, key)        → the stored document, or null when absent.
 // set(collection, key, data)  → persists data, returns data.
+// compareAndSet(c, k, r, data) → writes only when the durable document revision is r.
+// setIfAbsent(c, k, data)      → atomically initializes a missing document.
 // list(collection)            → array of every document in the collection (order not guaranteed).
 // delete(collection, key)     → true when a document was removed, false when none existed.
 //

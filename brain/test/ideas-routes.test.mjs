@@ -19,6 +19,7 @@ import path from "node:path";
 const HOME = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-ideas-routes-"));
 process.env.GTM_IDE_HOME = HOME;
 process.env.HOST = "127.0.0.1";
+process.env.GTM_IDE_FOUNDER_CODE = "ideas-test-founder";
 
 // Grab a free port, then hand it to the server via PORT.
 async function freePort() {
@@ -43,6 +44,13 @@ if (!server.listening) await once(server, "listening");
 const base = `http://127.0.0.1:${PORT}`;
 const PROJECT = "ideas-routes-test";
 
+async function browserCookie() {
+  const response = await fetch(`${base}/api/founder-session`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: "ideas-test-founder" }),
+  });
+  return (response.headers.get("set-cookie") ?? "").match(/gtm_session=[^;]+/)?.[0] ?? "";
+}
+
 after(() => {
   server.close();
   fs.rmSync(HOME, { recursive: true, force: true });
@@ -65,7 +73,7 @@ describe("idea routes — the founder door", () => {
   it("kills an idea: marks it dead AND banks an IdeaKill feedback signal", async () => {
     const idea = createGtmIdea({ projectId: PROJECT, goal: "g", angle: "asset-first", pitch: "Kill me" });
 
-    const res = await fetch(`${base}/api/projects/${PROJECT}/ideas/${idea.id}/kill`, { method: "POST" });
+    const res = await fetch(`${base}/api/projects/${PROJECT}/ideas/${idea.id}/kill`, { method: "POST", headers: { cookie: await browserCookie() } });
     assert.equal(res.status, 200);
     const { idea: updated } = await res.json();
     assert.equal(updated.killed, true);
@@ -82,7 +90,7 @@ describe("idea routes — the founder door", () => {
   it("keeps a survivor and banks an IdeaKeep signal", async () => {
     const idea = createGtmIdea({ projectId: PROJECT, goal: "g", angle: "asset-first", pitch: "Keep me" });
 
-    const res = await fetch(`${base}/api/projects/${PROJECT}/ideas/${idea.id}/keep`, { method: "POST" });
+    const res = await fetch(`${base}/api/projects/${PROJECT}/ideas/${idea.id}/keep`, { method: "POST", headers: { cookie: await browserCookie() } });
     assert.equal(res.status, 200);
     const { idea: updated } = await res.json();
     assert.equal(updated.killed, false);
@@ -94,12 +102,12 @@ describe("idea routes — the founder door", () => {
   it("refuses to keep a killed idea — a kill is dead, not deprioritized", async () => {
     const idea = createGtmIdea({ projectId: PROJECT, goal: "g", angle: "asset-first", pitch: "Dead", killed: true });
 
-    const res = await fetch(`${base}/api/projects/${PROJECT}/ideas/${idea.id}/keep`, { method: "POST" });
+    const res = await fetch(`${base}/api/projects/${PROJECT}/ideas/${idea.id}/keep`, { method: "POST", headers: { cookie: await browserCookie() } });
     assert.equal(res.status, 409);
   });
 
   it("a 404 when killing an idea that does not exist", async () => {
-    const res = await fetch(`${base}/api/projects/${PROJECT}/ideas/idea-nope/kill`, { method: "POST" });
+    const res = await fetch(`${base}/api/projects/${PROJECT}/ideas/idea-nope/kill`, { method: "POST", headers: { cookie: await browserCookie() } });
     assert.equal(res.status, 404);
   });
 

@@ -11,8 +11,10 @@
 // authoritative locally. Convex is the MIRROR that makes a project shared across a team in real time:
 // each local write is pushed up write-behind (async, best-effort, never blocking, never able to fail the
 // local write), and on boot the team's documents are pulled down so a fresh machine starts from shared
-// state. last-write-wins by timestamp keeps machines convergent. If Convex is unreachable the engine
-// keeps working entirely from SQLite — sync is best-effort, never load-bearing for one operator.
+// state. Revisioned writes preserve their local CAS base and advance atomically in Convex; a losing
+// offline edit stays local and is reported as a sync conflict instead of overwriting the winner. Boot
+// hydration likewise replaces local state only when the remote revision is provably newer. If Convex
+// is unreachable the engine keeps working entirely from SQLite — sync remains best-effort.
 //
 // THE (collection, key) MAPPING. The provider addresses a document by (collection, key); the Convex
 // `documents` table keys by one string `key` scoped to a `teamId` (see convex/documents.ts). We join the
@@ -24,6 +26,7 @@ import {
   registerConvexBackend,
   PROJECT_COLLECTION,
 } from "./persistence.mjs";
+import { isDeepStrictEqual } from "node:util";
 
 // Join a (collection, key) into the single Convex document key, and split it back. The separator is "/"
 // — collection names are directory-name-shaped (no slashes) so the FIRST slash is always the boundary.
@@ -34,6 +37,11 @@ function splitConvexKey(composite) {
   const idx = composite.indexOf("/");
   if (idx < 0) return { collection: composite, key: "" };
   return { collection: composite.slice(0, idx), key: composite.slice(idx + 1) };
+}
+
+function documentRevision(value) {
+  const revision = value && typeof value === "object" ? value.revision : null;
+  return Number.isInteger(revision) && revision >= 0 ? revision : null;
 }
 
 // The Convex client we need is narrow: a mutation/query pair against the documents functions. The live
@@ -54,7 +62,7 @@ async function functionRef(name) {
 // The mirror: a tiny async write-behind queue plus a boot pull. It owns ALL Convex contact, so the
 // synchronous backend below never awaits. Best-effort throughout: a failed push is re-queued and a
 // failed pull leaves local state untouched.
-function createMirror({ url, teamId, identity, client: injectedClient, now }) {
+function createMirror({ url, teamId, identity, client: injectedClient, now, onConflict, onAccepted, isBlocked }) {
   const timestamp = typeof now === "function" ? now : () => new Date().toISOString();
   let clientPromise = null;
   let warnedPush = false;
@@ -68,7 +76,11 @@ function createMirror({ url, teamId, identity, client: injectedClient, now }) {
     return clientPromise;
   }
 
-  const pending = new Map(); // convexKey -> { op: "set" | "delete", data? }
+  // Preserve per-document operation order. CAS revisions cannot be coalesced: if local revisions 1 and
+  // 2 are produced before a flush, Convex must observe both bases rather than only revision 2.
+  const pending = new Map(); // convexKey -> Array<{ op, data?, expectedRevision? }>
+  const conflicts = [];
+  const blockedKeys = new Set();
   let flushTimer = null;
   let flushing = null;
 
@@ -92,57 +104,160 @@ function createMirror({ url, teamId, identity, client: injectedClient, now }) {
     let client;
     let setRef;
     let removeRef;
+    let compareAndSetRef;
     try {
-      [client, setRef, removeRef] = await Promise.all([
+      [client, setRef, removeRef, compareAndSetRef] = await Promise.all([
         getClient(),
         functionRef("documents:set"),
         functionRef("documents:remove"),
+        functionRef("documents:compareAndSet"),
       ]);
     } catch (err) {
       requeue(batch);
       warnPush(err);
       return;
     }
-    for (const [key, entry] of batch) {
-      try {
-        if (entry.op === "delete") {
-          await client.mutation(removeRef, { teamId, key });
-        } else {
-          await client.mutation(setRef, {
-            teamId,
-            key,
-            data: entry.data,
-            updatedAt: timestamp(),
-            updatedBy: identity,
-          });
+    for (let keyIndex = 0; keyIndex < batch.length; keyIndex += 1) {
+      const [key, entries] = batch[keyIndex];
+      if (blockedKeys.has(key) || isBlocked?.(key)) {
+        blockedKeys.add(key);
+        for (const entry of entries) retainConflict({
+          key,
+          kind: "push",
+          op: entry.op,
+          expectedRevision: entry.expectedRevision ?? null,
+          reason: "unresolved-predecessor-conflict",
+          currentRevision: null,
+          at: timestamp(),
+        });
+        continue;
+      }
+      for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+        const entry = entries[entryIndex];
+        try {
+          let result;
+          if (entry.op === "delete") {
+            result = await client.mutation(removeRef, {
+              teamId,
+              key,
+              ...(Number.isInteger(entry.expectedRevision) ? { expectedRevision: entry.expectedRevision } : {}),
+            });
+          } else {
+            const args = {
+              teamId,
+              key,
+              data: entry.data,
+              updatedAt: timestamp(),
+              updatedBy: identity,
+            };
+            result = Number.isInteger(entry.expectedRevision)
+              ? await client.mutation(compareAndSetRef, {
+                ...args,
+                expectedRevision: entry.expectedRevision,
+                expectedData: entry.baseData,
+              })
+              : await client.mutation(setRef, args);
+          }
+          if (result?.status === "conflict" || result?.status === "invalid") {
+            const conflictRecord = {
+              key,
+              kind: "push",
+              op: entry.op,
+              expectedRevision: entry.expectedRevision ?? null,
+              reason: result.reason ?? result.status,
+              currentRevision: result.currentRevision ?? null,
+              at: timestamp(),
+            };
+            blockedKeys.add(key);
+            retainConflict(conflictRecord);
+            // Later operations for this key were built on the rejected local state. A matching numeric
+            // revision on the winning branch could make one appear valid (or let a queued delete erase
+            // it), so quarantine the dependent suffix rather than sending it.
+            for (const dependent of entries.slice(entryIndex + 1)) retainConflict({
+              key,
+              kind: "push",
+              op: dependent.op,
+              expectedRevision: dependent.expectedRevision ?? null,
+              reason: "predecessor-conflict",
+              currentRevision: result.currentRevision ?? null,
+              at: timestamp(),
+            });
+            break;
+          } else if (entry.op === "set" && Number.isInteger(entry.data?.revision)) {
+            try {
+              onAccepted?.({ key, revision: entry.data.revision, at: timestamp(), status: result?.status ?? "accepted" });
+            } catch { /* cursor evidence cannot break a completed remote write */ }
+          }
+        } catch (err) {
+          // Transport/runtime failure: restore this operation and everything after it. Structured CAS
+          // conflicts are intentionally not retried; retrying a stale base can never make it valid.
+          requeue([[key, entries.slice(entryIndex)], ...batch.slice(keyIndex + 1)]);
+          warnPush(err);
+          return;
         }
-      } catch (err) {
-        // Re-queue only this key (don't lose newer writes that arrived meanwhile) and stop the batch —
-        // a transient outage will retry on the next schedule.
-        if (!pending.has(key)) pending.set(key, entry);
-        warnPush(err);
-        break;
       }
     }
   }
 
   function requeue(batch) {
-    for (const [key, entry] of batch) if (!pending.has(key)) pending.set(key, entry);
+    for (const [key, entries] of batch) {
+      const newer = pending.get(key) ?? [];
+      pending.set(key, [...entries, ...newer]);
+    }
   }
   function warnPush(err) {
     if (warnedPush) return;
     warnedPush = true;
     console.warn(`[convex-backend] push failed, continuing local-only: ${err?.message ?? err}`);
   }
+  function retainConflict(record) {
+    conflicts.push(record);
+    try { onConflict?.(record); } catch { /* sync safety reporting cannot break writes */ }
+  }
 
   return {
-    pushSet(collection, key, data) {
-      pending.set(convexKey(collection, key), { op: "set", data });
+    pushSet(collection, key, data, expectedRevision, baseData) {
+      const composite = convexKey(collection, key);
+      if (blockedKeys.has(composite) || isBlocked?.(composite)) {
+        blockedKeys.add(composite);
+        retainConflict({
+          key: composite,
+          kind: "push",
+          op: "set",
+          expectedRevision: expectedRevision ?? null,
+          reason: "unresolved-predecessor-conflict",
+          currentRevision: null,
+          at: timestamp(),
+        });
+        return;
+      }
+      const queue = pending.get(composite) ?? [];
+      queue.push({ op: "set", data, expectedRevision, baseData });
+      pending.set(composite, queue);
       scheduleFlush();
     },
-    pushDelete(collection, key) {
-      pending.set(convexKey(collection, key), { op: "delete" });
+    pushDelete(collection, key, expectedRevision) {
+      const composite = convexKey(collection, key);
+      if (blockedKeys.has(composite) || isBlocked?.(composite)) {
+        blockedKeys.add(composite);
+        retainConflict({
+          key: composite,
+          kind: "push",
+          op: "delete",
+          expectedRevision: expectedRevision ?? null,
+          reason: "unresolved-predecessor-conflict",
+          currentRevision: null,
+          at: timestamp(),
+        });
+        return;
+      }
+      const queue = pending.get(composite) ?? [];
+      queue.push({ op: "delete", expectedRevision });
+      pending.set(composite, queue);
       scheduleFlush();
+    },
+    getConflicts() {
+      return structuredClone(conflicts);
     },
     // Drain the queue now and wait for it — used by tests and any caller that wants the mirror settled
     // (e.g. a graceful shutdown). Makes a bounded number of flush passes so a re-queued item gets a
@@ -174,13 +289,31 @@ function createMirror({ url, teamId, identity, client: injectedClient, now }) {
       try {
         const docs = (await client.query(listRef, { teamId })) ?? [];
         let pulled = 0;
+        let skipped = 0;
+        const hydrationConflicts = [];
         for (const doc of docs) {
           const { collection, key } = splitConvexKey(doc.key);
           if (!collection || !key) continue;
-          sink(collection, key, doc.data);
-          pulled += 1;
+          const result = sink(collection, key, doc.data);
+          if (result?.conflict) {
+            skipped += 1;
+            const conflictRecord = {
+              key: doc.key,
+              kind: "hydration",
+              at: timestamp(),
+              ...result,
+              remoteData: doc.data,
+            };
+            hydrationConflicts.push(conflictRecord);
+            blockedKeys.add(doc.key);
+            try { onConflict?.(conflictRecord); } catch { /* local state already remains untouched */ }
+          } else if (result?.skipped) {
+            skipped += 1;
+          } else {
+            pulled += 1;
+          }
         }
-        return { pulled };
+        return { pulled, skipped, conflicts: hydrationConflicts };
       } catch (err) {
         return warnPull(err);
       }
@@ -215,6 +348,7 @@ export function convexConfig(options = {}) {
 //
 //   - get/list read SQLite only (instant, local-first). The mirror never blocks a read.
 //   - set writes SQLite, returns the data, and queues a write-behind push.
+//   - compareAndSet preserves the local revision guard and mirrors only a successful local commit.
 //   - delete removes from SQLite, returns the result, and queues a write-behind remove.
 //
 // Options:
@@ -236,7 +370,34 @@ export function createConvexBackend(options = {}) {
   // A Convex URL with no team id is a degenerate "configured but no team" state — keep the local backend
   // fully working and simply skip mirroring rather than crash. mirror is null in that case.
   const mirror = config.teamId
-    ? createMirror({ ...config, client: options.client, now: options.now })
+    ? createMirror({
+      ...config,
+      client: options.client,
+      now: options.now,
+      onConflict(record) {
+        // Conflict receipts are local-only evidence. They deliberately bypass the wrapper so recording
+        // a failed mirror operation cannot recursively enqueue another mirror operation.
+        local.set("sync-conflicts", encodeURIComponent(record.key), {
+          ...record,
+          teamId: config.teamId,
+          identity: config.identity,
+          status: "unresolved",
+        });
+      },
+      onAccepted(record) {
+        local.set("sync-cursors", encodeURIComponent(record.key), {
+          ...record,
+          teamId: config.teamId,
+          identity: config.identity,
+        });
+      },
+      isBlocked(composite) {
+        const receipt = typeof local.getFresh === "function"
+          ? local.getFresh("sync-conflicts", encodeURIComponent(composite))
+          : local.get("sync-conflicts", encodeURIComponent(composite));
+        return receipt?.status === "unresolved";
+      },
+    })
     : null;
 
   return {
@@ -259,23 +420,117 @@ export function createConvexBackend(options = {}) {
         : local.get(collection, key);
     },
     set(collection, key, data) {
+      const current = typeof local.getFresh === "function"
+        ? local.getFresh(collection, key)
+        : local.get(collection, key);
       const stored = local.set(collection, key, data);
-      if (mirror) mirror.pushSet(collection, key, stored);
+      if (mirror) {
+        const nextRevision = documentRevision(stored);
+        if (nextRevision !== null && nextRevision >= 1) {
+          const expectedRevision = nextRevision - 1;
+          const baseData = documentRevision(current) === expectedRevision ? current : null;
+          mirror.pushSet(collection, key, stored, expectedRevision, baseData);
+        } else {
+          mirror.pushSet(collection, key, stored);
+        }
+      }
       return stored;
+    },
+    compareAndSet(collection, key, expectedRevision, data) {
+      const baseData = typeof local.getFresh === "function"
+        ? local.getFresh(collection, key)
+        : local.get(collection, key);
+      const stored = local.compareAndSet(collection, key, expectedRevision, data);
+      if (mirror) mirror.pushSet(collection, key, stored, expectedRevision, baseData);
+      return stored;
+    },
+    setIfAbsent(collection, key, data) {
+      const result = local.setIfAbsent(collection, key, data);
+      if (result.inserted && mirror) {
+        const revision = documentRevision(result.value);
+        if (revision !== null && revision >= 1) {
+          mirror.pushSet(collection, key, result.value, revision - 1, null);
+        } else {
+          mirror.pushSet(collection, key, result.value);
+        }
+      }
+      return result;
     },
     list(collection) {
       return local.list(collection);
     },
+    listSyncConflicts() {
+      return local.list("sync-conflicts");
+    },
     delete(collection, key) {
+      const current = typeof local.getFresh === "function"
+        ? local.getFresh(collection, key)
+        : local.get(collection, key);
       const removed = local.delete(collection, key);
-      if (mirror) mirror.pushDelete(collection, key);
+      if (mirror) mirror.pushDelete(collection, key, documentRevision(current));
       return removed;
     },
     // Boot hydration: pull the team's shared documents into the local backend so a fresh machine starts
     // from shared state. Best-effort; a no-op when there is no team. Returns { pulled } / { pulled, error }.
     async hydrate() {
       if (!mirror) return { pulled: 0 };
-      return mirror.pull((collection, key, data) => local.set(collection, key, data));
+      return mirror.pull((collection, key, data) => {
+        const composite = convexKey(collection, key);
+        const cursorKey = encodeURIComponent(composite);
+        const current = typeof local.getFresh === "function"
+          ? local.getFresh(collection, key)
+          : local.get(collection, key);
+        const remoteRevision = documentRevision(data);
+        if (current == null) {
+          local.set(collection, key, data);
+          if (remoteRevision !== null) local.set("sync-cursors", cursorKey, {
+            key: composite,
+            revision: remoteRevision,
+            at: new Date().toISOString(),
+            status: "hydrated",
+            teamId: config.teamId,
+            identity: config.identity,
+          });
+          return { written: true };
+        }
+        if (isDeepStrictEqual(current, data)) {
+          if (remoteRevision !== null) local.set("sync-cursors", cursorKey, {
+            key: composite,
+            revision: remoteRevision,
+            at: new Date().toISOString(),
+            status: "observed",
+            teamId: config.teamId,
+            identity: config.identity,
+          });
+          return { skipped: true, reason: "already-current" };
+        }
+        const localRevision = documentRevision(current);
+        const cursor = typeof local.getFresh === "function"
+          ? local.getFresh("sync-cursors", cursorKey)
+          : local.get("sync-cursors", cursorKey);
+        // A higher number is safe to hydrate only when the local document still equals the last remote-
+        // confirmed revision. Without this ancestry cursor, two offline branches can have different
+        // revision numbers and numeric ordering would silently erase one branch.
+        if (localRevision !== null && remoteRevision !== null
+          && remoteRevision > localRevision && cursor?.revision === localRevision) {
+          local.set(collection, key, data);
+          local.set("sync-cursors", cursorKey, {
+            key: composite,
+            revision: remoteRevision,
+            at: new Date().toISOString(),
+            status: "hydrated",
+            teamId: config.teamId,
+            identity: config.identity,
+          });
+          return { written: true };
+        }
+        return {
+          conflict: true,
+          reason: localRevision === remoteRevision ? "same-revision-diverged" : "local-not-proven-stale",
+          localRevision,
+          remoteRevision,
+        };
+      });
     },
   };
 }
@@ -299,7 +554,7 @@ function sharedTeamMirror() {
 }
 
 // True when a team deployment is actually configured to mirror to (a Convex URL AND a team id). The
-// guard the boot path and the convex-sync compatibility shim read to stay fully local-only by default.
+// guard the boot path and local reads to stay fully local-only by default.
 export function teamSyncEnabled() {
   const config = convexConfig();
   return !!(config && config.teamId);
@@ -311,9 +566,9 @@ export function enqueueDocument(collection, key, data) {
   const mirror = sharedTeamMirror();
   if (mirror) mirror.pushSet(collection, key, data);
 }
-export function enqueueDelete(collection, key) {
+export function enqueueDelete(collection, key, expectedRevision) {
   const mirror = sharedTeamMirror();
-  if (mirror) mirror.pushDelete(collection, key);
+  if (mirror) mirror.pushDelete(collection, key, expectedRevision);
 }
 
 // Settle the shared queue (tests / graceful shutdown). A no-op when no team is configured.
@@ -330,7 +585,7 @@ export function __resetTeamSync() {
 
 // Boot hydration entry: pull the team's shared documents into the local SQLite store so a fresh machine
 // starts from shared state. This is the single caller the server boot uses (replacing the legacy
-// convex-sync pull, which wrote raw .json beside the DB the engine actually reads). Guarded-off by
+// the retired compatibility pull, which wrote raw .json beside the DB the engine actually reads). Guarded-off by
 // default: with no team configured it returns `disabled` and never touches the network, so a local-only
 // deployment stays silent and offline. Returns { pulled } / { pulled, disabled } / { pulled, error }.
 export async function hydrateTeamDocuments(options = {}) {

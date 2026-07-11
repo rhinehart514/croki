@@ -1,0 +1,103 @@
+.canvas-outline {
+  position: absolute;
+  top: calc(var(--space-4) + 44px);
+  left: calc(var(--pentry-gutter, 0px) + var(--space-4));
+  z-index: 31;
+  color: var(--ink);
+  font-size: var(--text-sm);
+}
+
+.canvas-outline-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+  color: var(--ink-2);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.canvas-outline-toggle > span {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.canvas-outline-toggle:hover { border-color: var(--ghost); color: var(--ink); }
+.canvas-outline-toggle:focus-visible,
+.canvas-outline-panel button:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+
+.canvas-outline-panel {
+  width: min(360px, calc(100vw - var(--space-8)));
+  max-height: min(620px, calc(100vh - 150px));
+  margin-top: var(--space-2);
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+}
+
+.canvas-outline-panel > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.canvas-outline-panel > header div { display: grid; gap: var(--space-1); }
+.canvas-outline-panel > header strong { font-size: var(--text-base); }
+.canvas-outline-panel > header span { color: var(--muted); font-size: var(--text-xs); }
+.canvas-outline-panel > header button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.canvas-outline-panel > header button:hover { background: var(--surface-2); color: var(--ink); }
+
+.canvas-outline-panel ol {
+  max-height: min(540px, calc(100vh - 230px));
+  margin: 0;
+  padding: var(--space-2);
+  overflow: auto;
+  list-style: none;
+}
+
+.canvas-outline-panel li + li { border-top: 1px solid var(--line); }
+.canvas-outline-panel li > button {
+  display: grid;
+  width: 100%;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-2);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.canvas-outline-panel li > button:hover,
+.canvas-outline-panel li > button[aria-current="true"] { background: var(--surface-2); }
+.canvas-outline-panel li > button > strong { font-size: var(--text-sm); line-height: var(--leading-tight); }
+.canvas-outline-panel li > button > span:last-child { color: var(--muted); font-size: var(--text-xs); }
+.canvas-outline-kind { color: var(--muted); font-size: var(--text-xs); text-transform: capitalize; }
+.canvas-outline-empty { max-width: 34ch; margin: 0; padding: var(--space-5); color: var(--muted); }
+
+@media (max-width: 640px) {
+  .canvas-outline { top: var(--space-3); left: var(--space-3); }
+  .canvas-outline-panel { max-height: calc(100vh - 90px); }
+}

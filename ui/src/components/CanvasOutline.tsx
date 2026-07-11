@@ -1,0 +1,120 @@
+import { useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { ListTree, X } from "lucide-react";
+import type { WovenCanvas, WovenRef } from "@/types";
+import { buildCanvasOutline, canvasOutlineRefKey, type CanvasOutlineRow } from "@/lib/canvasOutline";
+import "@/styles/canvas-outline.css";
+
+function relationshipSummary(row: CanvasOutlineRow): string {
+  const parts: string[] = [];
+  if (row.incoming) parts.push(`${row.incoming} in`);
+  if (row.outgoing) parts.push(`${row.outgoing} out`);
+  return parts.join(", ") || "No connections";
+}
+
+export function CanvasOutline({
+  canvas,
+  selectedRef,
+  onSelect,
+  onInspect,
+}: {
+  canvas: WovenCanvas | null | undefined;
+  selectedRef?: WovenRef | null;
+  onSelect: (ref: WovenRef) => void;
+  onInspect: (ref: WovenRef) => void;
+}) {
+  const rows = useMemo(() => buildCanvasOutline(canvas), [canvas]);
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const rowRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const selectedKey = selectedRef ? canvasOutlineRefKey(selectedRef) : null;
+  const safeActiveIndex = Math.min(activeIndex, Math.max(0, rows.length - 1));
+
+  const focusRow = (index: number) => {
+    if (!rows.length) return;
+    const next = (index + rows.length) % rows.length;
+    setActiveIndex(next);
+    rowRefs.current[next]?.focus();
+  };
+
+  const onRowKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number, ref: WovenRef) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      event.preventDefault();
+      focusRow(index + 1);
+    } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      focusRow(index - 1);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      focusRow(0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      focusRow(rows.length - 1);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      onInspect(ref);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      setOpen(false);
+    }
+  };
+
+  return (
+    <section className={`canvas-outline ${open ? "open" : ""}`} aria-label="Canvas outline">
+      <button
+        type="button"
+        className="canvas-outline-toggle"
+        aria-expanded={open}
+        aria-controls="canvas-linear-outline"
+        onClick={() => {
+          if (!open && selectedKey) {
+            const selectedIndex = rows.findIndex((row) => canvasOutlineRefKey(row.anchor.ref) === selectedKey);
+            if (selectedIndex >= 0) setActiveIndex(selectedIndex);
+          }
+          setOpen((value) => !value);
+        }}
+      >
+        <ListTree size={15} aria-hidden="true" />
+        Outline
+        {rows.length ? <span>{rows.length}</span> : null}
+      </button>
+
+      {open ? (
+        <div className="canvas-outline-panel" id="canvas-linear-outline">
+          <header>
+            <div>
+              <strong>Canvas outline</strong>
+              <span>Linear access to the same canvas</span>
+            </div>
+            <button type="button" onClick={() => setOpen(false)} aria-label="Close canvas outline"><X size={15} /></button>
+          </header>
+          {rows.length ? (
+            <ol aria-label="Canvas items">
+              {rows.map((row, index) => {
+                const key = canvasOutlineRefKey(row.anchor.ref);
+                const selected = key === selectedKey;
+                return (
+                  <li key={key}>
+                    <button
+                      type="button"
+                      ref={(node) => { rowRefs.current[index] = node; }}
+                      tabIndex={index === safeActiveIndex ? 0 : -1}
+                      aria-current={selected ? "true" : undefined}
+                      onFocus={() => setActiveIndex(index)}
+                      onClick={() => onSelect(row.anchor.ref)}
+                      onDoubleClick={() => onInspect(row.anchor.ref)}
+                      onKeyDown={(event) => onRowKeyDown(event, index, row.anchor.ref)}
+                    >
+                      <span className="canvas-outline-kind">{row.anchor.kind.replace(/[-_]/g, " ")}</span>
+                      <strong>{row.anchor.label}</strong>
+                      <span>{row.regionTitles.length ? `${row.regionTitles.join(", ")} · ` : ""}{relationshipSummary(row)}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          ) : <p className="canvas-outline-empty">Grounded product material will appear here as the canvas fills.</p>}
+        </div>
+      ) : null}
+    </section>
+  );
+}

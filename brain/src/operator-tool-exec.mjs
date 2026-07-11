@@ -35,6 +35,9 @@ import { compareChannelRuns } from "./run-compare.mjs";
 import { makeFailureSink } from "./failure-log.mjs";
 import { resolveGitShaAsync } from "./friction.mjs";
 import { classifyOperatorVerb, isTerrainProjectionRef, normalizeStableRef, normalizeStableRefs } from "./operator-tools.mjs";
+import { createGoal, createGoalRelation, getGoal, getGoalRelation, reviseGoal, reviseGoalRelation } from "./goal-store.mjs";
+import { createWorkArtifact, createWorkRelationship, getWorkArtifact, getWorkRelationship, reviseWorkArtifact, reviseWorkRelationship } from "./work-artifact-store.mjs";
+import { normalizeCanvasProposal } from "./canvas-proposal.mjs";
 import {
   addEvent,
   compactProduct,
@@ -72,6 +75,16 @@ function recordText(value) {
   if (typeof value === "string") return value.trim();
   if (value && typeof value === "object") return String(value.text ?? value.wording ?? value.value ?? value.summary ?? "").trim();
   return String(value ?? "").trim();
+}
+
+function scopedLookup(read, noun, id) {
+  try { return read(); }
+  catch (error) {
+    if (/belongs to project/i.test(error instanceof Error ? error.message : String(error))) {
+      throw new Error(`${noun} not found in this project: ${id}`);
+    }
+    throw error;
+  }
 }
 
 function optionalWording(value) {
@@ -192,12 +205,11 @@ async function crossMotionSuppression(project, projectId, options) {
   }
 }
 
-async function liveProduceMicroproduct({ goal, grounding, repo, options }) {
-  const { produceMicroproduct, createClaudeMicroproductProducer } = await import("./microproduct-composer.mjs");
-  const { createClaudeMicroproductInvoker } = await import("./agent-bridge.mjs");
-  return produceMicroproduct({ goal, grounding }, {
+async function liveProduceMicroproduct({ goal, grounding, taste, repo, runtime, model, options }) {
+  const { produceMicroproduct, createMicroproductProducer } = await import("./microproduct-composer.mjs");
+  return produceMicroproduct({ goal, grounding, taste }, {
     ...options,
-    produce: createClaudeMicroproductProducer({ invoke: createClaudeMicroproductInvoker({ cwd: repo }) }),
+    produce: createMicroproductProducer({ cwd: repo, runtime, model }),
   });
 }
 
@@ -439,6 +451,10 @@ export async function executeTool(session, tool, options = {}) {
       value = { product: compactProduct(latestWorkspace(session, options)), sharedContext: project.sharedContext, crew: getAgentBench(projectId, {}, options) };
     } else if (ref.type === "crew") value = { crew: getAgentBench(projectId, {}, options) };
     else if (ref.type === "teammate") value = { teammate: getAgentProfile(projectId, ref.id, options) };
+    else if (ref.type === "goal") value = { goal: scopedLookup(() => getGoal(ref.id, { ...options, projectId }), "Goal", ref.id) };
+    else if (ref.type === "goal-relation") value = { relation: scopedLookup(() => getGoalRelation(ref.id, { ...options, projectId }), "Goal relation", ref.id) };
+    else if (ref.type === "work-artifact") value = { artifact: scopedLookup(() => getWorkArtifact(projectId, ref.id, options), "Work artifact", ref.id) };
+    else if (ref.type === "work-relationship") value = { relationship: scopedLookup(() => getWorkRelationship(projectId, ref.id, options), "Work relationship", ref.id) };
     else if (ref.type === "question") {
       const question = clarityStore.loadClarity(projectId, options).find((item) => item.id === ref.id) ?? null;
       if (!question) throw new Error(`Question not found in project ${projectId}: ${ref.id}`);
@@ -518,11 +534,86 @@ export async function executeTool(session, tool, options = {}) {
       const next = addEvent(working, { type: "session_note", title: "Recorded a note", detail: text, data: { refs, classification } }, options);
       return { session: next, result: { classification, recorded: { type: kind, text, refs } }, pause: false };
     }
-    if (kind === "model_artifact") {
-      if (!input.value || typeof input.value !== "object" || Array.isArray(input.value)) throw new Error("A model artifact needs an object value.");
-      const artifact = founderSafeValue(input.value);
-      const next = addEvent(working, { type: "model_artifact_recorded", title: "Recorded a model artifact", detail: recordText(input.value) || null, data: { artifact, refs, classification } }, options);
-      return { session: next, result: { classification, recorded: { type: kind, artifact, refs } }, pause: false };
+    if (kind === "model_artifact" || kind === "work_artifact" || kind === "canvas_proposal") {
+      if (!input.value || typeof input.value !== "object" || Array.isArray(input.value)) throw new Error("A work artifact needs an object value.");
+      const projectId = session.projectId ?? options.projectId ?? "default";
+      const actor = { type: "model-worker", runtime: session.runtime ?? "auto", model: session.model ?? null, sessionId: session.id };
+      const idempotencyKey = input.idempotencyKey || `${session.id}:${tool.id ?? `event-${session.events?.length ?? 0}`}:${kind}`;
+      const value = kind === "canvas_proposal" ? (() => {
+        const proposal = normalizeCanvasProposal(input.value, projectId);
+        return { id: input.value.id, kind: "canvas-change-proposal", title: proposal.title, summary: proposal.rationale, status: "proposed", format: "json", contentType: "application/vnd.drover.canvas-change-proposal+json", content: proposal };
+      })() : input.value;
+      const artifactId = value.artifactId ?? value.id;
+      const revisingArtifact = Number.isInteger(input.value.expectedArtifactRevision) && artifactId;
+      const artifactInput = {
+        ...value,
+        ...(!revisingArtifact && !value.kind ? { kind: kind === "model_artifact" ? "model-artifact" : "work-artifact" } : {}),
+        refs: normalizeStableRefs([...(value.refs ?? []), ...refs], { projectId }),
+        createdBy: actor,
+        revisionAuthor: actor,
+        modelReceipts: [...(Array.isArray(input.value.modelReceipts) ? input.value.modelReceipts : []), {
+          runtime: session.runtime ?? "auto", model: session.model ?? null, sessionId: session.id, toolCallId: tool.id ?? null,
+        }],
+        idempotencyKey,
+      };
+      const artifactPatch = { ...artifactInput };
+      delete artifactPatch.id;
+      delete artifactPatch.artifactId;
+      delete artifactPatch.lineageId;
+      const artifact = revisingArtifact
+        ? reviseWorkArtifact(projectId, artifactId, artifactPatch, options)
+        : createWorkArtifact(projectId, artifactInput, options);
+      const artifactRef = { type: "work-artifact", id: artifact.artifactId };
+      const next = addEvent(working, { type: "model_artifact_recorded", title: `Recorded ${artifact.title || artifact.kind}`, detail: artifact.summary || recordText(input.value) || null, data: { artifactRef, refs, classification } }, options);
+      return { session: next, result: { classification, recorded: { type: "work_artifact", artifact, ref: artifactRef, refs } }, pause: false };
+    }
+    if (kind === "goal") {
+      if (!input.value || typeof input.value !== "object" || Array.isArray(input.value)) throw new Error("A goal needs an object value.");
+      const projectId = session.projectId ?? options.projectId ?? "default";
+      const actor = `model:${session.runtime ?? "auto"}:${session.model ?? "default"}`;
+      const idempotencyKey = input.idempotencyKey || `${session.id}:${tool.id ?? `event-${session.events?.length ?? 0}`}:goal`;
+      const goalId = input.value.id;
+      const goalPatch = { ...input.value };
+      delete goalPatch.id;
+      delete goalPatch.createdBy;
+      const goal = Number.isInteger(input.value.expectedRevision) && goalId
+        ? reviseGoal(goalId, { ...goalPatch, projectId, revisionAuthor: actor, idempotencyKey }, options)
+        : createGoal({ ...input.value, projectId, createdBy: actor, revisionAuthor: actor, idempotencyKey }, options);
+      const goalRef = { type: "goal", id: goal.id };
+      const next = addEvent(working, { type: "goal_recorded", title: "Put a goal on the canvas", detail: goal.statement, data: { goalRef, classification } }, options);
+      return { session: next, result: { classification, recorded: { type: kind, goal, ref: goalRef } }, pause: false };
+    }
+    if (kind === "goal_relation") {
+      if (!input.value || typeof input.value !== "object" || Array.isArray(input.value)) throw new Error("A goal relationship needs an object value.");
+      const projectId = session.projectId ?? options.projectId ?? "default";
+      const actor = `model:${session.runtime ?? "auto"}:${session.model ?? "default"}`;
+      const idempotencyKey = input.idempotencyKey || `${session.id}:${tool.id ?? `event-${session.events?.length ?? 0}`}:goal-relation`;
+      const relationId = input.value.id;
+      const relationPatch = { ...input.value };
+      delete relationPatch.id;
+      delete relationPatch.createdBy;
+      const relation = Number.isInteger(input.value.expectedRevision) && relationId
+        ? reviseGoalRelation(relationId, { ...relationPatch, projectId, revisionAuthor: actor, idempotencyKey }, options)
+        : createGoalRelation({ ...input.value, projectId, createdBy: actor, revisionAuthor: actor, idempotencyKey }, options);
+      const relationRef = { type: "goal-relation", id: relation.id };
+      const next = addEvent(working, { type: "goal_relation_recorded", title: "Related two goals", detail: relation.label || relation.kind, data: { relationRef, classification } }, options);
+      return { session: next, result: { classification, recorded: { type: kind, relation, ref: relationRef } }, pause: false };
+    }
+    if (kind === "work_relationship") {
+      if (!input.value || typeof input.value !== "object" || Array.isArray(input.value)) throw new Error("A work relationship needs an object value.");
+      const projectId = session.projectId ?? options.projectId ?? "default";
+      const actor = { type: "model-worker", runtime: session.runtime ?? "auto", model: session.model ?? null, sessionId: session.id };
+      const idempotencyKey = input.idempotencyKey || `${session.id}:${tool.id ?? `event-${session.events?.length ?? 0}`}:work-relationship`;
+      const relationshipId = input.value.relationshipId ?? input.value.id;
+      const relationshipPatch = { ...input.value };
+      delete relationshipPatch.id;
+      delete relationshipPatch.relationshipId;
+      const relationship = Number.isInteger(input.value.expectedRelationshipRevision) && relationshipId
+        ? reviseWorkRelationship(projectId, relationshipId, { ...relationshipPatch, createdBy: actor, revisionAuthor: actor, idempotencyKey }, options)
+        : createWorkRelationship(projectId, { ...input.value, createdBy: actor, revisionAuthor: actor, idempotencyKey }, options);
+      const relationshipRef = { type: "work-relationship", id: relationship.relationshipId };
+      const next = addEvent(working, { type: "work_relationship_recorded", title: "Related canvas work", detail: relationship.label || relationship.kind, data: { relationshipRef, classification } }, options);
+      return { session: next, result: { classification, recorded: { type: kind, relationship, ref: relationshipRef } }, pause: false };
     }
     if (kind === "question_proposal") {
       const text = recordText(input.value);
@@ -952,6 +1043,7 @@ export async function executeTool(session, tool, options = {}) {
     const repo = options.cwd || project.sharedContext?.repository?.repo || process.cwd();
     const workspace = latestWorkspace(session, options);
     const grounding = compactProduct(workspace);
+    const taste = memoryFor(session.graphId ? flowFor(session, options).runs : [], options, session.projectId);
 
     let working = addEvent(session, {
       type: "operator_composing",
@@ -963,8 +1055,8 @@ export async function executeTool(session, tool, options = {}) {
     // 1) The producer cuts the artifact (spec + files) from the scanned product. It produces files and
     //    never deploys. Injected (fake) in tests; live = the subscription producer, dynamically loaded.
     const produce = options.produceMicroproduct
-      || ((args) => liveProduceMicroproduct({ ...args, repo, options }));
-    const built = await produce({ goal, grounding });
+      || ((args) => liveProduceMicroproduct({ ...args, repo, runtime: session.runtime, model: session.model, options }));
+    const built = await produce({ goal, grounding, taste });
     const artifactSpec = built?.artifactSpec ?? null;
     const artifactFiles = Array.isArray(built?.artifactFiles)
       ? built.artifactFiles

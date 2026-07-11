@@ -234,6 +234,17 @@ export function listFrictionQueue(options = {}) {
       firstSeen: meta.first_seen ?? null,
       lastSeen: meta.last_seen ?? null,
       gitSha: meta.git_sha ?? null,
+      branch: meta.branch && meta.branch !== "none" ? meta.branch : null,
+      worktree: meta.worktree && meta.worktree !== "none" ? meta.worktree : null,
+      commits: meta.commits != null ? Number(meta.commits) : null,
+      provider: meta.provider ?? null,
+      baseCommit: meta.base_commit ?? null,
+      workspace: meta.workspace ?? null,
+      projectId: meta.project_id ?? null,
+      repository: meta.repository ?? null,
+      model: meta.model ?? null,
+      reviewWorkspaceId: meta.review_workspace ?? null,
+      reviewRevisionId: meta.review_revision ?? null,
       errorSnippet: brokeMatch ? brokeMatch[1].trim() : null,
     };
   });

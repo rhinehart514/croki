@@ -6,6 +6,7 @@ import { loadProject } from "../project-store.mjs";
 import { listArtifacts, listCapabilities, readArtifact, writeArtifact } from "../artifact-store.mjs";
 import { setCredential, setOAuthCredential, listCredentials, removeCredential } from "../credential-store.mjs";
 import { runLoopbackConnect } from "../connectors/execute/gmail-oauth.mjs";
+import { authorizeFounderWriteForRequest } from "./session-guard.mjs";
 
 export default async function handle({ req, res, url }) {
   // Artifacts — the real GTM-engineering files (subagents + skills). Full markdown
@@ -30,11 +31,12 @@ export default async function handle({ req, res, url }) {
   }
   if (req.method === "POST" && url.pathname === "/api/artifact/save") {
     try {
+      authorizeFounderWriteForRequest(req, "Saving an executable agent or skill");
       const body = await readBody(req);
       if (body.type !== "agent" && body.type !== "skill") throw new Error("type must be 'agent' or 'skill'.");
       const saved = writeArtifact(body.type, body.ref, body.content);
       json(res, 200, saved);
-    } catch (err) { json(res, 400, { error: err instanceof Error ? err.message : String(err) }); }
+    } catch (err) { json(res, Number.isInteger(err?.status) ? err.status : 400, { error: err instanceof Error ? err.message : String(err) }); }
     return true;
   }
 
@@ -55,6 +57,7 @@ export default async function handle({ req, res, url }) {
 
   if (req.method === "POST" && url.pathname === "/api/credentials") {
     try {
+      authorizeFounderWriteForRequest(req, "Saving a sender credential");
       const body = await readBody(req);
       const project = loadProject();
       // setCredential returns the REDACTED credential (never the token) — safe to hand back to the UI.
@@ -65,7 +68,7 @@ export default async function handle({ req, res, url }) {
       });
       json(res, 200, { credential, credentials: listCredentials(project.id) });
     } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+      json(res, Number.isInteger(err?.status) ? err.status : 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return true;
   }
@@ -77,6 +80,7 @@ export default async function handle({ req, res, url }) {
   // sender; it does NOT loosen the wall — every send still waits for the founder at the gate.
   if (req.method === "POST" && url.pathname === "/api/credentials/gmail/connect") {
     try {
+      authorizeFounderWriteForRequest(req, "Connecting Gmail");
       const body = await readBody(req);
       const clientId = String(body.clientId ?? "").trim();
       const clientSecret = String(body.clientSecret ?? "").trim();
@@ -88,7 +92,7 @@ export default async function handle({ req, res, url }) {
       const credential = setOAuthCredential(project.id, { provider: "gmail", clientId, clientSecret, refreshToken, label: "Gmail (OAuth)" });
       json(res, 200, { credential, credentials: listCredentials(project.id) });
     } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+      json(res, Number.isInteger(err?.status) ? err.status : 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return true;
   }
@@ -96,11 +100,12 @@ export default async function handle({ req, res, url }) {
   const credentialMatch = url.pathname.match(/^\/api\/credentials\/([^/]+)$/);
   if (req.method === "DELETE" && credentialMatch) {
     try {
+      authorizeFounderWriteForRequest(req, "Removing a sender credential");
       const project = loadProject();
       const removed = removeCredential(project.id, decodeURIComponent(credentialMatch[1]));
       json(res, 200, { removed, credentials: listCredentials(project.id) });
     } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+      json(res, Number.isInteger(err?.status) ? err.status : 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return true;
   }

@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import {
   Background, BaseEdge, Controls, Handle, MarkerType, Panel, Position, ReactFlow,
   useReactFlow, useStore, useNodesInitialized, useUpdateNodeInternals, ViewportPortal,
-  type Connection, type Edge, type EdgeProps, type Node, type NodeChange, type NodeProps,
+  type Connection, type Edge, type EdgeProps, type Node, type NodeChange, type NodeProps, type ReactFlowInstance, type Viewport,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { motion } from "motion/react";
@@ -34,10 +34,10 @@ import type {
   Person, PersonAppearance,
 } from "@/types";
 import { computeChannelLanes, type ChannelLane } from "@/lib/channelLanes";
-import { ObjectChip, KindCluster, CanvasAnchor, FounderWall } from "@/components/canvas/wovenNodes";
-import { OpGoal, OpWork, OpGate, OpOutcome } from "@/components/canvas/operationNodes";
-import { buildOperationLanes } from "@/lib/operationLanes";
-import { canvasOutcomes } from "@/lib/canvasProjection";
+import { ObjectChip, KindCluster, CanvasAnchor, CanvasRegion, FounderWall } from "@/components/canvas/wovenNodes";
+import { CanvasNativeCreate, type CanvasCreateIntent } from "@/components/canvas/CanvasNativeCreate";
+import { CanvasRegionGroupingControl } from "@/components/CanvasRegionGroupingControl";
+import { canvasRenderingPolicy } from "@/lib/canvasPerformance";
 import { alignGatesToWall, buildCanvasAnchorLayer, buildWovenOverlay, focusIsEffective, type WovenAxis, type WovenFocus } from "@/lib/wovenOverlay";
 import type { WovenGraph } from "@/types";
 import type { RunSummary } from "@/api";
@@ -46,6 +46,8 @@ import { channelOfferLine } from "@/lib/gateItem";
 import type { GatePromote } from "@/lib/gateItem";
 import { GateReview } from "@/components/gate/GateReview";
 import { useGhostResolve } from "@/lib/ghostResolve";
+import { canvasAnchorRef, canvasPasteRequest, canvasRelationship, type CanvasCreateRequest, type CanvasRegionCreateRequest, type CanvasRelationshipRequest } from "@/lib/canvasNativeActions";
+import { isGroupableCanvasNode, regionRequestForSelection } from "@/lib/canvasRegionGrouping";
 import {
   structuralWarnings,
   warningsByNode,
@@ -1922,14 +1924,9 @@ const NODE_TYPES = {
   // Stable product/question/outcome landmarks from operatingView.woven.canvas (fix 3), overlaid beside
   // the object weaving. Focusing one traces its related anchors.
   canvasAnchor:   CanvasAnchor,
+  canvasRegion:   CanvasRegion,
   // The single founder-wall threshold across the lane band (P1).
   founderWall:    FounderWall,
-  // The Operator semantic lane (docs/production-direction/16): goal · work · gate · outcome, one per
-  // pipeline. The operation altitude, not the full Engineer step graph.
-  opGoal:         OpGoal,
-  opWork:         OpWork,
-  opGate:         OpGate,
-  opOutcome:      OpOutcome,
 };
 
 // ─── Feedback edge ── a return/learning edge (measure → context, switch → architect) routes UNDER the
@@ -2470,6 +2467,25 @@ function NodeFocuser({ selection, active }: { selection: NodeSelection; panelOpe
   return null;
 }
 
+// A newly-created or explicitly selected open-canvas object may live outside the current fleet viewport.
+// Bring that durable anchor into view without changing its position or fitting the entire, potentially huge,
+// operation. This also makes the workbench's create → inspect loop spatially legible.
+function AnchorFocuser({ focus }: { focus: WovenFocus }) {
+  const { getNode, setCenter } = useReactFlow();
+  useEffect(() => {
+    if (!focus || focus.kind !== "anchor" || focus.anchorId.startsWith("canchor:group:")) return;
+    const timer = setTimeout(() => {
+      const node = getNode(focus.anchorId);
+      if (!node) return;
+      const width = node.measured?.width ?? node.width ?? 220;
+      const height = node.measured?.height ?? node.height ?? 88;
+      setCenter(node.position.x + width / 2, node.position.y + height / 2, { zoom: 0.95, duration: 420 });
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [focus, getNode, setCenter]);
+  return null;
+}
+
 // ─── Pan to a pipeline's lane on the merged canvas ─────────────────────────────
 // "Open this pipeline" (ChannelSwitcher, a board tile) is navigation, not a node pick — it must NOT
 // touch `selection` (that pops the node detail modal open). A separate signal, a separate camera
@@ -2696,9 +2712,9 @@ function MeasureGuard({ nodeIds }: { nodeIds: string[] }) {
 // which keeps changing until the layout lands, and debounce: each settle render resets the timer,
 // so the fit fires once the positions stop moving, on the REAL bounds. We fit once per topology
 // (fittedTopology) so a later manual drag doesn't yank the viewport back.
-function FitOnGraph({ topology, bounds, running, suspended, fitOptions }: { topology: string; bounds: string; running: boolean; suspended?: boolean; fitOptions: FitOpts }) {
+function FitOnGraph({ topology, bounds, running, suspended, skipInitial, fitOptions }: { topology: string; bounds: string; running: boolean; suspended?: boolean; skipInitial?: boolean; fitOptions: FitOpts }) {
   const { fitView } = useReactFlow();
-  const fittedTopology = useRef<string | null>(null);
+  const fittedTopology = useRef<string | null>(skipInitial ? topology : null);
   useEffect(() => {
     if (running || suspended) return;                 // don't fight RunZoom or the operator cursor's follow
     if (fittedTopology.current === topology) return;  // already framed this graph; leave drags alone
@@ -2707,7 +2723,7 @@ function FitOnGraph({ topology, bounds, running, suspended, fitOptions }: { topo
       fitView({ ...fitOptions, duration: 360 });
     }, 140);
     return () => clearTimeout(t);
-  }, [topology, bounds, running, suspended, fitView, fitOptions]);
+  }, [topology, bounds, running, suspended, skipInitial, fitView, fitOptions]);
   return null;
 }
 
@@ -2721,7 +2737,9 @@ export function GraphCanvas({
   multiPipeline = null, panTo = null, onAskClaude, gatePromote, gateOffer = null, transportConnected = false, onRecordOutcome,
   onRefineItem, onDecideDelta, onOpenAgentProfile, runSummary = null,
   woven = null, wovenAxis = "objects", wovenFocus = null, onWovenSelect, onWireObject,
-  candidateLaneIds, onPickCandidate, operationMode = false, onOpenLane, projectId = null,
+  candidateLaneIds, onPickCandidate, projectId = null,
+  onCanvasAnchorPositionChange, onCanvasAuthorityChanged, onCanvasRegionChange, onCanvasRegionArchive, onCreateCanvasRegion,
+  onCreateCanvasObject, onConnectCanvasObjects, initialViewport = null, onViewportChange,
 }: {
   graph: GTMGraph;
   result: GTMRunResult | null;
@@ -2831,11 +2849,6 @@ export function GraphCanvas({
   // crew turns into real steps), never a literal targeting edge. `sourceStepId` is the namespaced step id;
   // `targetId` is the synthetic obj:/kind: id. Absent → the gesture is inert.
   onWireObject?: (sourceStepId: string, targetId: string) => void;
-  // Operator semantic projection (docs/production-direction/16): render one bounded lane per pipeline
-  // (goal · work · gate · outcome) instead of the full merged Engineer step graph. onOpenLane routes a
-  // lane click into Engineer for the full graph + GateReview.
-  operationMode?: boolean;
-  onOpenLane?: (channelId: string) => void;
   // The owning project id — threaded so the explain route (and any scoped graph call) is always
   // project-scoped rather than relying on global active-project inference.
   projectId?: string | null;
@@ -2843,6 +2856,17 @@ export function GraphCanvas({
   // candidate SHAPES, rendered as dashed proposed lanes in the one woven graph. Picking one commits it live.
   candidateLaneIds?: Set<string>;
   onPickCandidate?: (channelId: string) => void;
+  // Goal/work anchors are founder-owned canvas material. Their coordinates persist in the projection
+  // geometry authority, separate from executable pipeline node positions.
+  onCanvasAnchorPositionChange?: (nodeId: string, position: { x: number; y: number }) => void;
+  onCanvasAuthorityChanged?: () => void | Promise<void>;
+  onCanvasRegionChange?: (regionId: string, patch: { position?: { x: number; y: number }; size?: { width: number; height: number }; collapsed?: boolean }) => void;
+  onCanvasRegionArchive?: (regionId: string) => void;
+  initialViewport?: Viewport | null;
+  onViewportChange?: (viewport: Viewport) => void;
+  onCreateCanvasRegion?: (request: CanvasRegionCreateRequest) => void | Promise<void>;
+  onCreateCanvasObject?: (request: CanvasCreateRequest) => void | Promise<void>;
+  onConnectCanvasObjects?: (request: CanvasRelationshipRequest) => void | Promise<void>;
 }) {
   const handleSelect = useCallback((id: string) => onSelect(id), [onSelect]);
   // Inspector — the workbench's read surface. A node's record-count opens its real items as a card in
@@ -2861,6 +2885,13 @@ export function GraphCanvas({
   // Camera-follow break: the founder grabbed the canvas to look away from where Claude is working.
   // We pause the follow and offer a "Back to Claude" pill; the recenter nonce re-engages it.
   const [followBroken, setFollowBroken] = useState(false);
+  const [createIntent, setCreateIntent] = useState<CanvasCreateIntent | null>(null);
+  const [selectedCanvasNodeIds, setSelectedCanvasNodeIds] = useState<Set<string>>(() => new Set());
+  const [groupIntent, setGroupIntent] = useState(false);
+  const [groupBusy, setGroupBusy] = useState(false);
+  const [connectionSource, setConnectionSource] = useState<{ nodeId: string; ref: import("@/openCanvasTypes").StableRef } | null>(null);
+  const [canvasActionStatus, setCanvasActionStatus] = useState<string | null>(null);
+  const flowInstanceRef = useRef<ReactFlowInstance<Node, Edge> | null>(null);
   const [recenterSignal, setRecenterSignal] = useState(0);
   // When the operator presence clears, re-engage follow for next time. Adjusting state during render
   // from a changed prop is React's sanctioned pattern — no effect, no cascading render.
@@ -2869,6 +2900,13 @@ export function GraphCanvas({
   if (cursorActive !== trackedCursorActive) {
     setTrackedCursorActive(cursorActive);
     if (!cursorActive) setFollowBroken(false);
+  }
+  const [trackedNativeProject, setTrackedNativeProject] = useState(projectId);
+  if (projectId !== trackedNativeProject) {
+    setTrackedNativeProject(projectId);
+    setCreateIntent(null);
+    setConnectionSource(null);
+    setCanvasActionStatus(null);
   }
   const editable = variant !== "ideation" && !!onAddNode;
 
@@ -2939,9 +2977,7 @@ export function GraphCanvas({
   // both memos stay unconditional hooks; only the RENDERED nodes/edges pick one or the other.
   const merged = useMemo(
     () => {
-      // Operator altitude renders the semantic operation lanes instead of the full merged Engineer graph,
-      // so skip building (and framing on) the heavy merged graph entirely.
-      if (!multiPipeline || operationMode) return null;
+      if (!multiPipeline) return null;
       const raw = buildMergedFlowGraph(
       multiPipeline.channels,
       multiPipeline.channelGraphs,
@@ -2972,7 +3008,7 @@ export function GraphCanvas({
       multiPipeline, connectors, subsystemHealth, contractAudits, handleSelect, graph.id, running,
       runningNodeId, selection, proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal,
       onSubmitReview, onApproveGate, gatePromote, gateOffer, transportConnected, onRecordOutcome, onRefineItem, onDecideDelta, revealedNodeIds, toggleInspect, people, onAskClaude, onOpenAgentProfile, runSummary, nodeBeats,
-      candidateLaneIds, onPickCandidate, operationMode,
+      candidateLaneIds, onPickCandidate,
     ],
   );
 
@@ -3027,6 +3063,15 @@ export function GraphCanvas({
   // is the editor and stays untouched. `wovenZoom` tracks the live zoom so semantic zoom (far = clusters,
   // near = chips + ties) swaps without a second data read. The overlay never persists a thing.
   const [wovenZoom, setWovenZoom] = useState(1);
+  const [anchorDragState, setAnchorDragState] = useState<{
+    projectId: string | null;
+    positions: Record<string, { x: number; y: number }>;
+  }>({ projectId, positions: {} });
+  // Ignore presentation-only drag frames when another product opens; no effect/reset render is needed.
+  const anchorDragOverrides = useMemo(
+    () => anchorDragState.projectId === projectId ? anchorDragState.positions : {},
+    [anchorDragState, projectId],
+  );
   const wovenOverlay = useMemo(() => {
     if (!merged || !woven) return null;
     return buildWovenOverlay({
@@ -3062,20 +3107,9 @@ export function GraphCanvas({
   );
   // The single founder-wall bar (P1) — a thin vertical amber threshold across the lane band at the shared
   // gate x. Rendered behind the cards; non-interactive (the gate CARDS stay the actionable review path).
-  // Only present on the merged Operator canvas with 2+ gated lanes (object axis, lanes visible).
-  // The OPERATOR semantic projection (docs/production-direction/16): one bounded lane per pipeline instead
-  // of the full merged Engineer graph. Built from the same channels + graphs; the Engineer path is
-  // untouched. Present only in operationMode with a multiPipeline read.
-  const operationLanes = useMemo(
-    () => (operationMode && multiPipeline
-      // The outcome node means a REAL joined market return, matched by the backend's typed pipeline
-      // channelId from the canonical woven-canvas outcome projection — never internal produced throughput.
-      ? buildOperationLanes(multiPipeline.channels, multiPipeline.channelGraphs, canvasOutcomes(woven?.canvas ?? null))
-      : null),
-    [operationMode, multiPipeline, woven],
-  );
+  // Only present on the merged canvas with 2+ gated lanes (object axis, lanes visible).
   const wallNode = useMemo((): Node | null => {
-    const wall = operationLanes?.wall ?? merged?.wall;
+    const wall = merged?.wall;
     if (!wall) return null;
     return {
       id: "founder-wall", type: "founderWall",
@@ -3083,11 +3117,9 @@ export function GraphCanvas({
       data: { height: Math.max(0, wall.bottom - wall.top) },
       draggable: false, selectable: false, focusable: false, zIndex: 0,
     };
-  }, [operationLanes?.wall, merged?.wall]);
-  const nodes = useMemo(() => {
+  }, [merged?.wall]);
+  const projectedNodes = useMemo(() => {
     const wall = wallNode ? [wallNode] : [];
-    // Operator altitude: the compressed operation lanes ARE the surface (goal · work · gate · outcome).
-    if (operationLanes) return [...wall, ...operationLanes.nodes, ...(standaloneAnchorLayer?.nodes ?? [])];
     if (!wovenOverlay) return [...wall, ...laneGraphNodes, ...(standaloneAnchorLayer?.nodes ?? [])];
     if (typeAxisActive) return wovenOverlay.nodes;
     // Object axis: dim the lane cards when a focus isolates a crossing set (spatial focus-to-trace).
@@ -3102,13 +3134,96 @@ export function GraphCanvas({
         })
       : laneGraphNodes;
     return [...wall, ...laneNodes, ...wovenOverlay.nodes];
-  }, [wovenOverlay, standaloneAnchorLayer, laneGraphNodes, typeAxisActive, effectiveFocus, woven, wallNode, operationLanes]);
+  }, [wovenOverlay, standaloneAnchorLayer, laneGraphNodes, typeAxisActive, effectiveFocus, woven, wallNode]);
+  const nodes = useMemo(
+    () => projectedNodes.map((source) => {
+      const node = anchorDragOverrides[source.id] ? { ...source, position: anchorDragOverrides[source.id] } : source;
+      const selected = selectedCanvasNodeIds.has(node.id) ? { ...node, selected: true } : node;
+      if (selected.type === "canvasAnchor") {
+        const data = selected.data as import("@/lib/wovenOverlay").CanvasAnchorData;
+        const ref = canvasAnchorRef(data);
+        if (!ref) return selected;
+        return {
+          ...selected,
+          data: {
+            ...data,
+            onAuthorityChanged: onCanvasAuthorityChanged,
+            connection: { active: !!connectionSource, source: connectionSource?.nodeId === node.id },
+            onKeyboardConnect: onConnectCanvasObjects ? () => {
+              if (!connectionSource) {
+                setConnectionSource({ nodeId: selected.id, ref });
+                setCanvasActionStatus(`Choose what ${data.label} connects to, then press C.`);
+                return;
+              }
+              if (connectionSource.nodeId === selected.id) {
+                setConnectionSource(null);
+                setCanvasActionStatus("Connection cancelled.");
+                return;
+              }
+              const request = canvasRelationship({ ref: connectionSource.ref }, data);
+              if (!request) return;
+              setCanvasActionStatus("Connecting…");
+              void Promise.resolve(onConnectCanvasObjects(request)).then(() => {
+                setConnectionSource(null);
+                setCanvasActionStatus("Connected.");
+              }).catch((cause: unknown) => {
+                setCanvasActionStatus(cause instanceof Error ? cause.message : "Could not connect these objects.");
+              });
+            } : undefined,
+          },
+        };
+      }
+      if (selected.type !== "canvasRegion") return selected;
+      const data = selected.data as import("@/lib/wovenOverlay").CanvasRegionData;
+      return {
+        ...selected,
+        data: {
+          ...data,
+          onToggleCollapsed: () => onCanvasRegionChange?.(data.regionId, { collapsed: !data.collapsed }),
+          onResizeEnd: (size: { width: number; height: number }) => onCanvasRegionChange?.(data.regionId, { size }),
+          onArchive: () => onCanvasRegionArchive?.(data.regionId),
+        },
+      };
+    }),
+    [anchorDragOverrides, connectionSource, onCanvasAuthorityChanged, onCanvasRegionArchive, onCanvasRegionChange, onConnectCanvasObjects, projectedNodes, selectedCanvasNodeIds],
+  );
+  const selectedCanvasNodes = useMemo(
+    () => nodes.filter((node) => selectedCanvasNodeIds.has(node.id) && isGroupableCanvasNode(node)),
+    [nodes, selectedCanvasNodeIds],
+  );
+  const handleSelectionChange = useCallback(({ nodes: selected }: { nodes: Node[] }) => {
+    const next = new Set(selected.filter(isGroupableCanvasNode).map((node) => node.id));
+    setSelectedCanvasNodeIds((current) => {
+      if (current.size === next.size && [...current].every((id) => next.has(id))) return current;
+      return next;
+    });
+    if (next.size < 2) setGroupIntent(false);
+  }, []);
+  const createRegionFromSelection = useCallback(async (title: string) => {
+    const request = regionRequestForSelection(selectedCanvasNodes, title);
+    if (!request || !onCreateCanvasRegion) return;
+    setGroupBusy(true);
+    setCanvasActionStatus("Creating work region…");
+    try {
+      await onCreateCanvasRegion(request);
+      setGroupIntent(false);
+      setSelectedCanvasNodeIds(new Set());
+      setCanvasActionStatus(`${title} grouped ${request.memberRefs.length} items.`);
+    } catch (cause) {
+      setCanvasActionStatus(cause instanceof Error ? cause.message : "Could not create this work region.");
+    } finally {
+      setGroupBusy(false);
+    }
+  }, [onCreateCanvasRegion, selectedCanvasNodes]);
   const edges = useMemo(() => {
-    if (operationLanes) return [...operationLanes.edges, ...(standaloneAnchorLayer?.edges ?? [])];
     if (!wovenOverlay) return [...laneGraphEdges, ...(standaloneAnchorLayer?.edges ?? [])];
     if (typeAxisActive) return wovenOverlay.edges;
     return [...laneGraphEdges, ...wovenOverlay.edges];
-  }, [wovenOverlay, standaloneAnchorLayer, laneGraphEdges, typeAxisActive, operationLanes]);
+  }, [wovenOverlay, standaloneAnchorLayer, laneGraphEdges, typeAxisActive]);
+  const renderingPolicy = useMemo(
+    () => canvasRenderingPolicy(nodes.length, edges.length),
+    [nodes.length, edges.length],
+  );
 
   // The "N worth a look" chip steps the camera through each flagged card in turn (selecting it centers
   // it via NodeFocuser) — the fast path from "something's off" to the exact spot, no side list to scan.
@@ -3190,11 +3305,30 @@ export function GraphCanvas({
 
   const handleNodeDragStop = useCallback(
     (_event: unknown, node: Node) => {
+      if (node.type === "canvasRegion") {
+        const regionId = (node.data as { regionId?: string } | undefined)?.regionId;
+        if (regionId) onCanvasRegionChange?.(regionId, { position: node.position });
+        setAnchorDragState((current) => {
+          if (!Object.hasOwn(current.positions, node.id)) return current;
+          const positions = { ...current.positions };
+          delete positions[node.id];
+          return { ...current, positions };
+        });
+        return;
+      }
+      if (node.id.startsWith("canchor:") && onCanvasAnchorPositionChange) {
+        setAnchorDragState((current) => ({
+          projectId,
+          positions: { ...(current.projectId === projectId ? current.positions : {}), [node.id]: node.position },
+        }));
+        onCanvasAnchorPositionChange(node.id, node.position);
+        return;
+      }
       // A drag is a real founder move: persist it (origin "drag" records it in history). On a seeded
       // pipeline stored positions already paint as-is, so there's nothing extra to pin.
       onNodePositionChange?.(node.id, node.position, "drag");
     },
-    [onNodePositionChange],
+    [onCanvasAnchorPositionChange, onCanvasRegionChange, onNodePositionChange, projectId],
   ) as Parameters<typeof ReactFlow>[0]["onNodeDragStop"];
 
   // React Flow v12 only makes a CONTROLLED `nodes` graph interactive when it's given `onNodesChange` —
@@ -3204,14 +3338,19 @@ export function GraphCanvas({
   // position matters here — measurement and selection are handled internally / by our own click.
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      if (!onNodePositionChange) return;
       for (const change of changes) {
         if (change.type === "position" && change.dragging && change.position) {
-          onNodePositionChange(change.id, change.position, "layout");
+          if (change.id.startsWith("canchor:")) {
+            setAnchorDragState((current) => ({
+              projectId,
+              positions: { ...(current.projectId === projectId ? current.positions : {}), [change.id]: change.position! },
+            }));
+          }
+          else onNodePositionChange?.(change.id, change.position, "layout");
         }
       }
     },
-    [onNodePositionChange],
+    [onNodePositionChange, projectId],
   );
 
   // Click a woven chip / cluster → focus-to-trace (scale rule #2): the host isolates that object's / lane's
@@ -3239,23 +3378,27 @@ export function GraphCanvas({
     [onWovenSelect, wovenFocus],
   ) as Parameters<typeof ReactFlow>[0]["onNodeClick"];
 
-  // Operator altitude: clicking any part of a lane (goal / crew / gate / outcome) opens that pipeline in
-  // Engineer — the full step graph and the one GateReview action path. The lane id is `${channelId}::op-*`.
-  const handleOperationNodeClick = useCallback(
-    (_event: unknown, node: Node) => {
-      if (node.id.startsWith("canchor:")) {
-        if (!onWovenSelect) return;
-        const data = node.data as { anchorId?: string; ref?: { type: string | null; id: string } } | undefined;
-        const anchorId = data?.anchorId ?? node.id;
-        const same = wovenFocus?.kind === "anchor" && wovenFocus.anchorId === anchorId;
-        onWovenSelect(same ? null : { kind: "anchor", anchorId, ref: data?.ref });
-        return;
-      }
-      const sep = node.id.indexOf("::op-");
-      if (sep > 0 && onOpenLane) onOpenLane(node.id.slice(0, sep));
+  // Only explicit open-canvas relationship authorities carry `canvasRelationship`. Executable graph
+  // edges, derived context ties, outcome returns, and region containment therefore stay inert here and
+  // retain their existing graph semantics.
+  const handleWovenEdgeClick = useCallback(
+    (_event: unknown, edge: Edge) => {
+      if (!onWovenSelect) return;
+      const relationship = (edge.data as {
+        canvasRelationship?: {
+          relationshipId: string;
+          relationshipRef: { type: "goal-relation" | "work-relationship"; id: string };
+          source: import("@/types").WovenRef;
+          target: import("@/types").WovenRef;
+        };
+      } | undefined)?.canvasRelationship;
+      if (!relationship) return;
+      const same = wovenFocus?.kind === "relationship"
+        && wovenFocus.relationshipId === relationship.relationshipId;
+      onWovenSelect(same ? null : { kind: "relationship", ...relationship });
     },
-    [onOpenLane, onWovenSelect, wovenFocus],
-  ) as Parameters<typeof ReactFlow>[0]["onNodeClick"];
+    [onWovenSelect, wovenFocus],
+  ) as Parameters<typeof ReactFlow>[0]["onEdgeClick"];
 
   const handleConnect = useCallback((connection: Connection) => {
     // Drag-to-wire-object (docs/INTERTWINED-CANVAS.md §4): dragging from a step handle onto an object chip
@@ -3266,8 +3409,105 @@ export function GraphCanvas({
       onWireObject?.(connection.source, connection.target);
       return;
     }
+    if (connection.source?.startsWith("canchor:") || connection.target?.startsWith("canchor:")) {
+      const source = nodes.find((node) => node.id === connection.source);
+      const target = nodes.find((node) => node.id === connection.target);
+      const request = canvasRelationship(source?.data, target?.data);
+      if (!request || !onConnectCanvasObjects) return;
+      setCanvasActionStatus("Connecting…");
+      void Promise.resolve(onConnectCanvasObjects(request)).then(() => {
+        setConnectionSource(null);
+        setCanvasActionStatus("Connected.");
+      }).catch((cause: unknown) => {
+        setCanvasActionStatus(cause instanceof Error ? cause.message : "Could not connect these objects.");
+      });
+      return;
+    }
     if (connection.source && connection.target) onConnectNodes?.(connection.source, connection.target);
-  }, [onConnectNodes, onWireObject]);
+  }, [nodes, onConnectCanvasObjects, onConnectNodes, onWireObject]);
+
+  const handlePaneClick = useCallback((event: React.MouseEvent) => {
+    onPaneClick?.();
+    if (event.detail < 2 || !onCreateCanvasObject || running) return;
+    setCreateIntent({ token: Date.now(), screen: { x: event.clientX, y: event.clientY } });
+  }, [onCreateCanvasObject, onPaneClick, running]);
+
+  const flowPositionAt = useCallback((screen: { x: number; y: number }, element: HTMLElement) => {
+    const instance = flowInstanceRef.current;
+    if (instance) return instance.screenToFlowPosition(screen, { snapToGrid: false });
+    const rect = element.getBoundingClientRect();
+    return { x: screen.x - rect.left, y: screen.y - rect.top };
+  }, []);
+
+  const handleCanvasPaste = useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
+    if (!onCreateCanvasObject || running) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("input, textarea, select, [contenteditable='true']")) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const position = flowPositionAt({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }, event.currentTarget);
+    const request = canvasPasteRequest(event.clipboardData.getData("text/plain"), position);
+    if (!request) return;
+    event.preventDefault();
+    setCanvasActionStatus("Adding pasted work…");
+    void Promise.resolve(onCreateCanvasObject(request)).then(() => setCanvasActionStatus("Pasted work added."))
+      .catch((cause: unknown) => setCanvasActionStatus(cause instanceof Error ? cause.message : "Could not add pasted work."));
+  }, [flowPositionAt, onCreateCanvasObject, running]);
+
+  const handleCanvasDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    if (!onCreateCanvasObject || running || event.dataTransfer.files.length === 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const position = flowPositionAt({ x: event.clientX, y: event.clientY }, event.currentTarget);
+    const files = Array.from(event.dataTransfer.files);
+    setCanvasActionStatus(`Adding ${files.length} ${files.length === 1 ? "file" : "files"}…`);
+    void (async () => {
+      for (let index = 0; index < files.length; index += 1) {
+        const file = files[index];
+        const isImage = file.type.startsWith("image/");
+        const isText = file.type.startsWith("text/") || /(?:json|csv|xml|javascript|typescript)/i.test(file.type);
+        let content: import("@/openCanvasTypes").JsonValue;
+        let contentType = file.type || "application/octet-stream";
+        if (isImage) {
+          content = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.onerror = () => reject(reader.error ?? new Error(`Could not read ${file.name}.`));
+            reader.readAsDataURL(file);
+          });
+        } else if (isText) content = await file.text();
+        else {
+          contentType = "application/vnd.drover.file+json";
+          content = { name: file.name, mediaType: file.type || null, size: file.size, lastModified: file.lastModified };
+        }
+        await onCreateCanvasObject({
+          kind: "work",
+          workKind: isImage ? "image" : isText ? "document" : "file",
+          title: file.name,
+          contentType,
+          content,
+          position: { x: position.x + index * 28, y: position.y + index * 28 },
+        });
+      }
+      setCanvasActionStatus(`${files.length} ${files.length === 1 ? "file" : "files"} added.`);
+    })().catch((cause: unknown) => setCanvasActionStatus(cause instanceof Error ? cause.message : "Could not add dropped files."));
+  }, [flowPositionAt, onCreateCanvasObject, running]);
+
+  const handleCanvasKeyDown = useCallback((event: React.KeyboardEvent) => {
+    if (onCreateCanvasRegion && selectedCanvasNodes.length >= 2 && !running && !event.defaultPrevented && event.key.toLowerCase() === "g") {
+      const target = event.target as HTMLElement;
+      if (!target.closest("input, textarea, select, button, [contenteditable='true']")) {
+        event.preventDefault();
+        setGroupIntent(true);
+        return;
+      }
+    }
+    if (!onCreateCanvasObject || running || event.defaultPrevented || event.key.toLowerCase() !== "n") return;
+    const target = event.target as HTMLElement;
+    if (target.closest("input, textarea, select, button, [contenteditable='true']")) return;
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    setCreateIntent({ token: Date.now(), screen: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } });
+  }, [onCreateCanvasObject, onCreateCanvasRegion, running, selectedCanvasNodes.length]);
 
   // The live drop target for Crew/Skill drags is the outer canvas-area wrapper (App's onStepDrop),
   // which lands a node in a real focused pipeline — spinning up a scratch one if none is focused. The
@@ -3288,22 +3528,43 @@ export function GraphCanvas({
   }, [graph, merged]);
 
   return (
-    <NodeEditorContext.Provider value={editorContext}>
+      <NodeEditorContext.Provider value={editorContext}>
     <ReactFlow
       nodes={nodes}
       edges={edges}
+      // Dense products can carry hundreds of independent goals, artifacts, and relationships. The
+      // complete projection remains in React Flow's store for search/focus/fit; only off-screen DOM and
+      // SVG work is skipped. Small canvases keep the cheaper non-virtualized path.
+      onlyRenderVisibleElements={renderingPolicy.virtualize}
+      data-canvas-node-count={renderingPolicy.nodeCount}
+      data-canvas-edge-count={renderingPolicy.edgeCount}
+      data-canvas-virtualized={renderingPolicy.virtualize ? "true" : "false"}
       nodeTypes={NODE_TYPES}
       edgeTypes={EDGE_TYPES}
       onNodesChange={onNodesChange}
+      onInit={(instance) => { flowInstanceRef.current = instance; }}
       onNodeDragStop={handleNodeDragStop}
-      onNodeClick={operationMode ? handleOperationNodeClick : woven ? handleWovenNodeClick : undefined}
+      onNodeClick={woven ? handleWovenNodeClick : undefined}
+      onEdgeClick={woven ? handleWovenEdgeClick : undefined}
+      onSelectionChange={handleSelectionChange}
+      selectionOnDrag={Boolean(onCreateCanvasRegion && !running)}
+      panOnDrag={onCreateCanvasRegion && !running ? [1, 2] : true}
+      multiSelectionKeyCode={["Meta", "Control"]}
       onConnect={handleConnect}
       onEdgesDelete={(deleted) => onDeleteEdges?.(deleted.map((edge) => edge.id))}
-      onPaneClick={onPaneClick}
+      onPaneClick={handlePaneClick}
+      onPaste={handleCanvasPaste}
+      onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }}
+      onDrop={handleCanvasDrop}
+      onKeyDown={handleCanvasKeyDown}
+      tabIndex={0}
+      aria-label="Drover canvas. Drag to select, press G to group, press N to add, or paste and drop work directly."
       // A user-initiated pan/zoom (event is non-null; programmatic setCenter passes null) breaks the
       // camera-follow so the founder can look away from Claude's work without being yanked back.
       onMoveStart={(event) => { if (event && operatorCursor) setFollowBroken(true); }}
-      fitView
+      onMoveEnd={(event, viewport) => { if (event) onViewportChange?.(viewport); }}
+      defaultViewport={initialViewport ?? { x: 0, y: 0, zoom: 1 }}
+      fitView={!initialViewport}
       fitViewOptions={fitOptions}
       minZoom={0.15}
       maxZoom={1.8}
@@ -3317,12 +3578,13 @@ export function GraphCanvas({
       className={cn(variant === "ideation" && "ideation-canvas", selection && "loop-pane-focus")}
     >
       <NodeFocuser selection={selection} panelOpen={!!panelOpen} active={!running && !operatorCursor} />
+      {woven ? <AnchorFocuser focus={wovenFocus} /> : null}
       {merged ? <LanePanner panTo={panTo} lanes={merged.lanes} /> : null}
       {woven ? <WovenZoomReporter onZoom={setWovenZoom} /> : null}
-      {operatorCursor && !operationMode ? (
+      {operatorCursor ? (
         <OperatorCursor graph={cursorGraph} state={operatorCursor} followBroken={followBroken} recenterSignal={recenterSignal} />
       ) : null}
-      {operatorCursor && followBroken && !operationMode ? (
+      {operatorCursor && followBroken ? (
         <Panel position="top-right">
           <button
             type="button"
@@ -3333,6 +3595,22 @@ export function GraphCanvas({
           </button>
         </Panel>
       ) : null}
+      {createIntent && onCreateCanvasObject ? (
+        <CanvasNativeCreate intent={createIntent} onCreate={onCreateCanvasObject} onDismiss={() => setCreateIntent(null)} />
+      ) : null}
+      {onCreateCanvasRegion && selectedCanvasNodes.length >= 2 ? (
+        <Panel position="top-center">
+          <CanvasRegionGroupingControl
+            selectionCount={selectedCanvasNodes.length}
+            open={groupIntent}
+            busy={groupBusy}
+            onOpen={() => setGroupIntent(true)}
+            onCancel={() => setGroupIntent(false)}
+            onCreate={createRegionFromSelection}
+          />
+        </Panel>
+      ) : null}
+      {canvasActionStatus ? <div className="sr-only" role="status" aria-live="polite">{canvasActionStatus}</div> : null}
       {editable && singlePipeline && nodes.length > 1 ? (
         <Panel position="top-left">
           <button
@@ -3367,7 +3645,7 @@ export function GraphCanvas({
       ) : null}
       <MeasureGuard nodeIds={measureNodeIds} />
       <RunZoom running={running} suspended={wovenActive} />
-      <FitOnGraph topology={fitSignature} bounds={boundsSignature} running={wovenActive ? false : running} suspended={!!operatorCursor} fitOptions={fitOptions} />
+      <FitOnGraph topology={fitSignature} bounds={boundsSignature} running={wovenActive ? false : running} suspended={!!operatorCursor} skipInitial={!!initialViewport} fitOptions={fitOptions} />
       <Refitter nonce={refitNonce} fitOptions={fitOptions} />
       {result?.memoryApplied
         && (result.memoryApplied.approved + result.memoryApplied.rejected + result.memoryApplied.edits) > 0 && (

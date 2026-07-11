@@ -12,6 +12,7 @@
 
 import { fileURLToPath } from "node:url";
 import { STABLE_REF_INPUT_SCHEMA, classifyOperatorVerb, normalizeStableRef, normalizeStableRefs } from "./operator-tools.mjs";
+import { createOperatorCapabilityRegistry } from "./operator-capabilities.mjs";
 
 const BRAIN = "http://localhost:4317";
 
@@ -246,7 +247,7 @@ async function canonicalRecord(input = {}) {
   const projectId = await resolveProjectId(input.projectId);
   const refs = verbRefs(input, projectId);
   const ref = normalizeStableRef(input.ref ?? null, { projectId });
-  const response = await brainPost(`/api/operator/sessions/${encodeURIComponent(input.sessionId)}/verbs/record`, { projectId, kind: input.kind, value: input.value, ref, refs });
+  const response = await brainPost(`/api/operator/sessions/${encodeURIComponent(input.sessionId)}/verbs/record`, { projectId, kind: input.kind, value: input.value, idempotencyKey: input.idempotencyKey, ref, refs });
   return { classification: classifyOperatorVerb("record"), ...response };
 }
 
@@ -983,13 +984,15 @@ const LEGACY_TOOLS = [
   },
   {
     name: "request_feature",
-    description: "Ask Drover to BUILD a new capability for itself — usable from any codebase, any session. The request is queued instantly, then a builder agent works it in an isolated branch of the Drover repo (one build at a time, tests run, work committed). The result is a dogfood/* branch WAITING for founder review — this tool can never merge, push, or ship anything. Use for 'Drover should be able to…' wishes; use report_friction for plain bug notes that don't need a build now.",
+    description: "Ask Drover to BUILD a new capability for itself — usable from any codebase, any session. The request is queued instantly, then a file-only builder works in an isolated Drover worktree. Its exact uncommitted difference waits for founder review; this tool cannot run shell commands, test, commit, merge, push, deploy, or publish. Use for 'Drover should be able to…' wishes; use report_friction for plain bug notes that don't need a build now.",
     inputSchema: {
       type: "object",
       properties: {
         report: { type: "string", description: "The feature, in the founder's words — what should Drover be able to do, and for what moment?" },
         context: { type: "string", description: "What the founder was doing when they wished for it (one or two sentences)." },
         projectId: { type: "string", description: "Project the founder was working in. Defaults to the active project." },
+        provider: { type: "string", enum: ["claude", "claude-code", "codex"], description: "Which connected local coding runtime should build it. Omit to use the normal runtime preference." },
+        model: { type: "string", description: "Optional model override for the selected runtime." },
       },
       required: ["report"],
     },
@@ -1013,12 +1016,13 @@ const CANONICAL_TOOLS = [
   { name: "focus", description: "Focus a durable operator conversation on a stable product-scoped reference, including ephemeral terrain-read and terrain-hypothesis context. Writes session context only and never makes the projection authoritative.", inputSchema: { type: "object", properties: REF_FIELDS, required: ["sessionId", "ref"] }, handler: canonicalFocus },
   { name: "ask", description: "Ask the product crew a focused question through the durable operator service. Model-owned judgment may be recorded, but no action runs or crosses the founder wall.", inputSchema: { type: "object", properties: { ...REF_FIELDS, prompt: { type: "string" }, questionId: { type: "string" } }, required: ["sessionId", "prompt"] }, handler: (input) => canonicalDriveVerb("ask", input) },
   { name: "propose", description: "Propose reversible GTM or product moves through the durable operator service. Nothing is applied or run; later mutations remain founder-reviewable.", inputSchema: { type: "object", properties: { ...REF_FIELDS, prompt: { type: "string" }, questionId: { type: "string" }, rationale: { type: "string" }, operations: { type: "array", items: { type: "object" } } }, required: ["sessionId"] }, handler: (input) => canonicalDriveVerb("propose", input) },
-  { name: "record", description: "Record an attributable session note, model artifact, or transient question proposal. Model callers cannot pin durable clarity or write founder/gate decisions.", inputSchema: { type: "object", properties: { ...REF_FIELDS, kind: { type: "string", enum: ["session_note", "model_artifact", "question_proposal"] }, value: {} }, required: ["sessionId", "kind", "value"] }, handler: canonicalRecord },
+  { name: "record", description: "Record attributable goals, open work, relationships, notes, and question proposals on the shared canvas. Model callers cannot write founder/gate decisions or release anything.", inputSchema: { type: "object", properties: { ...REF_FIELDS, kind: { type: "string", enum: ["session_note", "model_artifact", "work_artifact", "goal", "goal_relation", "work_relationship", "question_proposal"] }, value: {}, idempotencyKey: { type: "string" } }, required: ["sessionId", "kind", "value"] }, handler: canonicalRecord },
   { name: "run", description: "Run or compose an action through the preserved operator compose-and-run service. Execution always stops at the founder gate and cannot approve or release.", inputSchema: { type: "object", properties: { ...REF_FIELDS, goal: { type: "string" }, questionId: { type: "string" }, composeNew: { type: "boolean" }, title: { type: "string" }, agents: { type: "array", items: { type: "object" } } }, required: ["sessionId"] }, handler: (input) => canonicalDriveVerb("run", input) },
 ];
 
 const TOOLS = [...CANONICAL_TOOLS, ...LEGACY_TOOLS];
 const TOOL_MAP = new Map(TOOLS.map((t) => [t.name, t]));
+const CANONICAL_CAPABILITIES = createOperatorCapabilityRegistry(CANONICAL_TOOLS);
 
 export { TOOLS, TOOL_MAP, LEGACY_TOOLS, CANONICAL_TOOLS };
 
@@ -1071,7 +1075,13 @@ async function dispatch(message) {
       });
     }
     try {
-      const result = await tool.handler(args);
+      const result = CANONICAL_CAPABILITIES.has(toolName)
+        ? await CANONICAL_CAPABILITIES.invoke(toolName, args, {
+          actor: "model",
+          exposure: "publicMcp",
+          toolCallId: `public-mcp-${Date.now()}`,
+        })
+        : await tool.handler(args);
       return respond(id, {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       });

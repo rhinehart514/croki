@@ -29,7 +29,9 @@
 
 import { fileURLToPath } from "node:url";
 import { getOperatorSession } from "./operator-store.mjs";
-import { executeOperatorTool, operatorTools } from "./operator-runtime.mjs";
+import { TOOLS as operatorTools } from "./operator-tools.mjs";
+import { executeTool } from "./operator-tool-exec.mjs";
+import { capabilityTools, createOperatorCapabilityRegistry } from "./operator-capabilities.mjs";
 import { assertSafeTool, filterSafeTools } from "./tool-safety.mjs";
 
 // Re-exported so existing importers of this bridge keep reaching the guard here. The regex and the
@@ -38,7 +40,11 @@ import { assertSafeTool, filterSafeTools } from "./tool-safety.mjs";
 export { assertSafeTool };
 
 export function safeOperatorTools() {
-  return filterSafeTools(operatorTools);
+  const tools = filterSafeTools(operatorTools);
+  const registry = createOperatorCapabilityRegistry(tools, () => {
+    throw new Error("Capability inventory handlers are not invokable.");
+  });
+  return capabilityTools(registry, tools, { actor: "model", exposure: "publicMcp" });
 }
 
 // Build a session-scoped bridge. Pure enough to unit-test: callTool routes a
@@ -48,12 +54,25 @@ export function createOperatorBridge({ sessionId, options = {} } = {}) {
   if (!sessionId) throw new Error("GTM_IDE_OPERATOR_SESSION is required for the operator MCP bridge.");
   const tools = safeOperatorTools();
   const toolNames = new Set(tools.map((tool) => tool.name));
+  const capabilities = createOperatorCapabilityRegistry(tools, (tool, input, context) => executeTool(
+    context.session,
+    { id: context.toolCallId, name: tool.name, input },
+    context.options,
+  ));
 
   async function callTool(name, input = {}) {
     if (!toolNames.has(name)) throw new Error(`Unknown operator tool: ${name}`);
     assertSafeTool(name);
     const session = getOperatorSession(sessionId, options);
-    const execution = await executeOperatorTool(session, { id: `mcp-${Date.now()}`, name, input }, options);
+    const toolCallId = `mcp-${Date.now()}`;
+    const execution = await capabilities.invoke(name, input, {
+      actor: "model",
+      exposure: "publicMcp",
+      session,
+      options,
+      toolCallId,
+      idempotencyKey: toolCallId,
+    });
     return {
       result: execution.result,
       pause: execution.pause === true,
@@ -61,7 +80,7 @@ export function createOperatorBridge({ sessionId, options = {} } = {}) {
     };
   }
 
-  return { sessionId, tools, callTool };
+  return { sessionId, tools, capabilities, callTool };
 }
 
 // ─── JSON-RPC 2.0 stdio transport ──────────────────────────────────────────────

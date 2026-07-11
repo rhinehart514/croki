@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from "motion/react";
 import type { ReactNode } from "react";
 import { SPRING, SPRING_SOFT } from "@/lib/springs";
 
-// The motion system. One spring (from ./springs) drives everything that moves — tabs (SlidingTabs),
+// The motion system. One spring (from ./springs) drives everything that moves, including tabs,
 // menus, sheets, accordions, lists — so the whole app feels like one object. The discipline: nothing
 // hard-cuts. Things that change position MOVE (layoutId), things that appear spring from where they
 // came from, and everything animates OUT via AnimatePresence, not just in.

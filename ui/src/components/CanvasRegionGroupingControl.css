@@ -1,0 +1,60 @@
+.canvas-region-group-trigger,
+.canvas-region-group-form {
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  box-shadow: var(--shadow-pop);
+}
+
+.canvas-region-group-trigger {
+  min-height: 34px;
+  padding: var(--space-2) var(--space-3);
+  font: 600 var(--text-sm)/1 var(--font-sans, sans-serif);
+  cursor: pointer;
+}
+
+.canvas-region-group-trigger kbd {
+  margin-left: var(--space-2);
+  color: var(--muted);
+  font: inherit;
+  font-weight: 500;
+}
+
+.canvas-region-group-form {
+  display: grid;
+  gap: var(--space-2);
+  width: min(420px, calc(100vw - var(--space-8)));
+  padding: var(--space-3);
+}
+
+.canvas-region-group-form label { font-size: var(--text-sm); font-weight: 600; }
+.canvas-region-group-form > div { display: flex; gap: var(--space-2); }
+.canvas-region-group-form input {
+  min-width: 0;
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  font: inherit;
+}
+.canvas-region-group-form button {
+  min-height: 32px;
+  padding: var(--space-2) var(--space-3);
+  color: var(--surface);
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 7px;
+  font: 600 var(--text-sm)/1 var(--font-sans, sans-serif);
+  cursor: pointer;
+}
+.canvas-region-group-form button.is-quiet { color: var(--ink-2); background: transparent; border-color: var(--line-2); }
+.canvas-region-group-form small { color: var(--muted); font-size: var(--text-xs); }
+.canvas-region-group-form :is(input, button):focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.canvas-region-group-form :is(input, button):disabled { cursor: wait; opacity: 0.55; }
+
+@media (max-width: 560px) {
+  .canvas-region-group-form > div { align-items: stretch; flex-direction: column; }
+}

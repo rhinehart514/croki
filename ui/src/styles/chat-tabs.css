@@ -1,6 +1,6 @@
 /* Chat tabs — one tab per live pipeline conversation the founder is running in parallel. The backend
    already drives these sessions concurrently; the strip is where they get a home. The active tab is a
-   glossy pill that SPRINGS between tabs (Motion layoutId), the same motion grammar as SlidingTabs, so
+   glossy pill that SPRINGS between tabs (Motion layoutId), using the shared motion grammar, so
    the whole app moves like one object. Monochrome by the one-accent rule — amber (--gap) appears only
    on a tab that is waiting on the founder's call, because that is a real state, never decoration. */
 .chat-tabs {

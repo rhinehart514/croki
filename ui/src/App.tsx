@@ -33,6 +33,8 @@ import {
   cancelOperatorSession,
   createProject,
   createOperatorSession,
+  handoffOperatorSession,
+  askBothOperatorRuntimes,
   acceptProductImplication,
   composerTurn,
   getComposerBriefing,
@@ -59,10 +61,16 @@ import {
   getReallocationTunables,
   getCredentials,
   getTerrainView,
+  getFounderSession,
   readTerrain,
   askTerrainCrew,
+  saveObjectGraphGeometry,
+  saveObjectGraphPositions,
+  reviseCanvasRegion,
+  archiveCanvasRegion,
 } from "@/api";
 import type { OperatorHints, OperatorSessionContext, ComposerBriefing, ComposerTurnResult } from "@/api";
+import { comparisonsFromDurableGroups, type RuntimeBranchComparisonModel } from "@/lib/runtimeBranchComparison";
 // Heavy overlay/panel components are split into their own chunks and loaded on demand the first time
 // the founder opens them, so they stay out of the initial app chunk. Each is named-exported, so the
 // dynamic import maps the named export onto the default React.lazy expects.
@@ -90,9 +98,7 @@ import { LeftRail, type StepDragPayload } from "@/components/LeftRail";
 import { CAP_STAGE_CATEGORY } from "@/lib/capabilities";
 import { type OperatorCursorState } from "@/components/GraphCanvas";
 import { setGhostResolve } from "@/lib/ghostResolve";
-import { TeamOnboarding } from "@/components/TeamOnboarding";
 import { convexEnabled, loadTeamIdentity, localTeamIdentity, type TeamIdentity } from "@/lib/convex";
-import { OperatorDriveState } from "@/components/OperatorDriveState";
 import { WorkspaceBooting } from "@/components/WorkspaceBooting";
 const TeamSpace = lazy(() => import("@/components/TeamSpace").then((m) => ({ default: m.TeamSpace })));
 import { canApprove as canApproveApi } from "@/api";
@@ -112,14 +118,20 @@ import { GtmCanvas, type GtmCanvasModel } from "@/components/canvas/GtmCanvas";
 import { QuestionFocus } from "@/components/canvas/QuestionFocus";
 import { OutcomeReturn } from "@/components/canvas/OutcomeReturn";
 import { TerrainFocus, type TerrainAction } from "@/components/canvas/TerrainFocus";
+import { OpenCanvasWorkbench } from "@/components/OpenCanvasWorkbench";
+import { FounderSessionUnlock } from "@/components/FounderSessionUnlock";
 import { resolveFocusedQuestion, canvasQuestions, canvasOutcomes, canvasImplications, clarityFallbackItems, questionIdFromFocus } from "@/lib/canvasProjection";
 import { showSelfObservedFailureChip } from "@/lib/failureChipVisibility";
 import { anchorNodeId } from "@/lib/wovenOverlay";
 import { sessionCandidates, type Candidate } from "@/lib/sessionCandidates";
 import type { WovenFocus } from "@/lib/wovenOverlay";
 import { CanvasHistoryControl } from "@/components/CanvasHistoryControl";
+import { CanvasStructureHistoryControl } from "@/components/CanvasStructureHistoryControl";
+import { CanvasOutline } from "@/components/CanvasOutline";
+import { connectCanvasObjects, createCanvasObject, createCanvasRegionFromSelection } from "@/lib/canvasNativeAuthority";
+import type { CanvasCreateRequest, CanvasRegionCreateRequest, CanvasRelationshipRequest } from "@/lib/canvasNativeActions";
 import { useCanvasHistory, describeOperations, describeGraphDiff } from "@/lib/canvasHistory";
-import { useNavigationLayers, describeSurface, resolveCanvasLens, resolveEngineerEscape, resolveLensSelection } from "@/lib/navigation";
+import { useNavigationLayers, describeSurface, resolveCanvasFocusEscape } from "@/lib/navigation";
 import { ProductEntryColumn } from "@/components/ProductEntryColumn";
 import { CanvasCard } from "@/components/CanvasCard";
 import { ClarityCard } from "@/components/ClarityCard";
@@ -224,6 +236,14 @@ function flowPositionFromDrop(event: React.DragEvent): { x: number; y: number } 
 }
 
 export default function App() {
+  const [founderSessionAuthenticated, setFounderSessionAuthenticated] = useState<boolean | null>(null);
+  useEffect(() => {
+    let live = true;
+    getFounderSession()
+      .then((session) => { if (live) setFounderSessionAuthenticated(session.authenticated); })
+      .catch(() => { if (live) setFounderSessionAuthenticated(false); });
+    return () => { live = false; };
+  }, []);
   // The canvas IS the workspace. "projects" is the only other base view — the cold-start picker
   // before any product exists. Understand and Ideas are no longer destinations that swap
   // the canvas out; they float OVER it as dismissable overlays (set via `overlay`), so the IDE is
@@ -259,12 +279,6 @@ export default function App() {
   // roles, self-built tools) live behind one overlay now, switched by these tabs.
   const [settingsTab, setSettingsTab] = useState<"workspace" | "team" | "tools">("workspace");
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
-  // The founder's EXPLICIT lens choice, or null to follow the built-in default (Operator once there are
-  // two-plus built pipelines, Engineer otherwise). "operator" = the fleet-wide operating view, "engineer"
-  // = the single-motion editor. Focusing a lane or parked gate sets it to Engineer; the whole-operation
-  // view sets it back to Operator. Kept nullable so a fresh product still opens on its natural default
-  // instead of a stuck prior choice, while a real toggle sticks (the lens tab reports up now — bug (d)).
-  const [, setCanvasLens] = useState<"operator" | "engineer" | null>(null);
   // The intertwined canvas's view state (docs/INTERTWINED-CANVAS.md) — the projection axis (objects = the
   // moat view, type = the forms/spread view) and the focus-to-trace selection. Pure view state; nothing
   // persists. The canvas OPENS on the broad type/forms map, drilling to the object axis as you focus.
@@ -351,7 +365,7 @@ export default function App() {
   }, []);
 
   // (Find-references state lived here; removed with its only trigger, the experiments summon card. The
-  // findReferences server call and its ReferencesPanel component remain for a future on-lens re-wire.)
+  // The findReferences server call remains for a future on-canvas re-wire.)
 
   // Ideate — the composer's thinking posture, and the durable clarity it pins onto the canvas.
   const [composerPosture, setComposerPosture] = useState<ComposerPosture>("build");
@@ -515,6 +529,9 @@ export default function App() {
   const [runSummary, setRunSummary] = useState<RunSummary | null>(null);
   const [outcomeOpen, setOutcomeOpen] = useState(false);
   const [operatorSession, setOperatorSession] = useState<OperatorSession | null>(null);
+  const [runtimeComparisons, setRuntimeComparisons] = useState<Record<string, RuntimeBranchComparisonModel>>({});
+  const [runtimeComparisonStarting, setRuntimeComparisonStarting] = useState(false);
+  const runtimeComparisonStartingRef = useRef(false);
   // The host-computed opening briefing (cross-pipeline snapshot), fetched from the server and handed to
   // ComposerDock's `briefing` prop — it overrides the dock's client-derived-from-roster fallback.
   const [composerBriefing, setComposerBriefing] = useState<ComposerBriefing | null>(null);
@@ -793,10 +810,6 @@ export default function App() {
     if (!built.length) { setOverviewActive(false); return false; }
     setOverviewActive(true);
     setActiveChannelId(null);
-    // Returning to the whole operation clears any forced lens so the built-count default applies
-    // (Engineer under two pipelines, Operator at two-plus) — a prior focus from opening a lane or a
-    // gate doesn't stick, and a single-pipeline product lands on Engineer instead of the fleet view.
-    setCanvasLens(null);
     setSelection(null);
     navCloseOverlay();
     setView("canvas");
@@ -940,11 +953,16 @@ export default function App() {
   useEffect(() => {
     if (!activeProjectId) return;
     let live = true;
+    setRuntimeComparisons({});
     setComposerBriefing(null);
     listOperatorSessions(activeProjectId)
-      .then(async ({ sessions }) => {
+      .then(async ({ sessions, comparisonGroups }) => {
         if (!live) return;
         setSessionRoster(sessions); // seed the tab roster with every pipeline for this product
+        // Ask-both is durable work, not transient chrome. Rebuild every project-scoped comparison from
+        // its branch sessions after a reload; this only restores the read surface and never drives,
+        // chooses, merges, stops, or approves either branch.
+        setRuntimeComparisons(comparisonsFromDurableGroups(comparisonGroups ?? [], humanizeOperatorSession));
         getComposerBriefing(activeProjectId).then((b) => { if (live) setComposerBriefing(b); }).catch(() => {});
         // The dock OPENS on the project's most-live conversation: prefer the active (non-terminal)
         // thread; fall back to the newest session so a just-finished one (which may still hold an
@@ -1122,20 +1140,25 @@ export default function App() {
   // graph in lockstep even if the panel is closed and reopened.
   const operatorSessionId = operatorSession?.id ?? null;
   const operatorSessionStatus = operatorSession?.status ?? null;
-  // (The GoalLauncher / ComposerDock "which input owns the screen" decision no longer lives in a
+  // (The composer "which input owns the screen" decision no longer lives in a
   // separate `showGoalLauncher` boolean — it reads the ONE surface model at render time, so the
   // launcher and the dock can never both claim the screen. See the ComposerDock gate below.)
   useEffect(() => {
     if (!operatorSessionId || !operatorSessionStatus
       || ["completed", "blocked", "failed", "cancelled"].includes(operatorSessionStatus)) return;
     let live = true;
+    let inFlight = false;
     const poll = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
         const response = await getOperatorSession(operatorSessionId, activeProjectId ?? undefined);
         if (!live) return;
         syncOperator(response.session);
       } catch {
         // Preserve the last durable state; the next poll may recover.
+      } finally {
+        inFlight = false;
       }
     };
     void poll();
@@ -1313,18 +1336,26 @@ export default function App() {
     [operatingView?.woven, terrainView, terrainRead],
   );
   const activeCanvasProjection = projectedWoven?.canvas ?? operatingView?.woven?.canvas ?? null;
+  const canvasStructureSignal = useMemo(() => {
+    const layoutRevision = activeCanvasProjection?.geometry?.revision ?? 0;
+    const regionRevisions = (activeCanvasProjection?.regions ?? [])
+      .map((region) => `${region.id}:${region.revision}:${region.archivedAt ?? "open"}`)
+      .sort()
+      .join("|");
+    return `${layoutRevision}|${regionRevisions}`;
+  }, [activeCanvasProjection]);
 
-  // Remember the founder's addressed terrain object across a process/page refresh. This stores only a
-  // stable canvas ref (not viewport coordinates or model output); the canonical projection must resolve
-  // it again before focus is restored, so stale or cross-project refs quietly disappear.
+  // Remember the founder's selected durable canvas object across a process/page refresh. This stores
+  // only a stable authority ref; the canonical projection must resolve it again, so stale and
+  // cross-project selections disappear instead of reopening a phantom card.
   useEffect(() => {
-    if (!activeProjectId || wovenFocus?.kind !== "anchor" || !wovenFocus.ref?.type?.startsWith("terrain-")) return;
-    localStorage.setItem(`drover.terrain-focus.${activeProjectId}`, JSON.stringify(wovenFocus.ref));
+    if (!activeProjectId || wovenFocus?.kind !== "anchor" || !wovenFocus.ref?.type) return;
+    localStorage.setItem(`drover.canvas-focus.${activeProjectId}`, JSON.stringify(wovenFocus.ref));
   }, [activeProjectId, wovenFocus]);
   useEffect(() => {
     if (!activeProjectId || !activeCanvasProjection || wovenFocus) return;
     try {
-      const saved = JSON.parse(localStorage.getItem(`drover.terrain-focus.${activeProjectId}`) ?? "null") as { type?: string; id?: string } | null;
+      const saved = JSON.parse(localStorage.getItem(`drover.canvas-focus.${activeProjectId}`) ?? "null") as { type?: string; id?: string } | null;
       if (!saved?.type || !saved.id) return;
       const anchor = activeCanvasProjection.anchors.find((candidate) => candidate.ref.type === saved.type && candidate.ref.id === saved.id);
       if (anchor) setWovenFocus({ kind: "anchor", anchorId: anchorNodeId(anchor.ref), ref: anchor.ref });
@@ -1340,7 +1371,7 @@ export default function App() {
     if (!activeProjectId || !operatingView) return;
     if (openedWovenForProject.current === activeProjectId) return;
     openedWovenForProject.current = activeProjectId;
-    const savedTerrainFocus = localStorage.getItem(`drover.terrain-focus.${activeProjectId}`);
+    const savedTerrainFocus = localStorage.getItem(`drover.canvas-focus.${activeProjectId}`);
     const parked = operatingView.lanes.find((l) => l.runState === "parked");
     if (savedTerrainFocus) {
       setWovenAxis("objects");
@@ -1674,6 +1705,40 @@ export default function App() {
   // Cleared per project open (openedWovenForProject also resets), so stale drags never haunt a new fleet.
   const [mergedDragOverrides, setMergedDragOverrides] = useState<Map<string, { x: number; y: number }>>(new Map());
 
+  // Layout writes are serialized per project. Each save carries the authority revision it was based on,
+  // so two tabs fail visibly instead of silently replacing deliberate founder placement. Serializing this
+  // tab's drag receipts also prevents a quick second drag from racing the first request on the wire.
+  const canvasLayoutWritesRef = useRef<{
+    projectId: string | null;
+    revision: number;
+    queue: Promise<void>;
+  }>({ projectId: null, revision: 0, queue: Promise.resolve() });
+  const projectedLayoutRevision = operatingView?.woven?.canvas?.geometry?.revision ?? 0;
+  if (canvasLayoutWritesRef.current.projectId !== activeProject?.id) {
+    canvasLayoutWritesRef.current = {
+      projectId: activeProject?.id ?? null,
+      revision: projectedLayoutRevision,
+      queue: Promise.resolve(),
+    };
+  } else {
+    canvasLayoutWritesRef.current.revision = Math.max(canvasLayoutWritesRef.current.revision, projectedLayoutRevision);
+  }
+
+  // Region geometry has its own authority (separate from generic anchor layout). Keep one ordered CAS
+  // stream per region so a quick move, resize, and collapse cannot race each other or lose a revision.
+  const canvasRegionWritesRef = useRef<{
+    projectId: string | null;
+    entries: Map<string, { revision: number; queue: Promise<void> }>;
+  }>({ projectId: null, entries: new Map() });
+  if (canvasRegionWritesRef.current.projectId !== activeProjectId) {
+    canvasRegionWritesRef.current = { projectId: activeProjectId, entries: new Map() };
+  }
+  for (const region of operatingView?.woven?.canvas?.regions ?? []) {
+    const known = canvasRegionWritesRef.current.entries.get(region.id);
+    if (!known) canvasRegionWritesRef.current.entries.set(region.id, { revision: region.revision, queue: Promise.resolve() });
+    else known.revision = Math.max(known.revision, region.revision);
+  }
+
   const handleNodePositionChange = useCallback((nodeId: string, position: { x: number; y: number }, origin?: "drag" | "layout") => {
     setGraphSavedAt(null);
     // A namespaced id is a merged-lane node; a drag on it persists in the per-lane override map (the focused
@@ -1767,12 +1832,11 @@ export default function App() {
       if (escapeStateRef.current.artifactEdit) { setArtifactEdit(null); event.preventDefault(); return; }
       if (escapeStateRef.current.agentProfileRef) { setAgentProfileRef(null); event.preventDefault(); return; }
       if (escapeStateRef.current.outcomeOpen) { setOutcomeOpen(false); event.preventDefault(); return; }
-      // Action altitude returns to the exact terrain focus that originated the move. Existing graph state,
-      // run, gate, and outcome data remain untouched; this only steps the canvas outward.
+      // Pipeline focus returns to the exact terrain focus that originated the move. Existing graph state,
+      // run, gate, and outcome data remain mounted; this only moves the canvas outward.
       if (escapeStateRef.current.activeChannel) {
-        const next = resolveEngineerEscape(originatingTerrainFocus);
+        const next = resolveCanvasFocusEscape(originatingTerrainFocus);
         setActiveChannelId(next.channelId);
-        setCanvasLens(next.lens);
         if (next.focus) setWovenFocus(next.focus);
         event.preventDefault();
         return;
@@ -1948,9 +2012,12 @@ export default function App() {
         : activeChannelId ? `pipeline:${activeChannelId}` : null;
     return {
       surface: activeChannelId ? "pipeline" : "terrain",
-      lens: activeChannelId ? "engineer" : "operator",
+      lens: "canvas",
       focusRef,
       contextRefs: focusRef ? [focusRef] : [],
+      threadRef: focusRef && /^(?:goal|work-artifact|work-region):/.test(focusRef)
+        ? focusRef
+        : activeChannelId ? `pipeline:${activeChannelId}` : "project",
     };
   }, [activeChannelId, focusedQuestionId, wovenFocus]);
 
@@ -2007,7 +2074,7 @@ export default function App() {
         participantRefs: q.participantRefs ?? [],
         productRefs: q.productRefs ?? [],
         surface: "terrain",
-        lens: "operator",
+        lens: "canvas",
         focusRef: `question:${q.id}`,
         contextRefs: [`question:${q.id}`, ...(q.productRefs ?? []).map((r) => `product:${r}`)],
       });
@@ -2071,6 +2138,210 @@ export default function App() {
     else if (!focus && questionIdFromFocus(wovenFocus)) setFocusedQuestionId(null);
     setWovenFocus(focus);
   }, [wovenFocus]);
+
+  const handleCanvasAnchorPositionChange = useCallback((nodeId: string, position: { x: number; y: number }) => {
+    const projectId = activeProjectIdRef.current;
+    if (!projectId) return;
+    const geometryId = nodeId.replace(/^canchor:/, "anchor:");
+    const authority = canvasLayoutWritesRef.current;
+    setOperatingView((current) => current?.woven?.canvas ? {
+      ...current,
+      woven: {
+        ...current.woven,
+        canvas: {
+          ...current.woven.canvas,
+          geometry: {
+            namespace: current.woven.canvas.geometry?.namespace ?? "project-canvas",
+            revision: current.woven.canvas.geometry?.revision ?? authority.revision,
+            positions: { ...(current.woven.canvas.geometry?.positions ?? {}), [geometryId]: position },
+            collapsedGroups: current.woven.canvas.geometry?.collapsedGroups ?? [],
+            pinnedCrew: current.woven.canvas.geometry?.pinnedCrew ?? [],
+            viewport: current.woven.canvas.geometry?.viewport,
+            updatedAt: current.woven.canvas.geometry?.updatedAt ?? null,
+          },
+        },
+      },
+    } : current);
+    const idempotencyKey = `ui:canvas-layout:${typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+    authority.queue = authority.queue.catch(() => undefined).then(async () => {
+      if (canvasLayoutWritesRef.current !== authority || authority.projectId !== projectId) return;
+      try {
+        const saved = await saveObjectGraphPositions(projectId, { [geometryId]: position }, {
+          expectedRevision: authority.revision,
+          idempotencyKey,
+        });
+        authority.revision = saved.geometry.revision;
+      } catch (error) {
+        setGraphError(error instanceof Error
+          ? `Canvas placement changed elsewhere. ${error.message}`
+          : "Canvas placement changed elsewhere. The latest arrangement was restored.");
+        await refreshOperatingView();
+      }
+    });
+    return authority.queue;
+  }, [refreshOperatingView]);
+
+  const handleCanvasViewportChange = useCallback((viewport: { x: number; y: number; zoom: number }) => {
+    const projectId = activeProjectIdRef.current;
+    if (!projectId) return;
+    const authority = canvasLayoutWritesRef.current;
+    setOperatingView((current) => current?.woven?.canvas ? {
+      ...current,
+      woven: {
+        ...current.woven,
+        canvas: {
+          ...current.woven.canvas,
+          geometry: {
+            namespace: current.woven.canvas.geometry?.namespace ?? "project-canvas",
+            revision: current.woven.canvas.geometry?.revision ?? authority.revision,
+            positions: current.woven.canvas.geometry?.positions ?? {},
+            collapsedGroups: current.woven.canvas.geometry?.collapsedGroups ?? [],
+            pinnedCrew: current.woven.canvas.geometry?.pinnedCrew ?? [],
+            viewport,
+            updatedAt: current.woven.canvas.geometry?.updatedAt ?? null,
+          },
+        },
+      },
+    } : current);
+    const idempotencyKey = `ui:canvas-viewport:${typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+    authority.queue = authority.queue.catch(() => undefined).then(async () => {
+      if (canvasLayoutWritesRef.current !== authority || authority.projectId !== projectId) return;
+      try {
+        const saved = await saveObjectGraphGeometry(projectId, { viewport }, {
+          expectedRevision: authority.revision,
+          idempotencyKey,
+        });
+        authority.revision = saved.geometry.revision;
+      } catch (error) {
+        setGraphError(error instanceof Error
+          ? `Canvas view changed elsewhere. ${error.message}`
+          : "Canvas view changed elsewhere. The latest view was restored.");
+        await refreshOperatingView();
+      }
+    });
+    return authority.queue;
+  }, [refreshOperatingView]);
+
+  const queueCanvasRegionWrite = useCallback((regionId: string, operation: "revise" | "archive", patch: {
+    position?: { x: number; y: number };
+    size?: { width: number; height: number };
+    collapsed?: boolean;
+  } = {}) => {
+    const projectId = activeProjectIdRef.current;
+    if (!projectId) return;
+    const authority = canvasRegionWritesRef.current;
+    let entry = authority.entries.get(regionId);
+    if (!entry) {
+      const projected = operatingView?.woven?.canvas?.regions?.find((region) => region.id === regionId);
+      if (!projected) return;
+      entry = { revision: projected.revision, queue: Promise.resolve() };
+      authority.entries.set(regionId, entry);
+    }
+
+    if (operation === "revise") {
+      // Keep direct manipulation responsive while the CAS receipt is in flight. The server projection
+      // replaces this optimistic shape after success or conflict.
+      setOperatingView((current) => current?.woven?.canvas ? {
+        ...current,
+        woven: {
+          ...current.woven,
+          canvas: {
+            ...current.woven.canvas,
+            regions: (current.woven.canvas.regions ?? []).map((region) => region.id === regionId
+              ? { ...region, ...patch }
+              : region),
+            anchors: current.woven.canvas.anchors.map((anchor) => anchor.ref.type === "work-region" && anchor.ref.id === regionId
+              ? { ...anchor, body: { ...(anchor.body as Record<string, unknown>), ...patch } }
+              : anchor),
+          },
+        },
+      } : current);
+    } else {
+      // Archiving removes only the spatial wrapper. Its member authorities stay on the canvas, so the
+      // founder sees immediately that no contained goal or artifact was deleted.
+      setOperatingView((current) => current?.woven?.canvas ? {
+        ...current,
+        woven: {
+          ...current.woven,
+          canvas: {
+            ...current.woven.canvas,
+            regions: (current.woven.canvas.regions ?? []).filter((region) => region.id !== regionId),
+            anchors: current.woven.canvas.anchors.filter((anchor) => !(anchor.ref.type === "work-region" && anchor.ref.id === regionId)),
+            relationships: current.woven.canvas.relationships.filter((relationship) => relationship.source.type !== "work-region" || relationship.source.id !== regionId),
+          },
+        },
+      } : current);
+      if (wovenFocus?.kind === "anchor" && wovenFocus.ref?.type === "work-region" && wovenFocus.ref.id === regionId) setWovenFocus(null);
+    }
+
+    const idempotencyKey = `ui:canvas-region:${operation}:${typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+    entry.queue = entry.queue.catch(() => undefined).then(async () => {
+      if (canvasRegionWritesRef.current !== authority || authority.projectId !== projectId) return;
+      try {
+        const common = {
+          expectedRevision: entry!.revision,
+          revisionAuthor: getIdentity().userId,
+          idempotencyKey,
+        };
+        const result = operation === "archive"
+          ? await archiveCanvasRegion(projectId, regionId, common)
+          : await reviseCanvasRegion(projectId, regionId, { ...common, ...patch, placementMode: "founder" });
+        entry!.revision = result.region.revision;
+        if (operation === "archive" && wovenFocus?.kind === "anchor" && wovenFocus.ref?.type === "work-region" && wovenFocus.ref.id === regionId) {
+          setWovenFocus(null);
+        }
+        await refreshOperatingView();
+      } catch (error) {
+        setGraphError(error instanceof Error
+          ? `That region changed elsewhere. ${error.message}`
+          : "That region changed elsewhere. The latest version was restored.");
+        await refreshOperatingView();
+      }
+    });
+  }, [operatingView, refreshOperatingView, wovenFocus]);
+
+  const handleCanvasRegionChange = useCallback((regionId: string, patch: {
+    position?: { x: number; y: number };
+    size?: { width: number; height: number };
+    collapsed?: boolean;
+  }) => queueCanvasRegionWrite(regionId, "revise", patch), [queueCanvasRegionWrite]);
+
+  const handleCanvasRegionArchive = useCallback(
+    (regionId: string) => queueCanvasRegionWrite(regionId, "archive"),
+    [queueCanvasRegionWrite],
+  );
+
+  const handleCreateCanvasObject = useCallback(async (request: CanvasCreateRequest) => {
+    const projectId = activeProjectIdRef.current;
+    if (!projectId) throw new Error("Open a product before placing work on its canvas.");
+    const ref = await createCanvasObject(projectId, request, getIdentity().userId);
+    // Persist the requested world coordinate through the same serialized layout authority as a drag.
+    // The object remains durable if placement conflicts; the visible error then asks the founder to place
+    // it again rather than rolling back useful work.
+    await handleCanvasAnchorPositionChange(anchorNodeId(ref), request.position);
+    await refreshOperatingView();
+    setWovenFocus({ kind: "anchor", anchorId: anchorNodeId(ref), ref });
+  }, [handleCanvasAnchorPositionChange, refreshOperatingView]);
+
+  const handleConnectCanvasObjects = useCallback(async (request: CanvasRelationshipRequest) => {
+    const projectId = activeProjectIdRef.current;
+    if (!projectId) throw new Error("Open a product before connecting canvas work.");
+    await connectCanvasObjects(projectId, request, getIdentity().userId);
+    await refreshOperatingView();
+  }, [refreshOperatingView]);
+
+  const handleCreateCanvasRegion = useCallback(async (request: CanvasRegionCreateRequest) => {
+    const projectId = activeProjectIdRef.current;
+    if (!projectId) throw new Error("Open a product before grouping canvas work.");
+    await createCanvasRegionFromSelection(projectId, request, getIdentity().userId);
+    await refreshOperatingView();
+  }, [refreshOperatingView]);
 
   // The question ids that actually resolve to a focusable question — the canvas question anchors plus the
   // raw clarity pins. The outcome rail only offers a "question" return chip for these (no no-op, fix 5).
@@ -2190,7 +2461,7 @@ export default function App() {
         setOriginatingTerrainFocus(wovenFocus);
         freshPipelineIntent.current = true;
         const response = await createOperatorSession(projectId, goal, undefined, true, {
-          surface: "terrain", lens: "operator", focusRef,
+          surface: "terrain", lens: "canvas", focusRef,
           productRefs: h.productRefs.map((r) => r.id),
           participantRefs: h.crewRefs.map((r) => r.id),
           contextRefs: [focusRef, ...h.evidenceRefs.map(stableRefString), ...h.counterEvidenceRefs.map(stableRefString)],
@@ -2347,22 +2618,12 @@ export default function App() {
     return match?.id ?? laneChannelId;
   }, [channels]);
 
-  // Operator lens → the real gate. A parked lane routes one click here: switch to the parked run's
-  // session (so its staged items and gate bloom are the ones on screen), then fly the canvas to that
-  // lane and drop into the Engineer lens where the gate review lives. Never approves or sends — it only
-  // navigates to the founder's real decision.
+  // A parked lane routes one click to its real gate. The same canvas remains mounted; only the active
+  // session and camera focus change. This never approves or sends.
   const flyToGate = useCallback(async (target: { decisionId: string; sessionId: string | null; pipelineId: string | null; channelId: string }) => {
     if (target.sessionId) await switchSession(target.sessionId);
     focusChannel(channelIdForLane(target.channelId));
-    setCanvasLens("engineer");
   }, [switchSession, focusChannel, channelIdForLane]);
-
-  // Operator lens → open a lane's pipeline in the single-motion editor (a quiet route off a tie or a
-  // lane, never forced). Focus the pipeline and switch to the Engineer lens.
-  const openLane = useCallback((laneChannelId: string) => {
-    focusChannel(channelIdForLane(laneChannelId));
-    setCanvasLens("engineer");
-  }, [focusChannel, channelIdForLane]);
 
   const handleProjectCreate = useCallback(async (input: { name?: string; repoPath: string; outcome: string }) => {
     setProjectBusy(true);
@@ -2430,6 +2691,130 @@ export default function App() {
     const response = await cancelOperatorSession(operatorSession.id, operatorProjectId(operatorSession));
     syncOperator(response.session);
   }, [operatorSession, syncOperator]);
+
+  const handleRuntimeHandoff = useCallback(async (model: string) => {
+    if (!operatorSession) return;
+    try {
+      const target = model === "auto" ? "auto" : /^gpt-/i.test(model) ? "codex" : "claude";
+      const response = await handoffOperatorSession(
+        operatorSession.id,
+        operatorProjectId(operatorSession),
+        target,
+        operatorSession.handoffRevision ?? 0,
+        model === "auto" ? undefined : model,
+      );
+      syncOperator(response.session);
+    } catch (error) {
+      setGraphError(error instanceof Error ? error.message : String(error));
+    }
+  }, [operatorSession, syncOperator]);
+
+  const handleAskBoth = useCallback(async () => {
+    if (!operatorSession || runtimeComparisonStartingRef.current) return;
+    const projectId = operatorProjectId(operatorSession);
+    const parentSessionId = operatorSession.id;
+    runtimeComparisonStartingRef.current = true;
+    setRuntimeComparisonStarting(true);
+    try {
+      const response = await askBothOperatorRuntimes(
+        parentSessionId,
+        projectId,
+        operatorSession.handoffRevision ?? 0,
+      );
+      // A project switch can finish while the two runtimes are starting. Never paint branches from the
+      // old product onto the newly focused canvas; the sessions remain durable in their owning project.
+      if (activeProjectIdRef.current !== projectId) return;
+      setRuntimeComparisons((current) => ({
+        ...current,
+        [response.branchGroupId]: {
+          branchGroupId: response.branchGroupId,
+          parentSessionId,
+          branches: response.branches.map(humanizeOperatorSession),
+          selectedSessionId: null,
+          keptBoth: false,
+        },
+      }));
+      await refreshRoster();
+    } catch (error) {
+      setGraphError(error instanceof Error ? error.message : String(error));
+    } finally {
+      runtimeComparisonStartingRef.current = false;
+      setRuntimeComparisonStarting(false);
+    }
+  }, [operatorSession, refreshRoster]);
+
+  // A product can hold many ask-both comparisons at once. Surface only the group belonging to the
+  // conversation in focus; switching to another goal never drags this decision surface along with it.
+  const runtimeComparison = useMemo(() => {
+    if (!operatorSession) return null;
+    return Object.values(runtimeComparisons).find((comparison) =>
+      comparison.parentSessionId === operatorSession.id
+      || comparison.branches.some((branch) => branch.id === operatorSession.id),
+    ) ?? null;
+  }, [operatorSession, runtimeComparisons]);
+
+  const runtimeComparisonBranchKey = runtimeComparison?.branches.map((branch) => branch.id).join(":") ?? "";
+  const runtimeComparisonHasLiveBranch = runtimeComparison?.branches.some(
+    (branch) => branch.status === "ready" || branch.status === "running",
+  ) ?? false;
+  useEffect(() => {
+    if (!runtimeComparisonBranchKey || !activeProjectId) return;
+    let live = true;
+    let inFlight = false;
+    const branchIds = runtimeComparisonBranchKey.split(":").filter(Boolean);
+    const refresh = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const settled = await Promise.allSettled(branchIds.map((id) => getOperatorSession(id, activeProjectId)));
+        if (!live) return;
+        const updates = new Map(settled.flatMap((result) =>
+          result.status === "fulfilled" ? [[result.value.session.id, humanizeOperatorSession(result.value.session)] as const] : [],
+        ));
+        if (!updates.size) return;
+        const groupId = runtimeComparison?.branchGroupId;
+        if (!groupId) return;
+        setRuntimeComparisons((current) => {
+          const comparison = current[groupId];
+          return comparison ? {
+            ...current,
+            [groupId]: { ...comparison, branches: comparison.branches.map((branch) => updates.get(branch.id) ?? branch) },
+          } : current;
+        });
+      } finally {
+        inFlight = false;
+      }
+    };
+    void refresh();
+    if (!runtimeComparisonHasLiveBranch) return () => { live = false; };
+    const timer = window.setInterval(() => void refresh(), 700);
+    return () => { live = false; window.clearInterval(timer); };
+  }, [activeProjectId, runtimeComparison?.branchGroupId, runtimeComparisonBranchKey, runtimeComparisonHasLiveBranch]);
+
+  const handleChooseRuntimeBranch = useCallback(async (sessionId: string) => {
+    if (!runtimeComparison?.branches.some((branch) => branch.id === sessionId)) return;
+    const groupId = runtimeComparison.branchGroupId;
+    setRuntimeComparisons((current) => current[groupId] ? {
+      ...current,
+      [groupId]: { ...current[groupId], selectedSessionId: sessionId, keptBoth: false },
+    } : current);
+    await switchSession(sessionId);
+  }, [runtimeComparison, switchSession]);
+
+  const handleKeepBothRuntimeBranches = useCallback(() => {
+    if (!runtimeComparison) return;
+    const groupId = runtimeComparison.branchGroupId;
+    setRuntimeComparisons((current) => current[groupId] ? {
+      ...current,
+      [groupId]: { ...current[groupId], selectedSessionId: null, keptBoth: true },
+    } : current);
+    void refreshRoster();
+  }, [refreshRoster, runtimeComparison]);
+
+  const handleRuntimeComparisonMaterialized = useCallback(async (ref: { type: "work-artifact"; id: string }) => {
+    await refreshOperatingView();
+    setWovenFocus({ kind: "anchor", anchorId: anchorNodeId(ref), ref });
+  }, [refreshOperatingView]);
 
   // Stop a running pipeline BY ID (not just the active one). Routes through the exact authorized cancel
   // path handleOperatorCancel uses — cancel ABANDONS a run (discarding any pending gate WITHOUT sending),
@@ -2883,20 +3268,6 @@ export default function App() {
     }
   }, [operatorSession, syncOperator, refreshRoster, graph]);
 
-  // Redirect mid-run from the cold-start watch surface: nudge the crew's course without stopping and
-  // starting over. Routes through the steer path (never a resume, never a release — nothing crosses the
-  // wall); the session syncs and the crew adjusts on its next turn.
-  const handleDriveSteer = useCallback(async (note: string) => {
-    const s = operatorSession;
-    if (!s) return;
-    try {
-      const response = await steerOperatorSession(s.id, operatorProjectId(s), note);
-      syncOperator(response.session);
-    } catch (error) {
-      setGraphError(error instanceof Error ? error.message : String(error));
-    }
-  }, [operatorSession, syncOperator]);
-
   // The live operator presence: Claude's cursor travels the canvas as it stages each node (camera
   // following), then rests on the lead ghost where the ✓/✕/note sits. Once the pipeline is composed
   // and actually EXECUTING, the same cursor follows runningNodeId step by step — without this the
@@ -3042,20 +3413,12 @@ export default function App() {
     return { channels: mergedChannels, channelGraphs: mergedGraphs, channelRunResults, draggedByNode: mergedDragOverrides };
   }, [candidateLanes, channels, channelGraphs, channelRunResults, mergedDragOverrides]);
 
-  // Operator is the default whenever no pipeline is explicitly focused. Engineer is action altitude and
-  // therefore cannot open without a real pipeline target.
-  const effectiveCanvasLens = resolveCanvasLens(activeChannelId, canvasCandidates.length > 0);
-  const handleCanvasLensChange = useCallback((lens: "operator" | "engineer") => {
-    const next = resolveLensSelection(lens, activeChannelId, channels.filter((c) => c.nodeCount > 0).map((c) => c.id));
-    setCanvasLens(next.lens);
-    setActiveChannelId(next.channelId);
-    if (lens === "operator" && originatingTerrainFocus) {
-      setWovenFocus(originatingTerrainFocus);
-      if (activeProjectId && originatingTerrainFocus.kind === "anchor" && originatingTerrainFocus.ref) {
-        localStorage.setItem(`drover.terrain-focus.${activeProjectId}`, JSON.stringify(originatingTerrainFocus.ref));
-      }
-    }
-  }, [activeChannelId, activeProjectId, channels, originatingTerrainFocus]);
+  const canvasViewport = useMemo(() => {
+    const value = activeCanvasProjection?.geometry?.viewport as { x?: unknown; y?: unknown; zoom?: unknown } | null | undefined;
+    return value && typeof value.x === "number" && typeof value.y === "number" && typeof value.zoom === "number"
+      ? { x: value.x, y: value.y, zoom: value.zoom }
+      : null;
+  }, [activeCanvasProjection?.geometry?.viewport]);
 
   const gtmCanvasModel = useMemo<GtmCanvasModel>(() => ({
     projectId: activeProject?.id ?? null,
@@ -3096,6 +3459,9 @@ export default function App() {
     runSummary,
     onAddNode: handleAddNode,
     onConnectNodes: handleGraphConnect,
+    onCreateCanvasObject: handleCreateCanvasObject,
+    onConnectCanvasObjects: handleConnectCanvasObjects,
+    onCreateCanvasRegion: handleCreateCanvasRegion,
     onDeleteEdges: handleDeleteEdges,
     onNodePositionChange: handleNodePositionChange,
     // The in-card node detail (GraphCanvas → NodeCardEditor): selecting a step expands its card in
@@ -3131,13 +3497,18 @@ export default function App() {
     // ── Operator lens: the fleet-wide operating view (Area 6) ──
     operatingView,
     onFlyToGate: (t) => void flyToGate(t),
-    onOpenLane: openLane,
     // ── The intertwined canvas (docs/INTERTWINED-CANVAS.md) ──
     woven: projectedWoven,
     wovenAxis,
     wovenFocus,
     onWovenAxisChange: setWovenAxis,
     onWovenSelect: handleWovenSelect,
+    onCanvasAnchorPositionChange: handleCanvasAnchorPositionChange,
+    onCanvasAuthorityChanged: refreshOperatingView,
+    onCanvasRegionChange: handleCanvasRegionChange,
+    onCanvasRegionArchive: handleCanvasRegionArchive,
+    initialViewport: canvasViewport,
+    onViewportChange: handleCanvasViewportChange,
     onWireObject: handleWireObject,
     // Candidates as dashed lanes in the one graph (the retired candidate board).
     candidateLaneIds: candidateLanes?.ids,
@@ -3153,10 +3524,10 @@ export default function App() {
   }), [
     canvasGraph, connectors, contractAudits, runResult, graphRunning, runningNodeId, nodeBeats, selection,
     dismissOverlays, proposedNodeIds, proposedEdgeIds, revealedNodeIds, proposalActive, operatorCursor,
-    handleResolveProposal, submitGateReview, approveGate, handleAddNode, handleGraphConnect, handleDeleteEdges,
+    handleResolveProposal, submitGateReview, approveGate, handleAddNode, handleGraphConnect, handleCreateCanvasObject, handleConnectCanvasObjects, handleCreateCanvasRegion, handleDeleteEdges,
     handleNodePositionChange, flowRuns, runNode, updateGraph, handleDeleteNode, channels, activeChannelId, subsystemHealth, activeProject, people, channelFeeds, directedFeeds, handleDeriveChannel, handleCanvasSelect, panSignal, focusChannel, askClaudeAbout, gatePromote, gateOffer, recordItemOutcome, refineGateItem, decideGateDelta, runSummary, transportConnected,
-    operatingView, projectedWoven, flyToGate, openLane,
-    wovenAxis, wovenFocus, handleWovenSelect, handleWireObject,
+    operatingView, projectedWoven, flyToGate,
+    wovenAxis, wovenFocus, handleWovenSelect, handleCanvasAnchorPositionChange, handleCanvasViewportChange, handleCanvasRegionChange, handleCanvasRegionArchive, handleWireObject, canvasViewport, refreshOperatingView,
     wovenMultiPipeline, candidateLanes, handlePickCandidateLane,
     terrainReading, terrainView, terrainRead, terrainError, connection?.connected,
   ]);
@@ -3186,9 +3557,6 @@ export default function App() {
 
   // Grounding is the only first-use prerequisite. Runtime setup is contextual on the terrain canvas.
   // above have already run, so these early returns are rules-of-hooks safe.
-  if (surface.kind === "teamOnboarding") {
-    return <TeamOnboarding onDone={setTeamIdentity} />;
-  }
   if (surface.kind === "productEntry") {
     return (
       <ProductEntry
@@ -3214,6 +3582,7 @@ export default function App() {
 
   return (
     <main className={`loop-shell ${view === "canvas" ? "canvas-bleed" : ""}`}>
+      {founderSessionAuthenticated === false ? <FounderSessionUnlock onUnlocked={() => setFounderSessionAuthenticated(true)} /> : null}
       {/* ── Toolbar ──────────────────────────────────────────────────────────
           The canvas view is full-bleed: the global top toolbar is gone there, and every control it
           held moves into the FloatingDock that floats top-center over the canvas (rendered below in
@@ -3376,6 +3745,22 @@ export default function App() {
               onRedo={handleRedoBoard}
             />
           ) : null}
+          {gtmCanvasVisible && activeProjectId ? (
+            <CanvasStructureHistoryControl
+              projectId={activeProjectId}
+              structureSignal={canvasStructureSignal}
+              besidePipelineHistory={Boolean(activeChannelId)}
+              onCanvasChanged={refreshOperatingView}
+            />
+          ) : null}
+          {gtmCanvasVisible ? (
+            <CanvasOutline
+              canvas={activeCanvasProjection}
+              selectedRef={wovenFocus?.kind === "anchor" ? wovenFocus.ref : null}
+              onSelect={(ref) => handleWovenSelect({ kind: "anchor", anchorId: anchorNodeId(ref), ref })}
+              onInspect={(ref) => handleWovenSelect({ kind: "anchor", anchorId: anchorNodeId(ref), ref })}
+            />
+          ) : null}
 
           {/* The product's truth, pinned to the LEFT EDGE of the same canvas — where wins enter. The
               go-to-market flow reads left-to-right out of it. Opening it (or its "full picture" link)
@@ -3401,11 +3786,8 @@ export default function App() {
               }}
               deriving={productDeriving}
               onReread={() => void handleRereadProduct()}
-              // The compact SOURCE (docs/production-direction/16): expanded at Operator/product altitude so
-              // the founder sees the product root, where wins enter, cited truths, and open unknowns as the
-              // left headwaters; collapsed to its thin tab at Engineer (action altitude) to give the single
-              // pipeline the width. The composer resting slim frees the room this now occupies.
-              defaultOpen={effectiveCanvasLens === "operator"}
+              // The product source remains present while pipeline focus changes inside the same canvas.
+              defaultOpen
             />
           ) : null}
           {gtmCanvasVisible && connection && !connection.connected && !focusedTerrain && !focusedQuestion ? (
@@ -3431,13 +3813,7 @@ export default function App() {
               onNewChannel={handleNewChannel}
               onShowOverview={overviewActive ? () => { void loadProjectOverview(channels); } : undefined}
               overviewActive={overviewActive && !activeChannelId}
-              // The two discrete altitude controls, surfaced on the dock (the canvas is chromeless). The
-              // effective lens reflects automatic focus (a focused pipeline is Engineer, candidates are
-              // Operator); a click reports the founder's choice up — the same setCanvasLens GtmCanvas uses.
-              activeLens={effectiveCanvasLens}
-              onLensChange={handleCanvasLensChange}
               operationStatus={operationStatus}
-              motionName={engine?.motion?.name ?? null}
               // The Summon menu is retired from the dock — the eight-item card menu is no longer offered
               // behind a button. The card components still exist and still render when something summons
               // them (e.g. a signal opening the Inbox card); context-summon (cards appearing where the
@@ -3449,10 +3825,8 @@ export default function App() {
               pendingDecisions={pendingCount}
               decisionsOpen={decisionsOpen}
               onToggleDecisions={() => { const willOpen = !decisionsOpen; nav.togglePopover("decisions"); if (willOpen) { void refreshPendingInbox(); void refreshReallocation(); } }}
-              onCloseMenus={() => nav.closePopover()}
               graph={graph}
               running={graphRunning}
-              runningNodeId={runningNodeId}
               onRun={() => void streamRun()}
             />
           ) : null}
@@ -3523,10 +3897,51 @@ export default function App() {
             <TerrainFocus
               key={`${focusedTerrain.ref.type}:${focusedTerrain.ref.id}`}
               item={focusedTerrain}
-              onClose={() => setWovenFocus(null)}
+              onClose={() => {
+                if (activeProjectId) localStorage.removeItem(`drover.canvas-focus.${activeProjectId}`);
+                setWovenFocus(null);
+              }}
               onAction={(action, item) => void handleTerrainAction(action, item)}
               onAskCrew={handleTerrainCrewAsk}
               onOpenCrew={(ref) => setAgentProfileRef(ref)}
+            />
+          ) : null}
+          {view === "canvas" && activeProjectId && !focusedQuestion && !focusedTerrain ? (
+            <OpenCanvasWorkbench
+              key={`${activeProjectId}:${wovenFocus?.kind === "anchor" ? `${wovenFocus.ref?.type ?? "ref"}:${wovenFocus.ref?.id ?? "none"}` : wovenFocus?.kind === "relationship" ? `${wovenFocus.relationshipRef.type}:${wovenFocus.relationshipRef.id}` : "none"}`}
+              projectId={activeProjectId}
+              selectedRef={wovenFocus?.kind === "anchor" && wovenFocus.ref?.type
+                ? { type: wovenFocus.ref.type, id: wovenFocus.ref.id }
+                : null}
+              selectedRelationship={wovenFocus?.kind === "relationship" ? {
+                ...wovenFocus.relationshipRef, source: wovenFocus.source, target: wovenFocus.target,
+              } : null}
+              selectedConflict={wovenFocus?.kind === "anchor" && wovenFocus.ref
+                ? (activeCanvasProjection?.conflicts ?? []).find((conflict) =>
+                  conflict.objectRef.type === wovenFocus.ref?.type && conflict.objectRef.id === wovenFocus.ref?.id,
+                ) ?? null
+                : null}
+              onChanged={refreshOperatingView}
+              onCreated={(ref) => setWovenFocus({ kind: "anchor", anchorId: anchorNodeId(ref), ref })}
+              onSelect={(ref) => setWovenFocus({ kind: "anchor", anchorId: anchorNodeId(ref), ref })}
+              onSelectRelationship={(relationshipRef) => {
+                const relationship = (activeCanvasProjection?.relationships ?? []).find((item) =>
+                  item.authority.id === relationshipRef.id,
+                );
+                setWovenFocus({
+                  kind: "relationship",
+                  relationshipId: relationship?.id ?? `relation:${relationshipRef.type}:${relationshipRef.id}`,
+                  relationshipRef,
+                  source: relationship?.source ?? relationshipRef.source ?? { type: "unknown", id: "unknown" },
+                  target: relationship?.target ?? relationshipRef.target ?? { type: "unknown", id: "unknown" },
+                });
+              }}
+              onClose={() => {
+                if (wovenFocus?.kind === "anchor" && (wovenFocus.ref?.type === "goal" || wovenFocus.ref?.type === "work-artifact" || wovenFocus.ref?.type === "work-region")) {
+                  setWovenFocus(null);
+                }
+                if (wovenFocus?.kind === "relationship") setWovenFocus(null);
+              }}
             />
           ) : null}
           {/* Outcome return + dashed implications (product altitude). Returns what came back toward the
@@ -3567,19 +3982,6 @@ export default function App() {
               onOpen={handleProjectOpen}
               projects={projects}
             />
-          ) : surface.kind === "operatorTakeover" ? (
-            // The drive STOPPED (a cold start with no runtime, a hit session limit, an error). Surface the
-            // reason and a way to pick the loop back up front-and-center ONLY when there is no canvas to show —
-            // a failed run on a product that HAS pipelines must NOT seize the whole woven canvas (that hid the
-            // operating view entirely); the failure stays reachable in the crew co-pilot rail, and the canvas
-            // keeps rendering. Takeover is reserved for a cold-start failure with nothing else to draw.
-            <OperatorDriveState
-              session={operatorSession!}
-              productName={activeProject?.name ?? "your product"}
-              onResume={() => void handleComposerSend("Continue.")}
-              onStartOver={() => void handleOperatorCancel()}
-              onSteer={(note) => handleDriveSteer(note)}
-            />
           ) : surface.kind === "canvas" ? (
             // A product with real work to show — a graph to watch assemble, built pipelines, OR candidate
             // shapes the goal forked into — SHOWS THE ONE WOVEN CANVAS even while Claude is driving the loop.
@@ -3587,22 +3989,7 @@ export default function App() {
             // the retired candidate board), so a parked ambiguous goal weaves its shapes in beside the live
             // motions instead of taking over a separate board. Picking one runs the SAME authorized build
             // path (resolveCandidatesAndSync → compose_and_run → the founder gate — nothing sends).
-            <GtmCanvas
-              model={gtmCanvasModel}
-              activeLensId={effectiveCanvasLens}
-              onLensChange={handleCanvasLensChange}
-              chromeless
-            />
-          ) : surface.kind === "operatorDrive" ? (
-            // True cold start: a goal was given but there is no product/graph yet to watch, so the drive's
-            // live reasoning IS the surface here until the first nodes exist.
-            <OperatorDriveState
-              session={operatorSession!}
-              productName={activeProject?.name ?? "your product"}
-              onResume={() => void handleComposerSend("Continue.")}
-              onStartOver={() => void handleOperatorCancel()}
-              onSteer={(note) => handleDriveSteer(note)}
-            />
+            <GtmCanvas model={gtmCanvasModel} />
           ) : surface.kind === "booting" ? (
             // Still resolving the workspace — a contextual, plan-based loading state that names what the
             // crew is doing (finding the workspace, reading pipelines, weaving the canvas) with a running
@@ -3869,17 +4256,25 @@ export default function App() {
           // Cold landing of an empty product (no pipeline built yet, no run going): open the composer so
           // the "State a go-to-market goal" invitation points at a visible input, not a slim edge rail.
           startOpen={!canvasGraph && !operatorSession}
-          // Product-altitude survey mode (docs/production-direction/16): at Operator the composer rests as
-          // the slim 48px perimeter rail (running/gate state still visible) so the operation owns the
-          // canvas and the left roster is the single persistent crew home; the founder's explicit focus
-          // opens it. At Engineer (action altitude) it opens with its session as before.
-          preferCollapsed={effectiveCanvasLens === "operator"}
+          // The composer rests quietly over the whole canvas and opens when a pipeline or work object is
+          // focused. This is focus behavior, not a second product mode.
+          preferCollapsed={!activeChannelId}
           recede={proposalActive}
           subject={composerSubject}
           onClearSubject={() => setComposerSubject(null)}
           onRetargetSubject={handleRetargetSubject}
           isNavCommand={isCanvasCommand}
           onSend={handleComposerSend}
+          onHandoff={handleRuntimeHandoff}
+          onAskBoth={!runtimeComparison && connection?.runtimes?.some((runtime) => runtime.id === "codex" && runtime.connected)
+            && connection.runtimes.some((runtime) => runtime.id === "claude-code" && runtime.connected)
+            ? handleAskBoth
+            : undefined}
+          runtimeComparison={runtimeComparison}
+          runtimeComparisonStarting={runtimeComparisonStarting}
+          onChooseRuntimeBranch={handleChooseRuntimeBranch}
+          onKeepBothRuntimeBranches={handleKeepBothRuntimeBranches}
+          onRuntimeComparisonMaterialized={(ref) => { void handleRuntimeComparisonMaterialized(ref); }}
           briefing={composerBriefing}
           onBuildCandidate={(c) => void resolveCandidatesAndSync(c.id, { nodes: c.nodes, edges: c.edges })}
           onCancel={handleOperatorCancel}
@@ -3904,14 +4299,8 @@ export default function App() {
         /> : null}
       </div>
 
-      {/* ── Self-observed failure log — Drover watching its OWN runs ──
-          This is a BUILDER diagnostic (Drover logging its own run failures for the person building Drover),
-          NOT a failure in the founder's go-to-market operation. Overlaying "Drover saw a failure" at
-          product altitude reads as the product being broken, so it is AUDIENCE-AWARE (docs/production-
-          direction/16): hidden on Operator/product altitude to keep the founder operation clean, and
-          reachable on Engineer/builder altitude when failures exist — the only entry point to the
-          FailureLogPanel, which stays fully intact. Derived from the effective canvas lens, not a flag. */}
-      {showSelfObservedFailureChip({ view, effectiveLens: effectiveCanvasLens, failuresToFix, failureLogOpen }) ? (
+      {/* Drover's own run failures remain reachable from the one canvas without becoming product truth. */}
+      {showSelfObservedFailureChip({ view, failuresToFix, failureLogOpen }) ? (
         <button
           type="button"
           className="flog-chip"

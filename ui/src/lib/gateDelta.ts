@@ -66,7 +66,7 @@ export function gateItemHasDelta(item: GTMItem): boolean {
 }
 
 // The entry HTML file's full text, for a standalone microproduct preview (the same static-preview
-// technique MicroproductFace uses). Null when there's no HTML entry to show.
+// sandboxed preview technique used by the gate card. Null when there's no HTML entry to show.
 function entryHtml(item: StagedCodeItem, files: StagedFile[]): string | null {
   const entryName = str(item.preview?.entry) ?? str(item.artifactSpec?.entry) ?? "index.html";
   const entry =

@@ -1,4 +1,7 @@
-# GTM Engine Canvas — the mental model and the canvas direction
+> **SUPERSEDED — 2026-07-11.** This engine-lens direction is design history. The
+> current directly editable, multi-goal contract is **docs/OPEN-CANVAS-SPEC.md**.
+
+# GTM Engine Canvas — the historical mental model and canvas direction
 
 Status: model locked 2026-06-28 (founder confirmed). **Engine view v1 SHIPPED into the live app**
 2026-06-28 — the `engine` lens is the default GTM overview; `npm test` green (371 backend tests,

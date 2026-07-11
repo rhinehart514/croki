@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { persistence } from "./persistence.mjs";
+import { PersistenceConflictError, persistence } from "./persistence.mjs";
 import { safeId, now } from "./store-fs.mjs";
 import { effectiveSolidity, normalizeEvidenceList, friendlySource } from "./evidence.mjs";
 
@@ -51,6 +51,15 @@ const LAYOUT_SCHEMA_VERSION = 2;
 
 export const PROJECT_CANVAS_LAYOUT_NAMESPACE = "project-canvas";
 export const OBJECT_GRAPH_LAYOUT_NAMESPACE = "object-graph";
+
+export class CanvasLayoutConflictError extends Error {
+  constructor(message, details = {}) {
+    super(message);
+    this.name = "CanvasLayoutConflictError";
+    this.code = "CANVAS_LAYOUT_CONFLICT";
+    Object.assign(this, details);
+  }
+}
 
 export function genObjectGraphId(prefix = "obj") {
   const stamp = now().replace(/\D/g, "").slice(0, 14);
@@ -234,6 +243,20 @@ function normalizeViewport(input) {
   return { x, y, zoom };
 }
 
+function canonicalJson(value) {
+  if (Array.isArray(value)) return value.map(canonicalJson);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalJson(value[key])]));
+  }
+  return value;
+}
+
+function layoutFingerprint(namespace, patch) {
+  return crypto.createHash("sha256")
+    .update(JSON.stringify(canonicalJson({ namespace, patch })))
+    .digest("hex");
+}
+
 export function normalizeProjectCanvasLayout(input = {}) {
   return {
     positions: normalizeObjectGraphPositions(input.positions ?? {}),
@@ -257,7 +280,22 @@ function layoutNamespaces(stored) {
   return namespaces;
 }
 
-function saveLayoutDocument(projectId, namespaces, options = {}) {
+function normalizeLayoutDocument(stored, projectId) {
+  return {
+    schemaVersion: LAYOUT_SCHEMA_VERSION,
+    projectId,
+    revision: Number.isInteger(stored?.revision) && stored.revision >= 0 ? stored.revision : 0,
+    positions: normalizeObjectGraphPositions(stored?.positions ?? {}),
+    namespaces: layoutNamespaces(stored),
+    idempotency: Array.isArray(stored?.idempotency) ? stored.idempotency.filter((receipt) => (
+      receipt && typeof receipt.key === "string" && typeof receipt.fingerprint === "string"
+        && Number.isInteger(receipt.resultRevision)
+    )) : [],
+    updatedAt: stored?.updatedAt ?? null,
+  };
+}
+
+function saveLayoutDocument(projectId, current, namespaces, options = {}) {
   const updatedAt = now();
   const durableNamespaces = {};
   for (const [namespace, layout] of Object.entries(namespaces)) {
@@ -272,11 +310,31 @@ function saveLayoutDocument(projectId, namespaces, options = {}) {
   const durable = {
     schemaVersion: LAYOUT_SCHEMA_VERSION,
     projectId,
+    revision: current.revision + 1,
     positions: canonical.positions,
     namespaces: durableNamespaces,
+    idempotency: [...current.idempotency, {
+      key: options.idempotencyKey,
+      fingerprint: options.fingerprint,
+      namespace: options.namespace,
+      resultRevision: current.revision + 1,
+      createdAt: updatedAt,
+    }].slice(-500),
     updatedAt,
   };
-  persistence(options).set(LAYOUT_COLLECTION, safeId(projectId), durable);
+  try {
+    persistence(options).compareAndSet(LAYOUT_COLLECTION, safeId(projectId), current.revision, durable);
+  } catch (error) {
+    if (error instanceof PersistenceConflictError) {
+      throw new CanvasLayoutConflictError(error.message, {
+        projectId,
+        expectedRevision: current.revision,
+        actualRevision: error.actualRevision,
+        cause: error,
+      });
+    }
+    throw error;
+  }
   return durable;
 }
 
@@ -332,21 +390,70 @@ export const objectGraphLayoutStore = {
   },
   loadNamespace(projectId = "default", namespace = PROJECT_CANVAS_LAYOUT_NAMESPACE, options = {}) {
     const stored = persistence(options).get(LAYOUT_COLLECTION, safeId(projectId));
+    const document = normalizeLayoutDocument(stored, projectId);
     const canonical = canonicalLayoutNamespace(namespace);
-    const layout = layoutNamespaces(stored)[canonical] ?? normalizeProjectCanvasLayout();
-    return { projectId, namespace: canonical, ...layout };
+    const layout = document.namespaces[canonical] ?? normalizeProjectCanvasLayout();
+    return { projectId, namespace: canonical, revision: document.revision, ...layout };
   },
   saveNamespace(projectId = "default", namespace = PROJECT_CANVAS_LAYOUT_NAMESPACE, layout = {}, options = {}) {
-    const stored = persistence(options).get(LAYOUT_COLLECTION, safeId(projectId));
-    const namespaces = layoutNamespaces(stored);
+    const provider = persistence(options);
+    const key = safeId(projectId);
+    let stored = provider.get(LAYOUT_COLLECTION, key);
+    // Layout documents predate optimistic concurrency. Promote one legacy snapshot to revision zero
+    // before its first CAS write; after this point every backend treats it as a normal revisioned authority.
+    if (stored && (!Number.isInteger(stored.revision) || stored.revision < 0)) {
+      stored = {
+        ...stored,
+        schemaVersion: LAYOUT_SCHEMA_VERSION,
+        projectId,
+        revision: 0,
+        idempotency: [],
+      };
+      provider.set(LAYOUT_COLLECTION, key, stored);
+    }
+    const current = normalizeLayoutDocument(stored, projectId);
+    const namespaces = current.namespaces;
     const canonical = canonicalLayoutNamespace(namespace);
+    const idempotencyKey = trimOrNull(options.idempotencyKey);
+    const normalizedLayout = normalizeProjectCanvasLayout(layout);
+    const fingerprint = options.mutationFingerprint ?? layoutFingerprint(canonical, normalizedLayout);
+    if (idempotencyKey) {
+      const receipt = current.idempotency.find((item) => item.key === idempotencyKey);
+      if (receipt) {
+        if (receipt.fingerprint !== fingerprint || receipt.namespace !== canonical) {
+          throw new CanvasLayoutConflictError(`Idempotency key ${idempotencyKey} was already used for a different canvas layout mutation.`, {
+            projectId, expectedRevision: options.expectedRevision, actualRevision: current.revision,
+          });
+        }
+        const existing = current.namespaces[canonical] ?? normalizeProjectCanvasLayout();
+        return { projectId, namespace: canonical, revision: current.revision, ...existing, deduped: true };
+      }
+    }
+    if (options.expectedRevision != null && options.expectedRevision !== current.revision) {
+      throw new CanvasLayoutConflictError(
+        `Stale canvas layout revision: expected ${options.expectedRevision}, current ${current.revision}.`,
+        { projectId, expectedRevision: options.expectedRevision, actualRevision: current.revision },
+      );
+    }
     const updatedAt = now();
-    namespaces[canonical] = { ...normalizeProjectCanvasLayout(layout), updatedAt };
-    const durable = saveLayoutDocument(projectId, namespaces, options);
-    return { projectId, namespace: canonical, ...durable.namespaces[canonical] };
+    namespaces[canonical] = { ...normalizedLayout, updatedAt };
+    const durable = saveLayoutDocument(projectId, current, namespaces, {
+      ...options,
+      namespace: canonical,
+      idempotencyKey: idempotencyKey ?? `internal:${crypto.randomUUID()}`,
+      fingerprint,
+    });
+    return { projectId, namespace: canonical, revision: durable.revision, ...durable.namespaces[canonical] };
   },
   mergeNamespace(projectId = "default", namespace = PROJECT_CANVAS_LAYOUT_NAMESPACE, patch = {}, options = {}) {
     const current = this.loadNamespace(projectId, namespace, options);
+    const canonical = canonicalLayoutNamespace(namespace);
+    const normalizedPatch = {
+      ...(patch.positions === undefined ? {} : { positions: normalizeObjectGraphPositions(patch.positions) }),
+      ...(patch.collapsedGroups === undefined ? {} : { collapsedGroups: normalizeStringList(patch.collapsedGroups) }),
+      ...(patch.pinnedCrew === undefined ? {} : { pinnedCrew: normalizeStringList(patch.pinnedCrew) }),
+      ...(patch.viewport === undefined ? {} : { viewport: normalizeViewport(patch.viewport) }),
+    };
     return this.saveNamespace(projectId, namespace, {
       positions: patch.positions === undefined
         ? current.positions
@@ -354,7 +461,7 @@ export const objectGraphLayoutStore = {
       collapsedGroups: patch.collapsedGroups === undefined ? current.collapsedGroups : patch.collapsedGroups,
       pinnedCrew: patch.pinnedCrew === undefined ? current.pinnedCrew : patch.pinnedCrew,
       viewport: patch.viewport === undefined ? current.viewport : patch.viewport,
-    }, options);
+    }, { ...options, mutationFingerprint: layoutFingerprint(canonical, normalizedPatch) });
   },
   delete(projectId = "default", options = {}) {
     return persistence(options).delete(LAYOUT_COLLECTION, safeId(projectId));

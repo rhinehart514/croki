@@ -30,6 +30,7 @@ import path from "node:path";
 const HOME = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-gate-mcp-approval-"));
 process.env.GTM_IDE_HOME = HOME;
 process.env.HOST = "127.0.0.1";
+process.env.GTM_IDE_FOUNDER_CODE = "gate-test-founder";
 
 async function freePort() {
   const probe = net.createServer();
@@ -54,11 +55,12 @@ after(() => {
   fs.rmSync(HOME, { recursive: true, force: true });
 });
 
-// What a real browser does on first contact: a GET lands the HttpOnly session cookie. We read it back and
-// replay it as the Cookie header, exactly as the browser auto-sends it on the later approval POST. Uses
-// /api/health so it works regardless of whether the UI bundle is built (the cookie is issued on every GET).
+// What a real browser does on first contact: a top-level document navigation lands the HttpOnly session
+// cookie. API reads and health probes deliberately never receive founder authority.
 async function browserSessionCookie() {
-  const res = await fetch(`${base}/api/health`);
+  const res = await fetch(`${base}/api/founder-session`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: "gate-test-founder" }),
+  });
   const setCookie = typeof res.headers.getSetCookie === "function"
     ? res.headers.getSetCookie().join("; ")
     : (res.headers.get("set-cookie") ?? "");
@@ -120,6 +122,10 @@ async function runGraphHttp({ graph, approvals, agent, cookie }) {
 }
 
 describe("founder gate is human-only AND browser-only on POST /api/graph/run", () => {
+  it("does not leak the founder bearer cookie through a raw health read", async () => {
+    const res = await fetch(`${base}/api/health`);
+    assert.equal(res.headers.get("set-cookie"), null);
+  });
   it("rejects an agent/MCP-originated gate approval (403) and releases nothing [A4]", async () => {
     const { status, body } = await runGraphHttp({
       graph: gatedGraph(),

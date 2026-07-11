@@ -1,3 +1,6 @@
+> **SUPERSEDED.** This Claude-specific design direction predates the provider-neutral
+> open canvas. See **docs/OPEN-CANVAS-SPEC.md** and current product state.
+
 # Claude Composer redesign — three zones, four moves
 
 **Status:** Design settled (mock approved 2026-07-07). Not yet built.

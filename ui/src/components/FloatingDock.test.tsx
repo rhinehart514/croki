@@ -2,11 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { FloatingDock } from "./FloatingDock";
 
-// The dock was slimmed to two jobs: "where am I" (breadcrumb) and "go" (Run). The competing badges it
-// used to carry — the Decisions count, the Issues count, Summon — moved onto the canvas, so their
-// props are still ACCEPTED (App keeps compiling) but no longer rendered here. These pin that contract:
-// Run is the one primary action and it disables with no runnable graph. The moved badges are covered
-// where they now live, not on this bar.
+// The dock is deliberately limited to context, real attention, settings, and Run.
 
 const graph = {
   id: "g1", name: "Test", version: "0",
@@ -31,10 +27,8 @@ const baseProps = {
   pendingDecisions: 0,
   decisionsOpen: false,
   onToggleDecisions: () => {},
-  onCloseMenus: () => {},
   graph: null,
   running: false,
-  runningNodeId: null,
   onRun: () => {},
 } as const;
 
@@ -53,41 +47,27 @@ describe("FloatingDock", () => {
     expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
   });
 
-  it("no longer renders a decisions badge here (it moved onto the canvas)", () => {
-    render(<FloatingDock {...baseProps} pendingDecisions={4} />);
-    expect(screen.queryByTitle(/waiting on you/)).toBeNull();
+  it("opens the real issue and founder-decision panels from live counts", () => {
+    const onToggleIssues = vi.fn();
+    const onToggleDecisions = vi.fn();
+    render(<FloatingDock {...baseProps} problems={2} pendingDecisions={4} onToggleIssues={onToggleIssues} onToggleDecisions={onToggleDecisions} />);
+    fireEvent.click(screen.getByRole("button", { name: "Issues, 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Waiting on you, 4" }));
+    expect(onToggleIssues).toHaveBeenCalledTimes(1);
+    expect(onToggleDecisions).toHaveBeenCalledTimes(1);
   });
 
-  // The two discrete altitude controls (docs/production-direction/09) live on the dock because the canvas
-  // is chromeless. These pin: both controls render, the active one is exposed, and a click reports up.
-  it("renders both Operator and Engineer altitude controls, with the active one exposed", () => {
-    render(<FloatingDock {...baseProps} activeLens="operator" onLensChange={() => {}} />);
-    expect(screen.getByRole("group", { name: "Canvas altitude" })).toBeTruthy();
-    const operator = screen.getByRole("button", { name: "Operator" });
-    const engineer = screen.getByRole("button", { name: "Engineer" });
-    // Active state is exposed accessibly (aria-pressed) — Operator active here, Engineer not.
-    expect(operator).toHaveAttribute("aria-pressed", "true");
-    expect(engineer).toHaveAttribute("aria-pressed", "false");
+  it("keeps attention controls absent when nothing needs the founder", () => {
+    render(<FloatingDock {...baseProps} />);
+    expect(screen.queryByRole("button", { name: /Issues/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Waiting on you/ })).toBeNull();
   });
 
-  it("reflects Engineer as the active altitude when that is the effective lens", () => {
-    render(<FloatingDock {...baseProps} activeLens="engineer" onLensChange={() => {}} />);
-    expect(screen.getByRole("button", { name: "Engineer" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "Operator" })).toHaveAttribute("aria-pressed", "false");
-  });
-
-  it("calls onLensChange with the chosen altitude on click", () => {
-    const onLensChange = vi.fn();
-    render(<FloatingDock {...baseProps} activeLens="operator" onLensChange={onLensChange} />);
-    fireEvent.click(screen.getByRole("button", { name: "Engineer" }));
-    expect(onLensChange).toHaveBeenCalledWith("engineer");
-    fireEvent.click(screen.getByRole("button", { name: "Operator" }));
-    expect(onLensChange).toHaveBeenCalledWith("operator");
-  });
-
-  it("omits the altitude control when no lens change is wired (no dead affordance)", () => {
+  it("does not expose product modes", () => {
     render(<FloatingDock {...baseProps} />);
     expect(screen.queryByRole("group", { name: "Canvas altitude" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Operator" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Engineer" })).toBeNull();
   });
 
   // The quiet one-line operation status (docs/production-direction/16) — a polite status region, never a

@@ -14,6 +14,7 @@ const HOME = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-graph-route-security-"))
 process.env.GTM_IDE_HOME = HOME;
 process.env.HOST = "127.0.0.1";
 process.env.GMAIL_OAUTH_TOKEN = "route-security-token";
+process.env.GTM_IDE_FOUNDER_CODE = "graph-test-founder";
 
 async function freePort() {
   const probe = net.createServer();
@@ -147,7 +148,9 @@ after(async () => {
 });
 
 async function browserCookie() {
-  const response = await fetch(`${base}/api/health`);
+  const response = await fetch(`${base}/api/founder-session`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: "graph-test-founder" }),
+  });
   const setCookie = typeof response.headers.getSetCookie === "function"
     ? response.headers.getSetCookie().join("; ")
     : (response.headers.get("set-cookie") ?? "");
@@ -201,6 +204,24 @@ describe("direct graph routes — project ownership and founder authority", () =
     const read = await fetch(`${base}/api/graph/template?project=${projectA.id}&channel=new-safe`);
     assert.equal(read.status, 200);
     assert.equal((await read.json()).graph.id, graph.id);
+  });
+
+  it("rejects forged whole-graph autonomy on save, run, and stream", async () => {
+    const forged = gatedGraph(channelA.graphId, "Scoped A");
+    forged.nodes.find((node) => node.id === "gate").config = {
+      autonomy: "autonomous",
+      blessedPattern: { decision: "approve" },
+    };
+    const save = await post("/api/graph/save", { projectId: projectA.id, graph: forged });
+    assert.equal(save.response.status, 400);
+    assert.match(save.body.error, /founder-owned release authority/);
+    const run = await post("/api/graph/run", { projectId: projectA.id, graph: forged });
+    assert.equal(run.response.status, 400);
+    assert.match(run.body.error, /founder-owned release authority/);
+    const stream = await post("/api/graph/run/stream", { projectId: projectA.id, graph: forged });
+    assert.equal(stream.response.status, 400);
+    assert.match(stream.body.error, /founder-owned release authority/);
+    assert.equal(senderCalls, 0);
   });
 
   it("rejects approved-item Gmail and HTTP graphs with no gate before any sender call", async () => {

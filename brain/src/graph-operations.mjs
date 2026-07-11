@@ -89,6 +89,36 @@ export function assertNoForgedAuthority(category, config) {
   }
 }
 
+function protectedAuthorityKeys(category) {
+  return category === "gate"
+    ? [...FOUNDER_OWNED_GATE_CONFIG_KEYS, ...FOUNDER_OWNED_RUNTIME_CONFIG_KEYS]
+    : FOUNDER_OWNED_RUNTIME_CONFIG_KEYS;
+}
+
+// Whole-graph save/run routes receive caller-supplied snapshots rather than typed operations. Legitimate
+// promoted graphs may already contain founder authority, so protected values are allowed only when they
+// exactly match the persisted graph. A new graph has no trusted snapshot and cannot arrive pre-promoted.
+export function assertGraphAuthorityMatches(graph, trustedGraph = null) {
+  if (!graph || !Array.isArray(graph.nodes)) return;
+  const trustedById = new Map((trustedGraph?.nodes ?? []).map((node) => [node.id, node]));
+  for (const node of graph.nodes) {
+    const trusted = trustedById.get(node.id);
+    for (const key of protectedAuthorityKeys(node.category)) {
+      const submittedHas = Object.prototype.hasOwnProperty.call(node.config ?? {}, key);
+      const trustedHas = Object.prototype.hasOwnProperty.call(trusted?.config ?? {}, key);
+      const sameValue = submittedHas && trustedHas
+        ? JSON.stringify(node.config[key]) === JSON.stringify(trusted.config[key])
+        : submittedHas === trustedHas;
+      if (submittedHas !== trustedHas || !sameValue) {
+        throw new Error(
+          `Node ${node.id}'s ${key} is founder-owned release authority and must match the persisted graph. ` +
+          "Use the explicit founder gate or pipeline trust control instead.",
+        );
+      }
+    }
+  }
+}
+
 function clone(value) {
   return structuredClone(value);
 }

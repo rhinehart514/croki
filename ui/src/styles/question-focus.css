@@ -1,6 +1,6 @@
 /* question-focus.css — the QUESTION-ALTITUDE sidecar (docs/production-direction/09). Focusing a pinned
    question expands its causal neighborhood in place, anchored to the right edge of the woven canvas —
-   the Operator control stays selected; this is a focus state, not a third route. Design system to the
+   this remains a focus state on the canvas, not a third route. Design system to the
    letter: opaque zinc surface (never glass), white/#fafafa ground, monochrome ink, Geist, one semantic
    accent (--ember) reserved for the founder's stamped call, no gradients / glow / card-grid slop.
    Disagreement is preserved as separate teammate branches — never a blended consensus. */

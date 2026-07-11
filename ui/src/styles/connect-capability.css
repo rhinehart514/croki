@@ -72,7 +72,7 @@
    neutral label, never a "Verified" shield it did not earn. */
 .cc-trust.demo { color: var(--muted); background: var(--surface-2); padding: 2px 7px; }
 
-.cc-btn { font: inherit; font-size: var(--text-sm); font-weight: 560; cursor: pointer; border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); padding: 7px 15px; transition: all 120ms var(--ease-out); }
+.cc-btn { font: inherit; font-size: var(--text-sm); font-weight: 560; cursor: pointer; border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); padding: 7px 15px; transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out), border-color 120ms var(--ease-out); }
 .cc-btn:hover { background: var(--surface-2); }
 .cc-btn:disabled { color: var(--faint); cursor: default; }
 .cc-btn.primary { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }

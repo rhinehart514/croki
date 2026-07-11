@@ -1,6 +1,6 @@
 import type {
   ConnectorMeta, Decisions, EngineState, GTMGraph, GTMProject, GTMRunResult,
-  OperatorSession, OperatorSessionSummary,
+  OperatorComparisonGroup, OperatorSession, OperatorSessionSummary,
   ScanPreview,
   ProjectSummary,
   ContextManifest, GtmLibrary,
@@ -13,6 +13,20 @@ import type {
 } from "@/types";
 import { identityHeaders } from "@/lib/identity";
 import type { MotionEfficiencyData } from "@/components/MotionEfficiencyTable";
+import type {
+  BranchWorkArtifactInput, ChangeGoalStatusInput, CreateGoalInput, CreateGoalRelationInput,
+  CreateWorkArtifactInput, CreateWorkRelationshipInput, Goal, GoalListResponse, GoalRelation,
+  GoalRelationHistoryResponse, GoalRelationListResponse, IncludeRetiredOptions, RestoreGoalRelationInput, RestoreWorkArtifactInput,
+  RestoreWorkRelationshipInput, RestoreGoalInput, RetireGoalInput, RetireGoalRelationInput, RetireWorkArtifactInput,
+  RetireWorkRelationshipInput, ReviseGoalInput, ReviseGoalRelationInput, ReviseWorkArtifactInput,
+  ReviseWorkRelationshipInput, WorkArtifactHistoryResponse, WorkArtifactListResponse,
+  WorkArtifactRevision, WorkRelationshipHistoryResponse, WorkRelationshipListResponse,
+  WorkRelationshipRevision,
+  ArchiveCanvasRegionInput, CanvasRegion, CanvasRegionListResponse, CreateCanvasRegionInput,
+  ReviseCanvasRegionInput, CanvasStructureHistoryEntry, CanvasStructureHistoryMutationInput,
+  CanvasStructureHistoryResponse,
+  GoalConflictDecision, GoalConflictDecisionListResponse, RecordGoalConflictDecisionInput,
+} from "@/openCanvasTypes";
 
 async function post<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(path, {
@@ -30,6 +44,254 @@ async function get<T>(path: string): Promise<T> {
   if (!res.ok) throw new Error(`${path} failed (${res.status}).`);
   return res.json() as Promise<T>;
 }
+
+export const getFounderSession = () => get<{ authenticated: boolean }>("/api/founder-session");
+export const unlockFounderSession = (code: string) => post<{ authenticated: true }>("/api/founder-session", { code });
+
+async function patch<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...identityHeaders() },
+    body: JSON.stringify(body),
+  });
+  const payload = (await res.json().catch(() => ({}))) as T & { error?: string };
+  if (!res.ok) throw new Error(payload.error || `${path} failed (${res.status}).`);
+  return payload;
+}
+
+const projectCollectionPath = (projectId: string, collection: string) =>
+  `/api/projects/${encodeURIComponent(projectId)}/${collection}`;
+
+const projectRecordPath = (projectId: string, collection: string, recordId: string, action?: string) =>
+  `${projectCollectionPath(projectId, collection)}/${encodeURIComponent(recordId)}${action ? `/${action}` : ""}`;
+
+const withIncludeRetired = (path: string, options?: IncludeRetiredOptions) =>
+  options?.includeRetired ? `${path}?includeRetired=true` : path;
+
+// ── Open canvas authorities ─────────────────────────────────────────────────
+// Persistence only: these calls cannot approve, release, execute, publish, or otherwise cross the wall.
+export const listGoals = (projectId: string, options?: IncludeRetiredOptions) =>
+  get<GoalListResponse>(withIncludeRetired(projectCollectionPath(projectId, "goals"), options));
+
+export const getGoal = (projectId: string, goalId: string, options?: IncludeRetiredOptions) =>
+  get<{ goal: Goal }>(withIncludeRetired(projectRecordPath(projectId, "goals", goalId), options));
+
+export type ProductChangeReceipt = {
+  id: string;
+  projectId: string;
+  status: "queued" | "building" | "failed" | "declined" | "ready-for-review" | "interrupted";
+  title: string;
+  provider: string | null;
+  model: string | null;
+  branch: string | null;
+  worktree: string | null;
+  baseCommit: string | null;
+  capturedAt: string | null;
+  safety: string;
+  verification: string;
+  diff: string | null;
+  patchHash: string | null;
+  truncated: boolean;
+  reviewWorkspaceId: string | null;
+  reviewRevisionId: string | null;
+  reviewRevision: WorkspaceChangeRevision | null;
+};
+
+export const listProductChanges = (projectId: string) =>
+  get<{ changes: ProductChangeReceipt[] }>(projectCollectionPath(projectId, "product-changes"));
+
+export const discardProductChange = (projectId: string, receiptId: string) =>
+  post<{ change: { id: string; projectId: string; status: "discarded"; discardedAt: string } }>(
+    projectRecordPath(projectId, "product-changes", receiptId, "discard"), { confirm: true },
+  );
+
+export type ProductChangeProposal = {
+  workspaceId: string;
+  revision: { id: string; status: "proposed"; diff: string; sourceReceiptId: string; safety: string };
+  deduped: boolean;
+};
+
+export const stageProductChangeProposal = (projectId: string, receiptId: string) =>
+  post<{ proposal: ProductChangeProposal }>(projectRecordPath(projectId, "product-changes", receiptId, "stage"), {});
+
+export const reviewProductChange = (projectId: string, receiptId: string, decision: "approve" | "reject") =>
+  post<{ revision: WorkspaceChangeRevision }>(projectRecordPath(projectId, "product-changes", receiptId, "review"), { decision });
+export const getProductChangeReadiness = (projectId: string, receiptId: string) =>
+  get<{ readiness: WorkspaceApplyReadiness }>(projectRecordPath(projectId, "product-changes", receiptId, "readiness"));
+export const applyProductChange = (projectId: string, receiptId: string) =>
+  post<{ revision: WorkspaceChangeRevision }>(projectRecordPath(projectId, "product-changes", receiptId, "apply"), { confirm: true });
+
+export type WorkspaceChangeRevision = {
+  id: string; status: "proposed" | "approved" | "rejected" | "applying" | "applied" | "reverted" | "failed";
+  diff: string; patchHash?: string; sourceReceiptId?: string; safety?: string; summary?: string;
+};
+export type WorkspaceApplyReadiness = { ready: boolean; reasons: string[]; sameBase: boolean; sourceStatus: string };
+export const getWorkspaceChangeRevision = async (workspaceId: string, revisionId: string) => {
+  const { workspace } = await get<{ workspace: { revisions: WorkspaceChangeRevision[] } }>(`/api/workspaces/${encodeURIComponent(workspaceId)}`);
+  const revision = workspace.revisions.find((item) => item.id === revisionId);
+  if (!revision) throw new Error("The staged product change review could not be found.");
+  return revision;
+};
+export const reviewWorkspaceChange = (workspaceId: string, revisionId: string, decision: "approve" | "reject") =>
+  post<{ revision: WorkspaceChangeRevision }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/revisions/${encodeURIComponent(revisionId)}/review`, { decision });
+export const getWorkspaceChangeReadiness = (workspaceId: string, revisionId: string) =>
+  get<{ readiness: WorkspaceApplyReadiness }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/revisions/${encodeURIComponent(revisionId)}/readiness`);
+export const applyWorkspaceChange = (workspaceId: string, revisionId: string) =>
+  post<{ revision: WorkspaceChangeRevision }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/revisions/${encodeURIComponent(revisionId)}/apply`, { confirm: true });
+
+export const createGoal = (projectId: string, input: CreateGoalInput) =>
+  post<{ goal: Goal }>(projectCollectionPath(projectId, "goals"), input);
+
+export const reviseGoal = (projectId: string, goalId: string, input: ReviseGoalInput) =>
+  patch<{ goal: Goal }>(projectRecordPath(projectId, "goals", goalId), input);
+
+export const changeGoalStatus = (projectId: string, goalId: string, input: ChangeGoalStatusInput) =>
+  post<{ goal: Goal }>(projectRecordPath(projectId, "goals", goalId, "status"), input);
+
+export const retireGoal = (projectId: string, goalId: string, input: RetireGoalInput) =>
+  post<{ goal: Goal }>(projectRecordPath(projectId, "goals", goalId, "retire"), input);
+
+export const restoreGoal = (projectId: string, goalId: string, input: RestoreGoalInput) =>
+  post<{ goal: Goal }>(projectRecordPath(projectId, "goals", goalId, "restore"), input);
+
+export const listGoalRelations = (projectId: string, options?: IncludeRetiredOptions) =>
+  get<GoalRelationListResponse>(withIncludeRetired(projectCollectionPath(projectId, "goal-relations"), options));
+
+export const createGoalRelation = (projectId: string, input: CreateGoalRelationInput) =>
+  post<{ relation: GoalRelation }>(projectCollectionPath(projectId, "goal-relations"), input);
+
+export const reviseGoalRelation = (projectId: string, relationId: string, input: ReviseGoalRelationInput) =>
+  patch<{ relation: GoalRelation }>(projectRecordPath(projectId, "goal-relations", relationId), input);
+
+export const retireGoalRelation = (projectId: string, relationId: string, input: RetireGoalRelationInput) =>
+  post<{ relation: GoalRelation }>(projectRecordPath(projectId, "goal-relations", relationId, "retire"), input);
+
+export const getGoalRelation = (projectId: string, relationId: string, options?: IncludeRetiredOptions) =>
+  get<{ relation: GoalRelation }>(withIncludeRetired(projectRecordPath(projectId, "goal-relations", relationId), options));
+
+export const getGoalRelationHistory = (projectId: string, relationId: string) =>
+  get<GoalRelationHistoryResponse>(projectRecordPath(projectId, "goal-relations", relationId, "history"));
+
+export const restoreGoalRelation = (projectId: string, relationId: string, input: RestoreGoalRelationInput) =>
+  post<{ relation: GoalRelation }>(projectRecordPath(projectId, "goal-relations", relationId, "restore"), input);
+
+export const listCanvasRegions = (projectId: string, options?: IncludeRetiredOptions) =>
+  get<CanvasRegionListResponse>(withIncludeRetired(projectCollectionPath(projectId, "canvas-regions"), options));
+
+export const getCanvasRegion = (projectId: string, regionId: string, options?: IncludeRetiredOptions) =>
+  get<{ region: CanvasRegion }>(withIncludeRetired(projectRecordPath(projectId, "canvas-regions", regionId), options));
+
+export const createCanvasRegion = (projectId: string, input: CreateCanvasRegionInput) =>
+  post<{ region: CanvasRegion }>(projectCollectionPath(projectId, "canvas-regions"), input);
+
+export const reviseCanvasRegion = (projectId: string, regionId: string, input: ReviseCanvasRegionInput) =>
+  patch<{ region: CanvasRegion }>(projectRecordPath(projectId, "canvas-regions", regionId), input);
+
+export const archiveCanvasRegion = (projectId: string, regionId: string, input: ArchiveCanvasRegionInput) =>
+  post<{ region: CanvasRegion }>(projectRecordPath(projectId, "canvas-regions", regionId, "archive"), input);
+
+export const reopenCanvasRegion = (projectId: string, regionId: string, input: ArchiveCanvasRegionInput) =>
+  post<{ region: CanvasRegion }>(projectRecordPath(projectId, "canvas-regions", regionId, "reopen"), input);
+
+export const getCanvasStructureHistory = (projectId: string) =>
+  get<CanvasStructureHistoryResponse>(projectCollectionPath(projectId, "canvas-history"));
+
+export const undoCanvasStructure = (projectId: string, input: CanvasStructureHistoryMutationInput) =>
+  post<{ history: CanvasStructureHistoryResponse; receipt: CanvasStructureHistoryEntry }>(
+    projectRecordPath(projectId, "canvas-history", "undo"), input,
+  );
+
+export const redoCanvasStructure = (projectId: string, input: CanvasStructureHistoryMutationInput) =>
+  post<{ history: CanvasStructureHistoryResponse; receipt: CanvasStructureHistoryEntry }>(
+    projectRecordPath(projectId, "canvas-history", "redo"), input,
+  );
+
+export const listGoalConflictDecisions = (projectId: string) =>
+  get<GoalConflictDecisionListResponse>(projectCollectionPath(projectId, "goal-conflict-decisions"));
+
+export const getGoalConflictDecisionHistory = (projectId: string, conflictId: string) =>
+  get<{ history: GoalConflictDecision[] }>(projectRecordPath(projectId, "goal-conflict-decisions", conflictId, "history"));
+
+export const recordGoalConflictDecision = (projectId: string, conflictId: string, input: RecordGoalConflictDecisionInput) =>
+  post<GoalConflictDecisionListResponse & { decision: GoalConflictDecision }>(
+    projectRecordPath(projectId, "goal-conflict-decisions", conflictId), input,
+  );
+
+export const listWorkArtifacts = (projectId: string, options?: IncludeRetiredOptions) =>
+  get<WorkArtifactListResponse>(withIncludeRetired(projectCollectionPath(projectId, "work-artifacts"), options));
+
+export const getWorkArtifact = (projectId: string, artifactId: string, options?: IncludeRetiredOptions) =>
+  get<{ artifact: WorkArtifactRevision }>(
+    withIncludeRetired(projectRecordPath(projectId, "work-artifacts", artifactId), options),
+  );
+
+export const getWorkArtifactHistory = (projectId: string, artifactId: string, options?: IncludeRetiredOptions) =>
+  get<WorkArtifactHistoryResponse>(
+    withIncludeRetired(projectRecordPath(projectId, "work-artifacts", artifactId, "history"), options),
+  );
+
+export const createWorkArtifact = (projectId: string, input: CreateWorkArtifactInput) =>
+  post<{ artifact: WorkArtifactRevision }>(projectCollectionPath(projectId, "work-artifacts"), input);
+
+export const reviseWorkArtifact = (projectId: string, artifactId: string, input: ReviseWorkArtifactInput) =>
+  patch<{ artifact: WorkArtifactRevision }>(projectRecordPath(projectId, "work-artifacts", artifactId), input);
+
+export const branchWorkArtifact = (projectId: string, artifactId: string, input: BranchWorkArtifactInput) =>
+  post<{ artifact: WorkArtifactRevision }>(
+    projectRecordPath(projectId, "work-artifacts", artifactId, "branch"), input,
+  );
+
+export const retireWorkArtifact = (projectId: string, artifactId: string, input: RetireWorkArtifactInput) =>
+  post<{ artifact: WorkArtifactRevision }>(
+    projectRecordPath(projectId, "work-artifacts", artifactId, "retire"), input,
+  );
+
+export const restoreWorkArtifact = (projectId: string, artifactId: string, input: RestoreWorkArtifactInput) =>
+  post<{ artifact: WorkArtifactRevision }>(
+    projectRecordPath(projectId, "work-artifacts", artifactId, "restore"), input,
+  );
+
+export const applyCanvasProposal = (projectId: string, artifactId: string, input: { expectedArtifactRevision: number; idempotencyKey: string }) =>
+  post<{ artifact: WorkArtifactRevision; structureReceipt?: CanvasStructureHistoryEntry; deduped: boolean }>(
+    projectRecordPath(projectId, "work-artifacts", artifactId, "apply-proposal"), input,
+  );
+
+export const listWorkRelationships = (projectId: string, options?: IncludeRetiredOptions) =>
+  get<WorkRelationshipListResponse>(
+    withIncludeRetired(projectCollectionPath(projectId, "work-relationships"), options),
+  );
+
+export const getWorkRelationship = (projectId: string, relationshipId: string, options?: IncludeRetiredOptions) =>
+  get<{ relationship: WorkRelationshipRevision }>(
+    withIncludeRetired(projectRecordPath(projectId, "work-relationships", relationshipId), options),
+  );
+
+export const getWorkRelationshipHistory = (
+  projectId: string, relationshipId: string, options?: IncludeRetiredOptions,
+) => get<WorkRelationshipHistoryResponse>(
+  withIncludeRetired(projectRecordPath(projectId, "work-relationships", relationshipId, "history"), options),
+);
+
+export const createWorkRelationship = (projectId: string, input: CreateWorkRelationshipInput) =>
+  post<{ relationship: WorkRelationshipRevision }>(projectCollectionPath(projectId, "work-relationships"), input);
+
+export const reviseWorkRelationship = (
+  projectId: string, relationshipId: string, input: ReviseWorkRelationshipInput,
+) => patch<{ relationship: WorkRelationshipRevision }>(
+  projectRecordPath(projectId, "work-relationships", relationshipId), input,
+);
+
+export const retireWorkRelationship = (
+  projectId: string, relationshipId: string, input: RetireWorkRelationshipInput,
+) => post<{ relationship: WorkRelationshipRevision }>(
+  projectRecordPath(projectId, "work-relationships", relationshipId, "retire"), input,
+);
+
+export const restoreWorkRelationship = (
+  projectId: string, relationshipId: string, input: RestoreWorkRelationshipInput,
+) => post<{ relationship: WorkRelationshipRevision }>(
+  projectRecordPath(projectId, "work-relationships", relationshipId, "restore"), input,
+);
 
 // ── Engine OS ───────────────────────────────────────────────────────────────
 export const getEngineState = (channelId?: string) =>
@@ -217,7 +479,7 @@ export async function runGraphStream(
 
 // ── Durable resident operator ────────────────────────────────────────────────
 export const listOperatorSessions = (projectId?: string) =>
-  get<{ sessions: OperatorSessionSummary[] }>(
+  get<{ sessions: OperatorSessionSummary[]; comparisonGroups: OperatorComparisonGroup[] }>(
     `/api/operator/sessions${projectId ? `?project=${encodeURIComponent(projectId)}` : ""}`,
   );
 
@@ -241,9 +503,10 @@ export type OperatorSessionContext = {
   participantRefs?: string[];
   productRefs?: string[];
   surface?: "terrain" | "pipeline";
-  lens?: "operator" | "engineer";
+  lens?: "canvas";
   focusRef?: string | null;
   contextRefs?: string[];
+  threadRef?: string | null;
 };
 export const createOperatorSession = (
   projectId: string, goal: string, graphId?: string, fresh?: boolean, context?: OperatorSessionContext, model?: string,
@@ -258,7 +521,35 @@ export const createOperatorSession = (
     ...(context?.lens ? { lens: context.lens } : {}),
     ...(context?.focusRef ? { focusRef: context.focusRef } : {}),
     ...(context?.contextRefs?.length ? { contextRefs: context.contextRefs } : {}),
+    ...(context?.threadRef ? { threadRef: context.threadRef } : {}),
   });
+
+export const handoffOperatorSession = (
+  sessionId: string,
+  projectId: string,
+  target: "auto" | "claude" | "codex",
+  expectedRevision: number,
+  model?: string,
+) => post<{ session: OperatorSession }>(`/api/operator/sessions/${encodeURIComponent(sessionId)}/handoff`, {
+  projectId,
+  target,
+  expectedRevision,
+  idempotencyKey: `handoff:${sessionId}:${expectedRevision}:${target}:${model ?? "default"}`,
+  ...(model ? { model } : {}),
+});
+
+export const askBothOperatorRuntimes = (
+  sessionId: string,
+  projectId: string,
+  expectedRevision: number,
+) => post<{ branches: OperatorSession[]; branchGroupId: string }>(
+  `/api/operator/sessions/${encodeURIComponent(sessionId)}/ask-both`,
+  {
+    projectId,
+    expectedRevision,
+    idempotencyKey: `ask-both:${sessionId}:${expectedRevision}`,
+  },
+);
 
 // Accept a product implication (docs/production-direction/06 §Product implication). The route
 // (brain/src/routes/measure.mjs → outcome-implications/:id/accept) is now fully server-derived: it DERIVES
@@ -387,7 +678,7 @@ export const composerTurn = (input: {
   hints?: OperatorHints;
   allowDrive?: boolean;
   surface?: "terrain" | "pipeline";
-  lens?: "operator" | "engineer";
+  lens?: "canvas";
   focusRef?: string | null;
   contextRefs?: string[];
 }) => post<ComposerTurnResult>("/api/operator/turn", input);
@@ -920,9 +1211,19 @@ export const saveMarketObject = (projectId: string, object: MarketCandidate) =>
 export const saveObjectGraphPositions = (
   projectId: string,
   positions: Record<string, { x: number; y: number }>,
-) => post<{ ok: boolean }>(
+  options: { expectedRevision: number; idempotencyKey: string },
+) => post<{ projectId: string; positions: Record<string, { x: number; y: number }>; savedAt: string; geometry: { revision: number } }>(
   `/api/projects/${encodeURIComponent(projectId)}/object-graph/positions`,
-  { positions },
+  { positions, ...options },
+);
+
+export const saveObjectGraphGeometry = (
+  projectId: string,
+  geometry: { positions?: Record<string, { x: number; y: number }>; viewport?: { x: number; y: number; zoom: number } | null },
+  options: { expectedRevision: number; idempotencyKey: string },
+) => post<{ projectId: string; positions: Record<string, { x: number; y: number }>; savedAt: string; geometry: { revision: number; viewport?: { x: number; y: number; zoom: number } | null } }>(
+  `/api/projects/${encodeURIComponent(projectId)}/object-graph/positions`,
+  { geometry, ...options },
 );
 
 // The compiled run and its staged gate. `gate.items` each wrap the raw staged item under `.item` (which

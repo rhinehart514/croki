@@ -18,6 +18,7 @@ import path from "node:path";
 const HOME = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-outcome-routes-"));
 process.env.GTM_IDE_HOME = HOME;
 process.env.HOST = "127.0.0.1";
+process.env.GTM_IDE_FOUNDER_CODE = "outcome-routes-founder";
 
 async function freePort() {
   const probe = net.createServer();
@@ -43,12 +44,16 @@ if (!server.listening) await once(server, "listening");
 const base = `http://127.0.0.1:${PORT}`;
 
 async function browserSessionCookie() {
-  const response = await fetch(`${base}/api/health`);
+  const response = await fetch(`${base}/api/founder-session`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code: "outcome-routes-founder" }),
+  });
   const setCookie = typeof response.headers.getSetCookie === "function"
     ? response.headers.getSetCookie().join("; ")
     : (response.headers.get("set-cookie") ?? "");
   const match = setCookie.match(/gtm_session=[^;]+/);
-  assert.ok(match, "the server issues a founder browser capability on GET");
+  assert.ok(match, "claiming the founder session with the one-time code issues a founder browser capability");
   return match[0];
 }
 

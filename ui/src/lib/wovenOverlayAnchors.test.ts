@@ -28,6 +28,89 @@ function canvasWith(): WovenCanvas {
 const lanes = new Map<string, ChannelLane>([["ch1", { offsetY: 0, height: 200, centerX: 300, centerY: 100 }]]);
 
 describe("woven overlay — canvas anchor layer (fix 3)", () => {
+  it("renders dozens of peer goals, open work kinds, and their native relationship without inventing a lead goal", () => {
+    const base = canvasWith();
+    const goals = Array.from({ length: 14 }, (_, index) => A("goal", `g${index}`, `Goal ${index}`));
+    const work = A("goal", "brief", "A work artifact whose open kind is also goal");
+    work.ref = { type: "work-artifact", id: "brief" };
+    const canvas: WovenCanvas = {
+      ...base,
+      anchors: [...base.anchors, ...goals, work],
+      relationships: [...base.relationships, rel({ type: "goal", id: "g0" }, "current-work", work.ref as { type: string; id: string })],
+    };
+    const layer = buildCanvasAnchorLayer(canvas, { top: 0, bottom: 400, minX: 300, maxX: 900 }, null);
+    expect(layer.nodes.filter((node) => (node.data as { ref?: { type?: string } }).ref?.type === "goal")).toHaveLength(14);
+    expect(layer.nodes.filter((node) => node.id === anchorNodeId({ type: "work-artifact", id: "brief" }))).toHaveLength(1);
+    expect(layer.edges.some((edge) => edge.id.includes("current-work"))).toBe(true);
+  });
+
+  it("carries advisory shared-goal conflict state onto the goals and shared object", () => {
+    const goal = A("goal", "g1", "Fix activation");
+    const work = A("brief", "shared", "Onboarding change");
+    work.ref = { type: "work-artifact", id: "shared" };
+    work.id = "anchor:work-artifact:shared";
+    const marker = {
+      id: "goal-conflict:work-artifact:shared", goalCount: 2,
+      summary: "2 active goals share work-artifact shared",
+      detail: "Fix activation; Clarify positioning both touch this object. Shared context is not proof of incompatibility.",
+    };
+    goal.facets = { goalConflicts: [marker] };
+    work.facets = { goalConflicts: [marker] };
+    const layer = buildCanvasAnchorLayer({ ...canvasWith(), anchors: [goal, work], relationships: [] }, band, null);
+    const goalData = layer.nodes.find((node) => node.id === anchorNodeId(goal.ref))?.data as { conflict?: { count: number; goalCount: number; detail: string } };
+    const workData = layer.nodes.find((node) => node.id === anchorNodeId(work.ref))?.data as { conflict?: { count: number; detail: string } };
+    expect(goalData.conflict?.count).toBe(1);
+    expect(goalData.conflict?.goalCount).toBe(2);
+    expect(workData.conflict?.detail).toMatch(/not proof/i);
+  });
+
+  it("restores founder positions from canonical anchor geometry and keeps goal/work anchors draggable", () => {
+    const goal = A("goal", "g1", "Find the first ten teams");
+    const work = A("brief", "w1", "Launch brief");
+    work.ref = { type: "work-artifact", id: "w1" };
+    work.id = "anchor:work-artifact:w1";
+    const canvas: WovenCanvas = {
+      ...canvasWith(),
+      anchors: [goal, work],
+      relationships: [],
+      geometry: {
+        namespace: "project-canvas",
+        positions: {
+          "anchor:goal:g1": { x: 111, y: 222 },
+          "anchor:work-artifact:w1": { x: 777, y: 333 },
+          // A presentation id is deliberately ignored. Geometry belongs to canonical authorities.
+          "canchor:goal:g1": { x: 999, y: 999 },
+        },
+      },
+    };
+    const { nodes } = buildCanvasAnchorLayer(canvas, band, null);
+    const goalNode = nodes.find((node) => node.id === anchorNodeId(goal.ref))!;
+    const workNode = nodes.find((node) => node.id === anchorNodeId(work.ref))!;
+    expect(goalNode.position).toEqual({ x: 111, y: 222 });
+    expect(workNode.position).toEqual({ x: 777, y: 333 });
+    expect(goalNode.draggable).toBe(true);
+    expect(workNode.draggable).toBe(true);
+  });
+
+  it("shows a work region as draggable spatial ground using only its own authority geometry", () => {
+    const region = A("work-region", "activation", "Fix activation");
+    region.ref = { type: "work-region", id: "activation" };
+    const regionBody = { id: "activation", projectId: "p1", title: "Fix activation", purpose: null, memberRefs: [], position: { x: 345, y: 234 }, size: { width: 720, height: 480 }, collapsed: false, founderPlaced: true, revision: 2 };
+    region.body = regionBody;
+    const { nodes, edges } = buildCanvasAnchorLayer({
+      ...canvasWith(), anchors: [region, A("goal", "g1", "Improve first value")],
+      relationships: [rel(region.ref as { type: string; id: string }, "member", { type: "goal", id: "g1" })],
+      regions: [{ ...regionBody, memberRefs: [{ type: "goal", id: "g1" }] }],
+    }, band, null);
+    const node = nodes.find((item) => item.id === anchorNodeId(region.ref));
+    expect(node?.position).toEqual({ x: 345, y: 234 });
+    expect(node?.type).toBe("canvasRegion");
+    expect(node?.draggable).toBe(true);
+    expect(node?.style).toMatchObject({ width: 720, height: 480 });
+    expect((node?.data as { memberCount?: number }).memberCount).toBe(1);
+    expect(edges).toHaveLength(0);
+  });
+
   it("renders product-truth, question, and outcome anchors as nodes plus the return edge", () => {
     const layer = buildCanvasAnchorLayer(canvasWith(), { top: 0, bottom: 200, minX: 300, maxX: 300 }, null);
     const ids = layer.nodes.map((n: Node) => n.id);
@@ -40,6 +123,31 @@ describe("woven overlay — canvas anchor layer (fix 3)", () => {
     expect(ret).toBeTruthy();
     expect(ret?.source).toBe(anchorNodeId({ type: "outcome", id: "r1" }));
     expect(ret?.target).toBe(anchorNodeId({ type: "question", id: "q1" }));
+  });
+
+  it("makes only explicit explanatory authorities selectable and marks model reads as proposed", () => {
+    const goalA = A("goal", "ga", "Activation");
+    const goalB = A("goal", "gb", "Retention");
+    const explicit: WovenCanvasRelationship = {
+      id: "relation:goal-relation:gr-1", source: goalA.ref, target: goalB.ref,
+      kind: "supports", label: "Activation supports retention", resolved: true,
+      disposition: "proposed", capabilities: { inspect: true },
+      receipt: { recordRef: { type: "goal-relation", id: "gr-1" } },
+      authority: { owner: "goal-store", id: "gr-1", projectId: "p", revision: 0 },
+    };
+    const derived = rel(goalB.ref as { type: string; id: string }, "related", goalA.ref as { type: string; id: string });
+    const layer = buildCanvasAnchorLayer({ ...canvasWith(), anchors: [goalA, goalB], relationships: [explicit, derived] }, band, null);
+    const editable = layer.edges.find((edge) => edge.id.includes("gr-1"));
+    const inert = layer.edges.find((edge) => edge.id.includes(derived.id));
+    expect(editable?.selectable).toBe(true);
+    expect(editable?.deletable).toBe(false);
+    expect(editable?.className).toContain("is-proposed");
+    expect(editable?.label).toBe("Activation supports retention");
+    expect(editable?.data).toMatchObject({
+      canvasRelationship: { relationshipRef: { type: "goal-relation", id: "gr-1" } },
+    });
+    expect(inert?.selectable).toBe(false);
+    expect(inert?.data).not.toHaveProperty("canvasRelationship");
   });
 
   it("places product/question landmarks left of the lane band and outcomes to the right", () => {
@@ -163,6 +271,66 @@ describe("woven overlay — semantic collapse of the product taxonomy", () => {
   it("preserves the outcome→question return edge across the collapse", () => {
     const { edges } = buildCanvasAnchorLayer(bigCanvas(), band, null);
     expect(edges.some((e: Edge) => e.source === anchorNodeId({ type: "outcome", id: "o1" }) && e.target === anchorNodeId({ type: "question", id: "q1" }))).toBe(true);
+  });
+});
+
+// A deterministic load fixture for the open-canvas contract. These are explicitly fixture authorities,
+// never claimed user/customer data: 240 independent goals, 480 work artifacts, and 960 typed relations.
+// Rich bodies are deliberately large so the test also proves the canvas projection does not copy them
+// into React Flow node data; the selected workbench is the only place that should render artifact bodies.
+function denseOpenCanvas(): WovenCanvas {
+  const goals = Array.from({ length: 240 }, (_, index) => {
+    const anchor = A("goal", `fixture-goal-${index}`, `Fixture goal ${String(index).padStart(3, "0")}`);
+    anchor.ref = { type: "goal", id: `fixture-goal-${index}` };
+    anchor.body = { statement: anchor.label, fixturePayload: `body-${index}-` + "x".repeat(4_096) };
+    return anchor;
+  });
+  const work = Array.from({ length: 480 }, (_, index) => {
+    const anchor = A("brief", `fixture-work-${index}`, `Fixture work ${String(index).padStart(3, "0")}`);
+    anchor.id = `anchor:work-artifact:fixture-work-${index}`;
+    anchor.ref = { type: "work-artifact", id: `fixture-work-${index}` };
+    anchor.body = { content: `artifact-${index}-` + "y".repeat(8_192), contentType: "text/markdown" };
+    return anchor;
+  });
+  const relationships = work.flatMap((anchor, index) => [
+    rel({ type: "goal", id: `fixture-goal-${index % goals.length}` }, "current-work", anchor.ref as { type: string; id: string }),
+    rel(anchor.ref as { type: string; id: string }, "informs", { type: "goal", id: `fixture-goal-${(index + 37) % goals.length}` }),
+  ]);
+  return {
+    state: { kind: "ready", stale: false, issues: [] },
+    geometry: null,
+    anchors: [...goals, ...work],
+    relationships,
+  };
+}
+
+describe("woven overlay — deterministic dense open canvas", () => {
+  it("projects hundreds of peer goals and work authorities with stable geometry in bounded time", () => {
+    const canvas = denseOpenCanvas();
+    const started = performance.now();
+    const first = buildCanvasAnchorLayer(canvas, band, null);
+    const elapsed = performance.now() - started;
+    const second = buildCanvasAnchorLayer(canvas, band, null);
+
+    expect(first.nodes).toHaveLength(720);
+    expect(first.edges).toHaveLength(960);
+    expect(first.nodes.map((node) => [node.id, node.position])).toEqual(second.nodes.map((node) => [node.id, node.position]));
+    // This is a broad regression ceiling rather than a frame benchmark; interaction work is protected by
+    // React Flow's visible-element virtualization. It catches accidental quadratic projection on CI.
+    expect(elapsed).toBeLessThan(1_000);
+  });
+
+  it("focus-traces a dense relationship set without copying off-screen rich bodies into node data", () => {
+    const canvas = denseOpenCanvas();
+    const focusedId = anchorNodeId({ type: "goal", id: "fixture-goal-137" });
+    const { nodes } = buildCanvasAnchorLayer(canvas, band, { kind: "anchor", anchorId: focusedId });
+    const focused = nodes.filter((node) => (node.data as { focus?: string }).focus === "focus");
+
+    expect(focused.some((node) => node.id === focusedId)).toBe(true);
+    expect(focused.some((node) => node.id.startsWith("canchor:work-artifact:"))).toBe(true);
+    expect(nodes.some((node) => (node.data as { focus?: string }).focus === "dim")).toBe(true);
+    expect(JSON.stringify(nodes.map((node) => node.data))).not.toContain("artifact-137-");
+    expect(JSON.stringify(nodes.map((node) => node.data))).not.toContain("body-137-");
   });
 });
 

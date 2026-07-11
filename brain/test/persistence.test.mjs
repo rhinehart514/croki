@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import {
+  PersistenceConflictError,
   persistence,
   jsonPersistence,
   sqlitePersistence,
@@ -77,6 +78,26 @@ describe("persistence provider", () => {
         p.set(PROJECT_COLLECTION, PROJECT_KEY, catalog);
         assert.deepEqual(p.get(PROJECT_COLLECTION, PROJECT_KEY), catalog);
         assert.deepEqual(p.list(PROJECT_COLLECTION), [catalog]);
+      });
+
+      it("atomically lets exactly one stale document writer win", () => {
+        const first = persistence({ ...options, backend });
+        const second = persistence({ ...options, backend });
+        first.compareAndSet("authorities", "p1", 0, {
+          revision: 1, records: [{ id: "base" }],
+        });
+        const staleA = first.get("authorities", "p1");
+        const staleB = second.get("authorities", "p1");
+        first.compareAndSet("authorities", "p1", staleA.revision, {
+          revision: 2, records: [...staleA.records, { id: "winner" }],
+        });
+        assert.throws(() => second.compareAndSet("authorities", "p1", staleB.revision, {
+          revision: 2, records: [...staleB.records, { id: "loser" }],
+        }), (error) => error instanceof PersistenceConflictError
+          && error.code === "PERSISTENCE_CONFLICT"
+          && error.expectedRevision === 1
+          && error.actualRevision === 2);
+        assert.deepEqual(first.get("authorities", "p1").records.map((item) => item.id), ["base", "winner"]);
       });
     });
   }

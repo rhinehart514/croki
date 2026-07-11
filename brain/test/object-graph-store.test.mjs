@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import {
+  CanvasLayoutConflictError,
   OBJECT_GRAPH_LAYOUT_NAMESPACE,
   PROJECT_CANVAS_LAYOUT_NAMESPACE,
   objectGraphLayoutStore,
@@ -95,6 +96,28 @@ describe("object graph store", () => {
     assert.deepEqual(saved.viewport, { x: -10, y: 4, zoom: 0.8 });
     assert.deepEqual(objectGraphLayoutStore.load("drover", options).positions, saved.positions);
     assert.deepEqual(persistence(options).get("object-graph-layout", "drover").positions, saved.positions);
+  });
+
+  it("guards founder geometry with revisioned idempotent compare-and-set writes", () => {
+    const options = freshRoot();
+    const first = objectGraphLayoutStore.mergeNamespace("drover", PROJECT_CANVAS_LAYOUT_NAMESPACE, {
+      positions: { "anchor:goal:g1": { x: 10, y: 20 } },
+    }, { ...options, expectedRevision: 0, idempotencyKey: "drag:g1:1" });
+    assert.equal(first.revision, 1);
+
+    const retry = objectGraphLayoutStore.mergeNamespace("drover", PROJECT_CANVAS_LAYOUT_NAMESPACE, {
+      positions: { "anchor:goal:g1": { x: 10, y: 20 } },
+    }, { ...options, expectedRevision: 0, idempotencyKey: "drag:g1:1" });
+    assert.equal(retry.revision, 1);
+    assert.equal(retry.deduped, true);
+
+    assert.throws(() => objectGraphLayoutStore.mergeNamespace("drover", PROJECT_CANVAS_LAYOUT_NAMESPACE, {
+      positions: { "anchor:goal:g2": { x: 40, y: 50 } },
+    }, { ...options, expectedRevision: 0, idempotencyKey: "drag:g2:1" }), CanvasLayoutConflictError);
+    assert.deepEqual(
+      objectGraphLayoutStore.loadNamespace("drover", PROJECT_CANVAS_LAYOUT_NAMESPACE, options).positions,
+      { "anchor:goal:g1": { x: 10, y: 20 } },
+    );
   });
 
   it("keeps edge type as a closed union and requires a basis receipt", () => {

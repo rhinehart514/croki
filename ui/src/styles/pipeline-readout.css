@@ -22,6 +22,16 @@
 }
 .pread:hover { box-shadow: var(--shadow-pop); }
 
+/* On the continuous canvas the shared-work control and focused-pipeline readout coexist. The readout
+   sits one quiet row below the arrangement control instead of replacing the entire canvas renderer. */
+.unified-gtm-canvas .pread {
+  top: calc(var(--space-12) + var(--space-2));
+}
+.unified-gtm-canvas .terrain-state-note {
+  top: auto;
+  bottom: var(--space-6);
+}
+
 /* ── the always-visible header row ── */
 .pread-head {
   display: flex;

@@ -29,6 +29,7 @@ import {
   query as agentQuery,
   tool as sdkTool,
 } from "@anthropic-ai/claude-agent-sdk";
+import { runClaudeQuery } from "../agent-bridge.mjs";
 import { z } from "zod";
 
 const BRIDGE_SERVER = "gtm-operator";
@@ -261,6 +262,24 @@ export const claudeCodeRuntime = {
   id: "claude-code",
   label: "Claude Code (Agent SDK)",
 
+  // A deliberately smaller capability than `drive`: edit inert files inside one isolated
+  // worktree and return prose. The host owns the worktree, receipt, git checks, and wall.
+  // Keeping this on the existing runtime adapter prevents product changes from quietly
+  // becoming a second Claude-only intelligence path.
+  async runProductChange({ prompt, cwd, model, maxTurns, allowedTools, canUseTool, env = process.env, authProbe, runQuery = runClaudeQuery }) {
+    const auth = detectClaudeAuth(env, authProbe);
+    return runQuery({
+      prompt,
+      cwd,
+      model,
+      maxTurns,
+      allowedTools,
+      canUseTool,
+      env,
+      allowApiKey: auth.mode === "api-key",
+    });
+  },
+
   isAvailable({ env = process.env, probe } = {}) {
     if (env.GTM_IDE_DISABLE_CLAUDE_CODE) {
       return { ok: false, reason: "Claude Code runtime is disabled (GTM_IDE_DISABLE_CLAUDE_CODE)." };
@@ -343,7 +362,7 @@ export const claudeCodeRuntime = {
           options: {
             abortController,
             cwd: ctx.options?.cwd || process.cwd(),
-            model: ctx.model,
+            ...(ctx.model ? { model: ctx.model } : {}),
             // SEVERED from the operator step budget (Wave 6). maxTurns is the MODEL's turns inside ONE
             // drive; it used to be `maxSteps - stepCount`, so late in a session the model got 1-2 turns
             // and hit "max turns (2)" before it could think — the leak the audit named. The operator's

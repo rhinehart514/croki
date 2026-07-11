@@ -2013,10 +2013,6 @@ svg {
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
-.loop-body.portfolio-mode {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
 /* ── Problems rail (the engine, folded into the loop) ────────────────────── */
 
 .rail-reopen {
@@ -5047,9 +5043,6 @@ svg {
    Problems section is gone. Monochrome (no amber — amber is the gate only): quiet at zero, an ink
    count when something is wrong. The popover is a small glass surface that routes to the fix node. */
 
-/* Program details toggle — flips the summoned inspector (agents, measurement, learning) in the
-   program header. Quiet by default; active when the inspector is showing. Monochrome. */
-
 /* Cross-channel queue — other channels holding drafts at their gate, each a routing row. */
 
 /* ── Issues panel — the system's problem list, twin of the Approvals panel. Opened from the always-
@@ -5091,94 +5084,6 @@ svg {
 
 /* Orbit pages (Understand / Opportunities / Channels) render in the IDE center column. */
 .loop-canvas-area.orbit-scroll { overflow-y: auto; overflow-x: hidden; }
-
-/* ── Outcome Program canvas — the executable source map ───────────────────── */
-.program-workbench {
-  display: grid;
-  /* topbar · mode strip · canvas (flexible). The debugger no longer takes a row — it
-     floats bottom-left over the canvas (a summoned tool), and the composer owns the
-     bottom-center, so the canvas keeps the full height. */
-  grid-template-rows: auto auto minmax(0, 1fr);
-  height: 100%;
-  min-width: 0;
-  background: var(--canvas);
-  position: relative;
-}
-
-/* Debugger collapsed to its toggle bar — the canvas claims the reclaimed height. Default state:
-   the graph is the workspace, the debugger is a drawer you summon. */
-.program-workbench.debug-collapsed {
-  grid-template-rows: auto auto minmax(0, 1fr);
-}
-
-/* Full-bleed: the topbar + mode-intent rows are gone (their controls live in the FloatingDock), so
-   the workbench is a single canvas row that fills the freed height edge to edge. */
-.program-workbench.full-bleed,
-.program-workbench.full-bleed.debug-collapsed {
-  grid-template-rows: minmax(0, 1fr);
-}
-
-/* The program workbench is already a four-zone IDE (explorer · canvas · inspector · debugger), so
-   the co-pilot keeps its uniform bottom-right floating panel (.composer-dock.floating) rather than
-   claiming a fifth full-height column. App opens it collapsed here (the `floating` prop) so the
-   inspector stays visible until Claude is summoned. */
-
-.program-topbar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 18px 22px 14px;
-  border-bottom: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.76);
-  backdrop-filter: blur(18px);
-}
-
-.program-path,
-.inspector-kicker {
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 760;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.program-status-line {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.program-status-pill {
-  display: inline-flex;
-  align-items: center;
-  min-height: 21px;
-  border: 1px solid var(--line-2);
-  border-radius: 999px;
-  padding: 0 8px;
-  color: var(--muted);
-  background: var(--surface);
-  font-size: 10px;
-  font-weight: 680;
-  text-transform: capitalize;
-  white-space: nowrap;
-}
-
-.program-status-pill.good { color: var(--proven); border-color: color-mix(in srgb, var(--proven) 24%, white); background: var(--proven-soft); }
-.program-status-pill.warn { color: var(--gap); border-color: color-mix(in srgb, var(--gap) 24%, white); background: var(--gap-soft); }
-.program-status-pill.bad { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 24%, white); background: var(--danger-soft); }
-
-.program-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* Mode strip — states the question the current mode asks of the program, so each lens reads as a
-   distinct view rather than the same canvas with a different tab highlighted. */
 
 /* The canvas plane wraps GraphCanvas so the gate node's bloom has a real block to sit in;
    it must fill the section or React Flow collapses. */
@@ -5241,8 +5146,6 @@ svg {
   50% { box-shadow: 0 0 0 5px oklch(0.21 0.006 285.9 / 0.16), var(--shadow-pop); }
 }
 
-.replay-scrubber { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-3); }
-
 .react-flow__edge.loop-edge-proposed .react-flow__edge-path {
   /* Faint ink + dash reads "staged, not yet real" through value and motion, not a hue. */
   stroke: var(--ghost);
@@ -5265,82 +5168,6 @@ svg {
   animation: edge-draw-on 460ms var(--ease-out) both;
 }
 @keyframes edge-draw-on { from { stroke-dashoffset: 900; } to { stroke-dashoffset: 0; } }
-
-.loop-proposal-bar {
-  position: absolute;
-  left: 50%;
-  bottom: 26px;
-  transform: translateX(-50%);
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  width: max-content;
-  max-width: min(680px, calc(100% - 64px));
-  padding: 12px 16px;
-  border: 1px solid var(--ink);
-  border-radius: 12px;
-  background: var(--surface);
-  box-shadow: 0 16px 44px -16px oklch(0.21 0.006 285.9 / 0.45);
-}
-
-.loop-proposal-text {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.loop-proposal-text strong {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--ink);
-}
-
-.loop-proposal-text strong svg { width: 14px; height: 14px; color: var(--ink); }
-
-.loop-proposal-text span {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 11.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.loop-proposal-actions {
-  display: flex;
-  flex: none;
-  gap: 8px;
-}
-
-.loop-proposal-discard {
-  padding: 7px 13px;
-  border: 1px solid var(--line-2);
-  border-radius: 8px;
-  background: var(--surface-2);
-  color: var(--ink);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.loop-proposal-accept {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 7px 14px;
-  border: 1px solid var(--ink);
-  border-radius: 8px;
-  background: var(--ink);
-  color: #fff;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.loop-proposal-accept svg { width: 13px; height: 13px; }
-.loop-proposal-bar button:disabled { opacity: 0.5; cursor: default; }
 
 /* Inline accept/reject on a proposed ghost node (slice 2). A compact pill floating on the node's
    top-right corner — the accept wears proven-green, the reject danger, the rest ink — so the founder
@@ -5474,167 +5301,21 @@ svg {
 .loop-auto-arrange:hover { background: var(--surface-2); color: var(--ink); border-color: var(--ink); }
 
 
-/* Inspector — the program framing the DAG lacks. Agent chips select a policy to read; no synthetic
-   canvas nodes. */
-
-.inspector-contract {
-  color: var(--muted);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-
-.inspector-eval {
-  margin-top: 6px;
-  padding: 7px 9px;
-  border-left: 2px solid var(--line-2);
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.program-inspector {
-  min-width: 0;
-  padding: 22px;
-  overflow: auto;
-  border-left: 1px solid var(--line);
-  background: var(--surface);
-}
-
-/* Program details — a floating glass sheet over the canvas (the agents list, measurement plan, and
-   learning threads). Never a rail: it sits above everything, on a dimming scrim that closes on click,
-   right-of-center so the canvas stays partly visible behind the frost. */
-.program-sheet {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  max-width: 520px;
-  max-height: 80vh;
-  margin: auto 0;
-  border-radius: var(--r-xl);
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
-  border: 1px solid color-mix(in srgb, var(--line-2) 72%, transparent);
-  box-shadow: 0 24px 60px -14px rgba(16, 18, 27, 0.34);
-  overflow: hidden;
-}
-
 /* The right zone of the data-flow shell = "Gate & results" (the OUTPUT side). The amber gate is the
    one accent (the wall); everything else is monochrome so the flow reads from layout, not color. */
 
 /* Everything-in-the-canvas: the canvas is always full width. A selected node expands its own card
    (handled in GraphCanvas), and program details float in a glass sheet — neither opens a rail. */
 
-.program-inspector h2 {
-  margin: 8px 0 8px;
-  color: var(--ink);
-  font-size: 18px;
-  font-weight: 720;
-}
-
-.program-inspector p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.inspector-facts {
-  display: grid;
-  gap: 8px;
-  margin: 16px 0 0;
-}
-
 /* Stack label over value, left-aligned — a long value (e.g. the buyer hypothesis) now wraps in the
    rail instead of being shoved right and overflowing off-screen. */
-.inspector-facts div {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-  padding: 9px 0;
-  border-bottom: 1px solid var(--line);
-  min-width: 0;
-}
-
-.inspector-facts dt {
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 720;
-  text-transform: uppercase;
-}
-
-.inspector-facts dd {
-  margin: 0;
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 550;
-  line-height: 1.45;
-  text-align: left;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-}
-
-.inspector-section {
-  display: grid;
-  gap: 8px;
-  margin-top: 18px;
-}
-
-.inspector-section h3 {
-  margin: 0;
-  color: var(--ink);
-  font-size: 11px;
-  font-weight: 760;
-}
-
 /* The debugger is a summoned tool, not a docked bar: it floats bottom-left as a glass
    control (out of the composer's way at bottom-center), and expands upward into a panel
    when opened. Collapsed, it's a small pill; the canvas owns the space it used to take. */
-.program-debugger {
-  position: absolute; left: 16px; bottom: 16px; z-index: 30;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  width: max-content; max-width: min(560px, calc(100% - 32px));
-  border: 1px solid var(--line-2);
-  border-radius: var(--r-lg);
-  /* Opaque when open — a floating tool, not a glass veil. A translucent panel let the canvas
-     nodes bleed through the event rows; solid surface keeps the debugger legible over the graph. */
-  background: var(--surface);
-  box-shadow: 0 1px 2px rgba(16,18,27,0.06), 0 22px 52px -18px rgba(16,18,27,0.34);
-  color: var(--ink);
-  overflow: hidden;
-}
-.program-debugger:not(.collapsed) { width: min(560px, calc(100% - 32px)); }
-
 /* Learning thread — the closed loop as a vertical decision → rule → agent story. Used in both the
    light inspector and the dark debugger, so the base is light and the debugger overrides for dark. */
 /* The debugger is now light (matches the warm IDE), so the learning thread inherits the light base —
    no dark overrides needed. */
-
-@media (max-width: 1180px) {
-
-  .program-inspector {
-    display: none;
-  }
-}
-
-@media (max-width: 760px) {
-  .program-topbar {
-    display: grid;
-    padding: 16px;
-  }
-
-  .program-actions {
-    overflow-x: auto;
-  }
-
-  /* The graph plane keeps React Flow's own full-bleed layout at every width. */
-
-  .program-debugger {
-    min-height: 180px;
-  }
-}
 
 /* Brand is a home button now (click → canvas). */
 button.loop-brand { background: none; border: 0; cursor: pointer; }
@@ -5857,52 +5538,6 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 @media (max-width: 900px) {
   .workflow-audit { width: 220px; max-height: 180px; overflow-y: auto; }
 }
-
-/* ── Goal launcher (the front door — say what you want) ────────────────────── */
-.goal-launcher { position: absolute; inset: 0; display: grid; place-items: center; padding: 32px; overflow-y: auto; }
-.goal-launcher-inner { width: 100%; max-width: 640px; text-align: center; }
-.goal-launcher-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
-.goal-launcher-title { font-family: var(--serif); font-size: 32px; font-weight: 600; color: var(--ink); margin: 12px 0 12px; letter-spacing: -0.015em; text-wrap: balance; }
-.goal-launcher-sub { font-size: 14px; line-height: 1.6; color: var(--muted); max-width: 540px; margin: 0 auto 22px; }
-.goal-launcher-box {
-  display: flex; flex-direction: column; align-items: stretch; gap: 8px; text-align: left;
-  padding: 12px 12px 12px 16px; background: var(--surface);
-  border: 1px solid var(--line-2); border-radius: var(--r-xl); box-shadow: var(--shadow-card);
-  transition: border-color 140ms var(--ease), box-shadow 140ms var(--ease);
-}
-/* The bottom control row inside the input: the runtime picker sits left, the send button right —
-   one calm composition, not a separate settings strip. */
-.goal-launcher-controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.goal-launcher-box:focus-within { border-color: var(--ember-line); box-shadow: 0 6px 18px -7px rgba(46, 110, 94, 0.28); }
-.goal-launcher-input {
-  flex: 1; border: 0; outline: none; resize: none; background: none;
-  font: inherit; font-size: 15px; line-height: 1.5; color: var(--ink); padding: 4px 0;
-}
-.goal-launcher-send {
-  flex-shrink: 0; width: 34px; height: 34px; border: 0; border-radius: 50%; cursor: pointer;
-  background: var(--primary); color: var(--on-primary); display: grid; place-items: center;
-}
-.goal-launcher-send:disabled { background: var(--ghost); cursor: default; }
-.goal-launcher-send:not(:disabled):hover { background: var(--primary-hover); }
-.goal-launcher-examples { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; }
-.goal-example {
-  padding: 7px 12px; font-size: 12.5px; color: var(--ink-2); cursor: pointer;
-  background: var(--surface); border: 1px solid var(--line-2); border-radius: 999px;
-}
-.goal-example:hover:not(:disabled) { background: var(--surface-2); border-color: var(--ghost); }
-.goal-example:disabled { opacity: 0.5; cursor: default; }
-.goal-launcher-secondary { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; margin-top: 22px; }
-.goal-launcher-secondary button {
-  display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; cursor: pointer;
-  font-size: 12.5px; color: var(--muted);
-}
-.goal-launcher-secondary button:hover:not(:disabled) { color: var(--ink); }
-.goal-launcher-secondary button:disabled { opacity: 0.5; cursor: default; }
-
-/* Scan framing: the muted "· read from your code" tail on the eyebrow, and the grounded facts row. */
-.goal-launcher-grounded { font-size: 12px; color: var(--muted); margin: -14px 0 22px; letter-spacing: 0.01em; }
-
-/* TEMPORARY pick-the-winner switcher — remove with the switcher in GoalLauncher.tsx once a framing wins. */
 
 /* ── Claude as a bottom-center GLASS command dock floating over the canvas ──── */
 /* The new shell: the canvas IS the interface, and Claude is its command line — a glass bar anchored
@@ -6748,62 +6383,6 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 .boot-foot{margin:18px 0 0;font-size:11.5px;color:var(--faint);line-height:1.5}
 @media (prefers-reduced-motion: reduce){.boot-spin{animation:none;border-top-color:var(--ember-line)}}
 
-/* Operator drive — the watchable build. The header is the building/failed status; below it the
-   operator's reasoning streams as a live, opaque, scrollable trail so the founder watches it think
-   (and sees WHY it stopped), instead of an opaque spinner. */
-.operator-drive{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
-  height:100%;padding:40px 32px;min-height:0}
-.operator-drive-head{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center}
-.operator-drive-icon{width:26px;height:26px;color:var(--proven)}
-.operator-drive-icon.stopped{color:var(--gap,#b9740a)}
-.operator-drive-head strong{font-family:var(--serif);font-size:18px;letter-spacing:-.01em;color:var(--ink)}
-.operator-drive-sub{color:var(--muted);font-size:14px;max-width:520px;line-height:1.5}
-.operator-drive.is-stopped .operator-drive-sub{color:var(--ink-2,var(--ink))}
-.operator-drive-elapsed{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;letter-spacing:.01em}
-.operator-drive-actions{display:flex;gap:8px;margin-top:4px}
-.operator-drive-resume{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--r-md,10px);
-  border:1px solid var(--ink);background:var(--ink);color:var(--surface,#fff);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
-.operator-drive-resume:hover{opacity:.9}
-.operator-drive-startover{padding:8px 14px;border-radius:var(--r-md,10px);border:1px solid var(--line-2,var(--line));
-  background:var(--surface,#fff);color:var(--muted);font:inherit;font-size:13px;font-weight:560;cursor:pointer}
-.operator-drive-startover:hover{color:var(--ink)}
-/* The trail is read, so it is OPAQUE (never glass): a solid card list, newest pinned to the bottom. */
-.operator-drive-trail{width:100%;max-width:560px;max-height:46vh;overflow-y:auto;display:flex;flex-direction:column;gap:2px;
-  padding:8px;background:var(--surface,#fff);border:1px solid var(--line-2,var(--line));border-radius:var(--r-lg,12px);
-  box-shadow:var(--shadow-card,0 1px 2px rgba(0,0,0,.04))}
-.operator-drive-line{display:flex;flex-direction:column;gap:2px;padding:9px 11px;border-radius:var(--r-sm,8px);text-align:left}
-.operator-drive-line+.operator-drive-line{border-top:1px solid var(--line,#ededf0)}
-.operator-drive-line-title{font-size:13px;font-weight:560;color:var(--ink)}
-.operator-drive-line-detail{font-size:12.5px;color:var(--muted);line-height:1.45;white-space:pre-wrap}
-.operator-drive-line.is-note{background:var(--surface-2,rgba(0,0,0,.025))}
-.operator-drive-line.is-note .operator-drive-line-title{color:var(--proven)}
-.operator-drive-line.is-fail .operator-drive-line-title{color:var(--danger,#dc2626)}
-/* The plan as the loading state: the drive's real steps checking off live. The active step, not a
-   spinner, is the "still going" signal — it breathes; done steps carry a check; pending steps rest. */
-.operator-drive-plan{display:flex;flex-direction:column;gap:2px;width:100%;max-width:560px;margin:0;padding:0;list-style:none}
-.operator-drive-step{display:flex;align-items:center;gap:10px;padding:7px 4px;font-size:13.5px;transition:color .2s ease}
-.operator-drive-step-mark{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;flex:0 0 auto;
-  border-radius:999px;color:#fff}
-.operator-drive-step-dot{width:6px;height:6px;border-radius:999px;background:currentColor}
-.operator-drive-step.is-done .operator-drive-step-mark{background:var(--proven)}
-.operator-drive-step.is-done .operator-drive-step-label{color:var(--ink)}
-.operator-drive-step.is-active .operator-drive-step-mark{background:none;color:var(--proven)}
-.operator-drive-step.is-active .operator-drive-step-dot{animation:operator-step-breathe 1.4s ease-in-out infinite}
-.operator-drive-step.is-active .operator-drive-step-label{color:var(--ink);font-weight:560}
-.operator-drive-step.is-pending .operator-drive-step-mark{background:none;color:var(--line-2,var(--line))}
-.operator-drive-step.is-pending .operator-drive-step-label{color:var(--muted)}
-@keyframes operator-step-breathe{0%,100%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:scale(1.25)}}
-@media (prefers-reduced-motion:reduce){.operator-drive-step.is-active .operator-drive-step-dot{animation:none;opacity:1}}
-/* Redirect mid-run: nudge the crew's course without stopping and starting over. */
-.operator-drive-nudge{display:flex;align-items:center;gap:6px;width:100%;max-width:560px}
-.operator-drive-nudge-input{flex:1;min-width:0;padding:9px 12px;font-size:13px;color:var(--ink);
-  border:1px solid var(--line);border-radius:var(--r-md,10px);background:var(--surface,#fff)}
-.operator-drive-nudge-input:focus{outline:none;border-color:var(--proven);box-shadow:0 0 0 3px color-mix(in srgb,var(--proven) 16%,transparent)}
-.operator-drive-nudge-input::placeholder{color:var(--muted)}
-.operator-drive-nudge-send{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;flex:0 0 auto;
-  border:none;border-radius:var(--r-md,10px);background:var(--proven);color:#fff;cursor:pointer;transition:opacity .15s ease}
-.operator-drive-nudge-send:disabled{opacity:.4;cursor:default}
-.operator-drive-nudge-send:not(:disabled):hover{opacity:.9}
 .composer-dock-retry{display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-size:12.5px;font-weight:600;
   padding:6px 12px;border-radius:7px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
 .composer-dock-retry:hover{background:#f6f4ef}
@@ -6978,14 +6557,6 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
   100% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0); }
 }
 
-.product-prov {
-  margin-left: auto;
-  font-size: 9.5px; font-weight: 600; letter-spacing: 0.02em;
-  padding: 1px 6px; border-radius: 999px; white-space: nowrap;
-}
-.product-prov-derived { color: var(--proven); background: rgba(22, 163, 74, 0.10); }
-.product-prov-spec { color: var(--gap); background: rgba(217, 119, 6, 0.10); }
-
 .product-node-name { font-size: 13.5px; font-weight: 600; color: var(--ink); line-height: 1.25; }
 .product-node-summary {
   font-size: 11.5px; line-height: 1.4; color: var(--muted);
@@ -7084,138 +6655,6 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 /* The node Overview is a two-column grid sized for the full-width workspace; in the ~340px summoned
    inspector the side column's 260px min collapses the main column, wrapping the uppercase labels
    word-by-word ("WHAT / THIS / STEP / DOES"). Force one column in the panel so it reads cleanly. */
-
-/* ── Multi-lens Product canvas — the SHELL ──────────────────────────────────────
-   The lens-switchable host. One calm tool, five lenses over the same model: a quiet docked lens
-   bar on top, the active lens filling the rest. Same monochrome as the GTM graph; color stays
-   rationed to the shared provenance tags (green derived / amber guess). Shared by all lenses;
-   only this file (the shell) defines it — lenses use these classes + the shared primitives. */
-.product-canvas-shell {
-  display: flex; flex-direction: column; min-height: 0; height: 100%;
-  background: var(--canvas);
-}
-
-/* Lens bar — docked, never floating. Holds the switcher, the grounding read-out, the actions. */
-.lens-bar {
-  flex: 0 0 auto;
-  display: flex; align-items: center; gap: 14px;
-  padding: 9px 14px;
-  background: var(--panel); backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--line-2);
-}
-.lens-switcher {
-  display: inline-flex; align-items: center; gap: 1px;
-  padding: 2px; border-radius: var(--r-md);
-  background: var(--surface-2); border: 1px solid var(--line-2);
-}
-.lens-tab {
-  font-size: 12px; font-weight: 600; color: var(--muted);
-  padding: 4px 12px; border: none; border-radius: 6px; background: none; cursor: pointer;
-  white-space: nowrap;
-  transition: background 140ms var(--ease), color 140ms var(--ease);
-}
-.lens-tab:hover { color: var(--ink-2); }
-.lens-tab.active { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-card); }
-
-.lens-bar-meta {
-  display: flex; align-items: center; gap: 8px;
-  margin-left: 4px; min-width: 0;
-}
-.lens-bar-meta .product-head-meta { white-space: nowrap; }
-
-.lens-bar-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-.lens-bridge {
-  font-size: 11.5px; font-weight: 500; color: var(--muted);
-  padding: 5px 12px; border: 1px solid var(--line-2); border-radius: 999px;
-  background: var(--surface); cursor: pointer; white-space: nowrap;
-  transition: color 140ms var(--ease), border-color 140ms var(--ease);
-}
-.lens-bridge:hover { color: var(--ink); border-color: var(--ink); }
-
-/* The active lens fills the rest; the lens owns its own canvas + floating panels. */
-.lens-frame { position: relative; flex: 1 1 auto; min-height: 0; width: 100%; }
-
-/* Chromeless shell: the lens switcher moved into the floating command dock (one bar, not two), so
-   there's no in-flow lens-bar to push content down. Reserve the dock's height at the top of the
-   frame so lens content (portfolio tiles, people, the product graph) never hides behind the dock. */
-.product-canvas-shell.chromeless .lens-frame { padding-top: 60px; }
-/* The grounding read-out + redraw (Product mode) float as a slim overlay top-right, clear of the dock. */
-.lens-overlay-meta {
-  position: absolute; top: 70px; right: 18px; z-index: 30;
-  display: flex; align-items: center; gap: 8px;
-}
-
-/* ── Shared lens primitives (built here, imported by every lens) ────────────────── */
-
-/* LensPanel — the translucent panel chrome, matching .product-head-panel. */
-.lens-panel {
-  display: flex; flex-direction: column; gap: 8px;
-  padding: 11px 13px;
-  background: var(--panel); backdrop-filter: blur(8px);
-  border: 1px solid var(--line-2); border-radius: var(--r-lg); box-shadow: var(--shadow-card);
-}
-.lens-panel-title {
-  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
-  color: var(--muted);
-}
-
-/* ObjectCard — reuses .product-node (harvested from the original canvas). The flow variant drops
-   the hover-lift transform that fights React Flow's transform-based positioning. */
-.lens-object-card { width: 232px; }
-.lens-object-card-flow:hover { transform: none; }
-
-/* Focal card — the center of gravity. Wider, larger title, heavier elevation and a ring, so the
-   hub reads as the heart of the picture instead of one more card in a grid of equals. */
-.lens-object-card-focal {
-  width: 268px;
-  border-color: var(--ink);
-  box-shadow: 0 0 0 1px var(--ink), var(--shadow-pop);
-}
-.lens-object-card-focal .product-node-name { font-size: 16px; line-height: 1.2; }
-.lens-object-card-focal .product-node-icon { width: 26px; height: 26px; }
-.lens-object-card-focal .product-node-icon svg { width: 15px; height: 15px; }
-
-/* The "flows into" arrow glyph, sized to the mono row. */
-.lens-flow-arrow { width: 13px; height: 13px; color: var(--faint); flex: 0 0 auto; }
-
-/* ── Portfolio-map lens — the GTM canvas's zoomed-out altitude ────────────────────
-   Every built channel as an opaque tile. Replaces the swimlane overview. The header carries the
-   shared ICP + headline claim every tile inherits; the grid wraps and scrolls on overflow. */
-
-/* Lens stub — the placeholder the shell ships with before the lens agents fill each in. */
-.lens-stub {
-  position: absolute; inset: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 10px; text-align: center; padding: 32px;
-}
-
-/* ── Mobile (390px) — dock and stack, never float off-screen ─────────────────────
-   The old single canvas floated panels at the React-Flow corners; below they overflowed and hid
-   nodes. The shell already docks the lens bar; here it wraps to its own rows, and any lens panel
-   that opts into .lens-panel-dock pins to the bottom edge full-width instead of floating. */
-@media (max-width: 560px) {
-  .lens-bar {
-    flex-wrap: wrap; gap: 8px; padding: 8px 10px;
-  }
-  .lens-switcher {
-    order: 1; flex: 1 1 100%;
-    overflow-x: auto; -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-  .lens-switcher::-webkit-scrollbar { display: none; }
-  .lens-bar-meta { order: 2; flex-wrap: wrap; }
-  .lens-bar-actions { order: 3; margin-left: auto; }
-  .lens-bridge { display: none; }            /* the toolbar GTM/Product switch is the way back */
-
-  /* Any lens that floats a side/legend panel should add .lens-panel-dock to it; on mobile it
-     leaves the floating corner and docks across the bottom so it can't push nodes off-screen. */
-  .lens-panel-dock {
-    position: absolute !important;
-    left: 8px !important; right: 8px !important; bottom: 8px !important;
-    top: auto !important; width: auto !important; max-width: none !important;
-    max-height: 42%; overflow-y: auto;
-  }
-}
 
 /* ════════════════════════════════════════════════════════════════════════
    STITCH GLASS LAYER — synced from design-system/styles.css (the source of
@@ -7457,8 +6896,7 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
   box-shadow: var(--shadow-pop);
 }
 [data-skin="glass"] .node-detail-workspace,
-[data-skin="glass"] .blank-channel-guide,
-[data-skin="glass"] .loop-proposal-bar {
+[data-skin="glass"] .blank-channel-guide {
   box-shadow: var(--shadow-modal);
 }
 /* Command bar floats as a popover (also frosted in section 3) */
@@ -7574,9 +7012,7 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
   background: var(--st-glass);
 }
 
-/* The indigo proposal block (proposed node + edge + bar + accept) — NOT reached
-   by the glass layer at all; de-indigo to ink/greige while keeping it legible
-   as a distinct "proposed" state via a dashed ink rim + ink fill button. */
+/* Proposed canvas changes stay distinct through an ink rim and dashed edge. */
 [data-skin="glass"] .react-flow .loop-node-proposed .loop-node {
   border-color: var(--st-ink);
   background: rgba(28, 28, 30, 0.04);
@@ -7585,18 +7021,6 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 [data-skin="glass"] .react-flow__edge.loop-edge-proposed .react-flow__edge-path {
   stroke: var(--st-ink);
 }
-[data-skin="glass"] .loop-proposal-bar {
-  border-color: var(--st-glass-brd);
-  box-shadow: var(--shadow-modal);
-}
-[data-skin="glass"] .loop-proposal-text strong svg {
-  color: var(--st-ink);
-}
-[data-skin="glass"] .loop-proposal-accept {
-  border-color: var(--st-ink);
-  background: var(--st-ink);
-}
-
 /* The one decorative purple the glass system itself still introduced: the lilac
    ambient wash on the canvas. Swap the lilac radial for a peach one so the plane
    carries no purple even post-reskin. (Re-declares the full background stack so
@@ -7647,20 +7071,15 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 /* Accepted opportunity border → proven (semantic kept) */
 
 /* Frost panels / topbar / drawers / modals — stronger blur, glass/modal shadow */
-[data-skin="glass"] .program-topbar,
 [data-skin="glass"] .product-head-panel,
 [data-skin="glass"] .product-bridge,
 [data-skin="glass"] .lens-bar,
-[data-skin="glass"] .lens-panel,
 [data-skin="glass"] .product-editor {
   background: var(--st-glass-2);
   -webkit-backdrop-filter: blur(26px) saturate(1.6);
   backdrop-filter: blur(26px) saturate(1.6);
   border-color: var(--st-glass-brd);
   box-shadow: var(--st-glass-shadow);
-}
-[data-skin="glass"] .program-topbar {
-  border-bottom: 1px solid var(--st-glass-brd);
 }
 [data-skin="glass"] .sim-drawer,
 [data-skin="glass"] .artifact-editor,
@@ -7714,7 +7133,6 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
   background: #fff;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
-[data-skin="glass"] .program-status-pill,
 [data-skin="glass"] .lens-bridge {
   border-radius: var(--st-pill);
   border-color: var(--st-glass-brd);
@@ -7952,7 +7370,7 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 
 /* ── Microproduct compose — the goal-in form on the Microproduct summon card, shown before an artifact
    has been cut. Opaque content surface, monochrome ink, the build action is a plain primary (the amber
-   gate lives on the staged MicroproductFace, never here). ───────────────────────────────────────── */
+   gate lives on the staged change, never here). ─────────────────────────────────────────────────── */
 .microproduct-compose {
   display: flex;
   flex-direction: column;
@@ -8164,14 +7582,6 @@ button.loop-brand:hover .loop-brand-name { color: var(--ink); }
 }
 @keyframes outcome-float-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .outcome-float { animation: none; } }
-
-/* The old canvas mode switcher (Move / Engineer) and its later AltitudeControl replacement are gone —
-   the Story altitude was removed and Steps (the runnable pipeline) is now the whole canvas. */
-
-/* Learn lens: its content is a centered read-column that would otherwise sit under the floated mode
-   pill. Drop its top in so the goal bar clears the switcher. Scoped to the lens — the full cockpit
-   scroll (no floating pill) keeps its own padding. */
-.lens-frame .ck.learn-lens { padding-top: 116px; }
 
 /* ── Pipeline intelligence — Explain mode + structural warnings ──────────────────────────────────────
    A quiet layer over the canvas: the pipeline explains its own shape and flags its own mistakes without

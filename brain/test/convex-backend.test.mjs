@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import { isDeepStrictEqual } from "node:util";
 
 import {
   createConvexBackend,
@@ -25,7 +26,8 @@ import { persistence, jsonPersistence, closePersistence, registerConvexBackend }
 function createFakeConvex() {
   // teamId -> Map<key, { key, data, updatedAt, updatedBy }>
   const tables = new Map();
-  const calls = { set: 0, remove: 0, list: 0 };
+  const calls = { set: 0, compareAndSet: 0, remove: 0, list: 0 };
+  let mutationHook = null;
 
   function table(teamId) {
     if (!tables.has(teamId)) tables.set(teamId, new Map());
@@ -43,6 +45,7 @@ function createFakeConvex() {
       }
     }
     if (fnPath.endsWith("documents:set") || fnPath === "set") return "set";
+    if (fnPath.endsWith("documents:compareAndSet") || fnPath === "compareAndSet") return "compareAndSet";
     if (fnPath.endsWith("documents:remove") || fnPath === "remove") return "remove";
     if (fnPath.endsWith("documents:list") || fnPath === "list") return "list";
     return "unknown";
@@ -51,21 +54,73 @@ function createFakeConvex() {
   return {
     _tables: tables,
     _calls: calls,
+    _setMutationHook(fn) {
+      mutationHook = fn;
+    },
     async mutation(ref, args) {
       const name = refName(ref);
+      if (mutationHook) await mutationHook(name, args);
       if (name === "set") {
         calls.set += 1;
         const t = table(args.teamId);
         const existing = t.get(args.key);
-        // last-write-wins by timestamp, mirroring documents:set
-        if (existing && existing.updatedAt && args.updatedAt < existing.updatedAt) return "older-ignored";
+        const currentRevision = Number.isInteger(existing?.data?.revision) ? existing.data.revision : null;
+        const nextRevision = Number.isInteger(args.data?.revision) ? args.data.revision : null;
+        if (existing && (currentRevision !== null || nextRevision !== null)) {
+          if (currentRevision === null || nextRevision === null) {
+            return { status: "conflict", reason: "revision-shape-changed", currentRevision };
+          }
+          if (nextRevision === currentRevision) {
+            return isDeepStrictEqual(existing.data, args.data)
+              ? { status: "unchanged", revision: currentRevision }
+              : { status: "conflict", reason: "same-revision-diverged", currentRevision };
+          }
+          if (nextRevision !== currentRevision + 1) {
+            return { status: "conflict", reason: "stale-or-skipped-revision", currentRevision };
+          }
+        } else if (existing?.updatedAt && args.updatedAt < existing.updatedAt) {
+          return { status: "ignored" };
+        }
         t.set(args.key, { key: args.key, data: args.data, updatedAt: args.updatedAt, updatedBy: args.updatedBy });
-        return "ok";
+        return { status: existing ? "updated" : "inserted", revision: nextRevision };
+      }
+      if (name === "compareAndSet") {
+        calls.compareAndSet += 1;
+        const t = table(args.teamId);
+        const existing = t.get(args.key);
+        const currentRevision = Number.isInteger(existing?.data?.revision) ? existing.data.revision : null;
+        if (!existing && args.expectedRevision !== 0) {
+          return { status: "conflict", reason: "missing-base", currentRevision: 0 };
+        }
+        if (existing && currentRevision === args.data.revision) {
+          try {
+            assert.deepEqual(existing.data, args.data);
+            return { status: "unchanged", revision: currentRevision };
+          } catch {
+            // Same revision with different data continues to the base-content conflict below.
+          }
+        }
+        if (existing && (!Object.hasOwn(args, "expectedData")
+          || !isDeepStrictEqual(existing.data, args.expectedData))) {
+          return { status: "conflict", reason: "base-content-diverged", currentRevision };
+        }
+        const actualRevision = existing ? currentRevision : 0;
+        if (actualRevision !== args.expectedRevision || args.data.revision !== args.expectedRevision + 1) {
+          return { status: "conflict", reason: "stale-base", currentRevision: actualRevision };
+        }
+        t.set(args.key, { key: args.key, data: args.data, updatedAt: args.updatedAt, updatedBy: args.updatedBy });
+        return { status: existing ? "updated" : "inserted", revision: args.data.revision };
       }
       if (name === "remove") {
         calls.remove += 1;
-        table(args.teamId).delete(args.key);
-        return null;
+        const t = table(args.teamId);
+        const existing = t.get(args.key);
+        const currentRevision = Number.isInteger(existing?.data?.revision) ? existing.data.revision : null;
+        if (currentRevision !== null && args.expectedRevision !== currentRevision) {
+          return { status: "conflict", reason: "stale-delete", currentRevision };
+        }
+        t.delete(args.key);
+        return { status: existing ? "removed" : "unchanged" };
       }
       throw new Error(`unexpected mutation ${name}`);
     },
@@ -166,12 +221,178 @@ describe("convex backend (provider interface, fake client)", () => {
     assert.equal(typeof backend.get, "function");
     assert.equal(typeof backend.getFresh, "function");
     assert.equal(typeof backend.set, "function");
+    assert.equal(typeof backend.compareAndSet, "function");
+    assert.equal(typeof backend.listSyncConflicts, "function");
     assert.equal(typeof backend.list, "function");
     assert.equal(typeof backend.delete, "function");
     // set/get return synchronously (not Promises) — the engine contract.
     const out = backend.set("flows", "g1", { id: "g1", n: 1 });
     assert.deepEqual(out, { id: "g1", n: 1 });
     assert.deepEqual(backend.get("flows", "g1"), { id: "g1", n: 1 });
+  });
+
+  it("preserves local CAS and mirrors only the successful writer", async () => {
+    backend.compareAndSet("goals", "p1", 0, { revision: 1, goals: [{ id: "base" }] });
+    const stale = backend.get("goals", "p1");
+    backend.compareAndSet("goals", "p1", stale.revision, {
+      revision: 2, goals: [...stale.goals, { id: "winner" }],
+    });
+    assert.throws(() => backend.compareAndSet("goals", "p1", stale.revision, {
+      revision: 2, goals: [...stale.goals, { id: "loser" }],
+    }), (error) => error?.code === "PERSISTENCE_CONFLICT");
+    await backend.mirror.drain();
+    assert.deepEqual(fake._tables.get("team_test").get("goals/p1").data.goals.map((goal) => goal.id), ["base", "winner"]);
+  });
+
+  it("preserves every queued CAS step instead of coalescing away its base", async () => {
+    backend.compareAndSet("goals", "ordered", 0, { revision: 1, goals: [{ id: "one" }] });
+    backend.compareAndSet("goals", "ordered", 1, { revision: 2, goals: [{ id: "one" }, { id: "two" }] });
+
+    await backend.mirror.drain();
+
+    assert.equal(fake._calls.compareAndSet, 2);
+    assert.equal(fake._tables.get("team_test").get("goals/ordered").data.revision, 2);
+    assert.deepEqual(backend.mirror.getConflicts(), []);
+  });
+
+  it("quarantines later local revisions when their queued predecessor loses remotely", async () => {
+    fake._tables.set("team_test", new Map([["goals/branched", {
+      key: "goals/branched",
+      data: { revision: 1, goals: [{ id: "remote-winner" }] },
+      updatedAt: "900",
+      updatedBy: "other",
+    }]]));
+    backend.compareAndSet("goals", "branched", 0, {
+      revision: 1, goals: [{ id: "offline-base" }],
+    });
+    backend.compareAndSet("goals", "branched", 1, {
+      revision: 2, goals: [{ id: "offline-base" }, { id: "offline-next" }],
+    });
+
+    await backend.mirror.drain();
+
+    assert.equal(fake._calls.compareAndSet, 1, "dependent revision must never be probed against the winner");
+    assert.deepEqual(fake._tables.get("team_test").get("goals/branched").data.goals, [{ id: "remote-winner" }]);
+    assert.deepEqual(backend.mirror.getConflicts().map((item) => item.reason), [
+      "base-content-diverged",
+      "predecessor-conflict",
+    ]);
+    assert.equal(backend.get("goals", "branched").revision, 2, "offline branch stays local for reconciliation");
+
+    backend.compareAndSet("goals", "branched", 2, {
+      revision: 3, goals: [{ id: "offline-base" }, { id: "offline-next" }, { id: "later" }],
+    });
+    await backend.mirror.drain();
+    assert.equal(fake._calls.compareAndSet, 1, "later writes stay quarantined until conflict resolution");
+
+    const restarted = createConvexBackend({ ...options, root: home, identity: "restarted" });
+    restarted.compareAndSet("goals", "branched", 3, {
+      revision: 4, goals: [{ id: "offline-base" }, { id: "offline-next" }, { id: "after-restart" }],
+    });
+    await restarted.mirror.drain();
+    assert.equal(fake._calls.compareAndSet, 1, "durable conflict receipt keeps quarantine across restart");
+  });
+
+  it("quarantines a dependent edit queued while the losing remote mutation is in flight", async () => {
+    fake._tables.set("team_test", new Map([["goals/in-flight", {
+      key: "goals/in-flight",
+      data: { revision: 1, goals: [{ id: "remote-winner" }] },
+      updatedAt: "900",
+      updatedBy: "other",
+    }]]));
+    let injected = false;
+    fake._setMutationHook(async (name) => {
+      if (name !== "compareAndSet" || injected) return;
+      injected = true;
+      backend.compareAndSet("goals", "in-flight", 1, {
+        revision: 2, goals: [{ id: "offline-base" }, { id: "queued-during-flight" }],
+      });
+    });
+    backend.compareAndSet("goals", "in-flight", 0, {
+      revision: 1, goals: [{ id: "offline-base" }],
+    });
+
+    await backend.mirror.drain();
+
+    assert.equal(fake._calls.compareAndSet, 1);
+    assert.deepEqual(fake._tables.get("team_test").get("goals/in-flight").data.goals, [{ id: "remote-winner" }]);
+    assert.ok(backend.mirror.getConflicts().some((item) => item.reason === "unresolved-predecessor-conflict"));
+  });
+
+  it("allows only one remote winner when two machines publish the same next revision", async () => {
+    const otherHome = freshHome();
+    const other = createConvexBackend({ ...options, root: otherHome, identity: "other" });
+    try {
+      // Both machines read the same remote base.
+      fake._tables.set("team_test", new Map([["goals/shared", {
+        key: "goals/shared",
+        data: { revision: 1, goals: [{ id: "base" }] },
+        updatedAt: "900",
+        updatedBy: "seed",
+      }]]));
+      await backend.hydrate();
+      await other.hydrate();
+
+      backend.compareAndSet("goals", "shared", 1, {
+        revision: 2, goals: [{ id: "base" }, { id: "winner" }],
+      });
+      other.compareAndSet("goals", "shared", 1, {
+        revision: 2, goals: [{ id: "base" }, { id: "loser" }],
+      });
+      await backend.mirror.drain();
+      await other.mirror.drain();
+
+      assert.deepEqual(
+        fake._tables.get("team_test").get("goals/shared").data.goals.map((goal) => goal.id),
+        ["base", "winner"],
+      );
+      assert.deepEqual(other.mirror.getConflicts().map((item) => item.reason), ["base-content-diverged"]);
+      assert.deepEqual(other.listSyncConflicts().map((item) => item.reason), ["base-content-diverged"]);
+      // The losing edit is not destroyed locally; reconciliation can surface it later.
+      assert.deepEqual(other.get("goals", "shared").goals.map((goal) => goal.id), ["base", "loser"]);
+    } finally {
+      await other.mirror.drain();
+      closePersistence({ root: otherHome });
+      fs.rmSync(otherHome, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a matching revision number when the proposed base belongs to another branch", async () => {
+    const local = persistence({ root: home, backend: "sqlite" });
+    local.set("goals", "same-number", { revision: 1, goals: [{ id: "offline-branch" }] });
+    fake._tables.set("team_test", new Map([["goals/same-number", {
+      key: "goals/same-number",
+      data: { revision: 1, goals: [{ id: "remote-branch" }] },
+      updatedAt: "900",
+      updatedBy: "other",
+    }]]));
+
+    backend.compareAndSet("goals", "same-number", 1, {
+      revision: 2, goals: [{ id: "offline-branch" }, { id: "next" }],
+    });
+    await backend.mirror.drain();
+
+    assert.equal(fake._tables.get("team_test").get("goals/same-number").data.revision, 1);
+    assert.equal(backend.mirror.getConflicts()[0].reason, "base-content-diverged");
+  });
+
+  it("fails closed instead of silently adopting an existing legacy document into revision one", async () => {
+    fake._tables.set("team_test", new Map([["goals/legacy-remote", {
+      key: "goals/legacy-remote",
+      data: { goals: [{ id: "legacy-remote" }] },
+      updatedAt: "900",
+      updatedBy: "old-client",
+    }]]));
+    backend.compareAndSet("goals", "legacy-remote", 0, {
+      revision: 1, goals: [{ id: "new-client" }],
+    });
+
+    await backend.mirror.drain();
+
+    assert.deepEqual(fake._tables.get("team_test").get("goals/legacy-remote").data, {
+      goals: [{ id: "legacy-remote" }],
+    });
+    assert.equal(backend.mirror.getConflicts()[0].reason, "base-content-diverged");
   });
 
   it("getFresh bypasses the wrapped local provider cache", () => {
@@ -191,12 +412,12 @@ describe("convex backend (provider interface, fake client)", () => {
   });
 
   it("round-trips set / get / list / delete locally AND mirrors each write to Convex", async () => {
-    backend.set("flows", "g1", { id: "g1", revision: 3 });
+    backend.set("flows", "g1", { id: "g1", revision: 1 });
     backend.set("people", "alpha", { projectId: "alpha", people: [] });
     backend.set("people", "beta", { projectId: "beta", people: [{ id: "p1" }] });
 
     // Local reads are instant and authoritative.
-    assert.deepEqual(backend.get("flows", "g1"), { id: "g1", revision: 3 });
+    assert.deepEqual(backend.get("flows", "g1"), { id: "g1", revision: 1 });
     const people = backend.list("people").sort((a, b) => a.projectId.localeCompare(b.projectId));
     assert.deepEqual(people.map((d) => d.projectId), ["alpha", "beta"]);
     assert.equal(backend.list("flows").length, 1);
@@ -212,8 +433,8 @@ describe("convex backend (provider interface, fake client)", () => {
     assert.equal(team.get("flows/g1"), undefined, "the deleted doc was removed from Convex too");
     assert.deepEqual(team.get("people/alpha").data, { projectId: "alpha", people: [] });
     assert.deepEqual(team.get("people/beta").data, { projectId: "beta", people: [{ id: "p1" }] });
-    // flows/g1's set and later delete coalesce on the same pending key before the drain, so only the
-    // two people sets reach Convex plus the one remove — the write-behind queue dedupes by key.
+    // The set and delete both reach Convex in order; versioned operations are never coalesced because
+    // doing so would discard the base needed to guard the later operation.
     assert.ok(fake._calls.set >= 2, `expected >=2 set calls, got ${fake._calls.set}`);
     assert.ok(fake._calls.remove >= 1);
   });
@@ -232,6 +453,68 @@ describe("convex backend (provider interface, fake client)", () => {
     assert.equal(result.pulled, 2);
     assert.deepEqual(backend.get("programs", "default"), { programs: [{ id: "p1" }] });
     assert.deepEqual(backend.get("project", "catalog"), { projects: [{ id: "default" }] });
+  });
+
+  it("hydrates only a provably newer revision and reports ambiguous or stale remote state", async () => {
+    for (const key of ["newer-remote", "newer-local", "diverged"]) {
+      backend.compareAndSet("goals", key, 0, { revision: 1, goals: [{ id: "local" }] });
+      backend.compareAndSet("goals", key, 1, { revision: 2, goals: [{ id: "local" }] });
+    }
+    backend.compareAndSet("goals", "newer-local", 2, { revision: 3, goals: [{ id: "local" }] });
+    await backend.mirror.drain();
+
+    const team = fake._tables.get("team_test");
+    team.set("goals/newer-remote", {
+      key: "goals/newer-remote", data: { revision: 3, goals: [{ id: "remote" }] }, updatedAt: "5000",
+    });
+    team.set("goals/newer-local", {
+      key: "goals/newer-local", data: { revision: 2, goals: [{ id: "remote" }] }, updatedAt: "5000",
+    });
+    team.set("goals/diverged", {
+      key: "goals/diverged", data: { revision: 2, goals: [{ id: "remote" }] }, updatedAt: "5000",
+    });
+
+    const result = await backend.hydrate();
+
+    assert.equal(result.pulled, 1);
+    assert.equal(result.skipped, 2);
+    assert.deepEqual(result.conflicts.map((item) => item.reason).sort(), [
+      "local-not-proven-stale",
+      "same-revision-diverged",
+    ]);
+    assert.equal(backend.get("goals", "newer-remote").revision, 3);
+    assert.deepEqual(backend.get("goals", "newer-remote").goals, [{ id: "remote" }]);
+    assert.deepEqual(backend.get("goals", "newer-local").goals, [{ id: "local" }]);
+    assert.deepEqual(backend.get("goals", "diverged").goals, [{ id: "local" }]);
+  });
+
+  it("does not treat a higher remote number as ancestry when a migrated local document has no cursor", async () => {
+    const local = persistence({ root: home, backend: "sqlite" });
+    local.set("goals", "legacy", { revision: 2, goals: [{ id: "offline-local" }] });
+    fake._tables.set("team_test", new Map([["goals/legacy", {
+      key: "goals/legacy", data: { revision: 4, goals: [{ id: "other-branch" }] }, updatedAt: "5000",
+    }]]));
+
+    const result = await backend.hydrate();
+
+    assert.equal(result.pulled, 0);
+    assert.equal(result.conflicts[0].reason, "local-not-proven-stale");
+    assert.deepEqual(backend.get("goals", "legacy").goals, [{ id: "offline-local" }]);
+    assert.equal(backend.listSyncConflicts()[0].remoteRevision, 4);
+  });
+
+  it("does not let a stale machine delete a newer remote revision", async () => {
+    fake._tables.set("team_test", new Map([["goals/shared", {
+      key: "goals/shared", data: { revision: 2, goals: [{ id: "remote" }] }, updatedAt: "5000",
+    }]]));
+    backend.set("goals", "shared", { revision: 1, goals: [{ id: "stale" }] });
+    await backend.mirror.drain();
+    backend.delete("goals", "shared");
+    await backend.mirror.drain();
+
+    assert.equal(fake._tables.get("team_test").get("goals/shared").data.revision, 2);
+    assert.equal(fake._calls.remove, 0, "delete is quarantined locally after the stale write loses");
+    assert.ok(backend.mirror.getConflicts().some((item) => item.reason === "unresolved-predecessor-conflict"));
   });
 
   it("a configured-but-teamless Convex URL keeps the local backend working with no mirror", () => {

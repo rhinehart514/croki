@@ -1,3 +1,6 @@
+> **SUPERSEDED AS PRODUCT DIRECTION.** This pipeline-centered canvas is implementation
+> history. See **docs/OPEN-CANVAS-SPEC.md** for the current multi-goal open canvas.
+
 # Drover — the intertwined canvas
 
 ## Vision

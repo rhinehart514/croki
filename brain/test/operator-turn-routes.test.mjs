@@ -155,4 +155,36 @@ describe("composer fast-lane routes — briefing read + turn", () => {
     assert.equal(crossed.status, 409);
     assert.deepEqual(getOperatorSession(session.id).focusRef, { type: "question", id: "q-1" }, "another project cannot replace the focus");
   });
+
+  it("hands a durable session to Codex through the project-scoped HTTP contract", async () => {
+    const session = createOperatorSession({
+      goal: "Continue this work", projectId: "handoff-route-project",
+      runtime: "claude-code", model: "claude-opus-4-8",
+      focusRef: { type: "work-artifact", id: "brief" },
+    });
+    const res = await fetch(`${base}/api/operator/sessions/${encodeURIComponent(session.id)}/handoff`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        projectId: "handoff-route-project", target: "codex", model: "gpt-5.5-codex",
+        expectedRevision: 0, idempotencyKey: "route-handoff-1",
+      }),
+    });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.session.worker.runtime, "codex");
+    assert.equal(body.session.handoffRevision, 1);
+    assert.deepEqual(body.session.focusRef, { type: "work-artifact", id: "brief" });
+    assert.equal(Object.hasOwn(body.session, "runtimeSessionId"), false);
+
+    const crossed = await fetch(`${base}/api/operator/sessions/${encodeURIComponent(session.id)}/handoff`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        projectId: "another-project", target: "claude", expectedRevision: 1, idempotencyKey: "route-cross-project",
+      }),
+    });
+    assert.equal(crossed.status, 400);
+    assert.equal(getOperatorSession(session.id).runtime, "codex");
+  });
 });

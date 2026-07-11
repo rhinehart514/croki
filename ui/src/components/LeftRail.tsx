@@ -142,7 +142,10 @@ export function LeftRail({
   // still renders the inviting roster before any connect handler is wired.
   onConnectCapability?: (id: string) => void;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      && window.matchMedia("(max-width: 640px)").matches,
+  );
   const [crewRoomOpen, setCrewRoomOpen] = useState(false);
   const [crewComposerOpen, setCrewComposerOpen] = useState(false);
   // The LIVE capability inventory — the real tools the crew can reach right now, from the runtime. null
@@ -154,6 +157,15 @@ export function LeftRail({
     void getCapabilityInventory().then((inv) => { if (live) setInventory(inv); });
     return () => { live = false; };
   }, [projectId, bench]);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia("(max-width: 640px)");
+    const collapseForNarrowCanvas = (event: MediaQueryListEvent) => {
+      if (event.matches) setCollapsed(true);
+    };
+    query.addEventListener("change", collapseForNarrowCanvas);
+    return () => query.removeEventListener("change", collapseForNarrowCanvas);
+  }, []);
 
   // Drag a crew member OR a capability onto the canvas → the canvas-area drop target reads
   // STEP_DRAG_MIME and adds a pipeline step, switching to the build view so the founder watches it land.

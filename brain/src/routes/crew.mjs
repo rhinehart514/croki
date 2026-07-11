@@ -10,6 +10,7 @@ import { deriveVoiceBrief } from "../teammate-soul.mjs";
 import { createCrewComposer, draftToMarkdown } from "../crew-composer.mjs";
 import { parseOpenClawWorkspace, importFromDirectory, createOpenClawDraft, applyImportedSoul } from "../openclaw-import.mjs";
 import { writeArtifact, readArtifact, isValidRef } from "../artifact-store.mjs";
+import { authorizeFounderWriteForRequest } from "./session-guard.mjs";
 
 function productRepo(project) {
   return project?.sharedContext?.repository?.repo || process.cwd();
@@ -112,6 +113,7 @@ export default async function handle({ req, res, url }) {
   const importMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/crew\/import$/);
   if (req.method === "POST" && importMatch) {
     try {
+      authorizeFounderWriteForRequest(req, "Importing a teammate definition");
       const projectId = decodeURIComponent(importMatch[1]);
       loadProject({ projectId });
       const body = await readBody(req);
@@ -128,7 +130,7 @@ export default async function handle({ req, res, url }) {
       const ref = uniqueRef(isValidRef(parsed.ref) ? parsed.ref : "imported-teammate");
       json(res, 200, { draft: createOpenClawDraft({ ...parsed, ref }) });
     } catch (err) {
-      json(res, 500, { error: err instanceof Error ? err.message : String(err) });
+      json(res, Number.isInteger(err?.status) ? err.status : 500, { error: err instanceof Error ? err.message : String(err) });
     }
     return true;
   }
@@ -136,6 +138,7 @@ export default async function handle({ req, res, url }) {
   const addMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/crew\/add$/);
   if (req.method === "POST" && addMatch) {
     try {
+      authorizeFounderWriteForRequest(req, "Saving a teammate");
       const projectId = decodeURIComponent(addMatch[1]);
       loadProject({ projectId });
       const body = await readBody(req);
@@ -172,7 +175,7 @@ export default async function handle({ req, res, url }) {
       teammateSoulStore.setVoice(projectId, ref, voice);
       json(res, 200, { ok: true, member: { ref, description } });
     } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+      json(res, Number.isInteger(err?.status) ? err.status : 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return true;
   }
@@ -199,6 +202,7 @@ export default async function handle({ req, res, url }) {
   const promoteMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/crew\/([^/]+)\/promote$/);
   if (req.method === "POST" && promoteMatch) {
     try {
+      authorizeFounderWriteForRequest(req, "Promoting a teammate lesson");
       const projectId = decodeURIComponent(promoteMatch[1]);
       const ref = decodeURIComponent(promoteMatch[2]);
       if (!isValidRef(ref)) { json(res, 400, { error: "That teammate id isn't valid." }); return true; }
@@ -208,7 +212,7 @@ export default async function handle({ req, res, url }) {
       teammateSoulStore.promote(projectId, ref, patternKey);
       json(res, 200, { profile: teammateFounderView(projectId, ref) });
     } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+      json(res, Number.isInteger(err?.status) ? err.status : 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return true;
   }
@@ -218,6 +222,7 @@ export default async function handle({ req, res, url }) {
   const dismissMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/crew\/([^/]+)\/dismiss$/);
   if (req.method === "POST" && dismissMatch) {
     try {
+      authorizeFounderWriteForRequest(req, "Dismissing a teammate lesson");
       const projectId = decodeURIComponent(dismissMatch[1]);
       const ref = decodeURIComponent(dismissMatch[2]);
       if (!isValidRef(ref)) { json(res, 400, { error: "That teammate id isn't valid." }); return true; }
@@ -227,7 +232,7 @@ export default async function handle({ req, res, url }) {
       teammateSoulStore.dismiss(projectId, ref, patternKey);
       json(res, 200, { profile: teammateFounderView(projectId, ref) });
     } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+      json(res, Number.isInteger(err?.status) ? err.status : 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return true;
   }

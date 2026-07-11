@@ -1,3 +1,7 @@
+> **SUPERSEDED AS PRODUCT DIRECTION.** Its open-vocabulary and anti-cage lessons remain
+> useful history. The current product contract is **docs/OPEN-CANVAS-SPEC.md**, where
+> product development and go-to-market share one canvas.
+
 # Emergent motion — the engine grades any go-to-market, not just outbound
 
 Status: engine BUILT + live-proven (2026-06-27). UI surfaces are the next slices (below).

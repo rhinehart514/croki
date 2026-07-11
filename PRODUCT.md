@@ -6,11 +6,11 @@ product
 
 ## Users
 
-Founders running one or more products who need to understand where a product may have market leverage, decide what deserves attention, and safely turn that judgment into go-to-market work. They use Drover as an operating desk: scanning a real repository, investigating product-market terrain with a persistent crew, shaping one move into a pipeline, and reviewing every outward effect before release.
+Founders running one or more products who need to understand what deserves attention, develop the product, and safely take it to market. Each product may carry dozens of concurrent product and go-to-market goals. They use Drover to direct Claude and Codex on one living canvas, inspect and correct the work in place, turn only the work that needs execution into a safe path, and learn from real outcomes.
 
 ## Product Purpose
 
-Drover reads a product, renders cited product truth and clearly labeled market hypotheses on one living canvas, gives the founder a persistent crew to work through uncertainty, turns a chosen move into an editable pipeline, and returns the market's answer to the same terrain. Success means the founder can understand the product before inventing a goal, act without losing context, and improve future work from real outcomes while truth, authorization, and learned taste remain durable.
+Drover makes product development and go-to-market easier by letting a founder direct Claude and Codex on one living canvas. It reads the real product, keeps facts distinct from interpretation, supports dozens of independent and related goals, materializes model work as editable canvas objects, expands work into an executable path only when action or repeatability requires it, and returns real outcomes to the goals and product context that produced them. Truth, founder authorization, and learned taste remain durable across every runtime and goal.
 
 ## Brand Personality
 
@@ -23,10 +23,10 @@ Do not resemble a generic AI chat wrapper, a template SaaS dashboard, a fixed fu
 ## Design Principles
 
 1. Show the founder's real product before asking them to configure a process.
-2. Keep the terrain visible so every question, crew position, pipeline, decision, and outcome retains context.
+2. Keep the canvas and its many goals visible so every question, artifact, product change, path, decision, and outcome retains context.
 3. Make evidence, inference, uncertainty, and authorization visually distinct without turning the canvas into a legend.
 4. Give teammates persistent identity and recognizable points of view, not interchangeable chat turns.
-5. Make work watchable and the founder wall unmistakable; approval persists as a visible receipt.
+5. Make Claude and Codex work watchable and locally steerable; make the founder wall unmistakable and preserve approval as a visible receipt.
 
 ## Accessibility & Inclusion
 

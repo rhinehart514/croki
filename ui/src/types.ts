@@ -874,6 +874,7 @@ export type OperatorSessionSummary = {
   goal: string;
   graphId: string;
   projectId?: string | null;
+  threadRef?: string | null;
   workspaceId?: string | null;
   status: OperatorStatus;
   createdAt: string;
@@ -888,6 +889,19 @@ export type OperatorSession = OperatorSessionSummary & {
   // may release; a member may not). Null/absent → the founder's personal space (solo founder releases).
   teamId?: string | null;
   model: string;
+  worker?: { runtime: "auto" | "claude" | "codex"; model: string | null };
+  parentSessionId?: string | null;
+  branchGroupId?: string | null;
+  handoffRevision?: number;
+  handoffs?: Array<{
+    id: string;
+    from: { runtime: "auto" | "claude" | "codex"; model: string | null };
+    to: { runtime: "claude" | "codex"; model: string };
+    contextRefs: Array<{ type: string; id: string }>;
+    focusRef?: { type: string; id: string } | null;
+    createdAt: string;
+    blocking: false;
+  }>;
   startedAt?: string | null;
   completedAt?: string | null;
   stepCount: number;
@@ -924,6 +938,17 @@ export type OperatorSession = OperatorSessionSummary & {
     regenerated?: boolean;
   } | null;
   events: OperatorEvent[];
+};
+
+// Durable read projection reconstructed from independently attributable Ask-both branch sessions.
+// It carries no selection, winner, merge, cancellation, or approval state.
+export type OperatorComparisonGroup = {
+  branchGroupId: string;
+  parentSessionId: string;
+  projectId: string;
+  createdAt: string;
+  updatedAt: string;
+  branches: OperatorSession[];
 };
 
 // ─── Team & identity types ────────────────────────────────────────────────────
@@ -1311,7 +1336,7 @@ export type GateDeltaChange = {
 
 // A sampled rendered page for a programmatic-page motion: its route and the self-contained HTML the
 // generator emits for it. The card renders it inline in a sandboxed, script-less iframe — the same
-// read-only preview MicroproductFace uses. `sampledFrom`/`total` say honestly "3 of 1,240 real pages",
+// read-only preview used by the gate. `sampledFrom`/`total` say honestly "3 of 1,240 real pages",
 // because the gate shows a sample of a generator's output, never the whole minted corpus.
 export type GateDeltaPage = {
   route: string;
@@ -1607,15 +1632,35 @@ export type WovenCanvasAnchor = {
   kind: string;               // open string — never a closed enum
   label: string;
   body: unknown;              // the authoritative record (question, outcome, product-truth, …)
-  authority: { owner: string; id: string; projectId: string; updatedAt: string | null };
+  facets?: Record<string, unknown>;
+  capabilities?: Record<string, boolean>;
+  authority: { owner: string; id: string; projectId: string; revision?: number; updatedAt: string | null };
 };
 export type WovenCanvasRelationship = {
   id: string;
   source: WovenRef;
   target: WovenRef;
   kind: string;               // "returns-to" | "serves" | "involves" | "about" | "contributed-to" | …
+  label?: string;
   resolved: boolean;
-  authority: { owner: string; projectId: string };
+  receipt?: unknown;
+  capabilities?: Record<string, boolean>;
+  disposition?: "proposed" | "accepted";
+  authority: { owner: string; id?: string; projectId: string; revision?: number; updatedAt?: string | null };
+};
+export type WovenGoalConflict = {
+  id: string;
+  kind: "shared-object";
+  objectRef: WovenRef;
+  goalRefs: WovenRef[];
+  goalCount: number;
+  status: "needs-founder" | "resolved";
+  blocking: false;
+  summary: string;
+  detail: string;
+  provenance: "derived";
+  basis: unknown[];
+  resolution?: import("@/openCanvasTypes").GoalConflictDecision;
 };
 // The canonical joined-outcome projection carried on the canvas (brain/src/woven-graph.mjs → projectCanvas
 // `outcomes`). Its fields are AUTHORITATIVE — kind/channelId/lineage are computed by the backend; the UI
@@ -1671,13 +1716,28 @@ export type WovenCanvasImplication = {
 export type WovenCanvas = {
   anchors: WovenCanvasAnchor[];
   relationships: WovenCanvasRelationship[];
+  regions?: Array<{
+    id: string;
+    projectId: string;
+    title: string;
+    purpose?: string | null;
+    memberRefs: WovenRef[];
+    position: { x: number; y: number };
+    size: { width: number; height: number };
+    collapsed: boolean;
+    founderPlaced: boolean;
+    revision: number;
+    archivedAt?: string;
+  }>;
+  conflicts?: WovenGoalConflict[];
   // The canonical joined outcomes + product implications, computed by the backend. Present on the current
   // projection; when absent (an older server) the UI falls back to reading the anchor bodies.
   outcomes?: WovenCanvasOutcome[];
   implications?: WovenCanvasImplication[];
   state: { kind: "empty" | "partial" | "ready"; stale: boolean; issues: unknown[] };
-  geometry: {
+          geometry: {
     namespace: string;
+    revision: number;
     positions: Record<string, { x: number; y: number }>;
     collapsedGroups?: unknown[];
     pinnedCrew?: unknown[];

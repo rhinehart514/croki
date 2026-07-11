@@ -5,12 +5,20 @@ import { graphIdForRef } from "./operator-project-scope.mjs";
 
 const SCHEMA_VERSION = 1;
 const COLLECTION = "operator-sessions";
+const MAX_OPERATOR_COMPARISON_GROUPS = 25;
+const MAX_OPERATOR_BRANCHES_PER_GROUP = 4;
 
 // The statuses that close a session for good — it becomes reopenable history, never the dock's live
 // thread. Everything else (ready, running, waiting_*, interrupted, blocked, failed) is a session the
 // founder can still drive, so it remains eligible to be the project's active conversation. Mirrors
 // resumeOperatorSession, which only refuses completed/cancelled.
 const TERMINAL_OPERATOR_STATUSES = new Set(["completed", "cancelled"]);
+const HANDOFF_BLOCKED_STATUSES = new Set(["running", ...TERMINAL_OPERATOR_STATUSES]);
+const RUNTIME_TARGETS = Object.freeze({
+  auto: { runtime: null, defaultModel: null, modelPattern: null },
+  claude: { runtime: "claude-code", defaultModel: "claude-opus-4-8", modelPattern: /^claude-/i },
+  codex: { runtime: "codex", defaultModel: "gpt-5.5-codex", modelPattern: /^gpt-/i },
+});
 
 // A session is one of two KINDS, and the per-project lock is scoped by it (see
 // getActiveSessionForProject). A "goal" session is the founder-driven dock thread: it is opened with a
@@ -48,7 +56,9 @@ function safeId(value) {
 }
 
 const VIEW_SURFACES = new Set(["terrain", "pipeline"]);
-const VIEW_LENSES = new Set(["operator", "engineer"]);
+// `operator` and `engineer` remain readable for historical sessions. New clients write `canvas` only;
+// pipeline/product altitude is represented by surface + focus on the same mounted canvas.
+const VIEW_LENSES = new Set(["canvas", "operator", "engineer"]);
 
 function semanticViewValue(input, current, key, allowed) {
   if (!Object.prototype.hasOwnProperty.call(input, key) || input[key] == null || input[key] === "") return current ?? null;
@@ -102,7 +112,8 @@ function contextFromInput(input = {}, current = {}, options = {}) {
     ...(graphId ? [{ type: "graph", id: graphId }] : []),
     ...(lastRunId ? [{ type: "run", id: lastRunId }] : []), ...(focusRef ? [focusRef] : []),
   ], { projectId });
-  return { projectId, surface, lens, questionId, participantRefs, productRefs, graphId, lastRunId, focusRef, contextRefs };
+  const threadRef = (String(input.threadRef ?? current.threadRef ?? "project").trim() || "project").slice(0, 200);
+  return { projectId, surface, lens, questionId, participantRefs, productRefs, graphId, lastRunId, focusRef, contextRefs, threadRef };
 }
 
 export function appendOperatorEvent(session, event) {
@@ -157,10 +168,6 @@ export function createOperatorSession(input, options = {}) {
     // there is no cadence (event-only) — that session is woken only by the input router, never the tick.
     nextWakeAt: kind === "ambient" ? armNextWake({ wakeIntervalMs }, Date.parse(createdAt)) : null,
     graphId: context.graphId,
-    // The program this session is driving, when the founder opened it from a program (e.g. the
-    // "Build the first agent" button). Lets the program tools bind to the intended program instead
-    // of guessing the newest one.
-    programId: input.programId || null,
     projectId: context.projectId,
     surface: context.surface,
     lens: context.lens,
@@ -169,13 +176,20 @@ export function createOperatorSession(input, options = {}) {
     productRefs: context.productRefs,
     focusRef: context.focusRef,
     contextRefs: context.contextRefs,
+    threadRef: context.threadRef,
     // The team that owns this session, optional and backward-compatible. Null for a solo founder's
     // local session (a team of one), set when the project is owned by a real multi-member team so the
     // Convex sync layer can attribute the conversation. Never gates anything on its own.
     teamId: input.teamId || null,
     workspaceId: input.workspaceId || null,
-    model: input.model || process.env.GTM_IDE_OPERATOR_MODEL || "claude-opus-4-8",
+    model: input.model && input.model !== "auto" ? input.model : process.env.GTM_IDE_OPERATOR_MODEL || null,
     runtime: input.runtime || null,
+    parentSessionId: input.parentSessionId || null,
+    branchGroupId: input.branchGroupId || null,
+    handoffRevision: Number.isInteger(input.handoffRevision) ? input.handoffRevision : 0,
+    handoffs: Array.isArray(input.handoffs) ? input.handoffs : [],
+    askBothReceipts: Array.isArray(input.askBothReceipts) ? input.askBothReceipts : [],
+    handoffContext: input.handoffContext ?? null,
     status: "ready",
     createdAt,
     updatedAt: createdAt,
@@ -227,6 +241,143 @@ export function bindOperatorSessionContext(id, input = {}, options = {}) {
   return saveOperatorSession({ ...session, ...contextFromInput(input, session, options) }, options);
 }
 
+function runtimeTarget(input = {}) {
+  const target = String(input.target ?? "").trim().toLowerCase();
+  const config = RUNTIME_TARGETS[target];
+  if (!config) throw new Error("A runtime handoff target must be auto, claude, or codex.");
+  if (target === "auto") return { target, runtime: null, model: null };
+  const model = String(input.model ?? config.defaultModel).trim();
+  if (!config.modelPattern.test(model)) throw new Error(`Model ${model} does not belong to the ${target} runtime.`);
+  return { target, runtime: config.runtime, model };
+}
+
+function handoffSnapshot(session) {
+  return {
+    goal: session.goal ?? null,
+    focusRef: session.focusRef ?? null,
+    contextRefs: session.contextRefs ?? [],
+    recentFounderDirections: (session.events ?? [])
+      .filter((event) => event?.type === "founder_input_received")
+      .slice(-5)
+      .map((event) => ({ createdAt: event.createdAt, direction: event.detail ?? event.title ?? null })),
+  };
+}
+
+function assertHandoffable(session, expectedRevision) {
+  if (HANDOFF_BLOCKED_STATUSES.has(session.status)) {
+    throw new Error(`Operator session ${session.id} cannot change runtime while ${session.status}.`);
+  }
+  const actual = Number.isInteger(session.handoffRevision) ? session.handoffRevision : 0;
+  if (!Number.isInteger(expectedRevision) || expectedRevision < 0) throw new Error("expectedRevision must be a non-negative integer.");
+  if (expectedRevision !== actual) {
+    const error = new Error(`Stale runtime handoff revision: expected ${expectedRevision}, found ${actual}.`);
+    error.code = "OPERATOR_HANDOFF_CONFLICT";
+    error.expectedRevision = expectedRevision;
+    error.actualRevision = actual;
+    throw error;
+  }
+  return actual;
+}
+
+function workerFor(session) {
+  const model = String(session?.model ?? "");
+  if (/^gpt-/i.test(model) || session?.runtime === "codex") return { runtime: "codex", model: /^gpt-/i.test(model) ? model : null };
+  if (/^claude-/i.test(model) || session?.runtime === "claude-code" || session?.runtime === "anthropic") {
+    return { runtime: "claude", model: /^claude-/i.test(model) ? model : null };
+  }
+  return { runtime: "auto", model: null };
+}
+
+export function handoffOperatorSession(sessionId, input = {}, options = {}) {
+  const session = assertOperatorSessionProject(sessionId, input.projectId, options);
+  const key = String(input.idempotencyKey ?? "").trim();
+  if (!key) throw new Error("An idempotencyKey is required for a runtime handoff.");
+  const existing = (session.handoffs ?? []).find((item) => item.idempotencyKey === key);
+  const target = runtimeTarget(input);
+  if (existing) {
+    if (existing.to.runtime !== target.target || existing.to.model !== target.model) {
+      throw new Error(`Idempotency key ${key} was already used for a different runtime handoff.`);
+    }
+    return session;
+  }
+  const revision = assertHandoffable(session, input.expectedRevision);
+  const createdAt = now();
+  const from = workerFor(session);
+  const receipt = {
+    id: `handoff-${createdAt.replace(/\D/g, "").slice(0, 14)}-${crypto.randomBytes(3).toString("hex")}`,
+    idempotencyKey: key,
+    from,
+    to: { runtime: target.target, model: target.model },
+    contextRefs: session.contextRefs ?? [],
+    focusRef: session.focusRef ?? null,
+    createdAt,
+    blocking: false,
+  };
+  let next = {
+    ...session,
+    runtime: target.runtime,
+    model: target.model,
+    runtimeSessionId: null,
+    modelMessages: [],
+    handoffContext: handoffSnapshot(session),
+    handoffRevision: revision + 1,
+    handoffs: [...(session.handoffs ?? []), receipt].slice(-50),
+  };
+  next = appendOperatorEvent(next, {
+    type: "runtime_handed_off",
+    title: `Work handed to ${target.target === "codex" ? "Codex" : target.target === "claude" ? "Claude" : "Auto"}`,
+    detail: "The goal, selected canvas context, and durable work carry over. Provider-private conversation state does not.",
+    data: { receiptId: receipt.id, from: from.runtime, to: target.target, model: target.model },
+  });
+  return saveOperatorSession(next, options);
+}
+
+export function branchOperatorSessionForBoth(sessionId, input = {}, options = {}) {
+  let parent = assertOperatorSessionProject(sessionId, input.projectId, options);
+  const key = String(input.idempotencyKey ?? "").trim();
+  if (!key) throw new Error("An idempotencyKey is required for ask both.");
+  const existing = (parent.askBothReceipts ?? []).find((item) => item.idempotencyKey === key);
+  if (existing) return existing.branchIds.map((id) => getOperatorSession(id, options));
+  const revision = assertHandoffable(parent, input.expectedRevision);
+  const claudeTarget = runtimeTarget({ target: "claude", model: input.claudeModel });
+  const codexTarget = runtimeTarget({ target: "codex", model: input.codexModel });
+  const at = now();
+  const groupId = `ask-both-${at.replace(/\D/g, "").slice(0, 14)}-${crypto.randomBytes(3).toString("hex")}`;
+  const context = handoffSnapshot(parent);
+  const common = {
+    goal: parent.goal,
+    projectId: parent.projectId,
+    graphId: parent.graphId,
+    surface: parent.surface,
+    lens: parent.lens,
+    questionId: parent.questionId,
+    participantRefs: parent.participantRefs,
+    productRefs: parent.productRefs,
+    focusRef: parent.focusRef,
+    contextRefs: parent.contextRefs,
+    threadRef: parent.threadRef,
+    parentSessionId: parent.id,
+    branchGroupId: groupId,
+    handoffContext: context,
+    maxSteps: parent.maxSteps,
+  };
+  const claude = createOperatorSession({ ...common, runtime: claudeTarget.runtime, model: claudeTarget.model }, options);
+  const codex = createOperatorSession({ ...common, runtime: codexTarget.runtime, model: codexTarget.model }, options);
+  const receipt = { id: groupId, idempotencyKey: key, branchIds: [claude.id, codex.id], createdAt: at };
+  parent = appendOperatorEvent({
+    ...parent,
+    handoffRevision: revision + 1,
+    askBothReceipts: [...(parent.askBothReceipts ?? []), receipt].slice(-25),
+  }, {
+    type: "runtime_branches_created",
+    title: "Claude and Codex branches created",
+    detail: "Each branch received the same durable canvas context. Their work stays attributable and separate.",
+    data: { branchGroupId: groupId, branchIds: receipt.branchIds },
+  });
+  saveOperatorSession(parent, options);
+  return [claude, codex];
+}
+
 export function getOperatorSession(id, options = {}) {
   const session = persistence(options).get(COLLECTION, safeId(id));
   if (!session) throw new Error(`Operator session not found: ${id}`);
@@ -264,6 +415,7 @@ export function listOperatorSessions(options = {}) {
         productRefs: session.productRefs ?? [],
         focusRef: session.focusRef ?? null,
         contextRefs: session.contextRefs ?? [],
+        threadRef: session.threadRef ?? "project",
         lastRunId: session.lastRunId ?? null,
         workspaceId: session.workspaceId,
         status: session.status,
@@ -274,6 +426,46 @@ export function listOperatorSessions(options = {}) {
       }];
     })
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+// Read-only, reconstructable projection for "Ask both". The branch sessions are the durable authority;
+// this does not persist a second comparison document or infer a winner. Keeping the projection bounded
+// prevents old experiments from making the canvas bootstrap grow without limit, while project scoping
+// happens before grouping so a forged/reused group id can never join sessions across products.
+export function listOperatorComparisonGroups(options = {}) {
+  const projectId = String(options.projectId ?? "").trim();
+  if (!projectId) return [];
+  const groups = new Map();
+  // Read the collection once. In particular, do not turn canvas bootstrap into one persistence lookup
+  // per historical session before applying the response bound.
+  for (const session of persistence(options).list(COLLECTION)) {
+    if (!session || !session.id || session.projectId !== projectId) continue;
+    const branchGroupId = String(session.branchGroupId ?? "").trim();
+    const parentSessionId = String(session.parentSessionId ?? "").trim();
+    if (!branchGroupId || !parentSessionId) continue;
+    const key = `${parentSessionId}\u0000${branchGroupId}`;
+    const current = groups.get(key) ?? {
+      branchGroupId,
+      parentSessionId,
+      projectId,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+      branches: [],
+    };
+    current.createdAt = current.createdAt < session.createdAt ? current.createdAt : session.createdAt;
+    current.updatedAt = current.updatedAt > session.updatedAt ? current.updatedAt : session.updatedAt;
+    current.branches.push(publicOperatorSession(session));
+    groups.set(key, current);
+  }
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      branches: group.branches
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
+        .slice(0, MAX_OPERATOR_BRANCHES_PER_GROUP),
+    }))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.branchGroupId.localeCompare(a.branchGroupId))
+    .slice(0, MAX_OPERATOR_COMPARISON_GROUPS);
 }
 
 // The project's current durable operator conversation of a given KIND — the dock's default thread.
@@ -305,9 +497,12 @@ export function listOperatorSessions(options = {}) {
 //     (A future RMW that awaits BETWEEN its read and its write would break this — that test guards it.)
 export function getActiveSessionForProject(projectId, options = {}) {
   const kindFilter = sessionKind({ kind: options.kind });
+  const threadRef = String(options.threadRef ?? "project").trim() || "project";
   const summaries = listOperatorSessions({ ...options, projectId: projectId ?? null });
   const live = summaries.find(
-    (summary) => !TERMINAL_OPERATOR_STATUSES.has(summary.status) && sessionKind(summary) === kindFilter,
+    (summary) => !TERMINAL_OPERATOR_STATUSES.has(summary.status)
+      && sessionKind(summary) === kindFilter
+      && String(summary.threadRef ?? "project") === threadRef,
   );
   if (!live) return null;
   return getOperatorSession(live.id, options);
@@ -321,7 +516,7 @@ export function getActiveSessionForProject(projectId, options = {}) {
 // EXPLICITLY here — never inherited from a mutable global active project.
 export function getOrCreateSessionForProject(projectId, input = {}, options = {}) {
   const kind = sessionKind(input);
-  const existing = getActiveSessionForProject(projectId, { ...options, kind });
+  const existing = getActiveSessionForProject(projectId, { ...options, kind, threadRef: input.threadRef ?? "project" });
   if (existing) return { session: existing, created: false };
   const session = createOperatorSession({ ...input, projectId, kind }, options);
   return { session, created: true };
@@ -385,14 +580,15 @@ function publicPendingGate(pendingGate) {
 export function publicOperatorSession(session) {
   const publicFields = [
     "id", "kind", "goal", "standingBrief", "wakeIntervalMs", "nextWakeAt", "graphId", "projectId",
-    "surface", "lens", "questionId", "participantRefs", "productRefs", "focusRef", "contextRefs", "workspaceId", "status",
+    "surface", "lens", "questionId", "participantRefs", "productRefs", "focusRef", "contextRefs", "threadRef", "workspaceId", "status",
     "createdAt", "updatedAt", "startedAt", "completedAt", "stepCount", "maxSteps", "graphRevision",
     "lastRunId", "summary", "error", "pendingQuestion", "pendingGate", "pendingProposal", "pendingIdeas",
-    "pendingCandidates", "events",
+    "pendingCandidates", "events", "parentSessionId", "branchGroupId", "handoffRevision", "handoffs",
   ];
   const projected = Object.fromEntries(publicFields.flatMap((key) =>
     Object.prototype.hasOwnProperty.call(session, key) ? [[key, session[key]]] : []));
   if (Object.prototype.hasOwnProperty.call(projected, "pendingGate")) projected.pendingGate = publicPendingGate(projected.pendingGate);
+  projected.worker = workerFor(session);
   return sanitizePublicSessionValue(projected);
 }
 

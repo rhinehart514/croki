@@ -1,5 +1,8 @@
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import { buildTrackingFix } from "./build.mjs";
+import { completeUncommittedPatch, patchDigest } from "./git-patch.mjs";
 
 function git(repo, args, options = {}) {
   try {
@@ -56,17 +59,38 @@ export function reviewRevision(revision, decision, note = "") {
 
 export function inspectApplyReadiness(workspace, revision) {
   const sourceHead = git(workspace.repo, ["rev-parse", "HEAD"]);
-  const sourceStatus = git(workspace.repo, ["status", "--porcelain"]);
+  // The isolated worktree namespace lives under the repository root by design; it is infrastructure,
+  // not founder dirt in the source checkout. Everything else remains a hard readiness blocker.
+  const sourceStatus = git(workspace.repo, ["status", "--porcelain", "--untracked-files=all", "--", ".", ":(exclude).dogfood-worktrees"]);
   const sameBase = sourceHead === revision.baseCommit;
+  let retainedSnapshotMatches = true;
+  let retainedReason = null;
+  if (revision.sourceReceiptId) {
+    try {
+      const repo = fs.realpathSync(workspace.repo);
+      const worktree = fs.realpathSync(revision.worktree);
+      const relative = path.relative(path.join(repo, ".dogfood-worktrees"), worktree);
+      if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("The retained worktree is outside this product.");
+      if (git(worktree, ["rev-parse", "HEAD"]) !== revision.baseCommit) throw new Error("The retained worktree base moved.");
+      if (git(worktree, ["symbolic-ref", "--short", "HEAD"]) !== revision.branch) throw new Error("The retained worktree branch changed.");
+      retainedSnapshotMatches = patchDigest(completeUncommittedPatch(worktree)) === revision.patchHash;
+      if (!retainedSnapshotMatches) retainedReason = "The retained product change moved after founder review; stage its current exact diff again.";
+    } catch (error) {
+      retainedSnapshotMatches = false;
+      retainedReason = error instanceof Error ? error.message : "The retained product change can no longer be verified.";
+    }
+  }
   return {
-    ready: revision.status === "approved" && sameBase && !sourceStatus,
+    ready: revision.status === "approved" && sameBase && !sourceStatus && retainedSnapshotMatches,
     sourceHead,
     sourceStatus,
     sameBase,
+    retainedSnapshotMatches,
     reasons: [
       revision.status !== "approved" ? "The change set is not approved." : null,
       !sameBase ? "The source repository moved since this change set was created." : null,
       sourceStatus ? "The source repository has uncommitted changes." : null,
+      retainedReason,
     ].filter(Boolean),
   };
 }

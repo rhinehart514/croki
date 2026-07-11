@@ -34,6 +34,13 @@ export type WovenFocus =
   // A stable canvas anchor (product truth, a question, an outcome, …) from operatingView.woven.canvas.
   // Focusing one lights it and the anchors it relates to; object/tie/kind weaving stays neutral.
   | { kind: "anchor"; anchorId: string; ref?: WovenRef }
+  | {
+      kind: "relationship";
+      relationshipId: string;
+      relationshipRef: { type: "goal-relation" | "work-relationship"; id: string };
+      source: WovenRef;
+      target: WovenRef;
+    }
   | null;
 
 // ── Canvas anchors (fix 3) — the stable product/question/outcome landmarks the backend projects onto the
@@ -55,6 +62,7 @@ export type WovenFocus =
 const ROOT_KINDS = new Set(["product", "product-model"]);
 const ANCHOR_RIGHT_KINDS = new Set(["outcome"]);
 const TERRAIN_KINDS = new Set(["terrain-opening", "terrain-tension", "terrain-hypothesis"]);
+const GOAL_KIND = "goal";
 // A product DETAIL is any "product-*" kind that is not the root, a truth, or an implication (implications
 // live on the outcome-return rail, not here). These are the long-tail the layer summarizes.
 function isDetailKind(kind: string): boolean {
@@ -75,6 +83,11 @@ function detailLabel(kind: string): string {
     ?? `${kind.replace(/^product-/, "").replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}s`;
 }
 
+function cleanConflictLabel(summary: string | undefined, goalCount: number | undefined): string {
+  const count = Math.max(2, Number(goalCount ?? 2));
+  return summary?.trim() || `${count} active goals share this work`;
+}
+
 export function anchorNodeId(ref: WovenRef): string {
   return `canchor:${ref.type ?? ""}:${ref.id}`;
 }
@@ -84,28 +97,62 @@ export type CanvasAnchorData = {
   ref: WovenRef;
   kind: string;
   label: string;
+  body?: unknown;
   focus?: "focus" | "dim";
   // Set on a summary chip standing in for a collapsed kind's tail — its member count. Selecting it expands.
   count?: number;
   group?: boolean;
+  conflict?: { count: number; goalCount: number; label: string; detail: string };
+  connection?: { active: boolean; source: boolean };
+  onKeyboardConnect?: () => void;
+  onAuthorityChanged?: () => void | Promise<void>;
+};
+
+// A durable work region is rendered as quiet canvas ground, not as another artifact card. The callbacks
+// are injected by GraphCanvas because this projection stays pure and has no write authority of its own.
+export type CanvasRegionData = {
+  regionId: string;
+  ref: WovenRef;
+  title: string;
+  purpose: string | null;
+  memberCount: number;
+  size: { width: number; height: number };
+  collapsed: boolean;
+  revision: number;
+  focus?: "focus" | "dim";
+  onToggleCollapsed?: () => void;
+  onResizeEnd?: (size: { width: number; height: number }) => void;
+  onArchive?: () => void;
 };
 
 // The lit set for a real-anchor focus: the anchor itself plus every anchor it relates to (either direction).
 function anchorLitSet(canvas: WovenCanvas, focus: Extract<WovenFocus, { kind: "anchor" }>): Set<string> {
   const lit = new Set<string>([focus.anchorId]);
-  const target = canvas.anchors.find((a) => anchorNodeId(a.ref) === focus.anchorId);
+  // Dense canvases can carry hundreds of anchors and relationships. Index once instead of scanning the
+  // full anchor array for each adjacent relationship (the previous path was O(anchors × relationships)).
+  const anchorsByRef = new Map<string, WovenCanvasAnchor>();
+  const anchorsByNodeId = new Map<string, WovenCanvasAnchor>();
+  for (const anchor of canvas.anchors) {
+    anchorsByRef.set(`${anchor.ref.type ?? ""}:${anchor.ref.id}`, anchor);
+    anchorsByNodeId.set(anchorNodeId(anchor.ref), anchor);
+  }
+  const target = anchorsByNodeId.get(focus.anchorId);
   if (!target) return lit;
   for (const rel of canvas.relationships ?? []) {
-    if (rel.source.id === target.ref.id) {
-      const other = canvas.anchors.find((a) => a.ref.id === rel.target.id);
+    if (rel.source.type === target.ref.type && rel.source.id === target.ref.id) {
+      const other = anchorsByRef.get(`${rel.target.type ?? ""}:${rel.target.id}`);
       if (other) lit.add(anchorNodeId(other.ref));
     }
-    if (rel.target.id === target.ref.id) {
-      const other = canvas.anchors.find((a) => a.ref.id === rel.source.id);
+    if (rel.target.type === target.ref.type && rel.target.id === target.ref.id) {
+      const other = anchorsByRef.get(`${rel.source.type ?? ""}:${rel.source.id}`);
       if (other) lit.add(anchorNodeId(other.ref));
     }
   }
   return lit;
+}
+
+function relationshipLitSet(focus: Extract<WovenFocus, { kind: "relationship" }>): Set<string> {
+  return new Set([anchorNodeId(focus.source), anchorNodeId(focus.target)]);
 }
 
 // ── One founder wall (docs/production-direction/16, P1) ──────────────────────────────────────────────
@@ -189,7 +236,38 @@ export function buildCanvasAnchorLayer(
   const details = canvas.anchors.filter((a) => isDetailKind(a.kind));
   const outcomes = canvas.anchors.filter((a) => ANCHOR_RIGHT_KINDS.has(a.kind));
   const terrain = canvas.anchors.filter((a) => TERRAIN_KINDS.has(a.kind));
+  const goals = canvas.anchors.filter((a) => a.kind === GOAL_KIND && a.ref.type === GOAL_KIND);
+  const work = canvas.anchors.filter((a) => a.ref.type === "work-artifact" || a.ref.type === "product-change");
   const byId = (a: WovenCanvasAnchor, b: WovenCanvasAnchor) => a.ref.id.localeCompare(b.ref.id);
+  const boundedBody = (a: WovenCanvasAnchor) => {
+    if (!a.body || typeof a.body !== "object" || Array.isArray(a.body)) return a.body;
+    if (a.ref.type === "goal") {
+      const body = a.body as Record<string, unknown>;
+      return Object.fromEntries(["projectId", "revision", "updatedAt", "statement", "desiredChange", "status"].filter((key) => body[key] !== undefined).map((key) => [key, body[key]]));
+    }
+    if (a.ref.type === "work-artifact") {
+      const body = a.body as Record<string, unknown>;
+      return Object.fromEntries(["projectId", "revision", "updatedAt", "title", "summary", "kind", "format", "contentType", "status"].filter((key) => body[key] !== undefined).map((key) => [key, body[key]]));
+    }
+    return a.body;
+  };
+  const anchorData = (a: WovenCanvasAnchor, id: string): CanvasAnchorData => {
+    const conflicts = Array.isArray(a.facets?.goalConflicts)
+      ? a.facets.goalConflicts as Array<{ goalCount?: number; summary?: string; detail?: string }>
+      : [];
+    const first = conflicts[0];
+    return {
+      anchorId: id, ref: a.ref, kind: a.kind, label: a.label, body: boundedBody(a), focus: stateFor(id),
+      ...(first ? {
+        conflict: {
+          count: conflicts.length,
+          goalCount: Math.max(2, ...conflicts.map((item) => Number(item.goalCount ?? 2))),
+          label: cleanConflictLabel(first.summary, first.goalCount),
+          detail: first.detail ?? "Multiple active goals use this shared object.",
+        },
+      } : {}),
+    };
+  };
 
   // A detail renders individually when it is causally connected OR its kind is expanded; the rest form the
   // per-kind tail that a summary chip stands in for.
@@ -205,7 +283,9 @@ export function buildCanvasAnchorLayer(
 
   // ── focus lighting ──
   let lit: Set<string> | null = null;
-  if (focus && focus.kind === "anchor") {
+  if (focus?.kind === "relationship") {
+    lit = relationshipLitSet(focus);
+  } else if (focus && focus.kind === "anchor") {
     if (expandedKind) {
       lit = new Set<string>();
       for (const a of details) if (a.kind === expandedKind) lit.add(anchorNodeId(a.ref));
@@ -223,7 +303,7 @@ export function buildCanvasAnchorLayer(
     const id = anchorNodeId(a.ref);
     left.push({
       id, type: "canvasAnchor", position: { x: 0, y: 0 }, draggable: false, selectable: true,
-      data: { anchorId: id, ref: a.ref, kind: a.kind, label: a.label, focus: stateFor(id) } satisfies CanvasAnchorData,
+      data: anchorData(a, id),
     });
   };
   [...roots].sort(byId).forEach(pushAnchor);
@@ -248,9 +328,56 @@ export function buildCanvasAnchorLayer(
   [...terrain].sort(byId).forEach((a, i) => {
     const id = anchorNodeId(a.ref);
     nodes.push({
-      id, type: "canvasAnchor", position: { x: leftX + 300, y: band.top + 42 + i * rowH },
+      id, type: "canvasAnchor", position: { x: leftX + 300, y: band.top + (goals.length ? 6 * rowH + 42 : 42) + i * rowH },
       draggable: false, selectable: true,
-      data: { anchorId: id, ref: a.ref, kind: a.kind, label: a.label, focus: stateFor(id) } satisfies CanvasAnchorData,
+      data: anchorData(a, id),
+    });
+  });
+
+  // Goals and their work are first-class canvas material, not rows hidden behind a project page. A
+  // compact deterministic grid handles dozens without creating a single privileged goal. Work sits on
+  // the opposite side so goal→work relationships read as movement across the shared field.
+  const pushGrid = (anchors: WovenCanvasAnchor[], x: number, direction: 1 | -1) => {
+    [...anchors].sort(byId).forEach((a, i) => {
+      const id = anchorNodeId(a.ref);
+      // Geometry is keyed by the canonical anchor authority id (`anchor:type:id`), not React Flow's
+      // presentation id (`canchor:type:id`). Keeping the two namespaces separate lets the backend detect
+      // genuinely detached positions without treating every founder drag as unresolved geometry.
+      const saved = canvas.geometry?.positions?.[a.id];
+      nodes.push({
+        id, type: "canvasAnchor",
+        position: saved ?? { x: x + direction * Math.floor(i / 6) * 250, y: band.top + (i % 6) * rowH },
+        draggable: true, selectable: true,
+        data: anchorData(a, id),
+      });
+    });
+  };
+  pushGrid(goals, leftX + 300, -1);
+  pushGrid(work, rightX, 1);
+  // Regions remain their own spatial authority. Their move/resize controls write through the region CAS
+  // API rather than the generic layout sidecar, so deliberate placement still has one source of truth.
+  [...(canvas.regions ?? [])].sort((a, b) => a.id.localeCompare(b.id)).forEach((region) => {
+    const ref: WovenRef = { type: "work-region", id: region.id };
+    const id = anchorNodeId(ref);
+    const width = Math.max(160, Number(region.size?.width) || 640);
+    const height = Math.max(120, Number(region.size?.height) || 420);
+    const collapsed = Boolean(region.collapsed);
+    nodes.push({
+      id, type: "canvasRegion",
+      position: { x: Number(region.position?.x) || 0, y: Number(region.position?.y) || 0 },
+      style: { width: collapsed ? Math.min(width, 420) : width, height: collapsed ? 72 : height },
+      draggable: true, dragHandle: ".canvas-region-drag-handle", selectable: true, zIndex: -1,
+      data: {
+        regionId: region.id,
+        ref,
+        title: region.title,
+        purpose: region.purpose ?? null,
+        memberCount: region.memberRefs?.length ?? 0,
+        size: { width, height },
+        collapsed,
+        revision: region.revision,
+        focus: stateFor(id),
+      } satisfies CanvasRegionData,
     });
   });
 
@@ -258,29 +385,56 @@ export function buildCanvasAnchorLayer(
   [...outcomes].sort(byId).forEach((a, i) => {
     const id = anchorNodeId(a.ref);
     nodes.push({
-      id, type: "canvasAnchor", position: { x: rightX, y: band.top + i * rowH }, draggable: false, selectable: true,
-      data: { anchorId: id, ref: a.ref, kind: a.kind, label: a.label, focus: stateFor(id) } satisfies CanvasAnchorData,
+      id, type: "canvasAnchor", position: { x: rightX, y: band.top + (work.length ? 6 * rowH + 36 : 0) + i * rowH }, draggable: false, selectable: true,
+      data: anchorData(a, id),
     });
   });
 
   const drawnIds = new Set(nodes.map((n) => n.id));
-  const byRefId = new Map(canvas.anchors.map((a) => [a.ref.id, anchorNodeId(a.ref)]));
-  // Return edges: an outcome returns to the question / product it names (relationship kind "returns-to").
+  const byRef = new Map(canvas.anchors.map((a) => [`${a.ref.type ?? ""}:${a.ref.id}`, anchorNodeId(a.ref)]));
+  // Draw every resolved relationship whose endpoints are visible. Open relation kinds remain data on the
+  // edge; returns-to keeps its established stronger treatment.
   for (const rel of canvas.relationships ?? []) {
-    if (rel.kind !== "returns-to") continue;
-    const source = byRefId.get(rel.source.id);
-    const target = byRefId.get(rel.target.id);
+    // A region's member references are already expressed by spatial containment. Drawing one line per
+    // member would turn the quiet bound back into a node-editor group and overwhelm shared artifacts.
+    if (rel.source.type === "work-region" && rel.kind === "member") continue;
+    const source = byRef.get(`${rel.source.type ?? ""}:${rel.source.id}`);
+    const target = byRef.get(`${rel.target.type ?? ""}:${rel.target.id}`);
     if (!source || !target || !drawnIds.has(source) || !drawnIds.has(target)) continue;
     const dim = lit ? !(lit.has(source) && lit.has(target)) : false;
+    const isReturn = rel.kind === "returns-to";
+    const relationType = rel.receipt && typeof rel.receipt === "object"
+      ? (rel.receipt as { recordRef?: { type?: string; id?: string } }).recordRef?.type
+      : null;
+    const relationId = rel.authority?.id;
+    const editableType = relationType === "goal-relation"
+      ? "goal-relation"
+      : relationType === "work-relationship-revision" ? "work-relationship" : null;
+    const selected = focus?.kind === "relationship" && focus.relationshipId === rel.id;
+    const proposed = rel.disposition === "proposed";
     edges.push({
-      id: `return:${rel.id}`,
+      id: `${isReturn ? "return" : "relation"}:${rel.id}`,
       source,
       target,
       type: "default",
-      className: `woven-return${dim ? " is-dim" : ""}`,
-      selectable: false,
-      focusable: false,
-      data: { kind: rel.kind },
+      className: `${isReturn ? "woven-return" : "woven-relation"}${dim ? " is-dim" : ""}${selected ? " selected" : ""}${proposed ? " is-proposed" : ""}`,
+      selectable: Boolean(editableType && relationId && rel.capabilities?.inspect),
+      deletable: false,
+      focusable: true,
+      ariaLabel: `${proposed ? "Proposed " : ""}${rel.label || rel.kind}: ${rel.source.type ?? "item"} ${rel.source.id} to ${rel.target.type ?? "item"} ${rel.target.id}${editableType ? ". Open relationship details." : ""}`,
+      label: rel.label || undefined,
+      data: {
+        kind: rel.kind,
+        ...(editableType && relationId ? {
+          canvasRelationship: {
+            relationshipId: rel.id,
+            relationshipRef: { type: editableType, id: relationId },
+            source: rel.source,
+            target: rel.target,
+          },
+        } : {}),
+        disposition: rel.disposition,
+      },
     });
   }
   return { nodes, edges };
@@ -325,7 +479,7 @@ export function focusIsEffective(focus: WovenFocus, woven: WovenGraph | null | u
   }
   // An anchor focus is NOT an object-weave focus — it drives the anchor layer separately, so it never
   // dims the object/tie/kind weaving. Reporting it "ineffective" here keeps object weaving neutral.
-  if (focus.kind === "anchor") return false;
+  if (focus.kind === "anchor" || focus.kind === "relationship") return false;
   // lane
   return (
     woven.objectNodes.some((o) => o.laneKeys.includes(focus.channelId)) ||

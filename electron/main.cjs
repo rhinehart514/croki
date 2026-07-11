@@ -14,6 +14,7 @@ const { app, BrowserWindow, shell, utilityProcess, dialog } = require("electron"
 const path = require("node:path");
 const http = require("node:http");
 const net = require("node:net");
+const crypto = require("node:crypto");
 const { execSync } = require("node:child_process");
 
 const isDev = !app.isPackaged;
@@ -22,6 +23,7 @@ const HOST = "127.0.0.1";
 let brainProcess = null;
 let mainWindow = null;
 let brainPort = 0;
+let founderCookie = null;
 
 // --- PATH repair ------------------------------------------------------------------------------
 // A macOS app launched from Finder gets a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin). The operator
@@ -72,7 +74,7 @@ function brainEntry() {
   return path.join(__dirname, "..", "brain", "src", "server.mjs");
 }
 
-function startBrain(port) {
+function startBrain(port, founderCode) {
   const entry = brainEntry();
   const child = utilityProcess.fork(entry, [], {
     stdio: "pipe",
@@ -81,6 +83,7 @@ function startBrain(port) {
       PORT: String(port),
       HOST,
       GTM_IDE_DESKTOP: "1",
+      GTM_IDE_FOUNDER_CODE: founderCode,
     },
   });
   child.stdout?.on("data", (d) => process.stdout.write(`[brain] ${d}`));
@@ -97,6 +100,43 @@ function startBrain(port) {
     }
   });
   return child;
+}
+
+// A Finder-launched app has no terminal in which to reveal the one-time founder code. The desktop
+// host is already the trusted local boundary, so it claims the session itself and installs only the
+// returned HttpOnly cookie in the Drover window. The renderer never receives the bootstrap secret.
+function claimDesktopFounderSession(port, founderCode) {
+  const payload = JSON.stringify({ code: founderCode });
+  return new Promise((resolve, reject) => {
+    const req = http.request({
+      hostname: HOST,
+      port,
+      path: "/api/founder-session",
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "content-length": Buffer.byteLength(payload),
+      },
+    }, (res) => {
+      res.resume();
+      if (res.statusCode !== 200) {
+        reject(new Error(`founder session claim failed with status ${res.statusCode}`));
+        return;
+      }
+      const raw = Array.isArray(res.headers["set-cookie"])
+        ? res.headers["set-cookie"][0]
+        : res.headers["set-cookie"];
+      const pair = String(raw || "").split(";", 1)[0];
+      const separator = pair.indexOf("=");
+      if (separator < 1) {
+        reject(new Error("founder session claim returned no cookie"));
+        return;
+      }
+      resolve({ name: pair.slice(0, separator), value: pair.slice(separator + 1) });
+    });
+    req.on("error", reject);
+    req.end(payload);
+  });
 }
 
 function waitForHealth(port, { timeoutMs = 30000, intervalMs = 250 } = {}) {
@@ -120,7 +160,7 @@ function waitForHealth(port, { timeoutMs = 30000, intervalMs = 250 } = {}) {
   });
 }
 
-function createWindow(port) {
+async function createWindow(port, cookie) {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -150,6 +190,15 @@ function createWindow(port) {
     return { action: "allow" };
   });
 
+  if (cookie) {
+    await mainWindow.webContents.session.cookies.set({
+      url: `http://${HOST}:${port}/`,
+      name: cookie.name,
+      value: cookie.value,
+      httpOnly: true,
+      sameSite: "strict",
+    });
+  }
   mainWindow.loadURL(`http://${HOST}:${port}/`);
   mainWindow.on("closed", () => { mainWindow = null; });
 }
@@ -158,9 +207,11 @@ async function boot() {
   repairPath();
   try {
     brainPort = await findFreePort();
-    brainProcess = startBrain(brainPort);
+    const founderCode = crypto.randomBytes(18).toString("hex");
+    brainProcess = startBrain(brainPort, founderCode);
     await waitForHealth(brainPort);
-    createWindow(brainPort);
+    founderCookie = await claimDesktopFounderSession(brainPort, founderCode);
+    await createWindow(brainPort, founderCookie);
   } catch (err) {
     dialog.showErrorBox(
       "Drover failed to start",
@@ -185,7 +236,7 @@ if (!gotLock) {
   app.whenReady().then(boot);
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0 && brainPort) createWindow(brainPort);
+    if (BrowserWindow.getAllWindows().length === 0 && brainPort) void createWindow(brainPort, founderCookie);
   });
 
   app.on("window-all-closed", () => {

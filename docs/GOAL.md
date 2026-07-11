@@ -1,7 +1,7 @@
-> **SUPERSEDED — 2026-07-01.** This describes the earlier "IDE for GTM" version of
-> the product (a build-your-own canvas of boxes and wires). The current plan of record
-> is **docs/GTM-ENGINE-REBUILD.md**, which reframes Drover as a GTM engine and compiler.
-> Where this doc conflicts with that spec, the spec wins. Kept for history only.
+> **SUPERSEDED.** This describes an earlier open-node and pipeline-centered version of
+> Drover. The current plan of record is **docs/OPEN-CANVAS-SPEC.md**. This document is
+> implementation history only; its program, foundry, separate-lens, and pipeline-first
+> phases are not current product requirements.
 
 ---
 

@@ -8,7 +8,7 @@ import type { RunSummary } from "@/api";
 import "@/styles/pipeline-readout.css";
 
 // FocusedPipelineReadout — the ACTION-ALTITUDE brief (docs/production-direction/09 §Focused pipeline
-// readout). When a single pipeline is focused (Engineer lens), the founder should read what it MEANS
+// readout). When a single pipeline is focused in place, the founder should read what it MEANS
 // before the graph machinery: the goal it serves, the crew on it, the intended effect, the measurement
 // intent, what's known vs unknown, the EXACT gate consequence, and the safety class — reversible local
 // build, staged external effect, or separately-authorized deploy.

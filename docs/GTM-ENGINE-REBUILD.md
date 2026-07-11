@@ -1,4 +1,9 @@
-# Drover — GTM Engine Rebuild (plan of record)
+> **SUPERSEDED.** This engine-and-compiler direction is implementation history. The
+> current product contract is **docs/OPEN-CANVAS-SPEC.md**: one directly editable canvas
+> for product development and go-to-market, with a pipeline only when execution or
+> repeatability requires one.
+
+# Drover — GTM Engine Rebuild (historical)
 
 Status: PARTIALLY BUILT. Authored 2026-07-01; updated 2026-07-02. Phases 0–6 have landed as
 code — evidence graph, gtm-store, market-research, path-portfolio, outcome-ingest,

@@ -1,6 +1,12 @@
-# Drover Production Direction
+> **SUPERSEDED — 2026-07-11.** This terrain-and-pipeline production package is
+> implementation history. The current product contract is **docs/OPEN-CANVAS-SPEC.md**
+> and current proof is recorded in **docs/STATE.md**. Its truth, founder-wall, taste,
+> runtime-safety, and product-context findings remain useful; its product hierarchy and
+> pipeline-centered acceptance target are no longer the plan of record.
 
-Status: production target and implementation source of truth for the GTM-for-product-development direction.
+# Drover Production Direction (historical)
+
+Historical status: former production target for the GTM-for-product-development direction.
 Current product stage: alpha; the target described here is not a prototype or a throwaway experiment.
 
 Implementation receipt, 2026-07-10: the deterministic terrain-first stack and browser journey are built and

@@ -43,14 +43,11 @@ export function ProductEntryColumn({
   deriving?: boolean;
   // Manually re-read the product — an explicit refresh of the picture. Hidden when not supplied.
   onReread?: () => void;
-  // Whether the column starts expanded. The caller collapses it (thin tab) on the Operator lens so the
-  // fleet-wide shared map isn't starved of width by a 300px gutter; the founder can still open it. When
-  // this changes (the founder switches lenses), the column follows it, but manual toggles in between win.
+  // Whether the column starts expanded. A caller may collapse it to give dense canvas work more width.
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  // Follow the caller's default when the lens it reflects changes — collapse on entering the Operator
-  // lens, expand on returning to Engineer — without stomping a manual toggle within the same lens.
+  // Follow a changed caller default without stomping a manual toggle while that default is stable.
   useEffect(() => { setOpen(defaultOpen); }, [defaultOpen]);
 
   // Honest progress for the read: it's one open-ended pass (the model decides how many files to open),

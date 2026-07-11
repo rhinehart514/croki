@@ -1,36 +1,40 @@
 # Drover
 
-**Alpha · v0.3.3** — the terrain-first product is built and tested, but no outside founder has yet
-used Drover to produce an attributable real-world win. [The state document](docs/STATE.md) keeps the
-dated, honest line between working software and market proof.
+**Alpha · v0.3.3** — the multi-goal open canvas, direct creation and editing, spatial regions,
+Claude/Codex handoff, isolated product changes, wall, outcome, and taste systems are built. Live provider
+and outside-founder verification remains, and no outside founder has yet used Drover to produce an attributable
+real-world result. [The state
+document](docs/STATE.md) keeps the dated, honest line between working software and market proof.
 
-**Drover reads your product, shows where it may have leverage, gives you a crew to work through the
-uncertainty, turns your choice into a safe go-to-market move, and brings the market's answer back to
-what you build.**
+**Drover gives Claude, Codex, and a founder one living canvas for understanding, changing, and taking a
+product to market—across dozens of independent or related goals.**
 
 ## The product
 
-You point Drover at a product repository and name the event that counts as a win. It opens on a
-living product-market terrain: what the code proves, where the product may meet the market, what is
-still uncertain, what you have chosen to try, and what came back.
+You point Drover at a product repository and optionally name an event that counts as a win. It opens on
+a living product-and-market canvas: what the code proves, what remains uncertain, what Claude or Codex is
+working on, what you changed, which outward effects need your decision, and what came back.
 
 The first useful view does not require you to invent a goal. Cited product truth appears directly
 from a read-only scan, even when no AI runtime is connected. With Codex or Claude Code available,
 Drover adds clearly labeled openings and tensions. These are informed reads, not facts dressed up as
 facts, and each can show the evidence, uncertainty, and what would change the read.
 
-From there:
+Each product can carry zero, one, or dozens of goals. A goal can be a product problem, a market question,
+an artifact to make, a code or design change, or a result to achieve. Goals share evidence and work by
+reference without being forced under one mission or copied into separate projects.
+
+On the canvas:
 
 - The **terrain** is the living picture of the product and market. It remains useful before any work
   begins and changes as decisions and outcomes accumulate.
-- An **operation** is the worked layer over that terrain: the questions, crew positions, active
-  moves, founder decisions, and results currently in play.
-- A **pipeline** is one move you choose to make real. It is an open, editable flow of agents, tools,
-  code, and other steps that runs to your approval wall.
-
-The canvas has two working distances. Operator keeps the whole terrain in view so you can understand,
-question, correct, and choose. Engineer opens one selected move so you can inspect its real pipeline,
-watch it run, and review the exact outward effect before approval.
+- **Work** materializes as revisioned goals, evidence, documents, comparisons, journeys, visual previews,
+  code differences, relationships, and named spatial regions rather than disappearing into a transcript.
+- A **pipeline** appears only when work needs repeatable execution or an outward effect. It is an open flow
+  of agents, skills, tools, code, and MCP steps that stops at your approval wall.
+- **Claude and Codex** share the same durable product, goals, selections, work, and wall state. A paused
+  session can be handed between them, or branched deliberately to compare both without blending their
+  disagreement.
 
 The persistent crew keeps recognizable identity across that work. Each teammate has one deterministic
 illustrated character in the canvas, left rail, conversation, crew room, creation flow, and profile;
@@ -62,8 +66,13 @@ npm install
 npm start
 ```
 
-Open [http://127.0.0.1:4317](http://127.0.0.1:4317), add a product repository, and name the event or
-result that counts as a win.
+Open [http://127.0.0.1:4317](http://127.0.0.1:4317), enter the one-time founder action code printed by
+`npm start`, and add a product repository. The canvas is useful with zero goals; create as many independent
+product or go-to-market goals as the work requires.
+
+The code protects founder-only mutations on the local server. Set `GTM_IDE_FOUNDER_CODE` before starting
+Drover when a stable code is more useful than the randomly generated default. Ordinary reads remain visible
+without it, and model or agent clients cannot use it to approve their own work.
 
 For rented intelligence, sign in through a local CLI using either subscription:
 
