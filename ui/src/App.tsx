@@ -4253,12 +4253,15 @@ export default function App() {
           // it an absolutely-positioned card over the middle/right of the board — the occlusion bug.
           floating={false}
           focusSignal={composerFocus}
-          // Cold landing of an empty product (no pipeline built yet, no run going): open the composer so
-          // the "State a go-to-market goal" invitation points at a visible input, not a slim edge rail.
-          startOpen={!canvasGraph && !operatorSession}
-          // The composer rests quietly over the whole canvas and opens when a pipeline or work object is
-          // focused. This is focus behavior, not a second product mode.
-          preferCollapsed={!activeChannelId}
+          // Composer-as-primary-driver: it greets the founder OPEN on the home overview (no pipeline
+          // focused) as well as on a cold empty product, so the always-present driver sits beside the
+          // canvas rather than hiding to a slim edge until something is focused. Was `!canvasGraph &&
+          // !operatorSession` — that only opened on a blank product, so a populated home hid the composer.
+          startOpen={!activeChannelId || (!canvasGraph && !operatorSession)}
+          // The composer is the primary driver and stays present beside the canvas; it no longer force-
+          // collapses at product altitude (the old `!activeChannelId` collapse fought the new model).
+          // Proposal focus still recedes it via `recede`, and the founder can still collapse it by hand.
+          preferCollapsed={false}
           recede={proposalActive}
           subject={composerSubject}
           onClearSubject={() => setComposerSubject(null)}

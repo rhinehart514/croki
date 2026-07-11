@@ -220,41 +220,10 @@ export function LeftRail({
       </header>
 
       <div className="lr-body">
-        {/* Pipelines — your real work; click loads one onto the canvas. The one-liner is the goal it's
-            chasing, so the list reads as intentions, not file names. */}
-        <Section
-          icon={<Workflow size={13} />}
-          title="Pipelines"
-          count={channels.length}
-          onNew={onNewChannel}
-          newTitle="Ideate a new pipeline"
-        >
-          {channels.length === 0 ? (
-            <p className="lr-empty">No pipelines yet — start one and it lands here.</p>
-          ) : (
-            channels.map((ch) => (
-              <button
-                key={ch.id}
-                className={`lr-row lr-stacked ${ch.id === activeChannelId ? "active" : ""}`}
-                type="button"
-                onClick={() => onLoadChannel(ch.id)}
-                title={ch.objective || ch.name}
-              >
-                <span
-                  className="lr-dot"
-                  style={{ background: healthHex(ch.lastRunOk === false ? 0.3 : ch.lastRunOk ? 0.85 : 0.6) }}
-                />
-                <span className="lr-row-main">
-                  <span className="lr-row-name">{ch.name}</span>
-                  <span className="lr-row-desc">{pipelineBlurb(ch)}</span>
-                  <span className="lr-row-meta">
-                    {ch.pendingGates > 0 ? `${ch.pendingGates} at the gate` : ch.runCount > 0 ? `${ch.runCount} run${ch.runCount === 1 ? "" : "s"}` : "never run"}
-                  </span>
-                </span>
-              </button>
-            ))
-          )}
-        </Section>
+        {/* The rail is a supply you DRAG from onto the canvas — a teammate or a capability becomes a work
+            object where you drop it. It leads with that draggable supply; pipelines moved below to a
+            reference list, so the home no longer opens on a pipeline-first navigator. */}
+        <p className="lr-cap-hint">Drag a teammate or capability onto the canvas to put it to work.</p>
 
         {/* Your crew — the agents you've assembled. Click opens a teammate's profile; drag one onto the
             canvas to add it as a pipeline step. Proven above still-on-the-bench, so earned trust reads
@@ -337,6 +306,43 @@ export function LeftRail({
             })}
           </Section>
         )}
+
+        {/* Pipelines — reference, not the headline: click loads one onto the canvas. Demoted below the
+            draggable supply so the rail reads as a palette, not the pipeline-first navigator the home used
+            to open on. */}
+        <Section
+          icon={<Workflow size={13} />}
+          title="Pipelines"
+          count={channels.length}
+          onNew={onNewChannel}
+          newTitle="Ideate a new pipeline"
+        >
+          {channels.length === 0 ? (
+            <p className="lr-empty">No pipelines yet — start one and it lands here.</p>
+          ) : (
+            channels.map((ch) => (
+              <button
+                key={ch.id}
+                className={`lr-row lr-stacked ${ch.id === activeChannelId ? "active" : ""}`}
+                type="button"
+                onClick={() => onLoadChannel(ch.id)}
+                title={ch.objective || ch.name}
+              >
+                <span
+                  className="lr-dot"
+                  style={{ background: healthHex(ch.lastRunOk === false ? 0.3 : ch.lastRunOk ? 0.85 : 0.6) }}
+                />
+                <span className="lr-row-main">
+                  <span className="lr-row-name">{ch.name}</span>
+                  <span className="lr-row-desc">{pipelineBlurb(ch)}</span>
+                  <span className="lr-row-meta">
+                    {ch.pendingGates > 0 ? `${ch.pendingGates} at the gate` : ch.runCount > 0 ? `${ch.runCount} run${ch.runCount === 1 ? "" : "s"}` : "never run"}
+                  </span>
+                </span>
+              </button>
+            ))
+          )}
+        </Section>
       </div>
 
       {/* The crew room — your whole team as characters, opened from the crew header. Clicking a
