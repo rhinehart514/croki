@@ -32,6 +32,10 @@ The canvas has two working distances. Operator keeps the whole terrain in view s
 question, correct, and choose. Engineer opens one selected move so you can inspect its real pipeline,
 watch it run, and review the exact outward effect before approval.
 
+The persistent crew keeps recognizable identity across that work. Each teammate has one deterministic
+illustrated character in the canvas, left rail, conversation, crew room, creation flow, and profile;
+initials appear only if character rendering fails.
+
 ## What stays yours
 
 Drover rents intelligence and owns a small, durable harness:

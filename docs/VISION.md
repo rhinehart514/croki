@@ -54,9 +54,9 @@ and shape one selected pipeline. These are two views of the same product, not se
 3. **Comprehension before action.** Drover reveals the credible field without hiding the uncertainty or
    forcing one recommended answer. A founder can inspect, correct, ask, investigate, or act directly.
 
-4. **A persistent crew.** Teammates remain attached to the product across moves. They retain useful lessons,
-   distinct positions, and a record of how their work performed, rather than restarting as anonymous chat
-   turns.
+4. **A persistent crew.** Teammates remain attached to the product across moves. Each teammate keeps one
+   deterministic illustrated character everywhere it appears, alongside useful lessons, distinct positions,
+   and a record of how its work performed. The crew does not restart as anonymous chat turns or initials.
 
 5. **Market return.** A release is not a result. Only an observed, honestly attributed outcome can teach the
    terrain, the next pipeline, the crew, and what the founder may build next.

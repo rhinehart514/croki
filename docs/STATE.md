@@ -50,7 +50,7 @@ The alpha test is:
 That human test is T11 and Gate D in the completion specification. It has **not passed**. The stage remains
 alpha.
 
-## Shipped on this branch
+## Implemented in the current tree
 
 | Area | State | What is proved |
 |---|---|---|
@@ -62,6 +62,7 @@ alpha.
 | No-runtime use | **Built and fixture-tested** | Cited product terrain and existing work remain available without Codex or Claude. Missing model interpretation is local and explicit rather than a full-product connection wall. |
 | Terrain to pipeline | **Built and tested** | A selected opening, question, or direct request can become the existing open pipeline. Its evidence, wording, intended effect, uncertainty, and measurement intent travel as advisory context, never as a prerequisite or approval. |
 | Operator and Engineer context | **Built and tested** | Surface, view, and focus survive operator turns and resume. Leaving one pipeline returns to the originating terrain focus when available. |
+| Persistent crew identity | **Built and browser-tested** | Every teammate uses one deterministic illustrated character across the canvas, left rail, conversation, crew room, creation flow, and profile. Initials remain only as a render-failure fallback. Same refs retain the same face; different refs remain visually distinct. |
 | Founder wall | **Built and security-tested** | Every execution path still requires upstream founder authorization. Browser-only gate release, project isolation, self-approval rejection, and the second deploy authorization have regression coverage. |
 | Outcome return | **Built and tested** | Joined outcomes return to their product, question, move, crew, run, and decision context when those links exist. Approval alone is not treated as a market result; unjoined signals remain unattributed. |
 | Taste loop | **Built and tested** | Gate decisions feed durable taste into later composition and agent work. Terrain reads can consume founder corrections without turning them into authorization. |
@@ -78,8 +79,8 @@ The completion specification separates four gates so lower-level proof cannot st
   the production build.
 - **Gate B — deterministic browser journey:** passed for desktop, compact, narrow mobile, keyboard-only,
   hard refresh, and no-runtime modes. It covers cited truth before a goal, progressive terrain, distinct
-  crew positions, pipeline handoff, the wall, an explicit founder decision, outcome return, and recovery
-  without spending a subscription.
+  crew positions and stable illustrated identities, pipeline handoff, the wall, an explicit founder
+  decision, outcome return, and recovery without spending a subscription.
 - **Gate C — local-runtime smoke:** the Codex-only project-scoped terrain read passed through a signed-in
   ChatGPT subscription on 2026-07-10, and the harness confirmed that it made no approval or release request.
   The full matrix is still open: Claude Code only, neither runtime, and an explicit choice with both
@@ -107,6 +108,8 @@ the alpha bet.
 ## Current document map
 
 - `README.md` — the product and local setup.
+- `PRODUCT.md` — the strategic product and design context.
+- `DESIGN.md` — the visual-system rules and component identity contracts.
 - `docs/VISION.md` — the terrain-first north star.
 - `docs/STATE.md` — this honest build and evaluation snapshot.
 - `AGENTS.md` — engineering invariants and repository rules.

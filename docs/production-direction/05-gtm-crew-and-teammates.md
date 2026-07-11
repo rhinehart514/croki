@@ -15,6 +15,7 @@ Every teammate must have:
 - a founder-safe name and voice;
 - a source definition or authored artifact;
 - product-specific soul/memory;
+- one stable illustrated character keyed to the teammate's durable ref;
 - evidence and outcome history;
 - a visible relationship to founder judgment;
 - a clear guardrail boundary;
@@ -84,7 +85,12 @@ Keep versioned lineage where the source or durable learned guidance changes. Do 
 
 The crew is persistently embodied on and around the product canvas. A teammate appears where it holds a
 belief, supplied evidence, owns a pipeline step, or learned from an outcome. Faces communicate identity,
-authorship, or responsibility—never decoration.
+authorship, or responsibility, never decoration.
+
+One teammate keeps one deterministic illustrated character across the canvas, left rail, conversation,
+crew room, creation flow, and profile. Compact surfaces do not substitute initials or anonymous status dots.
+A monogram may appear only when character rendering fails, preserving a legible identity without creating a
+second visual language. The same ref must render the same character; different refs must remain distinct.
 
 Selecting a teammate focuses every connected contribution, action, decision, and outcome without removing
 the surrounding product context. The relevant pod becomes visually primary while the full product-scoped
@@ -114,6 +120,7 @@ Reuse crew-roster-store.mjs, teammate-soul-store.mjs, memory.mjs, agent-bridge.m
 artifacts. Add only the smallest contribution/context links needed for a teammate to work across questions,
 actions, coding sessions, and outcomes. Do not create policies, profiles, instances, or a closed role enum.
 Ensure each teammate has evidence, uncertainty, recommendation, founder-learning, and honest empty states.
-Add tests for product isolation, agent-memory isolation, founder edits, disagreement preservation, and no
-raw prompt/soul internals reaching founder-facing surfaces.
+Add tests for product isolation, agent-memory isolation, founder edits, disagreement preservation, stable
+character identity, distinct characters for distinct refs, and no raw prompt/soul internals reaching
+founder-facing surfaces.
 ```

@@ -1,6 +1,7 @@
 # Product-Market Terrain Completion Spec
 
-Status: approved completion target for the next Drover build.
+Status: approved completion target. Deterministic implementation and Gate B passed on 2026-07-10; the full
+Gate C matrix, T11, and Gate D remain open. See `docs/STATE.md` for the current receipt.
 
 Stage: alpha. Passing this specification means the product is complete enough for the alpha bet; it does
 not mean the market has validated Drover.
@@ -45,7 +46,9 @@ The product should feel like this:
 These decisions are fixed for this build:
 
 - The canvas remains the home.
-- The existing product-scoped crew remains persistent and embodied on the canvas.
+- The existing product-scoped crew remains persistent and embodied on the canvas. Each teammate keeps one
+  deterministic illustrated character across every product surface; initials are a render-failure fallback,
+  not a compact presentation mode.
 - Product truth remains citation-bound and read-only.
 - Openings and tensions are model-owned hypotheses, never promoted to product truth by display or repetition.
 - Questions remain optional. A founder can act directly without creating one.
@@ -857,7 +860,8 @@ It must prove:
 2. See cited truth before any goal field is required.
 3. Watch three fixture hypotheses arrive progressively.
 4. Inspect evidence and falsifier.
-5. Ask two teammates and preserve disagreement.
+5. Ask two teammates, preserve disagreement, and keep each teammate's stable illustrated character visible
+   from the canvas into the conversation.
 6. Turn one hypothesis into a non-fixed-shape pipeline.
 7. Switch to Engineer and inspect the intended effect/gate consequence.
 8. Run to the wall; prove no release before a browser founder action.
@@ -866,7 +870,8 @@ It must prove:
 11. Refresh and recover the same project, focus, geometry, session, and gate/outcome history.
 
 Run the same journey at 1440x900, 1024x768, and 390x844, plus a keyboard-only pass. Fail on console errors,
-unhandled rejections, inaccessible unlabeled actions, or clipped primary controls.
+unhandled rejections, inaccessible unlabeled actions, clipped primary controls, or an initials-only teammate
+shown during a normal rendered state.
 
 ### Gate C — local-runtime smoke before a candidate is called complete
 

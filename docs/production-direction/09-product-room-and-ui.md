@@ -86,6 +86,11 @@ Canvas layers reveal detail without creating competing modes:
 The product-scoped crew remains visible along the canvas edge, while active teammates appear on the specific
 questions, steps, artifacts, and outcomes they own. Faces mean authorship or responsibility, never decoration.
 
+Each teammate has one stable illustrated character derived from its durable ref. That character follows the
+teammate through the left rail, canvas, conversation, crew room, creation flow, and profile. Do not swap to
+initials on compact surfaces; initials are permitted only as a render-failure fallback. Presence and working
+state may surround the character, but must not replace it.
+
 Selecting a teammate focuses its connected beliefs, work, decisions, lessons, and outcomes. The anchored
 teammate sidecar shows:
 
@@ -159,6 +164,7 @@ Keyboard behavior:
 - one semantic accent for the founder gate;
 - optical hierarchy through scale, spacing, focus, and line weight;
 - teammate faces used for identity, not decoration;
+- one stable illustrated character per teammate across every surface, with initials only as failure fallback;
 - evidence and uncertainty without score theater;
 - no dashboard card grid, decorative gradients, glow, generic AI chat styling, or provenance hairball;
 - deterministic layout preserves founder spatial memory across reloads.

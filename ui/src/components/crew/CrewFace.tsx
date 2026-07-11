@@ -1,13 +1,7 @@
-// One teammate's face, everywhere a teammate appears — the rail, the canvas node, the profile sheet
-// and its team grid, the crew room. Two registers, one identity:
-//
-//   • the default "character" face draws the hand-drawn crew character (CrewAvatar), degrading to the
-//     two-letter monogram in the agent's family tint if it can't render;
-//   • the "roundel" variant (opt-in) draws the teammate as a clean monogram roundel for deliberately
-//     compact, authorship-first surfaces such as message threads.
-//
-// Keeping the monogram as the fallback for the character face is deliberate: a broken character must
-// degrade to a legible identity, not to nothing.
+// One teammate's face, everywhere a teammate appears: the rail, canvas, conversation, profile, and
+// crew room. The hand-drawn character is the teammate's persistent identity. The two-letter monogram
+// exists only as a render-failure fallback, so a broken character degrades to a legible identity rather
+// than making one surface silently switch to a different avatar language.
 
 import { Component, type ReactNode } from "react";
 import { agentPersona, FAMILY_TINT, type AgentFamily } from "@/lib/agentPersona";
@@ -23,7 +17,7 @@ class FaceBoundary extends Component<{ fallback: ReactNode; children: ReactNode 
 }
 
 export function CrewFace({
-  agentRef, job, family: familyProp, monogram: monogramProp, size = 28, state = "idle", variant = "character", className,
+  agentRef, job, family: familyProp, monogram: monogramProp, size = 28, state = "idle", className,
 }: {
   agentRef: string;
   job?: string;
@@ -33,31 +27,12 @@ export function CrewFace({
   monogram?: string;
   size?: number;
   state?: "idle" | "working";
-  // "character" = the hand-drawn crew face (default, unchanged everywhere it already renders). "roundel"
-  // = the monogram roundel presentation the crew/composer surfaces use.
-  variant?: "character" | "roundel";
   className?: string;
 }) {
   const persona = familyProp && monogramProp ? null : agentPersona(agentRef, job);
   const family = familyProp ?? persona!.family;
   const monogram = monogramProp ?? persona!.monogram;
   const tint = FAMILY_TINT[family];
-
-  // The monogram roundel — the Warm Atelier crew presentation. Initials in the sleek display sans; a
-  // spruce ring + breathing dot mark a working teammate, a settled sage dot marks one that's idle/done.
-  if (variant === "roundel") {
-    const working = state === "working";
-    return (
-      <span
-        className={className ? `crew-roundel ${className}${working ? " is-working" : ""}` : `crew-roundel${working ? " is-working" : ""}`}
-        style={{ width: size, height: size, fontSize: Math.max(10, Math.round(size * 0.38)) }}
-        aria-hidden="true"
-      >
-        <span className="crew-roundel-mono">{monogram}</span>
-        <span className="crew-roundel-breath" />
-      </span>
-    );
-  }
 
   const fallback = (
     <span

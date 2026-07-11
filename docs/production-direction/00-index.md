@@ -3,6 +3,11 @@
 Status: production target and implementation source of truth for the GTM-for-product-development direction.
 Current product stage: alpha; the target described here is not a prototype or a throwaway experiment.
 
+Implementation receipt, 2026-07-10: the deterministic terrain-first stack and browser journey are built and
+green on `main`; a signed-in Codex subscription completed the project-scoped terrain smoke; persistent crew
+characters now render consistently across the product. The complete local-runtime matrix, T11, Gate D, and
+the outside-founder alpha exit remain open. `docs/STATE.md` is the authority for current proof.
+
 ## Mission
 
 Drover is the GTM team inside product development.

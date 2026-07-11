@@ -86,7 +86,7 @@ export function CrewRoom({
                   title={`Open ${name}'s profile`}
                 >
                   <span className="crewroom-stage">
-                    <CrewFace variant="roundel" agentRef={m.ref} job={m.job} family={p.family} monogram={p.monogram} size={56} />
+                    <CrewFace agentRef={m.ref} job={m.job} family={p.family} monogram={p.monogram} size={56} />
                   </span>
                   <span className="crewroom-name">{name}</span>
                   {name !== p.role ? <span className="crewroom-role">{p.role}</span> : null}

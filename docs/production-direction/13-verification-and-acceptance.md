@@ -10,7 +10,8 @@ Drover is production-ready for this direction when a founder can:
 
 1. Register a real codebase.
 2. Land on the woven canvas with grounded product truth and honest unknowns.
-3. See the persistent product-level GTM crew on and around that canvas.
+3. See the persistent product-level GTM crew on and around that canvas, with one stable illustrated
+   character per teammate across every surface.
 4. Ask or pin an optional GTM/product question in the UI or AI coding session.
 5. Focus its evidence and distinct teammate perspectives without synthetic consensus.
 6. Choose or request a GTM/product pipeline directly or from that question.
@@ -37,6 +38,7 @@ Drover is production-ready for this direction when a founder can:
 - pre-enrichment fixtures, empty new state, archived/unknown references, and rollback-compatible reads;
 - stable founder geometry after refresh and compatibility rollback;
 - teammate memory isolation;
+- stable teammate character identity by durable ref, with different refs remaining visually distinct;
 - question optionality;
 - open vocabulary and no fixed stage skeleton.
 
@@ -68,6 +70,8 @@ Verify at minimum:
 - sample product path;
 - product altitude on the woven canvas;
 - relevant crew pod;
+- the same teammate character in the left rail, canvas, conversation, crew room, and profile, with no
+  initials-only normal state;
 - teammate focus and anchored sidecar;
 - question altitude with preserved disagreement and provenance;
 - action altitude and open execution graph;

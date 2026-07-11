@@ -1,6 +1,6 @@
-# DESIGN.md — GTM IDE token rationing doctrine
+# DESIGN.md — Drover token rationing doctrine
 
-The visual system that keeps GTM IDE off the generic-AI-wrapper mean. Tokens live in
+The visual system that keeps Drover off the generic-AI-wrapper mean. Tokens live in
 `ui/src/index.css` (`:root`). This file is the *rationing doctrine* — the rules for when each
 token is allowed — so the system stays a system instead of drifting back to decoration. The
 anti-generic critic (`design-critic`) grades the running surface against this file.
@@ -57,6 +57,15 @@ for `--shadow-card` only when a thing genuinely lifts off the surface.
 `--ease` / `--ease-out` with `--dur-fast` (120ms) for state flips and `--dur-base` (200ms) for
 enter/exit. Motion clarifies a change; it never decorates. No looping ambient animation.
 
+## Crew identity is one character system
+
+`CrewFace` is the only teammate portrait door. It renders the deterministic illustrated `CrewAvatar`
+generated from the teammate's stable ref, so one teammate keeps the same recognizable face in the canvas,
+left rail, conversation, crew room, creation flow, and profile. Initials are a render-failure fallback only,
+never an alternate compact style. Family tint identifies the teammate's working family without turning the
+character into decorative color. Working motion stays subtle, transform-only, and disabled for reduced
+motion.
+
 ## The substitutability test
 
 Before shipping a surface: would it be mistaken for any other AI tool? If yes, it fails. The
@@ -64,6 +73,6 @@ escape is specificity — the GTM node diagram, the founder gate as a real wall,
 — rendered with this system's restraint, not a generic card grid in someone else's blue.
 
 ---
-Last updated alongside the OKLCH + type/spacing/elevation token pass. When the token layer in
-`ui/src/index.css` changes, update this doctrine in the same breath — tokens without rationing
+Last updated 2026-07-10 alongside the terrain-first and persistent crew-character pass. When the token
+layer in `ui/src/index.css` changes, update this doctrine in the same breath. Tokens without rationing
 drift.

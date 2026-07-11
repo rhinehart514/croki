@@ -1417,7 +1417,7 @@ export function ComposerDock({
               <div className="oc-you-t tnum">{clockTime(t.at)}</div>
             </div>
             <div className="oc-msg">
-              <CrewFace className="oc-msg-face" variant="roundel" agentRef={voice.ref} job={voice.job} size={32} />
+              <CrewFace className="oc-msg-face" agentRef={voice.ref} job={voice.job} size={32} />
               <div className="oc-msg-body">
                 <div className="oc-who">
                   <span className="oc-who-n">{voice.name}</span>
@@ -1448,7 +1448,7 @@ export function ComposerDock({
               ) : seg.kind === "say" ? (
                 <StaggerItem key={seg.id}>
                   <div className="oc-msg">
-                    <CrewFace className="oc-msg-face" variant="roundel" agentRef={voice.ref} job={voice.job} size={32} />
+                    <CrewFace className="oc-msg-face" agentRef={voice.ref} job={voice.job} size={32} />
                     <div className="oc-msg-body">
                       <div className="oc-who">
                         <span className="oc-who-n">{voice.name}</span>
@@ -1476,7 +1476,7 @@ export function ComposerDock({
                     const v = voiceForRef(d?.ref, bench, d?.label);
                     return (
                       <div className="oc-msg beat">
-                        <CrewFace className="oc-msg-face" variant="roundel" agentRef={v.ref} job={v.job} size={28} state={seg.id === streamingCrewId ? "working" : "idle"} />
+                        <CrewFace className="oc-msg-face" agentRef={v.ref} job={v.job} size={28} state={seg.id === streamingCrewId ? "working" : "idle"} />
                         <div className="oc-msg-body">
                           <div className="oc-who">
                             <span className="oc-who-n">{v.name}</span>
