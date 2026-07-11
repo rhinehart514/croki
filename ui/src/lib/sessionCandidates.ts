@@ -10,6 +10,7 @@
 // founder picks it (resolveOperatorCandidates → compose_and_run), which is a founder act, never a tool.
 
 import type { GTMEdge, GTMNode, OperatorEvent, OperatorSession } from "@/types";
+import { rewriteFounderLanguage } from "./operatorLanguage";
 
 export type Candidate = { id: string; label: string; rationale: string; nodes: GTMNode[]; edges: GTMEdge[] };
 
@@ -29,8 +30,8 @@ export function normalizeCandidates(raw: unknown): Candidate[] {
     });
     out.push({
       id,
-      label,
-      rationale: typeof c.rationale === "string" ? c.rationale : "",
+      label: rewriteFounderLanguage(label),
+      rationale: typeof c.rationale === "string" ? rewriteFounderLanguage(c.rationale) : "",
       nodes,
       edges: Array.isArray(c.edges) ? (c.edges as GTMEdge[]) : [],
     });

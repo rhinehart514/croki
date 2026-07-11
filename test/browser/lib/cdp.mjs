@@ -50,7 +50,9 @@ export async function launchChrome({ port, url }) {
   child.stderr.on("data", (chunk) => { stderr += chunk; });
   const base = `http://127.0.0.1:${port}`;
   let page;
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  // A cold macOS Chrome launch can spend several seconds validating the app bundle before DevTools
+  // appears. Keep the deterministic gate patient enough for that first launch without hiding an exit.
+  for (let attempt = 0; attempt < 300; attempt += 1) {
     if (child.exitCode !== null) throw new Error(`Chrome exited before DevTools was ready: ${stderr.trim()}`);
     try {
       const pages = await json(`${base}/json/list`);

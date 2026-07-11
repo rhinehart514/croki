@@ -123,9 +123,15 @@ export function FloatingDock({
             <div className="fdock-lens" role="group" aria-label="Canvas altitude">
               <button
                 type="button"
+                data-testid="operator-view-toggle"
                 className={activeLens === "operator" ? "on" : ""}
                 aria-pressed={activeLens === "operator"}
                 onClick={() => onLensChange("operator")}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  onLensChange("operator");
+                }}
               >
                 Operator
               </button>
@@ -134,6 +140,11 @@ export function FloatingDock({
                 className={activeLens === "engineer" ? "on" : ""}
                 aria-pressed={activeLens === "engineer"}
                 onClick={() => onLensChange("engineer")}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  onLensChange("engineer");
+                }}
               >
                 Engineer
               </button>
@@ -173,8 +184,15 @@ export function FloatingDock({
         {/* Run — the one dark primary. */}
         <button
           className="fdock-run-btn"
+          data-testid="pipeline-run"
+          data-terrain-primary="true"
           disabled={running || noGraph}
           onClick={onRun}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            if (!running && !noGraph) onRun();
+          }}
           type="button"
         >
           {running ? <LoaderCircle className="spin" size={13} /> : null}

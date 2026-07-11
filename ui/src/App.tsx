@@ -60,6 +60,7 @@ import {
   getCredentials,
   getTerrainView,
   readTerrain,
+  askTerrainCrew,
 } from "@/api";
 import type { OperatorHints, OperatorSessionContext, ComposerBriefing, ComposerTurnResult } from "@/api";
 // Heavy overlay/panel components are split into their own chunks and loaded on demand the first time
@@ -179,7 +180,7 @@ import type {
   ClarityObject, ClarityKind, ComposerPosture,
   PendingDecision, PendingInbox, OperatingView,
   ProductImplication,
-  TerrainRead, TerrainView,
+  TerrainCrewPosition, TerrainRead, TerrainView,
 } from "@/types";
 
 // Health → band color, identical to the canvas node badge (GraphCanvas healthHex), so a
@@ -440,17 +441,23 @@ export default function App() {
       return copy;
     });
   }, []);
-  const setRunResult = useCallback((updater: GTMRunResult | null | ((current: GTMRunResult | null) => GTMRunResult | null)) => {
-    if (!activeChannelId) return;
+  const updateChannelRunResult = useCallback((
+    channelId: string,
+    updater: GTMRunResult | null | ((current: GTMRunResult | null) => GTMRunResult | null),
+  ) => {
     setChannelRunResults((prev) => {
-      const current = prev.get(activeChannelId) ?? null;
+      const current = prev.get(channelId) ?? null;
       const next = typeof updater === "function" ? updater(current) : updater;
       if (next === current) return prev;
       const copy = new Map(prev);
-      if (next === null) copy.delete(activeChannelId); else copy.set(activeChannelId, next);
+      if (next === null) copy.delete(channelId); else copy.set(channelId, next);
       return copy;
     });
-  }, [activeChannelId]);
+  }, []);
+  const setRunResult = useCallback((updater: GTMRunResult | null | ((current: GTMRunResult | null) => GTMRunResult | null)) => {
+    if (!activeChannelId) return;
+    updateChannelRunResult(activeChannelId, updater);
+  }, [activeChannelId, updateChannelRunResult]);
   const [graphRunning, setGraphRunning] = useState(false);
   const [runningNodeId, setRunningNodeId] = useState<string | null>(null);
   const [graphError, setGraphError] = useState<string | null>(null);
@@ -971,6 +978,9 @@ export default function App() {
       if (!live) return;
       setProductModel(first);
       if (productHasContent(first)) return;
+      // Deterministic terrain is already useful without rented intelligence. Do not turn an empty
+      // interpretive model into a failing background request when no local runtime is connected.
+      if (!connection?.connected) { setProductDeriving(false); return; }
       // Nothing derived yet — read the product in the background, then refetch a few times so the panel
       // fills the moment the picture is ready. deriveProductModel is idempotent server-side; this never
       // sends or publishes anything.
@@ -993,7 +1003,7 @@ export default function App() {
       }
     })();
     return () => { live = false; };
-  }, [activeProjectId, productHasContent]);
+  }, [activeProjectId, connection?.connected, productHasContent]);
 
   // Manual re-read — an explicit refresh of the product picture. Reads the product again and refetches
   // the picture. Idempotent, read-only-to-the-world: never sends or publishes.
@@ -1234,6 +1244,7 @@ export default function App() {
   const [terrainReading, setTerrainReading] = useState(false);
   const [terrainError, setTerrainError] = useState<string | null>(null);
   const terrainReadAttempted = useRef<string | null>(null);
+  const terrainPipelineStarting = useRef(false);
   const refreshOperatingView = useCallback(async () => {
     if (!activeProjectId) { setOperatingView(null); return; }
     try {
@@ -1278,7 +1289,19 @@ export default function App() {
     setTerrainError(null);
     const model = typeof localStorage !== "undefined" ? localStorage.getItem("gtm.model") ?? undefined : undefined;
     void readTerrain(activeProjectId, { model }).then((read) => {
-      if (live) setTerrainRead(read);
+      if (!live) return;
+      // The structured runtime may return one batch even when it streamed internally. Reveal the
+      // addressed hypotheses one at a time so the canvas stays watchable instead of spinner-then-wall.
+      // This is presentation only: the canonical read id, fingerprint, refs, and order stay unchanged.
+      const hypotheses = read.hypotheses ?? [];
+      setTerrainRead({ ...read, hypotheses: [] });
+      void (async () => {
+        for (let index = 0; index < hypotheses.length; index += 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, index === 0 ? 40 : 140));
+          if (!live) return;
+          setTerrainRead({ ...read, hypotheses: hypotheses.slice(0, index + 1) });
+        }
+      })();
     }).catch(() => {
       if (live) setTerrainError("The terrain read did not complete. Grounded product truth is still available.");
     }).finally(() => { if (live) setTerrainReading(false); });
@@ -1291,6 +1314,23 @@ export default function App() {
   );
   const activeCanvasProjection = projectedWoven?.canvas ?? operatingView?.woven?.canvas ?? null;
 
+  // Remember the founder's addressed terrain object across a process/page refresh. This stores only a
+  // stable canvas ref (not viewport coordinates or model output); the canonical projection must resolve
+  // it again before focus is restored, so stale or cross-project refs quietly disappear.
+  useEffect(() => {
+    if (!activeProjectId || wovenFocus?.kind !== "anchor" || !wovenFocus.ref?.type?.startsWith("terrain-")) return;
+    localStorage.setItem(`drover.terrain-focus.${activeProjectId}`, JSON.stringify(wovenFocus.ref));
+  }, [activeProjectId, wovenFocus]);
+  useEffect(() => {
+    if (!activeProjectId || !activeCanvasProjection || wovenFocus) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(`drover.terrain-focus.${activeProjectId}`) ?? "null") as { type?: string; id?: string } | null;
+      if (!saved?.type || !saved.id) return;
+      const anchor = activeCanvasProjection.anchors.find((candidate) => candidate.ref.type === saved.type && candidate.ref.id === saved.id);
+      if (anchor) setWovenFocus({ kind: "anchor", anchorId: anchorNodeId(anchor.ref), ref: anchor.ref });
+    } catch { /* a malformed local view receipt is ignored */ }
+  }, [activeCanvasProjection, activeProjectId, wovenFocus]);
+
   // What the woven canvas opens on (docs/INTERTWINED-CANVAS.md decision 2): whatever NEEDS you — if a lane
   // is parked at a gate, open on the object axis focused on that lane so its crossings light immediately;
   // otherwise the broad GTM-forms map (the type axis, fully zoomed out). Runs once per project open (keyed
@@ -1300,8 +1340,13 @@ export default function App() {
     if (!activeProjectId || !operatingView) return;
     if (openedWovenForProject.current === activeProjectId) return;
     openedWovenForProject.current = activeProjectId;
+    const savedTerrainFocus = localStorage.getItem(`drover.terrain-focus.${activeProjectId}`);
     const parked = operatingView.lanes.find((l) => l.runState === "parked");
-    if (parked) {
+    if (savedTerrainFocus) {
+      setWovenAxis("objects");
+      // The canonical projection resolves the saved ref in the restoration effect above. A saved terrain
+      // address outranks the generic "needs you" lane because it is the founder's more specific context.
+    } else if (parked) {
       setWovenAxis("objects");
       setWovenFocus({ kind: "lane", channelId: parked.channelId });
     } else {
@@ -1374,7 +1419,7 @@ export default function App() {
         decisions: nextDecisions,
         resumeRunId,
       });
-      setRunResult(result);
+      updateChannelRunResult(graph.id, result);
       setFlowRuns((current) => [...current, result].slice(-10));
       if (result.storedRunCount !== undefined) {
         setGraph((current) => current ? {
@@ -1400,8 +1445,9 @@ export default function App() {
       setRunningNodeId(null);
       loadEngine(graph?.id ?? activeChannelId); // a run updates the ledger → refresh health + problems
       void refreshProjectScope();
+      refreshRunSummary();
     }
-  }, [activeChannelId, approvals, decisions, graph, loadEngine, refreshProjectScope, setGraph, setRunResult, selectInGraph]);
+  }, [activeChannelId, approvals, decisions, graph, loadEngine, refreshProjectScope, refreshRunSummary, setGraph, selectInGraph, updateChannelRunResult]);
 
   // Run JUST ONE step — the "run a small thing" loop. Unlike executeGraph (which resolves a gate or
   // runs the whole loop and then jumps to the first problem), this keeps the node you clicked selected
@@ -1416,7 +1462,7 @@ export default function App() {
     setGraphError(null);
     try {
       const result = await runWorkflowNode(graph, nodeId, projectId);
-      setRunResult(result);
+      updateChannelRunResult(graph.id, result);
       setFlowRuns((current) => [...current, result].slice(-10));
       if (result.storedRunCount !== undefined) {
         setGraph((current) => current ? {
@@ -1441,7 +1487,7 @@ export default function App() {
       loadEngine(graph?.id ?? activeChannelId); // a run updates the ledger → refresh health + problems
       void refreshProjectScope();
     }
-  }, [activeChannelId, graph, loadEngine, refreshProjectScope, setGraph, setRunResult]);
+  }, [activeChannelId, graph, loadEngine, refreshProjectScope, setGraph, updateChannelRunResult]);
 
   // Streaming run — the full loop, animated. Each step lights up as it runs and its
   // content lands the moment it succeeds, instead of one batch at the end.
@@ -1452,7 +1498,7 @@ export default function App() {
     setGraphRunning(true);
     setRunningNodeId(null);
     setGraphError(null);
-    setRunResult({ runId: `live-${Date.now()}`, graphId: graph.id, ok: false, nodes: {}, executionOrder: [], pendingGates: [], feedbackEdges: [] });
+    updateChannelRunResult(graph.id, { runId: `live-${Date.now()}`, graphId: graph.id, ok: false, nodes: {}, executionOrder: [], pendingGates: [], feedbackEdges: [] });
     try {
       await runGraphStream(graph, { projectId, approvals, decisions }, (ev) => {
         if (ev.type === "node_start") {
@@ -1460,12 +1506,12 @@ export default function App() {
         } else if (ev.type === "node_done") {
           setRunningNodeId((cur) => (cur === ev.nodeId ? null : cur));
           // Merge this step's result in live so its card count + the detail panel update now.
-          setRunResult((cur) => cur ? { ...cur, nodes: { ...cur.nodes, [ev.nodeId]: ev.result } } : cur);
+          updateChannelRunResult(graph.id, (cur) => cur ? { ...cur, nodes: { ...cur.nodes, [ev.nodeId]: ev.result } } : cur);
           // Reveal what this step just produced — the panel fills with its content as it succeeds.
           if (ev.result.items?.length || ev.result.pendingReview) selectInGraph(ev.nodeId, graph.id);
         } else if (ev.type === "run_done") {
           const result = ev.result;
-          setRunResult(result);
+          updateChannelRunResult(graph.id, result);
           setFlowRuns((current) => [...current, result].slice(-10));
           if (result.storedRunCount !== undefined) {
             setGraph((current) => current ? {
@@ -1489,8 +1535,9 @@ export default function App() {
       setRunningNodeId(null);
       loadEngine(graph?.id ?? activeChannelId);
       void refreshProjectScope();
+      refreshRunSummary();
     }
-  }, [activeChannelId, approvals, decisions, graph, loadEngine, refreshProjectScope, setGraph, setRunResult, selectInGraph]);
+  }, [activeChannelId, approvals, decisions, graph, loadEngine, refreshProjectScope, refreshRunSummary, setGraph, selectInGraph, updateChannelRunResult]);
 
   const approveGate = useCallback(async (nodeId: string) => {
     const next = { ...approvals, [nodeId]: true };
@@ -2133,22 +2180,27 @@ export default function App() {
       return;
     }
     if (action === "pipeline" && item.kind === "hypothesis") {
+      if (terrainPipelineStarting.current) return;
+      terrainPipelineStarting.current = true;
       const h = item.hypothesis;
       const goal = h.suggestedMove
         ? `Compose a pipeline for this possible move: ${h.suggestedMove.title}. Intended effect: ${h.suggestedMove.intendedEffect}`
         : `Compose a pipeline that acts on this product-market read: ${h.claim}`;
-      setOriginatingTerrainFocus(wovenFocus);
-      freshPipelineIntent.current = true;
-      const response = await createOperatorSession(projectId, goal, undefined, true, {
-        surface: "terrain", lens: "operator", focusRef,
-        productRefs: h.productRefs.map((r) => r.id),
-        participantRefs: h.crewRefs.map((r) => r.id),
-        contextRefs: [focusRef, ...h.evidenceRefs.map(stableRefString), ...h.counterEvidenceRefs.map(stableRefString)],
-      });
-      operatorGraphRevision.current = response.session.graphRevision;
-      operatorRunId.current = null;
-      syncOperator(response.session);
-      void refreshRoster();
+      try {
+        setOriginatingTerrainFocus(wovenFocus);
+        freshPipelineIntent.current = true;
+        const response = await createOperatorSession(projectId, goal, undefined, true, {
+          surface: "terrain", lens: "operator", focusRef,
+          productRefs: h.productRefs.map((r) => r.id),
+          participantRefs: h.crewRefs.map((r) => r.id),
+          contextRefs: [focusRef, ...h.evidenceRefs.map(stableRefString), ...h.counterEvidenceRefs.map(stableRefString)],
+        });
+        operatorRunId.current = null;
+        syncOperator(response.session);
+        void refreshRoster();
+      } finally {
+        terrainPipelineStarting.current = false;
+      }
       return;
     }
     if (action === "pin" || action === "pipeline") return;
@@ -2163,6 +2215,14 @@ export default function App() {
     setComposerFocus((f) => f + 1);
     await handleComposerSend(directive[action]);
   }, [handleComposerSend, pinClarity, refreshRoster, syncOperator, wovenFocus]);
+
+  const handleTerrainCrewAsk = useCallback(async (item: TerrainFocusItem): Promise<TerrainCrewPosition[]> => {
+    const projectId = activeProjectIdRef.current;
+    if (!projectId || item.kind !== "hypothesis") return [];
+    const model = typeof localStorage !== "undefined" ? localStorage.getItem("gtm.model") ?? undefined : undefined;
+    const response = await askTerrainCrew(projectId, item.hypothesis, model);
+    return response.positions;
+  }, []);
 
   // Drag-to-wire-object (docs/INTERTWINED-CANVAS.md §4): dragging from a step onto an object chip or a kind
   // region is a STEER, never a literal targeting edge. The founder is saying "this motion should also cover
@@ -2989,7 +3049,13 @@ export default function App() {
     const next = resolveLensSelection(lens, activeChannelId, channels.filter((c) => c.nodeCount > 0).map((c) => c.id));
     setCanvasLens(next.lens);
     setActiveChannelId(next.channelId);
-  }, [activeChannelId, channels]);
+    if (lens === "operator" && originatingTerrainFocus) {
+      setWovenFocus(originatingTerrainFocus);
+      if (activeProjectId && originatingTerrainFocus.kind === "anchor" && originatingTerrainFocus.ref) {
+        localStorage.setItem(`drover.terrain-focus.${activeProjectId}`, JSON.stringify(originatingTerrainFocus.ref));
+      }
+    }
+  }, [activeChannelId, activeProjectId, channels, originatingTerrainFocus]);
 
   const gtmCanvasModel = useMemo<GtmCanvasModel>(() => ({
     projectId: activeProject?.id ?? null,
@@ -3246,7 +3312,18 @@ export default function App() {
               It appears only once a run has happened. */}
           {view === "canvas" && !overlay && runSummary ? (
             <div className="run-strip run-strip--log-only" aria-label="Log what happened on your last run">
-              <button type="button" className="run-strip-log" onClick={() => { setOutcomeOpen(true); void refreshMotionEfficiency(); }}>
+              <button
+                type="button"
+                className="run-strip-log"
+                data-testid="record-outcome"
+                onClick={() => { setOutcomeOpen(true); void refreshMotionEfficiency(); }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  setOutcomeOpen(true);
+                  void refreshMotionEfficiency();
+                }}
+              >
                 Log what happened →
               </button>
             </div>
@@ -3268,7 +3345,13 @@ export default function App() {
                   <OutcomeCapture
                     projectId={activeProjectId}
                     runId={activeChannelId ?? ""}
-                    onDone={() => { setOutcomeOpen(false); refreshRunSummary(); void refreshMotionEfficiency(); }}
+                    onDone={() => {
+                      setOutcomeOpen(false);
+                      refreshRunSummary();
+                      void refreshMotionEfficiency();
+                      void refreshOperatingView();
+                      if (activeProjectId) void getTerrainView(activeProjectId).then((view) => { if (view) setTerrainView(view); });
+                    }}
                   />
                 </Suspense>
                 {/* The Measure read: which motion actually earned the outcomes, honest about what's
@@ -3438,9 +3521,11 @@ export default function App() {
           ) : null}
           {view === "canvas" && focusedTerrain && !focusedQuestion ? (
             <TerrainFocus
+              key={`${focusedTerrain.ref.type}:${focusedTerrain.ref.id}`}
               item={focusedTerrain}
               onClose={() => setWovenFocus(null)}
               onAction={(action, item) => void handleTerrainAction(action, item)}
+              onAskCrew={handleTerrainCrewAsk}
               onOpenCrew={(ref) => setAgentProfileRef(ref)}
             />
           ) : null}

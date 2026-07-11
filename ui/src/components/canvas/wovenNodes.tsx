@@ -167,6 +167,9 @@ function CanvasAnchorComponent({ data }: NodeProps<Node<CanvasAnchorData>>) {
   const isOutcome = data.kind === "outcome";
   const isQuestion = data.kind === "question";
   const isTerrain = data.kind.startsWith("terrain-");
+  const terrainTestId = data.kind === "product-truth"
+    ? "terrain-product-landmark"
+    : isTerrain ? "terrain-hypothesis" : undefined;
   // A summary chip stands in for a collapsed kind's long tail: one compact card with the count, selectable
   // to expand its members. It reads as a group (dashed outline, "N in this group"), never as a single item.
   if (data.group) {
@@ -195,6 +198,17 @@ function CanvasAnchorComponent({ data }: NodeProps<Node<CanvasAnchorData>>) {
         data.focus === "dim" && "is-dim",
       )}
       title={`${eyebrow}: ${data.label}`}
+      data-testid={terrainTestId}
+      data-ref={`${data.ref.type ?? "ref"}:${data.ref.id}`}
+      role={terrainTestId ? "button" : undefined}
+      tabIndex={terrainTestId ? 0 : undefined}
+      aria-label={terrainTestId ? `${eyebrow}: ${data.label}` : undefined}
+      onKeyDown={terrainTestId ? (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          event.currentTarget.click();
+        }
+      } : undefined}
     >
       <Handle type="target" position={Position.Left} id="anchor-in" />
       <span className="woven-anchor-eyebrow">{eyebrow}</span>

@@ -51,7 +51,7 @@ function OutcomeCard({ o, resolvableQuestionIds, onOpenPipeline, onFocusQuestion
   // "No response" is a distinct honest state: a released item with a measured zero return.
   const noResponse = o.kind === "observed-response" && (o.value ?? 0) === 0;
   return (
-    <div className="oret-out">
+    <div className="oret-out" data-testid="joined-outcome">
       <div className="oret-out-top">
         <span className="oret-out-label">{o.label}{o.value != null && o.value !== 0 ? <> · {o.value}</> : null}</span>
         <span className={`oret-badge ${noResponse ? "is-none" : badge.cls}`}>{noResponse ? "No response" : badge.label}</span>

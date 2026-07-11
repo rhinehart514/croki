@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { humanizeOperatorSession } from "./operatorLanguage";
+import { normalizeCandidates } from "./sessionCandidates";
 import type { OperatorSession } from "@/types";
 
 describe("operator language", () => {
@@ -18,5 +19,31 @@ describe("operator language", () => {
     expect(rewritten).toContain("approaches");
     expect(rewritten).toContain("review before anything goes out");
     expect(rewritten).not.toMatch(/GTM primitive|`ref`|project_created|attribution|positioning|buyer fit|hypotheses|runnable shapes|motion|approval gate/i);
+  });
+
+  it("translates raw success identifiers outside narration events too", () => {
+    const session = {
+      events: [{ id: "event-2", type: "inspection", title: "Product read", detail: "Blind: project_created could not be confirmed." }],
+    } as OperatorSession;
+
+    const rewritten = humanizeOperatorSession(session).events?.[0]?.detail ?? "";
+    expect(rewritten).toBe("Couldn't confirm the customer success signal in your product yet.");
+    expect(rewritten).not.toContain("project_created");
+  });
+
+  it("keeps the choice cards free of tracking and marketing shorthand", () => {
+    const [candidate] = normalizeCandidates([{
+      id: "inbound",
+      label: "Inbound referral motion",
+      rationale: "Mint a ref code, stage a ref-tagged ask, and make each introduction attributable.",
+      nodes: [],
+      edges: [],
+    }]);
+
+    expect(candidate.label).toBe("people finding you referral approach");
+    expect(candidate.rationale).toContain("create a tracking link");
+    expect(candidate.rationale).toContain("prepare a source-tracked ask");
+    expect(candidate.rationale).toContain("with a source you can see");
+    expect(`${candidate.label} ${candidate.rationale}`).not.toMatch(/inbound|motion|mint|ref code|ref-tagged|attributable/i);
   });
 });

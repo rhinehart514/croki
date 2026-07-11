@@ -3,6 +3,7 @@
 import os from "node:os";
 import { getTerrainView } from "../operating-view.mjs";
 import { createTerrainReader } from "../terrain-read.mjs";
+import { createTerrainCrewReader } from "../terrain-crew.mjs";
 import { loadProjectReadOnly, projectAgents } from "../project-store.mjs";
 import { getWorkspace } from "../workspace.mjs";
 import { getProductModel } from "../product-model-store.mjs";
@@ -127,10 +128,11 @@ export function createTerrainRoutes({
   projectTerrain = getTerrainView,
   projectionOptionsForProject = () => ({}),
   runTerrainRead = createTerrainReader(),
+  runTerrainCrew = createTerrainCrewReader(),
   terrainReadInput = terrainReadInputForProject,
 } = {}) {
   return async function handle({ req, res, url }) {
-    const match = url.pathname.match(/^\/api\/projects\/([^/]+)\/terrain(?:\/(read))?$/);
+    const match = url.pathname.match(/^\/api\/projects\/([^/]+)\/terrain(?:\/(read|crew))?$/);
     if (!match) return false;
     const projectId = decodeURIComponent(match[1]);
 
@@ -146,7 +148,7 @@ export function createTerrainRoutes({
       return true;
     }
 
-    if (req.method === "POST" && match[2]) {
+    if (req.method === "POST" && match[2] === "read") {
       try {
         const body = await readBody(req);
         const input = terrainReadInput(projectId, { model: body.model, focusRef: body.focusRef ?? null });
@@ -154,6 +156,19 @@ export function createTerrainRoutes({
         // createTerrainReader returns runtime metadata around the wire contract; injected readers may
         // return TerrainRead directly. The client always receives the TerrainRead itself.
         json(res, 200, result?.terrainRead ?? result);
+      } catch (err) {
+        json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+      }
+      return true;
+    }
+
+    if (req.method === "POST" && match[2] === "crew") {
+      try {
+        const body = await readBody(req);
+        if (!body?.hypothesis?.id) throw new Error("A terrain crew read needs one addressed hypothesis.");
+        const input = terrainReadInput(projectId, { model: body.model, focusRef: `terrain-hypothesis:${body.hypothesis.id}` });
+        const result = await runTerrainCrew({ ...input, hypothesis: body.hypothesis });
+        json(res, result?.ok === false ? 503 : 200, result?.terrainCrew ?? result);
       } catch (err) {
         json(res, 400, { error: err instanceof Error ? err.message : String(err) });
       }

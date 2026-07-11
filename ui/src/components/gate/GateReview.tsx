@@ -32,6 +32,12 @@ function splitSentences(text: string): string[] {
 
 const normalizeClaim = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
 
+function persistedDecision(item: GTMItem): "approve" | "reject" | undefined {
+  if (item.approvalStatus === "approved" || item.approved === true) return "approve";
+  if (item.approvalStatus === "rejected") return "reject";
+  return undefined;
+}
+
 // The primary button names the real-world effect — and NEVER lies. It reads off the item's nature (does
 // this actually cross the wall, or is it a plan the founder merely accepts?) so a strategy note or a
 // content plan can never wear a "Send it" button it doesn't earn. Deterministic code, never a model call.
@@ -519,7 +525,7 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
     const nextDecided: Record<string, "approve" | "reject"> = {};
     bloom.forEach(({ it, i }) => {
       const key = itemKey(it, i);
-      if (!isContextItem(it) && !gateItemView(it).hollow && !gateItemIsException(it) && !decided[key]) { batch[key] = { decision: "approve" }; nextDecided[key] = "approve"; }
+      if (!isContextItem(it) && !gateItemView(it).hollow && !gateItemIsException(it) && !decided[key] && !persistedDecision(it)) { batch[key] = { decision: "approve" }; nextDecided[key] = "approve"; }
     });
     const keys = Object.keys(batch);
     if (!keys.length) return;
@@ -541,7 +547,7 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
       setBusy(false);
     }
   };
-  const cleanUndecided = bloom.reduce((n, { it, i }) => n + (!isContextItem(it) && !gateItemView(it).hollow && !gateItemIsException(it) && !decided[itemKey(it, i)] ? 1 : 0), 0);
+  const cleanUndecided = bloom.reduce((n, { it, i }) => n + (!isContextItem(it) && !gateItemView(it).hollow && !gateItemIsException(it) && !decided[itemKey(it, i)] && !persistedDecision(it) ? 1 : 0), 0);
   const shown = bloom.slice(0, GATE_CARD_CAP);
   const lean = variant === "stage";
   // Effortless clean-approve: in the immersive room, Enter clears every clean draft at once (unless the
@@ -572,7 +578,7 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
     ? "a yes sends through your connected transport"
     : "a yes stages it on your machine — connect a sender to send for real";
   const reviewBody = (
-    <div className={cn("cgate-review", variant === "stage" && "cgate-review-stage")} onClick={(e) => e.stopPropagation()}>
+    <div className={cn("cgate-review", variant === "stage" && "cgate-review-stage")} data-testid="founder-gate" onClick={(e) => e.stopPropagation()}>
       <div className="cgate-review-lead">
         <span className="cgate-review-count">
           {/* One headline count, reconciled with the gate node. The node counts every not-yet-resolved
@@ -608,6 +614,8 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
       {onSubmit && ((lean && cleanUndecided >= 1) || cleanUndecided > 1) ? (
         <button
           className={cn("cgate-approve-all", lean && "cgate-approve-all-stage")}
+          data-testid="founder-gate-approve"
+          data-terrain-primary="true"
           type="button"
           disabled={busy}
           onClick={(e) => { e.stopPropagation(); void approveAllClean(); }}
@@ -625,7 +633,9 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
         {shown.map(({ it: item, i }) => {
           const key = itemKey(item, i);
           const v = gateItemView(item);
-          const state = decided[key];
+          // A local verdict makes approval feel immediate; the gate-stamped item keeps the receipt true
+          // after the resumed run, a graph refresh, or a page reload. UI state never becomes the authority.
+          const state = decided[key] ?? persistedDecision(item);
           const isEditing = editing?.key === key;
           if (state) {
             // An approved item can carry a real outcome back — the founder records what happened here,
@@ -641,7 +651,7 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
               ? item.plainLanguageTitle : v.subject;
             const verdictLabel = state === "approve" ? "Accepted" : state === "refine" ? "Reworking with the crew…" : "Returned";
             return (
-              <div className={cn("cgate-card", "is-decided", `is-${state}`)} key={key}>
+              <div className={cn("cgate-card", "is-decided", `is-${state}`)} data-testid={state === "approve" ? "gate-approved-receipt" : undefined} key={key}>
                 <span className="cgate-card-verdict-check" aria-hidden><Check size={12} /></span>
                 <span className="cgate-card-to">{decidedTitle}</span>
                 <span className="cgate-card-verdict">{verdictLabel}</span>

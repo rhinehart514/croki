@@ -328,6 +328,31 @@
 @media (max-width: 880px) {
   .fdock-left .stabs { display: none; }
 }
+@media (max-width: 640px) {
+  .fdock {
+    position: fixed;
+    left: 50vw;
+    width: calc(100vw - 16px);
+    max-width: none;
+    gap: 4px;
+    padding: 6px;
+  }
+  .fdock-left { flex: 1; gap: 3px; }
+  .fdock .project-switcher-name,
+  .fdock .project-switcher-caret,
+  .fdock .osw-trigger .menu-item-label { display: none; }
+  .fdock .project-switcher-trigger,
+  .fdock .osw-trigger {
+    width: 30px;
+    min-width: 30px;
+    padding-inline: 0;
+    justify-content: center;
+  }
+  .fdock-lens { margin-left: auto; }
+  .fdock-lens button { padding-inline: 7px; font-size: 11px; }
+  .fdock-right { gap: 3px; }
+  .fdock-run-btn { padding-inline: 10px; }
+}
 
 /* Summon control — the agentic replacement for lens tabs. A quiet + that opens a short menu of
    views to pop onto the canvas as draggable cards. */

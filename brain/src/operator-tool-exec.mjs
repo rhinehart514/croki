@@ -878,8 +878,8 @@ export async function executeTool(session, tool, options = {}) {
 
     let working = addEvent(session, {
       type: "operator_composing",
-      title: "Weighing candidate pipelines",
-      detail: `Judging whether the goal forks, and sketching distinct shapes: ${goal}`,
+      title: "Laying out your choices",
+      detail: "Putting distinct ways to reach customers side by side so you can choose before anything is built or sent.",
       data: { goal },
     }, options);
 

@@ -9,7 +9,7 @@ import type {
   CapabilityServer, CapabilityInventory, SenderCredential, Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole, BoardView,
   ChannelMeta, Input, ObjectGraphView, GTMItem, PendingInbox, OperatingView,
-  ProductImplication, TerrainRead, TerrainView,
+  ProductImplication, TerrainCrewRead, TerrainHypothesis, TerrainRead, TerrainView,
 } from "@/types";
 import { identityHeaders } from "@/lib/identity";
 import type { MotionEfficiencyData } from "@/components/MotionEfficiencyTable";
@@ -664,6 +664,12 @@ export const getTerrainView = (projectId: string): Promise<TerrainView | null> =
 // A rented, provider-neutral overlay read. It changes no product, pipeline, graph, gate, or outcome state.
 export const readTerrain = (projectId: string, input: { model?: string; focusRef?: string } = {}) =>
   post<TerrainRead>(`/api/projects/${encodeURIComponent(projectId)}/terrain/read`, input);
+
+export const askTerrainCrew = (projectId: string, hypothesis: TerrainHypothesis, model?: string) =>
+  post<TerrainCrewRead>(`/api/projects/${encodeURIComponent(projectId)}/terrain/crew`, {
+    hypothesis,
+    ...(model ? { model } : {}),
+  });
 
 // ── The one per-motion efficiency table (Area 7) ───────────────────────────────────────────────────────
 // deriveMotionEfficiency: every real outcome aggregated by the motion that earned it (a shape-derived

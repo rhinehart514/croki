@@ -1578,6 +1578,26 @@ export type TerrainRead = {
   runtime: { id: string; model: string | null };
   hypotheses: TerrainHypothesis[];
 };
+
+export type TerrainCrewPosition = {
+  id: string;
+  participantRef: string;
+  claim: string;
+  uncertainty: string | null;
+  recommendation: string | null;
+  falsifier: string | null;
+  evidenceRefs: WovenRef[];
+  disagreesWith: string[];
+};
+
+export type TerrainCrewRead = {
+  schemaVersion: 1;
+  projectId: string;
+  hypothesisRef: WovenRef;
+  generatedAt: string;
+  runtime: { id: string; model: string | null };
+  positions: TerrainCrewPosition[];
+};
 // Anchor kinds the backend emits: "product" | "product-truth" | "product-model" | "product-<element>" |
 // "teammate" | "question" | "pipeline" | "path" | "run" | "founder-decision" | "pinned-signal" |
 // "outcome" (and, forward-compatibly, "product-implication"/"implication" once the backend adds them).

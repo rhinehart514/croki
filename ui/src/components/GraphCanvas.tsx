@@ -38,7 +38,7 @@ import { ObjectChip, KindCluster, CanvasAnchor, FounderWall } from "@/components
 import { OpGoal, OpWork, OpGate, OpOutcome } from "@/components/canvas/operationNodes";
 import { buildOperationLanes } from "@/lib/operationLanes";
 import { canvasOutcomes } from "@/lib/canvasProjection";
-import { alignGatesToWall, buildWovenOverlay, focusIsEffective, type WovenAxis, type WovenFocus } from "@/lib/wovenOverlay";
+import { alignGatesToWall, buildCanvasAnchorLayer, buildWovenOverlay, focusIsEffective, type WovenAxis, type WovenFocus } from "@/lib/wovenOverlay";
 import type { WovenGraph } from "@/types";
 import type { RunSummary } from "@/api";
 import { explainGraph } from "@/api";
@@ -1362,7 +1362,10 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
 
   // Far-zoom face: a compact coin. Keeps both flow handles (t-l in, s-r out) so every edge still
   // connects at overview altitude; grows back to the full card on zoom-in or when selected.
-  if (coinLod && !selected) {
+  // Semantic zoom may collapse ordinary steps to coins, but never the active founder wall. A pending
+  // gate must keep its decision room mounted at every zoom, and an open room must survive the approved
+  // run update long enough to show the durable receipt.
+  if (coinLod && !selected && !data.bloomed && !reviewOpen) {
     return (
       <motion.div
         className={cn(
@@ -2462,8 +2465,7 @@ function NodeFocuser({ selection, active }: { selection: NodeSelection; panelOpe
       fitView({ nodes: [{ id }], padding: 0.2, duration: 460, maxZoom: 1.05 });
     }, 160);
     return () => clearTimeout(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selection]);
+  }, [selection, active, fitView, getNode]);
 
   return null;
 }
@@ -3039,6 +3041,14 @@ export function GraphCanvas({
     });
   }, [merged, woven, laneGraphNodes, wovenAxis, wovenZoom, wovenFocus]);
 
+  // Terrain and other stable product landmarks exist before the first pipeline, and remain present at
+  // Operator altitude after pipelines exist. They therefore cannot depend on a merged lane graph. The
+  // lane-aware overlay above still owns object ties; this standalone layer owns only canonical anchors.
+  const standaloneAnchorLayer = useMemo(
+    () => (!merged && woven?.canvas ? buildCanvasAnchorLayer(woven.canvas, null, wovenFocus) : null),
+    [merged, woven, wovenFocus],
+  );
+
   // On the TYPE axis (the spread view) the lanes recede — the forms map IS the surface. We drop the lane
   // graph entirely and show only the kind clusters. On the OBJECT axis the lanes stay and the chips/ties
   // overlay them. Focus-to-trace dims the lanes when a chip/lane/cluster is isolated.
@@ -3077,8 +3087,8 @@ export function GraphCanvas({
   const nodes = useMemo(() => {
     const wall = wallNode ? [wallNode] : [];
     // Operator altitude: the compressed operation lanes ARE the surface (goal · work · gate · outcome).
-    if (operationLanes) return [...wall, ...operationLanes.nodes];
-    if (!wovenOverlay) return [...wall, ...laneGraphNodes];
+    if (operationLanes) return [...wall, ...operationLanes.nodes, ...(standaloneAnchorLayer?.nodes ?? [])];
+    if (!wovenOverlay) return [...wall, ...laneGraphNodes, ...(standaloneAnchorLayer?.nodes ?? [])];
     if (typeAxisActive) return wovenOverlay.nodes;
     // Object axis: dim the lane cards when a focus isolates a crossing set (spatial focus-to-trace).
     const laneNodes = effectiveFocus
@@ -3092,13 +3102,13 @@ export function GraphCanvas({
         })
       : laneGraphNodes;
     return [...wall, ...laneNodes, ...wovenOverlay.nodes];
-  }, [wovenOverlay, laneGraphNodes, typeAxisActive, effectiveFocus, woven, wallNode, operationLanes]);
+  }, [wovenOverlay, standaloneAnchorLayer, laneGraphNodes, typeAxisActive, effectiveFocus, woven, wallNode, operationLanes]);
   const edges = useMemo(() => {
-    if (operationLanes) return operationLanes.edges;
-    if (!wovenOverlay) return laneGraphEdges;
+    if (operationLanes) return [...operationLanes.edges, ...(standaloneAnchorLayer?.edges ?? [])];
+    if (!wovenOverlay) return [...laneGraphEdges, ...(standaloneAnchorLayer?.edges ?? [])];
     if (typeAxisActive) return wovenOverlay.edges;
     return [...laneGraphEdges, ...wovenOverlay.edges];
-  }, [wovenOverlay, laneGraphEdges, typeAxisActive, operationLanes]);
+  }, [wovenOverlay, standaloneAnchorLayer, laneGraphEdges, typeAxisActive, operationLanes]);
 
   // The "N worth a look" chip steps the camera through each flagged card in turn (selecting it centers
   // it via NodeFocuser) — the fast path from "something's off" to the exact spot, no side list to scan.
@@ -3233,10 +3243,18 @@ export function GraphCanvas({
   // Engineer — the full step graph and the one GateReview action path. The lane id is `${channelId}::op-*`.
   const handleOperationNodeClick = useCallback(
     (_event: unknown, node: Node) => {
+      if (node.id.startsWith("canchor:")) {
+        if (!onWovenSelect) return;
+        const data = node.data as { anchorId?: string; ref?: { type: string | null; id: string } } | undefined;
+        const anchorId = data?.anchorId ?? node.id;
+        const same = wovenFocus?.kind === "anchor" && wovenFocus.anchorId === anchorId;
+        onWovenSelect(same ? null : { kind: "anchor", anchorId, ref: data?.ref });
+        return;
+      }
       const sep = node.id.indexOf("::op-");
       if (sep > 0 && onOpenLane) onOpenLane(node.id.slice(0, sep));
     },
-    [onOpenLane],
+    [onOpenLane, onWovenSelect, wovenFocus],
   ) as Parameters<typeof ReactFlow>[0]["onNodeClick"];
 
   const handleConnect = useCallback((connection: Connection) => {

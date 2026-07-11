@@ -16,14 +16,116 @@ const FIXTURE_DIR = path.join(ROOT, "brain/test/fixtures/terrain");
 const TERRAIN_VIEW = JSON.parse(fs.readFileSync(path.join(FIXTURE_DIR, "terrain-view.json"), "utf8"));
 const READ_CASES = JSON.parse(fs.readFileSync(path.join(FIXTURE_DIR, "terrain-read-cases.json"), "utf8"));
 const THREE_HYPOTHESES = ["valid-derived-opening", "speculative-opening", "tension-with-counterevidence"]
-  .flatMap((id) => READ_CASES.cases.find((item) => item.id === id).response.hypotheses);
-const CHANGED_READ = READ_CASES.cases.find((item) => item.id === "outcome-changed-read").response;
+  .flatMap((id) => READ_CASES.cases.find((item) => item.id === id).response.hypotheses)
+  .map((hypothesis, index) => ({ ...hypothesis, id: hypothesis.id ?? `fixture-hypothesis-${index + 1}` }));
+const CHANGED_READ_CASE = READ_CASES.cases.find((item) => item.id === "outcome-changed-read").response;
+const CHANGED_READ = {
+  ...CHANGED_READ_CASE,
+  // The changed read revises the selected terrain object; it is not an anonymous replacement. Production
+  // reads always pass through the host normalizer, so the browser fixture must not emit an undefined ref.
+  hypotheses: CHANGED_READ_CASE.hypotheses.map((hypothesis, index) => ({
+    ...hypothesis,
+    id: index === 0 ? THREE_HYPOTHESES[0].id : `fixture-changed-hypothesis-${index + 1}`,
+  })),
+};
 
 const VIEWPORTS = [
   { name: "desktop", width: 1440, height: 900 },
   { name: "compact", width: 1024, height: 768 },
   { name: "narrow", width: 390, height: 844, mobile: true },
 ];
+
+const PIPELINE_ID = "fixture-terrain-pipeline";
+const FIXTURE_GRAPH = {
+  id: PIPELINE_ID,
+  name: "Project brief activation test",
+  version: "1",
+  revision: 1,
+  nodes: [
+    { id: "source", category: "source", connector: "manual", label: "Brief recipients", position: { x: 40, y: 180 }, config: { items: [{ id: "recipient-1", name: "Fixture recipient" }] } },
+    { id: "draft", kind: "agent", ref: "product-strategist", label: "Shape the recipient follow-through", position: { x: 330, y: 180 }, contract: { accepts: [], emits: [], minItems: 0 } },
+    { id: "gate", category: "gate", connector: "default", label: "Founder review", position: { x: 620, y: 180 } },
+    { id: "execute", category: "execute", connector: "local", label: "Stage locally", position: { x: 910, y: 180 } },
+    { id: "measure", category: "measure", connector: "default", label: "Observe response", position: { x: 1200, y: 180 } },
+  ],
+  edges: [
+    { id: "source-draft", source: "source", target: "draft", edgeType: "data" },
+    { id: "draft-gate", source: "draft", target: "gate", edgeType: "data" },
+    { id: "gate-execute", source: "gate", target: "execute", edgeType: "data" },
+    { id: "execute-measure", source: "execute", target: "measure", edgeType: "data" },
+  ],
+  workContext: {
+    terrainRef: { type: "terrain-hypothesis", id: THREE_HYPOTHESES[0].id },
+    intendedEffect: THREE_HYPOTHESES[0].suggestedMove?.intendedEffect,
+    measurementIntent: THREE_HYPOTHESES[0].suggestedMove?.measurementIntent,
+  },
+};
+
+const GATE_ITEM = {
+  id: "fixture-draft-1",
+  type: "draft",
+  subject: "Invite the brief recipient into one reversible next step",
+  draft: "Your project brief is ready. Open it and continue into a workspace if the context is useful.",
+  joinKey: "fixture-join-1",
+  gtmActionId: "fixture-action-1",
+  whatYourYesDoes: "Approving stages this fixture action locally; nothing reaches an external recipient.",
+};
+
+function fixtureRun({ approved = false } = {}) {
+  const gateItem = approved
+    ? { ...GATE_ITEM, gated: true, approved: true, approvalStatus: "approved" }
+    : GATE_ITEM;
+  return {
+    runId: "fixture-run-1",
+    graphId: PIPELINE_ID,
+    ok: approved,
+    nodes: {
+      source: { ok: true, items: [{ id: "recipient-1", name: "Fixture recipient" }] },
+      draft: { ok: true, items: [GATE_ITEM] },
+      gate: { ok: true, items: [gateItem], pendingReview: !approved, meta: { awaitingReview: approved ? 0 : 1, approved: approved ? 1 : 0 } },
+      execute: approved ? { ok: true, items: [gateItem] } : { ok: false, blocked: true, items: [] },
+      measure: approved ? { ok: true, items: [] } : { ok: false, blocked: true, items: [] },
+    },
+    executionOrder: ["source", "draft", "gate", ...(approved ? ["execute", "measure"] : [])],
+    pendingGates: approved ? [] : ["gate"],
+    feedbackEdges: [],
+  };
+}
+
+function fixtureSession(projectId) {
+  const at = "2026-07-10T12:03:00.000Z";
+  return {
+    id: "fixture-operator-session",
+    kind: "goal",
+    goal: "Turn the project brief terrain opening into a measured move.",
+    projectId,
+    graphId: PIPELINE_ID,
+    graphRevision: 1,
+    surface: "terrain",
+    lens: "operator",
+    focusRef: `terrain-hypothesis:${THREE_HYPOTHESES[0].id}`,
+    contextRefs: [],
+    participantRefs: ["product-strategist", "market-skeptic"],
+    productRefs: ["sample-acme"],
+    status: "completed",
+    model: "fixture",
+    runtime: "fixture",
+    createdAt: at,
+    updatedAt: at,
+    startedAt: at,
+    completedAt: at,
+    stepCount: 1,
+    maxSteps: 18,
+    spentUsd: 0,
+    runtimeSessionId: "fixture-runtime-session",
+    summary: "Built the selected terrain move as an open pipeline.",
+    error: null,
+    pendingQuestion: null,
+    pendingGate: null,
+    pendingProposal: null,
+    events: [],
+  };
+}
 
 function delay(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
@@ -107,6 +209,9 @@ async function proxyResponse(upstream, request, response) {
     body: request.method === "GET" || request.method === "HEAD" ? undefined : Buffer.concat(chunks),
     redirect: "manual",
   });
+  if (process.env.TERRAIN_DEBUG === "1" && !upstreamResponse.ok) {
+    console.error(`Gate B upstream ${request.method} ${target.pathname}${target.search} -> ${upstreamResponse.status}`);
+  }
   const headers = Object.fromEntries(upstreamResponse.headers.entries());
   response.writeHead(upstreamResponse.status, headers);
   response.end(Buffer.from(await upstreamResponse.arrayBuffer()));
@@ -114,10 +219,15 @@ async function proxyResponse(upstream, request, response) {
 
 async function bootFixtureProxy(drover, { runtimeConnected = true } = {}) {
   const port = await freePort();
-  let terrainReadCount = 0;
+  let pipelineCreated = false;
+  let runStarted = false;
+  let gateApproved = false;
   let resultRecorded = false;
   const server = http.createServer(async (request, response) => {
     const url = new URL(request.url, `http://127.0.0.1:${port}`);
+    if (process.env.TERRAIN_DEBUG === "1" && /terrain|operator\/sessions|graph\/(run|template)|outcome/.test(url.pathname)) {
+      console.log(`Gate B fixture ${request.method} ${url.pathname}${url.search}`);
+    }
     const send = (status, body) => {
       response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
       response.end(JSON.stringify(body));
@@ -129,33 +239,167 @@ async function bootFixtureProxy(drover, { runtimeConnected = true } = {}) {
           : { connected: false, label: null, reason: "No local runtime is connected.", selectedRuntime: null, runtimes: [] });
         return;
       }
+      if (request.method === "POST" && url.pathname === "/api/product-model/derive") {
+        send(200, {
+          productModel: {
+            id: "fixture-product-model",
+            projectId: drover.projectId,
+            version: 1,
+            things: [{ id: "thing-project-brief", name: "Project brief", kind: "artifact", summary: "A signed read-only brief shared outside a workspace." }],
+            relationships: [],
+            userGoals: [{ id: "goal-share-context", actor: "Workspace owner", goal: "Share project context", outcome: "A recipient understands the work without joining first." }],
+            states: [], ia: [], workflows: [], interactions: [], transitions: [], pinnedSignals: [],
+          },
+          meta: { provider: "fixture" },
+        });
+        return;
+      }
+      if (request.method === "GET" && url.pathname === `/api/projects/${drover.projectId}/terrain`) {
+        send(200, {
+          ...TERRAIN_VIEW,
+          projectId: drover.projectId,
+          state: { ...TERRAIN_VIEW.state, stale: resultRecorded },
+          product: { ...TERRAIN_VIEW.product, projectRef: { type: "product", id: drover.projectId } },
+          outcomes: resultRecorded ? [{ type: "outcome", id: "outcome-brief-zero-conversion" }] : [],
+        });
+        return;
+      }
       if (request.method === "GET" && url.pathname === "/api/operating-view") {
         const actual = await fetch(new URL(request.url, drover.base), { headers: request.headers });
         const actualBody = actual.ok ? await actual.json() : {};
-        send(200, { ...actualBody, ...TERRAIN_VIEW, projectId: drover.projectId, product: { ...TERRAIN_VIEW.product, projectRef: { type: "product", id: drover.projectId } } });
+        const canvas = actualBody?.woven?.canvas ?? { anchors: [], relationships: [], outcomes: [], implications: [], geometry: TERRAIN_VIEW.geometry };
+        const outcome = {
+          id: "outcome-brief-zero-conversion",
+          ref: { type: "outcome", id: "outcome-brief-zero-conversion" },
+          kind: "observed-response",
+          label: "No response from the project brief",
+          value: 0,
+          observedAt: "2026-07-10T12:08:00.000Z",
+          channelId: PIPELINE_ID,
+          questionId: null,
+          productRefs: [drover.projectId],
+          crewRefs: ["product-strategist", "market-skeptic"],
+          runId: "fixture-run-1",
+        };
+        send(200, {
+          ...actualBody,
+          projectId: drover.projectId,
+          woven: {
+            ...(actualBody.woven ?? {}),
+            projectId: drover.projectId,
+            canvas: {
+              ...canvas,
+              outcomes: resultRecorded ? [outcome] : [],
+              anchors: resultRecorded ? [
+                ...(canvas.anchors ?? []).filter((anchor) => anchor.ref?.id !== outcome.id),
+                { id: `anchor:outcome:${outcome.id}`, ref: outcome.ref, kind: "outcome", label: outcome.label, body: outcome, authority: { owner: "fixture", id: outcome.id, projectId: drover.projectId, updatedAt: outcome.observedAt } },
+              ] : (canvas.anchors ?? []),
+            },
+          },
+        });
         return;
       }
-      if (/\/terrain(?:-read|\/read)?(?:\/stream)?$/.test(url.pathname) && request.method === "POST") {
-        terrainReadCount += 1;
-        const count = Math.min(terrainReadCount, THREE_HYPOTHESES.length);
+      if (url.pathname === `/api/projects/${drover.projectId}/terrain/read` && request.method === "POST") {
         send(200, {
           schemaVersion: 1,
-          id: `fixture-read-${terrainReadCount}`,
+          id: "fixture-read-1",
           projectId: drover.projectId,
           generatedAt: "2026-07-10T12:01:00.000Z",
           inputFingerprint: resultRecorded ? "fixture:sample-acme:joined-outcome-v2" : READ_CASES.inputFingerprint,
           runtime: READ_CASES.runtime,
-          hypotheses: resultRecorded ? CHANGED_READ.hypotheses : THREE_HYPOTHESES.slice(0, count),
+          hypotheses: resultRecorded ? CHANGED_READ.hypotheses : THREE_HYPOTHESES,
         });
         return;
       }
-      if (/\/terrain\/(?:ask|crew)$/.test(url.pathname) && request.method === "POST") {
-        send(200, READ_CASES.disagreement);
+      if (url.pathname === `/api/projects/${drover.projectId}/terrain/crew` && request.method === "POST") {
+        send(200, {
+          schemaVersion: 1,
+          projectId: drover.projectId,
+          hypothesisRef: { type: "terrain-hypothesis", id: THREE_HYPOTHESES[0].id },
+          generatedAt: "2026-07-10T12:02:00.000Z",
+          runtime: READ_CASES.runtime,
+          positions: READ_CASES.disagreement.positions.map((position, index) => ({
+            id: `fixture-position-${index + 1}`,
+            participantRef: position.teammateRef.id,
+            claim: position.position,
+            uncertainty: position.uncertainty,
+            recommendation: position.recommendation,
+            falsifier: position.falsifier,
+            evidenceRefs: position.evidenceRefs,
+            disagreesWith: [READ_CASES.disagreement.positions[index === 0 ? 1 : 0].teammateRef.id],
+          })),
+        });
         return;
       }
-      if (/\/terrain\/fixture-result$/.test(url.pathname) && request.method === "POST") {
+      if (request.method === "POST" && url.pathname === "/api/operator/sessions") {
+        pipelineCreated = true;
+        send(202, { session: fixtureSession(drover.projectId), reused: false });
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/api/operator/sessions/fixture-operator-session") {
+        send(200, { session: fixtureSession(drover.projectId) });
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/api/graph/template" && url.searchParams.get("channel") === PIPELINE_ID) {
+        send(200, { graph: FIXTURE_GRAPH, runs: runStarted ? [fixtureRun({ approved: gateApproved })] : [] });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/graph/audit") {
+        send(200, { audits: {} });
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/api/project" && pipelineCreated) {
+        const actual = await fetch(new URL(request.url, drover.base), { headers: request.headers });
+        const body = await actual.json();
+        send(200, {
+          ...body,
+          project: {
+            ...body.project,
+            activeChannelId: null,
+            channels: [{
+              id: PIPELINE_ID,
+              graphId: PIPELINE_ID,
+              name: "Project brief activation test",
+              objective: "Test whether the read-only project brief becomes a product-led entry point.",
+              kind: "terrain-selected-move",
+              enabled: true,
+              status: gateApproved ? "done" : runStarted ? "waiting" : "idle",
+              lastRunAt: runStarted ? "2026-07-10T12:05:00.000Z" : null,
+              lastRunOk: gateApproved,
+              pendingGates: runStarted && !gateApproved ? 1 : 0,
+              nodeCount: FIXTURE_GRAPH.nodes.length,
+              runCount: runStarted ? 1 : 0,
+              graphRevision: 1,
+              workContext: FIXTURE_GRAPH.workContext,
+            }],
+          },
+        });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/graph/run/stream") {
+        runStarted = true;
+        const result = fixtureRun();
+        response.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store" });
+        const events = [
+          { type: "run_start", nodeIds: FIXTURE_GRAPH.nodes.map((node) => node.id) },
+          ...["source", "draft", "gate"].flatMap((nodeId) => [{ type: "node_start", nodeId }, { type: "node_done", nodeId, result: result.nodes[nodeId] }]),
+          { type: "run_done", result },
+        ];
+        response.end(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(""));
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/graph/run") {
+        gateApproved = true;
+        send(200, fixtureRun({ approved: true }));
+        return;
+      }
+      if (request.method === "GET" && url.pathname === `/api/projects/${drover.projectId}/run-summary`) {
+        send(200, { run: runStarted ? { runId: "fixture-run-1", staged: 1, sent: gateApproved ? 1 : 0, measured: resultRecorded ? 1 : 0, replies: 0, calls: 0, signups: 0, paid: 0, noReply: resultRecorded ? 1 : null, revenue: null, note: resultRecorded ? "The brief drew no response." : "Awaiting a market result." } : null });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === `/api/projects/${drover.projectId}/outcome`) {
         resultRecorded = true;
-        send(201, { id: "outcome-brief-zero-conversion", joined: true, kind: "negative", stale: true });
+        send(201, { ok: true, id: "outcome-brief-zero-conversion", joined: true, kind: "negative", stale: true });
         return;
       }
       await proxyResponse(drover.base, request, response);
@@ -167,6 +411,12 @@ async function bootFixtureProxy(drover, { runtimeConnected = true } = {}) {
   await once(server, "listening");
   return {
     base: `http://127.0.0.1:${port}`,
+    reset() {
+      pipelineCreated = false;
+      runStarted = false;
+      gateApproved = false;
+      resultRecorded = false;
+    },
     close: () => new Promise((resolve) => {
       server.closeAllConnections?.();
       server.close(resolve);
@@ -202,13 +452,21 @@ async function waitForDom(client, expression, reason, timeout = 8000) {
 }
 
 async function activate(client, testId, text, reason, keyboardOnly) {
-  const focusedOrClicked = await client.evaluate(`(() => {
-    const element = window.__terrainEval.byTestId(${JSON.stringify(testId)}) || window.__terrainEval.byText(${JSON.stringify(text)});
-    if (!window.__terrainEval.visible(element)) return false;
-    if (${keyboardOnly ? "true" : "false"}) element.focus();
-    else element.click();
-    return true;
-  })()`);
+  let focusedOrClicked = false;
+  const started = Date.now();
+  // ReactFlow may remount a node while its measured size settles. Find and activate in one browser task,
+  // retrying across that transition so the evaluator grades the stable control rather than one animation
+  // frame. A control that never becomes actionable still fails with the caller's exact journey reason.
+  while (!focusedOrClicked && Date.now() - started < 8000) {
+    focusedOrClicked = await client.evaluate(`(() => {
+      const element = window.__terrainEval.byTestId(${JSON.stringify(testId)}) || window.__terrainEval.byText(${JSON.stringify(text)});
+      if (!window.__terrainEval.visible(element)) return false;
+      if (${keyboardOnly ? "true" : "false"}) element.focus();
+      else element.click();
+      return true;
+    })()`).catch(() => false);
+    if (!focusedOrClicked) await delay(100);
+  }
   assert.equal(focusedOrClicked, true, reason);
   if (keyboardOnly) {
     await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter" });
@@ -230,12 +488,16 @@ async function assertAccessibility(client, viewport) {
   const clipped = await client.evaluate(`(() => [...document.querySelectorAll('[data-terrain-primary="true"],[data-testid="terrain-primary-action"],[data-testid="founder-gate-approve"]')]
     .filter(window.__terrainEval.visible)
     .filter((element) => { const r = element.getBoundingClientRect(); return r.left < 0 || r.top < 0 || r.right > innerWidth || r.bottom > innerHeight; })
-    .map((element) => element.getAttribute('data-testid') || element.textContent?.trim() || element.tagName))()`);
-  assert.deepEqual(clipped, [], `${viewport.name}: clipped primary controls: ${clipped.join(", ")}`);
+    .map((element) => { const r = element.getBoundingClientRect(); return { id: element.getAttribute('data-testid') || element.textContent?.trim() || element.tagName, rect: [r.left, r.top, r.right, r.bottom], viewport: [innerWidth, innerHeight] }; }))()`);
+  if (process.env.TERRAIN_DEBUG === "1" && viewport.name === "narrow") {
+    console.log("narrow layout", await client.evaluate(`(() => [...document.querySelectorAll('.fdock,.fdock-left,.fdock-right,.project-switcher-trigger,.osw-trigger,.fdock-lens,.tfocus,.tfocus-actions')].map((element) => { const r = element.getBoundingClientRect(); return { className: element.className, rect: [r.left, r.top, r.right, r.bottom], display: getComputedStyle(element).display, width: getComputedStyle(element).width }; }))()`));
+  }
+  assert.deepEqual(clipped, [], `${viewport.name}: clipped primary controls: ${clipped.map((item) => `${item.id} @ ${item.rect.join("/")} in ${item.viewport.join("x")}`).join(", ")}`);
 }
 
 async function runJourney(client, viewport, { keyboardOnly = false } = {}) {
   await client.send("Emulation.setDeviceMetricsOverride", { width: viewport.width, height: viewport.height, deviceScaleFactor: 1, mobile: viewport.mobile === true });
+  await client.evaluate("localStorage.clear()").catch(() => {});
   await client.send("Page.reload", { ignoreCache: true });
   await waitForDom(client, "document.readyState === 'complete' && !!document.querySelector('#root')", `${viewport.name}: Drover did not finish loading`);
   await client.evaluate(browserHelpers());
@@ -270,20 +532,47 @@ async function runJourney(client, viewport, { keyboardOnly = false } = {}) {
   await waitForDom(client, `(() => { const view = window.__terrainEval.byTestId("engineer-view"); return /intended effect/i.test(view.textContent) && /gate|approval|wall/i.test(view.textContent); })()`, `${viewport.name}: Gate B step 7 failed — Engineer omitted intended effect or gate consequence`);
 
   await activate(client, "pipeline-run", "Run", `${viewport.name}: Gate B step 8 could not run the fixture pipeline`, keyboardOnly);
-  await waitForDom(client, `!!window.__terrainEval.byTestId("founder-gate")`, `${viewport.name}: Gate B step 8 failed — the run did not stop at the founder wall`);
+  try {
+    await waitForDom(client, `!!window.__terrainEval.byTestId("founder-gate")`, `${viewport.name}: Gate B step 8 failed — the run did not stop at the founder wall`);
+  } catch (error) {
+    if (process.env.TERRAIN_DEBUG === "1") {
+      console.log(`${viewport.name}: wall diagnostics`, await client.evaluate(`({ engineer: (() => { const element = window.__terrainEval.byTestId("engineer-view"); return element ? { ...element.dataset } : null; })(), runButton: (() => { const element = window.__terrainEval.byTestId("pipeline-run"); if (!element) return null; const r = element.getBoundingClientRect(); return { disabled: element.disabled, rect: [r.left, r.top, r.right, r.bottom] }; })(), gates: [...document.querySelectorAll('[data-testid="founder-gate"]')].length, text: document.querySelector('#root')?.textContent?.slice(-1200) })`));
+    }
+    throw error;
+  }
   assert.equal(await client.evaluate(`!!window.__terrainEval.byTestId("external-release-receipt")`), false, `${viewport.name}: an external release appeared before founder approval`);
+  await waitForDom(
+    client,
+    `window.__terrainEval.visible(window.__terrainEval.byTestId("founder-gate-approve") || window.__terrainEval.byText("Approve"))`,
+    `${viewport.name}: the founder wall opened without a visible decision action`,
+  );
   await activate(client, "founder-gate-approve", "Approve", `${viewport.name}: Gate B step 9 requires an explicit browser founder action`, keyboardOnly);
   await waitForDom(client, `!!window.__terrainEval.byTestId("gate-approved-receipt")`, `${viewport.name}: Gate B step 9 did not persist the founder decision receipt`);
   await activate(client, "record-outcome", "Record result", `${viewport.name}: Gate B step 9 could not record a joined result`, keyboardOnly);
+  await waitForDom(client, `!!window.__terrainEval.byText("Got ignored")`, `${viewport.name}: the outcome recorder did not open`);
+  await activate(client, "", "Got ignored", `${viewport.name}: the fixture negative result was not selectable`, keyboardOnly);
+  await activate(client, "", "Log what came back", `${viewport.name}: the fixture result could not be saved`, keyboardOnly);
   await waitForDom(client, `!!window.__terrainEval.byTestId("joined-outcome")`, `${viewport.name}: the fixture result was not visibly joined`);
+  await activate(client, "", "Done", `${viewport.name}: the joined result receipt could not be closed`, keyboardOnly);
 
   await activate(client, "operator-view-toggle", "Operator", `${viewport.name}: Gate B step 10 could not return to Operator`, keyboardOnly);
   await waitForDom(client, `(() => { const root = document.querySelector('#root'); return /stale|updated|changed/i.test(root.textContent) && !!window.__terrainEval.byTestId("terrain-product-landmark"); })()`, `${viewport.name}: Gate B step 10 failed — the joined result did not return to affected terrain`);
-  const beforeRefresh = await client.evaluate(`({ project: window.__terrainEval.byTestId("terrain-product-landmark")?.textContent, focus: window.__terrainEval.byTestId("terrain-focus")?.getAttribute("data-ref"), gate: !!window.__terrainEval.byTestId("gate-approved-receipt"), outcome: !!window.__terrainEval.byTestId("joined-outcome") })`);
+  const beforeRefresh = await client.evaluate(`({ project: !!document.querySelector('[data-testid="terrain-product-landmark"][data-ref="product-truth:truth-win-event"]'), focus: window.__terrainEval.byTestId("terrain-focus")?.getAttribute("data-ref"), gate: !!window.__terrainEval.byTestId("gate-approved-receipt"), outcome: !!window.__terrainEval.byTestId("joined-outcome") })`);
+  if (process.env.TERRAIN_DEBUG === "1") {
+    console.log(`${viewport.name}: refresh receipt before`, await client.evaluate(`({ storage: { ...localStorage }, focus: window.__terrainEval.byTestId("terrain-focus")?.getAttribute("data-ref") })`));
+  }
   await client.send("Page.reload", { ignoreCache: true });
   await waitForDom(client, "document.readyState === 'complete' && !!document.querySelector('#root')", `${viewport.name}: refresh did not recover the app`);
   await client.evaluate(browserHelpers());
-  const afterRefresh = await client.evaluate(`({ project: window.__terrainEval.byTestId("terrain-product-landmark")?.textContent, focus: window.__terrainEval.byTestId("terrain-focus")?.getAttribute("data-ref"), gate: !!window.__terrainEval.byTestId("gate-approved-receipt"), outcome: !!window.__terrainEval.byTestId("joined-outcome") })`);
+  try {
+    await waitForDom(client, `!!window.__terrainEval.byTestId("terrain-focus")`, `${viewport.name}: refresh did not restore the addressed terrain focus`);
+  } catch (error) {
+    if (process.env.TERRAIN_DEBUG === "1") {
+      console.log(`${viewport.name}: refresh receipt after`, await client.evaluate(`({ storage: { ...localStorage }, landmarks: [...document.querySelectorAll('[data-testid^="terrain-"]')].map((element) => ({ testId: element.getAttribute('data-testid'), ref: element.getAttribute('data-ref') })), text: document.querySelector('#root')?.textContent?.slice(0, 500) })`));
+    }
+    throw error;
+  }
+  const afterRefresh = await client.evaluate(`({ project: !!document.querySelector('[data-testid="terrain-product-landmark"][data-ref="product-truth:truth-win-event"]'), focus: window.__terrainEval.byTestId("terrain-focus")?.getAttribute("data-ref"), gate: !!window.__terrainEval.byTestId("gate-approved-receipt"), outcome: !!window.__terrainEval.byTestId("joined-outcome") })`);
   assert.deepEqual(afterRefresh, beforeRefresh, `${viewport.name}: Gate B step 11 lost project, focus, gate, or outcome history after refresh`);
   await assertAccessibility(client, viewport);
 }
@@ -296,6 +585,39 @@ async function assertNoRuntimeValue(client, proxyBase) {
   assert.equal(await client.evaluate(`!!window.__terrainEval.byTestId("runtime-fullscreen-wall")`), false, "no-runtime state replaced deterministic terrain with a connection wall");
 }
 
+async function launchEvaluatedChrome(url, errors) {
+  const chrome = await launchChrome({ port: await freePort(), url });
+  await chrome.client.send("Page.addScriptToEvaluateOnNewDocument", { source: `
+    (() => {
+      window.__droverTerrainCounts = [];
+      const attach = () => {
+        let last = -1;
+        const sample = () => {
+          const count = document.querySelectorAll('[data-testid="terrain-hypothesis"]').length;
+          if (count !== last && count > 0) { last = count; window.__droverTerrainCounts.push(count); }
+        };
+        new MutationObserver(sample).observe(document.documentElement, { childList: true, subtree: true });
+        sample();
+      };
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach, { once: true });
+      else attach();
+    })();
+  ` });
+  chrome.client.on("Runtime.exceptionThrown", ({ exceptionDetails }) => errors.push(exceptionDetails.exception?.description || exceptionDetails.text));
+  chrome.client.on("Runtime.consoleAPICalled", ({ type, args }) => {
+    if (type === "error") errors.push(`console.error: ${args.map((arg) => arg.value ?? arg.description ?? "").join(" ")}`);
+  });
+  chrome.client.on("Log.entryAdded", ({ entry }) => { if (entry.level === "error") errors.push(entry.text); });
+  return chrome;
+}
+
+async function closeEvaluatedChrome(chrome, errors) {
+  if (!chrome) return;
+  const unhandled = await chrome.client.evaluate("window.__droverUnhandledRejections || []").catch(() => []);
+  errors.push(...unhandled.map((message) => `Unhandled rejection: ${message}`));
+  await chrome.close();
+}
+
 async function main() {
   let drover;
   let proxy;
@@ -305,29 +627,40 @@ async function main() {
   try {
     drover = await bootDrover();
     proxy = await bootFixtureProxy(drover, { runtimeConnected: true });
-    const chromePort = await freePort();
-    chrome = await launchChrome({ port: chromePort, url: proxy.base });
-    chrome.client.on("Runtime.exceptionThrown", ({ exceptionDetails }) => errors.push(exceptionDetails.exception?.description || exceptionDetails.text));
-    chrome.client.on("Runtime.consoleAPICalled", ({ type, args }) => {
-      if (type === "error") errors.push(`console.error: ${args.map((arg) => arg.value ?? arg.description ?? "").join(" ")}`);
-    });
-    chrome.client.on("Log.entryAdded", ({ entry }) => { if (entry.level === "error") errors.push(entry.text); });
-    for (const viewport of VIEWPORTS) {
+    if (process.env.TERRAIN_DEBUG_HOLD === "1") {
+      console.log(`Gate B debug fixture: ${proxy.base}`);
+      await new Promise((resolve) => process.once("SIGINT", resolve));
+      return;
+    }
+    const selectedViewports = process.env.TERRAIN_VIEWPORT
+      ? VIEWPORTS.filter((viewport) => viewport.name === process.env.TERRAIN_VIEWPORT)
+      : VIEWPORTS;
+    for (const viewport of selectedViewports) {
       console.log(`Gate B: ${viewport.width}x${viewport.height}`);
+      proxy.reset();
+      chrome = await launchEvaluatedChrome(proxy.base, errors);
       try { await runJourney(chrome.client, viewport); }
       catch (error) { errors.push(error instanceof Error ? error.message : String(error)); }
+      await closeEvaluatedChrome(chrome, errors);
+      chrome = null;
     }
-    console.log("Gate B: keyboard-only");
-    try { await runJourney(chrome.client, VIEWPORTS[0], { keyboardOnly: true }); }
-    catch (error) { errors.push(error instanceof Error ? error.message : String(error)); }
+    if (!process.env.TERRAIN_VIEWPORT) {
+      console.log("Gate B: keyboard-only");
+      proxy.reset();
+      chrome = await launchEvaluatedChrome(proxy.base, errors);
+      try { await runJourney(chrome.client, VIEWPORTS[0], { keyboardOnly: true }); }
+      catch (error) { errors.push(error instanceof Error ? error.message : String(error)); }
+      await closeEvaluatedChrome(chrome, errors);
+      chrome = null;
+    }
 
     disconnectedProxy = await bootFixtureProxy(drover, { runtimeConnected: false });
     console.log("Gate B: no-runtime deterministic value");
+    chrome = await launchEvaluatedChrome(disconnectedProxy.base, errors);
     try { await assertNoRuntimeValue(chrome.client, disconnectedProxy.base); }
     catch (error) { errors.push(error instanceof Error ? error.message : String(error)); }
-
-    const unhandled = await chrome.client.evaluate("window.__droverUnhandledRejections || []").catch(() => []);
-    errors.push(...unhandled.map((message) => `Unhandled rejection: ${message}`));
+    await closeEvaluatedChrome(chrome, errors);
+    chrome = null;
     assert.deepEqual(errors, [], `Gate B deterministic browser failures:\n- ${errors.join("\n- ")}`);
     console.log("Gate B passed at 1440x900, 1024x768, 390x844, keyboard-only, refresh, and no-runtime modes.");
   } finally {

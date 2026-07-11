@@ -177,7 +177,15 @@ function EngineerLens({ model: m }: GtmLensProps) {
   const focusedLane = m.activeChannelId ? m.operatingView?.lanes.find((l) => l.channelId === m.activeChannelId) ?? null : null;
   const showReadout = !landing && !!m.activeChannelId && graph.nodes.length > 0;
   return (
-    <div className="engineer-lens" style={{ position: "relative", height: "100%", minHeight: 0, ...GUTTER_STYLE }}>
+    <div
+      className="engineer-lens"
+      data-testid="engineer-view"
+      data-channel-id={m.activeChannelId ?? ""}
+      data-graph-id={graph.id}
+      data-run-id={m.result?.runId ?? ""}
+      data-pending-gates={m.result?.pendingGates?.join(",") ?? ""}
+      style={{ position: "relative", height: "100%", minHeight: 0, ...GUTTER_STYLE }}
+    >
       {showReadout ? (
         <FocusedPipelineReadout
           channel={focusedChannel}
@@ -294,7 +302,7 @@ function OperatorLensPane({ model: m }: GtmLensProps) {
       ) : null}
       {m.terrainState?.stale || m.terrainState?.partial ? (
         <div className="terrain-state-note" role="status">
-          {m.terrainState.stale ? "Terrain read is older than the latest product or market evidence." : "Some terrain sources are unavailable; loaded truth remains usable."}
+          {m.terrainState.stale ? "Terrain updated; the model read is stale against newer product or market evidence." : "Some terrain sources are unavailable; loaded truth remains usable."}
         </div>
       ) : null}
       <GraphCanvas

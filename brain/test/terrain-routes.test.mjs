@@ -104,6 +104,53 @@ describe("project terrain routes", () => {
     }
   });
 
+  it("returns distinct project-scoped crew positions from the advisory POST seam", async () => {
+    let received = null;
+    const handler = createTerrainRoutes({
+      terrainReadInput: (projectId, { model, focusRef }) => ({
+        projectId, model, focusRef, crew: [{ ref: "activation-lead" }, { ref: "market-skeptic" }],
+      }),
+      runTerrainCrew: async (input) => {
+        received = input;
+        return { ok: true, terrainCrew: {
+          schemaVersion: 1,
+          projectId: input.projectId,
+          hypothesisRef: { type: "terrain-hypothesis", id: input.hypothesis.id },
+          generatedAt: "2026-07-10T00:00:00.000Z",
+          runtime: { id: "codex", model: input.model },
+          positions: [
+            { id: "position-1", participantRef: "activation-lead", claim: "Test the first-run surface.", evidenceRefs: [], disagreesWith: ["market-skeptic"] },
+            { id: "position-2", participantRef: "market-skeptic", claim: "Test whether the surface travels.", evidenceRefs: [], disagreesWith: ["activation-lead"] },
+          ],
+        } };
+      },
+    });
+    const injectedServer = http.createServer(async (req, res) => {
+      const url = new URL(req.url, "http://127.0.0.1");
+      if (!(await handler({ req, res, url }))) res.writeHead(404).end();
+    });
+    injectedServer.listen(0, "127.0.0.1");
+    await once(injectedServer, "listening");
+    const injectedBase = `http://127.0.0.1:${injectedServer.address().port}`;
+    try {
+      const hypothesis = { id: "h-1", claim: "A project brief could become an entry point.", evidenceRefs: [], counterEvidenceRefs: [] };
+      const response = await fetch(`${injectedBase}/api/projects/project-a/terrain/crew`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: "gpt-fixture", hypothesis }),
+      });
+      assert.equal(response.status, 200);
+      const read = await response.json();
+      assert.equal(read.positions.length, 2);
+      assert.notEqual(read.positions[0].claim, read.positions[1].claim);
+      assert.equal(received.focusRef, "terrain-hypothesis:h-1");
+      assert.deepEqual(received.hypothesis, hypothesis);
+    } finally {
+      injectedServer.closeAllConnections?.();
+      await new Promise((resolve) => injectedServer.close(resolve));
+    }
+  });
+
   it("assembles only the requested project's linked scan and project-scoped authorities", () => {
     const projects = new Map([
       ["project-a", { id: "project-a", sharedContext: { repository: { workspaceId: "workspace-a", repo: "/repo/a" } } }],

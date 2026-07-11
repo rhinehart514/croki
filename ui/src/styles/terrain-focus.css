@@ -33,6 +33,11 @@
 .tfocus-empty { color: var(--muted); }
 .tfocus-crew { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .tfocus-crew button { display: inline-flex; align-items: center; gap: var(--space-2); border: 1px solid var(--line-2); border-radius: var(--r-md); padding: var(--space-1) var(--space-2); background: var(--surface); color: var(--ink-2); cursor: pointer; }
+.tfocus-positions { display: grid; gap: var(--space-2); }
+.tfocus-position { padding: var(--space-3); border: 1px solid var(--line-2); border-radius: var(--r-md); background: var(--surface-2); }
+.tfocus-position strong { display: block; margin-bottom: var(--space-1); color: var(--ink); font-size: var(--text-xs); }
+.tfocus-position p { color: var(--ink-2); }
+.tfocus-position small { display: block; margin-top: var(--space-2); color: var(--muted); line-height: var(--leading-normal); }
 .tfocus-move strong { display: block; color: var(--ink); font-size: var(--text-sm); margin-bottom: var(--space-1); }
 .tfocus-move small { display: block; margin-top: var(--space-2); color: var(--muted); }
 .tfocus-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--line-2); background: var(--surface-2); }
@@ -41,7 +46,8 @@
 .tfocus-actions button.is-primary { background: var(--ink); border-color: var(--ink); color: var(--surface); }
 .tfocus :focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
 @media (max-width: 640px) {
-  .tfocus { top: auto; right: var(--space-2); bottom: calc(var(--space-12) + var(--space-4)); left: var(--space-2); width: auto; max-height: 62%; }
-  .tfocus-body { padding: var(--space-4); }
+  .tfocus { position: fixed; top: auto; right: var(--space-2); bottom: calc(var(--space-12) + var(--space-4)); left: var(--space-2); width: auto; max-height: 62%; }
+  .tfocus-body { min-height: 0; padding: var(--space-4); }
+  .tfocus-actions { flex: 0 0 auto; max-height: 10rem; overflow-y: auto; }
 }
 @media (prefers-reduced-motion: reduce) { .tfocus * { scroll-behavior: auto; } }

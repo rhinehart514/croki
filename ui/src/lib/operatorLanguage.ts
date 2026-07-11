@@ -37,6 +37,7 @@ const DETAIL_RULES: Array<[RegExp, string]> = [
   [/^Composed workflow is invalid[\s\S]*$/i, "The plan came back mis-wired — rebuilding it."],
   [/^No active (?:channel|pipeline)[\s\S]*$/i, "No pipeline is active yet."],
   [/^Blind:\s*invoice\.paid could not be confirmed\.?$/i, "Couldn't confirm the paid-invoice signal in your product."],
+  [/^Blind:\s*[a-z][a-z0-9_]* could not be confirmed\.?$/i, "Couldn't confirm the customer success signal in your product yet."],
 ];
 
 // Founder-facing word swaps applied only to the short status labels (titles) and to details we already
@@ -59,22 +60,34 @@ function rewriteDetail(detail: string): { text: string; rewritten: boolean } {
 // Model narration is allowed to stay first-person and specific, but the founder should never have to
 // decode the engine's nouns. This is a narrow backstop for the recurring vocabulary the prompt already
 // bans, including old persisted sessions written before that prompt rule existed.
-function rewriteReasoning(detail: string): string {
+export function rewriteFounderLanguage(detail: string): string {
   return detail
     .replace(/access requests preserve a\s+`?ref`?\s+source/gi, "access requests record where someone came from")
     .replace(/the actual\s+`?project_created`?\s+conversion is still blind/gi, "we still cannot see whether those people go on to create a project")
     .replace(/`([a-z][a-z0-9]*(?:_[a-z0-9]+)+)`/g, (_match, id: string) => id.replaceAll("_", " "))
+    .replace(/\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/g, (id) => id.replaceAll("_", " "))
+    .replace(/\bref[- ]tagged\b/gi, "source-tracked")
+    .replace(/\bref code\b/gi, "tracking link")
     .replace(/\bGTM primitive\b/gi, "useful clue")
     .replace(/\battribution\b/gi, "the source trail")
+    .replace(/\battributable\b/gi, "with a source you can see")
     .replace(/\bproduct positioning\b/gi, "how to explain the product")
     .replace(/\bbuyer fit\b/gi, "who it is really for")
     .replace(/\bhypotheses\b/gi, "things we still need to test")
     .replace(/\ba real fork\b/gi, "several genuinely different ways to go")
+    .replace(/\bthe goal forks\b/gi, "there are genuinely different ways to go")
+    .replace(/\bembodied pipeline\b/gi, "concrete")
+    .replace(/\bfounder review gate\b/gi, "your review before anything goes out")
+    .replace(/\bfounder truth\b/gi, "what only you can confirm")
     .replace(/\brunnable shapes\b/gi, "approaches")
     .replace(/\bshapes\b/gi, "approaches")
     .replace(/\bthe motion\b/gi, "one")
+    .replace(/\bmotion\b/gi, "approach")
     .replace(/\bapproval gate\b/gi, "review before anything goes out")
-    .replace(/\bbeing composed\b/gi, "being laid out");
+    .replace(/\bbeing composed\b/gi, "being laid out")
+    .replace(/\bmint\b/gi, "create")
+    .replace(/\bstage\b/gi, "prepare")
+    .replace(/\binbound\b/gi, "people finding you");
 }
 
 function humanizeOperatorEvent(ev: OperatorEvent): OperatorEvent {
@@ -89,9 +102,9 @@ function humanizeOperatorEvent(ev: OperatorEvent): OperatorEvent {
 
   // Reasoning stays authentic, with only the recurring engine vocabulary translated.
   const detailResult = rawDetail ? rewriteDetail(rawDetail) : { text: "", rewritten: false };
-  const detail = ev.type === "operator_note"
-    ? rewriteReasoning(detailResult.text)
-    : (detailResult.rewritten ? swapLabelWords(detailResult.text) : rawDetail);
+  const detail = detailResult.rewritten
+    ? swapLabelWords(detailResult.text)
+    : rewriteFounderLanguage(rawDetail);
 
   if (title === rawTitle && detail === rawDetail) return ev;
   return { ...ev, title, detail: detail || null };

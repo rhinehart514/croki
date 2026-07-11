@@ -107,7 +107,7 @@ export default function OutcomeCapture({ projectId, runId, onDone, missionLabel 
   if (landed) {
     const hasWin = landed.items.some((it) => it.win);
     return (
-      <section className={`oc-receipt${hasWin ? " is-win" : ""}`} aria-label="What came back">
+      <section className={`oc-receipt${hasWin ? " is-win" : ""}`} aria-label="What came back" data-testid="joined-outcome">
         <div className="oc-receipt-crown" aria-hidden="true">
           <span className="oc-receipt-seal">
             <Check />
@@ -143,7 +143,16 @@ export default function OutcomeCapture({ projectId, runId, onDone, missionLabel 
         </p>
 
         <div className="oc-actions">
-          <button type="button" className="oc-save oc-receipt-done" onClick={onDone}>
+          <button
+            type="button"
+            className="oc-save oc-receipt-done"
+            onClick={onDone}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              onDone();
+            }}
+          >
             Done
           </button>
         </div>
@@ -169,6 +178,11 @@ export default function OutcomeCapture({ projectId, runId, onDone, missionLabel 
                 className={`oc-chip${on ? " is-on" : ""}`}
                 aria-pressed={on}
                 onClick={() => toggle(o.id)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  toggle(o.id);
+                }}
               >
                 <span className="oc-chip-tick" aria-hidden="true">
                   {on ? <Check /> : null}
@@ -213,7 +227,17 @@ export default function OutcomeCapture({ projectId, runId, onDone, missionLabel 
         <button type="button" className="oc-skip" onClick={onDone} disabled={saving}>
           Skip
         </button>
-        <button type="button" className="oc-save" onClick={submit} disabled={!canSubmit}>
+        <button
+          type="button"
+          className="oc-save"
+          onClick={submit}
+          disabled={!canSubmit}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            if (canSubmit) void submit();
+          }}
+        >
           {saving ? "Saving…" : "Log what came back"}
         </button>
       </div>
