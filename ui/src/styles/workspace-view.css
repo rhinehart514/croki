@@ -16,8 +16,8 @@
      theme and lets the canvas bleed through. --canvas is opaque in both themes. */
   background: var(--canvas);
   border: 1px solid var(--line);
-  border-radius: var(--r-xl);
-  box-shadow: 0 24px 80px -20px rgba(16, 18, 27, 0.34);
+  border-radius: var(--elev-panel-radius);
+  box-shadow: var(--elev-panel-shadow);
   overflow: hidden;
 }
 

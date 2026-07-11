@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { AlertTriangle, Inbox, LoaderCircle, Settings2 } from "lucide-react";
+import { AlertTriangle, Inbox, LoaderCircle, Lock, Settings2 } from "lucide-react";
 import { SPRING } from "@/lib/springs";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { ChannelSwitcher } from "@/components/ChannelSwitcher";
@@ -16,6 +16,9 @@ export function FloatingDock({
   channels, activeChannelId,
   onOpenChannel, onNewChannel,
   onShowOverview, overviewActive,
+  // Home — zoom back out to the whole operation and clear any open layer. The product identity mark IS
+  // the home button, so the canvas needs no separate floating "back" chip.
+  onGoHome,
   // A quiet, one-line plain-language operation status (docs/production-direction/16) — "3 pipelines ·
   // 1 waiting on you · 2 back". Orients the founder without a dashboard; a polite status region, never a
   // command. Absent → omitted (no empty chrome).
@@ -25,6 +28,9 @@ export function FloatingDock({
   onOpenSettings,
   problems, issuesOpen, onToggleIssues,
   pendingDecisions, decisionsOpen, onToggleDecisions,
+  // Founder-action lock — approving/publishing/local changes are locked until the founder unlocks.
+  // Shown as a quiet lock chip, not a parked card; clicking it summons the unlock prompt.
+  locked, unlockOpen, onToggleUnlock,
   // Right — the one first-class action left on the bar.
   graph, running, onRun,
 }: {
@@ -42,6 +48,7 @@ export function FloatingDock({
   onNewChannel: () => void;
   onShowOverview?: () => void;
   overviewActive?: boolean;
+  onGoHome?: () => void;
   // A quiet plain-language operation status line. Optional; omitted when absent.
   operationStatus?: string | null;
   onOpenSettings?: () => void;
@@ -53,11 +60,15 @@ export function FloatingDock({
   pendingDecisions: number;
   decisionsOpen: boolean;
   onToggleDecisions: () => void;
+  locked?: boolean;
+  unlockOpen?: boolean;
+  onToggleUnlock?: () => void;
   graph: GTMGraph | null;
   running: boolean;
   onRun: () => void;
 }) {
   const noGraph = !graph || graph.nodes.length === 0;
+  const runTitle = running ? "Running…" : noGraph ? "Open or build a pipeline first, then run it" : "Run this pipeline";
 
   return (
     <motion.div
@@ -71,8 +82,19 @@ export function FloatingDock({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={SPRING}
     >
-      {/* Left — product · channel breadcrumb */}
+      {/* Left — home mark · product · channel breadcrumb */}
       <div className="fdock-left">
+        {onGoHome ? (
+          <button
+            type="button"
+            className="fdock-home"
+            onClick={onGoHome}
+            title="Back to the whole operation"
+            aria-label="Back to the whole operation"
+          >
+            <span className="loop-brand-mark">G</span>
+          </button>
+        ) : null}
         <ProjectSwitcher
           projects={projects}
           activeProjectId={activeProjectId}
@@ -112,6 +134,20 @@ export function FloatingDock({
             <span className="fdock-count gate">{pendingDecisions}</span>
           </button>
         ) : null}
+        {/* Founder-action lock — a quiet chip that says approving/publishing is locked and summons the
+            unlock prompt on click. Replaces the card that used to sit parked on the canvas full-time. */}
+        {locked && onToggleUnlock ? (
+          <button
+            className={`fdock-icon-btn fdock-lock${unlockOpen ? " open" : ""}`}
+            type="button"
+            onClick={onToggleUnlock}
+            title="Founder actions are locked — click to unlock approving, publishing, and local changes"
+            aria-label="Unlock founder actions"
+            aria-pressed={unlockOpen}
+          >
+            <Lock size={14} />
+          </button>
+        ) : null}
         {/* Settings — a quiet, low-emphasis monochrome gear tucked in the corner. The admin door
             (workspace, team, self-built tools). */}
         {onOpenSettings ? (
@@ -132,6 +168,7 @@ export function FloatingDock({
           data-testid="pipeline-run"
           data-terrain-primary="true"
           disabled={running || noGraph}
+          title={runTitle}
           onClick={onRun}
           onKeyDown={(event) => {
             if (event.key !== "Enter" && event.key !== " ") return;

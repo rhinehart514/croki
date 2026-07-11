@@ -62,6 +62,36 @@ export function humanizeStepLabel(label: string): string {
   return humanizeFieldLabel(raw);
 }
 
+// A pipeline's `objective` is set from the composer's goal string, which routinely arrives carrying
+// engineering-register tails a founder must never read: a "Win event = project_created" identifier, a
+// composer instruction ("Ideate 2-3 distinct GTM pipeline shapes the founder can compare…"), scan
+// bookkeeping ("inferred from the repo", "the code scan came back blind"), and third-person notes about
+// the founder. This reduces that blob to the one clean goal line: the first real sentence, with any
+// instruction/bookkeeping tail cut off, so a pipeline reads as a plain intention, not a prompt.
+//
+// A phrase that opens an instruction/bookkeeping clause. If one of these begins a sentence, that sentence
+// and everything after it is machinery — the goal is whatever came before. Matched at a sentence start
+// only, so a legitimate goal that happens to contain one of these words mid-sentence is left intact.
+const OBJECTIVE_TAIL = /(?:^|(?<=[.!?]\s))(?:win event\b|ideate\b|compose\b|product specifics\b|the code scan\b|the scan\b|inferred from\b|grounded in the reality\b|keep claims\b|each grounded\b|the founder\b|the buyer is\b|the activation is\b)/i;
+
+export function founderGoalLine(objective: string | null | undefined): string {
+  const raw = (objective ?? "").trim();
+  if (!raw) return "";
+  // Cut the objective at the first instruction/bookkeeping clause, then keep the first sentence of what
+  // remains — the plain goal. If no tail marker matched, the first sentence of the whole string is the goal.
+  const tail = raw.match(OBJECTIVE_TAIL);
+  const goalPart = (tail && tail.index != null ? raw.slice(0, tail.index) : raw).trim();
+  // First sentence: stop at the first sentence-ending punctuation followed by a space (or end of string).
+  const firstSentence = goalPart.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? goalPart;
+  // Drop a bare "Win event = …" fragment and any trailing separators the cut left behind.
+  const cleaned = firstSentence
+    .replace(/\s*[.·—-]\s*win event\b.*$/i, "")
+    .replace(/[\s.·—-]+$/, "")
+    .trim();
+  // Humanize any machine slug that rode inside the prose, matching every other founder-facing line.
+  return humanizeSlugsInText(cleaned);
+}
+
 // A machine slug token embedded in a prose line — a kebab or snake identifier a backend beat baked into
 // otherwise-human text ("Completed identify-referral-partners · 3 items", "On it — warm-inbound-users.").
 // Two or more separator-joined lowercase parts, no internal spaces. Matched inside a sentence so the

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Check, ChevronDown, LayoutGrid, Plus, Search } from "lucide-react";
 import { Reveal } from "@/lib/motion";
+import { founderGoalLine } from "@/lib/labels";
 import type { ChannelMeta } from "@/types";
 import "@/styles/menu.css";
 import "@/styles/outcome-switcher.css";
@@ -17,7 +18,7 @@ const channelMeta = (ch: ChannelMeta): string =>
 // The one-line goal shown under each pipeline name, so a row reads as an intention you can act on
 // rather than a bare label. Falls back to a plain invitation when the pipeline has no stated goal yet.
 const channelSub = (ch: ChannelMeta): string =>
-  ch.objective?.trim() || "Ready to run to your gate.";
+  founderGoalLine(ch.objective) || "Ready to run to your gate.";
 
 // The ChannelSwitcher is the breadcrumb that names the active channel and opens a flat dropdown of
 // every channel in the project (channels are plain flows now — there is no separate program surface).
@@ -133,7 +134,7 @@ export function ChannelSwitcher({
                 onClick={pick(() => onOpenChannel(ch.id))}
                 type="button"
                 role="menuitem"
-                title={ch.objective || ch.name}
+                title={founderGoalLine(ch.objective) || ch.name}
               >
                 <span className="osw-prow-dot" style={{ background: channelDot(ch) }} />
                 <span className="osw-prow-main">

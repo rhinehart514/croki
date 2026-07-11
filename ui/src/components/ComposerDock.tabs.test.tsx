@@ -77,7 +77,7 @@ describe("ComposerDock — per-tab stop / close", () => {
       summary("s2", "running", "pipeline two"),
     ];
     renderDock(roster, { onStopSession, onSwitchSession }, "s1");
-    const stop = screen.getByLabelText("Stop pipeline two");
+    const stop = screen.getByLabelText("Stop Pipeline two");
     fireEvent.click(stop); // arms (a live run has something to lose)
     fireEvent.click(screen.getByText("End?")); // confirms
     expect(onStopSession).toHaveBeenCalledWith("s2");
@@ -92,7 +92,7 @@ describe("ComposerDock — per-tab stop / close", () => {
       summary("s2", "completed", "pipeline two"),
     ];
     renderDock(roster, { onCloseSession, onSwitchSession }, "s1");
-    const close = screen.getByLabelText("Close pipeline two");
+    const close = screen.getByLabelText("Close Pipeline two");
     fireEvent.click(close);
     expect(onCloseSession).toHaveBeenCalledWith("s2");
     expect(onSwitchSession).not.toHaveBeenCalled();
@@ -105,7 +105,7 @@ describe("ComposerDock — per-tab stop / close", () => {
       summary("s2", "running", "pipeline two"),
     ];
     renderDock(roster, { onStopSession }, "s1");
-    const stop = screen.getByLabelText("Stop pipeline two");
+    const stop = screen.getByLabelText("Stop Pipeline two");
     fireEvent.click(stop);
     expect(onStopSession).not.toHaveBeenCalled(); // armed, not fired
     expect(screen.getByText("End?")).toBeTruthy();
@@ -120,7 +120,7 @@ describe("ComposerDock — per-tab stop / close", () => {
       summary("s2", "waiting_for_gate", "pipeline two"),
     ];
     renderDock(roster, { onCloseSession }, "s1");
-    const close = screen.getByLabelText("Close pipeline two");
+    const close = screen.getByLabelText("Close Pipeline two");
     fireEvent.click(close);
     expect(onCloseSession).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText("End?"));

@@ -30,8 +30,8 @@ describe("ComposerDock runtime continuation controls", () => {
       onHandoff={onHandoff} onAskBoth={onAskBoth}
     />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Hand to Auto" }));
-    fireEvent.click(screen.getByRole("button", { name: "Ask both" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to Auto-pick" }));
+    fireEvent.click(screen.getByRole("button", { name: "Run on both" }));
     expect(onHandoff).toHaveBeenCalledWith("auto");
     expect(onAskBoth).toHaveBeenCalledOnce();
   });
@@ -42,8 +42,8 @@ describe("ComposerDock runtime continuation controls", () => {
       onSend={() => {}} onCancel={() => {}} onReviewGate={() => {}}
       onHandoff={() => {}} onAskBoth={() => {}}
     />);
-    expect(screen.queryByRole("button", { name: /Hand to/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Ask both" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Switch to/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Run on both" })).not.toBeInTheDocument();
   });
 
   it("prevents a duplicate ask-both request while both branches are starting", () => {
@@ -53,7 +53,7 @@ describe("ComposerDock runtime continuation controls", () => {
       onSend={() => {}} onCancel={() => {}} onReviewGate={() => {}}
       onHandoff={() => {}} onAskBoth={onAskBoth} runtimeComparisonStarting
     />);
-    const button = screen.getByRole("button", { name: "Starting both…" });
+    const button = screen.getByRole("button", { name: "Running both…" });
     expect(button).toBeDisabled();
     fireEvent.click(button);
     expect(onAskBoth).not.toHaveBeenCalled();

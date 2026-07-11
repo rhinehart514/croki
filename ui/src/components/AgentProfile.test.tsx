@@ -92,6 +92,49 @@ describe("AgentProfile — the single learning story (soul)", () => {
     await waitFor(() => expect(screen.queryByText(/Ready to make permanent\?/i)).toBeNull());
   });
 
+  it("filters empty-run / no-op verdicts out of the learned feed and shows the calm empty state", async () => {
+    // An audit teammate ran on an empty input and emitted a machine no-op verdict. That is internal
+    // exhaust, not a lesson — it must never surface as something the teammate "learned".
+    mockedSoul.mockResolvedValue({
+      profile: {
+        name: "Maya",
+        record: { runs: 0, sent: 0, replies: 0, wins: 0 },
+        learned: [],
+        stillFiguring: [
+          { text: "No drafted first-contact message was provided to audit. Cannot issue a pass verdict on an empty input.", why: "" },
+        ],
+        ready: [],
+      },
+    });
+    render(<AgentProfile {...baseProps} />);
+
+    // The no-op verdict never appears anywhere on the sheet.
+    await waitFor(() => expect(screen.getByText(/What I've learned from you/i)).toBeInTheDocument());
+    expect(screen.queryByText(/provided to audit/i)).toBeNull();
+    expect(screen.queryByText(/Still figuring out/i)).toBeNull();
+    // With no real lessons left, the honest "no runs yet" empty state stands in.
+    expect(screen.getByText(/No runs yet/i)).toBeInTheDocument();
+  });
+
+  it("keeps a real lesson while dropping an empty-input sibling in the same list", async () => {
+    mockedSoul.mockResolvedValue({
+      profile: {
+        name: "Maya",
+        record: { runs: 3, sent: 0, replies: 0, wins: 0 },
+        learned: [
+          { text: "lead with their trigger", why: "" },
+          { text: "The input items contained no draft, so there is nothing to label or strip.", why: "" },
+        ],
+        stillFiguring: [],
+        ready: [],
+      },
+    });
+    render(<AgentProfile {...baseProps} />);
+
+    await waitFor(() => expect(screen.getByText("lead with their trigger")).toBeInTheDocument());
+    expect(screen.queryByText(/nothing to label/i)).toBeNull();
+  });
+
   it("dismisses a ready lesson on 'Not yet'", async () => {
     mockedSoul.mockResolvedValue({
       profile: {

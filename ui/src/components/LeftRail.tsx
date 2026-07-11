@@ -4,6 +4,7 @@ import {
   PanelLeftClose, PanelLeftOpen, Check, GripVertical, LayoutGrid, Blocks, Lock, Wrench,
 } from "lucide-react";
 import { agentPersona, humanizeRef } from "@/lib/agentPersona";
+import { founderGoalLine } from "@/lib/labels";
 import { healthHex } from "@/lib/health";
 import { STEP_DRAG_MIME } from "@/lib/objectPalette";
 import { CrewFace } from "@/components/crew/CrewFace";
@@ -73,8 +74,8 @@ function agentBlurb(row: AgentBenchRow): string {
 }
 
 function pipelineBlurb(ch: ChannelMeta): string {
-  const objective = ch.objective?.trim();
-  if (objective) return objective;
+  const goal = founderGoalLine(ch.objective);
+  if (goal) return goal;
   return "A pipeline you've started — set its goal and run it to your gate.";
 }
 
@@ -326,7 +327,7 @@ export function LeftRail({
                 className={`lr-row lr-stacked ${ch.id === activeChannelId ? "active" : ""}`}
                 type="button"
                 onClick={() => onLoadChannel(ch.id)}
-                title={ch.objective || ch.name}
+                title={founderGoalLine(ch.objective) || ch.name}
               >
                 <span
                   className="lr-dot"
@@ -471,6 +472,12 @@ function ConnectedCapabilities({ inventory }: { inventory: CapabilityInventory }
   );
 }
 
+// A crew row here is a PALETTE handle, not a profile card: face, name, and a drag grip, tuned so the
+// section reads "pick one up and drop it on the canvas." The full job description and the run record
+// live one click away in the teammate's profile (and again in the crew room) — repeating them here is
+// what made the rail feel like a second directory, so this row leaves them to the tooltip. The only
+// standing detail kept inline is a single quiet proven mark, so earned trust still reads at a glance
+// without re-listing every teammate's stats.
 function CrewRow({
   row, name, onOpen, onDragStep,
 }: {
@@ -480,31 +487,25 @@ function CrewRow({
   onDragStep: (event: DragEvent<HTMLElement>, payload: { kind: "agent" | "skill"; ref: string; label: string }) => void;
 }) {
   const { role } = agentPersona(row.ref, row.job);
-  const decided = row.counts.approved + row.counts.rejected;
-  const pct = decided > 0 ? Math.round((row.counts.approved / decided) * 100) : null;
+  const label = name ?? role;
+  // The tooltip carries the plain-English job so nothing is lost by dropping the inline description.
+  const blurb = agentBlurb(row);
   return (
     <button
       className="lr-row lr-crew lr-draggable"
       type="button"
       draggable
-      onDragStart={(event) => onDragStep(event, { kind: "agent", ref: row.ref, label: name ?? role })}
+      onDragStart={(event) => onDragStep(event, { kind: "agent", ref: row.ref, label })}
       onClick={() => onOpen(row.ref)}
-      title={row.job || (name ?? role)}
+      title={`${label} — ${blurb}`}
     >
       <Mark agentRef={row.ref} job={row.job} />
-      <span className="lr-row-main">
-        <span className="lr-row-name">{name ?? role}</span>
-        <span className="lr-row-desc">{agentBlurb(row)}</span>
-        {row.hasRuns ? (
-          <span className="lr-row-meta lr-crew-stats">
-            <span className="lr-stat good"><Check size={11} />{row.counts.approved}</span>
-            {pct !== null ? <span className="lr-stat-pct">{pct}%</span> : null}
-            <span className="lr-stat-runs">{row.runCount} run{row.runCount === 1 ? "" : "s"}</span>
-          </span>
-        ) : (
-          <span className="lr-row-meta">Not yet run</span>
-        )}
-      </span>
+      <span className="lr-row-name lr-crew-name">{label}</span>
+      {row.hasRuns ? (
+        <span className="lr-crew-proven" title={`${row.counts.approved} approved · ${row.runCount} run${row.runCount === 1 ? "" : "s"}`}>
+          <Check size={11} />
+        </span>
+      ) : null}
       <GripVertical className="lr-grip" size={14} aria-hidden="true" />
     </button>
   );

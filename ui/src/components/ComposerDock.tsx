@@ -8,7 +8,7 @@ import { statusLabel } from "@/lib/status";
 import { composerStartsCollapsed } from "@/lib/composerCollapse";
 import { subjectActions } from "@/lib/subjectActions";
 import { kindIcon } from "@/lib/objectKindIcons";
-import { humanizeFieldLabel, humanizeSlugsInText } from "@/lib/labels";
+import { founderGoalLine, humanizeFieldLabel, humanizeSlugsInText } from "@/lib/labels";
 import type { CanvasSubject, CardDetail } from "@/lib/cardDetail";
 import { getCapabilityInventory, type AgentBenchRow, type OperatorHints } from "@/api";
 import { motion } from "motion/react";
@@ -451,9 +451,46 @@ function chatTabState(status: OperatorStatus): ChatTabState {
   if (status === "running" || status === "ready") return "working";
   return "done"; // completed · cancelled · blocked · failed · interrupted
 }
+// A tab's name is a SHORT, readable title for the pipeline it belongs to — never the raw prompt the
+// founder typed. It starts from the clean goal line (founderGoalLine strips the composer's engineering
+// tail — "Ideate 2-3 shapes…", win-event ids, scan bookkeeping — so a tab never reads "i want to ideate
+// diff…"), drops a leading first-person throat-clear ("I want to", "Help me", "Let's"), and keeps a
+// compact phrase. Two tabs can still start with the same words; `distinctTabNames` disambiguates those so
+// no two tabs ever render identically.
 function chatTabName(s: OperatorSessionSummary): string {
-  const raw = (s.goal || s.summary || "Untitled pipeline").replace(/^\[[^\]]*\]\s*/, "").trim();
-  return raw || "Untitled pipeline";
+  const cleaned = founderGoalLine(s.goal) || (s.summary ?? "").trim() || (s.goal ?? "").replace(/^\[[^\]]*\]\s*/, "").trim();
+  if (!cleaned) return "Untitled pipeline";
+  // Drop a leading first-person framing so the name leads with the actual intent, not "I want to".
+  const deframed = cleaned.replace(/^\s*(?:i\s+(?:want|need|would like|'d like)\s+to|i\s+wanna|help me|let'?s|can you|please|could you)\s+/i, "").trim();
+  const core = deframed || cleaned;
+  // Keep it to a short phrase — the first clause (stop at a comma / dash / colon) capped at a few words —
+  // so tabs stay compact and a reader distinguishes them by words, not by where the ellipsis lands.
+  const firstClause = core.split(/\s*[—–,:;]\s+/)[0].trim() || core;
+  const words = firstClause.split(/\s+/);
+  const short = words.length > 6 ? words.slice(0, 6).join(" ") + "…" : firstClause;
+  const titled = short.charAt(0).toUpperCase() + short.slice(1);
+  return titled || "Untitled pipeline";
+}
+
+// Names for every tab in the roster, guaranteed distinct. Most tabs get their plain chatTabName; when two
+// or more would render the SAME label (same goal prefix), each colliding tab gets a "· 1 / · 2 …" suffix in
+// creation order, so the founder can always tell two parallel pipelines apart. Keyed by session id.
+function distinctTabNames(roster: OperatorSessionSummary[]): Record<string, string> {
+  const byName = new Map<string, OperatorSessionSummary[]>();
+  for (const s of roster) {
+    const name = chatTabName(s);
+    const group = byName.get(name) ?? [];
+    group.push(s);
+    byName.set(name, group);
+  }
+  const out: Record<string, string> = {};
+  for (const [name, group] of byName) {
+    if (group.length === 1) { out[group[0].id] = name; continue; }
+    group
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .forEach((s, i) => { out[s.id] = `${name} · ${i + 1}`; });
+  }
+  return out;
 }
 
 function ChatTabs({ roster, activeId, onSwitch, onNew, onStop, onClose }: {
@@ -467,6 +504,10 @@ function ChatTabs({ roster, activeId, onSwitch, onNew, onStop, onClose }: {
   onClose?: (id: string) => void;
 }) {
   const tabs = [...roster].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  // Distinct, readable name per tab — two parallel pipelines with the same goal prefix never render the
+  // same label (each colliding one carries a "· 1 / · 2" suffix). Falls back to the plain name if missing.
+  const tabNames = distinctTabNames(roster);
+  const nameOf = (s: OperatorSessionSummary) => tabNames[s.id] ?? chatTabName(s);
   // Two-tap confirm for a tab that has something to lose — a running run or a pending gate. The first tap
   // on its control ARMS it (swaps to a small "End?"), the second tap within ~3s confirms; switching tabs
   // or the timeout disarms. A finished tab has nothing to lose, so it closes on a single tap, no arm.
@@ -507,7 +548,8 @@ function ChatTabs({ roster, activeId, onSwitch, onNew, onStop, onClose }: {
             onClose?.(s.id);
           }
         };
-        const controlLabel = running ? `Stop ${chatTabName(s)}` : `Close ${chatTabName(s)}`;
+        const name = nameOf(s);
+        const controlLabel = running ? `Stop ${name}` : `Close ${name}`;
         return (
           <button
             key={s.id}
@@ -515,7 +557,7 @@ function ChatTabs({ roster, activeId, onSwitch, onNew, onStop, onClose }: {
             type="button"
             aria-selected={active}
             className={`chat-tab ${active ? "active" : ""}`}
-            title={chatTabName(s)}
+            title={name}
             onClick={() => { if (isArmed) disarm(); onSwitch(s.id); }}
             onBlur={(e) => { if (isArmed && !e.currentTarget.contains(e.relatedTarget as Node)) disarm(); }}
           >
@@ -528,7 +570,7 @@ function ChatTabs({ roster, activeId, onSwitch, onNew, onStop, onClose }: {
             ) : null}
             <span className="chat-tab-face">
               <span className={`chat-tab-dot ${state}`} aria-hidden="true" />
-              <span className="chat-tab-name">{chatTabName(s)}</span>
+              <span className="chat-tab-name">{name}</span>
             </span>
             {(onStop || onClose) ? (
               <span
@@ -659,9 +701,11 @@ function briefingLine(s: OperatorSessionSummary): string {
   return s.summary?.trim() || "quiet for now";
 }
 function deriveBriefing(roster: OperatorSessionSummary[]): Briefing {
+  // Same distinct names as the tabs, so a briefing row and its tab always read as the same pipeline.
+  const names = distinctTabNames(roster);
   const rows = [...roster]
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    .map((s) => ({ id: s.id, name: chatTabName(s), state: briefingStateOf(s.status), what: briefingLine(s) }));
+    .map((s) => ({ id: s.id, name: names[s.id] ?? chatTabName(s), state: briefingStateOf(s.status), what: briefingLine(s) }));
   const now = new Date();
   const eyebrow = `${now.toLocaleDateString([], { weekday: "long" })}, ${now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
   return { eyebrow, rows };
@@ -809,7 +853,9 @@ export function ComposerDock({
     (typeof localStorage !== "undefined" && localStorage.getItem("gtm.model")) || DEFAULT_MODEL);
   const pickModel = (id: string) => { setModel(id); try { localStorage.setItem("gtm.model", id); } catch { /* private mode */ } };
   const chosenAgent = modelById(model).agent;
-  const engineName = chosenAgent === "codex" ? "Codex" : chosenAgent === "claude" ? "Claude" : "Auto";
+  // Which AI runs the work, in plain words. "Auto" — no specific engine picked — reads as "Auto-pick" so a
+  // founder isn't left guessing what "Auto" means on its own.
+  const engineName = chosenAgent === "codex" ? "Codex" : chosenAgent === "claude" ? "Claude" : "Auto-pick";
   const assignedModel = session?.worker?.model ?? null;
   const assignedRuntime = session?.worker?.runtime ?? "auto";
   const chosenRuntime = chosenAgent;
@@ -1281,13 +1327,24 @@ export function ComposerDock({
             <AgentPicker value={model} onChange={pickModel} />
           </span>
           {handoffNeeded && onHandoff && session?.status !== "running" ? (
-            <button className="oc-runtime-action" type="button" onClick={() => void onHandoff(model)}>
-              Hand to {engineName}
+            <button
+              className="oc-runtime-action"
+              type="button"
+              title={`Move this work over to ${engineName}`}
+              onClick={() => void onHandoff(model)}
+            >
+              Switch to {engineName}
             </button>
           ) : null}
           {sessionActive && onAskBoth && session?.status !== "running" ? (
-            <button className="oc-runtime-action" type="button" disabled={runtimeComparisonStarting} onClick={() => void onAskBoth()}>
-              {runtimeComparisonStarting ? "Starting both…" : "Ask both"}
+            <button
+              className="oc-runtime-action"
+              type="button"
+              title="Run this on both engines and compare their answers"
+              disabled={runtimeComparisonStarting}
+              onClick={() => void onAskBoth()}
+            >
+              {runtimeComparisonStarting ? "Running both…" : "Run on both"}
             </button>
           ) : null}
           <button
@@ -1316,7 +1373,7 @@ export function ComposerDock({
           </button>
         </div>
       </div>
-      <p className="oc-hint">@ a teammate · everything you approve stays as a receipt</p>
+      <p className="oc-hint">@ to bring in a teammate · nothing goes out until you approve it</p>
     </div>
   );
 

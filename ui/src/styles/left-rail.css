@@ -136,10 +136,29 @@
 .lr-row.active { background: var(--surface-2); }
 .lr-row.active .lr-row-name { color: var(--ink); font-weight: 600; }
 
-/* Rows that carry a name + a plain-English one-liner (every pipeline and every crew member) stack their
-   body vertically, so the leading dot/monogram anchors to the top line, not the middle of two. */
-.lr-crew,
+/* Rows that carry a name + a plain-English one-liner (every pipeline) stack their body vertically, so
+   the leading dot anchors to the top line, not the middle of two. */
 .lr-stacked { align-items: flex-start; }
+
+/* A crew row is a tight palette handle — face, name, drag grip on one line — so the crew section reads
+   as "drag one onto the canvas" rather than a second full directory. The name takes the row; the drag
+   grip sits at the trailing edge. Detail lives in the profile a click away, not repeated here. */
+.lr-crew { align-items: center; }
+.lr-crew-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px; color: var(--ink); font-weight: 500; line-height: 1.3;
+}
+/* The one quiet inline signal kept on the palette: a proven teammate carries a small green tick, so
+   earned trust reads at a glance without re-listing every teammate's stats. */
+.lr-crew-proven {
+  flex: none;
+  display: inline-flex; align-items: center;
+  color: var(--proven);
+}
+/* The proven tick yields its spot to the drag grip on hover, so the trailing edge stays a single mark. */
+.lr-draggable:hover .lr-crew-proven,
+.lr-draggable:focus-visible .lr-crew-proven { display: none; }
 
 .lr-dot {
   flex: none;

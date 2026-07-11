@@ -53,10 +53,11 @@ export function IssuesCard({
                 <span className="fdock-problems-sub">{areaLabel(p.subsystem)}</span>
                 <span
                   className="fdock-problems-health"
-                  style={{ color: healthHex(p.health), borderColor: healthHex(p.health) }}
-                  title={`Health ${p.health}`}
+                  style={{ color: healthHex(p.health) }}
+                  title={`This part of your go-to-market is scoring ${p.health} out of 100`}
                 >
-                  {p.health}
+                  <span className="fdock-problems-health-dot" style={{ background: healthHex(p.health) }} />
+                  Health {p.health}<span className="fdock-problems-health-max">/100</span>
                 </span>
               </div>
               {pipelineActive ? (
@@ -75,7 +76,9 @@ export function IssuesCard({
                   ) : null}
                 </div>
               ) : (
-                <p className="fdock-problems-hint">Open a pipeline to fix this with Claude.</p>
+                <p className="fdock-problems-hint">
+                  Open the pipeline this touches, then hand it to Claude — fixing needs a pipeline in focus to work against.
+                </p>
               )}
             </StaggerItem>
           );

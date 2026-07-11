@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Plus } from "lucide-react";
 import {
   applyCanvasProposal, changeGoalStatus, createGoal, createGoalRelation, createWorkArtifact, createWorkRelationship,
   getWorkArtifactHistory, listCanvasRegions, listGoalRelations, listGoals, listWorkArtifacts, listWorkRelationships,
@@ -69,6 +70,17 @@ export function OpenCanvasWorkbench({ projectId, selectedRef, selectedRelationsh
   const selectedType = selectedRef?.type ?? null;
   const selectedId = selectedRef?.id ?? null;
   const [mode, setMode] = useState<Mode>(selectedRef?.type === "product-change" ? "product-changes" : selectedRelationship || selectedRef?.type === "goal" || selectedRef?.type === "work-artifact" || selectedRef?.type === "work-region" ? "inspect" : "closed");
+  // The collapsed "+" launcher's menu — a transient popover, closed on outside-click / Escape.
+  const [launcherOpen, setLauncherOpen] = useState(false);
+  const launcherRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!launcherOpen) return;
+    const onDown = (e: MouseEvent) => { if (launcherRef.current && !launcherRef.current.contains(e.target as Node)) setLauncherOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setLauncherOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [launcherOpen]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [artifacts, setArtifacts] = useState<WorkArtifactRevision[]>([]);
   const [regions, setRegions] = useState<CanvasRegion[]>([]);
@@ -342,12 +354,29 @@ export function OpenCanvasWorkbench({ projectId, selectedRef, selectedRelationsh
   });
 
   if (mode === "closed") {
+    // Collapsed to a single tucked "+" that opens a short menu — creation stays one click away without a
+    // four-button row floating over the nodes. The menu closes on outside-click or Escape.
     return (
-      <div className="open-canvas-launcher" aria-label="Add canvas work">
-        <button type="button" onClick={() => { setMode("create-goal"); setStatement(""); setDesiredChange(""); }}>New goal</button>
-        <button type="button" onClick={() => { setMode("create-work"); setTitle(""); setSummary(""); setContent(""); }}>New work</button>
-        <button type="button" onClick={() => { setMode("browse"); setBrowseQuery(""); }}>Open work</button>
-        <button type="button" onClick={() => setMode("product-changes")}>Product changes</button>
+      <div className={`open-canvas-launcher${launcherOpen ? " open" : ""}`} aria-label="Add canvas work" ref={launcherRef}>
+        <button
+          type="button"
+          className="open-canvas-launcher-trigger"
+          aria-haspopup="menu"
+          aria-expanded={launcherOpen}
+          title="Add to the canvas"
+          onClick={() => setLauncherOpen((v) => !v)}
+        >
+          <Plus size={16} aria-hidden="true" />
+          <span>Add</span>
+        </button>
+        {launcherOpen ? (
+          <div className="open-canvas-launcher-menu" role="menu">
+            <button type="button" role="menuitem" onClick={() => { setLauncherOpen(false); setMode("create-goal"); setStatement(""); setDesiredChange(""); }}>New goal</button>
+            <button type="button" role="menuitem" onClick={() => { setLauncherOpen(false); setMode("create-work"); setTitle(""); setSummary(""); setContent(""); }}>New work</button>
+            <button type="button" role="menuitem" onClick={() => { setLauncherOpen(false); setMode("browse"); setBrowseQuery(""); }}>Open work</button>
+            <button type="button" role="menuitem" onClick={() => { setLauncherOpen(false); setMode("product-changes"); }}>Product changes</button>
+          </div>
+        ) : null}
       </div>
     );
   }

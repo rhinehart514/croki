@@ -63,6 +63,34 @@ function cleanJob(job: string | undefined): string {
   return TEMPLATE_MARKERS.some((m) => low.includes(m)) ? "" : text;
 }
 
+// Empty-run exhaust dressed as a lesson. When a teammate runs on an empty or missing input, it can emit
+// a machine verdict ("no draft was provided to audit", "cannot issue a pass verdict on empty input") that
+// teaches nothing about the founder's taste — it only makes the crew look confused. These are internal
+// no-ops, not lessons, so they never belong in a founder-facing learning feed. Detect them by the phrases
+// a no-op / error verdict falls into and drop them.
+const NON_LESSON_MARKERS = [
+  "no draft",
+  "nothing to",
+  "cannot issue",
+  "can not issue",
+  "empty input",
+  "no op",
+  "no-op",
+  "provided to audit",
+  "no input",
+  "no items",
+  "nothing was provided",
+  "there is nothing",
+];
+function isRealLesson(text: string | undefined): boolean {
+  const low = (text ?? "").trim().toLowerCase();
+  if (!low) return false;
+  return !NON_LESSON_MARKERS.some((m) => low.includes(m));
+}
+function realLessons<T extends { text: string }>(lessons: T[] | undefined): T[] {
+  return (lessons ?? []).filter((l) => isRealLesson(l.text));
+}
+
 // A plain, non-alarming date stamp for a lesson receipt — "taught Jul 8", never a raw ISO string.
 function taughtStamp(iso: string | null | undefined): string | null {
   if (!iso) return null;
@@ -161,8 +189,14 @@ export function AgentProfile({
   const soulData = soul && soul.ref === view.ref ? soul.data : null;
   const soulPending = !soul || soul.ref !== view.ref;
   const recordLine = soulData ? trackRecordLine(soulData.record) : null;
+  // Only real, taste-bearing lessons reach the founder — empty-run / error verdicts are filtered out of
+  // every list (learned, still-figuring, ready) so a confused no-op never masquerades as something the
+  // teammate learned. Everything below reads from these, not the raw soul.
+  const learned = realLessons(soulData?.learned);
+  const stillFiguring = realLessons(soulData?.stillFiguring);
+  const ready = realLessons(soulData?.ready);
   const hasSoul = !!soulData && (
-    !!recordLine || soulData.learned.length > 0 || soulData.stillFiguring.length > 0 || soulData.ready.length > 0
+    !!recordLine || learned.length > 0 || stillFiguring.length > 0 || ready.length > 0
   );
 
   const { role } = agentPersona(view.ref, view.job);
@@ -188,15 +222,19 @@ export function AgentProfile({
 
           <div className="agentp-actions">
             {onAddToCanvas ? <Button onClick={() => onAddToCanvas(view.ref)} type="button">Put on the canvas</Button> : null}
-            <Button variant="outline" onClick={() => onEditSource(view.ref)} type="button">
-              <FileCode2 size={14} /> Edit the source file
-            </Button>
           </div>
 
-          <div className="agentp-ref">
-            <b>Born from:</b> an on-disk agent definition.<br />
-            <code>~/.claude/agents/{view.ref}.md</code>
-          </div>
+          {/* A quiet developer escape hatch — a technical user can still open this teammate's underlying
+              definition, but it never sits in the founder's eyeline. No file path is ever shown; the
+              path is engineering exhaust, not something a founder should read or be pointed at. */}
+          <button
+            type="button"
+            className="agentp-devlink"
+            onClick={() => onEditSource(view.ref)}
+            title="Open this teammate's definition (advanced)"
+          >
+            <FileCode2 size={12} /> Advanced
+          </button>
         </aside>
 
         {/* ── the dossier ── */}
@@ -265,9 +303,9 @@ export function AgentProfile({
               <>
                 {recordLine ? <p className="agentp-soul-record">{recordLine}</p> : null}
 
-                {soulData.learned.length ? (
+                {learned.length ? (
                   <ul className="agentp-soul-list">
-                    {soulData.learned.map((l, i) => (
+                    {learned.map((l, i) => (
                       <li className="agentp-soul-lesson" key={`learned-${i}`}>
                         <span className="agentp-soul-tick" aria-hidden="true">✓</span>
                         <span className="agentp-soul-lesson-body">
@@ -277,15 +315,17 @@ export function AgentProfile({
                       </li>
                     ))}
                   </ul>
-                ) : (
+                ) : (stillFiguring.length || ready.length) ? (
                   <p className="agentp-quiet">Nothing permanent yet — the lessons below become part of me when you say so.</p>
+                ) : (
+                  <p className="agentp-quiet">Still learning your taste — decisions you make here become part of me.</p>
                 )}
 
-                {soulData.stillFiguring.length ? (
+                {stillFiguring.length ? (
                   <div className="agentp-soul-block">
                     <div className="agentp-soul-blabel">Still figuring out</div>
                     <ul className="agentp-soul-list">
-                      {soulData.stillFiguring.map((l, i) => (
+                      {stillFiguring.map((l, i) => (
                         <li className="agentp-soul-lesson watching" key={`figuring-${i}`}>
                           <span className="agentp-soul-lesson-body">
                             <span className="agentp-soul-lesson-text">{l.text}</span>
@@ -297,7 +337,7 @@ export function AgentProfile({
                   </div>
                 ) : null}
 
-                {soulData.ready.map((l) => (
+                {ready.map((l) => (
                   <div className="agentp-soul-ready" key={`ready-${l.patternKey}`}>
                     <div className="agentp-soul-ready-h">Ready to make permanent?</div>
                     <p className="agentp-soul-ready-text">{l.text}</p>

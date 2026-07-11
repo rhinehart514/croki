@@ -88,12 +88,18 @@
 .agentp-stat .l { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
 .agentp-actions { margin-top: 20px; display: flex; flex-direction: column; gap: 8px; }
-.agentp-ref {
-  margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--line-2);
-  font-size: 11px; color: var(--faint); word-break: break-all;
+
+/* The developer escape hatch — deliberately demoted below the founder's eyeline. A subtle, muted,
+   icon-led control that a technical user can find and a founder will glide past; it opens the underlying
+   definition (never a visible file path). Quiet by default, only faintly firming on hover. */
+.agentp-devlink {
+  margin-top: 20px;
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 500; color: var(--faint);
+  background: transparent; border: none; padding: 2px 0; cursor: pointer;
+  transition: color 0.14s var(--ease-out);
 }
-.agentp-ref b { color: var(--muted); font-weight: 500; }
-.agentp-ref code { font-family: var(--font-mono); }
+.agentp-devlink:hover { color: var(--muted); }
 
 /* ── right: the dossier ── */
 .agentp-body { padding: 8px 34px 30px; overflow-y: auto; }

@@ -11,7 +11,7 @@ import "@xyflow/react/dist/style.css";
 import { motion } from "motion/react";
 import {
   AlertCircle, AlertTriangle, Ban, Bot, Check, CheckCircle2, Circle, Code, CornerDownLeft, Database, Download, FileText, GitMerge,
-  Loader, Lock, MessageSquare, MousePointer2, Pencil, Play, Search, ShieldCheck, Lightbulb, Split, Sprout, Target,
+  Loader, Lock, MessageSquare, MousePointer2, Pencil, Play, RotateCcw, Search, ShieldCheck, Lightbulb, Split, Sprout, Target,
   Telescope, Trash2, TrendingUp, Wand2, X, Zap,
 } from "lucide-react";
 import TerminalNode from "@/components/TerminalNode";
@@ -622,6 +622,38 @@ function HealthPill({ health, issue }: { health: number; issue?: string }) {
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
+// A raw error from a run — an API stack trace, a JSON blob, a model's own error string — must never
+// reach a node card as founder-facing copy. Detect the machine shapes and swap in one calm, humane
+// state line that keeps the needs-attention read without leaking the guts. The full raw string still
+// lives in the card's title (hover) for anyone debugging; the card itself stays in plain English.
+const RAW_ERROR_SHAPES = [
+  "api error",
+  "returned an error result",
+  "error result:",
+  '{"type"',
+  '{"error"',
+  "\n    at ",       // stack-trace frame
+  "traceback",
+  "econnrefused",
+  "etimedout",
+  "status code",
+  "http 4",
+  "http 5",
+];
+function isRawErrorText(s: string): boolean {
+  const l = s.toLowerCase();
+  return RAW_ERROR_SHAPES.some((shape) => l.includes(shape)) || /\b[45]\d\d\b/.test(l.slice(0, 40));
+}
+// The humane line shown in place of a raw error. If the error is already short and plain (a composer
+// wrote it for the founder), keep it; only machine noise gets collapsed to the generic retry line.
+function humaneErrorLine(error: string | undefined): string {
+  const raw = (error ?? "").trim();
+  if (!raw) return "Couldn't finish — needs another try";
+  if (isRawErrorText(raw)) return "Couldn't finish — needs another try";
+  // A plain, human-written note stays, just clipped so it can't bloat the card.
+  return raw.length > 60 ? `${raw.slice(0, 57)}…` : raw;
+}
+
 type RunStatus = "idle" | "running" | "done" | "error" | "pending" | "blocked";
 
 function getStatus(_node: GTMNode, result?: GTMNodeResult, running = false): RunStatus {
@@ -1062,7 +1094,7 @@ function NodeCardEditor({ node, result, health, contractAudit, running }: {
             <span className={`loop-node-editor-contract tone-${contractTone}`}>{contractText}</span>
           ) : null}
           {result && !result.ok && result.error ? (
-            <span className="loop-node-editor-contract tone-danger">{result.error.slice(0, 60)}</span>
+            <span className="loop-node-editor-contract tone-danger" title={result.error}>{humaneErrorLine(result.error)}</span>
           ) : null}
         </div>
       </CardSection>
@@ -1119,10 +1151,14 @@ function ResourceNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
             (config.unrunnable, written by the composer normalizer) — the founder sees in plain
             words why this step will not run instead of it silently vanishing from the canvas. */}
         {typeof node.config.unrunnable === "string" && node.config.unrunnable.trim() !== "" && (
-          <span className="loop-node-err-text">{node.config.unrunnable}</span>
+          <span className="loop-node-err-text">
+            <span className="loop-node-err-msg">{node.config.unrunnable}</span>
+          </span>
         )}
         {result && !result.ok && (
-          <span className="loop-node-err-text">{result.error?.slice(0, 40)}</span>
+          <span className="loop-node-err-text" title={result.error}>
+            <span className="loop-node-err-msg">{humaneErrorLine(result.error)}</span>
+          </span>
         )}
       </button>
       <Handle type="source" position={Position.Right} id="s-r" />
@@ -1455,7 +1491,9 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
           <span className="loop-node-label">{nodeLabel}</span>
           <div className="loop-node-switch-branches">
             {switchBranches.length === 0 ? (
-              <span className="loop-node-switch-empty">No branches yet — connect this switch to its paths</span>
+              // Calm, non-alarming hint — an empty switch is a not-yet, not a failure, so it reads as a
+              // quiet cue (never an error color) that gently points at the next move: draw a path out.
+              <span className="loop-node-switch-empty">Draw a path out to route on a rule</span>
             ) : switchBranches.map((b) => (
               <span className="loop-node-switch-branch" key={b.id}>
                 <span className="loop-node-switch-rule">{b.rule}</span>
@@ -1713,8 +1751,25 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
               )
               : null;
           })()}
+          {/* A failed run must never dump its raw API/JSON/stack text onto the card — that reads as broken,
+              not scrappy. Show one calm needs-another-try line (the full raw string rides in the title for
+              anyone debugging) with a tiny inline retry, so the founder can act instead of just reading noise.
+              The node keeps its error STATE styling; only the STRING is humanized. */}
           {(structural ? isRealError : hasErr) && result?.error && (
-            <span className="loop-node-err-text">{result.error.slice(0, 55)}</span>
+            <span className="loop-node-err-text" title={result.error}>
+              <span className="loop-node-err-msg">{humaneErrorLine(result.error)}</span>
+              {ctx?.bridge && !running ? (
+                <button
+                  type="button"
+                  className="loop-node-err-retry"
+                  title="Run this step again"
+                  aria-label="Run this step again"
+                  onClick={(e) => { e.stopPropagation(); ctx.bridge.onRunNode(node.id); }}
+                >
+                  <RotateCcw size={10} aria-hidden /> Try again
+                </button>
+              ) : null}
+            </span>
           )}
         </>
       )}

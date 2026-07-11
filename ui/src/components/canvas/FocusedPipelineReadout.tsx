@@ -33,6 +33,49 @@ function humanizeKind(kind: string | null | undefined): string {
   return k.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// A pipeline goal is usually written as a briefing to the crew — a one-line intent followed by
+// numbered or bulleted phases and a pile of guardrails ("Stop at the founder gate. Do NOT invent…").
+// Read cold, that whole paragraph reads as a wall of text. This turns it into a scannable shape: the
+// intent as a headline, the phases as compact step chips, and the full prose kept intact behind a
+// disclosure. Everything is sliced from the real goal string — nothing is invented; a goal with no
+// obvious phases just keeps its headline and shows the full text.
+type ParsedGoal = {
+  headline: string;
+  steps: string[];
+  hasMore: boolean; // is there prose beyond the headline worth revealing
+};
+
+function firstSentence(s: string): string {
+  const m = s.match(/^[\s\S]*?[.!?](?:\s|$)/);
+  return (m ? m[0] : s).trim().replace(/[.!?]+$/, "");
+}
+
+// Pull the short verb-y name of each phase from a briefing. Handles "(1) Research — …", "1. Qualify: …",
+// and "- Draft …" shapes; keeps just the phase name (the word before the dash/colon), title-cased.
+function extractSteps(s: string): string[] {
+  const steps: string[] = [];
+  const re = /(?:^|\s)(?:\(?\d+\)?[.)]\s*|[-•]\s+)([A-Za-z][A-Za-z /&]{1,28}?)\s*(?:[—–:-]|\n|$)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s)) !== null) {
+    const name = m[1].trim().replace(/\s+/g, " ");
+    // Guard against swallowing a whole sentence when there's no delimiter — a phase name is 1–3 words.
+    if (name && name.split(" ").length <= 3 && !steps.includes(name)) {
+      steps.push(name.replace(/\b\w/g, (c) => c.toUpperCase()));
+    }
+    if (steps.length >= 6) break;
+  }
+  return steps;
+}
+
+function parseGoal(goal: string | null): ParsedGoal | null {
+  if (!goal) return null;
+  const clean = goal.trim();
+  const headline = firstSentence(clean);
+  const steps = extractSteps(clean);
+  const hasMore = clean.length > headline.length + 2;
+  return { headline, steps, hasMore };
+}
+
 export type FocusedPipelineReadoutProps = {
   channel: ChannelMeta | null;
   graph: GTMGraph;
@@ -50,6 +93,7 @@ export function FocusedPipelineReadout({
   channel, graph, connectors, result, lane, runSummary, gateOffer, transportConnected = false, running = false, onOpenAgentProfile,
 }: FocusedPipelineReadoutProps) {
   const [open, setOpen] = useState(true);
+  const [briefOpen, setBriefOpen] = useState(false);
 
   const view = useMemo(() => {
     const goal = channel?.objective?.trim() || null;
@@ -69,14 +113,17 @@ export function FocusedPipelineReadout({
     // (gateItem's allow-listed field). When present we surface it verbatim; we never invent a second one.
     const canonicalConsequence = gateItems.map((it) => (typeof it.whatYourYesDoes === "string" ? it.whatYourYesDoes.trim() : "")).find(Boolean) || null;
 
-    // Intended effect — the motion class plus whether it reaches the market or stays local.
-    const motion = humanizeKind(lane?.motionKind ?? channel?.kind);
+    // Intended effect — where this pipeline's work lands, in plain founder terms. The motion kind is a
+    // quiet prefix only when it's a real named motion (not the generic "Custom" fallback), never
+    // engineer-speak like "produces a local artifact".
+    const rawMotion = humanizeKind(lane?.motionKind ?? channel?.kind);
+    const motion = rawMotion && rawMotion.toLowerCase() !== "custom" ? rawMotion : "";
     const reaches = safety === "local"
-      ? "changes your own product or produces a local artifact"
+      ? "Stays on your side — it changes your product or builds something for you to review."
       : safety === "deploy"
-        ? "ships a change to your product, live"
-        : "reaches people outside the product";
-    const effect = motion ? `${motion} — it ${reaches}.` : `It ${reaches}.`;
+        ? "Goes live on your product once you approve it."
+        : "Reaches people outside the product once you approve it.";
+    const effect = motion ? `${motion}. ${reaches}` : reaches;
 
     // Measurement intent — advisory, from the lane's efficiency signal. Honest empty pre-run.
     const eff = lane?.efficiency ?? null;
@@ -114,7 +161,8 @@ export function FocusedPipelineReadout({
 
     const offer = gateOffer?.trim() || channelOfferLine(channel) || null;
 
-    return { goal, crewRefs, safety, effect, measurement, unknowns, groundedCount, gateText, hasGate, offer };
+    const parsedGoal = parseGoal(goal);
+    return { goal, parsedGoal, crewRefs, safety, effect, measurement, unknowns, groundedCount, gateText, hasGate, offer };
   }, [channel, graph, connectors, result, lane, runSummary, gateOffer, transportConnected]);
 
   const safetyChip = SAFETY_CHIP[view.safety];
@@ -126,7 +174,7 @@ export function FocusedPipelineReadout({
         <div className="pread-headmain">
           <span className="pread-eyebrow"><Compass size={12} /> This pipeline</span>
           <p className={`pread-goal ${view.goal ? "" : "is-empty"}`}>
-            {view.goal ?? "No goal stated for this pipeline yet — tell the crew what it should accomplish."}
+            {view.parsedGoal?.headline ?? "No goal stated for this pipeline yet — tell the crew what it should accomplish."}
           </p>
         </div>
         <div className="pread-chips">
@@ -142,6 +190,28 @@ export function FocusedPipelineReadout({
 
       {open ? (
         <div className="pread-body">
+          {view.parsedGoal && (view.parsedGoal.steps.length > 0 || view.parsedGoal.hasMore) ? (
+            <div className="pread-cell is-wide pread-brief">
+              {view.parsedGoal.steps.length > 0 ? (
+                <ol className="pread-steps">
+                  {view.parsedGoal.steps.map((s, i) => (
+                    <li key={`step-${i}`} className="pread-step">
+                      <span className="pread-step-n">{i + 1}</span>{s}
+                    </li>
+                  ))}
+                </ol>
+              ) : null}
+              {view.parsedGoal.hasMore ? (
+                <>
+                  <button type="button" className="pread-brief-toggle" aria-expanded={briefOpen} onClick={() => setBriefOpen((b) => !b)}>
+                    {briefOpen ? "Hide full brief" : "Show full brief"}
+                  </button>
+                  {briefOpen ? <p className="pread-brief-full">{view.goal}</p> : null}
+                </>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="pread-cell">
             <div className="pread-label"><Users size={11} style={{ verticalAlign: "-1px", marginRight: 4 }} />Relevant crew</div>
             {view.crewRefs.length ? (

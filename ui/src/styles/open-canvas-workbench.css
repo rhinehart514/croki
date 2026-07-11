@@ -1,18 +1,65 @@
+/* The create affordance, collapsed from a four-button row to a single tucked "+". It sits top-right,
+   clear of the floating dock, and opens a short menu downward — creation stays one click away without a
+   button cluster floating over the nodes. */
 .open-canvas-launcher {
   position: absolute;
-  /* Clear the floating canvas dock. At the old 16px inset its Settings control intercepted both actions. */
   top: 72px;
   right: var(--space-4);
   z-index: 32;
-  display: flex;
-  gap: var(--space-1);
-  padding: var(--space-1);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
 }
-.open-canvas-launcher button,
+.open-canvas-launcher-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px 0 9px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 560;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 120ms var(--ease), color 120ms var(--ease);
+}
+.open-canvas-launcher-trigger:hover,
+.open-canvas-launcher.open .open-canvas-launcher-trigger { border-color: var(--ink-2); color: var(--ink); }
+.open-canvas-launcher-trigger svg { color: var(--muted); }
+.open-canvas-launcher-trigger:hover svg,
+.open-canvas-launcher.open .open-canvas-launcher-trigger svg { color: var(--ink); }
+.open-canvas-launcher-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 168px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+}
+.open-canvas-launcher-menu button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms var(--ease), color 120ms var(--ease);
+}
+.open-canvas-launcher-menu button:hover { background: var(--surface-2); color: var(--ink); }
+.open-canvas-launcher-menu button:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
 .open-canvas-workbench button {
   min-height: 32px;
   border: 1px solid var(--line-2);
@@ -23,10 +70,7 @@
   font-size: var(--text-sm);
   cursor: pointer;
 }
-.open-canvas-launcher button { padding: 0 var(--space-3); }
-.open-canvas-launcher button:hover,
 .open-canvas-workbench button:hover { border-color: var(--ink-2); color: var(--ink); }
-.open-canvas-launcher button:focus-visible,
 .open-canvas-workbench button:focus-visible,
 .open-canvas-workbench input:focus-visible,
 .open-canvas-workbench textarea:focus-visible,

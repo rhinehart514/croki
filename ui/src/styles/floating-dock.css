@@ -25,13 +25,31 @@
     0 18px 48px -16px oklch(0.21 0.006 285.9 / 0.32);
 }
 
-/* Left — product · outcome breadcrumb ------------------------------------------------------- */
+/* Left — home mark · product · outcome breadcrumb ------------------------------------------- */
 .fdock-left {
   display: flex;
   align-items: center;
   gap: 5px;
   min-width: 0;
 }
+
+/* The product-identity mark doubles as Home — one click back to the whole operation. Quiet by default,
+   the accent only appearing on hover so it never competes with Run. */
+.fdock-home {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: transparent;
+  cursor: pointer;
+  transition: background 120ms var(--ease), border-color 120ms var(--ease);
+}
+.fdock-home:hover { background: var(--surface-2); border-color: var(--line-2); }
+.fdock-home .loop-brand-mark { margin: 0; }
 
 .fdock-sep {
   color: var(--ghost);
@@ -274,15 +292,20 @@
 .fdock-problems-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .fdock-problems-sub { font-size: 11px; color: var(--faint); text-transform: capitalize; }
 .fdock-problems-health {
-  min-width: 22px;
-  padding: 1px 6px;
-  border: 1px solid currentColor;
-  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 7px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
   font-size: 11px;
-  font-weight: 700;
-  text-align: center;
+  font-weight: 600;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+.fdock-problems-health-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.fdock-problems-health-max { color: var(--faint); font-weight: 500; }
 .fdock-problems-fix {
   display: inline-flex;
   align-items: center;

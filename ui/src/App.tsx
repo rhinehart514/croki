@@ -237,6 +237,10 @@ function flowPositionFromDrop(event: React.DragEvent): { x: number; y: number } 
 
 export default function App() {
   const [founderSessionAuthenticated, setFounderSessionAuthenticated] = useState<boolean | null>(null);
+  // Whether the founder opened the unlock prompt. The unlock is no longer parked permanently on the
+  // canvas — a quiet lock chip in the dock summons it on demand, so a locked session isn't a persistent
+  // card competing with the map.
+  const [founderUnlockOpen, setFounderUnlockOpen] = useState(false);
   useEffect(() => {
     let live = true;
     getFounderSession()
@@ -2357,14 +2361,14 @@ export default function App() {
   // from real state. Null (omitted) when there is nothing to orient with.
   const operationStatus = useMemo(() => {
     const pipelines = channels.filter((c) => c.nodeCount > 0).length;
-    const waiting = pendingCount;
     const back = canvasOutcomes(activeCanvasProjection).length;
     const parts: string[] = [];
     if (pipelines) parts.push(`${pipelines} pipeline${pipelines === 1 ? "" : "s"}`);
-    if (waiting) parts.push(`${waiting} waiting on you`);
+    // "waiting on you" is NOT repeated here — the inbox badge already carries that count. Duplicating it
+    // in the status line made the same number read twice, one line apart.
     if (back) parts.push(`${back} back`);
     return parts.length ? parts.join(" · ") : null;
-  }, [channels, pendingCount, activeCanvasProjection]);
+  }, [channels, activeCanvasProjection]);
 
   // The compact source's cited truths and open unknowns (docs/production-direction/16), from the canonical
   // canvas: truths are the product-truth anchor labels; the important unknowns ARE the founder's pinned
@@ -2556,9 +2560,16 @@ export default function App() {
     if (d.projectId && d.projectId !== activeProjectId) {
       await handleProjectOpen(d.projectId);
     }
-    if (d.kind === "signal") summonView("inbox");
+    if (d.kind === "signal") {
+      summonView("inbox");
+    } else if (d.pipelineId) {
+      // Open lands ON the thing waiting, not the canvas it happened to leave open: pull the decision's
+      // own pipeline onto the board and surface the dock so its conversation/gate is right there.
+      focusChannel(d.pipelineId);
+      setComposerFocus((f) => f + 1);
+    }
     void refreshPendingInbox();
-  }, [activeProjectId, handleProjectOpen, summonView, refreshPendingInbox, navClosePopover]);
+  }, [activeProjectId, handleProjectOpen, summonView, refreshPendingInbox, navClosePopover, focusChannel]);
 
   // Remove a duplicate product. The switcher only offers it on non-active rows, so the active scope
   // never vanishes underfoot — a refresh of the project list is all that's needed.
@@ -3582,7 +3593,13 @@ export default function App() {
 
   return (
     <main className={`loop-shell ${view === "canvas" ? "canvas-bleed" : ""}`}>
-      {founderSessionAuthenticated === false ? <FounderSessionUnlock onUnlocked={() => setFounderSessionAuthenticated(true)} /> : null}
+      {founderSessionAuthenticated === false && founderUnlockOpen ? (
+        <div className="founder-session-scrim" role="presentation" onClick={() => setFounderUnlockOpen(false)}>
+          <div onClick={(event) => event.stopPropagation()}>
+            <FounderSessionUnlock onUnlocked={() => { setFounderSessionAuthenticated(true); setFounderUnlockOpen(false); }} />
+          </div>
+        </div>
+      ) : null}
       {/* ── Toolbar ──────────────────────────────────────────────────────────
           The canvas view is full-bleed: the global top toolbar is gone there, and every control it
           held moves into the FloatingDock that floats top-center over the canvas (rendered below in
@@ -3655,26 +3672,9 @@ export default function App() {
         {/* Center — the canvas IS the workspace. Only the cold-start picker replaces it. The canvas-area
             wrapper is the drop target for Crew/Skill steps dragged from the rail (step MIME only). */}
         <section className="loop-canvas-area" onDragOver={onStepDragOver} onDrop={onStepDrop}>
-          {/* HOME anchor — the always-present "back to the whole operation" affordance, pinned to the
-              canvas itself. Before this the only "back to canvas" was the brand logo in the top toolbar,
-              which renders ONLY off-canvas (the picker / cold-start views), so on the main surface there
-              was no home at all: a founder deep in a focused pipeline had no one-click way back to the
-              fleet view and no visible anchor. This chip zooms out to the fleet overview and clears any
-              open layer, and Escape peels layers down to it. Shown only when the computed canvas surface
-              is on screen — not over the launcher/booting/drive/takeover base surfaces where it's a
-              near-no-op. */}
-          {surface.kind === "canvas" ? (
-            <button
-              type="button"
-              className="canvas-home"
-              onClick={() => { clearCanvasLayers(); void loadProjectOverview(channels); }}
-              title="Back to the whole operation"
-              aria-label="Back to the whole operation"
-            >
-              <span className="loop-brand-mark">G</span>
-              <span className="canvas-home-label">Home</span>
-            </button>
-          ) : null}
+          {/* HOME is no longer a separate floating chip: the product-identity mark on the top bar IS the
+              "back to the whole operation" affordance (see FloatingDock's onGoHome), so the canvas stays
+              clear of a second identity element. Escape still peels layers down to the overview. */}
           {/* What happened — the run's real numbers now ride the pipeline's Measure node (their single
               home on the canvas), so the floating strip no longer repeats them. What stays here is only
               the loop-closer: a low-emphasis door to log a real outcome, which refreshes the summary.
@@ -3786,8 +3786,11 @@ export default function App() {
               }}
               deriving={productDeriving}
               onReread={() => void handleRereadProduct()}
-              // The product source remains present while pipeline focus changes inside the same canvas.
-              defaultOpen
+              // The product source stays present as a slim left-edge spine, not an open panel that eats the
+              // map's width on load. On a home with dozens of nodes the map must be the dominant element, so
+              // the card defaults COLLAPSED and the founder expands it on demand (its own lane, never over
+              // nodes — the canvas pads by --pentry-gutter so a node never renders under it).
+              defaultOpen={false}
             />
           ) : null}
           {gtmCanvasVisible && connection && !connection.connected && !focusedTerrain && !focusedQuestion ? (
@@ -3813,7 +3816,12 @@ export default function App() {
               onNewChannel={handleNewChannel}
               onShowOverview={overviewActive ? () => { void loadProjectOverview(channels); } : undefined}
               overviewActive={overviewActive && !activeChannelId}
+              onGoHome={surface.kind === "canvas" ? () => { clearCanvasLayers(); void loadProjectOverview(channels); } : undefined}
               operationStatus={operationStatus}
+              // Founder actions locked → a quiet lock chip in the dock, not a card parked on the canvas.
+              locked={founderSessionAuthenticated === false}
+              unlockOpen={founderUnlockOpen}
+              onToggleUnlock={() => setFounderUnlockOpen((open) => !open)}
               // The Summon menu is retired from the dock — the eight-item card menu is no longer offered
               // behind a button. The card components still exist and still render when something summons
               // them (e.g. a signal opening the Inbox card); context-summon (cards appearing where the
@@ -4175,6 +4183,13 @@ export default function App() {
             every product and pipeline. It routes, it never decides: each Open jumps to the item's real
             gate / review / inbox surface. Opaque, same register as the Issues panel; mutually exclusive
             with it. */}
+        {/* One thing at a time: a light click-away scrim sits under whichever right-rail popover is open
+            (Issues / Waiting-on-you / Failures) and over the dock + canvas, so opening one recedes the
+            rest and a click anywhere outside dismisses it — instead of two panels stacking and trapping
+            clicks. Very subtle dim; it's a click-catcher, not a modal. */}
+        {nav.popover !== null && view === "canvas" ? (
+          <div className="loop-popover-scrim" role="presentation" onClick={() => nav.closePopover()} />
+        ) : null}
         {decisionsOpen && view === "canvas" ? (
           <aside className="loop-issues-panel" role="dialog" aria-label="Decisions waiting on you" aria-modal="false">
             <header className="loop-issues-head">

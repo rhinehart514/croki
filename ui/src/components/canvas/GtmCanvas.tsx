@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { X } from "lucide-react";
 import { GraphCanvas, type OperatorCursorState } from "@/components/GraphCanvas";
 import { FocusedPipelineReadout } from "@/components/canvas/FocusedPipelineReadout";
 import type { NodeEditorBridge } from "@/components/nodeEditorBridge";
@@ -146,11 +148,13 @@ const GUTTER_STYLE = { paddingLeft: "var(--pentry-gutter, 0px)", transition: "pa
 const LANDING_EMPTY_GRAPH: GTMGraph = { id: "__landing-empty__", name: "New pipeline", version: "0", nodes: [], edges: [] };
 
 function UnifiedCanvas({ model: m }: { model: GtmCanvasModel }) {
+  // The terrain note is advisory, not a warning. A founder can dismiss it; a genuinely new signal
+  // (stale vs partial changing) brings it back so a fresh state is never hidden by an old dismissal.
+  const [terrainNoteDismissed, setTerrainNoteDismissed] = useState<string | null>(null);
   const landing = !m.graph;
   const graph = m.graph ?? LANDING_EMPTY_GRAPH;
   const hasLanes = (m.operatingView?.lanes.length ?? 0) > 0 || m.channels.length > 0;
   const axis = m.wovenAxis ?? "objects";
-  const parkedCount = (m.operatingView?.lanes ?? []).filter((lane) => lane.runState === "parked").length;
   const focusedChannel = m.activeChannelId ? m.channels.find((c) => c.id === m.activeChannelId) ?? null : null;
   const focusedLane = m.activeChannelId ? m.operatingView?.lanes.find((l) => l.channelId === m.activeChannelId) ?? null : null;
   const showReadout = !landing && !!m.activeChannelId && graph.nodes.length > 0;
@@ -165,6 +169,9 @@ function UnifiedCanvas({ model: m }: { model: GtmCanvasModel }) {
       data-pending-gates={m.result?.pendingGates?.join(",") ?? ""}
       style={{ position: "relative", height: "100%", minHeight: 0, ...GUTTER_STYLE }}
     >
+      {/* Arrange control — tucked in the bottom-left corner cluster, not a tab row floating over the top
+          nodes. "Show everything" appears only while a focus is active (a transient breadcrumb). The
+          "need you" count is not repeated here — the top bar's waiting indicator owns it. */}
       <div className="woven-axisbar">
         <div className="woven-axisseg" role="group" aria-label="Arrange canvas">
           <button type="button" className={axis === "objects" ? "on" : ""} aria-pressed={axis === "objects"} onClick={() => m.onWovenAxisChange?.("objects")}>
@@ -179,7 +186,6 @@ function UnifiedCanvas({ model: m }: { model: GtmCanvasModel }) {
             Show everything
           </button>
         ) : null}
-        {parkedCount ? <span className="woven-parked"><b>{parkedCount}</b> need you</span> : null}
       </div>
       {showReadout ? (
         <FocusedPipelineReadout
@@ -205,11 +211,29 @@ function UnifiedCanvas({ model: m }: { model: GtmCanvasModel }) {
                 : m.terrainState?.hypothesisCount === 0 ? <small>No credible opening was returned yet. Product truth remains available.</small> : null}
         </div>
       ) : null}
-      {m.terrainState?.stale || m.terrainState?.partial ? (
-        <div className="terrain-state-note" role="status">
-          {m.terrainState.stale ? "Terrain updated; the model read is stale against newer product or market evidence." : "Some terrain sources are unavailable; loaded truth remains usable."}
-        </div>
-      ) : null}
+      {(() => {
+        const ts = m.terrainState;
+        if (!ts?.stale && !ts?.partial) return null;
+        // A single note; stale is the more specific, more useful signal, so it wins when both are set.
+        const noteKind = ts.stale ? "stale" : "partial";
+        if (terrainNoteDismissed === noteKind) return null;
+        const text = ts.stale
+          ? "Your product or market has changed since this read — refresh to bring the openings up to date."
+          : "This read is working from part of your terrain. What's shown is solid; a fuller picture fills in as the rest loads.";
+        return (
+          <div className="terrain-state-note" role="status">
+            <span>{text}</span>
+            <button
+              type="button"
+              className="terrain-state-dismiss"
+              aria-label="Dismiss"
+              onClick={() => setTerrainNoteDismissed(noteKind)}
+            >
+              <X size={13} />
+            </button>
+          </div>
+        );
+      })()}
       <GraphCanvas
         connectors={m.connectors}
         contractAudits={m.contractAudits}

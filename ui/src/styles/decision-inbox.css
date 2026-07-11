@@ -42,13 +42,15 @@
   justify-content: space-between;
   gap: 8px;
 }
-.decision-row-kind {
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0.01em;
+/* The bold ask — what the founder must decide, promoted to the headline. */
+.decision-row-ask {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.005em;
   color: var(--ink);
 }
-.decision-row.is-gate .decision-row-kind { color: var(--gap); }
+.decision-row.is-gate .decision-row-ask { color: var(--gap); }
 .decision-row-when {
   flex: none;
   font-size: 10.5px;
@@ -56,23 +58,22 @@
   font-variant-numeric: tabular-nums;
 }
 
-.decision-row-title {
-  margin: 3px 0 0;
-  font-size: 13px;
-  line-height: 1.35;
-  color: var(--ink);
-}
-.decision-row-summary {
+/* Where it came from — the quiet subtitle right under the ask. */
+.decision-row-where {
   margin: 2px 0 0;
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 11.5px;
   color: var(--muted);
 }
-.decision-row-where {
-  margin: 4px 0 0;
-  font-size: 11px;
+/* The one-line human detail — the quietest line, and always plain words (never a raw error). */
+.decision-row-summary {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
   color: var(--muted-2, var(--muted));
-  font-variant-numeric: tabular-nums;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .decision-row-open {

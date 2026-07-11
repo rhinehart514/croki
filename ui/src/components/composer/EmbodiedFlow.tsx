@@ -1,14 +1,18 @@
 // A proposed pipeline shape, embodied — one of the "a few ways to shape this" ideas Claude hands back.
-// Instead of a paragraph, the shape reads as its crew in order: a left-to-right chain of teammate faces
-// and capability marks, joined by thin chevrons, ending at the amber "Your gate" chip. It mirrors the
-// canvas's own flow, so the idea reads instantly as a runnable pipeline — and "nothing sends until you
-// approve" is visible in the shape itself, not just the copy.
+// Instead of a paragraph, the shape reads as its crew in order: a left-to-right chain of steps, each a
+// teammate face (or a capability's brand mark) WITH its plain-English role beside it — "Prospect
+// Researcher › Outreach Writer › Your gate" — joined by thin chevrons and ending at the amber "Your gate"
+// chip. Every step names who does what, so the shape reads as "who does what, in order" at a glance,
+// never a row of unreadable two-letter tokens. It mirrors the canvas's own flow, so the idea reads
+// instantly as a runnable pipeline — and "nothing sends until you approve" is visible in the shape itself.
 //
 // It wears the shared .composer-card2 frame, the same frame the pre-run plan wears, so an idea set and a
 // plan read as siblings in the stream.
 
 import { ChevronRight, Shield } from "lucide-react";
 import { RosterTile } from "./RosterTile";
+import { CAPABILITIES } from "@/lib/capabilities";
+import { agentPersona } from "@/lib/agentPersona";
 import { humanizeStepLabel } from "@/lib/labels";
 import type { GTMEdge, GTMNode } from "@/types";
 import "@/styles/composer-embodied.css";
@@ -20,6 +24,20 @@ function flowNodes(nodes: GTMNode[]): GTMNode[] {
   return [...nodes]
     .filter((n) => n.category !== "context" && n.category !== "resource" && n.category !== "gate")
     .sort((a, b) => (a.position.y - b.position.y) || (a.position.x - b.position.x));
+}
+
+// The plain-English role/name to print beside each step's face — so the chain reads as words, never the
+// two-letter monogram the face falls back to. A teammate (a node with a `ref`) resolves to its role via
+// the same persona library every other surface uses ("Prospect Researcher"); a capability (a `connector`)
+// reads as its real service name ("Gmail", "Clay"); anything else degrades to its humanized label. This is
+// the SAME identity the face already carries — the label just makes it legible at a glance.
+function stepLabel(n: GTMNode): string {
+  if (n.ref) return agentPersona(n.ref, n.label ?? n.agentPrompt).role;
+  if (n.connector) {
+    const cap = CAPABILITIES.find((c) => c.id === n.connector);
+    if (cap) return cap.name;
+  }
+  return humanizeStepLabel(n.label) || "Step";
 }
 
 export function EmbodiedFlow({
@@ -61,12 +79,18 @@ export function EmbodiedFlow({
         </div>
 
         <div className="ef-flow">
-          {steps.map((n) => (
-            <span className="ef-step" key={n.id}>
-              <RosterTile node={n} size="sm" />
-              <ChevronRight className="ef-chev" size={13} aria-hidden="true" />
-            </span>
-          ))}
+          {steps.map((n) => {
+            const label = stepLabel(n);
+            return (
+              <span className="ef-step" key={n.id}>
+                <span className="ef-role">
+                  <RosterTile node={n} size="sm" title={label} />
+                  <span className="ef-role-name">{label}</span>
+                </span>
+                <ChevronRight className="ef-chev" size={13} aria-hidden="true" />
+              </span>
+            );
+          })}
           <span className="ef-gate-chip">
             <Shield size={14} aria-hidden="true" />
             Your gate

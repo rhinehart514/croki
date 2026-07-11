@@ -72,7 +72,8 @@ describe("OpenCanvasWorkbench", () => {
     const changed = vi.fn();
     const created = vi.fn();
     render(<OpenCanvasWorkbench projectId="p1" selectedRef={null} onChanged={changed} onCreated={created} onClose={vi.fn()} />);
-    fireEvent.click(await screen.findByRole("button", { name: "New goal" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "New goal" }));
     fireEvent.change(screen.getByLabelText("What do you want to change?"), { target: { value: "Learn why setup stalls" } });
     fireEvent.change(screen.getByLabelText("What would be different?"), { target: { value: "Founders reach first value in one session" } });
     fireEvent.click(screen.getByRole("button", { name: "Place on canvas" }));
@@ -91,7 +92,8 @@ describe("OpenCanvasWorkbench", () => {
     const created = vi.fn();
     render(<OpenCanvasWorkbench projectId="p1" selectedRef={null} onChanged={vi.fn()} onCreated={created} onClose={vi.fn()} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "New work" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "New work" }));
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Activation notes" } });
     fireEvent.change(screen.getByLabelText("Content"), { target: { value: "Founders miss the first action." } });
     fireEvent.click(screen.getByRole("button", { name: "Place on canvas" }));
@@ -184,7 +186,8 @@ describe("OpenCanvasWorkbench", () => {
   it("keeps a stale-write error visible and refreshes authority state on the next load", async () => {
     api.createGoal.mockRejectedValueOnce(new Error("Stale goal revision. Refresh and try again."));
     render(<OpenCanvasWorkbench projectId="p1" selectedRef={null} onChanged={vi.fn()} onClose={vi.fn()} />);
-    fireEvent.click(await screen.findByRole("button", { name: "New goal" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "New goal" }));
     fireEvent.change(screen.getByLabelText("What do you want to change?"), { target: { value: "Resolve the conflict" } });
     fireEvent.click(screen.getByRole("button", { name: "Place on canvas" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Stale goal revision. Refresh and try again.");
@@ -227,7 +230,8 @@ describe("OpenCanvasWorkbench", () => {
     const select = vi.fn();
     render(<OpenCanvasWorkbench projectId="p1" selectedRef={null} onChanged={vi.fn()} onSelect={select} onClose={vi.fn()} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Open work" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Open work" }));
     fireEvent.change(screen.getByLabelText("Find work"), { target: { value: "launch" } });
     expect(screen.queryByRole("button", { name: /Improve activation/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Launch brief/ }));
@@ -238,7 +242,8 @@ describe("OpenCanvasWorkbench", () => {
   it("opens isolated Claude and Codex product changes from the canvas launcher", async () => {
     render(<OpenCanvasWorkbench projectId="p1" selectedRef={null} onChanged={vi.fn()} onClose={vi.fn()} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Product changes" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Product changes" }));
 
     expect(await screen.findByRole("heading", { name: "Product work waiting on you" })).toBeInTheDocument();
     expect(screen.getByText(/Nothing is merged, pushed, deployed, or released/)).toBeInTheDocument();

@@ -70,10 +70,10 @@ export function ProductEntryColumn({
   // canvas, so it can't reserve space by layout). Publish the gutter it currently occupies as a CSS
   // variable on the document root; the GTM canvas panes read it and pad their left edge by exactly this
   // much, so no node ever renders under the column and it never steals a node's click. Expanded ≈ the
-  // 246px panel + its flow-out cue; collapsed ≈ the thin spine tab. Cleared on unmount (e.g. switching to
+  // 224px panel + its flow-out cue; collapsed ≈ the thin spine tab. Cleared on unmount (e.g. switching to
   // the Product view) so the canvas reclaims the full width.
   useEffect(() => {
-    const gutter = open ? "300px" : "64px";
+    const gutter = open ? "256px" : "56px";
     document.documentElement.style.setProperty("--pentry-gutter", gutter);
     return () => { document.documentElement.style.removeProperty("--pentry-gutter"); };
   }, [open]);
