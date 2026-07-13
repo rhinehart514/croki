@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Check, FolderOpen, LoaderCircle, PackageOpen, ScanSearch } from "lucide-react";
 import { getSampleProduct, pickFolder, scanPreview } from "@/api";
 import type { ScanPreview as ScanPreviewData } from "@/types";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 // The front door for a stranger, kept to ONE calm screen: point it at your product, watch the
 // read-only scan, and see a plain-language read of what it learned — then walk in. There is no
@@ -125,8 +127,9 @@ export function ProductEntry({ busy, onStart, onSeePortfolio }: {
 
             <div className="product-entry-field">
               <span className="product-entry-label"><ScanSearch size={14} /> Your product</span>
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 className={`product-entry-folder ${repoPath ? "chosen" : ""}`}
                 disabled={busy || picking || phase === "scanning"}
                 onClick={choose}
@@ -135,12 +138,12 @@ export function ProductEntry({ busy, onStart, onSeePortfolio }: {
                 {repoPath
                   ? <><span className="product-entry-folder-path">{repoPath}</span><span className="product-entry-folder-change">Change</span></>
                   : <span>{picking ? "Opening Finder…" : "Choose your product folder"}</span>}
-              </button>
+              </Button>
             </div>
 
             <details className="product-entry-adv">
               <summary>Win event — what counts as it working (optional)</summary>
-              <input
+              <Input
                 className="product-entry-input"
                 placeholder="e.g. signup, project_created, pilot_requested"
                 value={outcome}
@@ -151,15 +154,16 @@ export function ProductEntry({ busy, onStart, onSeePortfolio }: {
 
             <div className="product-entry-sample">
               <span className="product-entry-sample-or">No codebase handy?</span>
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 className="product-entry-sample-btn"
                 disabled={busy || picking || loadingSample || phase === "scanning"}
                 onClick={trySample}
               >
                 <PackageOpen size={14} />
                 {loadingSample ? "Opening sample…" : "Try it on a sample product"}
-              </button>
+              </Button>
             </div>
 
             {phase === "scanning" ? (
@@ -208,18 +212,18 @@ export function ProductEntry({ busy, onStart, onSeePortfolio }: {
               </div>
             )}
 
-            <button className="product-entry-go" disabled={busy || !repoPath.trim()} onClick={enter} type="button">
+            <Button className="product-entry-go" disabled={busy || !repoPath.trim()} onClick={enter} type="button">
               {busy ? "Taking you in…" : <>Take me in <ArrowRight size={16} /></>}
-            </button>
-            <button className="product-entry-link product-entry-back" onClick={startOver} type="button">
+            </Button>
+            <Button variant="link" className="product-entry-link product-entry-back" onClick={startOver} type="button">
               Pick a different folder
-            </button>
+            </Button>
           </>
         )}
 
         <p className="product-entry-foot">
           Read-only scan. Nothing sends. You approve everything at the gate.
-          {onSeePortfolio ? <> · <button className="product-entry-link" onClick={onSeePortfolio} type="button">open an existing product</button></> : null}
+          {onSeePortfolio ? <> · <Button variant="link" className="product-entry-link" onClick={onSeePortfolio} type="button">open an existing product</Button></> : null}
         </p>
       </div>
     </div>

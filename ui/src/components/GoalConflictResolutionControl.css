@@ -109,7 +109,7 @@
 }
 
 .goal-conflict-resolution__field > span { color: var(--muted); font-weight: 400; }
-.goal-conflict-resolution__field select,
+.goal-conflict-resolution__field [data-slot="select-trigger"],
 .goal-conflict-resolution__field textarea {
   width: 100%;
   padding: var(--space-2) var(--space-3);
@@ -119,6 +119,7 @@
   border-radius: 7px;
   font: inherit;
 }
+.goal-conflict-resolution__field [data-slot="select-trigger"] { height: auto; justify-self: stretch; }
 
 .goal-conflict-resolution :is(button, input, select, textarea):focus-visible {
   outline: 2px solid var(--link);

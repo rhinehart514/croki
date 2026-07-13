@@ -21,6 +21,13 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { GateDelta, GateDeltaDecision, GateDeltaPage, GateDeltaReceipt } from "@/types";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import "@/styles/gate-delta.css";
 
 // The verbatim outbound message. Left plain — the card never paraphrases what's being sent (invariant:
@@ -212,7 +219,7 @@ export function GateDeltaCard({
       {/* The delta pane — the CHANGE, shown. Exactly one kind renders. */}
       <div className="gdelta-pane">
         {editing != null ? (
-          <textarea
+          <Textarea
             className="gdelta-edit"
             value={editing}
             rows={8}
@@ -248,18 +255,18 @@ export function GateDeltaCard({
       {/* The decision row. Editing an outbound draft, sending back with a note, or the two-tier ship. */}
       {editing != null ? (
         <div className="gdelta-actions">
-          <button className="gdelta-btn is-primary" type="button" disabled={busy || !editing.trim()}
+          <Button variant="ghost" className="gdelta-btn is-primary" type="button" disabled={busy || !editing.trim()}
             onClick={() => void run({ decision: "approve", editedBody: editing })}>
             <Check size={13} aria-hidden /> Save &amp; {sendVerb.toLowerCase()}
-          </button>
-          <button className="gdelta-btn is-ghost" type="button" disabled={busy} onClick={() => setEditing(null)}>
+          </Button>
+          <Button variant="ghost" className="gdelta-btn is-ghost" type="button" disabled={busy} onClick={() => setEditing(null)}>
             Cancel
-          </button>
+          </Button>
         </div>
       ) : note != null ? (
         <div className="gdelta-sendback">
           <p className="gdelta-sendback-lead">Your crew picks this back up. What should they change?</p>
-          <textarea
+          <Textarea
             className="gdelta-sendback-note"
             rows={2}
             autoFocus
@@ -269,58 +276,66 @@ export function GateDeltaCard({
             onKeyDown={(e) => { if (e.key === "Escape") setNote(null); }}
           />
           <div className="gdelta-actions">
-            <button className="gdelta-btn is-send" type="button" disabled={busy || !note.trim()}
+            <Button variant="ghost" className="gdelta-btn is-send" type="button" disabled={busy || !note.trim()}
               onClick={() => void run({ decision: "send-back", note })}>
               {busy ? <Loader size={12} className="spin" aria-hidden /> : <CornerDownLeft size={12} aria-hidden />} Send to your crew
-            </button>
-            <button className="gdelta-btn is-ghost" type="button" disabled={busy} onClick={() => setNote(null)}>Cancel</button>
+            </Button>
+            <Button variant="ghost" className="gdelta-btn is-ghost" type="button" disabled={busy} onClick={() => setNote(null)}>Cancel</Button>
           </div>
         </div>
       ) : codeNative ? (
-        // Code-native: TWO authorizations. Approve stages the change; the heavier, separately-armed "Ship
-        // it live" is the second authorization that carries deployConfirmed:true. It never fires in one
-        // click — the founder arms it, then confirms, so a live product change is deliberate.
+        // Code-native: TWO authorizations. The AlertDialog is the second authorization and carries
+        // deployConfirmed:true only after the founder confirms the visible live-change boundary.
         <div className="gdelta-ship">
-          {!shipArmed ? (
-            <div className="gdelta-actions">
-              <button className="gdelta-btn is-ship-open" type="button" disabled={busy} onClick={() => setShipArmed(true)}>
+          <div className="gdelta-actions">
+            <AlertDialog open={shipArmed} onOpenChange={setShipArmed}>
+              <AlertDialogTrigger
+                render={<Button variant="ghost" className="gdelta-btn is-ship-open" />}
+                type="button"
+                disabled={busy}
+              >
                 <Rocket size={13} aria-hidden /> Ship it live…
-              </button>
-              <button className="gdelta-btn is-sendback" type="button" disabled={busy} onClick={() => setNote("")}>
-                <CornerDownLeft size={13} aria-hidden /> Send back
-              </button>
-            </div>
-          ) : (
-            <div className="gdelta-ship-confirm">
-              <p className="gdelta-ship-warn">
-                <ShieldCheck size={13} aria-hidden />
-                This {shipPath}. It's a real change to your product — your second yes.
-              </p>
-              <div className="gdelta-actions">
-                <button className="gdelta-btn is-ship-go" type="button" disabled={busy}
-                  onClick={() => void run({ decision: "ship", deployConfirmed: true })}>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Ship it live?</AlertDialogTitle>
+                  <AlertDialogDescription className="gdelta-ship-warn">
+                    <ShieldCheck size={13} aria-hidden />
+                    This {shipPath}. It&apos;s a real change to your product, your second yes.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="gdelta-btn is-ghost">Not yet</AlertDialogCancel>
+                  <AlertDialogAction
+                    variant="destructive"
+                    className="gdelta-btn is-ship-go"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => { setShipArmed(false); void run({ decision: "ship", deployConfirmed: true }); }}
+                  >
                   {busy ? <Loader size={13} className="spin" aria-hidden /> : <Rocket size={13} aria-hidden />} Ship it live
-                </button>
-                <button className="gdelta-btn is-ghost" type="button" disabled={busy} onClick={() => setShipArmed(false)}>
-                  Not yet
-                </button>
-              </div>
-            </div>
-          )}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <Button variant="ghost" className="gdelta-btn is-sendback" type="button" disabled={busy} onClick={() => setNote("")}>
+              <CornerDownLeft size={13} aria-hidden /> Send back
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="gdelta-actions">
-          <button className="gdelta-btn is-primary" type="button" disabled={busy}
+          <Button variant="ghost" className="gdelta-btn is-primary" type="button" disabled={busy}
             onClick={() => void run({ decision: "approve" })}>
             {busy ? <Loader size={13} className="spin" aria-hidden /> : <Check size={13} aria-hidden />} {sendVerb}
-          </button>
-          <button className="gdelta-btn is-sendback" type="button" disabled={busy} onClick={() => setNote("")}>
+          </Button>
+          <Button variant="ghost" className="gdelta-btn is-sendback" type="button" disabled={busy} onClick={() => setNote("")}>
             <CornerDownLeft size={13} aria-hidden /> Send back
-          </button>
+          </Button>
           {delta.kind === "outbound" && delta.body ? (
-            <button className="gdelta-btn is-edit" type="button" disabled={busy} onClick={() => setEditing(delta.body ?? "")}>
+            <Button variant="ghost" className="gdelta-btn is-edit" type="button" disabled={busy} onClick={() => setEditing(delta.body ?? "")}>
               <Pencil size={13} aria-hidden /> Edit
-            </button>
+            </Button>
           ) : null}
         </div>
       )}

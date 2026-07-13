@@ -8,6 +8,10 @@ import { X, Wand2, Check, RotateCcw, CornerDownLeft, Upload } from "lucide-react
 import { agentPersona } from "@/lib/agentPersona";
 import { composeCrewMember, addCrewMember, importOpenClawTeammate, type CrewDraft } from "@/api";
 import type { AgentBenchRow } from "@/api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 import { CrewFace } from "./CrewFace";
 import "./CrewComposer.css";
 
@@ -31,10 +35,8 @@ export function CrewComposer({
 
   useEffect(() => {
     const t = window.setTimeout(() => inputRef.current?.focus(), 40);
-    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } };
-    document.addEventListener("keydown", onKey, true);
-    return () => { window.clearTimeout(t); document.removeEventListener("keydown", onKey, true); };
-  }, [onClose]);
+    return () => { window.clearTimeout(t); };
+  }, []);
 
   const crew = bench ?? [];
   const crewName = (r: AgentBenchRow) => r.name?.trim() || agentPersona(r.ref, r.job).role;
@@ -98,15 +100,21 @@ export function CrewComposer({
   const composing = busy === "composing";
 
   return (
-    <div className="crewc-scrim" role="dialog" aria-modal="true" aria-label="Build a teammate">
-      <button type="button" className="crewc-scrim-close" aria-label="Close" onClick={onClose} />
+    <Sheet defaultOpen onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <SheetContent
+        className="crewc-scrim"
+        overlayClassName="crewc-scrim-close !fixed"
+        showCloseButton={false}
+        style={{ transform: "none", maxWidth: "none", width: "auto", border: 0, background: "transparent", boxShadow: "none", padding: 0 }}
+        onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
+      >
       <aside className="crewc-drawer">
         <header className="crewc-head">
           <div>
-            <h2 className="crewc-title">Build a teammate</h2>
-            <p className="crewc-sub">Describe what you need and shape it with Claude. Add it when it feels right.</p>
+            <SheetTitle className="crewc-title">Build a teammate</SheetTitle>
+            <SheetDescription className="crewc-sub">Describe what you need and shape it with Claude. Add it when it feels right.</SheetDescription>
           </div>
-          <button type="button" className="crewc-close" aria-label="Close" onClick={onClose}><X size={16} /></button>
+          <Button type="button" variant="ghost" size="icon" className="crewc-close" aria-label="Close" onClick={onClose}><X size={16} /></Button>
         </header>
 
         {/* Start-from strip — blank, or an existing teammate to adapt. Hidden once a draft is in hand. */}
@@ -143,7 +151,7 @@ export function CrewComposer({
               <span className="crewc-face">
                 <CrewFace agentRef={draft.ref} job={draft.description} family={persona?.family} monogram={persona?.monogram} size={64} />
               </span>
-              <input
+              <Input
                 className="crewc-name-input"
                 value={draft.name}
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
@@ -151,8 +159,8 @@ export function CrewComposer({
                 spellCheck={false}
               />
               {persona && persona.role !== draft.name ? <span className="crewc-role">{persona.role}</span> : null}
-              <textarea
-                className="crewc-desc-input"
+              <Textarea
+                className="crewc-desc-input !field-sizing-fixed"
                 value={draft.description}
                 onChange={(e) => setDraft({ ...draft, description: e.target.value })}
                 aria-label="What this teammate does"
@@ -181,9 +189,9 @@ export function CrewComposer({
 
         <div className="crewc-composer">
           <div className="crewc-inputrow">
-            <textarea
+            <Textarea
               ref={inputRef}
-              className="crewc-input"
+              className="crewc-input !field-sizing-fixed"
               placeholder={
                 mode === "import"
                   ? "Paste SOUL.md (and AGENTS.md, MEMORY.md, TOOLS.md, LEARNINGS.md)…"
@@ -195,19 +203,19 @@ export function CrewComposer({
               rows={2}
               disabled={composing}
             />
-            <button type="button" className="crewc-send" onClick={() => void send()} disabled={!input.trim() || composing} title={mode === "import" ? "Read the pasted agent" : draft ? "Refine" : "Draft with Claude"}>
+            <Button type="button" size="icon" className="crewc-send" onClick={() => void send()} disabled={!input.trim() || composing} title={mode === "import" ? "Read the pasted agent" : draft ? "Refine" : "Draft with Claude"}>
               {composing ? <Wand2 size={15} className="crewc-spin" /> : <CornerDownLeft size={15} />}
-            </button>
+            </Button>
           </div>
           <div className="crewc-actions">
             {draft ? (
               <>
-                <button type="button" className="crewc-secondary" onClick={startOver} disabled={busy === "adding"}>
+                <Button type="button" variant="outline" className="crewc-secondary" onClick={startOver} disabled={busy === "adding"}>
                   <RotateCcw size={13} /> Start over
-                </button>
-                <button type="button" className="crewc-primary" onClick={() => void add()} disabled={busy === "adding"}>
+                </Button>
+                <Button type="button" className="crewc-primary" onClick={() => void add()} disabled={busy === "adding"}>
                   <Check size={14} /> {busy === "adding" ? "Adding…" : "Add to crew"}
-                </button>
+                </Button>
               </>
             ) : (
               <span className="crewc-hint">{composing ? (mode === "import" ? "Reading your agent…" : "Claude is building your teammate…") : "Enter to send · Shift+Enter for a new line"}</span>
@@ -215,6 +223,7 @@ export function CrewComposer({
           </div>
         </div>
       </aside>
-    </div>
+      </SheetContent>
+    </Sheet>
   );
 }

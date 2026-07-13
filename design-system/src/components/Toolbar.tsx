@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cn } from "../lib/cn";
 
-/** The frosted top bar that holds the brand, breadcrumbs, and global actions. */
+/** The raised top bar that holds the brand, breadcrumbs, and global actions. */
 export function Toolbar({ className, ...props }: React.ComponentProps<"div">) {
   return <div className={cn("gtm-toolbar", className)} {...props} />;
 }

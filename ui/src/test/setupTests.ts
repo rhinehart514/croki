@@ -17,6 +17,10 @@ const testStorage: Storage = {
 Object.defineProperty(globalThis, "localStorage", { configurable: true, value: testStorage });
 Object.defineProperty(window, "localStorage", { configurable: true, value: testStorage });
 
+// Base UI restores the page scroll position after closing a portaled popup. jsdom intentionally leaves
+// scrollTo unimplemented, so provide the browser-shaped no-op the component tests need.
+Object.defineProperty(window, "scrollTo", { configurable: true, value: () => undefined });
+
 // Unmount anything a test rendered so state from one test never leaks into the next.
 afterEach(() => {
   cleanup();

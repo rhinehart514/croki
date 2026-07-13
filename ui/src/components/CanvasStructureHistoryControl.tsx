@@ -3,6 +3,7 @@ import { History, Redo2, Undo2 } from "lucide-react";
 import { getCanvasStructureHistory, redoCanvasStructure, undoCanvasStructure } from "@/api";
 import { getIdentity } from "@/lib/identity";
 import type { CanvasStructureHistoryEntry, CanvasStructureHistoryResponse } from "@/openCanvasTypes";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import "@/styles/canvas-history.css";
 
 function writeKey(action: "undo" | "redo"): string {
@@ -42,11 +43,11 @@ export function CanvasStructureHistoryControl({
 }) {
   const [history, setHistory] = useState<CanvasStructureHistoryResponse | null>(null);
   const [open, setOpen] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
   const [openedAt, setOpenedAt] = useState(0);
   const [busy, setBusy] = useState<"undo" | "redo" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [diverged, setDiverged] = useState(false);
-  const rootRef = useRef<HTMLDivElement | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -73,15 +74,6 @@ export function CanvasStructureHistoryControl({
   useEffect(() => {
     if (history) void Promise.resolve().then(load);
   }, [structureSignal]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (event: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
-    };
-    window.addEventListener("mousedown", onDown);
-    return () => window.removeEventListener("mousedown", onDown);
-  }, [open]);
 
   const entries = useMemo(() => history?.entries ?? [], [history]);
   const canUndo = !busy && !diverged && entries.some((entry) => entry.status === "applied");
@@ -120,10 +112,53 @@ export function CanvasStructureHistoryControl({
   };
 
   const hasTrail = entries.length > 0;
+  const setTrailOpen = (nextOpen: boolean) => {
+    if (nextOpen && !open) setOpenedAt(Date.now());
+    setOpen(nextOpen);
+  };
   return (
-    <div className={`chist chist-structure ${besidePipelineHistory ? "with-pipeline-history" : ""}`} ref={rootRef}>
-      {open ? (
-        <div className="chist-trail chist-structure-trail" aria-label="Canvas structure changes">
+    <div className={`chist chist-structure ${besidePipelineHistory ? "with-pipeline-history" : ""}`}>
+      <Popover
+        open={open}
+        onOpenChange={(nextOpen, eventDetails) => {
+          const target = eventDetails.event.target;
+          const pressedControlBar = target instanceof Node && barRef.current?.contains(target);
+          if (!nextOpen && eventDetails.reason === "outside-press" && pressedControlBar) {
+            eventDetails.cancel();
+            return;
+          }
+          setTrailOpen(nextOpen);
+        }}
+      >
+        <div ref={barRef} className="chist-bar" role="group" aria-label="Undo and redo canvas arrangement changes">
+          <span className="chist-structure-label">Canvas</span>
+          <button type="button" className="chist-btn" onClick={() => void mutate("undo")} disabled={!canUndo} aria-label="Undo the last canvas arrangement change" title="Undo canvas arrangement">
+            <Undo2 size={15} strokeWidth={2} />
+          </button>
+          <button type="button" className="chist-btn" onClick={() => void mutate("redo")} disabled={!canRedo} aria-label="Redo the next canvas arrangement change" title="Redo canvas arrangement">
+            <Redo2 size={15} strokeWidth={2} />
+          </button>
+          <span className="chist-sep" aria-hidden="true" />
+          <PopoverTrigger
+            render={(
+              <button
+                type="button"
+                className={`chist-btn chist-trail-toggle ${open ? "on" : ""}`}
+                aria-label="Show canvas arrangement history"
+              />
+            )}
+          >
+            <History size={15} strokeWidth={2} />
+            {hasTrail ? <span className="chist-count">{entries.length}</span> : null}
+          </PopoverTrigger>
+        </div>
+        <PopoverContent
+          className="chist-trail chist-structure-trail !gap-0 !ring-0"
+          side="top"
+          align="start"
+          sideOffset={8}
+          aria-label="Canvas structure changes"
+        >
           <div className="chist-trail-head">Canvas changes</div>
           <p className="chist-structure-note">Moves, regions, and view layout only. Content and real-world actions stay unchanged.</p>
           {error ? <p className="chist-structure-error" role="alert">{error}</p> : null}
@@ -140,29 +175,8 @@ export function CanvasStructureHistoryControl({
               ))}
             </ol>
           ) : <p className="chist-structure-empty">Move an item or change a region and its receipt will appear here.</p>}
-        </div>
-      ) : null}
-
-      <div className="chist-bar" role="group" aria-label="Undo and redo canvas arrangement changes">
-        <span className="chist-structure-label">Canvas</span>
-        <button type="button" className="chist-btn" onClick={() => void mutate("undo")} disabled={!canUndo} aria-label="Undo the last canvas arrangement change" title="Undo canvas arrangement">
-          <Undo2 size={15} strokeWidth={2} />
-        </button>
-        <button type="button" className="chist-btn" onClick={() => void mutate("redo")} disabled={!canRedo} aria-label="Redo the next canvas arrangement change" title="Redo canvas arrangement">
-          <Redo2 size={15} strokeWidth={2} />
-        </button>
-        <span className="chist-sep" aria-hidden="true" />
-        <button
-          type="button"
-          className={`chist-btn chist-trail-toggle ${open ? "on" : ""}`}
-          onClick={() => { if (!open) setOpenedAt(Date.now()); setOpen((value) => !value); }}
-          aria-label="Show canvas arrangement history"
-          aria-expanded={open}
-        >
-          <History size={15} strokeWidth={2} />
-          {hasTrail ? <span className="chist-count">{entries.length}</span> : null}
-        </button>
-      </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }

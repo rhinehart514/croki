@@ -192,6 +192,8 @@
 .inputs-inbox-select {
   flex: 1 1 140px;
   min-width: 120px;
+  width: auto;
+  height: auto;
   padding: 4px 8px;
   border-radius: var(--r-sm);
   border: 1px solid var(--line-2);

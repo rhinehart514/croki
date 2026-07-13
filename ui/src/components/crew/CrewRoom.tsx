@@ -3,9 +3,10 @@
 // a read-and-pick surface, not a workspace — no dragging, no editing here, just the roster you've
 // assembled, on-system and quiet. Seeded from the same bench roster the rail and the profile grid use.
 
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { X } from "lucide-react";
 import { agentPersona, humanizeRef } from "@/lib/agentPersona";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { CrewFace } from "./CrewFace";
 import "./CrewRoom.css";
 
@@ -19,14 +20,6 @@ export function CrewRoom({
   onClose: () => void;
   onOpen: (ref: string) => void;
 }) {
-  // Escape closes — the expected way out of a centered sheet.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } };
-    document.addEventListener("keydown", onKey, true);
-    return () => document.removeEventListener("keydown", onKey, true);
-  }, [open, onClose]);
-
   // Names shown to the founder must be unique. Several agents can share one coarse role ("Prospect
   // Researcher" x3), so when a role is shared, fall back to each agent's own descriptive name — the
   // same rule the rail and the profile team grid use, so all three rosters read the same way.
@@ -48,22 +41,24 @@ export function CrewRoom({
     return out;
   }, [roster]);
 
-  if (!open) return null;
-
   return (
-    <div className="crewroom-scrim" role="dialog" aria-modal="true" aria-label="Your crew">
-      {/* The backdrop is a real button so clicking outside closes — keyboard-reachable, and it never
-          swallows clicks meant for the sheet (the sheet paints above it). */}
-      <button type="button" className="crewroom-scrim-close" aria-label="Close crew room" onClick={onClose} />
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <DialogContent
+        className="crewroom-scrim"
+        overlayClassName="!bg-transparent !backdrop-blur-none"
+        showCloseButton={false}
+        style={{ transform: "none", maxWidth: "none", borderRadius: 0, boxShadow: "none" }}
+        onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
+      >
       <div className="crewroom-sheet">
         <header className="crewroom-head">
           <div className="crewroom-headings">
-            <h2 className="crewroom-title">Your crew</h2>
-            <p className="crewroom-sub">
+            <DialogTitle className="crewroom-title">Your crew</DialogTitle>
+            <DialogDescription className="crewroom-sub">
               {roster.length === 0
                 ? "No teammates yet."
                 : `${roster.length} teammate${roster.length === 1 ? "" : "s"} on your go-to-market team. Open one to see what it does and what it's learned.`}
-            </p>
+            </DialogDescription>
           </div>
           <button type="button" className="crewroom-close" aria-label="Close" onClick={onClose}>
             <X size={16} />
@@ -97,6 +92,7 @@ export function CrewRoom({
           </div>
         )}
       </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

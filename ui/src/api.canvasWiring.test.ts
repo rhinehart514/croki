@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { acceptProductImplication, askBothOperatorRuntimes, composerTurn, createOperatorSession, getGoalRelationHistory, getTerrainView, handoffOperatorSession, restoreGoalRelation, reviseGoalRelation, resumeOperatorSession, saveObjectGraphGeometry, saveObjectGraphPositions } from "@/api";
+import { acceptProductImplication, askBothOperatorRuntimes, composerTurn, createOperatorSession, getGoalRelationHistory, getTerrainView, handoffOperatorSession, restoreGoalRelation, reviseGoalRelation, resumeOperatorSession, saveCanvasGeometry, saveCanvasPositions } from "@/api";
 
 // A fetch spy that captures the last request and returns an ok JSON envelope. This proves the client
 // wiring for fix 1 (question → pipeline binds the real questionId/context) and fix 4 (accept hits the
@@ -91,11 +91,11 @@ describe("provider-neutral runtime continuation API", () => {
 
 describe("canvas layout API", () => {
   it("sends the optimistic revision and idempotency receipt with founder placement", async () => {
-    await saveObjectGraphPositions("proj / one", { "anchor:goal:g1": { x: 12, y: 34 } }, {
+    await saveCanvasPositions("proj / one", { "anchor:goal:g1": { x: 12, y: 34 } }, {
       expectedRevision: 7,
       idempotencyKey: "drag:g1:7",
     });
-    expect(lastUrl).toBe("/api/projects/proj%20%2F%20one/object-graph/positions");
+    expect(lastUrl).toBe("/api/projects/proj%20%2F%20one/canvas-layout");
     expect(lastBody).toEqual({
       positions: { "anchor:goal:g1": { x: 12, y: 34 } },
       expectedRevision: 7,
@@ -104,11 +104,11 @@ describe("canvas layout API", () => {
   });
 
   it("persists the founder's pan and zoom through the same revisioned geometry authority", async () => {
-    await saveObjectGraphGeometry("proj / one", { viewport: { x: -120, y: 44, zoom: 0.72 } }, {
+    await saveCanvasGeometry("proj / one", { viewport: { x: -120, y: 44, zoom: 0.72 } }, {
       expectedRevision: 8,
       idempotencyKey: "viewport:8",
     });
-    expect(lastUrl).toBe("/api/projects/proj%20%2F%20one/object-graph/positions");
+    expect(lastUrl).toBe("/api/projects/proj%20%2F%20one/canvas-layout");
     expect(lastBody).toEqual({
       geometry: { viewport: { x: -120, y: 44, zoom: 0.72 } },
       expectedRevision: 8,

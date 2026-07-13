@@ -37,6 +37,13 @@ function scheduleObjectGraphMarketFill(project, scanReport = null) {
 }
 
 export default async function handle({ req, res, url }) {
+  const legacySemanticRoute = /^\/api\/projects\/[^/]+\/object-graph(?:$|\/(?!positions$))/.test(url.pathname);
+  if (legacySemanticRoute && process.env.GTM_IDE_ENABLE_LEGACY_MACHINERY !== "1") {
+    json(res, 410, {
+      error: "The semantic object graph is retired. Use the open canvas, ordinary work artifacts, and flows.",
+    });
+    return true;
+  }
   // Object graph — the phase-1 GTM graph projection. It reads the new object-graph store plus the
   // existing durable GTM records, derives weakness from real signals, and highlights exactly one
   // strongest current testable path. Opening a project may run the read-only product scan so the

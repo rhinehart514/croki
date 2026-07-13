@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GoalRelation, WorkRelationshipRevision } from "@/openCanvasTypes";
 
@@ -85,5 +85,16 @@ describe("CanvasRelationshipInspector", () => {
       createdBy: expect.objectContaining({ type: "founder", id: "founder" }),
     })));
     expect(api.reviseWorkRelationship).not.toHaveBeenCalled();
+  });
+
+  it("requires explicit confirmation before retiring a live relationship", async () => {
+    render(<CanvasRelationshipInspector projectId="p1" selection={{ type: "goal-relation", id: "gr-1" }} onChanged={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Retire relationship" }));
+    expect(api.retireGoalRelation).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Retire relationship" }));
+
+    await waitFor(() => expect(api.retireGoalRelation).toHaveBeenCalledWith("p1", "gr-1", expect.objectContaining({ expectedRevision: 0 })));
   });
 });

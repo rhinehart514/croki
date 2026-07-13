@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Check, FolderGit2, FolderOpen, LoaderCircle, Plus } from "lucide-react";
 import type { ProjectSummary } from "@/types";
 import { pickFolder } from "@/api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 // The one operating signal per product, read straight from its real derived headline — never seeded.
 // "Blind" means the win event can't be confirmed yet (an attribution gap); a proven gap or grounded
@@ -66,9 +68,9 @@ export function ProjectPicker({
           <h1 id="project-picker-title">Every product you're taking to market</h1>
           <p>Where each one stands right now — the win it's chasing, whether it's grounded or blind, and how much go-to-market is live. Open one to work its map.</p>
         </div>
-        <button className="studio-primary-action" onClick={() => onNewProduct ? onNewProduct() : setCreating(true)} type="button">
+        <Button className="studio-primary-action" onClick={() => onNewProduct ? onNewProduct() : setCreating(true)} type="button">
           <Plus /> Add product
-        </button>
+        </Button>
       </header>
 
       {creating ? (
@@ -90,12 +92,13 @@ export function ProjectPicker({
           </div>
           <label>
             Product name
-            <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Optional; defaults to repository name" />
+            <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Optional; defaults to repository name" />
           </label>
           <label>
             Product folder
-            <button
+            <Button
               type="button"
+              variant="outline"
               className={`project-folder-pick ${repoPath ? "chosen" : ""}`}
               disabled={picking}
               onClick={choose}
@@ -104,18 +107,18 @@ export function ProjectPicker({
               {repoPath
                 ? <span className="project-folder-path">{repoPath}</span>
                 : <span>{picking ? "Opening Finder…" : "Choose your product folder"}</span>}
-            </button>
+            </Button>
           </label>
           <label>
             Win event
-            <input required value={outcome} onChange={(event) => setOutcome(event.target.value)} placeholder="customer_activated" />
+            <Input required value={outcome} onChange={(event) => setOutcome(event.target.value)} placeholder="customer_activated" />
           </label>
           <div className="project-create-actions">
-            <button className="studio-primary-action" disabled={busy} type="submit">
+            <Button className="studio-primary-action" disabled={busy} type="submit">
               {busy ? <LoaderCircle className="spin" /> : <FolderGit2 />}
               Scan and add
-            </button>
-            {projects.length ? <button onClick={() => setCreating(false)} type="button">Cancel</button> : null}
+            </Button>
+            {projects.length ? <Button variant="outline" onClick={() => setCreating(false)} type="button">Cancel</Button> : null}
           </div>
         </form>
       ) : null}
@@ -124,7 +127,8 @@ export function ProjectPicker({
         {projects.map((project) => {
           const state = projectState(project.headline);
           return (
-            <button
+            <Button
+              variant="ghost"
               className={`project-choice ${project.id === activeProjectId ? "active" : ""}`}
               key={project.id}
               onClick={() => void onOpen(project.id)}
@@ -147,7 +151,7 @@ export function ProjectPicker({
                 <span>{project.channelCount} {project.channelCount === 1 ? "pipeline" : "pipelines"}</span>
                 <span className="project-choice-since">{sinceLabel(project.updatedAt)}</span>
               </span>
-            </button>
+            </Button>
           );
         })}
       </div>

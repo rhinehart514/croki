@@ -250,6 +250,56 @@ export const applyCanvasProposal = (projectId: string, artifactId: string, input
     projectRecordPath(projectId, "work-artifacts", artifactId, "apply-proposal"), input,
   );
 
+export const greenlightExperimentArtifact = (
+  projectId: string,
+  artifactId: string,
+  expectedArtifactRevision: number,
+) => post<{
+  artifact: WorkArtifactRevision;
+  flow: GTMGraph;
+  run: { id: string; projectId?: string | null; result: GTMRunResult };
+  result: GTMRunResult;
+  created: boolean;
+}>(
+  projectRecordPath(projectId, "work-artifacts", artifactId, "greenlight"),
+  { expectedArtifactRevision, idempotencyKey: `ui:greenlight-experiment:${artifactId}:${expectedArtifactRevision}` },
+);
+
+export type ContextCandidate = {
+  id: string;
+  path: string;
+  kind: string;
+  finding: string;
+  whyItMayMatter: string;
+  relevance: number;
+  matchedContext: string[];
+  shape: { rows: number; exact: boolean; columns: string[] } | null;
+  source: { surface: "repository"; path: string; bytes: number; modifiedAt: string; fingerprint: string };
+};
+
+export type ContextDiscovery = {
+  projectId: string;
+  surface: { kind: "repository"; root: string };
+  question: string | null;
+  candidates: ContextCandidate[];
+  scannedFiles: number;
+  truncated: boolean;
+  note: string;
+  workArtifactStoreRevision: number;
+};
+
+export const discoverProjectContext = (projectId: string, question: string) =>
+  post<ContextDiscovery>(`/api/projects/${encodeURIComponent(projectId)}/context/discover`, { question, limit: 6 });
+
+export const promoteProjectContext = (
+  projectId: string,
+  candidate: ContextCandidate,
+  expectedStoreRevision: number,
+) => post<{ projectId: string; artifact: WorkArtifactRevision; created: boolean }>(
+  `/api/projects/${encodeURIComponent(projectId)}/context/promote`,
+  { candidate, expectedStoreRevision, idempotencyKey: `ui:promote-context:${candidate.source.fingerprint}` },
+);
+
 export const listWorkRelationships = (projectId: string, options?: IncludeRetiredOptions) =>
   get<WorkRelationshipListResponse>(
     withIncludeRetired(projectCollectionPath(projectId, "work-relationships"), options),
@@ -1181,23 +1231,28 @@ export const saveMarketObject = (projectId: string, object: MarketCandidate) =>
 
 // Persist the founder's canvas layout (per-project sidecar keyed by node id — projection state,
 // never knowledge). Merged server-side, so partial position maps are fine.
-export const saveObjectGraphPositions = (
+export const saveCanvasPositions = (
   projectId: string,
   positions: Record<string, { x: number; y: number }>,
   options: { expectedRevision: number; idempotencyKey: string },
 ) => post<{ projectId: string; positions: Record<string, { x: number; y: number }>; savedAt: string; geometry: { revision: number } }>(
-  `/api/projects/${encodeURIComponent(projectId)}/object-graph/positions`,
+  `/api/projects/${encodeURIComponent(projectId)}/canvas-layout`,
   { positions, ...options },
 );
 
-export const saveObjectGraphGeometry = (
+export const saveCanvasGeometry = (
   projectId: string,
   geometry: { positions?: Record<string, { x: number; y: number }>; viewport?: { x: number; y: number; zoom: number } | null },
   options: { expectedRevision: number; idempotencyKey: string },
 ) => post<{ projectId: string; positions: Record<string, { x: number; y: number }>; savedAt: string; geometry: { revision: number; viewport?: { x: number; y: number; zoom: number } | null } }>(
-  `/api/projects/${encodeURIComponent(projectId)}/object-graph/positions`,
+  `/api/projects/${encodeURIComponent(projectId)}/canvas-layout`,
   { geometry, ...options },
 );
+
+// Compatibility names for integrations compiled before the canvas stopped exposing a semantic object
+// graph. Both now address the one canonical canvas-layout authority.
+export const saveObjectGraphPositions = saveCanvasPositions;
+export const saveObjectGraphGeometry = saveCanvasGeometry;
 
 // The compiled run and its staged gate. `gate.items` each wrap the raw staged item under `.item` (which
 // carries a stable `gtmActionId`), plus a stable `actionId` and its current approval status.

@@ -95,4 +95,20 @@ describe("CanvasStructureHistoryControl", () => {
     expect(screen.getByRole("button", { name: "Undo the last canvas arrangement change" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Redo the next canvas arrangement change" })).toBeDisabled();
   });
+
+  it("opens from the keyboard and returns focus to its trigger on Escape", async () => {
+    render(<CanvasStructureHistoryControl projectId="p1" onCanvasChanged={vi.fn()} />);
+    const trigger = await screen.findByRole("button", { name: "Show canvas arrangement history" });
+    await waitFor(() => expect(trigger).toHaveTextContent("1"));
+    trigger.focus();
+
+    // Native buttons turn Enter/Space into a zero-detail click; jsdom does not synthesize it.
+    fireEvent.click(trigger, { detail: 0 });
+    expect(await screen.findByLabelText("Canvas structure changes")).toBeInTheDocument();
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByLabelText("Canvas structure changes")).toBeNull());
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
 });

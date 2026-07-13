@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 // Mock the API seam so the soul section renders from data we control, not the network.
 vi.mock("@/api", () => ({
@@ -37,6 +38,26 @@ beforeEach(() => {
 // There is ONE learning story now — the soul. The legacy "What I've become" derived-stats section was
 // folded into it, so a teammate has a single "What I've learned from you" panel that handles every state.
 describe("AgentProfile — the single learning story (soul)", () => {
+  it("closes on Escape and restores focus to the control that opened it", async () => {
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return <>
+        <button type="button" onClick={() => setOpen(true)}>Open teammate</button>
+        {open ? <AgentProfile {...baseProps} onClose={() => setOpen(false)} /> : null}
+      </>;
+    }
+
+    render(<Harness />);
+    const trigger = screen.getByRole("button", { name: "Open teammate" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    await screen.findByRole("dialog");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
   it("renders the honest 'no runs yet' copy when nothing has been learned", async () => {
     render(<AgentProfile {...baseProps} />);
     await waitFor(() => expect(screen.getByText(/No runs yet/i)).toBeInTheDocument());

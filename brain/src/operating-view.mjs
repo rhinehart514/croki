@@ -310,9 +310,10 @@ function warmReplyOutcomes(projectId, runs, existingOutcomes, options) {
   // same deterministic join outcome-ingest uses; no model call, no invention. Direct payload.runId wins.
   const runByJoinKey = new Map();
   for (const run of runs ?? []) {
-    for (const item of run?.items ?? []) {
+    const receiptItems = Object.values(run?.result?.nodes ?? {}).flatMap((node) => node?.items ?? []);
+    for (const item of [...(run?.items ?? []), ...receiptItems]) {
       const key = String(item?.joinKey ?? "").trim();
-      if (key && !runByJoinKey.has(key)) runByJoinKey.set(key, run.id);
+      if (key && !runByJoinKey.has(key)) runByJoinKey.set(key, run.id ?? run.runId ?? run.result?.runId);
     }
   }
   const out = [];
@@ -350,8 +351,13 @@ function canvasSources(project, channels, flowRuns, options) {
   ));
   const truth = read("productTruth", "gtm-product-truths", [], () => productTruthStore.list({ ...options, projectId }));
   const model = read("productModel", "product-model-store", null, () => getProductModel(projectId, { ...options, projectId }));
-  const paths = read("paths", "gtm-paths", [], () => gtmPathStore.list({ ...options, projectId }));
-  const runs = read("runs", "gtm-runs", [], () => runStore.list({ ...options, projectId }));
+  const includeLegacy = options.includeLegacyMachinery === true || process.env.GTM_IDE_ENABLE_LEGACY_MACHINERY === "1";
+  const paths = includeLegacy
+    ? read("paths", "gtm-paths", [], () => gtmPathStore.list({ ...options, projectId }))
+    : { owner: "gtm-paths", value: [], available: true };
+  const runs = includeLegacy
+    ? read("runs", "gtm-runs", [], () => runStore.list({ ...options, projectId }))
+    : { owner: "gtm-runs", value: [], available: true };
   const outcomes = read("outcomes", "gtm-results", [], () => resultStore.list({ ...options, projectId }));
   const implications = read("implications", "outcome-ingest.implications", [], () => projectProductImplications({ projectId }, options));
   const feedback = read("feedback", "feedback-ledger", { signals: [], decisions: [] }, () => loadFeedbackLedger(projectId, options));
@@ -361,7 +367,7 @@ function canvasSources(project, channels, flowRuns, options) {
     transientQuestions: operatorArtifacts.value.transientQuestions,
     positions: [...operatorArtifacts.value.positions, ...executionArtifacts.positions],
     sourceRecords: [
-      ...paths.value, ...runs.value, ...outcomes.value,
+      ...(includeLegacy ? [...paths.value, ...runs.value] : []), ...outcomes.value,
       ...operatorArtifacts.value.sourceRecords, ...executionArtifacts.sourceRecords,
     ],
   }, options));
@@ -401,7 +407,10 @@ function canvasSources(project, channels, flowRuns, options) {
     productModel: model.value,
     crew: [...crew.values()],
     questions: questions.value,
-    pipelines: [...channels.map((item) => ({ ...item, sourceKind: "channel" })), ...paths.value.map((item) => ({ ...item, sourceKind: "path" }))],
+    pipelines: [
+      ...channels.map((item) => ({ ...item, sourceKind: "channel" })),
+      ...(includeLegacy ? paths.value.map((item) => ({ ...item, sourceKind: "path" })) : []),
+    ],
     runs: runs.value,
     executionRuns: flowRuns,
     questionArtifacts: [
@@ -417,7 +426,7 @@ function canvasSources(project, channels, flowRuns, options) {
     })),
     // Recorded outcomes plus the still-in-play warm replies from the inbox — both loop back on the canvas.
     // The pending replies ride the SAME outcome projection so no second code path or authority is created.
-    outcomes: [...outcomes.value, ...warmReplyOutcomes(projectId, runs.value, outcomes.value, options)],
+    outcomes: [...outcomes.value, ...warmReplyOutcomes(projectId, [...runs.value, ...flowRuns], outcomes.value, options)],
     implications: implications.value,
     geometry: geometry.value,
     state: {

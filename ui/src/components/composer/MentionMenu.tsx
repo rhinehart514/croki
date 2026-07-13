@@ -19,6 +19,8 @@ export function MentionMenu({
   results,
   onPick,
   onClose,
+  id = "composer-mention-listbox",
+  onActiveDescendantChange,
   className,
   style,
 }: {
@@ -26,6 +28,8 @@ export function MentionMenu({
   results: MentionEntity[];
   onPick: (entity: MentionEntity) => void;
   onClose: () => void;
+  id?: string;
+  onActiveDescendantChange?: (id: string | undefined) => void;
   className?: string;
   style?: CSSProperties;
 }) {
@@ -90,10 +94,15 @@ export function MentionMenu({
     row?.scrollIntoView({ block: "nearest" });
   }, [active]);
 
+  const activeOptionId = ordered[active] ? `${id}-option-${active}` : undefined;
+  useEffect(() => {
+    onActiveDescendantChange?.(activeOptionId);
+  }, [activeOptionId, onActiveDescendantChange]);
+
   const indexOf = (entity: MentionEntity) => ordered.indexOf(entity);
 
   return (
-    <div className={className ? `mention ${className}` : "mention"} style={style} role="listbox" aria-label="Mention a teammate or capability">
+    <div id={id} className={className ? `mention ${className}` : "mention"} style={style} role="listbox" aria-label="Mention a teammate or capability">
       <div className="mention-q">
         <span className="at">@</span>
         <span className="q">{query}</span>
@@ -111,6 +120,7 @@ export function MentionMenu({
                   key={`a:${entity.id}`}
                   entity={entity}
                   active={indexOf(entity) === active}
+                  id={`${id}-option-${indexOf(entity)}`}
                   onPick={onPick}
                   onHover={() => setActive(indexOf(entity))}
                 />
@@ -125,6 +135,7 @@ export function MentionMenu({
                   key={`c:${entity.id}`}
                   entity={entity}
                   active={indexOf(entity) === active}
+                  id={`${id}-option-${indexOf(entity)}`}
                   onPick={onPick}
                   onHover={() => setActive(indexOf(entity))}
                 />
@@ -140,16 +151,19 @@ export function MentionMenu({
 function MentionRow({
   entity,
   active,
+  id,
   onPick,
   onHover,
 }: {
   entity: MentionEntity;
   active: boolean;
+  id: string;
   onPick: (entity: MentionEntity) => void;
   onHover: () => void;
 }) {
   return (
     <button
+      id={id}
       type="button"
       className={active ? "mention-row on" : "mention-row"}
       role="option"

@@ -3,11 +3,14 @@
    accent; everything else stays neutral. Never glass. */
 
 .decide-together {
-  position: absolute;
+  position: fixed;
   top: 64px;
+  bottom: 20px;
   right: 20px;
   z-index: 40;
   width: 360px;
+  height: auto;
+  max-height: calc(100dvh - 84px);
   max-width: calc(100vw - 40px);
   display: flex;
   flex-direction: column;

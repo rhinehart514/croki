@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Slot } from "@radix-ui/react-slot";
+import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/cn";
 
@@ -23,24 +23,45 @@ const buttonVariants = cva("gtm-btn", {
 export interface ButtonProps
   extends React.ComponentProps<"button">,
     VariantProps<typeof buttonVariants> {
-  /** Render as the single child element (Radix Slot) instead of a `<button>`. */
+  /** Render as the single child element instead of a `<button>`. */
   asChild?: boolean;
 }
 
 /**
- * The GTM IDE button. `primary` is the dark ink pill — the Deploy / Publish / Run
- * action. `secondary`, `ghost`, and `outline` recede from there.
+ * The Drover button. `primary` is the dark ink action; `secondary`, `ghost`,
+ * and `outline` recede from there.
  */
 export function Button({
   className,
   variant,
   size,
   asChild = false,
+  children,
   ...props
 }: ButtonProps) {
-  const Comp = asChild ? Slot : "button";
+  const classNames = cn(buttonVariants({ variant, size }), className);
+
+  if (asChild) {
+    const child = React.Children.only(children);
+    if (!React.isValidElement(child)) {
+      throw new Error("Button with asChild requires one React element child.");
+    }
+    const nativeButton = child.type === "button";
+
+    return (
+      <ButtonPrimitive
+        {...props}
+        className={classNames}
+        nativeButton={nativeButton}
+        render={child}
+      />
+    );
+  }
+
   return (
-    <Comp className={cn(buttonVariants({ variant, size }), className)} {...props} />
+    <ButtonPrimitive className={classNames} {...props}>
+      {children}
+    </ButtonPrimitive>
   );
 }
 

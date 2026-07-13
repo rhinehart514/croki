@@ -2,6 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, Globe, Info, KeyRound, Lock, Mail, ShieldCheck, Trash2 } from "lucide-react";
 import { connectGmailOAuth, connectSender, getCredentials, removeSender } from "@/api";
 import type { SenderCredential } from "@/types";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import "@/styles/connect-sender.css";
 
 // Connect a SENDER — the DURABLE Gmail connect. The founder registers their own Google "Desktop app"
@@ -27,6 +33,7 @@ export function ConnectSender() {
   const [endpointAuth, setEndpointAuth] = useState("");
   const [busy, setBusy] = useState(false);
   const [httpBusy, setHttpBusy] = useState(false);
+  const [pendingDisconnect, setPendingDisconnect] = useState<"gmail" | "http" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -130,9 +137,9 @@ export function ConnectSender() {
                 : <>Connected {new Date(gmail.savedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</>}
             </div>
           </div>
-          <button className="cs-btn danger sm" onClick={() => void disconnect()} type="button" title="Disconnect this sender">
+          <Button variant="outline" className="cs-btn danger sm" onClick={() => setPendingDisconnect("gmail")} type="button" title="Disconnect this sender">
             <Trash2 size={13} /> Disconnect
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="cs-add">
@@ -145,7 +152,7 @@ export function ConnectSender() {
             <label className="cs-add-lead" htmlFor="cs-client-id">Client ID</label>
             <div className="cs-field">
               <KeyRound />
-              <input
+              <Input
                 id="cs-client-id"
                 type="text"
                 value={clientId}
@@ -159,7 +166,7 @@ export function ConnectSender() {
             <label className="cs-add-lead" htmlFor="cs-client-secret">Client secret</label>
             <div className="cs-field">
               <Lock />
-              <input
+              <Input
                 id="cs-client-secret"
                 type="password"
                 value={clientSecret}
@@ -171,14 +178,14 @@ export function ConnectSender() {
                 disabled={busy}
               />
             </div>
-            <button
+            <Button
               className="cs-btn primary cs-connect"
               disabled={busy || !clientId.trim() || !clientSecret.trim()}
               onClick={() => void connect()}
               type="button"
             >
               {busy ? "Waiting for Google…" : "Connect Gmail"}
-            </button>
+            </Button>
           </div>
           <div className="cs-hint">
             <Info />
@@ -210,9 +217,9 @@ export function ConnectSender() {
               Approved items POST to your endpoint. Connected {new Date(httpEndpoint.savedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}.
             </div>
           </div>
-          <button className="cs-btn danger sm" onClick={() => void disconnectHttp()} type="button" title="Disconnect this endpoint">
+          <Button variant="outline" className="cs-btn danger sm" onClick={() => setPendingDisconnect("http")} type="button" title="Disconnect this endpoint">
             <Trash2 size={13} /> Disconnect
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="cs-add">
@@ -220,7 +227,7 @@ export function ConnectSender() {
             <label className="cs-add-lead" htmlFor="cs-endpoint">Endpoint URL</label>
             <div className="cs-field">
               <Globe />
-              <input
+              <Input
                 id="cs-endpoint"
                 type="url"
                 value={endpoint}
@@ -234,7 +241,7 @@ export function ConnectSender() {
             <label className="cs-add-lead" htmlFor="cs-endpoint-auth">Authorization header (optional)</label>
             <div className="cs-field">
               <KeyRound />
-              <input
+              <Input
                 id="cs-endpoint-auth"
                 type="password"
                 value={endpointAuth}
@@ -246,14 +253,14 @@ export function ConnectSender() {
                 disabled={httpBusy}
               />
             </div>
-            <button
+            <Button
               className="cs-btn primary cs-connect"
               disabled={httpBusy || !endpoint.trim()}
               onClick={() => void connectHttp()}
               type="button"
             >
               {httpBusy ? "Connecting…" : "Connect endpoint"}
-            </button>
+            </Button>
           </div>
           <div className="cs-hint">
             <Info />
@@ -264,6 +271,31 @@ export function ConnectSender() {
           </div>
         </div>
       )}
+
+      <AlertDialog open={pendingDisconnect !== null} onOpenChange={(nextOpen) => { if (!nextOpen) setPendingDisconnect(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disconnect {pendingDisconnect === "http" ? "this endpoint" : "Gmail"}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Approved sends will no longer be able to use this connection until you connect it again.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingDisconnect(null)}>Keep connected</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                const target = pendingDisconnect;
+                setPendingDisconnect(null);
+                if (target === "http") void disconnectHttp();
+                if (target === "gmail") void disconnect();
+              }}
+            >
+              Disconnect
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {error && <div className="cs-error">{error}</div>}
 

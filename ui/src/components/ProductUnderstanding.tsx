@@ -1,6 +1,7 @@
 import { ArrowRight, FileCode2, Lightbulb } from "lucide-react";
 import type { GTMProject } from "@/types";
 import { ProductReadout, type ProductEvidence } from "@/components/ProductReadout";
+import { Button } from "@/components/ui/button";
 
 // The persisted "Product grounding" read-out, opened over the canvas. It renders the SAME read-out
 // component the onboarding scan preview does, fed from the stored repository facts instead of a fresh
@@ -28,10 +29,10 @@ export function ProductUnderstanding({
           <span className="studio-eyebrow">Product grounding</span>
           <h1 id="understanding-title">{project.name}</h1>
         </div>
-        <button className="studio-primary-action" disabled={!canGenerate} onClick={() => void onGenerate()} type="button">
+        <Button variant="ghost" className="studio-primary-action" disabled={!canGenerate} onClick={() => void onGenerate()} type="button">
           <Lightbulb />
           Ideate pipelines
-        </button>
+        </Button>
       </header>
 
       <ProductReadout
@@ -45,12 +46,12 @@ export function ProductUnderstanding({
         }}
       />
 
-      <button className="understanding-empty" disabled={!canGenerate} onClick={() => void onGenerate()} type="button">
+      <Button variant="ghost" className="understanding-empty" disabled={!canGenerate} onClick={() => void onGenerate()} type="button">
         <FileCode2 />
         <strong>Ideate this product's pipelines from grounded reality</strong>
         <span>Reads the win event, the cited evidence, and the repo, then proposes pipelines with no shape assumed.</span>
         <em>Ideate pipelines <ArrowRight /></em>
-      </button>
+      </Button>
     </section>
   );
 }

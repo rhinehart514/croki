@@ -4,6 +4,7 @@ import type {
   ReallocationReceiptData,
   ReallocationStarvedMotion,
 } from "@/types";
+import { Button } from "@/components/ui/button";
 
 // ReallocationBatchCard — the Overdrive receipt the founder's batch/gate stream renders for LEARN
 // (GTM-MACHINE.md Area 3, decided open-question 1). The machine watched which of your motions actually
@@ -187,22 +188,24 @@ export function ReallocationBatchCard({
                     <span className="rbc-motion-prov rbc-motion-prov--flag">{m.reason}</span>
                     {live && onDecideStarved && (
                       <span className="rbc-motion-decide">
-                        <button
+                        <Button
+                          variant="ghost"
                           type="button"
                           className="rbc-mini"
                           disabled={busy}
                           onClick={() => onDecideStarved(m, "keep")}
                         >
                           Keep
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="ghost"
                           type="button"
                           className="rbc-mini rbc-mini--pause"
                           disabled={busy}
                           onClick={() => onDecideStarved(m, "pause")}
                         >
                           Pause
-                        </button>
+                        </Button>
                       </span>
                     )}
                   </li>
@@ -217,19 +220,20 @@ export function ReallocationBatchCard({
       {live && receipt?.applied && (onOverturn || onAccept) && (
         <footer className="rbc-actions">
           {onAccept && (
-            <button
+            <Button
+              variant="ghost"
               type="button"
               className="rbc-btn rbc-btn--primary"
               disabled={busy}
               onClick={onAccept}
             >
               Let it stand
-            </button>
+            </Button>
           )}
           {onOverturn && (
-            <button type="button" className="rbc-btn" disabled={busy} onClick={onOverturn}>
+            <Button variant="ghost" type="button" className="rbc-btn" disabled={busy} onClick={onOverturn}>
               <Undo2 size={13} aria-hidden="true" /> Overturn — keep my weights
-            </button>
+            </Button>
           )}
         </footer>
       )}

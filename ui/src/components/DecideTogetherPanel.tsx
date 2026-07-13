@@ -11,6 +11,7 @@
 
 import { MessageSquareReply, CornerUpLeft, Route, Archive, X } from "lucide-react";
 import type { ReplyAlert } from "@/types";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import "@/styles/decide-together.css";
 
 export function DecideTogetherPanel({
@@ -34,11 +35,19 @@ export function DecideTogetherPanel({
   const where = context.pipelineName;
 
   return (
-    <aside className="decide-together" role="dialog" aria-label="A reply came back — decide together" aria-modal="false">
+    <Sheet defaultOpen modal={false} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <SheetContent
+        side="right"
+        aria-label="A reply came back — decide together"
+        className="decide-together !gap-0 !p-0"
+        overlayClassName="pointer-events-none !bg-transparent !backdrop-blur-none"
+        showCloseButton={false}
+      >
       <header className="decide-together-head">
         <div className="decide-together-head-title">
           <MessageSquareReply size={16} />
-          <strong>A reply came back</strong>
+          <SheetTitle render={<strong />}>A reply came back</SheetTitle>
+          <SheetDescription className="sr-only">Review the reply and choose where it belongs. Nothing is sent from this panel.</SheetDescription>
         </div>
         <button className="decide-together-close" onClick={onClose} type="button" aria-label="Close">
           <X size={15} />
@@ -93,6 +102,7 @@ export function DecideTogetherPanel({
         </button>
       </footer>
       <p className="decide-together-guarantee">Nothing is sent until you say so. The machine never replies on its own.</p>
-    </aside>
+      </SheetContent>
+    </Sheet>
   );
 }

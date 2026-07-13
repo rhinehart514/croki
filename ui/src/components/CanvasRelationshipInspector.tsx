@@ -6,6 +6,13 @@ import {
 } from "@/api";
 import { getIdentity } from "@/lib/identity";
 import type { GoalRelation, JsonValue, WorkRelationshipRevision } from "@/openCanvasTypes";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 export type CanvasRelationshipSelection = {
   type: "goal-relation" | "work-relationship";
@@ -89,6 +96,7 @@ export function CanvasRelationshipInspector({ projectId, selection, onChanged }:
   const [basis, setBasis] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [retireOpen, setRetireOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -202,22 +210,42 @@ export function CanvasRelationshipInspector({ projectId, selection, onChanged }:
       {proposed && !retired ? (
         <div className="canvas-relationship-proposal">
           <div><strong>Model suggestion</strong><span>It stays proposed until you accept it.</span></div>
-          <button type="button" disabled={saving} onClick={() => void revise(true)}>{saving ? "Saving…" : "Accept relationship"}</button>
+          <Button type="button" variant="outline" disabled={saving} onClick={() => void revise(true)}>{saving ? "Saving…" : "Accept relationship"}</Button>
         </div>
       ) : null}
       <form onSubmit={(event) => { event.preventDefault(); void revise(false); }}>
-        <label>Relationship kind<input value={kind} disabled={retired} onChange={(event) => setKind(event.target.value)} /></label>
-        <label>Label<input value={label} disabled={retired} onChange={(event) => setLabel(event.target.value)} placeholder="Optional words shown on the canvas" /></label>
-        <label>Basis<textarea rows={4} value={basis} disabled={retired} onChange={(event) => setBasis(event.target.value)} /><small>One reason or receipt per line.</small></label>
-        {!retired ? <button className="open-canvas-primary" type="submit" disabled={saving}>{saving ? "Saving…" : "Save revision"}</button> : null}
+        <label>Relationship kind<Input value={kind} disabled={retired} onChange={(event) => setKind(event.target.value)} /></label>
+        <label>Label<Input value={label} disabled={retired} onChange={(event) => setLabel(event.target.value)} placeholder="Optional words shown on the canvas" /></label>
+        <label>Basis<Textarea rows={4} value={basis} disabled={retired} onChange={(event) => setBasis(event.target.value)} /><small>One reason or receipt per line.</small></label>
+        {!retired ? <Button className="open-canvas-primary" type="submit" disabled={saving}>{saving ? "Saving…" : "Save revision"}</Button> : null}
       </form>
       <details className="open-canvas-history" open={historyOpen} onToggle={(event) => setHistoryOpen(event.currentTarget.open)}>
         <summary>{history.length} immutable {history.length === 1 ? "revision" : "revisions"}</summary>
         <ol className="canvas-relationship-history">{[...history].reverse().map((revision) => <RelationshipHistoryRow key={`${revision.id}:${revision.revision}`} record={revision} />)}</ol>
       </details>
-      <button type="button" className="open-canvas-retire" disabled={saving} onClick={() => void toggleRetired()}>
+      <Button type="button" variant="outline" className="open-canvas-retire" disabled={saving} onClick={() => retired ? void toggleRetired() : setRetireOpen(true)}>
         {retired ? "Restore relationship" : "Retire relationship"}
-      </button>
+      </Button>
+      <AlertDialog open={retireOpen} onOpenChange={setRetireOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Retire this relationship?</AlertDialogTitle>
+            <AlertDialogDescription>
+              It will stop appearing as an active connection. Its immutable revision history remains available.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setRetireOpen(false)}>Keep relationship</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={saving}
+              onClick={() => { setRetireOpen(false); void toggleRetired(); }}
+            >
+              Retire relationship
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {error ? <p className="open-canvas-error" role="alert">{error}</p> : null}
     </section>
   );

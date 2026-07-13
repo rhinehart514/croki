@@ -1,7 +1,7 @@
 import { clsx, type ClassValue } from "clsx";
 
 /**
- * Class-name joiner for the GTM IDE design system.
+ * Class-name joiner for the Drover design system.
  *
  * Plain `clsx` — no `tailwind-merge`, because this DS does not use Tailwind:
  * styling comes from the hand-authored `styles.css` (tokens + component classes),

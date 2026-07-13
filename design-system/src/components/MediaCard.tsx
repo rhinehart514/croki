@@ -24,10 +24,8 @@ export interface MediaCardProps extends Omit<React.ComponentProps<"div">, "title
 }
 
 /**
- * A vertical glass card with a media cover region, a title, a meta line, and a
- * footer row of metadata atoms. Mirrors the styleguide `card()` anatomy: a frosted
- * surface (`--st-glass` + blur, 14px radius, `--st-node-shadow`) over a gradient or
- * image thumbnail.
+ * A vertical stone-surface card with a media cover region, a title, a meta line,
+ * and a footer row of metadata atoms.
  *
  * @example
  * <MediaCard

@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { Check, ChevronDown } from "lucide-react";
-import { Collapse, Reveal } from "@/lib/motion";
+import { useState } from "react";
+import { ChevronDown } from "lucide-react";
+import { Collapse } from "@/lib/motion";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup,
+  DropdownMenuRadioItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 // The engine + model catalog lives in a non-component sibling module so this file only exports
 // components (fast-refresh requires that). ComposerDock imports the model helpers from there too.
 import { ENGINES, MODELS, modelById, type Engine, type Model } from "@/components/agent-picker-models";
@@ -14,21 +17,18 @@ function Logo({ engine, brand, size = 14 }: { engine: Engine; brand?: boolean; s
   );
 }
 
-function ModelRow({ model, selected, onPick, withLogo }: { model: Model; selected: boolean; onPick: () => void; withLogo?: boolean }) {
+function ModelRow({ model, selected, withLogo }: { model: Model; selected: boolean; withLogo?: boolean }) {
   return (
-    <button
-      type="button"
-      role="menuitemradio"
-      aria-checked={selected}
+    <DropdownMenuRadioItem
+      value={model.id}
+      closeOnClick
       className={`agent-picker-model ${withLogo ? "with-logo" : ""} ${selected ? "selected" : ""}`}
-      onClick={onPick}
     >
       {withLogo ? <span className="agent-picker-rowlogo"><Logo engine={ENGINES[model.agent]} brand size={12} /></span> : null}
       <span className="agent-picker-model-label">{model.label}</span>
       <span className="agent-picker-model-note">{model.note}</span>
       {model.preview ? <span className="agent-picker-preview">Preview</span> : null}
-      {selected ? <Check size={14} className="agent-picker-check" aria-hidden="true" /> : null}
-    </button>
+    </DropdownMenuRadioItem>
   );
 }
 
@@ -41,53 +41,22 @@ export function AgentPicker({ value, onChange }: { value: string; onChange: (mod
   const current = modelById(value);
   // open the More section by default when the current selection lives in it, so the check is visible
   const [moreOpen, setMoreOpen] = useState(current.tier === "more");
-  // The menu renders in a body portal so the dock's overflow:hidden can't clip it, and is anchored
-  // ABOVE the trigger (the composer sits low on screen) so it never opens off-screen or scrolls.
-  const [pos, setPos] = useState<{ left: number; bottom: number } | null>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
   const currentEngine = ENGINES[current.agent];
   const moreModels = MODELS.filter((m) => m.tier === "more");
 
-  const toggle = () => {
-    if (open) { setOpen(false); return; }
-    const r = triggerRef.current?.getBoundingClientRect();
-    if (r) setPos({ left: r.left, bottom: window.innerHeight - r.top + 8 });
-    setOpen(true);
-  };
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as HTMLElement;
-      if (t.closest(".agent-picker-portal") || t.closest(".agent-picker")) return;
-      setOpen(false);
-    };
-    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onEsc);
-    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onEsc); };
-  }, [open]);
-
-  const pick = (id: string) => { onChange(id); setOpen(false); };
-
   return (
     <div className="agent-picker">
-      <button
-        ref={triggerRef}
-        type="button"
-        className={`agent-picker-trigger ${open ? "open" : ""}`}
-        onClick={toggle}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        title={`${currentEngine.name} · ${current.label} — ${currentEngine.meta}`}
-      >
-        <Logo engine={currentEngine} />
-        <span className="agent-picker-name">{current.label}</span>
-        <ChevronDown size={12} className="agent-picker-chev" aria-hidden="true" />
-      </button>
-      {pos ? createPortal(
-        <div className="agent-picker-portal" style={{ left: pos.left, bottom: pos.bottom }}>
-          <Reveal open={open} className="menu agent-picker-menu" role="menu" origin="bottom-left">
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger
+          className={`agent-picker-trigger ${open ? "open" : ""}`}
+          title={`${currentEngine.name} · ${current.label} — ${currentEngine.meta}`}
+        >
+          <Logo engine={currentEngine} />
+          <span className="agent-picker-name">{current.label}</span>
+          <ChevronDown size={12} className="agent-picker-chev" aria-hidden="true" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="start" sideOffset={8} className="menu agent-picker-menu w-auto">
+          <DropdownMenuRadioGroup value={value} onValueChange={(id) => onChange(String(id))}>
             {(Object.values(ENGINES)).map((engine) => (
               <div className="agent-picker-group" key={engine.id}>
                 <div className="agent-picker-group-head">
@@ -96,33 +65,32 @@ export function AgentPicker({ value, onChange }: { value: string; onChange: (mod
                   <span className="agent-picker-group-meta">{engine.meta}</span>
                 </div>
                 {MODELS.filter((m) => m.agent === engine.id && m.tier === "primary").map((m) => (
-                  <ModelRow key={m.id} model={m} selected={m.id === value} onPick={() => pick(m.id)} />
+                  <ModelRow key={m.id} model={m} selected={m.id === value} />
                 ))}
               </div>
             ))}
             {/* More models — a disclosure, so the default menu never needs to scroll */}
             <div className="agent-picker-more-wrap">
-              <button
-                type="button"
+              <DropdownMenuItem
                 className={`agent-picker-more-toggle ${moreOpen ? "open" : ""}`}
+                closeOnClick={false}
                 onClick={() => setMoreOpen((v) => !v)}
                 aria-expanded={moreOpen}
               >
                 <ChevronDown size={13} className="agent-picker-more-chev" aria-hidden="true" />
                 {moreOpen ? "Fewer models" : "More models"}
-              </button>
+              </DropdownMenuItem>
               <Collapse open={moreOpen}>
                 <div className="agent-picker-more">
                   {moreModels.map((m) => (
-                    <ModelRow key={m.id} model={m} selected={m.id === value} onPick={() => pick(m.id)} withLogo />
+                    <ModelRow key={m.id} model={m} selected={m.id === value} withLogo />
                   ))}
                 </div>
               </Collapse>
             </div>
-          </Reveal>
-        </div>,
-        document.body,
-      ) : null}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

@@ -5,6 +5,12 @@ import {
   listProductChanges, reviewProductChange, stageProductChangeProposal,
   type ProductChangeReceipt, type WorkspaceApplyReadiness, type WorkspaceChangeRevision,
 } from "@/api";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import "@/styles/product-change-review.css";
 
 type Review = { workspaceId: string; revision: WorkspaceChangeRevision; readiness?: WorkspaceApplyReadiness };
@@ -84,12 +90,69 @@ export function ProductChangeReview({ projectId, refreshSignal, focusedChangeId 
           {review?.revision.diff || change.diff ? <Diff value={review?.revision.diff ?? change.diff!} /> : <p className="pchange-no-diff">{ready ? "No readable difference." : "The difference appears when local work finishes."}</p>}
           {drifted ? <p className="pchange-error" role="alert">The isolated work changed after this review snapshot. The frozen diff above cannot be approved or applied; stage the current exact diff again.</p> : null}
           <div className="pchange-actions">
-            {ready && (!review || drifted) ? <button className="pchange-primary" type="button" disabled={active} onClick={() => void stage(change)}><Code2 size={14} /> {drifted ? "Stage current exact diff" : "Stage exact diff for review"}</button> : null}
-            {review?.revision.status === "proposed" && !drifted ? <><span className="pchange-confirm">Founder review</span><button className="pchange-primary" type="button" disabled={active} onClick={() => void decide(change, "approve")}>Approve local patch</button><button className="pchange-quiet" type="button" disabled={active} onClick={() => void decide(change, "reject")}>Reject</button></> : null}
-            {review?.revision.status === "approved" && !drifted && applyArmed !== change.id ? <button className="pchange-primary" type="button" disabled={active || review.readiness?.ready === false} onClick={() => setApplyArmed(change.id)}>Apply approved patch…</button> : null}
-            {review?.revision.status === "approved" && applyArmed === change.id ? <><span className="pchange-confirm">This writes the reviewed patch into your local product. It does not commit, merge, push, or deploy.</span><button className="pchange-danger" type="button" disabled={active || review.readiness?.ready === false} onClick={() => void apply(change)}>Yes, apply locally</button><button className="pchange-quiet" type="button" onClick={() => setApplyArmed(null)}>Not yet</button></> : null}
+            {ready && (!review || drifted) ? <Button variant="ghost" className="pchange-primary" type="button" disabled={active} onClick={() => void stage(change)}><Code2 size={14} /> {drifted ? "Stage current exact diff" : "Stage exact diff for review"}</Button> : null}
+            {review?.revision.status === "proposed" && !drifted ? <><span className="pchange-confirm">Founder review</span><Button variant="ghost" className="pchange-primary" type="button" disabled={active} onClick={() => void decide(change, "approve")}>Approve local patch</Button><Button variant="ghost" className="pchange-quiet" type="button" disabled={active} onClick={() => void decide(change, "reject")}>Reject</Button></> : null}
+            {review?.revision.status === "approved" && !drifted ? (
+              <AlertDialog open={applyArmed === change.id} onOpenChange={(nextOpen) => setApplyArmed(nextOpen ? change.id : null)}>
+                <AlertDialogTrigger
+                  render={<Button variant="ghost" className="pchange-primary" />}
+                  type="button"
+                  disabled={active || review.readiness?.ready === false}
+                >
+                  Apply approved patch…
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Apply approved patch locally?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This writes the reviewed patch into your local product. It does not commit, merge, push, or deploy.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="pchange-quiet">Not yet</AlertDialogCancel>
+                    <AlertDialogAction
+                      variant="destructive"
+                      className="pchange-danger"
+                      disabled={active || review.readiness?.ready === false}
+                      onClick={() => { setApplyArmed(null); void apply(change); }}
+                      type="button"
+                    >
+                      Yes, apply locally
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            ) : null}
             {review && ["rejected", "applied", "reverted"].includes(review.revision.status) ? <span className="pchange-review-receipt">{review.revision.status === "applied" ? "Applied locally" : review.revision.status === "rejected" ? "Rejected" : "Reverted"}</span> : null}
-            {discardArmed === change.id ? <><span className="pchange-confirm">Discard this isolated work?</span><button className="pchange-danger" type="button" disabled={active} onClick={() => void discard(change)}>Yes, discard</button><button className="pchange-quiet" type="button" onClick={() => setDiscardArmed(null)}>Keep it</button></> : <button className="pchange-quiet" type="button" disabled={active || ["queued", "building"].includes(change.status)} onClick={() => setDiscardArmed(change.id)}><Trash2 size={13} /> Discard local work</button>}
+            <AlertDialog open={discardArmed === change.id} onOpenChange={(nextOpen) => setDiscardArmed(nextOpen ? change.id : null)}>
+              <AlertDialogTrigger
+                render={<Button variant="ghost" className="pchange-quiet" />}
+                type="button"
+                disabled={active || ["queued", "building"].includes(change.status)}
+              >
+                <Trash2 size={13} /> Discard local work
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Discard this isolated work?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This removes the isolated worktree. Nothing has been committed, merged, pushed, deployed, or released.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="pchange-quiet">Keep it</AlertDialogCancel>
+                  <AlertDialogAction
+                    variant="destructive"
+                    className="pchange-danger"
+                    disabled={active}
+                    onClick={() => { setDiscardArmed(null); void discard(change); }}
+                    type="button"
+                  >
+                    Yes, discard
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </div> : null}
       </li>;

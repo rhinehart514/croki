@@ -4,6 +4,9 @@ import {
   addDesignReference, getDesignState, saveDesignState,
   type DesignState, type DesignReference,
 } from "@/api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import "@/styles/design-taste.css";
 
 // DesignTaste — the founder's front-end house style, made persistent. Until this surface existed, every
@@ -145,7 +148,7 @@ export function DesignTaste() {
         <label className="cs-add-lead" htmlFor="dt-house">In a word or two, the style</label>
         <div className="cs-field">
           <Palette />
-          <input
+          <Input
             id="dt-house"
             type="text"
             value={houseStyle}
@@ -155,7 +158,7 @@ export function DesignTaste() {
           />
         </div>
         <label className="cs-add-lead" htmlFor="dt-feeling">The feeling, in one line</label>
-        <textarea
+        <Textarea
           id="dt-feeling"
           className="dt-feeling"
           value={feeling}
@@ -179,7 +182,7 @@ export function DesignTaste() {
                   : <span className="dt-dim-tag">A principle, no screen yet</span>}
               </div>
               <div className="dt-dim-ask">{d.ask}</div>
-              <textarea
+              <Textarea
                 className="dt-dim-input"
                 value={principles[d.key] ?? ""}
                 onChange={(e) => { setPrinciples((p) => ({ ...p, [d.key]: e.target.value })); setSaved(false); }}
@@ -192,14 +195,15 @@ export function DesignTaste() {
         })}
       </div>
 
-      <button
+      <Button
+        variant="ghost"
         className="cs-btn primary dt-save"
         disabled={busy || !dirty}
         onClick={() => void save()}
         type="button"
       >
         {saved && !dirty ? <><Check size={14} /> Saved</> : busy ? "Saving…" : "Save your taste"}
-      </button>
+      </Button>
 
       {/* Reference screens — the anchor. Flagging a real screen marks its dimensions "anchored". */}
       <div className="dt-refs">
@@ -230,14 +234,15 @@ export function DesignTaste() {
                     ))}
                   </div>
                 </div>
-                <button
+                <Button
+                  variant="ghost"
                   className="cs-btn danger sm"
                   onClick={() => void removeRef(r.id)}
                   type="button"
                   title="Remove this reference"
                 >
                   <Trash2 size={12} />
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
@@ -248,7 +253,7 @@ export function DesignTaste() {
         <div className="dt-ref-add">
           <div className="cs-field">
             <Palette />
-            <input
+            <Input
               type="text"
               value={refLabel}
               onChange={(e) => setRefLabel(e.target.value)}
@@ -258,7 +263,7 @@ export function DesignTaste() {
           </div>
           <div className="cs-field">
             <Link2 />
-            <input
+            <Input
               type="url"
               value={refUrl}
               onChange={(e) => setRefUrl(e.target.value)}
@@ -267,7 +272,7 @@ export function DesignTaste() {
           </div>
           <div className="cs-field">
             <Info />
-            <input
+            <Input
               type="text"
               value={refProves}
               onChange={(e) => setRefProves(e.target.value)}
@@ -287,14 +292,15 @@ export function DesignTaste() {
               </button>
             ))}
           </div>
-          <button
+          <Button
+            variant="ghost"
             className="cs-btn dt-ref-add-btn"
             disabled={busy || !refLabel.trim()}
             onClick={() => void addRef()}
             type="button"
           >
             <Plus size={14} /> Flag this screen
-          </button>
+          </Button>
         </div>
       </div>
 

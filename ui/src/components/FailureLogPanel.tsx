@@ -19,6 +19,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, X, RotateCw } from "lucide-react";
 import { getFailureLog, type FailureLogView, type FailureGroup } from "@/api";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import "@/styles/failure-log.css";
 
 type Filter = "self_inflicted" | "transient";
@@ -136,11 +138,18 @@ export function FailureLogPanel({ projectId, onClose }: { projectId?: string | n
   const transientCount = view?.transientCount ?? 0;
 
   return (
-    <aside className="loop-issues-panel flog-panel" role="dialog" aria-label="What Drover saw fail" aria-modal="false">
+    <Sheet defaultOpen modal={false} onOpenChange={(nextOpen) => { if (!nextOpen) onClose?.(); }}>
+      <SheetContent
+        side="right"
+        className="loop-issues-panel flog-panel !gap-0 !p-0"
+        overlayClassName="pointer-events-none !bg-transparent !backdrop-blur-none"
+        showCloseButton={false}
+      >
+      <Tabs value={filter} onValueChange={(value) => setFilter(value as Filter)} className="contents">
       <header className="loop-issues-head">
         <div className="loop-issues-head-title">
           <AlertTriangle />
-          <strong>What Drover saw fail</strong>
+          <SheetTitle render={<strong />}>What Drover saw fail</SheetTitle>
         </div>
         <div className="flog-head-actions">
           <button
@@ -164,29 +173,25 @@ export function FailureLogPanel({ projectId, onClose }: { projectId?: string | n
       {/* The self-inflicted / transient split, as a segmented control. Self-inflicted is the default — the
           real bugs to fix. Transient (a retry or reset clears it) sits one tap away, never hidden. */}
       {view && (selfCount > 0 || transientCount > 0) ? (
-        <div className="flog-filter" role="tablist" aria-label="Failure class">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={filter === "self_inflicted"}
+        <TabsList className="flog-filter !h-auto !w-auto !rounded-none !bg-transparent !p-0" variant="line" aria-label="Failure class">
+          <TabsTrigger
+            value="self_inflicted"
             className={`flog-tab ${filter === "self_inflicted" ? "flog-tab--on" : ""}`}
-            onClick={() => setFilter("self_inflicted")}
           >
             To fix<span className="flog-tab-count">{selfCount}</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={filter === "transient"}
+          </TabsTrigger>
+          <TabsTrigger
+            value="transient"
             className={`flog-tab ${filter === "transient" ? "flog-tab--on" : ""}`}
-            onClick={() => setFilter("transient")}
           >
             Transient<span className="flog-tab-count">{transientCount}</span>
-          </button>
-        </div>
+          </TabsTrigger>
+        </TabsList>
       ) : null}
 
-      <div className="loop-issues-body flog-body">
+      {(["self_inflicted", "transient"] as const).map((tabFilter) => (
+      <TabsContent value={tabFilter} className="loop-issues-body flog-body" key={tabFilter}>
+        {filter === tabFilter ? <>
         {error ? (
           <p className="flog-msg flog-msg--error">Couldn’t load the failure log. {error}</p>
         ) : loading && !view ? (
@@ -207,7 +212,11 @@ export function FailureLogPanel({ projectId, onClose }: { projectId?: string | n
             {shown.map((g) => <GroupRow key={g.signature} group={g} />)}
           </ul>
         )}
-      </div>
-    </aside>
+        </> : null}
+      </TabsContent>
+      ))}
+      </Tabs>
+      </SheetContent>
+    </Sheet>
   );
 }

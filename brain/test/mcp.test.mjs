@@ -16,12 +16,12 @@ describe("MCP canonical verb surface", () => {
     assert.equal(registry.get("inspect").lane, "read-only");
     assert.equal(registry.get("run").lane, "reversible-local");
   });
-  it("advertises the six preferred verbs first while keeping legacy capabilities discoverable", () => {
-    assert.deepEqual(names.slice(0, 6), ["inspect", "focus", "ask", "propose", "record", "run"]);
-    assert.deepEqual(canonicalNames, names.slice(0, 6));
+  it("advertises only the six preferred verbs", () => {
+    assert.deepEqual(names, ["inspect", "focus", "ask", "propose", "record", "run"]);
+    assert.deepEqual(canonicalNames, names);
     assert.equal(new Set(names).size, names.length);
     for (const legacy of ["get_product_model", "get_workflow", "run_workflow", "get_outcome", "start_operator_session"]) {
-      assert.ok(names.includes(legacy), `${legacy} remains in tools/list`);
+      assert.ok(!names.includes(legacy), `${legacy} stays out of tools/list`);
     }
   });
 
@@ -39,11 +39,11 @@ describe("MCP canonical verb surface", () => {
     assert.deepEqual(TOOL_MAP.get("record").inputSchema.properties.kind.enum, ["session_note", "model_artifact", "work_artifact", "goal", "goal_relation", "work_relationship", "question_proposal"]);
   });
 
-  it("keeps prior direct compose/run capabilities as advertised compatibility adapters", () => {
+  it("keeps prior direct compose/run capabilities as hidden compatibility adapters", () => {
     assert.ok(LEGACY_TOOLS.length > CANONICAL_TOOLS.length);
     for (const name of ["start_operator_session", "run_workflow", "get_workflow", "get_outcome", "get_product_model"]) {
       assert.ok(TOOL_MAP.has(name), `${name} remains dispatchable`);
-      assert.ok(names.includes(name), `${name} remains advertised for backward compatibility`);
+      assert.ok(!names.includes(name), `${name} is not advertised to new clients`);
     }
   });
 

@@ -38,7 +38,7 @@ const TONE_VAR: Record<ChipTone, string> = {
   blind: "var(--blind)",
   agent: "var(--agent)",
   link: "var(--link)",
-  ink: "var(--st-ink)",
+  ink: "var(--ink)",
 };
 
 /**
@@ -93,8 +93,8 @@ export interface MetaPillProps extends React.ComponentProps<"span"> {
 type PillStyle = React.CSSProperties & { "--pill-accent"?: string };
 
 /**
- * A rounded (999px) glass metadata pill: an optional icon plus a short label,
- * bordered with `--st-line-2`. The quiet companion to {@link IconChip} for
+ * A rounded metadata pill: an optional icon plus a short label, bordered with
+ * `--line-2`. The quiet companion to {@link IconChip} for
  * durations, counts, and template/state tags.
  */
 export function MetaPill({ icon, label, accent, className, style, ...props }: MetaPillProps) {

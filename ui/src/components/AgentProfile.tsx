@@ -5,6 +5,7 @@ import {
 import { agentPersona, humanizeRef, agentOrigin, AGENT_ORIGIN_LABEL } from "@/lib/agentPersona";
 import { CrewFace } from "@/components/crew/CrewFace";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   getCrewMemberProfile, promoteCrewLearning, dismissCrewLearning,
   type CrewMemberProfile,
@@ -119,14 +120,6 @@ export function AgentProfile({
   // Absent → the action still shows, honestly disabled. Never sends; it stages a discovery step.
   onGatherEvidence?: (ref: string, falsifier: string) => void;
 }) {
-  // Escape closes — the founder's expected way out of a centered sheet.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } };
-    document.addEventListener("keydown", onKey, true);
-    return () => document.removeEventListener("keydown", onKey, true);
-  }, [open, onClose]);
-
   // The teammate's SOUL — its durable track record and the lessons it has learned from the founder.
   // Fetched when the sheet opens; stamped with the ref so one teammate's soul never renders on another's.
   const [soul, setSoul] = useState<{ ref: string; data: CrewMemberProfile | null } | null>(null);
@@ -180,7 +173,7 @@ export function AgentProfile({
     return out;
   }, [team]);
 
-  if (!open || !view) return null;
+  if (!view) return <Dialog open={false} />;
 
   // The soul for the teammate on screen (never a stale ref's). This is the SINGLE "what this teammate
   // has learned from you" story — its durable track record, the lessons it has earned, what it's still
@@ -205,16 +198,20 @@ export function AgentProfile({
   const mission = cleanJob(view.job) || `A ${role.toLowerCase()} on your crew. Open the source file to see exactly what it does.`;
 
   return (
-    <div className="agentp-scrim" role="dialog" aria-modal="true" aria-label={`${role} profile`}>
-      {/* The backdrop is a real button so clicking outside closes — semantic, keyboard-reachable, and
-          it never swallows clicks meant for the sheet (the sheet paints above it). */}
-      <button type="button" className="agentp-scrim-close" aria-label="Close profile" onClick={onClose} />
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <DialogContent
+        className="agentp-scrim"
+        overlayClassName="!bg-transparent !backdrop-blur-none"
+        showCloseButton={false}
+        style={{ transform: "none", maxWidth: "none", borderRadius: 0, boxShadow: "none" }}
+        onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
+      >
       <div className="agentp-sheet">
         {/* ── who this is ── */}
         <aside className="agentp-ident">
           <Mark agentRef={view.ref} job={view.job} />
           <div className="agentp-eyebrow">{AGENT_ORIGIN_LABEL[agentOrigin(view.ref)].label}</div>
-          <h1 className="agentp-role">{role}</h1>
+          <DialogTitle className="agentp-role">{role}</DialogTitle>
           <div className="agentp-meta">
             <span className="agentp-status"><span className="dot" />Active</span>
           </div>
@@ -397,6 +394,7 @@ export function AgentProfile({
           </div>
         ) : null}
       </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

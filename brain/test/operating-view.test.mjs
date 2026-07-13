@@ -188,8 +188,8 @@ describe("getOperatingView — the shared-map read (Area 6)", () => {
     const joined = canvas.outcomes.find((item) => item.id === gmail.id);
     assert.deepEqual(joined.lineage.pipelineRef, { type: "pipeline", id: channel.id });
     assert.deepEqual(joined.lineage.graphRef, { type: "graph", id: channel.graphId });
-    assert.deepEqual(joined.lineage.pathRef, { type: "path", id: pathRecord.id });
-    assert.deepEqual(joined.lineage.runRef, { type: "run", id: run.id });
+    assert.equal(joined.lineage.pathRef, null, "legacy path is not projected into the canonical canvas");
+    assert.equal(joined.lineage.runRef, null, "legacy compiled run is not projected into the canonical canvas");
     assert.deepEqual(joined.lineage.executionRunRef, { type: "execution-run", id: "execution-lineage-1" });
     assert.deepEqual(joined.lineage.deliveryRef, { type: "delivery-connector", id: "gmail" });
     const anchor = canvas.anchors.find((item) => item.ref.type === "outcome" && item.ref.id === gmail.id);
@@ -325,7 +325,7 @@ describe("getOperatingView — the shared-map read (Area 6)", () => {
       pinnedCrew: ["crew:researcher"],
     }, options);
 
-    const canvas = getOperatingView({ projectId: project.id }, options).woven.canvas;
+    const canvas = getOperatingView({ projectId: project.id }, { ...options, includeLegacyMachinery: true }).woven.canvas;
     assert.equal(canvas.anchors.some((item) => item.label === "Other only"), false, "records stay project scoped");
     assert.ok(canvas.anchors.some((item) => item.ref.type === "productTruth" && item.ref.id === truth.id));
     assert.ok(canvas.anchors.some((item) => item.ref.type === "question" && item.ref.id === question.id));

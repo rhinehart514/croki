@@ -67,7 +67,7 @@ before(() => {
 
 describe("project canvas layout authority", () => {
   it("requires revisioned idempotent writes and rejects stale placement", async () => {
-    const endpoint = `${base}/api/projects/${PROJECT}/object-graph/positions`;
+    const endpoint = `${base}/api/projects/${PROJECT}/canvas-layout`;
     const missing = await fetch(endpoint, {
       method: "POST",
       headers: { "content-type": "application/json" },

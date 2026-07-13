@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, RotateCcw, Scale } from "lucide-react";
 import { getSignalWeights, saveSignalWeights, type SignalWeights as Weights } from "@/api";
+import { Button } from "@/components/ui/button";
 import "@/styles/signal-weights.css";
 
 // SignalWeights — the founder's strategic judgment about which go-to-market paths are worth trying
@@ -126,15 +127,17 @@ export function SignalWeights() {
           </div>
 
           <div className="sw-actions">
-            <button
+            <Button
+              variant="ghost"
               className="cs-btn primary"
               disabled={busy || !dirty}
               onClick={() => void save()}
               type="button"
             >
               {saved && !dirty ? <><Check size={14} /> Saved</> : busy ? "Saving…" : "Save your leaning"}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
               className="cs-btn"
               disabled={busy || !dirty}
               onClick={() => void reset()}
@@ -142,7 +145,7 @@ export function SignalWeights() {
               title="Return to the balanced default"
             >
               <RotateCcw size={13} /> Reset to balanced
-            </button>
+            </Button>
           </div>
         </>
       ) : (

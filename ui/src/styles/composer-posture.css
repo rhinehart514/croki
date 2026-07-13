@@ -179,6 +179,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
+  margin-top: 7px;
 }
 
 .composer-attached-action {
@@ -468,10 +469,6 @@
 
 /* The kind menu — a small opaque card of the four clarity kinds, anchored to the trigger. */
 .cnv-pin-menu {
-  position: absolute;
-  left: 0;
-  top: calc(100% + 4px);
-  z-index: 20;
   display: flex;
   flex-direction: column;
   min-width: 132px;

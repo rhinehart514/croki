@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Check, LoaderCircle, Plus, ShieldCheck, User, Users, X } from "lucide-react";
 import { addTeamMember, createTeam, getMe, getTeamMembers } from "@/api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { getIdentity, setActingTeam, type ActingIdentity } from "@/lib/identity";
 import type { Me, TeamMember, TeamRole } from "@/types";
 import "@/styles/team-space.css";
@@ -131,15 +133,15 @@ export function TeamSpace({
   };
 
   return (
-    <aside className="team-space" role="dialog" aria-label="Team space" aria-modal="false">
+    <aside className="team-space" aria-label="Team space">
       <header className="team-space-head">
         <div className="team-space-head-title">
           <Users />
           <strong>Team</strong>
         </div>
-        <button className="team-space-close" onClick={onClose} type="button" aria-label="Close team space">
+        <Button className="team-space-close" variant="ghost" size="icon" onClick={onClose} type="button" aria-label="Close team space">
           <X />
-        </button>
+        </Button>
       </header>
 
       <div className="team-space-body">
@@ -149,18 +151,20 @@ export function TeamSpace({
         <section className="team-space-section">
           <div className="team-space-section-head">
             <span className="team-space-section-label">Spaces</span>
-            <button
+            <Button
               className="team-space-add"
+              variant="outline"
+              size="sm"
               type="button"
               onClick={() => { setCreating((v) => !v); setAddingMember(false); }}
             >
               <Plus size={13} /> New team
-            </button>
+            </Button>
           </div>
 
           {creating ? (
             <div className="team-space-form">
-              <input
+              <Input
                 className="team-space-input"
                 placeholder="Team name"
                 value={newTeamName}
@@ -170,10 +174,10 @@ export function TeamSpace({
                 onKeyDown={(e) => { if (e.key === "Enter") void submitCreate(); }}
               />
               <div className="team-space-form-actions">
-                <button className="team-space-btn primary" type="button" disabled={!newTeamName.trim() || busy} onClick={() => void submitCreate()}>
+                <Button className="team-space-btn primary" type="button" disabled={!newTeamName.trim() || busy} onClick={() => void submitCreate()}>
                   {busy ? <LoaderCircle className="spin" size={13} /> : <Check size={13} />} Create
-                </button>
-                <button className="team-space-btn" type="button" onClick={() => { setCreating(false); setNewTeamName(""); }}>Cancel</button>
+                </Button>
+                <Button className="team-space-btn" variant="outline" type="button" onClick={() => { setCreating(false); setNewTeamName(""); }}>Cancel</Button>
               </div>
             </div>
           ) : null}
@@ -213,23 +217,25 @@ export function TeamSpace({
                 {selectedTeam.id === personalTeamId ? "You" : `${selectedTeam.name} · members`}
               </span>
               {selectedTeam.id !== personalTeamId ? (
-                <button
+                <Button
                   className="team-space-add"
+                  variant="outline"
+                  size="sm"
                   type="button"
                   onClick={() => { setAddingMember((v) => !v); setCreating(false); }}
                 >
                   <Plus size={13} /> Add
-                </button>
+                </Button>
               ) : null}
             </div>
 
             {addingMember ? (
               <div className="team-space-form">
-                <input className="team-space-input" placeholder="User id (required)" value={memberDraft.userId} autoFocus disabled={busy}
+                <Input className="team-space-input" placeholder="User id (required)" value={memberDraft.userId} autoFocus disabled={busy}
                   onChange={(e) => setMemberDraft((d) => ({ ...d, userId: e.target.value }))} />
-                <input className="team-space-input" placeholder="Name" value={memberDraft.name} disabled={busy}
+                <Input className="team-space-input" placeholder="Name" value={memberDraft.name} disabled={busy}
                   onChange={(e) => setMemberDraft((d) => ({ ...d, name: e.target.value }))} />
-                <input className="team-space-input" placeholder="Email" value={memberDraft.email} disabled={busy}
+                <Input className="team-space-input" placeholder="Email" value={memberDraft.email} disabled={busy}
                   onChange={(e) => setMemberDraft((d) => ({ ...d, email: e.target.value }))} />
                 <div className="team-space-roles">
                   {(["owner", "approver", "member"] as TeamRole[]).map((r) => (
@@ -244,10 +250,10 @@ export function TeamSpace({
                   ))}
                 </div>
                 <div className="team-space-form-actions">
-                  <button className="team-space-btn primary" type="button" disabled={!memberDraft.userId.trim() || busy} onClick={() => void submitAddMember()}>
+                  <Button className="team-space-btn primary" type="button" disabled={!memberDraft.userId.trim() || busy} onClick={() => void submitAddMember()}>
                     {busy ? <LoaderCircle className="spin" size={13} /> : <Check size={13} />} Add member
-                  </button>
-                  <button className="team-space-btn" type="button" onClick={() => setAddingMember(false)}>Cancel</button>
+                  </Button>
+                  <Button className="team-space-btn" variant="outline" type="button" onClick={() => setAddingMember(false)}>Cancel</Button>
                 </div>
               </div>
             ) : null}

@@ -15,6 +15,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Inbox, Radio, Check, Ban, CornerUpRight, ShieldCheck } from "lucide-react";
 import { getInputs, routeInput } from "@/api";
 import type { Input, ChannelMeta } from "@/types";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import "@/styles/inputs-inbox.css";
 
 type InputsInboxProps = {
@@ -172,52 +174,57 @@ export function InputsInbox({ projectId, channels = [] }: InputsInboxProps) {
 
                   {row.routing ? (
                     <div className="inputs-inbox-route-row">
-                      <select
-                        className="inputs-inbox-select"
+                      <Select
                         value={row.target}
-                        aria-label={`Route ${input.kind} to a pipeline`}
-                        onChange={(e) => patchRow(input.id, { target: e.target.value })}
+                        onValueChange={(target) => patchRow(input.id, { target: String(target ?? "") })}
                       >
-                        <option value="">Choose a pipeline…</option>
-                        {channels.map((ch) => (
-                          <option key={ch.id} value={ch.id}>{ch.name}</option>
-                        ))}
-                      </select>
-                      <button
+                        <SelectTrigger className="inputs-inbox-select" aria-label={`Route ${input.kind} to a pipeline`}>
+                          <SelectValue placeholder="Choose a pipeline…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {channels.map((ch) => (
+                            <SelectItem key={ch.id} value={ch.id}>{ch.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
                         type="button"
                         className="inputs-inbox-btn inputs-inbox-btn-primary"
                         disabled={row.busy || !row.target}
                         onClick={() => void decide(input, { routedTo: row.target })}
                       >
                         <CornerUpRight /> {row.busy ? "Routing…" : "Route here"}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
+                        variant="outline"
                         className="inputs-inbox-btn"
                         disabled={row.busy}
                         onClick={() => patchRow(input.id, { routing: false, target: "" })}
                       >
                         Cancel
-                      </button>
+                      </Button>
                     </div>
                   ) : (
                     <div className="inputs-inbox-actions">
-                      <button
+                      <Button
                         type="button"
+                        variant="outline"
                         className="inputs-inbox-btn"
                         disabled={row.busy || channels.length === 0}
                         onClick={() => patchRow(input.id, { routing: true })}
                       >
                         <CornerUpRight /> Route
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
+                        variant="outline"
                         className="inputs-inbox-btn"
                         disabled={row.busy}
                         onClick={() => void decide(input, { ignore: true })}
                       >
                         <Ban /> Ignore
-                      </button>
+                      </Button>
                       {channels.length === 0 && (
                         <span className="inputs-inbox-source">No pipelines yet to route into</span>
                       )}

@@ -1,36 +1,13 @@
 // In-process ambient heartbeat.
 //
-// Drives the SAME due-work functions the manual POST /api/operator/ambient/tick route calls, on a fixed
-// interval, so promoted motions actually re-fire, ambient briefs actually wake, AND the captured-signal
-// inbox drains itself — all without an external cron. The manual route stays as the external/manual hook —
-// this file does not touch it.
+// The default heartbeat does one useful automatic job: read outcomes that already happened. Creative
+// work stays founder/operator initiated. Legacy standing briefs, repeated motions, and automatic input
+// routing remain callable through their explicit seams but are no longer ambient product behavior.
 //
-// FOUR heartbeat drivers now run per tick, each isolated in its own try/catch so a throw in one can never
-// stall the loop or break the others:
-//   1. runDueAmbientTicks       — standing-brief wakes (operator-runtime.mjs)
-//   2. runDueMotions            — promoted-motion re-runs (promote-motion.mjs)
-//   3. runDueInputRouting       — drain the captured-signal inbox per active project (this file), routing
-//                             each signal and, when a real wake scorer warrants it, composing-and-running a
-//                             next-step draft TO THE GATE. With no scorer wired the router refuses to wake,
-//                             so behavior is byte-identical to today.
-//   4. runDueInboxReads         — the AUTOMATIC outcome reader (connectors/measure/inbox-reader.mjs):
-//                             read-only, it polls each connected inbox for replies / bounces on the threads
-//                             of what Drover sent and ingests any detected signal back to its run through
-//                             the existing outcome-ingest path. With no connected Gmail it reads nothing; a
-//                             send-only or revoked grant reports blind and ingests nothing. It NEVER sends —
-//                             it records what already happened, honest-blind when it cannot attribute.
-//
-// SAFETY: this only DRIVES / STAGES standing work — it never sends, publishes, or approves. Every due item
-// still stops at the founder gate exactly as it would from a manual tick. There is deliberately no send
-// path here.
-//
-// COST DISCIPLINE (GTM-MACHINE.md Area 2 "Budget"): a per-tick budget caps how much the always-on runtime
-// may spend — the number of model-backed scorer invocations per tick, a per-motion probe cadence, and a
-// hard DAILY ceiling on paid MCP probe credits (a geogrid scan costs 50–162 credits). The daily probe
-// ledger is durable so the cap holds across ticks and process restarts. An idle tick with an empty inbox
-// makes ZERO model calls and ZERO paid probe calls: the scorer is only ever invoked when the router
-// actually reaches a candidate signal, and a probe is only ever charged when a caller explicitly asks the
-// budget to spend one.
+// Outcome reading is read-only: it notices replies and bounces attributable to prior runs, then records
+// them through the existing outcome path. It never sends, publishes, approves, calls a model, or spends
+// paid probe credits. The older creative drivers retain their own safety and budget seams when explicitly
+// enabled for compatibility, but they are not part of the default product loop.
 //
 // The timer is started ONLY when startAmbientScheduler() is explicitly called by the integrator (inside
 // server.listen). Importing this module spins no timer.
@@ -271,14 +248,18 @@ export async function runDueInboxReads(options = {}) {
 /**
  * Start the in-process ambient heartbeat.
  *
- * On each tick it calls the FOUR due-work drivers independently — a throw in one never breaks the loop or
- * the process, and none keeps the process alive (timer is unref'd). When nothing is due the underlying
- * functions no-op, so an idle heartbeat is cheap: an empty inbox routes nothing, so the scorer is never
- * invoked and no paid probe is ever charged.
+ * By default the heartbeat only reads outcomes. The three legacy creative drivers are an explicit
+ * compatibility opt-in; a throw in any enabled driver never breaks the loop or the process, and the
+ * timer is unref'd so it never keeps the process alive.
  *
  * @param {{ intervalMs?: number, maxScorerPerTick?: number, scorer?: Function|null }} [options]
  * @returns {{ stop(): void }} handle whose stop() clears the timer (no-op if never started / already stopped)
  */
+export function ambientDriverPolicy(options = {}) {
+  const creative = options.enableCreativeDrivers === true || process.env.GTM_IDE_ENABLE_AMBIENT_CREATION === "1";
+  return { outcomeReads: true, standingBriefs: creative, repeatableMotions: creative, inputRouting: creative };
+}
+
 export function startAmbientScheduler(options = {}) {
   const intervalMs = resolveIntervalMs(options);
 
@@ -289,21 +270,22 @@ export function startAmbientScheduler(options = {}) {
 
   // Idempotent: a second start returns a handle onto the one already-live timer.
   if (active) return active;
+  const policy = ambientDriverPolicy(options);
 
   const timer = setInterval(() => {
     // DRIVE/STAGE only — never sends, never approves. Each driver is isolated so one throw can't stall
     // the heartbeat. The BUDGET is built once per tick and shared across the drain so a deep inbox is
     // bounded within the tick's model/probe ceiling.
-    try {
+    if (policy.standingBriefs) try {
       runDueAmbientTicks();
     } catch {}
-    try {
+    if (policy.repeatableMotions) try {
       runDueMotions();
     } catch {}
-    try {
+    if (policy.inputRouting) try {
       runDueInputRouting({ maxScorerPerTick: options.maxScorerPerTick, scorer: options.scorer });
     } catch {}
-    try {
+    if (policy.outcomeReads) try {
       // The automatic outcome read is async (a network read); fire-and-forget with an isolated catch so a
       // read failure or a rejected promise never stalls the heartbeat or the other drivers. Read-only.
       Promise.resolve(runDueInboxReads()).catch(() => {});

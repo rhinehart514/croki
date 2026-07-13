@@ -20,6 +20,7 @@ const HOME = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-ideas-routes-"));
 process.env.GTM_IDE_HOME = HOME;
 process.env.HOST = "127.0.0.1";
 process.env.GTM_IDE_FOUNDER_CODE = "ideas-test-founder";
+process.env.GTM_IDE_ENABLE_LEGACY_MACHINERY = "1";
 
 // Grab a free port, then hand it to the server via PORT.
 async function freePort() {

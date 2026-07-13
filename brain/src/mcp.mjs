@@ -1021,8 +1021,10 @@ const CANONICAL_TOOLS = [
   { name: "run", description: "Run or compose an action through the preserved operator compose-and-run service. Execution always stops at the founder gate and cannot approve or release.", inputSchema: { type: "object", properties: { ...REF_FIELDS, goal: { type: "string" }, questionId: { type: "string" }, composeNew: { type: "boolean" }, title: { type: "string" }, agents: { type: "array", items: { type: "object" } } }, required: ["sessionId"] }, handler: (input) => canonicalDriveVerb("run", input) },
 ];
 
-const TOOLS = [...CANONICAL_TOOLS, ...LEGACY_TOOLS];
-const TOOL_MAP = new Map(TOOLS.map((t) => [t.name, t]));
+// The public surface is six verbs. Legacy names remain dispatchable for existing clients during the
+// migration, but tools/list no longer teaches every new agent forty parallel ways to address Drover.
+const TOOLS = [...CANONICAL_TOOLS];
+const TOOL_MAP = new Map([...CANONICAL_TOOLS, ...LEGACY_TOOLS].map((t) => [t.name, t]));
 const CANONICAL_CAPABILITIES = createOperatorCapabilityRegistry(CANONICAL_TOOLS);
 
 export { TOOLS, TOOL_MAP, LEGACY_TOOLS, CANONICAL_TOOLS };

@@ -1,7 +1,14 @@
-import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, FolderGit2, LoaderCircle, Plus, Settings2, Trash2 } from "lucide-react";
-import { Reveal } from "@/lib/motion";
+import { useState } from "react";
+import { ChevronDown, FolderGit2, LoaderCircle, Plus, Settings2, Trash2 } from "lucide-react";
 import type { ProjectSummary } from "@/types";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import "@/styles/menu.css";
 
 /**
@@ -27,112 +34,102 @@ export function ProjectSwitcher({
   onDelete?: (projectId: string) => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
-  // Inline two-step confirm: first click on the trash arms this row, second click removes. Closing
-  // the menu or arming another row resets it, so a stray click never deletes a product.
-  const [confirmId, setConfirmId] = useState<string | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDocClick = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) { setOpen(false); setConfirmId(null); }
-    };
-    const onEsc = (event: KeyboardEvent) => { if (event.key === "Escape") { setOpen(false); setConfirmId(null); } };
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onEsc);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onEsc);
-    };
-  }, [open]);
+  const [deleteProject, setDeleteProject] = useState<ProjectSummary | null>(null);
 
   const active = projects.find((project) => project.id === activeProjectId) ?? null;
 
   return (
-    <div className="project-switcher" ref={ref}>
-      <button
-        className="project-switcher-trigger"
-        onClick={() => { setOpen((value) => !value); setConfirmId(null); }}
-        type="button"
-        aria-label={active ? `Switch product. Current product: ${active.name}` : "Choose product"}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        disabled={busy}
-      >
-        {busy ? <LoaderCircle className="spin" /> : <FolderGit2 />}
-        <span className="project-switcher-name">{active?.name ?? "Choose product"}</span>
-        <ChevronDown className="project-switcher-caret" />
-      </button>
-
-      <Reveal open={open} className="menu project-switcher-menu" role="listbox" origin="top-left">
-          {projects.map((project) => (
-            <div key={project.id} className="project-switcher-row">
-              <button
+    <div className="project-switcher">
+      <DropdownMenu open={open} onOpenChange={setOpen} disabled={busy}>
+        <DropdownMenuTrigger
+          className="project-switcher-trigger"
+          aria-label={active ? `Switch product. Current product: ${active.name}` : "Choose product"}
+        >
+          {busy ? <LoaderCircle className="spin" /> : <FolderGit2 />}
+          <span className="project-switcher-name">{active?.name ?? "Choose product"}</span>
+          <ChevronDown className="project-switcher-caret" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" sideOffset={6} className="menu min-w-[264px]">
+          <DropdownMenuRadioGroup
+            value={activeProjectId ?? ""}
+            onValueChange={(projectId) => {
+              if (projectId !== activeProjectId) void onSwitch(String(projectId));
+            }}
+          >
+            {projects.map((project) => (
+              <DropdownMenuRadioItem
+                key={project.id}
+                value={project.id}
+                closeOnClick
                 className={`menu-item ${project.id === activeProjectId ? "active" : ""}`}
-                role="option"
-                aria-selected={project.id === activeProjectId}
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  if (project.id !== activeProjectId) void onSwitch(project.id);
-                }}
               >
                 <span className="menu-item-body">
                   <span className="menu-item-label">{project.name}</span>
                   <span className="menu-item-meta">{project.channelCount} {project.channelCount === 1 ? "pipeline" : "pipelines"}</span>
                 </span>
-                {project.id === activeProjectId ? <Check className="menu-item-check" /> : null}
-              </button>
-              {/* Delete only non-active products — the one you're in can't be pulled out from under you.
-                  Two-step: trash arms the row, then "Remove" confirms. */}
-              {onDelete && project.id !== activeProjectId ? (
-                confirmId === project.id ? (
-                  <button
-                    className="project-switcher-delete confirm"
-                    type="button"
-                    title={`Remove ${project.name}`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setConfirmId(null);
-                      void onDelete(project.id);
-                    }}
-                  >
-                    Remove
-                  </button>
-                ) : (
-                  <button
-                    className="project-switcher-delete"
-                    type="button"
-                    aria-label={`Remove ${project.name}`}
-                    title={`Remove ${project.name}`}
-                    onClick={(event) => { event.stopPropagation(); setConfirmId(project.id); }}
-                  >
-                    <Trash2 />
-                  </button>
-                )
-              ) : null}
-            </div>
-          ))}
-          <div className="menu-sep" role="separator" />
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+          <DropdownMenuSeparator className="menu-sep" />
           {onNewProduct ? (
-            <button
+            <DropdownMenuItem
               className="menu-item"
-              type="button"
-              onClick={() => { setOpen(false); onNewProduct(); }}
+              onClick={onNewProduct}
             >
               <Plus className="menu-item-icon" />
               <span className="menu-item-label">Point at a new product</span>
-            </button>
+            </DropdownMenuItem>
           ) : null}
-          <button
+          <DropdownMenuItem
             className="menu-item"
-            type="button"
-            onClick={() => { setOpen(false); onManage(); }}
+            onClick={onManage}
           >
             <Settings2 className="menu-item-icon" />
             <span className="menu-item-label">Manage products</span>
-          </button>
-      </Reveal>
+          </DropdownMenuItem>
+          {onDelete && projects.some((project) => project.id !== activeProjectId) ? (
+            <>
+              <DropdownMenuSeparator className="menu-sep" />
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="menu-label">Remove product</DropdownMenuLabel>
+                {projects.filter((project) => project.id !== activeProjectId).map((project) => (
+                  <DropdownMenuItem
+                    key={`remove:${project.id}`}
+                    variant="destructive"
+                    className="menu-item destructive"
+                    onClick={() => setDeleteProject(project)}
+                  >
+                    <Trash2 className="menu-item-icon" />
+                    <span className="menu-item-label">{project.name}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuGroup>
+            </>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <AlertDialog open={deleteProject !== null} onOpenChange={(nextOpen) => { if (!nextOpen) setDeleteProject(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {deleteProject?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the product from Drover. The active product cannot be removed here.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteProject(null)}>Keep product</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                if (deleteProject && onDelete) void onDelete(deleteProject.id);
+                setDeleteProject(null);
+              }}
+            >
+              Remove product
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

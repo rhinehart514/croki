@@ -11,6 +11,9 @@ import {
   AlertTriangle, Check, ChevronDown, ChevronRight, ChevronUp, CircleDot, CornerDownLeft, Loader, Pencil, ShieldCheck, Sprout, Undo2, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { itemKey } from "@/lib/itemKey";
 import { humanizeFieldLabel } from "@/lib/labels";
 import {
@@ -192,9 +195,9 @@ function GatePromotePanel({ promote, cleanCount, exceptionCount }: {
         <div className="cgate-promote-controls">
           {target ? (
             promotable ? (
-              <button type="button" className="cgate-promote-open" onClick={() => setEngaged(true)}>
+              <Button variant="ghost" type="button" className="cgate-promote-open" onClick={() => setEngaged(true)}>
                 <ShieldCheck size={11} aria-hidden /> Promote to {targetLabel}…
-              </button>
+              </Button>
             ) : (
               <span className="cgate-promote-thin">
                 {canRelease
@@ -206,9 +209,9 @@ function GatePromotePanel({ promote, cleanCount, exceptionCount }: {
             <span className="cgate-promote-thin">This pipeline is at the top of the ladder.</span>
           )}
           {level !== "draft" ? (
-            <button type="button" className="cgate-promote-revoke" disabled={!canRelease || busy} onClick={() => void revoke()}>
+            <Button variant="ghost" type="button" className="cgate-promote-revoke" disabled={!canRelease || busy} onClick={() => void revoke()}>
               <Undo2 size={11} aria-hidden /> Drop to draft
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : (
@@ -231,7 +234,7 @@ function GatePromotePanel({ promote, cleanCount, exceptionCount }: {
             Once banked, {cleanCount} clean draft{cleanCount === 1 ? "" : "s"} would release on your standing approval
             {exceptionCount > 0 ? `; ${exceptionCount} exception${exceptionCount === 1 ? "" : "s"} would still stop for your eyes.` : "; exceptions still stop for your eyes."}
           </div>
-          <input
+          <Input
             className="cgate-promote-note"
             value={note}
             placeholder={`What are you blessing? e.g. ${target === "autonomous" ? "this play is proven — run it" : "approve any draft to a vetted founder"}`}
@@ -254,9 +257,9 @@ function GatePromotePanel({ promote, cleanCount, exceptionCount }: {
                 {busy ? "Banking…" : holding ? "Hold to bless…" : `Hold to promote to ${targetLabel}`}
               </span>
             </button>
-            <button type="button" className="cgate-promote-cancel" disabled={busy} onClick={() => { clearHold(); setEngaged(false); }}>
+            <Button variant="ghost" type="button" className="cgate-promote-cancel" disabled={busy} onClick={() => { clearHold(); setEngaged(false); }}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -306,9 +309,9 @@ function RecordOutcome({ item, onRecord }: {
   }
   if (!open) {
     return (
-      <button type="button" className="cgate-outcome-open" onClick={() => setOpen(true)}>
+      <Button variant="ghost" type="button" className="cgate-outcome-open" onClick={() => setOpen(true)}>
         <CircleDot size={10} aria-hidden /> Record what happened
-      </button>
+      </Button>
     );
   }
   return (
@@ -321,7 +324,7 @@ function RecordOutcome({ item, onRecord }: {
         ))}
       </div>
       <div className="cgate-outcome-custom">
-        <input
+        <Input
           className="cgate-outcome-kind"
           value={kind}
           placeholder="or type what happened"
@@ -329,7 +332,7 @@ function RecordOutcome({ item, onRecord }: {
           onChange={(e) => setKind(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") void submit(kind); }}
         />
-        <input
+        <Input
           className="cgate-outcome-value"
           value={value}
           placeholder="value"
@@ -337,10 +340,10 @@ function RecordOutcome({ item, onRecord }: {
           disabled={busy}
           onChange={(e) => setValue(e.target.value)}
         />
-        <button type="button" className="cgate-outcome-save" disabled={busy || !kind.trim()} onClick={() => void submit(kind)}>
+        <Button variant="ghost" type="button" className="cgate-outcome-save" disabled={busy || !kind.trim()} onClick={() => void submit(kind)}>
           {busy ? <Loader size={10} className="spin" aria-hidden /> : "Save"}
-        </button>
-        <button type="button" className="cgate-outcome-cancel" disabled={busy} onClick={() => setOpen(false)}>Cancel</button>
+        </Button>
+        <Button variant="ghost" type="button" className="cgate-outcome-cancel" disabled={busy} onClick={() => setOpen(false)}>Cancel</Button>
       </div>
       {error ? <p className="cgate-outcome-error" role="alert">{error}</p> : null}
     </div>
@@ -629,7 +632,8 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
           exceptions are what they slow down for. The compact bloom keeps the quieter ">1" threshold so it
           doesn't duplicate a lone card's own Approve button. */}
       {onSubmit && ((lean && cleanUndecided >= 1) || cleanUndecided > 1) ? (
-        <button
+        <Button
+          variant="ghost"
           className={cn("cgate-approve-all", lean && "cgate-approve-all-stage")}
           data-testid="founder-gate-approve"
           data-terrain-primary="true"
@@ -650,7 +654,7 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
               : `Approve all ${cleanUndecided} clean draft${cleanUndecided === 1 ? "" : "s"}`}
           </span>
           {lean ? <kbd className="cgate-approve-all-kbd" aria-hidden>↵</kbd> : null}
-        </button>
+        </Button>
       ) : null}
       <div className="cgate-cards">
         {shown.map(({ it: item, i }) => {
@@ -714,9 +718,9 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
                 {v.body ? <div className="cgate-card-artifact"><CardBody text={v.body} evidence={[]} clamp /></div> : null}
                 <GateReceipt receipt={v.receipt} />
                 <div className="cgate-card-actions">
-                  <button className="cgate-reject" type="button" disabled={busy} onClick={() => void decide(key, "reject")}>
+                  <Button variant="ghost" className="cgate-reject" type="button" disabled={busy} onClick={() => void decide(key, "reject")}>
                     <CornerDownLeft size={11} aria-hidden /> Set aside
-                  </button>
+                  </Button>
                 </div>
               </div>
             );
@@ -727,9 +731,9 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
                 <span className="cgate-card-to"><AlertTriangle size={11} aria-hidden /> Nothing to review</span>
                 <p className="cgate-card-note">This item reached your review with nothing in it — no text and no details to read. Return it, or look at the step that produced it.</p>
                 <div className="cgate-card-actions">
-                  <button className="cgate-reject" type="button" disabled={busy} onClick={() => void decide(key, "reject")}>
+                  <Button variant="ghost" className="cgate-reject" type="button" disabled={busy} onClick={() => void decide(key, "reject")}>
                     <CornerDownLeft size={11} aria-hidden /> Return as draft
-                  </button>
+                  </Button>
                 </div>
               </div>
             );
@@ -764,7 +768,7 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
                 <p className="cgate-card-annot"><span className="cgate-card-annot-plus" aria-hidden>+</span>{reasons.join(" · ")}</p>
               ) : null}
               {isEditing ? (
-                <textarea
+                <Textarea
                   className="cgate-card-edit"
                   value={editing.text}
                   rows={5}
@@ -850,16 +854,16 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
               {v.evidence && !isEditing && !lean ? <p className="cgate-card-why">Why them: {v.evidence}</p> : null}
               {isEditing ? (
                 <div className="cgate-card-actions">
-                  <button className="cgate-approve" type="button" disabled={busy || !editing.text.trim()}
-                    onClick={() => void decide(key, "approve", editing.text)}>Save &amp; approve</button>
-                  <button className="cgate-ghost" type="button" disabled={busy} onClick={() => setEditing(null)}>Cancel</button>
+                  <Button variant="ghost" className="cgate-approve" type="button" disabled={busy || !editing.text.trim()}
+                    onClick={() => void decide(key, "approve", editing.text)}>Save &amp; approve</Button>
+                  <Button variant="ghost" className="cgate-ghost" type="button" disabled={busy} onClick={() => setEditing(null)}>Cancel</Button>
                 </div>
               ) : refining?.key === key ? (
                 // Send-back is note-first: the founder writes what to change, and it routes to the crew
                 // in the Composer. Not a rejection — a rework. The card flips to "reworking" on send.
                 <div className="cgate-refine" onClick={(e) => e.stopPropagation()}>
                   <p className="cgate-refine-lead">Your crew picks this back up in the chat. What should they change?</p>
-                  <textarea
+                  <Textarea
                     className="cgate-refine-note"
                     rows={2}
                     autoFocus
@@ -870,34 +874,35 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
                     onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setRefining(null); } }}
                   />
                   <div className="cgate-refine-actions">
-                    <button className="cgate-refine-send" type="button" disabled={busy || !refining.text.trim()}
+                    <Button variant="ghost" className="cgate-refine-send" type="button" disabled={busy || !refining.text.trim()}
                       onClick={() => void sendBack(item, key, refining.text)}>
                       {busy ? <Loader size={11} className="spin" aria-hidden /> : <CornerDownLeft size={11} aria-hidden />} Send to your crew
-                    </button>
-                    <button className="cgate-ghost" type="button" disabled={busy} onClick={() => setRefining(null)}>Cancel</button>
+                    </Button>
+                    <Button variant="ghost" className="cgate-ghost" type="button" disabled={busy} onClick={() => setRefining(null)}>Cancel</Button>
                   </div>
                 </div>
               ) : lean ? (
                 <div className="cgate-card-actions cgate-card-actions-stage">
-                  <button className="cgate-approve" type="button" disabled={busy} onClick={() => void decide(key, "approve")}>
+                  <Button variant="ghost" className="cgate-approve" type="button" disabled={busy} onClick={() => void decide(key, "approve")}>
                     <Check size={12} aria-hidden /> {sendVerb}
-                  </button>
+                  </Button>
                   {onRefineItem ? (
-                    <button className="cgate-sendback" type="button" disabled={busy} onClick={() => setRefining({ key, text: "" })}>
+                    <Button variant="ghost" className="cgate-sendback" type="button" disabled={busy} onClick={() => setRefining({ key, text: "" })}>
                       <CornerDownLeft size={12} aria-hidden /> Send back
-                    </button>
+                    </Button>
                   ) : (
-                    <button className="cgate-reject" type="button" disabled={busy} onClick={() => void decide(key, "reject")}>
+                    <Button variant="ghost" className="cgate-reject" type="button" disabled={busy} onClick={() => void decide(key, "reject")}>
                       <CornerDownLeft size={12} aria-hidden /> Send back
-                    </button>
+                    </Button>
                   )}
-                  <button className="cgate-edit" type="button" disabled={busy} onClick={() => setEditing({ key, text: v.body ?? "" })}>
+                  <Button variant="ghost" className="cgate-edit" type="button" disabled={busy} onClick={() => setEditing({ key, text: v.body ?? "" })}>
                     <Pencil size={12} aria-hidden /> Edit
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <div className="cgate-card-actions">
-                  <button
+                  <Button
+                    variant="ghost"
                     className="cgate-approve"
                     data-testid={!lean && cleanUndecided === 1 && !isException ? "founder-gate-approve" : undefined}
                     data-terrain-primary={!lean && cleanUndecided === 1 && !isException ? "true" : undefined}
@@ -912,13 +917,13 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
                     }}
                   >
                     <Check size={11} aria-hidden /> Approve &amp; release
-                  </button>
-                  <button className="cgate-reject" type="button" disabled={busy} onClick={() => void decide(key, "reject")}>
+                  </Button>
+                  <Button variant="ghost" className="cgate-reject" type="button" disabled={busy} onClick={() => void decide(key, "reject")}>
                     <CornerDownLeft size={11} aria-hidden /> Return as draft
-                  </button>
-                  <button className="cgate-edit" type="button" disabled={busy} onClick={() => setEditing({ key, text: v.body ?? "" })}>
+                  </Button>
+                  <Button variant="ghost" className="cgate-edit" type="button" disabled={busy} onClick={() => setEditing({ key, text: v.body ?? "" })}>
                     <Pencil size={11} aria-hidden /> Edit
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>

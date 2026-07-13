@@ -7,6 +7,6 @@ export default defineConfig({
   sourcemap: false,
   clean: true,
   treeshake: true,
-  // React is provided by the host (Claude Design runtime / consuming app).
+  // React is provided by the consuming application.
   external: ["react", "react-dom", "react/jsx-runtime"],
 });

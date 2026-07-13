@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Bot, Check, FileWarning, LoaderCircle, Wand2, X } from "lucide-react";
 import { getArtifact, saveArtifact, type ArtifactType } from "@/api";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 
 // Live, client-side frontmatter read — mirrors brain/src/artifact-store.mjs parseFrontmatter.
 // Used only to render the legible summary as you type; the raw markdown stays the source
@@ -90,16 +92,22 @@ export function ArtifactEditor({
   const filePath = type === "agent" ? `~/.claude/agents/${refName}.md` : `~/.claude/skills/${refName}/SKILL.md`;
 
   return (
-    <aside className={`artifact-editor ${open ? "open" : ""}`} aria-hidden={!open}>
+    <Sheet open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <SheetContent
+        side="right"
+        className="artifact-editor open !max-w-none !gap-0 !p-0"
+        overlayClassName="pointer-events-none !bg-transparent !backdrop-blur-none"
+        showCloseButton={false}
+      >
       <header className="artifact-editor-head">
         <div className="artifact-editor-title">
           <Icon className="artifact-editor-kind-icon" />
           <div>
-            <div className="artifact-editor-name">{meta.name || refName}</div>
+            <SheetTitle className="artifact-editor-name">{meta.name || refName}</SheetTitle>
             <code className="artifact-editor-path">{filePath}</code>
           </div>
         </div>
-        <button className="artifact-editor-close" onClick={onClose} type="button" aria-label="Close"><X /></button>
+        <Button className="artifact-editor-close" variant="ghost" size="icon" onClick={onClose} type="button" aria-label="Close"><X /></Button>
       </header>
 
       {!exists && !loading && (
@@ -137,8 +145,8 @@ export function ArtifactEditor({
         {loading ? (
           <div className="artifact-editor-loading"><LoaderCircle className="spin" /> Loading {refName}…</div>
         ) : (
-          <textarea
-            className="artifact-editor-textarea"
+          <Textarea
+            className="artifact-editor-textarea !field-sizing-fixed"
             value={content}
             spellCheck={false}
             onChange={(e) => { setContent(e.target.value); setDirty(true); }}
@@ -159,6 +167,7 @@ export function ArtifactEditor({
           {saving ? "Saving…" : savedAt ? "Saved" : exists ? "Save file" : "Create file"}
         </Button>
       </footer>
-    </aside>
+      </SheetContent>
+    </Sheet>
   );
 }

@@ -1,4 +1,5 @@
-// GTM IDE design system — public surface.
+// Drover design system — public surface. The historical package name and
+// `gtm-*` selectors remain stable for compatibility.
 // Tokens, fonts, and component classes live in ../styles.css (loaded globally).
 
 export { Button, buttonVariants } from "./components/Button";

@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Undo2, Redo2, History } from "lucide-react";
 import type { CanvasEdit } from "@/lib/canvasHistory";
 import { agentPersona, FAMILY_TINT } from "@/lib/agentPersona";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import "@/styles/canvas-history.css";
 
 // CanvasHistoryControl — the founder's take-it-back control for the working board, plus the visible
@@ -54,79 +55,95 @@ export function CanvasHistoryControl({
   onRedo: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
   // The clock reading for relative times, captured when the trail opens (an event, not render) so the
   // render body stays pure. Re-stamped on each open, which is exactly when the list is read.
   const [openedAt, setOpenedAt] = useState(0);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-
-  // Close the trail on an outside click so it never sits stuck over the board.
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    window.addEventListener("mousedown", onDown);
-    return () => window.removeEventListener("mousedown", onDown);
-  }, [open]);
 
   const hasTrail = edits.length > 0;
   // Newest at the top. An edit is "undone" when it sits at or past the cursor.
   const rows = edits.map((edit, i) => ({ edit, undone: i >= index })).reverse();
+  const setTrailOpen = (nextOpen: boolean) => {
+    if (nextOpen && !open) setOpenedAt(Date.now());
+    setOpen(nextOpen);
+  };
 
   return (
-    <div className="chist" ref={rootRef}>
-      {open && hasTrail ? (
-        <div className="chist-trail" role="log" aria-label="What you and Claude built">
-          <div className="chist-trail-head">Board history</div>
-          <ul className="chist-list">
-            {rows.map(({ edit, undone }) => (
-              <li key={edit.id} className={`chist-row ${undone ? "undone" : ""}`}>
-                <span className="chist-dot" style={dotStyle(edit)} aria-hidden="true" />
-                <span className="chist-row-text">
-                  <span className="chist-label">{edit.label}</span>
-                  <span className="chist-meta">{actorName(edit)} · {relTime(edit.at, openedAt)}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
+    <div className="chist">
+      <Popover
+        open={open}
+        onOpenChange={(nextOpen, eventDetails) => {
+          const target = eventDetails.event.target;
+          const pressedControlBar = target instanceof Node && barRef.current?.contains(target);
+          if (!nextOpen && eventDetails.reason === "outside-press" && pressedControlBar) {
+            eventDetails.cancel();
+            return;
+          }
+          setTrailOpen(nextOpen);
+        }}
+      >
+        <div ref={barRef} className="chist-bar" role="group" aria-label="Undo and redo board edits">
+          <button
+            type="button"
+            className="chist-btn"
+            onClick={onUndo}
+            disabled={!canUndo}
+            title="Undo (⌘Z)"
+            aria-label="Undo the last board edit"
+          >
+            <Undo2 size={15} strokeWidth={2} />
+          </button>
+          <button
+            type="button"
+            className="chist-btn"
+            onClick={onRedo}
+            disabled={!canRedo}
+            title="Redo (⇧⌘Z)"
+            aria-label="Redo the next board edit"
+          >
+            <Redo2 size={15} strokeWidth={2} />
+          </button>
+          <span className="chist-sep" aria-hidden="true" />
+          <PopoverTrigger
+            render={(
+              <button
+                type="button"
+                className={`chist-btn chist-trail-toggle ${open ? "on" : ""}`}
+                disabled={!hasTrail}
+                title="What you and Claude built"
+                aria-label="Show the board history"
+              />
+            )}
+          >
+            <History size={15} strokeWidth={2} />
+            {hasTrail ? <span className="chist-count">{edits.length}</span> : null}
+          </PopoverTrigger>
         </div>
-      ) : null}
-
-      <div className="chist-bar" role="group" aria-label="Undo and redo board edits">
-        <button
-          type="button"
-          className="chist-btn"
-          onClick={onUndo}
-          disabled={!canUndo}
-          title="Undo (⌘Z)"
-          aria-label="Undo the last board edit"
-        >
-          <Undo2 size={15} strokeWidth={2} />
-        </button>
-        <button
-          type="button"
-          className="chist-btn"
-          onClick={onRedo}
-          disabled={!canRedo}
-          title="Redo (⇧⌘Z)"
-          aria-label="Redo the next board edit"
-        >
-          <Redo2 size={15} strokeWidth={2} />
-        </button>
-        <span className="chist-sep" aria-hidden="true" />
-        <button
-          type="button"
-          className={`chist-btn chist-trail-toggle ${open ? "on" : ""}`}
-          onClick={() => { if (!open) setOpenedAt(Date.now()); setOpen((v) => !v); }}
-          disabled={!hasTrail}
-          title="What you and Claude built"
-          aria-label="Show the board history"
-          aria-expanded={open}
-        >
-          <History size={15} strokeWidth={2} />
-          {hasTrail ? <span className="chist-count">{edits.length}</span> : null}
-        </button>
-      </div>
+        {hasTrail ? (
+          <PopoverContent
+            className="chist-trail !gap-0 !ring-0"
+            side="top"
+            align="start"
+            sideOffset={8}
+            aria-label="Board history"
+          >
+            <div role="log" aria-label="What you and Claude built">
+              <div className="chist-trail-head">Board history</div>
+              <ul className="chist-list">
+                {rows.map(({ edit, undone }) => (
+                  <li key={edit.id} className={`chist-row ${undone ? "undone" : ""}`}>
+                    <span className="chist-dot" style={dotStyle(edit)} aria-hidden="true" />
+                    <span className="chist-row-text">
+                      <span className="chist-label">{edit.label}</span>
+                      <span className="chist-meta">{actorName(edit)} · {relTime(edit.at, openedAt)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </PopoverContent>
+        ) : null}
+      </Popover>
     </div>
   );
 }

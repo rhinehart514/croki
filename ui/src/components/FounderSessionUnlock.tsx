@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { unlockFounderSession } from "@/api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import "@/styles/founder-session.css";
 
 export function FounderSessionUnlock({ onUnlocked }: { onUnlocked: () => void }) {
@@ -28,8 +30,8 @@ export function FounderSessionUnlock({ onUnlocked }: { onUnlocked: () => void })
         <span>The canvas stays readable. Enter the code printed by Drover to approve, publish, or change local files.</span>
       </div>
       <form onSubmit={(event) => { event.preventDefault(); void submit(); }}>
-        <label><span className="sr-only">Founder action code</span><input autoFocus value={code} onChange={(event) => setCode(event.target.value)} autoComplete="one-time-code" placeholder="Founder action code" /></label>
-        <button type="submit" disabled={busy || !code.trim()}>{busy ? "Checking…" : "Unlock"}</button>
+        <label><span className="sr-only">Founder action code</span><Input autoFocus value={code} onChange={(event) => setCode(event.target.value)} autoComplete="one-time-code" placeholder="Founder action code" /></label>
+        <Button type="submit" disabled={busy || !code.trim()}>{busy ? "Checking…" : "Unlock"}</Button>
       </form>
       {error ? <p role="alert">{error}</p> : null}
     </aside>

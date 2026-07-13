@@ -2,6 +2,9 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import {
   AlertTriangle, Check, CornerLeftUp, Inbox, LoaderCircle, X,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   applyGraphOperations as applyGraphOperationsApi,
   auditGraph,
@@ -61,19 +64,14 @@ import {
   getFailureLog,
   getOperatingView,
   getMotionEfficiency,
-  getReallocation,
-  saveReallocationTunables,
-  getReallocationTunables,
   getCredentials,
   getTerrainView,
   getFounderSession,
   readTerrain,
   askTerrainCrew,
-  reviseWorkArtifact,
-  compileObjectGraphPath,
-  greenlightRun,
-  saveObjectGraphGeometry,
-  saveObjectGraphPositions,
+  greenlightExperimentArtifact,
+  saveCanvasGeometry,
+  saveCanvasPositions,
   reviseCanvasRegion,
   archiveCanvasRegion,
 } from "@/api";
@@ -89,16 +87,9 @@ const OutcomeCapture = lazy(() => import("@/components/OutcomeCapture"));
 const ConnectCapability = lazy(() => import("@/components/ConnectCapability").then((m) => ({ default: m.ConnectCapability })));
 const ConnectSender = lazy(() => import("@/components/ConnectSender").then((m) => ({ default: m.ConnectSender })));
 const DesignTaste = lazy(() => import("@/components/DesignTaste").then((m) => ({ default: m.DesignTaste })));
-const SignalWeights = lazy(() => import("@/components/SignalWeights").then((m) => ({ default: m.SignalWeights })));
-// The aggressiveness knobs (Area 3, decided-question 4) — the observation floor, the ranking-tilt clamp,
-// and the daily paid-probe cap — sit beside SignalWeights as visible, founder-tunable values.
-const AggressivenessTunables = lazy(() => import("@/components/AggressivenessTunables").then((m) => ({ default: m.AggressivenessTunables })));
 // The per-motion efficiency table (Area 7) — the Measure surface's honest "which motion is working" read,
 // the same rows the Operator lens's lanes consume. Rendered inside the outcome/measure surface.
 const MotionEfficiencyTable = lazy(() => import("@/components/MotionEfficiencyTable").then((m) => ({ default: m.MotionEfficiencyTable })));
-// The Overdrive reallocation receipt (Area 3) — the correctable batch card: what the machine leaned
-// toward and the motions it flagged as drawing nothing. Rendered atop the "waiting on you" batch.
-const ReallocationBatchCard = lazy(() => import("@/components/ReallocationBatchCard").then((m) => ({ default: m.ReallocationBatchCard })));
 import type { AgentProfileView, TeammateView } from "@/components/AgentProfile";
 import { ComposerDock } from "@/components/ComposerDock";
 import { FloatingDock } from "@/components/FloatingDock";
@@ -611,15 +602,9 @@ export default function App() {
   // The host-computed opening briefing (cross-pipeline snapshot), fetched from the server and handed to
   // ComposerDock's `briefing` prop — it overrides the dock's client-derived-from-roster fallback.
   const [composerBriefing, setComposerBriefing] = useState<ComposerBriefing | null>(null);
-  // Every pipeline the founder is running for this product, as lightweight summaries — the source for
-  // the composer's chat tabs. The backend already drives these sessions in parallel; this is the UI
-  // catching up to that. `operatorSession` stays the single ACTIVE conversation (all the gate / proposal
-  // / polling wiring keys off it, untouched); the roster is purely additive, refreshed alongside it.
+  // Every conversation for this product as lightweight summaries. The workspace rail owns navigation;
+  // `operatorSession` remains the single active conversation for gate, proposal, and polling behavior.
   const [sessionRoster, setSessionRoster] = useState<OperatorSessionSummary[]>([]);
-  // Tabs the founder has CLOSED. Close has no backend delete (a pipeline stays alive server-side), so a
-  // closed tab is a client-side view dismissal: rosterForDock filters these out. It naturally resets on a
-  // product switch (the roster re-seeds), so a still-alive pipeline honestly reappears on product re-entry.
-  const [dismissedTabs, setDismissedTabs] = useState<Set<string>>(new Set());
   // The shared People object — durable identities promoted from real run entrants, read-only. Feeds
   // the GTM canvas's People lens (find-references / dedup) and is refreshed after each run promotes
   // new entrants.
@@ -1293,8 +1278,8 @@ export default function App() {
 
   // Keep the chat-tab dots live for pipelines that AREN'T the active conversation: a calm 4s refresh of
   // the roster while any of them is still in flight. Gated on a derived boolean (not the roster array) so
-  // it doesn't re-arm on every refresh; stops entirely once every pipeline has settled, so an idle
-  // product polls nothing. The active tab doesn't wait on this — it's merged live below.
+  // it doesn't re-arm on every refresh; stops once every pipeline has settled, so an idle product polls
+  // nothing. The active conversation continues to use its faster session sync.
   const anyRosterLive = sessionRoster.some(
     (s) => !["completed", "cancelled", "blocked", "failed"].includes(s.status),
   );
@@ -1303,38 +1288,6 @@ export default function App() {
     const timer = window.setInterval(() => void refreshRoster(), 4000);
     return () => window.clearInterval(timer);
   }, [activeProjectId, anyRosterLive, refreshRoster]);
-
-  // The roster the composer tabs render. Tabs are for the pipelines you're RUNNING RIGHT NOW, not a
-  // graveyard of every past conversation — so this keeps only the still-in-flight sessions (working or
-  // waiting on you), plus the active one even if it just went terminal (your current chat keeps its
-  // tab). The active row is overlaid with the LIVE session (fresh status + goal) and guaranteed present
-  // before the first roster fetch lands; the rest catch up on the 4s cadence above.
-  const rosterForDock = useMemo<OperatorSessionSummary[]>(() => {
-    const LIVE = new Set([
-      "running", "ready",
-      "waiting_for_gate", "waiting_for_proposal", "waiting_for_ideas", "waiting_for_input",
-      "interrupted", "blocked",
-    ]);
-    const rows = sessionRoster
-      .filter((s) => LIVE.has(s.status) || s.id === operatorSession?.id)
-      // A closed tab drops out — UNLESS it's the active thread on screen (you can't hide the conversation
-      // you're currently reading out from under yourself; closing the active one switches away first).
-      .filter((s) => !dismissedTabs.has(s.id) || s.id === operatorSession?.id)
-      .map((s) =>
-        s.id === operatorSession?.id
-          ? { ...s, status: operatorSession.status, goal: operatorSession.goal, summary: operatorSession.summary ?? s.summary }
-          : s,
-      );
-    if (operatorSession && !rows.some((s) => s.id === operatorSession.id)) {
-      rows.unshift({
-        id: operatorSession.id, goal: operatorSession.goal, graphId: operatorSession.graphId,
-        projectId: operatorSession.projectId, workspaceId: operatorSession.workspaceId,
-        status: operatorSession.status, createdAt: operatorSession.createdAt,
-        updatedAt: operatorSession.updatedAt, summary: operatorSession.summary, error: operatorSession.error,
-      });
-    }
-    return rows;
-  }, [sessionRoster, operatorSession, dismissedTabs]);
 
   // Cross-project pending-decision poll — the notification. It reads what's waiting on the founder
   // across EVERY product and pipeline, NOT just the focused session, so a run that reaches the gate or
@@ -1492,6 +1445,11 @@ export default function App() {
   // dependency — keeps handleWovenSelect's identity stable for the memo dep arrays that consume it.
   const activeCanvasProjectionRef = useRef(activeCanvasProjection);
   activeCanvasProjectionRef.current = activeCanvasProjection;
+  // Live refs so selection can resolve the picked anchor and bring its thread forward without taking the
+  // projection, roster, or switch callback as dependencies — keeps handleWovenSelect's identity stable.
+  const sessionRosterRef = useRef(sessionRoster);
+  sessionRosterRef.current = sessionRoster;
+  const switchSessionRef = useRef<((id: string) => void) | null>(null);
   const canvasStructureSignal = useMemo(() => {
     const layoutRevision = activeCanvasProjection?.geometry?.revision ?? 0;
     const regionRevisions = (activeCanvasProjection?.regions ?? [])
@@ -1518,40 +1476,6 @@ export default function App() {
     if (!activeProjectId) { setMotionEfficiency(null); return; }
     try { setMotionEfficiency(await getMotionEfficiency(activeProjectId)); } catch { /* keep last */ }
   }, [activeProjectId]);
-
-  // The reallocation receipt (Area 3, the Overdrive card) — what the machine leaned toward, from which
-  // real outcomes, plus the motions flagged as drawing nothing. Loaded when the "waiting on you" batch
-  // opens; overturnable, never a hidden policy. Pure read; nothing here sends or auto-kills a motion.
-  const [reallocation, setReallocation] = useState<Awaited<ReturnType<typeof getReallocation>> | null>(null);
-  // The founder's persisted call on the current receipt (Overdrive: a correction after the fact). Held in
-  // the client for the session; overturning re-tunes the ranking weights to base through the tunables save.
-  const [reallocationDecision, setReallocationDecision] = useState<"accepted" | "overturned" | null>(null);
-  const refreshReallocation = useCallback(async () => {
-    try { setReallocation(await getReallocation()); } catch { /* keep last */ }
-    setReallocationDecision(null);
-  }, []);
-
-  // Overturn the lean (Overdrive: the founder's correction after the fact). The tilt is advisory — it
-  // shapes compose grounding and ranking but is never persisted over the founder's saved weights — so
-  // overturning it holds the machine at the founder's own base leaning: re-save the current base weights,
-  // which zeroes any accumulated drift, and record the call as a receipt chip. Never sends.
-  const overturnReallocation = useCallback(async () => {
-    try {
-      if (reallocation?.base) {
-        const { tunables } = await getReallocationTunables();
-        // Re-affirm the founder's base: saving the current tunables re-anchors the ranking to the
-        // founder's weights, so the advisory lean stops accumulating. (The base weights themselves live in
-        // the signal-weights surface; this confirms the aggressiveness table the lean runs inside.)
-        await saveReallocationTunables(tunables);
-      }
-    } catch { /* the receipt still records the founder's call even if the re-anchor read fails */ }
-    setReallocationDecision("overturned");
-  }, [reallocation]);
-
-  const acceptReallocation = useCallback(() => {
-    // Let the lean stand — the Overdrive default. Persist the founder's call as a receipt chip.
-    setReallocationDecision("accepted");
-  }, []);
 
   // Graph actions
   const executeGraph = useCallback(async (
@@ -2172,10 +2096,9 @@ export default function App() {
     void refreshRoster(); // a fresh pipeline gets its tab in the strip immediately
   }, [graph?.id, refreshRoster, currentOperatorContext]);
 
-  // One-click experiment greenlight. The proposal stays editable until the existing compile authority stages
-  // a durable run and the existing greenlight authority returns its run receipt. Only then does the canvas
-  // artifact become greenlit. The greenlight route can release local/prep work only; outward items remain at
-  // the founder wall for a separate decision.
+  // One-click experiment greenlight. A proposal becomes one ordinary flow with one ordinary flow-run
+  // receipt. It begins local work only; the backend carries no outward-release capability, so anything
+  // that later leaves the repository still needs the pipeline's separate founder release.
   const handleGreenlightExperiment = useCallback((artifact: WorkArtifactRevision) => requestFounderAction(async () => {
     const projectId = artifact.projectId;
     const content = artifact.content && typeof artifact.content === "object" && !Array.isArray(artifact.content)
@@ -2183,53 +2106,8 @@ export default function App() {
       : {};
     const intent = String(content.intent ?? artifact.title ?? artifact.summary ?? "").trim();
     if (!intent) throw new Error("Give this experiment a clear intent before greenlighting it.");
-    const ref = `work-artifact:${artifact.artifactId}`;
-    const joinKey = `experiment:${artifact.artifactId}:${artifact.revision}`;
-    const compiled = await compileObjectGraphPath(projectId, {
-      runPlan: {
-        execution: [{
-          id: joinKey,
-          action: "stage_locally",
-          protects: "stage_locally",
-          summary: intent,
-          artifactRef: ref,
-        }],
-      },
-      input: {
-        items: [{
-          kind: "planned-action",
-          plan: intent,
-          summary: intent,
-          protects: "stage_locally",
-          reviewPayload: "action-summary",
-          artifactRef: ref,
-          joinKey,
-        }],
-      },
-    });
-    const receipt = await greenlightRun(projectId, compiled.run.id);
-    if (!receipt.run?.id) throw new Error("The experiment did not return a durable run receipt.");
-
-    const identity = getIdentity();
-    await reviseWorkArtifact(projectId, artifact.artifactId, {
-      expectedArtifactRevision: artifact.revision,
-      kind: artifact.kind,
-      title: artifact.title ?? intent,
-      summary: artifact.summary ?? "Founder-greenlit experiment",
-      contentType: artifact.contentType,
-      format: artifact.format,
-      status: "greenlit",
-      content: {
-        ...content,
-        status: "greenlit",
-        compiledRunId: receipt.run.id,
-        greenlight: receipt.greenlight,
-        greenlitAt: new Date().toISOString(),
-      },
-      refs: [...artifact.refs, { type: "run", id: receipt.run.id }],
-      createdBy: { type: "founder", id: identity.userId, name: identity.name },
-      idempotencyKey: `greenlight-experiment:${artifact.artifactId}:${artifact.revision}:${receipt.run.id}`,
-    });
+    const receipt = await greenlightExperimentArtifact(projectId, artifact.artifactId, artifact.revision);
+    if (!receipt.run?.id) throw new Error("The experiment did not return a durable flow-run receipt.");
     setComposerSubject({ id: artifact.artifactId, label: intent, kind: "experiment" });
     setComposerFocus((value) => value + 1);
     void refreshOperatingView();
@@ -2343,7 +2221,17 @@ export default function App() {
     // crew what "this" means — no menu detour. Dismissable via the chip's ✕; selecting nothing lets go.
     if (focus?.kind === "anchor") {
       const anchor = (activeCanvasProjectionRef.current?.anchors ?? []).find((a) => anchorNodeId(a.ref) === focus.anchorId);
-      if (anchor) setComposerSubject({ id: anchor.ref.id, label: anchor.label ?? anchor.ref.id, kind: anchor.kind, detail: null });
+      if (anchor) {
+        setComposerSubject({ id: anchor.ref.id, label: anchor.label ?? anchor.ref.id, kind: anchor.kind, detail: null });
+        // Focus drives the thread: if this exact object already owns a live conversation, bring it forward
+        // so the transcript follows what the founder points at. Objects without a thread keep the current
+        // conversation (a send from here scopes a fresh one) — selection surfaces a thread, never destroys one.
+        const wantThread = `${anchor.ref.type}:${anchor.ref.id}`;
+        const live = (sessionRosterRef.current ?? []).find(
+          (session) => session.threadRef === wantThread && session.status !== "completed" && session.status !== "cancelled",
+        );
+        if (live) switchSessionRef.current?.(live.id);
+      }
     } else {
       setComposerSubject(null);
     }
@@ -2396,7 +2284,7 @@ export default function App() {
     authority.queue = authority.queue.catch(() => undefined).then(async () => {
       if (canvasLayoutWritesRef.current !== authority || authority.projectId !== projectId) return;
       try {
-        const saved = await saveObjectGraphPositions(projectId, { [geometryId]: position }, {
+        const saved = await saveCanvasPositions(projectId, { [geometryId]: position }, {
           expectedRevision: authority.revision,
           idempotencyKey,
         });
@@ -2440,7 +2328,7 @@ export default function App() {
     authority.queue = authority.queue.catch(() => undefined).then(async () => {
       if (canvasLayoutWritesRef.current !== authority || authority.projectId !== projectId) return;
       try {
-        const saved = await saveObjectGraphGeometry(projectId, { viewport }, {
+        const saved = await saveCanvasGeometry(projectId, { viewport }, {
           expectedRevision: authority.revision,
           idempotencyKey,
         });
@@ -2916,6 +2804,8 @@ export default function App() {
       }
     } catch { /* the switch failed (session gone / scope mismatch) — stay on the current conversation */ }
   }, [operatorSession?.id, loadChannel]);
+  // Expose the latest switch callback to the stable-identity selection handler (focus-drives-thread).
+  switchSessionRef.current = switchSession;
 
   // The Operator lens keys a lane by its graphId (the touch ledger's motionId is the graphId, so lanes,
   // efficiency rows, and object ties all join on it). The canvas navigation, though, is keyed by the
@@ -3127,32 +3017,14 @@ export default function App() {
   // Stop a running pipeline BY ID (not just the active one). Routes through the exact authorized cancel
   // path handleOperatorCancel uses — cancel ABANDONS a run (discarding any pending gate WITHOUT sending),
   // it never releases. If the stopped thread is the one on screen, sync it so the conversation reflects
-  // the cancel; then refresh the roster so every tab's dot re-derives and the stopped one drops out.
+  // the cancel; then refresh the workspace history so its status settles.
   const handleSessionStop = useCallback(async (id: string) => {
-    const row = rosterForDock.find((s) => s.id === id);
+    const row = sessionRoster.find((s) => s.id === id);
     const projectId = row?.projectId ?? activeProjectIdRef.current ?? "";
     const { session } = await cancelOperatorSession(id, projectId);
     if (id === operatorSession?.id) syncOperator(session);
     await refreshRoster();
-  }, [rosterForDock, operatorSession, syncOperator, refreshRoster]);
-
-  // Close a pipeline's tab — a client-side dismissal (no backend delete; the pipeline stays alive). If the
-  // thread is still running or holds a pending gate, ChatTabs already required a two-tap confirm before
-  // calling this, so here we STOP it (never leave a run that could still send in the background) and then
-  // hide it. Closing the ACTIVE tab first falls the founder onto the next live tab (or the empty state).
-  const handleSessionClose = useCallback((id: string) => {
-    const row = rosterForDock.find((s) => s.id === id);
-    // "working" in chat-tab terms — a live run. (waiting_for_* is "needs", already stopped, so it only
-    // needs dismissing, not cancelling.) Keep this in sync with ComposerDock's chatTabState.
-    const running = row?.status === "running" || row?.status === "ready";
-    if (running) void handleSessionStop(id);
-    setDismissedTabs((prev) => new Set(prev).add(id));
-    if (id === operatorSession?.id) {
-      const next = rosterForDock.find((s) => s.id !== id && !dismissedTabs.has(s.id));
-      if (next) void switchSession(next.id);
-      else handleNewChannel();
-    }
-  }, [rosterForDock, operatorSession, dismissedTabs, handleSessionStop, switchSession, handleNewChannel]);
+  }, [sessionRoster, operatorSession, syncOperator, refreshRoster]);
 
   // Delete a chat for good — the real, durable removal the founder asked for (not the client-side
   // dismissal Close does). A running chat is stopped first so the backend won't refuse it, then the
@@ -3171,7 +3043,6 @@ export default function App() {
       console.error("Failed to delete chat", err);
       return;
     }
-    setDismissedTabs((prev) => { const next = new Set(prev); next.delete(id); return next; });
     if (id === operatorSession?.id) {
       const fallback = sessionRoster.find((s) => s.id !== id);
       if (fallback) await switchSession(fallback.id);
@@ -4028,14 +3899,76 @@ export default function App() {
   // it holds its own grid column, so the canvas reflows around it.
   const showLeftRail = view === "canvas" && !overlay && !!activeProjectId;
 
+  // Conversation and workspace are two views of one left rail. The conversation keeps the existing
+  // operator, gate, steering, and canvas-context contracts; only its old floating perimeter is retired.
+  const renderRailConversation = (onBackToWorkspace: () => void) => (
+    <ComposerDock
+      session={operatorSession}
+      running={graphRunning}
+      bench={bench}
+      roster={sessionRoster}
+      embedded
+      onBackToWorkspace={onBackToWorkspace}
+      focusSignal={composerFocus}
+      altitude={composerAltitude}
+      selection={canvasSelection}
+      recede={proposalActive}
+      subject={composerSubject}
+      onClearSubject={() => setComposerSubject(null)}
+      onRetargetSubject={handleRetargetSubject}
+      isNavCommand={isCanvasCommand}
+      onSend={handleComposerSend}
+      onHandoff={handleRuntimeHandoff}
+      onAskBoth={!runtimeComparison && connection?.runtimes?.some((runtime) => runtime.id === "codex" && runtime.connected)
+        && connection.runtimes.some((runtime) => runtime.id === "claude-code" && runtime.connected)
+        ? handleAskBoth
+        : undefined}
+      runtimeComparison={runtimeComparison}
+      runtimeComparisonStarting={runtimeComparisonStarting}
+      onChooseRuntimeBranch={handleChooseRuntimeBranch}
+      onKeepBothRuntimeBranches={handleKeepBothRuntimeBranches}
+      onRuntimeComparisonMaterialized={(ref) => { void handleRuntimeComparisonMaterialized(ref); }}
+      briefing={composerBriefing}
+      onBuildCandidate={(candidate) => void resolveCandidatesAndSync(candidate.id, { nodes: candidate.nodes, edges: candidate.edges })}
+      onResolveProposal={(accept) => {
+        if (founderSessionAuthenticated !== true) { setFounderUnlockOpen(true); return; }
+        return handleResolveProposal(accept);
+      }}
+      onCancel={handleOperatorCancel}
+      onReviewGate={(nodeId) => selectInGraph(nodeId, operatorSession?.graphId ?? null)}
+      onSubmitGateReview={(nodeId, decisions) => submitGateReview(nodeId, decisions)}
+      onRefineItem={(item, note) => refineGateItem(item, note)}
+      onRecordItemOutcome={(item, outcome) => recordItemOutcome(item, outcome)}
+      gateLearned={(() => {
+        const memory = operatorSession?.pendingGate?.runResult?.memoryApplied;
+        return (memory?.approved ?? 0) + (memory?.rejected ?? 0) + (memory?.edits ?? 0);
+      })()}
+      gateOffer={gateOffer}
+      gatePromote={gatePromote}
+      posture={composerPosture}
+      onExitPosture={() => setComposerPosture("build")}
+      onPin={(kind, text) => { void pinClarity(kind, text); }}
+      graph={graph}
+    />
+  );
+
   return (
     <main className={`loop-shell ${view === "canvas" ? "canvas-bleed" : ""}`}>
       {founderSessionAuthenticated === false && founderUnlockOpen ? (
-        <div className="founder-session-scrim" role="presentation" onClick={() => setFounderUnlockOpen(false)}>
-          <div onClick={(event) => event.stopPropagation()}>
+        <Dialog open onOpenChange={(nextOpen) => { if (!nextOpen) setFounderUnlockOpen(false); }}>
+          <DialogContent
+            className="founder-session-scrim"
+            overlayClassName="!bg-transparent !backdrop-blur-none"
+            showCloseButton={false}
+            style={{ transform: "none", maxWidth: "none", borderRadius: 0, boxShadow: "none" }}
+            onClick={(event) => { if (event.target === event.currentTarget) setFounderUnlockOpen(false); }}
+          >
+            <DialogTitle className="sr-only">Unlock founder actions</DialogTitle>
+            <div>
             <FounderSessionUnlock onUnlocked={handleFounderUnlocked} />
-          </div>
-        </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       ) : null}
       {/* ── Toolbar ──────────────────────────────────────────────────────────
           The canvas view is full-bleed: the global top toolbar is gone there, and every control it
@@ -4097,11 +4030,13 @@ export default function App() {
             activeChannelId={activeChannelId}
             bench={bench}
             projectId={activeProjectId}
-            // The rail is the full chat HISTORY for this project — every conversation, not just the live
-            // ones the dock's tab strip keeps (rosterForDock). Already scoped to the active project by the
-            // backend, so switching products swaps the whole list.
+            projectName={activeProject?.name}
+            // The rail is the one conversation history for this project. It is already project-scoped by
+            // the backend, so switching products swaps both the list and its active thread together.
             sessions={sessionRoster}
             activeSessionId={operatorSession?.id ?? null}
+            conversationFocusSignal={composerFocus}
+            conversation={({ onBackToWorkspace }) => renderRailConversation(onBackToWorkspace)}
             onSwitchSession={(id) => void switchSession(id)}
             onNewChat={handleNewChannel}
             onDeleteSession={(id) => void handleSessionDelete(id)}
@@ -4168,13 +4103,13 @@ export default function App() {
               outcome refreshes the run summary so the strip reflects the new result. Records only —
               nothing sends. */}
           {outcomeOpen && activeProjectId ? (
-            <div
-              className="outcome-float"
-              role="dialog"
-              aria-modal="true"
-              aria-label="Log what happened"
-              onClick={(e) => { if (e.target === e.currentTarget) setOutcomeOpen(false); }}
-            >
+            <Dialog open onOpenChange={(nextOpen) => { if (!nextOpen) setOutcomeOpen(false); }}>
+              <DialogContent
+                className="outcome-float-content"
+                overlayClassName="outcome-float !backdrop-blur-none"
+                showCloseButton={false}
+              >
+              <DialogTitle className="sr-only">Log what happened</DialogTitle>
               <div className="outcome-float-inner">
                 {runResult?.runId ? <Suspense fallback={null}>
                   <OutcomeCapture
@@ -4205,7 +4140,8 @@ export default function App() {
                   <MotionEfficiencyTable data={motionEfficiency} />
                 </Suspense>
               </div>
-            </div>
+              </DialogContent>
+            </Dialog>
           ) : null}
 
           {/* History — undo/redo plus the receipts trail, bottom-left, clear of the top-center altitude
@@ -4282,7 +4218,7 @@ export default function App() {
               onToggleIssues={() => nav.togglePopover("issues")}
               pendingDecisions={pendingCount}
               decisionsOpen={decisionsOpen}
-              onToggleDecisions={() => { const willOpen = !decisionsOpen; nav.togglePopover("decisions"); if (willOpen) { void refreshPendingInbox(); void refreshReallocation(); } }}
+              onToggleDecisions={() => { const willOpen = !decisionsOpen; nav.togglePopover("decisions"); if (willOpen) void refreshPendingInbox(); }}
               failures={failuresToFix}
               failuresOpen={failureLogOpen}
               onToggleFailures={() => nav.togglePopover("failureLog")}
@@ -4379,6 +4315,7 @@ export default function App() {
                 : null}
               onChanged={refreshOperatingView}
               onGreenlightExperiment={handleGreenlightExperiment}
+              onFounderAction={requestFounderAction}
               onCreated={(ref) => handleWovenSelect({ kind: "anchor", anchorId: anchorNodeId(ref), ref })}
               onSelect={(ref) => handleWovenSelect({ kind: "anchor", anchorId: anchorNodeId(ref), ref })}
               onSelectRelationship={(relationshipRef) => {
@@ -4535,9 +4472,15 @@ export default function App() {
               assistant) stays visible, so it's part of the canvas, not a separate page. Its
               "Ideate channels" hands off to the composer's ideate posture. */}
           {overlay === "understand" && activeProject && (
-            <div className="canvas-overlay" role="dialog" aria-modal="true">
+            <Dialog open onOpenChange={(nextOpen) => { if (!nextOpen) nav.closeOverlay(); }}>
+              <DialogContent
+                className="canvas-overlay !fixed !max-w-none !gap-0 !rounded-none !p-0 !ring-0"
+                overlayClassName="pointer-events-none !bg-transparent !backdrop-blur-none"
+                showCloseButton={false}
+                style={{ transform: "none", maxWidth: "none" }}
+              >
               <div className="canvas-overlay-bar">
-                <span className="canvas-overlay-title">Product grounding</span>
+                <DialogTitle className="canvas-overlay-title">Product grounding</DialogTitle>
                 <button className="canvas-overlay-close" onClick={() => nav.closeOverlay()} type="button" title="Back to the canvas">×</button>
               </div>
               <div className="canvas-overlay-body">
@@ -4549,7 +4492,8 @@ export default function App() {
                   />
                 </Suspense>
               </div>
-            </div>
+              </DialogContent>
+            </Dialog>
           )}
 
           {/* Settings — the utility drawer: the workspace index, the team and its release roles, and
@@ -4557,30 +4501,35 @@ export default function App() {
               overlay; it reuses the standalone admin panels, so the bar owns the title + close and the
               panels render flush. Nothing here sends. */}
           {overlay === "settings" && (
-            <div className="canvas-overlay settings-overlay" role="dialog" aria-modal="true" aria-label="Settings">
+            <Dialog open onOpenChange={(nextOpen) => { if (!nextOpen) nav.closeOverlay(); }}>
+              <DialogContent
+                className="canvas-overlay settings-overlay !fixed !max-w-none !gap-0 !rounded-none !p-0 !ring-0"
+                overlayClassName="pointer-events-none !bg-transparent !backdrop-blur-none"
+                showCloseButton={false}
+                style={{ transform: "none", maxWidth: "none" }}
+              >
+              <DialogTitle className="sr-only">Settings</DialogTitle>
+              <Tabs value={settingsTab} onValueChange={(value) => setSettingsTab(value as typeof settingsTab)} className="contents">
               <div className="canvas-overlay-bar">
-                <div className="settings-overlay-tabs" role="tablist" aria-label="Settings sections">
+                <TabsList className="settings-overlay-tabs !h-auto !w-auto !rounded-none !bg-transparent !p-0" variant="line" aria-label="Settings sections">
                   {([
                     { id: "workspace", label: "Workspace" },
                     { id: "team", label: "Team" },
                     { id: "tools", label: "Tools" },
                   ] as const).map((tab) => (
-                    <button
+                    <TabsTrigger
                       key={tab.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={settingsTab === tab.id}
+                      value={tab.id}
                       className={`settings-overlay-tab ${settingsTab === tab.id ? "active" : ""}`}
-                      onClick={() => setSettingsTab(tab.id)}
                     >
                       {tab.label}
-                    </button>
+                    </TabsTrigger>
                   ))}
-                </div>
+                </TabsList>
                 <button className="canvas-overlay-close" onClick={() => nav.closeOverlay()} type="button" title="Back to the canvas">×</button>
               </div>
               <div className="canvas-overlay-body">
-                <div className="settings-overlay-panel">
+                <TabsContent value="workspace" className="settings-overlay-panel">
                   {settingsTab === "workspace" ? (
                     <Suspense fallback={null}>
                       <WorkspaceView
@@ -4595,11 +4544,15 @@ export default function App() {
                       />
                     </Suspense>
                   ) : null}
+                </TabsContent>
+                <TabsContent value="team" className="settings-overlay-panel">
                   {settingsTab === "team" ? (
                     <Suspense fallback={null}>
                       <TeamSpace onClose={() => nav.closeOverlay()} onTeamChange={handleTeamChange} />
                     </Suspense>
                   ) : null}
+                </TabsContent>
+                <TabsContent value="tools" className="settings-overlay-panel">
                   {settingsTab === "tools" ? (
                     <div className="settings-tools-stack">
                       {/* Connect your own Gmail as the sender — the one-field BYO step that turns the
@@ -4613,27 +4566,18 @@ export default function App() {
                       <Suspense fallback={null}>
                         <ConnectCapability onChange={() => {}} />
                       </Suspense>
-                      {/* Founder taste capture — the two surfaces that let a founder shape what the crew
-                          drafts, without ever sending: the front-end house style a visual agent reads,
-                          and the leaning that ranks which GTM paths come first. Neither touches the wall. */}
+                      {/* Founder taste capture shapes what the crew drafts without creating a second
+                          strategy-control surface. */}
                       <Suspense fallback={null}>
                         <DesignTaste />
                       </Suspense>
-                      <Suspense fallback={null}>
-                        <SignalWeights />
-                      </Suspense>
-                      {/* The aggressiveness knobs sit right beside the leaning they govern: how much proof a
-                          motion needs before it tilts the ranking, how far one proven motion may bend it,
-                          and the hard daily ceiling on paid measurement probes. Visible and tunable, never a
-                          hardcoded policy — and nothing here sends, ships, or spends on its own. */}
-                      <Suspense fallback={null}>
-                        <AggressivenessTunables />
-                      </Suspense>
                     </div>
                   ) : null}
-                </div>
+                </TabsContent>
               </div>
-            </div>
+              </Tabs>
+              </DialogContent>
+            </Dialog>
           )}
 
           {/* The bench moved into the always-present left rail's Crew section — no longer a takeover
@@ -4661,11 +4605,17 @@ export default function App() {
           <div className="loop-popover-scrim" role="presentation" onClick={() => nav.closePopover()} />
         ) : null}
         {decisionsOpen && view === "canvas" ? (
-          <aside className="loop-issues-panel" role="dialog" aria-label="Decisions waiting on you" aria-modal="false">
+          <Sheet defaultOpen modal={false} onOpenChange={(nextOpen) => { if (!nextOpen) nav.closePopover(); }}>
+            <SheetContent
+              side="right"
+              className="loop-issues-panel !gap-0 !p-0"
+              overlayClassName="pointer-events-none !bg-transparent !backdrop-blur-none"
+              showCloseButton={false}
+            >
             <header className="loop-issues-head">
               <div className="loop-issues-head-title">
                 <Inbox />
-                <strong>Waiting on you</strong>
+                <SheetTitle render={<strong />}>Waiting on you</SheetTitle>
                 {pendingCount > 0 ? <span className="loop-issues-count">{pendingCount}</span> : null}
               </div>
               <button className="loop-issues-close" onClick={() => nav.closePopover()} type="button" aria-label="Close decisions">
@@ -4673,22 +4623,10 @@ export default function App() {
               </button>
             </header>
             <div className="loop-issues-body">
-              {/* The Overdrive reallocation receipt sits atop the batch: what the machine leaned toward and
-                  the motions it flagged as drawing nothing, correctable here. Shown only when there's a real
-                  lean or a flagged motion — never an empty card. */}
-              {reallocation && (reallocation.applied || (reallocation.starved?.length ?? 0) > 0) ? (
-                <Suspense fallback={null}>
-                  <ReallocationBatchCard
-                    receipt={reallocation}
-                    decision={reallocationDecision}
-                    onOverturn={() => void overturnReallocation()}
-                    onAccept={acceptReallocation}
-                  />
-                </Suspense>
-              ) : null}
               <DecisionInbox decisions={pendingDecisions} onOpen={(d) => void openDecision(d)} />
             </div>
-          </aside>
+            </SheetContent>
+          </Sheet>
         ) : null}
 
         {/* Rail 5 push: the decide-together moment for a real reply. Opened from a reply-alert row; it
@@ -4704,11 +4642,17 @@ export default function App() {
         ) : null}
 
         {issuesOpen && view === "canvas" ? (
-          <aside className="loop-issues-panel" role="dialog" aria-label="Issues" aria-modal="false">
+          <Sheet defaultOpen modal={false} onOpenChange={(nextOpen) => { if (!nextOpen) nav.closePopover(); }}>
+            <SheetContent
+              side="right"
+              className="loop-issues-panel !gap-0 !p-0"
+              overlayClassName="pointer-events-none !bg-transparent !backdrop-blur-none"
+              showCloseButton={false}
+            >
             <header className="loop-issues-head">
               <div className="loop-issues-head-title">
                 <AlertTriangle />
-                <strong>Issues</strong>
+                <SheetTitle render={<strong />}>Issues</SheetTitle>
                 {issueCount > 0 ? <span className="loop-issues-count">{issueCount}</span> : null}
               </div>
               <button className="loop-issues-close" onClick={() => nav.closePopover()} type="button" aria-label="Close issues">
@@ -4725,76 +4669,9 @@ export default function App() {
                 onJump={(nodeId) => { nav.closePopover(); jumpToNode(nodeId); }}
               />
             </div>
-          </aside>
+            </SheetContent>
+          </Sheet>
         ) : null}
-
-        {/* Contextual crew composer. It remains attached to the terrain even with zero pipelines; the
-            first prompt asks what to understand, change, or pursue instead of requiring a goal. */}
-        {view === "canvas" ? <ComposerDock
-          session={operatorSession}
-          running={graphRunning}
-          // The founder's crew — the same bench the rail reads. Feeds the @-mention roster and the
-          // summoned parts tray so "@" autocompletes teammates and the tray shows their faces.
-          bench={bench}
-          // The parallel pipelines, as tabs: the roster (with the live active session merged in), which
-          // one is on screen, how to switch between them, and how to start another.
-          roster={rosterForDock}
-          activeSessionId={operatorSession?.id ?? null}
-          onSwitchSession={(id) => void switchSession(id)}
-          // End a thread from its tab: Stop a live run (authorized cancel), Close a paused/finished one.
-          onStopSession={handleSessionStop}
-          onCloseSession={handleSessionClose}
-          // Pure-canvas home: the composer is a floating layer the canvas owns, not a standing right lane.
-          // It rests as a centered command pill and pulls the transcript UP from the bar; its grid track
-          // collapses to zero (the floating dock is position:absolute), so the canvas runs full-bleed.
-          floating={true}
-          focusSignal={composerFocus}
-          altitude={composerAltitude}
-          selection={canvasSelection}
-          recede={proposalActive}
-          subject={composerSubject}
-          onClearSubject={() => setComposerSubject(null)}
-          onRetargetSubject={handleRetargetSubject}
-          isNavCommand={isCanvasCommand}
-          onSend={handleComposerSend}
-          onHandoff={handleRuntimeHandoff}
-          onAskBoth={!runtimeComparison && connection?.runtimes?.some((runtime) => runtime.id === "codex" && runtime.connected)
-            && connection.runtimes.some((runtime) => runtime.id === "claude-code" && runtime.connected)
-            ? handleAskBoth
-            : undefined}
-          runtimeComparison={runtimeComparison}
-          runtimeComparisonStarting={runtimeComparisonStarting}
-          onChooseRuntimeBranch={handleChooseRuntimeBranch}
-          onKeepBothRuntimeBranches={handleKeepBothRuntimeBranches}
-          onRuntimeComparisonMaterialized={(ref) => { void handleRuntimeComparisonMaterialized(ref); }}
-          briefing={composerBriefing}
-          onBuildCandidate={(c) => void resolveCandidatesAndSync(c.id, { nodes: c.nodes, edges: c.edges })}
-          onResolveProposal={(accept) => {
-            // A graph proposal is a founder-only local mutation. Open the existing unlock door before
-            // attempting it so a locked founder gets the code prompt, not a misleading gate-auth error.
-            if (founderSessionAuthenticated !== true) { setFounderUnlockOpen(true); return; }
-            return handleResolveProposal(accept);
-          }}
-          onCancel={handleOperatorCancel}
-          onReviewGate={(nodeId) => selectInGraph(nodeId, operatorSession?.graphId ?? null)}
-          // The gate, brought INTO the chat: "Review & send" opens the real GateReview in-thread, and these
-          // route it through the SAME authorized release path the canvas gate uses — no fork, no new wall.
-          onSubmitGateReview={(nodeId, d) => submitGateReview(nodeId, d)}
-          onRefineItem={(item, note) => refineGateItem(item, note)}
-          onRecordItemOutcome={(item, o) => recordItemOutcome(item, o)}
-          gateLearned={(() => {
-            const mem = operatorSession?.pendingGate?.runResult?.memoryApplied;
-            return (mem?.approved ?? 0) + (mem?.rejected ?? 0) + (mem?.edits ?? 0);
-          })()}
-          gateOffer={gateOffer}
-          gatePromote={gatePromote}
-          posture={composerPosture}
-          onExitPosture={() => setComposerPosture("build")}
-          onPin={(kind, text) => { void pinClarity(kind, text); }}
-          // Build-your-own-workflow retired: the composer composes via Claude, not a hand-pick picker.
-          // You state a goal and Claude composes to the gate rather than wiring steps by hand.
-          graph={graph}
-        /> : null}
 
       </div>
 

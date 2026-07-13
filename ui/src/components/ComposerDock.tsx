@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { DragEvent } from "react";
 import {
-  AlertTriangle, ArrowUp, Bot, Check, ChevronRight, LoaderCircle,
+  AlertTriangle, ArrowLeft, ArrowUp, Bot, Check, ChevronRight, LoaderCircle,
   Lightbulb, Maximize2, Mic, Pin, Play, Plus, ShieldCheck, Square, X,
 } from "lucide-react";
 import { statusLabel } from "@/lib/status";
@@ -14,7 +14,6 @@ import type { CanvasSubject, CardDetail } from "@/lib/cardDetail";
 import type { CanvasSelectionDescriptor } from "@/lib/canvasSelection";
 import type { ComposerAltitude } from "@/lib/composerAltitude";
 import { getCapabilityInventory, type AgentBenchRow, type OperatorHints } from "@/api";
-import { motion } from "motion/react";
 import { AgentPicker } from "@/components/AgentPicker";
 import { DEFAULT_MODEL, modelById } from "@/components/agent-picker-models";
 import { Collapse, Stagger, StaggerItem } from "@/lib/motion";
@@ -33,11 +32,11 @@ import { STEP_DRAG_MIME } from "@/lib/objectPalette";
 import type { StepDragPayload } from "@/components/LeftRail";
 import { GateReview } from "@/components/gate/GateReview";
 import { RuntimeBranchComparison } from "@/components/RuntimeBranchComparison";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { RuntimeBranchComparisonModel } from "@/lib/runtimeBranchComparison";
 import type { GatePromote } from "@/lib/gateItem";
 import "@/styles/composer-posture.css";
 import "@/styles/composer-candidates.css";
-import "@/styles/chat-tabs.css";
 import "@/styles/our-chat.css";
 import type { CapabilityInventory, ClarityKind, GateDecision, GTMGraph, GTMItem, OperatorEvent, OperatorSession, OperatorSessionSummary, OperatorStatus } from "@/types";
 
@@ -275,46 +274,25 @@ const CLARITY_KINDS: { kind: ClarityKind; label: string }[] = [
 // canvas as a durable card via onPin.
 function PinControl({ text, onPin }: { text: string; onPin: (kind: ClarityKind, text: string) => void }) {
   const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (wrapRef.current?.contains(e.target as Node)) return;
-      setOpen(false);
-    };
-    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onEsc);
-    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onEsc); };
-  }, [open]);
   return (
-    <div className={`cnv-pin ${open ? "open" : ""}`} ref={wrapRef}>
-      <button
-        className="cnv-pin-btn"
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        title="Pin this as a clarity card"
-        onClick={() => setOpen((v) => !v)}
-      >
-        <Pin size={12} aria-hidden="true" />
-        <span className="cnv-pin-label">Pin</span>
-      </button>
-      {open ? (
-        <div className="cnv-pin-menu" role="menu">
+    <div className={`cnv-pin ${open ? "open" : ""}`}>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger className="cnv-pin-btn" title="Pin this as a clarity card">
+          <Pin size={12} aria-hidden="true" />
+          <span className="cnv-pin-label">Pin</span>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="cnv-pin-menu w-auto" align="start" sideOffset={4}>
           {CLARITY_KINDS.map(({ kind, label }) => (
-            <button
+            <DropdownMenuItem
               key={kind}
               className="cnv-pin-item"
-              type="button"
-              role="menuitem"
-              onClick={() => { onPin(kind, text); setOpen(false); }}
+              onClick={() => onPin(kind, text)}
             >
               {label}
-            </button>
+            </DropdownMenuItem>
           ))}
-        </div>
-      ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
@@ -322,6 +300,26 @@ function PinControl({ text, onPin }: { text: string; onPin: (kind: ClarityKind, 
 // A canvas object's type, in founder words — "value_prop"/"valueProposition" → "Value proposition".
 function humanizeKind(kind: string): string {
   return humanizeFieldLabel(kind) || "Block";
+}
+
+// One-tap correction verbs for the object currently bound to the composer — the Notion/Strut in-place
+// menu, homed on the canvas object's representation in the composer. Each drops editable phrasing into
+// the input (never a bare fire), so a cheap correction is one tap plus a glance, not a typed paragraph.
+function quickActionsForSubject(subject: { label: string; kind: string }): Array<{ label: string; prompt: string }> {
+  const q = `“${subject.label}”`;
+  if (subject.kind === "question") {
+    return [
+      { label: "Answer it", prompt: `Make the call on ${q} — recommend an answer with your reasoning.` },
+      { label: "Find evidence", prompt: `Find the strongest evidence for and against ${q}.` },
+      { label: "Explain", prompt: `Explain ${q} in plain terms — what it means and why it matters.` },
+    ];
+  }
+  return [
+    { label: "Explain", prompt: `Explain ${q} in plain terms — what it means and why it matters.` },
+    { label: "Make it sharper", prompt: `Make ${q} shorter and sharper without losing the substance.` },
+    { label: "What's weak", prompt: `What is the weakest part of ${q}? Find what would challenge it.` },
+    { label: "Act on it", prompt: `Turn ${q} into a concrete next step I can run.` },
+  ];
 }
 
 // ─── The card face (a selected object graph card, folded into the top of the composer) ──────────
@@ -447,118 +445,11 @@ function stripOptions(text: string): string {
     .trim();
 }
 
-// ─── Chat tabs (one per pipeline the founder is running in parallel) ────────────────────────────
-type ChatTabState = "working" | "needs" | "done";
-function chatTabState(status: OperatorStatus): ChatTabState {
+type SessionActivityState = "working" | "needs" | "done";
+function sessionActivityState(status: OperatorStatus): SessionActivityState {
   if (status === "waiting_for_gate" || status === "waiting_for_proposal" || status === "waiting_for_ideas" || status === "waiting_for_input") return "needs";
   if (status === "running" || status === "ready") return "working";
   return "done"; // completed · cancelled · blocked · failed · interrupted
-}
-
-function ChatTabs({ roster, activeId, onSwitch, onNew, onStop, onClose }: {
-  roster: OperatorSessionSummary[];
-  activeId: string | null;
-  onSwitch: (id: string) => void;
-  onNew?: () => void;
-  // End a running thread (routes through the authorized cancel path) / dismiss an idle or finished one.
-  // A tab shows exactly one trailing control on hover: Stop for a live run, Close for a paused/done thread.
-  onStop?: (id: string) => void | Promise<void>;
-  onClose?: (id: string) => void;
-}) {
-  const tabs = [...roster].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  // Distinct, readable name per tab — two parallel pipelines with the same goal prefix never render the
-  // same label (each colliding one carries a "· 1 / · 2" suffix). Falls back to the plain name if missing.
-  const tabNames = distinctTabNames(roster);
-  const nameOf = (s: OperatorSessionSummary) => tabNames[s.id] ?? chatTabName(s);
-  // Two-tap confirm for a tab that has something to lose — a running run or a pending gate. The first tap
-  // on its control ARMS it (swaps to a small "End?"), the second tap within ~3s confirms; switching tabs
-  // or the timeout disarms. A finished tab has nothing to lose, so it closes on a single tap, no arm.
-  const [armed, setArmed] = useState<string | null>(null);
-  const armTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const disarm = () => {
-    if (armTimer.current) { clearTimeout(armTimer.current); armTimer.current = null; }
-    setArmed(null);
-  };
-  const arm = (id: string) => {
-    if (armTimer.current) clearTimeout(armTimer.current);
-    setArmed(id);
-    armTimer.current = setTimeout(() => setArmed(null), 3000);
-  };
-  useEffect(() => () => { if (armTimer.current) clearTimeout(armTimer.current); }, []);
-
-  return (
-    <div className="chat-tabs" role="tablist" aria-label="Your pipelines">
-      {tabs.map((s) => {
-        const active = s.id === activeId;
-        const state = chatTabState(s.status);
-        const running = state === "working";
-        // Confirm-required for anything not finished: a live run OR a tab waiting on a founder decision.
-        // Never silently drop a run mid-flight or a pending gate.
-        const confirmRequired = state !== "done";
-        const isArmed = armed === s.id;
-        const handleControl = (e: React.MouseEvent) => {
-          e.stopPropagation();
-          if (running) {
-            // Stopping a live run: arm first, confirm on the second tap.
-            if (confirmRequired && !isArmed) { arm(s.id); return; }
-            disarm();
-            void onStop?.(s.id);
-          } else {
-            // Closing a paused/finished thread. A pending-gate tab still confirms; a done tab closes at once.
-            if (confirmRequired && !isArmed) { arm(s.id); return; }
-            disarm();
-            onClose?.(s.id);
-          }
-        };
-        const name = nameOf(s);
-        const controlLabel = running ? `Stop ${name}` : `Close ${name}`;
-        return (
-          <button
-            key={s.id}
-            role="tab"
-            type="button"
-            aria-selected={active}
-            className={`chat-tab ${active ? "active" : ""}`}
-            title={name}
-            onClick={() => { if (isArmed) disarm(); onSwitch(s.id); }}
-            onBlur={(e) => { if (isArmed && !e.currentTarget.contains(e.relatedTarget as Node)) disarm(); }}
-          >
-            {active ? (
-              <motion.span
-                layoutId="chat-tab-pill"
-                className="chat-tab-pill"
-                transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.8 }}
-              />
-            ) : null}
-            <span className="chat-tab-face">
-              <span className={`chat-tab-dot ${state}`} aria-hidden="true" />
-              <span className="chat-tab-name">{name}</span>
-            </span>
-            {(onStop || onClose) ? (
-              <span
-                role="button"
-                tabIndex={0}
-                className={`chat-tab-close ${isArmed ? "armed" : ""}`}
-                aria-label={isArmed ? `Confirm — ${controlLabel}` : controlLabel}
-                title={isArmed ? "End this pipeline?" : controlLabel}
-                onClick={handleControl}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleControl(e as unknown as React.MouseEvent); }
-                }}
-              >
-                {isArmed ? <span className="chat-tab-close-text">End?</span> : running ? <Square size={11} /> : <X size={13} />}
-              </span>
-            ) : null}
-          </button>
-        );
-      })}
-      {onNew ? (
-        <button className="chat-tab-new" type="button" onClick={onNew} title="Start another pipeline" aria-label="Start another pipeline">
-          <Plus size={15} />
-        </button>
-      ) : null}
-    </div>
-  );
 }
 
 // ─── Placed mention chips (the @-team the founder named, rendered as roster tiles) ──────────────────────
@@ -653,11 +544,11 @@ type BriefingRow = { id: string; name: string; state: "needs" | "work" | "quiet"
 type Briefing = { eyebrow: string; rows: BriefingRow[] };
 
 function briefingStateOf(status: OperatorStatus): BriefingRow["state"] {
-  const s = chatTabState(status);
+  const s = sessionActivityState(status);
   return s === "needs" ? "needs" : s === "working" ? "work" : "quiet";
 }
 function briefingLine(s: OperatorSessionSummary): string {
-  const state = chatTabState(s.status);
+  const state = sessionActivityState(s.status);
   if (state === "needs") return "waiting at your gate";
   if (state === "working") return s.summary?.trim() || "working…";
   return s.summary?.trim() || "quiet for now";
@@ -678,8 +569,8 @@ export function ComposerDock({
   onHandoff, onAskBoth,
   runtimeComparison = null, runtimeComparisonStarting = false, onChooseRuntimeBranch, onKeepBothRuntimeBranches, onRuntimeComparisonMaterialized,
   bench = null,
-  roster = [], activeSessionId = null, onSwitchSession, onNewChat, onStopSession, onCloseSession,
-  floating = false, focusSignal = 0, recede = false,
+  roster = [], onNewChat,
+  floating = false, embedded = false, onBackToWorkspace, focusSignal = 0, recede = false,
   posture, onExitPosture, onPin,
   graph = null,
   subject = null, onClearSubject, onRetargetSubject, isNavCommand,
@@ -696,16 +587,10 @@ export function ComposerDock({
   // The founder's crew — the same bench the rail reads. Feeds the @-mention roster and the parts tray so
   // "@" autocompletes teammates and the summoned tray shows their faces. null while loading; empty is fine.
   bench?: AgentBenchRow[] | null;
-  // The founder's live pipelines — one operator session each. The tab strip renders them; `activeSessionId`
-  // is the one on screen; switching swaps the conversation. `onNewChat` starts another.
+  // Lightweight session summaries can feed the opening briefing. Session navigation belongs exclusively
+  // to the workspace rail, so the conversation never renders a second navigator.
   roster?: OperatorSessionSummary[];
-  activeSessionId?: string | null;
-  onSwitchSession?: (id: string) => void;
   onNewChat?: () => void;
-  // Per-tab lifecycle: STOP a running thread (routes through the authorized cancel path) or CLOSE a
-  // paused/finished one (a client-side dismissal). Threaded straight to ChatTabs — no dock-side logic.
-  onStopSession?: (id: string) => void | Promise<void>;
-  onCloseSession?: (id: string) => void;
   // The canvas↔chat tie: the object the founder handed to Claude from the canvas. A node-graph step shows
   // the lightweight header; an object-graph card carries `detail` and the composer BECOMES that card.
   subject?: CanvasSubject | null;
@@ -740,6 +625,10 @@ export function ComposerDock({
   gateOffer?: string | null;
   gatePromote?: GatePromote;
   floating?: boolean;
+  // The unified rail owns the perimeter and collapsed state. Embedded mode keeps this conversation mounted
+  // as the rail's conversation view, removes duplicate session tabs, and returns through the rail header.
+  embedded?: boolean;
+  onBackToWorkspace?: () => void;
   focusSignal?: number;
   // The cold landing of an empty product: the composer opens instead of resting as a slim edge rail, so
   // "State a go-to-market goal" points at a visible input. Only forces open on the rising edge.
@@ -820,6 +709,8 @@ export function ComposerDock({
   const rosterEntities = useMemo(() => buildRoster(bench ?? [], undefined, inventory), [bench, inventory]);
   const [mentions, setMentions] = useState<PlacedMention[]>([]);
   const [mentionQuery, setMentionQuery] = useState<{ query: string; start: number; end: number } | null>(null);
+  const mentionListboxId = useId();
+  const [mentionActiveDescendant, setMentionActiveDescendant] = useState<string | undefined>();
 
   // Voice — a simple tap-to-talk mic (the composer's calm signature; the heavy amplitude waveform was
   // retired). TAP the mic → hands-free listening locks on (tap again to stop and send); HOLD → push-to-talk
@@ -1288,6 +1179,20 @@ export function ComposerDock({
             ) : null}
           </div>
           <div className="composer-attached-label" title={subject.label}>{subject.label}</div>
+          {/* In-place quick verbs for the bound object — one tap seeds an editable steer, so the common
+              corrections (explain, sharpen, challenge, act) never need a typed paragraph. */}
+          <div className="composer-attached-actions" role="group" aria-label={`Quick actions for ${subject.label}`}>
+            {quickActionsForSubject(subject).map((action) => (
+              <button
+                key={action.label}
+                type="button"
+                className="composer-attached-action"
+                onClick={() => { setInput(action.prompt); inputRef.current?.focus(); }}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
         </div>
       ) : null}
 
@@ -1295,10 +1200,12 @@ export function ComposerDock({
           the menu owns highlight + arrow/enter/esc nav. Anchored above the input line. */}
       {mentionQuery ? (
         <MentionMenu
+          id={mentionListboxId}
           query={mentionQuery.query}
           results={rankRoster(rosterEntities, mentionQuery.query)}
           onPick={(entity) => insertMention(entityToPlaced(entity), { start: mentionQuery.start, end: mentionQuery.end })}
           onClose={() => setMentionQuery(null)}
+          onActiveDescendantChange={setMentionActiveDescendant}
           className="composer-mention"
         />
       ) : null}
@@ -1309,6 +1216,11 @@ export function ComposerDock({
           name="crew-message"
           className="oc-input-text"
           aria-label="Message your crew"
+          aria-haspopup="listbox"
+          aria-controls={mentionQuery ? mentionListboxId : undefined}
+          aria-expanded={Boolean(mentionQuery)}
+          aria-activedescendant={mentionQuery ? mentionActiveDescendant : undefined}
+          aria-autocomplete="list"
           placeholder={subject ? `Ask about “${subject.label}”: make it shorter, explain it, or act on it…` : altitude === "empty" ? "What do you want to change?" : selection.kind === "gate" ? "Ask what is waiting at your wall, or tell the crew what to revise…" : submitting ? "Request sent. You can draft the next steer here." : sendDisabled ? "Your crew is working. You can still say “go to …” to move the canvas" : steerable ? "Redirect your crew mid-run: “focus on enterprise”, “drop the third one”… nothing sends" : ideating ? "Think through your GTM: who's the real buyer, where's the wedge, why now" : session ? "Reply, redirect, or @-mention a teammate…" : "What should we understand, change, or pursue?"}
           value={input}
           onChange={(e) => {
@@ -1415,7 +1327,7 @@ export function ComposerDock({
 
   // ── CLOSED — the slim edge line. Docked hands the width back to the canvas; floating rests as the
   // command-line pill with a peek at any live session. ─────────────────────────────────────────────────
-  if (collapsed || (gateSelectedOnCanvas && !gateConversationOpen)) {
+  if (!embedded && (collapsed || (gateSelectedOnCanvas && !gateConversationOpen))) {
     if (!floating) {
       return (
         <aside className={`composer-dock docked collapsed our-chat${altitude ? ` altitude-${altitude}` : ""}`} aria-label="Your crew">
@@ -1463,19 +1375,26 @@ export function ComposerDock({
 
   // ── OPEN — the three zones: chrome (header + tabs), the response stream, the input. ───────────────────
   return (
-    <aside className={`composer-dock ${floating ? "floating" : "docked"} our-chat${altitude ? ` altitude-${altitude}` : ""}`} aria-label="Your crew">
+    <section className={`composer-dock ${embedded ? "embedded" : floating ? "floating" : "docked"} our-chat${altitude ? ` altitude-${altitude}` : ""}`} aria-label="Your crew">
       {/* ── Zone 1 · chrome — header. The working teammate's face carries the soft rotating ring: calm,
           meaningful presence (the signature). ─────────────────────────── */}
       <header className="oc-head">
+        {embedded ? (
+          <button className="oc-head-icon oc-head-back" onClick={onBackToWorkspace} type="button" title="Back to workspace" aria-label="Back to workspace">
+            <ArrowLeft size={16} />
+          </button>
+        ) : null}
         <span className={`oc-presence ${working ? "working" : ""}`}>
           <span className="oc-ring" aria-hidden="true" />
           <CrewFace agentRef={voice.ref} job={voice.job} size={34} state={working ? "working" : "idle"} />
         </span>
-        <span className="oc-head-title">Your crew</span>
+        <span className="oc-head-title" title={session?.goal ?? undefined}>
+          {embedded ? (session ? chatTabName(session) : "New conversation") : "Your crew"}
+        </span>
         <span className="oc-head-sub">
           {working ? `${voice.name} is working…` : session ? "just now" : "on your subscription"}
         </span>
-        {onNewChat && roster.length < 2 ? (
+        {!embedded && onNewChat && roster.length < 2 ? (
           <button className="oc-head-icon" onClick={onNewChat} type="button" title="Start another thread" aria-label="Start another thread">
             <Plus size={15} />
           </button>
@@ -1485,21 +1404,18 @@ export function ComposerDock({
             <Square size={15} />
           </button>
         )}
-        <button
-          className="oc-head-icon"
-          onClick={() => setCollapsed(true)}
-          type="button"
-          title={floating ? "Minimize" : "Collapse to the slim line"}
-          aria-label={floating ? "Minimize the panel" : "Collapse to the slim line"}
-        >
-          <X size={16} />
-        </button>
+        {!embedded ? (
+          <button
+            className="oc-head-icon"
+            onClick={() => setCollapsed(true)}
+            type="button"
+            title={floating ? "Minimize" : "Collapse to the slim line"}
+            aria-label={floating ? "Minimize the panel" : "Collapse to the slim line"}
+          >
+            <X size={16} />
+          </button>
+        ) : null}
       </header>
-
-      {/* ── Zone 1 · chrome — the pipelines you're running, as tabs (only at 2+). */}
-      {roster.length >= 2 && onSwitchSession ? (
-        <ChatTabs roster={roster} activeId={activeSessionId} onSwitch={onSwitchSession} onNew={onNewChat} onStop={onStopSession} onClose={onCloseSession} />
-      ) : null}
 
       {/* ── The card face — a selected object-graph card, pinned at the top: the composer BECOMES that card. */}
       {subject?.detail ? (
@@ -1789,6 +1705,6 @@ export function ComposerDock({
 
       {/* ── Zone 3 · the input ── */}
       {composer}
-    </aside>
+    </section>
   );
 }

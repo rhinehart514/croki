@@ -5,6 +5,7 @@ import {
   saveReallocationTunables,
   type ReallocationTunables,
 } from "@/api";
+import { Button } from "@/components/ui/button";
 import "@/styles/aggressiveness-tunables.css";
 
 // AggressivenessTunables — how fast the machine leans on what's working, and what always-on is allowed
@@ -230,7 +231,8 @@ export function AggressivenessTunables() {
           </div>
 
           <div className="at-actions">
-            <button
+            <Button
+              variant="ghost"
               className="cs-btn primary"
               disabled={busy || !dirty}
               onClick={() => void save()}
@@ -245,8 +247,9 @@ export function AggressivenessTunables() {
               ) : (
                 "Save these limits"
               )}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
               className="cs-btn"
               disabled={busy || !dirty}
               onClick={() => void reset()}
@@ -254,7 +257,7 @@ export function AggressivenessTunables() {
               title="Return to the stated defaults"
             >
               <RotateCcw size={13} /> Reset to defaults
-            </button>
+            </Button>
           </div>
         </>
       ) : (

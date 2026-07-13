@@ -5,11 +5,13 @@ import { GoalConflictError, goalStore } from "../goal-store.mjs";
 import { WorkArtifactConflictError, workArtifactStore } from "../work-artifact-store.mjs";
 import { CanvasRegionConflictError, canvasRegionStore } from "../canvas-region-store.mjs";
 import { CanvasStructureHistoryConflictError, canvasStructureHistoryStore } from "../canvas-structure-history.mjs";
+import { CanvasLayoutConflictError, PROJECT_CANVAS_LAYOUT_NAMESPACE, objectGraphLayoutStore } from "../object-graph-store.mjs";
 import { detectGoalConflicts } from "../goal-conflicts.mjs";
 import { GoalConflictDecisionConflictError, goalConflictDecisionStore } from "../goal-conflict-decision-store.mjs";
 import { requestHasSessionToken } from "./session-guard.mjs";
 import { authorizeFounderWriteForRequest } from "./session-guard.mjs";
 import { normalizeCanvasProposal } from "../canvas-proposal.mjs";
+import { greenlightExperimentArtifact } from "../experiment-flow.mjs";
 import { json, readBody } from "./util.mjs";
 
 function message(error) {
@@ -22,6 +24,7 @@ function statusFor(error) {
     || error instanceof WorkArtifactConflictError
     || error instanceof CanvasRegionConflictError
     || error instanceof CanvasStructureHistoryConflictError
+    || error instanceof CanvasLayoutConflictError
     || error instanceof GoalConflictDecisionConflictError
     || /^Stale\b/i.test(detail)
     || /idempotency key.+already used/i.test(detail)) return 409;
@@ -90,7 +93,7 @@ function requireRevision(input, field) {
 }
 
 function matchRoute(pathname) {
-  const match = pathname.match(/^\/api\/projects\/([^/]+)\/(goals|goal-relations|work-artifacts|work-relationships|canvas-regions|canvas-history|goal-conflict-decisions)(?:\/([^/]+))?(?:\/(history|status|branch|retire|restore|archive|reopen|apply-proposal))?$/);
+  const match = pathname.match(/^\/api\/projects\/([^/]+)\/(goals|goal-relations|work-artifacts|work-relationships|canvas-regions|canvas-layout|canvas-history|goal-conflict-decisions)(?:\/([^/]+))?(?:\/(history|status|branch|retire|restore|archive|reopen|apply-proposal|greenlight))?$/);
   if (!match) return null;
   return {
     projectId: decoded(match[1], "projectId"),
@@ -110,6 +113,7 @@ function methodAllowed(route, method) {
     return (!route.recordId && !route.action && method === "GET")
       || (!route.action && (route.recordId === "undo" || route.recordId === "redo") && method === "POST");
   }
+  if (route.collection === "canvas-layout") return !route.recordId && !route.action && (method === "GET" || method === "POST");
   if (!route.recordId && !route.action) return method === "GET" || method === "POST";
   if (route.recordId && !route.action) {
     if (route.collection === "goals") return method === "GET" || method === "PATCH";
@@ -125,6 +129,7 @@ function methodAllowed(route, method) {
   if (route.action === "status") return route.collection === "goals" && method === "POST";
   if (route.action === "branch") return route.collection === "work-artifacts" && method === "POST";
   if (route.action === "apply-proposal") return route.collection === "work-artifacts" && method === "POST";
+  if (route.action === "greenlight") return route.collection === "work-artifacts" && method === "POST";
   if (route.action === "restore") {
     return (route.collection === "goals" || route.collection === "goal-relations" || route.collection === "work-artifacts" || route.collection === "work-relationships") && method === "POST";
   }
@@ -138,7 +143,9 @@ export function createOpenCanvasRoutes({
   regions = canvasRegionStore,
   structureHistory = canvasStructureHistoryStore,
   conflictDecisions = goalConflictDecisionStore,
+  layouts = objectGraphLayoutStore,
   authorizeFounderDecision = authorizeConflictDecisionForRequest,
+  greenlightExperiment = greenlightExperimentArtifact,
   optionsForProject = () => ({}),
 } = {}) {
   return async function handle({ req, res, url }) {
@@ -173,6 +180,8 @@ export function createOpenCanvasRoutes({
           json(res, 200, conflictDecisions.list(projectId, options));
         } else if (collection === "canvas-history") {
           json(res, 200, structureHistory.list(projectId, options));
+        } else if (collection === "canvas-layout") {
+          json(res, 200, { projectId, geometry: layouts.loadNamespace(projectId, PROJECT_CANVAS_LAYOUT_NAMESPACE, options) });
         } else if (collection === "goals") {
           if (!recordId) json(res, 200, { goals: goals.list(projectId, options) });
           else json(res, 200, { goal: goals.get(recordId, options) });
@@ -221,6 +230,22 @@ export function createOpenCanvasRoutes({
           ? structureHistory.undo(projectId, body, scoped)
           : structureHistory.redo(projectId, body, scoped);
         json(res, 200, result);
+      } else if (collection === "canvas-layout") {
+        requireRevision(body, "expectedRevision");
+        const result = structureHistory.applyLayout(
+          projectId,
+          body.geometry ?? (body.positions ? body : { positions: body ?? {} }),
+          { ...body, revisionAuthor: body.revisionAuthor || "founder" },
+          scoped,
+        );
+        json(res, 200, {
+          projectId,
+          positions: result.layout.positions,
+          savedAt: result.layout.updatedAt,
+          geometry: result.layout,
+          historyReceipt: result.receipt,
+          historyRevision: result.history.revision,
+        });
       } else if (collection === "goals") {
         if (!recordId) {
           json(res, 201, { goal: goals.create({ ...body, projectId }, scoped) });
@@ -286,6 +311,15 @@ export function createOpenCanvasRoutes({
             idempotencyKey: `${body.idempotencyKey}:artifact`,
           }, scoped);
           json(res, 200, { artifact: applied, structureReceipt: structure.receipt, deduped: false });
+        } else if (action === "greenlight") {
+          authorizeFounderWriteForRequest(req, "Greenlighting an experiment");
+          requireRevision(body, "expectedArtifactRevision");
+          const result = await greenlightExperiment({
+            projectId,
+            artifactId: recordId,
+            expectedArtifactRevision: body.expectedArtifactRevision,
+          }, scoped);
+          json(res, result.created ? 201 : 200, result);
         } else if (action === "retire") {
           requireRevision(body, "expectedArtifactRevision");
           json(res, 200, { artifact: work.retire(projectId, recordId, body, scoped) });
@@ -327,7 +361,12 @@ export function createOpenCanvasRoutes({
       }
     } catch (error) {
       const status = statusFor(error);
-      json(res, status, { error: publicMessage(error, status) });
+      json(res, status, {
+        error: publicMessage(error, status),
+        ...(error?.code ? { code: error.code } : {}),
+        ...(Number.isInteger(error?.expectedRevision) ? { expectedRevision: error.expectedRevision } : {}),
+        ...(Number.isInteger(error?.actualRevision) ? { actualRevision: error.actualRevision } : {}),
+      });
     }
     return true;
   };

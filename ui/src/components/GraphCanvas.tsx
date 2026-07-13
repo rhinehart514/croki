@@ -1,7 +1,6 @@
 import "@/styles/canvas-refine.css";
 import "@/styles/canvas-gate.css";
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import {
   Background, BaseEdge, Controls, Handle, MarkerType, Panel, Position, ReactFlow,
   useReactFlow, useStore, useNodesInitialized, useUpdateNodeInternals, ViewportPortal,
@@ -18,6 +17,8 @@ import TerminalNode from "@/components/TerminalNode";
 import QueryNode from "@/components/QueryNode";
 import WebNode from "@/components/WebNode";
 import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { healthHex } from "@/lib/health";
 import { agentPersona, type AgentPersona } from "@/lib/agentPersona";
 import { humanizeStepLabel } from "@/lib/labels";
@@ -169,28 +170,42 @@ function GhostEdgeChips({ graph }: { graph: GTMGraph }) {
 // reveals the plain reason. Explain mode adds the composer's reasoning — why a step exists, why this
 // ordering — on demand. Both ride the node's own data so the card owns its own read.
 
-// The corner mark + hover reason on a flagged card. Amber, small, rationed — never a red alarm board.
+// The corner mark + reason on a flagged card. Amber, small, rationed — never a red alarm board.
+// This is a popover rather than a tooltip because its optional "See the fix" action is interactive.
 function NodeWarnMark({ warning, onSeeFix }: { warning: StructuralWarning; onSeeFix?: (w: StructuralWarning) => void }) {
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   return (
     <div className="loop-warn nodrag nopan" onClick={stop}>
-      <button
-        type="button"
-        className={cn("loop-warn-mark", `is-${warning.kind}`)}
-        aria-label={`${warning.title} — ${warning.detail}`}
-        title={warning.title}
-      >
-        <AlertTriangle aria-hidden />
-      </button>
-      <div className="loop-warn-pop" role="tooltip">
-        <div className="loop-warn-pop-head"><span className="loop-warn-pop-ico"><AlertTriangle aria-hidden /></span>{warning.title}</div>
-        <p className="loop-warn-pop-body">{warning.detail}</p>
-        {onSeeFix && warning.fixable ? (
-          <button type="button" className="loop-warn-fix" onClick={(e) => { stop(e); onSeeFix(warning); }}>
-            See the fix →
-          </button>
-        ) : null}
-      </div>
+      <Popover>
+        <PopoverTrigger
+          render={(
+            <button
+              type="button"
+              className={cn("loop-warn-mark", `is-${warning.kind}`)}
+              aria-label={`${warning.title} — ${warning.detail}`}
+              title={warning.title}
+            />
+          )}
+        >
+          <AlertTriangle aria-hidden />
+        </PopoverTrigger>
+        <PopoverContent
+          className="loop-warn-pop"
+          align="end"
+          side="bottom"
+          sideOffset={6}
+          aria-label={warning.title}
+          onClick={stop}
+        >
+          <div className="loop-warn-pop-head"><span className="loop-warn-pop-ico"><AlertTriangle aria-hidden /></span>{warning.title}</div>
+          <p className="loop-warn-pop-body">{warning.detail}</p>
+          {onSeeFix && warning.fixable ? (
+            <button type="button" className="loop-warn-fix" onClick={(e) => { stop(e); onSeeFix(warning); }}>
+              See the fix →
+            </button>
+          ) : null}
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
@@ -1291,20 +1306,6 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
     if (data.autoOpen && !wasAutoOpen.current) setReviewOpen(true);
     wasAutoOpen.current = !!data.autoOpen;
   }, [data.autoOpen]);
-  // Close the room on Escape while it's open — a full-surface overlay must always have a keyboard exit.
-  // But NOT while the founder is typing: Escape in the send-back note or the draft editor closes that
-  // field (handled locally in GateReview), never the whole room — so a stray Escape can't wipe their text.
-  useEffect(() => {
-    if (!reviewOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      const el = document.activeElement;
-      if (el && (el.tagName === "TEXTAREA" || el.tagName === "INPUT")) return;
-      setReviewOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [reviewOpen]);
   // Node LOD: subscribe to zoom as a BOOLEAN so the card only re-renders when it crosses the coin
   // threshold, not on every wheel tick. A selected card always shows full detail regardless of zoom.
   const coinLod = useStore((s) => s.transform[2] < LOD_COIN_ZOOM);
@@ -1599,24 +1600,26 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
               {data.bloomed ? `Needs you · review ${gateWaiting} →` : `Review ${gateWaiting} staged →`}
             </button>
           )}
-          {/* The founder gate opens as a centered modal over a dimmed canvas — portaled to the document body
-              so React Flow's viewport transform can't clip or mis-place it. It used to mount as a card
-              attached to the gate node and sprawl over the neighbouring nodes; now it's a focused "stop and
-              decide" surface that never fights the canvas underneath it. */}
-          {reviewOpen && result ? createPortal(
-            <div className="cgate-stage-overlay" onClick={() => setReviewOpen(false)}>
-              <div className="cgate-wall-attached cgate-review-modal" role="dialog" aria-label="Your call — review your crew's work" onClick={(e) => e.stopPropagation()}>
+          {/* The founder gate opens as a centered, focus-managed modal portaled outside React Flow's
+              transformed viewport. Escape and outside press close it, and focus returns to the gate. */}
+          <Dialog open={reviewOpen && !!result} onOpenChange={setReviewOpen}>
+            {result ? (
+              <DialogContent
+                className="cgate-wall-attached cgate-review-modal"
+                overlayClassName="cgate-stage-overlay"
+                showCloseButton={false}
+                onClick={(e) => e.stopPropagation()}
+              >
                 <div className="cgate-stage-bar">
-                  <span className="cgate-stage-eyebrow"><ShieldCheck size={13} aria-hidden /> Your call</span>
-                  <button type="button" className="cgate-stage-close" onClick={() => setReviewOpen(false)} aria-label="Close gate review" autoFocus>
+                  <DialogTitle className="cgate-stage-eyebrow"><ShieldCheck size={13} aria-hidden /> Your call</DialogTitle>
+                  <button type="button" className="cgate-stage-close" onClick={() => setReviewOpen(false)} aria-label="Close gate review">
                     <X size={16} aria-hidden />
                   </button>
                 </div>
                 <GateReview variant="bloom" items={result.items} run={data.run} onSubmit={data.onSubmitReview} onDecideDelta={data.onDecideDelta} learned={gateLearned} promote={data.gatePromote} offer={data.gateOffer} transportConnected={data.transportConnected} onRecordOutcome={data.onRecordOutcome} onRefineItem={data.onRefineItem} />
-              </div>
-            </div>,
-            document.body,
-          ) : null}
+              </DialogContent>
+            ) : null}
+          </Dialog>
         </>
       ) : (
         // ── Teammate / Measure / Step ── job-first header: an icon (the teammate's crew face for an
@@ -2660,10 +2663,20 @@ function NodeFocuser({ selection, panelOpen, active, fitOptions, suppressInitial
 // Bring that durable anchor into view without changing its position or fitting the entire, potentially huge,
 // operation. This also makes the workbench's create → inspect loop spatially legible.
 function AnchorFocuser({ focus, fitOptions, panelOpen, suppressInitial }: { focus: WovenFocus; fitOptions: FitOpts; panelOpen: boolean; suppressInitial: boolean }) {
-  const { getNode, setCenter } = useReactFlow();
+  const { getNode, fitView, setCenter } = useReactFlow();
   const frame = useCanvasFrame(fitOptions, panelOpen);
   const focusKey = focus ? JSON.stringify(focus) : "";
   const initialFocusKey = useRef(focusKey);
+  const focusedAnchorId = focus?.kind === "anchor" ? focus.anchorId : "";
+  // Creating an anchor refreshes the canonical projection twice: once for the write and once after the
+  // workbench reloads its authorities. Dense layout can move that anchor between those commits. Observe
+  // only its geometry so the camera lands after the final layout position instead of faithfully centering
+  // a coordinate that has already gone stale.
+  const focusedGeometry = useStore((state) => {
+    const node = focusedAnchorId ? state.nodeLookup.get(focusedAnchorId) : null;
+    if (!node) return "";
+    return `${node.position.x}:${node.position.y}:${node.measured?.width ?? node.width ?? 0}:${node.measured?.height ?? node.height ?? 0}`;
+  });
   useEffect(() => {
     // Preserve a valid saved viewport for the focus that was already active at mount. A newly created or
     // explicitly selected anchor has a different identity and still gets one deliberate camera move.
@@ -2680,6 +2693,10 @@ function AnchorFocuser({ focus, fitOptions, panelOpen, suppressInitial }: { focu
       }
       const width = node.measured?.width ?? node.width ?? 220;
       const height = node.measured?.height ?? node.height ?? 88;
+      if (node.measured?.width && node.measured?.height) {
+        void fitView({ nodes: [{ id: node.id }], ...fitOptions, padding: frame.padding, duration: 420, maxZoom: 0.95 });
+        return;
+      }
       const zoom = 0.95;
       setCenter(
         overlayAwareX(node.position.x + width / 2 + frame.offset.x / zoom, zoom),
@@ -2688,9 +2705,53 @@ function AnchorFocuser({ focus, fitOptions, panelOpen, suppressInitial }: { focu
       );
       // One focus event, one camera move. Once the founder pans, no settling timer follows them back.
     };
-    timer = window.setTimeout(center, 80);
+    // Debounce projection/layout commits. A later geometry change cancels this timer and schedules the
+    // same focus against the authoritative position; camera movement itself does not change geometry.
+    timer = window.setTimeout(center, 220);
     return () => { if (timer != null) window.clearTimeout(timer); };
-  }, [focus, focusKey, frame.height, frame.offset.x, frame.offset.y, frame.width, getNode, setCenter, suppressInitial]);
+  }, [fitOptions, fitView, focus, focusKey, focusedGeometry, frame.height, frame.offset.x, frame.offset.y, frame.padding, frame.width, getNode, setCenter, suppressInitial]);
+  return null;
+}
+
+// A dense phone canvas deliberately keeps a readable zoom floor, so fitting the entire portfolio can
+// leave a newly-arrived terrain summary outside the rendered subset. New terrain is the founder's active
+// read, not background inventory: after the whole-graph layout settles, bring its compact summary into the
+// usable frame once per progressive arrival. A restored founder camera remains authoritative on reload.
+function TerrainArrivalFocuser({ count, active, fitOptions, suppressInitial }: {
+  count: number;
+  active: boolean;
+  fitOptions: FitOpts;
+  suppressInitial: boolean;
+}) {
+  const { getNode, getZoom, setCenter } = useReactFlow();
+  const seenCount = useRef(0);
+  useEffect(() => {
+    if (!active || suppressInitial || count <= 0) {
+      seenCount.current = count;
+      return;
+    }
+    if (count <= seenCount.current) return;
+    seenCount.current = count;
+    let attempts = 0;
+    let timer: number | null = null;
+    const center = () => {
+      attempts += 1;
+      const node = getNode("canchor:group:terrain-opening");
+      if (!node) {
+        if (attempts < 30) timer = window.setTimeout(center, 80);
+        return;
+      }
+      const width = node.measured?.width ?? node.width ?? 164;
+      const height = node.measured?.height ?? node.height ?? 76;
+      const minZoom = fitOptions.minZoom ?? 0.56;
+      const zoom = Math.min(fitOptions.maxZoom, Math.max(minZoom, Math.min(0.8, getZoom())));
+      void setCenter(node.position.x + width / 2, node.position.y + height / 2, { zoom, duration: 320 });
+    };
+    // FitOnGraph waits 140ms for layout. Land after that whole-graph frame so the new read remains the
+    // visible object without turning later founder pans into camera-follow.
+    timer = window.setTimeout(center, 260);
+    return () => { if (timer != null) window.clearTimeout(timer); };
+  }, [active, count, fitOptions.maxZoom, fitOptions.minZoom, getNode, getZoom, setCenter, suppressInitial]);
   return null;
 }
 
@@ -3618,6 +3679,11 @@ export function GraphCanvas({
     () => canvasRenderingPolicy(nodes.length, edges.length),
     [nodes.length, edges.length],
   );
+  const terrainOpeningSummaryCount = useMemo(() => {
+    const summary = nodes.find((node) => node.id === "canchor:group:terrain-opening");
+    const count = (summary?.data as { count?: unknown } | undefined)?.count;
+    return typeof count === "number" && Number.isFinite(count) ? count : 0;
+  }, [nodes]);
 
   // The "N worth a look" chip steps the camera through each flagged card in turn (selecting it centers
   // it via NodeFocuser) — the fast path from "something's off" to the exact spot, no side list to scan.
@@ -4050,6 +4116,14 @@ export function GraphCanvas({
       <NodeFocuser selection={selection} panelOpen={!!panelOpen} active={!running && !operatorCursor} fitOptions={fitOptions} suppressInitial={!!restorableViewport} />
       <ViewportRestorer viewport={restorableViewport} receiptKey={projectId} topology={`${wovenAxis}:${fitSignature}`} fitOptions={fitOptions} />
       {woven ? <AnchorFocuser focus={wovenFocus} fitOptions={fitOptions} panelOpen={!!panelOpen} suppressInitial={!!restorableViewport} /> : null}
+      {woven ? (
+        <TerrainArrivalFocuser
+          count={terrainOpeningSummaryCount}
+          active={narrowCanvas && !wovenFocus}
+          fitOptions={fitOptions}
+          suppressInitial={!!restorableViewport}
+        />
+      ) : null}
       {merged ? <LanePanner panTo={panTo} lanes={merged.lanes} /> : null}
       {woven ? <WovenZoomReporter onZoom={setWovenZoom} /> : null}
       {operatorCursor ? (
@@ -4074,30 +4148,28 @@ export function GraphCanvas({
           grouping clusters while keeping every action reachable by keyboard. */}
       {nodes.length > 0 || woven ? (
         <Panel position="top-right">
-          <div className="canvas-tools">
-            <button
-              type="button"
-              className="canvas-tools-trigger"
-              aria-label="Canvas controls"
-              aria-haspopup="true"
-              aria-expanded={canvasToolsOpen}
-              aria-keyshortcuts="V"
-              onClick={() => setCanvasToolsOpen((open) => !open)}
-            >
-              <SlidersHorizontal size={14} /> Canvas <kbd>V</kbd>
-              {worthLook > 0 ? <span className="canvas-tools-count" aria-label={`${worthLook} flagged`}>{worthLook}</span> : null}
-            </button>
-            {canvasToolsOpen ? (
-              <div
-                className="canvas-tools-popover"
-                aria-label="Canvas controls"
-                onKeyDown={(event) => {
-                  if (event.key !== "Escape") return;
-                  event.preventDefault();
-                  setGroupIntent(false);
-                  setCanvasToolsOpen(false);
-                }}
+          <Popover
+            open={canvasToolsOpen}
+            onOpenChange={(open) => {
+              setCanvasToolsOpen(open);
+              if (!open) setGroupIntent(false);
+            }}
+          >
+            <div className="canvas-tools">
+              <PopoverTrigger
+                render={(
+                  <button
+                    type="button"
+                    className="canvas-tools-trigger"
+                    aria-label="Canvas controls"
+                    aria-keyshortcuts="V"
+                  />
+                )}
               >
+                <SlidersHorizontal size={14} /> Canvas <kbd>V</kbd>
+                {worthLook > 0 ? <span className="canvas-tools-count" aria-label={`${worthLook} flagged`}>{worthLook}</span> : null}
+              </PopoverTrigger>
+              <PopoverContent className="canvas-tools-popover nodrag nopan" align="end" sideOffset={8} aria-label="Canvas controls">
                 {woven && onWovenAxisChange ? (
                   <section>
                     <span className="canvas-tools-label">Arrange by</span>
@@ -4139,9 +4211,9 @@ export function GraphCanvas({
                     </button>
                   ) : null}
                 </section>
-              </div>
-            ) : null}
-          </div>
+              </PopoverContent>
+            </div>
+          </Popover>
         </Panel>
       ) : null}
       <MeasureGuard nodeIds={measureNodeIds} />

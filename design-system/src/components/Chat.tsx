@@ -2,20 +2,20 @@ import * as React from "react";
 import { cn } from "../lib/cn";
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Chat — a glass AI-assistant panel.
+   Chat — a teammate conversation panel.
 
    Composable by construction: `Chat` is the framed shell (header + scrollable
    body + composer slot), and the body is filled with small, typed building
    blocks — `ChatAttachment`, `ChatMessage`, `ChatToolCall`, `ChatDocRef`, and
    `ChatComposer` — rather than a hardcoded mock. Every visual comes from the
-   `--st-*` glass tokens; icons are passed in as `ReactNode` props so the
-   package keeps no icon dependency.
+   canonical Drover tokens; icons are passed as `ReactNode` props so the package
+   keeps no icon dependency.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ─── Shell ──────────────────────────────────────────────────────────────── */
 
 export interface ChatProps extends React.ComponentProps<"div"> {
-  /** The frosted header row — typically a `ChatHeader`. */
+  /** The header row, typically a `ChatHeader`. */
   header?: React.ReactNode;
   /** The composer pinned to the bottom — typically a `ChatComposer`. */
   composer?: React.ReactNode;
@@ -27,9 +27,8 @@ export interface ChatProps extends React.ComponentProps<"div"> {
 }
 
 /**
- * The glass AI-assistant panel: a fixed-height frosted card with a header, a
- * scrollable conversation body, and a composer. Compose the body from the
- * exported message subcomponents.
+ * A fixed-height teammate conversation panel with a header, a scrollable body,
+ * and a composer. Compose the body from the exported message subcomponents.
  */
 export function Chat({ header, composer, children, className, ...props }: ChatProps) {
   return (
@@ -300,7 +299,7 @@ export interface ChatComposerProps extends Omit<React.ComponentProps<"div">, "on
 }
 
 /**
- * The composer: a glass field holding the input over a control rail (+ button,
+ * The composer: a raised field holding the input over a control rail (+ button,
  * caller-supplied pills, mic, and the ink send pill).
  */
 export function ChatComposer({

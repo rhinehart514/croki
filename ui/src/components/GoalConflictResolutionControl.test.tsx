@@ -58,7 +58,10 @@ describe("GoalConflictResolutionControl", () => {
     expect(screen.getByText(/alone does not mean/i)).toBeInTheDocument();
     expect(screen.getByText(/nothing is changed or executed/i)).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Choose one goal for this object"));
-    fireEvent.change(screen.getByLabelText(/Goal that owns/), { target: { value: "positioning" } });
+    fireEvent.click(screen.getByLabelText(/Goal that owns/));
+    const positioning = await screen.findByRole("option", { name: "Clarify positioning" });
+    fireEvent.pointerDown(positioning, { pointerType: "mouse" });
+    fireEvent.click(positioning);
     fireEvent.change(screen.getByLabelText(/Note/), { target: { value: "Use the launch wording" } });
     fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
 

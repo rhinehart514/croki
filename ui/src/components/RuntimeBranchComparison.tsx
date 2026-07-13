@@ -4,6 +4,7 @@ import { createWorkArtifact, listWorkArtifacts } from "@/api";
 import { getIdentity } from "@/lib/identity";
 import { statusLabel } from "@/lib/status";
 import { humanizeSlugsInText } from "@/lib/labels";
+import { Button } from "@/components/ui/button";
 import type { OperatorEvent, OperatorSession } from "@/types";
 import { artifactMatchesComparison, comparisonArtifactFor, type RuntimeBranchComparisonModel } from "@/lib/runtimeBranchComparison";
 import type { WorkArtifactRevision } from "@/openCanvasTypes";
@@ -153,9 +154,9 @@ export function RuntimeBranchComparison({
         >
           {comparison.keptBoth ? <><Check aria-hidden="true" /> Both branches kept</> : "Keep both branches"}
         </button>
-        <button className="runtime-compare-materialize" type="button" disabled={!projectId || materializing || Boolean(artifact)} onClick={() => void materialize()}>
+        <Button variant="ghost" className="runtime-compare-materialize" type="button" disabled={!projectId || materializing || Boolean(artifact)} onClick={() => void materialize()}>
           {artifact ? <><Check aria-hidden="true" /> Comparison on canvas</> : <><GitCompareArrows aria-hidden="true" /> {materializing ? "Creating comparison…" : "Make comparison work"}</>}
-        </button>
+        </Button>
       </footer>
       {artifact ? <p className="runtime-compare-artifact-receipt">A third, editable comparison object now references both branches. Neither branch was merged, chosen, stopped, or authorized.</p> : null}
       {materializeError ? <p className="runtime-compare-error" role="alert">{materializeError}</p> : null}

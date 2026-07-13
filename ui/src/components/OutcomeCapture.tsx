@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { Check, Lock } from "lucide-react";
 import { recordFounderOutcome } from "@/api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import "@/styles/outcome-capture.css";
 
 // The payoff tail. After a run reaches the gate (or finishes), the founder spends ~20 seconds saying
@@ -143,7 +146,8 @@ export default function OutcomeCapture({ projectId, runId, onDone, missionLabel 
         </p>
 
         <div className="oc-actions">
-          <button
+          <Button
+            variant="ghost"
             type="button"
             className="oc-save oc-receipt-done"
             onClick={onDone}
@@ -154,7 +158,7 @@ export default function OutcomeCapture({ projectId, runId, onDone, missionLabel 
             }}
           >
             Done
-          </button>
+          </Button>
         </div>
       </section>
     );
@@ -191,7 +195,7 @@ export default function OutcomeCapture({ projectId, runId, onDone, missionLabel 
               </button>
               {on && o.unit ? (
                 <label className="oc-count">
-                  <input
+                  <Input
                     className="oc-count-input"
                     inputMode="numeric"
                     placeholder="0"
@@ -211,7 +215,7 @@ export default function OutcomeCapture({ projectId, runId, onDone, missionLabel 
         <label className="oc-learned-label" htmlFor="oc-learned-input">
           What did the market teach us?
         </label>
-        <textarea
+        <Textarea
           id="oc-learned-input"
           className="oc-learned-input"
           placeholder="Optional — the one thing you'd tell yourself before the next run."
@@ -224,10 +228,11 @@ export default function OutcomeCapture({ projectId, runId, onDone, missionLabel 
       {error ? <p className="oc-error" role="alert">{error}</p> : null}
 
       <div className="oc-actions">
-        <button type="button" className="oc-skip" onClick={onDone} disabled={saving}>
+        <Button variant="ghost" type="button" className="oc-skip" onClick={onDone} disabled={saving}>
           Skip
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="ghost"
           type="button"
           className="oc-save"
           onClick={submit}
@@ -239,7 +244,7 @@ export default function OutcomeCapture({ projectId, runId, onDone, missionLabel 
           }}
         >
           {saving ? "Saving…" : "Log what came back"}
-        </button>
+        </Button>
       </div>
     </section>
   );

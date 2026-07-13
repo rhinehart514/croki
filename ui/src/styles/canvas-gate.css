@@ -997,9 +997,14 @@
    the gate node), it sizes to a comfortable dialog and its body scrolls, instead of inheriting the
    node-toolbar's placement width. */
 .cgate-review-modal {
+  position: fixed;
+  z-index: 801;
   width: min(680px, 94vw);
   max-width: min(680px, 94vw);
   max-height: 86vh;
+  padding: 0;
+  gap: 0;
+  display: flex;
 }
 .cgate-review-modal > .cgate-review {
   max-height: calc(86vh - 56px);

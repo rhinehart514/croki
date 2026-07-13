@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle, ArrowRight, Ban, Check, CheckCheck, Clock, Info, Lock,
   ShieldCheck, Trash2,
@@ -7,6 +7,12 @@ import {
   connectCapability, getCapabilities, getCapabilityInventory, reclassifyCapabilityTool, removeCapability,
 } from "@/api";
 import type { CapabilityInventory, CapabilityServer, CapabilityTool } from "@/types";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import "@/styles/connect-capability.css";
 
 // The only capability wired to genuinely connect today: the bundled local demo MCP server. It is a
@@ -29,6 +35,8 @@ export function ConnectCapability({ onChange }: { onChange?: () => void } = {}) 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
+  const [confirmPending, setConfirmPending] = useState(false);
+  const confirmPendingRef = useRef(false);
   const [loaded, setLoaded] = useState(false);
   // The live inventory — its distinct serverIds are the founder's already-configured MCP servers, which
   // seed the add-a-server form (one tap to connect a server they've already wired elsewhere). null when
@@ -127,6 +135,18 @@ export function ConnectCapability({ onChange }: { onChange?: () => void } = {}) 
     else void move(server, tool, "write", true);
   }, [move]);
 
+  const confirmMove = useCallback(async (server: CapabilityServer, tool: CapabilityTool) => {
+    if (confirmPendingRef.current) return;
+    confirmPendingRef.current = true;
+    setConfirmPending(true);
+    try {
+      await move(server, tool, "read", true);
+    } finally {
+      confirmPendingRef.current = false;
+      setConfirmPending(false);
+    }
+  }, [move]);
+
   const remove = useCallback(async (id: string) => {
     try { await removeCapability(id); await refresh(); }
     catch (err) { setError(err instanceof Error ? err.message : String(err)); }
@@ -152,16 +172,18 @@ export function ConnectCapability({ onChange }: { onChange?: () => void } = {}) 
             <div className="cc-seeded-lead">From servers you&apos;ve already configured</div>
             <div className="cc-seeded-chips">
               {seededServers.map((id) => (
-                <button
+                <Button
                   key={id}
                   type="button"
                   className="cc-btn sm"
+                  variant="outline"
+                  size="sm"
                   disabled={busyId === `form:${id}`}
                   onClick={() => void connectServer({ name: id })}
                   title={`Connect ${id}`}
                 >
                   {busyId === `form:${id}` ? "Connecting…" : `+ ${id}`}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -177,14 +199,14 @@ export function ConnectCapability({ onChange }: { onChange?: () => void } = {}) 
                 </div>
                 <div className="cc-result-url">{DEMO_CAPABILITY.url}</div>
               </div>
-              <button
+              <Button
                 className="cc-btn primary"
                 disabled={busyId === DEMO_CAPABILITY.id}
                 onClick={() => void connect(DEMO_CAPABILITY)}
                 type="button"
               >
                 {busyId === DEMO_CAPABILITY.id ? "Connecting…" : "Connect"}
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -207,8 +229,9 @@ export function ConnectCapability({ onChange }: { onChange?: () => void } = {}) 
         <LoosenConfirm
           tool={confirm.tool}
           server={confirm.server}
-          onCancel={() => setConfirm(null)}
-          onConfirm={() => void move(confirm.server, confirm.tool, "read", true)}
+          pending={confirmPending}
+          onCancel={() => { if (!confirmPendingRef.current) setConfirm(null); }}
+          onConfirm={() => void confirmMove(confirm.server, confirm.tool)}
         />
       )}
     </div>
@@ -233,7 +256,7 @@ function AddServerForm({ onConnect, busy }: {
   return (
     <div className="cc-form">
       <div className="cc-form-row">
-        <input
+        <Input
           className="cc-form-in"
           value={name}
           placeholder="Name (e.g. Linear)"
@@ -242,7 +265,7 @@ function AddServerForm({ onConnect, busy }: {
         />
       </div>
       <div className="cc-form-row">
-        <input
+        <Input
           className="cc-form-in"
           value={url}
           placeholder="Server URL (https://…)"
@@ -251,16 +274,16 @@ function AddServerForm({ onConnect, busy }: {
         />
       </div>
       <div className="cc-form-row">
-        <input
+        <Input
           className="cc-form-in"
           value={command}
           placeholder="or a launch command (npx …)"
           onChange={(e) => setCommand(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
         />
-        <button className="cc-btn primary" type="button" disabled={!canSubmit} onClick={submit}>
+        <Button className="cc-btn primary" type="button" disabled={!canSubmit} onClick={submit}>
           {busy ? "Connecting…" : "Connect"}
-        </button>
+        </Button>
       </div>
       <div className="cc-form-hint">Give it a URL or a command — either one connects the server. Every tool it brings is sorted read (runs free) or write (behind your gate).</div>
     </div>
@@ -298,9 +321,9 @@ function ServerCard({ server, onMove, onRemove }: {
             {authBadge(server.auth)}
           </div>
         </div>
-        <button className="cc-btn sm danger" onClick={() => onRemove(server.id)} type="button" title="Disconnect">
+        <Button className="cc-btn sm danger" variant="destructive" size="sm" onClick={() => onRemove(server.id)} type="button" title="Disconnect">
           <Trash2 size={13} />
-        </button>
+        </Button>
       </div>
 
       {untrusted ? (
@@ -310,7 +333,7 @@ function ServerCard({ server, onMove, onRemove }: {
             <span>Community server, unverified auth. Quarantined — runs isolated, sees none of your product, all writes hard-blocked.</span>
           </div>
           <div className="cc-state-act">
-            <button className="cc-btn sm danger" onClick={() => onRemove(server.id)} type="button">Remove</button>
+            <Button className="cc-btn sm danger" variant="destructive" size="sm" onClick={() => onRemove(server.id)} type="button">Remove</Button>
           </div>
         </>
       ) : empty ? (
@@ -386,27 +409,25 @@ function ServerCard({ server, onMove, onRemove }: {
   );
 }
 
-function LoosenConfirm({ tool, server, onCancel, onConfirm }: {
-  tool: CapabilityTool; server: CapabilityServer; onCancel: () => void; onConfirm: () => void;
+function LoosenConfirm({ tool, server, pending, onCancel, onConfirm }: {
+  tool: CapabilityTool; server: CapabilityServer; pending: boolean; onCancel: () => void; onConfirm: () => void;
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel]);
   return (
-    <div className="cc-confirm-scrim" role="dialog" aria-modal="true" aria-label="Loosen the wall">
-      {/* a real control for click-outside-to-cancel — sits behind the dialog */}
-      <button type="button" className="cc-confirm-backdrop" aria-label="Cancel" onClick={onCancel} />
+    <AlertDialog defaultOpen onOpenChange={(nextOpen) => { if (!nextOpen && !pending) onCancel(); }}>
+      <AlertDialogContent
+        className="cc-confirm-scrim"
+        overlayClassName="!bg-transparent !backdrop-blur-none"
+        style={{ transform: "none", maxWidth: "none", borderRadius: 0, background: "transparent", boxShadow: "none", padding: 0 }}
+      >
       <div className="cc-confirm">
         <div className="cc-confirm-top">
           <div className="cc-confirm-ic"><AlertTriangle /></div>
           <div>
-            <div className="cc-confirm-h">Let <code>{tool.name}</code> run without you?</div>
-            <div className="cc-confirm-p">
+            <AlertDialogTitle className="cc-confirm-h">Let <code>{tool.name}</code> run without you?</AlertDialogTitle>
+            <AlertDialogDescription className="cc-confirm-p">
               This tool can act on the world through <b>{server.name}</b>. Move it to <b>Runs free</b> and
               workflows can call it on their own — no gate, no review.
-            </div>
+            </AlertDialogDescription>
           </div>
         </div>
         <div className="cc-confirm-move">
@@ -414,12 +435,15 @@ function LoosenConfirm({ tool, server, onCancel, onConfirm }: {
           <span className="arr"><ArrowRight size={14} /></span>
           <span className="to"><CheckCheck /> Runs free</span>
         </div>
-        <div className="cc-confirm-foot">
+        <AlertDialogFooter className="cc-confirm-foot !mx-0 !mb-0 !flex-row !rounded-none !bg-transparent">
           <span className="cc-spacer" />
-          <button className="cc-btn sm" onClick={onCancel} type="button">Keep gated</button>
-          <button className="cc-btn primary sm" onClick={onConfirm} type="button">Loosen the wall</button>
-        </div>
+          <AlertDialogCancel className="cc-btn sm" disabled={pending} onClick={onCancel}>Keep gated</AlertDialogCancel>
+          <AlertDialogAction className="cc-btn primary sm" disabled={pending} onClick={onConfirm} type="button">
+            {pending ? "Loosening…" : "Loosen the wall"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
       </div>
-    </div>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

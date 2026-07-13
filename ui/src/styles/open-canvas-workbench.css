@@ -35,9 +35,6 @@
 .open-canvas-launcher-trigger:hover svg,
 .open-canvas-launcher.open .open-canvas-launcher-trigger svg { color: var(--ink); }
 .open-canvas-launcher-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
   min-width: 168px;
   display: flex;
   flex-direction: column;
@@ -48,7 +45,7 @@
   background: var(--surface);
   box-shadow: var(--shadow-pop);
 }
-.open-canvas-launcher-menu button {
+.open-canvas-launcher-menu [data-slot="dropdown-menu-item"] {
   min-height: 32px;
   padding: 0 10px;
   border: none;
@@ -61,13 +58,13 @@
   cursor: pointer;
   transition: background 120ms var(--ease), color 120ms var(--ease);
 }
-.open-canvas-launcher-menu button:hover { background: var(--surface-2); color: var(--ink); }
-.open-canvas-launcher-menu button:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.open-canvas-launcher-menu [data-slot="dropdown-menu-item"]:hover { background: var(--surface-2); color: var(--ink); }
+.open-canvas-launcher-menu [data-slot="dropdown-menu-item"]:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
 @media (max-width: 760px) {
   /* Narrow keeps the core loop alive: one visible Add action opens the same canonical goal/work forms. */
   .open-canvas-launcher { top: 68px; right: var(--space-2); width: 76px; }
   .open-canvas-launcher-trigger { min-height: 44px; }
-  .open-canvas-launcher-menu button { min-height: 44px; }
+  .open-canvas-launcher-menu [data-slot="dropdown-menu-item"] { min-height: 44px; }
 }
 .open-canvas-workbench button {
   min-height: 32px;
@@ -84,6 +81,7 @@
 .open-canvas-workbench input:focus-visible,
 .open-canvas-workbench textarea:focus-visible,
 .open-canvas-workbench select:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.open-canvas-select { width: 100%; height: auto; min-height: 32px; background: var(--surface); }
 .open-canvas-workbench {
   position: absolute;
   top: 72px;
@@ -218,6 +216,17 @@
 .open-canvas-workbench .open-canvas-primary:hover { background: var(--ink-2); color: var(--surface); }
 .open-canvas-workbench button:disabled { cursor: not-allowed; opacity: .5; }
 .open-canvas-browser { display: grid; gap: var(--space-4); }
+.open-canvas-context { display: grid; gap: var(--space-4); }
+.open-canvas-context > p { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-normal); }
+.open-canvas-context > button { justify-self: start; }
+.open-canvas-context > small { color: var(--muted); font-size: var(--text-xs); }
+.open-canvas-context-candidates { display: grid; gap: var(--space-3); }
+.open-canvas-context-candidates article { display: grid; gap: var(--space-2); padding: var(--space-4); border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--canvas); }
+.open-canvas-context-candidates article > span { color: var(--muted); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .04em; }
+.open-canvas-context-candidates article > strong { font-size: var(--text-sm); line-height: var(--leading-normal); }
+.open-canvas-context-candidates article > p { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-normal); }
+.open-canvas-context-candidates article > code { overflow: hidden; color: var(--faint); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.open-canvas-context-candidates article > button { justify-self: start; }
 .open-canvas-browser-results { display: grid; border-top: 1px solid var(--line); }
 .open-canvas-browser-results button { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: var(--space-3); align-items: baseline; min-height: 0; padding: var(--space-3) 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; text-align: left; }
 .open-canvas-browser-results button span { color: var(--muted); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .04em; }

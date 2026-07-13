@@ -488,13 +488,30 @@ async function bootFixtureProxy(drover, { runtimeConnected = true } = {}) {
   await once(server, "listening");
   return {
     base: `http://127.0.0.1:${port}`,
-    reset() {
+    async reset() {
       pipelineCreated = false;
       runStarted = false;
       gateApproved = false;
       resultRecorded = false;
       partialFailureNext = false;
       partialFailureActive = false;
+      // Each viewport is an independent camera acceptance case. Durable goals intentionally survive
+      // across the matrix, but a viewport saved by the previous browser must not make the next browser
+      // begin off-screen. Clear only that projection state and preserve all canvas authorities/positions.
+      const layoutResponse = await fetch(`${drover.base}/api/projects/${drover.projectId}/canvas-layout`);
+      if (!layoutResponse.ok) throw new Error(`Could not read fixture canvas layout: ${await layoutResponse.text()}`);
+      const layout = await layoutResponse.json();
+      const resetKey = `fixture:reset-viewport:${Date.now()}:${Math.random()}`;
+      const resetResponse = await fetch(`${drover.base}/api/projects/${drover.projectId}/canvas-layout`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "idempotency-key": resetKey },
+        body: JSON.stringify({
+          viewport: null,
+          expectedRevision: layout.geometry.revision,
+          idempotencyKey: resetKey,
+        }),
+      });
+      if (!resetResponse.ok) throw new Error(`Could not reset fixture canvas viewport: ${await resetResponse.text()}`);
     },
     failNextRun() { partialFailureNext = true; },
     close: () => new Promise((resolve) => {
@@ -513,9 +530,15 @@ function browserHelpers() {
         const rect = element.getBoundingClientRect();
         return style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
       };
-      const byTestId = (id) => document.querySelector('[data-testid="' + id + '"]');
-      const byText = (text) => [...document.querySelectorAll('button,[role="button"],a,h1,h2,h3,[role="heading"]')]
-        .find((element) => visible(element) && (element.getAttribute('aria-label') || element.getAttribute('title') || element.textContent || "").trim().toLowerCase().includes(text.toLowerCase()));
+      const actionable = (element) => visible(element)
+        && element.getAttribute('aria-hidden') !== 'true'
+        && !element.closest('[aria-hidden="true"],[data-closed],[data-ending-style]');
+      const byTestId = (id) => {
+        const matches = [...document.querySelectorAll('[data-testid="' + id + '"]')];
+        return matches.find(actionable) ?? matches.find(visible) ?? matches[0] ?? null;
+      };
+      const byText = (text) => [...document.querySelectorAll('button,[role="button"],[role="menuitem"],[role="menuitemradio"],[role="menuitemcheckbox"],[role="option"],[role="tab"],a,h1,h2,h3,[role="heading"]')]
+        .find((element) => actionable(element) && (element.getAttribute('aria-label') || element.getAttribute('title') || element.textContent || "").trim().toLowerCase().includes(text.toLowerCase()));
       const terrainHypothesisCount = () =>
         Math.max(
           Number(document.querySelector('[data-testid="unified-canvas"]')?.getAttribute('data-terrain-hypothesis-count') || 0),
@@ -523,7 +546,7 @@ function browserHelpers() {
             + [...document.querySelectorAll('[data-testid="terrain-hypothesis-group"]')]
               .reduce((total, element) => total + Number(element.getAttribute('data-terrain-count') || 0), 0),
         );
-      window.__terrainEval = { visible, byTestId, byText, terrainHypothesisCount };
+      window.__terrainEval = { visible, actionable, byTestId, byText, terrainHypothesisCount };
       return true;
     })()
   `;
@@ -544,23 +567,38 @@ async function assertResponsiveReceipt(client, viewport, state) {
       ['dock', '[role="toolbar"][aria-label="Product canvas controls"]'],
       ['add', '[aria-label="Add canvas work"]'],
       ['status', '.fdock-status[role="status"], .canvas-status-surface[role="status"]'],
+      ['error', '.loop-error-banner[role="alert"]'],
       ['readout', '.pread'],
       ['canvas-controls', '.canvas-tools-trigger[aria-label="Canvas controls"]'],
       ['rail', '.left-rail .lr-expand, .left-rail .lr-collapse'],
       ['workbench', 'aside[aria-label="Canvas workbench"]'],
       ['composer', '.composer-dock .dock-rail-launcher, .composer-dock .composer-peek, aside.composer-dock[aria-label="Your crew"]'],
     ];
-    const visibleDialogs = [...document.querySelectorAll('[role="dialog"]')].filter(window.__terrainEval.visible);
+    const visibleDialogs = [...document.querySelectorAll('[role="dialog"]')]
+      .filter(window.__terrainEval.visible)
+      .filter((dialog) => !dialog.hasAttribute('data-closed') && !dialog.hasAttribute('data-ending-style'));
     // An aria-modal surface intentionally owns the viewport above any non-modal inspector/review that
     // remains mounted behind its scrim. Grade the active modal layer, not the background dialog it hides.
-    const modalDialogs = visibleDialogs.filter((dialog) => dialog.getAttribute('aria-modal') === 'true');
+    const activeModalBackdrop = [...document.querySelectorAll('[data-slot="dialog-overlay"][data-open]:not([data-ending-style])')]
+      .find((backdrop) => window.__terrainEval.visible(backdrop));
+    const modalDialogs = activeModalBackdrop
+      ? visibleDialogs.filter((dialog) => dialog.getAttribute('aria-hidden') !== 'true' && !dialog.closest('[aria-hidden="true"]'))
+      : visibleDialogs.filter((dialog) => dialog.getAttribute('aria-modal') === 'true');
     const activeDialogs = modalDialogs.length ? modalDialogs : visibleDialogs;
     const centerHit = (element) => {
       const rect = element.getBoundingClientRect();
       const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
       return { hit, owns: !!hit && (hit === element || element.contains(hit)) };
     };
-    const candidates = definitions.flatMap(([key, selector]) => {
+    // While a modal founder gate owns the viewport, the backdrop is supposed to block every canvas
+    // surface behind it. Grade only the active dialog in that state; background occlusion is the
+    // interaction contract, not a responsive overlap.
+    const narrowWorkbenchOwnsCanvas = innerWidth <= 640
+      && [...document.querySelectorAll('aside[aria-label="Canvas workbench"]')].some(window.__terrainEval.visible);
+    const candidates = (modalDialogs.length ? [] : definitions).flatMap(([key, selector]) => {
+      // The phone workbench deliberately becomes the primary full-canvas surface. The composer remains
+      // mounted behind it so closing the workbench restores the conversation without losing draft state.
+      if (narrowWorkbenchOwnsCanvas && key === 'composer') return [];
       const visible = [...document.querySelectorAll(selector)].filter(window.__terrainEval.visible);
       const element = visible.find((candidate) => centerHit(candidate).owns) ?? visible[0];
       if (!element) return [];
@@ -591,7 +629,7 @@ async function assertResponsiveReceipt(client, viewport, state) {
       }];
     }));
     const overlap = (a, b) => a && b && a.rect[0] < b.rect[2] - 1 && a.rect[2] > b.rect[0] + 1 && a.rect[1] < b.rect[3] - 1 && a.rect[3] > b.rect[1] + 1;
-    const pairs = [['dock', 'add'], ['dock', 'readout'], ['dock', 'workbench'], ['add', 'readout'], ['add', 'canvas-controls']];
+    const pairs = [['dock', 'add'], ['dock', 'readout'], ['dock', 'workbench'], ['add', 'readout'], ['add', 'canvas-controls'], ['error', 'dock'], ['error', 'add'], ['error', 'canvas-controls']];
     const overlaps = pairs.filter(([a, b]) => overlap(measured[a], measured[b])).map(([a, b]) => a + '/' + b);
     return { state: ${JSON.stringify(state)}, visualViewport: [viewportRect.left, viewportRect.top, viewportRect.right, viewportRect.bottom], measured, overlaps };
   })()`);
@@ -804,10 +842,27 @@ async function assertOpenCanvasGoal(client, viewport, keyboardOnly, projectId) {
     );
   }
 
-  await activate(client, "", "Close canvas workbench", `${suffix}: the created goal inspector could not return to the canvas`, keyboardOnly);
-  if (keyboardOnly && await client.evaluate(`!!document.querySelector('aside[aria-label="Canvas workbench"]')`)) {
-    await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 });
-    await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 });
+  if (!keyboardOnly) {
+    await activate(client, "", "Close canvas workbench", `${suffix}: the created goal inspector could not return to the canvas`, false);
+  } else {
+    // The canonical refresh after creation may remount the focused inspector between a CDP focus task and
+    // its key event. Keep the journey keyboard-only, but reacquire the current close control until the
+    // launcher proves that the actual mounted inspector received the activation.
+    const started = Date.now();
+    while (Date.now() - started < 8000) {
+      const closed = await client.evaluate(`(() => {
+        const launcher = document.querySelector('[aria-label="Add canvas work"]');
+        if (window.__terrainEval.visible(launcher)) return true;
+        const close = window.__terrainEval.byText('Close canvas workbench');
+        if (!window.__terrainEval.actionable(close)) return false;
+        close.focus();
+        return false;
+      })()`).catch(() => false);
+      if (closed) break;
+      await client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+      await client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+      await delay(100);
+    }
   }
   await waitForDom(client, `!!document.querySelector('[aria-label="Add canvas work"]')`, `${suffix}: the canvas launcher did not return after inspection`);
   await activate(client, "", "Add", `${suffix}: the canvas add menu could not reopen`, keyboardOnly);
@@ -846,7 +901,8 @@ async function assertOpenCanvasGoal(client, viewport, keyboardOnly, projectId) {
 async function assertAccessibility(client, viewport) {
   const failures = await client.evaluate(`(() => {
     const interactive = [...document.querySelectorAll('button,a[href],input,select,textarea,[role="button"]')]
-      .filter(window.__terrainEval.visible);
+      .filter(window.__terrainEval.visible)
+      .filter((element) => element.getAttribute('aria-hidden') !== 'true' && !element.closest('[aria-hidden="true"]'));
     const name = (element) => element.getAttribute('aria-label') || element.getAttribute('title') ||
       (element.getAttribute('aria-labelledby') ? document.getElementById(element.getAttribute('aria-labelledby'))?.textContent : '') ||
       element.textContent || element.getAttribute('placeholder') || element.getAttribute('name') || '';
@@ -1222,7 +1278,7 @@ async function main() {
     if (shouldRun("core")) {
       for (const viewport of selectedViewports) {
         await runScenario(`core:${viewport.name}`, async () => {
-          proxy.reset();
+          await proxy.reset();
           await withChrome(proxy.base, (client) => runJourney(client, viewport, drover.projectId));
         });
       }
@@ -1230,7 +1286,7 @@ async function main() {
 
     if (!filtered || shouldRun("keyboard")) {
       await runScenario("keyboard:desktop", async () => {
-        proxy.reset();
+        await proxy.reset();
         await withChrome(proxy.base, (client) => runJourney(client, VIEWPORTS[0], drover.projectId, { keyboardOnly: true }));
       });
     }
@@ -1238,7 +1294,7 @@ async function main() {
     if (!filtered || shouldRun("partial")) {
       for (const viewport of (viewportFilter ? selectedViewports : VIEWPORTS)) {
         await runScenario(`partial:${viewport.name}`, async () => {
-          proxy.reset();
+          await proxy.reset();
           proxy.failNextRun();
           await withChrome(proxy.base, (client) => assertPartialFailureRecovery(client, proxy.base, viewport));
         });
@@ -1257,7 +1313,7 @@ async function main() {
     if (!filtered || shouldRun("reduced-motion")) {
       const viewport = viewportFilter ? selectedViewports[0] : VIEWPORTS[0];
       await runScenario(`reduced-motion:${viewport.name}`, async () => {
-        proxy.reset();
+        await proxy.reset();
         await withChrome(proxy.base, async (client) => {
           await client.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
           await runJourney(client, viewport, drover.projectId);
@@ -1269,7 +1325,7 @@ async function main() {
     if (!filtered || shouldRun("reply")) {
       const viewport = viewportFilter ? selectedViewports[0] : VIEWPORTS[0];
       await runScenario(`reply:${viewport.name}`, async () => {
-        proxy.reset();
+        await proxy.reset();
         await withChrome(proxy.base, (client) => assertReplyDecideTogether(client, proxy.base, drover.projectId, viewport));
       });
     }

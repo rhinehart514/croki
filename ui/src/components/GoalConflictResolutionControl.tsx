@@ -2,6 +2,9 @@ import { useId, useState } from "react";
 import { listGoalConflictDecisions, recordGoalConflictDecision } from "@/api";
 import type { GoalConflictResolution } from "@/openCanvasTypes";
 import type { WovenGoalConflict } from "@/types";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import "./GoalConflictResolutionControl.css";
 
 type Props = {
@@ -50,9 +53,9 @@ function GoalConflictResolutionControlInner({
             Recorded by {current.decidedBy.id}, revision {current.revision + 1}
           </p>
         </div>
-        <button type="button" className="goal-conflict-resolution__quiet" onClick={() => setEditing(true)}>
+        <Button type="button" variant="outline" className="goal-conflict-resolution__quiet" onClick={() => setEditing(true)}>
           Change
-        </button>
+        </Button>
       </section>
     );
   }
@@ -96,9 +99,9 @@ function GoalConflictResolutionControlInner({
           <h3>{conflict.summary}</h3>
         </div>
         {current ? (
-          <button type="button" className="goal-conflict-resolution__quiet" onClick={() => setEditing(false)} disabled={busy}>
+          <Button type="button" variant="outline" className="goal-conflict-resolution__quiet" onClick={() => setEditing(false)} disabled={busy}>
             Cancel
-          </button>
+          </Button>
         ) : null}
       </div>
       <p className="goal-conflict-resolution__context">
@@ -119,23 +122,28 @@ function GoalConflictResolutionControlInner({
       {resolution === "choose-goal" ? (
         <label className="goal-conflict-resolution__field">
           Goal that owns changes to this object
-          <select value={chosenGoalId} onChange={(event) => setChosenGoalId(event.target.value)} disabled={busy}>
-            {conflict.goalRefs.map((goal) => <option key={goal.id} value={goal.id}>{goalLabels[goal.id] ?? goal.id}</option>)}
-          </select>
+          <Select value={chosenGoalId} onValueChange={(value) => setChosenGoalId(String(value ?? ""))} disabled={busy}>
+            <SelectTrigger aria-label="Goal that owns changes to this object">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {conflict.goalRefs.map((goal) => <SelectItem key={goal.id} value={goal.id}>{goalLabels[goal.id] ?? goal.id}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </label>
       ) : null}
 
       <label className="goal-conflict-resolution__field">
         Note <span>(optional)</span>
-        <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} maxLength={500} disabled={busy} />
+        <Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} maxLength={500} disabled={busy} />
       </label>
 
       {error ? <p className="goal-conflict-resolution__error" role="alert">{error}</p> : null}
       <div className="goal-conflict-resolution__footer">
         <p>This records your call. Nothing is changed or executed.</p>
-        <button type="submit" className="goal-conflict-resolution__save" disabled={busy || (resolution === "choose-goal" && !chosenGoalId)}>
+        <Button type="submit" className="goal-conflict-resolution__save" disabled={busy || (resolution === "choose-goal" && !chosenGoalId)}>
           {busy ? "Recording…" : "Record decision"}
-        </button>
+        </Button>
       </div>
     </form>
   );

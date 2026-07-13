@@ -6,13 +6,13 @@ const gateCss = readFileSync(`${process.cwd()}/src/styles/canvas-gate.css`, "utf
 
 describe("GraphCanvas viewport framing", () => {
   it("opens the founder gate as a centered modal portaled over a dimmed canvas", () => {
-    // The review is portaled to the document body (escaping React Flow's viewport transform) and rendered
-    // as a centered modal over the .cgate-stage-overlay scrim — never a node-attached card that sprawls
-    // over the neighbouring nodes.
-    expect(source).toContain("createPortal(");
-    expect(source).toContain('className="cgate-stage-overlay"');
+    // The Base UI dialog portals outside React Flow's viewport transform, owns focus/Escape/return, and
+    // renders over the existing .cgate-stage-overlay scrim rather than sprawling from a canvas node.
+    expect(source).toContain("<Dialog open={reviewOpen && !!result}");
+    expect(source).toContain('overlayClassName="cgate-stage-overlay"');
     expect(source).toContain("cgate-wall-attached cgate-review-modal");
-    expect(source).toContain("document.body,");
+    expect(source).toContain("<DialogTitle");
+    expect(source).not.toContain("createPortal(");
     expect(gateCss).toContain(".cgate-review-modal");
     // The old node-attached toolbar placement is gone.
     expect(source).not.toContain("function gateToolbarPlacement");

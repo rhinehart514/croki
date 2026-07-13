@@ -29,6 +29,7 @@ import ideaRoutes from "./routes/ideas.mjs";
 import channelRoutes from "./routes/channels.mjs";
 import inboxRoutes from "./routes/inbox.mjs";
 import productModelRoutes from "./routes/product-model.mjs";
+import contextRoutes from "./routes/context.mjs";
 import createTerrainRoutes from "./routes/terrain.mjs";
 import createOpenCanvasRoutes from "./routes/open-canvas.mjs";
 import operationPlanRoutes from "./routes/operation-plan.mjs";
@@ -71,6 +72,7 @@ const port = Number(process.env.PORT || 4317);
 const host = process.env.HOST || "127.0.0.1";
 recoverInterruptedOperatorSessions();
 const terrainRoutes = createTerrainRoutes();
+const legacyMachineryEnabled = process.env.GTM_IDE_ENABLE_LEGACY_MACHINERY === "1";
 
 // The route groups, in the original route order. The dispatch tries each until one claims the request.
 const ROUTE_GROUPS = [
@@ -82,16 +84,16 @@ const ROUTE_GROUPS = [
   presenceRoutes,
   marketRoutes,
   inputRoutes,
-  ideaRoutes,
+  ...(legacyMachineryEnabled ? [ideaRoutes] : []),
   channelRoutes,
   inboxRoutes,
   productModelRoutes,
+  contextRoutes,
   terrainRoutes,
   createOpenCanvasRoutes(),
-  operationPlanRoutes,
+  ...(legacyMachineryEnabled ? [operationPlanRoutes] : []),
   tasteRoutes,
-  signalWeightsRoutes,
-  reallocationTunablesRoutes,
+  ...(legacyMachineryEnabled ? [signalWeightsRoutes, reallocationTunablesRoutes] : []),
   operatorRoutes,
   engineRoutes,
   workspaceRoutes,
@@ -106,6 +108,11 @@ const server = http.createServer(async (req, res) => {
   const ctx = { req, res, url };
   for (const group of ROUTE_GROUPS) {
     if (await group(ctx)) return;
+  }
+
+  if (url.pathname.startsWith("/api/")) {
+    json(res, 404, { error: "API route not found." });
+    return;
   }
 
   // Static files
@@ -126,8 +133,8 @@ let ambientScheduler = null;
 server.listen(port, host, () => {
   console.log(`Drover running at http://${host}:${port}`);
   console.log(`Founder action code: ${founderBootstrapCode()}`);
-  // Start the in-process heartbeat that re-fires promoted motions and ambient briefs on an interval.
-  // It only DRIVES/STAGES standing work — every due item still stops at the founder gate; nothing sends.
+  // Start the outcome heartbeat. It notices replies/bounces that already happened; it does not invent,
+  // route, or repeat creative work in the background.
   ambientScheduler = startAmbientScheduler();
   // Dogfood crash recovery: no feature build survives a restart, so flip stale queued/building
   // items to `interrupted` and salvage any orphaned worktree work onto its branch. Best-effort.

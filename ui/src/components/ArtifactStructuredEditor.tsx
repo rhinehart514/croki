@@ -1,5 +1,7 @@
 import type { JsonValue } from "@/openCanvasTypes";
 import { structuredArtifactCollection, type StructuredArtifactKind as CollectionKind, type StructuredArtifactRecord as JsonRecord } from "@/lib/artifactStructuredEditing";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 function replaceRows(value: JsonValue, key: string | null, rows: JsonRecord[]): JsonValue {
   return key === null ? rows : { ...(value as JsonRecord), [key]: rows };
@@ -56,22 +58,22 @@ export function ArtifactStructuredEditor({ content, contentType, onChange }: {
             <legend>{kind === "comparison" ? `Alternative ${index + 1}` : `Step ${index + 1}`}</legend>
             {fields.length ? fields.map((field) => (
               <label key={field}>{field.replace(/[_-]+/g, " ")}
-                <input value={inputValue(row[field])} onChange={(event) => updateRow(index, field, event.target.value)} />
+                <Input value={inputValue(row[field])} onChange={(event) => updateRow(index, field, event.target.value)} />
               </label>
             )) : (
               <label>{kind === "comparison" ? "Name" : "Title"}
-                <input value={inputValue(row[titleKey])} onChange={(event) => updateRow(index, titleKey, event.target.value)} />
+                <Input value={inputValue(row[titleKey])} onChange={(event) => updateRow(index, titleKey, event.target.value)} />
               </label>
             )}
-            <button type="button" className="artifact-structured-remove" onClick={() => removeRow(index)}>
+            <Button type="button" variant="outline" className="artifact-structured-remove" onClick={() => removeRow(index)}>
               Remove {kind === "comparison" ? "alternative" : "step"}
-            </button>
+            </Button>
           </fieldset>
         ))}
       </div>
-      <button type="button" className="artifact-structured-add" onClick={addRow}>
+      <Button type="button" variant="outline" className="artifact-structured-add" onClick={addRow}>
         Add {kind === "comparison" ? "alternative" : "step"}
-      </button>
+      </Button>
       <p>Nested or unusual fields stay intact. Use Source when you need to change them.</p>
     </section>
   );

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CanvasRegion, Goal, WorkArtifactRevision } from "@/openCanvasTypes";
 
@@ -8,7 +8,7 @@ const api = vi.hoisted(() => ({
   createGoal: vi.fn(), reviseGoal: vi.fn(), changeGoalStatus: vi.fn(), retireGoal: vi.fn(), restoreGoal: vi.fn(), createGoalRelation: vi.fn(),
   createWorkArtifact: vi.fn(), reviseWorkArtifact: vi.fn(), retireWorkArtifact: vi.fn(), restoreWorkArtifact: vi.fn(),
   createWorkRelationship: vi.fn(), getWorkArtifactHistory: vi.fn(),
-  applyCanvasProposal: vi.fn(),
+  applyCanvasProposal: vi.fn(), discoverProjectContext: vi.fn(), promoteProjectContext: vi.fn(),
   getGoalRelation: vi.fn(), getGoalRelationHistory: vi.fn(), reviseGoalRelation: vi.fn(), retireGoalRelation: vi.fn(), restoreGoalRelation: vi.fn(),
   getWorkRelationship: vi.fn(), getWorkRelationshipHistory: vi.fn(), reviseWorkRelationship: vi.fn(), retireWorkRelationship: vi.fn(), restoreWorkRelationship: vi.fn(),
   listProductChanges: vi.fn(), discardProductChange: vi.fn(), stageProductChangeProposal: vi.fn(),
@@ -62,6 +62,10 @@ describe("OpenCanvasWorkbench", () => {
     api.reviseWorkArtifact.mockResolvedValue({ artifact: artifact({ revision: 3 }) });
     api.retireWorkArtifact.mockResolvedValue({ artifact: artifact({ revision: 3, retiredAt: "2026-07-11T12:00:00.000Z" }) });
     api.getWorkArtifactHistory.mockResolvedValue({ history: [] });
+    api.discoverProjectContext.mockResolvedValue({
+      projectId: "p1", surface: { kind: "repository", root: "/repo" }, question: null,
+      candidates: [], scannedFiles: 0, truncated: false, note: "Candidates only.", workArtifactStoreRevision: 4,
+    });
     api.listProductChanges.mockResolvedValue({ changes: [] });
     api.reviseCanvasRegion.mockResolvedValue({ region: region({ revision: 3 }) });
     api.archiveCanvasRegion.mockResolvedValue({ region: region({ revision: 3, archivedAt: "2026-07-11T12:00:00.000Z" }) });
@@ -74,7 +78,7 @@ describe("OpenCanvasWorkbench", () => {
     render(<OpenCanvasWorkbench projectId="p1" selectedRef={null} onChanged={changed} onCreated={created} onClose={vi.fn()} />);
     fireEvent.click(await screen.findByRole("button", { name: "Add" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "New goal" }));
-    expect(screen.getByRole("dialog", { name: "Canvas workbench" })).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Canvas workbench" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("What do you want to change?"), { target: { value: "Learn why setup stalls" } });
     fireEvent.change(screen.getByLabelText("What would be different?"), { target: { value: "Founders reach first value in one session" } });
     fireEvent.click(screen.getByRole("button", { name: "Place on canvas" }));
@@ -103,6 +107,40 @@ describe("OpenCanvasWorkbench", () => {
     expect(created).toHaveBeenCalledWith({ type: "work-artifact", id: "work-new" });
   });
 
+  it("scouts approved context without adding it, then promotes only the founder-confirmed candidate", async () => {
+    const candidate = {
+      id: "context-candidate-1", path: "stray/verified-footprint.csv", kind: "market-footprint",
+      finding: "I found 372 possible accounts in “verified footprint.”",
+      whyItMayMatter: "A footprint of 372 possible accounts may support an incumbent-displacement ICP.",
+      relevance: 100, matchedContext: ["incumbent"], shape: { rows: 372, exact: true, columns: ["domain"] },
+      source: { surface: "repository", path: "stray/verified-footprint.csv", bytes: 1200, modifiedAt: "2026-07-13T00:00:00.000Z", fingerprint: "fingerprint-1" },
+    };
+    api.discoverProjectContext.mockResolvedValue({
+      projectId: "p1", surface: { kind: "repository", root: "/repo" }, question: "incumbent ICP",
+      candidates: [candidate], scannedFiles: 19, truncated: false, note: "Candidates only.", workArtifactStoreRevision: 4,
+    });
+    api.promoteProjectContext.mockResolvedValue({
+      projectId: "p1", artifact: artifact({ artifactId: "context-evidence-1", kind: "context-evidence", status: "accepted" }), created: true,
+    });
+    const changed = vi.fn();
+    const created = vi.fn();
+    const founderAction = vi.fn(async (run: () => Promise<void>) => run());
+    render(<OpenCanvasWorkbench projectId="p1" selectedRef={null} onChanged={changed} onCreated={created} onFounderAction={founderAction} onClose={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Notice what we have" }));
+    fireEvent.change(screen.getByLabelText("What are we trying to understand?"), { target: { value: "incumbent ICP" } });
+    fireEvent.click(screen.getByRole("button", { name: "Look through the repository" }));
+
+    expect(await screen.findByText(candidate.finding)).toBeInTheDocument();
+    expect(api.promoteProjectContext).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Bring into the work" }));
+    await waitFor(() => expect(founderAction).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.promoteProjectContext).toHaveBeenCalledWith("p1", candidate, 4));
+    expect(created).toHaveBeenCalledWith({ type: "work-artifact", id: "context-evidence-1" });
+    expect(changed).toHaveBeenCalled();
+  });
+
   it("edits a selected artifact, shows immutable history, and retires it without executing anything", async () => {
     const current = artifact();
     const first = artifact({ id: "revision:w1:1", revision: 1, summary: "First angle", updatedAt: "2026-07-11T10:00:00.000Z" });
@@ -124,6 +162,7 @@ describe("OpenCanvasWorkbench", () => {
     fireEvent.click(screen.getByText("First angle"));
     await waitFor(() => expect(screen.getAllByText("Start with proof.").length).toBeGreaterThan(1));
     fireEvent.click(screen.getByRole("button", { name: "Retire work" }));
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Retire work" }));
     await waitFor(() => expect(api.retireWorkArtifact).toHaveBeenCalledTimes(1));
     expect(api.retireWorkArtifact.mock.calls[0][2]).toMatchObject({ expectedArtifactRevision: 2 });
   });
@@ -237,7 +276,10 @@ describe("OpenCanvasWorkbench", () => {
     api.listGoals.mockResolvedValue({ goals: [goal()] });
     render(<OpenCanvasWorkbench projectId="p1" selectedRef={{ type: "goal", id: "g1" }} onChanged={vi.fn()} onClose={vi.fn()} />);
 
-    fireEvent.change(await screen.findByLabelText("Goal status"), { target: { value: "paused" } });
+    fireEvent.click(await screen.findByLabelText("Goal status"));
+    const paused = await screen.findByRole("option", { name: "Paused" });
+    fireEvent.pointerDown(paused, { pointerType: "mouse" });
+    fireEvent.click(paused);
     fireEvent.change(screen.getByLabelText("Status note"), { target: { value: "Waiting for customer evidence" } });
     fireEvent.click(screen.getByRole("button", { name: "Update status" }));
 
@@ -299,6 +341,7 @@ describe("OpenCanvasWorkbench", () => {
       expectedRevision: 2, purpose: "Make first value unmistakable", placementMode: "founder",
     })));
     fireEvent.click(screen.getByRole("button", { name: "Archive region" }));
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Archive region" }));
     await waitFor(() => expect(api.archiveCanvasRegion).toHaveBeenCalledWith("p1", "activation", expect.objectContaining({ expectedRevision: 2 })));
 
     view.unmount();

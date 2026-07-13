@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import {
   Workflow, Users, Plus, ChevronDown,
   PanelLeftClose, PanelLeftOpen, Check, GripVertical, LayoutGrid, Blocks, Lock, Wrench,
-  Trash2, Search, PenSquare,
+  Trash2, Search, PenSquare, MessageSquare,
 } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import { agentPersona, humanizeRef } from "@/lib/agentPersona";
 import { founderGoalLine } from "@/lib/labels";
 import { chatTabName, distinctTabNames } from "@/lib/chatTitle";
@@ -15,6 +16,12 @@ import { CrewComposer } from "@/components/crew/CrewComposer";
 import { CAPABILITIES, STAGE_ORDER, STAGE_LABEL, capabilityMark, type Capability } from "@/lib/capabilities";
 import { getCapabilityInventory, type AgentBenchRow } from "@/api";
 import type { CapabilityInventory, ChannelMeta, GtmLibrary, OperatorSessionSummary } from "@/types";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
 import "@/styles/left-rail.css";
 
 // Which recency bucket a chat falls in, from its last-touched time. Buckets keep the history skimmable
@@ -32,6 +39,7 @@ function recencyBucket(iso: string | null | undefined): string {
 }
 
 const BUCKET_ORDER = ["Today", "Yesterday", "This week", "This month", "Earlier"];
+type RailSurface = "edge" | "workspace" | "conversation";
 
 // A live/attention dot for a chat row — a chat still running or waiting on the founder reads differently
 // from a settled one, so the history isn't a flat list of equals.
@@ -43,8 +51,8 @@ function chatDotState(status: string): "live" | "waiting" | "settled" {
 
 // The project-scoped chat history that lives at the top of the rail: New chat, a filter once the list
 // grows, and the conversations grouped by recency — each row click-to-open, with a hover delete behind a
-// two-tap confirm so a chat is never lost by a stray click. This is the merge of the composer's tab
-// strip into the workspace rail: the rail owns navigation, the composer owns the open conversation.
+// two-tap confirm so a chat is never lost by a stray click. Opening a row turns this same perimeter into
+// the conversation; no parallel tab strip or floating panel competes with it.
 function RailChats({ sessions, activeSessionId, onSwitch, onNew, onDelete }: {
   sessions: OperatorSessionSummary[];
   activeSessionId: string | null;
@@ -53,7 +61,7 @@ function RailChats({ sessions, activeSessionId, onSwitch, onNew, onDelete }: {
   onDelete: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<OperatorSessionSummary | null>(null);
   const names = useMemo(() => distinctTabNames(sessions), [sessions]);
 
   const groups = useMemo(() => {
@@ -83,7 +91,7 @@ function RailChats({ sessions, activeSessionId, onSwitch, onNew, onDelete }: {
       {sessions.length > 6 ? (
         <label className="lr-chats-search">
           <Search size={13} aria-hidden />
-          <input
+          <Input
             name="chat-search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -102,7 +110,6 @@ function RailChats({ sessions, activeSessionId, onSwitch, onNew, onDelete }: {
               <p className="lr-chats-bucket">{bucket}</p>
               {rows.map((s) => {
                 const active = s.id === activeSessionId;
-                const confirming = confirmingId === s.id;
                 return (
                   <div className={`lr-chat-row ${active ? "is-active" : ""}`} key={s.id}>
                     <button
@@ -114,22 +121,15 @@ function RailChats({ sessions, activeSessionId, onSwitch, onNew, onDelete }: {
                       <span className={`lr-chat-dot ${chatDotState(s.status)}`} aria-hidden />
                       <span className="lr-chat-title">{names[s.id] ?? chatTabName(s)}</span>
                     </button>
-                    {confirming ? (
-                      <span className="lr-chat-confirm">
-                        <button type="button" className="lr-chat-confirm-yes" onClick={() => { setConfirmingId(null); onDelete(s.id); }} title="Delete this chat permanently">Delete</button>
-                        <button type="button" className="lr-chat-confirm-no" onClick={() => setConfirmingId(null)} title="Keep it">Keep</button>
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="lr-chat-del"
-                        onClick={() => setConfirmingId(s.id)}
-                        title="Delete this chat"
-                        aria-label={`Delete chat: ${names[s.id] ?? chatTabName(s)}`}
-                      >
-                        <Trash2 size={13} aria-hidden />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="lr-chat-del"
+                      onClick={() => setPendingDelete(s)}
+                      title="Delete this chat"
+                      aria-label={`Delete chat: ${names[s.id] ?? chatTabName(s)}`}
+                    >
+                      <Trash2 size={13} aria-hidden />
+                    </button>
                   </div>
                 );
               })}
@@ -137,6 +137,28 @@ function RailChats({ sessions, activeSessionId, onSwitch, onNew, onDelete }: {
           ))}
         </div>
       )}
+      <AlertDialog open={pendingDelete !== null} onOpenChange={(nextOpen) => { if (!nextOpen) setPendingDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this chat?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDelete ? `“${names[pendingDelete.id] ?? chatTabName(pendingDelete)}” will be removed permanently.` : "This chat will be removed permanently."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingDelete(null)}>Keep chat</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                if (pendingDelete) onDelete(pendingDelete.id);
+                setPendingDelete(null);
+              }}
+            >
+              Delete chat
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }
@@ -243,8 +265,11 @@ export function LeftRail({
   activeChannelId,
   bench,
   projectId = null,
+  projectName,
   sessions = [],
   activeSessionId = null,
+  conversation,
+  conversationFocusSignal = 0,
   onSwitchSession,
   onNewChat,
   onDeleteSession,
@@ -260,10 +285,15 @@ export function LeftRail({
   bench: AgentBenchRow[] | null;
   // The active project — the "+ build a teammate" flow scopes the new teammate to it.
   projectId?: string | null;
-  // The project's chat history — the roster already scoped to this project by the host. The rail owns
-  // chat navigation now (New / open / delete); the composer owns the open conversation.
+  projectName?: string;
+  // The project's conversation history, already scoped by the host. The same rail owns New, open, delete,
+  // and the active thread so session navigation and conversation can never drift apart.
   sessions?: OperatorSessionSummary[];
   activeSessionId?: string | null;
+  // The active conversation is another view of this same rail, never a second floating surface.
+  // It stays mounted while the workspace view is visible so drafts and scroll position survive a round trip.
+  conversation?: ReactNode | ((controls: { onBackToWorkspace: () => void }) => ReactNode);
+  conversationFocusSignal?: number;
   onSwitchSession?: (id: string) => void;
   onNewChat?: () => void;
   onDeleteSession?: (id: string) => void;
@@ -287,10 +317,16 @@ export function LeftRail({
   // are progressive disclosures inside one left-edge model, never separate collapsed rails.
   productContext?: ReactNode;
 }) {
-  // Pure-canvas home: the rail rests as a slim summonable edge so the canvas runs full-bleed. History
-  // and parts are one click away — summoned, not standing — and collapse hands the width straight back.
-  // (Chat lives in the floating composer now; the rail is the pull-away, not a permanent sidebar.)
-  const [collapsed, setCollapsed] = useState(true);
+  // One rail, three spatial states. Workspace and conversation replace each other inside the same rounded
+  // perimeter; edge is the only collapsed state. The canvas always owns the neighboring grid track.
+  const [surface, setSurface] = useState<RailSurface>(activeSessionId ? "conversation" : "workspace");
+  const [keyboardJump, setKeyboardJump] = useState(false);
+  const reducedMotion = useReducedMotion();
+  const lastFocusSignal = useRef(conversationFocusSignal);
+  const lastAttention = useRef(false);
+  const edgeExpandRef = useRef<HTMLButtonElement>(null);
+  const workspaceCollapseRef = useRef<HTMLButtonElement>(null);
+  const conversationSurfaceRef = useRef<HTMLDivElement>(null);
   const [drawerView, setDrawerView] = useState<"product" | "build">(productContext ? "product" : "build");
   const [crewRoomOpen, setCrewRoomOpen] = useState(false);
   const [crewComposerOpen, setCrewComposerOpen] = useState(false);
@@ -303,14 +339,51 @@ export function LeftRail({
     void getCapabilityInventory().then((inv) => { if (live) setInventory(inv); });
     return () => { live = false; };
   }, [projectId, bench]);
+  const sessionNames = useMemo(() => distinctTabNames(sessions), [sessions]);
+  const activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
+  const activeConversationTitle = activeSession
+    ? sessionNames[activeSession.id] ?? chatTabName(activeSession)
+    : "New conversation";
+  const needsAttention = !!activeSession
+    && (activeSession.status.startsWith("waiting") || activeSession.status === "blocked");
+  const moveSurface = (next: RailSurface, focus: "edge" | "workspace" | "conversation" | null = null) => {
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && focused.closest(".left-rail")) focused.blur();
+    setSurface(next);
+    if (!focus) return;
+    window.requestAnimationFrame(() => {
+      if (focus === "edge") edgeExpandRef.current?.focus();
+      if (focus === "workspace") workspaceCollapseRef.current?.focus();
+      if (focus === "conversation") conversationSurfaceRef.current?.querySelector<HTMLElement>(".oc-head-back")?.focus();
+    });
+  };
+
+  // A canvas-started prompt, new conversation, or explicit composer shortcut moves into the conversation
+  // view. Keyboard summons skip the visual morph because high-frequency shortcuts should feel immediate.
   useEffect(() => {
-    if (typeof window.matchMedia !== "function") return;
-    const query = window.matchMedia("(max-width: 640px)");
-    const collapseForNarrowCanvas = (event: MediaQueryListEvent) => {
-      if (event.matches) setCollapsed(true);
+    if (conversationFocusSignal === lastFocusSignal.current) return;
+    lastFocusSignal.current = conversationFocusSignal;
+    setSurface("conversation");
+  }, [conversationFocusSignal]);
+  useEffect(() => {
+    if (activeSessionId) setSurface("conversation");
+  }, [activeSessionId]);
+  useEffect(() => {
+    if (needsAttention && !lastAttention.current) setSurface("conversation");
+    lastAttention.current = needsAttention;
+  }, [needsAttention]);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
+      event.preventDefault();
+      setKeyboardJump(true);
+      const focused = document.activeElement;
+      if (focused instanceof HTMLElement && focused.closest(".left-rail")) focused.blur();
+      setSurface("conversation");
+      window.requestAnimationFrame(() => setKeyboardJump(false));
     };
-    query.addEventListener("change", collapseForNarrowCanvas);
-    return () => query.removeEventListener("change", collapseForNarrowCanvas);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   // Drag a crew member OR a capability onto the canvas → the canvas-area drop target reads
@@ -346,47 +419,76 @@ export function LeftRail({
     };
   }, [bench]);
 
-  if (collapsed) {
-    return (
-      <aside className="left-rail collapsed" aria-label="Workspace">
-        <button className="lr-expand" type="button" onClick={() => setCollapsed(false)} title="Expand your workspace">
+  return (
+    <motion.aside
+      layout="size"
+      transition={keyboardJump || reducedMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+      className={`left-rail mode-${surface}${surface === "edge" ? " collapsed" : ""}${keyboardJump ? " keyboard-jump" : ""}`}
+      aria-label="Workspace and conversation"
+      data-surface={surface}
+    >
+      <nav className="lr-edge" aria-label="Workspace rail">
+        <button className="lr-edge-mark" type="button" onClick={() => moveSurface("workspace", "workspace")} aria-label="Open workspace" title="Open workspace">
+          <span aria-hidden>D</span>
+        </button>
+        <button ref={edgeExpandRef} className="lr-expand" type="button" onClick={() => moveSurface("workspace", "workspace")} title="Expand your workspace" aria-label="Expand your workspace">
           <PanelLeftOpen size={16} />
         </button>
-      </aside>
-    );
-  }
-
-  return (
-    <aside className="left-rail" aria-label="Workspace">
-      <header className="lr-head">
-        <span className="lr-head-title">Workspace</span>
-        <button className="lr-collapse" type="button" onClick={() => setCollapsed(true)} title="Collapse — reclaim the width">
-          <PanelLeftClose size={15} />
+        <button
+          className={`lr-edge-conversation${needsAttention ? " needs-attention" : ""}`}
+          type="button"
+          onClick={() => moveSurface("conversation", "conversation")}
+          title={activeConversationTitle}
+          aria-label={`Open conversation: ${activeConversationTitle}`}
+        >
+          <MessageSquare size={16} />
+          {needsAttention ? <span className="lr-edge-attention" aria-hidden /> : null}
         </button>
-      </header>
+      </nav>
+
+      <div
+        className={`lr-surface lr-workspace-surface${surface === "workspace" ? " active" : ""}`}
+        aria-hidden={surface !== "workspace"}
+        inert={surface !== "workspace" ? true : undefined}
+      >
+        <header className="lr-head">
+          <span className="lr-product-mark" aria-hidden>D</span>
+          <span className="lr-head-copy">
+            <span className="lr-head-kicker">Drover</span>
+            <span className="lr-head-title">{projectName ?? "Workspace"}</span>
+          </span>
+          <button ref={workspaceCollapseRef} className="lr-collapse" type="button" onClick={() => moveSurface("edge", "edge")} title="Collapse workspace" aria-label="Collapse workspace">
+            <PanelLeftClose size={15} />
+          </button>
+        </header>
 
       {onSwitchSession && onNewChat && onDeleteSession ? (
         <RailChats
           sessions={sessions}
           activeSessionId={activeSessionId}
-          onSwitch={onSwitchSession}
-          onNew={onNewChat}
+          onSwitch={(id) => { moveSurface("conversation", "conversation"); onSwitchSession(id); }}
+          onNew={() => { moveSurface("conversation"); onNewChat(); }}
           onDelete={onDeleteSession}
         />
       ) : null}
 
-      {productContext ? (
-        <div className="lr-tabs" role="tablist" aria-label="Workspace views">
-          <button type="button" role="tab" aria-selected={drawerView === "product"} onClick={() => setDrawerView("product")}>Product</button>
-          <button type="button" role="tab" aria-selected={drawerView === "build"} onClick={() => setDrawerView("build")}>Build</button>
-        </div>
-      ) : null}
+      <Tabs
+        value={drawerView}
+        onValueChange={(value) => setDrawerView(value as "product" | "build")}
+        className="contents"
+      >
+        {productContext ? (
+          <TabsList className="lr-tabs" aria-label="Workspace views">
+            <TabsTrigger value="product">Product</TabsTrigger>
+            <TabsTrigger value="build">Build</TabsTrigger>
+          </TabsList>
+        ) : null}
 
-      <div className="lr-body">
-        {drawerView === "product" && productContext ? (
-          <div className="lr-product-view">{productContext}</div>
-        ) : (
-          <>
+        <div className="lr-body">
+          {productContext ? (
+            <TabsContent value="product" className="lr-product-view">{productContext}</TabsContent>
+          ) : null}
+          <TabsContent value="build" className="contents">
         {/* The rail is a supply you DRAG from onto the canvas — a teammate or a capability becomes a work
             object where you drop it. It leads with that draggable supply; pipelines moved below to a
             reference list, so the home no longer opens on a pipeline-first navigator. */}
@@ -514,8 +616,20 @@ export function LeftRail({
             ))
           )}
         </Section>
-          </>
-        )}
+          </TabsContent>
+        </div>
+      </Tabs>
+      </div>
+
+      <div
+        ref={conversationSurfaceRef}
+        className={`lr-surface lr-conversation-surface${surface === "conversation" ? " active" : ""}`}
+        aria-hidden={surface !== "conversation"}
+        inert={surface !== "conversation" ? true : undefined}
+      >
+        {typeof conversation === "function"
+          ? conversation({ onBackToWorkspace: () => moveSurface("workspace", "workspace") })
+          : conversation}
       </div>
 
       {/* The crew room — your whole team as characters, opened from the crew header. Clicking a
@@ -537,7 +651,7 @@ export function LeftRail({
           onAdded={() => { setCrewComposerOpen(false); onCrewChanged?.(); }}
         />
       ) : null}
-    </aside>
+    </motion.aside>
   );
 }
 

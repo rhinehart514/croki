@@ -1,36 +1,119 @@
-/* The workspace is an in-flow palette. When it is readable, the canvas reserves its width; when it is
-   collapsed, the launcher returns that width. A readable surface never covers readable work. */
+/* One rounded perimeter for navigation and conversation. The rail changes role in place while the canvas
+   keeps the neighboring grid track; no second chat surface floats over readable work. */
 
 .left-rail {
-  /* Opaque — this is read, so force a solid ground even under a glass-scoped ancestor. */
-  --surface: #ffffff;
-  --surface-2: #f4f4f5;
-  width: 256px;
+  --rail-surface: oklch(0.985 0.004 75);
+  --rail-surface-raised: oklch(0.995 0.003 75);
+  position: relative;
+  align-self: stretch;
+  width: 288px;
+  margin: var(--space-3) 0 var(--space-3) var(--space-3);
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: #ffffff;
-  border-right: 1px solid var(--line);
+  overflow: hidden;
+  box-sizing: border-box;
+  background: var(--rail-surface);
+  border: 1px solid var(--line-2);
+  border-radius: 18px;
+  box-shadow: var(--shadow-card);
+  isolation: isolate;
 }
 
-.left-rail.collapsed {
-  width: 44px;
+.left-rail.mode-conversation { width: clamp(380px, 29vw, 430px); }
+.left-rail.mode-edge {
+  width: 52px;
+  background: var(--rail-surface-raised);
+}
+
+.lr-surface {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(-8px);
+  transition:
+    opacity var(--dur-base) cubic-bezier(0.22, 1, 0.36, 1),
+    transform var(--dur-base) cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear var(--dur-base);
+  will-change: transform, opacity;
+}
+.lr-conversation-surface { transform: translateX(8px); }
+.lr-surface.active {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(0);
+  transition-delay: 0s;
+}
+.left-rail.keyboard-jump .lr-surface { transition: none; }
+
+.lr-edge {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  padding: var(--space-2) 0;
+  flex-direction: column;
   align-items: center;
-  padding-top: 12px;
+  gap: var(--space-2);
+}
+.mode-edge .lr-edge { display: flex; }
+.lr-edge-mark,
+.lr-edge-conversation {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.lr-edge-mark {
+  margin-bottom: var(--space-2);
+  background: var(--ink);
+  color: var(--rail-surface-raised);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+.lr-edge-conversation { margin-top: auto; }
+.lr-edge-conversation:hover,
+.lr-edge-conversation:focus-visible { background: var(--surface-2); color: var(--ink); }
+.lr-edge-mark:active,
+.lr-edge-conversation:active { transform: scale(0.97); }
+.lr-edge-attention {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gap);
+  box-shadow: 0 0 0 2px var(--rail-surface-raised);
 }
 
-@media (max-width: 640px) {
-  .left-rail:not(.collapsed) {
+@media (max-width: 760px) {
+  .left-rail { margin: var(--space-2) 0 var(--space-2) var(--space-2); }
+  .left-rail:not(.mode-edge) {
     position: absolute;
-    inset: 64px var(--space-2) var(--space-2);
+    inset: var(--space-2) auto var(--space-2) var(--space-2);
     z-index: 70;
-    width: auto;
-    border: 1px solid var(--line-2);
-    border-radius: var(--r-xl);
+    width: min(420px, calc(100% - var(--space-4)));
     box-shadow: var(--shadow-pop);
-    overflow: hidden;
   }
-  .left-rail.collapsed { width: 44px; padding-top: 68px; }
+  .left-rail.mode-workspace { width: min(300px, calc(100% - var(--space-4))); }
+  .left-rail.mode-edge { width: 52px; }
+  .mode-edge .lr-edge { padding-top: 58px; }
+  .mode-edge .lr-edge-mark { display: none; }
+  .mode-edge .lr-edge-conversation { margin-bottom: 96px; }
   .lr-expand,
   .lr-collapse { width: 44px; height: 44px; }
 }
@@ -47,6 +130,8 @@
   cursor: pointer;
   transition: color 0.12s var(--ease), background 0.12s var(--ease);
 }
+.lr-expand { display: none; }
+.mode-edge .lr-expand { display: grid; }
 .lr-expand:hover,
 .lr-collapse:hover { color: var(--ink); background: var(--surface-2); }
 
@@ -58,13 +143,83 @@
 .lr-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  height: 44px;
-  padding: 0 10px 0 14px;
+  gap: var(--space-2);
+  min-height: 56px;
+  padding: 0 var(--space-3);
   border-bottom: 1px solid var(--line);
   flex: 0 0 auto;
 }
-.lr-head-title { font-family: var(--serif); font-size: 14px; font-weight: 600; color: var(--ink); letter-spacing: -0.005em; }
+.lr-product-mark {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: var(--r-md);
+  background: var(--ink);
+  color: var(--rail-surface-raised);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+.lr-head-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; }
+.lr-head-kicker { color: var(--faint); font-size: var(--text-xs); font-weight: 600; line-height: 1.2; }
+.lr-head-title {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 650;
+  line-height: var(--leading-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Conversation is the rail's second face. ComposerDock contributes the proven thread, gate, and input
+   internals, while this shell owns every spatial property and removes the old dock/floating vocabulary. */
+.left-rail .composer-dock.embedded {
+  position: relative;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: hidden;
+}
+.left-rail .composer-dock.embedded .oc-head {
+  min-height: 62px;
+  padding: 0 var(--space-3);
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--line);
+}
+.left-rail .composer-dock.embedded .oc-head-back { margin-right: 2px; }
+.left-rail .composer-dock.embedded .oc-head-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-family: inherit;
+  font-size: var(--text-base);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.left-rail .composer-dock.embedded .oc-head-sub {
+  max-width: 118px;
+  margin-left: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.left-rail .composer-dock.embedded .composer-dock-timeline { padding: var(--space-4); }
+.left-rail .composer-dock.embedded .oc-input-wrap { padding: var(--space-3) var(--space-4) var(--space-4); }
+
+/* Working state remains visible without a perpetual attention loop. */
+.left-rail .composer-dock.embedded .oc-presence.working .oc-ring,
+.left-rail .composer-dock.embedded .oc-typing i,
+.left-rail .composer-dock.embedded .oc-steps-dot.live { animation: none; }
+.left-rail .composer-dock.embedded .oc-typing i:nth-child(2) { opacity: 0.65; }
+.left-rail .composer-dock.embedded .oc-typing i:nth-child(3) { opacity: 0.35; }
 
 .lr-tabs {
   display: grid;
@@ -568,6 +723,11 @@
 .lr-cap:hover .lr-cap-connect svg { transform: translateX(2px); }
 
 @media (prefers-reduced-motion: reduce) {
+  .lr-surface,
+  .lr-edge-mark,
+  .lr-edge-conversation,
+  .lr-expand,
+  .lr-collapse { transition: none; }
   .lr-cap-connect { transform: none; }
   .lr-cap:hover .lr-cap-connect svg { transform: none; }
 }

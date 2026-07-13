@@ -15,6 +15,7 @@ import { getObjectTouch, listObjectTouches, resultStore } from "./gtm-store.mjs"
 import { objectKey as computeObjectKey, inferKind } from "./object-identity.mjs";
 import { bucketFor } from "./object-funnel.mjs";
 import { learnedSignal, renderLearnedSignal } from "./reallocation.mjs";
+import { listWorkArtifacts } from "./work-artifact-store.mjs";
 
 // The compact slice of the derived product model that discovery/research/draft agents actually need:
 // the core objects (things), how they relate, and what users are trying to do — NOT the whole raw
@@ -295,7 +296,29 @@ export function reportForProject(project, options = {}) {
   }
 }
 
-export function buildRunGrounding(project, report = null) {
+function compactAcceptedContext(projectId, options = {}) {
+  if (!projectId) return null;
+  try {
+    const findings = listWorkArtifacts(projectId, { ...options, includeRetired: false })
+      .filter((artifact) => artifact.kind === "context-evidence" && artifact.status === "accepted")
+      .map((artifact) => ({
+        id: artifact.artifactId,
+        title: artifact.title ?? null,
+        finding: artifact.content?.finding ?? artifact.summary ?? null,
+        whyItMatters: artifact.content?.whyItMatters ?? null,
+        source: artifact.content?.source ?? null,
+        shape: artifact.content?.shape ?? null,
+        provenance: artifact.provenance ?? null,
+      }))
+      .filter((finding) => finding.finding)
+      .slice(0, 12);
+    return findings.length ? findings : null;
+  } catch {
+    return null;
+  }
+}
+
+export function buildRunGrounding(project, report = null, options = {}) {
   const sc = project?.sharedContext ?? {};
   // The derived interpretive product model, read directly from its store (no signature change, no
   // caller change). This is what finally reaches the run when a founder never opened the picture
@@ -343,6 +366,10 @@ export function buildRunGrounding(project, report = null) {
   } catch {
     worked = null;
   }
+  // Founder-confirmed discoveries are ordinary open work, not a second knowledge base. Once accepted,
+  // their compact finding + provenance follows every composition/run through this shared grounding.
+  // Candidates never appear here: discovery is ephemeral until the founder promotes one.
+  const acceptedContext = compactAcceptedContext(project?.id, options);
   const base = {
     productName: project?.name || sc.product?.name || pc?.pkg?.name || "product",
     // The plain-words headline. When the founder stated nothing (no product description, no positioning)
@@ -365,6 +392,7 @@ export function buildRunGrounding(project, report = null) {
     // The worked steer (null when nothing touched yet). Carried via base on every return path — so both
     // the direct-run and gate-resume grounding paths get the same suppression-aware slice.
     worked,
+    acceptedContext,
   };
   if (!report) {
     // No scanned workspace — stay honestly blind rather than implying proven attribution.

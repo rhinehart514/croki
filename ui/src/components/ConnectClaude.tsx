@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ArrowRight, LoaderCircle, X } from "lucide-react";
 import { getConnection, type ConnectionStatus, type RuntimeReadiness } from "@/api";
+import { Button } from "@/components/ui/button";
 
 // The cold-start runtime gate. Every act of intelligence in Drover — reading your market, shaping
 // pipelines, drafting, running a goal to your gate — runs on the founder's OWN local AI subscription.
@@ -102,13 +103,13 @@ export function ConnectClaude({ connection, onResult, contextual = false, onDism
     return (
       <aside className="runtime-context is-compact" aria-label="Optional AI runtime">
         <h2>AI is optional</h2>
-        <button className="runtime-context-expand" type="button" onClick={() => setExpanded(true)}>
+        <Button variant="ghost" className="runtime-context-expand" type="button" onClick={() => setExpanded(true)}>
           Connect
-        </button>
+        </Button>
         {onDismiss ? (
-          <button className="runtime-context-dismiss" type="button" aria-label="Dismiss optional AI runtime" onClick={onDismiss}>
+          <Button variant="ghost" className="runtime-context-dismiss" type="button" aria-label="Dismiss optional AI runtime" onClick={onDismiss}>
             <X size={15} />
-          </button>
+          </Button>
         ) : null}
       </aside>
     );
@@ -117,9 +118,9 @@ export function ConnectClaude({ connection, onResult, contextual = false, onDism
   return (
     <div className={contextual ? "runtime-context is-expanded" : "product-entry"}>
       {contextual && onDismiss ? (
-        <button className="runtime-context-dismiss" type="button" aria-label="Dismiss optional AI runtime" onClick={onDismiss}>
+        <Button variant="ghost" className="runtime-context-dismiss" type="button" aria-label="Dismiss optional AI runtime" onClick={onDismiss}>
           <X size={15} />
-        </button>
+        </Button>
       ) : null}
       <div className="product-entry-inner">
         <span className="product-entry-eyebrow">{contextual ? "Optional intelligence" : "Drover"}</span>
@@ -166,11 +167,11 @@ export function ConnectClaude({ connection, onResult, contextual = false, onDism
           </p>
         ) : null}
 
-        <button className="product-entry-go" onClick={recheck} disabled={checking} type="button">
+        <Button variant="ghost" className="product-entry-go" onClick={recheck} disabled={checking} type="button">
           {checking
             ? <><LoaderCircle className="spin" size={16} /> Checking…</>
             : <>Re-check connection <ArrowRight size={16} /></>}
-        </button>
+        </Button>
 
         {stillOff ? <p className="product-entry-error" role="alert">{stillOff}</p> : null}
 
