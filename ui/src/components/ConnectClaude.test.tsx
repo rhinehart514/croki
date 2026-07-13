@@ -45,8 +45,17 @@ describe("ConnectClaude — provider-neutral runtime gate", () => {
   it("renders as contextual recovery without hiding grounded truth", () => {
     const { container } = render(<ConnectClaude connection={disconnected} onResult={() => {}} contextual />);
     expect(container.querySelector(".runtime-context")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /AI is optional/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Connect/i }));
     expect(screen.getByRole("heading", { name: /Read possible openings/i })).toBeInTheDocument();
     expect(screen.getByText(/Grounded product truth and existing work stay available/i)).toBeInTheDocument();
+  });
+
+  it("lets the founder dismiss the contextual recovery chip", () => {
+    const onDismiss = vi.fn();
+    render(<ConnectClaude connection={disconnected} onResult={() => {}} contextual onDismiss={onDismiss} />);
+    fireEvent.click(screen.getByRole("button", { name: /Dismiss optional AI runtime/i }));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
   it("lifts the gate when CODEX is connected (renders nothing)", () => {

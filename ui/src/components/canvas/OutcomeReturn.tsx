@@ -14,6 +14,20 @@ import "@/styles/outcome-return.css";
 // STAGES a founder-reviewable product-change pipeline — it never edits code or mutates product truth. The
 // current server omits outcomes/implications, so the rail stays honestly empty until the projection lands.
 
+// A plain, human "when" for the exposure line — the day it landed, not a live-ticking counter. Legibility,
+// not a metric: it orients the response in time and nothing more. Falls back to the raw string if unparseable.
+function formatWhen(iso: string): string {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return iso;
+  const d = new Date(t);
+  const now = Date.now();
+  const days = Math.floor((now - t) / 86_400_000);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days} days ago`;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 const OUTCOME_BADGE: Record<JoinedOutcome["kind"], { label: string; cls: string }> = {
   "sent": { label: "Released", cls: "" },
   "observed-response": { label: "Observed", cls: "is-observed" },
@@ -50,12 +64,40 @@ function OutcomeCard({ o, resolvableQuestionIds, onOpenPipeline, onFocusQuestion
   const badge = OUTCOME_BADGE[o.kind] ?? OUTCOME_BADGE["unmeasured"];
   // "No response" is a distinct honest state: a released item with a measured zero return.
   const noResponse = o.kind === "observed-response" && (o.value ?? 0) === 0;
+  // The inspectable ACCOUNT — pull-only. The card shows a one-line summary at rest; the founder OPENS this to
+  // read the fuller account of what came back: the exposure line (its honest state + when it landed + any
+  // value), and the response text itself when it carries more than the one-line summary already shows. Never
+  // pushed, never a metric at rest — the account is here only when the founder chooses to look
+  // (docs/EXPERIMENT-MACHINE-SPEC "not a scoreboard"). Offered only when there is something real to inspect.
+  const observedWhen = o.observedAt ? formatWhen(o.observedAt) : null;
+  const response = o.body?.trim() ?? "";
+  // Only re-print the response when it is more than the summary label already shows (avoid a duplicate line).
+  const responseAddsDetail = response.length > 0 && response !== o.label.trim();
+  const hasAccount = Boolean(responseAddsDetail || observedWhen);
   return (
     <div className="oret-out" data-testid="joined-outcome">
       <div className="oret-out-top">
         <span className="oret-out-label">{o.label}{o.value != null && o.value !== 0 ? <> · {o.value}</> : null}</span>
         <span className={`oret-badge ${noResponse ? "is-none" : badge.cls}`}>{noResponse ? "No response" : badge.label}</span>
       </div>
+      {hasAccount ? (
+        <details className="oret-account">
+          <summary className="oret-account-summary">What came back</summary>
+          <div className="oret-account-body">
+            {/* Exposure — the honest state + when it landed. A legible account, not a KPI: it says where this
+                stands, it does not grade it. */}
+            <p className="oret-account-exposure">
+              {noResponse ? "No response" : badge.label}
+              {observedWhen ? <> · {observedWhen}</> : null}
+              {o.value != null && o.value !== 0 ? <> · {o.value}</> : null}
+            </p>
+            {/* The response itself, when it carries more than the summary line. */}
+            {responseAddsDetail ? (
+              <blockquote className="oret-account-response">{response}</blockquote>
+            ) : null}
+          </div>
+        </details>
+      ) : null}
       <div className="oret-returns">
         {o.channelId && onOpenPipeline ? (
           <button type="button" className="oret-return" onClick={() => onOpenPipeline(o.channelId!)}>

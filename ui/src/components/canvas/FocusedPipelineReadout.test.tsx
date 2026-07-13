@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { FocusedPipelineReadout } from "@/components/canvas/FocusedPipelineReadout";
 import { safetyFromConnectors, safetyFromItems } from "@/lib/pipelineSafety";
 import type { ChannelMeta, ConnectorMeta, GTMGraph, GTMItem, GTMNode, GTMRunResult } from "@/types";
@@ -9,6 +9,10 @@ function node(over: Partial<GTMNode> & { id: string; category: GTMNode["category
 }
 function graph(nodes: GTMNode[]): GTMGraph {
   return { id: "g", name: "g", version: "0", nodes, edges: [] };
+}
+
+function openBrief(): void {
+  fireEvent.click(screen.getByRole("button", { name: "Open pipeline brief" }));
 }
 // The real connector inventory shapes (brain/src/connectors/execute/*): capability sets, never labels.
 const CONNECTORS: ConnectorMeta[] = [
@@ -50,14 +54,54 @@ describe("FocusedPipelineReadout gate consequence (fix 2)", () => {
   const g = graph([node({ id: "gate1", category: "gate" }), node({ id: "send1", category: "execute", connector: "gmail" })]);
 
   it("shows the exact whatYourYesDoes from the staged items", () => {
+    const result = { runId: "r", graphId: "g", ok: true, executionOrder: [], pendingGates: [], nodes: { gate1: { nodeId: "gate1", category: "gate", ok: true, items: [{ type: "draft", draft: "Hey", whatYourYesDoes: "Approving sends 3 emails to real recipients." }] } } } as unknown as GTMRunResult;
+    render(<FocusedPipelineReadout channel={channel} graph={g} connectors={CONNECTORS} result={result} lane={null} runSummary={null} />);
+    openBrief();
+    expect(screen.getByText("Approving sends 3 emails to real recipients.")).toBeTruthy();
+  });
+
+  it("keeps the informational brief closed while the founder gate needs the primary layer", () => {
     const result = { runId: "r", graphId: "g", ok: true, executionOrder: [], pendingGates: ["gate1"], nodes: { gate1: { nodeId: "gate1", category: "gate", ok: true, items: [{ type: "draft", draft: "Hey", whatYourYesDoes: "Approving sends 3 emails to real recipients." }] } } } as unknown as GTMRunResult;
     render(<FocusedPipelineReadout channel={channel} graph={g} connectors={CONNECTORS} result={result} lane={null} runSummary={null} />);
-    expect(screen.getByText("Approving sends 3 emails to real recipients.")).toBeTruthy();
+    openBrief();
+    expect(screen.getByRole("button", { name: "Open pipeline brief" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Approving sends 3 emails to real recipients.")).toBeNull();
   });
 
   it("falls back to the honest shape-derived line only when no canonical consequence is staged", () => {
     render(<FocusedPipelineReadout channel={channel} graph={g} connectors={CONNECTORS} result={null} lane={null} runSummary={null} transportConnected={false} />);
+    openBrief();
     // External send, no transport connected → the honest staged line; no invented "sends to real recipients".
     expect(screen.getByText(/Nothing sends until you connect a sender/)).toBeTruthy();
+  });
+});
+
+// Execution belongs to the explicitly selected lane, never the product-level dock or an incidental active channel.
+describe("FocusedPipelineReadout lane action", () => {
+  const channel: ChannelMeta = { id: "ch1", name: "Outbound", kind: "outbound", objective: "Book 3 calls", graphId: "g", enabled: true, status: "idle", lastRunAt: null, lastRunOk: null, pendingGates: 0, nodeCount: 1, runCount: 0, graphRevision: 1, lastRunResult: null };
+  const g = graph([node({ id: "draft", category: "generate" })]);
+
+  it("runs only from an explicitly focused lane", () => {
+    const onRun = vi.fn();
+    render(<FocusedPipelineReadout channel={channel} graph={g} connectors={CONNECTORS} result={null} lane={null} runSummary={null} selection={{ kind: "lane", channelId: "ch1", source: "focus" }} onRun={onRun} />);
+    fireEvent.keyDown(screen.getByTestId("pipeline-run"), { key: "Enter" });
+    expect(onRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not expose lane execution for incidental active state or another selection", () => {
+    const { rerender } = render(<FocusedPipelineReadout channel={channel} graph={g} connectors={CONNECTORS} result={null} lane={null} runSummary={null} selection={{ kind: "lane", channelId: "ch1", source: "active" }} onRun={() => {}} />);
+    expect(screen.queryByTestId("pipeline-run")).toBeNull();
+    rerender(<FocusedPipelineReadout channel={channel} graph={g} connectors={CONNECTORS} result={null} lane={null} runSummary={null} selection={{ kind: "anchor", anchorId: "canchor:goal:1", ref: { type: "goal", id: "1" } }} onRun={() => {}} />);
+    expect(screen.queryByTestId("pipeline-run")).toBeNull();
+  });
+
+  it("can keep its disclosure state in the stable canvas host", () => {
+    const onOpenChange = vi.fn();
+    const props = { channel, graph: g, connectors: CONNECTORS, result: null, lane: null, runSummary: null, open: false, onOpenChange };
+    const { rerender } = render(<FocusedPipelineReadout {...props} />);
+    fireEvent.keyDown(screen.getByRole("button", { name: "Open pipeline brief" }), { key: "Enter" });
+    expect(onOpenChange).toHaveBeenCalledWith(true);
+    rerender(<FocusedPipelineReadout {...props} open />);
+    expect(screen.getByRole("button", { name: "Close pipeline brief" })).toHaveAttribute("aria-expanded", "true");
   });
 });

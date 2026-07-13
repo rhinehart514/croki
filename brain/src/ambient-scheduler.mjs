@@ -43,6 +43,7 @@ import { listProjects } from "./project-store.mjs";
 import { getReallocationTunables } from "./reallocation-tunables-store.mjs";
 import { createAmbientWakeScorer } from "./ambient-wake-scorer.mjs";
 import { persistence } from "./persistence.mjs";
+import { safeLogFailure } from "./failure-log.mjs";
 
 const DEFAULT_TICK_MS = 5 * 60 * 1000; // every 5 minutes
 
@@ -234,9 +235,37 @@ export function runDueInputRouting(options = {}) {
  * per-project reports so a caller can observe/log. `projectIds` is injectable for the test; the live
  * heartbeat walks the active projects.
  */
-export function runDueInboxReads(options = {}) {
+export function recordInboxPollHealth(reports = [], options = {}) {
+  for (const entry of Array.isArray(reports) ? reports : []) {
+    const report = entry?.report;
+    if (!report || report.ok !== false) continue;
+    const projectId = entry.projectId ?? options.projectId ?? null;
+    // Reuse the system's existing self-observed issue authority. The project-scoped signature dedup-bumps
+    // repeated blind polls instead of inventing a scheduler-health store, and routes the reconnect/read-scope
+    // state onto the same system issue surface as every other operational failure.
+    safeLogFailure({
+      category: "node-error",
+      projectId,
+      graphId: "ambient-gmail-inbox",
+      graphLabel: "Automatic Gmail outcome polling",
+      node: { id: "gmail-inbox-read", kind: "connector", label: "Read Gmail outcomes" },
+      result: {
+        ok: false,
+        error: report.reason ?? "Gmail outcome polling failed.",
+        meta: {
+          needsReadScope: report.needsReadScope === true,
+          needsReconnect: report.needsReconnect === true,
+        },
+      },
+    }, { ...options, projectId });
+  }
+  return reports;
+}
+
+export async function runDueInboxReads(options = {}) {
   const projectIds = options.projectIds ?? activeProjectIds(options);
-  return runDueInboxOutcomeReads({ ...options, projectIds });
+  const reports = await runDueInboxOutcomeReads({ ...options, projectIds });
+  return recordInboxPollHealth(reports, options);
 }
 
 /**

@@ -35,10 +35,12 @@ describe("deriveExperimentFromRun", () => {
     assert.equal(exp.heldConstant, "Founder list");
     assert.equal(exp.claimId, "claim-1");
     assert.equal(exp.icp, "Dev-tool founders");
-    assert.equal(exp.result, "2 staged · awaiting review");
+    // APPROVAL IS NOT AN OUTCOME: a paused gate is a lifecycle state, not a result. The experiment's
+    // result stays blank — no gate tally is ever synthesized into it.
+    assert.equal(exp.result, null, "the result never carries a gate/approval tally");
   });
 
-  it("derives a complete experiment with gate decisions", () => {
+  it("NEVER reads gate decisions as an outcome (approval is not a market result)", () => {
     const result = {
       graphId: "cold-outbound",
       pendingGates: [],
@@ -55,9 +57,33 @@ describe("deriveExperimentFromRun", () => {
     };
     const exp = deriveExperimentFromRun({ graph, result, sharedContext: {} });
     assert.equal(exp.status, "complete");
-    assert.equal(exp.result, "3 staged · 2 approved · 1 rejected");
-    assert.equal(exp.successSignal, 'Founder approval at "Founder review"');
+    // The founder's approvals/rejections are the wall, not the win. None of them may become the result.
+    assert.equal(exp.result, null, "gate approvals/rejections never become the experiment result");
+    // The success signal is a market signal (a measure step names it) — never "founder approval".
+    assert.ok(
+      !exp.successSignal || !/approval/i.test(exp.successSignal),
+      "founder approval is never the success signal",
+    );
     assert.ok(!("icp" in exp), "icp left blank when no ICP label");
+  });
+
+  it("takes the success signal from a measure step, never from the gate", () => {
+    const graphWithMeasure = {
+      id: "cold-outbound",
+      name: "Cold outbound",
+      nodes: [
+        { id: "src", category: "source", label: "Founder list" },
+        { id: "draft", kind: "agent", label: "Draft opener" },
+        { id: "gate", category: "gate", label: "Founder review" },
+        { id: "measure", category: "measure", label: "Replies from PCO owners" },
+      ],
+    };
+    const exp = deriveExperimentFromRun({
+      graph: graphWithMeasure,
+      result: { graphId: "cold-outbound", pendingGates: [], nodes: {} },
+      sharedContext: {},
+    });
+    assert.equal(exp.successSignal, "Replies from PCO owners");
   });
 
   it("returns null without a channel id", () => {
@@ -154,6 +180,8 @@ describe("recordExperimentFromRun — a re-run never clobbers a founder verdict"
     const after = loadProject(options).sharedContext.experiments.find((e) => e.id === "exp-cold-outbound");
     assert.ok(after, "the experiment still exists after the re-run");
     assert.equal(after.verdict?.decision, "keep", "the founder's verdict survives the re-run");
-    assert.equal(after.result, "2 staged · 1 approved · 1 rejected", "the re-run still updates the derived result");
+    // The re-run re-derives identity but NEVER a gate tally — approval is not an outcome, so result stays
+    // blank until a real market outcome joins back through outcome-ingest.
+    assert.equal(after.result, null, "a re-run never writes a gate/approval tally into the result");
   });
 });

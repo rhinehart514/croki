@@ -64,6 +64,38 @@ export function needsConnectionResult({ channel, reason = "needs_connection", me
   };
 }
 
+// The status an outward connector stamps when items ARE founder-approved (item.approved === true) but the
+// run did NOT carry the host-issued outward-release capability (EXPERIMENT-MACHINE-SPEC rail 1). This is the
+// executor-level backstop under the item classifier: greenlight (and every ordinary/ambient run) never
+// supplies the capability, so even a mis-classified approved item routed into a real sender is HELD here,
+// never sent. It is BLOCKED (ok:false, blocked:true) — an honest not-green state, never a fake "sent" and
+// never a silent local stage — and the approved items are carried through intact so no work is lost. Only
+// the founder outward-approval path (the compiled-run approve route / operator gate-resume) carries the
+// capability, so this is the last structural gate before a byte leaves the machine.
+export function heldWithoutReleaseResult({ channel, items = [] }) {
+  const message =
+    "Held: these items are approved but this run did not carry founder outward-release authority, so nothing was sent. " +
+    "Approve them at the founder gate to release them.";
+  return {
+    ok: false,
+    blocked: true,
+    blockedReason: "needs_release",
+    needsRelease: true,
+    channel,
+    items: items.map((item) => ({
+      ...item,
+      channel,
+      applied: false,
+      executionStatus: "held_without_release",
+      needsRelease: true,
+      stagedReason: message,
+      sentAt: null,
+    })),
+    meta: { sent: 0, held: items.length, channel, blocked: "needs_release", note: message },
+    error: message,
+  };
+}
+
 // Every channel's descriptor. Adding a channel = adding one entry: its execute connector id, the live
 // transport factory the send-runner map injects (createTransport, or null when the connector's own default
 // fetch is the seam — like http), the credential providers it resolves through, and the founder-facing

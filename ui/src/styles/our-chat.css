@@ -455,6 +455,12 @@
   white-space: nowrap;
   cursor: pointer;
 }
+
+@media (max-width: 640px) {
+  .our-chat .oc-ib,
+  .our-chat .oc-send { width: 40px; height: 40px; }
+  .our-chat .oc-runtime-action { min-height: 40px; }
+}
 .our-chat .oc-runtime-action:hover { border-color: var(--ink-2); color: var(--ink); }
 .our-chat .oc-runtime-action:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .our-chat .oc-hint { font-size: 11px; color: var(--oc-ink-4); margin-top: 9px; text-align: center; }

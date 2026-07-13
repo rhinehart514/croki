@@ -2,8 +2,8 @@
    cluster beside the arrange control, and its panel unfurls UPWARD so it never runs off the bottom edge. */
 .canvas-outline {
   position: absolute;
-  bottom: 58px;
-  left: 172px;
+  bottom: 18px;
+  left: 462px;
   z-index: 17;
   display: flex;
   flex-direction: column-reverse;
@@ -107,6 +107,32 @@
 .canvas-outline-empty { max-width: 34ch; margin: 0; padding: var(--space-5); color: var(--muted); }
 
 @media (max-width: 640px) {
-  .canvas-outline { top: var(--space-3); left: var(--space-3); }
-  .canvas-outline-panel { max-height: calc(100vh - 90px); }
+  /* The two closed readable-surface launchers share one bottom row: Outline owns the left edge and the
+     44px crew launcher owns the right. Fixed opposing edges keep them separate at 320, 390, and 640px. */
+  .canvas-outline { position: fixed; top: auto; bottom: 64px; left: var(--space-2); }
+  .canvas-outline-toggle { min-height: 44px; font-size: var(--text-base); }
+  .canvas-outline-panel { width: calc(100vw - var(--space-6)); max-height: calc(100vh - 128px); }
+  .canvas-outline-panel > header button { width: 44px; height: 44px; }
+  .canvas-outline-panel ol { max-height: calc(100vh - 218px); }
+  .canvas-outline-panel li > button { min-height: 44px; }
+  .canvas-outline-panel li > button > strong { font-size: var(--text-base); }
+  /* On phones Outline becomes the readable canvas mode, not a popover squeezed over a still-active map.
+     The collapsed crew launcher sits beneath this layer, so the two inspection modes cannot overlap. */
+  .canvas-outline.open {
+    position: fixed;
+    inset: 64px var(--space-2) var(--space-2);
+    z-index: 70;
+    display: block;
+    background: var(--surface);
+  }
+  .canvas-outline.open .canvas-outline-toggle { display: none; }
+  .canvas-outline.open .canvas-outline-panel {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    margin: 0;
+  }
+  .canvas-outline.open .canvas-outline-panel ol { flex: 1; max-height: none; }
 }

@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { persistence } from "./persistence.mjs";
+import { now } from "./store-fs.mjs";
 
 // Team identity + membership. Local-first stays the base: a single founder is a team of one with no
 // login wall. This store models multiple members and roles so the parallel Convex sync layer can make
@@ -26,10 +27,6 @@ const FOUNDER_USER = {
 // is stable across restarts and the same every time we resolve it — never a fresh random team per boot.
 function personalTeamId(userId) {
   return `personal-${safeId(userId)}`;
-}
-
-function now() {
-  return new Date().toISOString();
 }
 
 function safeId(value) {

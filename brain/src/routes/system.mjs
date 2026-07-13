@@ -87,6 +87,7 @@ export default async function handle({ req, res, url }) {
         context: body?.context,
         snapshot,
         source: body?.source ?? "api",
+        projectId: snapshot.project?.id ?? body?.projectId ?? null,
       });
       json(res, 201, record);
     } catch (err) {
@@ -105,8 +106,10 @@ export default async function handle({ req, res, url }) {
   // an occurrences count, so one open self-observed file == one group. Newest lastSeen first.
   if (req.method === "GET" && url.pathname === "/api/friction") {
     try {
+      const projectId = url.searchParams.get("project") || null;
       const queue = listFrictionQueue();
-      json(res, 200, buildFailureLogView({ reports: enrichWithContext(queue) }));
+      const reports = enrichWithContext(queue).filter((report) => !projectId || report.projectId === projectId);
+      json(res, 200, buildFailureLogView({ reports }));
     }
     catch (err) { json(res, 500, { error: err instanceof Error ? err.message : String(err) }); }
     return true;

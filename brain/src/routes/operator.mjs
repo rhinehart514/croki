@@ -12,12 +12,15 @@ import {
   bindOperatorSessionContext,
   branchOperatorSessionForBoth,
   createOperatorSession,
+  deleteOperatorSession,
   getActiveSessionForProject,
   getOperatorSession,
   listOperatorComparisonGroups,
   listOperatorSessions,
   handoffOperatorSession,
+  operatorMutationBoundary,
   publicOperatorSession,
+  saveOperatorSession,
 } from "../operator-store.mjs";
 import {
   cancelOperatorSession,
@@ -35,6 +38,7 @@ import {
 import { runDueMotions } from "../promote-motion.mjs";
 import { selectRuntime, authModeLabel, runtimeStatuses } from "../runtimes/index.mjs";
 import { authorizeReleaseForRequest } from "./session-guard.mjs";
+import { isFounderPresent } from "../presence.mjs";
 import { getOperatingView } from "../operating-view.mjs";
 
 export default async function handle({ req, res, url }) {
@@ -78,7 +82,7 @@ export default async function handle({ req, res, url }) {
         ? graphIdForRef({ type: body.graphId ? "graph" : "pipeline", id: unscopedGraphId }, { projectId: project.id })
         : null;
       const flow = graphId ? loadFlow(graphId, null) : { graph: null };
-      const session = createOperatorSession({
+      let session = createOperatorSession({
         goal: body.goal,
         graphId: flow.graph?.id ?? null,
         projectId: project.id,
@@ -98,6 +102,28 @@ export default async function handle({ req, res, url }) {
         pipelineId: body.pipelineId ?? body.channelId ?? body.workflowId ?? null,
         runId: body.runId ?? null,
       });
+      // The founder's first substantial request is canvas authority immediately, not a provider-private
+      // prompt. Record it before the runtime starts, then require the drive to leave a post-request write
+      // receipt. A pipeline-specific request must prove a real composed/stored path; prose cannot satisfy it.
+      if (String(body.goal ?? "").trim()) {
+        const goalWrite = await executeOperatorTool(session, {
+          id: `route-founder-goal-${session.id}`,
+          name: "record",
+          input: {
+            kind: "goal",
+            idempotencyKey: `${session.id}:founder-goal`,
+            value: { statement: body.goal, status: "active", scopeRefs: session.contextRefs ?? [] },
+          },
+        });
+        session = saveOperatorSession({
+          ...goalWrite.session,
+          requiredMutation: {
+            kind: routeMutationRequirement(body.goal),
+            ...operatorMutationBoundary(goalWrite.session),
+            founderText: String(body.goal ?? "").trim(),
+          },
+        });
+      }
       launchOperatorSession(session.id);
       json(res, 202, { session: publicOperatorSession(session), reused: false });
     } catch (err) {
@@ -148,6 +174,27 @@ export default async function handle({ req, res, url }) {
       const scopedProject = url.searchParams.get("project");
       if (scopedProject) assertOperatorSessionProject(operatorSessionMatch[1], scopedProject);
       json(res, 200, { session: publicOperatorSession(getOperatorSession(operatorSessionMatch[1])) });
+    } catch (err) {
+      json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return true;
+  }
+
+  // Delete a chat from the founder's history — a real, durable removal (not the old client-side
+  // dismissal). A still-running session is refused with 409 so the caller stops it first; nothing that
+  // was ever sent is affected, since a session only stages work behind the wall.
+  if (req.method === "DELETE" && operatorSessionMatch) {
+    try {
+      const sessionId = decodeURIComponent(operatorSessionMatch[1]);
+      const scopedProject = url.searchParams.get("project");
+      if (scopedProject) assertOperatorSessionProject(sessionId, scopedProject);
+      const existing = getOperatorSession(sessionId);
+      if (existing?.status === "running") {
+        json(res, 409, { error: "This chat is still running. Stop it before deleting.", code: "OPERATOR_SESSION_RUNNING" });
+        return true;
+      }
+      const removed = deleteOperatorSession(sessionId);
+      json(res, 200, { deleted: !!removed, id: sessionId });
     } catch (err) {
       json(res, 404, { error: err instanceof Error ? err.message : String(err) });
     }
@@ -277,7 +324,7 @@ export default async function handle({ req, res, url }) {
       // live" button sends `deployConfirmed:true`, which the whole `body` forwards to resolveOperatorGate
       // (it builds the deploy authorization from it and threads it onto node.runtime). No allowlist strips
       // it and the route never invents it, so only a real founder body carrying it clears the deploy GUARD 2.
-      else if (action === "gate") session = await resolveOperatorGate(sessionId, { ...body, request: req }, { authorizeReleaseForRequest: authorizeReleaseForRequest(req) });
+      else if (action === "gate") session = await resolveOperatorGate(sessionId, { ...body, request: req }, { authorizeReleaseForRequest: authorizeReleaseForRequest(req), founderPresent: isFounderPresent() });
       // Send ONE staged item back to the crew to rework, with the founder's note. Releases nothing — it
       // re-drives to a fresh gate — so it takes the same authorizers as `gate` but never crosses the wall.
       else if (action === "gate-refine") session = await resolveOperatorGateRefine(sessionId, { ...body, request: req }, { authorizeReleaseForRequest: authorizeReleaseForRequest(req) });
@@ -351,7 +398,12 @@ export default async function handle({ req, res, url }) {
         bindOperatorSessionContext(body.sessionId, sessionContextFromBody(body));
       }
       const allowDrive = body.allowDrive === true && !!body.sessionId;
-      const runtime = allowDrive ? {} : { resume: () => null };
+      const runtime = allowDrive ? {} : {
+        resume: () => null,
+        materializeGoal: async () => null,
+        persistExchange: () => null,
+        materializeAnswer: async () => null,
+      };
       const result = await handleComposerTurn(
         { projectId: body.projectId, sessionId: body.sessionId, text: body.input, hints: body.hints },
         runtime,
@@ -369,6 +421,10 @@ export default async function handle({ req, res, url }) {
   }
 
   return false;
+}
+
+function routeMutationRequirement(text) {
+  return /\b(?:pipeline|workflow|executable path)\b/i.test(String(text ?? "")) ? "pipeline" : "durable_work";
 }
 
 function hasSessionContext(body = {}) {

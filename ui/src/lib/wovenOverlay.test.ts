@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import type { Node } from "@xyflow/react";
-import { buildWovenOverlay, focusIsEffective } from "@/lib/wovenOverlay";
+import { buildWovenOverlay, buildLoopBackLayer, focusIsEffective, anchorNodeId } from "@/lib/wovenOverlay";
 import type { ChannelLane } from "@/lib/channelLanes";
-import type { WovenGraph, WovenObjectNode, WovenTie } from "@/types";
+import type { WovenGraph, WovenObjectNode, WovenTie, WovenCanvas, WovenCanvasOutcome } from "@/types";
 
 // Minimal woven graph builder — just enough shape for the overlay's placement + focus logic.
 function objNode(over: Partial<WovenObjectNode> & { objectKey: string }): WovenObjectNode {
@@ -141,5 +141,222 @@ describe("buildWovenOverlay — occlusion guard", () => {
     expect(mergedNodes.some((m) => occludes(x, y, m))).toBe(false);
     // It kept a tight X near the anchor gutter (~248), not walked to the far edge.
     expect(x).toBeLessThan(500);
+  });
+});
+
+// ── The loop-back layer (the experiment-machine's new primitive) ─────────────────────────────────────
+// Outcomes and warm leads circle back to the FRONT of the pipeline that produced them. The stroke sources
+// from the outcome anchor and targets the leftmost rendered step of its originating channel.
+function outcome(over: Partial<WovenCanvasOutcome> & { id: string; channelId: string }): WovenCanvasOutcome {
+  return {
+    id: over.id,
+    ref: over.ref ?? { type: "outcome", id: over.id },
+    body: over.body ?? null,
+    kind: over.kind ?? "observed-response",
+    label: over.label ?? over.id,
+    channelId: over.channelId,
+  };
+}
+function canvasWith(outcomes: WovenCanvasOutcome[]): WovenCanvas {
+  return {
+    anchors: outcomes.map((o) => ({
+      id: `anchor:outcome:${o.id}`,
+      ref: o.ref,
+      kind: "outcome",
+      label: o.label,
+      body: null,
+      authority: { owner: "gtm-results", id: o.id, projectId: "p", updatedAt: null },
+    })),
+    relationships: [],
+    outcomes,
+    state: { kind: "ready", stale: false, issues: [] },
+    geometry: null,
+  };
+}
+// The merged canvas: laneA has two steps (front at x=0, back at x=600); laneB is a distractor lane.
+function mergedTwoStepLanes(): Node[] {
+  return [
+    { id: "laneA::front", position: { x: 0, y: 40 }, data: {} },
+    { id: "laneA::back", position: { x: 600, y: 40 }, data: {} },
+    { id: "laneB::front", position: { x: 0, y: 260 }, data: {} },
+  ];
+}
+
+describe("buildLoopBackLayer", () => {
+  it("loops an outcome back to the FRONT (leftmost step) of its originating pipeline", () => {
+    const o = outcome({ id: "o1", channelId: "laneA", kind: "business-outcome" });
+    const canvas = canvasWith([o]);
+    const merged = mergedTwoStepLanes();
+    const drawn = new Set<string>([...merged.map((n) => n.id), anchorNodeId(o.ref)]);
+    const edges = buildLoopBackLayer(canvas, merged, drawn, null);
+    expect(edges).toHaveLength(1);
+    expect(edges[0].source).toBe(anchorNodeId(o.ref));
+    // Lands on the front (x=0) step, not the back (x=600) one.
+    expect(edges[0].target).toBe("laneA::front");
+    expect(edges[0].className).toContain("woven-loopback");
+  });
+
+  it("marks a warm lead (an observed reply still in play) with is-warm; a close is not warm", () => {
+    const warm = outcome({ id: "w", channelId: "laneA", kind: "observed-response" });
+    const closed = outcome({ id: "c", channelId: "laneA", kind: "business-outcome" });
+    const canvas = canvasWith([warm, closed]);
+    const merged = mergedTwoStepLanes();
+    const drawn = new Set<string>([...merged.map((n) => n.id), anchorNodeId(warm.ref), anchorNodeId(closed.ref)]);
+    const edges = buildLoopBackLayer(canvas, merged, drawn, null);
+    const warmEdge = edges.find((e) => e.id === "loopback:w")!;
+    const closedEdge = edges.find((e) => e.id === "loopback:c")!;
+    expect(warmEdge.className).toContain("is-warm");
+    expect(closedEdge.className).not.toContain("is-warm");
+  });
+
+  it("skips an outcome with no originating pipeline, and one whose front step is not rendered", () => {
+    const noChannel = outcome({ id: "n", channelId: "" });
+    const unrendered = outcome({ id: "u", channelId: "laneGONE" });
+    const canvas = canvasWith([noChannel, unrendered]);
+    const merged = mergedTwoStepLanes();
+    const drawn = new Set<string>([...merged.map((n) => n.id), anchorNodeId(noChannel.ref), anchorNodeId(unrendered.ref)]);
+    expect(buildLoopBackLayer(canvas, merged, drawn, null)).toHaveLength(0);
+  });
+
+  it("skips an outcome whose own anchor is not drawn (honest, never a stranded edge)", () => {
+    const o = outcome({ id: "o1", channelId: "laneA" });
+    const canvas = canvasWith([o]);
+    const merged = mergedTwoStepLanes();
+    // Anchor id deliberately omitted from the drawn set.
+    const drawn = new Set<string>(merged.map((n) => n.id));
+    expect(buildLoopBackLayer(canvas, merged, drawn, null)).toHaveLength(0);
+  });
+
+  it("is emitted by buildWovenOverlay on the objects axis and absent on the type axis", () => {
+    const o = outcome({ id: "o1", channelId: "laneA", kind: "observed-response" });
+    const canvas = canvasWith([o]);
+    const woven = wovenGraph([objNode({ objectKey: "erie", laneKeys: ["laneA"] })], [
+      tie({ channelId: "laneA", objectKey: "erie", anchorStepId: "front" }),
+    ]);
+    const lanes = new Map<string, ChannelLane>([["laneA", lane({ offsetY: 0 })]]);
+    const mergedNodes = mergedTwoStepLanes();
+    const objectAxis = buildWovenOverlay({ woven, lanes, mergedNodes, axis: "objects", zoom: 1, focus: null, canvas });
+    expect(objectAxis.edges.some((e) => e.className?.includes("woven-loopback"))).toBe(true);
+    const typeAxis = buildWovenOverlay({ woven, lanes, mergedNodes, axis: "type", zoom: 0.2, focus: null, canvas });
+    expect(typeAxis.edges.some((e) => e.className?.includes("woven-loopback"))).toBe(false);
+  });
+});
+
+// ── No-home coverage: an outcome with NO originating pipeline loops back to its nearest HONEST anchor (the
+// question it answered, or a product it names), in the same calm motion vocabulary — retiring the old static
+// return edge. Never to a fake or undrawn target.
+function canvasWithAnchors(
+  outcomes: WovenCanvasOutcome[],
+  extraAnchors: WovenCanvas["anchors"],
+): WovenCanvas {
+  const base = canvasWith(outcomes);
+  return { ...base, anchors: [...base.anchors, ...extraAnchors] };
+}
+function anchor(kind: string, ref: { type: string; id: string }, label = ref.id): WovenCanvas["anchors"][number] {
+  return { id: `anchor:${kind}:${ref.id}`, ref, kind, label, body: null, authority: { owner: "x", id: ref.id, projectId: "p", updatedAt: null } };
+}
+
+describe("buildLoopBackLayer — no-home coverage", () => {
+  it("loops a pipeline-less outcome back to the QUESTION it answered when that anchor is drawn", () => {
+    const q = anchor("question", { type: "question", id: "q1" }, "Which segment?");
+    const o = outcome({ id: "o1", channelId: "", kind: "business-outcome" });
+    (o as WovenCanvasOutcome).questionId = "q1";
+    const canvas = canvasWithAnchors([o], [q]);
+    const merged = mergedTwoStepLanes();
+    const drawn = new Set<string>([...merged.map((n) => n.id), anchorNodeId(o.ref), anchorNodeId(q.ref)]);
+    const edges = buildLoopBackLayer(canvas, merged, drawn, null);
+    expect(edges).toHaveLength(1);
+    expect(edges[0].source).toBe(anchorNodeId(o.ref));
+    expect(edges[0].target).toBe(anchorNodeId(q.ref));
+    expect(edges[0].className).toContain("woven-loopback");
+  });
+
+  it("falls back to a PRODUCT anchor it names when there is no question", () => {
+    const p = anchor("product-thing", { type: "thing", id: "device" }, "Monitored device");
+    const o = outcome({ id: "o2", channelId: "", kind: "business-outcome" });
+    (o as WovenCanvasOutcome).productRefs = ["device"];
+    const canvas = canvasWithAnchors([o], [p]);
+    const merged = mergedTwoStepLanes();
+    const drawn = new Set<string>([...merged.map((n) => n.id), anchorNodeId(o.ref), anchorNodeId(p.ref)]);
+    const edges = buildLoopBackLayer(canvas, merged, drawn, null);
+    expect(edges).toHaveLength(1);
+    expect(edges[0].target).toBe(anchorNodeId(p.ref));
+  });
+
+  // FIX 6: a colliding ref.id on a NON-product anchor must NOT be targeted by a product-ref fallback. The
+  // old code matched any drawn anchor with the same ref.id — so a question/run/person sharing the id would
+  // be stroked to. The fallback now requires the matched anchor to actually be a product anchor.
+  it("does NOT target a same-id NON-product anchor for a product-ref fallback (wrong-target guard)", () => {
+    // A non-product anchor (a question) that happens to share the ref.id the outcome's productRef names.
+    const collidingQuestion = anchor("question", { type: "question", id: "device" }, "A question, not a product");
+    const o = outcome({ id: "o-collide", channelId: "", kind: "business-outcome" });
+    (o as WovenCanvasOutcome).productRefs = ["device"];
+    // No question the outcome answers, so the product-ref fallback is the only path — and the only drawn
+    // anchor with id "device" is the colliding QUESTION, which must be rejected.
+    const canvas = canvasWithAnchors([o], [collidingQuestion]);
+    const merged = mergedTwoStepLanes();
+    const drawn = new Set<string>([...merged.map((n) => n.id), anchorNodeId(o.ref), anchorNodeId(collidingQuestion.ref)]);
+    // Nothing honest to target → no stroke, never a wrong-target stroke to the question.
+    expect(buildLoopBackLayer(canvas, merged, drawn, null)).toHaveLength(0);
+  });
+
+  it("still targets the PRODUCT anchor when both a colliding non-product and the real product anchor are drawn", () => {
+    const collidingRun = anchor("run", { type: "run", id: "device" }, "A run sharing the id");
+    const realProduct = anchor("product-thing", { type: "thing", id: "device" }, "Monitored device");
+    const o = outcome({ id: "o-both", channelId: "", kind: "business-outcome" });
+    (o as WovenCanvasOutcome).productRefs = ["device"];
+    const canvas = canvasWithAnchors([o], [collidingRun, realProduct]);
+    const merged = mergedTwoStepLanes();
+    const drawn = new Set<string>([
+      ...merged.map((n) => n.id),
+      anchorNodeId(o.ref),
+      anchorNodeId(collidingRun.ref),
+      anchorNodeId(realProduct.ref),
+    ]);
+    const edges = buildLoopBackLayer(canvas, merged, drawn, null);
+    expect(edges).toHaveLength(1);
+    expect(edges[0].target).toBe(anchorNodeId(realProduct.ref));
+  });
+
+  it("carries the warm ember register to a no-home warm lead just like a pipelined one", () => {
+    const q = anchor("question", { type: "question", id: "q1" });
+    const warm = outcome({ id: "w", channelId: "", kind: "observed-response" });
+    (warm as WovenCanvasOutcome).questionId = "q1";
+    const canvas = canvasWithAnchors([warm], [q]);
+    const merged = mergedTwoStepLanes();
+    const drawn = new Set<string>([...merged.map((n) => n.id), anchorNodeId(warm.ref), anchorNodeId(q.ref)]);
+    const edges = buildLoopBackLayer(canvas, merged, drawn, null);
+    expect(edges[0].className).toContain("is-warm");
+  });
+
+  it("never strokes to a fake target: a no-home outcome whose question/product anchor is not drawn is skipped", () => {
+    const o = outcome({ id: "o3", channelId: "" });
+    (o as WovenCanvasOutcome).questionId = "q-missing";
+    (o as WovenCanvasOutcome).productRefs = ["p-missing"];
+    const canvas = canvasWith([o]); // no question/product anchor drawn
+    const merged = mergedTwoStepLanes();
+    const drawn = new Set<string>([...merged.map((n) => n.id), anchorNodeId(o.ref)]);
+    expect(buildLoopBackLayer(canvas, merged, drawn, null)).toHaveLength(0);
+  });
+
+  it("prefers the pipeline front over the no-home anchor when the outcome HAS a resolvable pipeline", () => {
+    const q = anchor("question", { type: "question", id: "q1" });
+    const o = outcome({ id: "o4", channelId: "laneA", kind: "business-outcome" });
+    (o as WovenCanvasOutcome).questionId = "q1";
+    const canvas = canvasWithAnchors([o], [q]);
+    const merged = mergedTwoStepLanes();
+    const drawn = new Set<string>([...merged.map((n) => n.id), anchorNodeId(o.ref), anchorNodeId(q.ref)]);
+    const edges = buildLoopBackLayer(canvas, merged, drawn, null);
+    expect(edges[0].target).toBe("laneA::front"); // pipeline front wins
+  });
+
+  it("loops a no-home outcome back even with zero pipeline lanes (object axis, no merged step cards)", () => {
+    const q = anchor("question", { type: "question", id: "q1" });
+    const o = outcome({ id: "o5", channelId: "", kind: "business-outcome" });
+    (o as WovenCanvasOutcome).questionId = "q1";
+    const canvas = canvasWithAnchors([o], [q]);
+    const edges = buildLoopBackLayer(canvas, [], new Set([anchorNodeId(o.ref), anchorNodeId(q.ref)]), null);
+    expect(edges).toHaveLength(1);
+    expect(edges[0].target).toBe(anchorNodeId(q.ref));
   });
 });

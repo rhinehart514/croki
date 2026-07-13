@@ -1,6 +1,5 @@
-import { compositeRank } from "../path-portfolio.mjs";
+import { clamp01, composeRankingSignals, mean, rankingStrength } from "../path-portfolio.mjs";
 import { tiltedSignalWeights } from "../reallocation.mjs";
-import { solidityRank, SOLIDITY_LADDER } from "../evidence.mjs";
 import { primaryWeakness } from "./weakness.mjs";
 
 const WALK_EDGE_TYPES = new Set(["leads_to", "targets", "uses", "produced"]);
@@ -12,23 +11,6 @@ const WEAKNESS_PENALTY = {
   specificity: 0.1,
   evidence: 0.1,
 };
-
-function strength(solidity) {
-  if (!solidity) return 0;
-  const len = SOLIDITY_LADDER.length;
-  return Math.max(0, (len - solidityRank(solidity)) / len);
-}
-
-function mean(nums) {
-  const finite = nums.filter((n) => Number.isFinite(n));
-  return finite.length ? finite.reduce((a, b) => a + b, 0) / finite.length : 0;
-}
-
-function clamp01(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return 0;
-  return Math.min(1, Math.max(0, n));
-}
 
 function pathKey(nodeIds) {
   return [...new Set(nodeIds)].sort().join("\0");
@@ -137,28 +119,20 @@ export function computeObjectPathSignals(candidate, graph = {}, weights) {
   const productNodes = nodes.filter((node) => node.domain === "product");
   const channelNodes = nodes.filter((node) => node.type === "channel" || node.domain === "audience");
   const measurementNodes = nodes.filter((node) => node.domain === "measurement" || node.type === "success_criteria");
-  const evidenceStrength = mean(nodes.map((node) => strength(node.solidity)));
-  const productReadiness = mean(productNodes.map((node) => strength(node.solidity)));
-  const channelReachability = mean(channelNodes.map((node) => strength(node.solidity)));
+  const evidenceStrength = mean(nodes.map((node) => rankingStrength(node.solidity)));
+  const productReadiness = mean(productNodes.map((node) => rankingStrength(node.solidity)));
+  const channelReachability = mean(channelNodes.map((node) => rankingStrength(node.solidity)));
   const measurementReadiness = measurementNodes.length
-    ? mean(measurementNodes.map((node) => strength(node.solidity) || (node.type === "contract" ? 0.75 : 0.25)))
+    ? mean(measurementNodes.map((node) => rankingStrength(node.solidity) || (node.type === "contract" ? 0.75 : 0.25)))
     : 0;
   const complexity = Math.min(nodes.length, 8) / 8;
-  const speedToTest = clamp01(((channelReachability + productReadiness) / 2) * (1 - 0.4 * complexity));
   const confidenceSignals = nodes.map((node) => Number(node.confidence) / 100).filter(Number.isFinite);
   const upside = confidenceSignals.length ? mean(confidenceSignals) : evidenceStrength;
   const founderFit = nodes.length ? nodes.filter((node) => node.origin === "founder").length / nodes.length : 0;
-  const signals = {
-    evidenceStrength: clamp01(evidenceStrength),
-    productReadiness: clamp01(productReadiness),
-    channelReachability: clamp01(channelReachability),
-    measurementReadiness: clamp01(measurementReadiness),
-    speedToTest: clamp01(speedToTest),
-    upside: clamp01(upside),
-    founderFit: clamp01(founderFit),
-  };
-  signals.composite = compositeRank(signals, weights);
-  return signals;
+  return composeRankingSignals({
+    evidenceStrength, productReadiness, channelReachability, measurementReadiness,
+    complexity, upside, founderFit,
+  }, weights);
 }
 
 export function scorePath(candidate, graph = {}, weights) {
@@ -169,7 +143,7 @@ export function scorePath(candidate, graph = {}, weights) {
   const penalty = firedWeaknesses.reduce((score, item) => score * (1 - (WEAKNESS_PENALTY[item.kind] ?? 0.05)), 1);
   const score = clamp01(signals.composite * penalty);
   const weakestLink = nodes
-    .map((node) => ({ nodeId: node.id, weakness: primaryWeakness(node.weaknesses ?? []), signal: Math.min(strength(node.solidity), Number(node.confidence ?? 0) / 100 || 0) }))
+    .map((node) => ({ nodeId: node.id, weakness: primaryWeakness(node.weaknesses ?? []), signal: Math.min(rankingStrength(node.solidity), Number(node.confidence ?? 0) / 100 || 0) }))
     .filter((item) => item.weakness)
     .sort((a, b) => a.signal - b.signal)[0] ?? null;
   return { ...candidate, name: candidateName(candidate, nodes), score, signals, weakestLink };

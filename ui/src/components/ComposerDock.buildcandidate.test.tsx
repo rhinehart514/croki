@@ -51,6 +51,39 @@ function candidateSession(): OperatorSession {
 }
 
 describe("ComposerDock — build a picked candidate (WI-C client seam)", () => {
+  it("keeps forming open when candidate choices are already waiting on the first render", () => {
+    const { container } = render(
+      <ComposerDock
+        session={candidateSession()}
+        running={false}
+        altitude="forming"
+        onSend={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+
+    expect(container.querySelector(".composer-dock")).not.toHaveClass("collapsed");
+    expect(screen.getAllByRole("button", { name: /prepare path/i })).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: /open the conversation/i })).not.toBeInTheDocument();
+  });
+
+  it("collapses passive forming when there is no founder choice to make", () => {
+    const passive = { ...candidateSession(), pendingCandidates: undefined } as unknown as OperatorSession;
+    const { container } = render(
+      <ComposerDock
+        session={passive}
+        running={false}
+        altitude="forming"
+        onSend={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+
+    expect(container.querySelector(".composer-dock")).toHaveClass("collapsed", "altitude-forming");
+    expect(screen.getByRole("button", { name: /open the conversation/i })).toHaveClass("dock-rail-launcher");
+    expect(screen.queryByRole("button", { name: /prepare path/i })).not.toBeInTheDocument();
+  });
+
   it("routes the pick through onBuildCandidate with the chosen candidate (the authorized compose-to-gate entry)", () => {
     const onBuildCandidate = vi.fn();
     render(
@@ -64,7 +97,7 @@ describe("ComposerDock — build a picked candidate (WI-C client seam)", () => {
     );
 
     // Two shapes render; picking the first fires the authorized build path with that exact candidate.
-    const buildButtons = screen.getAllByRole("button", { name: /build this/i });
+    const buildButtons = screen.getAllByRole("button", { name: /prepare path/i });
     expect(buildButtons.length).toBe(2);
     fireEvent.click(buildButtons[0]);
 
@@ -86,7 +119,7 @@ describe("ComposerDock — build a picked candidate (WI-C client seam)", () => {
       />,
     );
 
-    fireEvent.click(screen.getAllByRole("button", { name: /build this/i })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /prepare path/i })[0]);
 
     // The pick starts the build; nothing on this path may approve/release a gate.
     expect(onBuildCandidate).toHaveBeenCalledTimes(1);
@@ -104,7 +137,7 @@ describe("ComposerDock — build a picked candidate (WI-C client seam)", () => {
       />,
     );
 
-    fireEvent.click(screen.getAllByRole("button", { name: /build this/i })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /prepare path/i })[0]);
 
     // The fallback still asks to compose and run TO THE GATE — never a shortcut that skips it.
     expect(onSend).toHaveBeenCalledTimes(1);

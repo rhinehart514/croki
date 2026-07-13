@@ -40,6 +40,43 @@ const DETAIL_RULES: Array<[RegExp, string]> = [
   [/^Blind:\s*[a-z][a-z0-9_]* could not be confirmed\.?$/i, "Couldn't confirm the customer success signal in your product yet."],
 ];
 
+// Does this string look like machine output rather than a written sentence? JSON, a stack trace, a bare
+// HTTP status, or a bare URL all read as raw — and so does the run harness's own error envelope, which
+// arrives as prose ("Claude Code returned an error result: …", "API Error: Connection closed …"). A
+// founder must never read any of it, so we detect the shape and swap in one plain sentence instead.
+function looksLikeMachineError(text: string): boolean {
+  if (/^[[{]/.test(text)) return true; // starts as JSON
+  if (/"(type|status|error|message|code)"\s*:/.test(text)) return true; // JSON error fields
+  if (/\b(at\s+\w+.*:\d+:\d+|Error:|Traceback|Exception)\b/.test(text)) return true; // stack / exception
+  if (/^\d{3}\b/.test(text) && text.length < 40) return true; // bare status like "400 Bad Request"
+  if (/https?:\/\//.test(text) && text.length < 80) return true; // bare URL, no prose
+  // The harness/model envelopes — transport and quota errors that leak as prose. Anchored to error
+  // phrasing only: a reasoning turn that merely mentions the engine by name is scrubbed elsewhere, not
+  // mistaken for a failure here.
+  return /returned an error result|\bapi error\b|connection closed mid-response|maximum number of turns|max_turns|(?:session|usage) limit|hit your session|response above may be incomplete/i.test(text);
+}
+
+// Map any raw machine/model/harness error into a single honest founder sentence — or null if the text
+// already reads like a written sentence and should pass through. The one place a run's failure becomes
+// founder language; it never names the engine, quotes a payload, or shows a path. Shared by the crew
+// thread (via rewriteDetail) and the decisions inbox, so a failure reads the same everywhere.
+export function plainErrorLine(raw: string | null | undefined): string | null {
+  const text = (raw ?? "").trim();
+  if (!text || !looksLikeMachineError(text)) return null;
+  const lower = text.toLowerCase();
+  if (/model is not supported|not supported when using|unsupported model|model_not_found|does not have access to/.test(lower))
+    return "A teammate couldn't finish — the model it needs isn't available on your plan.";
+  if (/maximum number of turns|max_turns|turn budget/.test(lower))
+    return "A teammate ran long and paused before finishing. You can nudge it to keep going.";
+  if (/session limit|usage limit|rate limit|rate_limit|too many requests|\b429\b|quota|hit your session/.test(lower))
+    return "A teammate hit a usage limit and paused. It picks back up once the limit resets.";
+  if (/unauthor|forbidden|invalid api key|authentication|\b401\b|\b403\b/.test(lower))
+    return "A teammate couldn't connect — a login or key needs your attention.";
+  if (/timeout|timed out|econnreset|connection closed|network|fetch failed|overloaded|\b5\d{2}\b/.test(lower))
+    return "A teammate briefly lost its connection before it finished.";
+  return "A teammate couldn't finish this run. Nothing was sent.";
+}
+
 // Founder-facing word swaps applied only to the short status labels (titles) and to details we already
 // rewrote — never to raw reasoning prose, where "channel" can legitimately mean a marketing channel.
 function swapLabelWords(s: string): string {
@@ -52,6 +89,8 @@ function swapLabelWords(s: string): string {
 }
 
 function rewriteDetail(detail: string): { text: string; rewritten: boolean } {
+  const machineError = plainErrorLine(detail);
+  if (machineError) return { text: machineError, rewritten: true };
   if (DROP_DETAIL.some((re) => re.test(detail))) return { text: "", rewritten: true };
   for (const [re, to] of DETAIL_RULES) if (re.test(detail)) return { text: to, rewritten: true };
   return { text: detail, rewritten: false };
@@ -62,9 +101,18 @@ function rewriteDetail(detail: string): { text: string; rewritten: boolean } {
 // bans, including old persisted sessions written before that prompt rule existed.
 export function rewriteFounderLanguage(detail: string): string {
   return detail
+    // Never let engine plumbing surface inside a reasoning turn: the harness name, an absolute path to
+    // the founder's machine, or the internal "(dogfood)" project tag all get scrubbed before anything else.
+    .replace(/\bClaude Code\b/g, "the crew")
+    .replace(/\/Users\/[^\s)"'`]+/g, "your project folder")
+    .replace(/\s*\((?:dogfood|internal)\)/gi, "")
+    .replace(/\s*\bdogfood\b/gi, "")
     .replace(/access requests preserve a\s+`?ref`?\s+source/gi, "access requests record where someone came from")
     .replace(/the actual\s+`?project_created`?\s+conversion is still blind/gi, "we still cannot see whether those people go on to create a project")
-    .replace(/`([a-z][a-z0-9]*(?:_[a-z0-9]+)+)`/g, (_match, id: string) => id.replaceAll("_", " "))
+    // A backticked machine slug — `rodentradar-2`, `gtm-ide`, `project_created` — is an internal id, never
+    // founder language. De-slug it to plain words and drop a trailing duplicate-suffix number so it reads
+    // like a name. Runs after the specific semantic rules above, which depend on the raw ids.
+    .replace(/`([a-z][a-z0-9]*(?:[-_][a-z0-9]+)+)`/g, (_match, id: string) => id.replace(/[-_]\d+$/, "").replaceAll(/[-_]/g, " "))
     .replace(/\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/g, (id) => id.replaceAll("_", " "))
     .replace(/\bearning inbound access-requests\b/gi, "bringing in requests from owners")
     .replace(/\bref[- ]tagged\b/gi, "trackable")

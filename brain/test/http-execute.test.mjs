@@ -5,6 +5,11 @@ import path from "node:path";
 import { afterEach, describe, it } from "node:test";
 import { run } from "../src/connectors/execute/http.mjs";
 import { setCredential, removeCredential } from "../src/credential-store.mjs";
+import { OUTWARD_RELEASE } from "../src/graph.mjs";
+
+// These tests exercise the founder-RELEASED outward path, so each node carries the host-issued outward-
+// release capability the graph runner threads onto node.runtime on a founder outward-approval run (rail 1).
+const RELEASED = { outwardRelease: OUTWARD_RELEASE };
 
 // Isolate the BYO-credential store to a temp home so resolving the send auth never touches ~/.gtm-ide.
 process.env.GTM_IDE_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-http-creds-"));
@@ -21,6 +26,7 @@ describe("HTTP execution connector", () => {
           return { ok: true, status: 202, json: async () => ({ id: "provider-123" }) };
         },
       },
+      runtime: RELEASED,
     }, [
       { email: "approved@example.com", draft: "Hello", approved: true, gtmActionId: "gtm-action-1" },
       { email: "pending@example.com", draft: "No", approved: false, gtmActionId: "gtm-action-2" },
@@ -41,6 +47,7 @@ describe("HTTP execution connector", () => {
         endpoint: "https://relay.example/send",
         fetchImpl: async () => { called = true; },
       },
+      runtime: RELEASED,
     }, [{ approved: true, draft: "Hello" }]);
 
     assert.equal(called, false);
@@ -67,6 +74,7 @@ describe("HTTP send auth — BYO credential resolution (key resolution only, sen
           return { ok: true, status: 202, json: async () => ({ id: "p-1" }) };
         },
       },
+      runtime: RELEASED,
     }, [{ email: "a@example.com", draft: "Hi", approved: true, gtmActionId: "gtm-1" }], context);
     return { result, requests };
   }

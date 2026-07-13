@@ -1,8 +1,9 @@
 import { runClaudeQuery } from './agent-bridge.mjs';
+import crypto from 'node:crypto';
 import { buildComposerBriefing } from './composer-briefing.mjs';
 import { classifyComposerIntent } from './composer-router.mjs';
-import { resumeOperatorSession } from './operator-runtime.mjs';
-import { getOperatorSession } from './operator-store.mjs';
+import { executeOperatorTool, resumeOperatorSession } from './operator-runtime.mjs';
+import { appendOperatorEvent, getOperatorSession, saveOperatorSession } from './operator-store.mjs';
 import { getProductModel } from './product-model-store.mjs';
 import { loadProject } from './project-store.mjs';
 
@@ -32,6 +33,9 @@ export async function handleComposerTurn({ projectId, sessionId, text, hints }, 
     resume = resumeOperatorSession,
     runClaudeQuery: query = runClaudeQuery,
     productModel = getProductModel,
+    persistExchange = persistComposerExchange,
+    materializeAnswer = materializeComposerAnswer,
+    materializeGoal = materializeFounderGoal,
     options = {},
   } = runtime;
 
@@ -41,14 +45,16 @@ export async function handleComposerTurn({ projectId, sessionId, text, hints }, 
 
   // Run stays on the autonomous drive — the founder asked the crew to ship to the gate.
   if (intent === 'run') {
-    const session = resume(sessionId, text, { hints, options });
+    await materializeGoal(sessionId, text, options);
+    const session = resume(sessionId, text, { hints, options, requiredMutation: mutationRequirement(text, intent) });
     return { handled: 'drive', intent: 'run', grant: Boolean(classification.grant), session };
   }
 
   // A confident act imperative drives; a LOW-confidence "act" (the classifier's catch-all) is really
   // ambiguous chat, so it falls through to a real conversational turn rather than silently building.
   if (intent === 'act' && !belowBar(confidence, ACT_DRIVE_MIN)) {
-    const session = resume(sessionId, text, { hints, options });
+    await materializeGoal(sessionId, text, options);
+    const session = resume(sessionId, text, { hints, options, requiredMutation: mutationRequirement(text, intent) });
     return { handled: 'drive', intent: 'act', grant: false, session };
   }
 
@@ -79,7 +85,75 @@ export async function handleComposerTurn({ projectId, sessionId, text, hints }, 
     { projectId, sessionId, text },
     { query, buildBriefing, productModel, options },
   );
+  persistExchange(sessionId, text, answer, options);
+  await materializeAnswer(sessionId, text, answer, options);
   return { handled: 'fast', intent: 'converse', answer };
+}
+
+function mutationRequirement(text, intent) {
+  if (intent === 'run') return 'run';
+  return /\b(?:pipeline|workflow|executable path)\b/i.test(String(text ?? '')) ? 'pipeline' : 'durable_work';
+}
+
+async function materializeFounderGoal(sessionId, text, options = {}) {
+  let session;
+  try { session = getOperatorSession(sessionId, options); } catch { return null; }
+  const prior = (session.events ?? []).find((event) => event.type === 'goal_recorded');
+  if (prior) return session;
+  const statement = String(session.goal || text || '').trim();
+  if (!statement) return session;
+  const execution = await executeOperatorTool(session, {
+    id: `founder-goal-${session.id}`,
+    name: 'record',
+    input: {
+      kind: 'goal',
+      idempotencyKey: `${session.id}:founder-goal`,
+      value: { statement, status: 'active', scopeRefs: session.contextRefs ?? [] },
+    },
+  }, options);
+  return execution.session;
+}
+
+function persistComposerExchange(sessionId, founderText, crewText, options = {}) {
+  let session;
+  try { session = getOperatorSession(sessionId, options); } catch { return null; }
+  session = appendOperatorEvent(session, {
+    type: 'founder_message',
+    title: 'Founder',
+    detail: String(founderText ?? '').trim(),
+  });
+  session = appendOperatorEvent(session, {
+    type: 'crew_message',
+    title: 'Crew',
+    detail: String(crewText ?? '').trim(),
+  });
+  return saveOperatorSession(session, options);
+}
+
+async function materializeComposerAnswer(sessionId, founderText, crewText, options = {}) {
+  let session;
+  try { session = getOperatorSession(sessionId, options); } catch { return null; }
+  const content = String(crewText ?? '').trim();
+  if (!content) return null;
+  const key = crypto.createHash('sha256').update(`${session.id}\u0000${founderText}\u0000${content}`).digest('hex').slice(0, 24);
+  const execution = await executeOperatorTool(session, {
+    id: `composer-answer-${key}`,
+    name: 'record',
+    input: {
+      kind: 'work_artifact',
+      idempotencyKey: `${session.id}:composer-answer:${key}`,
+      refs: session.contextRefs ?? [],
+      value: {
+        kind: 'crew-answer',
+        title: String(founderText ?? 'Crew answer').trim().slice(0, 120),
+        summary: content.slice(0, 280),
+        content,
+        status: 'active',
+        provenance: 'generated',
+      },
+    },
+  }, options);
+  return execution.session;
 }
 
 // Have the crew write the answer in plain language, grounded in a block of real context. Used by the

@@ -6,6 +6,7 @@
   top: 72px;
   right: var(--space-4);
   z-index: 32;
+  width: 68px;
 }
 .open-canvas-launcher-trigger {
   display: inline-flex;
@@ -25,6 +26,8 @@
   cursor: pointer;
   box-shadow: var(--shadow-sm);
   transition: border-color 120ms var(--ease), color 120ms var(--ease);
+  width: 100%;
+  justify-content: center;
 }
 .open-canvas-launcher-trigger:hover,
 .open-canvas-launcher.open .open-canvas-launcher-trigger { border-color: var(--ink-2); color: var(--ink); }
@@ -60,6 +63,12 @@
 }
 .open-canvas-launcher-menu button:hover { background: var(--surface-2); color: var(--ink); }
 .open-canvas-launcher-menu button:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+@media (max-width: 760px) {
+  /* Narrow keeps the core loop alive: one visible Add action opens the same canonical goal/work forms. */
+  .open-canvas-launcher { top: 68px; right: var(--space-2); width: 76px; }
+  .open-canvas-launcher-trigger { min-height: 44px; }
+  .open-canvas-launcher-menu button { min-height: 44px; }
+}
 .open-canvas-workbench button {
   min-height: 32px;
   border: 1px solid var(--line-2);
@@ -259,6 +268,19 @@
 .open-canvas-error { margin: var(--space-4) 0 0; padding: var(--space-3); border: 1px solid color-mix(in oklch, var(--danger), transparent 65%); border-radius: var(--r-sm); color: var(--danger); font-size: var(--text-sm); }
 .open-canvas-muted { color: var(--muted); font-size: var(--text-sm); }
 @media (max-width: 640px) {
-  .open-canvas-workbench { inset: 64px var(--space-2) var(--space-2); width: auto; }
-  .open-canvas-launcher { top: 64px; right: var(--space-2); }
+  /* Narrow canvas work is a readable mode, not a sheet over another readable mode. It occupies the same
+     bounded viewport as Outline and the expanded Composer; sibling-state coordination in index.css makes
+     those surfaces replace one another instead of stacking. */
+  .open-canvas-workbench {
+    position: fixed;
+    inset: 64px var(--space-2) var(--space-2);
+    width: auto;
+    max-height: none;
+    border-radius: var(--r-md);
+  }
+  .open-canvas-workbench .open-canvas-close { width: 44px; min-height: 44px; }
+  .open-canvas-workbench input,
+  .open-canvas-workbench select { min-height: 44px; }
+  /* Add stays in the first command row. Terrain status appears only when needed and owns a later row. */
+  .open-canvas-launcher { position: fixed; top: 68px; right: var(--space-2); }
 }

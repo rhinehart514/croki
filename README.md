@@ -1,13 +1,21 @@
 # Drover
 
+**Vibe code your go-to-market.** The same relationship a founder already has with an AI coding tool — it
+works, you watch, you grab the wheel, nothing ships without you — pointed at getting users, and grounded in
+the real product because Drover read the codebase. Go-to-market leads because it is the wound; changing the
+product is a co-equal use of the same watch-steer-approve relationship.
+
 **Alpha · v0.3.3** — the multi-goal open canvas, direct creation and editing, spatial regions,
 Claude/Codex handoff, isolated product changes, wall, outcome, and taste systems are built. Live provider
 and outside-founder verification remains, and no outside founder has yet used Drover to produce an attributable
 real-world result. [The state
 document](docs/STATE.md) keeps the dated, honest line between working software and market proof.
 
-**Drover gives Claude, Codex, and a founder one living canvas for understanding, changing, and taking a
-product to market—across dozens of independent or related goals.**
+Drover's active direction is the **experiment machine**: a living machine of many parallel, grounded,
+agent-built experiments across go-to-market and product, for one venture at a time. The founder sees, refines,
+and approves; the crew builds and runs; real outcomes loop back on the canvas as motion, never a scoreboard.
+The build contract for that direction is [docs/EXPERIMENT-MACHINE-SPEC.md](docs/EXPERIMENT-MACHINE-SPEC.md);
+the north-star goal is [docs/production-direction/EXPERIMENT-MACHINE-GOAL.md](docs/production-direction/EXPERIMENT-MACHINE-GOAL.md).
 
 ## The product
 

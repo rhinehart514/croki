@@ -3,12 +3,12 @@ import type {
   OperatorComparisonGroup, OperatorSession, OperatorSessionSummary,
   ScanPreview,
   ProjectSummary,
-  ContextManifest, GtmLibrary,
+  GtmLibrary,
   GraphOperation, GTMContractAudit,
   ProductModel, ProductModelEdit,
   CapabilityServer, CapabilityInventory, SenderCredential, Person, CrossReferenceResult, ChannelFeed, DirectedFeed,
   ClarityObject, ClarityKind, Me, Team, TeamMember, TeamRole, BoardView,
-  ChannelMeta, Input, ObjectGraphView, GTMItem, PendingInbox, OperatingView,
+  ChannelMeta, Input, ObjectGraphView, GTMItem, PendingInbox, ReplyAlert, GtmExperiment, OperatingView,
   ProductImplication, TerrainCrewRead, TerrainHypothesis, TerrainRead, TerrainView,
 } from "@/types";
 import { identityHeaders } from "@/lib/identity";
@@ -43,6 +43,13 @@ async function get<T>(path: string): Promise<T> {
   const res = await fetch(path, { headers: { ...identityHeaders() } });
   if (!res.ok) throw new Error(`${path} failed (${res.status}).`);
   return res.json() as Promise<T>;
+}
+
+async function del<T>(path: string): Promise<T> {
+  const res = await fetch(path, { method: "DELETE", headers: { ...identityHeaders() } });
+  const payload = (await res.json().catch(() => ({}))) as T & { error?: string };
+  if (!res.ok) throw new Error((payload as { error?: string }).error || `${path} failed (${res.status}).`);
+  return payload;
 }
 
 export const getFounderSession = () => get<{ authenticated: boolean }>("/api/founder-session");
@@ -126,19 +133,6 @@ export type WorkspaceChangeRevision = {
   diff: string; patchHash?: string; sourceReceiptId?: string; safety?: string; summary?: string;
 };
 export type WorkspaceApplyReadiness = { ready: boolean; reasons: string[]; sameBase: boolean; sourceStatus: string };
-export const getWorkspaceChangeRevision = async (workspaceId: string, revisionId: string) => {
-  const { workspace } = await get<{ workspace: { revisions: WorkspaceChangeRevision[] } }>(`/api/workspaces/${encodeURIComponent(workspaceId)}`);
-  const revision = workspace.revisions.find((item) => item.id === revisionId);
-  if (!revision) throw new Error("The staged product change review could not be found.");
-  return revision;
-};
-export const reviewWorkspaceChange = (workspaceId: string, revisionId: string, decision: "approve" | "reject") =>
-  post<{ revision: WorkspaceChangeRevision }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/revisions/${encodeURIComponent(revisionId)}/review`, { decision });
-export const getWorkspaceChangeReadiness = (workspaceId: string, revisionId: string) =>
-  get<{ readiness: WorkspaceApplyReadiness }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/revisions/${encodeURIComponent(revisionId)}/readiness`);
-export const applyWorkspaceChange = (workspaceId: string, revisionId: string) =>
-  post<{ revision: WorkspaceChangeRevision }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/revisions/${encodeURIComponent(revisionId)}/apply`, { confirm: true });
-
 export const createGoal = (projectId: string, input: CreateGoalInput) =>
   post<{ goal: Goal }>(projectCollectionPath(projectId, "goals"), input);
 
@@ -296,12 +290,6 @@ export const restoreWorkRelationship = (
 // ── Engine OS ───────────────────────────────────────────────────────────────
 export const getEngineState = (channelId?: string) =>
   get<{ engine: EngineState }>(`/api/engine${channelId ? `?channel=${encodeURIComponent(channelId)}` : ""}`);
-
-// ── Context substrate (the multiplier, made visible) ──────────────────────────
-export const getContext = (channelId?: string) =>
-  get<{ channelId: string; manifest: ContextManifest; text: string }>(
-    `/api/context${channelId ? `?channel=${encodeURIComponent(channelId)}` : ""}`
-  );
 
 // ── The library — subagents and skills on disk (parts of GTM engineering) ─────
 export const getLibrary = () => get<GtmLibrary>("/api/library");
@@ -490,6 +478,13 @@ export const getOperatorSession = (sessionId: string, projectId?: string) =>
     `/api/operator/sessions/${sessionId}${projectId ? `?project=${encodeURIComponent(projectId)}` : ""}`,
   );
 
+// Permanently delete a chat from the founder's history. Scoped to the project so a chat can only be
+// removed from the product it belongs to. A running chat is refused (409) — stop it first.
+export const deleteOperatorSession = (sessionId: string, projectId?: string) =>
+  del<{ deleted: boolean; id: string }>(
+    `/api/operator/sessions/${encodeURIComponent(sessionId)}${projectId ? `?project=${encodeURIComponent(projectId)}` : ""}`,
+  );
+
 // One durable conversation per project. `reuse: true` returns the project's live (non-terminal) thread
 // when one exists (`reused: true`) instead of spawning a parallel session, and only creates a fresh one
 // (`reused: false`) when there is none — so the dock can only ever talk about the project on screen.
@@ -510,9 +505,10 @@ export type OperatorSessionContext = {
 };
 export const createOperatorSession = (
   projectId: string, goal: string, graphId?: string, fresh?: boolean, context?: OperatorSessionContext, model?: string,
+  reuse?: boolean,
 ) =>
   post<{ session: OperatorSession; reused: boolean }>("/api/operator/sessions", {
-    projectId, reuse: !fresh, goal, graphId: fresh ? undefined : graphId, fresh,
+    projectId, reuse: reuse ?? !fresh, goal, graphId: fresh ? undefined : graphId, fresh,
     ...(model ? { model } : {}),
     ...(context?.questionId ? { questionId: context.questionId } : {}),
     ...(context?.participantRefs?.length ? { participantRefs: context.participantRefs } : {}),
@@ -600,7 +596,7 @@ export const resumeOperatorSession = (
 export const resolveOperatorGate = (
   sessionId: string,
   projectId: string,
-  payload: { approvals?: Record<string, boolean>; decisions?: Decisions },
+  payload: { approvals?: Record<string, boolean>; decisions?: Decisions; deployConfirmed?: boolean },
 ) => post<{ session: OperatorSession }>(`/api/operator/sessions/${sessionId}/gate`, { projectId, ...payload });
 
 // Mid-run steer — a founder message delivered to a RUNNING or gated session WITHOUT resuming or releasing
@@ -937,6 +933,34 @@ export const getBoard = (projectId: string) =>
 export const getPendingInbox = (projectId?: string) =>
   get<PendingInbox>(`/api/pending-inbox${projectId ? `?project=${encodeURIComponent(projectId)}` : ""}`);
 
+// ── Reply alert + decide-together (rail 5 push) ──────────────────────────────
+// Read the full decide-together payload for one real reply — the reply, its joined context, and the
+// machine's suggested next move. Read-only: fetching it never auto-replies, routes, or runs.
+export const getReplyAlert = (projectId: string, inputId: string) =>
+  get<{ projectId: string; alert: ReplyAlert }>(
+    `/api/projects/${encodeURIComponent(projectId)}/reply-alerts/${encodeURIComponent(inputId)}`,
+  );
+
+// ── Mutation-from-a-loser (rail 2) ───────────────────────────────────────────
+// Propose a variant off a killed/failed experiment — a new open experiment mutated off the loser, for
+// the founder to greenlight. NEVER auto-kills the loser, NEVER runs the variant; this only appends a
+// proposed experiment. Returns the proposed variant.
+export const proposeVariantFromLoser = (projectId: string, experimentId: string) =>
+  post<{ projectId: string; artifact: WorkArtifactRevision; experiment: GtmExperiment; variant: GtmExperiment; created: boolean }>(
+    `/api/projects/${encodeURIComponent(projectId)}/experiments/${encodeURIComponent(experimentId)}/propose-variant`,
+    {},
+  );
+
+// ── Outside-trigger → proposed experiment (fourth birth source) ──────────────
+// Propose an experiment off a qualifying outside-trigger input, for the founder to greenlight. NEVER
+// runs the experiment or routes the input into a live channel; this only appends a proposal and stamps
+// the input as routed-to-proposal. Returns the proposed experiment.
+export const proposeExperimentFromTrigger = (projectId: string, inputId: string) =>
+  post<{ projectId: string; artifact: WorkArtifactRevision; experiment: GtmExperiment; input: unknown; created: boolean }>(
+    `/api/projects/${encodeURIComponent(projectId)}/inputs/${encodeURIComponent(inputId)}/propose-experiment`,
+    {},
+  );
+
 export const getObjectGraph = (projectId: string) =>
   get<ObjectGraphView>(`/api/projects/${encodeURIComponent(projectId)}/object-graph`);
 
@@ -1011,57 +1035,6 @@ export const applyObjectGraphOperations = (
   `/api/projects/${encodeURIComponent(projectId)}/object-graph`,
   { operations },
 );
-
-// Per-card ideation: given a source card and a plain target ("triggers", "messages"), the server runs
-// the SAME live grounded Claude generator the /ideas/round route uses and hands back a few decidable
-// candidate cards. Persists nothing — a candidate becomes a real draft card only when the founder adds
-// it (via applyObjectGraphOperations above). Each candidate is a founder-language statement plus the
-// object type the target (or the idea's own words) implies (null is fine — a loose, untyped draft).
-export type ObjectCandidate = { id: string; statement: string; type: string | null; rationale: string | null };
-
-// The founder watches Claude think: the streaming per-card ideate. `reasoning` events carry the model's
-// plain-language text deltas as it writes; the single `candidates` event lands the ideas at the end.
-// Mirrors runGraphStream's SSE reader. Returns when the stream ends. (The one-shot POST .../ideate route
-// still exists on the server for non-streaming callers; the canvas "+" uses this streaming path.)
-type ObjectIdeateStreamEvent =
-  | { type: "reasoning"; text: string }
-  | { type: "candidates"; candidates: ObjectCandidate[] }
-  | { type: "ideate_error"; error: string };
-
-export async function ideateObjectCandidatesStream(
-  projectId: string,
-  body: { target: string; sourceNodeId?: string },
-  onEvent: (event: ObjectIdeateStreamEvent) => void,
-): Promise<void> {
-  const res = await fetch(
-    `/api/projects/${encodeURIComponent(projectId)}/object-graph/ideate/stream`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    },
-  );
-  if (!res.ok || !res.body) {
-    const payload = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(payload.error || `Ideation stream failed (${res.status}).`);
-  }
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const frames = buf.split("\n\n");
-    buf = frames.pop() ?? "";
-    for (const frame of frames) {
-      const line = frame.split("\n").find((l) => l.startsWith("data: "));
-      if (line) {
-        try { onEvent(JSON.parse(line.slice(6)) as ObjectIdeateStreamEvent); } catch { /* skip malformed frame */ }
-      }
-    }
-  }
-}
 
 // ── What happened — the latest run's real numbers, in founder language ─────────────────────────────
 // Derived read-only from real state; null when no run has happened, and every outcome bucket stays null
@@ -1245,15 +1218,24 @@ export const compileObjectGraphPath = (
   input,
 );
 
-// Approve a staged compiled run at the founder gate: the per-item decisions release it through the same
-// engine, staging the approved items locally. Nothing sends. Returns the resolved run + refreshed gate.
-export const approveRun = (
+// Greenlight a staged experiment to RUN its internal/prep work — one founder click, DISTINCT from the
+// outward gate above. It starts the experiment's local/prep steps running while every genuinely-outward
+// step (send/publish/deploy/charge) stays pending at the founder gate exactly as today. It never approves
+// an outward item — the wall is untouched. Returns the resolved run, the refreshed gate, and a summary of
+// what started vs what is still held.
+export const greenlightRun = (
   projectId: string,
   runId: string,
-  decisions: Record<string, { decision: "approve" | "reject"; editedDraft?: string }>,
-) => post<{ projectId: string; run: CompiledRun; gate: CompiledGate; ok: boolean; pendingGates: string[] }>(
-  `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/approve`,
-  { decisions },
+) => post<{
+  projectId: string;
+  run: CompiledRun;
+  gate: CompiledGate;
+  greenlight: { startedInternal: number; heldOutward: number; note: string };
+  ok: boolean;
+  pendingGates: string[];
+}>(
+  `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/greenlight`,
+  {},
 );
 
 // ── The rebuilt GTM-engine rituals the founder invokes on the active project ──
@@ -1320,16 +1302,6 @@ export const revokeChannel = (projectId: string, channelId: string) =>
     {},
   );
 
-// ── Microproduct build-and-ship door — the deployable twin of compose_and_run ───
-// A goal in; a read-only producer cuts a working artifact from the real product and the host composes a
-// graph whose deploy step sits behind a founder gate. The run STOPS at the gate (pause:true). This call
-// NEVER deploys — the live ship happens only when the founder approves at the gate.
-export const composeMicroproduct = (projectId: string, body: { goal: string; title?: string }) =>
-  post<{ session: OperatorSession; staged: unknown; pause: boolean }>(
-    `/api/projects/${encodeURIComponent(projectId)}/microproduct`,
-    body,
-  );
-
 // ── Ambient inputs inbox — captured world-signals + the founder's per-input routing ──
 // Read the durable, append-only log of "something happened out there" (optionally filtered). The one
 // write per item is the founder's decision: route it into a channel, or set it aside. markRouted only
@@ -1392,4 +1364,6 @@ export type FailureLogView = {
 
 // Read the self-observed failure log. GET /api/friction returns the richer grouped shape above (the route
 // extends listFrictionQueue's raw reports into groups). Read-only; never triggers a run.
-export const getFailureLog = () => get<FailureLogView>("/api/friction");
+export const getFailureLog = (projectId?: string | null) => get<FailureLogView>(
+  `/api/friction${projectId ? `?project=${encodeURIComponent(projectId)}` : ""}`,
+);

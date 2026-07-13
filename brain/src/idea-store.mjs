@@ -10,14 +10,10 @@
 
 import crypto from "node:crypto";
 import { persistence } from "./persistence.mjs";
-import { safeId } from "./store-fs.mjs";
+import { now, safeId } from "./store-fs.mjs";
 
 const SCHEMA_VERSION = 1;
 const COLLECTION = "gtm-ideas";
-
-function now() {
-  return new Date().toISOString();
-}
 
 // The two verdicts the bar can hand down. A GtmIdea is either a survivor (cleared the floor) or killed
 // (a fatal gap or a Dead grade) — never a soft "low score". A kill is dead, not deprioritized.

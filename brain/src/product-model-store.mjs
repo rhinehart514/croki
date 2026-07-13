@@ -15,6 +15,7 @@
 import crypto from "node:crypto";
 import { rebuildProjectState } from "./program-projection.mjs";
 import { persistence } from "./persistence.mjs";
+import { now, safeId } from "./store-fs.mjs";
 
 const SCHEMA_VERSION = 1;
 const COLLECTION = "product-models";
@@ -36,14 +37,6 @@ const EDITABLE_BAGS = [
 const PROVENANCE = new Set(["derived", "speculative"]);
 // `claude` is retained for old records; Codex and Claude now arrive through the same generator.
 const GENERATED_BY = new Set(["codex", "claude", "blank", "founder"]);
-
-function now() {
-  return new Date().toISOString();
-}
-
-function safeId(value) {
-  return String(value || "default").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "default";
-}
 
 function slug(value) {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 54);

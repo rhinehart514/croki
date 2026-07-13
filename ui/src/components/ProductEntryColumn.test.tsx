@@ -50,4 +50,12 @@ describe("ProductEntryColumn — the compact source", () => {
     expect(onFocusTruth).toHaveBeenCalledWith(0);
     expect(onFocusUnknown).toHaveBeenCalledWith(0);
   });
+
+  it("renders as in-flow product context without a second collapse control", () => {
+    const { container } = render(<ProductEntryColumn productName="p" model={model} embedded defaultOpen={false} />);
+    expect(container.querySelector(".pentry.is-embedded")).toBeTruthy();
+    expect(screen.getByText("Book a valuation")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Collapse" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Show where wins enter" })).toBeNull();
+  });
 });

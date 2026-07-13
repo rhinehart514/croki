@@ -20,18 +20,19 @@ import { DEFAULT_SIGNAL_WEIGHTS } from "./signal-weights-store.mjs";
 
 // Strength of one solidity label on 0..1: observed=1, researched=.75, inferred=.5, speculative=.25,
 // an unknown (open) label = 0. Derived from the shared Evidence ladder — the single source of order.
-function strength(solidity) {
+export function rankingStrength(solidity) {
   const len = SOLIDITY_LADDER.length; // 4 canonical rungs
   const rank = solidityRank(solidity); // 0 (observed) .. len (unknown)
   return Math.max(0, (len - rank) / len);
 }
 
-function mean(nums) {
+export function mean(nums) {
   const finite = nums.filter((n) => Number.isFinite(n));
   return finite.length ? finite.reduce((a, b) => a + b, 0) / finite.length : 0;
 }
 
-function clamp01(n) {
+export function clamp01(value) {
+  const n = Number(value);
   if (!Number.isFinite(n)) return 0;
   return Math.min(1, Math.max(0, n));
 }
@@ -77,34 +78,39 @@ const PRIZE_FACETS = new Set(["buyer", "offer", "valueProp"]);
 export function computeRankingSignals({ path, truthById, marketById, contract, weights } = {}) {
   const { truths, markets } = resolveRests(path?.restsOn, truthById ?? new Map(), marketById ?? new Map());
 
-  const evidenceStrength = mean([...truths, ...markets].map((r) => strength(r.solidity)));
-  const productReadiness = mean(truths.map((r) => strength(r.solidity)));
+  const evidenceStrength = mean([...truths, ...markets].map((r) => rankingStrength(r.solidity)));
+  const productReadiness = mean(truths.map((r) => rankingStrength(r.solidity)));
 
-  const channelStrengths = markets.filter((m) => m.kind === "channel").map((m) => strength(m.solidity));
+  const channelStrengths = markets.filter((m) => m.kind === "channel").map((m) => rankingStrength(m.solidity));
   const channelReachability = channelStrengths.length ? Math.max(...channelStrengths) : 0;
 
   const measurementReadiness = contractCompleteness(contract);
 
   const betCount = path?.bet && typeof path.bet === "object" ? Object.keys(path.bet).length : 0;
   const complexity = Math.min(betCount, 8) / 8; // more moving parts → a bit slower to test
-  const speedToTest = clamp01(((channelReachability + productReadiness) / 2) * (1 - 0.4 * complexity));
-
   const prize = markets.filter((m) => PRIZE_FACETS.has(m.kind));
   const confs = prize.map((m) => Number(m.confidence)).filter((n) => Number.isFinite(n));
-  const upside = confs.length ? mean(confs) : mean(prize.map((m) => strength(m.solidity)));
+  const upside = confs.length ? mean(confs) : mean(prize.map((m) => rankingStrength(m.solidity)));
 
   const founderFit = markets.length
     ? markets.filter((m) => m.source === "founder-stated").length / markets.length
     : 0;
 
+  return composeRankingSignals({
+    evidenceStrength, productReadiness, channelReachability, measurementReadiness,
+    complexity, upside, founderFit,
+  }, weights);
+}
+
+export function composeRankingSignals(input = {}, weights) {
   const signals = {
-    evidenceStrength: clamp01(evidenceStrength),
-    productReadiness: clamp01(productReadiness),
-    channelReachability: clamp01(channelReachability),
-    measurementReadiness: clamp01(measurementReadiness),
-    speedToTest: clamp01(speedToTest),
-    upside: clamp01(upside),
-    founderFit: clamp01(founderFit),
+    evidenceStrength: clamp01(input.evidenceStrength),
+    productReadiness: clamp01(input.productReadiness),
+    channelReachability: clamp01(input.channelReachability),
+    measurementReadiness: clamp01(input.measurementReadiness),
+    speedToTest: clamp01(((input.channelReachability + input.productReadiness) / 2) * (1 - 0.4 * input.complexity)),
+    upside: clamp01(input.upside),
+    founderFit: clamp01(input.founderFit),
   };
   signals.composite = compositeRank(signals, weights);
   return signals;

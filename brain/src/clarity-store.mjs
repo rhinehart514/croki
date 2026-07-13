@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { persistence } from "./persistence.mjs";
 import { loadFounderDecisions } from "./feedback-ledger.mjs";
+import { now, safeId } from "./store-fs.mjs";
 
 // Clarity — the durable output of an Ideate thinking-posture conversation. A founder pins a thought
 // onto the canvas as one of four kinds: a claim, a direction, an icp, or an open question. It is real
@@ -18,33 +19,9 @@ const MAX_CLARITY = 2000;
 
 const CLARITY_KINDS = new Set(["claim", "direction", "icp", "question"]);
 
-function now() {
-  return new Date().toISOString();
-}
-
-function safeId(value) {
-  return String(value || "default").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "default";
-}
-
 function trimOrNull(value) {
   const text = String(value ?? "").trim();
   return text || null;
-}
-
-function normalizeParticipantRefs(list) {
-  if (!Array.isArray(list)) return [];
-  const seen = new Set();
-  return list.flatMap((raw) => {
-    if (!raw) return [];
-    const ref = typeof raw === "string"
-      ? { type: null, id: trimOrNull(raw) }
-      : { type: trimOrNull(raw.type ?? raw.kind), id: trimOrNull(raw.id ?? raw.ref) };
-    if (!ref.id) return [];
-    const key = `${ref.type ?? ""}:${ref.id}`;
-    if (seen.has(key)) return [];
-    seen.add(key);
-    return [ref];
-  });
 }
 
 function normalizeRefs(list) {
@@ -71,7 +48,7 @@ function normalizeClarityItem(item) {
     ...item,
     status: trimOrNull(item.status) ?? "open",
     updatedAt: item.updatedAt ?? item.createdAt ?? null,
-    participantRefs: normalizeParticipantRefs(item.participantRefs),
+    participantRefs: normalizeRefs(item.participantRefs),
     evidenceRefs: normalizeRefs(item.evidenceRefs),
     productRefs: normalizeRefs(item.productRefs),
   };
@@ -194,7 +171,7 @@ export function updateClarity(projectId = "default", itemId, patch = {}, options
   if (!note) delete updated.note;
   if (current.kind === "question") {
     if (patch.status !== undefined) updated.status = trimOrNull(patch.status) ?? current.status ?? "open";
-    if (patch.participantRefs !== undefined) updated.participantRefs = normalizeParticipantRefs(patch.participantRefs);
+    if (patch.participantRefs !== undefined) updated.participantRefs = normalizeRefs(patch.participantRefs);
     if (patch.evidenceRefs !== undefined) updated.evidenceRefs = normalizeRefs(patch.evidenceRefs);
     if (patch.productRefs !== undefined) updated.productRefs = normalizeRefs(patch.productRefs);
     if (updated.status !== "archived") delete updated.archivedAt;
@@ -235,7 +212,7 @@ function normalizeTransientQuestion(record, projectId) {
     status: trimOrNull(record.status) ?? "transient",
     pinned: false,
     sourceRef,
-    participantRefs: normalizeParticipantRefs(record.participantRefs),
+    participantRefs: normalizeRefs(record.participantRefs),
     evidenceRefs: normalizeRefs(record.evidenceRefs),
     productRefs: normalizeRefs(record.productRefs),
     createdAt: record.createdAt ?? null,
@@ -249,7 +226,7 @@ function normalizePosition(record, projectId) {
   const sourceRef = sourceRefFor(record, "artifact");
   const statement = trimOrNull(record.statement ?? record.claim ?? record.text);
   if (!questionId || !sourceRef || !statement) return null;
-  const participantRef = normalizeParticipantRefs([
+  const participantRef = normalizeRefs([
     record.participantRef ?? record.agentRef ?? record.teammateRef,
   ])[0] ?? null;
   return {
@@ -311,7 +288,7 @@ export function projectQuestions(projectId = "default", {
     return {
       ...question,
       positions: questionPositions,
-      relevantParticipantRefs: normalizeParticipantRefs([
+      relevantParticipantRefs: normalizeRefs([
         ...question.participantRefs, ...questionPositions.map((item) => item.participantRef),
       ]),
       backlinks: questionBacklinks,

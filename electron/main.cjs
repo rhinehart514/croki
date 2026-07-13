@@ -17,7 +17,6 @@ const net = require("node:net");
 const crypto = require("node:crypto");
 const { execSync } = require("node:child_process");
 
-const isDev = !app.isPackaged;
 const HOST = "127.0.0.1";
 
 let brainProcess = null;
@@ -170,7 +169,6 @@ async function createWindow(port, cookie) {
     titleBarStyle: "hiddenInset",
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
     },

@@ -1,7 +1,9 @@
 .tfocus {
   position: absolute;
   z-index: 28;
-  top: var(--space-12);
+  /* Canvas commands own the top two rows. The focused terrain read starts below them so opening a
+     hypothesis never makes Canvas controls look clickable while intercepting their pointer target. */
+  top: 120px;
   right: var(--space-4);
   bottom: calc(var(--space-12) + var(--space-6));
   width: min(380px, calc(100% - var(--space-8)));
@@ -13,6 +15,16 @@
   box-shadow: var(--shadow-pop);
   color: var(--ink-2);
   overflow: hidden;
+}
+/* A focused terrain object is the active read. On compact canvases the stale-status strip and focused
+   pipeline brief otherwise remain mounted directly underneath this sidecar, producing visible but
+   unreachable controls. Keep the canvas itself in place and remove only those competing overlays. */
+.loop-canvas-area:has(.tfocus) .pread { display: none; }
+.loop-canvas-area:has(.tfocus) .canvas-status-surface.has-terrain-status {
+  right: auto;
+  left: var(--space-4);
+  transform: none;
+  width: min(280px, calc(100% - 420px));
 }
 .tfocus-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); padding: var(--space-5); border-bottom: 1px solid var(--line-2); }
 .tfocus-head h2 { margin: var(--space-2) 0 0; font-size: var(--text-xl); line-height: var(--leading-tight); color: var(--ink); letter-spacing: var(--tracking-tight); }
@@ -49,5 +61,12 @@
   .tfocus { position: fixed; top: auto; right: var(--space-2); bottom: calc(var(--space-12) + var(--space-4)); left: var(--space-2); width: auto; max-height: 62%; }
   .tfocus-body { min-height: 0; padding: var(--space-4); }
   .tfocus-actions { flex: 0 0 auto; max-height: 10rem; overflow-y: auto; }
+  .loop-canvas-area:has(.tfocus) .canvas-status-surface.has-terrain-status {
+    top: 168px;
+    right: var(--space-2);
+    bottom: auto;
+    left: var(--space-2);
+    width: auto;
+  }
 }
 @media (prefers-reduced-motion: reduce) { .tfocus * { scroll-behavior: auto; } }

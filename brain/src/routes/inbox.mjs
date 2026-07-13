@@ -3,6 +3,14 @@
 // cross-reference / shared-kernel reads. Moved verbatim out of server.mjs.
 import { json, readBody } from "./util.mjs";
 import { getPendingInbox } from "../pending-inbox.mjs";
+import { getReplyAlert } from "../reply-alert.mjs";
+import { proposeVariantFromLoser } from "../loser-mutation.mjs";
+import {
+  acceptExperimentProposal,
+  proposeExperimentFromTrigger,
+  rejectExperimentProposal,
+} from "../trigger-proposal.mjs";
+import { createClaudeComposer } from "../composition.mjs";
 import { loadProject } from "../project-store.mjs";
 import { findReferences, listSharedKernel } from "../cross-reference.mjs";
 import { deriveFunnel, deriveNextObjects } from "../object-funnel.mjs";
@@ -54,6 +62,93 @@ export default async function handle({ req, res, url }) {
       json(res, 200, getPendingInbox({ projectId }));
     } catch (err) {
       json(res, 500, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return true;
+  }
+
+  // Reply alert + decide-together (rail 5 push). Read the full decide-together payload for ONE reply
+  // that came back — the reply, the context it joins to (pipeline / lead / run), and the machine's
+  // SUGGESTED next move the founder decides WITH. STRICTLY READ-ONLY: it never auto-replies, sends,
+  // routes, or runs. The founder's decide-together action (route the reply, reply by hand, set aside)
+  // happens on its own existing surface; this only assembles what that panel shows.
+  const projectReplyAlertMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/reply-alerts\/([^/]+)$/);
+  if (req.method === "GET" && projectReplyAlertMatch) {
+    try {
+      const projectId = decodeURIComponent(projectReplyAlertMatch[1]);
+      const inputId = decodeURIComponent(projectReplyAlertMatch[2]);
+      const alert = getReplyAlert({ projectId, inputId });
+      if (!alert) { json(res, 404, { error: `No reply alert for input: ${inputId}` }); return true; }
+      json(res, 200, { projectId, alert });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return true;
+  }
+
+  // Mutation-from-a-loser (rail 2). Persist a VARIANT PROPOSAL off a killed/failed experiment — a new
+  // open experiment mutated off the loser, one dimension varied, appended for the founder to greenlight.
+  // It NEVER auto-kills or touches the loser (only the founder kills), and NEVER runs the variant. This
+  // write only APPENDS a proposed experiment; it cannot cross the wall. Idempotent.
+  const projectVariantProposeMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/experiments\/([^/]+)\/propose-variant$/);
+  if (req.method === "POST" && projectVariantProposeMatch) {
+    try {
+      const projectId = decodeURIComponent(projectVariantProposeMatch[1]);
+      const experimentId = decodeURIComponent(projectVariantProposeMatch[2]);
+      const result = proposeVariantFromLoser({ projectId, experimentId });
+      json(res, 201, { projectId, ...result });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return true;
+  }
+
+  // Outside-trigger → proposed experiment (fourth birth source). Persist a PROPOSED open experiment off
+  // a qualifying unrouted outside-trigger input, appended for the founder to greenlight, and stamp the
+  // input as routed-to-proposal so it leaves the raw inbox. It NEVER runs the experiment, NEVER sends,
+  // NEVER routes the input into a live channel. This write only APPENDS a proposal. Idempotent.
+  const projectTriggerProposeMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/inputs\/([^/]+)\/propose-experiment$/);
+  if (req.method === "POST" && projectTriggerProposeMatch) {
+    try {
+      const projectId = decodeURIComponent(projectTriggerProposeMatch[1]);
+      const inputId = decodeURIComponent(projectTriggerProposeMatch[2]);
+      const result = proposeExperimentFromTrigger({ projectId, inputId });
+      json(res, 201, { projectId, ...result });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return true;
+  }
+
+  // Founder decision on a materialized experiment proposal. Accept may include an inline edit, records
+  // the stated experiment + deterministic GTM path, and stages one compiled run at the existing Wall.
+  // Reject records the durable decision without creating execution state. Both preserve proposal lineage.
+  const projectProposalDecisionMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/experiment-proposals\/([^/]+)\/(accept|reject)$/);
+  if (req.method === "POST" && projectProposalDecisionMatch) {
+    try {
+      const projectId = decodeURIComponent(projectProposalDecisionMatch[1]);
+      const artifactId = decodeURIComponent(projectProposalDecisionMatch[2]);
+      const action = projectProposalDecisionMatch[3];
+      const body = await readBody(req);
+      if (action === "reject") {
+        const result = rejectExperimentProposal({ projectId, artifactId, reason: body?.reason });
+        json(res, 200, { projectId, ...result });
+        return true;
+      }
+      const project = loadProject({ projectId });
+      const repo = project.sharedContext?.repository?.repo || process.cwd();
+      const result = await acceptExperimentProposal({
+        projectId,
+        artifactId,
+        experiment: body?.experiment ?? null,
+        path: body?.path ?? null,
+        runPlan: body?.runPlan ?? null,
+        input: body?.input ?? null,
+        output: body?.output ?? null,
+        compose: createClaudeComposer({ cwd: repo }),
+      });
+      json(res, 201, { projectId, ...result });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return true;
   }

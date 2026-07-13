@@ -100,7 +100,7 @@ function GroupRow({ group }: { group: FailureGroup }) {
   );
 }
 
-export function FailureLogPanel({ onClose }: { onClose?: () => void }) {
+export function FailureLogPanel({ projectId, onClose }: { projectId?: string | null; onClose?: () => void }) {
   const [view, setView] = useState<FailureLogView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -109,7 +109,7 @@ export function FailureLogPanel({ onClose }: { onClose?: () => void }) {
   // A manual re-read (the refresh button). Distinct from the mount effect so it can run any number of times.
   const load = () => {
     setLoading(true);
-    return getFailureLog()
+    return getFailureLog(projectId)
       .then((v) => { setView(v); setError(null); })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
@@ -117,12 +117,12 @@ export function FailureLogPanel({ onClose }: { onClose?: () => void }) {
 
   useEffect(() => {
     let live = true;
-    getFailureLog()
+    getFailureLog(projectId)
       .then((v) => { if (live) { setView(v); setError(null); } })
       .catch((e) => { if (live) setError(e instanceof Error ? e.message : String(e)); })
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
-  }, []);
+  }, [projectId]);
 
   // Split into the two classes, each already newest-first from the route. The filter chooses which set
   // fills the body; both counts stay visible so the founder knows transient failures exist even while

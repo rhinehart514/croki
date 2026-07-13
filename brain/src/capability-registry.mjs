@@ -73,8 +73,6 @@ export function classifyCapabilityEffects(effects = {}) {
   return CAPABILITY_LANES.READ_ONLY;
 }
 
-export const classifyEffects = classifyCapabilityEffects;
-
 function normalizeExposure(exposure = {}) {
   if (!isPlainObject(exposure)) throw registryError("capability_invalid", "exposure must be an object.");
   return deepFreeze(Object.fromEntries(EXPOSURES.map((key) => [key, exposure[key] === true])));

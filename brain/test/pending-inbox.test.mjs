@@ -56,7 +56,7 @@ describe("pending-decision inbox projection", () => {
     // Project 1, pipeline A: a run staged at the gate.
     pauseSession(p1, {
       goal: "Land a pest-control pilot", graphId: "pipeline-a", status: "waiting_for_gate",
-      patch: { pendingGate: { runId: "run-1", nodeIds: ["gate-1"], graphId: "pipeline-a" } },
+      patch: { pendingGate: { runId: "run-1", nodeIds: ["gate-1"], graphId: "pipeline-a", runResult: { nodes: { "gate-1": { items: [{ id: "draft-1" }, { id: "draft-2" }] } } } } },
     }, options);
     // Project 1, pipeline B: an ideate pause with two directions to build or cut.
     pauseSession(p1, {
@@ -78,16 +78,18 @@ describe("pending-decision inbox projection", () => {
 
     const inbox = getPendingInbox({}, options);
 
-    // Four things wait: gate + ideas + failed + the one unrouted signal.
+    // Four decisions wait: gate + ideas + failed + one proposed experiment born from the outside
+    // trigger. The trigger appears once, not again as a raw-signal duplicate.
     assert.equal(inbox.total, 4);
     assert.equal(inbox.decisions.length, 4);
     assert.equal(inbox.byKind.gate, 1);
     assert.equal(inbox.byKind.ideas, 1);
     assert.equal(inbox.byKind.failed, 1);
-    assert.equal(inbox.byKind.signal, 1);
+    assert.equal(inbox.byKind.signal, undefined);
+    assert.equal(inbox.byKind["trigger-proposal"], 1);
 
     const kinds = inbox.decisions.map((d) => d.kind).sort();
-    assert.deepEqual(kinds, ["failed", "gate", "ideas", "signal"]);
+    assert.deepEqual(kinds, ["failed", "gate", "ideas", "trigger-proposal"]);
 
     // Nothing running or completed leaked in.
     assert.ok(!inbox.decisions.some((d) => d.title === "in flight"));
@@ -99,6 +101,7 @@ describe("pending-decision inbox projection", () => {
     assert.equal(gate.projectName, "RodentRadar");
     assert.equal(gate.pipelineId, "pipeline-a");
     assert.equal(gate.sessionId != null, true);
+    assert.match(gate.summary, /^2 staged items/);
     assert.ok(gate.summary && gate.waitingSince);
 
     // The ideate item reports its option count.

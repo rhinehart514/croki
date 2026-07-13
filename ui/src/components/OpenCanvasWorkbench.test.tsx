@@ -74,6 +74,7 @@ describe("OpenCanvasWorkbench", () => {
     render(<OpenCanvasWorkbench projectId="p1" selectedRef={null} onChanged={changed} onCreated={created} onClose={vi.fn()} />);
     fireEvent.click(await screen.findByRole("button", { name: "Add" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "New goal" }));
+    expect(screen.getByRole("dialog", { name: "Canvas workbench" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("What do you want to change?"), { target: { value: "Learn why setup stalls" } });
     fireEvent.change(screen.getByLabelText("What would be different?"), { target: { value: "Founders reach first value in one session" } });
     fireEvent.click(screen.getByRole("button", { name: "Place on canvas" }));
@@ -183,6 +184,42 @@ describe("OpenCanvasWorkbench", () => {
     await waitFor(() => expect(api.applyCanvasProposal).toHaveBeenCalledWith("p1", "w1", expect.objectContaining({ expectedArtifactRevision: 2 })));
   });
 
+  it("makes one-click greenlight reachable from an editable experiment proposal", async () => {
+    const proposal = artifact({
+      kind: "experiment-proposal",
+      status: "proposed",
+      title: "Reply-triggered interview test",
+      summary: "Shape the next experiment from a real reply.",
+      contentType: "application/json",
+      format: "json",
+      content: {
+        id: "exp-trigger-reply-1",
+        intent: "Test whether interested founders will take a 20-minute interview.",
+        status: "proposed",
+        origin: "proposed",
+      },
+    });
+    api.listWorkArtifacts.mockResolvedValue({ artifacts: [proposal], storeRevision: 8 });
+    const greenlight = vi.fn().mockResolvedValue(undefined);
+    const changed = vi.fn();
+    render(
+      <OpenCanvasWorkbench
+        projectId="p1"
+        selectedRef={{ type: "work-artifact", id: "w1" }}
+        onChanged={changed}
+        onGreenlightExperiment={greenlight}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByRole("region", { name: "Experiment proposal" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Greenlight to run" }));
+
+    await waitFor(() => expect(greenlight).toHaveBeenCalledWith(proposal));
+    await waitFor(() => expect(changed).toHaveBeenCalled());
+    expect(screen.getByText(/anything outward still stops at your wall/i)).toBeInTheDocument();
+  });
+
   it("keeps a stale-write error visible and refreshes authority state on the next load", async () => {
     api.createGoal.mockRejectedValueOnce(new Error("Stale goal revision. Refresh and try again."));
     render(<OpenCanvasWorkbench projectId="p1" selectedRef={null} onChanged={vi.fn()} onClose={vi.fn()} />);
@@ -191,6 +228,7 @@ describe("OpenCanvasWorkbench", () => {
     fireEvent.change(screen.getByLabelText("What do you want to change?"), { target: { value: "Resolve the conflict" } });
     fireEvent.click(screen.getByRole("button", { name: "Place on canvas" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Stale goal revision. Refresh and try again.");
+    expect(screen.getByLabelText("What do you want to change?")).toHaveValue("Resolve the conflict");
     expect(api.listGoals).toHaveBeenCalledTimes(2);
     expect(api.listWorkArtifacts).toHaveBeenCalledTimes(2);
   });

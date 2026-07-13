@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { persistence } from "./persistence.mjs";
+import { now, safeId } from "./store-fs.mjs";
 
 // Person — the keystone object. A durable, project-scoped, shared identity promoted from real run
 // entrants. It is real GTM state derived from runs, NEVER seeded, and it NEVER sends. The same human
@@ -19,14 +20,6 @@ const SOCIAL_HOSTS = new Set([
   "linkedin.com", "twitter.com", "x.com", "github.com", "facebook.com",
   "instagram.com", "youtube.com", "medium.com", "substack.com", "t.co",
 ]);
-
-function now() {
-  return new Date().toISOString();
-}
-
-function safeId(value) {
-  return String(value || "default").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "default";
-}
 
 const COLLECTION = "people";
 

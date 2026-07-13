@@ -4,12 +4,43 @@ Logged 2026-07-03. Revised 2026-07-11 for the multi-goal open-canvas direction.
 
 This is the product north star. [STATE.md](STATE.md) records what the current build actually proves.
 [OPEN-CANVAS-SPEC.md](OPEN-CANVAS-SPEC.md) defines the target experience, system boundaries, delivery
-sequence, and acceptance gates. `AGENTS.md` records the engineering invariants.
+sequence, and acceptance gates. The active build direction on top of that contract is the experiment
+machine — [EXPERIMENT-MACHINE-SPEC.md](EXPERIMENT-MACHINE-SPEC.md) is its spec of record and
+[production-direction/EXPERIMENT-MACHINE-GOAL.md](production-direction/EXPERIMENT-MACHINE-GOAL.md) is the
+north-star goal. `AGENTS.md` records the engineering invariants.
 
 ## The one sentence
 
 **Drover makes product development and go-to-market easier by letting a founder direct Claude and Codex on
 one living canvas, where many goals can be understood, created, changed, run safely, and learned from.**
+
+## The positioning line
+
+**Vibe code your go-to-market.** (Founder decision, 2026-07-12.)
+
+The market-facing promise: the same relationship a founder already has with an AI coding tool — it works, you
+watch, you grab the wheel, nothing ships without you — pointed at getting users, and grounded in the real
+product because Drover read the codebase. This line positions against the two failure modes founders name:
+the blank-prompt chat that does not know their product, and the black-box "AI CMO" that speaks in their name
+unsupervised.
+
+The line leads with go-to-market because that is the wound; it does not narrow the product. Product
+development remains a co-equal use — the same watch-steer-approve relationship covers changing the product,
+not only marketing it. Supporting evidence for the segment and the two hard conditions (first-session payoff,
+earned-only distribution) is recorded in the 2026-07-12 market research.
+
+## The active direction: the experiment machine
+
+Vibe coding your go-to-market takes concrete shape as a **living machine of many parallel, grounded,
+agent-built experiments** across go-to-market and product, for one venture at a time. The founder sees,
+refines, and greenlights; the crew builds and runs; and real outcomes and warm leads visibly loop back to the
+front of the pipeline as motion through the weave — never a scoreboard. Six firm rails stay founder-held and
+are never automated away: nothing goes outward without the founder's explicit hand (and nothing outward runs
+while the founder is away); only the founder kills an experiment; the founder greenlights each experiment with
+one click; the founder can see and refine anything at any altitude; on a real reply the machine alerts the
+founder and they decide together; one venture is an isolated machine. Everything else — what an experiment is,
+how big it is, how many run, what counts as signal — stays agent-judged and open, never a fixed schema, enum,
+or role taxonomy. The build contract is [EXPERIMENT-MACHINE-SPEC.md](EXPERIMENT-MACHINE-SPEC.md).
 
 ## The product you experience
 

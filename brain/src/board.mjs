@@ -23,7 +23,8 @@ import { loadFeedbackLedger } from "./feedback-ledger.mjs";
 import { extractDecisions } from "./memory.mjs";
 import { deriveMeasure } from "./engine.mjs";
 import { loadFlow } from "./flow-store.mjs";
-import { normalizeExperiment } from "./experiment-derivation.mjs";
+import { resultStore } from "./gtm-store.mjs";
+import { experimentStatement, normalizeExperiment, outcomeCountsAsSuccess } from "./experiment-derivation.mjs";
 
 // Confidence is computed from the real signal behind a belief — never a seeded constant. A founder
 // verdict is the strongest signal; approvals / runs / appearances are next; cited evidence adds a
@@ -63,7 +64,7 @@ function makeLayer({ layer, phase, groundingMode, belief, stated = false, valida
   // so a resolved/running experiment is never invisible (a verdict with no other signal would otherwise
   // read blind).
   const resolved = String(belief ?? "").trim()
-    || String(experiments.map((e) => firstNonEmpty(e?.hypothesis, e?.variable)).find(Boolean) ?? "").trim();
+    || String(experiments.map(experimentStatement).find(Boolean) ?? "").trim();
   const confidence = resolved ? signalConfidence({ validated, tested, citations, stated }) : 0;
   return {
     layer,
@@ -641,10 +642,15 @@ export function getPipelineBeliefSpine({ projectId, channelId } = {}, options = 
 // ─────────────────────────────────────────────────────────────────────────────
 function tallyChannelRuns(graphId, options = {}) {
   let runs = 0, staged = 0, approved = 0, rejected = 0;
+  const pathIds = new Set();
   try {
     const { runs: chRuns } = loadFlow(graphId, null, options);
     for (const run of Array.isArray(chRuns) ? chRuns : []) {
       runs += 1;
+      // Collect the run's pathId (the durable key real outcomes join back on), so we can count the real
+      // market outcomes this channel actually produced — the only honest success signal.
+      const pathId = run?.result?.pathId ?? run?.pathId ?? run?.graph?.id ?? null;
+      if (pathId) pathIds.add(String(pathId));
       const nodes = run?.result?.nodes ?? {};
       for (const node of Object.values(nodes)) {
         if (node?.category !== "gate" || !Array.isArray(node.items)) continue;
@@ -658,7 +664,36 @@ function tallyChannelRuns(graphId, options = {}) {
   } catch {
     // a channel without a stored flow contributes no runs
   }
-  return { runs, staged, approved, rejected };
+  return { runs, staged, approved, rejected, pathIds };
+}
+
+// The count of REAL MARKET OUTCOMES a channel earned — a reply, meeting, signup, activation, purchase,
+// retention, or any founder-recorded outcome joined back to one of this channel's runs. FIX 5: this is the
+// ONLY success signal. A gate approval is NOT an outcome — it means the founder let something GO OUT, not
+// that the market responded — so approval rate is deliberately excluded from any success/leader score. A
+// "sent" delivery fact is likewise not a market outcome and is not counted. Pure read over the outcome
+// ledger, matched to the channel by the channel slug OR one of its runs' pathIds (the motion ref).
+function realOutcomeCountForChannel(channel, pathIds, options = {}) {
+  const projectFilter = channel.projectId ?? options.projectId ?? null;
+  const channelIds = new Set([channel.id, channel.graphId].filter(Boolean).map(String));
+  let outcomes;
+  try {
+    outcomes = resultStore.list(projectFilter ? { ...options, projectId: projectFilter } : options);
+  } catch {
+    return 0;
+  }
+  let count = 0;
+  for (const r of Array.isArray(outcomes) ? outcomes : []) {
+    // Only positive market evidence raises an arm. Known negatives (ignored, objection, bounce, …),
+    // neutral delivery receipts, and unknown labels remain visible in the ledger but never become wins.
+    if (!outcomeCountsAsSuccess(r?.outcomeKind)) continue;
+    const matchesChannel =
+      (r.channel && channelIds.has(String(r.channel))) ||
+      (r.pathId && pathIds.has(String(r.pathId))) ||
+      (r.motionRef && pathIds.has(String(r.motionRef)));
+    if (matchesChannel) count += 1;
+  }
+  return count;
 }
 
 function armSignal(channel, people, options = {}) {
@@ -671,10 +706,14 @@ function armSignal(channel, people, options = {}) {
   const distinctChannelCount = (p) => new Set((p.appearances ?? []).map((a) => a.channelId).filter(Boolean)).size;
   const fatigueScore = reachedPeople.filter((p) => distinctChannelCount(p) > 1).length;
 
+  // FIX 5: success comes ONLY from real market outcomes. Approval rate is removed from the score entirely.
+  const marketOutcomes = realOutcomeCountForChannel(channel, tally.pathIds, options);
   const hasSignal = tally.runs > 0;
-  const approvalRate = tally.staged > 0 ? tally.approved / tally.staged : 0;
+  // A comparative composite (never a calibrated absolute) that surfaces the leading arm: more real market
+  // outcomes dominate, with running the motion and reaching real people as secondary activity signals.
+  // Nothing about how often the founder APPROVED at the gate raises the score.
   const totalScore = hasSignal
-    ? Math.min(100, Math.round(Math.min(20, tally.runs * 4) + Math.min(40, peopleReached * 8) + approvalRate * 40))
+    ? Math.min(100, Math.round(Math.min(60, marketOutcomes * 20) + Math.min(20, peopleReached * 4) + Math.min(20, tally.runs * 4)))
     : null;
 
   return {
@@ -686,6 +725,7 @@ function armSignal(channel, people, options = {}) {
       itemsApproved: tally.approved,
       itemsRejected: tally.rejected,
       runsCount: tally.runs,
+      marketOutcomes,
       fatigueScore,
     },
     totalScore,

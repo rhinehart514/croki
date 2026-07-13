@@ -17,7 +17,7 @@ function Diff({ value }: { value: string }) {
   })}</pre>;
 }
 
-export function ProductChangeReview({ projectId, refreshSignal }: { projectId: string; refreshSignal?: string | number }) {
+export function ProductChangeReview({ projectId, refreshSignal, focusedChangeId }: { projectId: string; refreshSignal?: string | number; focusedChangeId?: string | null }) {
   const [changes, setChanges] = useState<ProductChangeReceipt[]>([]);
   const [reviews, setReviews] = useState<Record<string, Review>>({});
   const [open, setOpen] = useState<string | null>(null);
@@ -39,9 +39,10 @@ export function ProductChangeReview({ projectId, refreshSignal }: { projectId: s
         return [item.id, { workspaceId, revision, readiness }] as const;
       }));
       setChanges(next); setReviews(Object.fromEntries(staged)); setError(null);
+      if (focusedChangeId && next.some((change) => change.id === focusedChangeId)) setOpen(focusedChangeId);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Local product changes could not be loaded."); }
     finally { setLoading(false); }
-  }, [projectId]);
+  }, [focusedChangeId, projectId]);
   useEffect(() => { void Promise.resolve().then(load); }, [load, refreshSignal]);
   const readyCount = useMemo(() => changes.filter((change) => change.status === "ready-for-review").length, [changes]);
 

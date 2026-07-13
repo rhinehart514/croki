@@ -1,3 +1,11 @@
+> **HISTORICAL where it conflicts with the current direction.** This completion target and
+> its "primary object is the living product-market terrain" framing are implementation
+> history. The current north star is the experiment machine — see
+> **docs/EXPERIMENT-MACHINE-SPEC.md** and **docs/production-direction/EXPERIMENT-MACHINE-GOAL.md** —
+> on top of the open-canvas contract (**docs/OPEN-CANVAS-SPEC.md**). The
+> deterministic-implementation and gate findings below remain useful; where this completion-spec
+> framing conflicts with the experiment-machine direction, that direction wins.
+
 # Product-Market Terrain Completion Spec
 
 Status: approved completion target. Deterministic implementation and Gate B passed on 2026-07-10; the full

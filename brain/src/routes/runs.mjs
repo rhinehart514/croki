@@ -4,7 +4,10 @@
 import { json, readBody } from "./util.mjs";
 import { loadProject } from "../project-store.mjs";
 import { runStore, marketObjectStore } from "../gtm-store.mjs";
-import { gateReviewForRun, approveCompiledRun } from "../run-compile.mjs";
+import { gateReviewForRun, approveCompiledRun, greenlightRun, getRunScoped } from "../run-compile.mjs";
+import { OUTWARD_RELEASE } from "../graph.mjs";
+import { defaultSendRunners } from "../connectors/execute/gmail-transport.mjs";
+import { isFounderPresent } from "../presence.mjs";
 import { liveStepRuntime } from "../agent-bridge.mjs";
 import { buildMarketContext } from "../market-research.mjs";
 import { buildRunGrounding } from "../run-grounding.mjs";
@@ -30,7 +33,9 @@ export default async function handle({ req, res, url }) {
     try {
       const projectId = decodeURIComponent(projectRunGateMatch[1]);
       const runId = decodeURIComponent(projectRunGateMatch[2]);
-      const run = runStore.get(runId, { projectId });
+      // Venture-scoped read (FIX 4): a run from another venture fails closed as not-found here, so
+      // /projects/A/runs/<B-run>/gate never exposes venture B's staged work.
+      const run = getRunScoped(runId, projectId, {});
       json(res, 200, { projectId, ...gateReviewForRun(run) });
     } catch (err) {
       json(res, 404, { error: err instanceof Error ? err.message : String(err) });
@@ -70,11 +75,60 @@ export default async function handle({ req, res, url }) {
         grounding: buildRunGrounding(project),
         loadLastRunItems: createDerivedSourceLoader({ projectId }),
         authorizeRelease: authorizeReleaseForRequest(req),
+        // Match the operator and raw-graph approval paths: a persisted compiled graph with a Gmail execute
+        // node receives the host's live transport map when the founder approves it. The gate decision and
+        // OUTWARD_RELEASE capability below remain the WHETHER; these runners provide only the HOW.
+        sendRunners: defaultSendRunners(),
+        // The away / unattended hold: pass live presence so the gate connector holds an unattended
+        // standing-autonomy auto-approval on outward sends. A live founder approving here is present
+        // (their browser heartbeats), so this never adds friction to a real approval.
+        founderPresent: isFounderPresent(),
+        // RAIL 1 — the outward-release capability. This IS the founder outward-approval path (it passed the
+        // two-factor browser+owner guard above), so it carries the host-issued token that lets an approved
+        // item actually leave via a real connector. Greenlight, ambient, and composition never carry it.
+        outwardRelease: OUTWARD_RELEASE,
         options: { projectId },
       });
       json(res, 200, { projectId, run, gate, ok: result.ok, pendingGates: result.pendingGates });
     } catch (err) {
-      json(res, err?.code === "gate_release_forbidden" ? 403 : 400, { error: err instanceof Error ? err.message : String(err) });
+      const status = err?.code === "gate_release_forbidden" ? 403 : err?.code === "run_not_in_venture" ? 404 : 400;
+      json(res, status, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return true;
+  }
+
+  // Greenlight a staged experiment to RUN its internal/prep work — one founder click, distinct from the
+  // outward gate above. This sets the experiment running (its local/prep steps release through the same
+  // engine) while every genuinely-outward step (send/publish/deploy/charge) STAYS pending at the founder
+  // gate exactly as today. Greenlight never approves an outward item — the wall is untouched. It is still
+  // a founder-only browser act (same two-factor guard as approve): a staged experiment does not start
+  // itself, and an agent/MCP session cannot start it.
+  const projectRunGreenlightMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/runs\/([^/]+)\/greenlight$/);
+  if (req.method === "POST" && projectRunGreenlightMatch) {
+    try {
+      const projectId = decodeURIComponent(projectRunGreenlightMatch[1]);
+      const runId = decodeURIComponent(projectRunGreenlightMatch[2]);
+      const project = loadProject({ projectId });
+      // Greenlight releases internal/prep work, so it is a durable founder decision — require the same
+      // browser+owner proofs as an approval. (It cannot cross the wall, but it does change run state.)
+      authorizeReleaseForRequest(req)();
+      authorizeGateRelease({ projectId }, { request: req }, { projectId });
+      const repo = project.sharedContext?.repository?.repo || process.cwd();
+      const { run, gate, result, greenlight } = await greenlightRun({
+        projectId,
+        runId,
+        stepRuntime: liveStepRuntime({ cwd: repo }),
+        market: buildMarketContext(marketObjectStore.list({ projectId })),
+        grounding: buildRunGrounding(project),
+        loadLastRunItems: createDerivedSourceLoader({ projectId }),
+        authorizeRelease: authorizeReleaseForRequest(req),
+        founderPresent: isFounderPresent(),
+        options: { projectId },
+      });
+      json(res, 200, { projectId, run, gate, greenlight, ok: result.ok, pendingGates: result.pendingGates });
+    } catch (err) {
+      const status = err?.code === "gate_release_forbidden" ? 403 : err?.code === "run_not_in_venture" ? 404 : 400;
+      json(res, status, { error: err instanceof Error ? err.message : String(err) });
     }
     return true;
   }
@@ -89,10 +143,14 @@ export default async function handle({ req, res, url }) {
       const projectId = decodeURIComponent(projectRunPromoteMatch[1]);
       const runId = decodeURIComponent(projectRunPromoteMatch[2]);
       const body = await readBody(req);
+      // Preserve venture isolation on promotion too: validate the URL-scoped run before handing its id to
+      // promoteRun, whose storage path predates venture-scoped route reads. Cross-venture access is a 404.
+      getRunScoped(runId, projectId, {});
       const { motion, learning } = promoteRun(runId, { cadence: body?.cadence ?? null }, { projectId });
       json(res, 200, { motion, learning, summary: promoteSummary(motion) });
     } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+      const status = err?.code === "run_not_in_venture" ? 404 : 400;
+      json(res, status, { error: err instanceof Error ? err.message : String(err) });
     }
     return true;
   }

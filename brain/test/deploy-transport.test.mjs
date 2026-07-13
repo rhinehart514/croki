@@ -12,9 +12,10 @@ import assert from "node:assert/strict";
 
 import { createVercelRunner, defaultDeployRunners } from "../src/connectors/execute/deploy-transport.mjs";
 import { run as runDeploy } from "../src/connectors/execute/deploy.mjs";
-import { runGraph } from "../src/graph.mjs";
+import { OUTWARD_RELEASE, runGraph } from "../src/graph.mjs";
 
 const FOUNDER_AUTH = { confirmed: true, releasedBy: "founder-jacob" };
+const RELEASED_RUNTIME = { outwardRelease: OUTWARD_RELEASE, deployAuthorization: FOUNDER_AUTH };
 const approvedItem = (over = {}) => ({ gtmActionId: "a1", approved: true, artifactSpec: { name: "demo" }, ...over });
 
 // ─── defaultDeployRunners: honest-empty until a hosted runner is wired ────────────────────────
@@ -70,7 +71,7 @@ test("WALL — a run with a wired Vercel runner but NO founder deploy confirmati
   const vercel = async () => { calls += 1; return { ok: true, url: "https://x.vercel.app", runner: "vercel" }; };
   // The deploy connector reads the confirmation ONLY from node.runtime; a context-supplied runner cannot
   // supply it. So even with the runner wired, an unauthorized deploy refuses and the runner never fires.
-  const node = { id: "deploy", category: "execute", connector: "deploy", config: { runner: "vercel" } };
+  const node = { id: "deploy", category: "execute", connector: "deploy", config: { runner: "vercel" }, runtime: { outwardRelease: OUTWARD_RELEASE } };
   const result = await runDeploy(node, [approvedItem()], { deployRunners: { vercel } });
   assert.equal(result.ok, false);
   assert.equal(calls, 0, "the runner must never fire without the founder deploy confirmation");
@@ -80,7 +81,7 @@ test("WALL — a run with a wired Vercel runner but NO founder deploy confirmati
 test("WALL — with BOTH authorizations, the wired Vercel runner ships via context.deployRunners", async () => {
   let calls = 0;
   const vercel = async () => { calls += 1; return { ok: true, url: "https://demo.vercel.app", runner: "vercel" }; };
-  const node = { id: "deploy", category: "execute", connector: "deploy", config: { runner: "vercel" }, runtime: { deployAuthorization: FOUNDER_AUTH } };
+  const node = { id: "deploy", category: "execute", connector: "deploy", config: { runner: "vercel" }, runtime: RELEASED_RUNTIME };
   const result = await runDeploy(node, [approvedItem()], { deployRunners: { vercel } });
   assert.equal(result.ok, true);
   assert.equal(calls, 1);
@@ -110,6 +111,7 @@ test("THREADING — deployRunners passed to runGraph reaches the deploy connecto
   const vercel = async () => { calls += 1; return { ok: true, url: "https://x.vercel.app", runner: "vercel" }; };
   const run = await runGraph(vercelDeployGraph(), {
     approvals: { gate: true },
+    outwardRelease: OUTWARD_RELEASE,
     deployAuthorization: FOUNDER_AUTH,
     deployRunners: { vercel },
   });
@@ -123,7 +125,7 @@ test("THREADING — a deployRunner threaded onto context does NOT authorize a de
   const vercel = async () => { calls += 1; return { ok: true, url: "https://x.vercel.app", runner: "vercel" }; };
   // Runner wired, gate approved, but NO deployAuthorization opt — exactly what a run without the founder's
   // explicit confirm produces. The runner is the HOW; the WHETHER is still absent, so nothing ships.
-  const run = await runGraph(vercelDeployGraph(), { approvals: { gate: true }, deployRunners: { vercel } });
+  const run = await runGraph(vercelDeployGraph(), { approvals: { gate: true }, outwardRelease: OUTWARD_RELEASE, deployRunners: { vercel } });
   assert.equal(run.nodes.deploy.ok, false, "no founder confirmation → refuse, even with a runner wired");
   assert.equal(calls, 0, "the threaded runner never fired");
   assert.equal(run.nodes.deploy.meta.reason, "missing_founder_deploy_authorization");

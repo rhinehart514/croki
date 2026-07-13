@@ -33,6 +33,13 @@ describe("COMPOSE_PROMPT — the model's node-kind menu", () => {
   it("still forbids a fixed shape (anti-cage)", () => {
     assert.match(COMPOSE_PROMPT, /ZERO fixed shape/);
   });
+
+  it("states the exact source connector contracts so a first composition can run", () => {
+    assert.match(COMPOSE_PROMPT, /manual uses.*"items"/i);
+    assert.match(COMPOSE_PROMPT, /csv uses.*"csv"/i);
+    assert.match(COMPOSE_PROMPT, /api uses.*"endpoint"/i);
+    assert.match(COMPOSE_PROMPT, /placeholder recipients directly in manual config\.items/i);
+  });
 });
 
 describe("provider-neutral one-shot composition", () => {

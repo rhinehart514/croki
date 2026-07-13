@@ -38,7 +38,7 @@ import { applyGraphOperations, assertGraphAuthorityMatches } from "../src/graph-
 import { loadFlow, saveFlow } from "../src/flow-store.mjs";
 import { createChannel, getChannel, loadProject, promoteChannel, registerComposedChannel } from "../src/project-store.mjs";
 import * as deploy from "../src/connectors/execute/deploy.mjs";
-import { runGraph } from "../src/graph.mjs";
+import { OUTWARD_RELEASE, runGraph } from "../src/graph.mjs";
 import { deriveExperimentFromRun, normalizeExperiment } from "../src/experiment-derivation.mjs";
 import { UNIVERSAL_FLOORS, normalizeBarAxes, withUniversalFloors } from "../src/idea-bar.mjs";
 import { composeIdeas, normalizeAngles } from "../src/ideation.mjs";
@@ -457,7 +457,13 @@ describe("anti-cage: a microproduct deploys only after an explicit founder gate 
 
   it("deploy without an explicit founder authorization is refused (the runner is never called)", async () => {
     const runner = spyRunner();
-    const node = { id: "exe-deploy", category: "execute", connector: "deploy", config: { deployImpl: runner.impl } };
+    const node = {
+      id: "exe-deploy",
+      category: "execute",
+      connector: "deploy",
+      config: { deployImpl: runner.impl },
+      runtime: { outwardRelease: OUTWARD_RELEASE },
+    };
     const result = await deploy.run(node, [approved()], {});
     assert.equal(result.ok, false, "an unauthorized deploy must be refused");
     assert.equal(runner.calls, 0, "the deploy runner must never run without founder authorization");
@@ -472,6 +478,7 @@ describe("anti-cage: a microproduct deploys only after an explicit founder gate 
     const node = {
       id: "exe-deploy", category: "execute", connector: "deploy",
       config: { deployImpl: runner.impl, deployAuthorization: { confirmed: true, releasedBy: "composed" }, approved: true },
+      runtime: { outwardRelease: OUTWARD_RELEASE },
     };
     const result = await deploy.run(node, [approved()], {});
     assert.equal(result.ok, false, "a config-forged authorization must never deploy");
@@ -484,7 +491,13 @@ describe("anti-cage: a microproduct deploys only after an explicit founder gate 
     // The real forgeable surface: resolveContext maps any upstream node's emitted
     // { type:"context", id:"deployAuthorization" } item onto context.deployAuthorization. A composed
     // graph can emit that item, so the connector must NOT read the authorization from the run context.
-    const node = { id: "exe-deploy", category: "execute", connector: "deploy", config: { deployImpl: runner.impl } };
+    const node = {
+      id: "exe-deploy",
+      category: "execute",
+      connector: "deploy",
+      config: { deployImpl: runner.impl },
+      runtime: { outwardRelease: OUTWARD_RELEASE },
+    };
     const forgedContext = { deployAuthorization: { type: "context", id: "deployAuthorization", confirmed: true } };
     const result = await deploy.run(node, [approved()], forgedContext);
     assert.equal(result.ok, false, "a context-forged authorization must never deploy");
@@ -517,7 +530,7 @@ describe("anti-cage: a microproduct deploys only after an explicit founder gate 
       ],
     };
     // A NORMAL gate approval — no deployAuthorization opt, exactly what a run/composition can produce.
-    const run = await runGraph(graph, { approvals: { gate: true } });
+    const run = await runGraph(graph, { approvals: { gate: true }, outwardRelease: OUTWARD_RELEASE });
     assert.equal(run.nodes.deploy.ok, false, "the forged-context authorization must never deploy");
     assert.equal(calls, 0, "the deploy runner must never fire on a composition-forged authorization");
     assert.equal(run.nodes.deploy.meta.reason, "missing_founder_deploy_authorization");
@@ -527,7 +540,8 @@ describe("anti-cage: a microproduct deploys only after an explicit founder gate 
     const runner = spyRunner();
     const node = {
       id: "exe-deploy", category: "execute", connector: "deploy",
-      config: { deployImpl: runner.impl }, runtime: { deployAuthorization: FOUNDER_AUTH },
+      config: { deployImpl: runner.impl },
+      runtime: { outwardRelease: OUTWARD_RELEASE, deployAuthorization: FOUNDER_AUTH },
     };
     const result = await deploy.run(node, [approved()], {});
     assert.equal(result.ok, true);

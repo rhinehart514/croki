@@ -20,6 +20,8 @@
 // job (the gate is the contract checkpoint; a best-effort discovery chain is not contract-rigid)
 // live here too so graph.mjs calls them by name instead of re-deriving them.
 
+import { configuredItems as configuredManualItems } from "./connectors/find/manual.mjs";
+
 export const SOURCE_MODES = { PROVIDED: "provided", DISCOVERED: "discovered", DERIVED: "derived" };
 
 export function isSourceNode(node) {
@@ -45,7 +47,7 @@ export function sourceStandsOnData(node) {
   if (!isSourceNode(node)) return true;
   if (sourceMode(node) === SOURCE_MODES.DISCOVERED) return true;
   if (sourceMode(node) === SOURCE_MODES.DERIVED) return true;
-  if (node.connector === "manual") return Array.isArray(node.config?.items) && node.config.items.length > 0;
+  if (node.connector === "manual") return configuredManualItems(node).length > 0;
   if (node.connector === "csv") return typeof node.config?.csv === "string" && node.config.csv.trim().length > 0;
   if (node.connector === "api") return typeof node.config?.endpoint === "string" && node.config.endpoint.trim().length > 0;
   // A provided source on some other connector is assumed self-standing (it fetches its own).

@@ -23,6 +23,7 @@ export function ProductEntryColumn({
   deriving = false,
   onReread,
   defaultOpen = true,
+  embedded = false,
 }: {
   productName: string;
   model: ProductModel | null;
@@ -45,6 +46,9 @@ export function ProductEntryColumn({
   onReread?: () => void;
   // Whether the column starts expanded. A caller may collapse it to give dense canvas work more width.
   defaultOpen?: boolean;
+  // Inside the workspace drawer this is product context, not a second floating rail. Embedded mode keeps
+  // the content open, sheds its overlay chrome, and leaves canvas spacing to the drawer.
+  embedded?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   // Follow a changed caller default without stomping a manual toggle while that default is stable.
@@ -73,10 +77,11 @@ export function ProductEntryColumn({
   // 224px panel + its flow-out cue; collapsed ≈ the thin spine tab. Cleared on unmount (e.g. switching to
   // the Product view) so the canvas reclaims the full width.
   useEffect(() => {
+    if (embedded) return;
     const gutter = open ? "256px" : "56px";
     document.documentElement.style.setProperty("--pentry-gutter", gutter);
     return () => { document.documentElement.style.removeProperty("--pentry-gutter"); };
-  }, [open]);
+  }, [embedded, open]);
 
   // Keep the source COMPACT (docs/production-direction/16): a truth or an unknown is a short signal, not a
   // paragraph. Long pinned-question text is clipped so the source stays a headwaters, never a wall of text.
@@ -90,7 +95,7 @@ export function ProductEntryColumn({
     : things.slice(0, 4).map((t) => ({ title: t.name, sub: t.summary }));
   const hasModel = entries.length > 0;
 
-  if (!open) {
+  if (!open && !embedded) {
     return (
       <button
         type="button"
@@ -106,21 +111,23 @@ export function ProductEntryColumn({
   }
 
   return (
-    <aside className="pentry" aria-label="Product — where wins enter">
+    <aside className={`pentry${embedded ? " is-embedded" : ""}`} aria-label="Product context">
       <div className="pentry-head">
         <div className="pentry-head-text">
           <span className="pentry-kicker">Where wins enter</span>
           <strong className="pentry-name" title={productName}>{productName}</strong>
         </div>
-        <button
-          type="button"
-          className="pentry-collapse"
-          onClick={() => setOpen(false)}
-          aria-label="Collapse"
-          title="Collapse"
-        >
-          <ChevronLeft size={15} />
-        </button>
+        {!embedded ? (
+          <button
+            type="button"
+            className="pentry-collapse"
+            onClick={() => setOpen(false)}
+            aria-label="Collapse"
+            title="Collapse"
+          >
+            <ChevronLeft size={15} />
+          </button>
+        ) : null}
       </div>
 
       {hasModel ? (
@@ -201,10 +208,12 @@ export function ProductEntryColumn({
 
       {/* The flow-out cue: go-to-market reads to the RIGHT of the product, so the canvas visibly grows
           out of it. Decorative — the real edges live on the canvas nodes. */}
-      <span className="pentry-flow" aria-hidden="true">
-        <span className="pentry-flow-line" />
-        <ArrowRight className="pentry-flow-arrow" size={14} />
-      </span>
+      {!embedded ? (
+        <span className="pentry-flow" aria-hidden="true">
+          <span className="pentry-flow-line" />
+          <ArrowRight className="pentry-flow-arrow" size={14} />
+        </span>
+      ) : null}
     </aside>
   );
 }

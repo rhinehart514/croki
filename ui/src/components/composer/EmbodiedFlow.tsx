@@ -45,7 +45,7 @@ export function EmbodiedFlow({
   title,
   rationale,
   onBuild,
-  buildLabel = "Build this",
+  buildLabel = "Prepare path",
   dimmed = false,
   building = false,
 }: {

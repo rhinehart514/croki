@@ -23,13 +23,35 @@ import { composeGraphForChannel, assertGateWall } from "./workflow-composer.mjs"
 import { listCapabilities } from "./artifact-store.mjs";
 import { gtmPathStore, measurementContractStore, runStore, productTruthStore, marketObjectStore } from "./gtm-store.mjs";
 import { normalizeRunPlan } from "./graph-intelligence/compile-decompose.mjs";
-import { runGraph } from "./graph.mjs";
+import { runGraph, OUTWARD_RELEASE } from "./graph.mjs";
 import { recordRunDerivations } from "./run-derivation.mjs";
 import { makeFailureSink } from "./failure-log.mjs";
 import { resolveGitShaAsync } from "./friction.mjs";
+import { draftKey } from "./memory.mjs";
 
 function slug(value) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "path";
+}
+
+// ── Venture-scoped run lookup (EXPERIMENT-MACHINE-SPEC rail 6, FIX 4) ─────────────────────────────────
+// "One venture is an isolated machine. Ventures never bleed into each other." A run is addressed by id in
+// the URL but authorized against the URL's projectId — so reading/approving/greenlighting a run must verify
+// the run's OWN persisted projectId matches the venture it is being accessed under, and FAIL CLOSED on any
+// mismatch. Without this, /projects/A/runs/<B-run>/approve would expose and could approve venture B's work.
+// The mismatch is reported as a plain not-found (a 404-shaped error) so it never confirms a run exists in
+// another venture. A run persisted with a null projectId (legacy / unscoped) is only reachable under the
+// same null/absent scope, never adopted into a named venture.
+export function getRunScoped(runId, projectId, options = {}) {
+  const run = runStore.get(runId, { ...options, projectId });
+  const runProject = run?.projectId ?? null;
+  const urlProject = projectId ?? null;
+  if (runProject !== urlProject) {
+    const error = new Error(`Run not found in this venture: ${runId}`);
+    error.code = "run_not_in_venture";
+    error.status = 404;
+    throw error;
+  }
+  return run;
 }
 
 // ── The measurement-contract read ─────────────────────────────────────────────────────────────────
@@ -368,6 +390,139 @@ export function mergeSendOutputOntoItems(items, result) {
   });
 }
 
+// ── Greenlight: is this staged item OUTWARD (crosses the wall) or internal/prep (stays inside)? ──────
+// The experiment-machine greenlight starts an experiment's internal/prep work running WITHOUT approving
+// anything that leaves the machine. To do that safely it must decide, per staged item, whether releasing
+// it would cross the founder wall. The classification is CONSERVATIVE by construction: an item counts as
+// internal ONLY when its declared effect is unambiguously local (staged locally, or a reviewed-diff-only
+// product change that is explicitly barred from commit/push/deploy). Everything else — a send, a publish,
+// a deploy, a charge, a CRM write, or anything whose effect the item does not clearly bound — is treated
+// as OUTWARD and HELD at the gate. So a new or ambiguous item shape fails closed (held), never open.
+const INTERNAL_PROTECTS = new Set(["stage_locally"]);
+const OUTWARD_PROTECTS = new Set([
+  "send_emails", "publish_page", "deploy", "update_crm", "charge",
+  "commit", "push", "pull_request", "merge", "publish",
+]);
+const REQUIRED_PATCH_BLOCKS = ["commit", "push", "pull_request", "merge", "publish", "deploy"];
+
+function hasLocalPrepareDiffProof(item) {
+  if (String(item?.protects ?? "").trim() !== "prepare_diff") return false;
+  if (item?.effectBoundary !== "reviewed_diff_only") return false;
+  if (item?.externalEffectAuthorized !== false) return false;
+  const blocked = new Set(Array.isArray(item?.blockedEffects) ? item.blockedEffects.map((effect) => String(effect).trim()) : []);
+  return REQUIRED_PATCH_BLOCKS.every((effect) => blocked.has(effect));
+}
+
+export function isOutwardStagedItem(item) {
+  if (!item || typeof item !== "object") return true; // unknown shape → fail closed (outward, held)
+  const protects = String(item.protects ?? "").trim();
+  if (OUTWARD_PROTECTS.has(protects)) return true;
+
+  // Patch-shaped work is internal only with the compiler's complete reviewed-diff proof. A bare `kind:
+  // patch`, a `prepare_diff` label, a missing effect flag, or an incomplete/conflicting blocked-effects list
+  // is not authority to run: it stays held. This keeps commit/push/deploy work outward even when a model or
+  // stale persisted run supplies one reassuring field without the rest of the local-only contract.
+  const patchShaped = item.kind === "patch"
+    || protects === "prepare_diff"
+    || item.effectBoundary === "reviewed_diff_only"
+    || Array.isArray(item.blockedEffects);
+  if (patchShaped) return !hasLocalPrepareDiffProof(item);
+
+  if (INTERNAL_PROTECTS.has(protects)) return false;
+  // A protects verb that matches an outbound/approval verb is outward even if it is not in the known set.
+  if (/send|publish|deploy|charge|post|dm|message|email|call|commit|push|merge|pull.?request/i.test(protects)) return true;
+  // Default: fail closed. If we cannot prove an item stays inside, hold it.
+  return true;
+}
+
+// ── Greenlight → run the internal/prep work, HOLD everything outward ─────────────────────────────────
+// Rail 3 of the experiment machine: one founder click SETS AN EXPERIMENT RUNNING. This is deliberately
+// SEPARATE from the outward gate (approveCompiledRun): greenlight says "let this experiment run its
+// internal/prep work"; the gate says "approve what actually leaves." They are two distinct acts, and this
+// one is structurally incapable of the second. It reuses the exact same engine and the exact same gate as
+// approveCompiledRun — the wall is UNTOUCHED — but it auto-builds the per-item decision set itself and
+// APPROVES ONLY the internal/prep items (isOutwardStagedItem === false). Every genuinely-outward item is
+// left with NO decision, so it stays pending at the founder gate exactly as today. Greenlight never emits
+// an approve decision for an outward item, so it can never send, publish, deploy, or charge. The founder
+// still crosses the wall item-by-item later, when they choose to.
+export async function greenlightRun({
+  projectId = "default",
+  runId = null,
+  run = null,
+  stepRuntime,
+  market = null,
+  grounding = null,
+  designState = null,
+  memory = null,
+  loadLastRunItems = null,
+  authorizeRelease = null,
+  founderPresent = null,
+  options = {},
+} = {}) {
+  // Venture-scoped lookup (FIX 4): the greenlit run must belong to THIS venture; fail closed on mismatch.
+  const staged = run ?? getRunScoped(runId, projectId, options);
+  const items = Array.isArray(staged?.items) ? staged.items : [];
+
+  // Build the greenlight decision set: approve ONLY the internal/prep items, keyed the same way the gate
+  // keys per-item decisions (draftKey / the item's stable action id). Outward items are OMITTED entirely
+  // — no key, so the gate holds them pending. This is the whole safety story: greenlight literally cannot
+  // express an outward approval because it never writes an approve decision for an outward item.
+  const decisions = {};
+  let internalCount = 0;
+  let heldOutwardCount = 0;
+  for (const item of items) {
+    // Key the decision EXACTLY the way the gate connector will key it. approveCompiledRun stamps each
+    // reviewed item with gtmActionId = stableActionId(run, item) before the gate sees it, and the gate
+    // keys per-item decisions by draftKey(item) — which returns gtmActionId when present. So compute the
+    // same stable id here and key on it; an outward item is simply omitted, so the gate holds it pending.
+    const key = draftKeyForItem(item) || item?.gtmActionId || stableActionId(staged, item);
+    if (isOutwardStagedItem(item)) { heldOutwardCount += 1; continue; }
+    decisions[key] = { decision: "approve" };
+    internalCount += 1;
+  }
+
+  // If there is no internal/prep work to release, greenlight is an honest no-op on the wall: it reports
+  // that everything this experiment does is outward and already waiting at the gate. It never fabricates
+  // an approval to have something to do.
+  const result = await approveCompiledRun({
+    projectId,
+    run: staged,
+    runId,
+    decisions,
+    stepRuntime,
+    market,
+    grounding,
+    designState,
+    memory,
+    loadLastRunItems,
+    authorizeRelease,
+    founderPresent,
+    // NEVER pass sendRunners: greenlight has no delivery seam. Even if a decision were mis-classified,
+    // the execute connector would stage locally, not send. And NEVER pass outwardRelease (rail 1): with no
+    // host-issued outward-release capability on the run, every real outward connector (http/slack/gmail/
+    // deploy) HOLDS an approved item instead of sending it. Three independent guarantees, not one — so a
+    // greenlit patch item routed into an http or slack node sends NOTHING.
+    options,
+  });
+  return {
+    ...result,
+    greenlight: {
+      startedInternal: internalCount,
+      heldOutward: heldOutwardCount,
+      // The honest summary the founder sees: what greenlight set running vs what still waits at the wall.
+      note: internalCount
+        ? `Greenlit — ${internalCount} prep step${internalCount === 1 ? "" : "s"} running. ${heldOutwardCount} outward step${heldOutwardCount === 1 ? "" : "s"} still wait${heldOutwardCount === 1 ? "s" : ""} for your approval at the gate.`
+        : `Greenlit — this experiment's steps all reach outward, so nothing runs unattended. ${heldOutwardCount} step${heldOutwardCount === 1 ? "" : "s"} wait${heldOutwardCount === 1 ? "s" : ""} for your approval at the gate.`,
+    },
+  };
+}
+
+// The gate keys per-item decisions by draftKey(item); import lazily-safe here to avoid a cycle at module
+// load. Kept as a tiny local wrapper so greenlight keys its decisions IDENTICALLY to the gate connector.
+function draftKeyForItem(item) {
+  try { return draftKey(item); } catch { return null; }
+}
+
 // ── Approve → run: release a staged compiled run through the SAME engine ─────────────────────────────
 // A compiled run stages at the founder gate (compileRunFromPath). This is the other half: the founder's
 // per-item decisions (approve / reject / edit) release it. It reuses runGraph — NOT a parallel runtime —
@@ -396,9 +551,20 @@ export async function approveCompiledRun({
   // here matches the operator gate-resume path, which already passes it — and is what makes the compiled-run
   // approval able to genuinely send, and therefore able to persist the provider id the inbox reader needs.
   sendRunners = null,
+  // Founder presence (the away / unattended hold). Threaded straight through to runGraph so the gate
+  // connector holds an outward standing-autonomy auto-approval when the founder is away. Null leaves the
+  // wall's behavior unchanged. Never composition — the host resolves it from the live presence lease.
+  founderPresent = null,
+  // The outward-release capability (EXPERIMENT-MACHINE-SPEC rail 1). ONLY the founder outward-approval route
+  // passes the host-issued OUTWARD_RELEASE token here; greenlight calls approveCompiledRun WITHOUT it, so
+  // greenlight's run physically cannot cross the wall even on a mis-classified item — an outward connector
+  // holds an approved item that arrives with no capability. Threaded straight to runGraph. Default null.
+  outwardRelease = null,
   options = {},
 } = {}) {
-  const staged = run ?? runStore.get(runId, { ...options, projectId });
+  // Venture-scoped lookup (FIX 4): when we resolve the run by id, verify it belongs to THIS venture and
+  // fail closed on mismatch. An injected run (tests / the route that already scoped it) is trusted as-is.
+  const staged = run ?? getRunScoped(runId, projectId, options);
   const nodes = Array.isArray(staged.steps) ? staged.steps : [];
   const edges = Array.isArray(staged.edges) ? staged.edges : [];
   const gateNodes = nodes.filter((node) => node && node.category === "gate");
@@ -461,6 +627,10 @@ export async function approveCompiledRun({
     projectId,
     credentialOptions: options,
     authorizeRelease,
+    founderPresent,
+    // The outward-release capability — present ONLY on the founder outward-approval route, null on
+    // greenlight's call. Absent it, an outward connector holds every approved item instead of sending.
+    outwardRelease,
     // Only pass a send-runner map when one was supplied. Absent it, the execute connector stages locally
     // (the compiled-run default). Present, an approved item reaches the real transport and returns a
     // provider message id, which the merge below persists onto the run for the automatic inbox reader.

@@ -9,6 +9,15 @@ export type CanvasOutlineRow = {
 
 export const canvasOutlineRefKey = (ref: WovenRef) => `${ref.type ?? ""}:${ref.id}`;
 
+function founderPriority(anchor: WovenCanvasAnchor): number {
+  if (anchor.ref.type === "goal" || anchor.kind === "goal") return 0;
+  if (anchor.ref.type === "work-artifact" || anchor.ref.type === "product-change") return 1;
+  if (anchor.ref.type === "pipeline" || anchor.kind === "gate") return 2;
+  if (anchor.ref.type === "outcome" || anchor.kind === "outcome") return 3;
+  if (anchor.kind === "question" || anchor.kind.startsWith("terrain-")) return 4;
+  return 5;
+}
+
 export function buildCanvasOutline(canvas: WovenCanvas | null | undefined): CanvasOutlineRow[] {
   if (!canvas) return [];
   const counts = new Map<string, { incoming: number; outgoing: number }>();
@@ -39,6 +48,9 @@ export function buildCanvasOutline(canvas: WovenCanvas | null | undefined): Canv
     .sort((a, b) => {
       const aRegion = a.regionTitles[0] ?? "";
       const bRegion = b.regionTitles[0] ?? "";
-      return aRegion.localeCompare(bRegion) || a.anchor.kind.localeCompare(b.anchor.kind) || a.anchor.label.localeCompare(b.anchor.label);
+      return founderPriority(a.anchor) - founderPriority(b.anchor)
+        || aRegion.localeCompare(bRegion)
+        || a.anchor.kind.localeCompare(b.anchor.kind)
+        || a.anchor.label.localeCompare(b.anchor.label);
     });
 }

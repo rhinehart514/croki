@@ -2,15 +2,12 @@
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "workspaces": {
     ".": {
-      "entry": ["electron/main.cjs", "electron/**/*.cjs"],
+      "entry": ["electron/**/*.cjs"],
       "project": ["electron/**/*.{cjs,js,mjs}"]
     },
     "brain": {
       "entry": [
-        "src/server.mjs",
-        "src/mcp.mjs",
         "src/operator-mcp.mjs",
-        "src/mirror.mjs",
         "src/terminal-server.mjs",
         "src/migrate-to-sqlite.mjs",
         "test/**/*.test.mjs"
@@ -20,9 +17,6 @@
     "ui": {
       "entry": [
         "src/main.tsx",
-        "vite.config.ts",
-        "vitest.config.ts",
-        "src/test/setupTests.ts",
         "**/*.test.{ts,tsx}"
       ],
       "project": ["src/**/*.{ts,tsx}"],

@@ -11,9 +11,9 @@
 //   • Client type: Google "Desktop app" OAuth client. Desktop clients permit loopback-IP redirects on
 //     ANY localhost port with NO pre-registered redirect URI — so the dev server (4317) and the desktop
 //     app's dynamic port both work with one client, zero redirect-URI bookkeeping.
-//   • Scope: EXACTLY https://www.googleapis.com/auth/gmail.send (send-only, least privilege). Because we
-//     never request an identity scope, there is no id_token and no readable email — the UI says
-//     "Gmail connected", never a spoofed address. Least privilege beats a nicer label.
+//   • Scopes: gmail.send preserves the founder-approved delivery capability; gmail.readonly lets the
+//     automatic outcome reader inspect sent threads for replies and bounces. Existing send-only grants keep
+//     sending, but reads surface an explicit reconnect requirement until the founder re-consents.
 //   • Flow: authorization-code + PKCE (S256) over a loopback redirect, access_type=offline &
 //     prompt=consent so Google returns a REFRESH token. We store the refresh token (+ client id/secret).
 //   • Refresh: grant_type=refresh_token mints a fresh access token; we cache it until ~1 min before
@@ -29,6 +29,8 @@ import { spawn } from "node:child_process";
 export const GOOGLE_AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 export const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 export const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
+export const GMAIL_READ_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+export const GMAIL_SCOPES = `${GMAIL_SEND_SCOPE} ${GMAIL_READ_SCOPE}`;
 
 // Reuse a minted access token until this long before its stated expiry — a small skew so a token never
 // expires mid-flight between "we checked" and "Google received it".
@@ -55,7 +57,7 @@ export function generateState() {
 
 // Build the Google consent URL. access_type=offline + prompt=consent are what make Google return a
 // REFRESH token (the whole point — a durable grant, not a one-hour access token).
-export function buildAuthUrl({ clientId, redirectUri, state, codeChallenge, scope = GMAIL_SEND_SCOPE }) {
+export function buildAuthUrl({ clientId, redirectUri, state, codeChallenge, scope = GMAIL_SCOPES }) {
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,

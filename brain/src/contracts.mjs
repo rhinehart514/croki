@@ -123,8 +123,20 @@ export function auditGraphContracts(graph, runResult = null) {
   }
 
   return Object.fromEntries(graph.nodes.map((node) => {
-    const observed = runResult?.nodes?.[node.id]?.contractAudit;
+    const observedNode = runResult?.nodes?.[node.id];
+    const observed = observedNode?.contractAudit;
     if (observed) return [node.id, observed];
+    // Context and other host-owned nodes do not run through the executable-node output
+    // auditor, so their receipt legitimately has no `contractAudit`. Once a persisted run
+    // proves that the node produced items, prefer that observation over a speculative
+    // pre-run warning from its authored advisory contract. This keeps the Problems rail
+    // honest after a successful run without weakening contract enforcement for executable
+    // steps (those always carry their own observed audit above).
+    if (observedNode && Array.isArray(observedNode.items)) {
+      return [node.id, audit("satisfied", `${observedNode.items.length} observed item${observedNode.items.length === 1 ? "" : "s"} in the latest run.`, {
+        itemCount: observedNode.items.length,
+      })];
+    }
     const contract = normalizeContract(node.contract);
     // "none" ≠ "ready". An undeclared contract is not a satisfied one — it's the
     // absence of a promise. Rendering it green ("ready") is a false-positive health
@@ -170,4 +182,3 @@ export function auditGraphContracts(graph, runResult = null) {
     })];
   }));
 }
-

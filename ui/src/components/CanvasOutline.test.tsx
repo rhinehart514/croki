@@ -18,23 +18,37 @@ const canvas = {
 describe("CanvasOutline", () => {
   it("builds a stable linear view with regions and connection counts", () => {
     const rows = buildCanvasOutline(canvas);
-    expect(rows.map((row) => row.anchor.label)).toEqual(["Activation explanations", "Improve activation"]);
-    expect(rows[1]).toMatchObject({ outgoing: 1, regionTitles: ["Fix activation"] });
+    expect(rows.map((row) => row.anchor.label)).toEqual(["Improve activation", "Activation explanations"]);
+    expect(rows[0]).toMatchObject({ outgoing: 1, regionTitles: ["Fix activation"] });
   });
 
   it("selects, inspects, and supports spatial arrow navigation", () => {
     const onSelect = vi.fn();
     const onInspect = vi.fn();
-    render(<CanvasOutline canvas={canvas} onSelect={onSelect} onInspect={onInspect} />);
-    fireEvent.click(screen.getByRole("button", { name: /outline/i }));
+    const { container } = render(<CanvasOutline canvas={canvas} onSelect={onSelect} onInspect={onInspect} />);
+    const outline = container.querySelector(".canvas-outline");
+    const toggle = container.querySelector(".canvas-outline-toggle");
+    expect(outline).not.toHaveClass("open");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(toggle!);
+    expect(outline).toHaveClass("open");
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Founder goal")).toBeInTheDocument();
+    expect(screen.getByText("Crew work")).toBeInTheDocument();
     const comparison = screen.getByRole("button", { name: /Activation explanations/i });
     const goal = screen.getByRole("button", { name: /Improve activation/i });
     comparison.focus();
     fireEvent.keyDown(comparison, { key: "ArrowDown" });
     expect(goal).toHaveFocus();
-    fireEvent.click(goal);
-    expect(onSelect).toHaveBeenCalledWith({ type: "goal", id: "g1" });
     fireEvent.keyDown(goal, { key: "Enter" });
     expect(onInspect).toHaveBeenCalledWith({ type: "goal", id: "g1" });
+    expect(outline).not.toHaveClass("open");
+    expect(screen.queryByText("Linear access to the same canvas")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /outline/i }));
+    const reopenedGoal = screen.getByRole("button", { name: /Improve activation/i });
+    fireEvent.click(reopenedGoal);
+    expect(onSelect).toHaveBeenCalledWith({ type: "goal", id: "g1" });
+    expect(screen.queryByText("Linear access to the same canvas")).not.toBeInTheDocument();
   });
 });

@@ -13,7 +13,8 @@ import { buildMarketContext } from "./market-research.mjs";
 import { marketObjectStore } from "./gtm-store.mjs";
 import { settleProductChangeProposal } from "./outcome-ingest.mjs";
 import { applyGraphOperations } from "./graph-operations.mjs";
-import { hasApproveIntent, runGraph } from "./graph.mjs";
+import { hasApproveIntent, runGraph, OUTWARD_RELEASE } from "./graph.mjs";
+import { isFounderPresent } from "./presence.mjs";
 import { defaultSendRunners } from "./connectors/execute/gmail-transport.mjs";
 import { defaultDeployRunners } from "./connectors/execute/deploy-transport.mjs";
 import {
@@ -21,6 +22,7 @@ import {
   getOperatorSession,
   getOperatorSessionFresh,
   listOperatorSessions,
+  operatorMutationBoundary,
   saveOperatorSession,
 } from "./operator-store.mjs";
 import { loadProject, updateSharedContext } from "./project-store.mjs";
@@ -37,6 +39,7 @@ import {
   flowFor,
   latestWorkspace,
   memoryFor,
+  pauseForUnmetMutation,
   recallTaste,
   summarizeRun,
 } from "./operator-run-core.mjs";
@@ -46,6 +49,7 @@ import { createOperatorCapabilityRegistry, DISPATCH_ONLY_OPERATOR_TOOLS } from "
 import { safeLogFailure, makeFailureSink } from "./failure-log.mjs";
 import { resolveGitShaAsync } from "./friction.mjs";
 import { persistence } from "./persistence.mjs";
+import { mutationRequirementSatisfied } from "./operator-mutation-receipt.mjs";
 
 const OPERATOR_HALT_STATUSES = new Set([
   "waiting_for_gate",
@@ -251,11 +255,15 @@ export async function runOperatorSession(id, runtime = {}) {
     if (outcome.kind === "completed") {
       const current = getOperatorSessionFresh(id, options);
       if (OPERATOR_HALT_STATUSES.has(current.status)) return current;
+      if (!mutationRequirementSatisfied(current)) {
+        return pauseForUnmetMutation(current, options).session;
+      }
       return addEvent({
         ...current,
         status: "completed",
         summary: outcome.summary,
         completedAt: new Date().toISOString(),
+        requiredMutation: null,
       }, {
         type: "session_completed",
         title: "Operator finished",
@@ -450,6 +458,11 @@ export function resumeOperatorSession(id, input, runtime = {}) {
     status: "ready",
     error: null,
     pendingQuestion: null,
+    requiredMutation: runtime.requiredMutation ? {
+      kind: runtime.requiredMutation,
+      ...operatorMutationBoundary(session),
+      founderText: text,
+    } : null,
     maxSteps: Math.min(60, Math.max(session.maxSteps, session.stepCount + 12)),
     modelMessages: [
       ...(session.modelMessages ?? []),
@@ -678,6 +691,16 @@ export async function resolveOperatorGate(id, payload = {}, runtime = {}) {
     // applied. authorizeGateRelease already passed above (or this code is unreachable); re-running it
     // here means the wall holds even if a future caller wires runGraph approvals without the front guard.
     authorizeRelease: () => authorizeGateRelease(session, payload, options),
+    // RAIL 1 — the outward-release capability. This gate-resume run is THE founder outward-approval path
+    // (authorizeGateRelease passed above), so it carries the host-issued token that lets an approved item
+    // actually leave via a real outward connector. Ambient runs, greenlight, and composition never carry
+    // it, so an approved item can only cross the wall on a run the founder explicitly released here.
+    outwardRelease: OUTWARD_RELEASE,
+    // The away / unattended hold on this live gate resume (EXPERIMENT-MACHINE-SPEC rail 1, FIX 2a).
+    // Presence is resolved for EVERY run path: an explicit options.founderPresent wins (tests), otherwise
+    // the live presence lease decides, defaulting to AWAY when there is no heartbeat. So an unattended
+    // standing-autonomy auto-approval of a possibly-outward item is held here too, conservatively.
+    founderPresent: typeof options.founderPresent === "boolean" ? options.founderPresent : isFounderPresent(),
   });
   recordFlowRun(flow.graph, result, options);
   // Bank the run's derivations (founder-gate taste signals, promotions) for their side effects.

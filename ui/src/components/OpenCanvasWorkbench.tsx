@@ -56,7 +56,7 @@ function ArtifactHistoryRevision({ revision, current, busy, onRestore }: { revis
   );
 }
 
-export function OpenCanvasWorkbench({ projectId, selectedRef, selectedRelationship, selectedConflict, onChanged, onCreated, onSelect, onSelectRelationship, onClose }: {
+export function OpenCanvasWorkbench({ projectId, selectedRef, selectedRelationship, selectedConflict, onChanged, onCreated, onSelect, onSelectRelationship, onGreenlightExperiment, onClose, showLauncher = true }: {
   projectId: string;
   selectedRef?: StableRef | null;
   selectedRelationship?: CanvasRelationshipSelection | null;
@@ -65,11 +65,14 @@ export function OpenCanvasWorkbench({ projectId, selectedRef, selectedRelationsh
   onCreated?: (ref: StableRef) => void;
   onSelect?: (ref: StableRef) => void;
   onSelectRelationship?: (selection: CanvasRelationshipSelection) => void;
+  onGreenlightExperiment?: (artifact: WorkArtifactRevision) => void | Promise<void>;
   onClose: () => void;
+  showLauncher?: boolean;
 }) {
   const selectedType = selectedRef?.type ?? null;
   const selectedId = selectedRef?.id ?? null;
   const [mode, setMode] = useState<Mode>(selectedRef?.type === "product-change" ? "product-changes" : selectedRelationship || selectedRef?.type === "goal" || selectedRef?.type === "work-artifact" || selectedRef?.type === "work-region" ? "inspect" : "closed");
+  const closeWorkbench = useCallback(() => { setMode("closed"); onClose(); }, [onClose]);
   // The collapsed "+" launcher's menu — a transient popover, closed on outside-click / Escape.
   const [launcherOpen, setLauncherOpen] = useState(false);
   const launcherRef = useRef<HTMLDivElement | null>(null);
@@ -81,6 +84,16 @@ export function OpenCanvasWorkbench({ projectId, selectedRef, selectedRelationsh
     document.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
   }, [launcherOpen]);
+  useEffect(() => {
+    if (mode === "closed") return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !(document.activeElement as HTMLElement | null)?.classList.contains("open-canvas-close")) return;
+      event.preventDefault();
+      closeWorkbench();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [closeWorkbench, mode]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [artifacts, setArtifacts] = useState<WorkArtifactRevision[]>([]);
   const [regions, setRegions] = useState<CanvasRegion[]>([]);
@@ -207,6 +220,7 @@ export function OpenCanvasWorkbench({ projectId, selectedRef, selectedRelationsh
   }, [browseQuery, goalRelations, workRelationships]);
 
   const mutate = async (work: () => Promise<StableRef | void>) => {
+    const founderDraft = { statement, desiredChange, title, kind, summary, contentType, content, goalStatus, goalStatusReason, regionTitle, regionPurpose };
     setSaving(true);
     setError(null);
     try {
@@ -216,9 +230,16 @@ export function OpenCanvasWorkbench({ projectId, selectedRef, selectedRelationsh
       if (createdRef) onCreated?.(createdRef);
     } catch (cause) {
       const detail = cause instanceof Error ? cause.message : "The change could not be saved.";
-      // A stale writer keeps the founder's draft on screen, but refreshes the authority snapshot so
-      // the next save is based on the winning revision instead of repeatedly colliding with it.
-      if (/stale|conflict|revision/i.test(detail)) await load();
+      // Refresh canonical authority after a stale write, then restore the founder's unsaved draft so the
+      // conflict is visible and reconcilable rather than silently replacing their work with the winner.
+      if (/stale|conflict|revision/i.test(detail)) {
+        await load();
+        setStatement(founderDraft.statement); setDesiredChange(founderDraft.desiredChange);
+        setTitle(founderDraft.title); setKind(founderDraft.kind); setSummary(founderDraft.summary);
+        setContentType(founderDraft.contentType); setContent(founderDraft.content);
+        setGoalStatus(founderDraft.goalStatus); setGoalStatusReason(founderDraft.goalStatusReason);
+        setRegionTitle(founderDraft.regionTitle); setRegionPurpose(founderDraft.regionPurpose);
+      }
       setError(detail);
     } finally {
       setSaving(false);
@@ -332,6 +353,17 @@ export function OpenCanvasWorkbench({ projectId, selectedRef, selectedRelationsh
     setProposalApplyArmed(false);
   });
 
+  const greenlightSelectedExperiment = () => mutate(async () => {
+    if (!selectedArtifact || selectedArtifact.kind !== "experiment-proposal") {
+      throw new Error("Choose an experiment proposal first.");
+    }
+    if (selectedArtifact.status !== "proposed") {
+      throw new Error("This experiment has already been greenlit.");
+    }
+    if (!onGreenlightExperiment) throw new Error("The experiment runner is not available here.");
+    await onGreenlightExperiment(selectedArtifact);
+  });
+
   const addRelation = () => mutate(async () => {
     if (!selectedRef || !relationTarget) throw new Error("Choose another canvas object.");
     const target = records.find((item) => `${item.ref.type}:${item.ref.id}` === relationTarget)?.ref;
@@ -354,6 +386,7 @@ export function OpenCanvasWorkbench({ projectId, selectedRef, selectedRelationsh
   });
 
   if (mode === "closed") {
+    if (!showLauncher) return null;
     // Collapsed to a single tucked "+" that opens a short menu — creation stays one click away without a
     // four-button row floating over the nodes. The menu closes on outside-click or Escape.
     return (
@@ -386,13 +419,23 @@ export function OpenCanvasWorkbench({ projectId, selectedRef, selectedRelationsh
   const isRegionForm = !!selectedRegion;
   const isRelationshipForm = !!selectedRelationship;
   return (
-    <aside className={`open-canvas-workbench${mode === "product-changes" ? " open-canvas-workbench--wide" : ""}`} aria-label="Canvas workbench">
+    <aside className={`open-canvas-workbench${mode === "product-changes" ? " open-canvas-workbench--wide" : ""}`} role="dialog" aria-label="Canvas workbench">
       <header>
         <div><span>Canvas</span><h2>{mode === "browse" ? "Open work" : mode === "create-goal" ? "New goal" : mode === "create-work" ? "New work" : mode === "product-changes" ? "Product changes" : selectedRelationship ? "Relationship" : selectedGoal ? "Goal" : selectedRegion ? "Region" : "Work"}</h2></div>
-        <button type="button" className="open-canvas-close" aria-label="Close canvas workbench" onClick={() => { setMode("closed"); onClose(); }}>×</button>
+        <button
+          type="button"
+          className="open-canvas-close"
+          aria-label="Close canvas workbench"
+          onClick={closeWorkbench}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            closeWorkbench();
+          }}
+        >×</button>
       </header>
       {loading && !isGoalForm && !isWorkForm && !isRegionForm && !isRelationshipForm ? <p className="open-canvas-muted">Loading canvas work…</p> : null}
-      {mode === "product-changes" ? <ProductChangeReview projectId={projectId} /> : null}
+      {mode === "product-changes" ? <ProductChangeReview projectId={projectId} focusedChangeId={selectedType === "product-change" ? selectedId : null} /> : null}
       {mode === "browse" ? <section className="open-canvas-browser" aria-label="Find canvas work"><label>Find work<input autoFocus type="search" value={browseQuery} onChange={(event) => setBrowseQuery(event.target.value)} placeholder="Goal, work, region, or relationship" /></label><div className="open-canvas-browser-results">{visibleRecords.map((item) => <button type="button" key={`${item.ref.type}:${item.ref.id}`} onClick={() => onSelect?.(item.ref)}><span>{item.ref.type === "goal" ? "Goal" : item.ref.type === "work-region" ? item.label.startsWith("Archived") ? "Archived region" : "Region" : "Work"}</span>{item.label.replace(/^[^:]+:\s*/, "")}</button>)}{visibleRelationships.map((item) => <button type="button" key={`${item.selection.type}:${item.selection.id}`} onClick={() => onSelectRelationship?.(item.selection)}><span>{item.retired ? "Retired link" : "Link"}</span><span className="open-canvas-browser-relation"><b>{item.label}</b><small>{item.detail}</small></span></button>)}{!loading && visibleRecords.length === 0 && visibleRelationships.length === 0 ? <p className="open-canvas-muted">{browseQuery ? "No canvas work matches that search." : "No goals, work, regions, or relationships yet."}</p> : null}</div></section> : null}
       {isGoalForm ? (
         <form onSubmit={(event) => { event.preventDefault(); void saveGoal(); }}>
@@ -445,7 +488,14 @@ export function OpenCanvasWorkbench({ projectId, selectedRef, selectedRelationsh
             {proposalApplyArmed ? <div><span>Apply this exact canvas change?</span><button type="button" disabled={saving} onClick={() => void applySelectedCanvasProposal()}>Yes, apply on canvas</button><button type="button" onClick={() => setProposalApplyArmed(false)}>Not yet</button></div>
               : <button type="button" onClick={() => setProposalApplyArmed(true)}>Review and apply…</button>}
           </section> : null}
-          {!selectedRegion ? <details className="open-canvas-relation"><summary>Connect to another object</summary><label>Object<select value={relationTarget} onChange={(event) => setRelationTarget(event.target.value)}><option value="">Choose an object</option>{relationChoices.map((item) => <option key={`${item.ref.type}:${item.ref.id}`} value={`${item.ref.type}:${item.ref.id}`}>{item.label}</option>)}</select></label><label>Relationship<input value={relationKind} onChange={(event) => setRelationKind(event.target.value)} /></label><label>Why are they connected?<textarea rows={2} value={relationBasis} onChange={(event) => setRelationBasis(event.target.value)} /></label><button type="button" onClick={() => void addRelation()} disabled={saving || !relationTarget}>Connect</button></details> : null}
+          {selectedArtifact?.kind === "experiment-proposal" ? <section className="open-canvas-proposal" aria-label="Experiment proposal">
+            <strong>{selectedArtifact.status === "proposed" ? "Ready when the bet is sharp" : "Experiment greenlit"}</strong>
+            <p>{selectedArtifact.status === "proposed"
+              ? "Edit the proposal above or talk it through with the crew. Greenlight is one founder action: the crew starts the work, and anything outward still stops at your wall."
+              : "This proposal has entered the crew's working loop. Anything outward still stops at your wall."}</p>
+            {selectedArtifact.status === "proposed" ? <button className="open-canvas-primary" type="button" disabled={saving} onClick={() => void greenlightSelectedExperiment()}>{saving ? "Starting…" : "Greenlight to run"}</button> : null}
+          </section> : null}
+          {!selectedRegion ? <details className="open-canvas-relation"><summary>Connect to another object</summary><label>Object<select value={relationTarget} onChange={(event) => setRelationTarget(event.target.value)}><option value="">Choose an object</option>{relationChoices.map((item) => <option key={`${item.ref.type}:${item.ref.id}`} value={`${item.ref.type}:${item.ref.id}`}>{item.label}</option>)}</select></label><label>Relationship<input aria-label="Relationship kind" value={relationKind} onChange={(event) => setRelationKind(event.target.value)} /></label><label>Why are they connected?<textarea aria-label="Why these objects are connected" rows={2} value={relationBasis} onChange={(event) => setRelationBasis(event.target.value)} /></label><button type="button" onClick={() => void addRelation()} disabled={saving || !relationTarget}>Connect</button></details> : null}
           {selectedArtifact && history.length > 1 ? <details className="open-canvas-history"><summary>{history.length} revisions</summary>{[...history].reverse().map((revision) => <ArtifactHistoryRevision revision={revision} current={revision.id === selectedArtifact.id} busy={saving} onRestore={() => void restoreArtifactRevision(revision)} key={revision.id} />)}</details> : null}
           <button type="button" className="open-canvas-retire" disabled={saving} onClick={() => void (selectedRegion ? toggleRegionArchived() : toggleRetired())}>{selectedRegion ? selectedRegion.archivedAt ? "Reopen region" : "Archive region" : selectedArtifact?.retiredAt ? "Restore work" : selectedGoal?.retiredAt ? "Restore goal" : selectedGoal ? "Retire goal" : "Retire work"}</button>
         </>

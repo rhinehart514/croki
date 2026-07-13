@@ -14,7 +14,7 @@ import path from "node:path";
 import * as deploy from "../src/connectors/execute/deploy.mjs";
 import { isOrdinaryInRepoChange } from "../src/connectors/execute/artifact.mjs";
 import { getConnector, defaultGraphTemplate } from "../src/connectors/registry.mjs";
-import { runGraph } from "../src/graph.mjs";
+import { OUTWARD_RELEASE, runGraph } from "../src/graph.mjs";
 
 const node = (config = {}, runtime = undefined) => ({
   id: "exe-deploy",
@@ -26,6 +26,7 @@ const node = (config = {}, runtime = undefined) => ({
 
 // An explicit founder deploy authorization — the connector mirror of revision.mjs `confirmation === true`.
 const FOUNDER_AUTH = { confirmed: true, releasedBy: "founder-jacob" };
+const RELEASED_RUNTIME = { outwardRelease: OUTWARD_RELEASE, deployAuthorization: FOUNDER_AUTH };
 
 const approvedItem = (over = {}) => ({
   gtmActionId: "gtm-deploy-1",
@@ -46,7 +47,7 @@ const fakeRunner = () => {
 test("GATE PROOF — deploy is refused without an explicit founder deploy authorization (nothing ships)", async () => {
   const runner = fakeRunner();
   // Approved items present, BUT no founder deploy authorization on the run path.
-  const result = await deploy.run(node({ deployImpl: runner.impl }), [approvedItem()], {});
+  const result = await deploy.run(node({ deployImpl: runner.impl }, { outwardRelease: OUTWARD_RELEASE }), [approvedItem()], {});
   assert.equal(result.ok, false);
   assert.equal(runner.calls, 0, "the deploy runner must NEVER be invoked without founder authorization");
   assert.equal(result.meta.deployed, 0);
@@ -56,10 +57,24 @@ test("GATE PROOF — deploy is refused without an explicit founder deploy author
   assert.match(result.items[0].deployStatus, /only after an explicit founder gate approval/i);
 });
 
+test("COMMON WALL — deploy confirmation without the host outward-release capability still ships nothing", async () => {
+  const runner = fakeRunner();
+  const result = await deploy.run(
+    node({ deployImpl: runner.impl }, { deployAuthorization: FOUNDER_AUTH }),
+    [approvedItem()],
+    {},
+  );
+  assert.equal(result.ok, false);
+  assert.equal(result.blockedReason, "needs_release");
+  assert.equal(result.meta.reason, "missing_outward_release");
+  assert.equal(result.items[0].executionStatus, "held_without_release");
+  assert.equal(runner.calls, 0);
+});
+
 test("an unconfirmed authorization (confirmed !== true) is treated as no authorization", async () => {
   const runner = fakeRunner();
   const result = await deploy.run(
-    node({ deployImpl: runner.impl }, { deployAuthorization: { confirmed: false, releasedBy: "x" } }),
+    node({ deployImpl: runner.impl }, { outwardRelease: OUTWARD_RELEASE, deployAuthorization: { confirmed: false, releasedBy: "x" } }),
     [approvedItem()],
     {},
   );
@@ -75,7 +90,7 @@ test("INVARIANT — a config-forged authorization (composition's only reach) doe
   // Composition writes node.config. If it could authorize a deploy from config, the wall would fall.
   // The connector reads authorization ONLY from node.runtime (host-rebuilt each run), never config or context.
   const result = await deploy.run(
-    node({ deployImpl: runner.impl, deployAuthorization: { confirmed: true, releasedBy: "composed-graph" }, approved: true }),
+    node({ deployImpl: runner.impl, deployAuthorization: { confirmed: true, releasedBy: "composed-graph" }, approved: true }, { outwardRelease: OUTWARD_RELEASE }),
     [approvedItem()],
     {},
   );
@@ -89,7 +104,7 @@ test("INVARIANT — a config-forged authorization (composition's only reach) doe
 test("with founder authorization AND gate-approved items, the microproduct ships via the runner", async () => {
   const runner = fakeRunner();
   const result = await deploy.run(
-    node({ deployImpl: runner.impl }, { deployAuthorization: FOUNDER_AUTH }),
+    node({ deployImpl: runner.impl }, RELEASED_RUNTIME),
     [approvedItem()],
     {},
   );
@@ -110,7 +125,7 @@ test("ordinary in-repo changes stay reviewed diffs even with both authorizations
   const item = approvedItem({ kind: "change", repo: "/tmp/product", path: "app/share.tsx", artifactSpec: { inRepo: true } });
   assert.equal(isOrdinaryInRepoChange(item), true, "the source item's in-repo provenance owns the boundary");
   const result = await deploy.run(
-    node({ deployImpl: runner.impl, repo: "/tmp/change", runner: "byo" }, { deployAuthorization: FOUNDER_AUTH }),
+    node({ deployImpl: runner.impl, repo: "/tmp/change", runner: "byo" }, RELEASED_RUNTIME),
     [item],
     {},
   );
@@ -140,7 +155,7 @@ test("legacy BYO standalone microproduct deploys from its configured repo after 
   const item = approvedItem();
   const deployNode = node(
     { repo, remote: "origin", branch: "microproduct-live", runner: "byo" },
-    { deployAuthorization: FOUNDER_AUTH },
+    RELEASED_RUNTIME,
   );
   assert.equal(
     isOrdinaryInRepoChange(item),
@@ -160,7 +175,7 @@ test("legacy BYO standalone microproduct deploys from its configured repo after 
 
 test("question answers and implication acceptance cannot forge deploy confirmation", async () => {
   const runner = fakeRunner();
-  const result = await deploy.run(node({ deployImpl: runner.impl }), [approvedItem({ questionAnswered: true, implicationAccepted: true, deployConfirmed: true })], {});
+  const result = await deploy.run(node({ deployImpl: runner.impl }, { outwardRelease: OUTWARD_RELEASE }), [approvedItem({ questionAnswered: true, implicationAccepted: true, deployConfirmed: true })], {});
   assert.equal(result.ok, false);
   assert.equal(runner.calls, 0);
   assert.equal(result.meta.reason, "missing_founder_deploy_authorization");
@@ -172,7 +187,7 @@ test("the deploy authorization is NOT honored from the run context — that surf
   // confirmation ONLY from node.runtime (host-rebuilt every run), so a context-supplied auth ships nothing.
   const runner = fakeRunner();
   const result = await deploy.run(
-    node({ deployImpl: runner.impl }),
+    node({ deployImpl: runner.impl }, { outwardRelease: OUTWARD_RELEASE }),
     [approvedItem()],
     { deployAuthorization: FOUNDER_AUTH },
   );
@@ -186,7 +201,7 @@ test("the deploy authorization is NOT honored from the run context — that surf
 test("authorized, but only gate-approved items ship — unapproved artifacts are dropped, never deployed", async () => {
   const runner = fakeRunner();
   const result = await deploy.run(
-    node({ deployImpl: runner.impl }, { deployAuthorization: FOUNDER_AUTH }),
+    node({ deployImpl: runner.impl }, RELEASED_RUNTIME),
     [
       approvedItem({ gtmActionId: "ok" }),
       { gtmActionId: "pending", approved: false, artifactSpec: {} },
@@ -203,7 +218,7 @@ test("authorized, but only gate-approved items ship — unapproved artifacts are
 test("authorized with NO approved items ships nothing (honest no-op, not a failure)", async () => {
   const runner = fakeRunner();
   const result = await deploy.run(
-    node({ deployImpl: runner.impl }, { deployAuthorization: FOUNDER_AUTH }),
+    node({ deployImpl: runner.impl }, RELEASED_RUNTIME),
     [{ gtmActionId: "pending", approved: false }],
     {},
   );
@@ -219,7 +234,7 @@ test("the hosted Vercel fallback runs only when wired, and only after both autho
   const vercelRunner = async () => { vercelCalls += 1; return { ok: true, url: "https://demo.vercel.app", runner: "vercel" }; };
   // Authorized + approved + runner "vercel" wired via context.deployRunners.vercel (the MCP-backed slot).
   const ok = await deploy.run(
-    node({ runner: "vercel" }, { deployAuthorization: FOUNDER_AUTH }),
+    node({ runner: "vercel" }, RELEASED_RUNTIME),
     [approvedItem()],
     { deployRunners: { vercel: vercelRunner } },
   );
@@ -229,7 +244,7 @@ test("the hosted Vercel fallback runs only when wired, and only after both autho
 
   // Without a wired Vercel runner, the fallback is an honest blocked no-op — never a fake deploy.
   const blocked = await deploy.run(
-    node({ runner: "vercel" }, { deployAuthorization: FOUNDER_AUTH }),
+    node({ runner: "vercel" }, RELEASED_RUNTIME),
     [approvedItem()],
     {},
   );
@@ -268,7 +283,7 @@ function deployThreadGraph(deployImpl) {
 test("GATE SEAM — a normal gate approval with NO deploy confirmation still refuses to deploy (fail-safe)", async () => {
   let calls = 0;
   const graph = deployThreadGraph(async () => { calls += 1; return { ok: true, url: "https://x.dev", runner: "test" }; });
-  const run = await runGraph(graph, { approvals: { gate: true } });
+  const run = await runGraph(graph, { approvals: { gate: true }, outwardRelease: OUTWARD_RELEASE });
   assert.equal(run.nodes.gate.pendingReview, false, "the gate approved the item");
   assert.equal(run.nodes.deploy.ok, false, "but the deploy refuses without an explicit founder confirmation");
   assert.equal(calls, 0, "the deploy runner never fired");
@@ -278,7 +293,7 @@ test("GATE SEAM — a normal gate approval with NO deploy confirmation still ref
 test("GATE SEAM — an explicit founder deploy authorization passed to runGraph threads onto node.runtime and ships", async () => {
   let calls = 0;
   const graph = deployThreadGraph(async () => { calls += 1; return { ok: true, url: "https://x.dev", runner: "test" }; });
-  const run = await runGraph(graph, { approvals: { gate: true }, deployAuthorization: FOUNDER_AUTH });
+  const run = await runGraph(graph, { approvals: { gate: true }, outwardRelease: OUTWARD_RELEASE, deployAuthorization: FOUNDER_AUTH });
   assert.equal(run.nodes.deploy.ok, true, "the founder-confirmed deploy ships");
   assert.equal(calls, 1, "the deploy runner fired exactly once");
   assert.equal(run.nodes.deploy.meta.deployed, 1);

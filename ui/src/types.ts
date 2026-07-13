@@ -122,7 +122,13 @@ export type Input = {
 // own existing surface (the gate bloom, the ghost proposal, the ideate pause, the inbox card); this is
 // the queue that routes the founder there.
 export type PendingDecisionKind =
-  | "gate" | "proposal" | "ideas" | "candidates" | "question" | "blocked" | "failed" | "signal";
+  | "gate" | "proposal" | "ideas" | "candidates" | "question" | "blocked" | "failed" | "signal"
+  // Rail 5 push: a real reply came back — a decide-together alert, never an auto-reply.
+  | "reply-alert"
+  // Fourth birth source: an outside trigger spawned a proposed experiment to greenlight.
+  | "trigger-proposal"
+  // Rail 2: a killed/failed bet mutated into a variant proposal to greenlight (the loser is untouched).
+  | "variant-proposal";
 
 export type PendingDecision = {
   id: string;
@@ -144,6 +150,31 @@ export type PendingInbox = {
   total: number;
   byKind: Partial<Record<PendingDecisionKind, number>>;
   decisions: PendingDecision[];
+};
+
+// ─── Reply alert — the decide-together payload (rail 5 push) ──────────────────
+// The full moment for ONE real reply: the reply itself, the context it joins to (which pipeline / lead /
+// run), and the machine's SUGGESTED next move the founder decides WITH. Read-only — rendering it never
+// replies, routes, or runs. The founder's choice happens on its own surface; this is what the panel shows.
+export type ReplyAlert = {
+  id: string;
+  inputId: string;
+  projectId: string;
+  projectName: string | null;
+  kind: string;
+  source: string | null;
+  receivedAt: string | null;
+  reply: { from: string | null; body: string | null; threadId: string | null };
+  context: {
+    joinKey: string | null;
+    from: string | null;
+    threadId: string | null;
+    runId?: string | null;
+    pipelineId: string | null;
+    pipelineName: string | null;
+  };
+  // A suggestion the founder decides WITH — a string, never an action the machine takes.
+  suggestedMove: string;
 };
 
 // ─── ChannelFeed — two channels linked by the real entities they share ───────
@@ -267,31 +298,42 @@ export type FounderDecisionReceipt = {
 // posture — discuss and get clear, do not eagerly compose a channel.
 export type ComposerPosture = "build" | "ideate";
 
-// ─── Experiment — the shared operational hypothesis (sharedContext.experiments) ─
+// ─── Experiment — an open unit (sharedContext.experiments) ──────────────────────
 //
-// One live hypothesis bound to a channel: which claim/variable it tests, what's held constant, the
-// success signal, status, and the variant-vs-control pair. Distinct from the engine-OS `Experiment`
-// type (which models the engine's own A/B affordance with goal/affectedSubsystems) — this is the GTM
-// object the experiment-matrix lens grids by ICP × claim × channel. Mirrors the brain shape.
+// An experiment is an OPEN unit (EXPERIMENT-MACHINE-SPEC.md "The experiment"): any dimension — a single
+// message to one segment, a full find→draft→send→measure pipeline, a channel push, or a product change
+// — crew-sized, with NO required fields and NO hypothesis ceremony. Every field below is optional; an
+// experiment is creatable from just a free-form `intent`. Two experiments differ by any varied
+// dimension (message, ICP, channel, or product change), named openly, never by a fixed enum.
+//
+// APPROVAL IS NOT AN OUTCOME (VISION.md). `result`/`successSignal` are market signals joined from real
+// outcomes (reply, meeting, purchase, signup, ignored, objection) — never the founder's gate/approval
+// tally. Distinct from the engine-OS `Experiment` type (the engine's own A/B affordance). Mirrors the
+// brain shape.
 export type GtmExperiment = {
   id: string;
+  // The free-form bet in the founder's words — enough on its own, no other field required.
+  intent?: string;
   channelId?: string | null;
   hypothesis?: string;
   variable?: string;
   heldConstant?: string;
+  // A market success signal (e.g. a measure step's name), NOT "founder approval at the gate".
   successSignal?: string;
   status?: string;
+  // Blank until a real market outcome joins back — never a gate approval/rejected tally.
   result?: string | null;
   variant?: string;
   control?: string;
-  // The experiment may carry the claim/ICP it tests so the matrix can place it without guessing.
+  // The experiment may carry the claim/ICP it tests so the board can place it without guessing.
   claimId?: string | null;
   icp?: string | null;
-  // The strategic layer this experiment tests. OPEN string (never an enum); defaults to "channels".
+  // The dimension this experiment varies, when it is a comparison. OPEN string (never an enum) and
+  // OPTIONAL — an experiment with no layer stays open (the board surfaces it on the Learn band).
   targetLayer?: string;
-  // The arms under test. A channel is one arm KIND, so a single-channel run carries one channel arm.
-  // `tally` is the arm's real run result, attached by the board from that channel's run ledger (never
-  // invented) so the arm-comparison diagram races on grounded numbers.
+  // The arms under test — OPTIONAL. An open single-intent experiment may carry none. A channel is one
+  // arm KIND. `tally` is the arm's real run result, attached by the board from that channel's run ledger
+  // (never invented) so an arm-comparison races on grounded numbers.
   arms?: {
     id: string;
     label?: string;
@@ -1583,6 +1625,7 @@ export type TerrainView = {
     repository: { path: string | null; winEvent: string | null };
     truths: TerrainObservation[];
     modelRef: WovenRef | null;
+    model?: ProductModel | null;
   };
   hypotheses: TerrainHypothesis[];
   questions: WovenRef[];
@@ -1855,6 +1898,12 @@ export type JoinedOutcome = {
   // What class of outcome this is — kept honest and distinct (doc 07 §Measurement).
   kind: "sent" | "observed-response" | "product-activation" | "business-outcome" | "founder-entered" | "unmeasured";
   label: string;               // plain-words summary of what came back
+  // The account the founder INSPECTS on pull (never pushed): the actual response text that came back, the
+  // honest pending/observed status, and the raw outcome kind. Legibility, not a scoreboard — these are shown
+  // only when the founder opens the outcome, and none of them is a metric surfaced at rest.
+  body?: string | null;        // the response itself — what the reply/result actually said
+  status?: string | null;      // the honest pending state (released / observed / unattributed …)
+  outcomeKind?: string | null; // the raw kind, for the exposure line
   value?: number | null;
   observedAt?: string | null;
   channelId?: string | null;   // the pipeline it returns to

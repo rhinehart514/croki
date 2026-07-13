@@ -22,6 +22,10 @@ const ACT_IMPERATIVE = [
   'insert',
   'hook up',
   'promote',
+  'prepare',
+  'stage',
+  'turn this into',
+  'turn that into',
 ];
 
 const RELEASE_GRANT = [
@@ -95,6 +99,7 @@ const EXPLAIN_VOCAB = [
   'rationale',
   'how did',
   'what went wrong',
+  'help me understand',
 ];
 
 const FILLER_PREFIX = [
@@ -162,6 +167,16 @@ function isQuestionShaped(normalized) {
 }
 
 function isActImperative(normalized) {
+  // Explanation-shaped questions can mention an action as their subject without asking the crew to do it.
+  // Keep those conversational unless the founder gives a separate concrete command.
+  if (/^(?:(?:can|could|would) you\s+)?(?:please\s+)?(?:help me understand|explain|walk me through)\b/.test(normalized)) {
+    return false;
+  }
+  if (/^make it better[.!?]*$/.test(normalized)) return false;
+
+  // "Help me get/find/win..." is a concrete objective even though "help me understand..." is not.
+  if (/\bhelp me (?:get|find|reach|win|land)\s+\S/.test(normalized)) return true;
+
   return ACT_PATTERNS.some(([phrase, pattern]) => {
     if (!pattern.test(normalized)) {
       return false;

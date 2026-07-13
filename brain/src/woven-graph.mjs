@@ -289,6 +289,10 @@ function projectCanvas(view, knownWovenIds = []) {
   for (const relation of relationships.filter((item) => !item.resolved)) issues.push({ kind: "unresolved", ref: relation.id, owner: relation.authority.owner });
   const geometry = sources.geometry ? {
     namespace: sources.geometry.namespace ?? "project-canvas",
+    // The canvas client uses this revision for compare-and-set position and viewport writes. Dropping it
+    // made every refresh look like revision zero even when a layout already existed, so the first founder
+    // pan after reload was correctly—but uselessly—rejected as stale.
+    revision: sources.geometry.revision ?? 0,
     positions: sources.geometry.positions ?? {},
     collapsedGroups: sources.geometry.collapsedGroups ?? [],
     pinnedCrew: sources.geometry.pinnedCrew ?? [],

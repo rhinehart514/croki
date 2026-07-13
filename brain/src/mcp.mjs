@@ -446,10 +446,10 @@ async function getNextObjects({ projectId, kind, limit } = {}) {
 // SUGGEST a grouping of existing motions into the arms of one belief test. The founder confirms it on
 // the board; there is NO verdict tool on this surface (a verdict is the founder's hand alone). Never a
 // precondition, never a gate — post-hoc context only.
-async function groupExperiment({ projectId, targetLayer, hypothesis, heldConstant, arms }) {
+async function groupExperiment({ projectId, intent, targetLayer, hypothesis, heldConstant, arms }) {
   const id = await resolveProjectId(projectId);
   return brainPost(`/api/projects/${encodeURIComponent(id)}/experiments`, {
-    experiment: { targetLayer, hypothesis, heldConstant, arms },
+    experiment: { intent, targetLayer, hypothesis, heldConstant, arms },
   });
 }
 
@@ -804,16 +804,17 @@ const LEGACY_TOOLS = [
   },
   {
     name: "group_experiment",
-    description: "SUGGEST that two or more existing motions are really the ARMS of one belief test — e.g. that a PCO-outbound channel and a restaurant-outbound channel are two arms of one ICP experiment, the same pilot offer held constant. This only STATES the grouping as post-hoc context for the founder to confirm on the board; it never gates, triggers, or shapes a run, and it NEVER records a verdict (resolving the experiment is the founder's hand alone — there is no verdict tool here). Grouping must reflect a real strategic relationship, never auto-inferred from channel-name similarity. Defaults to the active project.",
+    description: "State an experiment. An experiment is an OPEN unit: it can be a single free-form intent (\"try a punchier subject line to PCO owners\"), a whole find→draft→send→measure pipeline, a channel push, or a product change — any dimension (message, ICP, channel, product), crew-sized, no required fields and no hypothesis ceremony. Provide only what names the bet: an intent alone is enough. Optionally add `arms` to group two or more existing motions as arms of one belief test (e.g. a PCO-outbound and a restaurant-outbound channel as two arms of one ICP experiment, the same pilot held constant), and/or a `targetLayer` naming the dimension it varies. This STATES the experiment as post-hoc context for the founder to see and confirm on the board; it never gates, triggers, or shapes a run, and it NEVER records a verdict (resolving the experiment is the founder's hand alone — there is no verdict tool here). Grouping reflects a real strategic relationship, never auto-inferred from channel-name similarity. Defaults to the active project.",
     inputSchema: {
       type: "object",
       properties: {
-        targetLayer: { type: "string", description: "The belief layer the arms test, e.g. \"market\" for an ICP experiment, \"positioning\", or \"offer\"." },
-        hypothesis: { type: "string", description: "What the experiment is testing in one line (e.g. \"PCO owners convert on the pilot better than restaurants\")." },
-        heldConstant: { type: "string", description: "What stays the same across every arm (e.g. \"$49 pilot\") — the control that makes the comparison fair." },
+        intent: { type: "string", description: "The free-form bet in the founder's own words (e.g. \"try a shorter opener with PCO owners\"). Enough on its own — no layer, arms, or hypothesis required." },
+        targetLayer: { type: "string", description: "Optional. The dimension this experiment varies — an OPEN string, e.g. \"market\"/\"icp\", \"message\", \"channel\", \"positioning\", \"offer\", or \"product\". Never an enum; omit when it is not a comparison." },
+        hypothesis: { type: "string", description: "Optional. What the experiment is testing in one line (e.g. \"PCO owners convert on the pilot better than restaurants\"). Not required — an experiment carries no forced hypothesis." },
+        heldConstant: { type: "string", description: "Optional. What stays the same across arms (e.g. \"$49 pilot\") — the control that makes a comparison fair." },
         arms: {
           type: "array",
-          description: "The motions under test, one per arm.",
+          description: "Optional. The motions under test, one per arm — only when grouping existing motions into a comparison. Omit for a single-intent experiment.",
           items: {
             type: "object",
             properties: {
@@ -826,7 +827,7 @@ const LEGACY_TOOLS = [
         },
         projectId: { type: "string", description: "Optional. Defaults to the active project." },
       },
-      required: ["targetLayer", "arms"],
+      required: [],
     },
     handler: groupExperiment,
   },

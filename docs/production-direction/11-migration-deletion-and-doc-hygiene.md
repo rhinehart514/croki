@@ -51,21 +51,14 @@ Keep historical identifiers where changing them would create risk. Translate the
 
 ## Docs to reconcile
 
-The following historical documents should remain marked historical or be retired after the production target
-is accepted. Do not remove `docs/GOAL.md` or `docs/CANVAS.md` while current `AGENTS.md` or another current doc
-still points to them; replace those pointers and preserve any still-authoritative invariants first.
+This numbered package is historical. The retired direction files (`GOAL.md`, `CANVAS.md`, `MODEL.md`,
+`PRODUCT-MODEL.md`, `PRODUCT-SPEC.md`, `EXPERIENCE.md`, and earlier program/policy/foundry plans) are available
+from git history rather than as live authorities. Current documentation must point to
+`docs/EXPERIMENT-MACHINE-SPEC.md`, `docs/OPEN-CANVAS-SPEC.md`, and `docs/STATE.md`; live source comments that
+still name a retired file are migration debt, not a reason to treat that file as canonical.
 
-- `docs/history/DDD.md`;
-- `docs/GOAL.md`;
-- `docs/MODEL.md`;
-- `docs/PRODUCT-MODEL.md`;
-- `docs/PRODUCT-SPEC.md`;
-- `docs/CANVAS.md`;
-- `docs/EXPERIENCE.md`;
-- earlier build plans that describe programs, policies, foundries, or fixed canvas modes.
-
-Update `docs/STATE.md` only when behavior has actually landed. Do not make the state file claim that the
-production direction is validated before a real founder drives it.
+`docs/history/DDD.md` remains explicitly historical. Update `docs/STATE.md` only when behavior has actually
+landed, and do not claim the direction is validated before a real founder drives it.
 
 ## Implementation prompt
 

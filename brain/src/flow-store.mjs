@@ -1,4 +1,5 @@
 import { persistence } from "./persistence.mjs";
+import { safeResolveFailuresForGraph } from "./failure-log.mjs";
 
 const COLLECTION = "flows";
 
@@ -40,7 +41,8 @@ function normalizeRunReceipt(run, graph = null) {
   const resultContext = run.result?.workContext && typeof run.result.workContext === "object"
     ? run.result.workContext
     : run.result;
-  return { ...run, ...workContextFor(run, resultContext, graph) };
+  const projectId = String(run.projectId ?? run.result?.projectId ?? run.result?.workContext?.projectId ?? "").trim() || null;
+  return { ...run, ...(projectId ? { projectId } : {}), ...workContextFor(run, resultContext, graph) };
 }
 
 function graphSnapshot(graph) {
@@ -137,8 +139,10 @@ export function recordFlowRun(graph, result, options = {}) {
     ? result.workContext
     : result;
   const workContext = workContextFor(explicitResultContext, options.workContext, graph, current.graph);
+  const projectId = String(options.projectId ?? result?.projectId ?? result?.workContext?.projectId ?? graph?.projectId ?? "").trim() || null;
   const runs = [...current.runs, {
     id: result.runId,
+    ...(projectId ? { projectId } : {}),
     createdAt,
     ok: result.ok,
     targetNodeId: result.targetNodeId,
@@ -161,5 +165,6 @@ export function recordFlowRun(graph, result, options = {}) {
     updatedAt: createdAt,
   };
   persistence(options).set(COLLECTION, safeId(graph.id), durable);
+  safeResolveFailuresForGraph(graph.id, result, options);
   return durable;
 }

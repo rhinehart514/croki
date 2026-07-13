@@ -15,6 +15,7 @@ import path from "node:path";
 import { createGmailTransport, defaultSendRunners } from "../src/connectors/execute/gmail-transport.mjs";
 import * as gmail from "../src/connectors/execute/gmail.mjs";
 import { setCredential } from "../src/credential-store.mjs";
+import { OUTWARD_RELEASE } from "../src/graph.mjs";
 
 const TOKEN = "ya29.mock-access-token-abc";
 
@@ -147,7 +148,12 @@ function credentialedContext(sendRunners) {
   return { credentialOptions: { root }, projectId: "p-test", sendRunners };
 }
 
-const node = (config = {}) => ({ id: "exe-gmail", category: "execute", connector: "gmail", config });
+// The founder-RELEASED outward path carries the host-issued outward-release capability on node.runtime
+// (EXPERIMENT-MACHINE-SPEC rail 1); the live-send tests here exercise that path.
+const node = (config = {}) => ({
+  id: "exe-gmail", category: "execute", connector: "gmail", config,
+  runtime: { outwardRelease: OUTWARD_RELEASE },
+});
 
 test("WALL — with the real transport wired, an UNAPPROVED item is still never sent", async () => {
   const f = mockFetch();

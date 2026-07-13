@@ -14,6 +14,7 @@ import { addClarity } from "../src/clarity-store.mjs";
 import { recordFeedbackSignals, recordFounderDecision } from "../src/feedback-ledger.mjs";
 import { objectGraphLayoutStore, PROJECT_CANVAS_LAYOUT_NAMESPACE } from "../src/object-graph-store.mjs";
 import { appendOperatorEvent, createOperatorSession, saveOperatorSession } from "../src/operator-store.mjs";
+import { appendInput } from "../src/inputs-store.mjs";
 import { createGoal } from "../src/goal-store.mjs";
 import { createWorkArtifact } from "../src/work-artifact-store.mjs";
 
@@ -196,6 +197,47 @@ describe("getOperatingView — the shared-map read (Area 6)", () => {
     assert.deepEqual(anchor.body.lineage.pipelineRef, { type: "pipeline", id: channel.id });
     assert.ok(canvas.relationships.some((item) => item.source.type === "pipeline"
       && item.source.id === channel.id && item.target.id === gmail.id && item.resolved));
+  });
+
+  it("loops an unrouted warm reply from the inbox back to its originating pipeline, without double-drawing a recorded one", () => {
+    const options = freshRoot();
+    const { project } = createProject({ name: "Warm loop" }, options);
+    const scoped = { ...options, projectId: project.id };
+    const { channel } = createChannel({ name: "Founder outreach", objective: "Earn a reply" }, scoped);
+    const pathRecord = gtmPathStore.create({ projectId: project.id, summary: "Proof", status: "selected" }, scoped);
+    const run = runStore.create({
+      projectId: project.id, pathId: pathRecord.id, status: "staged", executionRunId: "warm-exec-1",
+      items: [{ joinKey: "warm-in-play" }, { joinKey: "warm-recorded" }],
+    }, scoped);
+    // A flow run on the CHANNEL graph, so outcome lineage resolves the pipeline the same way a recorded
+    // reply does (execution graphId → channel.graphId), never the delivery connector.
+    const graph = loadFlow(channel.graphId, null, scoped).graph;
+    recordFlowRun(graph, { runId: "warm-exec-1", graphId: graph.id, ok: true, pendingGates: [], nodes: {} }, scoped);
+    // A reply that is ALREADY recorded as an outcome must not double-draw from the inbox.
+    resultStore.create({
+      projectId: project.id, runId: run.id, executionRunId: "warm-exec-1", pathId: pathRecord.id,
+      joinKey: "warm-recorded", channel: "gmail", outcomeKind: "reply",
+    }, scoped);
+    // Three unrouted replies sit in the inbox: one carries the execution run id (loops back to the channel),
+    // one is already recorded (deduped), and one has no origin (honest skip — no pipeline front to circle to).
+    appendInput(project.id, { kind: "reply", source: "gmail", payload: { runId: "warm-exec-1", summary: "Interested — tell me more" } }, options);
+    appendInput(project.id, { kind: "reply", source: "gmail", payload: { joinKey: "warm-recorded", summary: "already recorded" } }, options);
+    appendInput(project.id, { kind: "reply", source: "gmail", payload: { summary: "no origin" } }, options);
+
+    const canvas = getOperatingView({ projectId: project.id }, options).woven.canvas;
+    const pending = canvas.outcomes.filter((o) => String(o.id).startsWith("pending-reply:"));
+    // The already-recorded reply is deduped (it loops back as its recorded outcome, not twice). The two
+    // still-in-play replies remain: one resolves a pipeline (loops back), one has no origin (honest skip
+    // happens in the edge layer, so it carries a null channelId here).
+    assert.equal(pending.length, 2, "recorded reply deduped; the two in-play replies remain");
+    const looped = pending.filter((o) => o.channelId);
+    assert.equal(looped.length, 1, "only the reply with a resolvable run loops back to a pipeline");
+    assert.equal(looped[0].channelId, channel.id, "the warm reply loops back to its originating pipeline");
+    assert.equal(looped[0].kind, "observed-response", "a reply reads in the warm register");
+    // The originless reply resolves no pipeline — it will be skipped honestly at the loop-back edge layer.
+    assert.equal(pending.find((o) => !o.channelId)?.kind, "observed-response");
+    // Every pending reply gets an outcome anchor drawn so a resolvable one has an endpoint to loop from.
+    assert.ok(canvas.anchors.some((a) => a.ref.type === "outcome" && a.ref.id === looped[0].id));
   });
 
   it("adds project-scoped anchors and explicit relationships to the canonical woven read", () => {

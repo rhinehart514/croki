@@ -14,10 +14,14 @@
 
 import { loadProject, updateSharedContext } from "./project-store.mjs";
 import { runStore, resultStore } from "./gtm-store.mjs";
-
-function now() {
-  return new Date().toISOString();
-}
+import {
+  experimentStatement,
+  normalizeOutcomeKind,
+  outcomeCountsAsSuccess,
+  outcomeMatchesTarget,
+  outcomePolarity,
+} from "./experiment-derivation.mjs";
+import { now } from "./store-fs.mjs";
 
 const VERDICT_DECISIONS = new Set(["keep", "kill", "double-down"]);
 
@@ -33,11 +37,7 @@ const VERDICT_DECISIONS = new Set(["keep", "kill", "double-down"]);
 // Singularize an outcome-kind word so "signups" in a criteria line matches the "signup" outcomeKind on a
 // result. Narrow and deterministic — "ies"→"y", trailing "s" dropped, everything else unchanged.
 function singular(word) {
-  const w = String(word ?? "").trim().toLowerCase();
-  if (w.length <= 1) return w;
-  if (w.endsWith("ies")) return `${w.slice(0, -3)}y`;
-  if (w.endsWith("s")) return w.slice(0, -1);
-  return w;
+  return normalizeOutcomeKind(word);
 }
 
 function pluralize(n, kind) {
@@ -114,10 +114,14 @@ function gatherOutcomes(experiment, { projectId, options }) {
   });
 
   const byKind = {};
+  const byPolarity = { positive: 0, negative: 0, neutral: 0, unknown: 0 };
   const measuredKeys = new Set();
   for (const r of own) {
-    const kind = String(r?.outcomeKind ?? "").trim() || "unlabeled";
+    const rawKind = String(r?.outcomeKind ?? "").trim();
+    const kind = normalizeOutcomeKind(rawKind) || "unlabeled";
     byKind[kind] = (byKind[kind] ?? 0) + 1;
+    const polarity = outcomePolarity(rawKind);
+    byPolarity[polarity] += 1;
     const key = String(r?.joinKey ?? "").trim();
     if (key) measuredKeys.add(key);
   }
@@ -125,7 +129,7 @@ function gatherOutcomes(experiment, { projectId, options }) {
   const measured = [...measuredKeys].filter((k) => stagedJoinKeys.has(k)).length;
   const unmeasured = Math.max(0, staged - measured);
   const total = own.length;
-  return { own, byKind, total, staged, measured, unmeasured };
+  return { own, byKind, byPolarity, total, staged, measured, unmeasured };
 }
 
 // Read the success-criteria text tied to this experiment's runs (the criteria lives on the measurement
@@ -160,13 +164,12 @@ export function suggestVerdictFromOutcomes({ experimentId, projectId = "default"
   // Evaluate the threshold against observed counts (matching kinds after singularizing both sides).
   let threshold = null;
   if (thresholdRaw) {
-    const observedSingular = {};
-    for (const [kind, n] of Object.entries(observed.byKind)) {
-      const k = singular(kind);
-      observedSingular[k] = (observedSingular[k] ?? 0) + n;
-    }
     const targets = thresholdRaw.targets.map((t) => {
-      const seen = observedSingular[t.outcomeKind] ?? 0;
+      // Exact canonical target matching, with the polarity wall: an ignored/objection/bounce receipt is
+      // measurement, but it can never satisfy a success target or be promoted as a win.
+      const seen = observed.own.filter((result) =>
+        outcomeCountsAsSuccess(result?.outcomeKind, [t.outcomeKind])
+        && outcomeMatchesTarget(result?.outcomeKind, t.outcomeKind)).length;
       return { outcomeKind: t.outcomeKind, min: t.min, observed: seen, met: seen >= t.min };
     });
     threshold = {
@@ -178,7 +181,11 @@ export function suggestVerdictFromOutcomes({ experimentId, projectId = "default"
   }
 
   // The per-arm winner (only when unambiguous): the arm whose channel produced the most outcomes.
-  const winningArmId = pickWinningArm(experiment, { projectId, options });
+  const winningArmId = pickWinningArm(experiment, {
+    projectId,
+    options,
+    targetKinds: thresholdRaw?.targets.map((target) => target.outcomeKind) ?? [],
+  });
 
   // Decide the PROPOSAL. Conservative on kill: only when measurement is complete and the signal is clearly
   // negative. Never proposes when the read is inconclusive.
@@ -195,6 +202,7 @@ export function suggestVerdictFromOutcomes({ experimentId, projectId = "default"
       staged: observed.staged,
       measured: observed.measured,
       unmeasured: observed.unmeasured,
+      byPolarity: observed.byPolarity,
     },
     threshold,
     proposal,
@@ -203,7 +211,7 @@ export function suggestVerdictFromOutcomes({ experimentId, projectId = "default"
 }
 
 // Per-arm outcome tally → the single dominant arm's id, or null when tied / no arms / no outcomes.
-function pickWinningArm(experiment, { projectId, options }) {
+function pickWinningArm(experiment, { projectId, options, targetKinds = [] }) {
   const arms = Array.isArray(experiment?.arms) ? experiment.arms : [];
   if (arms.length < 1) return null;
   const results = resultStore.list({ ...options, projectId });
@@ -221,10 +229,10 @@ function pickWinningArm(experiment, { projectId, options }) {
     }
     const n = results.filter((r) => {
       const key = String(r?.joinKey ?? "").trim();
-      if (key && stagedKeys.has(key)) return true;
-      if (r?.pathId && String(r.pathId) === armId) return true;
-      if (r?.channel && String(r.channel) === armId) return true;
-      return false;
+      const belongs = (key && stagedKeys.has(key))
+        || (r?.pathId && String(r.pathId) === armId)
+        || (r?.channel && String(r.channel) === armId);
+      return belongs && outcomeCountsAsSuccess(r?.outcomeKind, targetKinds);
     }).length;
     return { id: arm?.id ?? null, n };
   });
@@ -240,21 +248,28 @@ function decideProposal({ observed, threshold, winningArmId }) {
     if (threshold.allMet) {
       return { decision: "keep", provenance, winningArmId, rationale: "Every success target is met." };
     }
-    // Clearly negative: measurement complete, something was measured, and no target got any signal.
+    // Clearly negative: measurement is complete and a KNOWN negative came back. Unknown labels remain
+    // inconclusive; open vocabulary is preserved rather than silently interpreted as failure.
     const anyTargetSignal = threshold.targets.some((t) => t.observed > 0);
-    if (observed.staged > 0 && observed.unmeasured === 0 && observed.measured > 0 && !anyTargetSignal) {
+    if (observed.staged > 0 && observed.unmeasured === 0 && observed.measured > 0
+      && observed.byPolarity.negative > 0 && !anyTargetSignal) {
       return {
         decision: "kill",
         provenance,
         winningArmId: null,
-        rationale: "Measurement is complete and no success target saw any signal.",
+        rationale: "Measurement is complete and only negative evidence reached the success targets.",
       };
     }
-    return null; // inconclusive — still running or partially met
+    return null; // inconclusive — still running, partially met, positive elsewhere, or honestly unknown
   }
-  // No threshold: don't invent success. Only lean "keep" when real outcomes were actually observed.
-  if (observed.total > 0) {
-    return { decision: "keep", provenance, winningArmId, rationale: "Real outcomes were observed." };
+  // No threshold: don't invent success from any arbitrary receipt. Known positives may support keep;
+  // known negatives may support kill once fully measured; neutral/unknown evidence stays inconclusive.
+  if (observed.byPolarity.positive > 0) {
+    return { decision: "keep", provenance, winningArmId, rationale: "Positive market outcomes were observed." };
+  }
+  if (observed.staged > 0 && observed.unmeasured === 0 && observed.measured > 0
+    && observed.byPolarity.negative > 0 && observed.byPolarity.unknown === 0) {
+    return { decision: "kill", provenance, winningArmId: null, rationale: "Measurement completed with negative market outcomes." };
   }
   return null;
 }
@@ -283,7 +298,7 @@ function proposalMessage({ observed, threshold, proposal }) {
   return `${observedText} observed.`;
 }
 
-export function applyExperimentVerdict({ projectId, experimentId, verdict } = {}, options = {}) {
+export function applyExperimentVerdict({ projectId, experimentId, verdict, decidedBy } = {}, options = {}) {
   if (!experimentId) throw new Error("applyExperimentVerdict requires an experimentId.");
   if (!verdict || !VERDICT_DECISIONS.has(verdict.decision)) {
     throw new Error('A verdict needs a decision of "keep", "kill", or "double-down".');
@@ -294,12 +309,15 @@ export function applyExperimentVerdict({ projectId, experimentId, verdict } = {}
   const target = experiments.find((e) => e?.id === experimentId);
   if (!target) throw new Error(`Experiment not found: ${experimentId}`);
 
-  // The founder's stamp. decidedBy defaults to "founder" because only the founder may set a verdict.
+  // The founder's stamp. FIX 3: decidedBy is the AUTHENTICATED actor the caller derived from the founder
+  // session — NEVER a caller-supplied body field. A verdict (especially a kill) is founder-only, so the
+  // route authenticates the request and passes the resolved actor here; body.decidedBy is ignored. Absent
+  // an explicit actor (a trusted in-process caller / test), it defaults to "founder".
   const stampedVerdict = {
     decision: verdict.decision,
     winningArmId: verdict.winningArmId ?? null,
     decidedAt: verdict.decidedAt ?? now(),
-    decidedBy: verdict.decidedBy ?? "founder",
+    decidedBy: decidedBy ?? "founder",
   };
 
   const nextExperiments = experiments.map((e) =>
@@ -319,8 +337,9 @@ export function applyExperimentVerdict({ projectId, experimentId, verdict } = {}
   // defaulting to "derived" so the truth valve in updateSharedContext applies: with real evidence it
   // stays "derived"; with none it self-demotes to "speculative". A founder may pass provenance:"founder"
   // to assert it outright (never demoted).
-  if ((verdict.decision === "keep" || verdict.decision === "double-down") && String(target.hypothesis ?? "").trim()) {
-    const text = String(target.hypothesis).trim();
+  const acceptedStatement = experimentStatement(target);
+  if ((verdict.decision === "keep" || verdict.decision === "double-down") && acceptedStatement) {
+    const text = acceptedStatement;
     const claims = Array.isArray(project.sharedContext?.claims) ? [...project.sharedContext.claims] : [];
     if (!claims.some((c) => (typeof c === "string" ? c : c?.text) === text)) {
       claims.push({

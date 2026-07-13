@@ -108,14 +108,20 @@ describe("operator MCP bridge — tool routing against the durable session", () 
       kind: "canvas_proposal", idempotencyKey: "operator:canvas-proposal",
       value: { id: "activation-region-proposal", title: "Group activation work", rationale: "Keep the goal and read together", operation: { type: "create-region", expectedStoreRevision: 0, title: "Activation", memberRefs: [{ type: "goal", id: "activation" }, { type: "work-artifact", id: "activation-map" }], position: { x: 40, y: 50 }, size: { width: 480, height: 300 } } },
     });
+    const proseArtifact = await bridge.callTool("record", {
+      kind: "work_artifact", idempotencyKey: "operator:artifact:prose",
+      value: "# Strongest move\n\nStart with the evidence-backed founder outreach loop.",
+    });
     assert.equal(goal.result.recorded.goal.id, "activation");
     assert.equal(artifact.result.recorded.artifact.kind, "activation-map");
     assert.equal(revisedGoal.result.recorded.goal.revision, 1);
     assert.equal(revisedArtifact.result.recorded.artifact.revision, 2);
     assert.equal(canvasProposal.result.recorded.artifact.kind, "canvas-change-proposal");
     assert.equal(canvasProposal.result.recorded.artifact.status, "proposed");
+    assert.equal(proseArtifact.result.recorded.artifact.title, "Strongest move");
+    assert.match(proseArtifact.result.recorded.artifact.content, /evidence-backed founder outreach/);
     assert.equal(listGoals(session.projectId ?? "default", options).length, 1);
-    assert.deepEqual(listWorkArtifacts(session.projectId ?? "default", options).map((item) => item.artifactId).sort(), ["activation-map", "activation-region-proposal"]);
+    assert.equal(listWorkArtifacts(session.projectId ?? "default", options).length, 3);
     const inspected = await bridge.callTool("inspect", { ref: { type: "work-artifact", id: "activation-map" } });
     assert.equal(inspected.result.value.artifact.artifactId, "activation-map");
   });

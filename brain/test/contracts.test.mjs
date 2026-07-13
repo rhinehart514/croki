@@ -136,6 +136,26 @@ describe("workflow data contracts", () => {
     assert.deepEqual(audits["measure"].missingFields, ["source"]);
   });
 
+  it("lets a persisted host-owned node receipt replace its speculative pre-run warning", () => {
+    const graph = {
+      id: "observed-context",
+      nodes: [{
+        id: "context",
+        category: "context",
+        connector: "product",
+        label: "Product context",
+        contract: { accepts: [], emits: ["productFact"], minItems: 1 },
+      }],
+      edges: [],
+    };
+    assert.equal(auditGraphContracts(graph).context.state, "waiting");
+    const audits = auditGraphContracts(graph, {
+      nodes: { context: { nodeId: "context", items: [{ productFact: "Proven" }] } },
+    });
+    assert.equal(audits.context.state, "satisfied");
+    assert.equal(audits.context.itemCount, 1);
+  });
+
   it("distinguishes waiting, satisfied, and zero-result output states", () => {
     const node = { label: "Draft", category: "generate", contract: { accepts: ["personalFact"], emits: ["draft"], minItems: 1 } };
     assert.equal(auditInput(node, []).state, "waiting");

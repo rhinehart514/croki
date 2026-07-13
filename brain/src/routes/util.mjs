@@ -51,32 +51,6 @@ export function json(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
-export function readBody(req) {
-  return new Promise((resolve, reject) => {
-    let body = "";
-    let receivedBytes = 0;
-    let tooLarge = false;
-    req.setEncoding("utf8");
-    req.on("data", (chunk) => {
-      if (tooLarge) return;
-      receivedBytes += Buffer.byteLength(chunk, "utf8");
-      if (receivedBytes > 100_000) {
-        tooLarge = true;
-        body = "";
-        reject(new Error("Request body too large."));
-        return;
-      }
-      body += chunk;
-    });
-    req.on("end", () => {
-      if (tooLarge) return;
-      try { resolve(body ? JSON.parse(body) : {}); }
-      catch { reject(new Error("Request body must be valid JSON.")); }
-    });
-    req.on("error", reject);
-  });
-}
-
 // Read a request body as RAW text (no JSON.parse), for the CSV drop route where the body is a
 // pasted/uploaded spreadsheet, not JSON. Same 100k guard as readBody.
 export function readRawBody(req) {
@@ -101,6 +75,12 @@ export function readRawBody(req) {
     });
     req.on("error", reject);
   });
+}
+
+export async function readBody(req) {
+  const body = await readRawBody(req);
+  try { return body ? JSON.parse(body) : {}; }
+  catch { throw new Error("Request body must be valid JSON."); }
 }
 
 export function expandHome(v) {

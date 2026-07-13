@@ -22,7 +22,8 @@
 //     back to an outcome. Failures are recorded as failures, never swallowed.
 
 import { resolveCredentialToken } from "../../credential-store.mjs";
-import { needsConnectionResult } from "./channels.mjs";
+import { needsConnectionResult, heldWithoutReleaseResult } from "./channels.mjs";
+import { hasOutwardRelease } from "../../graph.mjs";
 
 // Resolve the outbound auth header the BYO way: a founder-pasted credential for this project wins,
 // the GTM_IDE_SEND_AUTH env var is the fallback (the engineer path still works). projectId + persistence
@@ -65,6 +66,17 @@ export async function run(node, upstream, context) {
   // env var in as its own fallback). A founder who connected a transport no longer needs an env var.
   const endpoint = node.config.endpoint || resolveSendEndpoint(context);
   const approved = upstream.filter((item) => item.approved === true);
+
+  // RAIL 1 — the executor-level outward wall. Outward authority is a HOST-ISSUED capability, not an item
+  // label. Even for an item stamped approved === true, this connector refuses to actually POST anything
+  // unless the run carried the founder outward-release capability on this node's runtime. Greenlight and
+  // every ordinary/ambient run never supply it, so a mis-classified approved item routed here is HELD, not
+  // sent — the structural backstop under the item classifier. Only the founder outward-approval path carries
+  // it. A run with nothing approved is a plain no-op (nothing to hold on).
+  if (approved.length > 0 && !hasOutwardRelease(node)) {
+    return heldWithoutReleaseResult({ channel: node.config.channel || "http", items: approved });
+  }
+
   if (!endpoint) {
     // No destination from any of the three sources — never send blind. This is the SAME honest
     // needs-connection contract Gmail uses: an explicit BLOCKED status the founder is prompted to clear by

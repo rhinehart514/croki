@@ -300,25 +300,42 @@ function CanvasAnchorComponent({ data, selected }: NodeProps<Node<CanvasAnchorDa
   const isOutcome = data.kind === "outcome";
   const isQuestion = data.kind === "question";
   const isTerrain = data.kind.startsWith("terrain-");
+  const isGoal = data.ref.type === "goal";
+  const isWork = data.ref.type === "work-artifact" || data.ref.type === "product-change";
   const terrainTestId = data.kind === "product-truth"
     ? "terrain-product-landmark"
     : isTerrain ? "terrain-hypothesis" : undefined;
-  // A summary chip stands in for a collapsed kind's long tail: one compact card with the count, selectable
-  // to expand its members. It reads as a group (dashed outline, "N in this group"), never as a single item.
+  const evidenceCount = isTerrain && isRecord(data.body) && Array.isArray(data.body.evidence)
+    ? data.body.evidence.length
+    : 0;
+  // A summary chip stands in for either one product-detail kind or the remainder of a repeated inferred /
+  // outcome run. Both remain keyboard-expandable, so density never trades away access to the real objects.
   if (data.group) {
+    const overflow = data.groupType === "overflow";
+    const summary = data.groupType === "summary";
+    const count = data.count ?? 0;
+    const summaryLabel = overflow
+      ? `${count} more ${data.label.toLowerCase()}`
+      : summary ? `${data.label} ${count}` : data.label;
     return (
       <div
         className={cn("woven-anchor is-group", data.focus === "focus" && "is-focus", data.focus === "dim" && "is-dim")}
-        title={`${data.count} ${data.label.toLowerCase()} — product detail summarized to keep the map legible. Click to expand.`}
+        data-testid={isTerrain ? "terrain-hypothesis-group" : undefined}
+        data-terrain-count={isTerrain ? count : undefined}
+        title={overflow || summary
+          ? `${summaryLabel}. Select to show every item.`
+          : `${count} ${data.label.toLowerCase()} summarized to keep the map legible. Select to inspect.`}
         role="button"
         tabIndex={0}
-        aria-label={`${data.label}: ${data.count} product details. Expand group.`}
+        aria-label={overflow || summary
+          ? `${summaryLabel}. Show all.`
+          : `${data.label}: ${count} product details. Expand group.`}
         onKeyDown={activateOnKeyboard}
       >
         <Handle type="target" position={Position.Left} id="anchor-in" />
-        <span className="woven-anchor-eyebrow">Product detail</span>
-        <span className="woven-anchor-label">{data.label} <b className="woven-anchor-count">{data.count}</b></span>
-        <span className="woven-anchor-more">Click to expand</span>
+        <span className="woven-anchor-eyebrow">{summary ? "Model read" : overflow ? "More on canvas" : "Product detail"}</span>
+        <span className="woven-anchor-label">{overflow || summary ? summaryLabel : <>{data.label} <b className="woven-anchor-count">{count}</b></>}</span>
+        <span className="woven-anchor-more">{overflow || summary ? "Show all" : "Inspect details"}</span>
         <Handle type="source" position={Position.Right} id="anchor-out" />
       </div>
     );
@@ -335,6 +352,8 @@ function CanvasAnchorComponent({ data, selected }: NodeProps<Node<CanvasAnchorDa
         isOutcome && "is-outcome",
         isQuestion && "is-question",
         isTerrain && "is-terrain",
+        isGoal && "is-goal",
+        isWork && "is-work",
         data.conflict && "has-goal-conflict",
         data.onKeyboardConnect && "is-connectable",
         selected && "is-expanded",
@@ -360,6 +379,7 @@ function CanvasAnchorComponent({ data, selected }: NodeProps<Node<CanvasAnchorDa
       <Handle type="target" position={Position.Left} id="anchor-in" />
       <span className="woven-anchor-eyebrow">{eyebrow}</span>
       <span className="woven-anchor-label">{data.label}</span>
+      {evidenceCount > 0 ? <span className="woven-anchor-proof">{evidenceCount} code {evidenceCount === 1 ? "receipt" : "receipts"}</span> : null}
       {data.conflict ? (
         <span className="woven-anchor-conflict" aria-hidden>
           {data.conflict.count > 1
@@ -426,14 +446,12 @@ function CanvasRegionComponent({ data, selected }: NodeProps<Node<CanvasRegionDa
 }
 
 // ─── FounderWall ────────────────────────────────────────────────────────────────────────────────────
-// The single founder wall (docs/production-direction/16, P1): a thin vertical amber threshold every
-// pipeline crosses, drawn across the lane band at the shared gate x on the merged Operator canvas. It is
-// pure signal — non-interactive; the gate CARDS remain the actionable review path. One accent (amber), the
-// only color the wall earns, opaque, no glow.
-function FounderWallComponent({ data }: NodeProps<Node<{ height: number }>>) {
+// The founder wall is a persistent, non-interactive trust boundary. Real gate cards remain the action;
+// the conceptual variant simply tells an empty product where outward consequence begins.
+function FounderWallComponent({ data }: NodeProps<Node<{ height: number; conceptual?: boolean }>>) {
   return (
-    <div className="woven-wall" style={{ height: data.height }} aria-hidden="true">
-      <span className="woven-wall-label">Your wall</span>
+    <div className={`woven-wall${data.conceptual ? " is-conceptual" : ""}`} style={{ height: data.height }} aria-hidden="true">
+      <span className="woven-wall-label">Your wall · nothing leaves without your review</span>
     </div>
   );
 }

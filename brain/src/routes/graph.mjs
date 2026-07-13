@@ -23,7 +23,8 @@ import { buildMarketContext } from "../market-research.mjs";
 import { marketObjectStore } from "../gtm-store.mjs";
 import { createDerivedSourceLoader } from "../cross-reference.mjs";
 import { liveStepRuntime } from "../agent-bridge.mjs";
-import { hasApproveIntent, runGraph } from "../graph.mjs";
+import { hasApproveIntent, runGraph, OUTWARD_RELEASE } from "../graph.mjs";
+import { isFounderPresent } from "../presence.mjs";
 import { defaultSendRunners } from "../connectors/execute/gmail-transport.mjs";
 import { recordRunDerivations } from "../run-derivation.mjs";
 import { listConnectors } from "../connectors/registry.mjs";
@@ -31,6 +32,7 @@ import { listServers, getServer, recordServer, removeServer, reclassifyTool, ser
 import { connectStdioServer } from "../mcp-client.mjs";
 import { authorizeFounderWriteForRequest, authorizeReleaseForRequest } from "./session-guard.mjs";
 import { authorizeGateRelease } from "../operator-run-core.mjs";
+import { reconcileDirectRunWithOperator } from "../operator-run-reconciliation.mjs";
 
 function routeError(message, { status = 400, code = null } = {}) {
   const error = new Error(message);
@@ -302,8 +304,17 @@ export default async function handle({ req, res, url }) {
         // still the item's gate stamp; this only wires HOW an approved one is delivered. Absent it, every
         // execute connector stages locally.
         sendRunners: defaultSendRunners(),
+        // RAIL 1 — the outward-release capability. releaseAuthorizer above enforces the browser+owner
+        // guard and throws on any agent/tokenless approval, so this run is a founder outward-approval path
+        // and may carry the host-issued token that lets an approved item actually leave. The capability
+        // alone sends nothing — a connector still sends only items the gate stamped approved === true.
+        outwardRelease: OUTWARD_RELEASE,
+        // Presence resolved for this run path too (rail 1, FIX 2a): an away founder holds an unattended
+        // standing-autonomy auto-approval of a possibly-outward item. A live browser run heartbeats present.
+        founderPresent: isFounderPresent(),
       });
       const saved = recordFlowRun({ ...body.graph, id: graphId }, result, options);
+      reconcileDirectRunWithOperator({ projectId: project.id, graphId, result }, options);
       // One seam fires all three run-completion derivations: taste ledger, People promotion, and the
       // per-channel experiment. Read-derived GTM state only — never health, never a gate.
       recordRunDerivations({ projectId: project.id, graph: body.graph, result }, options);
@@ -374,9 +385,16 @@ export default async function handle({ req, res, url }) {
         // Same live delivery seam on the streaming run path — the gate stamp still governs whether a
         // message may leave; this only wires how an approved one is delivered.
         sendRunners: defaultSendRunners(),
+        // RAIL 1 — the outward-release capability. Same founder outward-approval path as /run (guarded by
+        // releaseAuthorizer above); it carries the host-issued token that lets an approved item actually
+        // leave. The capability sends nothing on its own — the gate stamp still governs whether.
+        outwardRelease: OUTWARD_RELEASE,
+        // Presence resolved for the streaming run path too (rail 1, FIX 2a).
+        founderPresent: isFounderPresent(),
         onEvent: send,
       });
       const saved = recordFlowRun({ ...body.graph, id: graphId }, result, options);
+      reconcileDirectRunWithOperator({ projectId: project.id, graphId, result }, options);
       recordRunDerivations({ projectId: project.id, graph: body.graph, result }, options);
       send({
         type: "run_done",

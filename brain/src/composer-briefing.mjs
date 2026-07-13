@@ -31,7 +31,7 @@ export function composeBriefingSummary(briefing) {
   const { gatesWaiting, recentlyFinished, stuck, perPipeline, projectName } = briefing;
   const clauses = [];
   if (gatesWaiting.length) {
-    const n = gatesWaiting.length;
+    const n = gatesWaiting.reduce((count, entry) => count + (entry.itemCount > 0 ? entry.itemCount : 1), 0);
     const gate = projectName ? `your ${projectName} gate` : "your gate";
     clauses.push(`${n} draft${n === 1 ? "" : "s"} waiting at ${gate}`);
   }
@@ -142,16 +142,29 @@ export function buildComposerBriefing(input = {}, options = {}) {
       };
     });
 
-  const perPipeline = channels.map((channel) => ({
-    id: channel.id,
-    name: channel.name,
-    status: channel.status,
-    lastRunAt: channel.lastRunAt ?? null,
-    lastRunOk: channel.lastRunOk ?? null,
-    pendingGates: channel.pendingGates ?? 0,
-    runCount: channel.runCount ?? 0,
-    produced: channel.lastRunResult?.produced ?? 0,
-  }));
+  const perPipeline = channels.map((channel) => {
+    let latestRun = null;
+    try { latestRun = loadFlow(channel.graphId, null, options)?.runs?.at(-1) ?? null; } catch { latestRun = null; }
+    const pendingNodeIds = Array.isArray(latestRun?.pendingGates) ? latestRun.pendingGates : [];
+    const runNodes = latestRun?.result?.nodes ?? {};
+    const stagedItems = pendingNodeIds.reduce((count, nodeId) => {
+      const items = runNodes?.[nodeId]?.items;
+      return count + (Array.isArray(items) ? items.length : 0);
+    }, 0);
+    return {
+      id: channel.id,
+      graphId: channel.graphId,
+      name: channel.name,
+      status: channel.status,
+      lastRunAt: channel.lastRunAt ?? null,
+      lastRunOk: channel.lastRunOk ?? null,
+      // Founder-facing counts are artifacts, not gate-node topology. A six-item batch at one wall is six
+      // decisions waiting, never "1" merely because the graph contains one gate node.
+      pendingGates: stagedItems || (pendingNodeIds.length ? pendingNodeIds.length : 0),
+      runCount: channel.runCount ?? 0,
+      produced: channel.lastRunResult?.produced ?? 0,
+    };
+  });
 
   const briefing = {
     projectId: projectId ?? null,

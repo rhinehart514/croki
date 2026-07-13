@@ -179,9 +179,10 @@ describe('composer turn fast lane', () => {
     assert.equal(calls.length, 1);
     assert.equal(calls[0][0], 's');
     assert.equal(calls[0][1], 'go');
-    assert.deepEqual(Object.keys(calls[0][2]).sort(), ['hints', 'options']);
+    assert.deepEqual(Object.keys(calls[0][2]).sort(), ['hints', 'options', 'requiredMutation']);
     assert.equal(calls[0][2].hints, hints);
     assert.equal(calls[0][2].options, options);
+    assert.equal(calls[0][2].requiredMutation, 'run');
   });
 
   it('a LOW-confidence act (the catch-all) is a real chat turn, not a silent build (Wave 5)', async () => {

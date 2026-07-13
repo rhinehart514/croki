@@ -12,6 +12,7 @@ const HOME = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-compiled-run-browser-onl
 process.env.GTM_IDE_HOME = HOME;
 process.env.HOST = "127.0.0.1";
 process.env.GTM_IDE_FOUNDER_CODE = "compiled-run-founder";
+process.env.GMAIL_OAUTH_TOKEN = "compiled-route-test-token";
 
 async function freePort() {
   const probe = net.createServer();
@@ -59,6 +60,28 @@ function gatedComposer() {
   });
 }
 
+function stagedGmailRun(item) {
+  return runStore.create(
+    {
+      projectId: PROJECT_ID,
+      pathId: `path-gmail-${Date.now()}-${Math.random()}`,
+      steps: [
+        { id: "src", category: "source", connector: "manual", config: { items: [item] } },
+        { id: "gate", category: "gate", connector: "default", config: {} },
+        { id: "gmail", category: "execute", connector: "gmail", config: { from: "founder@example.com", subject: "Route approval" } },
+      ],
+      edges: [
+        { source: "src", target: "gate", edgeType: "data" },
+        { source: "gate", target: "gmail", edgeType: "data" },
+      ],
+      items: [item],
+      gateState: { status: "pending", awaitingReview: 1 },
+      status: "staged",
+    },
+    { root: HOME, projectId: PROJECT_ID },
+  );
+}
+
 async function stagedRun() {
   const pathRecord = gtmPathStore.create(
     {
@@ -97,16 +120,29 @@ async function browserSessionCookie() {
   return match[0];
 }
 
-async function approveHttp(run, cookie = null, userId = null) {
+async function nativeJson(url, options = {}) {
+  const response = await fetch(url, options);
+  return { status: response.status, body: await response.json() };
+}
+
+async function postRunAction(run, action, body, cookie = null, userId = null) {
   const headers = { "Content-Type": "application/json" };
   if (cookie) headers.Cookie = cookie;
   if (userId) headers["x-gtm-user"] = userId;
-  const response = await fetch(`${base}/api/projects/${PROJECT_ID}/runs/${run.id}/approve`, {
+  const response = await fetch(`${base}/api/projects/${PROJECT_ID}/runs/${run.id}/${action}`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ decisions: decisionsFor(run) }),
+    body: JSON.stringify(body ?? {}),
   });
   return { status: response.status, body: await response.json() };
+}
+
+async function approveHttp(run, cookie = null, userId = null) {
+  return postRunAction(run, "approve", { decisions: decisionsFor(run) }, cookie, userId);
+}
+
+async function greenlightHttp(run, cookie = null, userId = null) {
+  return postRunAction(run, "greenlight", {}, cookie, userId);
 }
 
 describe("compiled-run UI approval is browser-only", () => {
@@ -138,5 +174,97 @@ describe("compiled-run UI approval is browser-only", () => {
     const foreign = await approveHttp(foreignRun, cookie, "other-project-owner");
     assert.equal(foreign.status, 403);
     assert.equal(runStore.get(foreignRun.id, { root: HOME, projectId: PROJECT_ID }).status, "staged");
+  });
+
+  it("HTTP ROUTES — cross-venture gate, approve, greenlight, and promotion all stay 404", async () => {
+    const cookie = await browserSessionCookie();
+    const foreignRun = runStore.create(
+      {
+        projectId: "another-venture",
+        pathId: "foreign-path",
+        steps: [
+          { id: "src", category: "source", connector: "manual" },
+          { id: "gate", category: "gate", connector: "default" },
+          { id: "out", category: "execute", connector: "local" },
+        ],
+        edges: [
+          { source: "src", target: "gate", edgeType: "data" },
+          { source: "gate", target: "out", edgeType: "data" },
+        ],
+        items: [{ draft: "private work", protects: "stage_locally" }],
+        status: "staged",
+      },
+      { root: HOME, projectId: "another-venture" },
+    );
+    const headers = { Cookie: cookie, "x-gtm-user": "founder", "Content-Type": "application/json" };
+    const gate = await nativeJson(`${base}/api/projects/${PROJECT_ID}/runs/${foreignRun.id}/gate`, { headers });
+    const approve = await postRunAction(foreignRun, "approve", { decisions: decisionsFor(foreignRun) }, cookie, "founder");
+    const greenlight = await postRunAction(foreignRun, "greenlight", {}, cookie, "founder");
+    const promote = await postRunAction(foreignRun, "promote", {}, cookie, "founder");
+    assert.deepEqual([gate.status, approve.status, greenlight.status, promote.status], [404, 404, 404, 404]);
+  });
+
+  it("HTTP ROUTE — founder approval injects the default Gmail runner and persists the provider id", async () => {
+    const cookie = await browserSessionCookie();
+    const run = stagedGmailRun({
+      email: "recipient@example.com",
+      subject: "Founder-approved route send",
+      draft: "This leaves only after the route approval.",
+      protects: "send_emails",
+      joinKey: "route-gmail-approved",
+    });
+    const nativeFetch = globalThis.fetch;
+    let gmailCalls = 0;
+    globalThis.fetch = async (url, options) => {
+      if (String(url).includes("gmail.googleapis.com/gmail/v1/users/me/messages/send")) {
+        gmailCalls += 1;
+        assert.match(String(options?.headers?.Authorization), /^Bearer compiled-route-test-token$/);
+        return { ok: true, status: 200, json: async () => ({ id: "gmail-route-message-1" }) };
+      }
+      return nativeFetch(url, options);
+    };
+    let response;
+    try {
+      response = await approveHttp(run, cookie, "founder");
+    } finally {
+      globalThis.fetch = nativeFetch;
+    }
+    assert.equal(response.status, 200);
+    assert.equal(gmailCalls, 1, "the persisted Gmail execute node used the route's default live runner");
+    assert.equal(response.body.run.items[0].providerMessageId, "gmail-route-message-1");
+    assert.equal(runStore.get(run.id, { root: HOME, projectId: PROJECT_ID }).items[0].providerMessageId, "gmail-route-message-1");
+  });
+
+  it("HTTP ROUTE — greenlight of explicit local prepare_diff proof never calls Gmail", async () => {
+    const cookie = await browserSessionCookie();
+    const run = stagedGmailRun({
+      kind: "patch",
+      email: "recipient@example.com",
+      draft: "diff --git a/app.js b/app.js",
+      protects: "prepare_diff",
+      effectBoundary: "reviewed_diff_only",
+      externalEffectAuthorized: false,
+      blockedEffects: ["commit", "push", "pull_request", "merge", "publish", "deploy"],
+      joinKey: "route-gmail-greenlight",
+    });
+    const nativeFetch = globalThis.fetch;
+    let gmailCalls = 0;
+    globalThis.fetch = async (url, options) => {
+      if (String(url).includes("gmail.googleapis.com/gmail/v1/users/me/messages/send")) {
+        gmailCalls += 1;
+        return { ok: true, status: 200, json: async () => ({ id: "must-not-send" }) };
+      }
+      return nativeFetch(url, options);
+    };
+    let response;
+    try {
+      response = await greenlightHttp(run, cookie, "founder");
+    } finally {
+      globalThis.fetch = nativeFetch;
+    }
+    assert.equal(response.status, 200);
+    assert.equal(gmailCalls, 0, "greenlight carries neither the default send runner nor outward-release capability");
+    assert.equal(response.body.greenlight.startedInternal, 1);
+    assert.ok(!response.body.run.items[0].providerMessageId);
   });
 });

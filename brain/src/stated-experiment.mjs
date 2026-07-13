@@ -27,12 +27,17 @@ export function upsertStatedExperiment({ projectId, experiment } = {}, options =
   if (!experiment || typeof experiment !== "object") {
     throw new Error("upsertStatedExperiment requires an experiment.");
   }
+
+  // An experiment is an OPEN unit (EXPERIMENT-MACHINE-SPEC.md "The experiment"): any dimension, crew-
+  // sized, no required fields, no hypothesis ceremony. It is creatable from just a free-form intent.
+  // `targetLayer` (which strategic dimension it varies) and `arms` (the motions it groups) are OPTIONAL
+  // context the founder may add, never a precondition. Forcing either re-created the killed
+  // program/portfolio shape the harness exists to prevent. The only real requirement is SOMETHING to
+  // name the bet — an intent, a hypothesis, a layer, or at least one arm.
   const targetLayer = String(experiment.targetLayer ?? "").trim();
-  if (!targetLayer) throw new Error("A stated experiment needs a targetLayer (e.g. \"market\").");
+  const intent = String(experiment.intent ?? experiment.hypothesis ?? "").trim();
 
   const rawArms = Array.isArray(experiment.arms) ? experiment.arms.filter((a) => a && (a.channelId || a.label)) : [];
-  if (rawArms.length < 1) throw new Error("A stated experiment needs at least one arm to group.");
-
   const arms = rawArms.map((arm, i) => ({
     id: String(arm.id ?? `arm-${slug(arm.label ?? arm.channelId ?? String(i))}`),
     label: String(arm.label ?? arm.channelId ?? `Arm ${i + 1}`),
@@ -40,14 +45,23 @@ export function upsertStatedExperiment({ projectId, experiment } = {}, options =
     channelId: arm.channelId ?? null,
   }));
 
+  // The one floor: an experiment cannot be an empty shell. Any single naming signal satisfies it.
+  if (!targetLayer && !intent && arms.length < 1) {
+    throw new Error("A stated experiment needs at least an intent, a hypothesis, a layer, or one arm.");
+  }
+
+  const idBasis = experiment.hypothesis || intent || arms.map((a) => a.label).join("-") || targetLayer;
   const id = String(
-    experiment.id ?? `exp-stated-${slug(targetLayer)}-${slug(experiment.hypothesis ?? arms.map((a) => a.label).join("-"))}`,
+    experiment.id ?? `exp-stated-${[slug(targetLayer), slug(idBasis)].filter(Boolean).join("-") || Date.now()}`,
   ).trim();
 
   const stated = {
     id,
-    targetLayer,
-    arms,
+    // Blank targetLayer / empty arms stay OPEN — dropped below rather than persisted as forced defaults,
+    // so the board surfaces a layerless experiment on the Learn band and the founder can add either later.
+    targetLayer: targetLayer || undefined,
+    arms: arms.length ? arms : undefined,
+    intent: intent || undefined,
     hypothesis: experiment.hypothesis ? String(experiment.hypothesis).trim() : undefined,
     heldConstant: experiment.heldConstant ? String(experiment.heldConstant).trim() : undefined,
     status: experiment.status ? String(experiment.status) : "running",

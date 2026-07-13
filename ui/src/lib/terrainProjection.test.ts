@@ -72,4 +72,38 @@ describe("terrain projection", () => {
     expect(projected.anchors.map((a) => a.kind)).toEqual(["product-truth"]);
     expect(projected.state.kind).toBe("ready");
   });
+
+  it("promotes three evidenced product journeys into the opening altitude", () => {
+    const view = terrain([]);
+    view.product.model = {
+      id: "model-1", version: 1, projectId: "p1", generatedBy: "claude",
+      groundingRef: { evidenceState: null, citationCount: 3, scannedAt: view.generatedAt },
+      things: [], relationships: [], userGoals: [], states: [], ia: [], interactions: [], transitions: [], pinnedSignals: [],
+      workflows: Array.from({ length: 4 }, (_, index) => ({
+        id: `flow-${index}`, name: `Journey ${index}`, actor: index === 0 ? "Owner" : "Operator",
+        summary: `The product supports journey ${index}.`,
+        steps: [{ id: `step-${index}`, label: "Start", summary: "The first step." }],
+        evidence: [{ label: "route", file: "src/routes.ts", line: index + 1, text: "route" }],
+        provenance: "derived" as const,
+      })),
+      createdAt: view.generatedAt, updatedAt: view.generatedAt,
+    };
+    const projected = projectTerrainCanvas(view, null, null)!;
+    const openings = projected.anchors.filter((anchor) => anchor.kind === "terrain-opening");
+    expect(openings).toHaveLength(3);
+    expect(openings.map((anchor) => anchor.label)).toEqual(["Owner: Journey 0", "Operator: Journey 1", "Operator: Journey 2"]);
+    expect(openings[0].body).toMatchObject({ provenance: "derived", claim: "The product supports journey 0." });
+  });
+
+  it("keeps the live operating-canvas viewport ahead of a stale terrain snapshot", () => {
+    const existing: WovenCanvas = {
+      anchors: [], relationships: [], state: { kind: "ready", stale: false, issues: [] },
+      geometry: { namespace: "project-canvas", revision: 4, positions: {}, viewport: { x: 80, y: -40, zoom: 0.7 } },
+    };
+    const staleTerrain = {
+      ...terrain(),
+      geometry: { namespace: "project-canvas", revision: 2, positions: {}, viewport: { x: 900, y: 600, zoom: 0.4 } },
+    } satisfies TerrainView;
+    expect(projectTerrainCanvas(staleTerrain, null, existing)?.geometry).toEqual(existing.geometry);
+  });
 });

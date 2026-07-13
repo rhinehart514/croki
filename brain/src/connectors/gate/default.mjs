@@ -140,8 +140,41 @@ export async function run(node, upstream, context) {
   const runtimePattern = node.runtime?.pattern;
   const autonomy = node.config?.autonomy ?? null;
   const blessed = node.config?.blessedPattern;
+  // The away / unattended hold (EXPERIMENT-MACHINE-SPEC rail 1): "nothing outward runs when the founder
+  // is away." A STANDING autonomy pattern is the one path where an OUTWARD item can be approved with no
+  // live human in the loop — a promoted channel auto-applying its blessed pattern. When the founder is
+  // away AND approving here could reach the world, that unattended auto-apply is suppressed: the batch
+  // falls through to per-item pending and HOLDS, queued for the founder's return. This ADDS conservatism
+  // only — it can never turn a hold into a send. A live per-run pattern the founder just stamped
+  // (runtimePattern) is a human act and is NOT held; only the standing, unattended auto-apply is.
+  //
+  // FAIL CLOSED (the fix): "could reach the world" is `possiblyOutward`, which is true for any known
+  // sender AND any UNRECOGNIZED / unknown-willSend downstream executor, across EVERY branch — not just the
+  // first, and not only a proven willSend===true. So an unknown executor, a Slack node, or a fan-out where
+  // any branch is outward is HELD while away. Only a downstream that is PROVEN internal on every branch
+  // (local/artifact, possiblyOutward === false) is left to auto-approve. Presence itself defaults to AWAY
+  // when unresolved (host-side), so an ambiguous presence + an ambiguous executor both fail closed.
+  // Presence is host-supplied runtime state, never composition.
+  const founderAway = context?.__founderPresent === false;
+  // Three states, distinguished so the hold fails CLOSED on the unknown but does not freeze a gate with
+  // genuinely nothing downstream:
+  //   - key ABSENT (undefined): the host did not resolve what's downstream → UNKNOWN → possibly-outward.
+  //   - value NULL: gateDownstreamAction proved there is NO execute node downstream → nothing leaves → safe.
+  //   - an object: `possiblyOutward` is authoritative (true for any sender OR any unrecognized executor,
+  //     across every branch; false only when every branch is proven internal).
+  const hasDownstreamKey = context ? "__gateDownstream" in context : false;
+  const downstream = context?.__gateDownstream;
+  let downstreamPossiblyOutward;
+  if (!hasDownstreamKey) {
+    downstreamPossiblyOutward = true; // unknown → fail closed
+  } else if (downstream === null) {
+    downstreamPossiblyOutward = false; // proven no execute downstream → nothing leaves
+  } else {
+    downstreamPossiblyOutward = downstream?.possiblyOutward !== false;
+  }
+  const holdOutwardWhileAway = founderAway && downstreamPossiblyOutward;
   const standingPattern =
-    (autonomy === "trusted" || autonomy === "autonomous") && blessed && typeof blessed === "object"
+    (autonomy === "trusted" || autonomy === "autonomous") && blessed && typeof blessed === "object" && !holdOutwardWhileAway
       ? blessed
       : null;
   const pattern =
@@ -179,7 +212,12 @@ export async function run(node, upstream, context) {
     let pending = 0;
     const items = upstream.map((item, index) => {
       const gtmActionId = actionId(node, item, index, context);
-      const d = decisions[draftKey(item)];
+      // Compiled-run review cards are keyed by the stable gtmActionId the UI rendered, while legacy
+      // operator gates still key decisions by the item's natural identity (email, URL, name, and so on).
+      // Prefer the explicit reviewed action id when present, then retain the legacy lookup as a fallback.
+      // Without this dual lookup, an item carrying both an email and a compiled gtmActionId could be
+      // approved in the browser under the latter but remain pending here under the former.
+      const d = decisions[item?.gtmActionId] ?? decisions[draftKey(item)];
       if (!d || (d.decision !== "approve" && d.decision !== "reject")) {
         pending += 1;
         return { ...item, gtmActionId, gated: true, approved: false, approvalStatus: "pending" };

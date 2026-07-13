@@ -28,7 +28,7 @@ function runResultWith(items: GTMItem[]): GTMRunResult {
   } as unknown as GTMRunResult;
 }
 
-function gateSession(items: GTMItem[] | null): OperatorSession {
+function gateSession(items: GTMItem[] | null, error?: string): OperatorSession {
   return {
     id: "s1",
     goal: "get more owners",
@@ -42,6 +42,7 @@ function gateSession(items: GTMItem[] | null): OperatorSession {
     maxSteps: 20,
     graphRevision: 1,
     events: [],
+    error,
     pendingGate: items
       ? { nodeIds: [GATE_ID], runResult: runResultWith(items) }
       : { nodeIds: [GATE_ID], runResult: runResultWith([]) },
@@ -56,6 +57,26 @@ beforeAll(() => {
 });
 
 describe("ComposerDock — gate in chat", () => {
+  it("yields to a selected canvas founder wall while keeping the conversation one action away", () => {
+    const items = [gateItem("a1", "Hi Ada — saw your launch.")];
+    render(
+      <ComposerDock
+        session={gateSession(items)}
+        running={false}
+        altitude="contextual"
+        selection={{ kind: "gate", channelId: "pipeline-1", nodeId: GATE_ID, node: { id: GATE_ID, category: "gate", label: "Founder wall" } as never }}
+        onSend={() => {}}
+        onCancel={() => {}}
+        onReviewGate={() => {}}
+        onSubmitGateReview={() => {}}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /review & send/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /open the conversation/i }));
+    expect(screen.getByRole("button", { name: /review & send/i })).toBeTruthy();
+  });
+
   it("opens the real review IN the thread when 'Review & send' is clicked (the button is no longer dead)", () => {
     const items = [gateItem("a1", "Hi Ada — saw your launch."), gateItem("a2", "Hi Bo — nice to meet you.")];
     render(
@@ -121,6 +142,47 @@ describe("ComposerDock — gate in chat", () => {
     expect(screen.getByText(/nothing staged to review/i)).toBeTruthy();
     // No decision-card lead text — the stage stayed closed.
     expect(screen.queryByText(/to decide · nothing goes until you say so/i)).toBeNull();
+  });
+
+  it("does not show a stale retry panel after a recovered run reaches the founder gate", () => {
+    render(
+      <ComposerDock
+        session={gateSession([gateItem("a1", "Hi Ada")], "An earlier worker process stopped.")}
+        running={false}
+        onSend={() => {}}
+        onCancel={() => {}}
+        onReviewGate={() => {}}
+        onSubmitGateReview={() => {}}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /review & send/i })).toBeTruthy();
+    expect(screen.queryByText(/hit a snag and paused/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /try again/i })).toBeNull();
+  });
+
+  it("keeps update-only pipeline proposals decidable in the conversation", () => {
+    const session = {
+      ...gateSession([]),
+      status: "waiting_for_proposal",
+      pendingGate: undefined,
+      pendingProposal: { rationale: "Add six placeholder recipients.", graphId: "g1", preview: { id: "g1", nodes: [], edges: [] } },
+    } as unknown as OperatorSession;
+    const onResolveProposal = vi.fn();
+    render(
+      <ComposerDock
+        session={session}
+        running={false}
+        onSend={() => {}}
+        onCancel={() => {}}
+        onReviewGate={() => {}}
+        onResolveProposal={onResolveProposal}
+      />,
+    );
+
+    expect(screen.getByText("Add six placeholder recipients.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /keep changes/i }));
+    expect(onResolveProposal).toHaveBeenCalledWith(true);
   });
 
   it("threads send-back: opening the note box and sending fires onRefineItem with the item + note", () => {

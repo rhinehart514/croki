@@ -55,6 +55,24 @@ describe("open workflow — agent step (subagent as a workflow node)", () => {
     assert.equal(result.nodes.a.ok, false);
     assert.match(result.nodes.a.error, /needs an agent runtime/);
   });
+
+  it("preserves an exact draft when a downstream reviewer returns only audit fields", async () => {
+    const draft = { name: "Ada", org: "Analytical Engine", subject: "A brief", message: "The exact message", status: "draft" };
+    const graph = {
+      id: "review-preserves-artifact",
+      nodes: [
+        source("s", [draft]),
+        { id: "audit", kind: "agent", ref: "claim-auditor", label: "Check the claim", position: { x: 200, y: 0 }, config: {} },
+      ],
+      edges: [{ id: "e", source: "s", target: "audit", edgeType: "data" }],
+    };
+    const result = await runGraph(graph, { stepRuntime: makeStepRuntime({
+      agent: async () => ({ ok: true, items: [{ name: "Ada", org: "Analytical Engine", audit_verdict: "pass", recommended_edit: "None" }] }),
+    }) });
+    assert.equal(result.nodes.audit.items[0].subject, "A brief");
+    assert.equal(result.nodes.audit.items[0].message, "The exact message");
+    assert.equal(result.nodes.audit.items[0].audit_verdict, "pass");
+  });
 });
 
 describe("open workflow — skill step (judgment as a workflow node)", () => {

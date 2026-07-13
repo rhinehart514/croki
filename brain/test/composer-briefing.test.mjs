@@ -88,6 +88,36 @@ describe("composer briefing", () => {
     assert.equal(briefing.gatesWaiting[0].label, "Review launch draft");
   });
 
+  it("counts staged artifacts rather than gate nodes", () => {
+    const { activeProjectId: projectId } = createProject({ name: "Alpha" }, options);
+    const { channel } = createChannel({ name: "Review" }, options);
+    const flow = loadFlow(channel.graphId, null, options);
+    recordFlowRun(flow.graph, {
+      runId: "run-gate",
+      ok: true,
+      pendingGates: ["gate-1"],
+      nodes: { "gate-1": { category: "gate", items: [{ id: "a" }, { id: "b" }, { id: "c" }] } },
+    }, options);
+    const session = createOperatorSession({ goal: "Review batch", projectId }, options);
+    saveOperatorSession({
+      ...session,
+      status: "waiting_for_gate",
+      graphId: channel.graphId,
+      lastRunId: "run-gate",
+      pendingGate: {
+        graphId: channel.graphId,
+        runId: "run-gate",
+        nodeIds: ["gate-1"],
+        runResult: { nodes: { "gate-1": { items: [{ id: "a" }, { id: "b" }, { id: "c" }] } } },
+      },
+    }, options);
+
+    const briefing = buildComposerBriefing({ projectId }, options);
+    assert.equal(briefing.gatesWaiting[0].itemCount, 3);
+    assert.equal(briefing.perPipeline[0].pendingGates, 3);
+    assert.match(briefing.summary, /3 drafts waiting/);
+  });
+
   it("does not double-count gate waiting sessions as stuck", () => {
     const { activeProjectId: projectId } = createProject({ name: "Alpha" }, options);
     const session = createOperatorSession({ goal: "Approve the batch", projectId }, options);

@@ -14,6 +14,7 @@
 
 import { classifyTool, READ_CLASS, WRITE_CLASS } from "./mcp-classifier.mjs";
 import { persistence } from "./persistence.mjs";
+import { now } from "./store-fs.mjs";
 
 const TRUST_LEVELS = new Set(["verified", "community", "untrusted"]);
 const COLLECTION = "capabilities";
@@ -21,10 +22,6 @@ const COLLECTION = "capabilities";
 function safeId(value) {
   return String(value || "server").replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 80);
 }
-function now() {
-  return new Date().toISOString();
-}
-
 /** A raw MCP tool descriptor → a stored tool record carrying its machine class. */
 function classifyRecord(tool, prior) {
   const verdict = classifyTool(tool);

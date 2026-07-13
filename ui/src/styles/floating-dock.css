@@ -1,7 +1,7 @@
 /* The floating control dock — one calm, shadcn-grounded bar that floats top-center over the
    full-bleed canvas. It replaces both the global top toolbar and the program sub-header. Neutral
-   palette, a hairline border, a soft shadow, muted-foreground secondary text, ONE dark primary
-   (Run). Amber belongs to the gate alone — nothing here is amber except the Approvals count. */
+   palette, a hairline border, a soft shadow, and muted-foreground secondary text. Amber belongs to
+   the gate alone — nothing here is amber except the founder-attention count. */
 
 .fdock {
   position: absolute;
@@ -33,8 +33,8 @@
   min-width: 0;
 }
 
-/* The product-identity mark doubles as Home — one click back to the whole operation. Quiet by default,
-   the accent only appearing on hover so it never competes with Run. */
+/* The product-identity mark doubles as Home — one click back to the product canvas. Quiet by default,
+   with the accent appearing only on hover. */
 .fdock-home {
   display: inline-flex;
   align-items: center;
@@ -57,10 +57,6 @@
   padding: 0 1px;
   flex-shrink: 0;
 }
-
-/* Keep the breadcrumb from hogging the bar — cap the outcome name so the dock stays contained. */
-.fdock-left .osw-trigger { max-width: 220px; }
-.fdock-left .osw-trigger-name { max-width: 150px; }
 
 /* Motion identity — a quiet, read-only chip naming WHAT KIND of go-to-market the focused workflow is
    ("Outbound loop", "Content loop"), derived from its real stages. Monochrome, subordinate to the
@@ -164,6 +160,31 @@
 .fdock-status.off { color: var(--gap); }
 .fdock-status.off .fdock-status-dot { background: var(--gap); }
 
+/* Presence — a quiet state chip (never a KPI). Reports present vs away; when away it reads "outward
+   held". Low emphasis by design: it orients, it does not demand action. Present is calm/muted; away
+   picks up the semantic gap tone so "nothing outward runs" is legible without shouting. */
+.fdock-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 560;
+  white-space: nowrap;
+  user-select: none;
+}
+.fdock-presence.is-present {
+  color: var(--muted);
+}
+.fdock-presence.is-away {
+  color: var(--gap);
+  background: color-mix(in srgb, var(--gap) 9%, transparent);
+}
+.fdock-presence-label { line-height: 1; }
+
 /* Compact icon buttons — the secondary actions (Problems, Approvals, Program details). */
 .fdock-icon-btn {
   position: relative;
@@ -185,6 +206,38 @@
 .fdock-icon-btn.open { color: var(--ink); background: var(--surface-2); border-color: var(--line-2); }
 .fdock-icon-btn.has-count,
 .fdock-icon-btn.has-pending { color: var(--ink); }
+
+.fdock-attention-wrap { position: relative; }
+.fdock-attention-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 80;
+  width: 190px;
+  padding: 6px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+}
+.fdock-attention-menu button {
+  width: 100%;
+  min-height: 36px;
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.fdock-attention-menu button:hover,
+.fdock-attention-menu button:focus-visible { background: var(--surface-2); outline: none; }
+.fdock-attention-menu button b { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); }
 
 /* Settings gear — deliberately the quietest thing on the bar. Smaller footprint and a fainter
    resting color than the other controls, so it reads as a low-emphasis corner affordance rather than
@@ -230,30 +283,6 @@
 }
 .fdock-ghost-btn:hover:not(:disabled) { border-color: var(--ghost); }
 .fdock-ghost-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-/* Run program — the one dark primary. */
-.fdock-run-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 14px;
-  border: 1px solid var(--primary);
-  border-radius: var(--r-md);
-  background: var(--primary);
-  color: var(--on-primary);
-  font-size: 12px;
-  font-weight: 660;
-  cursor: pointer;
-  white-space: nowrap;
-  box-shadow: 0 2px 8px oklch(0.21 0.006 285.9 / 0.18);
-  transition: background 140ms var(--ease), box-shadow 140ms var(--ease);
-}
-.fdock-run-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--primary) 88%, white);
-  box-shadow: 0 4px 12px oklch(0.21 0.006 285.9 / 0.24);
-}
-.fdock-run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Problems popover — reuses the glass-popover register from the old toolbar chip. */
 .fdock-pop-wrap { position: relative; display: inline-flex; }
@@ -327,13 +356,13 @@
    action (Fix with Claude) is the dark fill; opening the node is the quiet secondary. */
 .issues-card { display: flex; flex-direction: column; gap: 10px; }
 .issues-card-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-/* Shown in place of the fix action when no pipeline is open — fixing needs a pipeline to work against,
-   so from the overview this points the founder to open one rather than offering a dead action. */
+/* Shown in place of the fix action when no work is open — fixing needs focused work to act against, so
+   from the overview this points the founder to open one rather than offering a dead action. */
 .fdock-problems-hint { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
 .fdock-problems-fix.primary { color: var(--surface); background: var(--ink); border-color: var(--ink); }
 .fdock-problems-fix.primary:hover { background: var(--ink-2, #1a1a1a); border-color: var(--ink-2, #1a1a1a); }
 
-/* Pipeline-audit popover header (the audit moved off the canvas into the dock). */
+/* Work-audit popover header (the audit moved off the canvas into the dock). */
 .fdock-pop-title {
   display: flex; align-items: center; justify-content: space-between;
   padding: 2px 4px 8px; margin-bottom: 2px; border-bottom: 1px solid var(--line);
@@ -357,22 +386,27 @@
     left: 50vw;
     width: calc(100vw - 16px);
     max-width: none;
-    gap: 4px;
-    padding: 6px;
+    gap: 2px;
+    padding: 3px 4px;
   }
   .fdock-left { flex: 1; gap: 3px; }
   .fdock .project-switcher-name,
-  .fdock .project-switcher-caret,
-  .fdock .osw-trigger .menu-item-label { display: none; }
-  .fdock .project-switcher-trigger,
-  .fdock .osw-trigger {
-    width: 30px;
-    min-width: 30px;
+  .fdock .project-switcher-caret { display: none; }
+  .fdock .project-switcher-trigger {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
     padding-inline: 0;
     justify-content: center;
   }
-  .fdock-right { gap: 3px; }
-  .fdock-run-btn { padding-inline: 10px; }
+  .fdock-home,
+  .fdock-icon-btn,
+  .fdock-settings-gear {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+  }
+  .fdock-right { gap: 2px; }
 }
 
 /* Summon control — the agentic replacement for lens tabs. A quiet + that opens a short menu of

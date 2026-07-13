@@ -25,7 +25,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { runGraph } from "../src/graph.mjs";
+import { runGraph, OUTWARD_RELEASE } from "../src/graph.mjs";
 import { recordFlowRun } from "../src/flow-store.mjs";
 import { pollInboxOutcomes, projectFlowRunsToSentRuns } from "../src/connectors/measure/inbox-reader.mjs";
 import { resultStore } from "../src/gtm-store.mjs";
@@ -130,6 +130,28 @@ describe("projectFlowRunsToSentRuns — the flow store's execute output projects
     assert.equal(projectFlowRunsToSentRuns([]).length, 0);
     assert.equal(projectFlowRunsToSentRuns([{ runs: [{ result: { nodes: {} } }] }]).length, 0);
   });
+
+  it("filters overlapping flow lineage to the owning venture", () => {
+    const sent = (projectId, providerMessageId) => ({
+      projectId,
+      id: `run-${projectId}`,
+      graphSnapshot: { id: "shared-graph", nodes: [], edges: [] },
+      result: {
+        nodes: {
+          out: { category: "execute", items: [{ joinKey: "same-key", providerMessageId, to: `${projectId}@example.com` }] },
+        },
+      },
+    });
+    const records = [{ graph: { id: "shared-graph" }, runs: [sent("venture-a", "msg-a"), sent("venture-b", "msg-b")] }];
+
+    const ventureA = projectFlowRunsToSentRuns(records, { projectId: "venture-a" });
+    assert.deepEqual(ventureA.map((run) => run.projectId), ["venture-a"]);
+    assert.equal(ventureA[0].items[0].providerMessageId, "msg-a");
+
+    const legacyUnowned = [{ graph: { id: "shared-graph" }, runs: [sent(null, "msg-unowned")] }];
+    assert.equal(projectFlowRunsToSentRuns(legacyUnowned, { projectId: "venture-a" }).length, 0,
+      "project-scoped polling never guesses ownership for a legacy unowned receipt");
+  });
 });
 
 describe("measure lane — LIVE send via recordFlowRun → poll → attribute once, no cross-tick duplicate", () => {
@@ -152,7 +174,7 @@ describe("measure lane — LIVE send via recordFlowRun → poll → attribute on
       assert.equal(pending.nodes.out?.blocked, true, "the send node is blocked behind the pending gate");
       assert.equal((pending.nodes.out?.items ?? []).length, 0, "nothing was sent before approval");
       // Persist the paused run the way the route does (recordFlowRun on every run).
-      recordFlowRun(graph, pending, options);
+      recordFlowRun(graph, pending, { ...options, projectId });
 
       // PHASE 2 — the founder approves and the gate resumes with the live delivery seam wired. This is the
       // ONE wall-crossing path: the approved item flows to the gmail node and the stub transport returns a
@@ -169,6 +191,9 @@ describe("measure lane — LIVE send via recordFlowRun → poll → attribute on
         // this callback. The transport test must cross that same host-owned release seam.
         authorizeRelease: () => { releases.calls += 1; },
         sendRunners: fakeSendRunner(providerMessageId, sends),
+        // The founder outward-approval path carries the host-issued outward-release capability (rail 1);
+        // without it a real sender HOLDS the approved item instead of delivering it.
+        outwardRelease: OUTWARD_RELEASE,
       });
       assert.equal(releases.calls, 1, "the host authorized the founder's release before delivery");
       assert.equal(sends.calls, 1, "the send transport was actually invoked for the approved item");
@@ -178,7 +203,7 @@ describe("measure lane — LIVE send via recordFlowRun → poll → attribute on
 
       // PERSIST — exactly as the live route/operator path does: the whole run result into the FLOW store.
       // This is where a live send's provider id actually lands in production.
-      recordFlowRun(graph, resumed, options);
+      recordFlowRun(graph, resumed, { ...options, projectId });
 
       // POLL — the inbox reader now reads the flow store, indexes the sent item, and attributes EXACTLY ONE
       // Result to it when the recipient replies.

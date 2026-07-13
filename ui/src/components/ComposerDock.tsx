@@ -8,8 +8,11 @@ import { statusLabel } from "@/lib/status";
 import { composerStartsCollapsed } from "@/lib/composerCollapse";
 import { subjectActions } from "@/lib/subjectActions";
 import { kindIcon } from "@/lib/objectKindIcons";
-import { founderGoalLine, humanizeFieldLabel, humanizeSlugsInText } from "@/lib/labels";
+import { humanizeFieldLabel, humanizeSlugsInText } from "@/lib/labels";
+import { chatTabName, distinctTabNames } from "@/lib/chatTitle";
 import type { CanvasSubject, CardDetail } from "@/lib/cardDetail";
+import type { CanvasSelectionDescriptor } from "@/lib/canvasSelection";
+import type { ComposerAltitude } from "@/lib/composerAltitude";
 import { getCapabilityInventory, type AgentBenchRow, type OperatorHints } from "@/api";
 import { motion } from "motion/react";
 import { AgentPicker } from "@/components/AgentPicker";
@@ -451,47 +454,6 @@ function chatTabState(status: OperatorStatus): ChatTabState {
   if (status === "running" || status === "ready") return "working";
   return "done"; // completed · cancelled · blocked · failed · interrupted
 }
-// A tab's name is a SHORT, readable title for the pipeline it belongs to — never the raw prompt the
-// founder typed. It starts from the clean goal line (founderGoalLine strips the composer's engineering
-// tail — "Ideate 2-3 shapes…", win-event ids, scan bookkeeping — so a tab never reads "i want to ideate
-// diff…"), drops a leading first-person throat-clear ("I want to", "Help me", "Let's"), and keeps a
-// compact phrase. Two tabs can still start with the same words; `distinctTabNames` disambiguates those so
-// no two tabs ever render identically.
-function chatTabName(s: OperatorSessionSummary): string {
-  const cleaned = founderGoalLine(s.goal) || (s.summary ?? "").trim() || (s.goal ?? "").replace(/^\[[^\]]*\]\s*/, "").trim();
-  if (!cleaned) return "Untitled pipeline";
-  // Drop a leading first-person framing so the name leads with the actual intent, not "I want to".
-  const deframed = cleaned.replace(/^\s*(?:i\s+(?:want|need|would like|'d like)\s+to|i\s+wanna|help me|let'?s|can you|please|could you)\s+/i, "").trim();
-  const core = deframed || cleaned;
-  // Keep it to a short phrase — the first clause (stop at a comma / dash / colon) capped at a few words —
-  // so tabs stay compact and a reader distinguishes them by words, not by where the ellipsis lands.
-  const firstClause = core.split(/\s*[—–,:;]\s+/)[0].trim() || core;
-  const words = firstClause.split(/\s+/);
-  const short = words.length > 6 ? words.slice(0, 6).join(" ") + "…" : firstClause;
-  const titled = short.charAt(0).toUpperCase() + short.slice(1);
-  return titled || "Untitled pipeline";
-}
-
-// Names for every tab in the roster, guaranteed distinct. Most tabs get their plain chatTabName; when two
-// or more would render the SAME label (same goal prefix), each colliding tab gets a "· 1 / · 2 …" suffix in
-// creation order, so the founder can always tell two parallel pipelines apart. Keyed by session id.
-function distinctTabNames(roster: OperatorSessionSummary[]): Record<string, string> {
-  const byName = new Map<string, OperatorSessionSummary[]>();
-  for (const s of roster) {
-    const name = chatTabName(s);
-    const group = byName.get(name) ?? [];
-    group.push(s);
-    byName.set(name, group);
-  }
-  const out: Record<string, string> = {};
-  for (const [name, group] of byName) {
-    if (group.length === 1) { out[group[0].id] = name; continue; }
-    group
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-      .forEach((s, i) => { out[s.id] = `${name} · ${i + 1}`; });
-  }
-  return out;
-}
 
 function ChatTabs({ roster, activeId, onSwitch, onNew, onStop, onClose }: {
   roster: OperatorSessionSummary[];
@@ -724,8 +686,10 @@ export function ComposerDock({
   onProposeCandidates, onBuildCandidate,
   briefing = null,
   onSubmitGateReview, onRefineItem, onRecordItemOutcome,
+  onResolveProposal,
   gateLearned = 0, gateOffer = null, gatePromote,
   seed = null, startOpen = false, preferCollapsed = false,
+  altitude, selection = { kind: "none" },
 }: {
   session: OperatorSession | null;
   running: boolean;
@@ -769,6 +733,9 @@ export function ComposerDock({
   onSubmitGateReview?: (nodeId: string, decisions: Record<string, GateDecision>) => void | Promise<void>;
   onRefineItem?: (item: GTMItem, note: string) => void | Promise<void>;
   onRecordItemOutcome?: (item: GTMItem, outcome: { outcomeKind: string; value?: number }) => void | Promise<void>;
+  // Update-only graph proposals have no new ghost node to carry the canvas accept controls. Keep the
+  // same all-or-nothing founder decision available in the conversation for every proposal shape.
+  onResolveProposal?: (accept: boolean) => void | Promise<void>;
   gateLearned?: number;
   gateOffer?: string | null;
   gatePromote?: GatePromote;
@@ -783,6 +750,8 @@ export function ComposerDock({
   // This keeps exactly one persistent crew home (the left roster) at product altitude and the operation
   // visually dominant. False at action altitude (Engineer), where the composer opens with its session.
   preferCollapsed?: boolean;
+  altitude?: ComposerAltitude;
+  selection?: CanvasSelectionDescriptor;
   // A message the founder started from the canvas — the host pre-fills the input (and opens the dock) but
   // NEVER sends it: the founder reads, edits, and presses send. The token makes an identical re-ask re-seed.
   seed?: { text: string; token: number } | null;
@@ -805,14 +774,33 @@ export function ComposerDock({
   // no host wiring; when the host later hands a fuller read, it overrides the derived one.
   briefing?: Briefing | null;
 }) {
+  // A forming session is passive only until it presents real paths for the founder to choose. Candidate
+  // choices are a judgment moment, so they must be readable on the first render rather than waiting for a
+  // later signature change to re-open a dock that altitude="forming" initially collapsed.
+  const candidates = sessionCandidates(session);
+  const hasCandidateChoices = candidates.length > 0;
+  const gateSelectedOnCanvas = selection.kind === "gate";
+  const gateSelectionKey = selection.kind === "gate" ? `${selection.channelId}:${selection.nodeId}` : null;
+  // Automatic composer state changes can overlap the streamed run → gate handoff. The wall still wins
+  // unless the founder explicitly opens the conversation from its launcher; that opt-in is scoped to the
+  // exact gate, so a later wall starts calm again.
+  const [openedGateConversation, setOpenedGateConversation] = useState<string | null>(null);
+  const gateConversationOpen = !!gateSelectionKey && openedGateConversation === gateSelectionKey;
+
   // ── THE STATE MODEL: closed (a slim edge line) vs open (the three zones). It opens itself for exactly
   // one reason — the founder is needed — and never self-drives between the six shapes it used to. `floating`
   // keeps its own resting-pill model for the rare over-canvas usage; docked is closed/open only.
   const [collapsed, setCollapsed] = useState(
-    composerStartsCollapsed({ startOpen, preferCollapsed, floating, hasSession: !!session, terminal: !!session && TERMINAL.has(session.status) }),
+    altitude
+      ? altitude === "resting" || gateSelectedOnCanvas || (altitude === "forming" && !hasCandidateChoices)
+      : composerStartsCollapsed({ startOpen, preferCollapsed, floating, hasSession: !!session, terminal: !!session && TERMINAL.has(session.status) }),
   );
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // The send receipt is immediate. The founder's sentence leaves the textarea as soon as it is accepted,
+  // then this clock + current beat make the asynchronous hand-off watchable. It is deliberately elapsed
+  // time, not a fabricated percentage: model and tool work have no truthful completion fraction.
+  const [workElapsed, setWorkElapsed] = useState(0);
   // Ephemeral fast-lane turns (status/explain) — answered without a session, so they aren't in
   // session.events. Rendered in the thread just after the opening briefing; cleared when a drive lands
   // or the session switches.
@@ -955,6 +943,24 @@ export function ComposerDock({
     if (terminalOverview) setCollapsed(true);
   }
 
+  const [trackedAltitude, setTrackedAltitude] = useState(altitude);
+  if (altitude !== trackedAltitude) {
+    setTrackedAltitude(altitude);
+    if (altitude === "empty" || altitude === "activity" || (altitude === "contextual" && !gateSelectedOnCanvas) || (altitude === "forming" && hasCandidateChoices)) setCollapsed(false);
+    if (altitude === "contextual" && gateSelectedOnCanvas) setCollapsed(true);
+    if (altitude === "resting" || (altitude === "forming" && !hasCandidateChoices)) setCollapsed(true);
+  }
+
+  // The canvas founder wall is already the active decision surface. Selecting it should clear the
+  // conversation out of the way (especially on a phone-width pane), while leaving the same conversation
+  // one explicit launcher action away for questions or revision instructions.
+  const [trackedGateSelection, setTrackedGateSelection] = useState(gateSelectedOnCanvas);
+  if (gateSelectedOnCanvas !== trackedGateSelection) {
+    setTrackedGateSelection(gateSelectedOnCanvas);
+    if (gateSelectedOnCanvas) setCollapsed(true);
+    else if (altitude === "contextual") setCollapsed(false);
+  }
+
   // focusSignal — the founder EXPLICITLY asked for the composer (stated a goal, handed Claude a node,
   // started another pipeline). Always open in the same render (so the input is mounted) and focus it.
   const [trackedFocus, setTrackedFocus] = useState(focusSignal);
@@ -963,17 +969,18 @@ export function ComposerDock({
     setCollapsed(false);
   }
 
-  // Product-altitude survey mode collapses the composer to its slim rail so the operation owns the canvas.
-  // A post-commit effect is deliberate and load-bearing: on a cold project-load or a newly-arriving gate on
-  // a LIVE session, a spurious focusSignal bump lands in a LATER render than the altitude settling, so the
-  // render-time reconciliation above can't catch it (its key doesn't change on that render) and the
-  // composer would sprawl across the canvas. This effect re-asserts the slim rail whenever the altitude or
-  // session/project changes — browser-verified on estatesaleusa and rodentradar. Its running/gate state
-  // still rides the rail's orb + shield; a founder who clicks the rail open at product altitude stays open
-  // (this effect does not re-run on that click). The lint rule against setState-in-effect is a general
-  // heuristic; here the effect exists precisely to synchronize the collapse to the altitude prop.
+  // Legacy callers without altitude still use the old collapse hint. The product shell passes altitude.
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { if (preferCollapsed) setCollapsed(true); }, [preferCollapsed, session?.id]);
+  useEffect(() => { if (!altitude && preferCollapsed) setCollapsed(true); }, [altitude, preferCollapsed, session?.id]);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia("(max-width: 760px)");
+    const collapseForNarrowCanvas = (event: MediaQueryListEvent) => {
+      if (event.matches && altitude !== "empty" && altitude !== "activity" && altitude !== "contextual" && !hasCandidateChoices) setCollapsed(true);
+    };
+    query.addEventListener("change", collapseForNarrowCanvas);
+    return () => query.removeEventListener("change", collapseForNarrowCanvas);
+  }, [altitude, hasCandidateChoices]);
   useEffect(() => {
     if (focusSignal) inputRef.current?.focus();
   }, [focusSignal]);
@@ -1058,6 +1065,21 @@ export function ComposerDock({
   const steerable = session?.status === "running" || session?.status === "waiting_for_gate";
   const sendDisabled = running || session?.status === "ready" || (waitingGate && !steerable);
   const working = running || session?.status === "running";
+  const workActive = submitting || working;
+  const [trackedWorkActive, setTrackedWorkActive] = useState(workActive);
+  if (trackedWorkActive !== workActive) {
+    setTrackedWorkActive(workActive);
+    if (workActive) setWorkElapsed(0);
+  }
+  useEffect(() => {
+    if (!workActive) return;
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => setWorkElapsed(Math.floor((Date.now() - startedAt) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, [workActive]);
+  const currentWorkStep = session?.events.at(-1)?.title
+    ? humanizeSlugsInText(session.events.at(-1)!.title)
+    : "Grounding the request in your product";
   // The latest reasoning turn, while the crew is still producing — it gets the soft streaming shimmer + a
   // caret, so the output reads as "still forming" instead of a finished block that popped in.
   const streamingSayId = working && session
@@ -1072,7 +1094,7 @@ export function ComposerDock({
   const voice = sessionVoice(graph, bench);
 
   // A gate or a pending question is the founder's judgment moment — open on its rising edge.
-  const needsDecision = waitingGate || !!session?.pendingQuestion;
+  const needsDecision = (waitingGate && !gateSelectedOnCanvas) || !!session?.pendingQuestion;
   const [trackedNeedsDecision, setTrackedNeedsDecision] = useState(needsDecision);
   if (needsDecision !== trackedNeedsDecision) {
     setTrackedNeedsDecision(needsDecision);
@@ -1081,7 +1103,9 @@ export function ComposerDock({
 
   // The run is the plan made live — open on its rising edge so the plan checklist is in front of the
   // founder, striking off step by step in lockstep with the canvas.
-  const runLive = running && !!graph && graph.nodes.length > 0;
+  // A streamed run may still be unwinding when its gate receipt lands. Once that wall is selected, its
+  // decision surface wins immediately; the final run-live render must not reopen chat over it.
+  const runLive = running && !gateSelectedOnCanvas && !!graph && graph.nodes.length > 0;
   const [trackedRunLive, setTrackedRunLive] = useState(runLive);
   if (runLive !== trackedRunLive) {
     setTrackedRunLive(runLive);
@@ -1089,7 +1113,6 @@ export function ComposerDock({
   }
 
   // Ambiguous-goal shapes, read off the session through the one isolated seam.
-  const candidates = sessionCandidates(session);
   const candidateSig = candidates.map((c) => c.id).join("|");
   const [pickedCandidateId, setPickedCandidateId] = useState<string | null>(null);
   const [trackedCandidateSig, setTrackedCandidateSig] = useState(candidateSig);
@@ -1182,15 +1205,21 @@ export function ComposerDock({
     setSubmitting(true);
     setCollapsed(false);
     setMentionQuery(null);
+    // Move accepted text out of the input before waiting on the network/model. Leaving it in place made a
+    // successful send look like a disabled, stuck draft for the full model turn.
+    setInput("");
+    setMentions([]);
     try {
       const r = await onSend(value, hints, model);
-      setInput("");
-      setMentions([]);
       if (r && r.mode === "fast" && typeof r.answer === "string") {
         setFastTurns((prev) => [...prev, { id: `fast-${Date.now()}`, you: value, answer: r.answer!, at: new Date().toISOString() }]);
       } else if (r && r.mode === "drive") {
         setFastTurns([]);
       }
+    } catch (error) {
+      // A rejected hand-off never eats the founder's words. Put the draft back so retry/correction is local.
+      setInput((current) => current.trim() ? current : value);
+      throw error;
     } finally { setSubmitting(false); }
   };
 
@@ -1214,6 +1243,13 @@ export function ComposerDock({
   // never changes shape as you move.
   const composer = (
     <div className="oc-input-wrap">
+      {workActive ? (
+        <div className="oc-turn-progress" role="status" aria-live="polite">
+          <span className="oc-turn-progress-dot" aria-hidden="true" />
+          <span className="oc-turn-progress-copy"><b>Sent</b><span>{currentWorkStep}</span></span>
+          <time className="oc-turn-progress-time">{Math.floor(workElapsed / 60)}:{String(workElapsed % 60).padStart(2, "0")}</time>
+        </div>
+      ) : null}
       {ideating ? (
         <div className="composer-posture">
           <Lightbulb className="composer-posture-icon" size={13} aria-hidden="true" />
@@ -1270,11 +1306,11 @@ export function ComposerDock({
       <div className="oc-input">
         <textarea
           ref={inputRef}
+          name="crew-message"
           className="oc-input-text"
           aria-label="Message your crew"
-          placeholder={subject ? `Ask about “${subject.label}”: make it shorter, explain it, or act on it…` : sendDisabled ? "Your crew is working. You can still say “go to …” to move the canvas" : steerable ? "Redirect your crew mid-run: “focus on enterprise”, “drop the third one”… nothing sends" : ideating ? "Think through your GTM: who's the real buyer, where's the wedge, why now" : session ? "Reply, redirect, or @-mention a teammate…" : "What should we understand, change, or pursue?"}
+          placeholder={subject ? `Ask about “${subject.label}”: make it shorter, explain it, or act on it…` : altitude === "empty" ? "What do you want to change?" : selection.kind === "gate" ? "Ask what is waiting at your wall, or tell the crew what to revise…" : submitting ? "Request sent. You can draft the next steer here." : sendDisabled ? "Your crew is working. You can still say “go to …” to move the canvas" : steerable ? "Redirect your crew mid-run: “focus on enterprise”, “drop the third one”… nothing sends" : ideating ? "Think through your GTM: who's the real buyer, where's the wedge, why now" : session ? "Reply, redirect, or @-mention a teammate…" : "What should we understand, change, or pursue?"}
           value={input}
-          disabled={submitting}
           onChange={(e) => {
             const el = e.currentTarget;
             setInput(el.value);
@@ -1379,13 +1415,16 @@ export function ComposerDock({
 
   // ── CLOSED — the slim edge line. Docked hands the width back to the canvas; floating rests as the
   // command-line pill with a peek at any live session. ─────────────────────────────────────────────────
-  if (collapsed) {
+  if (collapsed || (gateSelectedOnCanvas && !gateConversationOpen)) {
     if (!floating) {
       return (
-        <aside className="composer-dock docked collapsed our-chat" aria-label="Your crew">
+        <aside className={`composer-dock docked collapsed our-chat${altitude ? ` altitude-${altitude}` : ""}`} aria-label="Your crew">
           <button
             className="dock-rail-launcher"
-            onClick={() => setCollapsed(false)}
+            onClick={() => {
+              if (gateSelectionKey) setOpenedGateConversation(gateSelectionKey);
+              setCollapsed(false);
+            }}
             type="button"
             title={`Open ${engineName}`}
             aria-label={`Open the conversation with ${engineName}`}
@@ -1404,9 +1443,12 @@ export function ComposerDock({
       );
     }
     return (
-      <aside className="composer-dock floating resting our-chat" aria-label="Your crew">
+      <aside className={`composer-dock floating resting our-chat${altitude ? ` altitude-${altitude}` : ""}`} aria-label="Your crew">
         {session ? (
-          <button className="composer-peek" onClick={() => setCollapsed(false)} type="button" title="Open the conversation" aria-label="Open the conversation with your crew">
+          <button className="composer-peek" onClick={() => {
+            if (gateSelectionKey) setOpenedGateConversation(gateSelectionKey);
+            setCollapsed(false);
+          }} type="button" title="Open the conversation" aria-label="Open the conversation with your crew">
             <span className={`composer-peek-dot ${working ? "live" : ""}`} aria-hidden="true" />
             <span className="composer-peek-text">
               {recede ? "Staged on the canvas — keep, change, or note it there" : working ? "Your crew is working…" : session.events.length ? humanizeSlugsInText(session.events[session.events.length - 1].title) : `Your crew · ${statusLabel(session.status)}`}
@@ -1421,7 +1463,7 @@ export function ComposerDock({
 
   // ── OPEN — the three zones: chrome (header + tabs), the response stream, the input. ───────────────────
   return (
-    <aside className={`composer-dock ${floating ? "floating" : "docked"} our-chat`} aria-label="Your crew">
+    <aside className={`composer-dock ${floating ? "floating" : "docked"} our-chat${altitude ? ` altitude-${altitude}` : ""}`} aria-label="Your crew">
       {/* ── Zone 1 · chrome — header. The working teammate's face carries the soft rotating ring: calm,
           meaningful presence (the signature). ─────────────────────────── */}
       <header className="oc-head">
@@ -1434,7 +1476,7 @@ export function ComposerDock({
           {working ? `${voice.name} is working…` : session ? "just now" : "on your subscription"}
         </span>
         {onNewChat && roster.length < 2 ? (
-          <button className="oc-head-icon" onClick={onNewChat} type="button" title="Start another pipeline" aria-label="Start another pipeline">
+          <button className="oc-head-icon" onClick={onNewChat} type="button" title="Start another thread" aria-label="Start another thread">
             <Plus size={15} />
           </button>
         ) : null}
@@ -1524,7 +1566,8 @@ export function ComposerDock({
 
         {!session ? (
           <div className="oc-idle">
-            <p className="oc-idle-lead">Tell Claude or Codex what you want to understand, make, change, achieve, or learn. Their work appears on the canvas; anything that reaches outside your product stops at your gate.</p>
+            {altitude === "empty" ? <h1 className="oc-idle-title">What do you want to change?</h1> : null}
+            <p className="oc-idle-lead">Tell your crew the outcome, question, or product change you want to pursue. The work takes shape here; anything outward stops at your wall.</p>
             <div className="oc-idle-starters">
               {STARTERS.map((s) => (
                 <button key={s} className="oc-idle-starter" onClick={() => setInput(s)} type="button">{s}</button>
@@ -1628,7 +1671,7 @@ export function ComposerDock({
                 (still stops at the gate). Hidden while a gate is waiting so the two decisions never collide. */}
             {candidates.length > 0 && !waitingGate ? (
               <div className="cmp-response-group">
-                <p className="cmp-response-lead">A few ways to shape this — each shows its crew in order, ending at your gate. Pick one, edit it, nothing sends until you approve.</p>
+                <p className="cmp-response-lead">A few ways to act on this — each shows its crew in order, ending at your gate. Pick one to prepare it; nothing sends until you approve.</p>
                 {candidates.map((c) => (
                   <EmbodiedFlow
                     key={c.id}
@@ -1641,6 +1684,22 @@ export function ComposerDock({
                     building={pickedCandidateId === c.id}
                   />
                 ))}
+              </div>
+            ) : null}
+
+            {session?.pendingProposal && onResolveProposal ? (
+              <div className="oc-gate" role="group" aria-label="Review proposed pipeline changes">
+                <div className="oc-gate-h">
+                  <span className="oc-gate-lock" aria-hidden="true"><Check /></span>
+                  <div>
+                    <div className="oc-gate-t">Changes ready for your review</div>
+                    <div className="oc-gate-s">{session.pendingProposal.rationale || "Your crew proposed a reversible pipeline change."}</div>
+                  </div>
+                </div>
+                <div className="oc-gate-f">
+                  <button className="oc-btn ghost" onClick={() => void onResolveProposal(false)} type="button">Discard</button>
+                  <button className="oc-btn amber" onClick={() => void onResolveProposal(true)} type="button">Keep changes</button>
+                </div>
               </div>
             ) : null}
 
@@ -1708,7 +1767,7 @@ export function ComposerDock({
             ) : null}
 
             {/* ── Error — a snag your crew hit; one calm sentence, never the raw engine text. */}
-            {session?.error && !session.pendingQuestion ? (
+            {session?.error && !session.pendingQuestion && ["blocked", "failed", "interrupted"].includes(session.status) ? (
               <div className="oc-error">
                 <span>Your crew hit a snag and paused. You can pick up where it left off.</span>
                 <button className="oc-btn" onClick={() => void onSend("continue", undefined, model)} type="button">

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowRight, LoaderCircle } from "lucide-react";
+import { ArrowRight, LoaderCircle, X } from "lucide-react";
 import { getConnection, type ConnectionStatus, type RuntimeReadiness } from "@/api";
 
 // The cold-start runtime gate. Every act of intelligence in Drover — reading your market, shaping
@@ -48,20 +48,25 @@ const PROVIDERS: Provider[] = [
 // Provider-specific because it rides that provider's own row; redacted because we map to a fixed phrase
 // instead of surfacing any backend error text, env var, or stack.
 type ProviderView = { status: "connected" | "disabled" | "off"; note: string };
-function viewFor(runtime: RuntimeReadiness | undefined): ProviderView {
+function viewFor(runtime: RuntimeReadiness | undefined, connectionActive: boolean): ProviderView {
   if (!runtime) return { status: "off", note: "Not detected yet" };
-  if (runtime.connected) return { status: "connected", note: "Connected" };
+  // A CLI can be signed in while Drover is explicitly configured not to use it. In that state the
+  // provider is detected, but calling it "Connected" contradicts the top-level runtime selection.
+  if (runtime.connected && connectionActive) return { status: "connected", note: "Connected" };
+  if (runtime.connected) return { status: "disabled", note: "Detected, not active" };
   if (/disabl/i.test(runtime.reason ?? "")) return { status: "disabled", note: "Turned off for this install" };
   return { status: "off", note: "Not signed in" };
 }
 
-export function ConnectClaude({ connection, onResult, contextual = false }: {
+export function ConnectClaude({ connection, onResult, contextual = false, onDismiss }: {
   connection: ConnectionStatus;
   onResult: (status: ConnectionStatus) => void;
   contextual?: boolean;
+  onDismiss?: () => void;
 }) {
   const [checking, setChecking] = useState(false);
   const [stillOff, setStillOff] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(!contextual);
 
   // A ready runtime means the gate is done — render nothing, regardless of which provider it was. This
   // mirrors the parent's own check so a connected Codex OR Claude both lift the gate.
@@ -79,7 +84,12 @@ export function ConnectClaude({ connection, onResult, contextual = false }: {
     try {
       const fresh = await getConnection();
       onResult(fresh);
-      if (!fresh.connected) setStillOff("Still no AI runtime signed in. Run one of the commands above, then re-check.");
+      if (!fresh.connected) {
+        const detected = fresh.runtimes?.some((runtime) => runtime.connected) === true;
+        setStillOff(detected
+          ? "A signed-in runtime is detected but not active. Check Drover's runtime setting, then re-check."
+          : "Still no AI runtime signed in. Run one of the commands above, then re-check.");
+      }
     } catch {
       // Redacted on purpose — a concise, actionable line rather than a raw transport error.
       setStillOff("Couldn't reach the connection check. Try again in a moment.");
@@ -88,11 +98,34 @@ export function ConnectClaude({ connection, onResult, contextual = false }: {
     }
   };
 
+  if (contextual && !expanded) {
+    return (
+      <aside className="runtime-context is-compact" aria-label="Optional AI runtime">
+        <h2>AI is optional</h2>
+        <button className="runtime-context-expand" type="button" onClick={() => setExpanded(true)}>
+          Connect
+        </button>
+        {onDismiss ? (
+          <button className="runtime-context-dismiss" type="button" aria-label="Dismiss optional AI runtime" onClick={onDismiss}>
+            <X size={15} />
+          </button>
+        ) : null}
+      </aside>
+    );
+  }
+
   return (
-    <div className={contextual ? "runtime-context" : "product-entry"}>
+    <div className={contextual ? "runtime-context is-expanded" : "product-entry"}>
+      {contextual && onDismiss ? (
+        <button className="runtime-context-dismiss" type="button" aria-label="Dismiss optional AI runtime" onClick={onDismiss}>
+          <X size={15} />
+        </button>
+      ) : null}
       <div className="product-entry-inner">
         <span className="product-entry-eyebrow">{contextual ? "Optional intelligence" : "Drover"}</span>
-        <h1 className="product-entry-title">{contextual ? "Read possible openings" : "Connect an AI runtime."}</h1>
+        {contextual
+          ? <h2 className="product-entry-title">Read possible openings</h2>
+          : <h1 className="product-entry-title">Connect an AI runtime.</h1>}
         <p className="product-entry-sub">
           {contextual
             ? "Grounded product truth and existing work stay available. Connect a local runtime when you want the crew to read possible openings or take a turn."
@@ -102,7 +135,7 @@ export function ConnectClaude({ connection, onResult, contextual = false }: {
         <ul className="connect-runtimes" aria-label="Connect a runtime">
           {PROVIDERS.map((p) => {
             const runtime = runtimes.find((r) => p.matches(r));
-            const view = viewFor(runtime);
+            const view = viewFor(runtime, connection.connected);
             return (
               <li key={p.key} className="connect-runtime">
                 <div className="connect-runtime-main">

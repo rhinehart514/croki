@@ -18,6 +18,8 @@ function vendorChunk(id: string): string | undefined {
   if (id.includes("/convex")) return "vendor-convex";
   if (id.includes("/react/") || id.includes("/react-dom/") || id.includes("/scheduler/")) return "vendor-react";
   if (id.includes("lucide-react")) return "vendor-lucide";
+  if (id.includes("@dicebear")) return "vendor-avatars";
+  if (id.includes("react-markdown") || id.includes("remark-") || id.includes("micromark") || id.includes("mdast-") || id.includes("unist-")) return "vendor-markdown";
   return "vendor";
 }
 

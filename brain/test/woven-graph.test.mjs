@@ -205,7 +205,7 @@ describe("buildWovenGraph — the woven projection (INTERTWINED-CANVAS §2)", ()
         decisions: [],
         signals: [],
         outcomes: [],
-        geometry: { namespace: "project-canvas", positions: { "anchor:question:q-archived": { x: 3, y: 4 }, "unknown:gone": { x: 5, y: 6 }, "obj-legacy": { x: 7, y: 8 } } },
+        geometry: { namespace: "project-canvas", revision: 7, positions: { "anchor:question:q-archived": { x: 3, y: 4 }, "unknown:gone": { x: 5, y: 6 }, "obj-legacy": { x: 7, y: 8 } } },
         state: { kind: "ready", stale: false, issues: [] },
       },
     }, { channelGraphs: new Map(), touchRecords: [] });
@@ -215,5 +215,6 @@ describe("buildWovenGraph — the woven projection (INTERTWINED-CANVAS §2)", ()
     assert.equal(woven.canvas.state.kind, "partial");
     assert.deepEqual(woven.canvas.geometry.detachedPositionRefs, ["unknown:gone"]);
     assert.deepEqual(woven.canvas.geometry.compatibilityPositionRefs, ["obj-legacy"]);
+    assert.equal(woven.canvas.geometry.revision, 7);
   });
 });

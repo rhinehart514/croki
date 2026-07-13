@@ -63,6 +63,26 @@ describe("DecisionInbox", () => {
     expect(screen.getByText(/isn't available on your plan/)).toBeInTheDocument();
   });
 
+  it("never shows the run harness's own error envelope; a plain line stands in", () => {
+    const failed: PendingDecision[] = [
+      {
+        id: "op-h:failed", kind: "failed", projectId: "gtm-ide", projectName: "GTM IDE (dogfood)",
+        pipelineId: "pipeline-z", pipelineName: "Dev-tool outreach", sessionId: "op-h", inputId: null,
+        title: "get my first dev-tool founder to try it",
+        summary: "Claude Code returned an error result: You've hit your session limit · resets 1:30am (America/New_York)",
+        waitingSince: new Date().toISOString(),
+      },
+    ];
+    render(<DecisionInbox decisions={failed} onOpen={() => {}} />);
+    expect(screen.getByText("A run stopped early")).toBeInTheDocument();
+    // The engine name, the raw envelope, and the internal "(dogfood)" tag all stay off the founder's desk.
+    expect(screen.queryByText(/Claude Code/)).toBeNull();
+    expect(screen.queryByText(/session limit/)).toBeNull();
+    expect(screen.queryByText(/dogfood/)).toBeNull();
+    expect(screen.getByText(/hit a usage limit/)).toBeInTheDocument();
+    expect(screen.getByText(/GTM IDE · Dev-tool outreach/)).toBeInTheDocument();
+  });
+
   it("collapses one run to a single row at its newest waiting state", () => {
     const now = Date.now();
     const sameRun: PendingDecision[] = [

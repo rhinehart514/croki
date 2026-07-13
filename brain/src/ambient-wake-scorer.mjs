@@ -20,29 +20,7 @@
 // brief all resolve to { warrant: false } (no wake), so a scorer that can't reach a clean judgment never
 // invents one — it degrades to exactly today's blank behavior.
 
-import { runClaudeQuerySync } from "./agent-bridge.mjs";
-
-// Pull the wake verdict JSON out of the model's reply — fenced, inline, or the whole message. Returns
-// null when there is no parseable object, so the caller refuses to wake rather than guess.
-function parseVerdict(text) {
-  if (typeof text !== "string" || !text.trim()) return null;
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const candidates = [];
-  if (fenced) candidates.push(fenced[1].trim());
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start !== -1 && end > start) candidates.push(text.slice(start, end + 1));
-  candidates.push(text.trim());
-  for (const candidate of candidates) {
-    try {
-      const parsed = JSON.parse(candidate);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
-    } catch {
-      // try the next candidate
-    }
-  }
-  return null;
-}
+import { parseAgentObject, runClaudeQuerySync } from "./agent-bridge.mjs";
 
 // Coerce a parsed verdict into the strict, host-owned shape. `warrant` is a hard boolean (anything but a
 // literal true is false); `brief` is the standing brief a warranted wake runs (required for a wake — a
@@ -101,6 +79,6 @@ export function createAmbientWakeScorer({ cwd = process.cwd(), model, runSync = 
       return { warrant: false };
     }
     if (typeof text !== "string" || !text.trim()) return { warrant: false };
-    return coerceVerdict(parseVerdict(text));
+    return coerceVerdict(parseAgentObject(text));
   };
 }

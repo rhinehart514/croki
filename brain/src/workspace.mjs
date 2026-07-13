@@ -1,10 +1,10 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { compactAgentError } from "./build.mjs";
 import { persistence } from "./persistence.mjs";
 import { scanRepo } from "./scan.mjs";
+import { now } from "./store-fs.mjs";
 
 const SCHEMA_VERSION = 1;
 
@@ -13,18 +13,10 @@ const SCHEMA_VERSION = 1;
 // written as raw JSON beside the database the engine reads. One document per workspace, keyed by id.
 const WORKSPACE_COLLECTION = "workspaces";
 
-function now() {
-  return new Date().toISOString();
-}
-
-function stateRoot(options = {}) {
-  return options.root || process.env.GTM_IDE_HOME || path.join(os.homedir(), ".gtm-ide");
-}
-
 // The persistence provider rooted at this options' home. Resolving the root here keeps the workspace
 // store on exactly the same backend as every other durable store.
 function store(options = {}) {
-  return persistence({ root: stateRoot(options) });
+  return persistence(options);
 }
 
 function workspaceId(repo, outcome) {

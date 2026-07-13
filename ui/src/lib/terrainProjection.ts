@@ -35,6 +35,47 @@ function hypothesisAnchor(view: TerrainView, hypothesis: TerrainHypothesis): Wov
   };
 }
 
+function productOpeningAnchors(view: TerrainView): WovenCanvasAnchor[] {
+  const model = view.product.model;
+  if (!model) return [];
+
+  const journeys = model.workflows
+    .filter((workflow) => workflow.provenance === "derived" && workflow.evidence.length > 0)
+    .slice(0, 3)
+    .map((workflow) => {
+      const ref = { type: "product-workflow", id: workflow.id } satisfies WovenRef;
+      return {
+        id: `anchor:${ref.type}:${ref.id}`,
+        ref,
+        kind: "terrain-opening",
+        label: `${workflow.actor}: ${workflow.name}`,
+        body: {
+          ...workflow,
+          claim: workflow.summary,
+          whyItMatters: workflow.steps.map((step) => step.label).join(" → "),
+        },
+        authority: authority("product-model", workflow.id, view.projectId, model.updatedAt),
+      } satisfies WovenCanvasAnchor;
+    });
+
+  if (journeys.length >= 3) return journeys;
+  const structures = model.things
+    .filter((thing) => thing.provenance === "derived" && thing.evidence.length > 0)
+    .slice(0, 3 - journeys.length)
+    .map((thing) => {
+      const ref = { type: "product-thing", id: thing.id } satisfies WovenRef;
+      return {
+        id: `anchor:${ref.type}:${ref.id}`,
+        ref,
+        kind: "terrain-opening",
+        label: `${thing.name}: ${thing.summary}`,
+        body: { ...thing, claim: thing.summary },
+        authority: authority("product-model", thing.id, view.projectId, model.updatedAt),
+      } satisfies WovenCanvasAnchor;
+    });
+  return [...journeys, ...structures];
+}
+
 function relKey(r: WovenCanvasRelationship): string {
   return `${r.kind}:${r.source.type}:${r.source.id}:${r.target.type}:${r.target.id}`;
 }
@@ -89,6 +130,7 @@ export function projectTerrainCanvas(
   const hypotheses = (read?.projectId === terrain.projectId ? read.hypotheses : terrain.hypotheses).slice(0, 5);
   const additions = [
     ...terrain.product.truths.map((truth) => truthAnchor(terrain, truth)),
+    ...productOpeningAnchors(terrain),
     ...hypotheses.map((hypothesis) => hypothesisAnchor(terrain, hypothesis)),
   ];
   const additionRefs = new Set(additions.map((a) => `${a.ref.type}:${a.ref.id}`));
@@ -101,7 +143,9 @@ export function projectTerrainCanvas(
     outcomes: existing?.outcomes,
     implications: existing?.implications,
     state: terrain.state,
-    geometry: terrain.geometry ?? existing?.geometry ?? null,
+    // The operating canvas is the live layout authority. A deterministic terrain read can carry an
+    // older geometry snapshot; letting it win here made a successfully saved pan snap back on refresh.
+    geometry: existing?.geometry ?? terrain.geometry ?? null,
   };
 }
 

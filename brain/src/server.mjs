@@ -22,6 +22,7 @@ import projectRoutes from "./routes/projects.mjs";
 import measureRoutes from "./routes/measure.mjs";
 import objectGraphRoutes from "./routes/object-graph.mjs";
 import runRoutes from "./routes/runs.mjs";
+import presenceRoutes from "./routes/presence.mjs";
 import marketRoutes from "./routes/market.mjs";
 import inputRoutes from "./routes/inputs.mjs";
 import ideaRoutes from "./routes/ideas.mjs";
@@ -78,6 +79,7 @@ const ROUTE_GROUPS = [
   measureRoutes,
   objectGraphRoutes,
   runRoutes,
+  presenceRoutes,
   marketRoutes,
   inputRoutes,
   ideaRoutes,

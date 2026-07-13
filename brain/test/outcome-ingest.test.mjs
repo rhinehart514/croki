@@ -108,6 +108,33 @@ describe("outcome ingest — join on one key", () => {
     assert.equal(joinToRun({ joinKey: "", runs: [run] }), null);
   });
 
+  it("ignores overlapping lineage owned by another venture", () => {
+    const options = freshRoot();
+    const runs = [
+      { id: "wrong-run", projectId: "venture-b", pathId: "path-b", items: [{ joinKey: "shared-key", channel: "gmail" }] },
+      { id: "right-run", projectId: "venture-a", pathId: "path-a", items: [{ joinKey: "shared-key", channel: "gmail" }] },
+    ];
+    const joined = ingestOutcome(
+      { joinKey: "shared-key", outcomeKind: "reply", providerEventId: "reply-a" },
+      { ...options, projectId: "venture-a", runs },
+    );
+    assert.equal(joined.joined, true);
+    assert.equal(joined.result.runId, "right-run");
+    assert.equal(joined.result.pathId, "path-a");
+
+    const onlyForeign = ingestOutcome(
+      { joinKey: "foreign-only", outcomeKind: "reply", providerEventId: "reply-foreign" },
+      {
+        ...options,
+        projectId: "venture-a",
+        runs: [{ id: "venture-b-run", projectId: "venture-b", pathId: "path-b", items: [{ joinKey: "foreign-only" }] }],
+      },
+    );
+    assert.equal(onlyForeign.joined, false);
+    assert.equal(onlyForeign.result.runId, null);
+    assert.equal(onlyForeign.result.pathId, null);
+  });
+
   it("an outcome whose key matches nothing staged is captured honestly, not dropped", () => {
     const options = freshRoot();
     const { projectId } = seedRun(options);

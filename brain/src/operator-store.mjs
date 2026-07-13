@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { persistence } from "./persistence.mjs";
 import { normalizeStableRef, normalizeStableRefs } from "./operator-tools.mjs";
 import { graphIdForRef } from "./operator-project-scope.mjs";
+import { now } from "./store-fs.mjs";
 
 const SCHEMA_VERSION = 1;
 const COLLECTION = "operator-sessions";
@@ -45,10 +46,6 @@ export function armNextWake(session, fromMs = Date.now()) {
   if (!Number.isFinite(interval) || interval <= 0) return null;
   const from = Number.isFinite(fromMs) ? fromMs : Date.now();
   return new Date(from + interval).toISOString();
-}
-
-function now() {
-  return new Date().toISOString();
 }
 
 function safeId(value) {
@@ -116,9 +113,35 @@ function contextFromInput(input = {}, current = {}, options = {}) {
   return { projectId, surface, lens, questionId, participantRefs, productRefs, graphId, lastRunId, focusRef, contextRefs, threadRef };
 }
 
+export function operatorEventCursor(session) {
+  const persisted = session?.eventCursor;
+  if (Number.isSafeInteger(persisted) && persisted >= 0) return persisted;
+  const sequenced = (session?.events ?? []).reduce((highest, event) => {
+    const sequence = Number(event?.sequence);
+    return Number.isSafeInteger(sequence) && sequence > highest ? sequence : highest;
+  }, 0);
+  // Legacy sessions have retained events but no monotonic cursor. Their current retained length is a safe
+  // migration baseline: every event appended from here receives a stable sequence above it.
+  return sequenced || (session?.events ?? []).length;
+}
+
+export function operatorMutationBoundary(session) {
+  const lastEvent = (session?.events ?? []).at(-1);
+  return {
+    afterEventSequence: operatorEventCursor(session),
+    afterEventId: lastEvent?.id ?? null,
+  };
+}
+
 export function appendOperatorEvent(session, event) {
+  const nextSequence = operatorEventCursor(session) + 1;
+  const requestedSequence = Number(event.sequence);
+  const sequence = Number.isSafeInteger(requestedSequence) && requestedSequence > 0
+    ? requestedSequence
+    : nextSequence;
   const entry = {
     id: event.id || `event-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`,
+    sequence,
     createdAt: event.createdAt || now(),
     type: event.type,
     title: event.title,
@@ -127,6 +150,7 @@ export function appendOperatorEvent(session, event) {
   };
   return {
     ...session,
+    eventCursor: Math.max(operatorEventCursor(session), sequence),
     events: [...(session.events ?? []), entry].slice(-500),
     updatedAt: entry.createdAt,
   };
@@ -392,6 +416,14 @@ export function getOperatorSessionFresh(id, options = {}) {
   return session;
 }
 
+// Permanently remove a session document. This is the founder deleting a chat from their history — a
+// real delete, not the client-side dismissal the dock used to do. Returns whether a document was
+// removed. The caller (route) is responsible for refusing to delete a still-running session; here we
+// only touch durable state, so a deleted chat never reappears on the next project load.
+export function deleteOperatorSession(id, options = {}) {
+  return persistence(options).delete(COLLECTION, safeId(id));
+}
+
 export function listOperatorSessions(options = {}) {
   // When a projectId is passed, scope the list to that project's sessions.
   // Legacy sessions written before project scoping have projectId === null and
@@ -606,6 +638,12 @@ export function listFlowsNeedingFounder(options = {}) {
       const session = getOperatorSession(summary.id, options);
       if (session.status !== "waiting_for_gate") return [];
       const gate = session.pendingGate ?? null;
+      const gateNodeIds = Array.isArray(gate?.nodeIds) ? gate.nodeIds : [];
+      const runNodes = gate?.runResult?.nodes ?? {};
+      const itemCount = gateNodeIds.reduce((count, nodeId) => {
+        const items = runNodes?.[nodeId]?.items;
+        return count + (Array.isArray(items) ? items.length : 0);
+      }, 0);
       return [{
         sessionId: session.id,
         kind: sessionKind(session),
@@ -613,7 +651,8 @@ export function listFlowsNeedingFounder(options = {}) {
         graphId: gate?.graphId ?? session.graphId ?? null,
         label: session.goal || session.standingBrief || null,
         runId: gate?.runId ?? session.lastRunId ?? null,
-        gateNodeIds: Array.isArray(gate?.nodeIds) ? gate.nodeIds : [],
+        gateNodeIds,
+        itemCount,
         updatedAt: session.updatedAt,
       }];
     });

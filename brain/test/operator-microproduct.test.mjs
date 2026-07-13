@@ -13,9 +13,10 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 
 import { loadFlow } from "../src/flow-store.mjs";
 import { createOperatorSession } from "../src/operator-store.mjs";
-import { operatorTools, executeOperatorTool, resolveOperatorGate } from "../src/operator-runtime.mjs";
+import { operatorTools, executeOperatorTool, launchOperatorSession, resolveOperatorGate } from "../src/operator-runtime.mjs";
 import { safeOperatorTools, assertSafeTool } from "../src/operator-mcp.mjs";
 import { run as runDeployConnector } from "../src/connectors/execute/deploy.mjs";
+import { OUTWARD_RELEASE } from "../src/graph.mjs";
 
 // A keyless client whose only job is to let the post-gate operator relaunch finish cleanly (it
 // returns a single `complete` turn). resolveOperatorGate fires a background relaunch when the gate
@@ -135,11 +136,13 @@ describe("compose_microproduct — the operator build-and-ship door", () => {
     // node now gets PAST GUARD 2 — it no longer refuses for a missing authorization; it instead fails at
     // the live SHIP runner (no BYO git remote configured), proving the confirmation threaded all the way
     // to the connector. Nothing is faked-shipped: the live runner is honest scaffolding, not yet wired.
+    const runtime = { options, client: completingClient() };
     await resolveOperatorGate(
       execution.session.id,
       { approvals: { "deploy-gate": true }, deployConfirmed: true },
-      { options, client: completingClient() },
+      runtime,
     );
+    await launchOperatorSession(execution.session.id, runtime);
     const confirmedRun = loadFlow(graphId, null, options).runs.at(-1).result;
     const deployNode = confirmedRun.nodes.deploy ?? confirmedRun.nodes[Object.keys(confirmedRun.nodes).find((k) => k.startsWith("deploy") && k !== "deploy-gate")];
     assert.ok(deployNode, "the deploy node ran on resume");
@@ -155,11 +158,13 @@ describe("compose_microproduct — the operator build-and-ship door", () => {
       { ...options, produceMicroproduct: fakeProducer },
     );
     const graphId = execution.session.graphId;
+    const runtime = { options, client: completingClient() };
     await resolveOperatorGate(
       execution.session.id,
       { approvals: { "deploy-gate": true } }, // approved, but the founder did NOT confirm a deploy
-      { options, client: completingClient() },
+      runtime,
     );
+    await launchOperatorSession(execution.session.id, runtime);
     const run = loadFlow(graphId, null, options).runs.at(-1).result;
     const deployNode = run.nodes.deploy;
     assert.ok(deployNode, "the deploy node ran on resume");
@@ -186,7 +191,13 @@ describe("compose_microproduct — the operator build-and-ship door", () => {
 // only from the founder-input run path, never from composition or a run. So the door cannot deploy.
 describe("compose_microproduct — the deploy node cannot ship without the founder gate + confirmation", () => {
   it("refuses to deploy a gate-approved item when no founder deploy authorization is supplied", async () => {
-    const node = { id: "deploy", category: "execute", connector: "deploy", config: { target: "staged" } };
+    const node = {
+      id: "deploy",
+      category: "execute",
+      connector: "deploy",
+      config: { target: "staged" },
+      runtime: { outwardRelease: OUTWARD_RELEASE },
+    };
     const approvedItem = { id: "art-1", approved: true, artifactSpec: { name: "x" }, artifactFiles: [{ path: "index.html", contents: "<html>" }] };
     // No context.deployAuthorization — exactly the state a run/composition can produce.
     const result = await runDeployConnector(node, [approvedItem], {});

@@ -23,6 +23,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { approveCompiledRun } from "../src/run-compile.mjs";
+import { OUTWARD_RELEASE } from "../src/graph.mjs";
 import { pollInboxOutcomes } from "../src/connectors/measure/inbox-reader.mjs";
 import { gtmPathStore, runStore, resultStore } from "../src/gtm-store.mjs";
 
@@ -104,6 +105,9 @@ describe("measure lane — send → persist execute output → poll → attribut
         // this callback. Compiled-run approval must not reach a sender without the host release seam.
         authorizeRelease: () => { releases.calls += 1; },
         sendRunners: fakeSendRunner(providerMessageId, sends),
+        // The founder outward-approval path carries the host-issued outward-release capability (rail 1) —
+        // without it a real sender now HOLDS the approved item instead of delivering it.
+        outwardRelease: OUTWARD_RELEASE,
         options,
       });
       assert.equal(releases.calls, 1, "the host authorized the founder's release before delivery");

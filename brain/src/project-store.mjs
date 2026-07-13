@@ -10,13 +10,10 @@ import { defaultTeamId } from "./team-store.mjs";
 import { buildAgentProfile, buildAgentBench } from "./memory.mjs";
 import { crewRosterStore } from "./crew-roster-store.mjs";
 import { persistProductTruthsFromScan } from "./gtm-store.mjs";
+import { now } from "./store-fs.mjs";
 
 const SCHEMA_VERSION = 4;
 const CATALOG_SCHEMA_VERSION = 1;
-
-function now() {
-  return new Date().toISOString();
-}
 
 // The per-channel autonomy ladder. A channel starts at "draft" (the gate holds everything, today's
 // behavior). The founder can explicitly promote it to "trusted" or "autonomous" — that promotion is

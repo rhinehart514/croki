@@ -137,6 +137,7 @@ function humanizeOutcomeKind(k: string): string {
 
 type OutcomeBody = {
   id?: string; outcomeKind?: string; source?: string; value?: number | null; observedAt?: string | null;
+  body?: string | null; status?: string | null;
   runId?: string | null; pathId?: string | null; channelId?: string | null; questionId?: string | null;
   productRefs?: WovenRef[]; participantRefs?: WovenRef[];
 };
@@ -149,6 +150,10 @@ export function canvasOutcomes(canvas: WovenCanvas | null | undefined): JoinedOu
       id: o.id,
       kind: o.kind,
       label: o.label || humanizeOutcomeKind(o.outcomeKind ?? ""),
+      // The inspectable account (pull-only): the response body, the honest status, the raw kind.
+      body: o.body ?? null,
+      status: o.status ?? null,
+      outcomeKind: o.outcomeKind ?? null,
       value: o.value ?? null,
       observedAt: o.observedAt ?? null,
       channelId: o.channelId ?? null,
@@ -182,6 +187,9 @@ export function canvasOutcomes(canvas: WovenCanvas | null | undefined): JoinedOu
       id: body.id ?? a.ref.id,
       kind: classifyOutcomeKind(outcomeKind, body.source),
       label: humanizeOutcomeKind(outcomeKind),
+      body: body.body ?? null,
+      status: body.status ?? null,
+      outcomeKind: body.outcomeKind ?? null,
       value: body.value ?? null,
       observedAt: body.observedAt ?? a.authority.updatedAt ?? null,
       channelId,

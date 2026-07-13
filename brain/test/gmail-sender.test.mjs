@@ -14,6 +14,7 @@ import path from "node:path";
 import * as gmail from "../src/connectors/execute/gmail.mjs";
 import { getConnector, defaultGraphTemplate } from "../src/connectors/registry.mjs";
 import { setCredential } from "../src/credential-store.mjs";
+import { OUTWARD_RELEASE } from "../src/graph.mjs";
 
 // A fake transport that records every call and NEVER touches the real world. It also captures the
 // arguments so a test can assert the token was passed to it (and only to it) and the provenance header.
@@ -43,7 +44,13 @@ function credentialedContext(extra = {}) {
   return { context: { credentialOptions: { root }, projectId: "p-test", ...extra }, root };
 }
 
-const node = (config = {}) => ({ id: "exe-gmail", category: "execute", connector: "gmail", config });
+// These tests exercise the founder-RELEASED outward path, so the node carries the host-issued outward-
+// release capability the graph runner threads onto node.runtime on a founder outward-approval run (rail 1).
+// Without it a real sender now HOLDS every approved item (proven separately in outward-release.test.mjs).
+const node = (config = {}) => ({
+  id: "exe-gmail", category: "execute", connector: "gmail", config,
+  runtime: { outwardRelease: OUTWARD_RELEASE },
+});
 
 const approvedItem = (over = {}) => ({
   gtmActionId: "gtm-send-1",

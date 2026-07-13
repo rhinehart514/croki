@@ -17,8 +17,17 @@ export const meta = {
   sourceOfTruth: ["contacts"],
 };
 
+// `items` is canonical. Accept the two natural open-work aliases models and founders commonly use so
+// a correctly reviewed hand-seeded list does not become an empty run over a naming mismatch.
+export function configuredItems(node) {
+  for (const candidate of [node.config?.items, node.config?.rows, node.config?.contacts]) {
+    if (Array.isArray(candidate) && candidate.length) return candidate;
+  }
+  return [];
+}
+
 export async function run(node) {
-  const list = Array.isArray(node.config?.items) ? node.config.items : [];
+  const list = configuredItems(node);
   const items = list
     .filter((entry) => entry && typeof entry === "object")
     .map((entry, index) => ({

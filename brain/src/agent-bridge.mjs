@@ -150,6 +150,18 @@ export function loadAgentDefinition(ref, { artifactPath, root } = {}) {
   return null;
 }
 
+// Definitions produced by the deleted program/policy foundry are venture-bound artifacts, not portable
+// teammate doctrine. Loading one in another project can leak its audience, product claims, and absolute
+// evidence paths into an otherwise isolated run. Keep the agent ref available as an open capability, but
+// fall back to the current task + current project's retrieved context instead of importing stale doctrine.
+export function portableAgentDefinition(definition) {
+  if (typeof definition !== "string" || !definition.trim()) return null;
+  const frontmatter = definition.match(/^---\s*\n([\s\S]*?)\n---/)?.[1] ?? "";
+  const legacyBound = /^(?:programId|creationPolicyId|agentInstanceId):/m.test(frontmatter);
+  const foreignProjectEvidence = /\.claude\/projects\/[^\s)]+\/memory\//i.test(definition);
+  return legacyBound || foreignProjectEvidence ? null : definition;
+}
+
 // ── Per-agent toolset resolution (real, tested) ──────────────────────────────
 // Every agent used to run with the same blanket five read-only tools, ignoring the `tools:` its
 // definition declares — the one fixed thing left in the otherwise-personalized bridge. Now the
@@ -403,7 +415,7 @@ export function buildAgentPrompt({ ref, prompt, items, context = {}, artifactPat
   // Load the real on-disk definition if one exists. When found, the agent's own doctrine + role
   // drives the run; when not, we fall back to the original one-line label (identical to before),
   // so a missing definition is a pure no-op.
-  const definition = loadAgentDefinition(ref, { artifactPath, root: agentDefinitionRoot });
+  const definition = portableAgentDefinition(loadAgentDefinition(ref, { artifactPath, root: agentDefinitionRoot }));
   const role = definition
     ? `You are acting as the "${ref}" GTM subagent. Follow this agent definition:\n\n${definition.trim()}`
     : `You are doing the work of the "${ref}" GTM subagent.`;

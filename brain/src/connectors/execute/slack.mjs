@@ -20,7 +20,8 @@
 // non-attributable item is refused, never posted. Failures are recorded as failures, never swallowed.
 
 import { resolveCredentialToken } from "../../credential-store.mjs";
-import { needsConnectionResult } from "./channels.mjs";
+import { needsConnectionResult, heldWithoutReleaseResult } from "./channels.mjs";
+import { hasOutwardRelease } from "../../graph.mjs";
 
 export const meta = {
   id: "slack",
@@ -53,6 +54,15 @@ export async function run(node, upstream, context = {}) {
   const approved = (upstream ?? []).filter((item) => item.approved === true);
   if (approved.length === 0) {
     return { ok: true, items: [], meta: { sent: 0, note: "No founder-approved items to send." } };
+  }
+
+  // RAIL 1 — the executor-level outward wall (EXPERIMENT-MACHINE-SPEC). Outward authority is a HOST-ISSUED
+  // capability, not an item label. Even for an approved item, this connector refuses to POST to the webhook
+  // unless the run carried the founder outward-release capability on this node's runtime. Greenlight and
+  // every ordinary/ambient run never supply it, so a mis-classified approved item routed into Slack is HELD,
+  // never posted — the structural backstop under the greenlight item classifier.
+  if (!hasOutwardRelease(node)) {
+    return heldWithoutReleaseResult({ channel: "slack", items: approved });
   }
 
   // The delivery seam, in order: an explicit node-config webhook, then a founder-connected webhook, then

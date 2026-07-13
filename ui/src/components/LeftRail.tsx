@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import {
   Workflow, Users, Plus, ChevronDown,
   PanelLeftClose, PanelLeftOpen, Check, GripVertical, LayoutGrid, Blocks, Lock, Wrench,
+  Trash2, Search, PenSquare,
 } from "lucide-react";
 import { agentPersona, humanizeRef } from "@/lib/agentPersona";
 import { founderGoalLine } from "@/lib/labels";
+import { chatTabName, distinctTabNames } from "@/lib/chatTitle";
 import { healthHex } from "@/lib/health";
 import { STEP_DRAG_MIME } from "@/lib/objectPalette";
 import { CrewFace } from "@/components/crew/CrewFace";
@@ -12,8 +14,132 @@ import { CrewRoom } from "@/components/crew/CrewRoom";
 import { CrewComposer } from "@/components/crew/CrewComposer";
 import { CAPABILITIES, STAGE_ORDER, STAGE_LABEL, capabilityMark, type Capability } from "@/lib/capabilities";
 import { getCapabilityInventory, type AgentBenchRow } from "@/api";
-import type { CapabilityInventory, ChannelMeta, GtmLibrary } from "@/types";
+import type { CapabilityInventory, ChannelMeta, GtmLibrary, OperatorSessionSummary } from "@/types";
 import "@/styles/left-rail.css";
+
+// Which recency bucket a chat falls in, from its last-touched time. Buckets keep the history skimmable
+// without a date on every row — the same grouping Mistral / Grok / Otter use in their chat sidebars.
+function recencyBucket(iso: string | null | undefined): string {
+  if (!iso) return "Earlier";
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "Earlier";
+  const days = Math.floor((Date.now() - then) / 86_400_000);
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return "This week";
+  if (days < 30) return "This month";
+  return "Earlier";
+}
+
+const BUCKET_ORDER = ["Today", "Yesterday", "This week", "This month", "Earlier"];
+
+// A live/attention dot for a chat row — a chat still running or waiting on the founder reads differently
+// from a settled one, so the history isn't a flat list of equals.
+function chatDotState(status: string): "live" | "waiting" | "settled" {
+  if (status === "running") return "live";
+  if (status.startsWith("waiting") || status === "blocked") return "waiting";
+  return "settled";
+}
+
+// The project-scoped chat history that lives at the top of the rail: New chat, a filter once the list
+// grows, and the conversations grouped by recency — each row click-to-open, with a hover delete behind a
+// two-tap confirm so a chat is never lost by a stray click. This is the merge of the composer's tab
+// strip into the workspace rail: the rail owns navigation, the composer owns the open conversation.
+function RailChats({ sessions, activeSessionId, onSwitch, onNew, onDelete }: {
+  sessions: OperatorSessionSummary[];
+  activeSessionId: string | null;
+  onSwitch: (id: string) => void;
+  onNew: () => void;
+  onDelete: (id: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const names = useMemo(() => distinctTabNames(sessions), [sessions]);
+
+  const groups = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const filtered = sessions
+      .filter((s) => !q || (names[s.id] ?? chatTabName(s)).toLowerCase().includes(q))
+      .slice()
+      .sort((a, b) => String(b.updatedAt ?? "").localeCompare(String(a.updatedAt ?? "")));
+    const byBucket = new Map<string, OperatorSessionSummary[]>();
+    for (const s of filtered) {
+      const bucket = recencyBucket(s.updatedAt);
+      (byBucket.get(bucket) ?? byBucket.set(bucket, []).get(bucket)!).push(s);
+    }
+    return BUCKET_ORDER.filter((b) => byBucket.has(b)).map((b) => [b, byBucket.get(b)!] as const);
+  }, [sessions, names, query]);
+
+  return (
+    <section className="lr-chats" aria-label="Chats">
+      <div className="lr-chats-head">
+        <span className="lr-section-label">Chats</span>
+        <button type="button" className="lr-chats-new" onClick={onNew} title="Start a new chat">
+          <PenSquare size={14} aria-hidden />
+          <span>New</span>
+        </button>
+      </div>
+
+      {sessions.length > 6 ? (
+        <label className="lr-chats-search">
+          <Search size={13} aria-hidden />
+          <input
+            name="chat-search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search chats"
+            aria-label="Search chats"
+          />
+        </label>
+      ) : null}
+
+      {sessions.length === 0 ? (
+        <p className="lr-chats-empty">No chats in this project yet. Start one to begin.</p>
+      ) : (
+        <div className="lr-chats-list">
+          {groups.map(([bucket, rows]) => (
+            <div className="lr-chats-group" key={bucket}>
+              <p className="lr-chats-bucket">{bucket}</p>
+              {rows.map((s) => {
+                const active = s.id === activeSessionId;
+                const confirming = confirmingId === s.id;
+                return (
+                  <div className={`lr-chat-row ${active ? "is-active" : ""}`} key={s.id}>
+                    <button
+                      type="button"
+                      className="lr-chat-open"
+                      onClick={() => onSwitch(s.id)}
+                      aria-current={active ? "true" : undefined}
+                    >
+                      <span className={`lr-chat-dot ${chatDotState(s.status)}`} aria-hidden />
+                      <span className="lr-chat-title">{names[s.id] ?? chatTabName(s)}</span>
+                    </button>
+                    {confirming ? (
+                      <span className="lr-chat-confirm">
+                        <button type="button" className="lr-chat-confirm-yes" onClick={() => { setConfirmingId(null); onDelete(s.id); }} title="Delete this chat permanently">Delete</button>
+                        <button type="button" className="lr-chat-confirm-no" onClick={() => setConfirmingId(null)} title="Keep it">Keep</button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="lr-chat-del"
+                        onClick={() => setConfirmingId(s.id)}
+                        title="Delete this chat"
+                        aria-label={`Delete chat: ${names[s.id] ?? chatTabName(s)}`}
+                      >
+                        <Trash2 size={13} aria-hidden />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
 
 // What a rail row writes on drag, read by the canvas drop target. A teammate is an agent/skill ref; a
 // capability is an external service that lands as a stage step. One union so the drop handler branches.
@@ -117,19 +243,31 @@ export function LeftRail({
   activeChannelId,
   bench,
   projectId = null,
+  sessions = [],
+  activeSessionId = null,
+  onSwitchSession,
+  onNewChat,
+  onDeleteSession,
   onLoadChannel,
-  onNewChannel,
   onOpenAgent,
   onCrewChanged,
   onConnectCapability,
+  onAddStep,
+  productContext,
 }: {
   channels: ChannelMeta[];
   activeChannelId: string | null;
   bench: AgentBenchRow[] | null;
   // The active project — the "+ build a teammate" flow scopes the new teammate to it.
   projectId?: string | null;
+  // The project's chat history — the roster already scoped to this project by the host. The rail owns
+  // chat navigation now (New / open / delete); the composer owns the open conversation.
+  sessions?: OperatorSessionSummary[];
+  activeSessionId?: string | null;
+  onSwitchSession?: (id: string) => void;
+  onNewChat?: () => void;
+  onDeleteSession?: (id: string) => void;
   onLoadChannel: (id: string) => void;
-  onNewChannel: () => void;
   onOpenAgent: (ref: string) => void;
   // Fired after a teammate is built and added, so the host refetches the bench and the new face appears.
   onCrewChanged?: () => void;
@@ -142,11 +280,18 @@ export function LeftRail({
   // Connecting a capability is founder-initiated; App owns the actual connect flow. Optional so the rail
   // still renders the inviting roster before any connect handler is wired.
   onConnectCapability?: (id: string) => void;
+  // The same placement authority the canvas drop target uses, exposed for keyboard and touch users.
+  // Keeping the StepDragPayload intact means drag and explicit placement cannot drift apart.
+  onAddStep?: (payload: StepDragPayload) => void;
+  // Product truths and open unknowns share this drawer with reusable crew and pipelines. The two views
+  // are progressive disclosures inside one left-edge model, never separate collapsed rails.
+  productContext?: ReactNode;
 }) {
-  const [collapsed, setCollapsed] = useState(() =>
-    typeof window !== "undefined" && typeof window.matchMedia === "function"
-      && window.matchMedia("(max-width: 640px)").matches,
-  );
+  // Pure-canvas home: the rail rests as a slim summonable edge so the canvas runs full-bleed. History
+  // and parts are one click away — summoned, not standing — and collapse hands the width straight back.
+  // (Chat lives in the floating composer now; the rail is the pull-away, not a permanent sidebar.)
+  const [collapsed, setCollapsed] = useState(true);
+  const [drawerView, setDrawerView] = useState<"product" | "build">(productContext ? "product" : "build");
   const [crewRoomOpen, setCrewRoomOpen] = useState(false);
   const [crewComposerOpen, setCrewComposerOpen] = useState(false);
   // The LIVE capability inventory — the real tools the crew can reach right now, from the runtime. null
@@ -220,11 +365,38 @@ export function LeftRail({
         </button>
       </header>
 
+      {onSwitchSession && onNewChat && onDeleteSession ? (
+        <RailChats
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          onSwitch={onSwitchSession}
+          onNew={onNewChat}
+          onDelete={onDeleteSession}
+        />
+      ) : null}
+
+      {productContext ? (
+        <div className="lr-tabs" role="tablist" aria-label="Workspace views">
+          <button type="button" role="tab" aria-selected={drawerView === "product"} onClick={() => setDrawerView("product")}>Product</button>
+          <button type="button" role="tab" aria-selected={drawerView === "build"} onClick={() => setDrawerView("build")}>Build</button>
+        </div>
+      ) : null}
+
       <div className="lr-body">
+        {drawerView === "product" && productContext ? (
+          <div className="lr-product-view">{productContext}</div>
+        ) : (
+          <>
         {/* The rail is a supply you DRAG from onto the canvas — a teammate or a capability becomes a work
             object where you drop it. It leads with that draggable supply; pipelines moved below to a
             reference list, so the home no longer opens on a pipeline-first navigator. */}
-        <p className="lr-cap-hint">Drag a teammate or capability onto the canvas to put it to work.</p>
+        <p className="lr-cap-hint">
+          {!activeChannelId
+            ? "Select a pipeline before adding a teammate or capability."
+            : onAddStep
+              ? "Add a teammate or capability to the selected pipeline, or drag it onto the canvas."
+              : "This pipeline cannot receive palette items here yet."}
+        </p>
 
         {/* Your crew — the agents you've assembled. Click opens a teammate's profile; drag one onto the
             canvas to add it as a pipeline step. Proven above still-on-the-bench, so earned trust reads
@@ -256,11 +428,11 @@ export function LeftRail({
             <>
               {proven.length > 0 ? <div className="lr-group">Proven</div> : null}
               {proven.map((row) => (
-                <CrewRow key={row.ref} row={row} name={nameByRef.get(row.ref)} onOpen={onOpenAgent} onDragStep={onStepDragStart} />
+                <CrewRow key={row.ref} row={row} name={nameByRef.get(row.ref)} onOpen={onOpenAgent} onDragStep={onStepDragStart} onAddStep={onAddStep} canAdd={!!activeChannelId} />
               ))}
               {waiting.length > 0 ? <div className="lr-group">On the bench</div> : null}
               {waiting.map((row) => (
-                <CrewRow key={row.ref} row={row} name={nameByRef.get(row.ref)} onOpen={onOpenAgent} onDragStep={onStepDragStart} />
+                <CrewRow key={row.ref} row={row} name={nameByRef.get(row.ref)} onOpen={onOpenAgent} onDragStep={onStepDragStart} onAddStep={onAddStep} canAdd={!!activeChannelId} />
               ))}
             </>
           )}
@@ -286,7 +458,7 @@ export function LeftRail({
             <div className="lr-cap-group">
               <div className="lr-group">Suggested connections · not connected yet</div>
               {CAPABILITIES.map((cap) => (
-                <CapabilityRow key={cap.id} cap={cap} suggested onConnect={onConnectCapability} onDragStep={onStepDragStart} />
+                <CapabilityRow key={cap.id} cap={cap} suggested onConnect={onConnectCapability} onDragStep={onStepDragStart} onAddStep={onAddStep} canAdd={!!activeChannelId} />
               ))}
             </div>
           </Section>
@@ -300,7 +472,7 @@ export function LeftRail({
                 <div key={stage} className="lr-cap-group">
                   <div className="lr-group">{STAGE_LABEL[stage]}</div>
                   {caps.map((cap) => (
-                    <CapabilityRow key={cap.id} cap={cap} suggested onConnect={onConnectCapability} onDragStep={onStepDragStart} />
+                    <CapabilityRow key={cap.id} cap={cap} suggested onConnect={onConnectCapability} onDragStep={onStepDragStart} onAddStep={onAddStep} canAdd={!!activeChannelId} />
                   ))}
                 </div>
               );
@@ -315,8 +487,6 @@ export function LeftRail({
           icon={<Workflow size={13} />}
           title="Pipelines"
           count={channels.length}
-          onNew={onNewChannel}
-          newTitle="Ideate a new pipeline"
         >
           {channels.length === 0 ? (
             <p className="lr-empty">No pipelines yet — start one and it lands here.</p>
@@ -344,6 +514,8 @@ export function LeftRail({
             ))
           )}
         </Section>
+          </>
+        )}
       </div>
 
       {/* The crew room — your whole team as characters, opened from the crew header. Clicking a
@@ -395,40 +567,83 @@ function CapabilityMark({ cap }: { cap: Capability }) {
   );
 }
 
+function AddToPipelineButton({
+  label, payload, canAdd, onAddStep,
+}: {
+  label: string;
+  payload: StepDragPayload;
+  canAdd: boolean;
+  onAddStep?: (payload: StepDragPayload) => void;
+}) {
+  const disabled = !canAdd || !onAddStep;
+  return (
+    <button
+      className="lr-shead-new"
+      type="button"
+      disabled={disabled}
+      aria-disabled={disabled}
+      aria-label={disabled
+        ? canAdd ? `Adding ${label} is unavailable` : `Select a pipeline before adding ${label}`
+        : `Add ${label} to selected pipeline`}
+      title={disabled ? undefined : `Add ${label} to selected pipeline`}
+      onClick={() => onAddStep?.(payload)}
+      style={{
+        width: "auto",
+        minWidth: 44,
+        height: 44,
+        padding: "0 8px",
+        fontSize: 11,
+        fontWeight: 600,
+        opacity: disabled ? 0.38 : 1,
+        cursor: disabled ? "default" : "pointer",
+      }}
+    >
+      Add
+    </button>
+  );
+}
+
 // One capability: logo, what it does, and two ways to use it — drag it onto the canvas to wire it into a
 // pipeline as a stage step, or click Connect to hook up the service. Gated capabilities (they reach the
 // outside world) show the amber gate marker beside the name. Draggable like a crew row, same grip.
 function CapabilityRow({
-  cap, onConnect, onDragStep, suggested,
+  cap, onConnect, onDragStep, onAddStep, canAdd, suggested,
 }: {
   cap: Capability;
   onConnect?: (id: string) => void;
   onDragStep: (event: DragEvent<HTMLElement>, payload: StepDragPayload) => void;
+  onAddStep?: (payload: StepDragPayload) => void;
+  canAdd: boolean;
   // A suggested (not-yet-connected) capability — visibly recessive, and its click is "connect", not
   // "use". A live connected tool renders through ConnectedCapabilities instead, never here.
   suggested?: boolean;
 }) {
+  const payload: StepDragPayload = { kind: "capability", id: cap.id, name: cap.name, stage: cap.stage, gated: !!cap.gated };
   return (
-    <button
-      className={`lr-row lr-cap lr-draggable${suggested ? " lr-cap-suggested" : ""}`}
-      type="button"
-      draggable
-      onDragStart={(event) => onDragStep(event, { kind: "capability", id: cap.id, name: cap.name, stage: cap.stage, gated: !!cap.gated })}
-      onClick={() => onConnect?.(cap.id)}
-      title={suggested ? `Connect ${cap.name} to give your crew this capability` : `Drag ${cap.name} onto the canvas, or click to connect`}
-    >
-      <CapabilityMark cap={cap} />
-      <span className="lr-row-main">
-        <span className="lr-row-name">
-          {cap.name}
-          {cap.gated ? (
-            <span className="lr-cap-gate" title="Reaches the outside world — only acts behind your gate" aria-label="gated" />
-          ) : null}
+    <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+      <button
+        className={`lr-row lr-cap lr-draggable${suggested ? " lr-cap-suggested" : ""}`}
+        type="button"
+        draggable
+        style={{ minWidth: 0 }}
+        onDragStart={(event) => onDragStep(event, payload)}
+        onClick={() => onConnect?.(cap.id)}
+        title={suggested ? `Connect ${cap.name} to give your crew this capability` : `Drag ${cap.name} onto the canvas, or click to connect`}
+      >
+        <CapabilityMark cap={cap} />
+        <span className="lr-row-main">
+          <span className="lr-row-name">
+            {cap.name}
+            {cap.gated ? (
+              <span className="lr-cap-gate" title="Reaches the outside world — only acts behind your gate" aria-label="gated" />
+            ) : null}
+          </span>
+          <span className="lr-row-desc">{cap.blurb}</span>
         </span>
-        <span className="lr-row-desc">{cap.blurb}</span>
-      </span>
-      <GripVertical className="lr-grip" size={14} aria-hidden="true" />
-    </button>
+        <GripVertical className="lr-grip" size={14} aria-hidden="true" />
+      </button>
+      <AddToPipelineButton label={cap.name} payload={payload} canAdd={canAdd} onAddStep={onAddStep} />
+    </div>
   );
 }
 
@@ -479,34 +694,41 @@ function ConnectedCapabilities({ inventory }: { inventory: CapabilityInventory }
 // standing detail kept inline is a single quiet proven mark, so earned trust still reads at a glance
 // without re-listing every teammate's stats.
 function CrewRow({
-  row, name, onOpen, onDragStep,
+  row, name, onOpen, onDragStep, onAddStep, canAdd,
 }: {
   row: AgentBenchRow;
   name?: string;
   onOpen: (ref: string) => void;
   onDragStep: (event: DragEvent<HTMLElement>, payload: { kind: "agent" | "skill"; ref: string; label: string }) => void;
+  onAddStep?: (payload: StepDragPayload) => void;
+  canAdd: boolean;
 }) {
   const { role } = agentPersona(row.ref, row.job);
   const label = name ?? role;
+  const payload: StepDragPayload = { kind: "agent", ref: row.ref, label };
   // The tooltip carries the plain-English job so nothing is lost by dropping the inline description.
   const blurb = agentBlurb(row);
   return (
-    <button
-      className="lr-row lr-crew lr-draggable"
-      type="button"
-      draggable
-      onDragStart={(event) => onDragStep(event, { kind: "agent", ref: row.ref, label })}
-      onClick={() => onOpen(row.ref)}
-      title={`${label} — ${blurb}`}
-    >
-      <Mark agentRef={row.ref} job={row.job} />
-      <span className="lr-row-name lr-crew-name">{label}</span>
-      {row.hasRuns ? (
-        <span className="lr-crew-proven" title={`${row.counts.approved} approved · ${row.runCount} run${row.runCount === 1 ? "" : "s"}`}>
-          <Check size={11} />
-        </span>
-      ) : null}
-      <GripVertical className="lr-grip" size={14} aria-hidden="true" />
-    </button>
+    <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+      <button
+        className="lr-row lr-crew lr-draggable"
+        type="button"
+        draggable
+        style={{ minWidth: 0 }}
+        onDragStart={(event) => onDragStep(event, payload)}
+        onClick={() => onOpen(row.ref)}
+        title={`${label} — ${blurb}`}
+      >
+        <Mark agentRef={row.ref} job={row.job} />
+        <span className="lr-row-name lr-crew-name">{label}</span>
+        {row.hasRuns ? (
+          <span className="lr-crew-proven" title={`${row.counts.approved} approved · ${row.runCount} run${row.runCount === 1 ? "" : "s"}`}>
+            <Check size={11} />
+          </span>
+        ) : null}
+        <GripVertical className="lr-grip" size={14} aria-hidden="true" />
+      </button>
+      <AddToPipelineButton label={label} payload={payload} canAdd={canAdd} onAddStep={onAddStep} />
+    </div>
   );
 }

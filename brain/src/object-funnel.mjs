@@ -24,7 +24,7 @@ function setAsideActive(touch, asOf) {
 // The set of objectKeys a real outcome has joined back to. The honest join available today: a Result's
 // buyerRef or joinKey that equals an object's key. Area 7 widens this with motionKind/motionRef; until
 // then this is the truthful, narrow join — never a fabricated conversion.
-function convertedKeys(projectId, options) {
+export function joinedOutcomeKeys(projectId, options = {}) {
   const keys = new Set();
   let results = [];
   try {
@@ -32,7 +32,7 @@ function convertedKeys(projectId, options) {
   } catch {
     results = [];
   }
-  for (const result of results) {
+  for (const result of Array.isArray(results) ? results : []) {
     if (!result) continue;
     const ref = String(result.buyerRef ?? "").trim();
     if (ref) keys.add(ref);
@@ -64,7 +64,7 @@ export function bucketFor(record, { convertedKeySet, asOf } = {}) {
 export function deriveFunnel(projectId = "default", options = {}) {
   const asOf = new Date().toISOString();
   const records = listObjectTouches(projectId, options);
-  const convertedKeySet = convertedKeys(projectId, options);
+  const convertedKeySet = joinedOutcomeKeys(projectId, options);
 
   const byKind = new Map();
   const totals = { seen: 0, in_flight: 0, handled: 0, suppressed: 0, total: 0 };

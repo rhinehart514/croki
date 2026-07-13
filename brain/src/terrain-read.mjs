@@ -293,9 +293,3 @@ export function createTerrainReader({ runTask = runStructuredTask, cwd = process
     };
   };
 }
-
-export const blankTerrainRead = async (input = {}) => ({
-  ok: true,
-  terrainRead: normalizeTerrainRead([], input, { id: "blank", model: null }),
-  meta: { provider: "blank", blank: true },
-});

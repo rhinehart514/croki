@@ -2,10 +2,62 @@
    full-bleed canvas. Clears the ProductEntryColumn (left edge, vertically centered) and the bottom-left
    add-step tools. Monochrome zinc only; the one accent (amber) is the founder gate's alone. A crew edit's
    dot may carry its agent family tint (the sanctioned crew-color exception), set inline from the palette. */
+/* One cluster holds both history stacks (board edits + canvas arrangement) so they read as a single
+   control group at bottom-left, not two competing floating pills. The children drop their own absolute
+   positioning and sit snug in this flex row; each still pops its own trail upward from its bar. */
+.chist-cluster {
+  position: absolute;
+  z-index: 15;
+  left: 156px;
+  bottom: 18px;
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  pointer-events: none;
+}
+.chist-cluster > .chist,
+.chist-cluster > .chist-structure {
+  position: static;
+  left: auto;
+  bottom: auto;
+}
+/* One continuous pill: the two stacks' bars drop their own chrome and share the cluster's surface, with a
+   hairline seam between them, so the founder reads a single history control instead of two pills. */
+.chist-cluster > .chist > .chist-bar,
+.chist-cluster > .chist-structure > .chist-bar {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.chist-cluster > .chist,
+.chist-cluster > .chist-structure { pointer-events: auto; }
+.chist-cluster > .chist > .chist-bar {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-right: 0;
+  border-radius: 9px 0 0 9px;
+  box-shadow: var(--shadow-card);
+  padding-right: 4px;
+}
+.chist-cluster > .chist-structure > .chist-bar {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 1px solid var(--line-2);
+  border-radius: 0 9px 9px 0;
+  box-shadow: var(--shadow-card);
+  padding-left: 4px;
+}
+/* When only the arrangement stack shows (no active pipeline), it's a standalone rounded pill again. */
+.chist-cluster > .chist-structure:only-child > .chist-bar {
+  border-left: 1px solid var(--line);
+  border-radius: 9px;
+}
+
 .chist {
   position: absolute;
   z-index: 15;
-  left: 14px;
+  /* Shares one bottom utility row with What came back. The outcome pull is 134px wide. */
+  left: 156px;
   bottom: 18px;
   display: flex;
   flex-direction: column;
@@ -119,7 +171,7 @@
 
 /* Durable project-canvas structure history. It deliberately sits beside, rather than merges into, the
    pipeline graph's session-only history: the label names its scope and its trail explains the boundary. */
-.chist-structure.with-pipeline-history { left: calc(var(--space-12) * 3); }
+.chist-structure.with-pipeline-history { left: 274px; }
 .chist-structure-label {
   padding: 0 var(--space-1) 0 var(--space-2);
   color: var(--muted);
@@ -150,6 +202,8 @@
 }
 
 @media (max-width: 640px) {
+  .chist { left: var(--space-3); bottom: var(--space-3); }
+  .chist-btn { min-width: 44px; min-height: 44px; justify-content: center; }
   .chist-structure.with-pipeline-history {
     left: var(--space-3);
     bottom: calc(var(--space-12) + var(--space-4));

@@ -58,6 +58,7 @@
 
 import { execFileSync } from "node:child_process";
 import { isOrdinaryInRepoChange } from "./artifact.mjs";
+import { hasOutwardRelease } from "../../graph.mjs";
 
 export const meta = {
   id: "deploy",
@@ -150,8 +151,33 @@ export async function run(node, upstream, context) {
     };
   }
 
-  // GUARD 2 — the explicit founder deploy confirmation. Checked FIRST so an unauthorized run ships
-  // nothing at all (it never even filters to "what would deploy"). Refuse loudly, stage nothing.
+  // COMMON OUTWARD WALL — deploy shares the same host-issued release capability as every real sender.
+  // A gate-approved item plus the deploy-specific confirmation is still insufficient if this run did not
+  // originate from the founder's outward-release path. Greenlight and ambient runs never carry the token,
+  // so a deployable artifact routed here stays held and the runner is never touched.
+  if (!hasOutwardRelease(node)) {
+    return {
+      ok: false,
+      blocked: true,
+      blockedReason: "needs_release",
+      items: [
+        ...heldChanges,
+        ...deployable.map((item) => ({
+          ...item,
+          outputKind: "artifact",
+          deployed: false,
+          live: false,
+          executionStatus: "held_without_release",
+          deployStatus: "held — outward release requires an explicit founder approval through the release wall.",
+        })),
+      ],
+      error: "Deploy held: this run does not carry the founder outward-release capability.",
+      meta: { deployed: 0, staged: heldChanges.length, refused: deployable.length, reason: "missing_outward_release" },
+    };
+  }
+
+  // GUARD 2 — deploy's additional explicit founder confirmation. The common release capability above says
+  // this run may cross the outward wall; this second authorization says this specific deploy may ship.
   const authorization = readDeployAuthorization(node);
   if (!authorization) {
     return {

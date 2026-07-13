@@ -38,6 +38,7 @@ import { getFreshAccessToken } from "../execute/gmail-oauth.mjs";
 import { runStore, resultStore } from "../../gtm-store.mjs";
 import { persistence } from "../../persistence.mjs";
 import { ingestOutcome } from "../../outcome-ingest.mjs";
+import { appendInput, listInputs } from "../../inputs-store.mjs";
 
 // The flow store's collection name (flow-store.mjs COLLECTION). Read directly here rather than importing
 // flow-store's writer, so this read-only reader never pulls in the write path.
@@ -93,6 +94,7 @@ export function joinSentItems(runs) {
         joinKey,
         recipient,
         runId: trimOrNull(run?.id),
+        pathId: trimOrNull(run?.pathId),
         sentAt: item.sentAt ?? null,
         providerMessageId: messageId,
       });
@@ -116,10 +118,24 @@ export function joinSentItems(runs) {
 // run's id comes from the flow record so a projected sent item attributes to its run exactly as a runStore
 // item does. Pure over the flow records passed in; no network, no model — the test drives it with plain
 // records shaped exactly like recordFlowRun writes.
-export function projectFlowRunsToSentRuns(flowRecords) {
+export function projectFlowRunsToSentRuns(flowRecords, { projectId = null } = {}) {
+  const requestedProjectId = trimOrNull(projectId);
   const sentRuns = [];
   for (const record of Array.isArray(flowRecords) ? flowRecords : []) {
     for (const flowRun of Array.isArray(record?.runs) ? record.runs : []) {
+      const snapshot = flowRun?.graphSnapshot ?? record?.graph ?? {};
+      const ownerProjectId = trimOrNull(
+        flowRun?.projectId
+        ?? flowRun?.result?.projectId
+        ?? flowRun?.result?.workContext?.projectId
+        ?? snapshot?.projectId
+        ?? record?.projectId
+        ?? record?.graph?.projectId,
+      );
+      // Flow documents are keyed by graph, not venture. A poll for one venture must never index an
+      // explicitly-owned send from another venture, even when graph ids or join keys overlap. Legacy
+      // unowned receipts are excluded from project-scoped polling because attributing them would be a guess.
+      if (requestedProjectId && ownerProjectId !== requestedProjectId) continue;
       const nodes = flowRun?.result?.nodes ?? {};
       const items = [];
       for (const nodeResult of Object.values(nodes)) {
@@ -139,9 +155,9 @@ export function projectFlowRunsToSentRuns(flowRecords) {
         // Carry the compiled topology through so the downstream ingest derives the motion dimension from
         // the run's own shape exactly as it does for a runStore run — nodes in `steps`, wiring in `edges`.
         // The flow run stores a graphSnapshot; the flow record carries the live graph as a fallback.
-        const snapshot = flowRun?.graphSnapshot ?? record?.graph ?? {};
         sentRuns.push({
           id: trimOrNull(flowRun?.id) ?? trimOrNull(flowRun?.result?.runId),
+          projectId: ownerProjectId,
           steps: Array.isArray(snapshot.nodes) ? snapshot.nodes : [],
           edges: Array.isArray(snapshot.edges) ? snapshot.edges : [],
           pathId: trimOrNull(snapshot.id) ?? trimOrNull(record?.graph?.id),
@@ -160,14 +176,16 @@ export function projectFlowRunsToSentRuns(flowRecords) {
 // downstream, so reading broadly never fabricates an attribution. Injectable via options.flowRecords so
 // the test drives it with plain records and no store.
 function loadSentRunsFromFlowStore(options = {}) {
-  if (Array.isArray(options.flowRecords)) return projectFlowRunsToSentRuns(options.flowRecords);
+  if (Array.isArray(options.flowRecords)) {
+    return projectFlowRunsToSentRuns(options.flowRecords, { projectId: options.projectId });
+  }
   let records = [];
   try {
     records = persistence(options).list(FLOW_COLLECTION) ?? [];
   } catch {
     records = [];
   }
-  return projectFlowRunsToSentRuns(records);
+  return projectFlowRunsToSentRuns(records, { projectId: options.projectId });
 }
 
 // A single header value off a Gmail message payload, case-insensitive on the header name. Gmail returns
@@ -218,6 +236,8 @@ export function classifyThread(thread, sentItem = {}) {
 
   let bounceEventId = null;
   let replyEventId = null;
+  let replyFrom = null;
+  let replyBody = null;
   let sawBounce = false;
   let sawReply = false;
   for (const message of messages) {
@@ -234,6 +254,8 @@ export function classifyThread(thread, sentItem = {}) {
     if (!recipient || from === recipient) {
       sawReply = true;
       replyEventId = trimOrNull(message?.id) ?? replyEventId;
+      replyFrom = from;
+      replyBody = trimOrNull(message?.snippet) ?? replyBody;
     }
   }
 
@@ -246,6 +268,8 @@ export function classifyThread(thread, sentItem = {}) {
   if (sawReply) return {
     outcomeKind: "reply",
     signal: "positive",
+    from: replyFrom,
+    body: replyBody,
     ...(replyEventId ? { providerEventId: replyEventId } : {}),
   };
   return null;
@@ -318,6 +342,45 @@ async function resolveReadToken(projectId, options = {}) {
   }
 }
 
+function replyInputId(classification, threadId) {
+  const eventIdentity = trimOrNull(classification?.providerEventId) ?? trimOrNull(threadId);
+  if (!eventIdentity) return null;
+  return `input-gmail-${String(eventIdentity).replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 120)}`;
+}
+
+// Result creation and Input capture are two durable writes. If the Result lands and the Input write fails,
+// the next poll sees the Result as a duplicate but must still repair the missing founder-decision Input.
+// A deterministic id plus a pre-write lookup makes that repair exactly-once across every later poll.
+function ensureReplyInput(projectId, { classification, threadId, sent }, options = {}) {
+  if (classification?.outcomeKind !== "reply") return { inputId: null, created: false };
+  const inputId = replyInputId(classification, threadId);
+  if (!inputId) return { inputId: null, created: false };
+  const list = typeof options.listInputs === "function" ? options.listInputs : listInputs;
+  const append = typeof options.appendInput === "function" ? options.appendInput : appendInput;
+  const existing = list(projectId, options).find((input) => input?.id === inputId);
+  if (existing) return { inputId, created: false };
+  append(projectId, {
+    id: inputId,
+    kind: "reply",
+    source: "gmail",
+    payload: {
+      from: classification.from,
+      body: classification.body,
+      threadId,
+      joinKey: sent.joinKey,
+      runId: sent.runId,
+      pipelineId: sent.pathId,
+      providerEventId: classification.providerEventId,
+    },
+    provenance: {
+      source: "connected-account",
+      provider: "gmail",
+      providerEventId: classification.providerEventId,
+    },
+  }, { ...options, projectId });
+  return { inputId, created: true };
+}
+
 // ── The poller ────────────────────────────────────────────────────────────────────────────────────
 // One automatic read pass for a project. Reads the runs once, indexes what was sent, resolves a read
 // token from the banked Gmail credential, and — thread by thread — classifies each sent message's thread
@@ -367,6 +430,8 @@ export async function pollInboxOutcomes(projectId = "default", options = {}) {
   const ingested = [];
   let unattributed = 0;
   let deduped = 0;
+  let repairedInputs = 0;
+  let pendingInputRepairs = 0;
   // Cache thread reads so multiple sent messages in one thread cost one thread fetch, and one signal per
   // thread ingests once (not once per sent message that shares the thread).
   const seenThreads = new Set();
@@ -420,20 +485,40 @@ export async function pollInboxOutcomes(projectId = "default", options = {}) {
       },
       { ...options, projectId, runs, existingResults },
     );
-    // A signal already recorded on an earlier tick is a durable no-op — do not count it as a fresh ingest
-    // and do not add it to the pass's seen-state again (it is already there).
+    // A reply's founder-decision Input is repaired independently of Result dedupe. This covers the crash
+    // window where the Result write succeeded but the Input write failed: the next poll dedupes measurement
+    // and creates the missing Input once. A later poll sees both durable identities and writes nothing.
+    let input = { inputId: null, created: false };
+    let inputRepairPending = false;
+    try {
+      input = ensureReplyInput(projectId, { classification, threadId, sent }, options);
+    } catch {
+      inputRepairPending = classification.outcomeKind === "reply";
+    }
+
+    // A signal already recorded on an earlier tick is a durable measurement no-op. It may still have
+    // repaired the missing Input above; report that separately without pretending a new outcome arrived.
     if (result.deduped) {
       deduped += 1;
+      if (input.created) repairedInputs += 1;
+      if (inputRepairPending) pendingInputRepairs += 1;
       continue;
     }
     // Add the just-created Result to the pass's seen-state so a second thread within THIS same tick that
     // resolves to the same identity is also deduped (belt-and-braces with the cross-tick ledger read).
     existingResults.push(result.result);
     if (!result.joined) unattributed += 1;
-    ingested.push({ joinKey: sent.joinKey, outcomeKind: classification.outcomeKind, joined: result.joined });
+    if (inputRepairPending) pendingInputRepairs += 1;
+    ingested.push({
+      joinKey: sent.joinKey,
+      outcomeKind: classification.outcomeKind,
+      joined: result.joined,
+      ...(input.inputId ? { inputId: input.inputId } : {}),
+      ...(inputRepairPending ? { inputRepairPending: true } : {}),
+    });
   }
 
-  return { ok: true, ingested, unattributed, deduped };
+  return { ok: true, ingested, unattributed, deduped, repairedInputs, pendingInputRepairs };
 }
 
 // Run the automatic outcome read for EVERY project that has a connected inbox, on the heartbeat. Mirrors

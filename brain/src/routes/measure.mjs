@@ -350,18 +350,29 @@ export default async function handle({ req, res, url }) {
     return true;
   }
 
-  // Belief write-back — the founder resolves an experiment with a verdict. STRICTLY post-gate: this only
-  // records a decision the founder has already made; it never gates or triggers a run.
+  // Belief write-back — the founder resolves an experiment with a verdict (keep / kill / double-down).
+  // STRICTLY post-gate: this records a decision the founder has already made; it never triggers a run.
+  //
+  // FIX 3: ONLY the founder may kill (or otherwise verdict) an experiment (EXPERIMENT-MACHINE-SPEC rail 2).
+  // The endpoint is guarded with the SAME two-factor founder check the gate uses — a real Drover browser
+  // session AND an owner/approver on the owning project — so a tokenless or agent-stamped POST cannot end
+  // an experiment. The actor is DERIVED from the authenticated request (never trusted from body.decidedBy),
+  // and passed to applyExperimentVerdict as the stamp.
   const projectVerdictMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/experiments\/([^/]+)\/verdict$/);
   if (req.method === "POST" && projectVerdictMatch) {
     try {
       const projectId = decodeURIComponent(projectVerdictMatch[1]);
       const experimentId = decodeURIComponent(projectVerdictMatch[2]);
+      // Authenticate FIRST — before reading the body or touching any state. Both proofs must pass: a real
+      // browser capability and an owner/approver on this project's team. Request identity is authoritative.
+      authorizeReleaseForRequest(req)();
+      const approver = authorizeGateRelease({ projectId }, { request: req }, { projectId });
+      const decidedBy = approver?.actor?.userId || approver?.actor?.name || "founder";
       const body = await readBody(req);
-      const saved = applyExperimentVerdict({ projectId, experimentId, verdict: body?.verdict ?? body });
+      const saved = applyExperimentVerdict({ projectId, experimentId, verdict: body?.verdict ?? body, decidedBy });
       json(res, 200, { experiments: saved.sharedContext.experiments, updatedAt: saved.updatedAt });
     } catch (err) {
-      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+      json(res, err?.code === "gate_release_forbidden" ? 403 : 400, { error: err instanceof Error ? err.message : String(err) });
     }
     return true;
   }

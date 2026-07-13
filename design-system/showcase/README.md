@@ -1,21 +1,20 @@
 # GTM IDE Design System — showcase
 
 The styleguide / reference page for `@gtm-ide/design-system`, designed in
-claude.ai/design and ported here verbatim. Self-contained: open it in a browser
-(via a static server) and it renders the foundations, a live component gallery,
-and composition patterns on the glass "Stitch" canvas.
+claude.ai/design and ported here verbatim. Serve the `design-system/` directory
+and it renders the foundations, a live component gallery, and composition
+patterns on the glass "Stitch" canvas.
 
 ## Run it
 
 Any static server works (it needs a server, not `file://`, so the browser can
-load `demos.jsx`). Internet is required at view time — React/ReactDOM/Babel load
-from unpkg.
+load `demos.jsx`). Serve the package root because the showcase reads the
+canonical `styles.css` directly. Internet is required at view time —
+React/ReactDOM/Babel load from unpkg.
 
 ```sh
-# from the repo root
-node design-system/.ds-sync/storybook/http-serve.mjs design-system/showcase
-#   → open the http://127.0.0.1:<port>/ URL it prints
-# or:  npx serve design-system/showcase
+# from the repo root, then open /showcase/
+npx serve design-system
 ```
 
 ## Files
@@ -24,10 +23,12 @@ node design-system/.ds-sync/storybook/http-serve.mjs design-system/showcase
 |---|---|
 | `index.html` | the page — bespoke "Stitch" CSS (`--st-*` glass aesthetic) over the DS tokens |
 | `demos.jsx` | the live component specimens, compiled in-browser by Babel and mounted into `#demo-*` nodes |
-| `styles.css`, `_ds_bundle.css`, `_ds_bundle.js`, `fonts/` | **vendored** from the package build (`../ds-bundle`) — the real DS stylesheet, the `window.GtmIde` component bundle, and Geist fonts |
+| `styles.css` | Loads Geist fonts plus the canonical package stylesheet at `../styles.css` |
+| `_ds_bundle.js`, `fonts/` | **vendored** from the package build (`../ds-bundle`) — the `window.GtmIde` component bundle and Geist fonts |
 
-`refresh-assets.cjs` re-copies the vendored files after a package rebuild — run
-it whenever the design system changes so the showcase doesn't render stale.
+`refresh-assets.cjs` refreshes the generated JavaScript bundle and fonts after a
+package rebuild — run it whenever the design system components change so the
+showcase doesn't render stale.
 
 ## Important — showcase ≠ package (yet)
 

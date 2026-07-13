@@ -99,9 +99,16 @@ export function projectFlowRunReceipts(flowRuns = []) {
     const pendingGates = Array.isArray(receipt.pendingGates)
       ? receipt.pendingGates
       : (Array.isArray(result.pendingGates) ? result.pendingGates : []);
+    const projectId = trimOrNull(
+      receipt.projectId
+      ?? result.projectId
+      ?? result.workContext?.projectId
+      ?? snapshot.projectId,
+    );
     return [{
       id: executionRunId,
       executionRunId,
+      ...(projectId ? { projectId } : {}),
       pathId: trimOrNull(result.graphId),
       questionId: trimOrNull(receipt.questionId ?? result.questionId ?? result.workContext?.questionId ?? snapshot.questionId),
       participantRefs: receipt.participantRefs ?? result.participantRefs
@@ -335,9 +342,20 @@ export function ingestOutcome(outcome = {}, options = {}) {
   }
 
   // Reuse a passed-in run snapshot (a batch reads once), else read the project's runs now.
-  const match = Array.isArray(options.runs)
-    ? joinToRun({ joinKey, runs: options.runs })
+  const candidateRuns = Array.isArray(options.runs)
+    ? options.runs.filter((candidate) => {
+        const owner = trimOrNull(candidate?.projectId);
+        return !owner || owner === trimOrNull(projectId);
+      })
+    : null;
+  const candidateMatch = candidateRuns
+    ? joinToRun({ joinKey, runs: candidateRuns })
     : joinStoredExecution({ joinKey, projectId, options });
+  // Defense in depth: callers may inject or reconcile a broad run snapshot. An explicitly-owned run from
+  // another venture must never win merely because its joinKey overlaps this venture's key. Unowned legacy
+  // compiled runs remain readable; newly persisted flow receipts carry durable project ownership.
+  const matchedProjectId = trimOrNull(candidateMatch?.run?.projectId);
+  const match = matchedProjectId && matchedProjectId !== trimOrNull(projectId) ? null : candidateMatch;
   const run = match?.run ?? null;
   const item = match?.item ?? null;
 

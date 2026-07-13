@@ -15,7 +15,7 @@
 // reimplements the markdown-file queue.
 
 import path from "node:path";
-import { reportFriction, updateFrictionItem, findOpenFailureBySignature, resolveGitShaAsync, slugify, DEFAULT_QUEUE_DIR } from "./friction.mjs";
+import { reportFriction, updateFrictionItem, findOpenFailureBySignature, listFrictionQueue, resolveGitShaAsync, slugify, resolveFrictionQueueDir } from "./friction.mjs";
 
 // Resolve where this failure gets filed. An explicit options.queueDir always wins. Otherwise, when the
 // caller isolates its session to a store root (options.root — every operator unit test does this, and the
@@ -25,8 +25,7 @@ import { reportFriction, updateFrictionItem, findOpenFailureBySignature, resolve
 // otherwise-isolated tests through one shared growing file. Production passes neither, so it lands on the
 // real DEFAULT_QUEUE_DIR exactly as before.
 function resolveQueueOptions(options = {}) {
-  if (options.queueDir || !options.root) return options;
-  return { ...options, queueDir: path.join(options.root, "dogfood", "queue") };
+  return { ...options, queueDir: resolveFrictionQueueDir(options) };
 }
 
 // The four capture paths — where a failure entered our observation. An observability taxonomy, not a GTM
@@ -51,7 +50,7 @@ function normalizePart(value) {
 //   category | errorKind | nodeKind(+label slug) | graphId
 // A crash/stall with no node uses the literal "session" for the node part; a run with no graph uses
 // "session" for the graph part.
-export function failureSignature({ category, errorKind, nodeKind, nodeLabel, graphId } = {}) {
+export function failureSignature({ category, errorKind, nodeKind, nodeLabel, graphId, projectId } = {}) {
   const cat = normalizePart(category);
   const kind = normalizePart(errorKind);
   // nodeKind is node.kind (agent/skill/code/tool) or the literal "session" for a crash/stall. When the
@@ -63,7 +62,12 @@ export function failureSignature({ category, errorKind, nodeKind, nodeLabel, gra
     node = `${node}:${slugify(nodeLabel)}`;
   }
   const graph = normalizePart(graphId || "session");
-  return [cat, kind, node, graph].join("|");
+  const base = [cat, kind, node, graph];
+  // Historical/manual callers without project scope keep their exact four-part key. Real operator
+  // failures append the owning project so identical session-level crashes in two ventures never dedup
+  // into one record whose prompt excerpt is then shown under the wrong venture.
+  if (projectId) base.push(normalizePart(projectId));
+  return base.join("|");
 }
 
 // ── Classification ────────────────────────────────────────────────────────────
@@ -216,6 +220,7 @@ export function buildFailureContext(input = {}) {
     nodeKind: node?.kind ?? (category === "run-crash" || category === "run-stall" ? "session" : nodeKind),
     nodeLabel,
     graphId: resolvedGraphId,
+    projectId: session?.projectId ?? input.projectId ?? null,
   });
 
   // The founder-safe, reproducible context — no item bodies, no system prompts.
@@ -268,7 +273,7 @@ export function logFailure(input = {}, rawOptions = {}) {
   if (existing) {
     // findOpenFailureBySignature returns the basename; updateFrictionItem needs the full path. Resolve it
     // against the same queue dir reportFriction wrote to.
-    const queueDir = options.queueDir ?? DEFAULT_QUEUE_DIR;
+    const queueDir = resolveFrictionQueueDir(options);
     const filePath = path.join(queueDir, existing.file);
     const occurrences = (Number.isFinite(existing.occurrences) ? existing.occurrences : 1) + 1;
     updateFrictionItem(filePath, {
@@ -308,6 +313,7 @@ export function logFailure(input = {}, rawOptions = {}) {
       occurrences: 1,
       firstSeen: stamp,
       lastSeen: stamp,
+      projectId: input.session?.projectId ?? input.projectId ?? null,
     },
     { ...options, now: stamp },
   );
@@ -323,6 +329,33 @@ export function safeLogFailure(input = {}, options = {}) {
     logFailure(input, options);
   } catch {
     // Observation must never alter the run it observes. Swallow silently.
+  }
+}
+
+// A newer clean run is concrete evidence that the earlier failure no longer describes the pipeline's
+// current state. Resolve every open self-observed entry scoped to that graph and keep the historical file
+// as a receipt. Best-effort and never-throws for the same reason as logging: issue bookkeeping cannot
+// alter a run. A recurrence after this point opens a fresh issue through the existing open-only dedup.
+export function safeResolveFailuresForGraph(graphId, result, rawOptions = {}) {
+  try {
+    if (!graphId || result?.ok !== true) return 0;
+    const options = resolveQueueOptions(rawOptions);
+    const graphPart = normalizePart(graphId);
+    const { queueDir, reports } = listFrictionQueue(options);
+    let resolved = 0;
+    for (const report of reports) {
+      if (!report.signature || report.status === "resolved") continue;
+      const parts = report.signature.split("|");
+      if (parts[3] !== graphPart) continue;
+      updateFrictionItem(path.join(queueDir, report.file), {
+        fields: { status: "resolved", resolved_at: new Date().toISOString(), resolved_by_run: result.runId ?? "unknown" },
+        appendSection: `## Resolution\n\nA newer run (${result.runId ?? "unknown"}) completed cleanly on this pipeline, so this issue no longer describes the current state.`,
+      });
+      resolved += 1;
+    }
+    return resolved;
+  } catch {
+    return 0;
   }
 }
 

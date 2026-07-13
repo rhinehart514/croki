@@ -41,7 +41,8 @@
 
 import { resolveCredentialToken, getCredential } from "../../credential-store.mjs";
 import { getFreshAccessToken } from "./gmail-oauth.mjs";
-import { needsConnectionResult } from "./channels.mjs";
+import { needsConnectionResult, heldWithoutReleaseResult } from "./channels.mjs";
+import { hasOutwardRelease } from "../../graph.mjs";
 
 export const DEFAULT_RATE_LIMIT = 50;
 export const DEFAULT_RECALL_WINDOW_MS = 30_000;
@@ -163,6 +164,15 @@ export async function run(node, upstream, context = {}) {
   const approved = upstream.filter((item) => item.approved === true);
   if (approved.length === 0) {
     return { ok: true, items: [], meta: { sent: 0, staged: 0, note: "No founder-approved items to send." } };
+  }
+
+  // RAIL 1 — the executor-level outward wall (EXPERIMENT-MACHINE-SPEC). On top of the item-approval stamp,
+  // this connector refuses to actually send unless the run carried the host-issued founder outward-release
+  // capability on this node's runtime. Greenlight and every ordinary/ambient run never supply it, so a
+  // mis-classified approved item routed to Gmail is HELD, never sent — the structural backstop under the
+  // item classifier, mirroring http/slack/deploy.
+  if (!hasOutwardRelease(node)) {
+    return heldWithoutReleaseResult({ channel: "gmail", items: approved });
   }
 
   // Resolve the founder's credential and the wired transport. Either missing → the send CANNOT happen, and

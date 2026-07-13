@@ -18,6 +18,13 @@ import * as http from "../src/connectors/execute/http.mjs";
 import * as slack from "../src/connectors/execute/slack.mjs";
 import { needsConnectionResult, listChannels, getChannel } from "../src/connectors/execute/channels.mjs";
 import { getConnector } from "../src/connectors/registry.mjs";
+import { OUTWARD_RELEASE } from "../src/graph.mjs";
+
+// The founder-RELEASED outward path carries this host-issued capability on node.runtime (rail 1). These
+// tests pin the needs-connection / attribution / wall contracts, which all live DOWNSTREAM of the release
+// gate, so each outward node that reaches them is a released one. (The rail-1 hold itself — an outward node
+// WITHOUT this capability holding every approved item — is proven in outward-release.test.mjs.)
+const RELEASED = { outwardRelease: OUTWARD_RELEASE };
 
 // An isolated, empty credential store so nothing is "connected" — the exact state the fix must be honest
 // about. Env send-keys are cleared per test where they matter.
@@ -83,7 +90,7 @@ test("GMAIL — an approved item with no connection is BLOCKED needs_connection,
   try {
     const t = spyTransport();
     const result = await gmail.run(
-      { id: "exe", category: "execute", connector: "gmail", config: { transport: t.impl } },
+      { id: "exe", category: "execute", connector: "gmail", config: { transport: t.impl }, runtime: RELEASED },
       [approvedItem()],
       emptyContext(),
     );
@@ -107,7 +114,7 @@ test("HTTP — approved items with no endpoint connected are BLOCKED needs_conne
   delete process.env.GTM_IDE_SEND_ENDPOINT;
   try {
     const result = await http.run(
-      { config: {} },
+      { config: {}, runtime: RELEASED },
       [approvedItem({ gtmActionId: "gtm-http-1" })],
       emptyContext(),
     );
@@ -142,7 +149,7 @@ test("SLACK — no webhook connected → BLOCKED needs_connection, transport nev
   try {
     const t = spyTransport();
     const result = await slack.run(
-      { id: "exe", category: "execute", connector: "slack", config: {} },
+      { id: "exe", category: "execute", connector: "slack", config: {}, runtime: RELEASED },
       [approvedItem({ gtmActionId: "gtm-slack-1" })],
       { ...emptyContext(), sendRunners: { slack: t.impl } },
     );
@@ -172,7 +179,7 @@ test("SLACK — the WALL holds: an UNAPPROVED item never posts, even with a webh
 test("SLACK — an approved item WITH a connected webhook actually posts (happy path)", async () => {
   const posts = [];
   const result = await slack.run(
-    { id: "exe", category: "execute", connector: "slack", config: { webhook: "https://hooks.slack.example/x", fetchImpl: async (u, o) => { posts.push({ u, o }); return { ok: true, status: 200 }; } } },
+    { id: "exe", category: "execute", connector: "slack", config: { webhook: "https://hooks.slack.example/x", fetchImpl: async (u, o) => { posts.push({ u, o }); return { ok: true, status: 200 }; } }, runtime: RELEASED },
     [approvedItem({ gtmActionId: "gtm-slack-ok" })],
     emptyContext(),
   );
@@ -186,7 +193,7 @@ test("SLACK — an approved item WITH a connected webhook actually posts (happy 
 test("SLACK — an approved item with no gtmActionId is refused (non-attributable), never posted", async () => {
   const posts = [];
   const result = await slack.run(
-    { id: "exe", category: "execute", connector: "slack", config: { webhook: "https://hooks.slack.example/x", fetchImpl: async (u, o) => { posts.push({ u, o }); return { ok: true, status: 200 }; } } },
+    { id: "exe", category: "execute", connector: "slack", config: { webhook: "https://hooks.slack.example/x", fetchImpl: async (u, o) => { posts.push({ u, o }); return { ok: true, status: 200 }; } }, runtime: RELEASED },
     [approvedItem({ gtmActionId: undefined })],
     emptyContext(),
   );

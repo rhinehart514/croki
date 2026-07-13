@@ -14,10 +14,12 @@ import { buildRunGrounding, deriveSuppression } from "./run-grounding.mjs";
 import { createDerivedSourceLoader } from "./cross-reference.mjs";
 import { getAgentBench, getAgentProfile, getProjectChannels } from "./project-store.mjs";
 import { recordRunDerivations } from "./run-derivation.mjs";
+import { mutationRequirementSatisfied } from "./operator-mutation-receipt.mjs";
 import { buildMarketContext } from "./market-research.mjs";
 import { marketObjectStore } from "./gtm-store.mjs";
 import { applyGraphOperations, validateGraph } from "./graph-operations.mjs";
 import { listConnectors, runGraph } from "./graph.mjs";
+import { isFounderPresent } from "./presence.mjs";
 import { executeDomainCommand } from "./domain-commands.mjs";
 import { bindOperatorSessionContext, saveOperatorSession } from "./operator-store.mjs";
 import { loadProject, registerComposedChannel, updateSharedContext } from "./project-store.mjs";
@@ -48,6 +50,7 @@ import {
   latestWorkspace,
   memoryFor,
   operatorProjectOptions,
+  pauseForUnmetMutation,
   summarizeRun,
 } from "./operator-run-core.mjs";
 
@@ -75,6 +78,27 @@ function recordText(value) {
   if (typeof value === "string") return value.trim();
   if (value && typeof value === "object") return String(value.text ?? value.wording ?? value.value ?? value.summary ?? "").trim();
   return String(value ?? "").trim();
+}
+
+// Models occasionally return a finished strategic read as the value itself instead of wrapping it in
+// an artifact envelope. Preserve that useful work as durable canvas material. JSON object strings are
+// decoded; ordinary text becomes the artifact content with a short title from its first meaningful line.
+// Canvas proposals remain strict because their operation shape carries mutation semantics.
+function recordArtifactValue(value, kind) {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value;
+  if (kind === "canvas_proposal") return null;
+  if (typeof value !== "string" || !value.trim()) return null;
+  const text = value.trim();
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+  } catch { /* Plain prose is a valid open work artifact. */ }
+  const firstLine = text.split(/\r?\n/).find((line) => line.trim())?.replace(/^#+\s*/, "").trim();
+  return {
+    kind: kind === "model_artifact" ? "model-artifact" : "work-artifact",
+    title: (firstLine || "Strategic read").slice(0, 120),
+    content: text,
+  };
 }
 
 function scopedLookup(read, noun, id) {
@@ -383,6 +407,12 @@ async function executeGraphRun(session, { targetNodeId, stream = false } = {}, o
     // persistence root so the stored key resolves from the same store the founder saved it in.
     projectId: session.projectId || "default",
     credentialOptions: options,
+    // The away / unattended hold on the ORDINARY / ambient run path too (EXPERIMENT-MACHINE-SPEC rail 1,
+    // FIX 2a). Presence must be resolved for EVERY run path, not just the gate-resume, so a standing-
+    // autonomy pattern can never auto-approve an outward item unattended on an ambient run. Default when
+    // unresolved is AWAY (isFounderPresent() returns false with no live heartbeat) — conservative by
+    // construction. A test can override via options.founderPresent; otherwise the live lease decides.
+    founderPresent: typeof options.founderPresent === "boolean" ? options.founderPresent : isFounderPresent(),
     onEvent,
     // Self-observation sink: a genuinely failed node — or one whose model output was unusable — is filed
     // into the dogfood queue. The SAME closure is used on the gate-resume run (resolveOperatorGate), so both
@@ -535,23 +565,24 @@ export async function executeTool(session, tool, options = {}) {
       return { session: next, result: { classification, recorded: { type: kind, text, refs } }, pause: false };
     }
     if (kind === "model_artifact" || kind === "work_artifact" || kind === "canvas_proposal") {
-      if (!input.value || typeof input.value !== "object" || Array.isArray(input.value)) throw new Error("A work artifact needs an object value.");
+      const artifactValue = recordArtifactValue(input.value, kind);
+      if (!artifactValue) throw new Error("A work artifact needs content or an object value.");
       const projectId = session.projectId ?? options.projectId ?? "default";
       const actor = { type: "model-worker", runtime: session.runtime ?? "auto", model: session.model ?? null, sessionId: session.id };
       const idempotencyKey = input.idempotencyKey || `${session.id}:${tool.id ?? `event-${session.events?.length ?? 0}`}:${kind}`;
       const value = kind === "canvas_proposal" ? (() => {
-        const proposal = normalizeCanvasProposal(input.value, projectId);
-        return { id: input.value.id, kind: "canvas-change-proposal", title: proposal.title, summary: proposal.rationale, status: "proposed", format: "json", contentType: "application/vnd.drover.canvas-change-proposal+json", content: proposal };
-      })() : input.value;
+        const proposal = normalizeCanvasProposal(artifactValue, projectId);
+        return { id: artifactValue.id, kind: "canvas-change-proposal", title: proposal.title, summary: proposal.rationale, status: "proposed", format: "json", contentType: "application/vnd.drover.canvas-change-proposal+json", content: proposal };
+      })() : artifactValue;
       const artifactId = value.artifactId ?? value.id;
-      const revisingArtifact = Number.isInteger(input.value.expectedArtifactRevision) && artifactId;
+      const revisingArtifact = Number.isInteger(artifactValue.expectedArtifactRevision) && artifactId;
       const artifactInput = {
         ...value,
         ...(!revisingArtifact && !value.kind ? { kind: kind === "model_artifact" ? "model-artifact" : "work-artifact" } : {}),
         refs: normalizeStableRefs([...(value.refs ?? []), ...refs], { projectId }),
         createdBy: actor,
         revisionAuthor: actor,
-        modelReceipts: [...(Array.isArray(input.value.modelReceipts) ? input.value.modelReceipts : []), {
+        modelReceipts: [...(Array.isArray(artifactValue.modelReceipts) ? artifactValue.modelReceipts : []), {
           runtime: session.runtime ?? "auto", model: session.model ?? null, sessionId: session.id, toolCallId: tool.id ?? null,
         }],
         idempotencyKey,
@@ -564,7 +595,7 @@ export async function executeTool(session, tool, options = {}) {
         ? reviseWorkArtifact(projectId, artifactId, artifactPatch, options)
         : createWorkArtifact(projectId, artifactInput, options);
       const artifactRef = { type: "work-artifact", id: artifact.artifactId };
-      const next = addEvent(working, { type: "model_artifact_recorded", title: `Recorded ${artifact.title || artifact.kind}`, detail: artifact.summary || recordText(input.value) || null, data: { artifactRef, refs, classification } }, options);
+      const next = addEvent(working, { type: "model_artifact_recorded", title: `Recorded ${artifact.title || artifact.kind}`, detail: artifact.summary || recordText(artifactValue) || null, data: { artifactRef, refs, classification } }, options);
       return { session: next, result: { classification, recorded: { type: "work_artifact", artifact, ref: artifactRef, refs } }, pause: false };
     }
     if (kind === "goal") {
@@ -1406,6 +1437,10 @@ export async function executeTool(session, tool, options = {}) {
   }
 
   if (tool.name === "complete") {
+    if (!mutationRequirementSatisfied(session)) {
+      const { message, session: next } = pauseForUnmetMutation(session, options);
+      return { session: next, result: { status: next.status, summary: message, completed: false }, pause: true };
+    }
     const next = addEvent({
       ...session,
       status: input.outcome === "blocked" ? "blocked" : "completed",
@@ -1413,6 +1448,7 @@ export async function executeTool(session, tool, options = {}) {
       completedAt: new Date().toISOString(),
       pendingQuestion: null,
       error: input.outcome === "blocked" ? input.summary : null,
+      requiredMutation: null,
     }, {
       type: "session_completed",
       title: input.outcome === "achieved" ? "Goal achieved" : input.outcome === "blocked" ? "Session blocked" : "Session completed",

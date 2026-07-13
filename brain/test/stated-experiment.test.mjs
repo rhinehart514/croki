@@ -85,3 +85,59 @@ describe("stated ICP experiment → verdict → board flips the Market belief to
     assert.ok(claim, "the kept belief becomes a durable claim");
   });
 });
+
+// An experiment is an OPEN unit: any dimension, crew-sized, no required fields, no hypothesis ceremony.
+// It must be creatable from JUST a free-form intent — no targetLayer, no arms, no hypothesis required.
+describe("stated experiment is an open unit — no forced shape", () => {
+  let parent;
+  let options;
+
+  beforeEach(() => {
+    parent = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-open-exp-"));
+    options = { root: parent };
+  });
+
+  afterEach(() => fs.rmSync(parent, { recursive: true, force: true }));
+
+  it("creates from just a free-form intent — no targetLayer, no arms, no hypothesis", () => {
+    const { experiment } = upsertStatedExperiment({
+      projectId: "default",
+      experiment: { intent: "Try a punchier opener with PCO owners" },
+    }, options);
+
+    assert.ok(experiment, "an intent-only experiment is created");
+    assert.equal(experiment.intent, "Try a punchier opener with PCO owners");
+    assert.equal(experiment.origin, "stated");
+    assert.ok(!("targetLayer" in experiment), "no layer is forced onto an open experiment");
+    assert.ok(!("arms" in experiment), "no arm is forced onto an open experiment");
+    assert.ok(!("hypothesis" in experiment), "no hypothesis is forced");
+    assert.ok(!experiment.verdict, "creating an experiment never sets a verdict");
+  });
+
+  it("varies an open dimension that is not a channel (message), no arms required", () => {
+    const { experiment } = upsertStatedExperiment({
+      projectId: "default",
+      experiment: { targetLayer: "message", intent: "Shorter subject line" },
+    }, options);
+    assert.equal(experiment.targetLayer, "message", "the varied dimension is an open string, not an enum");
+    assert.ok(!("arms" in experiment), "a message experiment needs no arms");
+  });
+
+  it("still rejects a completely empty shell (the one floor)", () => {
+    assert.throws(
+      () => upsertStatedExperiment({ projectId: "default", experiment: {} }, options),
+      /intent|hypothesis|layer|arm/i,
+      "an experiment must name the bet somehow",
+    );
+  });
+
+  it("does not force a phantom channel arm on read (normalizeExperiment)", async () => {
+    const { normalizeExperiment } = await import("../src/experiment-derivation.mjs");
+    const { experiment } = upsertStatedExperiment({
+      projectId: "default",
+      experiment: { intent: "Product change: inline onboarding" },
+    }, options);
+    const norm = normalizeExperiment(experiment);
+    assert.deepEqual(norm.arms, [], "an armless open experiment stays armless — no phantom channel arm");
+  });
+});

@@ -2,6 +2,7 @@ import {
   deleteProjectFromCatalog, loadProject, loadProjectCatalog, saveProject, setActiveProject,
 } from "./project-store.mjs";
 import { persistence } from "./persistence.mjs";
+import { safeId } from "./store-fs.mjs";
 import { loadFeedbackLedger, saveFeedbackLedger } from "./feedback-ledger.mjs";
 import { loadProductModelStore, saveProductModelStore } from "./product-model-store.mjs";
 import { loadDomainEventStore, saveDomainEventStore } from "./domain-events.mjs";
@@ -27,10 +28,6 @@ import { getGtmIdea, listGtmIdeas, saveGtmIdea } from "./idea-store.mjs";
 //   per-project credential file to move or purge, so the founder's connections carry through untouched.
 // - UNIONED ON THE TARGET PROJECT OBJECT: channels (deduped by id). The target keeps its own
 //   sharedContext (its repo grounding) as authoritative.
-
-function safeId(value) {
-  return String(value || "default").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "default";
-}
 
 // The per-project store files this module owns (keyed by safeId(projectId)). Each is
 // `<root>/<dir>/<safeId(projectId)>.json`. Purged from a source on merge and from a project on delete.

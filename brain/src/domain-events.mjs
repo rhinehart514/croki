@@ -1,16 +1,9 @@
 import crypto from "node:crypto";
 import { persistence } from "./persistence.mjs";
+import { now, safeId } from "./store-fs.mjs";
 
 const SCHEMA_VERSION = 1;
 const COLLECTION = "domain-events";
-
-function now() {
-  return new Date().toISOString();
-}
-
-function safeId(value) {
-  return String(value || "default").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "default";
-}
 
 function emptyStore(projectId) {
   return { schemaVersion: SCHEMA_VERSION, projectId, events: [] };

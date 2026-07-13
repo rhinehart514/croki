@@ -10,8 +10,8 @@ Likely files:
 
 - `docs/STATE.md`
 - `README.md`
-- `docs/GTM-ENGINE-REBUILD.md`
-- `docs/GTM-MACHINE.md`
+- `docs/EXPERIMENT-MACHINE-SPEC.md`
+- `docs/OPEN-CANVAS-SPEC.md`
 - `docs/production-direction/*`
 - `AGENTS.md` only if the standing doctrine itself changes
 

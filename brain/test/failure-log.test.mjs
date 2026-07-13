@@ -16,6 +16,7 @@ import {
   buildFailureContext,
   logFailure,
   safeLogFailure,
+  safeResolveFailuresForGraph,
   FAILURE_CATEGORIES,
 } from "../src/failure-log.mjs";
 import { listFrictionQueue } from "../src/friction.mjs";
@@ -429,6 +430,28 @@ describe("safeLogFailure — never throws", () => {
     );
     const files = fs.readdirSync(queueDir).filter((f) => f.endsWith(".md"));
     assert.equal(files.length, 1, "the happy path still writes — never-throws is a guard, not a no-op");
+    fs.rmSync(queueDir, { recursive: true, force: true });
+  });
+});
+
+describe("successful-run issue reconciliation", () => {
+  it("resolves open failures for the repaired graph and preserves other graphs", () => {
+    const queueDir = tmpQueue();
+    logFailure({ category: "node-error", node: { kind: "agent", label: "Draft" }, result: { error: "boom" }, graphId: "g1" }, opts(queueDir));
+    logFailure({ category: "node-error", node: { kind: "agent", label: "Draft" }, result: { error: "boom" }, graphId: "g2" }, opts(queueDir));
+
+    assert.equal(safeResolveFailuresForGraph("g1", { ok: true, runId: "run-fixed" }, { queueDir }), 1);
+    const reports = listFrictionQueue({ queueDir }).reports;
+    assert.equal(reports.find((r) => r.signature.endsWith("|g1")).status, "resolved");
+    assert.equal(reports.find((r) => r.signature.endsWith("|g2")).status, "open");
+    fs.rmSync(queueDir, { recursive: true, force: true });
+  });
+
+  it("does not clear an issue after another failed run", () => {
+    const queueDir = tmpQueue();
+    logFailure({ category: "node-error", node: { kind: "agent", label: "Draft" }, result: { error: "boom" }, graphId: "g1" }, opts(queueDir));
+    assert.equal(safeResolveFailuresForGraph("g1", { ok: false, runId: "run-bad" }, { queueDir }), 0);
+    assert.equal(listFrictionQueue({ queueDir }).reports[0].status, "open");
     fs.rmSync(queueDir, { recursive: true, force: true });
   });
 });

@@ -2,13 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { FloatingDock } from "./FloatingDock";
 
-// The dock is deliberately limited to context, real attention, settings, and Run.
-
-const graph = {
-  id: "g1", name: "Test", version: "0",
-  nodes: [{ id: "n1", label: "Draft", category: "generate" as const, position: { x: 0, y: 0 }, config: {} }],
-  edges: [],
-};
+// The dock is deliberately limited to context, real attention, founder state, and settings.
 
 const baseProps = {
   projects: [],
@@ -17,50 +11,44 @@ const baseProps = {
   onSwitchProject: () => {},
   onManageProjects: () => {},
   onNewProduct: () => {},
-  channels: [],
-  activeChannelId: null,
-  onOpenChannel: () => {},
-  onNewChannel: () => {},
   problems: 0,
   issuesOpen: false,
   onToggleIssues: () => {},
   pendingDecisions: 0,
   decisionsOpen: false,
   onToggleDecisions: () => {},
-  graph: null,
-  running: false,
-  onRun: () => {},
 } as const;
 
 describe("FloatingDock", () => {
-  it("shows Run, and runs on click when there is a runnable graph", () => {
-    const onRun = vi.fn();
-    render(<FloatingDock {...baseProps} graph={graph} onRun={onRun} />);
-    const run = screen.getByRole("button", { name: "Run" });
-    expect(run).not.toBeDisabled();
-    fireEvent.click(run);
-    expect(onRun).toHaveBeenCalledTimes(1);
+  it("names the dock for the product canvas and has no global Run action", () => {
+    render(<FloatingDock {...baseProps} />);
+    expect(screen.getByRole("toolbar", { name: "Product canvas controls" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Run" })).toBeNull();
   });
 
-  it("disables Run when there is no runnable graph (no fake affordance)", () => {
-    render(<FloatingDock {...baseProps} graph={null} />);
-    expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
+  it("uses the product canvas as the home destination", () => {
+    const onGoHome = vi.fn();
+    render(<FloatingDock {...baseProps} onGoHome={onGoHome} />);
+    fireEvent.click(screen.getByRole("button", { name: "Back to the product canvas" }));
+    expect(onGoHome).toHaveBeenCalledTimes(1);
   });
 
-  it("opens the real issue and founder-decision panels from live counts", () => {
+  it("keeps founder decisions in Needs you and system conditions in separate controls", () => {
     const onToggleIssues = vi.fn();
     const onToggleDecisions = vi.fn();
-    render(<FloatingDock {...baseProps} problems={2} pendingDecisions={4} onToggleIssues={onToggleIssues} onToggleDecisions={onToggleDecisions} />);
-    fireEvent.click(screen.getByRole("button", { name: "Issues, 2" }));
-    fireEvent.click(screen.getByRole("button", { name: "Waiting on you, 4" }));
+    const onToggleFailures = vi.fn();
+    render(<FloatingDock {...baseProps} problems={2} pendingDecisions={4} failures={3} onToggleIssues={onToggleIssues} onToggleDecisions={onToggleDecisions} onToggleFailures={onToggleFailures} />);
+    fireEvent.click(screen.getByRole("button", { name: "Needs you, 4" }));
+    fireEvent.click(screen.getByRole("button", { name: "System issues, 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Run failures, 3" }));
     expect(onToggleIssues).toHaveBeenCalledTimes(1);
     expect(onToggleDecisions).toHaveBeenCalledTimes(1);
+    expect(onToggleFailures).toHaveBeenCalledTimes(1);
   });
 
   it("keeps attention controls absent when nothing needs the founder", () => {
     render(<FloatingDock {...baseProps} />);
-    expect(screen.queryByRole("button", { name: /Issues/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Waiting on you/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Needs you/ })).toBeNull();
   });
 
   it("does not expose product modes", () => {
@@ -70,17 +58,23 @@ describe("FloatingDock", () => {
     expect(screen.queryByRole("button", { name: "Engineer" })).toBeNull();
   });
 
-  // The quiet one-line operation status (docs/production-direction/16) — a polite status region, never a
-  // command, omitted when there's nothing to orient with.
-  it("renders the operation status as a polite status region when provided", () => {
-    render(<FloatingDock {...baseProps} operationStatus="3 pipelines · 1 waiting on you · 2 back" />);
+  it("reports founder presence as a polite status region", () => {
+    render(<FloatingDock {...baseProps} presence={{ state: "away", present: false }} />);
     const status = screen.getByRole("status");
-    expect(status.textContent).toBe("3 pipelines · 1 waiting on you · 2 back");
+    expect(status.textContent).toBe("Away · outward held");
     expect(status).toHaveAttribute("aria-live", "polite");
   });
 
-  it("omits the operation status when absent (no empty chrome)", () => {
+  it("omits presence status when unavailable (no empty chrome)", () => {
     render(<FloatingDock {...baseProps} />);
     expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("keeps retired work navigation out of the product dock", () => {
+    render(<FloatingDock {...baseProps} />);
+    expect(screen.getByRole("button", { name: "Choose product" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Choose work/ })).toBeNull();
+    expect(screen.queryByText("All work")).toBeNull();
+    expect(screen.queryByText("New work")).toBeNull();
   });
 });

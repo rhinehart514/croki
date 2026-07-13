@@ -23,6 +23,7 @@ import { listConnectors } from "./connectors/registry.mjs";
 import { deriveMotionEfficiency, projectProductImplications } from "./outcome-ingest.mjs";
 import { deriveFunnel } from "./object-funnel.mjs";
 import { getPendingInbox } from "./pending-inbox.mjs";
+import { listUnroutedInputs } from "./inputs-store.mjs";
 import { buildWovenGraph } from "./woven-graph.mjs";
 import { getProductModel } from "./product-model-store.mjs";
 import { crewRosterStore } from "./crew-roster-store.mjs";
@@ -284,6 +285,63 @@ function executionQuestionArtifacts(projectId, flowRuns) {
   return { positions, sourceRecords };
 }
 
+// The reply-shaped world-signals still sitting UNROUTED in the inbox — warm leads the market sent back that
+// the founder hasn't decided on yet. The recorded-outcome ledger (resultStore) only holds replies that have
+// already been ingested/joined; a reply that just landed and is still "in play" lives here, in the input
+// store, until the founder decides together with the crew what it feeds. The experiment-machine spec wants
+// THESE to loop back to the front of the pipeline that earned them — visible motion, not a panel row.
+//
+// This is a PURE PROJECTION over data the backend already holds: it mints no new authority, schema, or enum.
+// Each unrouted reply is folded into the SAME outcomes stream as a synthetic warm outcome, carrying the
+// run id it joins to (from the inbound reader's stamped joinKey/runId) so the existing outcome lineage
+// resolves its originating pipeline — and its outcomeKind is 'reply', which outcomeDisplayKind already maps
+// to 'observed-response' (the warm/ember register the loop-back layer draws). A reply with no resolvable run
+// carries a null runId; the loop-back layer then honestly skips it (no pipeline front to circle back to) —
+// never a stranded or invented stroke. Nothing here is persisted; it re-derives on every re-weave.
+function warmReplyOutcomes(projectId, runs, existingOutcomes, options) {
+  let unrouted = [];
+  try { unrouted = listUnroutedInputs(projectId, options); } catch { return []; }
+  const replyKinds = new Set(["reply", "response", "meeting", "objection"]);
+  // A reply already recorded as an outcome (same joinKey) must not double-draw — the recorded one wins.
+  const recordedJoinKeys = new Set(
+    (existingOutcomes ?? []).map((o) => String(o?.joinKey ?? "").trim()).filter(Boolean),
+  );
+  // Resolve a reply's origin run by matching its stamped joinKey against a staged run item's joinKey — the
+  // same deterministic join outcome-ingest uses; no model call, no invention. Direct payload.runId wins.
+  const runByJoinKey = new Map();
+  for (const run of runs ?? []) {
+    for (const item of run?.items ?? []) {
+      const key = String(item?.joinKey ?? "").trim();
+      if (key && !runByJoinKey.has(key)) runByJoinKey.set(key, run.id);
+    }
+  }
+  const out = [];
+  for (const input of unrouted) {
+    const kind = String(input?.kind ?? "").trim().toLowerCase();
+    if (!replyKinds.has(kind)) continue;
+    const payload = input?.payload ?? {};
+    const joinKey = String(payload.joinKey ?? "").trim();
+    if (joinKey && recordedJoinKeys.has(joinKey)) continue; // already loops back as a recorded outcome.
+    const runId = String(payload.runId ?? "").trim() || (joinKey ? runByJoinKey.get(joinKey) ?? null : null);
+    out.push({
+      id: `pending-reply:${input.id}`,
+      runId,
+      joinKey: joinKey || null,
+      outcomeKind: kind,          // → outcomeDisplayKind → 'observed-response' (warm register).
+      body: String(payload.summary ?? payload.body ?? input.source ?? "").trim() || "Reply in play",
+      value: null,
+      status: "observed",
+      observedAt: input.receivedAt ?? null,
+      updatedAt: input.receivedAt ?? null,
+      productRefs: [],
+      participantRefs: [],
+      // A stable marker so a downstream reader can tell a still-in-play inbox reply from a recorded result.
+      pending: true,
+    });
+  }
+  return out;
+}
+
 function canvasSources(project, channels, flowRuns, options) {
   const projectId = project.id;
   const overrides = options.terrainSourceReaders ?? {};
@@ -357,7 +415,9 @@ function canvasSources(project, channels, flowRuns, options) {
       ...pin,
       resolved: (feedback.value.signals ?? []).some((item) => item.id === pin.signalId),
     })),
-    outcomes: outcomes.value,
+    // Recorded outcomes plus the still-in-play warm replies from the inbox — both loop back on the canvas.
+    // The pending replies ride the SAME outcome projection so no second code path or authority is created.
+    outcomes: [...outcomes.value, ...warmReplyOutcomes(projectId, runs.value, outcomes.value, options)],
     implications: implications.value,
     geometry: geometry.value,
     state: {

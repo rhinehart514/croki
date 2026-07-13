@@ -52,6 +52,24 @@ describe("woven canvas keyboard navigation", () => {
     expect(onActivate).toHaveBeenCalledOnce();
   });
 
+  it("renders an honest, keyboard-expandable remainder summary for repeated canvas objects", () => {
+    const onActivate = vi.fn();
+    render(
+      <div onClick={onActivate}>
+        <CanvasAnchor {...({ data: {
+          anchorId: "canchor:group:outcome",
+          ref: { type: "group", id: "outcome" },
+          kind: "outcome", label: "Outcomes", count: 5, group: true, groupType: "overflow",
+        } } as never)} />
+      </div>,
+    );
+
+    const summary = screen.getByRole("button", { name: "5 more outcomes. Show all." });
+    expect(summary).toHaveTextContent("5 more outcomes");
+    fireEvent.keyDown(summary, { key: " " });
+    expect(onActivate).toHaveBeenCalledOnce();
+  });
+
   it("names shared-goal attention honestly without presenting it as a blocker", () => {
     render(<CanvasAnchor {...({ data: {
       anchorId: "canchor:work-artifact:shared",

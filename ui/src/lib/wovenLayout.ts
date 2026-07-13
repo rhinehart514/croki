@@ -102,43 +102,6 @@ export function partitionByTouch(
   return { individual, badges };
 }
 
-// ─── v1 — mean-X gutter placement (lanes-primary) ───────────────────────────────────────────────────
-// Place each object chip at the MEAN X of its touching steps (approach 2's rule): a prospect two motions
-// touch late sits far right, at the causal depth where the crossing happens. Y sits in the GUTTER between /
-// beyond the lanes it ties to — the mean of the touched lanes' gutter rows, nudged into open space so a
-// chip never lands on top of a step card.
-//
-// Inputs the integrator already has:
-//   - `stepXByObject`: objectKey → the x-coordinates of the steps that touched it (from the tie join —
-//     a tie runs from a lane's last data-producing step to the object, and that step's laid-out x is
-//     known). Mean of these is the chip's x.
-//   - `laneGutterYByLane`: channelId → the y of the gutter band just below that lane (the integrator reads
-//     it off computeChannelLanes: offsetY + height gives the band under a lane). Mean over the object's
-//     touched lanes is the chip's y.
-// Deterministic: identical inputs → identical output, no seed, no simulation.
-export function layoutMeanXGutter(
-  objects: OperatingObject[],
-  stepXByObject: ReadonlyMap<string, number[]>,
-  laneGutterYByLane: ReadonlyMap<string, number>,
-  fallbackX = 0,
-  fallbackY = 0,
-): Map<string, Placed> {
-  const out = new Map<string, Placed>();
-  for (const obj of objects) {
-    const xs = stepXByObject.get(obj.objectKey);
-    const x = xs && xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : fallbackX;
-
-    const gutterYs: number[] = [];
-    for (const laneId of obj.lanes) {
-      const gy = laneGutterYByLane.get(laneId);
-      if (typeof gy === "number") gutterYs.push(gy);
-    }
-    const y = gutterYs.length ? gutterYs.reduce((a, b) => a + b, 0) / gutterYs.length : fallbackY;
-    out.set(obj.objectKey, { x, y });
-  }
-  return out;
-}
-
 // ─── v2 — objects-primary layout (the graft, same nodes) ────────────────────────────────────────────
 // The population becomes the substrate: chips cluster into regions by their OPEN kind string, and node
 // SIZE encodes degree (motionCount) so moat objects are visibly the largest with no overlay. Placement is
@@ -248,36 +211,6 @@ export const CLUSTER_ZOOM = 0.45;
 
 export function isClustered(zoom: number): boolean {
   return zoom < CLUSTER_ZOOM;
-}
-
-// Blend a set of grouped nodes into cluster chips for the far-zoom render. Each input carries its group
-// (an open string) and its degree; the output is one KindClusterData per group, placed at the MEAN X/Y of
-// its members (approach 5's depth-not-lines: N crossings add zero lines, the cluster just carries more
-// totalDegree and reads heavier). Deterministic — mean placement, stable group order (first-seen).
-export function blendToClusters(
-  members: Array<{ id: string; group: string; degree: number; pos: Placed }>,
-): Array<KindClusterData & { pos: Placed }> {
-  const groups = new Map<string, { count: number; totalDegree: number; sx: number; sy: number }>();
-  const order: string[] = [];
-  for (const m of members) {
-    const g = (m.group ?? "").trim() || "object";
-    if (!groups.has(g)) { groups.set(g, { count: 0, totalDegree: 0, sx: 0, sy: 0 }); order.push(g); }
-    const acc = groups.get(g)!;
-    acc.count += 1;
-    acc.totalDegree += m.degree ?? 0;
-    acc.sx += m.pos.x;
-    acc.sy += m.pos.y;
-  }
-  return order.map((g) => {
-    const acc = groups.get(g)!;
-    return {
-      clusterKey: `cluster:${g}`,
-      label: g,
-      count: acc.count,
-      totalDegree: acc.totalDegree,
-      pos: { x: acc.sx / acc.count, y: acc.sy / acc.count },
-    };
-  });
 }
 
 // ─── Degree → visual weight (shared by both altitudes) ──────────────────────────────────────────────

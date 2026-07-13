@@ -137,7 +137,7 @@ export function ConnectSender() {
       ) : (
         <div className="cs-add">
           <div className="cs-steps">
-            In Google Cloud, create an OAuth <b>Desktop app</b> client with the Gmail API enabled and the
+            In Google Cloud, create an OAuth <b>Desktop app</b> client with the Gmail API enabled and the{" "}
             <code>gmail.send</code> scope, then paste its two values below. Drover opens Google to ask your
             permission, then remembers the connection.
           </div>

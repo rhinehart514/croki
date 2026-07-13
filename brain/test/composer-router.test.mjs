@@ -99,6 +99,25 @@ test('act messages classify to act without grant', () => {
   }
 });
 
+test('explanation-shaped help stays conversational while concrete help commands still act', () => {
+  const explanations = [
+    'help me understand what happened',
+    'can you help me understand how this pipeline works?',
+    'walk me through how to add a step',
+  ];
+  for (const message of explanations) {
+    const result = classifyComposerIntent(message);
+    assert.equal(result.intent, 'explain', message);
+    assert.ok(result.confidence >= 0.75, message);
+  }
+
+  for (const message of ['help me get the first five customers', 'please build a customer pipeline']) {
+    const result = classifyComposerIntent(message);
+    assert.equal(result.intent, 'act', message);
+    assert.ok(result.confidence >= 0.6, message);
+  }
+});
+
 test('polite imperatives with trailing question marks classify to act', () => {
   const messages = [
     'can you add a step?',

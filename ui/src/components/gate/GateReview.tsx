@@ -360,13 +360,30 @@ function isContextItem(item: GTMItem): boolean {
 // machine state the founder never decides on), and code-shaped labels — every remaining label runs
 // through humanizeFieldLabel so a key and its alias read as one plain concept (both "value_prop" and
 // "valueProposition" render "Value proposition"), never as raw or duplicated field keys.
+// Field keys that are pure machine internals — the founder decides on the CONTENT, never on which agent
+// wrote it or the crew's own quality flags. Dropped before the card renders (keys normalized: lowercased,
+// separators removed, so "agent_ref" / "agentRef" both match).
+const INTERNAL_FIELD_KEYS = new Set(["agentref", "tastechecks"]);
+// Machine field names → the plain words a founder would actually say. Applied on top of humanizeFieldLabel
+// so a jargon key ("cta", "grounding") never reaches the gate as machinery.
+const PLAIN_FIELD_LABELS: Record<string, string> = {
+  cta: "The ask",
+  grounding: "Based on",
+  personalizationrule: "Personalized by",
+};
+
 function reviewableFields(fields: { label: string; value: string }[]): { label: string; value: string }[] {
   return fields
     .filter((f) => {
+      const key = f.label.toLowerCase().replace(/[\s_-]+/g, "");
+      if (INTERNAL_FIELD_KEYS.has(key)) return false;
       const v = f.value.trim().toLowerCase();
       return v !== "true" && v !== "false";
     })
-    .map((f) => ({ label: humanizeFieldLabel(f.label), value: f.value }));
+    .map((f) => {
+      const key = f.label.toLowerCase().replace(/[\s_-]+/g, "");
+      return { label: PLAIN_FIELD_LABELS[key] ?? humanizeFieldLabel(f.label), value: f.value };
+    });
 }
 
 // The inspectable receipt for everything the crew attached that the card can't show up front — the
@@ -619,6 +636,12 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
           type="button"
           disabled={busy}
           onClick={(e) => { e.stopPropagation(); void approveAllClean(); }}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            event.stopPropagation();
+            void approveAllClean();
+          }}
         >
           <Check size={13} aria-hidden />
           <span className="cgate-approve-all-label">
@@ -874,7 +897,20 @@ export function GateReview({ items, onSubmit, onDecideDelta, learned, promote, o
                 </div>
               ) : (
                 <div className="cgate-card-actions">
-                  <button className="cgate-approve" type="button" disabled={busy} onClick={() => void decide(key, "approve")}>
+                  <button
+                    className="cgate-approve"
+                    data-testid={!lean && cleanUndecided === 1 && !isException ? "founder-gate-approve" : undefined}
+                    data-terrain-primary={!lean && cleanUndecided === 1 && !isException ? "true" : undefined}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void decide(key, "approve")}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void decide(key, "approve");
+                    }}
+                  >
                     <Check size={11} aria-hidden /> Approve &amp; release
                   </button>
                   <button className="cgate-reject" type="button" disabled={busy} onClick={() => void decide(key, "reject")}>

@@ -67,6 +67,7 @@ export function CanvasNativeCreate({
           <span>{kind === "goal" ? "What do you want to change?" : "What should exist here?"}</span>
           <input
             ref={inputRef}
+            name="canvas-add-title"
             value={title}
             disabled={saving}
             onChange={(event) => setTitle(event.target.value)}

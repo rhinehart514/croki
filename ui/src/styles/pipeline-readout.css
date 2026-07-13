@@ -7,44 +7,59 @@
 
 .pread {
   position: absolute;
-  top: var(--space-3);
+  top: calc(var(--space-12) + var(--space-5));
   left: calc(var(--pentry-gutter, 0px) + var(--space-4));
-  right: var(--space-4);
-  z-index: 6;
-  background: #ffffff;
-  border: 1px solid var(--muted);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-card);
+  width: min(920px, calc(100% - var(--pentry-gutter, 0px) - 360px));
+  min-width: 420px;
+  z-index: 18;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
   font-family: "Geist Variable", ui-sans-serif, -apple-system, sans-serif;
   color: var(--ink);
   overflow: hidden;
-  transition: box-shadow 140ms ease, border-color 140ms ease;
+  transition: box-shadow var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
 }
-.pread:hover { box-shadow: var(--shadow-pop); }
+.pread:hover,
+.pread.is-open { border-color: var(--muted); box-shadow: var(--shadow-pop); }
 
 /* On the continuous canvas the shared-work control and focused-pipeline readout coexist. The readout
    sits one quiet row below the arrangement control instead of replacing the entire canvas renderer. */
 .unified-gtm-canvas .pread {
-  top: calc(var(--space-12) + var(--space-2));
+  top: calc(var(--space-12) + var(--space-5));
 }
 .unified-gtm-canvas .terrain-state-note {
   top: auto;
-  bottom: var(--space-6);
+  bottom: 106px;
 }
 
 /* ── the always-visible header row ── */
+.pread-topline { display: flex; align-items: stretch; }
 .pread-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  width: 100%;
+  min-height: 48px;
+  padding: var(--space-2) var(--space-3);
+  flex: 1;
+  width: auto;
   text-align: left;
   background: transparent;
   border: 0;
   cursor: pointer;
 }
 .pread-head:focus-visible { outline: 2px solid var(--ink-2); outline-offset: -2px; }
+.pread-run {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 44px; margin: 4px 6px 4px 0; padding: 0 var(--space-3);
+  border: 1px solid var(--ink); border-radius: var(--r-md);
+  background: var(--ink); color: var(--surface);
+  font: inherit; font-size: var(--text-sm); font-weight: 620; white-space: nowrap; cursor: pointer;
+}
+.pread-run:hover:not(:disabled) { background: var(--ink-2); }
+.pread-run:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.pread-run:disabled { opacity: .5; cursor: default; }
 .pread-headmain { flex: 1; min-width: 0; }
 .pread-eyebrow {
   display: inline-flex; align-items: center; gap: var(--space-1);
@@ -54,13 +69,20 @@
   text-transform: uppercase;
   color: var(--muted);
 }
+.pread:not(.is-open) .pread-eyebrow { display: none; }
 .pread-goal {
-  margin: 4px 0 0;
+  margin: 0;
   font-size: var(--text-base);
   font-weight: 600;
-  line-height: 1.35;
+  line-height: var(--leading-tight);
   color: var(--ink);
 }
+.pread:not(.is-open) .pread-goal {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pread.is-open .pread-goal { margin-top: var(--space-1); }
 .pread-goal.is-empty { color: var(--muted); font-weight: 500; }
 
 /* the safety-class chip + running/gate state chips, right-aligned in the header */
@@ -73,7 +95,7 @@
   border-radius: var(--r-sm);
   background: var(--surface-2);
   color: var(--ink-2);
-  border: 1px solid var(--muted);
+  border: 1px solid var(--line-2);
   white-space: nowrap;
 }
 .pread-chip.is-local { }
@@ -90,16 +112,18 @@
 @keyframes pread-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .pread-chip.is-running .pread-chip-dot { animation: none; } }
 
-.pread-caret { flex-shrink: 0; color: var(--muted); display: flex; align-items: center; transition: transform 160ms ease; }
+.pread-caret { flex-shrink: 0; color: var(--muted); display: flex; align-items: center; transition: transform var(--dur-fast) var(--ease-out); }
 .pread.is-open .pread-caret { transform: rotate(90deg); }
 
 /* ── the expanded body ── */
 .pread-body {
+  max-height: min(520px, calc(100vh - 184px));
+  overflow-y: auto;
   padding: 0 var(--space-4) var(--space-4);
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--surface-2);
+  border-top: 1px solid var(--line);
 }
 .pread-cell { min-width: 0; }
 .pread-cell.is-wide { grid-column: 1 / -1; }
@@ -193,4 +217,33 @@
   font-family: var(--font-mono);
   padding-top: var(--space-2);
   border-top: 1px dashed color-mix(in srgb, var(--ember) 24%, var(--muted));
+}
+
+/* A narrow canvas belongs to the outline and crew, not a permanently expanded briefing. Keep the
+   pipeline's intent and live consequence visible in one compact row; the full readout remains available
+   on wider workspaces where it does not cover the graph. */
+@media (max-width: 760px) {
+  .pread {
+    left: calc(var(--pentry-gutter, 0px) + var(--space-2));
+    right: var(--space-2);
+  }
+  .pread-head { padding: var(--space-2) var(--space-3); gap: var(--space-2); }
+  .pread-goal {
+    font-size: var(--text-sm);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .pread-eyebrow, .pread-chips .pread-chip:not(.is-running):not(.is-gate), .pread-body { display: none; }
+  .pread-chips { gap: var(--space-1); }
+}
+
+@media (max-width: 1120px) {
+  .unified-gtm-canvas .pread { top: 112px; }
+  .pread {
+    right: var(--space-4);
+    width: auto;
+    min-width: 0;
+  }
+  .pread-chip:not(.is-running):not(.is-gate) { display: none; }
 }

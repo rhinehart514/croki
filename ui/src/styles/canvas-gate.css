@@ -73,6 +73,12 @@
 }
 .loop-gate-side.is-waiting b { color: var(--gap); }
 .loop-gate-side.is-released b { color: var(--ink); }
+.loop-gate-release-receipt {
+  align-self: flex-start;
+  font-size: 0.625rem;
+  font-weight: 620;
+  color: var(--ink-2);
+}
 .loop-gate-seam {
   width: 2px;
   align-self: stretch;
@@ -960,6 +966,44 @@
   transition: color 0.14s ease;
 }
 .cgate-body-toggle:hover { color: var(--ink); }
+
+/* NodeToolbar portals this host into React Flow's screen-space renderer. It stays attached to the gate,
+   but never inherits the viewport scale. GraphCanvas supplies pane-derived bounds and flips its side. */
+.cgate-wall-toolbar { pointer-events: auto; }
+.cgate-wall-attached {
+  position: relative;
+  width: var(--cgate-panel-width, 560px);
+  max-width: var(--cgate-panel-width, 560px);
+  max-height: var(--cgate-panel-max-height, 720px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--gap) 38%, var(--line-2));
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-modal);
+  color: var(--ink);
+}
+.cgate-wall-attached > .cgate-review {
+  width: 100%;
+  max-height: calc(var(--cgate-panel-max-height, 720px) - 56px);
+  overflow-y: auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Centered-modal sizing: when the review is portaled into the .cgate-stage-overlay scrim (not attached to
+   the gate node), it sizes to a comfortable dialog and its body scrolls, instead of inheriting the
+   node-toolbar's placement width. */
+.cgate-review-modal {
+  width: min(680px, 94vw);
+  max-width: min(680px, 94vw);
+  max-height: 86vh;
+}
+.cgate-review-modal > .cgate-review {
+  max-height: calc(86vh - 56px);
+}
 
 /* ════════════════════════════════════════════════════════════════════════
    THE SPLIT STAGE — the immersive gate room (variant="stage")

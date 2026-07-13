@@ -37,6 +37,7 @@ const PORT = await freePort();
 process.env.PORT = String(PORT);
 
 const { createOperatorSession, getOperatorSession, listOperatorSessions } = await import("../src/operator-store.mjs");
+const { listGoals } = await import("../src/goal-store.mjs");
 const { server } = await import("../src/server.mjs");
 
 if (!server.listening) await once(server, "listening");
@@ -107,6 +108,28 @@ describe("composer fast-lane routes — briefing read + turn", () => {
 
     // THE WALL / no-cage: the turn endpoint created and drove nothing.
     assert.equal(listOperatorSessions({}).length, before, "the act turn created no session");
+  });
+
+  it("allowDrive:false leaves an existing session's durable goals and events untouched", async () => {
+    const session = createOperatorSession({ goal: "Explore the market", projectId: "no-drive-project" });
+    const before = getOperatorSession(session.id);
+    const goalsBefore = listGoals("no-drive-project").length;
+
+    const res = await fetch(`${base}/api/operator/turn`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        projectId: "no-drive-project",
+        sessionId: session.id,
+        input: "build a real pipeline",
+        allowDrive: false,
+      }),
+    });
+    assert.equal(res.status, 202);
+    const after = getOperatorSession(session.id);
+    assert.deepEqual(after.events, before.events, "the deferred turn appends no founder, crew, goal, or drive event");
+    assert.equal(after.eventCursor, before.eventCursor);
+    assert.equal(listGoals("no-drive-project").length, goalsBefore, "the deferred turn records no durable goal");
   });
 
   it("POST /api/operator/turn with an empty input is answered, never rejected (no cage)", async () => {

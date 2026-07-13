@@ -20,7 +20,7 @@ const LANE_GAP = 320;
 // would pop the node detail modal open).
 export type ChannelLane = { offsetY: number; height: number; centerX: number; centerY: number };
 
-// For each channel (in the given order — the same order ChannelSwitcher/the channel list uses),
+// For each channel, in the same order as the pipeline list,
 // compute how far to shift its nodes' y so lanes stack without collision, and how tall its own lane
 // is. Channels with no loaded graph, or an empty one, reserve no lane (nothing to draw yet).
 export function computeChannelLanes(

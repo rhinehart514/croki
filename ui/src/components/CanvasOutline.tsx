@@ -8,7 +8,16 @@ function relationshipSummary(row: CanvasOutlineRow): string {
   const parts: string[] = [];
   if (row.incoming) parts.push(`${row.incoming} in`);
   if (row.outgoing) parts.push(`${row.outgoing} out`);
-  return parts.join(", ") || "No connections";
+  return parts.join(", ") || "Independent on this canvas";
+}
+
+function founderKind(row: CanvasOutlineRow): string {
+  if (row.anchor.ref.type === "goal" || row.anchor.kind === "goal") return "Founder goal";
+  if (row.anchor.ref.type === "work-artifact") return "Crew work";
+  if (row.anchor.ref.type === "product-change") return "Product change";
+  if (row.anchor.kind === "outcome") return "What came back";
+  if (row.anchor.kind === "question") return "Open question";
+  return row.anchor.kind.replace(/[-_]/g, " ");
 }
 
 export function CanvasOutline({
@@ -51,6 +60,7 @@ export function CanvasOutline({
       focusRow(rows.length - 1);
     } else if (event.key === "Enter") {
       event.preventDefault();
+      setOpen(false);
       onInspect(ref);
     } else if (event.key === "Escape") {
       event.preventDefault();
@@ -100,11 +110,17 @@ export function CanvasOutline({
                       tabIndex={index === safeActiveIndex ? 0 : -1}
                       aria-current={selected ? "true" : undefined}
                       onFocus={() => setActiveIndex(index)}
-                      onClick={() => onSelect(row.anchor.ref)}
-                      onDoubleClick={() => onInspect(row.anchor.ref)}
+                      onClick={() => {
+                        setOpen(false);
+                        onSelect(row.anchor.ref);
+                      }}
+                      onDoubleClick={() => {
+                        setOpen(false);
+                        onInspect(row.anchor.ref);
+                      }}
                       onKeyDown={(event) => onRowKeyDown(event, index, row.anchor.ref)}
                     >
-                      <span className="canvas-outline-kind">{row.anchor.kind.replace(/[-_]/g, " ")}</span>
+                      <span className="canvas-outline-kind">{founderKind(row)}</span>
                       <strong>{row.anchor.label}</strong>
                       <span>{row.regionTitles.length ? `${row.regionTitles.join(", ")} · ` : ""}{relationshipSummary(row)}</span>
                     </button>

@@ -16,6 +16,7 @@ import crypto from "node:crypto";
 
 import * as gmail from "../src/connectors/execute/gmail.mjs";
 import { setOAuthCredential } from "../src/credential-store.mjs";
+import { OUTWARD_RELEASE } from "../src/graph.mjs";
 import {
   buildAuthUrl,
   parseCallback,
@@ -26,6 +27,7 @@ import {
   clearAccessTokenCache,
   createCallbackListener,
   GMAIL_SEND_SCOPE,
+  GMAIL_READ_SCOPE,
 } from "../src/connectors/execute/gmail-oauth.mjs";
 
 // A mock token-endpoint fetch: answers the queued responses in order (last repeats), counting hits so a
@@ -53,7 +55,12 @@ function freshRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "gtm-gmail-oauth-"));
 }
 
-const node = (config = {}) => ({ id: "exe-gmail", category: "execute", connector: "gmail", config });
+// The founder-RELEASED outward path carries the host-issued outward-release capability on node.runtime
+// (EXPERIMENT-MACHINE-SPEC rail 1); these live-send tests exercise that path.
+const node = (config = {}) => ({
+  id: "exe-gmail", category: "execute", connector: "gmail", config,
+  runtime: { outwardRelease: OUTWARD_RELEASE },
+});
 const approvedItem = (over = {}) => ({ gtmActionId: "gtm-1", approved: true, email: "buyer@example.com", subject: "hi", draft: "Hello.", ...over });
 
 // ─── (a) a banked refresh token mints an access token that feeds the transport ────────────────────
@@ -206,13 +213,16 @@ test("WALL — with a valid durable Gmail connection, an UNAPPROVED item is stil
 
 // ─── supporting: the consent URL + PKCE the founder's Google Desktop client must match ─────────────
 
-test("buildAuthUrl requests offline access, forced consent, S256 PKCE, and ONLY the gmail.send scope", () => {
+test("buildAuthUrl requests offline access, forced consent, S256 PKCE, and the send + reply-read scopes", () => {
   const url = new URL(buildAuthUrl({ clientId: "cid", redirectUri: "http://127.0.0.1:5051", state: "st", codeChallenge: "chal" }));
   assert.equal(url.origin + url.pathname, "https://accounts.google.com/o/oauth2/v2/auth");
   assert.equal(url.searchParams.get("client_id"), "cid");
   assert.equal(url.searchParams.get("redirect_uri"), "http://127.0.0.1:5051");
   assert.equal(url.searchParams.get("response_type"), "code");
-  assert.equal(url.searchParams.get("scope"), GMAIL_SEND_SCOPE);
+  assert.deepEqual(
+    new Set(url.searchParams.get("scope").split(" ")),
+    new Set([GMAIL_SEND_SCOPE, GMAIL_READ_SCOPE]),
+  );
   assert.equal(url.searchParams.get("access_type"), "offline");
   assert.equal(url.searchParams.get("prompt"), "consent");
   assert.equal(url.searchParams.get("code_challenge"), "chal");

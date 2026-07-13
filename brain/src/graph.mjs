@@ -14,6 +14,24 @@ import { auditInput, auditOutput } from "./contracts.mjs";
 import { relaxGateContracts, relaxPreGateContracts } from "./source-entry.mjs";
 import { assertMoatConsulted } from "./consult-guard.mjs";
 
+// ─── The outward-release capability (EXPERIMENT-MACHINE-SPEC rail 1) ──────────────────────────────────
+// Outward authority is an EXECUTOR-LEVEL, HOST-ISSUED capability — not an item label. A real network/deploy
+// connector (http, slack, gmail, deploy) refuses to actually leave the machine unless it receives THIS exact
+// token on its node.runtime, and the token is minted here in the host and threaded ONLY down the runGraph
+// opt `outwardRelease`. The founder outward-approval paths (operator gate-resume, the compiled-run approve
+// route) pass it; greenlight and every ordinary/ambient run do NOT. Because it is an opaque module-private
+// symbol rebuilt onto node.runtime from opts every run — never node.config, never a context item, never an
+// item field — composition and a model-driven run cannot forge it, exactly like `deployAuthorization`. So
+// even a mis-classified `approved === true` item routed into an http/slack node cannot send: without the
+// capability on the run, the connector holds it. This is the structural backstop under the item classifier.
+export const OUTWARD_RELEASE = Symbol("gtm.outward-release-capability");
+
+// Does this node carry the host-issued outward-release capability? Connectors call this before any real
+// send/publish/deploy. A missing/forged value fails closed (no release), so a fabricated token cannot pass.
+export function hasOutwardRelease(node) {
+  return node?.runtime?.outwardRelease === OUTWARD_RELEASE;
+}
+
 // ─── Topological sort (Kahn's algorithm on data edges) ───────────────────────
 
 function topoSort(nodes, edges) {
@@ -175,6 +193,26 @@ function stampAgentRef(items, agentRef) {
   );
 }
 
+// A reviewing/enriching agent often returns only the fields it added. Preserve the original artifact
+// when there is one unambiguous upstream match, so a claim audit cannot replace the message the founder
+// is being asked to approve. This is open-shape reconciliation, not a business taxonomy: stable ids win,
+// then exact address/name pairs. Unmatched or ambiguous outputs stay exactly as the model returned them.
+function preserveUpstreamArtifactFields(upstream, output) {
+  if (!Array.isArray(upstream) || !Array.isArray(output) || !upstream.length) return output;
+  const objects = upstream.filter((item) => item && typeof item === "object" && !Array.isArray(item));
+  const keys = ["id", "gtmActionId", "joinKey", "email", "url"];
+  return output.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return item;
+    const matches = objects.filter((candidate) => {
+      if (keys.some((key) => item[key] != null && candidate[key] != null && String(item[key]) === String(candidate[key]))) return true;
+      const sameName = item.name && candidate.name && String(item.name) === String(candidate.name);
+      const sameOrg = item.org && candidate.org && String(item.org) === String(candidate.org);
+      return Boolean(sameName && sameOrg);
+    });
+    return matches.length === 1 ? { ...matches[0], ...item } : item;
+  });
+}
+
 // ─── Resolve context inputs for a node ───────────────────────────────────────
 
 function resolveContext(nodeId, edges, nodeResults) {
@@ -256,7 +294,7 @@ async function runNodeWithTimeout(node, upstream, context, store, opts, timeoutM
 }
 
 async function runNode(node, upstream, context, store, opts = {}) {
-  const { approvals = {}, decisions = {}, deployAuthorization = null } = opts;
+  const { approvals = {}, decisions = {}, deployAuthorization = null, outwardRelease = null } = opts;
   // Resource nodes: declaration only, no execution
   if (node.category === "resource") {
     return { nodeId: node.id, category: node.category, ok: true, items: [], meta: { declaration: true } };
@@ -282,7 +320,7 @@ async function runNode(node, upstream, context, store, opts = {}) {
       if (kind === "agent" && result?.ok !== false && Array.isArray(result?.items)) {
         const agentRef = node.ref ?? node.config?.ref ?? null;
         if (agentRef) {
-          const items = stampAgentRef(result.items, agentRef);
+          const items = stampAgentRef(preserveUpstreamArtifactFields(upstream, result.items), agentRef);
           return { nodeId: node.id, category: node.category, kind, ...result, items };
         }
       }
@@ -358,6 +396,11 @@ async function runNode(node, upstream, context, store, opts = {}) {
         // microproduct deploy connector reads an authorization composition can't forge. Null on a normal
         // run — that is why an ordinary gate approval never deploys.
         deployAuthorization,
+        // The outward-release capability (rail 1). Present ONLY on a founder outward-approval run; absent
+        // on greenlight and every ordinary/ambient run. An outward connector (http/slack/gmail/deploy)
+        // refuses to actually send/publish/deploy without it — the executor-level backstop under the item
+        // classifier. Rebuilt from opts every run, so composition/run can never forge it.
+        outwardRelease,
       },
     };
     const result = await connector.run(runtimeNode, upstream, context, store);
@@ -405,24 +448,38 @@ export function hasApproveIntent(approvals = {}, decisions = {}) {
     ));
 }
 
-// What approving at a gate actually DOES, read off the nearest downstream execute node. Deterministic
-// (code answers when it can): the plain-language "what your yes does" line is grounded in this, so the
-// gate can honestly say "nothing sends — staged locally" for a local queue vs "sends" / "publishes" for
-// a real transport. Null when no execute node is downstream of the gate (nothing leaves on approval).
+// What approving at a gate actually DOES, read off the downstream execute nodes. Deterministic (code
+// answers when it can): the plain-language "what your yes does" line is grounded in this, so the gate can
+// honestly say "nothing sends — staged locally" for a local queue vs "sends" / "publishes" for a real
+// transport. Null when no execute node is downstream of the gate (nothing leaves on approval).
+//
+// ONLY the connectors PROVEN to stay inside the machine are willSend:false. Everything else — every real
+// sender AND every UNRECOGNIZED connector — is outward or possibly-outward, so the away/unattended hold
+// (EXPERIMENT-MACHINE-SPEC rail 1) fails CLOSED on the unknown. `slack` is a real sender and is listed here
+// (it was missing before — that omission made an away Slack send fail-open). A connector NOT in this map
+// resolves to willSend:null, which `possiblyOutward` (below) treats as outward.
 const EXECUTE_ACTION_BY_CONNECTOR = {
   local: { verb: "stage-local", willSend: false },
+  artifact: { verb: "stage-artifact", willSend: false },
   gmail: { verb: "send", willSend: true },
   "gmail-oauth": { verb: "send", willSend: true },
   "gmail-transport": { verb: "send", willSend: true },
   http: { verb: "send", willSend: true },
-  artifact: { verb: "stage-artifact", willSend: false },
+  slack: { verb: "send", willSend: true },
   deploy: { verb: "deploy", willSend: true },
 };
 
+// The set of every execute connector downstream of a gate, and whether ANY of them is possibly-outward.
+// possiblyOutward is true when ANY downstream execute is a known sender (willSend === true) OR an
+// UNRECOGNIZED connector (willSend === null / not in the map). It is false ONLY when every downstream
+// execute is a proven-internal connector (local/artifact). This is what the away-hold reads: away holds
+// the whole batch if ANY branch could reach the world. Fails CLOSED on the unknown, and checks EVERY
+// branch — never just the first.
 export function gateDownstreamAction(gateNodeId, nodes, edges) {
   const nodeMap = new Map((nodes ?? []).map((n) => [n.id, n]));
   const dataEdges = (edges ?? []).filter((e) => e.edgeType === "data" || e.edgeType == null);
   const seen = new Set([gateNodeId]);
+  const executes = [];
   let frontier = [gateNodeId];
   while (frontier.length) {
     const next = [];
@@ -433,14 +490,23 @@ export function gateDownstreamAction(gateNodeId, nodes, edges) {
         const target = nodeMap.get(edge.target);
         if (target?.category === "execute") {
           const connector = target.connector || "local";
-          return { connector, ...(EXECUTE_ACTION_BY_CONNECTOR[connector] ?? { verb: null, willSend: null }) };
+          const action = EXECUTE_ACTION_BY_CONNECTOR[connector] ?? { verb: null, willSend: null };
+          executes.push({ connector, ...action });
+          // Do NOT stop at the first execute — a gate can fan out to several branches, and away must hold
+          // if ANY of them is possibly-outward. Keep walking every branch.
         }
         next.push(edge.target);
       }
     }
     frontier = next;
   }
-  return null;
+  if (executes.length === 0) return null;
+  // possiblyOutward: any known sender OR any unrecognized connector (willSend !== false). Fails closed.
+  const possiblyOutward = executes.some((e) => e.willSend !== false);
+  // The first execute keeps its role as the plain-language "what your yes does" descriptor (unchanged
+  // shape), now augmented with the whole-branch possiblyOutward verdict + the connector list.
+  const first = executes[0];
+  return { ...first, possiblyOutward, executeConnectors: executes.map((e) => e.connector) };
 }
 
 export async function runGraph(graph, opts = {}) {
@@ -507,6 +573,21 @@ export async function runGraph(graph, opts = {}) {
     // Per-node wall-clock ceiling (ms). A stuck connector/fetch fails honestly at this bound instead of
     // hanging the whole run. Generous by default; a non-positive value disables it (unbounded).
     nodeTimeoutMs = DEFAULT_NODE_TIMEOUT_MS,
+    // Founder presence (the away / unattended state, EXPERIMENT-MACHINE-SPEC rail 1). Host-supplied
+    // runtime boolean threaded onto each gate node's context as `context.__founderPresent`. When false
+    // (away) AND the gate's downstream action would send, the gate connector suppresses UNATTENDED
+    // standing-autonomy auto-approval and holds the outward batch for the founder's return. It only ADDS
+    // conservatism — a null/true value leaves the wall's behavior exactly as before. Never forgeable by
+    // composition (rebuilt from opts every run, like sendRunners/deployAuthorization).
+    founderPresent = null,
+    // The outward-release capability (EXPERIMENT-MACHINE-SPEC rail 1). Host-issued token threaded onto each
+    // execute node's runtime as `node.runtime.outwardRelease`. An outward connector (http/slack/gmail/
+    // deploy) refuses to actually send/publish/deploy unless it receives EXACTLY this token — so an
+    // approved item cannot leave on a run that did not carry the capability. Supplied ONLY by the founder
+    // outward-approval paths (operator gate-resume, the compiled-run approve route); greenlight and every
+    // ordinary/ambient run leave it null, so they physically cannot cross the wall even on a mis-classified
+    // item. Never forgeable by composition (rebuilt from opts every run, like deployAuthorization).
+    outwardRelease = null,
   } = opts;
   const emit = typeof onEvent === "function" ? onEvent : () => {};
   const { nodes, edges, id: graphId } = graph;
@@ -628,6 +709,11 @@ export async function runGraph(graph, opts = {}) {
     if (node.category === "gate") {
       if (typeof gateTranslator === "function") context.__gateTranslate = gateTranslator;
       context.__gateDownstream = gateDownstreamAction(node.id, nodes, edges);
+      // The away / unattended hold. Only threaded when the host explicitly resolved presence (a boolean);
+      // a null leaves the key unset so away is opt-in per run and existing runs are byte-identical. The
+      // gate connector reads this ONLY to suppress unattended standing-autonomy auto-approval on outward
+      // sends — it never affects a live founder decision.
+      if (typeof founderPresent === "boolean") context.__founderPresent = founderPresent;
     }
 
     // Stream the step lifecycle so the UI can animate the flow and reveal content
@@ -651,14 +737,14 @@ export async function runGraph(graph, opts = {}) {
       // source) is a real product gap, but it must not fail an otherwise-successful run — a fully
       // approved, staged run reads "completed", and Measure reports its gap separately. Let the node
       // run on what it has (it self-labels each item attributed/blind) and flag it blind, not blocked.
-      result = await runNodeWithTimeout(node, upstream, context, store, { approvals, decisions, stepRuntime, loadLastRunItems, deployAuthorization }, nodeTimeoutMs);
+      result = await runNodeWithTimeout(node, upstream, context, store, { approvals, decisions, stepRuntime, loadLastRunItems, deployAuthorization, outwardRelease }, nodeTimeoutMs);
       // A timeout is an honest failure, never "blind" — blind swallows into the run's ok, a stuck node
       // must not. Only a node that actually ran gets the blind (measurement-can't-attribute) treatment.
       result = result.timedOut
         ? { ...result, contractAudit: inputAudit }
         : { ...result, ok: result.ok !== false, blind: true, contractAudit: inputAudit };
     } else {
-      result = await runNodeWithTimeout(node, upstream, context, store, { approvals, decisions, stepRuntime, loadLastRunItems, deployAuthorization }, nodeTimeoutMs);
+      result = await runNodeWithTimeout(node, upstream, context, store, { approvals, decisions, stepRuntime, loadLastRunItems, deployAuthorization, outwardRelease }, nodeTimeoutMs);
       const outputAudit = result.ok ? auditOutput(node, result.items ?? []) : inputAudit;
       result = { ...result, contractAudit: outputAudit };
       if (result.ok && outputAudit.state === "blocked") {

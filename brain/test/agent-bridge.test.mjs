@@ -137,6 +137,29 @@ describe("buildAgentPrompt — merges a loaded definition, no-ops cleanly when a
     fs.rmSync(root, { recursive: true, force: true });
   });
 
+  it("does not import legacy program-bound doctrine into another venture", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "gtm-agents-bound-"));
+    fs.writeFileSync(path.join(root, "first-contact.md"), `---
+name: first-contact
+programId: program-rodent-outreach
+agentInstanceId: rodent-writer-v1
+tools: Read, WebSearch
+---
+Draft only for pest-control operators.
+Evidence: /Users/founder/.claude/projects/rodentradar/memory/MEMORY.md:0`);
+    const built = buildAgentPrompt({
+      ref: "first-contact",
+      prompt: "Draft for the active product.",
+      items: [],
+      context: { __run: { projectId: "acme-saas" } },
+      agentDefinitionRoot: root,
+    });
+    assert.equal(built.definitionLoaded, false);
+    assert.doesNotMatch(built.prompt, /pest-control|rodentradar|program-rodent/i);
+    assert.match(built.prompt, /Draft for the active product/);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
   it("folds accumulated skill guidance into the agent prompt as doctrine (not raw passthrough JSON)", () => {
     const built = buildAgentPrompt({
       ref: "channel-drafter",

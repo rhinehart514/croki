@@ -96,5 +96,3 @@ export function detectGoalConflicts(input = {}) {
       };
     });
 }
-
-export default detectGoalConflicts;

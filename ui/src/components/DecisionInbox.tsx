@@ -13,8 +13,9 @@
 // run couldn't say in plain words (a raw error payload from a model or tool) is turned into one human
 // sentence before it ever reaches this surface — the founder never reads a JSON blob or a stack trace.
 
-import { CircleCheck, GitPullRequestArrow, Lightbulb, Route, MessageCircleQuestion, OctagonAlert, CircleSlash, Inbox } from "lucide-react";
+import { CircleCheck, GitPullRequestArrow, Lightbulb, Route, MessageCircleQuestion, OctagonAlert, CircleSlash, Inbox, MessageSquareReply, Webhook, GitBranchPlus } from "lucide-react";
 import type { PendingDecision, PendingDecisionKind } from "@/types";
+import { plainErrorLine } from "@/lib/operatorLanguage";
 import "@/styles/decision-inbox.css";
 
 // Each kind's icon and whether it carries the founder-gate accent. The bold headline itself is built
@@ -29,6 +30,11 @@ const KIND_META: Record<PendingDecisionKind, { icon: typeof Inbox; accent: boole
   blocked: { icon: OctagonAlert, accent: false },
   failed: { icon: CircleSlash, accent: false },
   signal: { icon: Inbox, accent: false },
+  // A real reply is the one PUSH the spec wants — accent it so it reads as "decide together now".
+  "reply-alert": { icon: MessageSquareReply, accent: true },
+  // Birth-source proposals — greenlight moves, not the founder-gate accent.
+  "trigger-proposal": { icon: Webhook, accent: false },
+  "variant-proposal": { icon: GitBranchPlus, accent: false },
 };
 
 // The bold line: exactly what the founder must decide, in their words, with the real count folded in
@@ -52,55 +58,42 @@ function askHeadline(d: PendingDecision): string {
       return "A run stopped early";
     case "signal":
       return "A signal to route";
+    case "reply-alert":
+      return "A reply came back — decide together";
+    case "trigger-proposal":
+      return "An outside trigger — shape an experiment?";
+    case "variant-proposal":
+      return "A bet ended — shape the next variant?";
     default:
       return "Waiting on you";
   }
 }
 
+function actionLabel(kind: PendingDecisionKind): string {
+  return kind === "trigger-proposal" || kind === "variant-proposal" ? "Shape" : "Open";
+}
+
 // Turn whatever a run left in its summary into one line a founder can read. Runs that blocked or died
-// often carry a raw model/tool error — a JSON payload, a stack trace, a bare status string. None of
-// that belongs in front of the founder, so we detect those shapes and swap in a plain sentence. Text
-// that already reads like a human sentence passes through untouched.
+// often carry a raw model/tool/harness error — a JSON payload, a stack trace, a named-engine envelope.
+// None of that belongs in front of the founder, so we route it through the shared plainErrorLine seam
+// (the same one the crew thread uses) and swap in a plain sentence. Text that already reads like a
+// human sentence passes through untouched.
 function humaneLine(kind: PendingDecisionKind, raw: string | null): string | null {
   const text = (raw ?? "").trim();
 
   // Only blocked/failed rows carry error payloads; other kinds' summaries are already founder-words.
   const mayBeError = kind === "blocked" || kind === "failed";
-  if (mayBeError && (text === "" || looksLikeRawError(text))) {
-    return errorPlainLine(text);
+  if (mayBeError) {
+    const plain = plainErrorLine(text);
+    if (text === "" || plain) return plain ?? "A teammate couldn't finish this run. Nothing was sent.";
   }
   return text || null;
 }
 
-// Does this string look like machine output rather than a written sentence? JSON, a stack trace, a
-// bare HTTP status, or a `{"type"…}` error envelope all read as raw.
-function looksLikeRawError(text: string): boolean {
-  if (/^[[{]/.test(text)) return true; // starts as JSON
-  if (/"(type|status|error|message|code)"\s*:/.test(text)) return true; // JSON error fields
-  if (/\b(at\s+\w+.*:\d+:\d+|Error:|Traceback|Exception)\b/.test(text)) return true; // stack / exception
-  if (/^\d{3}\b/.test(text) && text.length < 40) return true; // bare status like "400 Bad Request"
-  if (/https?:\/\//.test(text) && text.length < 80) return true; // bare URL, no prose
-  return false;
-}
-
-// Map a raw error into a single human sentence. We look for the few real causes worth naming (an
-// unavailable model on the founder's plan, a rate limit, an auth problem) and otherwise fall back to
-// an honest generic line. Never surfaces the payload itself.
-function errorPlainLine(text: string): string {
-  const lower = text.toLowerCase();
-  if (/model is not supported|not supported when using|unsupported model|model_not_found|does not have access to/.test(lower)) {
-    return "A teammate couldn't finish — the model it needs isn't available on your plan.";
-  }
-  if (/rate limit|rate_limit|too many requests|\b429\b/.test(lower)) {
-    return "A teammate hit a usage limit and paused. Give it a moment and try again.";
-  }
-  if (/unauthor|forbidden|invalid api key|authentication|\b401\b|\b403\b/.test(lower)) {
-    return "A teammate couldn't connect — a login or key needs your attention.";
-  }
-  if (/timeout|timed out|econnreset|network|fetch failed/.test(lower)) {
-    return "A teammate lost its connection before it finished.";
-  }
-  return "A teammate couldn't finish this run. Nothing was sent.";
+// Strip internal project tags a founder should never read ("(dogfood)", "(internal)") from a name
+// that came straight from run data.
+function cleanProjectName(name: string): string {
+  return name.replace(/\s*\((?:dogfood|internal)\)/gi, "").trim();
 }
 
 // One thread should show as one row. A single run can pass through several waiting states, and the
@@ -174,7 +167,7 @@ export function DecisionInbox({
         const Icon = meta.icon;
         const headline = askHeadline(d);
         const line = humaneLine(d.kind, d.summary);
-        const where = [d.projectName, d.pipelineName].filter(Boolean).join(" · ");
+        const where = [d.projectName ? cleanProjectName(d.projectName) : null, d.pipelineName].filter(Boolean).join(" · ");
         return (
           <li key={d.id} className={`decision-row ${meta.accent ? "is-gate" : ""}`}>
             <span className={`decision-row-glyph ${meta.accent ? "is-gate" : ""}`}>
@@ -193,7 +186,7 @@ export function DecisionInbox({
               className="decision-row-open"
               onClick={() => onOpen(d)}
             >
-              Open
+              {actionLabel(d.kind)}
             </button>
           </li>
         );

@@ -54,6 +54,7 @@ export function ProjectSwitcher({
         className="project-switcher-trigger"
         onClick={() => { setOpen((value) => !value); setConfirmId(null); }}
         type="button"
+        aria-label={active ? `Switch product. Current product: ${active.name}` : "Choose product"}
         aria-haspopup="listbox"
         aria-expanded={open}
         disabled={busy}

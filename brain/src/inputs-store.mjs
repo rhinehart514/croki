@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { persistence } from "./persistence.mjs";
-import { safeId } from "./store-fs.mjs";
+import { now, safeId } from "./store-fs.mjs";
 
 // The INPUTS layer — a durable, project-scoped, append-only log of live world signals entering the
 // product from the outside: a commit, a signup, a reply, a star, a demo visit, a CSV row. This is the
@@ -19,10 +19,6 @@ const COLLECTION = "inputs";
 // then either 'routed' (folded into a run / person / experiment, with routedTo naming the target) or
 // 'ignored' (deliberately set aside). Only these three are legal.
 const INPUT_STATUSES = new Set(["unrouted", "routed", "ignored"]);
-
-function now() {
-  return new Date().toISOString();
-}
 
 function emptyStore(projectId) {
   return { schemaVersion: SCHEMA_VERSION, projectId, inputs: [] };

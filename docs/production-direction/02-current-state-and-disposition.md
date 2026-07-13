@@ -56,14 +56,14 @@ founder decisions, and returned outcomes still read as adjacent systems instead 
 - a hosted strategy/ranking engine that substitutes for model judgment;
 - parallel stores for every new interpretation concept when a projection will work.
 
-## Existing source-of-truth hierarchy
+## Source-of-truth hierarchy after this package
 
 1. `AGENTS.md` for invariants and engineering doctrine.
 2. Current code and tests for actual behavior.
 3. `docs/STATE.md` for dated reality.
-4. `docs/production-direction/` for the approved target direction.
-5. `docs/GTM-MACHINE.md` and `docs/GTM-ENGINE-REBUILD.md` for retained engine ideas where they do not conflict.
-6. `docs/history/DDD.md` and superseded docs for historical context only.
+4. `docs/EXPERIMENT-MACHINE-SPEC.md` and `docs/OPEN-CANVAS-SPEC.md` for the current target direction.
+5. This numbered production-direction package and retired direction files in git history for implementation context only.
+6. `docs/history/DDD.md` and other superseded docs for historical context only.
 
 ## Implementation prompt
 

@@ -23,6 +23,31 @@
   color: var(--ink);
   overflow: hidden;
 }
+/* The pull affordance — the rail is now SECONDARY to the canvas loop-back motion (EXPERIMENT-MACHINE-SPEC),
+   so it does not auto-open. This quiet chip sits where the rail anchors and opens it on the founder's pull.
+   Calm and monochrome: a low-key note that returns exist, never a count, badge, or nag. It expands into the
+   full rail in place. */
+.oret-pull {
+  position: absolute;
+  left: calc(var(--pentry-gutter, 0px) + 14px);
+  bottom: 18px;
+  z-index: 41;
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: #ffffff;
+  border: 1px solid var(--muted);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-pop);
+  font-family: "Geist Variable", ui-sans-serif, -apple-system, sans-serif;
+  font-size: var(--text-xs); font-weight: 560; letter-spacing: 0.01em;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.oret-pull:hover { color: var(--ink); border-color: var(--ink-2); }
+.oret-pull:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 1px; }
+@media (prefers-reduced-motion: reduce) { .oret-pull { transition: none; } }
+
 .oret-head {
   display: flex; align-items: center; gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
@@ -60,6 +85,29 @@
 .oret-badge.is-observed { color: var(--ink); }
 .oret-badge.is-none { color: var(--muted); }
 .oret-badge.is-unmeasured { color: var(--muted); font-style: italic; }
+
+/* The inspectable account — pull-only. Collapsed by default (never a pushed metric); the founder opens it to
+   read what actually came back: the response text and a plain exposure line. Quiet, monochrome, no accent. */
+.oret-account { margin-top: var(--space-2); }
+.oret-account-summary {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 540; color: var(--muted);
+  cursor: pointer; list-style: none; user-select: none;
+}
+.oret-account-summary::-webkit-details-marker { display: none; }
+.oret-account-summary::before { content: "›"; display: inline-block; transition: transform 120ms ease; }
+.oret-account[open] .oret-account-summary::before { transform: rotate(90deg); }
+.oret-account-summary:hover { color: var(--ink-2); }
+.oret-account-body { margin-top: var(--space-2); padding-left: 2px; }
+.oret-account-response {
+  margin: 0; padding: 0 0 0 10px;
+  border-left: 2px solid var(--line);
+  font-size: 12px; line-height: 1.5; color: var(--ink);
+  white-space: pre-wrap; word-break: break-word;
+}
+.oret-account-empty { margin: 0; font-size: 11.5px; color: var(--muted); font-style: italic; }
+.oret-account-exposure { margin: var(--space-2) 0 0; font-size: 11px; color: var(--muted); }
+
 /* the return edges, rendered as routing chips — each returns the outcome toward a real object */
 .oret-returns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--space-2); }
 .oret-return {

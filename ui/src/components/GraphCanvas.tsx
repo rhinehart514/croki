@@ -12,7 +12,7 @@ import { motion } from "motion/react";
 import {
   AlertCircle, AlertTriangle, Ban, Bot, Check, CheckCircle2, Circle, Code, CornerDownLeft, Database, Download, FileText, GitMerge,
   Loader, Lock, MessageSquare, MousePointer2, Pencil, Play, RotateCcw, Search, ShieldCheck, Lightbulb, Split, Sprout, Target,
-  Telescope, Trash2, TrendingUp, Wand2, X, Zap,
+  Eye, Flag, SlidersHorizontal, Telescope, Trash2, TrendingUp, Wand2, X, Zap,
 } from "lucide-react";
 import TerminalNode from "@/components/TerminalNode";
 import QueryNode from "@/components/QueryNode";
@@ -38,7 +38,8 @@ import { ObjectChip, KindCluster, CanvasAnchor, CanvasRegion, FounderWall } from
 import { CanvasNativeCreate, type CanvasCreateIntent } from "@/components/canvas/CanvasNativeCreate";
 import { CanvasRegionGroupingControl } from "@/components/CanvasRegionGroupingControl";
 import { canvasRenderingPolicy } from "@/lib/canvasPerformance";
-import { alignGatesToWall, buildCanvasAnchorLayer, buildWovenOverlay, focusIsEffective, type WovenAxis, type WovenFocus } from "@/lib/wovenOverlay";
+import { isRestorableViewport, viewportShowsAnyObject } from "@/lib/canvasViewportContract";
+import { alignGatesToWall, buildCanvasAnchorLayer, buildWovenOverlay, focusIsEffective, projectFounderWall, type WovenAxis, type WovenFocus } from "@/lib/wovenOverlay";
 import type { WovenGraph } from "@/types";
 import type { RunSummary } from "@/api";
 import { explainGraph } from "@/api";
@@ -283,13 +284,15 @@ const CATEGORY_LABEL: Record<GTMNodeCategory, string> = {
 // mechanical tell we refuse: any node-graph app prints those exact words, so a stranger guesses them
 // before the card loads. Each of these reads instead as what it IS in the founder's go-to-market — the
 // brief the crew works from, the send that reaches the world (staged behind the wall until you approve),
-// the scoreboard of what that send drove. `eyebrow` is the quiet operator name, `headline` the plain job
-// it does, `idle` the honest present state before a run has given it real numbers. The Gate keeps its own
+// and what actually came back from the world. `eyebrow` is the quiet operator name, `headline` the plain
+// job it does, `idle` the honest present state before a run has given it real numbers. The Measure card is
+// deliberately NOT a "scoreboard" — the spec bans scoreboard/metric framing, which triggers the avoidance
+// the machine exists to prevent; it reads as real market results looping back. The Gate keeps its own
 // richer treatment (it's the signature card); this brings its neighbours up to the same register.
 const STRUCTURAL_CARD: Partial<Record<GTMNodeCategory, { eyebrow: string; headline: string; idle: string }>> = {
   context: { eyebrow: "The brief",      headline: "Your product & who it's for", idle: "What your crew read to work from" },
-  execute: { eyebrow: "The send",       headline: "Send what you approved",       idle: "Staged on your machine — leaves only after you approve at the gate" },
-  measure: { eyebrow: "The scoreboard", headline: "What the send drove",          idle: "Scores the moment your send goes out" },
+  execute: { eyebrow: "The send",       headline: "Send what you approved",       idle: "Staged on your machine. Nothing's sent yet." },
+  measure: { eyebrow: "What came back",  headline: "Real results from the world",  idle: "Warm replies and outcomes loop back here once your send is out" },
 };
 
 // A structural node whose composed label is just its engine category ("Execute", "Measure", "Context
@@ -348,7 +351,7 @@ function nodeVisual(node: GTMNode): { color: string; label: string; icon: React.
 //   Source   — the audience this channel pulls in (mode-marked provided/discovered)
 //   Teammate — a personalized agent (its role is the headline; the kebab ref is a faint slug)
 //   Gate     — the wall: the one place anything reaches the world (the signature card)
-//   Measure  — the scoreboard, honest about blind attribution
+//   Measure  — what came back from the world (real results), honest about blind attribution
 //   Step     — the quiet machinery (tool / code / skill / enrich / filter / generate)
 type CardObject = "source" | "teammate" | "gate" | "measure" | "switch" | "step";
 function cardObject(node: GTMNode): CardObject {
@@ -374,7 +377,7 @@ function canvasLabel(node: GTMNode): string {
 // step a teammate PERFORMS — a draft, an enrich, a filter, a skill/code beat — has no `kind:"agent"` yet
 // still belongs to a crew member; we derive that member's character from the step's own job so the founder
 // sees WHO owns it, as a character, not a faceless mechanical card. Structural nodes are deliberately
-// characterless: the gate is the founder's own wall, Measure is the scoreboard, a Source is the audience,
+// characterless: the gate is the founder's own wall, Measure is what came back from the world, a Source is the audience,
 // a Switch is automatic logic, Execute is the send, and context/resource are reference — none is a teammate.
 // The seed is the node's ref → id so the same step always draws the same face and two steps never collide.
 function stepTeammate(node: GTMNode): { persona: AgentPersona; seed: string } | null {
@@ -1557,11 +1560,21 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
             </div>
           </div>
           <span className="loop-node-label">{nodeLabel}</span>
-          <div className="loop-gate-threshold" role="group" aria-label="Gate throughput">
-            <span className="loop-gate-side is-waiting"><b>{gateWaiting}</b><span>waiting</span></span>
-            <span className="loop-gate-seam" aria-hidden />
-            <span className="loop-gate-side is-released"><b>{gateReleased}</b><span>released</span></span>
-          </div>
+          {/* The waiting/released ledger is a live metric — show it only once the gate has real
+              throughput. On a gate that has never run, two big zeros read as a dead thing dressed as a
+              scoreboard; the "Nothing staged yet." line below carries the resting state instead. */}
+          {gateWaiting > 0 || gateReleased > 0 ? (
+            <div className="loop-gate-threshold" role="group" aria-label="Gate throughput">
+              <span className="loop-gate-side is-waiting"><b>{gateWaiting}</b><span>waiting</span></span>
+              <span className="loop-gate-seam" aria-hidden />
+              <span className="loop-gate-side is-released"><b>{gateReleased}</b><span>released</span></span>
+            </div>
+          ) : null}
+          {gateReleased > 0 && gateWaiting === 0 ? (
+            <span className="loop-gate-release-receipt" data-testid="gate-approved-receipt">
+              Approved · {gateReleased} released
+            </span>
+          ) : null}
           <span
             className={cn("loop-gate-autonomy", `is-${gateAutonomy}`)}
             title="Autonomy is set only by an explicit founder promotion — never by composition or a run."
@@ -1574,7 +1587,7 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
             <b>{gateAutonomyLabel}</b> — {gateAutonomyPosture}
           </span>
           {gateItems.length === 0 ? (
-            <span className="loop-gate-empty">Nothing staged yet. Nothing reaches the world until you approve it here.</span>
+            <span className="loop-gate-empty">Nothing staged yet.</span>
           ) : (
             // The node stays a compact object on the canvas; opening the review is a deliberate act that
             // brings up the immersive room, not a cramped bloom in the corner.
@@ -1586,20 +1599,20 @@ function WorkNodeComponent({ data }: NodeProps<Node<GTMNodeData>>) {
               {data.bloomed ? `Needs you · review ${gateWaiting} →` : `Review ${gateWaiting} staged →`}
             </button>
           )}
-          {/* The review room — a full-surface overlay portaled to the body so it escapes the canvas
-              transform and truly takes over: the reel of what the crew did, then the decisions. Click the
-              scrim or press Escape (when not typing) to step out. Dialog semantics so keyboard and
-              screen-reader users can't tab into the obscured canvas behind the scrim. */}
+          {/* The founder gate opens as a centered modal over a dimmed canvas — portaled to the document body
+              so React Flow's viewport transform can't clip or mis-place it. It used to mount as a card
+              attached to the gate node and sprawl over the neighbouring nodes; now it's a focused "stop and
+              decide" surface that never fights the canvas underneath it. */}
           {reviewOpen && result ? createPortal(
             <div className="cgate-stage-overlay" onClick={() => setReviewOpen(false)}>
-              <div className="cgate-stage-shell" role="dialog" aria-modal="true" aria-label="Your call — review your crew's work" onClick={(e) => e.stopPropagation()}>
+              <div className="cgate-wall-attached cgate-review-modal" role="dialog" aria-label="Your call — review your crew's work" onClick={(e) => e.stopPropagation()}>
                 <div className="cgate-stage-bar">
                   <span className="cgate-stage-eyebrow"><ShieldCheck size={13} aria-hidden /> Your call</span>
-                  <button type="button" className="cgate-stage-close" onClick={() => setReviewOpen(false)} aria-label="Close" autoFocus>
+                  <button type="button" className="cgate-stage-close" onClick={() => setReviewOpen(false)} aria-label="Close gate review" autoFocus>
                     <X size={16} aria-hidden />
                   </button>
                 </div>
-                <GateReview variant="stage" items={result.items} run={data.run} onSubmit={data.onSubmitReview} onDecideDelta={data.onDecideDelta} learned={gateLearned} promote={data.gatePromote} offer={data.gateOffer} transportConnected={data.transportConnected} onRecordOutcome={data.onRecordOutcome} onRefineItem={data.onRefineItem} />
+                <GateReview variant="bloom" items={result.items} run={data.run} onSubmit={data.onSubmitReview} onDecideDelta={data.onDecideDelta} learned={gateLearned} promote={data.gatePromote} offer={data.gateOffer} transportConnected={data.transportConnected} onRecordOutcome={data.onRecordOutcome} onRefineItem={data.onRefineItem} />
               </div>
             </div>,
             document.body,
@@ -1992,7 +2005,32 @@ function FeedbackEdge({ sourceX, sourceY, targetX, targetY, markerEnd, style }: 
   const path = `M ${sourceX},${sourceY} C ${sourceX},${midY} ${targetX},${midY} ${targetX},${targetY}`;
   return <BaseEdge path={path} markerEnd={markerEnd} style={style} className="loop-edge-feedback" />;
 }
-const EDGE_TYPES = { feedback: React.memo(FeedbackEdge) };
+
+// ─── Loop-back edge ── the experiment-machine's one new primitive. What came back (an outcome or a warm
+// lead) doesn't hang off a faint parallel dash — it visibly CIRCLES back to the front of the pipeline that
+// produced it. So this is a real arc that BOWS up and over the pipeline spine and sweeps AROUND the
+// intervening step cards back to the entry step, reading as a distinct return motion, not one more tie line.
+// The bow height scales with the horizontal span so a long loop clears the whole node band; a short loop
+// still arcs visibly. It routes ABOVE the band (negative Y) so it never buries under the step cards.
+function LoopBackEdge({ sourceX, sourceY, targetX, targetY, markerEnd, style }: EdgeProps) {
+  const dx = Math.abs(targetX - sourceX);
+  // Keep the return close to the work. The old span-proportional 300px bow turned one outcome into the
+  // dominant object on screen. A shallow bounded trace still clears the cards and carries direction without
+  // becoming a decorative arch.
+  const bow = Math.min(96, Math.max(56, dx * 0.1));
+  const apexY = Math.min(sourceY, targetY) - bow;
+  const c1x = sourceX - dx * 0.18;
+  const c2x = targetX + dx * 0.18;
+  const path = `M ${sourceX},${sourceY} C ${c1x},${apexY} ${c2x},${apexY} ${targetX},${targetY}`;
+  // The `woven-loopback[ is-warm][ is-dim]` class rides on the edge's wrapping <g> (set in wovenOverlay), so
+  // the CSS (`.woven-loopback .react-flow__edge-path`) targets this path without threading className here.
+  return <BaseEdge path={path} markerEnd={markerEnd} style={style} />;
+}
+
+const EDGE_TYPES = {
+  feedback: React.memo(FeedbackEdge),
+  loopback: React.memo(LoopBackEdge),
+};
 
 // Workbench surfaces (terminal/query/web) are human-operated sources with their own renderers, not the
 // work-card. Routed by kind, since they share the "source" category with connector-backed sources.
@@ -2494,30 +2532,126 @@ function buildMergedFlowGraph(
 
 // ─── Auto-center on selection ─────────────────────────────────────────────────
 
-function NodeFocuser({ selection, active }: { selection: NodeSelection; panelOpen: boolean; active: boolean }) {
-  const { getNode, fitView } = useReactFlow();
+const overlayAwareX = (x: number, zoom: number): number => {
+  void zoom;
+  return x;
+};
+
+type CanvasFrame = {
+  padding: { top: number; right: number; bottom: number; left: number };
+  offset: { x: number; y: number };
+  width: number;
+  height: number;
+};
+
+function paddingPixels(value: PaddingUnit | undefined, extent: number): number {
+  if (typeof value === "number") return value;
+  if (!value) return 0;
+  if (value.endsWith("px")) return Number.parseFloat(value) || 0;
+  if (value.endsWith("%")) return extent * (Number.parseFloat(value) || 0) / 100;
+  return 0;
+}
+
+// Resolve fit padding against the React Flow pane, then reserve the occupied right panel without ever
+// consulting window dimensions. The offset is expressed in screen pixels and converted to flow units by
+// callers when using setCenter.
+function resolveCanvasFrame(
+  width: number,
+  height: number,
+  padding: FitPadding,
+  panelOpen: boolean,
+): CanvasFrame {
+  const raw = typeof padding === "object"
+    ? {
+        top: paddingPixels(padding.top, height),
+        right: paddingPixels(padding.right, width),
+        bottom: paddingPixels(padding.bottom, height),
+        left: paddingPixels(padding.left, width),
+      }
+    : {
+        top: paddingPixels(padding, height),
+        right: paddingPixels(padding, width),
+        bottom: paddingPixels(padding, height),
+        left: paddingPixels(padding, width),
+      };
+  const panelInset = panelOpen ? Math.min(360, width * 0.34) : 0;
+  const right = Math.min(raw.right + panelInset, Math.max(raw.right, width - raw.left - 220));
+  const resolved = { ...raw, right };
+  return {
+    padding: resolved,
+    width,
+    height,
+    offset: {
+      x: (resolved.right - resolved.left) / 2,
+      y: (resolved.bottom - resolved.top) / 2,
+    },
+  };
+}
+
+function useCanvasFrame(fitOptions: FitOpts, panelOpen: boolean): CanvasFrame {
+  const width = useStore((state) => state.width);
+  const height = useStore((state) => state.height);
+  return useMemo(
+    () => resolveCanvasFrame(width, height, fitOptions.padding, panelOpen),
+    [fitOptions.padding, height, panelOpen, width],
+  );
+}
+
+function NodeFocuser({ selection, panelOpen, active, fitOptions, suppressInitial }: { selection: NodeSelection; panelOpen: boolean; active: boolean; fitOptions: FitOpts; suppressInitial: boolean }) {
+  const { getNode, fitView, setCenter } = useReactFlow();
+  const frame = useCanvasFrame(fitOptions, panelOpen);
   const prev = React.useRef<NodeSelection>(selection);
+  const first = useRef(true);
 
   useEffect(() => {
+    // A valid saved camera wins on boot, even if the host also restores a selected card. Later explicit
+    // selections still frame normally.
+    if (first.current) {
+      first.current = false;
+      if (suppressInitial) { prev.current = selection; return; }
+    }
     // Don't yank the canvas while a run is streaming and auto-selecting each step.
     if (!active) { prev.current = selection; return; }
     if (!selection) {
       // Closing a card zooms the view back out to the lanes it came from.
-      if (prev.current) fitView({ padding: 0.16, maxZoom: 1, duration: 460 });
+      if (prev.current) fitView({ ...fitOptions, padding: frame.padding, maxZoom: 1, duration: 460 });
       prev.current = selection;
       return;
     }
     prev.current = selection;
-    if (!getNode(selection)) return;
     // Clicking a card opens the editor, which grows the card tall. Fit that EXPANDED card fully into
-    // view (centered, whole thing on screen) rather than zooming into the collapsed node and letting the
-    // editor overflow off the page. The short delay lets the card expand and measure before we fit it.
+    // the actual pane's usable rectangle rather than centering it under an occupied panel. Dense canvases
+    // may replace the React Flow node store in the same commit as an automatic selection (for example,
+    // when a run result blooms a gate), so retry briefly instead of discarding that focus request.
     const id = selection;
-    const t = setTimeout(() => {
-      fitView({ nodes: [{ id }], padding: 0.2, duration: 460, maxZoom: 1.05 });
-    }, 160);
-    return () => clearTimeout(t);
-  }, [selection, active, fitView, getNode]);
+    let attempts = 0;
+    let timer: number | null = null;
+    const focus = () => {
+      attempts += 1;
+      const node = getNode(id);
+      if (!node) {
+        if (attempts < 30) timer = window.setTimeout(focus, 80);
+        return;
+      }
+      const measuredWidth = node.measured?.width ?? node.width;
+      const measuredHeight = node.measured?.height ?? node.height;
+      // A dense virtualized canvas keeps off-screen nodes in the RF store but does not mount/measure
+      // their DOM until the camera reaches them. fitView ignores that zero-size target, so first center
+      // from its authoritative flow position; once visible, its screen-space editor can measure normally.
+      if (!measuredWidth || !measuredHeight) {
+        const zoom = Math.min(1.05, fitOptions.maxZoom);
+        void setCenter(
+          overlayAwareX(node.position.x + 120 + frame.offset.x / zoom, zoom),
+          node.position.y + 60 + frame.offset.y / zoom,
+          { zoom, duration: 460 },
+        );
+        return;
+      }
+      fitView({ nodes: [{ id }], ...fitOptions, padding: frame.padding, duration: 460, maxZoom: 1.05 });
+    };
+    timer = window.setTimeout(focus, 160);
+    return () => { if (timer != null) window.clearTimeout(timer); };
+  }, [selection, active, fitOptions, fitView, frame.height, frame.offset.x, frame.offset.y, frame.padding, frame.width, getNode, setCenter, suppressInitial]);
 
   return null;
 }
@@ -2525,48 +2659,134 @@ function NodeFocuser({ selection, active }: { selection: NodeSelection; panelOpe
 // A newly-created or explicitly selected open-canvas object may live outside the current fleet viewport.
 // Bring that durable anchor into view without changing its position or fitting the entire, potentially huge,
 // operation. This also makes the workbench's create → inspect loop spatially legible.
-function AnchorFocuser({ focus }: { focus: WovenFocus }) {
+function AnchorFocuser({ focus, fitOptions, panelOpen, suppressInitial }: { focus: WovenFocus; fitOptions: FitOpts; panelOpen: boolean; suppressInitial: boolean }) {
   const { getNode, setCenter } = useReactFlow();
+  const frame = useCanvasFrame(fitOptions, panelOpen);
+  const focusKey = focus ? JSON.stringify(focus) : "";
+  const initialFocusKey = useRef(focusKey);
   useEffect(() => {
+    // Preserve a valid saved viewport for the focus that was already active at mount. A newly created or
+    // explicitly selected anchor has a different identity and still gets one deliberate camera move.
+    if (suppressInitial && focusKey === initialFocusKey.current) return;
     if (!focus || focus.kind !== "anchor" || focus.anchorId.startsWith("canchor:group:")) return;
-    const timer = setTimeout(() => {
+    let attempts = 0;
+    let timer: number | null = null;
+    const center = () => {
+      attempts += 1;
       const node = getNode(focus.anchorId);
-      if (!node) return;
+      if (!node) {
+        if (attempts < 30) timer = window.setTimeout(center, 80);
+        return;
+      }
       const width = node.measured?.width ?? node.width ?? 220;
       const height = node.measured?.height ?? node.height ?? 88;
-      setCenter(node.position.x + width / 2, node.position.y + height / 2, { zoom: 0.95, duration: 420 });
-    }, 120);
-    return () => clearTimeout(timer);
-  }, [focus, getNode, setCenter]);
+      const zoom = 0.95;
+      setCenter(
+        overlayAwareX(node.position.x + width / 2 + frame.offset.x / zoom, zoom),
+        node.position.y + height / 2 + frame.offset.y / zoom,
+        { zoom, duration: 420 },
+      );
+      // One focus event, one camera move. Once the founder pans, no settling timer follows them back.
+    };
+    timer = window.setTimeout(center, 80);
+    return () => { if (timer != null) window.clearTimeout(timer); };
+  }, [focus, focusKey, frame.height, frame.offset.x, frame.offset.y, frame.width, getNode, setCenter, suppressInitial]);
   return null;
 }
 
 // ─── Pan to a pipeline's lane on the merged canvas ─────────────────────────────
-// "Open this pipeline" (ChannelSwitcher, a board tile) is navigation, not a node pick — it must NOT
+// "Open this pipeline" navigation is not a node pick — it must NOT
 // touch `selection` (that pops the node detail modal open). A separate signal, a separate camera
 // move: pans to the lane's center the same way NodeFocuser pans to a node, at a wider zoom so the
 // whole lane frames in view.
 function LanePanner({ panTo, lanes }: { panTo: { channelId: string; token: number; nodeId?: string } | null; lanes: Map<string, ChannelLane> | null }) {
   const { setCenter, getNode } = useReactFlow();
+  const consumedToken = useRef<number | null>(null);
   useEffect(() => {
-    if (!panTo) return;
-    // A nodeId flies to that specific step (rendered ids are namespaced on the merged canvas), close
-    // enough to read, WITHOUT selecting it — no modal. Falls back to the lane if the node isn't found.
-    if (panTo.nodeId) {
-      const n = getNode(`${panTo.channelId}::${panTo.nodeId}`) ?? getNode(panTo.nodeId);
-      if (n) {
-        const w = n.measured?.width ?? n.width ?? 220;
-        const h = n.measured?.height ?? n.height ?? 110;
-        setCenter(n.position.x + w / 2, n.position.y + h / 2, { zoom: 0.9, duration: 480 });
-        return;
+    if (!panTo || consumedToken.current === panTo.token) return;
+    let attempts = 0;
+    let timer: number | null = null;
+    const pan = () => {
+      if (consumedToken.current === panTo.token) return;
+      attempts += 1;
+      // A nodeId flies to that specific step (rendered ids are namespaced on the merged canvas), close
+      // enough to read, WITHOUT selecting it. A result can replace the merged node store in the same
+      // commit as this token; retry before consuming the request as a whole-lane fallback.
+      if (panTo.nodeId) {
+        const n = getNode(`${panTo.channelId}::${panTo.nodeId}`) ?? getNode(panTo.nodeId);
+        if (n) {
+          const w = n.measured?.width ?? n.width ?? 220;
+          const h = n.measured?.height ?? n.height ?? 110;
+          const zoom = 0.9;
+          consumedToken.current = panTo.token;
+          setCenter(overlayAwareX(n.position.x + w / 2, zoom), n.position.y + h / 2, { zoom, duration: 480 });
+          return;
+        }
+        if (attempts < 30) {
+          timer = window.setTimeout(pan, 80);
+          return;
+        }
       }
-    }
-    if (!lanes) return;
-    const lane = lanes.get(panTo.channelId);
-    if (!lane) return;
-    setCenter(lane.centerX, lane.centerY, { zoom: 0.7, duration: 480 });
+      if (!lanes) return;
+      const lane = lanes.get(panTo.channelId);
+      if (!lane) return;
+      const zoom = 0.7;
+      consumedToken.current = panTo.token;
+      setCenter(overlayAwareX(lane.centerX, zoom), lane.centerY, { zoom, duration: 480 });
+    };
+    pan();
+    return () => { if (timer != null) window.clearTimeout(timer); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panTo, lanes]);
+  return null;
+}
+
+// A pending founder decision is stronger than ordinary selection: the wall must be on screen even on a
+// dense virtualized fleet where its card has never mounted. Center directly from React Flow's durable
+// node position once per run receipt; this neither follows later pans nor repeatedly steals the camera.
+function FounderGateFocuser({ target, receiptKey, fitOptions, panelOpen }: { target: Node | null; receiptKey: string | null; fitOptions: FitOpts; panelOpen: boolean }) {
+  const { setCenter } = useReactFlow();
+  const frame = useCanvasFrame(fitOptions, panelOpen);
+  const targetId = target?.id ?? null;
+  // The projection gives us an immediate position before virtualization mounts the DOM card. The store
+  // measurements wake the effect once that jump materializes the real node, at which point one short
+  // measured settle finishes the receipt and releases the camera back to the founder.
+  const measuredWidth = useStore((state) => targetId ? state.nodeLookup.get(targetId)?.measured.width ?? 0 : 0);
+  const measuredHeight = useStore((state) => targetId ? state.nodeLookup.get(targetId)?.measured.height ?? 0 : 0);
+  const paneWidth = useStore((state) => state.width);
+  const paneHeight = useStore((state) => state.height);
+  const viewportX = useStore((state) => state.transform[0]);
+  const viewportY = useStore((state) => state.transform[1]);
+  const viewportZoom = useStore((state) => state.transform[2]);
+  const width = measuredWidth || target?.width || 240;
+  const height = measuredHeight || target?.height || 120;
+  const focusSafe = 14;
+  const targetVisible = !!target && paneWidth > 0 && paneHeight > 0
+    && viewportX + target.position.x * viewportZoom >= focusSafe
+    && viewportX + (target.position.x + width) * viewportZoom <= paneWidth - focusSafe
+    && viewportY + target.position.y * viewportZoom >= focusSafe
+    && viewportY + (target.position.y + height) * viewportZoom <= paneHeight - focusSafe;
+  const applied = useRef<string | null>(null);
+  useEffect(() => {
+    if (!target || !receiptKey || applied.current === receiptKey) return;
+    let timer: number | null = null;
+    if (targetVisible) {
+      // Do not complete on the first visible animation frame. A competing one-shot fit/restore may still
+      // be settling; a viewport change cancels this confirmation and the off-screen branch reasserts the
+      // wall. After a stable beat, the founder owns the camera again.
+      timer = window.setTimeout(() => { applied.current = receiptKey; }, 360);
+    } else {
+      timer = window.setTimeout(() => {
+      const zoom = Math.min(0.9, fitOptions.maxZoom);
+      void setCenter(
+        overlayAwareX(target.position.x + width / 2 + frame.offset.x / zoom, zoom),
+        target.position.y + height / 2 + frame.offset.y / zoom,
+        { zoom, duration: 0 },
+      );
+      }, 40);
+    }
+    return () => { if (timer != null) window.clearTimeout(timer); };
+  }, [fitOptions.maxZoom, frame.offset.x, frame.offset.y, height, receiptKey, setCenter, target, targetVisible, width]);
   return null;
 }
 
@@ -2633,7 +2853,7 @@ function OperatorCursor({ graph, state, followBroken, recenterSignal }: {
     if (lastKey.current === key) return;
     lastKey.current = key;
     const z = getZoom();
-    setCenter((target.position?.x ?? 0) + 120, (target.position?.y ?? 0) + 56, {
+    setCenter(overlayAwareX((target.position?.x ?? 0) + 120, Math.min(1, Math.max(0.62, z))), (target.position?.y ?? 0) + 56, {
       zoom: Math.min(1, Math.max(0.62, z)),
       duration: 620,
     });
@@ -2715,6 +2935,15 @@ type PaddingUnit = number | `${number}px` | `${number}%`;
 type FitPadding = PaddingUnit | { top?: PaddingUnit; right?: PaddingUnit; bottom?: PaddingUnit; left?: PaddingUnit };
 type FitOpts = { padding: FitPadding; maxZoom: number; minZoom?: number };
 
+function measuredNodeBounds(nodes: Node[]) {
+  return nodes.map((node) => ({
+    x: node.position.x,
+    y: node.position.y,
+    width: node.measured?.width ?? node.width ?? 0,
+    height: node.measured?.height ?? node.height ?? 0,
+  }));
+}
+
 function Refitter({ nonce, fitOptions }: { nonce?: number; fitOptions: FitOpts }) {
   const { fitView } = useReactFlow();
   const seen = useRef(nonce);
@@ -2724,6 +2953,32 @@ function Refitter({ nonce, fitOptions }: { nonce?: number; fitOptions: FitOpts }
     const t = setTimeout(() => fitView({ ...fitOptions, duration: 420 }), 90);
     return () => clearTimeout(t);
   }, [nonce, fitView, fitOptions]);
+  return null;
+}
+
+// The durable viewport is fetched after the canvas shell mounts. React Flow's `defaultViewport` is only
+// read on mount, so without this bridge a correctly saved pan still reopened at 0,0 until an auto-fit
+// happened. Apply each authoritative receipt once; programmatic moves carry no DOM event and therefore
+// do not enter the founder-write loop.
+function ViewportRestorer({ viewport, receiptKey, topology, fitOptions }: { viewport: Viewport | null; receiptKey: string | null; topology: string; fitOptions: FitOpts }) {
+  const { fitView, getNodes, setViewport } = useReactFlow();
+  const width = useStore((state) => state.width);
+  const height = useStore((state) => state.height);
+  const size = useMemo(() => ({ width, height }), [width, height]);
+  const initialized = useNodesInitialized();
+  const applied = useRef<string | null>(null);
+  useEffect(() => {
+    if (!viewport || !initialized || size.width <= 0 || size.height <= 0) return;
+    // Topology and pane size wake this effect once the canvas is ready, but they do not create a new
+    // viewport receipt. Reapplying the same saved camera after a dense graph hydrates can overwrite an
+    // explicit node focus and virtualize the founder wall between its mount and its first action render.
+    const signature = `${receiptKey ?? "canvas"}:${viewport.x}:${viewport.y}:${viewport.zoom}`;
+    if (applied.current === signature) return;
+    applied.current = signature;
+    const objects = measuredNodeBounds(getNodes());
+    if (viewportShowsAnyObject(viewport, size, objects)) void setViewport(viewport, { duration: 0 });
+    else void fitView({ ...fitOptions, duration: 0 });
+  }, [fitOptions, fitView, getNodes, initialized, receiptKey, setViewport, size, topology, viewport]);
   return null;
 }
 
@@ -2749,6 +3004,32 @@ function MeasureGuard({ nodeIds }: { nodeIds: string[] }) {
   return null;
 }
 
+// One final post-layout invariant: a non-empty canvas may never settle with every object outside the
+// viewport. This runs once for each topology + container size, after measurement has stabilized. It does
+// not observe later founder pans, so recovery cannot turn into camera-follow.
+function CanvasVisibilityGuard({ topology, fitOptions }: { topology: string; fitOptions: FitOpts }) {
+  const { fitView, getNodes, getViewport } = useReactFlow();
+  const width = useStore((state) => state.width);
+  const height = useStore((state) => state.height);
+  const size = useMemo(() => ({ width, height }), [width, height]);
+  const nodeCount = useStore((state) => state.nodes.length);
+  const checked = useRef<string | null>(null);
+  useEffect(() => {
+    if (nodeCount === 0 || size.width <= 0 || size.height <= 0) return;
+    const signature = `${topology}:${Math.round(size.width)}x${Math.round(size.height)}`;
+    if (checked.current === signature) return;
+    const timer = setTimeout(() => {
+      checked.current = signature;
+      const objects = measuredNodeBounds(getNodes());
+      if (objects.length > 0 && !viewportShowsAnyObject(getViewport(), size, objects)) {
+        void fitView({ ...fitOptions, duration: 0 });
+      }
+    }, 240);
+    return () => clearTimeout(timer);
+  }, [fitOptions, fitView, getNodes, getViewport, nodeCount, size, topology]);
+  return null;
+}
+
 // ─── Fit on graph change — center the whole flow in the open canvas ────────────
 // React Flow's `fitView` prop only frames once, on mount. But the graph data and its
 // auto-layout positions arrive asynchronously AFTER mount (the graph loads, then
@@ -2771,6 +3052,10 @@ function FitOnGraph({ topology, bounds, running, suspended, skipInitial, fitOpti
   const { fitView } = useReactFlow();
   const fittedTopology = useRef<string | null>(skipInitial ? topology : null);
   useEffect(() => {
+    // A saved founder viewport is authoritative for this mount. Data arrives in layers after boot
+    // (empty shell → terrain → woven graph); treating those hydration steps as new topology used to
+    // auto-fit over the restored camera and made refresh look as though panning had never persisted.
+    if (skipInitial) return;
     if (running || suspended) return;                 // don't fight RunZoom or the operator cursor's follow
     if (fittedTopology.current === topology) return;  // already framed this graph; leave drags alone
     const t = setTimeout(() => {
@@ -2791,10 +3076,10 @@ export function GraphCanvas({
   bloomNodeId = null, nodeEditor = null, revealedNodeIds, onPaneClick, operatorCursor = null, people = [],
   multiPipeline = null, panTo = null, onAskClaude, gatePromote, gateOffer = null, transportConnected = false, onRecordOutcome,
   onRefineItem, onDecideDelta, onOpenAgentProfile, runSummary = null,
-  woven = null, wovenAxis = "objects", wovenFocus = null, onWovenSelect, onWireObject,
+  woven = null, wovenAxis = "objects", wovenFocus = null, onWovenAxisChange, onWovenSelect, onWireObject,
   candidateLaneIds, onPickCandidate, projectId = null,
   onCanvasAnchorPositionChange, onCanvasAuthorityChanged, onCanvasRegionChange, onCanvasRegionArchive, onCreateCanvasRegion,
-  onCreateCanvasObject, onConnectCanvasObjects, initialViewport = null, onViewportChange,
+  onCreateCanvasObject, onConnectCanvasObjects, initialViewport = null, onViewportChange, onCanvasSelectionChange,
 }: {
   graph: GTMGraph;
   result: GTMRunResult | null;
@@ -2896,6 +3181,9 @@ export function GraphCanvas({
   // The projection axis: "objects" = the moat view (chips + ties in the gutter), "type" = the spread view
   // (lanes collapse into kind clusters). Pure view state the host toggles.
   wovenAxis?: WovenAxis;
+  // Arrangement, grouping, reasoning, and focus actions share one canvas-control home. The host owns
+  // the woven arrangement state; this callback is absent on a plain single-pipeline editor.
+  onWovenAxisChange?: (axis: WovenAxis) => void;
   // Focus-to-trace: the selected object / lane / cluster whose crossings stay lit while everything recedes.
   wovenFocus?: WovenFocus;
   // Click a chip or cluster → the host sets focus-to-trace (or clears it). Absent → chips are inert.
@@ -2922,6 +3210,7 @@ export function GraphCanvas({
   onCreateCanvasRegion?: (request: CanvasRegionCreateRequest) => void | Promise<void>;
   onCreateCanvasObject?: (request: CanvasCreateRequest) => void | Promise<void>;
   onConnectCanvasObjects?: (request: CanvasRelationshipRequest) => void | Promise<void>;
+  onCanvasSelectionChange?: (nodeIds: ReadonlySet<string>) => void;
 }) {
   const handleSelect = useCallback((id: string) => onSelect(id), [onSelect]);
   // Inspector — the workbench's read surface. A node's record-count opens its real items as a card in
@@ -2943,6 +3232,7 @@ export function GraphCanvas({
   const [createIntent, setCreateIntent] = useState<CanvasCreateIntent | null>(null);
   const [selectedCanvasNodeIds, setSelectedCanvasNodeIds] = useState<Set<string>>(() => new Set());
   const [groupIntent, setGroupIntent] = useState(false);
+  const [canvasToolsOpen, setCanvasToolsOpen] = useState(false);
   const [groupBusy, setGroupBusy] = useState(false);
   const [connectionSource, setConnectionSource] = useState<{ nodeId: string; ref: import("@/openCanvasTypes").StableRef } | null>(null);
   const [canvasActionStatus, setCanvasActionStatus] = useState<string | null>(null);
@@ -2962,8 +3252,19 @@ export function GraphCanvas({
     setCreateIntent(null);
     setConnectionSource(null);
     setCanvasActionStatus(null);
+    setSelectedCanvasNodeIds(new Set());
   }
   const editable = variant !== "ideation" && !!onAddNode;
+  const commitCanvasConnection = useCallback((request: CanvasRelationshipRequest) => {
+    if (!onConnectCanvasObjects) return;
+    setCanvasActionStatus("Connecting…");
+    void Promise.resolve(onConnectCanvasObjects(request)).then(() => {
+      setConnectionSource(null);
+      setCanvasActionStatus("Connected.");
+    }).catch((cause: unknown) => {
+      setCanvasActionStatus(cause instanceof Error ? cause.message : "Could not connect these objects.");
+    });
+  }, [onConnectCanvasObjects]);
 
   // Render-time auto-layout — what actually drives what's on screen.
   // The composer ships cramped/overlapping positions, and the persistence round-trip (the effect
@@ -3033,16 +3334,44 @@ export function GraphCanvas({
   const merged = useMemo(
     () => {
       if (!multiPipeline) return null;
+      // The focused graph is authoritative even while the project catalog catches up to a newly composed
+      // pipeline. Overlay it into the merged inputs so a run-result refresh cannot briefly remove the very
+      // lane (and founder gate) the current canvas is addressing.
+      const catalogChannel = multiPipeline.channels.find((channel) => channel.id === graph.id || channel.graphId === graph.id) ?? null;
+      const focusedChannelId = catalogChannel?.id ?? graph.id;
+      const mergedChannels = catalogChannel || graph.nodes.length === 0
+        ? multiPipeline.channels
+        : [...multiPipeline.channels, {
+            id: focusedChannelId,
+            name: graph.name,
+            kind: "pipeline",
+            objective: graph.name,
+            graphId: graph.id,
+            enabled: true,
+            status: result?.pendingGates?.length ? "waiting" : result?.ok ? "done" : "idle",
+            lastRunAt: null,
+            lastRunOk: result?.ok ?? null,
+            pendingGates: result?.pendingGates?.length ?? 0,
+            nodeCount: graph.nodes.length,
+            runCount: result ? 1 : 0,
+            graphRevision: graph.revision ?? 1,
+            lastRunResult: null,
+          } satisfies ChannelMeta];
+      const mergedGraphs = new Map(multiPipeline.channelGraphs);
+      if (graph.nodes.length > 0) mergedGraphs.set(focusedChannelId, graph);
+      const mergedRunResults = new Map(multiPipeline.channelRunResults);
+      if (result) mergedRunResults.set(focusedChannelId, result);
+      else mergedRunResults.delete(focusedChannelId);
       const raw = buildMergedFlowGraph(
-      multiPipeline.channels,
-      multiPipeline.channelGraphs,
-      multiPipeline.channelRunResults,
+      mergedChannels,
+      mergedGraphs,
+      mergedRunResults,
       connectors,
       subsystemHealth,
       contractAudits,
       handleSelect,
       {
-        channelId: graph.id,
+        channelId: focusedChannelId,
         running, runningNodeId, selection,
         proposedNodeIds, proposedEdgeIds, proposalActive,
         onResolveProposal, onSubmitReview, onApproveGate, gatePromote, gateOffer, transportConnected, onRecordOutcome,
@@ -3054,13 +3383,13 @@ export function GraphCanvas({
       onOpenAgentProfile,
       multiPipeline.draggedByNode,
       );
-      // One founder wall (P1): align every lane's gate onto one shared x so the overview reads as a single
-      // amber threshold every pipeline crosses. No-op with fewer than two gated lanes.
+      // One founder wall: a single gate defines it; multiple gated lanes align to one shared threshold.
+      // The projection is render-only and never rewrites persisted positions.
       const aligned = alignGatesToWall(raw.nodes, raw.lanes);
       return { ...raw, nodes: aligned.nodes, wall: aligned.wall };
     },
     [
-      multiPipeline, connectors, subsystemHealth, contractAudits, handleSelect, graph.id, running,
+      multiPipeline, connectors, subsystemHealth, contractAudits, handleSelect, graph, result, running,
       runningNodeId, selection, proposedNodeIds, proposedEdgeIds, proposalActive, onResolveProposal,
       onSubmitReview, onApproveGate, gatePromote, gateOffer, transportConnected, onRecordOutcome, onRefineItem, onDecideDelta, revealedNodeIds, toggleInspect, people, onAskClaude, onOpenAgentProfile, runSummary, nodeBeats,
       candidateLaneIds, onPickCandidate,
@@ -3160,19 +3489,33 @@ export function GraphCanvas({
     () => (focusIsEffective(wovenFocus, woven) ? wovenFocus : null),
     [wovenFocus, woven],
   );
-  // The single founder-wall bar (P1) — a thin vertical amber threshold across the lane band at the shared
-  // gate x. Rendered behind the cards; non-interactive (the gate CARDS stay the actionable review path).
-  // Only present on the merged canvas with 2+ gated lanes (object axis, lanes visible).
+  // The founder wall is a persistent trust boundary. Real gate geometry wins; a product with no pipeline
+  // receives a quiet conceptual boundary beyond its durable material, never a fabricated actionable gate.
+  const projectedWall = useMemo(() => {
+    if (merged?.wall) return merged.wall;
+    if (merged) return null;
+    const anchors = standaloneAnchorLayer?.nodes ?? [];
+    const xs = anchors.map((node) => node.position.x);
+    const ys = anchors.map((node) => node.position.y);
+    const conceptualBand = anchors.length
+      ? {
+          minX: Math.min(...xs),
+          maxX: Math.max(...xs) + 620,
+          top: Math.min(...ys) - 80,
+          bottom: Math.max(...ys) + 520,
+        }
+      : { minX: 0, maxX: 960, top: 40, bottom: 680 };
+    return projectFounderWall([], new Map(), conceptualBand);
+  }, [merged, standaloneAnchorLayer]);
   const wallNode = useMemo((): Node | null => {
-    const wall = merged?.wall;
-    if (!wall) return null;
+    if (!projectedWall) return null;
     return {
       id: "founder-wall", type: "founderWall",
-      position: { x: wall.x - 3, y: wall.top },
-      data: { height: Math.max(0, wall.bottom - wall.top) },
+      position: { x: projectedWall.x - 3, y: projectedWall.top },
+      data: { height: Math.max(0, projectedWall.bottom - projectedWall.top), conceptual: !merged?.wall },
       draggable: false, selectable: false, focusable: false, zIndex: 0,
     };
-  }, [merged?.wall]);
+  }, [merged?.wall, projectedWall]);
   const projectedNodes = useMemo(() => {
     const wall = wallNode ? [wallNode] : [];
     if (!wovenOverlay) return [...wall, ...laneGraphNodes, ...(standaloneAnchorLayer?.nodes ?? [])];
@@ -3217,13 +3560,7 @@ export function GraphCanvas({
               }
               const request = canvasRelationship({ ref: connectionSource.ref }, data);
               if (!request) return;
-              setCanvasActionStatus("Connecting…");
-              void Promise.resolve(onConnectCanvasObjects(request)).then(() => {
-                setConnectionSource(null);
-                setCanvasActionStatus("Connected.");
-              }).catch((cause: unknown) => {
-                setCanvasActionStatus(cause instanceof Error ? cause.message : "Could not connect these objects.");
-              });
+              commitCanvasConnection(request);
             } : undefined,
           },
         };
@@ -3240,7 +3577,7 @@ export function GraphCanvas({
         },
       };
     }),
-    [anchorDragOverrides, connectionSource, onCanvasAuthorityChanged, onCanvasRegionArchive, onCanvasRegionChange, onConnectCanvasObjects, projectedNodes, selectedCanvasNodeIds],
+    [anchorDragOverrides, commitCanvasConnection, connectionSource, onCanvasAuthorityChanged, onCanvasRegionArchive, onCanvasRegionChange, onConnectCanvasObjects, projectedNodes, selectedCanvasNodeIds],
   );
   const selectedCanvasNodes = useMemo(
     () => nodes.filter((node) => selectedCanvasNodeIds.has(node.id) && isGroupableCanvasNode(node)),
@@ -3252,8 +3589,9 @@ export function GraphCanvas({
       if (current.size === next.size && [...current].every((id) => next.has(id))) return current;
       return next;
     });
+    onCanvasSelectionChange?.(next);
     if (next.size < 2) setGroupIntent(false);
-  }, []);
+  }, [onCanvasSelectionChange]);
   const createRegionFromSelection = useCallback(async (title: string) => {
     const request = regionRequestForSelection(selectedCanvasNodes, title);
     if (!request || !onCreateCanvasRegion) return;
@@ -3263,13 +3601,14 @@ export function GraphCanvas({
       await onCreateCanvasRegion(request);
       setGroupIntent(false);
       setSelectedCanvasNodeIds(new Set());
+      onCanvasSelectionChange?.(new Set());
       setCanvasActionStatus(`${title} grouped ${request.memberRefs.length} items.`);
     } catch (cause) {
       setCanvasActionStatus(cause instanceof Error ? cause.message : "Could not create this work region.");
     } finally {
       setGroupBusy(false);
     }
-  }, [onCreateCanvasRegion, selectedCanvasNodes]);
+  }, [onCanvasSelectionChange, onCreateCanvasRegion, selectedCanvasNodes]);
   const edges = useMemo(() => {
     if (!wovenOverlay) return [...laneGraphEdges, ...(standaloneAnchorLayer?.edges ?? [])];
     if (typeAxisActive) return wovenOverlay.edges;
@@ -3327,15 +3666,34 @@ export function GraphCanvas({
   // gets to zoom IN to fill the frame (a couple of cards must not shrink to specks), while the dense OBJECT
   // axis keeps a tighter ceiling so the whole weave stays on screen.
   const wovenTypeAxis = wovenActive && wovenAxis === "type";
-  const fitOptions = useMemo<FitOpts>(
-    () => (singlePipeline ? { padding: 0.16, maxZoom: 1, minZoom: 0.72 }
-      // The woven fits leave extra room at the top and left so the top lane's source card clears the floating
-      // axis toggle (top-left chrome). Per-side padding, in px on the chrome sides and % elsewhere for air.
-      : wovenTypeAxis ? { padding: { top: 96, left: 200, right: "8%", bottom: "10%" }, maxZoom: 1.15, minZoom: 0.7 }
-      : wovenActive ? { padding: { top: 96, left: 200, right: "6%", bottom: "8%" }, maxZoom: 0.92, minZoom: 0.66 }
-      : { padding: 0.14, maxZoom: 1 }),
-    [singlePipeline, wovenActive, wovenTypeAxis],
+  const [narrowCanvas, setNarrowCanvas] = useState(() =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia("(max-width: 760px)").matches
+      : false,
   );
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia("(max-width: 760px)");
+    const onChange = (event: MediaQueryListEvent) => setNarrowCanvas(event.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+  const fitOptions = useMemo<FitOpts>(
+    () => (narrowCanvas
+      // Fitting every lane into a phone-width pane turns full cards into specks. Automatic framing stays
+      // above the coin-LOD threshold and lets the founder pan; an intentional pinch can still zoom out.
+      ? singlePipeline
+        ? { padding: { top: 88, left: 24, right: 24, bottom: 112 }, maxZoom: 0.88, minZoom: 0.68 }
+        : wovenTypeAxis
+        ? { padding: { top: 88, left: 24, right: 24, bottom: 112 }, maxZoom: 0.84, minZoom: 0.62 }
+        : { padding: { top: 88, left: 24, right: 24, bottom: 112 }, maxZoom: 0.8, minZoom: 0.56 }
+      : singlePipeline ? { padding: { top: 88, left: 72, right: 72, bottom: 112 }, maxZoom: 1, minZoom: 0.72 }
+      : wovenTypeAxis ? { padding: { top: 88, left: 72, right: 72, bottom: 112 }, maxZoom: 1.15, minZoom: 0.7 }
+      : wovenActive ? { padding: { top: 88, left: 72, right: 72, bottom: 112 }, maxZoom: 0.92, minZoom: 0.66 }
+      : { padding: { top: 88, left: 72, right: 72, bottom: 112 }, maxZoom: 1 }),
+    [narrowCanvas, singlePipeline, wovenActive, wovenTypeAxis],
+  );
+  const restorableViewport = isRestorableViewport(initialViewport) ? initialViewport : null;
 
   // Re-fit the viewport whenever the flow's structure changes (load, compose) — the merged canvas
   // reacts to every lane's topology, not just the focused one, so a newly loaded/composed pipeline
@@ -3469,23 +3827,20 @@ export function GraphCanvas({
       const target = nodes.find((node) => node.id === connection.target);
       const request = canvasRelationship(source?.data, target?.data);
       if (!request || !onConnectCanvasObjects) return;
-      setCanvasActionStatus("Connecting…");
-      void Promise.resolve(onConnectCanvasObjects(request)).then(() => {
-        setConnectionSource(null);
-        setCanvasActionStatus("Connected.");
-      }).catch((cause: unknown) => {
-        setCanvasActionStatus(cause instanceof Error ? cause.message : "Could not connect these objects.");
-      });
+      commitCanvasConnection(request);
       return;
     }
     if (connection.source && connection.target) onConnectNodes?.(connection.source, connection.target);
-  }, [nodes, onConnectCanvasObjects, onConnectNodes, onWireObject]);
+  }, [commitCanvasConnection, nodes, onConnectCanvasObjects, onConnectNodes, onWireObject]);
 
   const handlePaneClick = useCallback((event: React.MouseEvent) => {
+    setCanvasToolsOpen(false);
+    setSelectedCanvasNodeIds(new Set());
+    onCanvasSelectionChange?.(new Set());
     onPaneClick?.();
     if (event.detail < 2 || !onCreateCanvasObject || running) return;
     setCreateIntent({ token: Date.now(), screen: { x: event.clientX, y: event.clientY } });
-  }, [onCreateCanvasObject, onPaneClick, running]);
+  }, [onCanvasSelectionChange, onCreateCanvasObject, onPaneClick, running]);
 
   const flowPositionAt = useCallback((screen: { x: number; y: number }, element: HTMLElement) => {
     const instance = flowInstanceRef.current;
@@ -3548,21 +3903,37 @@ export function GraphCanvas({
   }, [flowPositionAt, onCreateCanvasObject, running]);
 
   const handleCanvasKeyDown = useCallback((event: React.KeyboardEvent) => {
+    const target = event.target as HTMLElement;
+    const typing = !!target.closest("input, textarea, select, button, [contenteditable='true']");
+    if (!typing && !event.defaultPrevented && event.key.toLowerCase() === "v") {
+      event.preventDefault();
+      setCanvasToolsOpen((open) => !open);
+      return;
+    }
+    if (!typing && !event.defaultPrevented && event.key.toLowerCase() === "e" && singlePipeline && nodes.length > 1) {
+      event.preventDefault();
+      setExplainMode((active) => !active);
+      return;
+    }
+    if (!typing && !event.defaultPrevented && event.key.toLowerCase() === "f" && worthLook > 0) {
+      event.preventDefault();
+      stepToWarning();
+      return;
+    }
     if (onCreateCanvasRegion && selectedCanvasNodes.length >= 2 && !running && !event.defaultPrevented && event.key.toLowerCase() === "g") {
-      const target = event.target as HTMLElement;
-      if (!target.closest("input, textarea, select, button, [contenteditable='true']")) {
+      if (!typing) {
         event.preventDefault();
+        setCanvasToolsOpen(true);
         setGroupIntent(true);
         return;
       }
     }
     if (!onCreateCanvasObject || running || event.defaultPrevented || event.key.toLowerCase() !== "n") return;
-    const target = event.target as HTMLElement;
-    if (target.closest("input, textarea, select, button, [contenteditable='true']")) return;
+    if (typing) return;
     event.preventDefault();
     const rect = event.currentTarget.getBoundingClientRect();
     setCreateIntent({ token: Date.now(), screen: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } });
-  }, [onCreateCanvasObject, onCreateCanvasRegion, running, selectedCanvasNodes.length]);
+  }, [nodes.length, onCreateCanvasObject, onCreateCanvasRegion, running, selectedCanvasNodes.length, singlePipeline, stepToWarning, worthLook]);
 
   // The live drop target for Crew/Skill drags is the outer canvas-area wrapper (App's onStepDrop),
   // which lands a node in a real focused pipeline — spinning up a scratch one if none is focused. The
@@ -3574,13 +3945,48 @@ export function GraphCanvas({
   );
 
   // OperatorCursor positions itself off a plain GTMGraph's node positions (nodeById lookup, not React
-  // Flow's rendered node store) — on the merged canvas the focused channel's real nodes sit in a lane,
-  // so the cursor needs those same y-shifted positions or it'd point at the wrong spot on screen.
+  // Flow's rendered node store). Feed it the exact focused-lane projection: merged lanes are auto-laid
+  // and vertically stacked, so merely adding the lane offset to the persisted graph can point the crew
+  // at a different card and immediately undo a deliberate gate focus on dense, virtualized canvases.
   const cursorGraph = useMemo(() => {
-    const offsetY = merged?.lanes.get(graph.id)?.offsetY;
-    if (!offsetY) return graph;
-    return { ...graph, nodes: graph.nodes.map((n) => ({ ...n, position: { x: n.position.x, y: n.position.y + offsetY } })) };
-  }, [graph, merged]);
+    if (!merged) return laidOutGraph;
+    const projectedByNodeId = new Map<string, Node>();
+    for (const projected of laneGraphNodes) {
+      const data = projected.data as GTMNodeData | undefined;
+      if (data?.graphId !== graph.id || !data.node?.id) continue;
+      projectedByNodeId.set(data.node.id, projected);
+    }
+    return {
+      ...laidOutGraph,
+      nodes: laidOutGraph.nodes.map((node) => {
+        const projected = projectedByNodeId.get(node.id);
+        return projected ? { ...node, position: projected.position } : node;
+      }),
+    };
+  }, [graph.id, laidOutGraph, laneGraphNodes, merged]);
+  const pendingGateNodeId = useMemo(() => {
+    const gateId = result?.pendingGates?.[0];
+    if (!gateId) return null;
+    if (!merged) return gateId;
+    return laneGraphNodes.find((node) => {
+      const data = node.data as GTMNodeData | undefined;
+      return data?.graphId === graph.id && data.node?.id === gateId;
+    })?.id ?? null;
+  }, [graph.id, laneGraphNodes, merged, result?.pendingGates]);
+  const pendingGateReceiptKey = pendingGateNodeId && result
+    ? `${result.runId}:${pendingGateNodeId}`
+    : null;
+  const pendingGateProjection = pendingGateNodeId
+    ? nodes.find((node) => node.id === pendingGateNodeId) ?? null
+    : null;
+  // React Flow may omit off-screen node DOM on dense canvases, but the complete result projection still
+  // lives in its store. Expose a small aggregate receipt on the canvas root so resilience checks and
+  // assistive diagnostics can distinguish "virtualized" from "lost downstream state" after a partial run.
+  const blockedNodeCount = nodes.reduce((count, projected) => {
+    const data = projected.data as GTMNodeData | undefined;
+    if (!data?.node || !data.result) return count;
+    return getStatus(data.node, data.result, data.running) === "blocked" ? count + 1 : count;
+  }, 0);
 
   return (
       <NodeEditorContext.Provider value={editorContext}>
@@ -3594,6 +4000,10 @@ export function GraphCanvas({
       data-canvas-node-count={renderingPolicy.nodeCount}
       data-canvas-edge-count={renderingPolicy.edgeCount}
       data-canvas-virtualized={renderingPolicy.virtualize ? "true" : "false"}
+      data-canvas-blocked-node-count={blockedNodeCount}
+      data-pending-gate-node-id={pendingGateNodeId ?? ""}
+      data-pending-gate-x={pendingGateProjection?.position.x ?? ""}
+      data-pending-gate-y={pendingGateProjection?.position.y ?? ""}
       nodeTypes={NODE_TYPES}
       edgeTypes={EDGE_TYPES}
       onNodesChange={onNodesChange}
@@ -3602,8 +4012,13 @@ export function GraphCanvas({
       onNodeClick={woven ? handleWovenNodeClick : undefined}
       onEdgeClick={woven ? handleWovenEdgeClick : undefined}
       onSelectionChange={handleSelectionChange}
-      selectionOnDrag={Boolean(onCreateCanvasRegion && !running)}
-      panOnDrag={onCreateCanvasRegion && !running ? [1, 2] : true}
+      // The canvas is spatial before it is a selection tool: ordinary empty-space drag pans, node drag
+      // moves work, and Shift-drag invokes React Flow's selection rectangle. Space and middle-drag remain
+      // unconditional pan gestures through the native React Flow controls.
+      selectionOnDrag={false}
+      selectionKeyCode="Shift"
+      panActivationKeyCode="Space"
+      panOnDrag
       multiSelectionKeyCode={["Meta", "Control"]}
       onConnect={handleConnect}
       onEdgesDelete={(deleted) => onDeleteEdges?.(deleted.map((edge) => edge.id))}
@@ -3613,15 +4028,15 @@ export function GraphCanvas({
       onDrop={handleCanvasDrop}
       onKeyDown={handleCanvasKeyDown}
       tabIndex={0}
-      aria-label="Drover canvas. Drag to select, press G to group, press N to add, or paste and drop work directly."
+      aria-label="Drover canvas. Drag empty space to pan, Shift-drag to select, press V for canvas controls, G to group, N to add, or paste and drop work directly."
       // A user-initiated pan/zoom (event is non-null; programmatic setCenter passes null) breaks the
       // camera-follow so the founder can look away from Claude's work without being yanked back.
       onMoveStart={(event) => { if (event && operatorCursor) setFollowBroken(true); }}
       onMoveEnd={(event, viewport) => { if (event) onViewportChange?.(viewport); }}
-      defaultViewport={initialViewport ?? { x: 0, y: 0, zoom: 1 }}
-      fitView={!initialViewport}
+      defaultViewport={restorableViewport ?? { x: 0, y: 0, zoom: 1 }}
+      fitView={!restorableViewport}
       fitViewOptions={fitOptions}
-      minZoom={0.15}
+      minZoom={wovenActive ? (narrowCanvas ? 0.24 : 0.66) : 0.15}
       maxZoom={1.8}
       // With the woven overlay live, steps stay connectable even on a read-only fleet so the drag-to-wire
       // steer works; the wall still gates whatever the composer fills in.
@@ -3632,8 +4047,9 @@ export function GraphCanvas({
       proOptions={{ hideAttribution: true }}
       className={cn(variant === "ideation" && "ideation-canvas", selection && "loop-pane-focus")}
     >
-      <NodeFocuser selection={selection} panelOpen={!!panelOpen} active={!running && !operatorCursor} />
-      {woven ? <AnchorFocuser focus={wovenFocus} /> : null}
+      <NodeFocuser selection={selection} panelOpen={!!panelOpen} active={!running && !operatorCursor} fitOptions={fitOptions} suppressInitial={!!restorableViewport} />
+      <ViewportRestorer viewport={restorableViewport} receiptKey={projectId} topology={`${wovenAxis}:${fitSignature}`} fitOptions={fitOptions} />
+      {woven ? <AnchorFocuser focus={wovenFocus} fitOptions={fitOptions} panelOpen={!!panelOpen} suppressInitial={!!restorableViewport} /> : null}
       {merged ? <LanePanner panTo={panTo} lanes={merged.lanes} /> : null}
       {woven ? <WovenZoomReporter onZoom={setWovenZoom} /> : null}
       {operatorCursor ? (
@@ -3653,54 +4069,89 @@ export function GraphCanvas({
       {createIntent && onCreateCanvasObject ? (
         <CanvasNativeCreate intent={createIntent} onCreate={onCreateCanvasObject} onDismiss={() => setCreateIntent(null)} />
       ) : null}
-      {onCreateCanvasRegion && selectedCanvasNodes.length >= 2 ? (
-        <Panel position="top-center">
-          <CanvasRegionGroupingControl
-            selectionCount={selectedCanvasNodes.length}
-            open={groupIntent}
-            busy={groupBusy}
-            onOpen={() => setGroupIntent(true)}
-            onCancel={() => setGroupIntent(false)}
-            onCreate={createRegionFromSelection}
-          />
-        </Panel>
-      ) : null}
       {canvasActionStatus ? <div className="sr-only" role="status" aria-live="polite">{canvasActionStatus}</div> : null}
-      {editable && singlePipeline && nodes.length > 1 ? (
-        <Panel position="top-left">
-          <button
-            type="button"
-            className="loop-auto-arrange"
-            onClick={autoArrange}
-            title="Tidy the pipeline into a left-to-right layout — you can rearrange freely after."
-          >
-            <Wand2 size={13} /> Auto-arrange
-          </button>
-        </Panel>
-      ) : null}
-      {/* Pipeline intelligence bar: the Explain toggle (off = the canvas is exactly as clean as today;
-          on = every arrow says why and every teammate says why it's here) and the quiet amber tally of
-          what's worth a look. Reads the pipeline's SHAPE, never a side drawer. */}
-      {singlePipeline && nodes.length > 1 ? (
+      {/* One canvas-control home. It replaces the separate arrange, axis, explanation, flagged, and
+          grouping clusters while keeping every action reachable by keyboard. */}
+      {nodes.length > 0 || woven ? (
         <Panel position="top-right">
-          <div className="loop-explain-bar">
-            <div className="loop-explain-seg" role="group" aria-label="Explain mode">
-              <button type="button" className={cn(!explainMode && "on")} aria-pressed={!explainMode} onClick={() => setExplainMode(false)}>Clean</button>
-              <button type="button" className={cn(explainMode && "on")} aria-pressed={explainMode} onClick={() => setExplainMode(true)}>
-                <span className="loop-explain-dot" aria-hidden />Explain
-              </button>
-            </div>
-            {worthLook > 0 ? (
-              <button type="button" className="loop-worth-chip" onClick={stepToWarning} title="Step through what's worth a look">
-                <span className="loop-worth-b">{worthLook}</span> Worth a look
-              </button>
+          <div className="canvas-tools">
+            <button
+              type="button"
+              className="canvas-tools-trigger"
+              aria-label="Canvas controls"
+              aria-haspopup="true"
+              aria-expanded={canvasToolsOpen}
+              aria-keyshortcuts="V"
+              onClick={() => setCanvasToolsOpen((open) => !open)}
+            >
+              <SlidersHorizontal size={14} /> Canvas <kbd>V</kbd>
+              {worthLook > 0 ? <span className="canvas-tools-count" aria-label={`${worthLook} flagged`}>{worthLook}</span> : null}
+            </button>
+            {canvasToolsOpen ? (
+              <div
+                className="canvas-tools-popover"
+                aria-label="Canvas controls"
+                onKeyDown={(event) => {
+                  if (event.key !== "Escape") return;
+                  event.preventDefault();
+                  setGroupIntent(false);
+                  setCanvasToolsOpen(false);
+                }}
+              >
+                {woven && onWovenAxisChange ? (
+                  <section>
+                    <span className="canvas-tools-label">Arrange by</span>
+                    <div className="canvas-tools-segment" role="group" aria-label="Arrange canvas by">
+                      <button type="button" aria-pressed={wovenAxis === "objects"} onClick={() => onWovenAxisChange("objects")}>Shared work</button>
+                      <button type="button" aria-pressed={wovenAxis === "type"} onClick={() => onWovenAxisChange("type")}>Work types</button>
+                    </div>
+                  </section>
+                ) : null}
+                <section className="canvas-tools-actions" aria-label="Canvas actions">
+                  {editable && singlePipeline && nodes.length > 1 ? (
+                    <button type="button" onClick={autoArrange}><Wand2 size={14} /><span>Auto-arrange</span></button>
+                  ) : null}
+                  {onCreateCanvasRegion ? (
+                    selectedCanvasNodes.length >= 2 ? (
+                      <CanvasRegionGroupingControl
+                        selectionCount={selectedCanvasNodes.length}
+                        open={groupIntent}
+                        busy={groupBusy}
+                        onOpen={() => setGroupIntent(true)}
+                        onCancel={() => setGroupIntent(false)}
+                        onCreate={createRegionFromSelection}
+                      />
+                    ) : (
+                      <button type="button" disabled title="Select at least two canvas items first"><GitMerge size={14} /><span>Group selection</span><kbd>G</kbd></button>
+                    )
+                  ) : null}
+                  {singlePipeline && nodes.length > 1 ? (
+                    <button type="button" aria-pressed={explainMode} aria-keyshortcuts="E" onClick={() => setExplainMode((active) => !active)}>
+                      <Eye size={14} /><span>{explainMode ? "Hide reasoning" : "Show reasoning"}</span><kbd>E</kbd>
+                    </button>
+                  ) : null}
+                  {wovenFocus ? (
+                    <button type="button" onClick={() => onWovenSelect?.(null)}><RotateCcw size={14} /><span>Show everything</span></button>
+                  ) : null}
+                  {worthLook > 0 ? (
+                    <button type="button" className="is-flagged" aria-keyshortcuts="F" onClick={stepToWarning}>
+                      <Flag size={14} /><span>Jump to flagged</span><b>{worthLook}</b><kbd>F</kbd>
+                    </button>
+                  ) : null}
+                </section>
+              </div>
             ) : null}
           </div>
         </Panel>
       ) : null}
       <MeasureGuard nodeIds={measureNodeIds} />
+      <CanvasVisibilityGuard topology={`${wovenAxis}:${fitSignature}`} fitOptions={fitOptions} />
       <RunZoom running={running} suspended={wovenActive} />
-      <FitOnGraph topology={fitSignature} bounds={boundsSignature} running={wovenActive ? false : running} suspended={!!operatorCursor} skipInitial={!!initialViewport} fitOptions={fitOptions} />
+      {/* A deliberate woven focus owns the camera. In particular, adding an anchor changes topology;
+          letting the delayed whole-graph fit run after AnchorFocuser would move the new object back
+          underneath its inspector. Once focus clears, the pending topology is free to frame normally. */}
+      <FitOnGraph topology={fitSignature} bounds={boundsSignature} running={wovenActive ? false : running} suspended={!!operatorCursor || !!wovenFocus} skipInitial={!!restorableViewport} fitOptions={fitOptions} />
+      <FounderGateFocuser target={pendingGateProjection} receiptKey={pendingGateReceiptKey} fitOptions={fitOptions} panelOpen={!!panelOpen} />
       <Refitter nonce={refitNonce} fitOptions={fitOptions} />
       {result?.memoryApplied
         && (result.memoryApplied.approved + result.memoryApplied.rejected + result.memoryApplied.edits) > 0 && (

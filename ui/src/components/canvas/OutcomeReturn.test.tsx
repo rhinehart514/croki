@@ -43,3 +43,40 @@ describe("OutcomeReturn return chips (fix 4 + fix 5)", () => {
     expect(onOpenProduct).toHaveBeenCalledWith("billing");
   });
 });
+
+describe("OutcomeReturn — what came back is inspectable on PULL (Codex-review nuance)", () => {
+  it("keeps the account collapsed at rest and reveals the response + exposure only when opened", () => {
+    const o = outcome({
+      label: "A reply came back", body: "Interested — can you send pricing for 40 sites?",
+      status: "observed", observedAt: new Date().toISOString(), value: null,
+    });
+    const { container } = render(
+      <OutcomeReturn
+        outcomes={[o]} implications={[]} resolvableQuestionIds={new Set(["q1"])}
+        onClose={() => {}} onAcceptImplication={() => {}} onDismissImplication={() => {}}
+      />,
+    );
+    // The full response body is NOT pushed at rest — it lives inside a collapsed <details>.
+    const details = container.querySelector("details.oret-account") as HTMLDetailsElement;
+    expect(details).toBeTruthy();
+    expect(details.open).toBe(false);
+    // The disclosure summary is the pull affordance; the response + exposure live inside it (revealed on open
+    // in the browser; present in the DOM for the test). Legibility on pull — the account is there to look at.
+    const summary = details.querySelector("summary.oret-account-summary") as HTMLElement;
+    expect(summary.textContent).toContain("What came back");
+    expect(details.querySelector(".oret-account-response")?.textContent).toBe("Interested — can you send pricing for 40 sites?");
+    expect(details.querySelector(".oret-account-exposure")?.textContent).toContain("today");
+  });
+
+  it("shows no account disclosure when there is nothing extra to inspect (no empty affordance)", () => {
+    // Body equals the summary label and no observed-at → nothing additional to reveal.
+    const o = outcome({ label: "Recorded outcome", body: "Recorded outcome", observedAt: null, value: null });
+    const { container } = render(
+      <OutcomeReturn
+        outcomes={[o]} implications={[]} resolvableQuestionIds={new Set(["q1"])}
+        onClose={() => {}} onAcceptImplication={() => {}} onDismissImplication={() => {}}
+      />,
+    );
+    expect(container.querySelector("details.oret-account")).toBeNull();
+  });
+});

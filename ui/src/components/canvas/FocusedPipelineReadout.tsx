@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { ChevronRight, Compass, FlaskConical, ShieldQuestion, Target, Users } from "lucide-react";
+import { ChevronRight, Compass, FlaskConical, Play, ShieldQuestion, Target, Users } from "lucide-react";
 import { CrewFace } from "@/components/crew/CrewFace";
 import { channelOfferLine } from "@/lib/gateItem";
 import { safetyFromConnectors, safetyFromItems, stagedGateItems, type SafetyClass } from "@/lib/pipelineSafety";
 import type { ChannelMeta, ConnectorMeta, GTMGraph, GTMRunResult, OperatingLane } from "@/types";
 import type { RunSummary } from "@/api";
+import type { CanvasSelectionDescriptor } from "@/lib/canvasSelection";
 import "@/styles/pipeline-readout.css";
 
 // FocusedPipelineReadout — the ACTION-ALTITUDE brief (docs/production-direction/09 §Focused pipeline
@@ -86,14 +87,25 @@ export type FocusedPipelineReadoutProps = {
   gateOffer?: string | null;
   transportConnected?: boolean;
   running?: boolean;
+  selection?: CanvasSelectionDescriptor;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onRun?: () => void;
   onOpenAgentProfile?: (ref: string) => void;
 };
 
 export function FocusedPipelineReadout({
-  channel, graph, connectors, result, lane, runSummary, gateOffer, transportConnected = false, running = false, onOpenAgentProfile,
+  channel, graph, connectors, result, lane, runSummary, gateOffer, transportConnected = false, running = false, selection = { kind: "none" }, open: controlledOpen, onOpenChange, onRun, onOpenAgentProfile,
 }: FocusedPipelineReadoutProps) {
-  const [open, setOpen] = useState(true);
+  // Pipeline focus should reveal the work, not replace it with a briefing sheet. The compact row keeps
+  // intent and consequence in view; the founder opens the full read only when they need it.
+  const [internalOpen, setInternalOpen] = useState(false);
   const [briefOpen, setBriefOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const changeOpen = (next: boolean) => {
+    if (controlledOpen == null) setInternalOpen(next);
+    onOpenChange?.(next);
+  };
 
   const view = useMemo(() => {
     const goal = channel?.objective?.trim() || null;
@@ -107,6 +119,7 @@ export function FocusedPipelineReadout({
     // Safety class — backend-authoritative item nature first (the staged gate items decide), then the real
     // connector-capability rule pre-run. Never a label substring.
     const gateItems = stagedGateItems(graph, result);
+    const releasedCount = gateItems.filter((item) => item.approved === true || item.approvalStatus === "approved").length;
     const safety: SafetyClass = safetyFromItems(gateItems) ?? safetyFromConnectors(graph, connectors);
     const hasGate = graph.nodes.some((n) => n.category === "gate");
     // The canonical "what your yes does" — the SAME sentence GateReview shows, read off the staged items
@@ -119,7 +132,7 @@ export function FocusedPipelineReadout({
     const rawMotion = humanizeKind(lane?.motionKind ?? channel?.kind);
     const motion = rawMotion && rawMotion.toLowerCase() !== "custom" ? rawMotion : "";
     const reaches = safety === "local"
-      ? "Stays on your side — it changes your product or builds something for you to review."
+      ? "Stays on your side. It changes your product or builds something for you to review."
       : safety === "deploy"
         ? "Goes live on your product once you approve it."
         : "Reaches people outside the product once you approve it.";
@@ -148,12 +161,12 @@ export function FocusedPipelineReadout({
     if (canonicalConsequence) {
       gateText = canonicalConsequence;
     } else if (!hasGate) {
-      gateText = "This pipeline has no founder gate yet — one is required on every path before anything can leave.";
+      gateText = "This pipeline has no founder gate yet. Every path needs one before anything can leave.";
     } else if (safety === "deploy") {
       gateText = "Approving stages the change for your review. Shipping it live is a second, separate authorization at the gate.";
     } else if (safety === "external") {
       gateText = transportConnected
-        ? "Approving releases the staged items through your connected sender — they reach real recipients."
+        ? "Approving releases the staged items through your connected sender. They reach real recipients."
         : "Approving stages the items for your review. Nothing sends until you connect a sender.";
     } else {
       gateText = "Approving stages this work locally for your review. Nothing leaves your machine.";
@@ -162,19 +175,48 @@ export function FocusedPipelineReadout({
     const offer = gateOffer?.trim() || channelOfferLine(channel) || null;
 
     const parsedGoal = parseGoal(goal);
-    return { goal, parsedGoal, crewRefs, safety, effect, measurement, unknowns, groundedCount, gateText, hasGate, offer };
+    return { goal, parsedGoal, crewRefs, safety, effect, measurement, unknowns, groundedCount, gateText, hasGate, offer, releasedCount };
   }, [channel, graph, connectors, result, lane, runSummary, gateOffer, transportConnected]);
 
   const safetyChip = SAFETY_CHIP[view.safety];
-  const pendingGates = channel?.pendingGates ?? 0;
+  // A live run result is the immediate authority. Project/channel metadata refreshes after it and can
+  // lag by a request, which previously left the expanded briefing above the founder's decision room.
+  const pendingGates = result?.pendingGates?.length ?? channel?.pendingGates ?? 0;
+  const showRun = selection.kind === "lane" && selection.source === "focus" && selection.channelId === channel?.id && !!onRun;
+  const toggleOpen = () => {
+    if (pendingGates < 1) changeOpen(!open);
+  };
+  const startRun = () => {
+    changeOpen(false);
+    setBriefOpen(false);
+    onRun?.();
+  };
+
+  // The gate is the primary moment. A run launched here closes the informational brief before work
+  // starts; an externally-arriving paused result also suppresses it without a state-setting effect.
+  const visibleOpen = open && pendingGates < 1;
 
   return (
-    <div className={`pread ${open ? "is-open" : ""}`}>
-      <button type="button" className="pread-head" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+    <div className={`pread ${visibleOpen ? "is-open" : ""}`}>
+      <div className="pread-topline">
+      <button
+        type="button"
+        className="pread-head"
+        aria-expanded={visibleOpen}
+        aria-label={`${visibleOpen ? "Close" : "Open"} pipeline brief`}
+        onClick={toggleOpen}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          // React Flow and the canvas both own keyboard shortcuts. Handle the disclosure at its button
+          // boundary so Enter/Space cannot be swallowed by a parent during async pipeline hydration.
+          event.preventDefault();
+          toggleOpen();
+        }}
+      >
         <div className="pread-headmain">
           <span className="pread-eyebrow"><Compass size={12} /> This pipeline</span>
           <p className={`pread-goal ${view.goal ? "" : "is-empty"}`}>
-            {view.parsedGoal?.headline ?? "No goal stated for this pipeline yet — tell the crew what it should accomplish."}
+            {view.parsedGoal?.headline ?? "No goal yet. Tell the crew what it should accomplish."}
           </p>
         </div>
         <div className="pread-chips">
@@ -182,13 +224,32 @@ export function FocusedPipelineReadout({
             <span className="pread-chip is-running"><span className="pread-chip-dot" />Running</span>
           ) : pendingGates > 0 ? (
             <span className="pread-chip is-gate"><span className="pread-chip-dot" />{pendingGates} waiting on you</span>
+          ) : view.releasedCount > 0 ? (
+            <span className="pread-chip is-gate" data-testid="gate-approved-receipt">{view.releasedCount} approved</span>
           ) : null}
           <span className={`pread-chip ${safetyChip.cls}`}>{safetyChip.label}</span>
           <span className="pread-caret"><ChevronRight size={16} /></span>
         </div>
       </button>
+      {showRun ? (
+        <button
+          type="button"
+          className="pread-run"
+          data-testid="pipeline-run"
+          disabled={running}
+          onClick={startRun}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            startRun();
+          }}
+        >
+          <Play size={13} aria-hidden="true" /> {running ? "Running…" : "Run this work"}
+        </button>
+      ) : null}
+      </div>
 
-      {open ? (
+      {visibleOpen ? (
         <div className="pread-body">
           {view.parsedGoal && (view.parsedGoal.steps.length > 0 || view.parsedGoal.hasMore) ? (
             <div className="pread-cell is-wide pread-brief">
@@ -243,7 +304,7 @@ export function FocusedPipelineReadout({
             {view.measurement ? (
               <p className="pread-value">{view.measurement}</p>
             ) : (
-              <p className="pread-value is-empty">No outcomes joined yet — they attach here after the first run.</p>
+              <p className="pread-value is-empty">No outcomes yet. They attach here after the first run.</p>
             )}
           </div>
 
@@ -263,7 +324,7 @@ export function FocusedPipelineReadout({
           </div>
 
           <div className="pread-gate">
-            <span className="pread-gate-label">⛉ What your yes does</span>
+            <span className="pread-gate-label">⛉ At the gate · what your yes does</span>
             <p className="pread-gate-text">{view.gateText}</p>
             {view.offer ? <p className="pread-gate-offer">Offer: {view.offer}</p> : null}
           </div>

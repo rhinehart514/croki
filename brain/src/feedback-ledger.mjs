@@ -4,17 +4,10 @@ import { appendGateJudgments, sharedJudgmentsPath } from "./shared-judgments.mjs
 import { persistence } from "./persistence.mjs";
 import { draftKey, extractIdeaTaste } from "./memory.mjs";
 import { recordGateDecisionsIntoSouls } from "./soul-wiring.mjs";
+import { now, safeId } from "./store-fs.mjs";
 
 const SCHEMA_VERSION = 1;
 const COLLECTION = "feedback-ledger";
-
-function now() {
-  return new Date().toISOString();
-}
-
-function safeId(value) {
-  return String(value || "default").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "default";
-}
 
 function emptyLedger(projectId) {
   return { schemaVersion: SCHEMA_VERSION, projectId, signals: [], decisions: [] };
@@ -38,10 +31,6 @@ function normalizeRefs(list) {
   });
 }
 
-function normalizeParticipantRefs(list) {
-  return normalizeRefs(list);
-}
-
 function stableDecisionId(projectId, sourceRef) {
   const hash = crypto.createHash("sha256")
     .update(`${projectId}\u0000${sourceRef?.type ?? "source"}\u0000${sourceRef?.id ?? ""}`)
@@ -62,7 +51,7 @@ function normalizeDecisionReceipt(input = {}, { projectId = "default", legacy = 
   const explicitId = trimOrNull(input.id);
   if (!explicitId && !sourceRef) throw new Error("A founder decision receipt needs a stable sourceRef or explicit id.");
   const contextRefs = normalizeRefs([...(input.contextRefs ?? []), ...(sourceRef ? [sourceRef] : [])]);
-  const participantRefs = normalizeParticipantRefs(input.participantRefs);
+  const participantRefs = normalizeRefs(input.participantRefs);
   const evidenceRefs = normalizeRefs(input.evidenceRefs);
   const productRefs = normalizeRefs(input.productRefs);
   return {
@@ -154,7 +143,7 @@ function withCompatibilityReceipts(ledger, options) {
     ...receipt,
     questionId: trimOrNull(receipt?.questionId),
     contextRefs: normalizeRefs(receipt?.contextRefs),
-    participantRefs: normalizeParticipantRefs(receipt?.participantRefs),
+    participantRefs: normalizeRefs(receipt?.participantRefs),
     evidenceRefs: normalizeRefs(receipt?.evidenceRefs),
     productRefs: normalizeRefs(receipt?.productRefs),
   })) : [];
@@ -256,7 +245,7 @@ function gateDecisionDescriptor({ projectId, graph, result, nodeId, nodeResult, 
   const itemIdentity = trimOrNull(item?.id) ?? trimOrNull(draftKey(item)) ?? `item-${index}`;
   const sourceRef = { type: "gate-decision", id: `${runId || graphId || "unknown-run"}:${nodeId}:${itemIdentity}` };
   const questionId = trimOrNull(item?.questionId ?? nodeResult?.questionId ?? result?.questionId ?? graph?.questionId);
-  const participantRefs = normalizeParticipantRefs([
+  const participantRefs = normalizeRefs([
     ...(result?.participantRefs ?? []), ...(item?.participantRefs ?? []), item?.agentRef,
   ]);
   const evidenceRefs = normalizeRefs([...(result?.evidenceRefs ?? []), ...(item?.evidenceRefs ?? [])]);

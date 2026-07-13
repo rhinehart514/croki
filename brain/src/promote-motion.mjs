@@ -29,10 +29,10 @@ import {
   gtmPathStore,
   getObjectTouch,
 } from "./gtm-store.mjs";
-import { gateReviewForRun } from "./run-compile.mjs";
+import { gateReviewForRun, getRunScoped } from "./run-compile.mjs";
 import { assertGateWall } from "./workflow-composer.mjs";
 import { objectKey as computeObjectKey, inferKind } from "./object-identity.mjs";
-import { bucketFor } from "./object-funnel.mjs";
+import { bucketFor, joinedOutcomeKeys } from "./object-funnel.mjs";
 import { learnedSignal } from "./reallocation.mjs";
 
 const MINUTE = 60 * 1000;
@@ -178,7 +178,8 @@ function writePromotionLearning({ decision, run, score, projectId, options }) {
 // so it exists and keeps score but never fires on its own. Also writes the promotion Learning.
 export function promoteRun(runId, { cadence = null, nowMs = Date.now() } = {}, options = {}) {
   const projectId = options.projectId ?? "default";
-  const run = runStore.get(runId, { ...options, projectId });
+  // Venture-scoped (FIX 4): a run from another venture fails closed rather than being promoted here.
+  const run = getRunScoped(runId, projectId, options);
   const score = scoreForRun(run, { projectId, options });
   const intervalMs = cadenceToMs(cadence);
   const nextRunAt = intervalMs ? new Date(nowMs + intervalMs).toISOString() : null;
@@ -239,27 +240,6 @@ function hasSelfSourcingEntry(steps, edges) {
 // to the last discovered batch, so a re-source never re-works who's already handled. Returns the advancing
 // items (joinKeys already stripped by the caller's mapping is preserved here by re-stripping). Honest
 // fallback: if the ledger read yields nothing to suppress, every carried item advances (today's behavior).
-// The set of objectKeys a real outcome has already joined back to for this project — the RESPONDERS. The
-// honest, narrow join object-funnel uses: a Result's buyerRef or joinKey that equals an object's key. Read
-// once per cycle. A read failure yields an empty set (nothing drops — today's behavior).
-function respondedKeys(projectId, options) {
-  const keys = new Set();
-  let results = [];
-  try {
-    results = resultStore.list({ ...options, projectId });
-  } catch {
-    results = [];
-  }
-  for (const result of Array.isArray(results) ? results : []) {
-    if (!result) continue;
-    const ref = String(result.buyerRef ?? "").trim();
-    if (ref) keys.add(ref);
-    const joinKey = String(result.joinKey ?? "").trim();
-    if (joinKey) keys.add(joinKey);
-  }
-  return keys;
-}
-
 export function computeCycleItems(template, projectId, options = {}) {
   const carried = (Array.isArray(template?.items) ? template.items : []).map((item) => {
     const { joinKey, ...rest } = item && typeof item === "object" ? item : {};
@@ -270,7 +250,7 @@ export function computeCycleItems(template, projectId, options = {}) {
 
   let convertedKeySet;
   try {
-    convertedKeySet = respondedKeys(projectId, options);
+    convertedKeySet = joinedOutcomeKeys(projectId, options);
   } catch {
     convertedKeySet = new Set();
   }

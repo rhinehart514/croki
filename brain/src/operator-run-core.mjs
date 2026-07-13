@@ -14,12 +14,32 @@ import { appendOperatorEvent, saveOperatorSession } from "./operator-store.mjs";
 import { applySharedContextToGraph, loadProject, projectTeamId } from "./project-store.mjs";
 import { assertSessionGraphProject } from "./operator-project-scope.mjs";
 import { canApprove, getMember, resolveCurrentUser } from "./team-store.mjs";
+import { unmetMutationMessage } from "./operator-mutation-receipt.mjs";
 
 export function operatorProjectOptions(session, options = {}) {
   const owner = session?.projectId ?? null;
   const requested = options.projectId ?? null;
   if (owner && requested && owner !== requested) throw new Error(`Operator session ${session.id} belongs to project ${owner}, not ${requested}.`);
   return owner ? { ...options, projectId: owner } : options;
+}
+
+export function pauseForUnmetMutation(session, options = {}) {
+  const message = unmetMutationMessage(session);
+  return {
+    message,
+    session: addEvent({
+      ...session,
+      status: "waiting_for_input",
+      summary: null,
+      error: message,
+      pendingQuestion: { question: "Retry this request?", reason: message },
+      requiredMutation: null,
+    }, {
+      type: "action_not_completed",
+      title: "Requested work was not created",
+      detail: message,
+    }, options),
+  };
 }
 
 const RAW_MACHINERY_KEY = /^(agentPrompt|systemPrompt|prompt|soul|modelMessages|runtimeSessionId|credentials|token|apiKey|sourcePath|artifactPath|raw)$/i;

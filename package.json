@@ -11,6 +11,7 @@
     "lint": "npm --prefix ui run lint",
     "test": "npm --prefix brain test && npm --prefix ui run test:unit && npm run lint && npm run build",
     "test:terrain:browser": "npm --prefix ui run build -- --configLoader runner && node --test test/browser/terrain-journey.mjs",
+    "test:acceptance": "npm test && npm run test:terrain:browser",
     "start": "npm run build && node brain/src/server.mjs",
     "mcp": "node brain/src/mcp.mjs",
     "app:rebuild": "electron-rebuild --module-dir brain --only better-sqlite3,node-pty && codesign -s - -f brain/node_modules/better-sqlite3/build/Release/better_sqlite3.node brain/node_modules/node-pty/build/Release/pty.node",
@@ -19,12 +20,11 @@
     "app": "npm run build:desktop && electron .",
     "app:dist": "npm run build:desktop && npm run app:rebuild && electron-builder --mac && npm run app:reset-native"
   },
-  "dependencies": {
-    "convex": "1.42.0"
-  },
   "devDependencies": {
     "@electron/rebuild": "4.0.6",
+    "convex": "1.42.0",
     "electron": "42.5.1",
-    "electron-builder": "26.15.3"
+    "electron-builder": "26.15.3",
+    "ws": "8.21.0"
   }
 }

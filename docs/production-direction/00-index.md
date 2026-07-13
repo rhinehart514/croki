@@ -3,6 +3,16 @@
 > and current proof is recorded in **docs/STATE.md**. Its truth, founder-wall, taste,
 > runtime-safety, and product-context findings remain useful; its product hierarchy and
 > pipeline-centered acceptance target are no longer the plan of record.
+>
+> **Current north star (2026-07-12): the experiment machine.** Two files in this folder
+> are current, not historical, and supersede the earlier completion-spec framing (including
+> `17-product-market-terrain-completion-spec.md`) where they conflict:
+>
+> - `EXPERIMENT-MACHINE-GOAL.md` — the north-star goal: complete the experiment machine end to end.
+> - `experiment-machine-alignment.md` — the fit/conflict/gap map of the current tree against that spec.
+>
+> Its spec of record is **docs/EXPERIMENT-MACHINE-SPEC.md**. The numbered files 01–17 below are the
+> earlier production package and remain implementation history.
 
 # Drover Production Direction (historical)
 

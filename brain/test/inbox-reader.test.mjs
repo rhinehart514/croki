@@ -27,15 +27,17 @@ import {
   pollInboxOutcomes,
 } from "../src/connectors/measure/inbox-reader.mjs";
 import { gtmPathStore, runStore, resultStore } from "../src/gtm-store.mjs";
+import { listInputs } from "../src/inputs-store.mjs";
 
 function freshRoot() {
   return { root: fs.mkdtempSync(path.join(os.tmpdir(), "inbox-reader-")) };
 }
 
 // A Gmail message shape (as the read transport returns): payload.headers is [{ name, value }].
-function gmailMessage(headers = {}, id = null) {
+function gmailMessage(headers = {}, id = null, snippet = null) {
   return {
     ...(id ? { id } : {}),
+    ...(snippet ? { snippet } : {}),
     payload: { headers: Object.entries(headers).map(([name, value]) => ({ name, value })) },
   };
 }
@@ -91,12 +93,14 @@ describe("classifyThread", () => {
     const thread = {
       messages: [
         gmailMessage({ From: "founder@drover.co", [`X-GTM-IDE-Provenance`]: OUR_PROVENANCE }), // our outbound
-        gmailMessage({ From: "Ada <ada@acme.com>" }, "gmail-reply-1"), // her reply
+        gmailMessage({ From: "Ada <ada@acme.com>" }, "gmail-reply-1", "Interested — can we talk Thursday?"), // her reply
       ],
     };
     assert.deepEqual(classifyThread(thread, sentToAda), {
       outcomeKind: "reply",
       signal: "positive",
+      from: "ada@acme.com",
+      body: "Interested — can we talk Thursday?",
       providerEventId: "gmail-reply-1",
     });
   });
@@ -133,7 +137,12 @@ describe("classifyThread", () => {
 
   it("falls back to any non-bounce inbound when the recipient was not stored", () => {
     const thread = { messages: [gmailMessage({ From: "whoever@wherever.com" })] };
-    assert.deepEqual(classifyThread(thread, {}), { outcomeKind: "reply", signal: "positive" });
+    assert.deepEqual(classifyThread(thread, {}), {
+      outcomeKind: "reply",
+      signal: "positive",
+      from: "whoever@wherever.com",
+      body: null,
+    });
   });
 
   it("returns null for a thread with only our outbound (no signal yet)", () => {
@@ -174,9 +183,11 @@ function fakeRead(thread, { threadId = "thr-1" } = {}) {
 describe("pollInboxOutcomes — automatic attribution", () => {
   it("attributes a detected reply to its exact run item through the real ingest path", async () => {
     const options = freshRoot();
-    const { projectId } = seedSentRun(options);
+    const { projectId, runId, pathId } = seedSentRun(options);
 
-    const replyThread = { messages: [gmailMessage({ From: "ada@acme.com" }, "gmail-reply-1")] };
+    const replyThread = {
+      messages: [gmailMessage({ From: "ada@acme.com" }, "gmail-reply-1", "Interested — can we talk Thursday?")],
+    };
     const report = await pollInboxOutcomes(projectId, {
       ...options,
       token: "fake-access-token",
@@ -197,6 +208,58 @@ describe("pollInboxOutcomes — automatic attribution", () => {
     assert.equal(results[0].source, "connected-account");
     assert.equal(results[0].providerEventId, "gmail-reply-1");
     assert.equal(results[0].providerSourceId, "thr-1");
+
+    // A connected-account reply also becomes one durable founder decision with exact run and pipeline
+    // lineage. The poller records it; it never replies or routes it on its own.
+    const inputs = listInputs(projectId, options);
+    assert.equal(inputs.length, 1);
+    assert.equal(inputs[0].kind, "reply");
+    assert.equal(inputs[0].source, "gmail");
+    assert.equal(inputs[0].status, "unrouted");
+    assert.equal(inputs[0].payload.from, "ada@acme.com");
+    assert.match(inputs[0].payload.body, /Thursday/);
+    assert.equal(inputs[0].payload.joinKey, "jk-ada");
+    assert.equal(inputs[0].payload.runId, runId);
+    assert.equal(inputs[0].payload.pipelineId, pathId);
+  });
+
+  it("repairs exactly one reply Input when the Result write succeeded first", async () => {
+    const options = freshRoot();
+    const { projectId } = seedSentRun(options);
+    const replyThread = { messages: [gmailMessage({ From: "ada@acme.com" }, "gmail-reply-repair", "Please send times.")] };
+    let failedOnce = false;
+    const first = await pollInboxOutcomes(projectId, {
+      ...options,
+      token: "fake-access-token",
+      readTransport: fakeRead(replyThread),
+      appendInput: (...args) => {
+        failedOnce = true;
+        throw new Error(`simulated input write failure for ${args[0]}`);
+      },
+    });
+    assert.equal(failedOnce, true);
+    assert.equal(first.ingested.length, 1, "measurement still lands when the Input write fails");
+    assert.equal(first.pendingInputRepairs, 1);
+    assert.equal(resultStore.list({ ...options, projectId }).length, 1);
+    assert.equal(listInputs(projectId, options).length, 0);
+
+    const second = await pollInboxOutcomes(projectId, {
+      ...options,
+      token: "fake-access-token",
+      readTransport: fakeRead(replyThread),
+    });
+    assert.equal(second.ingested.length, 0, "repair does not mint a second Result");
+    assert.equal(second.deduped, 1);
+    assert.equal(second.repairedInputs, 1);
+    assert.equal(listInputs(projectId, options).length, 1, "the missing Input is repaired once");
+
+    const third = await pollInboxOutcomes(projectId, {
+      ...options,
+      token: "fake-access-token",
+      readTransport: fakeRead(replyThread),
+    });
+    assert.equal(third.repairedInputs, 0);
+    assert.equal(listInputs(projectId, options).length, 1, "later polls cannot duplicate the repaired Input");
   });
 
   it("reports blind and ingests nothing when Gmail refuses the read (send-only scope, 403)", async () => {

@@ -18,6 +18,15 @@ import { fileURLToPath } from "node:url";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const DEFAULT_QUEUE_DIR = path.join(REPO_ROOT, "dogfood", "queue");
 
+// An explicitly isolated Drover home is a tenancy boundary, not just a persistence preference. Keep the
+// self-observation queue inside that home as well, otherwise a clean founder workspace can read prompt
+// excerpts and failures from the repository-wide dogfood queue. Callers may still pin queueDir directly.
+export function resolveFrictionQueueDir(options = {}) {
+  if (options.queueDir) return options.queueDir;
+  const home = options.root || process.env.GTM_IDE_HOME;
+  return home ? path.join(home, "dogfood", "queue") : DEFAULT_QUEUE_DIR;
+}
+
 const KINDS = new Set(["friction", "bug", "wish", "feature"]);
 
 function readGitSha() {
@@ -74,7 +83,7 @@ export function reportFriction(input = {}, options = {}) {
   const snapshot = input.snapshot && typeof input.snapshot === "object" ? input.snapshot : {};
   const now = options.now ? new Date(options.now) : new Date();
   const gitSha = "gitSha" in options ? options.gitSha : readGitSha();
-  const queueDir = options.queueDir ?? DEFAULT_QUEUE_DIR;
+  const queueDir = resolveFrictionQueueDir(options);
 
   fs.mkdirSync(queueDir, { recursive: true });
 
@@ -100,6 +109,7 @@ export function reportFriction(input = {}, options = {}) {
   if (input.signature) lines.push(`signature: ${input.signature}`);
   if (input.category) lines.push(`category: ${input.category}`);
   if (input.failureClass) lines.push(`failure_class: ${input.failureClass}`);
+  if (input.projectId) lines.push(`project_id: ${String(input.projectId).replace(/[\r\n]/g, "")}`);
   const occurrences = Number.isFinite(input.occurrences) ? input.occurrences : (input.signature ? 1 : null);
   if (occurrences != null) lines.push(`occurrences: ${occurrences}`);
   if (input.firstSeen) lines.push(`first_seen: ${input.firstSeen}`);
@@ -158,7 +168,7 @@ export function updateFrictionItem(file, { fields = {}, appendSection } = {}) {
 // the match, and it never parses item bodies. Returns { file, occurrences } or null.
 export function findOpenFailureBySignature(signature, options = {}) {
   if (!signature) return null;
-  const queueDir = options.queueDir ?? DEFAULT_QUEUE_DIR;
+  const queueDir = resolveFrictionQueueDir(options);
   let entries;
   try {
     entries = fs.readdirSync(queueDir).filter((f) => f.endsWith(".md")).sort();
@@ -199,7 +209,7 @@ export function findOpenFailureBySignature(signature, options = {}) {
 
 // List open reports — lets a routine (or the founder) see the queue without parsing files.
 export function listFrictionQueue(options = {}) {
-  const queueDir = options.queueDir ?? DEFAULT_QUEUE_DIR;
+  const queueDir = resolveFrictionQueueDir(options);
   let entries;
   try {
     entries = fs.readdirSync(queueDir).filter((f) => f.endsWith(".md")).sort();

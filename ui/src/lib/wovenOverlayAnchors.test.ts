@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Node, Edge } from "@xyflow/react";
-import { buildWovenOverlay, buildCanvasAnchorLayer, anchorNodeId, groupNodeId, alignGatesToWall } from "@/lib/wovenOverlay";
+import { buildWovenOverlay, buildCanvasAnchorLayer, anchorNodeId, groupNodeId, alignGatesToWall, projectFounderWall } from "@/lib/wovenOverlay";
 import type { ChannelLane } from "@/lib/channelLanes";
 import type { WovenCanvas, WovenCanvasAnchor, WovenCanvasRelationship, WovenGraph } from "@/types";
 
@@ -28,6 +28,30 @@ function canvasWith(): WovenCanvas {
 const lanes = new Map<string, ChannelLane>([["ch1", { offsetY: 0, height: 200, centerX: 300, centerY: 100 }]]);
 
 describe("woven overlay — canvas anchor layer (fix 3)", () => {
+  it("shows a prioritized, deduplicated grounded read instead of repeated scanner tokens", () => {
+    const anchors = [
+      A("product-truth", "segment-1", "Segment"),
+      A("product-truth", "segment-2", "segment"),
+      A("product-truth", "utm", "utm_source"),
+      A("product-truth", "claim", "Signup captures campaign attribution before workspace creation"),
+      A("product-truth", "sharing", "External clients can read a shared brief without buying a seat"),
+    ];
+    const layer = buildCanvasAnchorLayer({ ...canvasWith(), anchors, relationships: [] }, band, null);
+    const rendered = layer.nodes.map((node) => (node.data as { label?: string }).label);
+    expect(rendered).toEqual([
+      "Signup captures campaign attribution before workspace creation",
+      "External clients can read a shared brief without buying a seat",
+      "utm_source",
+    ]);
+  });
+
+  it("renders one product landmark when project and product-model authorities share a label", () => {
+    const product = A("product", "project", "RodentRadar");
+    const model = A("product-model", "model", "RodentRadar");
+    const layer = buildCanvasAnchorLayer({ ...canvasWith(), anchors: [product, model], relationships: [] }, band, null);
+    expect(layer.nodes).toHaveLength(1);
+  });
+
   it("renders dozens of peer goals, open work kinds, and their native relationship without inventing a lead goal", () => {
     const base = canvasWith();
     const goals = Array.from({ length: 14 }, (_, index) => A("goal", `g${index}`, `Goal ${index}`));
@@ -111,18 +135,17 @@ describe("woven overlay — canvas anchor layer (fix 3)", () => {
     expect(edges).toHaveLength(0);
   });
 
-  it("renders product-truth, question, and outcome anchors as nodes plus the return edge", () => {
+  it("renders product-truth, question, and outcome anchors as nodes; the static return edge is retired", () => {
     const layer = buildCanvasAnchorLayer(canvasWith(), { top: 0, bottom: 200, minX: 300, maxX: 300 }, null);
     const ids = layer.nodes.map((n: Node) => n.id);
     expect(ids).toContain(anchorNodeId({ type: "productTruth", id: "t1" }));
     expect(ids).toContain(anchorNodeId({ type: "question", id: "q1" }));
     expect(ids).toContain(anchorNodeId({ type: "outcome", id: "r1" }));
     expect(layer.nodes.every((n) => n.type === "canvasAnchor")).toBe(true);
-    // The outcome returns to the question — a dashed return edge between the two anchors.
-    const ret = layer.edges.find((e: Edge) => e.id === "return:relA");
-    expect(ret).toBeTruthy();
-    expect(ret?.source).toBe(anchorNodeId({ type: "outcome", id: "r1" }));
-    expect(ret?.target).toBe(anchorNodeId({ type: "question", id: "q1" }));
+    // The static dashed `returns-to` stroke is RETIRED: what came back now loops home through the animated
+    // loop-back layer, so the anchor layer draws no `return:*` (or `woven-return`) edge at all.
+    expect(layer.edges.some((e: Edge) => e.id === "return:relA")).toBe(false);
+    expect(layer.edges.some((e: Edge) => (e.className ?? "").includes("woven-return"))).toBe(false);
   });
 
   it("makes only explicit explanatory authorities selectable and marks model reads as proposed", () => {
@@ -199,7 +222,10 @@ function bigCanvas(): WovenCanvas {
     A("outcome", "o1", "Got 3 replies"),
   ];
   // 100 unconnected detail anchors spread across kinds — the long tail that used to form the ladder.
-  const kinds = ["product-thing", "product-goal", "product-state", "product-workflow", "product-interaction"];
+  const kinds = [
+    "product-thing", "product-goal", "product-state", "product-ia", "product-workflow",
+    "product-interaction", "product-transition", "product-relationship",
+  ];
   for (let i = 0; i < 100; i++) anchors.push(A(kinds[i % kinds.length], `d${i}`, `Detail ${i}`));
   // Two details are causally connected — a question is "about" one, a pipeline "grounds" another.
   anchors.push(A("product-thing", "connected-thing", "The monitored device"));
@@ -219,10 +245,9 @@ describe("woven overlay — semantic collapse of the product taxonomy", () => {
     const anchorCount = c.anchors.filter((a) => a.kind.startsWith("product-")).length;
     expect(anchorCount).toBeGreaterThan(100); // the raw tail really is huge
     const { nodes } = buildCanvasAnchorLayer(c, band, null);
-    const detailKinds = new Set(c.anchors.filter((a) => a.kind.startsWith("product-") && a.kind !== "product-truth" && a.kind !== "product-model").map((a) => a.kind));
-    // The rendered set is BOUNDED: root + 2 truths + 3 questions + 2 connected details + 1 outcome
-    // + one summary chip per detail kind — never ~100 postage stamps.
-    expect(nodes.length).toBeLessThanOrEqual(9 + detailKinds.size);
+    // The rendered set is BOUNDED: root + 2 truths + 3 questions + 1 outcome + one progressive Product
+    // details landmark, even when the underlying model spans many open categories.
+    expect(nodes.length).toBe(8);
     expect(nodes.length).toBeLessThan(20);
     // The vertical extent is bounded too, so Fit View stays legible (no 5000px ladder).
     const maxY = Math.max(...nodes.map((n) => n.position.y));
@@ -237,25 +262,27 @@ describe("woven overlay — semantic collapse of the product taxonomy", () => {
     expect(nodes.some((n) => n.id === anchorNodeId({ type: "model", id: "root" }))).toBe(true);
   });
 
-  it("keeps causally-connected product details individual, summarizes the unconnected tail", () => {
+  it("renders one product-details landmark and reveals the real categories on focus", () => {
     const { nodes } = buildCanvasAnchorLayer(bigCanvas(), band, null);
-    // The two connected details render individually (causal context retained).
-    expect(nodes.some((n) => n.id === anchorNodeId({ type: "thing", id: "connected-thing" }))).toBe(true);
-    expect(nodes.some((n) => n.id === anchorNodeId({ type: "workflow", id: "connected-flow" }))).toBe(true);
-    // The unconnected tail is represented by summary chips carrying the real counts (data preserved).
     const groups = nodes.filter((n) => (n.data as { group?: boolean }).group);
-    expect(groups.length).toBeGreaterThan(0);
-    const summarized = groups.reduce((s, g) => s + ((g.data as { count?: number }).count ?? 0), 0);
-    expect(summarized).toBe(100); // every one of the 100 unconnected details is accounted for, none dropped
-    // No individual chip for an unconnected detail.
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.id).toBe(groupNodeId("product-details"));
+    expect((groups[0]?.data as { count?: number }).count).toBe(102);
+    // Connected and unconnected members alike stay inside their kind summary until the founder opens it.
+    expect(nodes.some((n) => n.id === anchorNodeId({ type: "thing", id: "connected-thing" }))).toBe(false);
     expect(nodes.some((n) => n.id === anchorNodeId({ type: "thing", id: "d0" }))).toBe(false);
+
+    const categories = buildCanvasAnchorLayer(bigCanvas(), band, { kind: "anchor", anchorId: groupNodeId("product-details"), ref: { type: "group", id: "product-details" } });
+    expect(categories.nodes.filter((node) => (node.data as { group?: boolean }).group)).toHaveLength(8);
+    expect(categories.nodes.some((node) => node.id === groupNodeId("product-thing"))).toBe(true);
   });
 
   it("expands a kind's members on focus (zoom/focus access to the collapsed tail), stable selection", () => {
     const c = bigCanvas();
     const collapsed = buildCanvasAnchorLayer(c, band, null);
-    const thingGroup = collapsed.nodes.find((n) => n.id === groupNodeId("product-thing"))!;
-    expect(thingGroup).toBeTruthy();
+    expect(collapsed.nodes.some((n) => n.id === groupNodeId("product-details"))).toBe(true);
+    const categories = buildCanvasAnchorLayer(c, band, { kind: "anchor", anchorId: groupNodeId("product-details"), ref: { type: "group", id: "product-details" } });
+    expect(categories.nodes.some((n) => n.id === groupNodeId("product-thing"))).toBe(true);
     // Focusing the summary chip expands that kind: its members now render individually.
     const focused = buildCanvasAnchorLayer(c, band, { kind: "anchor", anchorId: groupNodeId("product-thing"), ref: { type: "group", id: "product-thing" } });
     expect(focused.nodes.some((n) => n.id === anchorNodeId({ type: "thing", id: "d0" }))).toBe(true);
@@ -264,13 +291,39 @@ describe("woven overlay — semantic collapse of the product taxonomy", () => {
     expect((d0.data as { focus?: string }).focus).toBe("focus");
     const q2 = focused.nodes.find((n) => n.id === anchorNodeId({ type: "question", id: "q2" }))!;
     expect((q2.data as { focus?: string }).focus).toBe("dim");
-    // Other kinds stay collapsed (only the focused kind expands).
-    expect(focused.nodes.some((n) => n.id === groupNodeId("product-goal"))).toBe(true);
+    // Other categories return behind the one Product details landmark while this kind is inspected.
+    expect(focused.nodes.some((n) => n.id === groupNodeId("product-details"))).toBe(false);
   });
 
-  it("preserves the outcome→question return edge across the collapse", () => {
-    const { edges } = buildCanvasAnchorLayer(bigCanvas(), band, null);
-    expect(edges.some((e: Edge) => e.source === anchorNodeId({ type: "outcome", id: "o1" }) && e.target === anchorNodeId({ type: "question", id: "q1" }))).toBe(true);
+  it("keeps the outcome and its question individual across the collapse, and draws no static return edge", () => {
+    const canvas = bigCanvas();
+    const { nodes, edges } = buildCanvasAnchorLayer(canvas, band, null);
+    // Both endpoints of the returns-to relationship survive the collapse as individual, home-able anchors —
+    // the loop-back needs them present to carry the outcome home. The `returns-to` relationship data itself
+    // is preserved on the canvas (canvasProjection derives questionId/productRefs from it).
+    expect(nodes.some((n) => n.id === anchorNodeId({ type: "outcome", id: "o1" }))).toBe(true);
+    expect(nodes.some((n) => n.id === anchorNodeId({ type: "question", id: "q1" }))).toBe(true);
+    expect(canvas.relationships.some((r) => r.kind === "returns-to")).toBe(true);
+    // But the STATIC return stroke is retired — the animated loop-back layer now owns the return motion.
+    expect(edges.some((e: Edge) => e.source === anchorNodeId({ type: "outcome", id: "o1" }) && e.target === anchorNodeId({ type: "question", id: "q1" }))).toBe(false);
+  });
+
+  it("summarizes inferred reads while keeping outcomes visible and both groups expandable", () => {
+    const base = canvasWith();
+    const openings = Array.from({ length: 7 }, (_, index) => A("terrain-opening", `opening-${index}`, `Opening ${index}`));
+    const outcomes = Array.from({ length: 6 }, (_, index) => A("outcome", `outcome-${index}`, `Outcome ${index}`));
+    const canvas = { ...base, anchors: [...openings, ...outcomes], relationships: [] };
+
+    const collapsed = buildCanvasAnchorLayer(canvas, band, null);
+    expect(collapsed.nodes.filter((node) => (node.data as { kind?: string; group?: boolean }).kind === "terrain-opening" && !(node.data as { group?: boolean }).group)).toHaveLength(0);
+    expect(collapsed.nodes.filter((node) => (node.data as { kind?: string; group?: boolean }).kind === "outcome" && !(node.data as { group?: boolean }).group)).toHaveLength(1);
+    expect((collapsed.nodes.find((node) => node.id === groupNodeId("terrain-opening"))?.data as { count?: number; groupType?: string; label?: string })).toMatchObject({ count: 7, groupType: "summary", label: "Inferred openings" });
+    expect((collapsed.nodes.find((node) => node.id === groupNodeId("outcome"))?.data as { count?: number; groupType?: string })).toMatchObject({ count: 5, groupType: "overflow" });
+
+    const expanded = buildCanvasAnchorLayer(canvas, band, { kind: "anchor", anchorId: groupNodeId("terrain-opening"), ref: { type: "group", id: "terrain-opening" } });
+    expect(expanded.nodes.filter((node) => (node.data as { kind?: string }).kind === "terrain-opening")).toHaveLength(7);
+    expect(expanded.nodes.some((node) => node.id === groupNodeId("terrain-opening"))).toBe(false);
+    expect(expanded.nodes.some((node) => node.id === groupNodeId("outcome"))).toBe(true);
   });
 });
 
@@ -334,8 +387,8 @@ describe("woven overlay — deterministic dense open canvas", () => {
   });
 });
 
-// ── One founder wall: gate-x alignment across lanes (docs/production-direction/16, P1) ──
-describe("alignGatesToWall — one shared founder wall", () => {
+// ── One founder wall: geometry + optional gate-x alignment (docs/production-direction/16, P1) ──
+describe("founder wall projection", () => {
   const lanes = new Map([
     ["a", { offsetY: 0, height: 100, centerX: 200 }],
     ["b", { offsetY: 120, height: 100, centerX: 200 }],
@@ -343,22 +396,45 @@ describe("alignGatesToWall — one shared founder wall", () => {
   const gate = (ch: string, x: number, id = `${ch}-gate`) => ({ id, position: { x, y: 0 }, data: { channelId: ch, node: { category: "gate" } } });
   const step = (ch: string, x: number, id = `${ch}-step`) => ({ id, position: { x, y: 0 }, data: { channelId: ch, node: { category: "generate" } } });
 
-  it("shifts each lane so every gate lands on one shared x, and reports the wall band", () => {
-    const nodes = [step("a", 100), gate("a", 300), step("b", 100), gate("b", 500)];
-    const { nodes: out, wall } = alignGatesToWall(nodes, lanes);
-    const gates = out.filter((n) => (n.data as { node?: { category?: string } }).node?.category === "gate");
-    const xs = gates.map((g) => g.position.x);
-    expect(new Set(xs).size).toBe(1);        // both gates now share one x
-    expect(xs[0]).toBe(500);                  // aligned to the rightmost gate column
-    // Lane 'a' shifted right by 200 (500-300), so its step moved with it.
-    expect(out.find((n) => n.id === "a-step")!.position.x).toBe(300);
-    expect(wall).toEqual({ x: 500, top: 0, bottom: 220 }); // spans the full gated band
-  });
-
-  it("is a no-op with fewer than two gated lanes (a single pipeline needs no wall)", () => {
+  it("projects one gated lane without moving its persisted positions", () => {
     const nodes = [step("a", 100), gate("a", 300), step("b", 100)];
     const { nodes: out, wall } = alignGatesToWall(nodes, lanes);
+    expect(out).toBe(nodes);
+    expect(out.find((node) => node.id === "a-gate")!.position.x).toBe(300);
+    expect(wall).toEqual({ x: 300, top: 0, bottom: 100 });
+  });
+
+  it("aligns multiple gated lanes to the rightmost gate and spans their full band", () => {
+    const nodes = [step("a", 100), gate("a", 300), step("b", 100), gate("b", 500)];
+    const originalPositions = nodes.map((node) => ({ ...node.position }));
+    const { nodes: out, wall } = alignGatesToWall(nodes, lanes);
+    const gates = out.filter((node) => (node.data as { node?: { category?: string } }).node?.category === "gate");
+    expect(new Set(gates.map((node) => node.position.x))).toEqual(new Set([500]));
+    expect(out.find((node) => node.id === "a-step")!.position.x).toBe(300);
+    expect(wall).toEqual({ x: 500, top: 0, bottom: 220 });
+    expect(nodes.map((node) => node.position)).toEqual(originalPositions);
+  });
+
+  it("can project multiple gates without aligning any node", () => {
+    const nodes = [gate("a", 300), gate("b", 500)];
+    const result = alignGatesToWall(nodes, lanes, { align: false });
+    expect(result.nodes).toBe(nodes);
+    expect(result.nodes.map((node) => node.position.x)).toEqual([300, 500]);
+    expect(result.wall).toEqual({ x: 500, top: 0, bottom: 220 });
+  });
+
+  it("returns no wall and preserves nodes when there are no gates", () => {
+    const nodes = [step("a", 100), step("b", 100)];
+    const { nodes: out, wall } = alignGatesToWall(nodes, lanes);
+    expect(out).toBe(nodes);
     expect(wall).toBeNull();
-    expect(out.find((n) => n.id === "a-gate")!.position.x).toBe(300); // unchanged
+  });
+
+  it("projects a non-actionable conceptual wall for zero pipelines from the supplied canvas band", () => {
+    const band = { top: 40, bottom: 640, minX: -120, maxX: 880 };
+    expect(projectFounderWall([], new Map(), band)).toEqual({ x: 880, top: 40, bottom: 640 });
+    const result = alignGatesToWall([], new Map(), { conceptualBand: band });
+    expect(result.nodes).toEqual([]);
+    expect(result.wall).toEqual({ x: 880, top: 40, bottom: 640 });
   });
 });

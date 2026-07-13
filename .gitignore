@@ -24,6 +24,9 @@ release/
 output/
 .design-loop/
 /*.png
+/.artifacts/
+/.impeccable/
+/artifacts/
 
 # Convex local deployment credentials
 .env.local

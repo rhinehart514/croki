@@ -21,6 +21,34 @@ describe("operator language", () => {
     expect(rewritten).not.toMatch(/GTM primitive|`ref`|project_created|attribution|positioning|buyer fit|hypotheses|runnable shapes|motion|approval gate/i);
   });
 
+  it("never leaks the run harness's own error envelope into the crew thread", () => {
+    const session = {
+      events: [
+        { id: "e-1", type: "operator_note", title: "Operator finished", detail: "Claude Code returned an error result: You've hit your session limit · resets 1:30am (America/New_York)" },
+        { id: "e-2", type: "operator_note", title: "Operator note", detail: "API Error: Connection closed mid-response. The response above may be incomplete." },
+      ],
+      error: "Claude Code returned an error result: Reached maximum number of turns (12)",
+    } as unknown as OperatorSession;
+
+    const out = humanizeOperatorSession(session);
+    const rendered = `${out.events?.map((e) => e.detail).join(" ")} ${out.error}`;
+    expect(rendered).not.toMatch(/Claude Code|API Error|session limit|maximum number of turns|Connection closed|Agent SDK/i);
+    expect(out.events?.[0]?.detail).toMatch(/usage limit/);
+    expect(out.events?.[1]?.detail).toMatch(/lost its connection/);
+    expect(out.error).toMatch(/ran long and paused/);
+  });
+
+  it("scrubs the engine name and machine paths from reasoning prose", () => {
+    const session = {
+      events: [{ id: "e-3", type: "operator_note", title: "Operator reasoning", detail: "The active project (`rodentradar-2`) lives at /Users/laneyfraass/gtm-ide, so Claude Code can read it." }],
+    } as unknown as OperatorSession;
+    const detail = humanizeOperatorSession(session).events?.[0]?.detail ?? "";
+    expect(detail).not.toMatch(/Claude Code|\/Users\/|rodentradar-2|`/);
+    expect(detail).toContain("the crew");
+    expect(detail).toContain("your project folder");
+    expect(detail).toContain("rodentradar");
+  });
+
   it("translates raw success identifiers outside narration events too", () => {
     const session = {
       events: [{ id: "event-2", type: "inspection", title: "Product read", detail: "Blind: project_created could not be confirmed." }],
