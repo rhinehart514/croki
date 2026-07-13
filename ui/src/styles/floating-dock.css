@@ -356,9 +356,16 @@
    action (Fix with Claude) is the dark fill; opening the node is the quiet secondary. */
 .issues-card { display: flex; flex-direction: column; gap: 10px; }
 .issues-card-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-/* Shown in place of the fix action when no work is open — fixing needs focused work to act against, so
-   from the overview this points the founder to open one rather than offering a dead action. */
-.fdock-problems-hint { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+/* Said once, not per row. When no pipeline is in focus every issue shares the same next step, so the
+   instruction lives at the foot of the list rather than repeating under each card. */
+.issues-card-foot {
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.45;
+}
 .fdock-problems-fix.primary { color: var(--surface); background: var(--ink); border-color: var(--ink); }
 .fdock-problems-fix.primary:hover { background: var(--ink-2, #1a1a1a); border-color: var(--ink-2, #1a1a1a); }
 

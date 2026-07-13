@@ -75,11 +75,7 @@ export function IssuesCard({
                     </button>
                   ) : null}
                 </div>
-              ) : (
-                <p className="fdock-problems-hint">
-                  Open the pipeline this touches, then hand it to Claude — fixing needs a pipeline in focus to work against.
-                </p>
-              )}
+              ) : null}
             </StaggerItem>
           );
         })}
@@ -102,6 +98,11 @@ export function IssuesCard({
           </StaggerItem>
         ))}
       </Stagger>
+      {!pipelineActive ? (
+        <p className="issues-card-foot">
+          Open the pipeline an issue touches, then hand it to Claude — fixing needs a pipeline in focus to work against.
+        </p>
+      ) : null}
     </div>
   );
 }

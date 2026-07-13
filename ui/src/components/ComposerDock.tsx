@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { DragEvent } from "react";
 import {
   AlertTriangle, ArrowLeft, ArrowUp, Bot, Check, ChevronRight, LoaderCircle,
-  Lightbulb, Maximize2, Mic, Pin, Play, Plus, ShieldCheck, Square, X,
+  Lightbulb, Maximize2, Mic, MoreHorizontal, Pin, Play, Plus, ShieldCheck, Square, X,
 } from "lucide-react";
 import { statusLabel } from "@/lib/status";
 import { composerStartsCollapsed } from "@/lib/composerCollapse";
@@ -1274,26 +1274,30 @@ export function ComposerDock({
           <span className="oc-input-picker" title={sessionActive ? `${engineName} is on this outcome` : "The engine and model working this outcome"}>
             <AgentPicker value={model} onChange={pickModel} />
           </span>
-          {handoffNeeded && onHandoff && session?.status !== "running" ? (
-            <button
-              className="oc-runtime-action"
-              type="button"
-              title={`Move this work over to ${engineName}`}
-              onClick={() => void onHandoff(model)}
-            >
-              Switch to {engineName}
-            </button>
-          ) : null}
-          {sessionActive && onAskBoth && session?.status !== "running" ? (
-            <button
-              className="oc-runtime-action"
-              type="button"
-              title="Run this on both engines and compare their answers"
-              disabled={runtimeComparisonStarting}
-              onClick={() => void onAskBoth()}
-            >
-              {runtimeComparisonStarting ? "Running both…" : "Run on both"}
-            </button>
+          {/* Advanced engine routing (hand this work to the other engine · run it on both to compare) is
+              tucked behind one quiet overflow instead of two wide text buttons crowding the compose row.
+              The actions keep their plain-language labels inside the menu; the row stays calm. */}
+          {((handoffNeeded && onHandoff) || (sessionActive && onAskBoth)) && session?.status !== "running" ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger className="oc-ib" aria-label="Engine options" title="Engine options">
+                <MoreHorizontal size={15} />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" align="end" sideOffset={8} className="menu w-auto">
+                {handoffNeeded && onHandoff ? (
+                  <DropdownMenuItem onClick={() => { if (onHandoff) void onHandoff(model); }}>
+                    Switch to {engineName}
+                  </DropdownMenuItem>
+                ) : null}
+                {sessionActive && onAskBoth ? (
+                  <DropdownMenuItem
+                    disabled={runtimeComparisonStarting}
+                    onClick={() => { if (onAskBoth) void onAskBoth(); }}
+                  >
+                    {runtimeComparisonStarting ? "Running both…" : "Run on both"}
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : null}
           <button
             className={`oc-ib ${voiceOn ? "active" : ""}`}

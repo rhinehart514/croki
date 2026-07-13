@@ -86,7 +86,25 @@
   list-style: none;
 }
 
-.canvas-outline-panel li + li { border-top: 1px solid var(--line); }
+/* One eyebrow per kind, not per row — a quiet section header the rows beneath inherit. */
+.canvas-outline-group {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-2) var(--space-1);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.canvas-outline-group:first-child { padding-top: var(--space-1); }
+.canvas-outline-group > span {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
 .canvas-outline-panel li > button {
   display: grid;
   width: 100%;
@@ -103,8 +121,29 @@
 .canvas-outline-panel li > button[aria-current="true"] { background: var(--surface-2); }
 .canvas-outline-panel li > button > strong { font-size: var(--text-sm); line-height: var(--leading-tight); }
 .canvas-outline-panel li > button > span:last-child { color: var(--muted); font-size: var(--text-xs); }
-.canvas-outline-kind { color: var(--muted); font-size: var(--text-xs); text-transform: capitalize; }
 .canvas-outline-empty { max-width: 34ch; margin: 0; padding: var(--space-5); color: var(--muted); }
+
+/* Bottom-left tool zone — canvas history + Outline sit in one grouped strip instead of two pills adrift
+   at different left offsets. Scoped to desktop; on phones each control keeps its own fixed corner (below),
+   so nothing overlaps at 320–640px. The children drop their own absolute positioning and align by their
+   bottoms; the Outline panel still unfurls upward from its own toggle within the row. */
+@media (min-width: 641px) {
+  .canvas-bottom-tools {
+    position: absolute;
+    left: 156px;
+    bottom: 18px;
+    z-index: 17;
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-2);
+  }
+  .canvas-bottom-tools > .chist-cluster,
+  .canvas-bottom-tools > .canvas-outline {
+    position: static;
+    left: auto;
+    bottom: auto;
+  }
+}
 
 @media (max-width: 640px) {
   /* The two closed readable-surface launchers share one bottom row: Outline owns the left edge and the

@@ -4149,35 +4149,39 @@ export default function App() {
               canvas arrangement (moves, regions, layout) are two reversible stacks, but they share ONE
               control cluster so the founder reads a single history affordance, not two competing pills.
               Nothing here ever runs or sends. */}
-          {gtmCanvasVisible && (activeChannelId || activeProjectId) ? (
-            <div className="chist-cluster">
-              {activeChannelId ? (
-                <CanvasHistoryControl
-                  edits={boardHistory.edits}
-                  index={boardHistory.index}
-                  canUndo={canUndo(activeChannelId)}
-                  canRedo={canRedo(activeChannelId)}
-                  onUndo={handleUndoBoard}
-                  onRedo={handleRedoBoard}
-                />
-              ) : null}
-              {activeProjectId ? (
-                <CanvasStructureHistoryControl
-                  projectId={activeProjectId}
-                  structureSignal={canvasStructureSignal}
-                  besidePipelineHistory={Boolean(activeChannelId)}
-                  onCanvasChanged={refreshOperatingView}
-                />
-              ) : null}
-            </div>
-          ) : null}
+          {/* One bottom-left tool zone: canvas history + Outline sit in a single grouped strip so the
+              corner reads as one control cluster, not two pills drifting apart across the canvas floor. */}
           {gtmCanvasVisible ? (
-            <CanvasOutline
-              canvas={activeCanvasProjection}
-              selectedRef={wovenFocus?.kind === "anchor" ? wovenFocus.ref : null}
-              onSelect={(ref) => handleWovenSelect({ kind: "anchor", anchorId: anchorNodeId(ref), ref })}
-              onInspect={(ref) => handleWovenSelect({ kind: "anchor", anchorId: anchorNodeId(ref), ref })}
-            />
+            <div className="canvas-bottom-tools">
+              {(activeChannelId || activeProjectId) ? (
+                <div className="chist-cluster">
+                  {activeChannelId ? (
+                    <CanvasHistoryControl
+                      edits={boardHistory.edits}
+                      index={boardHistory.index}
+                      canUndo={canUndo(activeChannelId)}
+                      canRedo={canRedo(activeChannelId)}
+                      onUndo={handleUndoBoard}
+                      onRedo={handleRedoBoard}
+                    />
+                  ) : null}
+                  {activeProjectId ? (
+                    <CanvasStructureHistoryControl
+                      projectId={activeProjectId}
+                      structureSignal={canvasStructureSignal}
+                      besidePipelineHistory={Boolean(activeChannelId)}
+                      onCanvasChanged={refreshOperatingView}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+              <CanvasOutline
+                canvas={activeCanvasProjection}
+                selectedRef={wovenFocus?.kind === "anchor" ? wovenFocus.ref : null}
+                onSelect={(ref) => handleWovenSelect({ kind: "anchor", anchorId: anchorNodeId(ref), ref })}
+                onInspect={(ref) => handleWovenSelect({ kind: "anchor", anchorId: anchorNodeId(ref), ref })}
+              />
+            </div>
           ) : null}
 
           {gtmCanvasVisible && connection && !connection.connected && !runtimeContextDismissed && !focusedTerrain && !focusedQuestion ? (

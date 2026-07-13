@@ -638,6 +638,13 @@
   font-size: var(--text-xs);
   color: var(--muted);
 }
+/* The expand affordance is said on hover, not stamped on every summary chip at rest — a rail of these
+   read as labels + counts, and "Inspect details / Show all" reveals only when you reach for a node. The
+   node's aria-label already carries the action, so keyboard and screen-reader users never lose it. */
+.woven-anchor.is-group .woven-anchor-more { display: none; }
+.woven-anchor.is-group:hover .woven-anchor-more,
+.woven-anchor.is-group:focus-visible .woven-anchor-more,
+.woven-anchor.is-group:focus-within .woven-anchor-more { display: block; }
 
 /* The single founder wall (docs/production-direction/16, P1) — one vertical amber threshold every pipeline
    crosses on the merged Operator canvas. Thin, opaque, the one accent the wall earns; non-interactive. */

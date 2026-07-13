@@ -780,6 +780,9 @@ svg {
 }
 
 /* Overlay actions (save chip, run count) */
+/* Save · run count · Clear read as ONE quiet strip, not three floating chips. The container is the pill;
+   the chips inside drop their own borders/fills and sit as segments split by a hairline, so a finished
+   run leaves a single calm status object in the corner instead of scattered confetti. */
 .loop-graph-actions {
   position: absolute;
   /* Canvas controls and Add own the second chrome row. Run/save receipts sit one quiet row below them,
@@ -788,7 +791,14 @@ svg {
   right: calc(var(--space-4) + var(--space-12) + var(--space-6) + var(--space-3));
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 0;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
   z-index: 10;
 }
 
@@ -800,26 +810,26 @@ svg {
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  border-radius: 20px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
   font-size: 10px;
   font-weight: 680;
 }
+/* Hairline seam between segments — a single continuous control, read left to right. */
+.loop-graph-actions > * + * { border-left: 1px solid var(--line); border-radius: 0; }
 
 .loop-save-chip {
-  border: 1px solid var(--line);
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.9);
   cursor: pointer;
-  transition: background 120ms, border-color 120ms;
+  transition: color 120ms, background 120ms;
 }
 
-.loop-save-chip:hover { border-color: var(--accent); color: var(--accent); }
-.loop-save-chip.saved { color: var(--proven); border-color: rgba(36, 165, 104, 0.3); }
+.loop-save-chip:hover { color: var(--accent); background: var(--surface-2); }
+.loop-save-chip.saved { color: var(--proven); }
 
 .loop-run-chip {
   color: var(--faint);
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid var(--line);
 }
 
 /* Error banner */
@@ -1670,12 +1680,12 @@ svg {
    step" palette, the Pipeline-audit chip, the "THE BET" hero) below the dock so they never collide. */
 .loop-canvas-area .react-flow__panel.top { margin-top: 56px; }
 
-/* The top-right canvas chrome is two deliberate rows. Add and Save own row one; Canvas controls sit to
-   their left. The status receipt owns row two. Previously React Flow, the launcher, and the status surface
-   each pinned themselves to the same corner and visibly occupied one another. */
+/* The top-right canvas chrome: Canvas controls and Add read as ONE grouped cluster on row one (an 8px
+   seam between them, not a wide gap that scattered them into two islands); the status receipt owns row
+   two. The panel is right-anchored, so Canvas grows leftward and never collides with Add beside it. */
 .loop-canvas-area .react-flow__panel.top.right:has(.canvas-tools) {
   top: 72px;
-  right: calc(var(--space-4) + 68px + 56px + var(--space-3));
+  right: calc(var(--space-4) + 68px + var(--space-2));
   margin-top: 0;
 }
 

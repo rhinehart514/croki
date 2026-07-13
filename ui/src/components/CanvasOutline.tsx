@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { Fragment, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { ListTree, X } from "lucide-react";
 import type { WovenCanvas, WovenRef } from "@/types";
 import { buildCanvasOutline, canvasOutlineRefKey, type CanvasOutlineRow } from "@/lib/canvasOutline";
@@ -102,29 +102,45 @@ export function CanvasOutline({
               {rows.map((row, index) => {
                 const key = canvasOutlineRefKey(row.anchor.ref);
                 const selected = key === selectedKey;
+                // The kind is a property of the GROUP, not each row. Rows arrive sorted by kind, so we
+                // print the label once as a section header when it changes and let every row beneath it
+                // inherit it — instead of stamping the same eyebrow on seven identical rows.
+                const kind = founderKind(row);
+                const startsGroup = index === 0 || founderKind(rows[index - 1]) !== kind;
+                const groupCount = startsGroup
+                  ? rows.filter((r) => founderKind(r) === kind).length
+                  : 0;
                 return (
-                  <li key={key}>
-                    <button
-                      type="button"
-                      ref={(node) => { rowRefs.current[index] = node; }}
-                      tabIndex={index === safeActiveIndex ? 0 : -1}
-                      aria-current={selected ? "true" : undefined}
-                      onFocus={() => setActiveIndex(index)}
-                      onClick={() => {
-                        setOpen(false);
-                        onSelect(row.anchor.ref);
-                      }}
-                      onDoubleClick={() => {
-                        setOpen(false);
-                        onInspect(row.anchor.ref);
-                      }}
-                      onKeyDown={(event) => onRowKeyDown(event, index, row.anchor.ref)}
-                    >
-                      <span className="canvas-outline-kind">{founderKind(row)}</span>
-                      <strong>{row.anchor.label}</strong>
-                      <span>{row.regionTitles.length ? `${row.regionTitles.join(", ")} · ` : ""}{relationshipSummary(row)}</span>
-                    </button>
-                  </li>
+                  <Fragment key={key}>
+                    {startsGroup ? (
+                      <li className="canvas-outline-group" aria-hidden="true">
+                        {kind}
+                        {groupCount > 1 ? <span>{groupCount}</span> : null}
+                      </li>
+                    ) : null}
+                    <li>
+                      <button
+                        type="button"
+                        ref={(node) => { rowRefs.current[index] = node; }}
+                        tabIndex={index === safeActiveIndex ? 0 : -1}
+                        aria-current={selected ? "true" : undefined}
+                        aria-label={`${kind}: ${row.anchor.label}`}
+                        onFocus={() => setActiveIndex(index)}
+                        onClick={() => {
+                          setOpen(false);
+                          onSelect(row.anchor.ref);
+                        }}
+                        onDoubleClick={() => {
+                          setOpen(false);
+                          onInspect(row.anchor.ref);
+                        }}
+                        onKeyDown={(event) => onRowKeyDown(event, index, row.anchor.ref)}
+                      >
+                        <strong>{row.anchor.label}</strong>
+                        <span>{row.regionTitles.length ? `${row.regionTitles.join(", ")} · ` : ""}{relationshipSummary(row)}</span>
+                      </button>
+                    </li>
+                  </Fragment>
                 );
               })}
             </ol>

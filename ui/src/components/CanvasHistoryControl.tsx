@@ -68,6 +68,11 @@ export function CanvasHistoryControl({
     setOpen(nextOpen);
   };
 
+  // Nothing built yet → nothing to take back. A row of three greyed, inert buttons is pure clutter on a
+  // fresh canvas, so the control stays hidden until there's a real board edit (undo is still on ⌘Z). The
+  // moment the first edit lands, hasTrail flips true and the bar appears.
+  if (!hasTrail) return null;
+
   return (
     <div className="chist">
       <Popover
