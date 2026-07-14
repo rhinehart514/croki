@@ -1,17 +1,12 @@
 // A teammate's SOUL — the layer that makes a teammate appreciate over time.
 //
-// Drover already derives per-teammate taste from the run ledger (memory.mjs: extractDecisionsForAgent /
-// buildAgentProfile). That derivation is EPHEMERAL — recomputed from raw gate decisions every run, and
-// every correction counts the same as every other. This module is the layer on top, modelled on how
-// OpenClaw agents get smarter: a correction starts life as a SCRATCH learning; only when it has proven
-// itself across enough real instances does it GRADUATE into the teammate's permanent soul — the identity
-// that loads on every future run. The founder blesses the graduation, so a situational correction never
-// hardens into a permanent rule without them seeing it (the wall: the founder is always the judge).
+// A correction starts as a scratch learning. Only repeated real evidence makes it eligible to graduate
+// into the teammate's permanent identity, and the founder blesses that graduation at the wall.
 //
 // Two tiers, exactly the "make main agents smarter over time" ask:
-//   - A PROJECT-INSTANCE soul learns lessons specific to one product/goal (a teammate "redefined for
-//     the project it's working on").
-//   - A lesson proven across enough DISTINCT projects graduates a second time, up into the TEMPLATE
+//   - A VENTURE-INSTANCE soul learns lessons specific to one product/goal (a teammate "redefined for
+//     the venture it's working on").
+//   - A lesson proven across enough DISTINCT ventures graduates a second time, up into the TEMPLATE
 //     soul (the "main agent"), so a reusable teammate carries what it has learned everywhere.
 //
 // This module is PURE — no persistence, no clock of its own. Timestamps are milliseconds passed in by
@@ -20,22 +15,22 @@
 
 // The graduation rule. The default mirrors the popular OpenClaw "self-improving-agent" convention —
 // a lesson graduates only when it has recurred enough, across enough distinct tasks, recently enough.
-// All three gates must pass; each exists to kill a different false positive:
+// All three conditions must pass; each exists to kill a different false positive:
 //   - minRecurrence: a one-off edit is noise, not a rule.
 //   - minTasks: the same edit on one stubborn item is still one situation, not a pattern.
 //   - windowDays: a lesson the founder has drifted away from should age out, not haunt forever.
 export const DEFAULT_GRADUATION = { minRecurrence: 3, minTasks: 2, windowDays: 30 };
 
-// Cross-project (template) graduation: a lesson promoted in this many distinct project instances is
+// Cross-venture (template) graduation: a lesson promoted in this many distinct venture instances is
 // general enough to belong to the reusable teammate itself.
-export const DEFAULT_TEMPLATE_GRADUATION = { minProjects: 2 };
+export const DEFAULT_TEMPLATE_GRADUATION = { minVentures: 2 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // A stable pattern key for a free-text correction, so "you keep using em-dashes" logged five times
 // dedupes to one learning that recurs five times — not five separate learnings that never graduate.
-// The real callers (the gate/memory layer) can cluster more cleverly and pass their own key; this is
-// the honest fallback: lowercase, drop punctuation, collapse whitespace, keep the first eight words.
+// Callers may pass a stronger key; this fallback lowercases, drops punctuation, collapses whitespace,
+// and keeps the first eight words.
 export function patternKeyFor(text) {
   return String(text || "")
     .toLowerCase()
@@ -47,8 +42,7 @@ export function patternKeyFor(text) {
     .join(" ");
 }
 
-// Record one observation into the scratch learnings. An observation is a correction the founder made
-// at the gate, or a signal from the world (a reply / a win tied to a draft this teammate produced).
+// Record one wall correction or joined market return into scratch learnings.
 // Dedupes by pattern key: a repeat bumps the existing learning's recurrence (a new occurrence) and
 // refreshes its wording, rather than spawning a duplicate. Returns a NEW array (never mutates input).
 export function recordLearning(learnings = [], observation = {}, { now = Date.now() } = {}) {
@@ -57,7 +51,7 @@ export function recordLearning(learnings = [], observation = {}, { now = Date.no
   if (!key) return Array.isArray(learnings) ? [...learnings] : [];
   const at = Number.isFinite(observation.at) ? observation.at : now;
   const taskId = observation.taskId != null ? String(observation.taskId) : "unknown";
-  const source = observation.source === "world" ? "world" : "gate";
+  const source = observation.source === "world" ? "world" : "wall";
 
   const next = (Array.isArray(learnings) ? learnings : []).map((l) => ({ ...l, occurrences: [...(l.occurrences || [])] }));
   const existing = next.find((l) => l.patternKey === key);
@@ -94,7 +88,7 @@ export function distinctTasksWithin(learning, windowDays, now = Date.now()) {
   return new Set(occurrencesInWindow(learning, windowDays, now).map((o) => o.taskId)).size;
 }
 
-// Is this learning ready to graduate? All three gates within the window, and not already resolved.
+// Is this learning ready to graduate? All three conditions must hold within the window.
 export function isReady(learning, options = {}, now = Date.now()) {
   if (!learning || learning.status === "promoted" || learning.status === "dismissed") return false;
   const { minRecurrence, minTasks, windowDays } = { ...DEFAULT_GRADUATION, ...options };
@@ -117,7 +111,7 @@ function soulEntryId(patternKey) {
 // Bless a graduation: move a ready learning into the permanent soul and mark the scratch learning
 // promoted. Idempotent — promoting an already-promoted key changes nothing. `soul` is the whole soul
 // object ({ soul: [...entries], learnings: [...] }); returns a new soul object.
-export function promote(soul = {}, patternKey, { now = Date.now(), run = null } = {}) {
+export function promote(soul = {}, patternKey, { now = Date.now(), drive = null } = {}) {
   const entries = Array.isArray(soul.soul) ? [...soul.soul] : [];
   const learnings = Array.isArray(soul.learnings) ? soul.learnings.map((l) => ({ ...l })) : [];
   const learning = learnings.find((l) => l.patternKey === patternKey);
@@ -129,9 +123,9 @@ export function promote(soul = {}, patternKey, { now = Date.now(), run = null } 
       patternKey,
       text: learning.text,
       why: learning.why || "",
-      source: learning.source || "gate",
+      source: learning.source || "wall",
       graduatedAt: now,
-      graduatedAtRun: run,
+      graduatedAtDrive: drive,
     });
   }
   learning.status = "promoted";
@@ -148,13 +142,13 @@ export function dismiss(soul = {}, patternKey, { now = Date.now() } = {}) {
 
 // ── Track record (the world-facing counters a teammate accrues) ───────────────────────────────────
 export function emptyRecord() {
-  return { runs: 0, sent: 0, replies: 0, wins: 0 };
+  return { drives: 0, sent: 0, replies: 0, wins: 0 };
 }
 
-// Fold one run's outcome into the record. Only real signals — never seeded.
+// Fold one drive's outcome into the record. Only real signals — never seeded.
 export function bumpRecord(record = emptyRecord(), patch = {}) {
   const base = { ...emptyRecord(), ...record };
-  for (const key of ["runs", "sent", "replies", "wins"]) {
+  for (const key of ["drives", "sent", "replies", "wins"]) {
     if (Number.isFinite(patch[key])) base[key] += patch[key];
   }
   return base;
@@ -167,7 +161,7 @@ export function bumpRecord(record = emptyRecord(), patch = {}) {
 //
 // This is a STANCE, not a fire mechanism. "on-notice" only changes the TONE a teammate narrates in
 // (it sounds like it is fighting for its place); nothing here disables, deletes, deprioritizes, or
-// reorders a teammate. Any actual retire/disable action is a separate founder decision with its own gate.
+// reorders a teammate. Any actual retire/disable action is a separate founder decision at the wall.
 export const DEFAULT_STANDING = "proving";
 
 // The floor of sent-with-nothing-back that reads as "on notice." Below it, a teammate simply has not put
@@ -192,12 +186,12 @@ export function standingFromRecord(record = emptyRecord()) {
   return DEFAULT_STANDING;
 }
 
-// ── Cross-project (template) graduation ───────────────────────────────────────────────────────────
-// A lesson that has been promoted in enough DISTINCT project instances is general enough to belong to
-// the reusable teammate itself. `instanceSouls` is [{ projectId, soul: [...entries] }]. Returns the
-// patternKeys ready to graduate up, each with the projects that prove it and the best wording seen.
+// ── Cross-venture (template) graduation ───────────────────────────────────────────────────────────
+// A lesson that has been promoted in enough DISTINCT venture instances is general enough to belong to
+// the reusable teammate itself. `instanceSouls` is [{ ventureId, soul: [...entries] }]. Returns the
+// patternKeys ready to graduate up, each with the ventures that prove it and the best wording seen.
 export function templateCandidates(instanceSouls = [], options = {}, templateSoul = {}) {
-  const { minProjects } = { ...DEFAULT_TEMPLATE_GRADUATION, ...options };
+  const { minVentures } = { ...DEFAULT_TEMPLATE_GRADUATION, ...options };
   const already = new Set((Array.isArray(templateSoul.soul) ? templateSoul.soul : []).map((e) => e.patternKey));
   const byKey = new Map();
   for (const inst of instanceSouls || []) {
@@ -205,19 +199,19 @@ export function templateCandidates(instanceSouls = [], options = {}, templateSou
       if (already.has(entry.patternKey)) continue;
       let agg = byKey.get(entry.patternKey);
       if (!agg) {
-        agg = { patternKey: entry.patternKey, text: entry.text, why: entry.why || "", projects: new Set() };
+        agg = { patternKey: entry.patternKey, text: entry.text, why: entry.why || "", ventures: new Set() };
         byKey.set(entry.patternKey, agg);
       }
-      agg.projects.add(inst.projectId);
+      agg.ventures.add(inst.ventureId);
       if (entry.text) agg.text = entry.text; // freshest wording wins
     }
   }
   return [...byKey.values()]
-    .filter((agg) => agg.projects.size >= minProjects)
-    .map((agg) => ({ patternKey: agg.patternKey, text: agg.text, why: agg.why, projects: [...agg.projects] }));
+    .filter((agg) => agg.ventures.size >= minVentures)
+    .map((agg) => ({ patternKey: agg.patternKey, text: agg.text, why: agg.why, ventures: [...agg.ventures] }));
 }
 
-// Bless a template graduation: add a cross-project lesson to the reusable teammate's soul. Idempotent.
+// Bless a template graduation: add a cross-venture lesson to the reusable teammate's soul. Idempotent.
 export function promoteToTemplate(templateSoul = {}, candidate = {}, { now = Date.now() } = {}) {
   const entries = Array.isArray(templateSoul.soul) ? [...templateSoul.soul] : [];
   const id = soulEntryId(candidate.patternKey);
@@ -229,8 +223,8 @@ export function promoteToTemplate(templateSoul = {}, candidate = {}, { now = Dat
     why: candidate.why || "",
     source: "template",
     graduatedAt: now,
-    graduatedAtRun: null,
-    fromProjects: candidate.projects || [],
+    graduatedAtDrive: null,
+    fromVentures: candidate.ventures || [],
   });
   return { ...templateSoul, soul: entries };
 }
@@ -267,15 +261,15 @@ export function assignName(ref, { taken = [] } = {}) {
   return NAME_POOL[start]; // bench larger than the pool: fall back to the deterministic pick
 }
 
-// A fresh soul at birth — thin, exactly like the "run 0" example: a name and its guardrails, nothing
-// learned yet. `templateRef` is null for a template itself, or the template's ref for a project instance.
-export function newSoul({ ref, name, projectId = null, templateRef = null, bornAtRun = 0, now = Date.now() } = {}) {
+// A fresh soul at birth is thin: a name and its guardrails, nothing
+// learned yet. `templateRef` is null for a template itself, or the template's ref for a venture instance.
+export function newSoul({ ref, name, ventureId = null, templateRef = null, bornAtDrive = 0, now = Date.now() } = {}) {
   return {
     ref,
     name: name || assignName(ref),
-    projectId,
+    ventureId,
     templateRef,
-    bornAtRun,
+    bornAtDrive,
     soul: [],
     learnings: [],
     record: emptyRecord(),
@@ -351,7 +345,7 @@ export function deriveVoiceBrief(soul = {}, { definition = null, maxConvictions 
   const stance = seed?.stance || fallback.stance;
 
   const record = {
-    runs: counter(soul.record, "runs"),
+    drives: counter(soul.record, "drives"),
     sent: counter(soul.record, "sent"),
     replies: counter(soul.record, "replies"),
     wins: counter(soul.record, "wins"),
@@ -393,7 +387,7 @@ export function renderVoiceForNarration(brief = {}) {
     stance ? `How you carry yourself: ${stance}` : "",
     standingTone ? `Your standing right now: ${standingTone}` : "",
     convictions.length
-      ? `How you work, earned over past runs — let these shape the line, never quote them verbatim:\n- ${convictions.join("\n- ")}`
+      ? `How you work, earned over past drives — let these shape the line, never quote them verbatim:\n- ${convictions.join("\n- ")}`
       : "",
     `Say only what is true of this step. Never claim to send, publish, or finish anything — every outward action still waits for the founder's approval. One line only: no preamble, no sign-off.`,
   ]

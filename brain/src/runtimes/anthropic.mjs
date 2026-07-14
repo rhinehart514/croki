@@ -1,8 +1,8 @@
-// Anthropic API operator runtime — the direct-key runtime.
+// Anthropic API teammate runtime — the direct-key runtime.
 //
 // This is the original in-process model/tool loop, moved behind the runtime
 // interface (see ./index.mjs for the contract). It owns nothing durable: GTM
-// IDE supplies every persistence, gate, and cancellation decision through the
+// Drover supplies every persistence, wall, and cancellation decision through the
 // `ctx` callbacks. This adapter only turns the conversation into the next model
 // turn and asks GTM IDE to execute the tool calls it produced.
 
@@ -21,7 +21,7 @@ export const anthropicRuntime = {
 
   // Drive the session to its next pause. Returns one of:
   //   { kind: "completed", summary }  — model stopped with no tool call
-  //   { kind: "paused" }              — a tool reached a gate / founder input / completion
+  //   { kind: "paused" }              — a tool reached the wall / founder input / completion
   //   { kind: "cancelled" }           — GTM IDE flagged a durable cancel mid-flight
   //   { kind: "budget" }              — exhausted the step budget without finishing
   async drive(ctx) {
@@ -31,7 +31,7 @@ export const anthropicRuntime = {
       : [{ role: "user", content: ctx.goal }];
     let steps = ctx.stepCount;
 
-    // The system prompt (operator doctrine) + tool list are the stable prefix of every turn in this
+    // The system prompt (teammate doctrine) + tool list are the stable prefix of every turn in this
     // loop — identical bytes turn after turn. Cache them so each subsequent turn reads the prefix at
     // ~0.1x instead of re-billing it. cache_control rides on the last system block (tools render before
     // system, so the breakpoint caches tools + system together). Only when system is a plain string —
@@ -47,9 +47,9 @@ export const anthropicRuntime = {
         model: ctx.model,
         // Room for adaptive thinking + a real tool-call turn. Thinking counts toward max_tokens, so the
         // prior 4096 could truncate a reasoned turn; streaming isn't used here, so stay under the HTTP
-        // timeout ceiling. The operator loop is reasoning-heavy — this is where thinking earns its cost.
+        // timeout ceiling. The teammate loop is reasoning-heavy — this is where thinking earns its cost.
         max_tokens: 16000,
-        // Adaptive thinking + high effort: the operator plans multi-step GTM work across tool calls, the
+        // Adaptive thinking + high effort: the teammate plans multi-step GTM work across tool calls, the
         // reasoning-heavy creator case the harness wants to think hard. Opus 4.8 (the pinned default)
         // takes adaptive thinking; effort lives inside output_config. A founder-injected client in tests
         // ignores these, so they only shape the real subscription-billed run.
@@ -77,7 +77,7 @@ export const anthropicRuntime = {
         ctx.persistMessages(messages);
         return {
           kind: "completed",
-          summary: text || "The operator finished without a final summary.",
+          summary: text || "The teammate finished without a final summary.",
         };
       }
 
@@ -98,7 +98,7 @@ export const anthropicRuntime = {
             for (const skipped of toolUses.slice(index + 1)) {
               results.push(toolResultBlock(skipped.id, {
                 paused: true,
-                note: "Not executed because the session reached a founder gate or required founder input.",
+                note: "Not executed because the session reached a founder wall or required founder input.",
               }));
             }
             paused = true;

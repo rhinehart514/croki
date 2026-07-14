@@ -2,12 +2,8 @@
   "name": "gtm-ide-brain",
   "version": "0.2.0",
   "type": "module",
-  "description": "Local code-grounded GTM workspace, revision loop, and flow runner.",
-  "bin": {
-    "mirror": "src/mirror.mjs"
-  },
+  "description": "The local runtime for Drover's firm loop.",
   "scripts": {
-    "mirror": "node src/mirror.mjs",
     "start": "node src/server.mjs",
     "test": "node --test --test-concurrency=1 --test-force-exit",
     "test:live": "GTM_LIVE=1 node --test test/live.test.mjs"
@@ -15,10 +11,6 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.185",
     "@anthropic-ai/sdk": "0.105.0",
-    "better-sqlite3": "12.11.1",
-    "convex": "1.27.5",
-    "node-pty": "1.0.0",
-    "ws": "8.18.0",
     "zod": "4.4.3"
   }
 }

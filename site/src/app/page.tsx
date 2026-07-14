@@ -9,6 +9,7 @@ import {
   GitFork,
   LockKeyhole,
   MousePointer2,
+  Plug,
   ScanSearch,
   ShieldCheck,
   Sparkles,
@@ -88,6 +89,30 @@ const principles = [
     icon: Sparkles,
     title: "Your corrections become taste.",
     body: "Approvals, edits, rejections, and real outcomes form durable context that survives a change of model or runtime.",
+  },
+];
+
+const pricingLines = [
+  {
+    number: "01",
+    icon: Code2,
+    title: "The software",
+    body: "Clone the source and run the current alpha. There is no Drover license or seat fee today.",
+    detail: "$0 to Drover",
+  },
+  {
+    number: "02",
+    icon: TerminalSquare,
+    title: "Your machine",
+    body: "Drover runs on your own macOS or Linux box with Node.js and Git. Your product and working state stay local.",
+    detail: "You host it",
+  },
+  {
+    number: "03",
+    icon: Plug,
+    title: "Your model",
+    body: "Connect the Codex or Claude Code subscription you already pay for. The deterministic scan still runs without one.",
+    detail: "Optional",
   },
 ];
 
@@ -364,6 +389,43 @@ export default function Home() {
                 </a>
               </div>
             </InView>
+          </section>
+
+          <section
+            className="loop-section"
+            id="pricing"
+            aria-labelledby="pricing-title"
+          >
+            <div className="loop-heading">
+              <InView>
+                <p className="section-index">Pricing</p>
+                <h2 id="pricing-title">You already own what it costs.</h2>
+                <p>
+                  Drover is a source-available alpha you run yourself. No usage
+                  bill, no seat, and no hosted plan yet — you bring the machine
+                  and the model subscription you already have.
+                </p>
+              </InView>
+            </div>
+
+            <div className="loop-list">
+              {pricingLines.map((line) => {
+                const Icon = line.icon;
+                return (
+                  <InView className="loop-row" key={line.number}>
+                    <span className="loop-number">{line.number}</span>
+                    <span className="loop-icon" aria-hidden="true">
+                      <Icon />
+                    </span>
+                    <div className="loop-copy">
+                      <h3>{line.title}</h3>
+                      <p>{line.body}</p>
+                    </div>
+                    <span className="loop-detail">{line.detail}</span>
+                  </InView>
+                );
+              })}
+            </div>
           </section>
 
           <section className="faq-section" aria-labelledby="faq-title">

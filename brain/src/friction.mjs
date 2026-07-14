@@ -1,9 +1,4 @@
-// Friction capture — the dogfood build queue for GTM IDE itself.
-//
-// This is feedback about the PRODUCT ("the gate card hid the citation"), never GTM taste
-// ("too salesy" — that belongs to gate decisions and the feedback ledger). Two ledgers,
-// two consumers: taste shapes the next RUN, friction shapes the next BUILD. Nothing here
-// reads or writes taste memory.
+// Friction capture — the dogfood build queue for Drover itself.
 //
 // Reports land as one markdown file per item in dogfood/queue/ at the repo root — where a
 // coding agent (a nightly Claude Code routine) can read them, work them into PRs, and the
@@ -72,8 +67,8 @@ export function slugify(text) {
   return slug || "report";
 }
 
-// File a friction report. `input.snapshot` is whatever real state the caller could gather
-// (project, pending gates, session ids) — absent pieces stay absent rather than invented.
+// File a friction report. `input.snapshot` is whatever real state the caller could gather;
+// absent pieces stay absent rather than invented.
 export function reportFriction(input = {}, options = {}) {
   const report = String(input.report ?? "").trim();
   if (!report) throw new Error("A friction report needs the words — what got in the way?");
@@ -109,7 +104,7 @@ export function reportFriction(input = {}, options = {}) {
   if (input.signature) lines.push(`signature: ${input.signature}`);
   if (input.category) lines.push(`category: ${input.category}`);
   if (input.failureClass) lines.push(`failure_class: ${input.failureClass}`);
-  if (input.projectId) lines.push(`project_id: ${String(input.projectId).replace(/[\r\n]/g, "")}`);
+  if (input.ventureId) lines.push(`venture_id: ${String(input.ventureId).replace(/[\r\n]/g, "")}`);
   const occurrences = Number.isFinite(input.occurrences) ? input.occurrences : (input.signature ? 1 : null);
   if (occurrences != null) lines.push(`occurrences: ${occurrences}`);
   if (input.firstSeen) lines.push(`first_seen: ${input.firstSeen}`);
@@ -250,7 +245,7 @@ export function listFrictionQueue(options = {}) {
       provider: meta.provider ?? null,
       baseCommit: meta.base_commit ?? null,
       workspace: meta.workspace ?? null,
-      projectId: meta.project_id ?? null,
+      ventureId: meta.venture_id ?? null,
       repository: meta.repository ?? null,
       model: meta.model ?? null,
       reviewWorkspaceId: meta.review_workspace ?? null,

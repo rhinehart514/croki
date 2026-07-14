@@ -1,6 +1,6 @@
 // The dogfood feature builder — "the house fixes itself when you complain about it."
 //
-// The founder, working in ANY codebase, requests a GTM IDE feature through the product's own
+// The founder, working in any codebase, requests a Drover feature through the product's own
 // MCP server. This module is the deterministic spine that services the request:
 //
 //   1. the request lands in dogfood/queue/ as a normal queue item (kind: feature)
@@ -47,7 +47,7 @@ function resolvedThroughExisting(candidate) {
 
 // Claude file tools are useful only with a real filesystem boundary. Deny absolute/path-traversal,
 // symlink escapes, and git metadata. Codex gets the equivalent write boundary from its workspace
-// sandbox with shell disabled. Read/Glob/Grep are confined too: project isolation is not write-only.
+// sandbox with shell disabled. Read/Glob/Grep are confined too: isolation is not write-only.
 export function createBuilderPathPolicy(worktree) {
   // The real builder creates this directory before installing the policy. Keeping the lexical
   // fallback makes injected git/model contract tests possible without weakening live behavior.
@@ -102,7 +102,7 @@ export function resolveProductChangeRuntime({ provider, model, runtime, env = pr
   if (forced && modelRuntime && forced !== modelRuntime) {
     throw new Error(`Model ${model} belongs to the ${modelRuntime} runtime, not ${forced}.`);
   }
-  const selected = selectRuntime({ runtime, forced, model, env });
+  const selected = selectRuntime({ runtime, forced, model, env, capability: "runProductChange" });
   if (!selected.adapter) throw new Error(selected.reason || "No model runtime is available for product changes.");
   if (typeof selected.adapter.runProductChange !== "function") {
     throw new Error(`${selected.adapter.label} cannot create isolated product changes.`);
@@ -116,14 +116,14 @@ function realGit(args, cwd = REPO_ROOT) {
 
 export function builderPrompt({ report, context, snapshot, branch }) {
   return [
-    `You are the dogfood feature builder for GTM IDE, working headless in an ISOLATED git worktree on branch ${branch}. The founder requested, mid-flow:`,
+    `You are the dogfood feature builder for Drover, working headless in an isolated git worktree on branch ${branch}. The founder requested, mid-flow:`,
     "",
     `"${report}"`,
     context ? `\nWhat was happening: ${context}` : "",
     snapshot && Object.keys(snapshot).length ? `\nProduct state at request time:\n${JSON.stringify(snapshot, null, 2)}` : "",
     "",
     "Build the smallest scoped change that honestly delivers this. Rules:",
-    "- Read AGENTS.md first and respect its invariants — the founder gate wall, health derived from real signals (never seeded), read-only scanning, no re-caging.",
+    "- Read AGENTS.md first and respect its invariants — the founder wall, health derived from real signals, and read-only inspection.",
     "- You have file tools only. Do not claim commands or tests ran; name the verification the founder should run during review.",
     "- NEVER commit, stage, push, merge, deploy, publish, switch branches, or touch another worktree. Leave the exact difference uncommitted for founder review.",
     "- If the request is too vague or unbuildable as stated, change nothing and say exactly what decision or detail is missing.",
@@ -179,7 +179,7 @@ export async function buildFeatureRequest(input = {}, options = {}) {
         base_commit: baseSha,
         workspace: worktree,
         repository: repoRoot,
-        project_id: input.projectId ?? input.snapshot?.project?.id ?? "drover",
+        venture_id: input.ventureId ?? "drover",
       },
     });
 

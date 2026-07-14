@@ -29,8 +29,8 @@ export function findChrome() {
 
 export async function launchChrome({ port, url }) {
   const executable = findChrome();
-  if (!executable) throw new Error("Gate B needs Chrome or Chromium. Set CHROME_BIN to a browser executable available in CI.");
-  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "drover-terrain-chrome-"));
+  if (!executable) throw new Error("The browser journey needs Chrome or Chromium. Set CHROME_BIN to a browser executable available in CI.");
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "drover-firm-chrome-"));
   const child = spawn(executable, [
     "--headless=new",
     "--no-sandbox",
@@ -51,7 +51,7 @@ export async function launchChrome({ port, url }) {
   const base = `http://127.0.0.1:${port}`;
   let page;
   // A cold macOS Chrome launch can spend several seconds validating the app bundle before DevTools
-  // appears. Keep the deterministic gate patient enough for that first launch without hiding an exit.
+  // appears. Keep the deterministic journey patient enough for that first launch without hiding an exit.
   for (let attempt = 0; attempt < 300; attempt += 1) {
     if (child.exitCode !== null) throw new Error(`Chrome exited before DevTools was ready: ${stderr.trim()}`);
     try {
@@ -72,17 +72,8 @@ export async function launchChrome({ port, url }) {
   await client.send("Page.addScriptToEvaluateOnNewDocument", {
     source: `
       window.__droverUnhandledRejections = [];
-      window.__droverTerrainCounts = [];
       window.addEventListener("unhandledrejection", (event) => {
         window.__droverUnhandledRejections.push(String(event.reason?.stack || event.reason || "unknown rejection"));
-      });
-      window.addEventListener("DOMContentLoaded", () => {
-        const recordTerrainCount = () => {
-          const count = document.querySelectorAll('[data-testid="terrain-hypothesis"]').length;
-          if (count > 0 && window.__droverTerrainCounts.at(-1) !== count) window.__droverTerrainCounts.push(count);
-        };
-        new MutationObserver(recordTerrainCount).observe(document.documentElement, { childList: true, subtree: true });
-        recordTerrainCount();
       });
     `,
   });

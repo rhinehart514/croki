@@ -127,10 +127,10 @@ describe("teammate-soul: founder-blessed promotion", () => {
   it("moves a ready learning into the permanent soul and marks it promoted", () => {
     const soul = readySoul();
     const key = patternKeyFor("lead with their trigger");
-    const next = promote(soul, key, { now: T0 + 3 * DAY, run: 8 });
+    const next = promote(soul, key, { now: T0 + 3 * DAY, drive: 8 });
     assert.equal(next.soul.length, 1);
     assert.equal(next.soul[0].patternKey, key);
-    assert.equal(next.soul[0].graduatedAtRun, 8);
+    assert.equal(next.soul[0].graduatedAtDrive, 8);
     assert.equal(next.soul[0].source, "world");
     assert.equal(next.learnings.find((l) => l.patternKey === key).status, "promoted");
   });
@@ -138,8 +138,8 @@ describe("teammate-soul: founder-blessed promotion", () => {
   it("is idempotent — promoting the same key twice adds one soul entry", () => {
     const soul = readySoul();
     const key = patternKeyFor("lead with their trigger");
-    const once = promote(soul, key, { now: T0, run: 8 });
-    const twice = promote(once, key, { now: T0, run: 9 });
+    const once = promote(soul, key, { now: T0, drive: 8 });
+    const twice = promote(once, key, { now: T0, drive: 9 });
     assert.equal(twice.soul.length, 1);
   });
 
@@ -154,40 +154,40 @@ describe("teammate-soul: founder-blessed promotion", () => {
 
 describe("teammate-soul: track record (real signals only)", () => {
   it("starts empty and folds in real outcomes", () => {
-    assert.deepEqual(emptyRecord(), { runs: 0, sent: 0, replies: 0, wins: 0 });
+    assert.deepEqual(emptyRecord(), { drives: 0, sent: 0, replies: 0, wins: 0 });
     let r = emptyRecord();
-    r = bumpRecord(r, { runs: 1, sent: 1 });
-    r = bumpRecord(r, { runs: 1, sent: 1, replies: 1 });
-    assert.deepEqual(r, { runs: 2, sent: 2, replies: 1, wins: 0 });
+    r = bumpRecord(r, { drives: 1, sent: 1 });
+    r = bumpRecord(r, { drives: 1, sent: 1, replies: 1 });
+    assert.deepEqual(r, { drives: 2, sent: 2, replies: 1, wins: 0 });
   });
 });
 
-describe("teammate-soul: cross-project (template) graduation", () => {
+describe("teammate-soul: cross-venture (template) graduation", () => {
   const entry = (patternKey, text) => ({ id: `soul:${patternKey}`, patternKey, text });
 
-  it("graduates a lesson promoted across 2+ projects up to the template", () => {
+  it("graduates a lesson promoted across 2+ ventures up to the template", () => {
     const instances = [
-      { projectId: "rodentradar", soul: [entry("voice/no-emdash", "no em-dashes")] },
-      { projectId: "strelva", soul: [entry("voice/no-emdash", "no em-dashes")] },
+      { ventureId: "rodentradar", soul: [entry("voice/no-emdash", "no em-dashes")] },
+      { ventureId: "strelva", soul: [entry("voice/no-emdash", "no em-dashes")] },
     ];
     const cands = templateCandidates(instances, {}, {});
     assert.equal(cands.length, 1);
     assert.equal(cands[0].patternKey, "voice/no-emdash");
-    assert.deepEqual(cands[0].projects.sort(), ["rodentradar", "strelva"]);
+    assert.deepEqual(cands[0].ventures.sort(), ["rodentradar", "strelva"]);
   });
 
-  it("does NOT graduate a lesson proven in only one project", () => {
+  it("does NOT graduate a lesson proven in only one venture", () => {
     const instances = [
-      { projectId: "rodentradar", soul: [entry("voice/no-emdash", "no em-dashes")] },
-      { projectId: "strelva", soul: [entry("other/lesson", "something else")] },
+      { ventureId: "rodentradar", soul: [entry("voice/no-emdash", "no em-dashes")] },
+      { ventureId: "strelva", soul: [entry("other/lesson", "something else")] },
     ];
     assert.deepEqual(templateCandidates(instances, {}, {}), []);
   });
 
   it("skips a lesson the template already holds", () => {
     const instances = [
-      { projectId: "a", soul: [entry("voice/no-emdash", "x")] },
-      { projectId: "b", soul: [entry("voice/no-emdash", "x")] },
+      { ventureId: "a", soul: [entry("voice/no-emdash", "x")] },
+      { ventureId: "b", soul: [entry("voice/no-emdash", "x")] },
     ];
     const template = { soul: [entry("voice/no-emdash", "x")] };
     assert.deepEqual(templateCandidates(instances, {}, template), []);
@@ -195,25 +195,25 @@ describe("teammate-soul: cross-project (template) graduation", () => {
 
   it("promoteToTemplate is idempotent", () => {
     let template = {};
-    const cand = { patternKey: "voice/no-emdash", text: "no em-dashes", projects: ["a", "b"] };
+    const cand = { patternKey: "voice/no-emdash", text: "no em-dashes", ventures: ["a", "b"] };
     template = promoteToTemplate(template, cand, { now: T0 });
     template = promoteToTemplate(template, cand, { now: T0 });
     assert.equal(template.soul.length, 1);
-    assert.deepEqual(template.soul[0].fromProjects, ["a", "b"]);
+    assert.deepEqual(template.soul[0].fromVentures, ["a", "b"]);
   });
 });
 
 describe("teammate-soul: stakes standing (a read-only label off REAL results)", () => {
   it("a real win reads as trusted, whatever else the record says", () => {
-    assert.equal(standingFromRecord({ runs: 5, sent: 9, replies: 0, wins: 1 }), "trusted");
+    assert.equal(standingFromRecord({ drives: 5, sent: 9, replies: 0, wins: 1 }), "trusted");
   });
 
   it("enough sent with zero replies and zero wins reads as on-notice", () => {
-    assert.equal(standingFromRecord({ runs: 2, sent: 2, replies: 0, wins: 0 }), "on-notice");
+    assert.equal(standingFromRecord({ drives: 2, sent: 2, replies: 0, wins: 0 }), "on-notice");
   });
 
   it("a brand-new teammate with no signal reads as proving, honestly", () => {
-    assert.equal(standingFromRecord({ runs: 0, sent: 0, replies: 0, wins: 0 }), "proving");
+    assert.equal(standingFromRecord({ drives: 0, sent: 0, replies: 0, wins: 0 }), "proving");
     assert.equal(standingFromRecord(), DEFAULT_STANDING);
   });
 
@@ -241,9 +241,9 @@ describe("teammate-soul: the voice brief is an ALLOWLIST assembler (the raw-prom
         { id: `soul:${MARKER}`, patternKey: MARKER, why: MARKER, source: MARKER, text: "Lead with the buyer's own trigger." },
       ],
       learnings: [
-        { patternKey: MARKER, why: MARKER, source: "gate", text: MARKER, status: "watching", occurrences: [] },
+        { patternKey: MARKER, why: MARKER, source: "wall", text: MARKER, status: "watching", occurrences: [] },
       ],
-      record: { runs: 3, sent: 4, replies: 1, wins: 0 },
+      record: { drives: 3, sent: 4, replies: 1, wins: 0 },
     };
   }
 

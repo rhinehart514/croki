@@ -7,9 +7,8 @@
     },
     "brain": {
       "entry": [
-        "src/operator-mcp.mjs",
-        "src/terminal-server.mjs",
-        "src/migrate-to-sqlite.mjs",
+        "src/server.mjs",
+        "src/mcp.mjs",
         "test/**/*.test.mjs"
       ],
       "project": ["src/**/*.mjs"]
@@ -23,10 +22,8 @@
       "ignoreDependencies": [
         "@fontsource-variable/geist",
         "@fontsource-variable/geist-mono",
-        "tailwindcss",
-        "tw-animate-css"
+        "tailwindcss"
       ]
     }
-  },
-  "ignore": ["brain/src/demo/**"]
+  }
 }

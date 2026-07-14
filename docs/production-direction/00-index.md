@@ -4,15 +4,13 @@
 > runtime-safety, and product-context findings remain useful; its product hierarchy and
 > pipeline-centered acceptance target are no longer the plan of record.
 >
-> **Current north star (2026-07-12): the experiment machine.** Two files in this folder
-> are current, not historical, and supersede the earlier completion-spec framing (including
-> `17-product-market-terrain-completion-spec.md`) where they conflict:
+> **Superseded again — 2026-07-14.** The current north star and spec of record are in
+> `docs/FIRM-SPEC.md`. Every file in this folder is now implementation history. In particular:
 >
 > - `EXPERIMENT-MACHINE-GOAL.md` — the north-star goal: complete the experiment machine end to end.
 > - `experiment-machine-alignment.md` — the fit/conflict/gap map of the current tree against that spec.
 >
-> Its spec of record is **docs/EXPERIMENT-MACHINE-SPEC.md**. The numbered files 01–17 below are the
-> earlier production package and remain implementation history.
+> The experiment-machine files supplied useful inputs to the firm direction but no longer define it.
 
 # Drover Production Direction (historical)
 

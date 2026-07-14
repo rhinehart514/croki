@@ -14,10 +14,10 @@ test("reportFriction writes one agent-readable markdown item with the snapshot a
   const queueDir = tmpQueue();
   const record = reportFriction(
     {
-      report: "The gate card hid the citation under the fold",
+      report: "The wall card hid the citation under the fold",
       kind: "bug",
-      context: "Reviewing a RodentRadar draft at the gate",
-      snapshot: { project: { id: "proj-1" }, needsFounder: [{ sessionId: "s1", gateNodeIds: ["g1"] }] },
+      context: "Reviewing a RodentRadar draft at the wall",
+      snapshot: { venture: { id: "venture-1" }, needsFounder: [{ betId: "b1", wallItemIds: ["w1"] }] },
       source: "test",
     },
     { queueDir, now: "2026-07-01T12:00:00.000Z", gitSha: "abc123" },
@@ -33,11 +33,11 @@ test("reportFriction writes one agent-readable markdown item with the snapshot a
   assert.match(text, /captured_at: 2026-07-01T12:00:00\.000Z/);
   assert.match(text, /git_sha: abc123/);
   assert.match(text, /source: test/);
-  assert.match(text, /The gate card hid the citation under the fold/);
+  assert.match(text, /The wall card hid the citation under the fold/);
   assert.match(text, /## What was happening/);
-  assert.match(text, /Reviewing a RodentRadar draft at the gate/);
+  assert.match(text, /Reviewing a RodentRadar draft at the wall/);
   assert.match(text, /## Snapshot/);
-  assert.match(text, /"sessionId": "s1"/);
+  assert.match(text, /"betId": "b1"/);
 });
 
 test("reportFriction refuses an empty report and never invents a git sha", () => {

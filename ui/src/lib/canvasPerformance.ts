@@ -1,4 +1,4 @@
-// Rendering policy for the open canvas. React Flow keeps every node in its store (so search,
+// Rendering policy for the Firm lens. React Flow keeps every node in its store (so search,
 // focus, keyboard selection, and fit calculations still see the complete durable projection),
 // while `onlyRenderVisibleElements` prevents rich node bodies and relationship SVGs outside the
 // viewport from entering the DOM. Keep the threshold deterministic: device speed must never change

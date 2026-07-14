@@ -1,7 +1,4 @@
-// Shared persistence primitives for the file-backed domain stores. Eight stores previously
-// re-implemented these byte-for-byte; centralizing them removes the boilerplate and gives every
-// store one durable-write path to reason about. (The event log is the authoritative history; these
-// snapshot stores are its working projection — see program-projection.mjs.)
+// Shared local-file primitives for Firm state.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -23,10 +20,7 @@ export function safeId(value, fallback = "default") {
     .slice(0, 90) || fallback;
 }
 
-// Durable write: serialize to a per-process temp file, then atomically rename into place so a
-// crash mid-write can never leave a half-written store on disk. The team-sync mirror lives entirely in
-// convex-backend.mjs now (the single seam); this primitive is a pure local atomic write and does not
-// enqueue anything itself.
+// Serialize to a per-process temp file, then atomically rename into place.
 export function atomicWrite(file, value) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;

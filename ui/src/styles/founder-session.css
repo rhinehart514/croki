@@ -1,4 +1,4 @@
-/* The founder gate prompt — the one-time unlock. Centered along the bottom so it reads as the gate, and
+/* The founder unlock prompt. Centered along the bottom so it reads as a deliberate boundary, and
    never stacks with the bottom-left corner cluster (arrange / outline / history). */
 .founder-session {
   position: fixed;

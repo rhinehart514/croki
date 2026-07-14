@@ -9,7 +9,7 @@
 //
 // AUTHENTICATED WRITE (EXPERIMENT-MACHINE-SPEC rail 1, FIX 2c). Marking "present" REMOVES a safety hold —
 // it lets an unattended standing-autonomy pattern auto-approve a possibly-outward item — so the write must
-// be founder-authenticated, exactly like a gate approval. A raw/tokenless or agent-stamped POST can no
+// be founder-authenticated, exactly like a wall decision. A raw/tokenless or agent-stamped POST can no
 // longer mark the founder present and drop the away-hold. The GET (the indicator read) stays open — a read
 // removes no hold. Holding when uncertain (an unauthenticated caller cannot force "present") is always the
 // safe direction: the lease simply lapses to away on its own.
@@ -31,7 +31,7 @@ export default async function handle({ req, res, url }) {
   if (req.method === "POST") {
     const body = (await readBody(req)) ?? {};
     // Marking PRESENT removes a safety hold, so it must come from the authenticated founder browser (same
-    // two-factor guard as a gate approval). Marking AWAY only ADDS a hold, so it is always allowed — a
+    // two-factor guard as a wall decision). Marking AWAY only ADDS a hold, so it is always allowed — a
     // caller can freely make the system MORE conservative, never less.
     if (body.away !== true) {
       try {

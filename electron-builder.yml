@@ -9,22 +9,16 @@ copyright: Drover
 # docs/DISTRIBUTION.md.
 publish: null
 
-# Keep everything as plain files in Resources. The brain is a Node server that reads ui/dist off disk
-# and loads a native SQLite module (better-sqlite3); asar packing would force unpack rules for both.
-# For a local, unsigned, single-user build the size cost is irrelevant and this removes a whole class
-# of "works in dev, breaks packaged" path/native-module bugs.
+# Keep the local brain and built lens as plain files in Resources.
 asar: false
 
-# We rebuild brain/node_modules/better-sqlite3 against Electron's ABI via the `app:rebuild` script
-# before packaging. electron-builder's own rebuild only targets root deps, so leave it off.
 npmRebuild: false
 
 directories:
   output: release
   buildResources: build
 
-# Ad-hoc sign the whole bundle as one unit so the native better-sqlite3 binding isn't killed by
-# macOS Library Validation. See build/after-pack.cjs.
+# Ad-hoc sign the local bundle as one unit. See build/after-pack.cjs.
 afterPack: build/after-pack.cjs
 
 files:

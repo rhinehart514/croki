@@ -1,7 +1,6 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { buildTrackingFix } from "./build.mjs";
 import { completeUncommittedPatch, patchDigest } from "./git-patch.mjs";
 
 function git(repo, args, options = {}) {
@@ -15,28 +14,6 @@ function git(repo, args, options = {}) {
     const stderr = error?.stderr?.toString?.().trim();
     throw new Error(stderr || `git ${args.join(" ")} failed.`);
   }
-}
-
-export async function createRevision(workspace, options = {}) {
-  const createdAt = new Date().toISOString();
-  const result = await buildTrackingFix(workspace.report, options);
-  return {
-    id: `revision-${Date.now()}`,
-    createdAt,
-    updatedAt: createdAt,
-    status: result.ok ? "proposed" : "failed",
-    reportScannedAt: workspace.report.scannedAt,
-    gapId: workspace.report.gaps?.[0]?.id ?? null,
-    evidence: workspace.report.gaps?.[0]?.citations ?? [],
-    baseCommit: result.baseCommit,
-    branch: result.branch,
-    worktree: result.worktree,
-    worktreeStatus: result.status,
-    diffStat: result.diffStat,
-    diff: result.diff,
-    summary: result.summary,
-    error: result.error,
-  };
 }
 
 export function reviewRevision(revision, decision, note = "") {

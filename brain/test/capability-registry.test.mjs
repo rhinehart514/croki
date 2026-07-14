@@ -17,7 +17,7 @@ function definition(overrides = {}) {
     handler: async () => ({ found: true }),
     source: { kind: "host", ref: "repository" },
     allowedActors: ["claude", "codex"],
-    exposure: { operator: true, http: false, publicMcp: true },
+    exposure: { firm: true, http: false, publicMcp: true },
     effects: { readTargets: ["repository"] },
     approvalPolicy: { required: false },
     ...overrides,
@@ -28,8 +28,8 @@ describe("provider-neutral capability registry", () => {
   it("gives Claude and Codex identical inventory and invocation behavior", async () => {
     const registry = createCapabilityRegistry([definition()]);
     assert.deepEqual(registry.viewForActor("claude"), registry.viewForActor("codex"));
-    assert.deepEqual(await registry.invoke("repo.inspect", { ref: "app.ts" }, { actor: "claude", exposure: "operator" }), { found: true });
-    assert.deepEqual(await registry.invoke("repo.inspect", { ref: "app.ts" }, { actor: "codex", exposure: "operator" }), { found: true });
+    assert.deepEqual(await registry.invoke("repo.inspect", { ref: "app.ts" }, { actor: "claude", exposure: "firm" }), { found: true });
+    assert.deepEqual(await registry.invoke("repo.inspect", { ref: "app.ts" }, { actor: "codex", exposure: "firm" }), { found: true });
   });
 
   it("requires the founder wall for an external effect and never trusts a model approval", async () => {
@@ -70,7 +70,7 @@ describe("provider-neutral capability registry", () => {
       handler: async (input, context) => { received = { input, context }; return { found: true }; },
     })]);
     await registry.invoke("worktree.edit", { ref: "app.ts" }, {
-      actor: "codex", exposure: "operator", idempotencyKey: "edit-1", sessionId: "session-1",
+      actor: "codex", exposure: "firm", idempotencyKey: "edit-1", sessionId: "session-1",
     });
     assert.equal(registry.get("worktree.edit").lane, CAPABILITY_LANES.REVERSIBLE_LOCAL);
     assert.equal(received.context.idempotencyKey, "edit-1");

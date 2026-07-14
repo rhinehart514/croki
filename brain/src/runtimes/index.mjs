@@ -1,6 +1,6 @@
-// Operator runtime registry + selector.
+// Firm runtime registry + selector.
 //
-// A runtime is provider-neutral: it drives a durable operator session to its
+// A runtime is provider-neutral: it drives a teammate to its
 // next pause and nothing more. The contract every adapter implements:
 //
 //   id        string         stable identifier recorded on the session
@@ -9,11 +9,10 @@
 //   async drive(ctx) -> { kind, summary? }
 //       kind ∈ "completed" | "paused" | "cancelled" | "budget"
 //
-// `ctx` carries the goal/model/system/tools plus GTM-IDE-owned callbacks
+// `ctx` carries the goal/model/system/tools plus Drover-owned callbacks
 // (isCancelled, currentStatus, onTurn, onText, onToolStart, onToolError,
-// runTool, persistMessages). The runtime NEVER touches the session store, the
-// run ledger, gates, or cancellation directly — it only calls those callbacks.
-// That is what keeps persistence and safety on GTM IDE's side of the line no
+// runTool, persistMessages). The runtime only calls those callbacks.
+// That keeps persistence and safety on Drover's side of the line no
 // matter which runtime (API, Claude Code subprocess, or a future Codex
 // subprocess) is actually reasoning.
 
@@ -36,7 +35,8 @@ const REGISTRY = {
 // Preference order when nothing is forced: the bundled Claude Code Agent SDK is
 // subscription runtimes first, then the direct Anthropic API as a keyed
 // fallback. A session bound through the model picker overrides this order.
-const PREFERENCE = [claudeCodeRuntime, codexRuntime, anthropicRuntime];
+const DRIVE_PREFERENCE = [claudeCodeRuntime, anthropicRuntime];
+const PRODUCT_CHANGE_PREFERENCE = [claudeCodeRuntime, codexRuntime];
 
 export function getRuntime(id) {
   return REGISTRY[id] ?? null;
@@ -50,7 +50,7 @@ export function runtimeForModel(model) {
 }
 
 export function runtimeStatuses({ env = process.env } = {}) {
-  return PREFERENCE.map((adapter) => {
+  return DRIVE_PREFERENCE.map((adapter) => {
     const availability = adapter.isAvailable({ env });
     return {
       id: adapter.id,
@@ -65,19 +65,22 @@ export function runtimeStatuses({ env = process.env } = {}) {
 // Decide which runtime drives this session.
 //   - An injected client (tests / custom transport) forces the Anthropic adapter.
 //   - An injected adapter object is used as-is.
-//   - GTM_IDE_OPERATOR_RUNTIME (or session.runtime) forces a named runtime.
+//   - GTM_IDE_FIRM_RUNTIME forces a named runtime.
 //   - Otherwise: first available in PREFERENCE order.
 // Returns { adapter, client?, auth?, reason? }. A null adapter carries an
 // honest reason; `auth` names the credential mode the adapter will use.
-export function selectRuntime({ client, runtime, forced, model, env = process.env } = {}) {
+export function selectRuntime({ client, runtime, forced, model, env = process.env, capability = "drive" } = {}) {
   if (client) return { adapter: anthropicRuntime, client, auth: "client" };
-  if (runtime && typeof runtime.drive === "function") return { adapter: runtime };
+  if (runtime && typeof runtime[capability] === "function") return { adapter: runtime };
 
-  const forcedId = forced || runtimeForModel(model) || env.GTM_IDE_OPERATOR_RUNTIME;
+  const forcedId = forced || runtimeForModel(model) || env.GTM_IDE_FIRM_RUNTIME;
   if (forcedId) {
     const adapter = getRuntime(forcedId);
     if (!adapter) {
-      return { adapter: null, reason: `Unknown operator runtime "${forcedId}".` };
+      return { adapter: null, reason: `Unknown Firm runtime "${forcedId}".` };
+    }
+    if (typeof adapter[capability] !== "function") {
+      return { adapter: null, reason: `${adapter.label} does not support ${capability}.` };
     }
     const availability = adapter.isAvailable({ env });
     return availability.ok
@@ -86,7 +89,8 @@ export function selectRuntime({ client, runtime, forced, model, env = process.en
   }
 
   const reasons = [];
-  for (const adapter of PREFERENCE) {
+  const preference = capability === "runProductChange" ? PRODUCT_CHANGE_PREFERENCE : DRIVE_PREFERENCE;
+  for (const adapter of preference) {
     const availability = adapter.isAvailable({ env });
     if (availability.ok) return { adapter, auth: availability.auth };
     reasons.push(`${adapter.label}: ${availability.reason}`);

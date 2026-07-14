@@ -14,7 +14,7 @@ export const CAPABILITY_LANES = Object.freeze({
 
 export const MODEL_ACTORS = Object.freeze(["claude", "codex", "model", "agent"]);
 const MODEL_ACTOR_SET = new Set(MODEL_ACTORS);
-const EXPOSURES = Object.freeze(["operator", "http", "publicMcp"]);
+const EXPOSURES = Object.freeze(["firm", "http", "publicMcp"]);
 const PRIVILEGED_OPERATIONS = new Set(["approval", "release"]);
 
 function registryError(code, message) {

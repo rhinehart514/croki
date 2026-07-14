@@ -1,20 +1,15 @@
-// Claude Code Agent SDK operator runtime — the preferred local runtime.
+// Claude Code Agent SDK runtime — the preferred local intelligence adapter.
 //
-// Why this exists: GTM IDE claims to be a local harness. Claude Code is exactly
+// Why this exists: Drover is a local harness. Claude Code is exactly
 // that — it runs on the founder's existing authenticated subscription (no raw
 // ANTHROPIC_API_KEY), holds its own agent/tool loop, and reads the repo locally.
-// So when the `claude` CLI is installed, the resident operator should be driven
+// So when the `claude` CLI is installed, the resident teammate should be driven
 // by a Claude Code subprocess rather than a direct API call.
 //
-// Ownership boundary (critical): Claude Code owns NONE of GTM IDE's durable
-// state or safety. It receives the goal plus GTM IDE's typed operator tools
-// (over an MCP bridge, ./operator-mcp.mjs), reasons, and calls those tools. The
-// tools execute inside GTM IDE code and persist to GTM IDE's session store, run
-// ledger, and gates. The operator toolset contains no approve/send/publish tool,
-// so the subprocess literally cannot push past a founder gate — when a run
-// reaches a gate the session flips to `waiting_for_gate` and this adapter stops
-// the subprocess. GTM IDE keeps owning session state, typed mutations, the
-// ledger, permissions, gates, cancellation, timeout, and restart recovery.
+// Claude Code owns none of Drover's durable state or safety. It receives the goal plus typed Firm
+// tools over an in-process MCP bridge. The tools execute inside Drover. The toolset contains no
+// approve/send/publish tool, so the subprocess cannot cross the wall. Drover owns state, typed
+// mutations, permissions, cancellation, timeout, and restart recovery.
 //
 // The Agent SDK bundles Claude Code, so the product does not depend on a global
 // `claude` binary. It can use an existing Claude Code login or ANTHROPIC_API_KEY.
@@ -29,33 +24,33 @@ import {
   query as agentQuery,
   tool as sdkTool,
 } from "@anthropic-ai/claude-agent-sdk";
-import { runClaudeQuery } from "../agent-bridge.mjs";
+import { runClaudeQuery } from "../model-query.mjs";
 import { z } from "zod";
 
-const BRIDGE_SERVER = "gtm-operator";
+const BRIDGE_SERVER = "drover-firm";
 
-// Operator tools are all read/patch/run/ask/complete — none send, publish, or
-// approve a gate. We still funnel the allow-list through one builder so the
-// safety property is asserted in one place (see operator-mcp.test.mjs).
-export function operatorAllowedTools(toolNames, server = BRIDGE_SERVER) {
+// Firm tools are all read/patch/run/ask/complete — none send, publish, or
+// clear the wall. We still funnel the allow-list through one builder so the
+// safety property is asserted in one place.
+export function firmAllowedTools(toolNames, server = BRIDGE_SERVER) {
   return toolNames.map((name) => `mcp__${server}__${name}`);
 }
 
-// The composer IS the Claude harness (founder decision, 2026-07-01). The operator runs as a
+// The composer IS the Claude harness (founder decision, 2026-07-01). The teammate runs as a
 // real Claude Code session — the founder's skills (/ideate, /positioning…), named subagents,
 // parallel fan-out (Task/Agent), web research, and read-only file tools — instead of a caged
-// model that can only touch the operator bridge. The wall stays structural at this boundary:
-// no Bash, no Write/Edit, no send-shaped tool is ever granted here, and gates still resolve
+// model that can only touch the teammate bridge. The wall stays structural at this boundary:
+// no Bash, no Write/Edit, no send-shaped tool is ever granted here, and wall decisions still resolve
 // only through the founder (assertSafeTool refuses approve/send verbs on the bridge itself).
 // The honest seam this opens: a founder-owned agent definition invoked via Task may declare
 // its own tools — those definitions are the founder's files and their tool grants are the
 // founder's standing policy, the same trust boundary as the skills themselves.
-// Escape hatch: GTM_OPERATOR_HARNESS=caged (or ctx.options.harness === "caged") restores the
-// bridge-only operator.
+// GTM_FIRM_HARNESS=caged (or ctx.options.harness === "caged") selects the
+// bridge-only teammate.
 export const HARNESS_TOOLS = ["Task", "Agent", "Skill", "WebSearch", "WebFetch", "Read", "Glob", "Grep", "TodoWrite"];
 
-export function operatorHarnessMode(ctx = {}, env = process.env) {
-  const explicit = ctx.options?.harness ?? env.GTM_OPERATOR_HARNESS;
+export function firmHarnessMode(ctx = {}, env = process.env) {
+  const explicit = ctx.options?.harness ?? env.GTM_FIRM_HARNESS;
   return explicit === "caged" ? "caged" : "full";
 }
 
@@ -76,10 +71,10 @@ export function buildClaudeArgs({ mcpConfigPath, allowedTools, model, maxTurns }
   return args;
 }
 
-// The MODEL's per-drive turn budget — decoupled from the operator step budget (Wave 6). Generous by
-// default so a real multi-step drive can think, and floored at 8 on a resume so a gate-resume re-draft
+// The MODEL's per-drive turn budget — decoupled from the teammate step budget (Wave 6). Generous by
+// default so a real multi-step drive can think, and floored at 8 on a resume so a wall-resume re-draft
 // always has room. Overridable via env for tuning. Never derived from maxSteps/stepCount — that
-// coupling was the "max turns (2)" leak; the operator's own step guard is the cross-cycle throttle.
+// coupling was the "max turns (2)" leak; the teammate's own step guard is the cross-cycle throttle.
 export function modelMaxTurns(ctx, isResume) {
   const base = Number(process.env.GTM_IDE_CLAUDE_CODE_MAX_TURNS) || 40;
   const floor = isResume ? 8 : 1;
@@ -184,7 +179,7 @@ export function detectClaudeAuth(env = process.env, probe = hasStoredClaudeLogin
   return { mode: "none" };
 }
 
-// Human label for an auth mode, shown in operator events. null for "none" and
+// Human label for an auth mode, shown in teammate events. null for "none" and
 // the test client — nothing useful to display.
 export function authModeLabel(mode) {
   switch (mode) {
@@ -199,16 +194,8 @@ export function authModeLabel(mode) {
 // after each SDK message because MCP tools execute out-of-band, so a wall the founder must
 // resolve has to appear here or the model keeps talking past it and the turn-end is misread
 // as "completed" (which then clobbers the pending wall). waiting_for_proposal is a wall:
-// a staged graph change waits for the founder's accept/discard exactly like a gate.
-export const PAUSE_STATUSES = new Set([
-  "waiting_for_gate",
-  "waiting_for_proposal",
-  "waiting_for_input",
-  "waiting_for_ideas",
-  "waiting_for_candidates",
-  "completed",
-  "blocked",
-]);
+// a staged change waits for the founder's accept/discard at the wall.
+export const PAUSE_STATUSES = new Set(["paused"]);
 
 // A resume can fail when the prior on-disk transcript is gone — cleared, expired, or the session
 // was created on another machine/cwd. Detect that narrowly so we only fall back to a cold start
@@ -218,7 +205,7 @@ export function isResumeFailure(error) {
   return /resume|session/.test(message) && /not found|no longer|does not exist|missing|unknown|no conversation|cannot/.test(message);
 }
 
-export function createOperatorSdkServer(ctx) {
+export function createFirmSdkServer(ctx) {
   const tools = (ctx.tools ?? []).map((definition) => {
     const schema = z.fromJSONSchema(definition.input_schema ?? { type: "object", properties: {} });
     const shape = schema instanceof z.ZodObject ? schema.shape : {};
@@ -252,7 +239,7 @@ export function createOperatorSdkServer(ctx) {
   return createSdkMcpServer({
     name: BRIDGE_SERVER,
     version: "0.3.0",
-    instructions: "Use these typed Drover tools for every project, channel, graph, run, and completion action. Never narrate a tool call in text.",
+    instructions: "Use these typed Drover tools for venture truth, taste, bets, staged work, and founder-wall pauses. Never narrate a tool call in text.",
     tools,
     alwaysLoad: true,
   });
@@ -289,7 +276,7 @@ export const claudeCodeRuntime = {
       if (!binary.ok) return binary;
     }
     // The bundled SDK is present, but the runtime is only usable if the founder
-    // is actually authenticated. Gate availability on that so a signed-out
+    // is actually authenticated. Require authentication on that so a signed-out
     // founder hits an honest cold-start (with options) instead of a deep SDK
     // crash mid-session. OAuth subscription is preferred; a raw key is the
     // fallback.
@@ -308,27 +295,27 @@ export const claudeCodeRuntime = {
     };
   },
 
-  // Drive the session through the Agent SDK, wired to GTM IDE's operator MCP
+  // Drive the session through the Agent SDK, wired to GTM IDE's teammate MCP
   // bridge. The bridge executes tools in its own process against the durable
   // session store. The SDK owns model orchestration; GTM IDE still owns state,
-  // validation, cancellation, and the exact boundary around founder gates.
+  // validation, cancellation, and the exact boundary around founder walls.
   //
   // Conversation memory ("remember your chats"): the SDK persists the running
   // transcript under ~/.claude/projects (persistSession), keyed by cwd + a
   // session id. On the FIRST drive we let the SDK mint that id and capture it
   // back through ctx.onRuntimeSession so GTM IDE stores it on the durable
-  // operator session. On every LATER drive — after a founder gate, founder
+  // teammate session. On every LATER drive — after a founder wall, founder
   // input, an iteration-budget pause, or a full process restart — we `resume`
   // that same id and send only the new instruction (ctx.resumePrompt: "the
-  // founder approved the gate", etc.). The subprocess then continues the exact
+  // founder approved the wall", etc.). The subprocess then continues the exact
   // conversation it was in instead of re-deriving context from cold. GTM IDE
-  // still owns all durable state and the gate; this only restores the model's
+  // still owns all durable state and the wall; this only restores the model's
   // working memory across the pauses GTM IDE itself imposes.
   async drive(ctx) {
-    const harness = operatorHarnessMode(ctx);
-    const allowedTools = operatorAllowedTools((ctx.tools ?? []).map((tool) => tool.name));
+    const harness = firmHarnessMode(ctx);
+    const allowedTools = firmAllowedTools((ctx.tools ?? []).map((tool) => tool.name));
     if (harness === "full") allowedTools.push(...HARNESS_TOOLS);
-    const sdkServer = createOperatorSdkServer(ctx);
+    const sdkServer = createFirmSdkServer(ctx);
     const runQuery = ctx.query || agentQuery;
     const reportSession = typeof ctx.onRuntimeSession === "function" ? ctx.onRuntimeSession : () => {};
 
@@ -363,12 +350,12 @@ export const claudeCodeRuntime = {
             abortController,
             cwd: ctx.options?.cwd || process.cwd(),
             ...(ctx.model ? { model: ctx.model } : {}),
-            // SEVERED from the operator step budget (Wave 6). maxTurns is the MODEL's turns inside ONE
+            // SEVERED from the teammate step budget (Wave 6). maxTurns is the MODEL's turns inside ONE
             // drive; it used to be `maxSteps - stepCount`, so late in a session the model got 1-2 turns
-            // and hit "max turns (2)" before it could think — the leak the audit named. The operator's
+            // and hit "max turns (2)" before it could think — the leak the audit named. The teammate's
             // own cross-cycle throttle stays where it belongs (stepCount >= maxSteps in the runtime).
             // Here the model gets a generous fixed turn budget, with a HARD FLOOR of 8 on a resume so a
-            // gate-resume drive always has room to re-draft. The real economic throttle is maxBudgetUsd
+            // wall-resume drive always has room to re-draft. The real economic throttle is maxBudgetUsd
             // (session-total-aware, below) plus the silence watchdog — not a starved turn count.
             maxTurns: modelMaxTurns(ctx, resumeId != null),
             // Session-total-aware: each drive may spend up to the per-drive cap, but never past what is
@@ -377,7 +364,7 @@ export const claudeCodeRuntime = {
             // instead of an unbounded per-drive $5 each time.
             maxBudgetUsd: driveBudgetUsd(ctx),
             systemPrompt: harness === "full"
-              ? `${ctx.system}\n\nYou are running inside the founder's full Claude harness: their skills (invoke with the Skill tool), their named subagents and parallel fan-out (Task/Agent), web research, and read-only file tools are available alongside the Drover bridge tools. Use them — fan out research, run /ideate-style generation with separate judging — but the walls hold: you cannot send, publish, write files, or resolve a founder gate from here; everything outward still stages at the gate.`
+              ? `${ctx.system}\n\nYou are running inside the founder's full Claude harness: their skills (invoke with the Skill tool), their named subagents and parallel fan-out (Task/Agent), web research, and read-only file tools are available alongside the Drover bridge tools. Use them — fan out research, run /ideate-style generation with separate judging — but the walls hold: you cannot send, publish, write files, or resolve a founder wall from here; everything outward still stages at the wall.`
               : ctx.system,
             tools: [],
             allowedTools,
@@ -422,8 +409,8 @@ export const claudeCodeRuntime = {
           if (message.type === "result") terminalResult = message;
 
           // MCP tool execution completes before the following SDK message is
-          // yielded. Check every message so a gate reached by the bridge stops
-          // the resident operator before another model turn can cross it.
+          // yielded. Check every message so the wall reached by the bridge stops
+          // the resident teammate before another model turn can cross it.
           const status = ctx.currentStatus();
           if (status === "cancelled") {
             abortController.abort();
@@ -468,7 +455,7 @@ export const claudeCodeRuntime = {
       // founder. Fall back ONCE to a fresh session that re-inspects from the
       // goal. Any other failure surfaces unchanged.
       if (priorSessionId && isResumeFailure(error)) {
-        ctx.onText?.("Previous conversation memory was unavailable, so the operator is starting a fresh pass and re-inspecting from the goal.");
+        ctx.onText?.("Previous conversation memory was unavailable, so the teammate is starting a fresh pass and re-inspecting from the goal.");
         return await attempt(null);
       }
       throw error;

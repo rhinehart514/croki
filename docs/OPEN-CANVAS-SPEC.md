@@ -1,8 +1,12 @@
 # Drover open canvas product specification
 
-**Status:** plan of record for the next product direction  
-**Stage:** alpha  
-**Decision date:** 2026-07-11  
+> **Superseded — 2026-07-14.** The build direction is now [FIRM-SPEC.md](FIRM-SPEC.md). This document
+> stays binding for the harness it defined (truth, the founder wall, taste) and as implementation
+> history; where it and FIRM-SPEC.md conflict, FIRM-SPEC.md wins.
+
+**Status:** superseded implementation history
+**Stage:** alpha
+**Decision date:** 2026-07-11
 **Product verdict:** build
 
 This specification defines the complete target product and the smallest trustworthy path toward it. It
@@ -11,12 +15,8 @@ pipeline, treat the execution graph as a separate product surface, or limit Drov
 Those documents remain useful implementation history. The truth layer, founder wall, learned taste,
 terrain, open step runtime, and current alpha evidence standard remain binding.
 
-**Current build direction (2026-07-12):** the open canvas is the foundation contract; the active direction
-built on top of it is the **experiment machine** — "vibe code your go-to-market." Its spec of record is
-[EXPERIMENT-MACHINE-SPEC.md](EXPERIMENT-MACHINE-SPEC.md) and its north-star goal is
-[production-direction/EXPERIMENT-MACHINE-GOAL.md](production-direction/EXPERIMENT-MACHINE-GOAL.md). That spec
-does not replace this one; it describes the experience — many parallel grounded experiments, the loop-back
-canvas, and the six firm founder rails — that runs on this canvas and harness.
+**Current build direction (2026-07-14):** [FIRM-SPEC.md](FIRM-SPEC.md) replaces this product model.
+The spatial substrate and truth/wall/taste findings survive only where the firm spec retains them.
 
 ## 1. The decision
 

@@ -1,13 +1,15 @@
 # The Experiment Machine — build spec
 
-**Status:** spec of record for how Drover runs GTM + product experiments.
+> **Superseded — 2026-07-14.** The build direction is now [FIRM-SPEC.md](FIRM-SPEC.md). This document
+> stays binding for the harness it defined (truth, the founder wall, taste) and as implementation
+> history; where it and FIRM-SPEC.md conflict, FIRM-SPEC.md wins.
+
+**Status:** superseded implementation history.
 **Derived from:** two founder discovery interviews (2026-07-12).
 **Scope:** product-agnostic. **Stage:** alpha.
 
-This spec sits under [OPEN-CANVAS-SPEC.md](OPEN-CANVAS-SPEC.md) and [VISION.md](VISION.md). It does not
-replace the harness (truth, founder wall, taste); it describes the experience the founder actually wants
-built on top of it. Where it names a mechanic as "open," building a fixed schema, config screen, or role
-taxonomy for it re-creates the cage the harness exists to prevent.
+This spec is an input to [FIRM-SPEC.md](FIRM-SPEC.md), which replaces its experiment-specific product
+model while retaining the truth, wall, taste, divergence, and outcome lessons named here.
 
 ## What it is
 

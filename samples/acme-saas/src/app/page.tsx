@@ -25,6 +25,9 @@ export default function LandingPage() {
       <Link className="cta" href="/signup">
         Start free
       </Link>
+      <Link className="pricing-link" href="/pricing">
+        See pricing
+      </Link>
     </main>
   );
 }

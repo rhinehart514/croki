@@ -4,7 +4,6 @@
 // than making one surface silently switch to a different avatar language.
 
 import { Component, type ReactNode } from "react";
-import { agentPersona, FAMILY_TINT, type AgentFamily } from "@/lib/agentPersona";
 import { CrewAvatar } from "./CrewAvatar";
 import "./CrewFace.css";
 
@@ -16,28 +15,24 @@ class FaceBoundary extends Component<{ fallback: ReactNode; children: ReactNode 
   render() { return this.state.failed ? <>{this.props.fallback}</> : <>{this.props.children}</>; }
 }
 
-export function CrewFace({
-  agentRef, job, family: familyProp, monogram: monogramProp, size = 28, state = "idle", className,
-}: {
+function monogramOf(ref: string) {
+  const words = ref.replace(/^gtm-/, "").split(/[-_\s]+/).filter(Boolean);
+  if (words.length > 1) return `${words[0][0]}${words[1][0]}`.toUpperCase();
+  return (words[0] ?? "T").slice(0, 2).toUpperCase();
+}
+
+export function CrewFace({ agentRef, size = 28, state = "idle", className }: {
   agentRef: string;
-  job?: string;
-  // Pass family + monogram to skip the persona lookup when the caller already derived it; otherwise
-  // this reads them from the same persona library every other surface uses, so faces never drift.
-  family?: AgentFamily;
-  monogram?: string;
   size?: number;
   state?: "idle" | "working";
   className?: string;
 }) {
-  const persona = familyProp && monogramProp ? null : agentPersona(agentRef, job);
-  const family = familyProp ?? persona!.family;
-  const monogram = monogramProp ?? persona!.monogram;
-  const tint = FAMILY_TINT[family];
+  const monogram = monogramOf(agentRef);
 
   const fallback = (
     <span
       className="crew-face-monogram"
-      style={{ background: tint.bg, color: tint.fg, fontSize: Math.max(9, Math.round(size * 0.4)) }}
+      style={{ background: "var(--surface-2)", color: "var(--muted)", fontSize: Math.max(9, Math.round(size * 0.4)) }}
     >
       {monogram}
     </span>
@@ -46,7 +41,7 @@ export function CrewFace({
   return (
     <span className={className ? `crew-face ${className}` : "crew-face"} style={{ width: size, height: size }}>
       <FaceBoundary fallback={fallback}>
-        <CrewAvatar agentRef={agentRef} family={family} size={size} state={state} />
+        <CrewAvatar agentRef={agentRef} size={size} state={state} />
       </FaceBoundary>
     </span>
   );

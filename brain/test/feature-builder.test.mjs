@@ -235,7 +235,7 @@ test("an uninspectable failed build is preserved instead of being force-cleaned"
 });
 
 test("the builder prompt carries the wall and the request verbatim", () => {
-  const prompt = builderPrompt({ report: "Show me X", context: "mid-review", snapshot: { project: { id: "p1" } }, branch: "dogfood/x" });
+  const prompt = builderPrompt({ report: "Show me X", context: "mid-review", snapshot: { venture: { id: "v1" } }, branch: "dogfood/x" });
   assert.match(prompt, /"Show me X"/);
   assert.match(prompt, /NEVER commit.*push.*merge.*deploy/i);
   assert.match(prompt, /file tools only/i);

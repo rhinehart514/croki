@@ -26,6 +26,7 @@ export function SiteHeader() {
         <a href="#machine">The machine</a>
         <a href="#wall">Founder wall</a>
         <a href="#local">Run locally</a>
+        <a href="#pricing">Pricing</a>
       </nav>
 
       <Button
@@ -67,6 +68,7 @@ export function SiteHeader() {
             <SheetClose render={<a href="#machine" />}>The machine</SheetClose>
             <SheetClose render={<a href="#wall" />}>Founder wall</SheetClose>
             <SheetClose render={<a href="#local" />}>Run locally</SheetClose>
+            <SheetClose render={<a href="#pricing" />}>Pricing</SheetClose>
           </nav>
           <div className="mobile-sheet-footer">
             <Button

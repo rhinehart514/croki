@@ -1,14 +1,10 @@
 #!/usr/bin/env node
 
-import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { attachTerminalServer } from "./terminal-server.mjs";
 import { recoverStaleBuilds } from "./feature-builder.mjs";
-import { listConnectors } from "./connectors/registry.mjs";
-import { recoverInterruptedOperatorSessions } from "./operator-store.mjs";
-import { startAmbientScheduler } from "./ambient-scheduler.mjs";
+import { startHeatScheduler } from "./firm/heat.mjs";
 import { json, serveFile } from "./routes/util.mjs";
 import { founderBootstrapCode } from "./routes/session-guard.mjs";
 
@@ -18,88 +14,29 @@ import { founderBootstrapCode } from "./routes/session-guard.mjs";
 // calls them in the original route order, then falls through to the static-file + 405 tail — so the
 // FIRST matching route still wins, exactly as when every route lived inline.
 import systemRoutes from "./routes/system.mjs";
-import projectRoutes from "./routes/projects.mjs";
-import measureRoutes from "./routes/measure.mjs";
-import objectGraphRoutes from "./routes/object-graph.mjs";
-import runRoutes from "./routes/runs.mjs";
 import presenceRoutes from "./routes/presence.mjs";
-import marketRoutes from "./routes/market.mjs";
-import inputRoutes from "./routes/inputs.mjs";
-import ideaRoutes from "./routes/ideas.mjs";
-import channelRoutes from "./routes/channels.mjs";
-import inboxRoutes from "./routes/inbox.mjs";
-import productModelRoutes from "./routes/product-model.mjs";
-import contextRoutes from "./routes/context.mjs";
-import createTerrainRoutes from "./routes/terrain.mjs";
-import createOpenCanvasRoutes from "./routes/open-canvas.mjs";
-import operationPlanRoutes from "./routes/operation-plan.mjs";
-import tasteRoutes from "./routes/taste.mjs";
-import signalWeightsRoutes from "./routes/signal-weights.mjs";
-import reallocationTunablesRoutes from "./routes/reallocation-tunables.mjs";
-import operatorRoutes from "./routes/operator.mjs";
-import engineRoutes from "./routes/engine.mjs";
-import workspaceRoutes from "./routes/workspaces.mjs";
-import graphRoutes from "./routes/graph.mjs";
-import artifactRoutes from "./routes/artifacts.mjs";
-import crewRoutes from "./routes/crew.mjs";
-
-const here = path.dirname(fileURLToPath(import.meta.url));
-
-// Load <repoRoot>/.env.local so the team-sync config persists across restarts without exporting env by
-// hand. Minimal KEY=VALUE parser; never overrides an already-set var. CONVEX_URL (written by
-// `npx convex dev`) is mapped to GTM_IDE_CONVEX_URL when the latter isn't set, so wiring a team needs
-// only GTM_IDE_TEAM_ID. With no .env.local and no env, the engine stays fully local — sync never engages.
-(() => {
-  try {
-    const envPath = path.resolve(here, "../../.env.local");
-    if (!fs.existsSync(envPath)) return;
-    for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
-      const m = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*)$/);
-      if (!m) continue;
-      const key = m[1];
-      const val = m[2].trim().replace(/^["']|["']$/g, "");
-      if (!(key in process.env)) process.env[key] = val;
-    }
-    if (!process.env.GTM_IDE_CONVEX_URL && process.env.CONVEX_URL) {
-      process.env.GTM_IDE_CONVEX_URL = process.env.CONVEX_URL;
-    }
-  } catch {
-    /* best-effort: a malformed .env.local never blocks boot */
-  }
-})();
+import credentialRoutes from "./routes/credentials.mjs";
+import firmRoutes from "./firm/routes.mjs";
+import firmHeatRoutes from "./firm/heat-routes.mjs";
+import firmLensRoutes from "./firm/lens-routes.mjs";
+import firmProductChangeRoutes from "./firm/product-routes.mjs";
+import firmWorkRoutes from "./firm/work-routes.mjs";
+import firmVentureRoutes from "./firm/venture-routes.mjs";
 
 const port = Number(process.env.PORT || 4317);
 const host = process.env.HOST || "127.0.0.1";
-recoverInterruptedOperatorSessions();
-const terrainRoutes = createTerrainRoutes();
-const legacyMachineryEnabled = process.env.GTM_IDE_ENABLE_LEGACY_MACHINERY === "1";
 
-// The route groups, in the original route order. The dispatch tries each until one claims the request.
+// Surviving harness routes plus the firm's live venture/bet/wall surface.
 const ROUTE_GROUPS = [
   systemRoutes,
-  projectRoutes,
-  measureRoutes,
-  objectGraphRoutes,
-  runRoutes,
   presenceRoutes,
-  marketRoutes,
-  inputRoutes,
-  ...(legacyMachineryEnabled ? [ideaRoutes] : []),
-  channelRoutes,
-  inboxRoutes,
-  productModelRoutes,
-  contextRoutes,
-  terrainRoutes,
-  createOpenCanvasRoutes(),
-  ...(legacyMachineryEnabled ? [operationPlanRoutes] : []),
-  tasteRoutes,
-  ...(legacyMachineryEnabled ? [signalWeightsRoutes, reallocationTunablesRoutes] : []),
-  operatorRoutes,
-  engineRoutes,
-  workspaceRoutes,
-  graphRoutes,
-  artifactRoutes,
-  crewRoutes,
+  credentialRoutes,
+  firmRoutes,
+  firmHeatRoutes,
+  firmLensRoutes,
+  firmProductChangeRoutes,
+  firmWorkRoutes,
+  firmVentureRoutes,
 ];
 
 const server = http.createServer(async (req, res) => {
@@ -121,21 +58,19 @@ const server = http.createServer(async (req, res) => {
   json(res, 405, { error: "Method not allowed." });
 });
 
-// Live terminal sessions for canvas terminal nodes (WebSocket on /api/terminal). Loopback-only.
-attachTerminalServer(server);
-
 // Exported so a test can boot the real route handler on an ephemeral port and close it cleanly.
 export { server };
 
-// In-process ambient heartbeat handle, so shutdown can clear the timer cleanly.
-let ambientScheduler = null;
+// The firm's always-on heat scheduler (F7) handle, so shutdown can clear the timer cleanly.
+let heatScheduler = null;
 
-server.listen(port, host, () => {
+function startServer() {
+  server.listen(port, host, () => {
   console.log(`Drover running at http://${host}:${port}`);
   console.log(`Founder action code: ${founderBootstrapCode()}`);
-  // Start the outcome heartbeat. It notices replies/bounces that already happened; it does not invent,
-  // route, or repeat creative work in the background.
-  ambientScheduler = startAmbientScheduler();
+  // Start the firm's always-on loop. Every open venture's heat dial defaults to "off" (getHeatSettings)
+  // until the founder turns it up, so a fresh install wakes nothing until explicitly asked to.
+  heatScheduler = startHeatScheduler();
   // Dogfood crash recovery: no feature build survives a restart, so flip stale queued/building
   // items to `interrupted` and salvage any orphaned worktree work onto its branch. Best-effort.
   try {
@@ -144,33 +79,21 @@ server.listen(port, host, () => {
   } catch (err) {
     console.log(`  Dogfood recovery skipped: ${err instanceof Error ? err.message : err}`);
   }
-  const connectors = listConnectors();
-  const ready = connectors.filter((c) => c.configured && !c.stub);
-  const stubs = connectors.filter((c) => c.stub);
-  if (ready.length) console.log(`  Connectors ready: ${ready.map((c) => c.name).join(", ")}`);
-  if (stubs.length) console.log(`  Connectors stubbed: ${stubs.map((c) => c.name).join(", ")}`);
-  // When a team is configured, hydrate the local store root from the team's shared state on boot.
-  // Best-effort and lazy-loaded — a local-only deployment never touches the sync layer, and prints
-  // nothing alarming: an unconfigured pull reports `disabled` and we stay quiet rather than logging
-  // a "pulled 0" or "pull failed" line for a deployment that never opted into team sync.
-  if (process.env.GTM_IDE_CONVEX_URL && process.env.GTM_IDE_TEAM_ID) {
-    import("./convex-backend.mjs")
-      .then((m) => m.hydrateTeamDocuments())
-      .then((r) => {
-        if (r?.disabled) return;
-        if (r?.pulled != null) console.log(`  Team sync: pulled ${r.pulled} shared document(s) from Convex`);
-      })
-      .catch(() => {});
-  }
-});
-
-// Clear the ambient heartbeat timer on shutdown so the process can exit cleanly.
-for (const signal of ["SIGTERM", "SIGINT"]) {
-  process.on(signal, () => {
-    try {
-      ambientScheduler?.stop();
-    } catch {
-      /* best-effort: never block shutdown on the heartbeat timer */
-    }
   });
 }
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  startServer();
+  // Clear the heat scheduler timer on shutdown so the process can exit cleanly.
+  for (const signal of ["SIGTERM", "SIGINT"]) {
+    process.on(signal, () => {
+      try {
+        heatScheduler?.stop();
+      } catch {
+        /* best-effort: never block shutdown on the heat scheduler timer */
+      }
+    });
+  }
+}
+
+export { startServer };

@@ -1,22 +1,12 @@
 // gmail-oauth.test.mjs — the DURABLE Gmail auth layer, proven entirely against mocks (no browser, no
-// real Google call, no real send). It pins the refresh-token flow that sits BEFORE A3's Bearer transport:
-//   (a) a banked refresh token mints an access token and that token feeds the transport;
-//   (b) a cached unexpired access token is reused, not re-minted;
-//   (c) invalid_grant surfaces as needsReconnect and NEVER a fake send;
-//   (d) the loopback callback parses the code and rejects a mismatched state (CSRF guard);
-//   (e) the WALL still holds — an unapproved item never sends even with a valid, durable connection.
+// real Google call, no real send). It pins the refresh-token flow, cache behavior, reconnect signal,
+// and loopback callback/PKCE protections independently of the retired graph execute connector.
 // Plus unit coverage of the PKCE + consent-URL construction that the founder's Google client must match.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import crypto from "node:crypto";
 
-import * as gmail from "../src/connectors/execute/gmail.mjs";
-import { setOAuthCredential } from "../src/credential-store.mjs";
-import { OUTWARD_RELEASE } from "../src/graph.mjs";
 import {
   buildAuthUrl,
   parseCallback,
@@ -42,54 +32,6 @@ function mockTokenFetch(responses) {
   };
   return { impl, calls, get count() { return calls.length; } };
 }
-
-// A fake send transport that captures every message (so a test can read the credentialToken it was fed)
-// and never delivers anything real.
-function capturingTransport() {
-  const calls = [];
-  const impl = async (message) => { calls.push(message); return { ok: true, providerMessageId: `m-${calls.length}` }; };
-  return { impl, calls, get count() { return calls.length; } };
-}
-
-function freshRoot() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "gtm-gmail-oauth-"));
-}
-
-// The founder-RELEASED outward path carries the host-issued outward-release capability on node.runtime
-// (EXPERIMENT-MACHINE-SPEC rail 1); these live-send tests exercise that path.
-const node = (config = {}) => ({
-  id: "exe-gmail", category: "execute", connector: "gmail", config,
-  runtime: { outwardRelease: OUTWARD_RELEASE },
-});
-const approvedItem = (over = {}) => ({ gtmActionId: "gtm-1", approved: true, email: "buyer@example.com", subject: "hi", draft: "Hello.", ...over });
-
-// ─── (a) a banked refresh token mints an access token that feeds the transport ────────────────────
-
-test("a stored refresh token mints an access token and feeds it to the transport", async () => {
-  clearAccessTokenCache();
-  const root = freshRoot();
-  setOAuthCredential("p-test", { provider: "gmail", clientId: "cid", clientSecret: "csecret", refreshToken: "rt-a" }, { root });
-  const tokenFetch = mockTokenFetch([{ status: 200, body: { access_token: "ya29.fresh-a", expires_in: 3600 } }]);
-  const transport = capturingTransport();
-  const context = {
-    credentialOptions: { root },
-    projectId: "p-test",
-    oauthFetch: tokenFetch.impl,
-    sendRunners: { gmail: transport.impl },
-    __run: { runId: "r1", originRunId: "r1", graphId: "g1" },
-  };
-
-  const result = await gmail.run(node({ from: "founder@example.com" }), [approvedItem()], context);
-
-  assert.equal(result.items[0].executionStatus, "sent");
-  assert.equal(result.items[0].applied, true);
-  assert.equal(transport.count, 1, "the transport is reached exactly once for the approved item");
-  assert.equal(transport.calls[0].credentialToken, "ya29.fresh-a", "the MINTED access token is what the transport sends with");
-  assert.equal(tokenFetch.count, 1, "one refresh call minted the access token");
-  // The refresh call was a proper refresh_token grant carrying the banked refresh token.
-  assert.match(tokenFetch.calls[0].init.body, /grant_type=refresh_token/);
-  assert.match(tokenFetch.calls[0].init.body, /refresh_token=rt-a/);
-});
 
 // ─── (b) a cached unexpired access token is reused, not re-minted ──────────────────────────────────
 
@@ -123,32 +65,6 @@ test("an access token within ~1 min of expiry is re-minted, not served stale", a
 });
 
 // ─── (c) invalid_grant → needsReconnect, never a fake send ─────────────────────────────────────────
-
-test("a revoked refresh token (invalid_grant) surfaces needs_reconnect and never fakes a send", async () => {
-  clearAccessTokenCache();
-  const root = freshRoot();
-  setOAuthCredential("p-test", { provider: "gmail", clientId: "cid", clientSecret: "csecret", refreshToken: "rt-revoked" }, { root });
-  const tokenFetch = mockTokenFetch([{ status: 400, body: { error: "invalid_grant", error_description: "Token has been expired or revoked." } }]);
-  const transport = capturingTransport();
-  const context = {
-    credentialOptions: { root },
-    projectId: "p-test",
-    oauthFetch: tokenFetch.impl,
-    sendRunners: { gmail: transport.impl },
-    __run: { runId: "r1", originRunId: "r1", graphId: "g1" },
-  };
-
-  const result = await gmail.run(node(), [approvedItem()], context);
-
-  assert.equal(transport.count, 0, "a revoked grant NEVER reaches the send transport");
-  assert.equal(result.meta.sent, 0);
-  // Honest blocked needs-reconnect — not a silent staged no-op that reads like success.
-  assert.equal(result.ok, false);
-  assert.equal(result.blocked, true);
-  assert.equal(result.items[0].executionStatus, "needs_reconnect");
-  assert.equal(result.items[0].needsReconnect, true);
-  assert.equal(result.meta.blocked, "needs_reconnect");
-});
 
 test("mintAccessToken throws a needsReconnect error on invalid_grant", async () => {
   clearAccessTokenCache();
@@ -186,29 +102,6 @@ test("parseCallback accepts a matching state and rejects a mismatch, missing cod
   assert.throws(() => parseCallback("/?code=abc&state=other", "s1"), /state mismatch/i);
   assert.throws(() => parseCallback("/?state=s1", "s1"), /no authorization code/i);
   assert.throws(() => parseCallback("/?error=access_denied&state=s1", "s1"), /OAuth error/i);
-});
-
-// ─── (e) the WALL still holds — an unapproved item never sends, even with a valid connection ───────
-
-test("WALL — with a valid durable Gmail connection, an UNAPPROVED item is still never sent", async () => {
-  clearAccessTokenCache();
-  const root = freshRoot();
-  setOAuthCredential("p-test", { provider: "gmail", clientId: "cid", clientSecret: "csecret", refreshToken: "rt-e" }, { root });
-  const tokenFetch = mockTokenFetch([{ status: 200, body: { access_token: "ya29.valid", expires_in: 3600 } }]);
-  const transport = capturingTransport();
-  const context = {
-    credentialOptions: { root },
-    projectId: "p-test",
-    oauthFetch: tokenFetch.impl,
-    sendRunners: { gmail: transport.impl },
-    __run: { runId: "r1", originRunId: "r1", graphId: "g1" },
-  };
-
-  const result = await gmail.run(node(), [{ gtmActionId: "a", email: "x@example.com", draft: "no", approved: false }], context);
-
-  assert.equal(transport.count, 0, "the send transport is never reached for an item the founder did not approve");
-  assert.equal(tokenFetch.count, 0, "with nothing approved, no token is even minted");
-  assert.equal(result.meta.sent, 0);
 });
 
 // ─── supporting: the consent URL + PKCE the founder's Google Desktop client must match ─────────────

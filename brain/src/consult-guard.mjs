@@ -10,10 +10,10 @@
 // were consulted before production started.
 //
 // What this module does NOT do (yet): capture the actual tool-call names from a live agent
-// run. That wiring happens at the gate: when the run completes a node, the operator runtime
+// run. That wiring happens at the wall: when the run completes a node, the teammate runtime
 // collects the observed tool calls from the step result and calls assertMoatConsulted before
-// marking the gate ready. That follow-up is intentionally left to operator-runtime.mjs /
-// graph.mjs — this module is only the rule, not the wiring.
+// marking the wall ready. That follow-up is intentionally left to teammate-runtime.mjs /
+// Firm drives enforce this rule before staged work reaches the wall.
 //
 // Rules:
 //   - If the step produced a draft or outreach (producedDraft: true):

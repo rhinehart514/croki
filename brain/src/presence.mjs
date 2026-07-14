@@ -8,7 +8,7 @@
 // restart honestly resets to "away" (the conservative default) until a browser heartbeats again.
 //
 // The wall is UNCHANGED. Away never loosens anything — it can only turn a would-be auto-approval into a
-// held, pending item. A live human decision (an explicit gate approval, a per-run blessed pattern the
+// held, pending item. A live human decision (an explicit wall decision, a per-run blessed pattern the
 // founder just stamped) is unaffected: away holds only the UNATTENDED auto-apply of a standing pattern.
 //
 // Detection is AUTOMATIC (a heartbeat/lease), which is the founder's recommended default. The mechanism
