@@ -21,6 +21,7 @@ import firmHeatRoutes from "./firm/heat-routes.mjs";
 import firmLensRoutes from "./firm/lens-routes.mjs";
 import firmProductChangeRoutes from "./firm/product-routes.mjs";
 import firmWorkRoutes from "./firm/work-routes.mjs";
+import firmDialogueRoutes from "./firm/dialogue-routes.mjs";
 import firmVentureRoutes from "./firm/venture-routes.mjs";
 import firmConfigurationRoutes from "./firm/configuration-routes.mjs";
 import firmArchitectureRoutes from "./firm/architecture-routes.mjs";
@@ -39,6 +40,7 @@ const ROUTE_GROUPS = [
   firmLensRoutes,
   firmProductChangeRoutes,
   firmWorkRoutes,
+  firmDialogueRoutes,
   firmConfigurationRoutes,
   firmArchitectureRoutes,
   firmVentureRoutes,

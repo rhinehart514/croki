@@ -18,6 +18,7 @@
 import { now, getVentureDoc, setVentureDoc, listVentureDocs } from "./venture-store.mjs";
 import { recordOutcomeIntoSoul } from "../soul-wiring.mjs";
 import { park } from "./wall.mjs";
+import { emitFirmEvent } from "./firm-events.mjs";
 
 function trimOrNull(value) {
   const text = String(value ?? "").trim();
@@ -179,6 +180,7 @@ export function recordOutcome(outcome = {}, options = {}) {
     effect: { kind: "outcome", outcome: recorded },
   }, options);
 
+  emitFirmEvent(ventureId, "outcome", { betId: bet?.id ?? null });
   return { outcome: recorded, joined: Boolean(bet), bet, queued, deduped: false };
 }
 

@@ -26,6 +26,7 @@ import { createWorkLoopReceipts } from "./work-loop-receipts.mjs";
 import { buildWorkHandoff } from "./work-loop-handoff.mjs";
 import { captureWorkingTheoryBaseline, checkWorkingTheoryCompletion } from "./working-theory-completion.mjs";
 import { loadWork, saveWork } from "./work-loop-state.mjs";
+import { drainSteer } from "./work-loop-steer.mjs";
 import { withParticipantDriveLease } from "./work-loop-drive-lease.mjs";
 import {
   reserveAgentDailySpend,
@@ -44,7 +45,7 @@ function pendingWallItems(ventureStore, ventureId, options) {
 
 // The system prompt: the teammate's soul/voice, plus the one standing instruction that carries
 // FIRM-SPEC.md's divergence doctrine — the host names the expectation, the crew judges the shape.
-function buildSystem({ ventureId, teammateRef, goal, options, configuration, agent, coordination, firstDirection, target, architectureContext, theoryContext, workingTheoryDrive }) {
+function buildSystem({ ventureId, teammateRef, goal, options, configuration, agent, coordination, firstDirection, target, architectureContext, theoryContext, workingTheoryDrive, steerBrief }) {
   const soul = teammateSoulStore.ensure(ventureId, teammateRef, {}, options);
   const brief = teammateSoulStore.voiceBriefFor(ventureId, teammateRef, {}, options) ?? {};
   const name = agent.name || brief.name || soul.name || teammateRef;
@@ -93,6 +94,7 @@ function buildSystem({ ventureId, teammateRef, goal, options, configuration, age
     workingTheoryDrive
       ? `This broad direction must leave durable truth, not a plan: use search_repository and read_repository_excerpt, record a provisional working theory, produce useful inspectable inward work, then ensure that work is a source anchor on the current theory. The host will report partial unless all three facts exist.`
       : "",
+    steerBrief ? steerBrief : "",
     `When the founder asks to shape venture architecture or propose a GTM system, first use read_venture_architecture, then propose_architecture_change; it stays staged for the founder, so do not create bets, start campaigns, or invent workflow stages on its behalf. Otherwise, when useful, fork genuinely divergent bets — different angles, not restatements of the same move.`,
     `How many, and along which dimensions, is your judgment call; there is no fixed count.`,
     configuration.coordination.protocols.length
@@ -275,6 +277,20 @@ async function driveTeammateLeased({
     nowMs: driveStartedAt,
   });
 
+  // Drain any founder steer queued while prior work ran (the §2.7 checkpoint seam). This is the honest
+  // "adjusts on the next step": a steer reply the founder made during a run is folded into THIS resume's
+  // brief, then cleared. Landed via work-loop-steer.mjs (a sibling module) so work-loop.mjs stays under
+  // its LOC ceiling. Applies to a fresh drive on an existing effort too (a steer can arrive between runs).
+  const steerBrief = (betId ?? bet?.id)
+    ? drainSteer({ ventureId, betId: betId ?? bet?.id }, options)
+    : null;
+  // drainSteer cleared the durable queue on the effort's work record; mirror that onto the in-memory
+  // work this drive will checkpoint, so the drive's own saveWork never resurrects an already-folded
+  // steer (loadWork ran before the drain).
+  if (steerBrief && work && Array.isArray(work.pendingSteer)) {
+    work = { ...work, pendingSteer: [] };
+  }
+
   // A resumed provider conversation already has its transcript, but it cannot infer why the
   // founder started this new drive. Carry the explicit direction into every resume and retain the
   // last pause as context rather than letting either one replace the other. Fresh drives still use
@@ -283,6 +299,7 @@ async function driveTeammateLeased({
     ? [
         work.pausedFor ? `Prior pause context: ${work.pausedFor}` : null,
         `New founder direction: ${goal}`,
+        steerBrief,
       ].filter(Boolean).join("\n\n")
     : null;
   let currentWork = {
@@ -337,6 +354,7 @@ async function driveTeammateLeased({
       architectureContext,
       theoryContext,
       workingTheoryDrive,
+      steerBrief,
     }),
     tools: tools.map(({ run: _run, ...definition }) => definition),
     client: selection.client ?? null,
@@ -380,7 +398,10 @@ async function driveTeammateLeased({
       const receipt = receipts.takeTool(name);
       try {
         const result = await tool.run(input ?? {});
-        const pause = name === "ask_founder" || (name === "stage_outward" && result?.parked === true);
+        // A pre-authorized grant parks the act for the record but does NOT wait on the founder
+        // (result.waiting === false), so the drive keeps going rather than pausing at the wall.
+        const result_waits = name === "stage_outward" && result?.parked === true && result?.waiting !== false;
+        const pause = name === "ask_founder" || result_waits;
         if (pause) {
           currentWork = { ...currentWork, pausedFor: name === "ask_founder" ? "Waiting for the founder's answer." : "Waiting at the founder wall." };
           checkpointWork();

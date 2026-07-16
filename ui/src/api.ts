@@ -273,6 +273,67 @@ export const startArchitectureCampaign = (
 export const getConversation = (ventureId: string) =>
   get<{ messages: FirmConversationMessage[] }>(`/api/ventures/${encodeURIComponent(ventureId)}/conversation`);
 
+// Review-is-dialogue (build contract §4A.2, Phase 4): a founder reply in the thread, interpreted as
+// one dialogue act (steer / approve / approve-standing / close / new-direction) and dispatched to the
+// existing seams server-side. `betId` scopes the reply to the effort it answers. INTEGRATION POINT:
+// added to the shared api.ts; a conversation component calls this instead of a per-purpose button set.
+export type ConversationReplyResult = {
+  act: "steer" | "approve" | "approve-standing" | "close" | "new-direction";
+  betId?: string | null;
+  messageId?: string;
+  applied?: string;
+  ended?: boolean;
+  teammateRef?: string;
+  why?: string;
+  waitingItemId?: string | null;
+  grant?: { actType: string; grantedAt: string } | null;
+  note?: string;
+  outcome?: { kind?: string; summary?: string };
+  messages?: FirmConversationMessage[];
+};
+
+export const replyInConversation = (
+  ventureId: string,
+  body: { message: string; betId?: string | null },
+) => guardedPost<ConversationReplyResult>(
+  `/api/ventures/${encodeURIComponent(ventureId)}/conversation/reply`,
+  body,
+);
+
+// Live event stream (build contract §2.4 / Phase 5): subscribe to the brain's SSE push so a present
+// founder sees work stream without the 900 ms poll. The stream carries data-free notifications
+// ({ ventureId, kind, at }); a listener re-reads the relevant surface through the existing routes. The
+// caller keeps the 900 ms poll as the reconnect fallback (see useFirmEventStream). Returns an
+// unsubscribe function that closes the connection.
+export type FirmStreamEvent = {
+  ventureId: string;
+  kind: "lens" | "conversation" | "drive" | "wall" | "outcome";
+  at: string;
+  betId?: string;
+};
+
+export function subscribeVentureEvents(
+  ventureId: string,
+  onEvent: (event: FirmStreamEvent) => void,
+  onStateChange?: (state: "open" | "closed") => void,
+): () => void {
+  if (typeof EventSource === "undefined") return () => {};
+  const source = new EventSource(`/api/ventures/${encodeURIComponent(ventureId)}/events`);
+  const relay = (message: MessageEvent) => {
+    try {
+      onEvent(JSON.parse(message.data) as FirmStreamEvent);
+    } catch {
+      /* a malformed frame is ignored; the poll fallback still refreshes the surface */
+    }
+  };
+  for (const kind of ["lens", "conversation", "drive", "wall", "outcome"]) {
+    source.addEventListener(kind, relay as EventListener);
+  }
+  source.onopen = () => onStateChange?.("open");
+  source.onerror = () => onStateChange?.("closed");
+  return () => { source.close(); onStateChange?.("closed"); };
+}
+
 export type FirmActiveDrive = {
   id: string;
   ventureId: string;

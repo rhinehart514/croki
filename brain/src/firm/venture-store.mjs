@@ -50,6 +50,7 @@ export const VENTURE_COLLECTIONS = Object.freeze([
   "placement",
   "configuration",
   "architecture",
+  "grants",
 ]);
 
 function ventureRoot(options, ventureId) {

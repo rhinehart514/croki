@@ -19,6 +19,8 @@ import { authorizeFounderWriteForRequest } from "../routes/founder-authority.mjs
 import { abortActiveDrive, listActiveDrives } from "./active-drives.mjs";
 import { getVentureDoc, listVentureDocs } from "./venture-store.mjs";
 import { buildArchitectureContext, buildWorkingTheoryContext } from "./architecture-context.mjs";
+import { routeDirection } from "./direction-routing.mjs";
+import { appendConversationMessage } from "./conversation.mjs";
 
 function trimOrNull(value) {
   const text = String(value ?? "").trim();
@@ -105,15 +107,40 @@ export default async function handle({ req, res, url, deps = {} }) {
       primaryTeammateRef,
       ...targetedTeammateRefs,
     ].filter(Boolean))];
-    const teammateRef = primaryTeammateRef
-      ?? targetedTeammateRefs[0]
-      ?? configuration.coordination.coordinatorRef
-      ?? configuration.agents.find((agent) => agent.activation === "direct" || agent.activation === "direct-or-relevant")?.ref
-      ?? (configuration?.revision === 1 && configuration.agents.length === 0 ? "founding-teammate" : null);
+    // Direction routing (§4A.1): an unscoped founder direction is claimed by the right teammate before
+    // the drive begins. routeDirection is deterministic-first — it returns the SAME coordinator/first-
+    // direct participant this route always fell back to, so scoped/targeted directions and the
+    // deterministic cases are behavior-identical. Only a genuinely fuzzy multi-crew match uses the model
+    // (deps.routingClassify, defaulted to null so nothing hits the network here); when it does, the
+    // claim is made visible in the thread with a one-line why BEFORE work starts.
+    const unscopedDirection = !primaryTeammateRef && !targetedTeammateRefs.length && !trimOrNull(body?.betId);
+    let routedWhy = null;
+    let teammateRef;
+    if (unscopedDirection) {
+      const routed = await routeDirection(
+        { direction: body?.goal, configuration },
+        { classify: deps.routingClassify },
+      );
+      teammateRef = routed.teammateRef
+        ?? (configuration?.revision === 1 && configuration.agents.length === 0 ? "founding-teammate" : null);
+      // Surface the claim only when routing genuinely chose among several lenses (the model path);
+      // the deterministic coordinator/activation fallback keeps the prior silent behavior so existing
+      // conversation ordering is unchanged.
+      if (routed.usedModel) routedWhy = routed.why;
+    } else {
+      teammateRef = primaryTeammateRef
+        ?? targetedTeammateRefs[0]
+        ?? configuration.coordination.coordinatorRef
+        ?? configuration.agents.find((agent) => agent.activation === "direct" || agent.activation === "direct-or-relevant")?.ref
+        ?? (configuration?.revision === 1 && configuration.agents.length === 0 ? "founding-teammate" : null);
+    }
     if (!teammateRef) {
       const error = new Error("This firm has no configured participant to take the direction.");
       error.status = 409;
       throw error;
+    }
+    if (routedWhy) {
+      appendConversationMessage({ ventureId, role: "teammate", teammateRef, content: routedWhy }, {});
     }
     const configuredRefs = new Set(configuration.agents.map((agent) => agent.ref));
     const unknownRefs = requestedTeammateRefs.filter((ref) => !configuredRefs.has(ref));
