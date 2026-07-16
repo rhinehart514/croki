@@ -170,7 +170,9 @@ describe("anti-cage (firm): teammate records carry no role, seniority, or manage
     const path2 = await import("node:path");
     const { summon, listCrew } = await import("../../src/firm/crew.mjs");
     const { createVenture } = await import("../../src/firm/venture-store.mjs");
-    const options = { root: fs2.mkdtempSync(path2.join(os.tmpdir(), "firm-anticage-crew-")) };
+    // Opt out of the founding-crew seed: this guard checks the SHAPE of a single summoned teammate's
+    // roster entry and soul, so it wants a venture holding only the one teammate it summons.
+    const options = { root: fs2.mkdtempSync(path2.join(os.tmpdir(), "firm-anticage-crew-")), seedFoundingCrew: false };
     const venture = createVenture({ name: "Roster shape check" }, options);
     summon(venture.id, "outreach-writer", {}, options);
     const crew = listCrew(venture.id, options);

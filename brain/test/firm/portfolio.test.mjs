@@ -25,8 +25,12 @@ import { teammateSoulStore, LIBRARY_VENTURE } from "../../src/teammate-soul-stor
 import { driveTeammate } from "../../src/firm/work-loop.mjs";
 import routes from "../../src/firm/routes.mjs";
 
+// The portfolio tests build controlled fixture ventures and assert exact soul-export / crew counts, so they
+// opt out of the founding-crew roster seed (createVenture's default). The founding-crew instances DO travel
+// with a venture export (they are venture-scoped instance souls, rail-6-correct), but that is proven in
+// founding-crew.test; here the fixtures want only the teammate they explicitly summon.
 function freshRoot() {
-  return { root: fs.mkdtempSync(path.join(os.tmpdir(), "firm-portfolio-")) };
+  return { root: fs.mkdtempSync(path.join(os.tmpdir(), "firm-portfolio-")), seedFoundingCrew: false };
 }
 
 function browserReq() {

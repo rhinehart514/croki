@@ -20,8 +20,11 @@ import { listConversation } from "../../src/firm/conversation.mjs";
 import { applyFirmConfiguration, getFirmConfiguration } from "../../src/firm/configuration.mjs";
 import { getArchitectureState } from "../../src/firm/architecture.mjs";
 
+// The work-loop tests drive named teammates and assert first-participant formation from an empty roster,
+// so they opt out of the founding-crew roster seed (createVenture's default). Phase-8 seeding is proven in
+// founding-crew.test.
 function freshRoot() {
-  return { root: fs.mkdtempSync(path.join(os.tmpdir(), "firm-work-loop-")) };
+  return { root: fs.mkdtempSync(path.join(os.tmpdir(), "firm-work-loop-")), seedFoundingCrew: false };
 }
 
 // A fake Anthropic-shaped client: each entry in `turns` is one model turn, returned in order.

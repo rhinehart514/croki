@@ -13,8 +13,11 @@ import { createBet, fork, end } from "../../src/firm/bet.mjs";
 import { summon } from "../../src/firm/crew.mjs";
 import { park } from "../../src/firm/wall.mjs";
 
+// The lens tests build a controlled crew to assert the projection shape, so they opt out of the founding-
+// crew roster seed (createVenture's default) — otherwise every venture would carry the four named
+// characters and inflate the crew-count assertions. Phase-8 seeding is proven in founding-crew.test.
 function freshRoot() {
-  return { root: fs.mkdtempSync(path.join(os.tmpdir(), "firm-lens-")) };
+  return { root: fs.mkdtempSync(path.join(os.tmpdir(), "firm-lens-")), seedFoundingCrew: false };
 }
 
 function fixtureVenture(options) {

@@ -11,8 +11,11 @@ import { summon, listCrew } from "../../src/firm/crew.mjs";
 import { createVenture } from "../../src/firm/venture-store.mjs";
 import { teammateSoulStore } from "../../src/teammate-soul-store.mjs";
 
+// These tests exercise the summon PRIMITIVE over an otherwise-empty venture, so they opt out of the
+// founding-crew roster seed (createVenture's default) — otherwise every venture would open with the four
+// named characters and swamp the single-summon assertions. Phase-8 seeding is proven in founding-crew.test.
 function freshRoot() {
-  return { root: fs.mkdtempSync(path.join(os.tmpdir(), "firm-crew-")) };
+  return { root: fs.mkdtempSync(path.join(os.tmpdir(), "firm-crew-")), seedFoundingCrew: false };
 }
 
 describe("crew — summon", () => {

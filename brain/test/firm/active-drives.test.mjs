@@ -42,7 +42,12 @@ test.after(() => {
 });
 
 test("a host-authorized abort stops one active provider drive and keeps the bet's partial evidence", async () => {
-  const venture = createVenture({ name: "Stoppable work" }, { root });
+  // Opt out of the founding-crew seed: this test drives an ad-hoc teammate ("researcher") to exercise
+  // abort + partial-evidence mechanics over an otherwise-empty venture, relying on the empty-config
+  // first-participant formation path. With the four founding characters seeded, the config is already
+  // formed and a drive to a fifth, unconfigured ref is (correctly) gated — that gate is Phase-4 direction-
+  // routing's concern, not this abort mechanics test's.
+  const venture = createVenture({ name: "Stoppable work" }, { root, seedFoundingCrew: false });
   const bet = createBet({ ventureId: venture.id, intent: "Inspect the product", teammateRef: "researcher" });
   setVentureDoc(venture.id, "bets", bet.id, bet, { root });
   const runtime = {
