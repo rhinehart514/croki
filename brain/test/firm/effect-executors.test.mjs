@@ -11,6 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { describe, it } from "node:test";
+import { founderRequest } from "../helpers/founder-capability.mjs";
 
 import { createEffectExecutor, decideWithExecution } from "../../src/firm/effect-executors.mjs";
 import { park, queue, decide, hasWallRelease } from "../../src/firm/wall.mjs";
@@ -18,7 +19,6 @@ import { createVenture } from "../../src/firm/venture-store.mjs";
 import { createBet } from "../../src/firm/bet.mjs";
 import { forkProductBet, stageProductBetForReview, getWorkspace } from "../../src/firm/product-change.mjs";
 import { reviewProductBetChange } from "../../src/firm/product-change-decide.mjs";
-import { claimFounderSession, founderBootstrapCode } from "../../src/routes/session-guard.mjs";
 
 function git(cwd, args) {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -33,12 +33,6 @@ function fixtureRepo() {
   git(repo, ["add", "."]);
   git(repo, ["commit", "-qm", "base"]);
   return repo;
-}
-
-function browserCookie() {
-  let value = "";
-  claimFounderSession({ headers: {} }, { setHeader(_name, next) { value = next; } }, founderBootstrapCode());
-  return value.split(";")[0];
 }
 
 describe("effect-executors — the unreleased-effect guard holds even with a real workspaceId/revisionId", () => {
@@ -98,7 +92,7 @@ describe("effect-executors — end to end: fork -> stage -> review -> release ->
     const prematureRelease = () => decideWithExecution(
       decide,
       { ventureId: venture.id, itemId: parked.id, decision: "release" },
-      { req: { headers: { cookie: browserCookie() } }, actor: "founder" },
+      { req: founderRequest(), actor: "founder" },
       { isFounderPresent: () => true },
       options,
     );
@@ -112,7 +106,7 @@ describe("effect-executors — end to end: fork -> stage -> review -> release ->
     const receipt = decideWithExecution(
       decide,
       { ventureId: venture.id, itemId: parked.id, decision: "release" },
-      { req: { headers: { cookie: browserCookie() } }, actor: "founder" },
+      { req: founderRequest(), actor: "founder" },
       { isFounderPresent: () => true },
       options,
     );

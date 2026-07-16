@@ -1,5 +1,8 @@
 # F9 pre-deletion baseline
 
+> **ARCHIVED RECEIPT.** This captures a past dirty tree and is not current state. Use
+> [STATE.md](../STATE.md) and a fresh `git status` before making any deletion decision.
+
 **Status:** read-only capture. Nothing in this document required editing production code; the two
 test-file edits made alongside this baseline (a presence-lease flake fix in `market-poll.test.mjs`,
 and the equivalent hardening in my own `effect-executors.test.mjs`/`work-loop-wall-integration.test.mjs`)

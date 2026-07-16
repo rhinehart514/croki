@@ -7,6 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { founderHeaders } from "../helpers/founder-capability.mjs";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "drover-lens-routes-"));
 process.env.GTM_IDE_HOME = root;
@@ -17,21 +18,15 @@ const { createVenture } = await import("../../src/firm/venture-store.mjs");
 const { createBet } = await import("../../src/firm/bet.mjs");
 const { setVentureDoc } = await import("../../src/firm/venture-store.mjs");
 const { park } = await import("../../src/firm/wall.mjs");
-const { claimFounderSession, founderBootstrapCode } = await import("../../src/routes/session-guard.mjs");
 
 const options = { root };
 const venture = createVenture({ name: "Route-guarded lens venture" }, options);
 
-function browserCookie() {
-  let value = "";
-  claimFounderSession({ headers: {} }, { setHeader(_name, next) { value = next; } }, founderBootstrapCode());
-  return value.split(";")[0];
-}
-
 async function call(method, pathname, body = {}, headers = {}) {
   const req = Readable.from([JSON.stringify(body)]);
   req.method = method;
-  req.headers = { "content-type": "application/json", ...headers };
+  req.url = pathname;
+  req.headers = { "content-type": "application/json", ...founderHeaders({ method, path: pathname }), ...headers };
   let status = 0;
   let raw = "";
   const res = { writeHead(next) { status = next; }, setHeader() {}, end(next) { raw += next ?? ""; } };
@@ -92,18 +87,13 @@ test("GET /api/ventures lists the portfolio, ungated", async () => {
   assert.ok(res.body.ventures.some((v) => v.id === venture.id));
 });
 
-test("POST /api/ventures without a founder session is refused", async () => {
-  const res = await call("POST", "/api/ventures", { name: "Should not exist" });
+test("POST /api/ventures from an agent-stamped caller is refused", async () => {
+  const res = await call("POST", "/api/ventures", { name: "Should not exist" }, { "x-gtm-actor": "agent" });
   assert.equal(res.status, 403);
 });
 
-test("POST /api/ventures from an agent-stamped caller is refused even with a founder cookie", async () => {
-  const res = await call("POST", "/api/ventures", { name: "Should not exist either" }, { cookie: browserCookie(), "x-gtm-actor": "agent" });
-  assert.equal(res.status, 403);
-});
-
-test("the authenticated founder browser can start a new venture", async () => {
-  const res = await call("POST", "/api/ventures", { name: "A new venture" }, { cookie: browserCookie() });
+test("the local Drover page can start a new venture without an unlock ceremony", async () => {
+  const res = await call("POST", "/api/ventures", { name: "A new venture" });
   assert.equal(res.status, 200);
   assert.equal(res.body.venture.name, "A new venture");
   assert.ok(res.body.venture.id);

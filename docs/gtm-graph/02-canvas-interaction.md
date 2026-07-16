@@ -1,6 +1,10 @@
 # 02 — Canvas & Interaction
 
-**Status:** spec, from locked doctrine · **Date:** 2026-07-02 · **Binds to:** `00-DOCTRINE.md` (doctrine wins on conflict)
+> **SUPERSEDED PACKAGE FILE.** The status and doctrine below apply only within this historical GTM
+> graph package. Current canvas authority is [FIRM-SPEC.md](../FIRM-SPEC.md) and the root
+> [DESIGN.md](../../DESIGN.md).
+
+**Historical status:** superseded spec from the 2026-07-02 locked doctrine.
 
 ```
 Cold open:    prefilled graph, strongest current testable path highlighted

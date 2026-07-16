@@ -253,13 +253,13 @@ test("request_feature is exposed on the MCP front door", () => {
 test("recoverStaleBuilds preserves dirty worktrees without staging or committing", async () => {
   const queueDir = tmpQueue();
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "feature-repo-"));
-  const wt = path.join(repoRoot, ".dogfood-worktrees", "2026-07-01-old-build");
-  fs.mkdirSync(wt, { recursive: true });
 
   // A stale building item + a healthy done item that must not be touched.
   const { reportFriction, updateFrictionItem } = await import("../src/friction.mjs");
   const stale = reportFriction({ report: "stuck build", kind: "feature" }, { queueDir, now: "2026-07-01T10:00:00.000Z", gitSha: "x" });
   updateFrictionItem(stale.file, { fields: { status: "building" } });
+  const wt = path.join(repoRoot, ".dogfood-worktrees", path.basename(stale.file, ".md"));
+  fs.mkdirSync(wt, { recursive: true });
   const done = reportFriction({ report: "finished earlier", kind: "feature" }, { queueDir, now: "2026-07-01T09:00:00.000Z", gitSha: "x" });
   updateFrictionItem(done.file, { fields: { status: "ready-for-review" } });
 
@@ -275,6 +275,25 @@ test("recoverStaleBuilds preserves dirty worktrees without staging or committing
   assert.match(fs.readFileSync(done.file, "utf8"), /status: ready-for-review/, "terminal items untouched");
   assert.equal(recovered.filter((r) => r.item).length, 1);
   assert.equal(recovered.filter((r) => r.worktree).length, 1);
+
+  const recoveredAgain = recoverStaleBuilds({ queueDir, repoRoot, git });
+  assert.deepEqual(recoveredAgain, [], "a later server start does not recover the same retained work again");
+});
+
+test("recoverStaleBuilds leaves receipt-less retained worktrees alone", async () => {
+  const queueDir = tmpQueue();
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "feature-repo-"));
+  const wt = path.join(repoRoot, ".dogfood-worktrees", "old-review-without-receipt");
+  fs.mkdirSync(wt, { recursive: true });
+  const sharedModules = fs.mkdtempSync(path.join(os.tmpdir(), "feature-modules-"));
+  fs.symlinkSync(sharedModules, path.join(wt, "node_modules"));
+  const git = fakeGit({ "status": "?? founder-review.txt" });
+  const { recoverStaleBuilds } = await import("../src/feature-builder.mjs");
+
+  assert.deepEqual(recoverStaleBuilds({ queueDir, repoRoot, git }), []);
+  assert.equal(fs.existsSync(wt), true);
+  assert.equal(fs.lstatSync(path.join(wt, "node_modules")).isSymbolicLink(), true);
+  assert.equal(git.calls.length, 0, "unknown retained work is not inspected or mutated");
 });
 
 test("recoverStaleBuilds uncommits interrupted model work before exposing it for review", async () => {

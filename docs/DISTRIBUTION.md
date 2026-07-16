@@ -1,141 +1,100 @@
-# Distribution — how a stranger gets Drover today
+# Distribution — how a founder gets Drover
 
-_Honest, dated snapshot. Last updated 2026-07-07. Stage: alpha._
+**Honest snapshot:** 2026-07-15, alpha. [STATE.md](STATE.md) remains the authority for product proof.
+This file covers delivery mechanics only.
 
-Short version: **there is no download link yet.** Drover ships as source you clone and
-build yourself, or as an **unsigned, arm64-only macOS `.dmg` you build on your own machine.**
-Turning that into a real, click-to-download product is a founder decision that needs an
-Apple Developer identity and a hosting call — see "What real distribution still needs" below.
+There is no signed public download. The supported alpha path is source on a desktop machine. A local
+arm64 macOS package can be built from the repository, but the current Firm tree has no freshly
+verified package receipt; the existing artifact under `release/` predates the current package
+version and does not count as one.
 
----
+## Current paths
 
-## What exists right now
+| Path | State | Boundary |
+|---|---|---|
+| Run `npm run app` | Supported local alpha path | Builds the UI, starts the loopback brain, and hosts founder authority below the renderer |
+| Run `npm start` | Read-only browser diagnostics by default | Requires Node and npm; an explicit loopback-only development hatch exists but is not a distribution authority |
+| Build `npm run app:dist` | Configured for arm64 macOS | Produces an unsigned, ad-hoc-signed local DMG; reverify before handoff |
+| Download a signed, notarized app | Does not exist | Requires founder-owned Apple identity and hosting decisions |
 
-| Path | Who it works for | State |
-|------|------------------|-------|
-| Clone the repo and run `npm start` | Anyone on macOS/Linux with Node + a `claude` CLI login | Works |
-| Build the desktop app locally (`npm run app:dist`) | Apple-silicon (arm64) macOS only | Works, but the artifact is **unsigned** |
-| Download a signed, notarized app | — | **Does not exist yet** |
+Drover is local software, not bundled intelligence. Real teammate work needs at least one connected
+runtime:
 
-Drover is not self-contained intelligence. The desktop app is a thin shell around a local
-Node engine that **shells out to the founder's own `claude` CLI subscription** for the
-operator. So any path below assumes the person already has `claude` and `git` on their PATH.
-There is no bundled model and no API key to ship.
+- Claude Code through the bundled Agent SDK, using an existing Claude Code login or configured
+  Anthropic credential; or
+- the `codex` CLI on `PATH` with `codex login status` succeeding.
 
-State lives in `~/.gtm-ide` and `~/.claude`, shared with the `npm start` dev server. (The
-`~/.gtm-ide` path and other `gtm-ide` identifiers are the product's historical code name and
-are intentionally kept — the app's display name is Drover.)
+Runtime credentials remain provider-owned. Drover records the runtime and authentication mode, never
+the credential. Durable product state lives under the intentional historical `~/.gtm-ide` path.
 
----
-
-## Path A — run from source (works today, all-in-one)
+## Source path
 
 ```sh
-git clone <repo> drover && cd drover
-npm install          # installs root, brain/, and ui/ deps
-npm start             # builds the UI, serves API + client on http://localhost:4317
+git clone <repo> drover
+cd drover
+npm install
+npm run app
 ```
 
-Requirements: Node, `git`, and a working `claude` CLI login (the operator runtime needs it).
-This is the surest way for a stranger to see Drover today — no packaging, no Gatekeeper.
+The desktop host builds the interface, starts the brain plus client on loopback, and injects a fresh
+founder capability below the renderer. Create a venture and bind its product repository; no unlock
+ceremony is required. `npm start` serves the same shell for read-only diagnostics, but founder writes
+remain unavailable because a standalone browser is not a trusted host.
 
-## Path B — build the macOS desktop app locally (arm64 only)
+For local source development only, `DROVER_DEV_FOUNDER=1 npm start` makes the loopback browser
+writable without minting agent authority. The hatch is off by default, accepts only same-origin
+non-agent requests received from a loopback socket, and does not change the supported Electron or
+packaged-app security model.
+
+The product target is desktop only. Running the source server on another operating system does not
+create a phone, tablet, or cross-platform packaging commitment.
+
+## Local macOS app
 
 ```sh
 npm install
-npm run app:rebuild   # one-time: rebuild + ad-hoc-sign the native SQLite module for Electron's ABI
-npm run app           # run it windowed (no .dmg), OR:
-npm run app:dist      # build the unsigned .dmg into release/
+npm run app
+# or
+npm run app:dist
 ```
 
-The `.dmg` lands in `release/` as `Drover-0.3.1-arm64.dmg`. Because it is **unsigned**,
-macOS Gatekeeper blocks the first launch: the user must **right-click the app and choose
-Open** once to clear it. After that it launches normally.
+`app:dist` targets Apple-silicon macOS and writes a versioned `Drover-<version>-arm64.dmg` under
+`release/`. `release/` is ignored and must never be treated as proof for a different package version
+or source tree.
 
-`release/` is git-ignored — the binary is never committed. Each person builds their own.
+The package has no Developer ID signature or notarization. Gatekeeper therefore requires the
+founder to use the explicit one-time right-click **Open** path. `electron-builder.yml` sets
+`publish: null`; no update manifest is emitted and the app performs no update check.
 
-> **Gotcha:** `app:dist` (via `app:rebuild`) rebuilds the native SQLite module against
-> Electron's ABI. That breaks `npm test`, which runs under Node — the persistence-backend and
-> migration tests fail to load the binding. After building a `.dmg`, restore the Node build with
-> `npm --prefix brain rebuild better-sqlite3` before running the test suite.
+The packaged display name is Drover. Compatibility identifiers stay unchanged: npm package
+`gtm-ide`, bundle id `com.gtmide.desktop`, storage path `~/.gtm-ide`, and historical `channel`
+records are intentional.
 
----
+## Verification before a handoff
 
-## Branding and version, as they stand
+Run the product gates against the source tree first:
 
-- The packaged app is **Drover** end to end: app name, window title, menu-bar name, DMG
-  volume, and DMG filename all read Drover. (`electron-builder.yml` `productName: Drover`,
-  `ui/index.html` `<title>Drover</title>`.)
-- Internal identifiers stay on the historical code name on purpose and are **not** branding
-  bugs: the bundle id `com.gtmide.desktop`, the storage path `~/.gtm-ide`, and the npm
-  package name `gtm-ide`. Do not "fix" these.
-- Version is a coherent **0.3.1** across `package.json`, `package-lock.json`, `README.md`,
-  and `docs/STATE.md`. Pre-1.0 by design.
+```sh
+npm run test:acceptance
+```
 
-## Auto-update: intentionally off
+This reruns the mechanical suite, design-token parity, four preserved operating journeys, and three
+Living Venture Atlas journeys. It is the source-tree readiness receipt, not a packaged-app or
+outside-founder proof.
 
-There is **no auto-updater**. The app bundles no `electron-updater` and runs no update
-check on launch, and `electron-builder.yml` sets `publish: null` so the build emits **no
-update manifest** (`latest-mac.yml`). This is deliberate: a local, unsigned build has
-nowhere to update _from_, and a manifest that points nowhere is worse than none. When real
-distribution exists, wiring an updater is part of that same decision (below).
+For a desktop artifact, build from that same verified tree, launch the packaged app, bind a disposable
+repository, confirm runtime readiness, restart, and complete the deterministic Firm journey. Record
+the package version, architecture, macOS version, runtime/auth mode, and resulting artifact hash.
+Do not update [STATE.md](STATE.md) with packaging proof until that receipt exists.
 
----
+## What public distribution still requires
 
-## What real distribution still needs — founder-only actions
+These are founder-owned external actions and are not authorized by a documentation or build task:
 
-These are **outward, irreversible, or account-bound** steps that require the founder's Apple
-identity and a hosting decision. They are intentionally _not_ done here.
+1. Join or use an Apple Developer account and issue a Developer ID Application certificate.
+2. Replace the local ad-hoc signing path with hardened-runtime signing and notarization.
+3. Choose artifact hosting and, only if wanted, an update provider.
+4. Run the signed package, Gatekeeper, clean-machine, upgrade, and rollback matrix.
 
-### 1. Code signing + notarization (Apple)
-
-Required so a downloaded app opens without the right-click-to-Open workaround, and so
-Gatekeeper trusts it at all on other people's machines.
-
-- **Apple Developer Program membership** — $99/year, and a **Developer ID Application**
-  certificate created in that account.
-- An **app-specific password** (or an App Store Connect API key) for the notarization
-  service.
-- Then `electron-builder.yml` changes from the current unsigned config
-  (`mac.identity: null`) to signing + notarizing, roughly:
-
-  ```yaml
-  mac:
-    identity: "Developer ID Application: <NAME> (<TEAMID>)"
-    hardenedRuntime: true
-    gatekeeperAssess: false
-    notarize:
-      teamId: "<TEAMID>"
-  # credentials via env: APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
-  ```
-
-  Note: the current `build/after-pack.cjs` ad-hoc-signs the whole bundle so the native
-  SQLite binding survives Library Validation on an **unsigned** build. Under real Developer
-  ID signing, that hook is replaced by proper signing of the binding, not ad-hoc `-s -`.
-
-### 2. Hosting the download + updates
-
-- Decide **where the `.dmg` lives** (a download page, GitHub Releases, S3/R2, etc.).
-- If auto-update is wanted, add `electron-updater` to the app, set a `publish` provider in
-  `electron-builder.yml` (which then emits `latest-mac.yml`), and host that manifest beside
-  the artifact. Until then, `publish: null` stays and there is no updater.
-
-### 3. Cross-platform (currently macOS arm64 only)
-
-- The build targets **arm64 mac only** (`mac.target: dmg, arch: [arm64]`). Intel macs need
-  an `x64` (or `universal`) arch; Windows and Linux need their own targets, icons, and —
-  for signing — their own certificates.
-- **Folder picker:** choosing a product folder uses macOS `osascript` (`choose folder`) in
-  `brain/src/server.mjs`. On non-mac it already **degrades gracefully** — the endpoint
-  returns `{ unsupported: true }` so the UI can fall back to a typed path — so this is a
-  missing convenience on other platforms, not a hard break. A real Windows/Linux release
-  would want a native picker there.
-
----
-
-## Bottom line for the alpha bet
-
-For getting Drover in front of a stranger _now_, **Path A (run from source)** is the honest
-recommendation — it sidesteps signing and Gatekeeper entirely. The local `.dmg` is real and
-useful for a mac the founder controls, but its unsigned status makes it a rough hand-off to
-someone else until the Apple steps above are done.
+Intel macOS, Windows, and Linux packages are not current product commitments. Adding one requires an
+explicit product and distribution decision, native-path verification, and its own signing story.

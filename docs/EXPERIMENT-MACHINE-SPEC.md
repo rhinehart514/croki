@@ -1,8 +1,8 @@
 # The Experiment Machine — build spec
 
-> **Superseded — 2026-07-14.** The build direction is now [FIRM-SPEC.md](FIRM-SPEC.md). This document
-> stays binding for the harness it defined (truth, the founder wall, taste) and as implementation
-> history; where it and FIRM-SPEC.md conflict, FIRM-SPEC.md wins.
+> **Superseded — 2026-07-14.** [FIRM-SPEC.md](FIRM-SPEC.md) is the only product and build contract.
+> This document is implementation history and has no independent authority. The Firm spec carries
+> forward only the truth, wall, taste, divergence, and outcome findings it explicitly retains.
 
 **Status:** superseded implementation history.
 **Derived from:** two founder discovery interviews (2026-07-12).

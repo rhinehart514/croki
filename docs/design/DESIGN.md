@@ -1,77 +1,358 @@
-> **HISTORICAL SNAPSHOT.** The current design authority is the root **DESIGN.md** and
-> the shipped token layer. This June snapshot must not override either.
+---
+status: canonical-current-code-record
+refreshed: 2026-07-15
+experience_direction: ../../DESIGN.md
+token_source: ../../ui/src/index.css
+feature_styles:
+  - ../../ui/src/styles/firm-app.css
+  - ../../ui/src/styles/firm-lens.css
+  - ../../ui/src/styles/firm-lens-outline.css
+  - ../../ui/src/styles/freshness.css
+  - ../../ui/src/styles/firm-settings.css
+  - ../../ui/src/styles/portfolio-frontier.css
+  - ../../ui/src/styles/venture-atlas.css
+  - ../../ui/src/styles/workyard.css
+tokens:
+  colors:
+    ink: { value: "#23211d", ref: "ui/src/index.css:18" }
+    ink_2: { value: "#4e4b44", ref: "ui/src/index.css:20" }
+    ink_3: { value: "#615e56", ref: "ui/src/index.css:21" }
+    muted: { value: "#615e56", ref: "ui/src/index.css:22" }
+    faint: { value: "#aba598", ref: "ui/src/index.css:23" }
+    ghost: { value: "#c6c1b6", ref: "ui/src/index.css:24" }
+    line: { value: "#d3cfc6", ref: "ui/src/index.css:25" }
+    surface: { value: "#f4f2ee", ref: "ui/src/index.css:27" }
+    surface_2: { value: "#dcd8d0", ref: "ui/src/index.css:29" }
+    canvas: { value: "#e9e6e0", ref: "ui/src/index.css:30" }
+    room: { value: "#e3e0da", ref: "ui/src/index.css:31" }
+    link: { value: "#1e5245", ref: "ui/src/index.css:35" }
+    gap: { value: "#a9791a", ref: "ui/src/index.css:36" }
+    danger: { value: "#b4443a", ref: "ui/src/index.css:37" }
+    blind: { value: "#aba598", ref: "ui/src/index.css:38" }
+  type:
+    text_xs: { value: "0.6875rem", ref: "ui/src/index.css:40" }
+    text_meta: { value: "0.75rem", ref: "ui/src/index.css:41" }
+    text_sm: { value: "0.8125rem", ref: "ui/src/index.css:42" }
+    text_base: { value: "0.875rem", ref: "ui/src/index.css:43" }
+    text_md: { value: "1rem", ref: "ui/src/index.css:44" }
+    text_lg: { value: "1.0625rem", ref: "ui/src/index.css:45" }
+    text_xl: { value: "1.3125rem", ref: "ui/src/index.css:46" }
+    text_2xl: { value: "1.625rem", ref: "ui/src/index.css:47" }
+    text_display: { value: "2.75rem", ref: "ui/src/index.css:48" }
+    leading_tight: { value: "1.25", ref: "ui/src/index.css:48" }
+    leading_normal: { value: "1.5", ref: "ui/src/index.css:49" }
+  spacing:
+    space_1: "0.25rem"
+    space_2: "0.5rem"
+    space_3: "0.75rem"
+    space_4: "1rem"
+    space_5: "1.25rem"
+    space_6: "1.5rem"
+    space_8: "2rem"
+    space_12: "3rem"
+    ref: "ui/src/index.css:51"
+  radius:
+    sm: "6px"
+    md: "9px"
+    lg: "12px"
+    ref: "ui/src/index.css:60"
+  motion:
+    ease: "cubic-bezier(0.22, 1, 0.36, 1)"
+    ease_out: "var(--ease)"
+    fast: "120ms"
+    base: "200ms"
+    ref: "ui/src/index.css:71"
+---
 
-# Drover — design system record
+# Drover design system record
 
-An archived index of the codebase's design system, extracted from the real code
-(`ui/src/index.css`, `ui/src/styles/*`). Refreshed as the system accretes, not rewritten.
-Last refreshed: 2026-06-27.
+This is the canonical design-system record extracted from the live UI. The root
+[`DESIGN.md`](../../DESIGN.md) owns experience direction; this file records what the current code can
+actually render, where reuse is real, and where the foundation is drifting.
 
-## The register
+The older white/zinc, blue-link, proven-green, and glass-palette description is retired. The current
+Firm shell ships a warm mineral palette, opaque operating surfaces, a forest interaction color, and
+no production glass skin.
 
-GTM IDE is an **operating tool, not a marketing site**: a clean light canvas, monochrome
-ink, semantic color for meaning only, restrained motion that shows causality (evidence flows
-into nodes, decisions pause at gates). "Calm GTM Control Room." The dark element is the
-*primary button* (ink pill, white text), not the theme. Font: **Geist** (sans) + **Geist Mono**
-(code-like identifiers). The spine — "vibe up to the gate, never past it" — has a visual
-correlate: the gate is sacred, marked in amber, never just another modal.
+## Creative north star
 
-## Tokens (source of truth: `ui/src/index.css` `:root`)
+**The firm speaks; the canvas proves.** The visual system is a quiet warm room for a living venture
+atlas. Product value, founder-shaped architecture, exact differences, market language, evidence, and
+the founder wall create specificity. Agent machinery and decoration do not.
 
-Use the tokens, never raw hex. OKLCH ramp so steps are perceptually even.
+## Stack
 
-- **Ink ramp** — `--ink` #18181b · `--ink-2` #3f3f46 · `--muted` #71717a · `--faint` #a1a1aa · `--ghost` #d4d4d8
-- **Surfaces** — `--surface` #fff · `--surface-2` #f4f4f5 · `--canvas` #fafafa · `--line` #ececec · `--line-2` #e4e4e7 · `--panel` (translucent)
-- **Primary** — `--primary` ink · `--on-primary` white · `--link` #2563eb (the one restrained blue)
-- **Semantic — color for MEANING only (status dots, edge pills, gates):**
-  - `--proven` #16a34a (+`-soft`) — cited/ready/safe; in capabilities = **runs free (read)**
-  - `--gap` #d97706 (+`-soft`) — needs attention; **the gate owns amber** (see `library-palette.css`); in capabilities = **behind the gate (write)**
-  - `--danger` #dc2626 (+`-soft`) — error/reject/untrusted
-  - `--blind` #a1a1aa — no signal (honest "we can't see it" state)
-- **Type scale** — `--text-xs` 11px … `--text-2xl` 26px (Geist, ~1.22 modular)
-- **Spacing** — `--space-1` 4px … `--space-12` 48px (4px base, one rhythm)
-- **Radius** — `--r-sm` 6 · `--r-md` 9 · `--r-lg` 12 · `--r-xl` 16
-- **Elevation** — `--shadow-card` (rests) · `--shadow-pop` (floats) · `--shadow-modal` (commands)
-- **Motion** — `--ease`/`--ease-out` (~120–200ms hover/press), `--ease-spring` (entrances/lands only, soft overshoot), no bounce on interaction
+- **Application:** React 19.2 + TypeScript 6, built by Vite 8.
+- **Styling:** Tailwind CSS 4 token aliases plus feature-local CSS. There is no Tailwind config file;
+  `ui/src/index.css` supplies `@theme inline` aliases.
+- **Primitive layer:** Base UI 1.6 under local shadcn-style source components in
+  `ui/src/components/ui/`; Class Variance Authority composes `Button` variants.
+- **Canvas:** `@xyflow/react` 12.11.
+- **Motion:** Motion supplies topology/layout transitions where the atlas changes meaning; CSS and
+  React Flow handle direct interaction and camera travel. All use the shared motion contract.
+- **Icons:** `lucide-react` 1.21.
+- **Rich model text:** `streamdown` 2.5.
+- **Identity:** DiceBear-backed illustrated avatars behind `CrewFace`.
+- **Type assets:** Geist Variable and Geist Mono are installed and imported. The rendered body stack
+  is the system sans; Geist Mono is used for machine text; Geist is reserved for rare return/focus
+  headings through `--font-heading`.
+- **Platform:** desktop web shell embedded by Electron; 960px minimum, judged at 1440x900 and
+  1280x800.
 
-A `[data-skin="glass"]` warm-glass skin exists (`--st-*` tokens) for the canvas register.
+The standalone `design-system/` package is a compatibility projection named
+`@gtm-ide/design-system`. The production UI does not import it, and it is not an alternate source of
+truth. Its shared tokens resolve identically to `ui/src/index.css`; its 34 explicitly registered
+extensions serve package-only historical components.
 
-## Primitives & conventions
+## Color roles
 
-- **The one menu** (`ui/src/styles/menu.css`, `.menu`) — every dropdown routes through it,
-  grounded in shadcn/ui. Monochrome; the trailing check is the only signature mark. Two skins:
-  opaque (chrome) and `.menu-glass` (floats over the canvas).
-- **The glass palette** (`ui/src/styles/library-palette.css`, `libp-`) — the summoned "+ Add
-  step" surface; the canonical glass recipe (color-mix + backdrop-blur + hairline). Establishes
-  the rule **"the gate owns amber"** (no decorative amber elsewhere).
-- **Opaque content surfaces** — any panel you read or work in (the "+ Add step" library palette,
-  node editors, pickers, modals with content) is **opaque**: `background: var(--surface)` + hairline
-  border + soft shadow. NEVER the glass recipe (`backdrop-filter` blur + translucent fill) — over the
-  busy canvas it bleeds through and kills legibility. The shadow floats it, not blur. Glass is only
-  for tiny transient chrome you don't read against. (Founder-flagged 2026-06-27; the warm-calm glass
-  aesthetic is for marketing surfaces, not this operating tool.)
-- **Icons** — `lucide-react`. Hard ban: the **Sparkles** icon (use Lightbulb / neutral instead).
-- **Brand glyphs** (`ui/src/lib/brandGlyph.ts` + `components/BrandGlyph.tsx`) — external service logos
-  (Notion, Gmail…) for `mcp` nodes, from `simple-icons` resolved by server id. **Monochrome ink at
-  rest** (holds the calm canvas), **brand-color on focus** (`brand` flag → the service's official hex);
-  unknown service → `lucide` Plug fallback. A brand logo is never full-color at rest — color stays for
-  meaning.
-- **Semantic controls** — a button is `<button>`, a link `<a>`, an input `<input>`. Exception
-  documented in code: React Flow canvas nodes (`GraphCanvas`, `ProgramCanvas`) use `div`+handler
-  deliberately because they nest interactive controls, where a `<button>` wrapper is invalid HTML.
+### Neutral room
 
-## Surfaces (per-surface specs live alongside this file)
+- `--room` `#e3e0da` is the outer workbench.
+- `--canvas` `#e9e6e0` is the infinite spatial ground.
+- `--surface` `#f4f2ee` is the readable lifted plane for conversation, nodes, controls, and review.
+- `--surface-2` `#dcd8d0` is an inset or quiet selected plane.
+- `--ink` `#23211d` through `--ghost` `#c6c1b6` forms the warm umber content and line ramp.
 
-- **Node cards** (`docs/design/node-cards.md`) — the canvas step cards. Carry external MCP capability
-  logos (brand glyph + read/write lane signal: proven-green "Runs free" / gap-amber "Behind your
-  gate"), the agent persona monogram, or the category icon. Clicking the empty canvas dismisses any
-  open overlay (`onPaneClick` → host `dismissOverlays`). Built 2026-06-27.
-- **Connect a capability** (`docs/design/connect-capability.md`) — "the wall": a connected MCP
-  server's tools split by a vertical seam into Runs free (proven green) / Behind your gate (gap
-  amber), unknown defaults gated. The product's safety story as layout. Built 2026-06-27.
+### Semantic color
 
-## How this compounds
+- `--link` `#1e5245` marks interaction, focus, and presence. It is not an ambient brand wash.
+- `--gap` `#a9791a` marks held founder attention and the wall.
+- `--danger` `#b4443a` marks destructive or failed states.
+- `--blind` `#aba598` marks missing signal.
 
-Promote inline values to tokens and consolidate duplicate primitives only by genuine need —
-grow by use, never a speculative library. Refresh this record (extract from current code) when
-a token or primitive is added or consolidated.
+The UI has no production `--proven` token. Do not reintroduce positive/negative outcome color or
+inherit the standalone package's green status vocabulary. Outcomes remain language and evidence.
+
+`--muted` is the readable metadata ink: 5.20:1 on canvas and 5.79:1 on surface. `--faint` remains a
+decorative line/disabled role and must not carry essential meaning.
+
+## Type hierarchy and voice
+
+The tokenized scale is 11px, 12px, 13px, 14px, 16px, 17px, 21px, 26px, and a rare 44px display role. `--text-meta` is the minimum
+operating metadata role; production feature CSS has no remaining raw 9-10px text.
+
+The intended roles are:
+
+- Geist Variable for rare display and major focus headings.
+- System sans for body, controls, and high-frequency reading.
+- Geist Mono for code, repository paths, revisions, identifiers, and exact diffs.
+
+Geist's rare display role remains intentionally narrow; do not describe it as the body face.
+Founder-facing prose is plain, concrete, and consequence-led; machine vocabulary belongs only in
+receipts and disclosures.
+
+## Spacing, radius, and density
+
+The spacing scale is 4, 8, 12, 16, 20, 24, 32, and 48px. The radius scale is 6, 9, and 12px, plus a
+24px panel radius alias and full circles where identity or a focal marker requires them.
+
+Dense does not mean microscopic. Metadata can be quieter than body copy but must stay readable at the
+two supported desktop sizes. Crew does not occupy a duplicate conversation roster. The conversation
+panel has a durable 360–680px width and can collapse; the canvas tray stays compact until requested
+and its expanded inventory remains scrollable inside the viewport.
+
+## Elevation and material
+
+- `--shadow-card` is the resting node and content-card level.
+- `--shadow-pop` is the popover, outline, and transient-control level.
+- `--shadow-modal` is reserved for a blocking decision surface.
+- Conversation and review content are opaque. The dotted canvas may never bleed through text.
+- Hairlines and spacing group related content before another container does.
+
+The rail and avatar use the earned `--shadow-rail` and `--avatar-inset` roles. Do not create a
+speculative shadow catalog.
+
+## Living atlas grammar
+
+The production surface remains an infinite React Flow canvas, not a dashboard composition:
+
+- **Open concept:** a plain fragment or label with an incomplete edge; no role glyph.
+- **Named area:** a quiet irregular territorial boundary with its title embedded in the boundary.
+- **Product loop:** ordered beats through product terrain with a visible return curve.
+- **System:** a stable layered landmark with one compact capability statement.
+- **Motion:** a route crossing systems with actor and value endpoints.
+- **Campaign:** a temporary bracket or pressure envelope around part of a route.
+- **Bet/work:** the existing Workyard claim and exact-work territory at near depth.
+- **Release:** exact work oriented toward the founder wall.
+- **Outcome:** an inbound impression carrying source and join identity.
+- **Founder authority:** the wall boundary and explicit decision seal.
+
+These materials must remain distinguishable in monochrome. Uniform rectangular cards, generic graph
+ports, arrow spaghetti, and a permanent property inspector fail the grammar. Canvas placement, route
+bends, camera, z-order, and decorative strokes are presentation; semantic architecture lives in the
+venture document.
+
+## Motion
+
+The shared motion contract is `--dur-fast` at 120ms and `--dur-base` at 200ms with
+`cubic-bezier(0.22, 1, 0.36, 1)`. Atlas focus may use `--dur-focus` at 360ms with the same settling
+curve; topology changes may use a critically damped spring only through the installed Motion runtime.
+Shared controls name the properties they transition and consume shared timing. Working identity
+settles into a static forest ring; it never loops to simulate work.
+
+Purposeful sequences are camera focus/restore, concept promotion, route reflow, fork, exact release
+to the wall, evidence-supported return, and founder-accepted architecture change. Each plays once,
+remains interruptible, and ends in the complete information state. React Flow camera movement uses
+the same contract and becomes immediate when `prefers-reduced-motion` is active. The direction is strict:
+
+- explicit transform/opacity or named state properties only;
+- no loop that simulates productivity;
+- no `transition: all`;
+- no parallax, ambient drift, pulsing work decoration, or animation used as status;
+- reduced motion preserves information in the settled frame.
+
+## Real primitive inventory
+
+### Reused primitives
+
+- **`Button`** — Base UI + CVA. Variants: `default`, `outline`, `secondary`, `ghost`, `destructive`,
+  `link`. Sizes: `default`, `xs`, `sm`, `lg`, `icon`, `icon-xs`, `icon-sm`, `icon-lg`. Used by the
+  composer, heat, configuration actions, product-change review, and wall review.
+- **`Input`** — Base UI input with default, focus, disabled, and invalid states. Used by venture setup
+  and heat/spend control.
+- **`Textarea`** — semantic textarea with the same state vocabulary. Used by the direction composer
+  and wall notes.
+- **`CrewFace`** — one participant-identity door. States: `idle`, `working`; monogram exists only as
+  an error fallback. Reused across roster, canvas, composer, and conversation.
+
+### Feature primitives that carry product meaning
+
+- **`VenturePicker`** — existing venture, create another venture, repository selection, loading,
+  empty, busy, and error.
+- **`TeammateRail`** — scoped conversation, composer, collapse control, and wall-open state.
+- **`GoalComposer`** — whole-firm, teammate, and bet scope; runtime readiness; busy, suggestion,
+  blocked-at-wall, error, and send states.
+- **`ConversationFeed`** — founder/model messages, configuration proposal/receipt, handoff, activity,
+  empty guidance, and working state.
+- **`ReturnBrief`** — presentation-only `Since you left` groups with canonical receipt/bet/wall
+  navigation and an explicit wider-firm omission boundary.
+- **`FirmFreshness`** — last verified update, reconnect/backoff, offline, and desktop-host-required
+  states over the coherent shell read model.
+- **`ActiveWorkReceipt`** — durable progress, elapsed time, runtime/configuration/cost provenance, and
+  provider-supported stop without ending the bet.
+- **`ConfigurationMessage` + `ConfigurationDiff`** — proposal, applied receipt, stale proposal, apply,
+  undo, and raw field disclosure.
+- **`ConversationHandoff`** — new-bet and wall handoff attached to the originating conversation.
+- **`FirmLens`** — React Flow projection, authored placement, ephemeral evidence focus scenes, camera
+  history, semantic altitude, relationship edges, outline, wall band, loading, error, and empty firm.
+- **`CanvasTray`** — draggable and keyboard-placeable existing crew plus host-backed repository and
+  connected-account capabilities; it writes placement only.
+- **`CrewNode`** — selected participant plus capability-proposal toolbar.
+- **`CapabilityNode`** — a placed real source/action with read-only or founder-wall authority shown
+  explicitly and a placement-only remove action.
+- **`BetNode`** — `live`, `at-wall`, and `ended` position; fork marker; staged count; latest joined
+  market return.
+- **`FirmLensOutline`** — keyboard-accessible crew/bet index with open/closed, active row, group,
+  empty, Home/End/arrow/Escape behavior.
+- **`FirmWallReview`** — clear wall and purpose-specific pending items; exact artifact/consequence;
+  release, answer, outcome review, product-change review, deploy authorization, keep, and end actions.
+- **`FirmHeatControl`** — heat, daily spend, dirty, saving, saved, and error.
+
+Feature primitives are not a request to extract a component package. They remain local until a second
+live surface needs the same behavior.
+
+## Current foundation state
+
+### Real
+
+- Warm mineral tokens in `ui/src/index.css` and their Tailwind aliases.
+- One venture-wide header, a persistent 360–680px conversation width, independent conversation
+  collapse, and a canvas that takes the released space at supported desktop sizes.
+- A compact canvas tray for repositioning existing crew and placing repository/Gmail capability
+  truth without granting authority or duplicating domain state.
+- Shared Base UI button/input primitives in high-consequence forms.
+- Stable `CrewFace` identity across four surfaces.
+- Card/popover/modal elevation roles.
+- Purpose-specific wall actions and configuration receipts.
+- Keyboard outline and visible focus styling.
+- Coherent freshness/read-only presentation, evidence-linked return briefing, and durable active-work
+  control.
+- Measured-node viewport fitting, temporary bet-family focus arrangement, camera restoration, and
+  reduced-motion-aware camera travel.
+
+### Duplicated
+
+- Venture, tray, thread, handoff, starter, and outline buttons each own feature-local state styling.
+  Some are semantically distinct; compact control styling is repeated.
+- `design-system/src/components` contains a second button/input/textarea/card vocabulary not consumed
+  by the production UI.
+- `design-system/styles.css` duplicates the canonical values as a checked compatibility projection;
+  production imports remain prohibited.
+
+### Inline
+
+- Raw 999px pill radius and scattered 1-3px gaps/padding.
+- Raw fixed control and node dimensions where a semantic density role would be clearer.
+
+### Missing by current need
+
+- No additional shared primitive is earned by current reuse. Freshness, consequence-first
+  configuration summaries, and far/middle/near canvas representations remain feature-local because
+  they encode product behavior rather than generic component vocabulary.
+
+## Foundation ledger
+
+Closed in the 2026-07-14 foundation pass:
+
+- Undefined production variables and a false-positive parity command.
+- Unreadable 9-10px metadata and sub-AA muted text.
+- Fixed roster cards that clipped without an explicit scroll affordance.
+- Looping avatar/activity animation and `transition: all`.
+- Raw rail/avatar shadows and `CrewNode`'s parallel compact controls.
+- Disconnected heading type, silent stale state, schema-first configuration review, full-card
+  miniaturization, selected-thread contamination, and empty-wall modal theater.
+- Offscreen first-frame canvas nodes, non-spatial bet focus, raw return timestamps, animated
+  reduced-motion camera travel, and low-contrast active wall text.
+
+Remaining foundation debt includes the historical package component duplicate, incidental raw
+geometry already named above, and the production build's oversized shared vendor chunk. The current
+operating and Atlas browser receipts pass; product-proof gates live in `docs/STATE.md`. Do not convert
+them into speculative design-system primitives.
+
+## Local rules
+
+Checkable rules for this repository:
+
+- Add or change production tokens only in `ui/src/index.css`; update the YAML values here in the same
+  change.
+- Never treat `design-system/styles.css` as canonical. If the package is maintained, its parity check
+  must fail the process on drift, not merely print "failed" with exit code zero.
+- Extend `ui/src/components/ui` before hand-rolling a repeated control state. Keep product-specific
+  semantics in feature components.
+- Use `CrewFace` for every teammate portrait. No alternate initials, icon, or avatar system.
+- The wall owns amber. Interaction owns forest. Outcomes own neither.
+- Readable operating surfaces are opaque; no glass over the canvas.
+- Mono is for machine material only.
+- No raw font size below the decided metadata token; no essential text below AA contrast.
+- No full-card far view. Semantic zoom changes the representation.
+- No connection failure may leave a "Live" claim without a visible freshness qualifier.
+- No generic approval verb may cross wall purposes.
+- Product-owned copy names concrete work and consequences; it never exposes `bet`, `motion`, `fork`,
+  `outcome`, `the wall`, `pipeline`, `stage`, or `work item`. Historical component, route, storage,
+  and test identifiers remain until an intentional migration.
+- No mobile breakpoint or phone/tablet design work.
+
+## Verification
+
+Run after code changes that touch this record:
+
+```sh
+npm --prefix design-system run verify:tokens
+npm --prefix ui run test:unit
+npm --prefix ui run lint
+npm --prefix ui run build
+npm run test:acceptance
+```
+
+The token parity command reads all production CSS, rejects undefined production variables, compares
+all 78 canonical tokens with the compatibility projection, validates the extension registry, and
+exits nonzero on any drift.
+
+The acceptance browser pass covers 1440x900 and 1280x800, 80–200% browser zoom, keyboard focus,
+reduced motion, Atlas overview and architecture traces, teammate and bet/work focus, a populated and
+clear wall, dense and empty ventures, loading, stale/offline recovery, error, and long content. Any
+unavailable live fixture is named rather than assumed.
+
+Refresh this record only from current code and a current render. Promote inline values and
+consolidate duplicates by observed reuse; do not build a speculative component library.

@@ -1,5 +1,6 @@
-> **SUPERSEDED.** This Claude-specific design direction predates the provider-neutral
-> open canvas. See **docs/OPEN-CANVAS-SPEC.md** and current product state.
+> **SUPERSEDED.** This Claude-specific design direction is history. Current product and design
+> authority lives in [FIRM-SPEC.md](../FIRM-SPEC.md), [STATE.md](../STATE.md), and the root
+> [DESIGN.md](../../DESIGN.md).
 
 # Claude Composer redesign — three zones, four moves
 

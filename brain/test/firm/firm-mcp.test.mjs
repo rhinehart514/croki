@@ -18,6 +18,7 @@ import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { describe, it } from "node:test";
+import { founderHeaders } from "../helpers/founder-capability.mjs";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "firm-mcp-"));
 process.env.GTM_IDE_HOME = root;
@@ -52,7 +53,8 @@ function setup() {
 async function call(handler, method, pathname, body = {}, headers = {}) {
   const req = Readable.from([JSON.stringify(body)]);
   req.method = method;
-  req.headers = { "content-type": "application/json", ...headers };
+  req.url = pathname;
+  req.headers = { "content-type": "application/json", ...founderHeaders({ method, path: pathname }), ...headers };
   let status = 0;
   let raw = "";
   const res = { writeHead(next) { status = next; }, setHeader() {}, end(next) { raw += next ?? ""; } };

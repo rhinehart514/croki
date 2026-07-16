@@ -11,6 +11,7 @@ import { Anthropic } from "@anthropic-ai/sdk";
 export const anthropicRuntime = {
   id: "anthropic",
   label: "Anthropic API",
+  supportsAbort: true,
 
   // Available when a client is injected (tests / custom transport) or a key is set.
   isAvailable({ client, env = process.env } = {}) {
@@ -43,22 +44,28 @@ export const anthropicRuntime = {
     while (steps < ctx.maxSteps) {
       if (ctx.isCancelled()) return { kind: "cancelled" };
 
-      const response = await client.messages.create({
-        model: ctx.model,
-        // Room for adaptive thinking + a real tool-call turn. Thinking counts toward max_tokens, so the
-        // prior 4096 could truncate a reasoned turn; streaming isn't used here, so stay under the HTTP
-        // timeout ceiling. The teammate loop is reasoning-heavy — this is where thinking earns its cost.
-        max_tokens: 16000,
-        // Adaptive thinking + high effort: the teammate plans multi-step GTM work across tool calls, the
-        // reasoning-heavy creator case the harness wants to think hard. Opus 4.8 (the pinned default)
-        // takes adaptive thinking; effort lives inside output_config. A founder-injected client in tests
-        // ignores these, so they only shape the real subscription-billed run.
-        thinking: { type: "adaptive" },
-        output_config: { effort: "high" },
-        system: cachedSystem,
-        tools: ctx.tools,
-        messages,
-      });
+      let response;
+      try {
+        response = await client.messages.create({
+          model: ctx.model,
+          // Room for adaptive thinking + a real tool-call turn. Thinking counts toward max_tokens, so the
+          // prior 4096 could truncate a reasoned turn; streaming isn't used here, so stay under the HTTP
+          // timeout ceiling. The teammate loop is reasoning-heavy — this is where thinking earns its cost.
+          max_tokens: 16000,
+          // Adaptive thinking + high effort: the teammate plans multi-step GTM work across tool calls, the
+          // reasoning-heavy creator case the harness wants to think hard. Opus 4.8 (the pinned default)
+          // takes adaptive thinking; effort lives inside output_config. A founder-injected client in tests
+          // ignores these, so they only shape the real subscription-billed run.
+          thinking: { type: "adaptive" },
+          output_config: { effort: "high" },
+          system: cachedSystem,
+          tools: ctx.tools,
+          messages,
+        }, ctx.signal ? { signal: ctx.signal } : undefined);
+      } catch (error) {
+        if (ctx.signal?.aborted || ctx.isCancelled()) return { kind: "cancelled" };
+        throw error;
+      }
 
       if (ctx.isCancelled()) return { kind: "cancelled" };
       steps = ctx.onTurn();

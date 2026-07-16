@@ -1,5 +1,9 @@
 # F6 — The lens
 
+> **HISTORICAL EXECUTION TASK.** This work package is not a current backlog. Current lens behavior
+> and proof live in [FIRM-SPEC.md](../FIRM-SPEC.md), [STATE.md](../STATE.md), and the root
+> [DESIGN.md](../../DESIGN.md).
+
 **Goal:** the canvas renders crew, bets, the wall, and the market's returns over the firm store.
 Placement memory only. Divergence below the fold; pull, not push.
 

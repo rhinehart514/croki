@@ -9,19 +9,42 @@
 
 import type { FirmBet, FirmCrewMember } from "@/types";
 
-const CREW_GAP_X = 180;
+// Territories need real room for several durable workpieces. The broad view can zoom out; overlap at
+// reading distance is the more damaging failure, so the fallback starts as a loose archipelago.
+const COLUMN_GAP_X = 620;
 const CREW_Y = 0;
-const BET_GAP_X = 240;
 const BET_ROW_Y = 160;
-const BET_GAP_Y = 130;
+const BET_GAP_Y = 560;
 
 export type LensAnchorKey = `crew:${string}` | `bet:${string}`;
+export type CapabilityAnchorKey = `capability:${string}`;
+export type CanvasAnchorKey = LensAnchorKey | CapabilityAnchorKey;
 
 export function crewAnchorKey(ref: string): LensAnchorKey {
   return `crew:${ref}`;
 }
 export function betAnchorKey(id: string): LensAnchorKey {
   return `bet:${id}`;
+}
+export function capabilityAnchorKey(id: string): CapabilityAnchorKey {
+  return `capability:${id}`;
+}
+
+// A focus scene is a temporary reading arrangement, not placement. This helper names only the
+// durable anchors that already exist so automatic and requested focus framing can gather the bet
+// family without ever writing a machine-authored layout into the venture.
+export function focusNeighborhoodKeys(bets: FirmBet[], focusedBetId: string): LensAnchorKey[] {
+  const focused = bets.find((bet) => bet.id === focusedBetId);
+  if (!focused) return [];
+  const related = new Set<LensAnchorKey>([betAnchorKey(focused.id)]);
+  if (focused.teammateRef) related.add(crewAnchorKey(focused.teammateRef));
+  if (focused.forkedFrom && bets.some((bet) => bet.id === focused.forkedFrom)) {
+    related.add(betAnchorKey(focused.forkedFrom));
+  }
+  for (const bet of bets) {
+    if (bet.forkedFrom === focused.id) related.add(betAnchorKey(bet.id));
+  }
+  return [...related];
 }
 
 function forkDepth(bet: FirmBet, byId: Map<string, FirmBet>): number {
@@ -45,7 +68,7 @@ export function fallbackPositions(crew: FirmCrewMember[], bets: FirmBet[]): Reco
   const byId = new Map(bets.map((bet) => [bet.id, bet]));
 
   crew.forEach((member, index) => {
-    positions[crewAnchorKey(member.ref)] = { x: index * CREW_GAP_X, y: CREW_Y };
+    positions[crewAnchorKey(member.ref)] = { x: index * COLUMN_GAP_X, y: CREW_Y };
   });
 
   const teammateRefs = crew.map((member) => member.ref);
@@ -59,7 +82,7 @@ export function fallbackPositions(crew: FirmCrewMember[], bets: FirmBet[]): Reco
     const depth = forkDepth(bet, byId);
     const row = Math.max(depth, rowsUsedInColumn.get(column) ?? 0);
     rowsUsedInColumn.set(column, row + 1);
-    positions[betAnchorKey(bet.id)] = { x: column * BET_GAP_X, y: BET_ROW_Y + row * BET_GAP_Y };
+    positions[betAnchorKey(bet.id)] = { x: column * COLUMN_GAP_X, y: BET_ROW_Y + row * BET_GAP_Y };
   }
 
   return positions;

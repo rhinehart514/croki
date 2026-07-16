@@ -6,22 +6,31 @@
 import { Fragment, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { ListTree, X } from "lucide-react";
 import { buildLensOutline, type LensOutlineRow } from "./lensOutline";
-import type { FirmBet, FirmCrewMember } from "@/types";
+import type { FirmBet, FirmConfiguration, FirmCrewMember } from "@/types";
 import type { LensAnchorKey } from "@/lib/lensLayout";
+import type { WorkyardCard } from "./workyardProjection";
 import "@/styles/firm-lens-outline.css";
 
 export function FirmLensOutline({
   crew,
   bets,
+  configuration,
   selectedKey,
+  selectedWorkRef,
+  workByBet,
   onInspect,
+  onSelectWork,
 }: {
   crew: FirmCrewMember[];
   bets: FirmBet[];
+  configuration?: FirmConfiguration;
   selectedKey?: LensAnchorKey | null;
+  selectedWorkRef?: string | null;
+  workByBet?: ReadonlyMap<string, WorkyardCard[]>;
   onInspect: (anchorKey: LensAnchorKey) => void;
+  onSelectWork?: (betId: string, workRef: string) => void;
 }) {
-  const rows = useMemo(() => buildLensOutline(crew, bets), [crew, bets]);
+  const rows = useMemo(() => buildLensOutline(crew, bets, configuration, workByBet), [crew, bets, configuration, workByBet]);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const rowRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -50,7 +59,8 @@ export function FirmLensOutline({
     } else if (event.key === "Enter") {
       event.preventDefault();
       setOpen(false);
-      onInspect(row.anchorKey);
+      if (row.betId && row.workRef) onSelectWork?.(row.betId, row.workRef);
+      else onInspect(row.anchorKey);
     } else if (event.key === "Escape") {
       event.preventDefault();
       setOpen(false);
@@ -63,7 +73,7 @@ export function FirmLensOutline({
         type="button"
         className="firm-lens-outline-toggle"
         aria-expanded={open}
-        aria-controls="firm-lens-outline-panel"
+        aria-controls={open ? "firm-lens-outline-panel" : undefined}
         onClick={() => setOpen((value) => !value)}
       >
         <ListTree size={15} aria-hidden="true" />
@@ -76,17 +86,17 @@ export function FirmLensOutline({
           <header>
             <div>
               <strong>Firm outline</strong>
-              <span>Crew, live bets, the wall, and what's ended</span>
+              <span>Crew, current directions, exact work, and founder decisions</span>
             </div>
             <button type="button" onClick={() => setOpen(false)} aria-label="Close firm outline"><X size={15} /></button>
           </header>
           {rows.length ? (
-            <ol aria-label="Crew and bets">
+            <ol aria-label="Crew, current directions, and exact work">
               {rows.map((row, index) => {
-                const selected = row.anchorKey === selectedKey;
+                const selected = row.workRef ? row.workRef === selectedWorkRef : row.anchorKey === selectedKey && !selectedWorkRef;
                 const startsGroup = index === 0 || rows[index - 1].group !== row.group;
                 return (
-                  <Fragment key={row.anchorKey}>
+                  <Fragment key={row.id}>
                     {startsGroup ? <li className="firm-lens-outline-group" aria-hidden="true">{row.group}</li> : null}
                     <li>
                       <button
@@ -95,8 +105,13 @@ export function FirmLensOutline({
                         tabIndex={index === safeActiveIndex ? 0 : -1}
                         aria-current={selected ? "true" : undefined}
                         aria-label={`${row.group}: ${row.label}`}
+                        data-depth={row.depth}
                         onFocus={() => setActiveIndex(index)}
-                        onClick={() => { setOpen(false); onInspect(row.anchorKey); }}
+                        onClick={() => {
+                          setOpen(false);
+                          if (row.betId && row.workRef) onSelectWork?.(row.betId, row.workRef);
+                          else onInspect(row.anchorKey);
+                        }}
                         onKeyDown={(event) => onRowKeyDown(event, index, row)}
                       >
                         <strong>{row.label}</strong>
@@ -107,7 +122,7 @@ export function FirmLensOutline({
                 );
               })}
             </ol>
-          ) : <p className="firm-lens-outline-empty">The crew hasn't forked anything yet.</p>}
+          ) : <p className="firm-lens-outline-empty">The crew hasn't begun any work yet.</p>}
         </div>
       ) : null}
     </section>

@@ -3,9 +3,9 @@
 // GET the whole lens payload for one venture; PUT the founder's placement. Placement is the one write
 // this surface allows — mirrors routes.mjs's own posture (the founder-authority boundary, when one
 // applies, lives one layer down; this file only turns a URL + body into that call's arguments). A
-// placement write carries no outward effect and touches nothing but where things sit on the canvas, so
-// it is not founder-authority-gated the way wall.decide() is — any authenticated venture-scoped caller
-// may drag a node. Venture existence is still fail-closed: an unknown ventureId 404s via
+// placement write carries no outward effect, but it is still the founder changing the durable lens.
+// It therefore uses the same host-issued capability as every other founder write. Venture existence
+// is still fail-closed: an unknown ventureId 404s via
 // venture-store.mjs's own assertVentureExists, surfaced here as a plain error response.
 //
 // Also carries the portfolio door — GET/POST /api/ventures (list/create) — because F6's shell (FirmApp)
@@ -16,7 +16,7 @@
 import { json, readBody } from "../routes/util.mjs";
 import { buildLens, putPlacement, PersistenceConflictError } from "./lens.mjs";
 import { createVenture, listVentures } from "./venture-store.mjs";
-import { authorizeFounderWriteForRequest } from "../routes/session-guard.mjs";
+import { authorizeFounderWriteForRequest } from "../routes/founder-authority.mjs";
 
 function statusFor(err) {
   if (err instanceof PersistenceConflictError) return 409;
@@ -59,6 +59,7 @@ export default async function handle({ req, res, url }) {
   if (req.method === "PUT" && placementMatch) {
     const ventureId = decodeURIComponent(placementMatch[1]);
     try {
+      authorizeFounderWriteForRequest(req, "Changing the canvas placement");
       const body = await readBody(req);
       const placement = putPlacement(ventureId, {
         positions: body?.positions,

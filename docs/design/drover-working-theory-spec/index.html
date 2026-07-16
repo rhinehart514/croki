@@ -1,0 +1,851 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2322211e'/%3E%3Cpath d='M21 18h12c10 0 17 5 17 14S43 47 33 47H21V18zm10 8v13h2c5 0 8-2 8-7s-3-6-8-6h-2z' fill='%23f2f0eb'/%3E%3C/svg%3E">
+  <title>Drover — What We Are Building Next</title>
+  <style>
+    :root {
+      --ink: #22211e;
+      --muted: #6b6860;
+      --faint: #8f8a80;
+      --paper: #f2f0eb;
+      --paper-2: #e9e6df;
+      --paper-3: #dedad1;
+      --line: rgba(34, 33, 30, .15);
+      --line-strong: rgba(34, 33, 30, .28);
+      --green: #1e5748;
+      --green-soft: #dfe8e2;
+      --amber: #956718;
+      --amber-soft: #efe4c9;
+      --red: #a43f34;
+      --red-soft: #f1dcd7;
+      --blue: #385b70;
+      --blue-soft: #dce5e9;
+      --shadow: 0 20px 60px rgba(42, 38, 31, .12);
+      --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 78% 8%, rgba(255,255,255,.7), transparent 22rem),
+        var(--paper);
+      font-family: var(--sans);
+      line-height: 1.45;
+      letter-spacing: -.012em;
+    }
+    button, input { font: inherit; }
+    button { color: inherit; }
+    :focus-visible { outline: 3px solid rgba(30, 87, 72, .36); outline-offset: 3px; }
+    a { color: inherit; }
+    code, .mono { font-family: var(--mono); letter-spacing: -.035em; }
+    .shell { min-width: 1120px; }
+    .rail {
+      position: fixed;
+      inset: 0 auto 0 0;
+      z-index: 20;
+      width: 264px;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--line);
+      background: rgba(242, 240, 235, .91);
+      backdrop-filter: blur(18px);
+      padding: 28px 22px 22px;
+    }
+    .brand { display: flex; align-items: center; gap: 11px; font-size: 15px; }
+    .brand-mark {
+      width: 29px; height: 29px; display: grid; place-items: center;
+      border-radius: 7px; color: white; background: var(--ink); font-weight: 800;
+    }
+    .brand span { display: grid; }
+    .brand small { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .11em; }
+    .nav { display: grid; gap: 3px; margin-top: 52px; }
+    .nav a {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 10px; border-radius: 8px;
+      color: var(--muted); text-decoration: none; font-size: 13px;
+    }
+    .nav a::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--paper-3); }
+    .nav a.active { color: var(--ink); background: rgba(255,255,255,.64); }
+    .nav a.active::before { background: var(--green); }
+    .rail-note { margin-top: auto; border-top: 1px solid var(--line); padding-top: 16px; }
+    .rail-note strong, .rail-note small { display: block; }
+    .rail-note strong { font: 500 18px/1.1 var(--serif); }
+    .rail-note small { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+    main { margin-left: 264px; }
+    section { scroll-margin-top: 20px; }
+    .hero {
+      min-height: 760px;
+      padding: 74px 6vw 50px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      overflow: hidden;
+    }
+    .eyebrow { color: var(--green); font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .12em; }
+    .hero-copy { max-width: 1020px; align-self: center; }
+    h1 {
+      margin: 12px 0 22px;
+      max-width: 960px;
+      font: 500 clamp(58px, 7vw, 104px)/.91 var(--serif);
+      letter-spacing: -.062em;
+    }
+    .hero-copy > p { max-width: 760px; margin: 0; color: var(--muted); font-size: 21px; line-height: 1.45; }
+    .hero-copy em { color: var(--ink); font-family: var(--serif); font-style: italic; }
+    .audit-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      border-top: 1px solid var(--line-strong);
+    }
+    .audit-strip div { padding: 17px 20px 0 0; }
+    .audit-strip strong { display: block; font: 500 26px/1 var(--serif); }
+    .audit-strip small { color: var(--muted); font-size: 11px; }
+    .orientation {
+      padding: 70px 6vw 90px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,.24);
+    }
+    .orientation-top {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(340px, .65fr);
+      gap: 70px;
+      align-items: start;
+    }
+    .orientation h2 { max-width: 760px; }
+    .orientation-lede { max-width: 760px; margin: 20px 0 0; color: var(--muted); font-size: 18px; }
+    .orientation-lede strong { color: var(--ink); }
+    .status-key { border-top: 1px solid var(--line-strong); }
+    .status-key div { display: grid; grid-template-columns: 92px 1fr; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+    .status-key strong { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+    .status-key p { margin: 0; color: var(--muted); font-size: 11px; }
+    .status-key .today strong { color: var(--green); }
+    .status-key .next strong { color: var(--amber); }
+    .status-key .unknown strong { color: var(--red); }
+    .context-spread {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(340px, .62fr);
+      gap: 70px;
+      margin-top: 64px;
+    }
+    .context-lines { border-top: 1px solid var(--line-strong); }
+    .context-line { display: grid; grid-template-columns: 145px 1fr; gap: 26px; padding: 22px 0; border-bottom: 1px solid var(--line); }
+    .context-line h3 { font-size: 12px; }
+    .context-line p { margin: 0; color: var(--muted); font-size: 14px; }
+    .context-line p strong { color: var(--ink); }
+    .plain-definitions { align-self: start; padding: 28px; border-radius: 18px; color: #eeece5; background: var(--ink); }
+    .plain-definitions > span { color: #9cb8ad; font-size: 9px; text-transform: uppercase; letter-spacing: .1em; }
+    .plain-definitions h3 { margin-top: 8px; font: 500 25px var(--serif); }
+    .plain-definitions dl { margin: 22px 0 0; }
+    .plain-definitions dt { margin-top: 17px; color: white; font-size: 11px; font-weight: 750; }
+    .plain-definitions dd { margin: 4px 0 0; color: #aaa99f; font-size: 11px; }
+    .founder-story { margin-top: 68px; }
+    .founder-story > header { display: grid; grid-template-columns: 145px 1fr; gap: 26px; margin-bottom: 24px; }
+    .founder-story > header span { color: var(--green); font-size: 10px; text-transform: uppercase; letter-spacing: .1em; }
+    .founder-story > header strong { font: 500 30px/1.12 var(--serif); }
+    .story-line { display: grid; grid-template-columns: repeat(5, 1fr); border-top: 1px solid var(--line-strong); border-bottom: 1px solid var(--line-strong); }
+    .story-line article { min-height: 180px; padding: 20px 20px 22px 0; }
+    .story-line article + article { padding-left: 20px; border-left: 1px solid var(--line); }
+    .story-line small { color: var(--faint); font: 10px var(--mono); }
+    .story-line strong { display: block; margin-top: 24px; font-size: 13px; }
+    .story-line p { margin: 7px 0 0; color: var(--muted); font-size: 11px; }
+    .chapter { padding: 90px 6vw; border-bottom: 1px solid var(--line); }
+    .chapter-head { display: grid; grid-template-columns: 180px minmax(0, 760px); gap: 36px; margin-bottom: 58px; }
+    .chapter-index { font: italic 20px var(--serif); color: var(--faint); }
+    h2 { margin: 0; font: 500 clamp(40px, 4.5vw, 66px)/.98 var(--serif); letter-spacing: -.048em; }
+    .chapter-head p { margin: 18px 0 0; max-width: 690px; color: var(--muted); font-size: 17px; }
+    h3 { margin: 0; font-size: 17px; letter-spacing: -.025em; }
+    .callout {
+      padding: 30px 34px; border: 1px solid var(--line-strong); border-radius: 18px;
+      background: rgba(255,255,255,.38);
+    }
+    .callout p { margin: 9px 0 0; color: var(--muted); }
+    .category {
+      display: grid; grid-template-columns: minmax(0, .8fr) minmax(520px, 1.2fr); gap: 56px; align-items: start;
+    }
+    .category-name { position: sticky; top: 28px; }
+    .category-name strong { display: block; font: 500 42px/1 var(--serif); letter-spacing: -.04em; }
+    .category-name p { color: var(--muted); max-width: 420px; }
+    .not-list { display: grid; border-top: 1px solid var(--line-strong); }
+    .not-list div { display: grid; grid-template-columns: 140px 1fr; gap: 22px; padding: 20px 0; border-bottom: 1px solid var(--line); }
+    .not-list strong { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+    .not-list p { margin: 0; color: var(--muted); }
+    .signature {
+      background: #252722; color: #f1efe9; padding: 90px 4vw;
+      border-bottom: 1px solid rgba(255,255,255,.12);
+    }
+    .signature .chapter-head p, .signature .chapter-index { color: #aaa99f; }
+    .simulator {
+      border: 1px solid rgba(255,255,255,.14); border-radius: 22px; overflow: hidden;
+      background: #1f211d; box-shadow: 0 38px 80px rgba(0,0,0,.28);
+    }
+    .sim-top {
+      height: 54px; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 18px; border-bottom: 1px solid rgba(255,255,255,.11); font-size: 12px;
+    }
+    .sim-brand { display: flex; gap: 9px; align-items: center; font-weight: 700; }
+    .sim-brand i { width: 19px; height: 19px; display: grid; place-items: center; border-radius: 5px; background: #f0eee8; color: #222; font-style: normal; }
+    .sim-status { color: #b9b7ae; }
+    .sim-body { display: grid; grid-template-columns: 330px 1fr; min-height: 570px; }
+    .sim-chat { padding: 22px; border-right: 1px solid rgba(255,255,255,.11); display: flex; flex-direction: column; }
+    .sim-chat small { color: #96958c; text-transform: uppercase; letter-spacing: .11em; font-size: 9px; }
+    .sim-chat h3 { margin-top: 6px; font: 500 22px var(--serif); }
+    .sim-response { margin-top: 40px; color: #cbc9c0; font-size: 13px; }
+    .sim-response strong { color: #f4f2eb; display: block; margin-bottom: 8px; }
+    .sim-receipt { margin-top: 16px; padding-left: 12px; border-left: 2px solid #6a8d7e; font-size: 11px; color: #9fb3aa; }
+    .prompt-box { margin-top: auto; }
+    .prompt-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 9px; }
+    .prompt-presets button, .phase-controls button {
+      border: 1px solid rgba(255,255,255,.17); border-radius: 999px; background: transparent; color: #c8c6bd;
+      padding: 6px 9px; cursor: pointer; font-size: 10px;
+    }
+    .prompt-presets button:hover, .phase-controls button:hover { border-color: rgba(255,255,255,.5); color: white; }
+    .prompt-entry { display: flex; gap: 8px; padding: 7px 7px 7px 12px; border-radius: 14px; background: #34362f; }
+    .prompt-entry input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: white; font-size: 12px; }
+    .prompt-entry button { width: 32px; border: 0; border-radius: 9px; background: #e9e6df; color: #222; cursor: pointer; }
+    .sim-canvas { position: relative; overflow: hidden; background-color: #e7e4dd; color: var(--ink); }
+    .sim-canvas::before {
+      content: ""; position: absolute; inset: 0; opacity: .36;
+      background-image: radial-gradient(rgba(42,40,34,.34) .7px, transparent .7px);
+      background-size: 18px 18px;
+    }
+    .phase-controls { position: absolute; z-index: 4; top: 14px; left: 14px; display: flex; gap: 6px; }
+    .phase-controls button { color: #5c5a53; border-color: rgba(34,33,30,.2); background: rgba(245,243,238,.74); }
+    .phase-controls button.active { background: var(--ink); color: white; border-color: var(--ink); }
+    .theory-label { position: absolute; top: 56px; left: 26px; z-index: 3; }
+    .theory-label small { color: var(--green); font-size: 9px; text-transform: uppercase; letter-spacing: .1em; font-weight: 800; }
+    .theory-label strong { display: block; max-width: 420px; font: 500 28px/1.04 var(--serif); }
+    .theory-label em { display: block; margin-top: 6px; color: var(--muted); font-size: 10px; font-style: normal; }
+    .map { position: absolute; inset: 112px 22px 48px; }
+    .map svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+    .map path { fill: none; stroke: rgba(34,33,30,.23); stroke-width: 1.4; stroke-dasharray: 4 5; }
+    .node {
+      position: absolute; z-index: 2; width: 178px; min-height: 90px; padding: 13px 14px;
+      border: 1px solid rgba(34,33,30,.18); border-radius: 12px; background: rgba(247,245,240,.92);
+      box-shadow: 0 9px 25px rgba(41,38,31,.08); transition: opacity .35s, transform .45s, filter .35s;
+    }
+    .node small { display: block; color: var(--faint); text-transform: uppercase; font-size: 8px; letter-spacing: .1em; }
+    .node strong { display: block; margin-top: 5px; font-size: 13px; line-height: 1.22; }
+    .node span { display: block; margin-top: 9px; color: var(--muted); font-size: 9px; }
+    .node[data-kind="evidence"] { border-left: 3px solid var(--green); }
+    .node[data-kind="action"] { border-left: 3px solid var(--amber); }
+    .node[data-kind="decision"] { border-left: 3px solid var(--red); }
+    .n1 { left: 5%; top: 6%; } .n2 { left: 37%; top: 0; } .n3 { right: 3%; top: 11%; }
+    .n4 { left: 18%; top: 54%; } .n5 { left: 51%; top: 48%; } .n6 { right: 1%; top: 67%; }
+    .phase-0 .node, .phase-0 .map svg { opacity: 0; transform: translateY(12px) scale(.98); }
+    .phase-1 .n4, .phase-1 .n5, .phase-1 .n6 { opacity: .18; filter: grayscale(1); transform: translateY(8px); }
+    .phase-1 .map svg { opacity: .45; }
+    .phase-2 .node, .phase-2 .map svg, .phase-3 .node, .phase-3 .map svg { opacity: 1; transform: none; }
+    .phase-3 .n2 { border-color: rgba(30,87,72,.5); background: #edf3ef; }
+    .phase-3 .n3 { opacity: .46; }
+    .sim-caption { display: flex; justify-content: space-between; gap: 20px; padding: 15px 18px; border-top: 1px solid rgba(255,255,255,.11); color: #aaa99f; font-size: 11px; }
+    .sim-caption strong { color: white; }
+    .principles { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line-strong); }
+    .principle { min-height: 230px; padding: 26px 25px 26px 0; border-bottom: 1px solid var(--line); }
+    .principle:not(:nth-child(3n+1)) { border-left: 1px solid var(--line); padding-left: 25px; }
+    .principle b { display: block; color: var(--green); font: italic 18px var(--serif); }
+    .principle h3 { margin-top: 34px; }
+    .principle p { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+    .before-after { display: grid; grid-template-columns: 1fr 62px 1fr; align-items: stretch; }
+    .comparison { padding: 28px; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,.38); }
+    .comparison.current { opacity: .75; }
+    .comparison h3 { font: 500 27px var(--serif); }
+    .comparison ol { list-style: none; counter-reset: row; margin: 24px 0 0; padding: 0; }
+    .comparison li { counter-increment: row; position: relative; padding: 16px 0 16px 36px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+    .comparison li::before { content: "0" counter(row); position: absolute; left: 0; color: var(--faint); font: 10px var(--mono); }
+    .comparison.target { border-color: rgba(30,87,72,.45); background: var(--green-soft); }
+    .arrow { display: grid; place-items: center; font: 32px var(--serif); color: var(--green); }
+    .capability-map { display: grid; grid-template-columns: 220px 1fr; border-top: 1px solid var(--line-strong); }
+    .cap-filter { padding: 24px 22px 24px 0; border-right: 1px solid var(--line); }
+    .cap-filter button { display: block; width: 100%; border: 0; padding: 9px 10px; text-align: left; border-radius: 7px; background: transparent; cursor: pointer; color: var(--muted); font-size: 12px; }
+    .cap-filter button.active { color: white; background: var(--ink); }
+    .cap-list { padding-left: 32px; }
+    .cap-row { display: grid; grid-template-columns: 170px 110px 1fr; gap: 22px; padding: 20px 0; border-bottom: 1px solid var(--line); }
+    .cap-row code { font-size: 11px; overflow-wrap: anywhere; }
+    .cap-row p { margin: 0; color: var(--muted); font-size: 12px; }
+    .status { align-self: start; display: inline-flex; width: max-content; border-radius: 999px; padding: 4px 8px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; }
+    .status.keep { color: var(--green); background: var(--green-soft); }
+    .status.change { color: var(--amber); background: var(--amber-soft); }
+    .status.remove { color: var(--red); background: var(--red-soft); }
+    .status.prove { color: var(--blue); background: var(--blue-soft); }
+    .architecture { background: var(--paper-2); }
+    .arch-diagram { display: grid; grid-template-columns: 1fr 70px 1fr; gap: 0; align-items: center; }
+    .arch-stack { display: grid; gap: 10px; }
+    .arch-box { padding: 18px 20px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.46); }
+    .arch-box small { display: block; color: var(--faint); font-size: 9px; text-transform: uppercase; letter-spacing: .1em; }
+    .arch-box strong { display: block; margin-top: 5px; }
+    .arch-box p { margin: 5px 0 0; color: var(--muted); font-size: 11px; }
+    .arch-spine { height: 100%; display: grid; place-items: center; color: var(--green); font: 30px var(--serif); }
+    .data-contract { margin-top: 50px; display: grid; grid-template-columns: .8fr 1.2fr; gap: 48px; }
+    .data-contract > div > p { color: var(--muted); }
+    pre {
+      margin: 0; padding: 24px; overflow: auto; border-radius: 14px;
+      color: #d9d7ce; background: #252722; font: 11px/1.65 var(--mono); tab-size: 2;
+    }
+    .code-key { color: #9fc0b2; } .code-string { color: #d5b778; } .code-comment { color: #7e8177; }
+    .pressure-test { background: #22231f; color: #f1efe9; }
+    .pressure-test .chapter-head p, .pressure-test .chapter-index { color: #aaa99f; }
+    .verdict-line {
+      display: grid; grid-template-columns: 1.15fr 1fr 1fr;
+      border-top: 1px solid rgba(255,255,255,.28); border-bottom: 1px solid rgba(255,255,255,.16);
+    }
+    .verdict-line article { min-height: 170px; padding: 23px 25px 25px 0; }
+    .verdict-line article + article { padding-left: 25px; border-left: 1px solid rgba(255,255,255,.14); }
+    .verdict-line small { color: #92938b; font-size: 9px; text-transform: uppercase; letter-spacing: .1em; }
+    .verdict-line strong { display: block; margin-top: 28px; font: 500 25px/1.08 var(--serif); }
+    .verdict-line p { margin: 8px 0 0; color: #aaa99f; font-size: 11px; }
+    .verdict-line .survives strong { color: #a9cab9; }
+    .correction-list { margin-top: 58px; border-top: 1px solid rgba(255,255,255,.28); counter-reset: correction; }
+    .correction {
+      counter-increment: correction; display: grid; grid-template-columns: 70px minmax(260px,.8fr) minmax(380px,1.2fr);
+      gap: 24px; padding: 26px 0; border-bottom: 1px solid rgba(255,255,255,.14);
+    }
+    .correction::before { content: "0" counter(correction); color: #777971; font: 11px var(--mono); }
+    .correction strong { font: 500 21px/1.12 var(--serif); }
+    .correction p { margin: 0; color: #aaa99f; font-size: 12px; }
+    .correction p b { color: #f1efe9; }
+    .decision-room {
+      display: grid; grid-template-columns: 250px minmax(0,1fr); gap: 38px;
+      margin-top: 70px; padding-top: 28px; border-top: 1px solid rgba(255,255,255,.28);
+    }
+    .decision-tabs { align-self: start; position: sticky; top: 28px; display: grid; gap: 5px; }
+    .decision-tabs > span { margin-bottom: 9px; color: #92938b; font-size: 9px; text-transform: uppercase; letter-spacing: .11em; }
+    .decision-tabs button {
+      display: grid; grid-template-columns: 25px 1fr; gap: 6px; width: 100%; padding: 11px 12px;
+      border: 1px solid transparent; border-radius: 9px; color: #aaa99f; background: transparent;
+      text-align: left; cursor: pointer; font-size: 11px;
+    }
+    .decision-tabs button i { color: #74766e; font: normal 9px var(--mono); }
+    .decision-tabs button.active { color: #f4f2eb; border-color: rgba(255,255,255,.14); background: rgba(255,255,255,.06); }
+    .decision-panel { display: none; }
+    .decision-panel.active { display: block; }
+    .decision-panel > header { padding-bottom: 24px; border-bottom: 1px solid rgba(255,255,255,.2); }
+    .decision-panel .decision-status { color: #9fc0b2; font-size: 9px; text-transform: uppercase; letter-spacing: .11em; }
+    .decision-panel h3 { margin-top: 8px; max-width: 720px; font: 500 38px/1.04 var(--serif); }
+    .decision-panel > header p { max-width: 760px; color: #aaa99f; }
+    .decision-facts { display: grid; grid-template-columns: repeat(3,1fr); }
+    .decision-facts div { min-height: 150px; padding: 22px 22px 20px 0; }
+    .decision-facts div + div { padding-left: 22px; border-left: 1px solid rgba(255,255,255,.12); }
+    .decision-facts small { color: #777971; font-size: 8px; text-transform: uppercase; letter-spacing: .11em; }
+    .decision-facts strong { display: block; margin-top: 14px; font-size: 12px; }
+    .decision-facts p { margin: 7px 0 0; color: #999a92; font-size: 10px; }
+    .code-paths { padding: 16px 18px; border-radius: 10px; background: #191a17; color: #9fc0b2; font: 10px/1.7 var(--mono); }
+    .execution-sequence { margin-top: 72px; }
+    .execution-sequence > header { display: grid; grid-template-columns: 250px 1fr; gap: 38px; margin-bottom: 24px; }
+    .execution-sequence > header span { color: #9fc0b2; font-size: 9px; text-transform: uppercase; letter-spacing: .1em; }
+    .execution-sequence > header strong { font: 500 27px/1.1 var(--serif); }
+    .sequence-line { display: grid; grid-template-columns: repeat(5,1fr); border-top: 1px solid rgba(255,255,255,.28); }
+    .sequence-line article { min-height: 205px; padding: 21px 19px 20px 0; }
+    .sequence-line article + article { padding-left: 19px; border-left: 1px solid rgba(255,255,255,.13); }
+    .sequence-line small { color: #777971; font: 9px var(--mono); }
+    .sequence-line strong { display: block; margin-top: 29px; font-size: 12px; }
+    .sequence-line p { margin: 7px 0 0; color: #999a92; font-size: 10px; }
+    .sequence-line em { display: block; margin-top: 16px; color: #d0ae6c; font: normal 9px/1.35 var(--mono); }
+    .boundary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 58px; }
+    .boundary-grid article { padding: 25px; border: 1px solid rgba(255,255,255,.14); border-radius: 14px; }
+    .boundary-grid small { color: #92938b; font-size: 9px; text-transform: uppercase; letter-spacing: .1em; }
+    .boundary-grid h3 { margin-top: 9px; font: 500 25px var(--serif); }
+    .boundary-grid ul { list-style: none; margin: 18px 0 0; padding: 0; }
+    .boundary-grid li { position: relative; padding: 9px 0 9px 17px; border-top: 1px solid rgba(255,255,255,.11); color: #aaa99f; font-size: 11px; }
+    .boundary-grid li::before { content: ""; position: absolute; left: 0; top: 14px; width: 5px; height: 5px; border-radius: 50%; background: #8ab09e; }
+    .boundary-grid .not-yet li::before { background: #b78278; }
+    .kill-switches { margin-top: 60px; padding: 30px 32px; border-radius: 16px; background: #171815; }
+    .kill-switches > header { display: flex; align-items: baseline; justify-content: space-between; gap: 30px; }
+    .kill-switches h3 { font: 500 28px var(--serif); }
+    .kill-switches > header span { color: #b78278; font-size: 9px; text-transform: uppercase; letter-spacing: .1em; }
+    .kill-switches ol { margin: 24px 0 0; padding-left: 20px; columns: 2; column-gap: 52px; }
+    .kill-switches li { break-inside: avoid; padding: 8px 0 8px 7px; color: #aaa99f; font-size: 11px; }
+    .language-table { width: 100%; border-collapse: collapse; border-top: 1px solid var(--line-strong); }
+    .language-table th, .language-table td { padding: 16px 14px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+    .language-table th { color: var(--faint); font-size: 9px; text-transform: uppercase; letter-spacing: .09em; }
+    .language-table td { font-size: 13px; }
+    .language-table td:first-child { color: var(--red); font-family: var(--mono); font-size: 11px; }
+    .language-table td:nth-child(2) { color: var(--green); font-weight: 650; }
+    .language-table td:last-child { color: var(--muted); }
+    .build-layout { display: grid; grid-template-columns: 220px 1fr; gap: 36px; }
+    .phase-list { display: grid; gap: 7px; align-self: start; position: sticky; top: 28px; }
+    .phase-list button { border: 1px solid transparent; border-radius: 9px; padding: 12px; background: transparent; text-align: left; cursor: pointer; color: var(--muted); }
+    .phase-list button strong { display: block; color: inherit; font-size: 12px; }
+    .phase-list button small { font-size: 9px; }
+    .phase-list button.active { color: var(--ink); border-color: var(--line); background: rgba(255,255,255,.5); }
+    .phase-detail { min-height: 500px; }
+    .phase-panel { display: none; }
+    .phase-panel.active { display: block; }
+    .phase-panel > header { padding-bottom: 26px; border-bottom: 1px solid var(--line-strong); }
+    .phase-panel > header span { color: var(--green); font-size: 10px; text-transform: uppercase; letter-spacing: .1em; }
+    .phase-panel > header h3 { margin-top: 8px; font: 500 34px var(--serif); }
+    .phase-panel > header p { max-width: 700px; color: var(--muted); }
+    .phase-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin-top: 28px; }
+    .phase-grid h4 { margin: 0 0 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+    .phase-grid ul { list-style: none; margin: 0; padding: 0; }
+    .phase-grid li { padding: 10px 0 10px 18px; position: relative; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+    .phase-grid li::before { content: ""; position: absolute; left: 0; top: 16px; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+    .file-list code { display: block; margin: 6px 0; color: var(--blue); font-size: 10px; }
+    .proof-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 34px; }
+    .proof { padding: 18px; border-radius: 12px; background: rgba(255,255,255,.45); border: 1px solid var(--line); }
+    .proof strong { display: block; font-size: 12px; }
+    .proof p { margin: 6px 0 0; color: var(--muted); font-size: 11px; }
+    .risk-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .risk { padding: 22px; border: 1px solid var(--line); border-radius: 14px; }
+    .risk b { color: var(--red); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+    .risk strong { display: block; margin-top: 20px; }
+    .risk p { margin: 7px 0 0; color: var(--muted); font-size: 12px; }
+    .decision {
+      margin-top: 50px; padding: 34px; border-radius: 18px; color: white; background: var(--green);
+      display: grid; grid-template-columns: 1fr auto; gap: 30px; align-items: end;
+    }
+    .decision h3 { font: 500 34px var(--serif); }
+    .decision p { max-width: 720px; margin-bottom: 0; color: rgba(255,255,255,.74); }
+    .decision span { display: block; font: italic 22px var(--serif); white-space: nowrap; }
+    .footer { padding: 42px 6vw 55px; display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; }
+    [hidden] { display: none !important; }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="rail" aria-label="Specification sections">
+      <div class="brand"><span class="brand-mark">D</span><span><strong>Drover</strong><small>Build specification</small></span></div>
+      <nav class="nav">
+        <a class="active" href="#thesis">Overview</a>
+        <a href="#orientation">Start here</a>
+        <a href="#category">Product identity</a>
+        <a href="#signature">Signature moment</a>
+        <a href="#principles">Invariants</a>
+        <a href="#audit">Code audit</a>
+        <a href="#architecture">Technical shape</a>
+        <a href="#pressure-test">Pressure test</a>
+        <a href="#language">Language</a>
+        <a href="#build">Build sequence</a>
+        <a href="#proof">Proof</a>
+      </nav>
+      <div class="rail-note">
+        <strong>Selected direction</strong>
+        <small>Immediate working theory<br>Work makes structure durable<br>Founder holds the world boundary</small>
+      </div>
+    </aside>
+
+    <main>
+      <section class="hero" id="thesis">
+        <div class="eyebrow">A self-contained product + technical brief · 15 July 2026</div>
+        <div class="hero-copy">
+          <h1>The venture starts working while you can still see the whole thing.</h1>
+          <p>Drover is a local-first desktop workbench for a solo founder running one or more products. This document explains the next move: one ordinary sentence draws an editable view of how the business could work, starts useful work, and <em>changes its mind in public</em> as reality returns.</p>
+        </div>
+        <div class="audit-strip" aria-label="Code audit scope">
+          <div><strong>385</strong><small>canonical first-party files inventoried</small></div>
+          <div><strong>54,055</strong><small>lines across runtime, UI, tests, and fixtures</small></div>
+          <div><strong>713</strong><small>reported mechanical checks currently green</small></div>
+          <div><strong>1</strong><small>execution loop to keep—not another engine</small></div>
+        </div>
+      </section>
+
+      <section class="orientation" id="orientation">
+        <div class="orientation-top">
+          <div>
+            <span class="eyebrow">Start here · the 90-second version</span>
+            <h2>Drover already has the machinery. We are changing when the founder feels its value.</h2>
+            <p class="orientation-lede"><strong>This is a proposal for what to build next, not a description of everything already shipped.</strong> Today Drover can read a product repository, coordinate AI teammates, prepare research and code changes, hold risky actions for the founder, and learn from real replies. But it introduces that power through internal concepts and an architecture-approval step. The proposed experience starts with useful work and makes the system understandable as it forms.</p>
+          </div>
+          <div class="status-key" aria-label="Document status key">
+            <div class="today"><strong>Built today</strong><p>Exists in the current codebase and has mechanical coverage.</p></div>
+            <div class="next"><strong>Build next</strong><p>The product and technical direction specified in this document.</p></div>
+            <div class="unknown"><strong>Still unproven</strong><p>Requires real founder use or a real market result, not another test.</p></div>
+          </div>
+        </div>
+
+        <div class="context-spread">
+          <div class="context-lines">
+            <div class="context-line"><h3>Who it is for</h3><p>A solo founder operating several products who wants the leverage of an expert team <strong>without becoming a manager of AI agents</strong>.</p></div>
+            <div class="context-line"><h3>What Drover is today</h3><p>A desktop application bound to the founder’s real product repository. It gives restricted AI teammates a shared conversation, a deep canvas, isolated code workspaces, connected Gmail, durable evidence, and a founder-controlled release boundary.</p></div>
+            <div class="context-line"><h3>The current problem</h3><p>The machinery is capable, but the opening asks the founder to understand Drover’s internal nouns and approve an empty system shape before enough useful work is visible.</p></div>
+            <div class="context-line"><h3>The proposed change</h3><p>The founder says what should change in normal language. Drover immediately shows its best current interpretation of the whole venture and begins the safe work that can test or improve that interpretation.</p></div>
+            <div class="context-line"><h3>What does not change</h3><p>Every send, publish, product apply, deploy, or spend remains an exact founder decision. Existing work identity, evidence lineage, repository isolation, budgets, and security checks remain authoritative.</p></div>
+            <div class="context-line"><h3>What success feels like</h3><p>The founder does not watch an agent finish a task. They watch <strong>the venture become more legible and more capable</strong>, then intervene only where their judgment or authority is actually required.</p></div>
+          </div>
+          <aside class="plain-definitions">
+            <span>Plain definitions</span>
+            <h3>Four ideas used throughout</h3>
+            <dl>
+              <dt>Venture</dt><dd>One product or business inside the founder’s portfolio, bound to its real repository and history.</dd>
+              <dt>Working theory</dt><dd>Drover’s editable current explanation of who may care, how value happens, how to reach them, and what is worth trying. It is visibly provisional.</dd>
+              <dt>Inward work</dt><dd>Reading, analysis, research, drafting, coordination, and isolated code changes that do not touch customers or production.</dd>
+              <dt>World-touching consequence</dt><dd>A send, publish, deploy, product apply, or spend. Drover prepares it; the founder decides it.</dd>
+            </dl>
+          </aside>
+        </div>
+
+        <div class="founder-story">
+          <header><span>One concrete story</span><strong>A founder opens a new product and says: “Help this venture grow.”</strong></header>
+          <div class="story-line">
+            <article><small>01 · Read</small><strong>Drover grounds itself</strong><p>It reads the actual product, prior founder decisions, current work, connected reach, and returned evidence.</p></article>
+            <article><small>02 · Explain</small><strong>A whole view appears</strong><p>The canvas shows who may benefit, how value could happen, and several plausible ways to reach people—clearly labeled as Drover’s current read.</p></article>
+            <article><small>03 · Work</small><strong>Useful work begins</strong><p>Research, product analysis, drafts, or an isolated code change appear under concrete names, with owners and receipts.</p></article>
+            <article><small>04 · Hold</small><strong>The exact consequence stops</strong><p>When something is ready to send, apply, deploy, or spend, the founder sees precisely what will happen and why.</p></article>
+            <article><small>05 · Learn</small><strong>Reality pressures the view</strong><p>A reply, adoption result, rejection, or founder correction attaches to the relevant claim. The next active inward turn may strengthen, weaken, split, or replace it.</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="chapter" id="category">
+        <header class="chapter-head"><div class="chapter-index">01</div><div><h2>Define the category by the change it causes.</h2><p>“ADE” is useful internally, but it is not the product copy. The category definition should tell us what Drover must do, what it must refuse to become, and why the canvas exists.</p></div></header>
+        <div class="category">
+          <div class="category-name">
+            <span class="eyebrow">Internal category definition</span>
+            <strong>Venture development environment</strong>
+            <p>A place where a founder develops the venture itself—not only its code, campaigns, tasks, or agent configuration.</p>
+            <div class="callout"><h3>Founder-facing promise</h3><p>Say what should change. Drover makes the venture legible, starts the work it can safely do, and brings back the exact decisions only you can make.</p></div>
+          </div>
+          <div class="not-list">
+            <div><strong>Not a task manager</strong><p>The primary object is the founder’s changing understanding of the venture, backed by real work—not a queue of assigned containers.</p></div>
+            <div><strong>Not an agent org chart</strong><p>Teammates remain inspectable machinery. They do not become the opening metaphor or make the founder configure a company before getting value.</p></div>
+            <div><strong>Not a GTM diagram</strong><p>The canvas is executable evidence: every visible grouping opens into current work, an artifact, a repository fact, a founder statement, or returned reality.</p></div>
+            <div><strong>Not autonomous theater</strong><p>Drover may read, reason, prepare, and change isolated code. It cannot send, publish, deploy, or spend without the founder at the exact consequence.</p></div>
+            <div><strong>Not a new glossary</strong><p>The interface uses business meaning and the founder’s words. Internal precision stays in code, durable receipts, and developer diagnostics.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="signature" id="signature">
+        <header class="chapter-head"><div class="chapter-index">02</div><div><h2>One sentence becomes a living world.</h2><p>The first response is not a plan to approve. It is a provisional interpretation already tied to safe, useful work. Use the controls below to inspect the intended sequence.</p></div></header>
+        <div class="simulator" aria-label="Interactive signature flow">
+          <div class="sim-top"><div class="sim-brand"><i>D</i> Drover <span style="color:#8d8c84;font-weight:400">· Acme</span></div><div class="sim-status" id="sim-status">Ready for a direction</div></div>
+          <div class="sim-body">
+            <aside class="sim-chat">
+              <small>Venture conversation</small><h3 id="sim-heading">What should change?</h3>
+              <div class="sim-response" id="sim-response"><strong>Drover is ready.</strong>Use a broad sentence. The canvas will show what Drover infers, what it has grounded, and what it has actually begun.</div>
+              <div class="sim-receipt" id="sim-receipt">No work has started.</div>
+              <div class="prompt-box">
+                <div class="prompt-presets"><button type="button" data-prompt="Help this venture grow.">Broad ask</button><button type="button" data-prompt="Find a faster path from signup to first value.">Product ask</button><button type="button" data-prompt="Reach agencies that already feel this problem.">Market ask</button></div>
+                <div class="prompt-entry"><input id="sim-input" value="Help this venture grow." aria-label="Example founder direction"><button id="sim-send" type="button" aria-label="Run example">↑</button></div>
+              </div>
+            </aside>
+            <div class="sim-canvas phase-0" id="sim-canvas">
+              <div class="phase-controls" aria-label="Signature flow phases"><button type="button" data-phase="0" class="active">Direction</button><button type="button" data-phase="1">Theory</button><button type="button" data-phase="2">Work</button><button type="button" data-phase="3">Evidence</button></div>
+              <div class="theory-label"><small>Drover’s current read · provisional</small><strong id="theory-title">A clearer first success may unlock growth.</strong><em id="theory-meta">Nothing is presented as settled fact.</em></div>
+              <div class="map">
+                <svg viewBox="0 0 760 390" preserveAspectRatio="none" aria-hidden="true"><path d="M120 70 C240 30 260 45 360 65 S570 75 675 100"/><path d="M110 90 C150 185 215 250 300 290"/><path d="M365 90 C410 175 435 195 505 245"/><path d="M675 125 C690 205 695 265 700 315"/><path d="M300 295 C390 280 430 265 505 250"/></svg>
+                <article class="node n1" data-kind="evidence"><small>Grounded in the product</small><strong>Users can create a workspace, but first value is unclear.</strong><span>Repository read · signup/actions.ts</span></article>
+                <article class="node n2" data-kind="evidence"><small>Working theory</small><strong>Make the first useful result happen without setup expertise.</strong><span>Inference · editable in plain language</span></article>
+                <article class="node n3" data-kind="evidence"><small>Possible path</small><strong>Show one concrete result before asking for configuration.</strong><span>Backed by product analysis</span></article>
+                <article class="node n4" data-kind="action"><small>Being worked on</small><strong>Trace signup → first visible result</strong><span>Mira · reading the real flow</span></article>
+                <article class="node n5" data-kind="action"><small>Prepared safely</small><strong>Rewrite the first-run experience</strong><span>Isolated product change · not applied</span></article>
+                <article class="node n6" data-kind="decision"><small>Needs you at the consequence</small><strong>Apply the first-run change</strong><span>Exact diff, destination, and reason</span></article>
+              </div>
+            </div>
+          </div>
+          <div class="sim-caption"><span><strong>Magic:</strong> the whole venture appears before the founder learns Drover’s internals.</span><span><strong>Trust:</strong> tentative, grounded, active, and founder-held work never look the same.</span></div>
+        </div>
+      </section>
+
+      <section class="chapter" id="principles">
+        <header class="chapter-head"><div class="chapter-index">03</div><div><h2>These invariants keep the magic from turning into overhang.</h2><p>They are design and architecture tests. A feature that violates one is not “more powerful”; it is a second product hiding inside Drover.</p></div></header>
+        <div class="principles">
+          <article class="principle"><b>01</b><h3>Theory now, structure later.</h3><p>Drover can show a complete interpretation immediately. Only patterns that improve reuse, context, or attribution need to become durable structure.</p></article>
+          <article class="principle"><b>02</b><h3>No empty architecture.</h3><p>Every visible grouping must point to founder language, repository truth, concrete work, an artifact, returned evidence, or a real relationship.</p></article>
+          <article class="principle"><b>03</b><h3>Ordinary language is the control surface.</h3><p>The founder revises a claim or relationship by saying what is wrong. They do not translate their judgment into a Drover taxonomy.</p></article>
+          <article class="principle"><b>04</b><h3>One loop, many views.</h3><p>Conversation, canvas, focused work, return briefing, and decision review project the same durable execution truth. None gets its own business store.</p></article>
+          <article class="principle"><b>05</b><h3>Autonomy grows inward.</h3><p>Reading, analysis, drafting, coordination, and isolated code changes can compound. World-touching consequences remain exact founder acts.</p></article>
+          <article class="principle"><b>06</b><h3>Evidence pressures the picture.</h3><p>Reality attaches to the claim it bears on immediately. Semantic reinterpretation happens only during visible model work and preserves the reason for the change.</p></article>
+          <article class="principle"><b>07</b><h3>Depth belongs on the canvas.</h3><p>Chat stays the easy handle. The canvas keeps the system visible, traceable, editable, and satisfyingly complex at desktop scale.</p></article>
+          <article class="principle"><b>08</b><h3>Models judge; hosts enforce.</h3><p>The model decides which paths are promising and when structure may help. The host enforces identity, references, budgets, authority, and isolation.</p></article>
+          <article class="principle"><b>09</b><h3>No fixed completeness quota.</h3><p>No required number of paths, campaigns, teammates, or artifacts. The response is complete when the current venture is coherent and usefully active.</p></article>
+        </div>
+      </section>
+
+      <section class="chapter" id="transition">
+        <header class="chapter-head"><div class="chapter-index">04</div><div><h2>Change the sequence, not the ambition.</h2><p>The current code contains the right powers in the wrong opening order. The migration removes the approval ceremony before value and preserves every consequential rail beneath it.</p></div></header>
+        <div class="before-after">
+          <article class="comparison current"><span class="eyebrow" style="color:var(--red)">Current production</span><h3>Describe containers, then ask permission</h3><ol><li>Founder gives a broad direction.</li><li>One participant reads product truth.</li><li>Drover builds a rigid five-role architecture proposal.</li><li>A giant overlay asks to accept the whole proposal.</li><li>Acceptance creates empty governing work envelopes.</li><li>Useful work begins later and is labeled with internal nouns.</li></ol></article>
+          <div class="arrow" aria-hidden="true">→</div>
+          <article class="comparison target"><span class="eyebrow">Target production</span><h3>Show a theory and begin useful work</h3><ol><li>Founder gives one ordinary direction.</li><li>Drover reads product truth, prior evidence, configuration, and current work.</li><li>A provisional whole-venture view assembles in place.</li><li>Safe work begins under concrete, founder-readable names.</li><li>Each send, apply, deploy, or spend waits at its exact consequence.</li><li>Evidence pressures the view; a visible inward turn may revise it, and the founder may later make useful structure durable.</li></ol></article>
+        </div>
+      </section>
+
+      <section class="chapter" id="audit">
+        <header class="chapter-head"><div class="chapter-index">05</div><div><h2>Most of the full stack survives.</h2><p>The audit covered the canonical runtime, UI, tests, Electron host, design-system compatibility package, marketing site, browser journeys, and sample product. Dependency trees, build output, duplicated worktrees, screenshots, and historical prototypes were excluded.</p></div></header>
+        <div class="capability-map">
+          <div class="cap-filter" aria-label="Capability filters"><button class="active" type="button" data-filter="all">All findings</button><button type="button" data-filter="keep">Keep</button><button type="button" data-filter="change">Change</button><button type="button" data-filter="remove">Retire from opening</button><button type="button" data-filter="prove">Still prove</button></div>
+          <div class="cap-list">
+            <article class="cap-row" data-status="keep"><code>work-loop.mjs<br>work-loop-tools.mjs</code><span class="status keep">Keep</span><p>The core drive already reads truth and taste, involves participants, opens divergent work, prepares artifacts, asks the founder, speaks, and parks outward consequences.</p></article>
+            <article class="cap-row" data-status="change"><code>architecture-proposals.mjs<br>architecture-projection.mjs</code><span class="status change">Change</span><p>Reuse proposal versioning and ghost projection for a supersedable working theory. Stop treating proposal acceptance as the gateway to useful work.</p></article>
+            <article class="cap-row" data-status="remove"><code>ArchitectureProposalSurface.tsx<br>architecture-system-assembly.mjs</code><span class="status remove">Retire</span><p>Remove the giant approval overlay from the signature flow and stop minting untouched empty work envelopes when a whole-system proposal is accepted.</p></article>
+            <article class="cap-row" data-status="keep"><code>wall.mjs<br>effect-executors.mjs<br>founder-authority.mjs</code><span class="status keep">Keep</span><p>The Electron-signed, presence-aware, cross-venture-safe authority boundary is the product’s trust spine. Rename founder copy; do not weaken its construction.</p></article>
+            <article class="cap-row" data-status="keep"><code>product-change*.mjs<br>feature-builder.mjs</code><span class="status keep">Keep</span><p>Isolated worktrees, retained diffs, explicit review/apply, and recovery already make “useful inward code work” real without giving a model deployment power.</p></article>
+            <article class="cap-row" data-status="keep"><code>market-poll.mjs<br>market.mjs<br>soul-wiring.mjs</code><span class="status keep">Keep</span><p>Gmail replies already return with exact lineage, remain unattributed when ambiguous, and update participant memory only from real signals.</p></article>
+            <article class="cap-row" data-status="change"><code>GoalComposer.tsx<br>goalComposerTarget.ts<br>ConversationFeed.tsx</code><span class="status change">Change</span><p>Make broad direction the default, replace machinery verbs, show real progress while the drive runs, and present handoffs as concrete changes rather than internal counts.</p></article>
+            <article class="cap-row" data-status="change"><code>VentureAtlas.tsx<br>AtlasProjection.ts<br>architectureProposalProjection.ts</code><span class="status change">Change</span><p>Merge the current working theory directly into the canvas. Confidence, source, activity, and consequence become visual states; object roles disappear from primary copy.</p></article>
+            <article class="cap-row" data-status="keep"><code>directionTarget.ts<br>architecture-context.mjs<br>work-routes.mjs</code><span class="status keep">Keep</span><p>Selection already narrows conversation and runtime context to an exact architecture element, work identity, or participant. Extend it to provisional theory identity.</p></article>
+            <article class="cap-row" data-status="change"><code>work-loop-budget.mjs<br>active-drives.mjs</code><span class="status change">Harden</span><p>Add per-participant reservation or serialization before broad directions fan out concurrently. Current overlapping drives can overshoot spend and last-write-win resume state.</p></article>
+            <article class="cap-row" data-status="keep"><code>FirmApp.tsx<br>use-firm-connection.ts<br>return-brief.ts</code><span class="status keep">Keep</span><p>The split conversation/canvas shell, last-good freshness behavior, active work receipts, and evidence-led return account already support the desired rhythm.</p></article>
+            <article class="cap-row" data-status="remove"><code>site/src/app/page.tsx<br>machine-canvas.tsx</code><span class="status remove">Rewrite later</span><p>The public site still sells an “experiment machine” using the old nouns. Do not block the product slice on it, but do not call the language migration complete until it changes.</p></article>
+            <article class="cap-row" data-status="prove"><code>real venture use</code><span class="status prove">Prove</span><p>No outside founder or attributable market result has validated the direction. The artifact defines deterministic proof, but the alpha gate remains a real founder and real returned answer.</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="chapter architecture" id="architecture">
+        <header class="chapter-head"><div class="chapter-index">06</div><div><h2>Use one execution truth and two levels of belief.</h2><p>The immediate theory is a versioned, supersedable projection. Durable architecture remains the founder-applied compression that changes future context, reuse, or attribution. Neither creates a second execution store.</p></div></header>
+        <div class="arch-diagram">
+          <div class="arch-stack">
+            <div class="arch-box"><small>Founder surface</small><strong>Conversation + Living Venture Atlas</strong><p>Plain-language direction, editable theory, concrete work, evidence, exact decisions.</p></div>
+            <div class="arch-box"><small>Read model</small><strong>Current working theory</strong><p>Newest valid theory candidate + durable architecture + real work and evidence joins. Supersedable, not accepted.</p></div>
+            <div class="arch-box"><small>Durable semantic truth</small><strong>One architecture document</strong><p>Founder-applied structure only when it changes execution context, reuse, or attribution.</p></div>
+          </div>
+          <div class="arch-spine" aria-hidden="true">↕</div>
+          <div class="arch-stack">
+            <div class="arch-box"><small>Existing execution</small><strong>Direction → participant drive → tools</strong><p>Truth, taste, coordination, divergent work, artifacts, questions, and speech.</p></div>
+            <div class="arch-box"><small>Existing venture store</small><strong>Conversation, work envelopes, evidence, decisions, returns</strong><p>Historical identifiers remain implementation-only compatibility seams.</p></div>
+            <div class="arch-box"><small>Existing authority</small><strong>Founder-held consequences</strong><p>Message send, product apply, publish, deploy, and spend keep their exact host checks.</p></div>
+          </div>
+        </div>
+        <div class="data-contract">
+          <div><span class="eyebrow">Minimal proposal evolution</span><h3 style="margin-top:10px;font:500 30px var(--serif)">A theory is not another domain model.</h3><p>Add a mode and explicit anchors to the existing proposal record, but give the mode narrower semantics. A working theory may contain open concepts and plain-language relationships; it must not mint provisional campaigns or empty operational containers. Real work is joined into the view from the existing execution records. Only structural-change mode can be accepted into durable architecture.</p></div>
+          <pre aria-label="Proposed internal record"><span class="code-comment">// stored with existing architecture proposal state</span>
+{
+  <span class="code-key">mode</span>: <span class="code-string">"working-theory"</span>,
+  <span class="code-key">supersedes</span>: <span class="code-string">"proposal-…"</span> | null,
+  <span class="code-key">baseRevision</span>: 4,
+  <span class="code-key">intent</span>: <span class="code-string">"Make first value happen sooner"</span>,
+  <span class="code-key">operations</span>: [<span class="code-comment">/* concepts + plain relationships only */</span>],
+  <span class="code-key">anchors</span>: [
+    { <span class="code-key">subjectRef</span>: <span class="code-string">"architecture:first-value"</span>,
+      <span class="code-key">sourceRefs</span>: [<span class="code-string">"conversation:message-…"</span>,
+                   <span class="code-string">"repository:signup/actions.ts#L10"</span>,
+                   <span class="code-string">"work:staged-…"</span>] }
+  ],
+  <span class="code-key">status</span>: <span class="code-string">"current"</span> <span class="code-comment">// never “accepted”</span>
+}</pre>
+        </div>
+        <div class="callout" style="margin-top:34px"><h3>Host/model boundary</h3><p>The host validates venture scope, stable identity, source existence, allowed theory operations, authority, budget, and compare-and-set revision. It derives “active,” “prepared,” and “needs you” only from real records. It does not decide how many paths are enough, whether an audience is promising, or when two ideas mean the same thing. Those remain model judgments, made inspectable through sources.</p></div>
+      </section>
+
+      <section class="chapter pressure-test" id="pressure-test">
+        <header class="chapter-head"><div class="chapter-index">07</div><div><h2>The direction survives. The naive implementation does not.</h2><p>The stack can produce the signature moment without a new engine, but only if Drover treats provisional understanding, real execution, and returned evidence as different kinds of truth. This is the engineering pressure test: where the idea bends, what must be guaranteed by code, and what remains intentionally unpromised.</p></div></header>
+
+        <div class="verdict-line">
+          <article class="survives"><small>Verdict</small><strong>Technically viable</strong><p>The current drive, proposal, projection, artifact, product-change, market-lineage, polling, and founder-authority systems cover most of the path.</p></article>
+          <article><small>Best leverage</small><strong>Join the stack; do not duplicate it</strong><p>A flexible theory view over existing truth is more powerful than another hierarchy of stored containers.</p></article>
+          <article><small>Largest risk</small><strong>Artifact theater with convincing motion</strong><p>A generated map and assigned tasks can look intelligent while producing no source-grounded work or consequence.</p></article>
+        </div>
+
+        <div class="correction-list" aria-label="Corrections to the initial technical proposal">
+          <article class="correction"><strong>Reuse proposal machinery, not proposal ontology.</strong><p>The existing proposal record gives us versioning, compare-and-set writes, provenance, staleness, and ghost projection. <b>Its rigid system → motion → campaign roles are the wrong substrate for provisional thought.</b> Working-theory mode should allow open concepts and relationships only. Operational paths appear because real work joins the scene—not because the model predeclared empty campaign containers.</p></article>
+          <article class="correction"><strong>Guarantee completion in the host, not in prompt wording.</strong><p>A model can always stop early. The drive may call the right tools and still return a plan instead of useful work. <b>The host must validate the durable effects before reporting success:</b> product truth was inspected, a source-bearing theory exists, and at least one inspectable artifact, analysis, or isolated product change exists. Otherwise the result is honestly partial and resumable.</p></article>
+          <article class="correction"><strong>Evidence creates pressure before it creates interpretation.</strong><p>An attributable reply can immediately attach to the exact work that caused it and mark a connected claim as challenged or supported. <b>It cannot semantically rewrite the theory unless a model is actually running.</b> With autonomous inward work off, Drover should say “new evidence may change this view,” then revise on the next founder or budgeted inward turn.</p></article>
+        </div>
+
+        <div class="decision-room">
+          <div class="decision-tabs" role="tablist" aria-label="Technical decisions">
+            <span>Inspect a decision</span>
+            <button class="active" role="tab" aria-selected="true" data-technical="1"><i>01</i><span>Theory persistence</span></button>
+            <button role="tab" aria-selected="false" data-technical="2"><i>02</i><span>Product grounding</span></button>
+            <button role="tab" aria-selected="false" data-technical="3"><i>03</i><span>First-use guarantee</span></button>
+            <button role="tab" aria-selected="false" data-technical="4"><i>04</i><span>Identity + correction</span></button>
+            <button role="tab" aria-selected="false" data-technical="5"><i>05</i><span>Concurrency + spend</span></button>
+            <button role="tab" aria-selected="false" data-technical="6"><i>06</i><span>Evidence return</span></button>
+            <button role="tab" aria-selected="false" data-technical="7"><i>07</i><span>Crash + recovery</span></button>
+          </div>
+          <div class="decision-panels">
+            <article class="decision-panel active" data-technical-panel="1">
+              <header><span class="decision-status">Recommended · constrained reuse</span><h3>Store a supersedable candidate in proposal state; project it as a view.</h3><p>A separate theory store would create dual truth. A purely ephemeral theory would lose correction history and selection identity. The proposal machinery is the useful middle—but only after working-theory mode is barred from creating rigid operational roles.</p></header>
+              <div class="decision-facts"><div><small>Reject</small><strong>New theory store</strong><p>Creates synchronization, migration, and authority ambiguity.</p></div><div><small>Reject</small><strong>Purely generated view</strong><p>Cannot preserve edits, provenance, or identity across revisions.</p></div><div><small>Choose</small><strong>Restricted proposal mode</strong><p>Open concepts + relationships; real execution remains elsewhere.</p></div></div>
+              <div class="code-paths">architecture-proposals.mjs · architecture.mjs · architecture-projection.mjs<br>Required: mode lifecycle · per-subject anchors · conversation refs · byte-threshold compaction</div>
+            </article>
+            <article class="decision-panel" data-technical-panel="2">
+              <header><span class="decision-status">Required before the product claim</span><h3>Give every runtime the same bounded repository evidence tools.</h3><p>The current truth read is a fast index: filenames, package metadata, and a shallow documentation excerpt. Claude’s full harness can inspect more deeply than the Codex adapter, so relying on native harness tools would make the core experience provider-dependent. Drover needs its own cited, path-bounded search and read tools.</p></header>
+              <div class="decision-facts"><div><small>Keep</small><strong>Fast truth snapshot</strong><p>Useful for orientation and choosing where to inspect next.</p></div><div><small>Add</small><strong>Search repository</strong><p>Query + globs + bounded results under host path policy.</p></div><div><small>Add</small><strong>Read cited excerpt</strong><p>Exact path and line range captured as a durable source object.</p></div></div>
+              <div class="code-paths">truth.mjs · work-loop-tools.mjs · codex.mjs · claude-code.mjs<br>Security: repo content is untrusted data; citations grant no tools, authority, or path escape</div>
+            </article>
+            <article class="decision-panel" data-technical-panel="3">
+              <header><span class="decision-status">Recommended · same drive, checked outcome</span><h3>Keep <code>POST /drive</code>; add a completion contract around its durable effects.</h3><p>No compound “do everything” tool and no new job engine are needed for the first slice. One coordinating participant uses the existing iterative work loop. The system prompt asks for early grounding and theory materialization; the host decides whether the promised result actually exists.</p></header>
+              <div class="decision-facts"><div><small>Complete</small><strong>Three facts exist</strong><p>Grounding read + current theory + useful inspectable work.</p></div><div><small>Partial</small><strong>Keep durable progress</strong><p>Name the missing fact and offer continuation; do not roll back useful work.</p></div><div><small>Never count</small><strong>Plans and empty assignments</strong><p>A future intention is not useful work and cannot satisfy the gate.</p></div></div>
+              <div class="code-paths">work-loop.mjs · architecture-work-loop-tools.mjs · work-loop-receipts.mjs<br>Test at both runtime adapters; require equivalent contract fulfillment, not identical model output</div>
+            </article>
+            <article class="decision-panel" data-technical-panel="4">
+              <header><span class="decision-status">Required for the second slice</span><h3>Preserve semantic identity while allowing the picture to be wrong.</h3><p>Each superseding theory receives the prior projected theory and updates stable element IDs instead of redrawing unrelated objects. Selection carries the theory version and subject ID. Work gets a separate provisional-theory context builder so provisional belief never masquerades as accepted structural truth.</p></header>
+              <div class="decision-facts"><div><small>Stable</small><strong>Subject identity</strong><p>Connected work and selection survive wording and relationship changes.</p></div><div><small>Versioned</small><strong>Theory context</strong><p>A drive knows which theory informed it and can surface staleness.</p></div><div><small>Promotable</small><strong>Durable structure</strong><p>Founder-applied promotion preserves IDs when meaning truly stays the same.</p></div></div>
+              <div class="code-paths">architecture-context.mjs · work-routes.mjs · directionTarget.ts · goalComposerTarget.ts<br>Correction write uses existing architecture compare-and-set; stale candidates rebase, never silently apply</div>
+            </article>
+            <article class="decision-panel" data-technical-panel="5">
+              <header><span class="decision-status">Blocker for parallel fan-out; not for MVP</span><h3>Begin with one coordinator. Parallelize only after spend and resume state have one writer.</h3><p>Current active-drive state is process-local, budget accounting reads then writes, and overlapping calls can last-write-win a participant’s resume record. The magic does not require fan-out. Serialize each participant first; later reserve spend through a durable compare-and-set lease before provider calls.</p></header>
+              <div class="decision-facts"><div><small>Now</small><strong>One coordinating participant</strong><p>Avoids concurrency risk without shrinking the visible result.</p></div><div><small>Before fan-out</small><strong>Durable participant lease</strong><p>One resume writer across restart or multiple processes.</p></div><div><small>Before provider call</small><strong>Budget reservation</strong><p>Reserve conservatively, then settle or refund from actual usage.</p></div></div>
+              <div class="code-paths">work-loop-budget.mjs · active-drives.mjs · work-loop-coordination.mjs<br>Different participants may run together only after each participant’s lease and reservation are durable</div>
+            </article>
+            <article class="decision-panel" data-technical-panel="6">
+              <header><span class="decision-status">Deterministic join now; semantic revision on a later turn</span><h3>Let returned reality challenge the view without pretending a model was present.</h3><p>Gmail lineage already joins a reply to the exact originating work and parks it for founder review. The projection can immediately attach that evidence and surface pressure. It must never auto-reply, infer causation beyond the join, or claim the theory has been reinterpreted while autonomous inward work is off.</p></header>
+              <div class="decision-facts"><div><small>Immediate</small><strong>Evidence attachment</strong><p>Exact origin, channel, timestamp, and review state.</p></div><div><small>Deterministic</small><strong>Pressure state</strong><p>Supported, challenged, or unresolved based on explicit joins and founder records.</p></div><div><small>Model turn</small><strong>Semantic rewrite</strong><p>Founder direction or enabled, budgeted inward continuation.</p></div></div>
+              <div class="code-paths">market.mjs · market-poll.mjs · architecture-projection.mjs · heat.mjs<br>Copy with heat off: “New evidence may change this view” — never “Drover changed the theory”</div>
+            </article>
+            <article class="decision-panel" data-technical-panel="7">
+              <header><span class="decision-status">Recommended · durable partial progress</span><h3>Use compensating semantics, not a fake transaction across JSON stores.</h3><p>Theory writes, artifacts, and isolated product changes are durable; active-drive display is not. If the process stops after only part of the signature result exists, keep the honest progress and show that work stopped. Resume only on an explicit continuation at first—automatic restart would silently spend and cross the founder’s authority expectation.</p></header>
+              <div class="decision-facts"><div><small>Theory first</small><strong>Work can fail later</strong><p>Keep a provisional view marked “no useful work yet”; report partial.</p></div><div><small>Work first</small><strong>Theory can fail later</strong><p>Keep the artifact visible; retry grouping without duplicating work.</p></div><div><small>Process restart</small><strong>Transient status disappears</strong><p>Say “work stopped; last durable changes kept.”</p></div></div>
+              <div class="code-paths">active-drives.mjs · venture-store.mjs · product-change.mjs · work-loop.mjs<br>Current theory pointer and supersession remain atomic inside the existing architecture compare-and-set write</div>
+            </article>
+          </div>
+        </div>
+
+        <div class="execution-sequence">
+          <header><span>First vertical slice</span><strong>The smallest honest route from a broad sentence to visible capability</strong></header>
+          <div class="sequence-line">
+            <article><small>01 · Direction</small><strong>One broad sentence enters the existing drive.</strong><p>The coordinating participant and active-drive receipt begin.</p><em>Failure: keep the sentence; report no runtime.</em></article>
+            <article><small>02 · Ground</small><strong>The model searches and reads cited product truth.</strong><p>The quick snapshot orients; typed tools establish evidence.</p><em>Failure: do not generate an authoritative map.</em></article>
+            <article><small>03 · Materialize</small><strong>An open-concept working theory appears inline.</strong><p>Polling can reveal it while the same drive continues.</p><em>Failure: keep grounding; result remains partial.</em></article>
+            <article><small>04 · Work</small><strong>The participant produces one inspectable inward result.</strong><p>Artifact, verified analysis, or isolated product change—not an assignment.</p><em>Failure: preserve theory; name the missing work.</em></article>
+            <article><small>05 · Reconcile</small><strong>The host checks the completion contract.</strong><p>Complete, partial, or stopped are derived from durable facts.</p><em>Never convert an incomplete run into success copy.</em></article>
+          </div>
+        </div>
+
+        <div class="boundary-grid">
+          <article><small>The first slice can honestly do</small><h3>Technical possibility now</h3><ul><li>Show a source-bearing provisional whole before structural acceptance.</li><li>Begin one real line of inward work in the same coordinating drive.</li><li>Reveal progress through the existing 1.2–1.5 second polling loops; no streaming transport is load-bearing.</li><li>Keep sends, product apply, publish, deploy, and spend at the existing founder-held boundary.</li><li>Preserve partial durable progress across model failure or process interruption.</li></ul></article>
+          <article class="not-yet"><small>Do not promise in the first slice</small><h3>Explicitly later or unsupported</h3><ul><li>Reliable parallel teammate fan-out before leases, resume serialization, and spend reservation.</li><li>Deep live-web research through every runtime; the core adapters currently provide no universal network capability.</li><li>Automatic semantic theory revision while inward continuation is off.</li><li>Automatic drive recovery after app restart without a fresh founder decision to spend.</li><li>A hard latency promise before measuring both provider adapters on real repositories.</li></ul></article>
+        </div>
+
+        <div class="kill-switches">
+          <header><h3>Stop adding surface area if any of these stay true.</h3><span>Release-kill conditions</span></header>
+          <ol><li>A clean venture cannot produce a source-grounded theory and one credible artifact in one drive without manual prompt surgery.</li><li>The same broad direction produces generic plans across materially different repositories.</li><li>A founder cannot distinguish inferred, grounded, active, and waiting-for-me states at a glance.</li><li>The theory requires a second store or a parallel execution schema to function.</li><li>Five real corrections leave duplicated subjects, broken selection, or manual diagram grooming.</li><li>The produced work has no plausible route to a founder-held world consequence and returned evidence.</li></ol>
+        </div>
+      </section>
+
+      <section class="chapter" id="language">
+        <header class="chapter-head"><div class="chapter-index">08</div><div><h2>Remove jargon without replacing it with softer jargon.</h2><p>Founder copy names the actual action, artifact, evidence, or consequence. Internal identifiers remain stable until a deliberate migration because renaming storage does not improve the founder’s experience.</p></div></header>
+        <table class="language-table">
+          <thead><tr><th>Never product-owned</th><th>Show instead</th><th>Rule</th></tr></thead>
+          <tbody>
+            <tr><td>bet</td><td>The founder’s phrase: “Rewrite first run”</td><td>No universal replacement noun. Use the actual work or uncertainty.</td></tr>
+            <tr><td>motion</td><td>“Help new users succeed on their own”</td><td>Name the business path, not its internal semantic role.</td></tr>
+            <tr><td>fork</td><td>“Try another approach” / “Make an agency version”</td><td>Use a concrete branching verb only when a person needs the distinction.</td></tr>
+            <tr><td>outcome</td><td>“Three teams activated” / “No one replied”</td><td>Reality speaks in its own words. Do not wrap it in a category label.</td></tr>
+            <tr><td>the wall</td><td>“Ready to send” / “Ready to apply” / “Needs your answer”</td><td>Name the exact founder decision and consequence.</td></tr>
+            <tr><td>stage / staged</td><td>“Drafted” / “Changed in isolation” / “Waiting for…”</td><td>Describe the real state; never expose a workflow abstraction.</td></tr>
+            <tr><td>pipeline / work item</td><td>The actual artifact or current action</td><td>Do not create a new generic container noun.</td></tr>
+            <tr><td>architecture proposal</td><td>“Drover’s current read” / “Make this reusable”</td><td>Separate provisional understanding from an explicit durable-structure decision.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="chapter" id="build">
+        <header class="chapter-head"><div class="chapter-index">09</div><div><h2>Ship the signature slice before expanding autonomy.</h2><p>The sequence below keeps every step independently reviewable. It gets the magic on screen with one coordinating drive first, then hardens fan-out before adding more simultaneous work.</p></div></header>
+        <div class="build-layout">
+          <div class="phase-list" role="tablist" aria-label="Build phases">
+            <button class="active" role="tab" aria-selected="true" data-build="1"><strong>1 · Make the sentence real</strong><small>Signature vertical slice</small></button>
+            <button role="tab" aria-selected="false" data-build="2"><strong>2 · Make it editable</strong><small>Plain-language correction</small></button>
+            <button role="tab" aria-selected="false" data-build="3"><strong>3 · Let work compound</strong><small>Safe fan-out + return</small></button>
+            <button role="tab" aria-selected="false" data-build="4"><strong>4 · Remove the old product</strong><small>Language + legacy opening</small></button>
+          </div>
+          <div class="phase-detail">
+            <article class="phase-panel active" data-panel="1">
+              <header><span>First production milestone</span><h3>One broad direction draws the theory and produces useful work.</h3><p>Keep <code>POST /drive</code>. An unscoped direction lets one coordinating participant inspect cited product truth, record an open-concept working theory, and use existing work tools in the same drive. The host reports success only after the three durable effects exist. The theory becomes an inline canvas projection; it is never a modal acceptance gate.</p></header>
+              <div class="phase-grid"><div><h4>Change</h4><ul><li>Add provider-neutral repository search and cited-excerpt tools.</li><li>Add restricted <code>mode: working-theory</code>, supersession, subject anchors, and conversation references to proposal state.</li><li>Validate grounding + current theory + useful inspectable work before reporting the drive complete.</li><li>Merge the newest theory ghost scene and real work joins into <code>projectAtlas</code>.</li><li>Show only real tool activity and durable artifacts as progress; preserve honest partial results.</li></ul></div><div class="file-list"><h4>Primary files</h4><code>brain/src/firm/truth.mjs</code><code>brain/src/firm/work-loop-tools.mjs</code><code>brain/src/firm/architecture-proposals.mjs</code><code>brain/src/firm/architecture-work-loop-tools.mjs</code><code>brain/src/firm/work-loop.mjs</code><code>brain/src/firm/architecture-projection.mjs</code><code>ui/src/components/atlas/VentureAtlas.tsx</code><code>ui/src/components/firm/GoalComposer.tsx</code></div></div>
+            </article>
+            <article class="phase-panel" data-panel="2">
+              <header><span>Second production milestone</span><h3>The founder corrects the picture without opening configuration.</h3><p>Selection already supplies exact scope. Extend that identity to provisional elements and relationships so “agencies are not the buyer” supersedes the current theory, re-contextualizes connected work, and preserves what changed and why.</p></header>
+              <div class="phase-grid"><div><h4>Change</h4><ul><li>Target a working-theory subject with stable identity and source revision.</li><li>Give provisional theory its own runtime context builder instead of presenting it as durable architecture.</li><li>Interpret ordinary corrections into a superseding theory while preserving unchanged subject IDs.</li><li>Show changed relationships as evidence-backed deltas; deterministic pressure may precede semantic reinterpretation.</li><li>Offer durable structure only when it would change reuse, future context, or attribution.</li></ul></div><div class="file-list"><h4>Primary files</h4><code>brain/src/firm/architecture-context.mjs</code><code>brain/src/firm/work-routes.mjs</code><code>brain/src/firm/conversation.mjs</code><code>ui/src/components/firm/directionTarget.ts</code><code>ui/src/components/firm/goalComposerTarget.ts</code><code>ui/src/components/atlas/ArchitectureElement.tsx</code></div></div>
+            </article>
+            <article class="phase-panel" data-panel="3">
+              <header><span>Third production milestone</span><h3>Multiple safe lines of work can continue without breaking the rails.</h3><p>Before true parallel fan-out, make spend and resume state concurrency-safe. Then let the coordinating participant involve others or continue concrete branches under existing runtime, capability, authority, and daily-spend limits.</p></header>
+              <div class="phase-grid"><div><h4>Change</h4><ul><li>Add per-participant spend reservation or explicit drive serialization.</li><li>Protect resume records with compare-and-set or a single writer.</li><li>Let only bounded inward work continue automatically; world-touching consequences still stop.</li><li>Make the return account lead with changed understanding, concrete work, returned reality, and exact founder decisions.</li><li>Never fabricate activity while a provider is idle or disconnected.</li></ul></div><div class="file-list"><h4>Primary files</h4><code>brain/src/firm/work-loop-budget.mjs</code><code>brain/src/firm/active-drives.mjs</code><code>brain/src/firm/heat.mjs</code><code>brain/src/firm/work-loop-coordination.mjs</code><code>ui/src/lib/return-brief.ts</code><code>ui/src/components/firm/ReturnBrief.tsx</code></div></div>
+            </article>
+            <article class="phase-panel" data-panel="4">
+              <header><span>Completion milestone</span><h3>The old opening and machinery register disappear.</h3><p>Historical identifiers remain behind the interface, but founder-owned UI, browser journeys, fixtures, error messages, empty states, settings explanations, and the public site stop teaching the old category.</p></header>
+              <div class="phase-grid"><div><h4>Change</h4><ul><li>Turn the founder-language guard into an authoritative static test over product-owned strings.</li><li>Delete the signature dependency on <code>ArchitectureProposalSurface</code> and whole-system empty assembly.</li><li>Retarget browser journeys around sentence → theory → useful work → exact consequence.</li><li>Rewrite the marketing site only after the product slice is coherent and captured.</li><li>Preserve internal route/storage names unless a migration buys concrete engineering value.</li></ul></div><div class="file-list"><h4>Primary files</h4><code>brain/test/anti-cage-founder-register.test.mjs</code><code>test/browser/firm-journey.mjs</code><code>test/browser/atlas-journey.mjs</code><code>ui/src/**/*.{ts,tsx}</code><code>site/src/app/page.tsx</code><code>site/src/components/machine-canvas.tsx</code></div></div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="chapter" id="proof">
+        <header class="chapter-head"><div class="chapter-index">10</div><div><h2>Prove the moment, the depth, and the boundary.</h2><p>Mechanical proof protects the product claim; it does not substitute for a founder or a market result. The first deterministic fixture should be a clean venture with only a bound repository and the direction “Help this venture grow.”</p></div></header>
+        <div class="proof-grid">
+          <article class="proof"><strong>Whole view in the first response</strong><p>A coherent provisional theory is visible without accepting architecture or opening settings.</p></article>
+          <article class="proof"><strong>Useful inward work exists</strong><p>At least one inspectable artifact or verified isolated product change—not a placeholder or future assignment.</p></article>
+          <article class="proof"><strong>Every grouping is traceable</strong><p>Each visible cluster has an existing founder statement, repository fact, work identity, artifact, relationship, or returned signal.</p></article>
+          <article class="proof"><strong>No product-owned machinery words</strong><p>The founder-language guard covers rendered strings, aria labels, empty states, errors, fixtures, and browser journey assertions.</p></article>
+          <article class="proof"><strong>Every consequence remains held</strong><p>No send, publish, deploy, product apply, or spend executes through model, MCP, browser forgery, stale presence, or cross-venture access.</p></article>
+          <article class="proof"><strong>Plain-language correction works</strong><p>The founder revises a selected claim; the new theory supersedes the old one and affected work keeps stable identity.</p></article>
+          <article class="proof"><strong>Canvas depth survives scale</strong><p>Desktop journeys retain pan/zoom, focus-to-trace, outline parity, camera restoration, reduced motion, and legibility at the existing dense fixtures.</p></article>
+          <article class="proof"><strong>Reality pressures the theory honestly</strong><p>A joined reply or founder-recorded result attaches to the relevant relationship immediately. Semantic change occurs only on a founder or enabled inward turn, never as invisible model work.</p></article>
+        </div>
+        <div class="risk-list" style="margin-top:42px">
+          <article class="risk"><b>Failure mode</b><strong>Theory looks authoritative before it is grounded.</strong><p>Keep inference visually tentative, show the source basis at focus, and never convert confidence language into a score.</p></article>
+          <article class="risk"><b>Failure mode</b><strong>The broad ask creates a pile of shallow work.</strong><p>Require concrete sources and useful artifacts, not a fixed number of branches. Let the model stop when the picture is coherent.</p></article>
+          <article class="risk"><b>Failure mode</b><strong>The canvas becomes an unreadable generated diagram.</strong><p>Omit empty structure, use semantic zoom, keep exact outline parity, and make the current theory a designed projection rather than persisted coordinates.</p></article>
+          <article class="risk"><b>Failure mode</b><strong>Parallel work breaks spend or resume guarantees.</strong><p>Do the signature slice with one coordinating drive; harden reservation/serialization before concurrent fan-out.</p></article>
+        </div>
+        <div class="decision"><div><h3>The build call</h3><p>Do not create a new ADE engine. Build one narrow vertical slice: provider-neutral product grounding, a restricted open-concept theory candidate in existing proposal state, one coordinating drive, a host-checked useful-work contract, and an inline projection joined to real execution. Add stable correction next; add parallel continuation only after concurrency and spend are durable.</p></div><span>Sentence → truth → theory → work → reality</span></div>
+      </section>
+
+      <footer class="footer"><span>Drover immediate working theory · executable build specification</span><span>Source of truth: FIRM-SPEC.md + STATE.md + canonical code audit</span></footer>
+    </main>
+  </div>
+
+  <script>
+    const navLinks = [...document.querySelectorAll('.nav a')];
+    const sections = navLinks.map((link) => document.querySelector(link.getAttribute('href'))).filter(Boolean);
+    const sectionObserver = new IntersectionObserver((entries) => {
+      const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (!visible) return;
+      navLinks.forEach((link) => link.classList.toggle('active', link.getAttribute('href') === `#${visible.target.id}`));
+    }, { rootMargin: '-15% 0px -70%', threshold: [0, .2, .6] });
+    sections.forEach((section) => sectionObserver.observe(section));
+
+    const phaseCopy = [
+      { status: 'Ready for a direction', heading: 'What should change?', response: '<strong>Drover is ready.</strong>Use a broad sentence. The canvas will show what Drover infers, what it has grounded, and what it has actually begun.', receipt: 'No work has started.' },
+      { status: 'Reading the venture · shaping a provisional view', heading: 'A whole-venture read is assembling', response: '<strong>I’m grounding this in the product.</strong>I can already see a possible path through first value. The dashed relationships are my current read, not settled fact.', receipt: 'Founder direction + repository truth attached.' },
+      { status: '2 safe lines of work active', heading: 'The theory is producing real work', response: '<strong>I’ve started with first value.</strong>Mira is tracing the real signup flow. A product change is being prepared in isolation so you can judge the diff, not a promise.', receipt: '1 repository read · 1 active analysis · 1 isolated change.' },
+      { status: 'New evidence needs a read', heading: 'Reality has challenged the picture', response: '<strong>The first-value path now has support.</strong>The repository trace and isolated change are attached. The outreach path still lacks audience evidence. Drover will reinterpret this on the next active inward turn.', receipt: '2 sources attached · 1 relationship challenged · no invisible model work.' }
+    ];
+    const simCanvas = document.getElementById('sim-canvas');
+    const phaseButtons = [...document.querySelectorAll('[data-phase]')];
+    function setPhase(value) {
+      const phase = Math.max(0, Math.min(3, Number(value)));
+      simCanvas.className = `sim-canvas phase-${phase}`;
+      phaseButtons.forEach((button) => button.classList.toggle('active', Number(button.dataset.phase) === phase));
+      document.getElementById('sim-status').textContent = phaseCopy[phase].status;
+      document.getElementById('sim-heading').textContent = phaseCopy[phase].heading;
+      document.getElementById('sim-response').innerHTML = phaseCopy[phase].response;
+      document.getElementById('sim-receipt').textContent = phaseCopy[phase].receipt;
+    }
+    phaseButtons.forEach((button) => button.addEventListener('click', () => setPhase(button.dataset.phase)));
+    document.querySelectorAll('[data-prompt]').forEach((button) => button.addEventListener('click', () => { document.getElementById('sim-input').value = button.dataset.prompt; }));
+    document.getElementById('sim-send').addEventListener('click', () => {
+      const prompt = document.getElementById('sim-input').value.trim();
+      if (!prompt) return;
+      document.getElementById('theory-title').textContent = prompt.toLowerCase().includes('agencies') ? 'Agencies may be the fastest path to repeated buyer pain.' : prompt.toLowerCase().includes('signup') ? 'A faster first success may improve the path from signup to value.' : 'A clearer first success may unlock growth.';
+      setPhase(1);
+      window.setTimeout(() => setPhase(2), 850);
+    });
+
+    document.querySelectorAll('[data-filter]').forEach((button) => button.addEventListener('click', () => {
+      const filter = button.dataset.filter;
+      document.querySelectorAll('[data-filter]').forEach((candidate) => candidate.classList.toggle('active', candidate === button));
+      document.querySelectorAll('.cap-row').forEach((row) => { row.hidden = filter !== 'all' && row.dataset.status !== filter; });
+    }));
+
+    document.querySelectorAll('[data-technical]').forEach((button) => button.addEventListener('click', () => {
+      const decision = button.dataset.technical;
+      document.querySelectorAll('[data-technical]').forEach((candidate) => {
+        const active = candidate === button;
+        candidate.classList.toggle('active', active);
+        candidate.setAttribute('aria-selected', String(active));
+      });
+      document.querySelectorAll('[data-technical-panel]').forEach((panel) => panel.classList.toggle('active', panel.dataset.technicalPanel === decision));
+    }));
+
+    document.querySelectorAll('[data-build]').forEach((button) => button.addEventListener('click', () => {
+      const phase = button.dataset.build;
+      document.querySelectorAll('[data-build]').forEach((candidate) => { const active = candidate === button; candidate.classList.toggle('active', active); candidate.setAttribute('aria-selected', String(active)); });
+      document.querySelectorAll('[data-panel]').forEach((panel) => panel.classList.toggle('active', panel.dataset.panel === phase));
+    }));
+  </script>
+</body>
+</html>

@@ -1,5 +1,8 @@
 # Design direction — workflow-builder native
 
+> **ARCHIVED DESIGN DIRECTION.** Drover is no longer a workflow builder. This file is reference
+> history only; use [FIRM-SPEC.md](../FIRM-SPEC.md) and the root [DESIGN.md](../../DESIGN.md).
+
 Decided 2026-06-22. Arc: Refinement (cross-layer). Scope: design system + the core
 four surfaces (shell/toolbar, canvas/nodes, co-pilot dock, gate/detail panel). Lens:
 **user-native for a vibe coder, value-prop forward.**

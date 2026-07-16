@@ -10,10 +10,12 @@
 
 :root {
   font-family: var(--sans);
-  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, "Roboto Mono", monospace;
-  --serif: "Geist Variable", Geist, ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+  --serif: "Geist Variable", Geist, ui-sans-serif, system-ui, sans-serif;
   --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
-  --mono: var(--font-mono);
+  --mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-orbital-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --font-heading: var(--serif);
+  --font-mono: var(--mono);
   color: var(--ink);
   background: var(--room);
   font-synthesis: none;
@@ -22,8 +24,10 @@
 
   /* Cool umber ink ramp. */
   --ink: #23211d;
+  --ink-1: var(--ink);
   --ink-2: #4e4b44;
-  --muted: #847f75;
+  --ink-3: #615e56;
+  --muted: #615e56;
   --faint: #aba598;
   --ghost: #c6c1b6;
 
@@ -31,6 +35,7 @@
   --line: #d3cfc6;
   --line-2: #c6c1b6;
   --surface: #f4f2ee;
+  --surface-1: var(--surface);
   --surface-2: #dcd8d0;
   --canvas: #e9e6e0;
   --canvas-dot: #d3cfc6;
@@ -72,12 +77,14 @@
 
   /* Type scale — Geist, ~1.22 modular, IDE-dense base. Use these, not raw px. */
   --text-xs: 0.6875rem;   /* 11px — meta, badges */
+  --text-meta: 0.75rem;   /* 12px — readable operating metadata */
   --text-sm: 0.8125rem;   /* 13px — labels, secondary */
   --text-base: 0.875rem;  /* 14px — body, the default */
   --text-md: 1rem;        /* 16px — emphasized body */
   --text-lg: 1.0625rem;   /* 17px — card titles */
   --text-xl: 1.3125rem;   /* 21px — section headers */
   --text-2xl: 1.625rem;   /* 26px — page title */
+  --text-display: 2.75rem; /* 44px — rare entry and reveal moments */
   --leading-tight: 1.25;
   --leading-normal: 1.5;
   --tracking-tight: -0.011em; /* large text optical tightening */
@@ -105,14 +112,17 @@
   --shadow-card: 0 1px 0 rgba(38, 33, 26, 0.03), 0 4px 12px -7px rgba(38, 33, 26, 0.16);
   --shadow-pop: 0 4px 12px rgba(38, 33, 26, 0.07), 0 12px 32px -10px rgba(38, 33, 26, 0.18);
   --shadow-modal: 0 8px 24px -12px rgba(38, 33, 26, 0.22), 0 24px 64px -20px rgba(38, 33, 26, 0.28);
+  --shadow-rail: 4px 0 18px -14px rgba(38, 33, 26, 0.22);
+  --avatar-inset: inset 0 0 0 1px rgba(38, 33, 26, 0.08);
   --elev-popover-shadow: var(--shadow-pop);
   --elev-popover-radius: var(--r-xl);
   --elev-panel-shadow: var(--shadow-modal);
   --elev-panel-radius: var(--r-2xl);
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --dur-fast: 120ms;
-  --dur-base: 200ms;
+  --ease-out: var(--ease);
+  --dur-fast: 180ms;
+  --dur-base: 220ms;
+  --dur-focus: 260ms;
   /* Motion layer additions — mirrored from ui/src/index.css to keep the package
      and app token contracts identical. The app owns the full keyframe set; the
      package ships only the component-level transitions below. */
@@ -129,7 +139,7 @@
   --background: var(--room);
   --foreground: var(--ink);
   --card-foreground: var(--ink);
-  --popover: var(--panel);
+  --popover: var(--surface);
   --popover-foreground: var(--ink);
   --primary-foreground: var(--on-primary);
   --secondary: var(--surface-2);

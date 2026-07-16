@@ -1,5 +1,8 @@
 # Production Workstreams
 
+> **ARCHIVED WORKSTREAMS.** This sequence is not a current roadmap. Current direction and proof live
+> in [FIRM-SPEC.md](../FIRM-SPEC.md) and [STATE.md](../STATE.md).
+
 This is the implementation sequence for the full production direction. Each workstream must produce a
 production-quality increment with tests, error states, browser verification where relevant, and a truthful
 state update. These are dependency-ordered workstreams, not throwaway prototypes.

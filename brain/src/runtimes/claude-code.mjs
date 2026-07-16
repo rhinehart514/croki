@@ -85,13 +85,25 @@ export function modelMaxTurns(ctx, isResume) {
 // never more than what remains of the session's total budget (sessionBudget − spentSoFar, both in USD).
 // spentSoFar is the cumulative cost prior drives reported back through ctx.onCost; 0 on the first drive.
 // This makes ONE real dollar figure the throttle for a whole multi-drive run, instead of an unbounded
-// fresh $5 every drive. A tiny floor keeps a drive from being handed $0 and instantly tripping budget.
+// fresh $5 every drive. A configured participant rail may narrow it further; work-loop rejects a drive
+// before this adapter when nothing remains.
 export function driveBudgetUsd(ctx) {
   const perDrive = Number(process.env.GTM_IDE_CLAUDE_CODE_MAX_BUDGET_USD) || 5;
   const sessionCap = Number(process.env.GTM_IDE_CLAUDE_CODE_SESSION_BUDGET_USD) || 25;
   const spent = Number(ctx?.spentUsd) || 0;
   const remaining = Math.max(0, sessionCap - spent);
-  return Math.max(0.25, Math.min(perDrive, remaining));
+  const configuredRemaining = ctx?.maxBudgetUsd != null && Number.isFinite(Number(ctx.maxBudgetUsd))
+    ? Math.max(0, Number(ctx.maxBudgetUsd))
+    : Number.POSITIVE_INFINITY;
+  return Math.min(perDrive, remaining, configuredRemaining);
+}
+
+function conciseProcessError(raw) {
+  const clean = String(raw ?? "").trim();
+  if (!clean) return "";
+  const marker = clean.lastIndexOf("\nerror:");
+  const relevant = marker >= 0 ? clean.slice(marker + 1) : clean.slice(-1_200);
+  return relevant.split("\n").slice(0, 7).join("\n").slice(0, 1_200);
 }
 
 // Parse one newline-delimited stream-json line into a neutral event. Returns
@@ -248,6 +260,8 @@ export function createFirmSdkServer(ctx) {
 export const claudeCodeRuntime = {
   id: "claude-code",
   label: "Claude Code (Agent SDK)",
+  costReporting: "usd",
+  supportsAbort: true,
 
   // A deliberately smaller capability than `drive`: edit inert files inside one isolated
   // worktree and return prose. The host owns the worktree, receipt, git checks, and wall.
@@ -334,6 +348,9 @@ export const claudeCodeRuntime = {
     // conversation"; null means "start a fresh one from the goal".
     const attempt = async (resumeId) => {
       const abortController = new AbortController();
+      const abortFromHost = () => abortController.abort(ctx.signal?.reason);
+      if (ctx.signal?.aborted) abortFromHost();
+      else ctx.signal?.addEventListener?.("abort", abortFromHost, { once: true });
       const timeoutMs = Number(process.env.GTM_IDE_CLAUDE_CODE_TIMEOUT_MS) || 600_000;
       const timeout = setTimeout(() => abortController.abort(), timeoutMs);
       const stderr = [];
@@ -348,7 +365,7 @@ export const claudeCodeRuntime = {
           prompt,
           options: {
             abortController,
-            cwd: ctx.options?.cwd || process.cwd(),
+            cwd: ctx.cwd || process.cwd(),
             ...(ctx.model ? { model: ctx.model } : {}),
             // SEVERED from the teammate step budget (Wave 6). maxTurns is the MODEL's turns inside ONE
             // drive; it used to be `maxSteps - stepCount`, so late in a session the model got 1-2 turns
@@ -421,8 +438,15 @@ export const claudeCodeRuntime = {
             return { kind: "paused" };
           }
         }
+      } catch (error) {
+        if (ctx.isCancelled() || ctx.signal?.aborted) return { kind: "cancelled" };
+        const detail = conciseProcessError(stderr.join(""));
+        if (!detail) throw error;
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`${message}: ${detail}`, { cause: error });
       } finally {
         clearTimeout(timeout);
+        ctx.signal?.removeEventListener?.("abort", abortFromHost);
       }
 
       if (!terminalResult) {

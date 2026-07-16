@@ -1,22 +1,24 @@
 # Drover
 
-**Vibe code your go-to-market.** Drover is the operating system for one-person holding companies: a
-permanent AI crew runs product and go-to-market bets across isolated ventures, while every send,
+**Vibe code your go-to-market.** Drover is the operating system for one-person holding companies:
+permanent AI teammates run product and go-to-market bets across isolated ventures, while every send,
 publish, deploy, and spend waits at one founder wall.
 
 The active build contract is [The Firm](docs/FIRM-SPEC.md). The dated line between working software
-and unproven market claims is [STATE](docs/STATE.md).
+and unproven market claims is [STATE](docs/STATE.md). The [documentation map](docs/README.md)
+separates current translations from historical implementation packages.
 
 ## The product
 
-A venture binds to a real product repository. Drover reads cited product truth from that repository,
-summons persistent teammates, and lets them fork open-ended bets. They research, draft, and build in
-the background. Product changes use isolated git worktrees. Nothing reaches the world until the
-founder releases the exact effect.
+A venture binds to a real product repository. Drover reads cited product truth from that repository
+and opens on a Living Venture Atlas: one spatial model of how the venture creates value, reaches the
+market, acts, and learns. Founder-defined concepts can stay open; product loops, systems, motions,
+and campaigns gain operational meaning only when that meaning changes execution or evidence.
 
-The desktop canvas is a lens over the firm, not a workflow database. It shows crew, bets, returned
-outcomes, and the wall. A bet is always derived as live, at the wall, or ended by the founder. The
-founder's approvals, rejections, answers, and kills become durable taste for later work.
+Persistent teammates work through that architecture, fork open-ended bets, and stage exact work.
+Product changes use isolated git worktrees. The canvas joins architecture to bets, returned outcomes,
+and the wall without becoming a workflow database or second source of truth. Nothing reaches the
+world until the founder releases the exact effect.
 
 The founder controls one heat dial—off, steady, or full—and one daily spend rail. Turning heat up
 accelerates inward work; it never weakens the wall.
@@ -37,12 +39,15 @@ Requires a current Node.js release and npm.
 
 ```bash
 npm install
-npm start
+npm run app
 ```
 
-Open the local URL printed by the server, unlock founder actions, and create a venture with its
-product repository path. Set `GTM_IDE_FOUNDER_CODE` before starting to choose the local founder code;
-otherwise the server prints a generated one.
+The desktop host opens the local workbench and injects a fresh founder capability below the renderer;
+founder actions need no separate unlock ceremony. `npm start` still serves the browser shell for
+read-only diagnostics, but intentionally cannot make founder changes because a standalone browser is
+not an authority boundary. Local UI development may opt into `DROVER_DEV_FOUNDER=1 npm start`; this
+default-off hatch accepts only non-agent requests whose origin and socket are both loopback. It does
+not alter the shipped Electron authority path.
 
 The historical `gtm-ide`, `channel`, and `~/.gtm-ide` implementation identifiers remain intentional.
 
@@ -68,11 +73,20 @@ Build an unsigned local disk image with `npm run app:dist`.
 
 ```bash
 npm test
-npm run test:firm:browser
+npm run test:acceptance
 ```
+
+The acceptance gate adds token parity, four preserved operating journeys, and three Living Venture
+Atlas journeys to the mechanical suite.
 
 ## Safety boundary
 
-Founder authority is browser-session-only and non-forgeable by models, MCP, or stored content.
-Presence is a volatile lease: away holds every outward release while inward work continues. Deploys
-require a second explicit founder authorization. Ventures fail closed across every read and write.
+The desktop host owns a volatile secret and signs each founder request with a short-lived,
+single-use method-and-path claim. The secret is never exposed to browser code or logged. Unstamped
+loopback, replayed, expired, cross-origin, actor-stamped model, and MCP writes are refused. The
+deterministic browser journey uses an isolated per-run secret and request interception to exercise the
+same contract without a production bypass. The optional `DROVER_DEV_FOUNDER` source-development hatch
+still refuses agent-stamped, cross-origin, and non-loopback traffic and is off unless explicitly set.
+Presence is a volatile lease: away holds every outward
+release while inward work continues. Deploys require a second explicit founder authorization.
+Ventures fail closed across every read and write.

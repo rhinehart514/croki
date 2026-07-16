@@ -1,5 +1,8 @@
 # Current State and Disposition
 
+> **ARCHIVED SNAPSHOT.** This file describes the production-direction tree at capture time. It is
+> not current state; use [STATE.md](../STATE.md).
+
 ## Current stage
 
 Drover is alpha. The truth scan, founder gate, taste memory, graph execution, named teammates, outcome
@@ -61,7 +64,7 @@ founder decisions, and returned outcomes still read as adjacent systems instead 
 1. `AGENTS.md` for invariants and engineering doctrine.
 2. Current code and tests for actual behavior.
 3. `docs/STATE.md` for dated reality.
-4. `docs/EXPERIMENT-MACHINE-SPEC.md` and `docs/OPEN-CANVAS-SPEC.md` for the current target direction.
+4. Historical experiment-machine and open-canvas specs for decision archaeology only.
 5. This numbered production-direction package and retired direction files in git history for implementation context only.
 6. `docs/history/DDD.md` and other superseded docs for historical context only.
 

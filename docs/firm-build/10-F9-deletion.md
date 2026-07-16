@@ -1,5 +1,8 @@
 # F9 — The deletion pass
 
+> **HISTORICAL EXECUTION TASK.** This deletion plan is not authorization to remove current files.
+> Use [FIRM-SPEC.md](../FIRM-SPEC.md), [STATE.md](../STATE.md), and the live dependency graph.
+
 **Goal:** the tree is clean: everything in FIRM-SPEC.md §Dies is gone, the guards protect the new
 physics, and `npm test` is green end to end. This is the last task; run it only when F1–F8 are in.
 

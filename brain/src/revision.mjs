@@ -59,6 +59,7 @@ export function inspectApplyReadiness(workspace, revision) {
   }
   return {
     ready: revision.status === "approved" && sameBase && !sourceStatus && retainedSnapshotMatches,
+    status: revision.status,
     sourceHead,
     sourceStatus,
     sameBase,

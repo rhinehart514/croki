@@ -35,7 +35,8 @@ const REGISTRY = {
 // Preference order when nothing is forced: the bundled Claude Code Agent SDK is
 // subscription runtimes first, then the direct Anthropic API as a keyed
 // fallback. A session bound through the model picker overrides this order.
-const DRIVE_PREFERENCE = [claudeCodeRuntime, anthropicRuntime];
+const DRIVE_PREFERENCE = [claudeCodeRuntime, codexRuntime, anthropicRuntime];
+const FOUNDER_RUNTIME_CHOICES = [claudeCodeRuntime, codexRuntime];
 const PRODUCT_CHANGE_PREFERENCE = [claudeCodeRuntime, codexRuntime];
 
 export function getRuntime(id) {
@@ -50,14 +51,16 @@ export function runtimeForModel(model) {
 }
 
 export function runtimeStatuses({ env = process.env } = {}) {
-  return DRIVE_PREFERENCE.map((adapter) => {
+  return FOUNDER_RUNTIME_CHOICES.map((adapter) => {
     const availability = adapter.isAvailable({ env });
     return {
       id: adapter.id,
       label: adapter.label,
       connected: availability.ok,
       auth: availability.ok ? availability.auth ?? null : null,
+      authLabel: availability.ok ? authModeLabel(availability.auth) : null,
       reason: availability.ok ? null : availability.reason ?? "Not available.",
+      abortSupported: adapter.supportsAbort === true,
     };
   });
 }

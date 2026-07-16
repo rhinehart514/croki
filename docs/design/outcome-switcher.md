@@ -1,5 +1,8 @@
 # OutcomeSwitcher redesign — flat list, branch only when it must
 
+> **ARCHIVED DESIGN RECEIPT.** Here, “outcome” names a superseded program object—not Drover's current
+> returned-reality meaning. Do not reuse this ontology; use [FIRM-SPEC.md](../FIRM-SPEC.md).
+
 Decided 2026-06-27. Refinement arc (the surface existed and wanted cross-layer/IA direction).
 
 ## Surface

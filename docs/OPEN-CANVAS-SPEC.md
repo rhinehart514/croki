@@ -1,8 +1,8 @@
 # Drover open canvas product specification
 
-> **Superseded — 2026-07-14.** The build direction is now [FIRM-SPEC.md](FIRM-SPEC.md). This document
-> stays binding for the harness it defined (truth, the founder wall, taste) and as implementation
-> history; where it and FIRM-SPEC.md conflict, FIRM-SPEC.md wins.
+> **Superseded — 2026-07-14.** [FIRM-SPEC.md](FIRM-SPEC.md) is the only product and build contract.
+> This document is implementation history and has no independent authority. The Firm spec carries
+> forward the truth, wall, taste, and spatial findings it explicitly retains.
 
 **Status:** superseded implementation history
 **Stage:** alpha
@@ -934,7 +934,7 @@ The target is broad, but the alpha build must prove one complete slice before ex
 
 ### T0. Reconcile the contract
 
-- Make this specification and the revised vision the current product direction.
+- Historical task: make this specification and the revised vision the product direction at that time.
 - Mark pipeline-first and separate-lens documents as implementation history where they conflict.
 - Update operator language and anti-cage tests to protect the open-canvas contract.
 

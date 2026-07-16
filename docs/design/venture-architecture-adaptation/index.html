@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Drover venture architecture adaptation</title>
+  <link rel="stylesheet" href="prototype.css">
+</head>
+<body>
+  <div class="app" data-altitude="venture" data-machinery="closed" data-outcome="returned">
+    <header class="topbar">
+      <div class="identity">
+        <span class="drover-mark" aria-hidden="true">D</span>
+        <div><strong>Drover</strong><button id="venture-switch" class="venture-switch" type="button" aria-haspopup="listbox" aria-expanded="false"><span id="venture-name">Buffalo Projects</span><span aria-hidden="true">⌄</span></button></div>
+      </div>
+      <div class="venture-menu" id="venture-menu" role="listbox" aria-label="Choose venture" hidden>
+        <button type="button" role="option" data-venture="buffalo" aria-selected="true"><strong>Buffalo Projects</strong><span>Builder network</span></button>
+        <button type="button" role="option" data-venture="denialshield" aria-selected="false"><strong>DenialShield</strong><span>Dental revenue SaaS</span></button>
+      </div>
+      <div class="freshness" role="status"><span aria-hidden="true"></span> Verified 2 min ago</div>
+      <nav class="altitude-nav" aria-label="Canvas altitude">
+        <button type="button" data-go="venture" aria-pressed="true">Venture</button>
+        <button type="button" data-go="architecture" aria-pressed="false">Architecture</button>
+        <button type="button" data-go="motion" aria-pressed="false">Motion</button>
+        <button type="button" data-go="campaign" aria-pressed="false">Campaign</button>
+        <button type="button" data-go="bet" aria-pressed="false">Bet</button>
+      </nav>
+      <div class="top-actions">
+        <button id="add-concept-button" class="quiet-button" type="button">Add thought <kbd>N</kbd></button>
+        <button id="outline-button" class="quiet-button" type="button" aria-expanded="false" aria-controls="outline">Outline <kbd>O</kbd></button>
+        <button id="machinery-button" class="quiet-button" type="button" aria-expanded="false" aria-controls="machinery">How it runs</button>
+      </div>
+    </header>
+
+    <main class="world" aria-label="Venture product and go-to-market architecture">
+      <div class="grid" aria-hidden="true"></div>
+      <section class="return-strip" aria-labelledby="return-heading">
+        <div><span>Since yesterday</span><h1 id="return-heading">Buffalo Projects is testing whether useful work begins before identity.</h1></div>
+        <button class="return-beat" type="button" data-focus="campaign:project-drops"><span>Needs you</span><strong id="needs-you">Release the project-drop experience</strong></button>
+        <button class="return-beat" type="button" data-focus="outcome:drop-return"><span>Reality returned</span><strong id="recent-return">4 of 6 builders described work before making a profile</strong></button>
+        <button class="return-beat" type="button" data-focus="motion:graduate"><span>Under pressure</span><strong id="pressure-summary">The intake system has proof; referral still has none</strong></button>
+        <button id="wider-button" class="text-button" type="button">Show the whole venture</button>
+      </section>
+
+      <section class="venture-intent inspectable" data-entity="venture:intent" tabindex="0" aria-label="Venture intent">
+        <span>Trying to make true</span>
+        <h2 id="venture-intent">Talented builders find the right people through credible work—not polished profiles.</h2>
+        <p id="venture-proof">Repository-bound product truth · 3 intended changes · 1 contradiction</p>
+      </section>
+
+      <section class="open-territory" aria-labelledby="territory-heading">
+        <div class="territory-boundary" aria-hidden="true"></div>
+        <header><span>Founder-shaped area</span><h2 id="territory-heading">Campus distribution door</h2><p>Important context; not an operational taxonomy.</p></header>
+        <div class="tentative-link" aria-hidden="true"><span>may open the door to</span></div>
+        <button class="open-concept" type="button" data-entity="concept:champions" style="--concept-x:47%;--concept-y:20%">
+          <small>Open concept</small><strong>Department champions</strong>
+        </button>
+        <button class="open-concept" type="button" data-entity="concept:referral" style="--concept-x:72%;--concept-y:56%">
+          <small>Open concept</small><strong>Referral engine</strong>
+        </button>
+        <button class="open-concept" type="button" data-entity="concept:created" style="--concept-x:19%;--concept-y:57%" hidden>
+          <small>Open concept</small><strong>New thought</strong>
+        </button>
+      </section>
+
+      <section class="product-land" aria-labelledby="product-heading">
+        <header><span>Product architecture</span><h2 id="product-heading">Value becomes visible through work</h2></header>
+        <ol class="value-loop" aria-label="Primary product loop">
+          <li class="inspectable" tabindex="0" data-entity="product:entry"><i>1</i><span><strong id="loop-entry">Recent graduate</strong><small>arrives with something to build</small></span></li>
+          <li class="inspectable" tabindex="0" data-entity="product:expression"><i>2</i><span><strong id="loop-action">Describes the work</strong><small>before identity or credentials</small></span></li>
+          <li class="inspectable" tabindex="0" data-entity="product:composition"><i>3</i><span><strong id="loop-core">Enters a matched cohort</strong><small>composition is the product center</small></span></li>
+          <li class="inspectable" tabindex="0" data-entity="product:proof"><i>4</i><span><strong id="loop-value">Leaves credible proof</strong><small>work entries compound the record</small></span></li>
+          <li class="inspectable" tabindex="0" data-entity="product:return"><i>5</i><span><strong id="loop-return">Finds people and opportunity</strong><small>proof attracts the next participant</small></span></li>
+        </ol>
+        <div class="product-pressure"><span aria-hidden="true">!</span><strong id="product-pressure-title">Missing capability</strong><small id="product-pressure-copy">Private usefulness before cohort invitation is not yet supported by the product.</small></div>
+      </section>
+
+      <section class="systems-land" aria-labelledby="systems-heading">
+        <header><span>Reusable systems</span><h2 id="systems-heading">What the venture can do repeatedly</h2></header>
+        <div class="system-field" id="system-field">
+          <button class="system inspectable" type="button" data-entity="system:intake" style="--x:5%;--y:7%"><span class="system-glyph" aria-hidden="true"></span><strong>Builder intake</strong><small>captures a real project before a profile</small></button>
+          <button class="system inspectable shared" type="button" data-entity="system:work-proof" style="--x:49%;--y:12%"><span class="system-glyph" aria-hidden="true"></span><strong>Work record + proof</strong><small>shared by 2 motions</small></button>
+          <button class="system inspectable" type="button" data-entity="system:cohort" style="--x:28%;--y:51%"><span class="system-glyph" aria-hidden="true"></span><strong>Cohort operation</strong><small>composes and runs working rooms</small></button>
+          <button class="system inspectable" type="button" data-entity="system:intelligence" style="--x:70%;--y:55%"><span class="system-glyph" aria-hidden="true"></span><strong>Intelligence production</strong><small>turns work into legible market evidence</small></button>
+        </div>
+      </section>
+
+      <section class="motions-land" aria-labelledby="motions-heading">
+        <header><span>Repeatable motions</span><h2 id="motions-heading">How actors reach value</h2></header>
+        <div class="motion-stack" id="motion-stack">
+          <button class="motion active inspectable" type="button" data-entity="motion:graduate" data-focus="motion:graduate">
+            <span class="motion-path" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+            <span><small>Active · product-led</small><strong>Graduate → project drop → cohort → proof → referral</strong><em>Builder intake · Cohort operation · Work record + proof</em></span>
+            <b aria-label="One active campaign">1</b>
+          </button>
+          <button class="motion inspectable" type="button" data-entity="motion:intelligence" data-focus="motion:intelligence">
+            <span class="motion-path" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span><small>Active · relationship-led</small><strong>Intelligence → recognition → sponsored cohort → outcomes</strong><em>Intelligence production · Work record + proof</em></span>
+            <b aria-label="One active campaign">1</b>
+          </button>
+          <button class="motion inactive inspectable" type="button" data-entity="motion:event" data-focus="motion:event">
+            <span class="motion-path" aria-hidden="true"><i></i><i></i></span>
+            <span><small>Inactive · unsupported</small><strong>Event participant → working room → cohort</strong><em>Event activation has no current release or evidence</em></span>
+            <b aria-label="No active campaigns">0</b>
+          </button>
+        </div>
+      </section>
+
+      <section class="campaign-zone inspectable" tabindex="0" data-entity="campaign:project-drops" data-focus="campaign:project-drops" aria-labelledby="campaign-heading">
+        <div class="campaign-bracket" aria-hidden="true"></div>
+        <header><span>Campaign activating the graduate motion</span><h2 id="campaign-heading">First twenty project drops</h2><p>Audience: recent graduates · Objective: qualified work before profile creation</p></header>
+        <div class="campaign-chain">
+          <button type="button" class="chain-node bet-node" data-focus="bet:project-first"><small>Governing bet</small><strong>Project drop converts better than profile creation</strong></button>
+          <button type="button" class="chain-node release-node" data-focus="release:project-drop"><small>Exact release · held</small><strong>Project-drop experience</strong><span>4 files · preview ready</span></button>
+          <button type="button" class="chain-node outcome-node" data-focus="outcome:drop-return"><small>Evidence-supported return</small><strong>4 of 6 described work first</strong><span>Joined to exact release; causality not claimed</span></button>
+        </div>
+        <footer><span><b>Measurement contract</b> Observe whether a qualified project is described before identity setup.</span><span><b>If challenged</b> Revise the intake system and product loop—not a campaign stage.</span></footer>
+      </section>
+
+      <section class="focus-scene" id="focus-scene" aria-live="polite" aria-label="Focused architecture trace" hidden>
+        <header><button id="focus-back" type="button" aria-label="Return one altitude">←</button><span id="focus-kicker">Motion</span><h2 id="focus-title">Graduate → project drop → cohort → proof → referral</h2><button id="focus-close" type="button" aria-label="Return to venture">×</button></header>
+        <div class="trace" id="trace"></div>
+        <div class="focus-detail" id="focus-detail"></div>
+      </section>
+
+      <aside class="wall" aria-label="The wall: founder-held world boundary">
+        <div class="wall-rule" aria-hidden="true"></div>
+        <span>The world</span>
+        <button id="wall-item" type="button" data-focus="release:project-drop"><i aria-hidden="true"></i><strong>1 release needs you</strong><small>Nothing crossed</small></button>
+        <div class="world-return" id="world-return"><i aria-hidden="true">↩</i><strong>Reality returned</strong><small>Joined by captured identity</small></div>
+      </aside>
+
+      <aside class="outline" id="outline" aria-label="Venture outline" hidden>
+        <header><div><strong>Venture outline</strong><span>Deterministic access at every zoom</span></div><button id="outline-close" type="button" aria-label="Close outline">×</button></header>
+        <ol id="outline-list"></ol>
+        <p>Arrow keys move · Enter focuses · Escape broadens</p>
+      </aside>
+
+      <aside class="machinery" id="machinery" aria-label="Execution machinery" hidden>
+        <header><div><span>How this is being executed</span><h2>Receipts behind the architecture</h2></div><button id="machinery-close" type="button" aria-label="Close machinery">×</button></header>
+        <div class="machinery-grid">
+          <section><span>Teammate contribution</span><strong>Sable shaped the intake bet</strong><p>Coordinator · Codex · configuration v12</p></section>
+          <section><span>Exact product work</span><strong>worktree/bet-project-drop</strong><p>4 files changed · no commit · preview running</p></section>
+          <section><span>Runtime drive</span><strong>Completed in 3m 42s</strong><p>18 steps · $0.19 recorded · taste consulted</p></section>
+          <section><span>Authority</span><strong>OUTWARD_RELEASE unavailable</strong><p>Host issues it only after Jacob releases this wall item.</p></section>
+        </div>
+      </aside>
+
+      <aside class="concept-popover" id="concept-popover" aria-label="Selected open concept" hidden>
+        <header><span id="concept-kind">Open concept</span><button id="concept-close" type="button" aria-label="Close concept details">×</button></header>
+        <h2 id="concept-title">Referral engine</h2>
+        <p id="concept-statement">Maybe visible work proof can create the next participant introduction.</p>
+        <div class="concept-actions">
+          <button id="keep-open" type="button">Keep open</button>
+          <button id="use-in-drover" type="button">Use as a system</button>
+        </div>
+        <small id="concept-truth">Tentatively connected · no execution effect</small>
+      </aside>
+
+      <aside class="mutation-preview" id="mutation-preview" aria-label="Architecture change preview" hidden>
+        <span>Architecture change</span>
+        <h2>Make this operational?</h2>
+        <p><strong id="mutation-subject">Referral engine</strong> will become a reusable system. It may then power motions and enter teammate context. Its tentative connections remain tentative.</p>
+        <div><button id="cancel-mutation" type="button">Cancel</button><button id="apply-mutation" type="button">Apply with undo</button></div>
+      </aside>
+
+      <aside class="concept-editor" id="concept-editor" aria-label="Add an open concept" hidden>
+        <label><span>Add to the atlas</span><input id="concept-input" type="text" placeholder="Name what matters"></label>
+        <p>No type required. This will not change execution until you give it an operational role.</p>
+        <div><button id="cancel-concept" type="button">Cancel</button><button id="create-concept" type="button">Add thought</button></div>
+      </aside>
+
+      <section class="composer" aria-label="Continuous direction composer">
+        <div class="target" id="composer-target"><span>Directing</span><strong>Buffalo Projects</strong><button id="clear-target" type="button" aria-label="Clear selected target" hidden>×</button></div>
+        <label><span class="sr-only">Give direction</span><textarea id="composer" rows="1" placeholder="Tell the venture what should change…"></textarea></label>
+        <button id="send-direction" class="send" type="button" aria-label="Give direction">↑</button>
+        <div class="composer-proof"><span>No outward authority</span><kbd>⌘↵</kbd></div>
+      </section>
+
+      <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    </main>
+  </div>
+  <script src="prototype.js"></script>
+</body>
+</html>

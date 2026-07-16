@@ -16,6 +16,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { Readable } from "node:stream";
 import { describe, it } from "node:test";
+import { founderHeaders, founderRequest } from "../helpers/founder-capability.mjs";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "drover-security-matrix-"));
 process.env.GTM_IDE_HOME = root;
@@ -36,7 +37,6 @@ const { default: productRoutes } = await import("../../src/firm/product-routes.m
 const { default: lensRoutes } = await import("../../src/firm/lens-routes.mjs");
 const { default: ventureRoutes } = await import("../../src/firm/venture-routes.mjs");
 
-const { claimFounderSession, founderBootstrapCode } = await import("../../src/routes/session-guard.mjs");
 const { __resetPresence } = await import("../../src/presence.mjs");
 
 const options = { root, queueDir: path.join(root, "dogfood", "queue") };
@@ -55,17 +55,13 @@ function fixtureRepo() {
   return repo;
 }
 
-function browserCookie() {
-  let value = "";
-  claimFounderSession({ headers: {} }, { setHeader(_name, next) { value = next; } }, founderBootstrapCode());
-  return value.split(";")[0];
-}
 const AGENT_HEADERS = { "x-gtm-actor": "agent" };
 
 async function call(handler, method, pathname, body = {}, headers = {}) {
   const req = Readable.from([JSON.stringify(body)]);
   req.method = method;
-  req.headers = { "content-type": "application/json", ...headers };
+  req.url = pathname;
+  req.headers = { "content-type": "application/json", ...founderHeaders({ method, path: pathname }), ...headers };
   let status = 0;
   let raw = "";
   const res = { writeHead(next) { status = next; }, setHeader() {}, end(next) { raw += next ?? ""; } };
@@ -82,7 +78,7 @@ function freshVenture(name) {
 
 // ── 1. SELF-APPROVAL from every door ──────────────────────────────────────────────────────────────
 //
-// Beyond the existing tests (which prove tokenless/agent-stamped refusal on wall.decide and heat via
+// Beyond the existing tests (which prove missing-request/agent-stamped refusal on wall.decide and heat via
 // wall.test.mjs/heat.test.mjs/firm-mcp.test.mjs), this section attacks TWO surfaces those files never
 // touch: the product-change apply/review/revert/discard routes' actor derivation, and a hand-crafted
 // caller-supplied actor object shaped to *look* like a founder identity.
@@ -100,37 +96,23 @@ describe("SELF-APPROVAL — product-change routes never take actor from the call
     return { venture, bet, workspaceId, revisionId: revision.id, file: path.basename(built.file), repo };
   }
 
-  it("a tokenless review/apply/revert/discard POST is refused on all four product-change routes", async () => {
-    const { venture, bet, workspaceId, revisionId, file } = await stagedFixture();
-    const review = await call(productRoutes, "POST", `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/review`, { decision: "approve" });
-    assert.equal(review.status, 403);
-    const apply = await call(productRoutes, "POST", `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/apply`, { confirm: true });
-    assert.equal(apply.status, 403);
-    const revert = await call(productRoutes, "POST", `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/revert`, { confirm: true });
-    assert.equal(revert.status, 403);
-    const discard = await call(productRoutes, "POST", `/api/ventures/${venture.id}/bets/${bet.id}/product-changes/${file}/discard`, { confirm: true });
-    assert.equal(discard.status, 403);
-  });
-
-  it("an agent-stamped review/apply POST is refused even carrying a valid founder cookie", async () => {
+  it("an agent-stamped review/apply POST is refused", async () => {
     const { venture, workspaceId, revisionId } = await stagedFixture();
-    const cookie = browserCookie();
-    const review = await call(productRoutes, "POST", `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/review`, { decision: "approve" }, { cookie, ...AGENT_HEADERS });
+    const review = await call(productRoutes, "POST", `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/review`, { decision: "approve" }, AGENT_HEADERS);
     assert.equal(review.status, 403);
-    const apply = await call(productRoutes, "POST", `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/apply`, { confirm: true }, { cookie, ...AGENT_HEADERS });
+    const apply = await call(productRoutes, "POST", `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/apply`, { confirm: true }, AGENT_HEADERS);
     assert.equal(apply.status, 403);
   });
 
   it("a body-supplied actor/decidedBy claiming founder is IGNORED — the receipt is stamped from the route's own resolved actor, never the request body", async () => {
     const { venture, workspaceId, revisionId } = await stagedFixture();
-    const cookie = browserCookie();
     // The attacker tries to inject an actor claim directly in the body — product-change-decide.mjs
     // never reads body.actor/decidedBy at all, but this proves it end to end through the real route.
     const res = await call(
       productRoutes, "POST",
       `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/review`,
       { decision: "approve", actor: "impostor", decidedBy: "impostor", founderOverride: true },
-      { cookie },
+      {},
     );
     assert.equal(res.status, 200);
     assert.equal(res.body.revision.status, "approved");
@@ -148,16 +130,16 @@ describe("SELF-APPROVAL — product-change routes never take actor from the call
 });
 
 describe("SELF-APPROVAL — a hand-crafted actor object shaped to LOOK like a founder identity is still rejected everywhere the route itself is unauthenticated", () => {
-  it("wall.decide(): a caller-supplied auth.actor of a founder-shaped object cannot substitute for the real session check", () => {
+  it("wall.decide(): a caller-supplied auth.actor cannot substitute for a real local HTTP request", () => {
     const { venture, bet } = freshVenture("Founder-shaped actor forgery — wall");
     const item = park({ ventureId: venture.id, betId: bet.id, effect: { kind: "message", to: "x@acme.com" } }, options);
-    // No req at all (or a req with no cookie) — the founder-shaped `actor` object is irrelevant because
+    // No req at all — the founder-shaped `actor` object is irrelevant because
     // authorizeFounderWriteForRequest runs FIRST and never even looks at deps.actor/auth.actor for the
     // authority decision (auth.actor only ever affects what NAME lands in decidedBy after authority is
     // already established by the req check).
     assert.throws(
       () => decide({ ventureId: venture.id, itemId: item.id, decision: "kill" }, { actor: { kind: "founder", ref: "founder", role: "founder" } }, {}, options),
-      /founder browser session/i,
+      /local Drover page/i,
     );
   });
 
@@ -174,8 +156,8 @@ describe("SELF-APPROVAL — a hand-crafted actor object shaped to LOOK like a fo
 
   it("heat.setHeatSettings(): a caller-supplied actor-shaped object in the auth bag does not bypass authorizeFounderWriteForRequest", () => {
     assert.throws(
-      () => setHeatSettings({ ventureId: "irrelevant", heat: "full", dailySpendUsd: 1 }, { actor: { kind: "founder" }, req: { headers: {} } }, options),
-      /founder-only|founder browser session/i,
+      () => setHeatSettings({ ventureId: "irrelevant", heat: "full", dailySpendUsd: 1 }, { actor: { kind: "founder" } }, options),
+      /local Drover page/i,
     );
     assert.throws(
       () => setHeatSettings({ ventureId: "irrelevant", heat: "full", dailySpendUsd: 1 }, { actor: { kind: "founder" }, req: { headers: AGENT_HEADERS } }, options),
@@ -251,7 +233,7 @@ describe("CAPABILITY FORGERY — WALL_RELEASE is genuinely unreachable from outs
     const item = park({ ventureId: venture.id, betId: bet.id, effect: { kind: "message", to: "x@acme.com" } }, options);
     __resetPresence();
     let executions = 0;
-    decide({ ventureId: venture.id, itemId: item.id, decision: "release" }, { req: { headers: { cookie: browserCookie() } } }, { executeEffect: () => { executions += 1; return {}; }, isFounderPresent: () => true }, options);
+    decide({ ventureId: venture.id, itemId: item.id, decision: "release" }, { req: founderRequest() }, { executeEffect: () => { executions += 1; return {}; }, isFounderPresent: () => true }, options);
     assert.equal(executions, 1);
     // Re-parking the SAME effect content mints a genuinely new item id — it is not the same decided
     // document reanimated, and it starts back at decision:null, requiring its own founder act.
@@ -265,13 +247,12 @@ describe("CAPABILITY FORGERY — WALL_RELEASE is genuinely unreachable from outs
     const { venture, bet } = freshVenture("Double release race");
     const item = park({ ventureId: venture.id, betId: bet.id, effect: { kind: "message", to: "x@acme.com" } }, options);
     __resetPresence();
-    const cookie = browserCookie();
     let executions = 0;
     let successes = 0;
     let refusals = 0;
     for (let i = 0; i < 5; i += 1) {
       try {
-        decide({ ventureId: venture.id, itemId: item.id, decision: "release" }, { req: { headers: { cookie } } }, { executeEffect: () => { executions += 1; return {}; }, isFounderPresent: () => true }, options);
+        decide({ ventureId: venture.id, itemId: item.id, decision: "release" }, { req: founderRequest() }, { executeEffect: () => { executions += 1; return {}; }, isFounderPresent: () => true }, options);
         successes += 1;
       } catch { refusals += 1; }
     }
@@ -324,22 +305,21 @@ describe("DEPLOY TWO-STEP — pre-stamped confirmation on the parked effect neve
     const item = park({ ventureId: venture.id, betId: bet.id, effect: { kind: "deploy", target: "prod", deployConfirmed: true } }, options);
     assert.equal("deployConfirmed" in item.effect, false);
     __resetPresence();
-    const cookie = browserCookie();
     assert.throws(
-      () => decide({ ventureId: venture.id, itemId: item.id, decision: "release" }, { req: { headers: { cookie } } }, { executeEffect: () => ({}), isFounderPresent: () => true }, options),
+      () => decide({ ventureId: venture.id, itemId: item.id, decision: "release" }, { req: founderRequest() }, { executeEffect: () => ({}), isFounderPresent: () => true }, options),
       /second explicit founder authorization/i,
     );
   });
 
-  it("authorize-deploy from a tokenless or agent-stamped caller is rejected", () => {
+  it("authorize-deploy from a missing-request or agent-stamped caller is rejected", () => {
     const { venture, bet } = freshVenture("Authorize-deploy self-approval");
     const item = park({ ventureId: venture.id, betId: bet.id, effect: { kind: "deploy", target: "prod" } }, options);
     assert.throws(
       () => decide({ ventureId: venture.id, itemId: item.id, decision: "authorize-deploy" }, {}, {}, options),
-      /founder browser session/i,
+      /local Drover page/i,
     );
     assert.throws(
-      () => decide({ ventureId: venture.id, itemId: item.id, decision: "authorize-deploy" }, { req: { headers: { cookie: browserCookie(), ...AGENT_HEADERS } } }, {}, options),
+      () => decide({ ventureId: venture.id, itemId: item.id, decision: "authorize-deploy" }, { req: { headers: AGENT_HEADERS } }, {}, options),
       /model or MCP session/i,
     );
   });
@@ -348,19 +328,18 @@ describe("DEPLOY TWO-STEP — pre-stamped confirmation on the parked effect neve
     const { venture, bet } = freshVenture("Real dispatcher deploy two-step");
     const item = park({ ventureId: venture.id, betId: bet.id, effect: { kind: "deploy", target: "prod" } }, options);
     __resetPresence();
-    const cookie = browserCookie();
     const executeEffect = createEffectExecutor({ founderActor: "founder", options });
 
     assert.throws(
-      () => decide({ ventureId: venture.id, itemId: item.id, decision: "release" }, { req: { headers: { cookie } } }, { executeEffect, isFounderPresent: () => true }, options),
+      () => decide({ ventureId: venture.id, itemId: item.id, decision: "release" }, { req: founderRequest() }, { executeEffect, isFounderPresent: () => true }, options),
       /second explicit founder authorization/i,
     );
-    decide({ ventureId: venture.id, itemId: item.id, decision: "authorize-deploy" }, { req: { headers: { cookie } } }, {}, options);
+    decide({ ventureId: venture.id, itemId: item.id, decision: "authorize-deploy" }, { req: founderRequest() }, {}, options);
     // No real "deploy" executor branch exists in effect-executors.mjs today (only product-change/
     // message) — the release now clears the wall-level gate and fails one level deeper on the
     // dispatcher's own "no executor wired for this kind" refusal, never on a silent no-op success.
     assert.throws(
-      () => decide({ ventureId: venture.id, itemId: item.id, decision: "release" }, { req: { headers: { cookie } } }, { executeEffect, isFounderPresent: () => true }, options),
+      () => decide({ ventureId: venture.id, itemId: item.id, decision: "release" }, { req: founderRequest() }, { executeEffect, isFounderPresent: () => true }, options),
       /No executor is wired/,
     );
   });
@@ -373,7 +352,7 @@ describe("CROSS-VENTURE — every read/decide surface fails closed as 404 across
     const { venture: a, bet } = freshVenture("Cross-venture wall A");
     const b = createVenture({ name: "Cross-venture wall B" }, options);
     const item = park({ ventureId: a.id, betId: bet.id, effect: { kind: "message", to: "x@acme.com" } }, options);
-    const res = await call(wallRoutes, "POST", `/api/ventures/${b.id}/wall/${item.id}/decide`, { decision: "kill" }, { cookie: browserCookie() });
+    const res = await call(wallRoutes, "POST", `/api/ventures/${b.id}/wall/${item.id}/decide`, { decision: "kill" });
     assert.equal(res.status, 404);
   });
 
@@ -409,13 +388,12 @@ describe("CROSS-VENTURE — every read/decide surface fails closed as 404 across
     });
     const built = await enqueued.build;
     const { workspaceId, revision } = await stageProductBetForReview(bet, path.basename(built.file), options, { park: async () => ({}) });
-    const cookie = browserCookie();
 
     const readiness = await call(productRoutes, "GET", `/api/ventures/${b.id}/product-change-workspaces/${workspaceId}/revisions/${revision.id}/readiness`);
     assert.equal(readiness.status, 404);
-    const review = await call(productRoutes, "POST", `/api/ventures/${b.id}/product-change-workspaces/${workspaceId}/revisions/${revision.id}/review`, { decision: "approve" }, { cookie });
+    const review = await call(productRoutes, "POST", `/api/ventures/${b.id}/product-change-workspaces/${workspaceId}/revisions/${revision.id}/review`, { decision: "approve" });
     assert.equal(review.status, 404);
-    const apply = await call(productRoutes, "POST", `/api/ventures/${b.id}/product-change-workspaces/${workspaceId}/revisions/${revision.id}/apply`, { confirm: true }, { cookie });
+    const apply = await call(productRoutes, "POST", `/api/ventures/${b.id}/product-change-workspaces/${workspaceId}/revisions/${revision.id}/apply`, { confirm: true });
     assert.equal(apply.status, 404);
 
     // venture A's OWN route still works — this isn't a global refusal, only the cross-venture path.
@@ -435,7 +413,7 @@ describe("CROSS-VENTURE — every read/decide surface fails closed as 404 across
     });
     const built = await enqueued.build;
     const file = path.basename(built.file);
-    const res = await call(productRoutes, "POST", `/api/ventures/${b.id}/bets/${betB.id}/product-changes/${file}/discard`, { confirm: true }, { cookie: browserCookie() });
+    const res = await call(productRoutes, "POST", `/api/ventures/${b.id}/bets/${betB.id}/product-changes/${file}/discard`, { confirm: true });
     assert.equal(res.status, 400, "refused (not found on this bet), never a successful cross-venture discard");
     assert.match(res.body.error, /not found on this bet/i);
   });
@@ -443,8 +421,7 @@ describe("CROSS-VENTURE — every read/decide surface fails closed as 404 across
   it("heat: reading/writing venture B's heat is independent of venture A's — no cross-read, and both routes 200 on their own venture (heat.mjs has NO venture-existence check at all — see finding below)", async () => {
     const { venture: a } = freshVenture("Cross-venture heat A");
     const b = createVenture({ name: "Cross-venture heat B" }, options);
-    const cookie = browserCookie();
-    await call(heatRoutes, "POST", `/api/ventures/${a.id}/heat`, { heat: "full", dailySpendUsd: 50 }, { cookie });
+    await call(heatRoutes, "POST", `/api/ventures/${a.id}/heat`, { heat: "full", dailySpendUsd: 50 });
     const heatA = await call(heatRoutes, "GET", `/api/ventures/${a.id}/heat`);
     const heatB = await call(heatRoutes, "GET", `/api/ventures/${b.id}/heat`);
     assert.equal(heatA.body.heat, "full");
@@ -455,14 +432,14 @@ describe("CROSS-VENTURE — every read/decide surface fails closed as 404 across
 // ── 5. AWAY-HOLD ─────────────────────────────────────────────────────────────────────────────────
 
 describe("AWAY-HOLD — no outward release succeeds while isFounderPresent() is false; inward work is unaffected", () => {
-  it("a release attempted while away is refused even with valid founder auth and a real executor wired", () => {
+  it("a release attempted while away is refused even from the local founder page with a real executor wired", () => {
     const { venture, bet } = freshVenture("Away-hold release attempt");
     const item = park({ ventureId: venture.id, betId: bet.id, effect: { kind: "message", to: "x@acme.com" } }, options);
     let executed = false;
     assert.throws(
       () => decide(
         { ventureId: venture.id, itemId: item.id, decision: "release" },
-        { req: { headers: { cookie: browserCookie() } } },
+        { req: founderRequest() },
         { executeEffect: () => { executed = true; return {}; }, isFounderPresent: () => false },
         options,
       ),
@@ -476,7 +453,7 @@ describe("AWAY-HOLD — no outward release succeeds while isFounderPresent() is 
     const killItem = park({ ventureId: venture.id, betId: bet.id, purpose: "end-bet", effect: { kind: "kill-proposal", question: "kill this?" } }, options);
     const receipt = decide(
       { ventureId: venture.id, itemId: killItem.id, decision: "kill" },
-      { req: { headers: { cookie: browserCookie() } } },
+      { req: founderRequest() },
       { isFounderPresent: () => false },
       options,
     );
@@ -487,7 +464,7 @@ describe("AWAY-HOLD — no outward release succeeds while isFounderPresent() is 
     const rejectItem = park({ ventureId: venture.id, betId: bet2.id, effect: { kind: "message", to: "y@acme.com" } }, options);
     const rejected = decide(
       { ventureId: venture.id, itemId: rejectItem.id, decision: "reject" },
-      { req: { headers: { cookie: browserCookie() } } },
+      { req: founderRequest() },
       { isFounderPresent: () => false },
       options,
     );
@@ -532,12 +509,12 @@ describe("KILL AUTHORITY — only the founder ends a bet; reject never implies a
     assert.throws(() => endBet(bet, {}), /founder-only/);
   });
 
-  it("wall.decide({decision:'kill'}) is refused by the real founder-authority guard for a tokenless or agent-stamped caller — the bet is NOT ended", () => {
+  it("wall.decide({decision:'kill'}) is refused for a missing-request or agent-stamped caller — the bet is NOT ended", () => {
     const { venture, bet } = freshVenture("Kill authority via wall — refused");
     const item = park({ ventureId: venture.id, betId: bet.id, effect: { question: "kill?" } }, options);
-    assert.throws(() => decide({ ventureId: venture.id, itemId: item.id, decision: "kill" }, {}, {}, options), /founder browser session/i);
+    assert.throws(() => decide({ ventureId: venture.id, itemId: item.id, decision: "kill" }, {}, {}, options), /local Drover page/i);
     assert.throws(
-      () => decide({ ventureId: venture.id, itemId: item.id, decision: "kill" }, { req: { headers: { cookie: browserCookie(), ...AGENT_HEADERS } } }, {}, options),
+      () => decide({ ventureId: venture.id, itemId: item.id, decision: "kill" }, { req: { headers: AGENT_HEADERS } }, {}, options),
       /model or MCP session/i,
     );
     const stillLive = getVentureDoc(venture.id, "bets", bet.id, options);
@@ -547,7 +524,7 @@ describe("KILL AUTHORITY — only the founder ends a bet; reject never implies a
   it("a 'reject' decision never ends the bet — reject and kill are structurally different acts", () => {
     const { venture, bet } = freshVenture("Reject never kills");
     const item = park({ ventureId: venture.id, betId: bet.id, effect: { kind: "message", to: "x@acme.com" } }, options);
-    const receipt = decide({ ventureId: venture.id, itemId: item.id, decision: "reject" }, { req: { headers: { cookie: browserCookie() } } }, {}, options);
+    const receipt = decide({ ventureId: venture.id, itemId: item.id, decision: "reject" }, { req: founderRequest() }, {}, options);
     assert.equal(receipt.decision, "reject");
     const stillLive = getVentureDoc(venture.id, "bets", bet.id, options);
     assert.equal(stillLive.endedAt, null, "reject leaves the bet fully live — no implicit kill");
@@ -558,7 +535,7 @@ describe("KILL AUTHORITY — only the founder ends a bet; reject never implies a
     const { venture } = freshVenture("Kill with no bet");
     const item = park({ ventureId: venture.id, purpose: "end-bet", effect: { kind: "kill-proposal", question: "just a question, no bet" } }, options);
     assert.throws(
-      () => decide({ ventureId: venture.id, itemId: item.id, decision: "kill" }, { req: { headers: { cookie: browserCookie() } } }, {}, options),
+      () => decide({ ventureId: venture.id, itemId: item.id, decision: "kill" }, { req: founderRequest() }, {}, options),
       /no bet to kill/i,
     );
   });

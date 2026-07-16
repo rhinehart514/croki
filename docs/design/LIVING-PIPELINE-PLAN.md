@@ -1,5 +1,9 @@
 # Living pipeline — integration plan
 
+> **ARCHIVED DESIGN PLAN.** This pipeline integration is not current work. Product and design
+> authority lives in [FIRM-SPEC.md](../FIRM-SPEC.md), [STATE.md](../STATE.md), and the root
+> [DESIGN.md](../../DESIGN.md).
+
 The canvas becomes a living strategy map: conditional logic is a readable node, conviction
 is visual weight, what's live moves, retired work collapses, and a Strategist proposes
 promote/prune/conflict changes the founder gates. Grounded in the real design system

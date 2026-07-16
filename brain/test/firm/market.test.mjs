@@ -28,7 +28,7 @@ describe("market — a reply lands as an outcome on its exact bet", () => {
   it("joins an outcome to the bet whose joinKey matches, appended to bet.evidence", () => {
     const options = freshRoot();
     const venture = createVenture({ name: "Outcome join" }, options);
-    const bet = makeBet(venture.id, options);
+    const bet = makeBet(venture.id, options, { configurationRevision: 7 });
 
     const { outcome, joined, bet: joinedBet } = recordOutcome(
       { ventureId: venture.id, joinKey: bet.joinKey, outcomeKind: "reply", body: "sounds interesting, tell me more", from: "jo@acme.com", source: "connected-account" },
@@ -38,6 +38,7 @@ describe("market — a reply lands as an outcome on its exact bet", () => {
     assert.equal(joinedBet.id, bet.id);
     assert.equal(outcome.type, "outcome");
     assert.equal(outcome.body, "sounds interesting, tell me more");
+    assert.equal(outcome.configurationRevision, 7);
 
     const reloaded = getVentureDoc(venture.id, "bets", bet.id, options);
     assert.equal(reloaded.evidence.length, 1);
@@ -49,7 +50,7 @@ describe("market — a reply lands as an outcome on its exact bet", () => {
   it("a poller re-observing the same reply on a later tick is a durable no-op (dedupe by provider event)", () => {
     const options = freshRoot();
     const venture = createVenture({ name: "Dedupe" }, options);
-    const bet = makeBet(venture.id, options);
+    const bet = makeBet(venture.id, options, { configurationRevision: 7 });
     const raw = { ventureId: venture.id, joinKey: bet.joinKey, outcomeKind: "reply", body: "hi", from: "jo@acme.com", source: "connected-account", providerEventId: "gmail-msg-1", providerSourceId: "thread-1" };
 
     const first = recordOutcome(raw, options);
@@ -87,12 +88,13 @@ describe("market — parks exactly one decide-together item, never auto-replies 
   it("recordOutcome parks a wall item carrying the outcome, and deciding it never touches an executor", () => {
     const options = freshRoot();
     const venture = createVenture({ name: "Decide together" }, options);
-    const bet = makeBet(venture.id, options);
+    const bet = makeBet(venture.id, options, { configurationRevision: 7 });
     const { queued } = recordOutcome({ ventureId: venture.id, joinKey: bet.joinKey, outcomeKind: "reply", body: "let's talk", source: "connected-account" }, options);
 
     assert.ok(queued);
     assert.equal(queued.purpose, "review-outcome");
     assert.equal(queued.blocksBet, false);
+    assert.equal(queued.configurationRevision, 7);
     assert.equal(queued.effect.outcome.body, "let's talk");
 
     const wallQueue = queue(venture.id, options);

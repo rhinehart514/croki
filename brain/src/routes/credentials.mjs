@@ -1,5 +1,5 @@
 import { json, readBody } from "./util.mjs";
-import { authorizeFounderWriteForRequest } from "./session-guard.mjs";
+import { authorizeFounderWriteForRequest } from "./founder-authority.mjs";
 import {
   listCredentials,
   removeCredential,
@@ -33,12 +33,13 @@ export default async function handle({ req, res, url }) {
       const clientId = String(body?.clientId ?? "").trim();
       const clientSecret = String(body?.clientSecret ?? "").trim();
       if (!clientId || !clientSecret) throw new Error("A Google OAuth client id and secret are required.");
-      const { refreshToken } = await runLoopbackConnect({ clientId, clientSecret });
+      const { refreshToken, accountAddress } = await runLoopbackConnect({ clientId, clientSecret });
       const credential = setOAuthCredential({
         provider: "gmail",
         clientId,
         clientSecret,
         refreshToken,
+        accountAddress,
         label: "Gmail (OAuth)",
       });
       json(res, 200, { credential, credentials: listCredentials() });

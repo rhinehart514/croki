@@ -16,6 +16,7 @@ import { enqueueFeatureRequest } from "../feature-builder.mjs";
 import { completeUncommittedPatch, patchDigest } from "../git-patch.mjs";
 import { getWorkspace, openBetWorkspace, addRevision } from "./product-change-workspace.mjs";
 import { git, safeWorkspace, assertRetainedIdentity, readBetIdentity, betQueueRecord } from "./product-change-record.mjs";
+import { stampKnownEffectConsequences } from "./effect-consequences.mjs";
 
 const MAX_DIFF = 120_000;
 
@@ -135,9 +136,15 @@ export async function stageProductBetForReview(bet, file, options = {}, deps = {
   const staged = alreadyStaged ? bet.staged : [
     ...(bet.staged ?? []),
     {
+      id,
       kind: "product-change", sourceReceiptId: file, workspaceId: workspace.id, revisionId: id,
       diff, diffStat: revision.diffStat, patchHash, worktree: record.worktree, branch: record.branch,
-      baseCommit: record.baseCommit, betId: bet.id, stagedAt: now(),
+      baseCommit: record.baseCommit, betId: bet.id,
+      ownerRefs: bet.teammateRef ? [bet.teammateRef] : [], contributorRefs: [],
+      configurationRevision: bet.configurationRevision ?? null,
+      architectureRevision: bet.architectureRevision ?? null,
+      architectureTarget: bet.architectureTarget ?? null,
+      stagedAt: now(), updatedAt: now(),
     },
   ];
   const updatedBet = { ...bet, staged, updatedAt: now() };
@@ -147,7 +154,7 @@ export async function stageProductBetForReview(bet, file, options = {}, deps = {
     // effect-executors.mjs's product-change executor needs them at release time to call
     // applyProductBetChange — the wall only ever hands the executor the effect it parked.
     await park(
-      { ventureId: bet.ventureId, betId: bet.id, purpose: "release", effect: { kind: "product-change", workspaceId: workspace.id, revisionId: id, diff, diffStat: revision.diffStat, patchHash, worktree: record.worktree, branch: record.branch, baseCommit: record.baseCommit, sourceReceiptId: file } },
+      { ventureId: bet.ventureId, betId: bet.id, workRef: id, purpose: "release", configurationRevision: bet.configurationRevision ?? null, architectureRevision: bet.architectureRevision ?? null, architectureTarget: bet.architectureTarget ?? null, effect: stampKnownEffectConsequences({ kind: "product-change", workspaceId: workspace.id, revisionId: id, diff, diffStat: revision.diffStat, patchHash, worktree: record.worktree, branch: record.branch, baseCommit: record.baseCommit, sourceReceiptId: file }, options) },
       options,
     );
   }

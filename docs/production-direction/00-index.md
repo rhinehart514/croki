@@ -1,21 +1,19 @@
-> **SUPERSEDED — 2026-07-11.** This terrain-and-pipeline production package is
-> implementation history. The current product contract is **docs/OPEN-CANVAS-SPEC.md**
-> and current proof is recorded in **docs/STATE.md**. Its truth, founder-wall, taste,
-> runtime-safety, and product-context findings remain useful; its product hierarchy and
-> pipeline-centered acceptance target are no longer the plan of record.
->
-> **Superseded again — 2026-07-14.** The current north star and spec of record are in
-> `docs/FIRM-SPEC.md`. Every file in this folder is now implementation history. In particular:
+> **SUPERSEDED.** Every file in this folder is implementation history.
+> [`FIRM-SPEC.md`](../FIRM-SPEC.md) is the only product and build contract, and
+> [`STATE.md`](../STATE.md) is the only current proof record. This package's truth, wall, taste,
+> runtime-safety, and product-context findings survive only where the Firm spec explicitly retains
+> them; its terrain, graph, question, action, run, goal, and pipeline models have no current
+> authority. In particular:
 >
 > - `EXPERIMENT-MACHINE-GOAL.md` — the north-star goal: complete the experiment machine end to end.
-> - `experiment-machine-alignment.md` — the fit/conflict/gap map of the current tree against that spec.
+> - `experiment-machine-alignment.md` — the fit/conflict/gap map of the tree captured by that audit.
 >
 > The experiment-machine files supplied useful inputs to the firm direction but no longer define it.
 
 # Drover Production Direction (historical)
 
 Historical status: former production target for the GTM-for-product-development direction.
-Current product stage: alpha; the target described here is not a prototype or a throwaway experiment.
+Historical package stage at capture: alpha; the target described here was not a prototype or a throwaway experiment.
 
 Implementation receipt, 2026-07-10: the deterministic terrain-first stack and browser journey are built and
 green on `main`; a signed-in Codex subscription completed the project-scoped terrain smoke; persistent crew

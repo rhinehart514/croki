@@ -1,6 +1,9 @@
 # 01 — Object Graph (data model)
 
-**Binding doctrine:** `00-DOCTRINE.md`. Siblings: `02-canvas-interaction` (projection/UI), `03-intelligence` (spray, edge inference, weakness detection, repair generation), `04-runs-and-wall` (compile, gate behavior, outcome ingestion), `05-migration` (what folds, what code carries over).
+> **SUPERSEDED PACKAGE FILE.** The binding doctrine below applies only within this historical GTM
+> graph package. It has no current domain authority; use [FIRM-SPEC.md](../FIRM-SPEC.md).
+
+**Historical package doctrine:** `00-DOCTRINE.md`. Siblings: `02-canvas-interaction` (projection/UI), `03-intelligence` (spray, edge inference, weakness detection, repair generation), `04-runs-and-wall` (compile, gate behavior, outcome ingestion), `05-migration` (what folds, what code carries over).
 
 ```
 Cold open:    prefilled graph, strongest current testable path highlighted

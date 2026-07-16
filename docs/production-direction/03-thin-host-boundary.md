@@ -1,5 +1,8 @@
 # Thin Host Boundary
 
+> **SUPERSEDED PACKAGE FILE.** This boundary analysis is historical input only. Current rails and
+> host boundaries are defined by [FIRM-SPEC.md](../FIRM-SPEC.md).
+
 ## Purpose
 
 Drover rents frontier intelligence. The host must remain thin enough that new model capabilities improve

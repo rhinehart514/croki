@@ -1,5 +1,6 @@
 // work-loop-tools.mjs — the tool set work-loop.mjs hands a driving teammate: read_truth, get_taste,
-// fork_bet, stage_artifact, stage_outward, ask_founder, speak. Split out of work-loop.mjs by domain
+// fork_bet, stage_artifact, stage_outward, involve_participant, ask_founder, speak. Split out of
+// work-loop.mjs by domain
 // responsibility (the tools themselves vs. the drive that hands them to a runtime) to keep both files
 // under the firm build's ~300-line budget.
 //
@@ -15,6 +16,11 @@ import { assertMoatConsulted } from "../consult-guard.mjs";
 import { classifyCapabilityEffects, CAPABILITY_LANES } from "../capability-registry.mjs";
 import { readRepositoryTruth } from "./truth.mjs";
 import { hasOutwardSignal } from "./outward-guard.mjs";
+import { appendConversationMessage } from "./conversation.mjs";
+import { getFirmConfiguration, proposeFirmConfiguration } from "./configuration.mjs";
+import { buildArchitectureWorkLoopTools } from "./architecture-work-loop-tools.mjs";
+import { stampKnownEffectConsequences } from "./effect-consequences.mjs";
+import { buildRepositoryWorkLoopTools } from "./repository-work-loop-tools.mjs";
 
 const MAX_EVENTS_PER_BET = 200;
 
@@ -27,11 +33,33 @@ function genId(prefix) {
 // composer/lens streams; it is capped so a long-running drive never grows the venture file without
 // bound. Only meaningful on a bet (pre-fork work has nothing yet worth streaming to a lens).
 export function appendEvent(ventureId, betId, event, options) {
-  if (!betId) return;
+  if (!betId) return null;
   const bet = getVentureDoc(ventureId, "bets", betId, options);
-  if (!bet) return;
-  const events = [...(bet.events ?? []), { ...event, at: now() }].slice(-MAX_EVENTS_PER_BET);
+  if (!bet) return null;
+  const storedEvent = {
+    ...event,
+    id: event?.id ?? genId("event"),
+    at: event?.at ?? now(),
+  };
+  const events = [...(bet.events ?? []), storedEvent].slice(-MAX_EVENTS_PER_BET);
   setVentureDoc(ventureId, "bets", bet.id, { ...bet, events, updatedAt: now() }, options);
+  return storedEvent;
+}
+
+// A tool's elapsed time is knowable only after it returns. Complete that exact stable event in place;
+// never infer a duration for text/model time and never manufacture cost at this seam.
+export function completeEventReceipt(ventureId, betId, eventId, receipt = {}, options) {
+  if (!betId || !eventId) return null;
+  const bet = getVentureDoc(ventureId, "bets", betId, options);
+  if (!bet) return null;
+  const index = (bet.events ?? []).findIndex((event) => event?.id === eventId);
+  if (index < 0) return null;
+  const durationMs = Number(receipt.durationMs);
+  if (!Number.isFinite(durationMs) || durationMs < 0) return bet.events[index];
+  const events = [...bet.events];
+  events[index] = { ...events[index], durationMs };
+  setVentureDoc(ventureId, "bets", bet.id, { ...bet, events, updatedAt: now() }, options);
+  return events[index];
 }
 
 // read_truth is cited repository grounding, not interpretation.
@@ -85,9 +113,92 @@ function makeGetTaste({ ventureId, options, taste, ventureStore }) {
   };
 }
 
+function makeGetFirmConfiguration({ ventureId, options }) {
+  return {
+    name: "get_firm_configuration",
+    description: "Read the venture's current participant, runtime, coordination, budget, and authority configuration.",
+    input_schema: { type: "object", properties: {}, required: [] },
+    async run() {
+      return getFirmConfiguration(ventureId, options);
+    },
+  };
+}
+
+function makeProposeFirmConfiguration({ ventureId, teammateRef, options, trackCall }) {
+  return {
+    name: "propose_firm_configuration",
+    description: "Propose a partial change to the firm configuration for founder review. This never applies the change.",
+    input_schema: {
+      type: "object",
+      properties: {
+        summary: { type: "string" },
+        rationale: { type: "string" },
+        changes: { type: "object" },
+      },
+      required: ["summary", "changes"],
+    },
+    async run({ summary, rationale, changes } = {}) {
+      trackCall("propose_firm_configuration");
+      const proposal = proposeFirmConfiguration({
+        ventureId,
+        changes,
+        summary,
+        rationale,
+        proposedBy: teammateRef,
+      }, options);
+      appendConversationMessage({
+        ventureId,
+        role: "teammate",
+        kind: "configuration-proposal",
+        content: proposal.rationale ? `${proposal.summary} — ${proposal.rationale}` : proposal.summary,
+        teammateRef,
+        configurationProposal: proposal,
+      }, options);
+      return {
+        proposalId: proposal.id,
+        baseRevision: proposal.baseRevision,
+        proposedRevision: proposal.proposedRevision,
+        summary: proposal.summary,
+        applied: false,
+      };
+    },
+  };
+}
+
+// involve_participant is the deliberative seam, not a routing table. The current participant chooses
+// a configured peer and one of the founder-configured protocols for a focused contribution. The work
+// loop supplies the callback that runs that peer through their own runtime, capability, authority, and
+// budget configuration; this tool only validates and returns the contribution to the caller.
+function makeInvolveParticipant({ participants, protocols, involveParticipant, trackCall, contributingRefs }) {
+  const participantRefs = participants.map((participant) => participant.ref);
+  return {
+    name: "involve_participant",
+    description: "Ask another configured participant for a focused contribution using an allowed coordination protocol.",
+    input_schema: {
+      type: "object",
+      properties: {
+        targetRef: { type: "string", enum: participantRefs },
+        protocol: { type: "string", enum: protocols },
+        question: { type: "string" },
+        context: { type: "string" },
+      },
+      required: ["targetRef", "protocol", "question"],
+    },
+    async run({ targetRef, protocol, question, context } = {}) {
+      trackCall("involve_participant");
+      if (!participantRefs.includes(targetRef)) throw new Error(`No available configured participant has ref "${targetRef}".`);
+      if (!protocols.includes(protocol)) throw new Error(`Coordination protocol "${protocol}" is not enabled for this firm.`);
+      if (!String(question ?? "").trim()) throw new Error("A participant contribution needs a focused question.");
+      const contribution = await involveParticipant({ targetRef, protocol, question, context });
+      contributingRefs.add(targetRef);
+      return contribution;
+    },
+  };
+}
+
 // fork_bet: the one structural verb, exposed as a tool. Divergence itself is never counted or shaped
 // here — the teammate calls this as many times, with whatever distinct intents, as the goal warrants.
-function makeForkBet({ ventureId, teammateRef, options, trackCall }) {
+function makeForkBet({ ventureId, teammateRef, configurationRevision, architectureRevision, target, options, trackCall }) {
   return {
     name: "fork_bet",
     description: "Create a genuinely distinct bet, optionally as a mutation of an existing bet.",
@@ -103,9 +214,14 @@ function makeForkBet({ ventureId, teammateRef, options, trackCall }) {
     async run({ intent, forkedFrom, learning } = {}) {
       trackCall("fork_bet");
       const parent = forkedFrom ? getVentureDoc(ventureId, "bets", forkedFrom, options) : null;
-      const bet = parent
-        ? fork(parent, intent, { teammateRef, learning })
-        : createBet({ ventureId, intent, teammateRef });
+      const created = parent
+        ? fork(parent, intent, { teammateRef, learning, configurationRevision })
+        : createBet({ ventureId, intent, teammateRef, configurationRevision });
+      const bet = {
+        ...created,
+        architectureRevision: architectureRevision ?? created.architectureRevision ?? null,
+        architectureTarget: target?.architectureId ? { id: target.architectureId, stepId: target.architectureStepId ?? null } : (created.architectureTarget ?? null),
+      };
       setVentureDoc(ventureId, "bets", bet.id, bet, options);
       appendEvent(ventureId, bet.id, { type: "bet_forked", detail: intent }, options);
       return bet;
@@ -116,7 +232,7 @@ function makeForkBet({ ventureId, teammateRef, options, trackCall }) {
 // stage_artifact: attach content to bet.staged[] — a draft, a list, a page, a diff. Producing a draft
 // requires taste to have been consulted first (consult-guard), so a staged artifact can never bypass
 // the founder's own accumulated signal.
-function makeStageArtifact({ ventureId, options, trackCall, consultedNames }) {
+function makeStageArtifact({ ventureId, teammateRef, configurationRevision, architectureRevision, target, options, trackCall, consultedNames, contributingRefs }) {
   return {
     name: "stage_artifact",
     description: "Attach a local draft, list, page, or diff to a bet without releasing it.",
@@ -125,12 +241,14 @@ function makeStageArtifact({ ventureId, options, trackCall, consultedNames }) {
       properties: {
         betId: { type: "string" },
         content: {},
+        title: { type: "string" },
+        workRef: { type: "string" },
         producedDraft: { type: "boolean" },
         producedVisual: { type: "boolean" },
       },
       required: ["betId", "content"],
     },
-    async run({ betId, content, producedDraft = true, producedVisual = false } = {}) {
+    async run({ betId, content, title = null, workRef = null, producedDraft = true, producedVisual = false } = {}) {
       trackCall("stage_artifact");
       const consult = assertMoatConsulted({ toolCalls: [...consultedNames], producedDraft, producedVisual });
       if (!consult.ok) {
@@ -140,10 +258,36 @@ function makeStageArtifact({ ventureId, options, trackCall, consultedNames }) {
       }
       const bet = getVentureDoc(ventureId, "bets", betId, options);
       if (!bet) throw new Error(`No such bet: ${betId}`);
-      const staged = [...(bet.staged ?? []), { id: genId("staged"), content, stagedAt: now() }];
+      const staged = [...(bet.staged ?? [])];
+      const existingIndex = workRef ? staged.findIndex((item) => item?.id === workRef) : -1;
+      if (workRef && existingIndex < 0) throw new Error(`No staged work ${workRef} belongs to bet ${betId}.`);
+      const previous = existingIndex >= 0 ? staged[existingIndex] : null;
+      const priorOwners = Array.isArray(previous?.ownerRefs) ? previous.ownerRefs.filter(Boolean) : [];
+      const owners = priorOwners.length ? [...new Set(priorOwners)] : [teammateRef];
+      const priorContributors = Array.isArray(previous?.contributorRefs) ? previous.contributorRefs.filter(Boolean) : [];
+      const contributors = [...new Set([
+        ...priorContributors,
+        ...[...contributingRefs].filter((ref) => !owners.includes(ref)),
+      ])];
+      const timestamp = now();
+      const artifact = {
+        ...(previous ?? {}),
+        id: previous?.id ?? genId("staged"),
+        ...(String(title ?? "").trim() ? { title: String(title).trim() } : {}),
+        content,
+        ownerRefs: owners,
+        contributorRefs: contributors,
+        configurationRevision: configurationRevision ?? previous?.configurationRevision ?? null,
+        architectureRevision: architectureRevision ?? previous?.architectureRevision ?? bet.architectureRevision ?? null,
+        architectureTarget: target?.architectureId ? { id: target.architectureId, stepId: target.architectureStepId ?? null } : (previous?.architectureTarget ?? bet.architectureTarget ?? null),
+        stagedAt: previous?.stagedAt ?? timestamp,
+        updatedAt: timestamp,
+      };
+      if (existingIndex >= 0) staged[existingIndex] = artifact;
+      else staged.push(artifact);
       setVentureDoc(ventureId, "bets", bet.id, { ...bet, staged, updatedAt: now() }, options);
       appendEvent(ventureId, betId, { type: "staged", detail: null }, options);
-      return staged[staged.length - 1];
+      return artifact;
     },
   };
 }
@@ -154,7 +298,7 @@ function makeStageArtifact({ ventureId, options, trackCall, consultedNames }) {
 // its absence never turns a signal on either (host structural detection is the only path to
 // FOUNDER_WALL besides the pre-existing host-authored effects path). This never executes anything —
 // the only door past the wall is the founder's own decide().
-function makeStageOutward({ ventureId, options, trackCall, consultedNames, deps }) {
+function makeStageOutward({ ventureId, configurationRevision, architectureRevision, target, options, trackCall, consultedNames, deps }) {
   return {
     name: "stage_outward",
     description: "Park an outward, irreversible, or financial effect at the founder wall. Never executes it.",
@@ -162,13 +306,14 @@ function makeStageOutward({ ventureId, options, trackCall, consultedNames, deps 
       type: "object",
       properties: {
         betId: { type: "string" },
+        workRef: { type: "string" },
         effect: { type: "object" },
         producedDraft: { type: "boolean" },
         producedVisual: { type: "boolean" },
       },
       required: ["betId", "effect"],
     },
-    async run({ betId, effect, producedDraft = true, producedVisual = false } = {}) {
+    async run({ betId, workRef = null, effect, producedDraft = true, producedVisual = false } = {}) {
       trackCall("stage_outward");
       // classifyCapabilityEffects is still consulted (both effect.effects AND a top-level
       // {external|irreversible|financial|writeTargets} shape — the pre-existing convention this tool
@@ -199,8 +344,23 @@ function makeStageOutward({ ventureId, options, trackCall, consultedNames, deps 
         error.code = "moat_not_consulted";
         throw error;
       }
+      const bet = getVentureDoc(ventureId, "bets", betId, options);
+      if (!bet) throw new Error(`No such bet: ${betId}`);
+      const requestedWorkRef = String(workRef ?? "").trim() || null;
+      if (requestedWorkRef && !(bet.staged ?? []).some((artifact) => artifact?.id === requestedWorkRef)) {
+        throw new Error(`No staged work ${requestedWorkRef} belongs to bet ${betId}.`);
+      }
+      const stagedWorkRefs = [...new Set((bet.staged ?? []).map((artifact) => artifact?.id).filter(Boolean))];
+      // One candidate is safe to infer. With several workpieces, "latest" is only chronology—not
+      // provenance—so leave the act unjoined and let wall.park give it its own durable identity.
+      const unambiguousWorkRef = stagedWorkRefs.length === 1 ? stagedWorkRefs[0] : null;
       const park = deps?.park ?? (await import("./wall.mjs")).park;
-      const queueItem = await park({ ventureId, betId, purpose: "release", effect }, options);
+      const queueItem = await park({
+        ventureId, betId, workRef: requestedWorkRef ?? unambiguousWorkRef,
+        purpose: "release", configurationRevision, architectureRevision,
+        architectureTarget: target?.architectureId ? { id: target.architectureId, stepId: target.architectureStepId ?? null } : null,
+        effect: stampKnownEffectConsequences(effect, options),
+      }, options);
       appendEvent(ventureId, betId, { type: "parked", detail: null }, options);
       return { lane, parked: true, queueItem };
     },
@@ -210,7 +370,7 @@ function makeStageOutward({ ventureId, options, trackCall, consultedNames, deps 
 // ask_founder: parks one question at the wall queue rather than blocking the model on a chat turn it
 // cannot have. A question is not an outward effect, but it is still the founder's door — it goes
 // through the same park() injection point so F3 owns the one queue every pause lands in.
-function makeAskFounder({ ventureId, options, deps }) {
+function makeAskFounder({ ventureId, configurationRevision, architectureRevision, target, options, deps }) {
   return {
     name: "ask_founder",
     description: "Park a question for the founder when work cannot continue without an answer.",
@@ -225,6 +385,9 @@ function makeAskFounder({ ventureId, options, deps }) {
         ventureId,
         betId,
         purpose: "answer",
+        configurationRevision,
+        architectureRevision,
+        architectureTarget: target?.architectureId ? { id: target.architectureId, stepId: target.architectureStepId ?? null } : null,
         effect: { question },
       }, options);
       appendEvent(ventureId, betId, { type: "asked", detail: question }, options);
@@ -233,9 +396,10 @@ function makeAskFounder({ ventureId, options, deps }) {
   };
 }
 
-// speak: a narration beat, appended to the bet's event log — the plain "what I'm doing" line the
-// composer/lens streams. No model prose reaches storage unshaped; this just banks the line as an event.
-function makeSpeak({ ventureId, options }) {
+// speak: a narration beat, appended to both the bet's event log and the passive venture conversation —
+// the plain "what I'm doing" line the founder sees. No model prose reaches chat unshaped; only an
+// explicit speak call becomes a teammate message.
+function makeSpeak({ ventureId, teammateRef, target, options }) {
   return {
     name: "speak",
     description: "Record a short progress beat on a bet for the founder to see.",
@@ -246,6 +410,14 @@ function makeSpeak({ ventureId, options }) {
     },
     async run({ betId, text } = {}) {
       appendEvent(ventureId, betId, { type: "speak", detail: text }, options);
+      appendConversationMessage({
+        ventureId,
+        role: "teammate",
+        content: text,
+        teammateRef,
+        betId,
+        target,
+      }, options);
       return { ok: true };
     },
   };
@@ -254,22 +426,60 @@ function makeSpeak({ ventureId, options }) {
 // Assembles the whole tool set for one drive. Returns `{ tools, consultedNames }` — consultedNames is
 // the live Set every tool's trackCall writes into and assertMoatConsulted reads from, so the caller
 // (work-loop.mjs) can also report which tools a drive actually consulted.
-export function buildToolSet({ ventureId, teammateRef, options, cwd, taste, ventureStore, deps }) {
+export function buildToolSet({
+  ventureId,
+  teammateRef,
+  configurationRevision = null,
+  architectureRevision = null,
+  options,
+  cwd,
+  taste,
+  ventureStore,
+  deps,
+  coordinationParticipants = [],
+  coordinationProtocols = [],
+  involveParticipant = null,
+  target = null,
+}) {
   const consultedNames = new Set();
+  const contributingRefs = new Set([teammateRef]);
+  const capturedSources = new Map();
   const trackCall = (name) => consultedNames.add(name);
   const definitions = [
     makeReadTruth({ cwd }),
+    ...buildRepositoryWorkLoopTools({ cwd, trackCall, capturedSources }),
+    makeGetFirmConfiguration({ ventureId, options }),
     makeGetTaste({ ventureId, options, taste, ventureStore }),
-    makeForkBet({ ventureId, teammateRef, options, trackCall }),
-    makeStageArtifact({ ventureId, options, trackCall, consultedNames }),
-    makeStageOutward({ ventureId, options, trackCall, consultedNames, deps }),
-    makeAskFounder({ ventureId, options, deps }),
-    makeSpeak({ ventureId, options }),
+    ...buildArchitectureWorkLoopTools({
+      ventureId,
+      teammateRef,
+      configurationRevision,
+      options,
+      trackCall,
+      consultedNames,
+      capturedSources,
+      target,
+    }),
+    makeForkBet({ ventureId, teammateRef, configurationRevision, architectureRevision, target, options, trackCall }),
+    makeStageArtifact({ ventureId, teammateRef, configurationRevision, architectureRevision, target, options, trackCall, consultedNames, contributingRefs }),
+    makeStageOutward({ ventureId, configurationRevision, architectureRevision, target, options, trackCall, consultedNames, deps }),
+    makeAskFounder({ ventureId, configurationRevision, architectureRevision, target, options, deps }),
+    makeSpeak({ ventureId, teammateRef, target, options }),
+    makeProposeFirmConfiguration({ ventureId, teammateRef, options, trackCall }),
+    coordinationParticipants.length && coordinationProtocols.length && involveParticipant
+      ? makeInvolveParticipant({
+          participants: coordinationParticipants,
+          protocols: coordinationProtocols,
+          involveParticipant,
+          trackCall,
+          contributingRefs,
+        })
+      : null,
   ];
   // get_taste's own factory has no trackCall wired in (it takes only ventureId/options/taste/
   // ventureStore above) — wrap it here so calling it still registers as a moat consult.
   const getTaste = definitions.find((tool) => tool.name === "get_taste");
   const wrappedGetTaste = { ...getTaste, async run(input) { trackCall("get_taste"); return getTaste.run(input); } };
-  const tools = definitions.map((tool) => (tool.name === "get_taste" ? wrappedGetTaste : tool));
+  const tools = definitions.filter(Boolean).map((tool) => (tool.name === "get_taste" ? wrappedGetTaste : tool));
   return { tools: filterSafeTools(tools), consultedNames };
 }

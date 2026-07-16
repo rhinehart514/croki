@@ -9,12 +9,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
+import { founderRequest } from "../helpers/founder-capability.mjs";
 
 import { pollReplies, buildSentIndex } from "../../src/firm/market-poll.mjs";
 import { createVenture, setVentureDoc, listVentureDocs, getVentureDoc } from "../../src/firm/venture-store.mjs";
 import { createBet } from "../../src/firm/bet.mjs";
 import { park, decide } from "../../src/firm/wall.mjs";
-import { claimFounderSession, founderBootstrapCode } from "../../src/routes/session-guard.mjs";
 import { setOAuthCredential } from "../../src/credential-store.mjs";
 import { clearAccessTokenCache } from "../../src/connectors/execute/gmail-oauth.mjs";
 
@@ -23,9 +23,7 @@ function freshRoot() {
 }
 
 function browserReq() {
-  let cookie = null;
-  claimFounderSession({ headers: {} }, { setHeader(_name, next) { cookie = next.split(";")[0]; } }, founderBootstrapCode());
-  return { headers: { cookie } };
+  return founderRequest();
 }
 
 // A Gmail message shape (as the read transport returns it) — mirrors inbox-reader.test.mjs's own helper.
@@ -59,11 +57,11 @@ function fakeReadTransport({ messageToThread = {}, threads = {} } = {}) {
 // Sets up one venture with one bet, releases a "message" effect through the real wall (park + decide),
 // and stamps a fake real Gmail messageId onto the release receipt's executionResult — exactly the shape
 // buildSentIndex reads. Returns { venture, bet, messageId }.
-function setupReleasedSend(options, { messageId = "gmsg-1", to = "ada@acme.com" } = {}) {
+function setupReleasedSend(options, { messageId = "gmsg-1", to = "ada@acme.com", workRef = "staged-offer-1" } = {}) {
   const venture = createVenture({ name: "Poll acceptance" }, options);
-  const bet = createBet({ ventureId: venture.id, intent: "cold email to ada", teammateRef: "outreach-writer" });
+  const bet = createBet({ ventureId: venture.id, intent: "cold email to ada", teammateRef: "outreach-writer", configurationRevision: 4 });
   setVentureDoc(venture.id, "bets", bet.id, bet, options);
-  const queued = park({ ventureId: venture.id, betId: bet.id, effect: { kind: "message", channel: "gmail", to, body: "hi" } }, options);
+  const queued = park({ ventureId: venture.id, betId: bet.id, workRef, effect: { kind: "message", channel: "gmail", to, body: "hi" } }, options);
   // isFounderPresent is injected true directly rather than routed through presence.mjs's real
   // markPresent() lease — that lease is a process-wide singleton (brain/src/presence.mjs), so racing
   // its 60s wall-clock window against every other test file in the same `node --test` run is what
@@ -87,7 +85,9 @@ describe("buildSentIndex — released wall items with a real messageId become th
     const entry = index.get(messageId);
     assert.equal(entry.joinKey, bet.joinKey);
     assert.equal(entry.betId, bet.id);
+    assert.equal(entry.workRef, "staged-offer-1");
     assert.equal(entry.recipient, "ada@acme.com");
+    assert.equal(entry.configurationRevision, 4);
   });
 
   it("never indexes a parked-but-not-yet-decided item, or a killed bet's item", () => {
@@ -139,12 +139,16 @@ describe("pollReplies — a real reply lands as an outcome on its exact bet, onc
     assert.equal(outcomes[0].outcomeKind, "reply");
     assert.equal(outcomes[0].from, "ada@acme.com");
     assert.equal(outcomes[0].source, "connected-account");
+    assert.equal(outcomes[0].workRef, "staged-offer-1", "the return stays attached to the exact originating work");
+    assert.equal(outcomes[0].configurationRevision, 4);
 
     // One decide-together item parked at the wall for this outcome.
     const decisions = listVentureDocs(venture.id, "decisions", options);
     const outcomeItems = decisions.filter((d) => d.purpose === "review-outcome");
     assert.equal(outcomeItems.length, 1);
     assert.equal(outcomeItems[0].betId, bet.id);
+    assert.equal(outcomeItems[0].workRef, "staged-offer-1");
+    assert.equal(outcomeItems[0].configurationRevision, 4);
   });
 
   it("dedupes across two polls — the same reply thread ingests as one outcome, not two", async () => {

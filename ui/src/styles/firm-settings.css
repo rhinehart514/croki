@@ -1,0 +1,200 @@
+/* Venture settings stays a pulled layer over the workbench. It exposes real connections and optional
+   host behavior without turning configuration into a second operating surface. */
+
+.firm-settings-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.firm-settings-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  background: color-mix(in srgb, var(--ink) 18%, transparent);
+  cursor: default;
+}
+
+.firm-settings-panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: min(450px, calc(100vw - var(--space-12)));
+  height: 100%;
+  flex-direction: column;
+  border-left: 1px solid var(--line-2);
+  background: var(--surface);
+  box-shadow: var(--shadow-modal);
+  outline: none;
+}
+
+.firm-settings-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 68px;
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.firm-settings-head-icon,
+.firm-settings-connection-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--line-2);
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+.firm-settings-head-icon { width: 34px; height: 34px; border-radius: var(--r-md); }
+.firm-settings-head-icon svg { width: 16px; height: 16px; }
+.firm-settings-head > span:nth-child(2) { display: grid; gap: 1px; }
+.firm-settings-head small { color: var(--muted); font-size: var(--text-meta); }
+.firm-settings-head h2 { margin: 0; font-size: var(--text-md); font-weight: 700; letter-spacing: var(--tracking-tight); }
+
+.firm-settings-scroll {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  align-content: start;
+  gap: var(--space-8);
+  overflow-y: auto;
+  padding: var(--space-6) var(--space-4) var(--space-8);
+}
+
+.firm-settings-section { display: grid; gap: var(--space-3); }
+.firm-settings-section > header { display: grid; gap: var(--space-2); }
+.firm-settings-section > header > span { display: grid; gap: 2px; }
+.firm-settings-section > header small {
+  color: var(--muted);
+  font-size: var(--text-meta);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.firm-settings-section > header h3 { margin: 0; font-size: var(--text-lg); font-weight: 700; letter-spacing: var(--tracking-tight); }
+.firm-settings-section > header p { margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-normal); }
+
+.firm-settings-connection {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  background: var(--canvas);
+}
+.firm-settings-connection-icon { width: 32px; height: 32px; border-radius: var(--r-md); }
+.firm-settings-connection-icon svg { width: 15px; height: 15px; }
+.firm-settings-connection > div { display: grid; min-width: 0; gap: var(--space-2); }
+.firm-settings-connection-title { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.firm-settings-connection-title strong { font-size: var(--text-sm); font-weight: 700; }
+.firm-settings-connection p { margin: 0; color: var(--ink-2); font-size: var(--text-xs); line-height: var(--leading-normal); }
+.firm-settings-connection code {
+  overflow: hidden;
+  color: var(--muted);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.firm-settings-connection ul { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.firm-settings-connection li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+.firm-settings-connection li svg { width: 12px; height: 12px; color: var(--link); }
+.firm-settings-connection li:last-child svg { color: var(--gap); }
+.firm-settings-connection > div > button { width: fit-content; }
+
+.firm-settings-connection-status {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-meta);
+  font-weight: 650;
+}
+.firm-settings-connection-status svg { width: 12px; height: 12px; }
+.firm-settings-connection-status[data-connected="true"] { color: var(--link); }
+
+.firm-settings-connection-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.firm-settings-connection-actions > small { color: var(--muted); font-size: var(--text-meta); line-height: var(--leading-normal); }
+.firm-settings-connection-actions > span { display: flex; flex: none; gap: var(--space-1); }
+
+.firm-settings-connect-form {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+.firm-settings-connect-form label,
+.firm-always-on > label { display: grid; gap: var(--space-1); color: var(--ink-2); font-size: var(--text-xs); font-weight: 600; }
+.firm-settings-connect-form input,
+.firm-always-on input[type="number"] { width: 100%; height: 34px; background: var(--surface); }
+.firm-settings-connect-form > small { color: var(--muted); font-size: var(--text-meta); line-height: var(--leading-normal); }
+.firm-settings-connect-form > span { display: flex; justify-content: flex-end; gap: var(--space-2); }
+
+.firm-always-on {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  background: var(--canvas);
+}
+.firm-always-on-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
+.firm-always-on-head > span { display: grid; gap: var(--space-1); }
+.firm-always-on-head strong { font-size: var(--text-sm); }
+.firm-always-on-head small,
+.firm-always-on > p { margin: 0; color: var(--muted); font-size: var(--text-meta); line-height: var(--leading-normal); }
+.firm-always-on-actions { display: flex; min-height: 28px; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.firm-always-on-actions small,
+.firm-always-on-actions > span,
+.firm-always-on-loading { color: var(--muted); font-size: var(--text-meta); }
+
+.firm-settings-switch { position: relative; display: inline-flex; flex: none; align-items: center; gap: var(--space-2); cursor: pointer; }
+.firm-settings-switch input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.firm-settings-switch > span {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  border: 1px solid var(--ghost);
+  border-radius: 999px;
+  background: var(--surface-2);
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.firm-settings-switch > span::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  content: "";
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.firm-settings-switch input:checked + span { border-color: var(--link); background: var(--link); }
+.firm-settings-switch input:checked + span::after { transform: translateX(14px); }
+.firm-settings-switch input:focus-visible + span { outline: 2px solid color-mix(in srgb, var(--link) 32%, transparent); outline-offset: 2px; }
+.firm-settings-switch input:disabled + span { opacity: 0.55; cursor: not-allowed; }
+.firm-settings-switch em { min-width: 20px; color: var(--ink-2); font-size: var(--text-meta); font-style: normal; font-weight: 700; }
+
+.firm-settings-error { color: var(--danger); font-size: var(--text-xs); line-height: var(--leading-normal); }
+.firm-settings-read-only { color: var(--muted); font-size: var(--text-meta); line-height: var(--leading-normal); }
+
+@media (prefers-reduced-motion: reduce) {
+  .firm-settings-switch > span,
+  .firm-settings-switch > span::after { transition: none; }
+}

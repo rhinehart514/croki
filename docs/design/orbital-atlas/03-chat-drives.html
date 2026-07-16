@@ -1,0 +1,510 @@
+<style>
+  :root{
+    --ink:#23211d; --ink-2:#4e4b44; --muted:#615e56; --faint:#8f8a7e; --ghost:#c6c1b6;
+    --line:#d3cfc6; --line-2:#c6c1b6;
+    --surface:#f4f2ee; --surface-2:#dcd8d0; --canvas:#e9e6e0; --panel:#efede8; --room:#e3e0da;
+    --primary:#23211d; --on-primary:#e9e6e0;
+    --spruce:#2e6e5e; --spruce-ink:#1e5245; --spruce-soft:#dce7e2; --spruce-line:#b7cec6;
+    --proven:#5d7350; --proven-soft:#e1e7db; --proven-line:#b7c9ac;
+    --gap:#a9791a; --gap-soft:#f1e6cd; --gap-ink:#72510f; --gap-line:#d8be7e;
+    --queued:#b0aba0;
+    --danger:#b4443a;
+    --r-sm:6px; --r-md:9px; --r-lg:12px; --r-xl:16px; --r-2xl:24px;
+    --shadow-card:0 1px 0 rgba(38,33,26,.03), 0 4px 12px -7px rgba(38,33,26,.16);
+    --shadow-pop:0 4px 12px rgba(38,33,26,.07), 0 12px 32px -10px rgba(38,33,26,.18);
+    --shadow-float:0 22px 48px -30px rgba(38,33,26,.55);
+    --ease:cubic-bezier(.22,1,.36,1);
+    --sans:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
+    --serif:"Iowan Old Style","Palatino Linotype","Palatino","Book Antiqua",Georgia,"Times New Roman",serif;
+    --mono:"SF Mono",ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:var(--sans);color:var(--ink);background:var(--room);-webkit-font-smoothing:antialiased;overflow:hidden}
+  .tnum{font-variant-numeric:tabular-nums}
+  button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+  :focus-visible{outline:2px solid var(--spruce);outline-offset:2px;border-radius:4px}
+
+  .app{display:flex;flex-direction:column;height:100vh}
+
+  /* ── Top chrome + altitude gauge (shared with 01/02) ── */
+  .top{
+    display:flex;align-items:center;gap:14px;height:48px;padding:0 20px;
+    background:linear-gradient(var(--room),color-mix(in srgb,var(--room) 88%,transparent));
+    border-bottom:1px solid var(--line);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);position:relative;z-index:30;
+  }
+  .brand{display:flex;align-items:center;gap:9px;font-weight:680;letter-spacing:-.01em;font-size:14px}
+  .brand .mark{display:grid;place-items:center;width:24px;height:24px;border-radius:7px;background:var(--primary);color:var(--on-primary)}
+  .brand .venture{color:var(--muted);font-weight:520}
+  .crumb{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+  .crumb .sep{color:var(--ghost)}
+  .crumb .up{display:inline-flex;align-items:center;gap:5px;color:var(--muted);font-weight:520}
+  .crumb .up:hover{color:var(--ink)}
+  .crumb .here{color:var(--ink);font-weight:640}
+
+  .alt{
+    position:absolute;left:50%;transform:translateX(-50%);
+    display:flex;align-items:center;gap:2px;padding:3px;border-radius:999px;
+    background:color-mix(in srgb,var(--surface) 70%,transparent);border:1px solid var(--line-2);
+    -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+  }
+  .alt-step{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px;border-radius:999px;font-size:12px;font-weight:600;color:var(--muted)}
+  .alt-step.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-card)}
+  .alt-step .rings{width:13px;height:13px}
+
+  .top-right{margin-left:auto;display:flex;align-items:center;gap:6px}
+  .proposing-flag{
+    display:inline-flex;align-items:center;gap:6px;padding:3px 11px;border-radius:999px;
+    background:var(--spruce-soft);color:var(--spruce-ink);font-size:12px;font-weight:660;border:1px solid var(--spruce-line);
+  }
+  .proposing-flag .live-dot{width:6px;height:6px;border-radius:50%;background:var(--spruce);box-shadow:0 0 0 3px var(--spruce-soft)}
+  .chip{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border-radius:999px;font-size:13px;font-weight:560;color:var(--ink-2);background:color-mix(in srgb,var(--surface) 70%,transparent);border:1px solid var(--line-2)}
+  .chip:hover{background:var(--surface)}
+
+  /* body: conversation left, assembling canvas right */
+  .body{display:flex;flex:1;min-height:0}
+
+  /* ── CONVERSATION (left) — Drover explaining what it found ── */
+  .convo{
+    width:392px;flex:0 0 auto;display:flex;flex-direction:column;min-height:0;
+    background:linear-gradient(180deg,color-mix(in srgb,var(--surface) 80%,transparent),color-mix(in srgb,var(--panel) 80%,transparent));
+    border-right:1px solid var(--line);z-index:20;
+  }
+  .convo-scroll{flex:1;overflow-y:auto;padding:20px 20px 8px}
+  .msg{margin-bottom:18px}
+  .msg-role{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+  .msg-role .rav{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;font-size:10px;font-weight:700;color:var(--on-primary)}
+  .msg-role .rav.you{background:#5b6e8c;border-radius:50%}
+  .msg-role .rav.drv{background:var(--primary)}
+
+  /* the founder's ask — the exact wow-moment prompt */
+  .ask{
+    padding:13px 15px;border-radius:14px 14px 14px 4px;
+    background:var(--spruce-soft);border:1px solid var(--spruce-line);
+    font-size:14.5px;line-height:1.5;color:var(--spruce-ink);
+  }
+  .ask b{font-weight:700}
+
+  /* Drover's reasoning */
+  .reason{font-size:13.5px;line-height:1.58;color:var(--ink-2)}
+  .reason p{margin:0 0 10px}
+  .reason b{color:var(--ink);font-weight:640}
+  .reason .cite{color:var(--spruce-ink);font-weight:600}
+
+  /* the motion-mix reasoning list — operator explaining the found structure */
+  .mixlist{margin:12px 0 4px;display:grid;gap:8px}
+  .mixrow{
+    display:flex;gap:11px;padding:10px 11px;border-radius:10px;
+    background:color-mix(in srgb,var(--surface) 88%,transparent);border:1px solid var(--line-2);
+  }
+  .mixrow .mdot{flex:0 0 auto;width:24px;height:24px;border-radius:8px;display:grid;place-items:center;color:var(--spruce-ink);background:var(--spruce-soft);border:1px solid var(--spruce-line)}
+  .mixrow .mbody{min-width:0}
+  .mixrow .mname{font-size:12.5px;font-weight:660;color:var(--ink);line-height:1.2}
+  .mixrow .mwhy{margin-top:3px;font-size:11.5px;color:var(--muted);line-height:1.4}
+  .mixrow .mwhy .cite{color:var(--spruce-ink);font-weight:600}
+
+  /* step-tracker — the machine assembling, stage by stage (2026 AI language) */
+  .tracker{margin:12px 0 2px;display:grid;gap:0}
+  .trk{display:flex;align-items:center;gap:9px;padding:5px 0;font-size:12.5px;color:var(--muted)}
+  .trk .tk{flex:0 0 auto;width:16px;height:16px;border-radius:50%;display:grid;place-items:center}
+  .trk.done .tk{background:var(--proven-soft);color:var(--proven)}
+  .trk.done{color:var(--ink-2)}
+  .trk.now .tk{background:var(--spruce-soft);color:var(--spruce-ink)}
+  .trk.now{color:var(--spruce-ink);font-weight:600}
+  .trk.now .tk{box-shadow:0 0 0 3px var(--spruce-soft)}
+  .trk .tt{flex:0 0 auto;margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+
+  /* convo footer: the plain-words summary of what was designed */
+  .convo-foot{flex:0 0 auto;border-top:1px solid var(--line);padding:14px 20px 16px;background:color-mix(in srgb,var(--surface) 66%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  .summary{
+    display:flex;flex-wrap:wrap;gap:6px 7px;margin-bottom:12px;
+  }
+  .sum-pill{display:inline-flex;align-items:baseline;gap:4px;padding:4px 9px;border-radius:999px;font-size:11px;font-weight:560;color:var(--ink-2);background:var(--surface);border:1px solid var(--line-2)}
+  .sum-pill b{font-family:var(--mono);font-weight:700;color:var(--ink);font-size:11.5px}
+  .sum-pill.wall{color:var(--gap-ink);background:var(--gap-soft);border-color:var(--gap-line)}
+  .sum-pill.wall b{color:var(--gap-ink)}
+  .safe-note{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--gap-ink);margin-bottom:13px;line-height:1.4}
+  .safe-note svg{flex:0 0 auto}
+  .accept-row{display:flex;gap:8px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:40px;padding:0 16px;border-radius:999px;font-size:14px;font-weight:660;white-space:nowrap;transition:transform 120ms var(--ease),background 120ms var(--ease)}
+  .btn:hover{transform:translateY(-1px)}
+  .btn.accept{flex:1;background:var(--spruce-ink);color:#eef4f1}
+  .btn.accept:hover{background:#17453a}
+  .btn.adjust{color:var(--ink-2);border:1px solid var(--line-2);background:var(--surface)}
+  .btn.adjust:hover{background:var(--surface-2)}
+
+  /* ── ASSEMBLING CANVAS (right) — the same orbital field, proposal ghosted ── */
+  .stage{position:relative;flex:1;overflow:hidden;background:var(--canvas)}
+  .stage::before{content:"";position:absolute;inset:0;background-image:radial-gradient(#d3cfc6 .9px,transparent .9px);background-size:22px 22px;opacity:.5}
+  .field{position:absolute;inset:0;width:100%;height:100%}
+
+  /* proposal banner floating top of canvas */
+  .propbar{
+    position:absolute;top:16px;left:44%;transform:translateX(-50%);z-index:14;
+    display:inline-flex;align-items:center;gap:10px;padding:7px 9px 7px 14px;border-radius:999px;
+    background:color-mix(in srgb,var(--surface) 84%,transparent);border:1px dashed var(--spruce-line);
+    -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:var(--shadow-float);
+    font-size:12.5px;color:var(--ink-2);font-weight:560;
+  }
+  .propbar b{color:var(--ink);font-weight:680}
+  .propbar .ghost-tag{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;background:var(--spruce-soft);color:var(--spruce-ink);font-size:11px;font-weight:660;border:1px solid var(--spruce-line)}
+
+  /* Node overlay */
+  .node{position:absolute;transform:translate(-50%,-50%);z-index:8}
+
+  /* venture intent — the real, solid heart the proposal wires into */
+  .intent{
+    z-index:11;width:216px;text-align:center;padding:17px 19px;border-radius:var(--r-2xl);
+    background:color-mix(in srgb,var(--surface) 92%,transparent);border:1px solid var(--line-2);
+    box-shadow:var(--shadow-float);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  }
+  .intent .kick{font-size:9px;font-weight:760;letter-spacing:.13em;text-transform:uppercase;color:var(--faint)}
+  .intent .make{margin:7px 0 0;font-family:var(--serif);font-size:16.5px;line-height:1.28;color:var(--ink);font-weight:500;letter-spacing:-.005em}
+  .intent .make em{font-style:italic;color:var(--spruce-ink)}
+
+  /* ── PROPOSED motion cluster — ghosted/dashed until accepted ── */
+  .cluster{
+    width:236px;padding:12px 14px 11px;border-radius:var(--r-xl);text-align:left;
+    background:color-mix(in srgb,var(--surface) 62%,transparent);
+    border:1.5px dashed var(--spruce-line);
+    box-shadow:0 10px 30px -22px rgba(38,33,26,.5);
+    -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);
+    opacity:.96;
+    animation:settle .5s var(--ease) both;
+  }
+  @keyframes settle{from{opacity:0;transform:translate(-50%,-46%) scale(.96)}to{opacity:.96;transform:translate(-50%,-50%) scale(1)}}
+  .node.d1 .cluster{animation-delay:.05s}
+  .node.d2 .cluster{animation-delay:.22s}
+  .node.d3 .cluster{animation-delay:.4s}
+  .cluster-head{display:flex;align-items:center;gap:8px}
+  .cluster-ic{flex:0 0 auto;width:26px;height:26px;border-radius:8px;display:grid;place-items:center;color:var(--spruce-ink);background:var(--spruce-soft);border:1px solid var(--spruce-line)}
+  .cluster-head > span:not(.cluster-ic):not(.prop-tag){min-width:0}
+  .cluster-name{display:block;font-family:var(--serif);font-size:15px;font-weight:500;color:var(--ink);line-height:1.15}
+  .cluster-kind{display:block;font-size:9px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--spruce-ink);margin-top:2px;white-space:nowrap}
+  .prop-tag{margin-left:auto;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--spruce-ink);background:var(--spruce-soft);border:1px solid var(--spruce-line);padding:2px 7px;border-radius:999px}
+
+  /* a proposed campaign row inside the cluster */
+  .camp{margin-top:9px;padding-top:9px;border-top:1px dashed var(--line-2)}
+  .camp + .camp{margin-top:7px}
+  .camp-q{font-size:11.5px;line-height:1.32;color:var(--ink-2);font-weight:560}
+  .camp-q .who{display:inline-flex;align-items:center;gap:4px;font-weight:640;color:var(--ink)}
+  .camp-q .who .cd{width:14px;height:14px;border-radius:50%;display:inline-grid;place-items:center;font-size:7.5px;font-weight:700;color:#fff}
+  /* proposed workflow chain — dashed pips, mirrors 01's glyph */
+  .pchain{margin-top:7px;display:flex;align-items:center;gap:0}
+  .pstage{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;flex:1}
+  .ppip{width:10px;height:10px;border-radius:50%;border:1.5px dashed var(--spruce);background:color-mix(in srgb,var(--spruce-soft) 60%,transparent);position:relative;z-index:2}
+  .ppip.gate{border:1.5px dashed var(--gap);background:var(--gap-soft)}
+  .ppip.gate::after{content:"";position:absolute;inset:0;margin:auto;width:3px;height:3px;border-radius:50%;background:var(--gap)}
+  .pcap{font-size:7.5px;font-weight:600;color:var(--faint);font-family:var(--mono);letter-spacing:-.02em}
+  .pcap.g{color:var(--gap-ink)}
+  .pconn{position:absolute;top:5px;left:50%;width:100%;height:1.5px;background:repeating-linear-gradient(90deg,var(--spruce-line) 0 3px,transparent 3px 6px);z-index:1}
+  .pstage:last-child .pconn{display:none}
+  .camp-sig{margin-top:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:10px;color:var(--muted)}
+  .camp-sig .sg{display:inline-flex;align-items:center;gap:4px}
+  .camp-sig .sg b{font-family:var(--mono);font-weight:700;color:var(--ink-2)}
+  .camp-sig .sg.gate{color:var(--gap-ink)}
+  .camp-sig .sg.gate b{color:var(--gap-ink)}
+
+  /* per-cluster adjust affordance */
+  .cluster-foot{margin-top:9px;display:flex;align-items:center;justify-content:space-between}
+  .adjust-mini{font-size:10.5px;font-weight:620;color:var(--spruce-ink);display:inline-flex;align-items:center;gap:4px}
+  .gate-mini{font-size:10px;font-weight:640;color:var(--gap-ink);display:inline-flex;align-items:center;gap:4px}
+
+  /* ring altitude label */
+  .ringlabel{
+    position:absolute;transform:translate(-50%,-50%);z-index:6;font-size:9.5px;font-weight:680;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--faint);background:color-mix(in srgb,var(--canvas) 82%,transparent);padding:2px 7px;border-radius:999px;
+  }
+
+  /* mini-orbit orientation, bottom-right (shared with 02) */
+  .minimap{
+    position:absolute;bottom:16px;right:16px;z-index:12;width:158px;padding:11px 12px;border-radius:var(--r-lg);
+    background:color-mix(in srgb,var(--surface) 80%,transparent);border:1px solid var(--line-2);
+    -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);box-shadow:var(--shadow-float);
+  }
+  .minimap h4{margin:0 0 8px;font-size:9.5px;font-weight:760;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+  .minimap svg{width:100%;height:auto;display:block}
+  .minimap .cap{margin-top:6px;font-size:10px;color:var(--muted);line-height:1.35;text-align:center}
+  .minimap .cap b{color:var(--spruce-ink);font-weight:640}
+</style>
+
+<div class="app">
+  <!-- TOP CHROME -->
+  <header class="top">
+    <div class="brand"><span class="mark" aria-hidden="true">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.5 7M20 20 8.5 17"/></svg>
+    </span>Drover <span class="venture">drover</span></div>
+    <nav class="crumb" aria-label="Location">
+      <button class="up">the orbit</button>
+      <span class="sep">/</span>
+      <span class="here">proposed GTM system</span>
+    </nav>
+
+    <nav class="alt" aria-label="Canvas altitude">
+      <span class="alt-step on"><svg class="rings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="10.5"/></svg>Venture</span>
+      <span class="alt-step"><svg class="rings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="5" cy="12" r="2.4"/><circle cx="12" cy="12" r="2.4"/><circle cx="19" cy="12" r="2.4"/><path d="M7.4 12h2.2M14.4 12h2.2"/></svg>Inside a bet</span>
+    </nav>
+
+    <div class="top-right">
+      <span class="proposing-flag"><span class="live-dot"></span>Drover is proposing a system</span>
+      <button class="chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 6.6 19a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3 13.4H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 7.4l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 10 3.6h0A2 2 0 1 1 14 3.6v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>Settings</button>
+    </div>
+  </header>
+
+  <div class="body">
+    <!-- ── CONVERSATION ── -->
+    <section class="convo" aria-label="Conversation with Drover">
+      <div class="convo-scroll">
+        <!-- THE FOUNDER'S ASK (the exact wow-moment prompt) -->
+        <div class="msg">
+          <div class="msg-role"><span class="rav you">J</span>You</div>
+          <div class="ask">Give this venture a full GTM system — <b>3 motions</b>: product-led growth, founder-led outbound, and content/SEO — and set up the first campaigns for each.</div>
+        </div>
+
+        <!-- DROVER'S REASONING -->
+        <div class="msg">
+          <div class="msg-role"><span class="rav drv"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.5 7M20 20 8.5 17"/></svg></span>Drover</div>
+          <div class="reason">
+            <p>Your intent is <b>credible work over polished profiles</b>. That points the three motions at proof, not persuasion — so each one leads with a builder's real repo activity:</p>
+            <div class="mixlist">
+              <div class="mixrow">
+                <span class="mdot"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M5 10l7-7 7 7"/></svg></span>
+                <div class="mbody">
+                  <div class="mname">Product-led growth</div>
+                  <div class="mwhy"><span class="cite">Product truth</span> shows 62 in trial with no activation nudge — a self-serve motion converts them cheapest.</div>
+                </div>
+              </div>
+              <div class="mixrow">
+                <span class="mdot"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h13M11 6l6 6-6 6"/></svg></span>
+                <div class="mbody">
+                  <div class="mname">Founder-led outbound</div>
+                  <div class="mwhy">Soren's warm-intro bet already returned <span class="cite">+3× replies</span> — outbound compounds that proof to net-new founders.</div>
+                </div>
+              </div>
+              <div class="mixrow">
+                <span class="mdot"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span>
+                <div class="mbody">
+                  <div class="mname">Content / SEO</div>
+                  <div class="mwhy">Hiring-intent long-tail is uncontested — content feeds the other two motions durable inbound.</div>
+                </div>
+              </div>
+            </div>
+            <p style="margin-top:12px">I wired outbound and content <b>into PLG</b> where they compound, and staged <b>5 campaigns</b> with their workflow chains. Every outward stage stops at the wall.</p>
+          </div>
+        </div>
+
+        <!-- STEP-TRACKER: the machine assembling -->
+        <div class="msg">
+          <div class="msg-role"><span class="rav drv"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="4"/></svg></span>Assembling on the canvas</div>
+          <div class="tracker">
+            <div class="trk done"><span class="tk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 13l5 5L20 6"/></svg></span>Placed 3 motions around your intent<span class="tt">0.4s</span></div>
+            <div class="trk done"><span class="tk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 13l5 5L20 6"/></svg></span>Drafted 5 campaigns · assigned crew<span class="tt">1.1s</span></div>
+            <div class="trk done"><span class="tk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 13l5 5L20 6"/></svg></span>Built 14 workflow stages<span class="tt">1.9s</span></div>
+            <div class="trk now"><span class="tk"><span class="live-dot" style="width:6px;height:6px;border-radius:50%;background:currentColor"></span></span>Marking 4 gates at the wall…<span class="tt">now</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONVO FOOTER: plain-words summary + accept actions -->
+      <div class="convo-foot">
+        <div class="summary">
+          <span class="sum-pill"><b>3</b> motions</span>
+          <span class="sum-pill"><b>5</b> campaigns</span>
+          <span class="sum-pill"><b>14</b> workflow stages</span>
+          <span class="sum-pill wall"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg><b>4</b> gates</span>
+        </div>
+        <div class="safe-note">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+          Nothing runs until you say so — this is a proposal, still ghosted on the canvas.
+        </div>
+        <div class="accept-row">
+          <button class="btn accept"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 13l5 5L20 6"/></svg>Accept the whole system</button>
+          <button class="btn adjust">Adjust per motion</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── ASSEMBLING CANVAS ── -->
+    <main class="stage">
+      <!-- ORBITAL GROUND + proposal wires (dashed spruce = compounding, dashed amber = outward) -->
+      <svg class="field" viewBox="0 0 1200 820" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <defs>
+          <radialGradient id="core" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#ecece7" stop-opacity=".9"/>
+            <stop offset="60%" stop-color="#e9e6e0" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <circle cx="600" cy="410" r="340" fill="url(#core)"/>
+        <!-- altitude rings -->
+        <g fill="none" stroke="#c6c1b6" stroke-dasharray="2 7" stroke-width="1">
+          <circle cx="600" cy="410" r="160"/><circle cx="600" cy="410" r="290"/><circle cx="600" cy="410" r="390"/>
+        </g>
+        <!-- wall approach arc, right side -->
+        <path d="M 600 410 m 390 0 a 390 390 0 0 1 -276 276" fill="none" stroke="#a9791a" stroke-width="1.3" stroke-opacity=".45"/>
+        <path d="M 600 410 m 390 0 a 390 390 0 0 0 -276 -276" fill="none" stroke="#a9791a" stroke-width="1.2" stroke-opacity=".3"/>
+
+        <!-- PROPOSAL WIRES: intent -> each motion cluster (dashed spruce, animating in) -->
+        <g fill="none" stroke="#2e6e5e" stroke-width="1.8" stroke-dasharray="5 6" opacity=".72">
+          <path d="M545 408 L 400 378"><animate attributeName="stroke-dashoffset" from="22" to="0" dur="1.4s" repeatCount="indefinite"/></path>
+          <path d="M660 402 L 785 378"><animate attributeName="stroke-dashoffset" from="22" to="0" dur="1.4s" repeatCount="indefinite"/></path>
+          <path d="M575 470 L 505 625"><animate attributeName="stroke-dashoffset" from="22" to="0" dur="1.4s" repeatCount="indefinite"/></path>
+        </g>
+        <!-- COMPOUNDING wires between motions (content -> plg, outbound -> plg) -->
+        <g fill="none" stroke="#7a8c72" stroke-width="1.4" stroke-dasharray="3 6" opacity=".5">
+          <path d="M430 640 C 340 550, 340 460, 350 400"/>
+          <path d="M770 400 C 630 420, 520 400, 420 375"/>
+        </g>
+      </svg>
+
+      <!-- proposal banner -->
+      <div class="propbar">
+        <span>Proposed system for <b>drover</b></span>
+        <span class="ghost-tag"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>ghosted — not real yet</span>
+      </div>
+
+      <!-- compounding edge labels -->
+      <div class="ringlabel" style="left:29.5%;top:65%;color:var(--proven)">content feeds PLG</div>
+      <div class="ringlabel" style="left:51%;top:44%;color:var(--proven)">outbound compounds proof</div>
+
+      <!-- VENTURE INTENT (the solid heart) — center at 600/1200=50%, 410/820=50% -->
+      <div class="node" style="left:50%;top:52%">
+        <div class="intent">
+          <div class="kick">Venture intent · live</div>
+          <p class="make">Make it obvious that <em>credible work</em> wins hires.</p>
+        </div>
+      </div>
+
+      <!-- ===== MOTION 1: PLG (upper-left) ===== -->
+      <div class="node d1" style="left:26.7%;top:40.5%">
+        <div class="cluster">
+          <div class="cluster-head">
+            <span class="cluster-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M5 10l7-7 7 7"/></svg></span>
+            <span><span class="cluster-name">Product-led growth</span><span class="cluster-kind">Motion · 2 campaigns</span></span>
+            <span class="prop-tag">new</span>
+          </div>
+          <div class="camp">
+            <div class="camp-q"><span class="who"><span class="cd" style="background:#7a5b8c">M</span>Mira</span> · Trial "publish your build-log" activation prompt</div>
+            <div class="pchain">
+              <div class="pstage"><span class="ppip"></span><span class="pcap">seg</span><span class="pconn"></span></div>
+              <div class="pstage"><span class="ppip"></span><span class="pcap">build</span><span class="pconn"></span></div>
+              <div class="pstage"><span class="ppip gate"></span><span class="pcap g">gate</span><span class="pconn"></span></div>
+              <div class="pstage"><span class="ppip"></span><span class="pcap">ship</span><span class="pconn"></span></div>
+              <div class="pstage"><span class="ppip"></span><span class="pcap">meas</span></div>
+            </div>
+            <div class="camp-sig">
+              <span class="sg"><b>62</b> in trial</span>
+              <span class="sg">expect signal <b>Aug 5</b></span>
+            </div>
+          </div>
+          <div class="camp">
+            <div class="camp-q"><span class="who"><span class="cd" style="background:#7a5b8c">M</span>Mira</span> · "3 repos to 71% complete" onboarding checklist</div>
+            <div class="pchain">
+              <div class="pstage"><span class="ppip"></span><span class="pcap">draft</span><span class="pconn"></span></div>
+              <div class="pstage"><span class="ppip gate"></span><span class="pcap g">gate</span><span class="pconn"></span></div>
+              <div class="pstage"><span class="ppip"></span><span class="pcap">ship</span><span class="pconn"></span></div>
+              <div class="pstage"><span class="ppip"></span><span class="pcap">meas</span></div>
+            </div>
+            <div class="camp-sig">
+              <span class="sg gate"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg>1 gate</span>
+              <span class="sg">expect signal <b>Aug 12</b></span>
+            </div>
+          </div>
+          <div class="cluster-foot">
+            <span class="adjust-mini"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Adjust this motion</span>
+            <span class="gate-mini"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg>2 gates</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== MOTION 2: OUTBOUND (upper-right, nearest the wall) ===== -->
+      <div class="node d2" style="left:74.4%;top:41.5%">
+        <div class="cluster">
+          <div class="cluster-head">
+            <span class="cluster-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h13M11 6l6 6-6 6"/></svg></span>
+            <span><span class="cluster-name">Founder-led outbound</span><span class="cluster-kind">Motion · 2 campaigns</span></span>
+            <span class="prop-tag">new</span>
+          </div>
+          <div class="camp">
+            <div class="camp-q"><span class="who"><span class="cd" style="background:#5b6e8c">Y</span>Yara</span> · Cold outreach on the strength of a live repo</div>
+            <div class="pchain">
+              <div class="pstage"><span class="ppip"></span><span class="pcap">src</span><span class="pconn"></span></div>
+              <div class="pstage"><span class="ppip"></span><span class="pcap">enr</span><span class="pconn"></span></div>
+              <div class="pstage"><span class="ppip"></span><span class="pcap">drft</span><span class="pconn"></span></div>
+              <div class="pstage"><span class="ppip gate"></span><span class="pcap g">gate</span><span class="pconn"></span></div>
+              <div class="pstage"><span class="ppip"></span><span class="pcap">send</span></div>
+            </div>
+            <div class="camp-sig">
+              <span class="sg gate"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg>send stops here</span>
+              <span class="sg">expect reply <b>Jul 29</b></span>
+            </div>
+          </div>
+          <div class="camp">
+            <div class="camp-q"><span class="who"><span class="cd" style="background:#8c6b5b">S</span>Soren</span> · Warm-intro asks to past collaborators</div>
+            <div class="pchain">
+              <div class="pstage"><span class="ppip"></span><span class="pcap">list</span><span class="pconn"></span></div>
+              <div class="pstage"><span class="ppip"></span><span class="pcap">drft</span><span class="pconn"></span></div>
+              <div class="pstage"><span class="ppip gate"></span><span class="pcap g">gate</span><span class="pconn"></span></div>
+              <div class="pstage"><span class="ppip"></span><span class="pcap">send</span></div>
+            </div>
+            <div class="camp-sig">
+              <span class="sg gate"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg>1 gate</span>
+              <span class="sg">builds on <b>+3×</b> proof</span>
+            </div>
+          </div>
+          <div class="cluster-foot">
+            <span class="adjust-mini"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Adjust this motion</span>
+            <span class="gate-mini"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg>2 gates</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== MOTION 3: CONTENT / SEO (bottom) ===== -->
+      <div class="node d3" style="left:41%;top:87%">
+        <div class="cluster">
+          <div class="cluster-head">
+            <span class="cluster-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span>
+            <span><span class="cluster-name">Content / SEO</span><span class="cluster-kind">Motion · 1 campaign</span></span>
+            <span class="prop-tag">new</span>
+          </div>
+          <div class="camp">
+            <div class="camp-q"><span class="who"><span class="cd" style="background:#5b8c72">K</span>Kai</span> · "How I got hired from my GitHub" builder stories</div>
+            <div class="pchain">
+              <div class="pstage"><span class="ppip"></span><span class="pcap">kw</span><span class="pconn"></span></div>
+              <div class="pstage"><span class="ppip"></span><span class="pcap">brief</span><span class="pconn"></span></div>
+              <div class="pstage"><span class="ppip"></span><span class="pcap">draft</span><span class="pconn"></span></div>
+              <div class="pstage"><span class="ppip gate"></span><span class="pcap g">gate</span><span class="pconn"></span></div>
+              <div class="pstage"><span class="ppip"></span><span class="pcap">rank</span></div>
+            </div>
+            <div class="camp-sig">
+              <span class="sg gate"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg>publish stops here</span>
+              <span class="sg">expect rank <b>Sep 2</b></span>
+            </div>
+          </div>
+          <div class="cluster-foot">
+            <span class="adjust-mini"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Adjust this motion</span>
+            <span class="gate-mini"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg>1 gate</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- MINI ORBIT — you are here (venture altitude, proposal overlaid) -->
+      <div class="minimap" aria-label="Mini orbit — you are here">
+        <h4>The orbit</h4>
+        <svg viewBox="0 0 158 100" fill="none">
+          <g fill="none" stroke="#c6c1b6" stroke-dasharray="1.5 4" stroke-width="1"><circle cx="79" cy="50" r="18"/><circle cx="79" cy="50" r="33"/><circle cx="79" cy="50" r="44"/></g>
+          <path d="M 79 50 m 44 0 a 44 44 0 0 1 -31 31" fill="none" stroke="#a9791a" stroke-width="1.2" stroke-opacity=".5"/>
+          <circle cx="79" cy="50" r="6" fill="#e6e2db" stroke="#c6c1b6"/>
+          <!-- three proposed motions, dashed spruce -->
+          <g fill="none" stroke="#2e6e5e" stroke-width="1.3" stroke-dasharray="3 4" opacity=".8">
+            <path d="M79 50 L 52 32"/><path d="M79 50 L 110 34"/><path d="M79 50 L 79 84"/>
+          </g>
+          <circle cx="52" cy="32" r="4" fill="#dce7e2" stroke="#2e6e5e" stroke-dasharray="2 2"/>
+          <circle cx="110" cy="34" r="4" fill="#dce7e2" stroke="#2e6e5e" stroke-dasharray="2 2"/>
+          <circle cx="79" cy="84" r="4" fill="#dce7e2" stroke="#2e6e5e" stroke-dasharray="2 2"/>
+        </svg>
+        <div class="cap">A whole system, <b>proposed</b> around your intent.</div>
+      </div>
+    </main>
+  </div>
+</div>

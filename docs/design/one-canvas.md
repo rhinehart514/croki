@@ -1,5 +1,6 @@
-> **SUPERSEDED — 2026-07-11.** This altitude-and-pipeline canvas is design history.
-> The current directly editable, multi-goal contract is **docs/OPEN-CANVAS-SPEC.md**.
+> **SUPERSEDED.** This altitude-and-pipeline canvas is design history. Current product and design
+> authority lives in [FIRM-SPEC.md](../FIRM-SPEC.md), [STATE.md](../STATE.md), and the root
+> [DESIGN.md](../../DESIGN.md).
 
 # One canvas — the altitude ladder (historical flows redesign)
 

@@ -1,5 +1,9 @@
 # Product Canvas and UI/IA
 
+> **SUPERSEDED PACKAGE FILE.** This terrain/pipeline UI is historical. Current UX authority is
+> [FIRM-SPEC.md](../FIRM-SPEC.md), [STATE.md](../STATE.md), and the root
+> [DESIGN.md](../../DESIGN.md).
+
 ## Primary surface
 
 The canvas remains Drover's home, product workspace, question focus, pipeline editor, gate location, and

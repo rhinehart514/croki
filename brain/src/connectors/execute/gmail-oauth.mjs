@@ -28,6 +28,7 @@ import { spawn } from "node:child_process";
 
 export const GOOGLE_AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 export const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
+export const GMAIL_PROFILE_ENDPOINT = "https://gmail.googleapis.com/gmail/v1/users/me/profile";
 export const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
 export const GMAIL_READ_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 export const GMAIL_SCOPES = `${GMAIL_SEND_SCOPE} ${GMAIL_READ_SCOPE}`;
@@ -128,6 +129,31 @@ export async function exchangeCode({
     expiresAt: now() + (Number(payload.expires_in) || 3600) * 1000,
     scope: payload.scope ?? null,
   };
+}
+
+// The Gmail profile endpoint is the authority for the connected mailbox identity. This is deliberately
+// best-effort: a valid OAuth connection remains useful if profile lookup fails, but no address is banked
+// in that case. A label, client id, or caller-supplied sender string is never treated as an identity.
+export async function resolveGmailProfileAddress({
+  accessToken,
+  fetchImpl,
+  profileEndpoint = GMAIL_PROFILE_ENDPOINT,
+} = {}) {
+  if (!String(accessToken ?? "").trim()) return null;
+  const doFetch = typeof fetchImpl === "function" ? fetchImpl : (typeof fetch === "function" ? fetch : null);
+  if (!doFetch) return null;
+  try {
+    const response = await doFetch(profileEndpoint, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) return null;
+    const payload = await response.json().catch(() => ({}));
+    const address = String(payload?.emailAddress ?? "").trim().toLowerCase();
+    return address.includes("@") ? address : null;
+  } catch {
+    return null;
+  }
 }
 
 // Mint a fresh access token from a stored refresh token. A revoked/expired grant (Google 400
@@ -281,7 +307,11 @@ export async function runLoopbackConnect({
       // forces one; if it is still missing, the founder must revoke Drover's access and reconnect.
       throw new Error("Google returned no refresh token — remove Drover under your Google account's third-party access, then reconnect so consent is prompted again.");
     }
-    return { refreshToken: tokens.refreshToken };
+    const accountAddress = await resolveGmailProfileAddress({ accessToken: tokens.accessToken, fetchImpl });
+    return {
+      refreshToken: tokens.refreshToken,
+      ...(accountAddress ? { accountAddress } : {}),
+    };
   } finally {
     listener.server.close();
   }

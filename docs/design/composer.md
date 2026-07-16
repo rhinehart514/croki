@@ -1,5 +1,9 @@
 # Composer — Aurora Canvas direction
 
+> **ARCHIVED DESIGN RECEIPT.** This command composer is superseded. Current conversation and
+> composer UX is governed by [FIRM-SPEC.md](../FIRM-SPEC.md), [STATE.md](../STATE.md), and the root
+> [DESIGN.md](../../DESIGN.md).
+
 Status: built into `ui/src/components/ComposerDock.tsx` + `ui/src/index.css`, verified
 live on the vite dev server (2026-06-28). The surface is the command composer — the panel
 where the founder asks Claude to build, run, and change the GTM system.

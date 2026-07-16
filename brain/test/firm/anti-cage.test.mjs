@@ -1,5 +1,6 @@
-// anti-cage.test.mjs (firm) — static guards for the F1 firm core, mirroring the doctrine and style of
-// brain/test/anti-cage.test.mjs but pinned to FIRM-SPEC.md's own invariants:
+// anti-cage.test.mjs (firm) — static guards for the firm core, pinned to FIRM-SPEC.md's enduring
+// minimality and authority invariants. The Living Venture Atlas deliberately adds one semantic
+// architecture document; these guards prevent that document from regrowing the retired object graph.
 //
 //   GUARD A — brain/src/firm/ imports old code only through the keep-list. No file here may import a
 //     module named in FIRM-SPEC.md §Deletion ledger "Dies" — those are the object-graph, executable-
@@ -11,7 +12,10 @@
 //     exists to remove one layer up from the old object-graph/session machinery.
 //
 //   GUARD C — teammate records carry no role/seniority/hierarchy/manager field. Teammates are souls
-//     and lessons, nothing structural (FIRM-SPEC.md "The three nouns" — Teammate).
+//     and lessons, not the venture's structural model.
+//
+//   GUARD D — architecture stays one document with exactly the five intentional semantic roles.
+//     It has no executable edge taxonomy, campaign lifecycle, release duplicate, or placement truth.
 
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -178,7 +182,55 @@ describe("anti-cage (firm): teammate records carry no role, seniority, or manage
   });
 });
 
-// ─── Guard D: market.mjs surfaces no aggregate/count/score field — the market speaks, it never scores ─
+// ─── Guard D: the architecture layer is semantic, singular, and non-executable ───────────────────
+
+describe("anti-cage (firm): venture architecture stays a minimal semantic layer", () => {
+  it("has exactly five roles and does not turn releases, outcomes, bets, or teammates into architecture roles", async () => {
+    const { ARCHITECTURE_ROLES } = await import("../../src/firm/architecture.mjs");
+    assert.deepEqual(
+      ARCHITECTURE_ROLES,
+      ["concept", "product-loop", "system", "motion", "campaign"],
+      "changing the durable ontology requires an explicit FIRM-SPEC decision, not an incidental schema addition",
+    );
+  });
+
+  it("keeps architecture in one document instead of per-role stores", () => {
+    const forbiddenStores = firmSrcFiles().filter((filename) => (
+      /^(system|motion|campaign|product-loop|concept|graph)-(store|repository)\.mjs$/.test(filename)
+    ));
+    assert.deepEqual(
+      forbiddenStores,
+      [],
+      `architecture grew parallel role stores: ${forbiddenStores.join(", ")}. ` +
+      "FIRM-SPEC requires one revisioned architecture document inside the venture store.",
+    );
+  });
+
+  it("offers semantic edit operations, never an executable graph or lifecycle machine", async () => {
+    const { ARCHITECTURE_OPERATIONS } = await import("../../src/firm/architecture.mjs");
+    const executableVerb = /(?:execute|run|advance|transition|compile|schedule|dispatch|stage)/i;
+    assert.deepEqual(
+      ARCHITECTURE_OPERATIONS.filter((operation) => executableVerb.test(operation)),
+      [],
+      "architecture connections describe venture meaning; work-loop and wall events remain execution truth",
+    );
+  });
+
+  it("stores no placement, health, score, stage, or generic status in current architecture truth", async () => {
+    const { emptyArchitecture } = await import("../../src/firm/architecture.mjs");
+    const document = emptyArchitecture("venture-minimality");
+    for (const forbidden of ["placement", "health", "score", "stage", "status"]) {
+      assert.equal(forbidden in document, false, `architecture document carries forbidden ${forbidden} truth`);
+    }
+    assert.deepEqual(
+      Object.keys(document).sort(),
+      ["connections", "elements", "evidenceAnnotations", "groups", "intent", "revision", "schemaVersion", "updatedAt", "updatedBy", "ventureId"].sort(),
+      "the architecture root grew an unreviewed authority or lifecycle field",
+    );
+  });
+});
+
+// ─── Guard E: market.mjs surfaces no aggregate/count/score field — the market speaks, it never scores ─
 //
 // FIRM-SPEC.md "What stays open": "What the market's outcome says. It speaks in language or it is
 // silent — no sentiment scores, no aggregate numbers surfaced to the founder." outcome-ingest.mjs's
@@ -236,7 +288,7 @@ describe("anti-cage (firm): market.mjs surfaces no aggregate/count/score field",
   });
 });
 
-// ─── Guard E: the smallness ceiling (FIRM-SPEC.md §New anti-cage guards) ───────────────────────────
+// ─── Guard F: the smallness ceiling (FIRM-SPEC.md §New anti-cage guards) ───────────────────────────
 //
 // "The new core stays within a named file budget; adding a store or a noun fails the guard until this
 // spec is amended first." F9's deletion pass (docs/firm-build/F9-DELETION-MANIFEST.md) is what actually

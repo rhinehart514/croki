@@ -1,6 +1,9 @@
 # 04 — Runs and the Wall
 
-**Spec 4 of 5** · cites `00-DOCTRINE.md` (which wins on conflict) · siblings: `01-object-graph` (node/edge schema), `02-canvas-interaction` (how any of this renders), `03-intelligence` (generation, weakness detection, scoring math), `05-migration` (what folds/cuts).
+> **SUPERSEDED PACKAGE FILE.** This run/gate model is history and has no authority over the current
+> bet/wall model. Use [FIRM-SPEC.md](../FIRM-SPEC.md).
+
+**Historical spec 4 of 5** · package siblings: `01-object-graph`, `02-canvas-interaction`, `03-intelligence`, and `05-migration`.
 
 ```
 Cold open:    prefilled graph, strongest current testable path highlighted

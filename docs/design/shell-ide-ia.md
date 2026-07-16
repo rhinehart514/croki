@@ -1,5 +1,9 @@
 # Shell IA — "The IDE" (Refinement, picked 2026-06-22)
 
+> **ARCHIVED DESIGN DIRECTION.** This channel-centered IDE shell is superseded. Current desktop UX
+> is governed by [FIRM-SPEC.md](../FIRM-SPEC.md), [STATE.md](../STATE.md), and the root
+> [DESIGN.md](../../DESIGN.md).
+
 Founder picked the IDE three-pane model for the GTM IDE shell, to fix: "I don't know where
 to start, where to see channels and parts of my GTM engineering."
 

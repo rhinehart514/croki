@@ -1,5 +1,9 @@
 # Product Room UX Plan (Flow Architect pre-code gate)
 
+> **ARCHIVED UX PLAN.** This plan targets the superseded terrain/pipeline surface. Current UX
+> authority is [FIRM-SPEC.md](../FIRM-SPEC.md), [STATE.md](../STATE.md), and the root
+> [DESIGN.md](../../DESIGN.md).
+
 > **Scope correction — 2026-07-10.** This document is the implementation plan and receipt for repairing the
 > operation layer: readable pipeline lanes, one founder wall, question focus, crew embodiment, and outcome
 > return. Its statement that “the GTM operation is the canvas” is superseded by

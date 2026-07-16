@@ -1,5 +1,8 @@
 # GTM Crew and Teammates
 
+> **SUPERSEDED PACKAGE FILE.** This crew model is historical input only. Current teammate physics
+> are defined by [FIRM-SPEC.md](../FIRM-SPEC.md).
+
 ## Product role
 
 The crew is not a collection of graph nodes. It is Drover's durable GTM team.

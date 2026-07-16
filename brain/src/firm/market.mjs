@@ -83,12 +83,20 @@ function joinToBet(ventureId, joinKey, options) {
 // field, no score. `structural`/`identifying` mirrors outcome-ingest.mjs's writeLearningForResult split
 // (Build step 1's "keep the split"): structural (channel, outcomeKind, whether it joined) is safe to
 // pool across ventures later; identifying (the body, who spoke, the bet's own intent) never is.
-function buildOutcome({ ventureId, joinKey, outcomeKind, body, from, source, channel, messageId, observedAt, providerEventId: eventId, providerSourceId }, bet) {
+function buildOutcome({ ventureId, joinKey, workRef, outcomeKind, body, from, source, channel, messageId, observedAt, providerEventId: eventId, providerSourceId, configurationRevision, architectureRevision, architectureTarget }, bet, release = null) {
   return {
     type: "outcome",
     id: `outcome-${(observedAt ?? now()).replace(/\D/g, "").slice(0, 14)}-${Math.random().toString(16).slice(2, 10)}`,
     ventureId,
     betId: bet?.id ?? null,
+    workRef: trimOrNull(workRef),
+    configurationRevision: Number.isInteger(configurationRevision) && configurationRevision > 0
+      ? configurationRevision
+      : (Number.isInteger(bet?.configurationRevision) ? bet.configurationRevision : null),
+    architectureRevision: Number.isInteger(architectureRevision) && architectureRevision >= 0
+      ? architectureRevision
+      : (Number.isInteger(release?.architectureRevision) ? release.architectureRevision : (Number.isInteger(bet?.architectureRevision) ? bet.architectureRevision : null)),
+    architectureTarget: architectureTarget?.id ? architectureTarget : (release?.architectureTarget ?? bet?.architectureTarget ?? null),
     joinKey: trimOrNull(joinKey),
     outcomeKind: trimOrNull(outcomeKind),
     from: trimOrNull(from),
@@ -102,7 +110,7 @@ function buildOutcome({ ventureId, joinKey, outcomeKind, body, from, source, cha
     attribution: bet ? "joined" : "unattributed",
     joined: Boolean(bet),
     structural: { channel: trimOrNull(channel), outcomeKind: trimOrNull(outcomeKind), joined: Boolean(bet) },
-    identifying: { betId: bet?.id ?? null, betIntent: bet?.intent ?? null, from: trimOrNull(from), body: trimOrNull(body) },
+    identifying: { betId: bet?.id ?? null, workRef: trimOrNull(workRef), betIntent: bet?.intent ?? null, from: trimOrNull(from), body: trimOrNull(body) },
   };
 }
 
@@ -129,7 +137,10 @@ export function recordOutcome(outcome = {}, options = {}) {
   }
 
   const bet = joinToBet(ventureId, outcome.joinKey, options);
-  const recorded = buildOutcome(outcome, bet);
+  const release = outcome.workRef
+    ? listVentureDocs(ventureId, "decisions", options).find((item) => item.workRef === outcome.workRef && item.decision === "release")
+    : null;
+  const recorded = buildOutcome(outcome, bet, release);
   setVentureDoc(ventureId, "outcomes", recorded.id, recorded, options);
 
   if (bet) {
@@ -159,8 +170,12 @@ export function recordOutcome(outcome = {}, options = {}) {
   const queued = park({
     ventureId,
     betId: bet?.id ?? null,
+    workRef: recorded.workRef,
     purpose: "review-outcome",
     blocksBet: false,
+    configurationRevision: recorded.configurationRevision,
+    architectureRevision: recorded.architectureRevision,
+    architectureTarget: recorded.architectureTarget,
     effect: { kind: "outcome", outcome: recorded },
   }, options);
 
@@ -181,7 +196,7 @@ const HAPPENED_TO_KIND = {
   other: "other",
 };
 
-export function recordFounderOutcome({ ventureId, betId, happened, learned }, options = {}) {
+export function recordFounderOutcome({ ventureId, betId, workRef = null, happened, learned }, options = {}) {
   if (!trimOrNull(ventureId)) throw new Error("recordFounderOutcome() needs a ventureId.");
   const bet = trimOrNull(betId) ? getVentureDoc(ventureId, "bets", betId, options) : null;
   if (trimOrNull(betId) && !bet) throw new Error(`No such bet: ${betId}`);
@@ -191,7 +206,7 @@ export function recordFounderOutcome({ ventureId, betId, happened, learned }, op
   // one-off key when the founder is recording something unattributed on purpose.
   const joinKey = bet?.joinKey ?? `founder-${now()}`;
   return recordOutcome(
-    { ventureId, joinKey, outcomeKind, body: trimOrNull(learned), source: "founder-entered" },
+    { ventureId, joinKey, workRef, outcomeKind, body: trimOrNull(learned), source: "founder-entered" },
     options,
   );
 }

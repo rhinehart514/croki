@@ -49,9 +49,110 @@ async function setup(options) {
     deps: { park: async (item) => { parked.push(item); return { id: "queue-1", ...item }; } },
   });
   const stageOutward = tools.find((t) => t.name === "stage_outward");
+  const stageArtifact = tools.find((t) => t.name === "stage_artifact");
   const getTaste = tools.find((t) => t.name === "get_taste");
-  return { venture, bet, stageOutward, getTaste, consultedNames, parked, options };
+  return { venture, bet, stageArtifact, stageOutward, getTaste, consultedNames, parked, options };
 }
+
+describe("staged work — stable identity and participant attribution", () => {
+  it("revises one durable work record and preserves owner/contributor attribution", async () => {
+    const options = freshRoot();
+    const firstDrive = await setup(options);
+    await firstDrive.getTaste.run({});
+    const first = await firstDrive.stageArtifact.run({
+      betId: firstDrive.bet.id,
+      title: "Paid pilot offer",
+      content: "First draft",
+    });
+
+    const taste = await import("../../src/firm/taste.mjs");
+    const ventureStore = await import("../../src/firm/venture-store.mjs");
+    const secondTools = buildToolSet({
+      ventureId: firstDrive.venture.id,
+      teammateRef: "buyer-researcher",
+      options,
+      taste,
+      ventureStore,
+      deps: {},
+    }).tools;
+    await secondTools.find((tool) => tool.name === "get_taste").run({});
+    const revised = await secondTools.find((tool) => tool.name === "stage_artifact").run({
+      betId: firstDrive.bet.id,
+      workRef: first.id,
+      content: "Revised with buyer language",
+    });
+
+    const reloaded = getVentureDoc(firstDrive.venture.id, "bets", firstDrive.bet.id, options);
+    assert.equal(reloaded.staged.length, 1, "revision updates the same durable work record");
+    assert.equal(revised.id, first.id);
+    assert.deepEqual(revised.ownerRefs, ["outreach-writer"]);
+    assert.deepEqual(revised.contributorRefs, ["buyer-researcher"]);
+    assert.equal(revised.title, "Paid pilot offer");
+    assert.equal(revised.content, "Revised with buyer language");
+  });
+
+  it("parks the outward act against the exact staged work and rejects a foreign work reference", async () => {
+    const options = freshRoot();
+    const { bet, stageArtifact, stageOutward, getTaste, parked } = await setup(options);
+    await getTaste.run({});
+    const work = await stageArtifact.run({ betId: bet.id, content: "Offer draft" });
+    const result = await stageOutward.run({
+      betId: bet.id,
+      workRef: work.id,
+      effect: { kind: "message", to: "buyer@acme.com", body: "Offer" },
+    });
+    assert.equal(result.queueItem.workRef, work.id);
+    assert.equal(parked[0].workRef, work.id);
+    await assert.rejects(
+      () => stageOutward.run({ betId: bet.id, workRef: "staged-from-another-bet", effect: { to: "buyer@acme.com" } }),
+      /No staged work/,
+    );
+  });
+
+  it("infers one possible origin but never guesses among several staged workpieces", async () => {
+    const options = freshRoot();
+    const { bet, stageArtifact, stageOutward, getTaste, parked } = await setup(options);
+    await getTaste.run({});
+    const onlyWork = await stageArtifact.run({ betId: bet.id, content: "First workpiece" });
+    const inferred = await stageOutward.run({ betId: bet.id, effect: { to: "buyer@acme.com" } });
+    assert.equal(inferred.queueItem.workRef, onlyWork.id);
+
+    await stageArtifact.run({ betId: bet.id, content: "Second workpiece" });
+    const unjoined = await stageOutward.run({ betId: bet.id, effect: { to: "other@acme.com" } });
+    assert.equal(unjoined.queueItem.workRef, null, "chronology must not masquerade as provenance");
+    assert.equal(parked.length, 2);
+  });
+
+  it("attributes an involved participant to work staged after their contribution", async () => {
+    const options = freshRoot();
+    const base = await setup(options);
+    const taste = await import("../../src/firm/taste.mjs");
+    const ventureStore = await import("../../src/firm/venture-store.mjs");
+    const { tools } = buildToolSet({
+      ventureId: base.venture.id,
+      teammateRef: "outreach-writer",
+      options,
+      taste,
+      ventureStore,
+      coordinationParticipants: [{ ref: "buyer-researcher" }],
+      coordinationProtocols: ["consult"],
+      involveParticipant: async () => ({ contribution: "Buyer language needs a concrete result." }),
+      deps: {},
+    });
+    await tools.find((tool) => tool.name === "get_taste").run({});
+    await tools.find((tool) => tool.name === "involve_participant").run({
+      targetRef: "buyer-researcher",
+      protocol: "consult",
+      question: "Check the offer language",
+    });
+    const work = await tools.find((tool) => tool.name === "stage_artifact").run({
+      betId: base.bet.id,
+      content: "Revised paid pilot offer",
+    });
+    assert.deepEqual(work.ownerRefs, ["outreach-writer"]);
+    assert.deepEqual(work.contributorRefs, ["buyer-researcher"]);
+  });
+});
 
 describe("stage_outward — the exact bypass call now parks and leaves a trace", () => {
   it("an outward-shaped effect (to/channel/body) with NO effects.external declared still forces the wall", async () => {

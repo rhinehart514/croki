@@ -1,5 +1,8 @@
 # Experiment-machine alignment map
 
+> **Archived audit.** This receipt evaluates a superseded product direction. It does not describe
+> the current tree; use [FIRM-SPEC.md](../FIRM-SPEC.md) and [STATE.md](../STATE.md).
+
 **Status:** full-stack mission audit of the current tree against
 [../EXPERIMENT-MACHINE-SPEC.md](../EXPERIMENT-MACHINE-SPEC.md).
 **Updated:** 2026-07-12. **Stage:** alpha.

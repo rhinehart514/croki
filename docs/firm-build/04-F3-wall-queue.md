@@ -1,5 +1,8 @@
 # F3 — The wall queue
 
+> **HISTORICAL EXECUTION TASK.** This work package is not a current backlog. Current wall behavior
+> and proof live in [FIRM-SPEC.md](../FIRM-SPEC.md) and [STATE.md](../STATE.md).
+
 **Goal:** one decision surface for everything outward: releases, kills, replies, questions. The
 security matrix passes against the new store.
 

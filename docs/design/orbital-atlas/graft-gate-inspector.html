@@ -1,0 +1,384 @@
+<style>
+  :root{
+    --ink:#23211d; --ink-2:#4e4b44; --muted:#615e56; --faint:#8f8a7e; --ghost:#c6c1b6;
+    --line:#d3cfc6; --line-2:#c6c1b6;
+    --surface:#f4f2ee; --surface-2:#dcd8d0; --canvas:#e9e6e0; --panel:#efede8; --room:#e3e0da;
+    --primary:#23211d; --on-primary:#e9e6e0;
+    --spruce:#2e6e5e; --spruce-ink:#1e5245; --spruce-soft:#dce7e2; --spruce-line:#b7cec6;
+    --proven:#5d7350; --proven-soft:#e1e7db;
+    --gap:#a9791a; --gap-soft:#f1e6cd; --gap-ink:#72510f; --gap-line:#d8be7e;
+    --danger:#b4443a;
+    --r-sm:6px; --r-md:9px; --r-lg:12px; --r-xl:16px; --r-2xl:24px;
+    --shadow-card:0 1px 0 rgba(38,33,26,.03), 0 4px 12px -7px rgba(38,33,26,.16);
+    --shadow-pop:0 4px 12px rgba(38,33,26,.07), 0 12px 32px -10px rgba(38,33,26,.18);
+    --shadow-float:0 22px 48px -30px rgba(38,33,26,.55);
+    --ease:cubic-bezier(.22,1,.36,1);
+    --sans:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
+    --serif:"Iowan Old Style","Palatino Linotype","Palatino","Book Antiqua",Georgia,"Times New Roman",serif;
+    --mono:"SF Mono",ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:var(--sans);color:var(--ink);background:var(--room);-webkit-font-smoothing:antialiased;overflow:hidden}
+  .tnum{font-variant-numeric:tabular-nums}
+  button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+  :focus-visible{outline:2px solid var(--spruce);outline-offset:2px;border-radius:4px}
+
+  .app{display:flex;flex-direction:column;height:100vh}
+
+  /* Top chrome with breadcrumb */
+  .top{
+    display:flex;align-items:center;gap:14px;height:48px;padding:0 20px;
+    background:linear-gradient(var(--room),color-mix(in srgb,var(--room) 88%,transparent));
+    border-bottom:1px solid var(--line);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+    position:relative;z-index:30;
+  }
+  .brand{display:flex;align-items:center;gap:9px;font-weight:680;letter-spacing:-.01em;font-size:14px}
+  .brand .mark{display:grid;place-items:center;width:24px;height:24px;border-radius:7px;background:var(--primary);color:var(--on-primary)}
+  .brand .venture{color:var(--muted);font-weight:520}
+  .crumb{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted)}
+  .crumb a{color:var(--muted);text-decoration:none;font-weight:520;display:inline-flex;align-items:center;gap:5px}
+  .crumb a:hover{color:var(--ink)}
+  .crumb .sep{color:var(--ghost)}
+  .crumb .mtag{color:var(--spruce-ink);background:var(--spruce-soft);border:1px solid var(--spruce-line);padding:2px 9px;border-radius:999px;font-size:12px;font-weight:640}
+  .crumb .cur{color:var(--ink);font-weight:640}
+  .top-right{margin-left:auto;display:flex;align-items:center;gap:6px}
+  .wall-flag{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:var(--gap-soft);color:var(--gap-ink);font-size:12px;font-weight:640;border:1px solid var(--gap-line)}
+  .chip{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border-radius:999px;font-size:13px;font-weight:560;color:var(--ink-2);background:color-mix(in srgb,var(--surface) 70%,transparent);border:1px solid var(--line-2);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);transition:background 140ms var(--ease)}
+  .chip:hover{background:var(--surface)}
+
+  /* Canvas region — same field, one bet given the room */
+  .stage{position:relative;flex:1;overflow:hidden;background:var(--canvas)}
+  .stage::before{content:"";position:absolute;inset:0;background-image:radial-gradient(#d3cfc6 .9px,transparent .9px);background-size:22px 22px;opacity:.5}
+  .field{position:absolute;inset:0;width:100%;height:100%}
+
+  /* MINI-ORBIT — orientation device back to the whole field, top-left */
+  .miniorbit{
+    position:absolute;top:16px;left:16px;z-index:20;width:196px;padding:12px 13px 11px;border-radius:var(--r-xl);
+    background:color-mix(in srgb,var(--surface) 78%,transparent);border:1px solid var(--line-2);
+    -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);box-shadow:var(--shadow-float);
+  }
+  .miniorbit h3{margin:0 0 9px;font-size:10px;font-weight:760;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;justify-content:space-between}
+  .miniorbit h3 a{color:var(--spruce-ink);font-weight:640;letter-spacing:0;text-transform:none;font-size:11px;text-decoration:none}
+  .miniorbit h3 a:hover{text-decoration:underline;text-underline-offset:2px}
+  .mini-svg{width:100%;height:118px;display:block}
+  .mini-cap{margin-top:8px;font-size:11px;color:var(--muted);line-height:1.4}
+  .mini-cap b{color:var(--ink);font-weight:640}
+
+  /* Crew rail below mini-orbit */
+  .rail{
+    position:absolute;top:290px;left:16px;width:196px;z-index:19;padding:11px;border-radius:var(--r-xl);
+    background:color-mix(in srgb,var(--surface) 76%,transparent);border:1px solid var(--line-2);
+    -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);box-shadow:var(--shadow-float);
+  }
+  .rail h3{margin:2px 2px 8px;font-size:10px;font-weight:760;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .crew-row{display:flex;align-items:center;gap:9px;padding:6px 6px;border-radius:10px;width:100%;text-align:left}
+  .av{flex:0 0 auto;width:27px;height:27px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:680;color:var(--on-primary)}
+  .crew-name{font-size:12.5px;font-weight:620;color:var(--ink);line-height:1.1}
+  .crew-sub{font-size:10.5px;color:var(--muted);display:flex;align-items:center;gap:5px}
+  .live-dot{width:6px;height:6px;border-radius:50%;background:var(--spruce);box-shadow:0 0 0 3px var(--spruce-soft);animation:pulse 2.4s var(--ease) infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 3px var(--spruce-soft)}50%{box-shadow:0 0 0 5px color-mix(in srgb,var(--spruce) 18%,transparent)}}
+
+  /* The bet header — the question given the room, top center */
+  .bethead{
+    position:absolute;top:20px;left:calc(50% - 108px);transform:translateX(-50%);z-index:18;width:min(620px,46vw);text-align:center;
+  }
+  .bethead .kick{display:inline-flex;align-items:center;gap:8px;font-size:9.5px;font-weight:740;letter-spacing:.11em;text-transform:uppercase;color:var(--faint)}
+  .bethead .kick .mtag{color:var(--spruce-ink);background:var(--spruce-soft);border:1px solid var(--spruce-line);padding:1px 7px;border-radius:999px;letter-spacing:.06em}
+  .bethead h1{margin:9px 0 0;font-family:var(--serif);font-weight:500;font-size:22px;line-height:1.24;letter-spacing:-.005em;color:var(--ink)}
+  .bethead .sub{margin-top:8px;font-size:12.5px;color:var(--muted);display:inline-flex;align-items:center;gap:10px}
+  .bethead .sub .dot{width:17px;height:17px;border-radius:50%;display:grid;place-items:center;font-size:9px;font-weight:700;color:var(--on-primary)}
+  .bethead .sub b{color:var(--ink);font-weight:640}
+
+  /* WORKFLOW GRAPH — the full agentic chain filling the field */
+  .graph{position:absolute;left:calc(50% - 108px);top:56%;transform:translate(-50%,-50%);z-index:14;display:flex;align-items:flex-start;gap:0}
+  .wf-col{display:flex;flex-direction:column;align-items:center}
+  .wf-node{
+    width:158px;padding:12px 12px 11px;border-radius:var(--r-lg);text-align:left;position:relative;
+    background:var(--surface);border:1px solid var(--line-2);box-shadow:var(--shadow-card);
+  }
+  .wf-node.done{border-color:color-mix(in srgb,var(--proven) 34%,var(--line-2))}
+  .wf-node.running{border-color:var(--spruce-line);background:color-mix(in srgb,var(--spruce-soft) 30%,var(--surface));box-shadow:var(--shadow-pop)}
+  .wf-node.gate{border:1.5px solid var(--gap-line);background:var(--gap-soft);box-shadow:var(--shadow-pop),0 0 0 4px color-mix(in srgb,var(--gap) 9%,transparent)}
+  .wf-node.queued{opacity:.6;border-style:dashed}
+  .wf-top{display:flex;align-items:center;gap:9px}
+  .wf-ic{width:28px;height:28px;flex:0 0 auto;border-radius:8px;display:grid;place-items:center}
+  .wf-ic.done{background:var(--proven-soft);color:var(--proven)}
+  .wf-ic.running{background:var(--spruce-soft);color:var(--spruce-ink)}
+  .wf-ic.gate{background:color-mix(in srgb,var(--gap) 22%,var(--surface));color:var(--gap-ink)}
+  .wf-ic.queued{background:var(--surface-2);color:var(--faint)}
+  .wf-name{display:block;font-size:13px;font-weight:680;color:var(--ink);line-height:1.1}
+  .wf-stateline{display:block;margin-top:3px;font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+  .wf-stateline.done{color:var(--proven)}
+  .wf-stateline.running{color:var(--spruce-ink)}
+  .wf-stateline.gate{color:var(--gap-ink)}
+  .wf-stateline.queued{color:var(--faint)}
+  /* receipts under each node — Relevance-AI-style, never a spinner */
+  .wf-receipts{margin-top:10px;padding-top:9px;border-top:1px solid var(--line);display:grid;gap:5px}
+  .rcpt{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--ink-2);line-height:1.25}
+  .rcpt .rn{font-family:var(--mono);font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+  .rcpt svg{flex:0 0 auto}
+  .rcpt.muted{color:var(--muted)}
+  .rcpt.hold{color:var(--gap-ink);font-weight:560}
+  /* teammate avatar on running node */
+  .wf-avatar{position:absolute;top:-10px;right:-8px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:700;color:var(--on-primary);box-shadow:0 0 0 2px var(--surface),var(--shadow-card);z-index:3}
+  .wf-avatar::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1.5px solid var(--spruce);opacity:.5;animation:ring 2.4s var(--ease) infinite}
+  @keyframes ring{0%{transform:scale(.9);opacity:.55}70%{transform:scale(1.55);opacity:0}100%{opacity:0}}
+  /* live elapsed on running node */
+  .wf-elapsed{position:absolute;bottom:-9px;left:12px;font-size:9.5px;font-weight:640;font-family:var(--mono);color:var(--spruce-ink);background:var(--surface);padding:1px 6px;border-radius:999px;border:1px solid var(--spruce-line)}
+
+  /* edges between workflow nodes */
+  .wf-edge{flex:0 0 40px;align-self:flex-start;margin-top:20px;display:flex;flex-direction:column;align-items:center;position:relative}
+  .wf-edge svg{display:block}
+  .wf-edge .el{position:absolute;top:16px;font-size:9px;font-weight:640;color:var(--faint);white-space:nowrap;letter-spacing:.02em;background:color-mix(in srgb,var(--canvas) 80%,transparent);padding:0 3px}
+  .wf-edge .el.hold{color:var(--gap-ink)}
+
+  /* the gate's outward-stop caption */
+  .gate-caption{position:absolute;left:calc(50% - 108px);top:calc(56% + 168px);transform:translateX(-50%);z-index:14;display:inline-flex;align-items:center;gap:8px;font-size:11.5px;color:var(--gap-ink);font-weight:600;background:var(--gap-soft);border:1px solid var(--gap-line);padding:6px 13px;border-radius:999px;box-shadow:var(--shadow-card)}
+
+  /* Gate inspector — the held outward act, right side */
+  .inspector{
+    position:absolute;top:20px;right:16px;bottom:88px;width:296px;z-index:18;display:flex;flex-direction:column;
+    border-radius:var(--r-xl);background:color-mix(in srgb,var(--surface) 92%,transparent);
+    border:1px solid var(--gap-line);box-shadow:var(--shadow-float),0 0 0 1px color-mix(in srgb,var(--gap) 10%,transparent);
+    -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);overflow:hidden;
+  }
+  .insp-head{padding:14px 16px 12px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--gap-soft) 45%,var(--surface))}
+  .insp-kick{display:flex;align-items:center;gap:7px;font-size:9.5px;font-weight:760;letter-spacing:.1em;text-transform:uppercase;color:var(--gap-ink)}
+  .insp-title{margin:8px 0 0;font-size:14px;font-weight:680;color:var(--ink);line-height:1.3}
+  .insp-body{flex:1;overflow:auto;padding:14px 16px}
+  .insp-lbl{font-size:9.5px;font-weight:760;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+  .insp-lbl + .insp-lbl{margin-top:16px}
+  .draftcard{border:1px solid var(--line-2);border-radius:var(--r-md);overflow:hidden;background:var(--surface)}
+  .draft-to{display:flex;align-items:center;gap:8px;padding:9px 11px;border-bottom:1px solid var(--line);background:var(--panel);font-size:11.5px;color:var(--ink-2)}
+  .draft-to .av-sm{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:9px;font-weight:700;color:#fff;background:#6a6f7a}
+  .draft-to b{color:var(--ink);font-weight:640}
+  .draft-body{padding:11px 12px;font-size:12px;line-height:1.5;color:var(--ink-2)}
+  .draft-body .hl{background:color-mix(in srgb,var(--spruce) 12%,transparent);border-radius:3px;padding:0 2px;color:var(--spruce-ink)}
+  .insp-meta{margin-top:12px;display:grid;gap:7px}
+  .mrow{display:flex;align-items:center;justify-content:space-between;font-size:11.5px;color:var(--muted)}
+  .mrow b{color:var(--ink);font-weight:640;font-variant-numeric:tabular-nums}
+  .insp-foot{padding:12px 16px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px;background:color-mix(in srgb,var(--gap-soft) 30%,var(--surface))}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:38px;padding:0 16px;border-radius:999px;font-size:13px;font-weight:640;white-space:nowrap;transition:transform 120ms var(--ease),background 120ms var(--ease)}
+  .btn:hover{transform:translateY(-1px)}
+  .btn.approve{background:var(--gap-ink);color:#f7efe0}
+  .btn.approve:hover{background:#5c410c}
+  .btn.hold{color:var(--ink-2);border:1px solid var(--line-2);background:var(--surface)}
+  .btn.hold:hover{background:var(--surface-2)}
+
+  /* Composer scoped to this bet */
+  .composer{
+    position:absolute;left:calc(50% - 108px);bottom:18px;transform:translateX(-50%);z-index:24;width:min(560px,44vw);
+    padding:11px 13px;border-radius:var(--r-2xl);background:color-mix(in srgb,var(--surface) 82%,transparent);
+    border:1px solid var(--line-2);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);box-shadow:var(--shadow-float);
+  }
+  .comp-scope{display:flex;align-items:center;gap:9px;margin-bottom:8px}
+  .scope-pill{display:inline-flex;align-items:center;gap:7px;padding:4px 11px 4px 5px;border-radius:999px;background:var(--spruce-soft);border:1px solid var(--spruce-line);font-size:12px;font-weight:640;color:var(--spruce-ink)}
+  .scope-pill .av-sm{width:19px;height:19px;border-radius:50%;display:grid;place-items:center;font-size:9px;font-weight:700;color:var(--on-primary)}
+  .scope-help{font-size:11.5px;color:var(--muted)}
+  .comp-input{display:flex;align-items:center;gap:9px}
+  .comp-input input{flex:1;height:34px;padding:0 6px;border:0;background:transparent;outline:none;font-size:14px;color:var(--ink)}
+  .comp-input input::placeholder{color:var(--faint)}
+  .send{width:34px;height:34px;border-radius:50%;background:var(--primary);color:var(--on-primary);display:grid;place-items:center;transition:transform 120ms var(--ease)}
+  .send:hover{transform:translateY(-1px)}
+</style>
+
+<div class="app">
+  <!-- TOP CHROME with breadcrumb -->
+  <header class="top">
+    <div class="brand"><span class="mark" aria-hidden="true">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.5 7M20 20 8.5 17"/></svg>
+    </span>Drover</div>
+    <nav class="crumb" aria-label="Location">
+      <a href="#"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/></svg>drover</a>
+      <span class="sep">/</span>
+      <span class="mtag">Outbound motion</span>
+      <span class="sep">/</span>
+      <span class="cur">Founder-signed outreach</span>
+    </nav>
+    <div class="top-right">
+      <span class="wall-flag"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg>12 held at the wall</span>
+      <button class="chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>Fold back to orbit</button>
+    </div>
+  </header>
+
+  <!-- CANVAS STAGE -->
+  <main class="stage">
+    <!-- FIELD: the orbit recedes to a faint ground; this bet has the room -->
+    <svg class="field" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <g fill="none" stroke="#c6c1b6" stroke-dasharray="2 8" stroke-width="1" opacity=".4">
+        <circle cx="800" cy="470" r="230"/><circle cx="800" cy="470" r="420"/><circle cx="800" cy="470" r="600"/>
+      </g>
+    </svg>
+
+    <!-- MINI-ORBIT — where am I -->
+    <aside class="miniorbit">
+      <h3>You are here <a href="#">Orbit ↩</a></h3>
+      <svg class="mini-svg" viewBox="0 0 172 118" fill="none" aria-label="Mini orbit showing this bet's position">
+        <!-- rings -->
+        <g stroke="#c6c1b6" stroke-dasharray="2 5" stroke-width="1" fill="none">
+          <circle cx="80" cy="59" r="20"/><circle cx="80" cy="59" r="36"/><circle cx="80" cy="59" r="52"/>
+        </g>
+        <!-- sector dividers -->
+        <g stroke="#c6c1b6" stroke-width="1" opacity=".5" stroke-dasharray="2 4">
+          <line x1="80" y1="59" x2="80" y2="7"/><line x1="80" y1="59" x2="126" y2="99"/><line x1="80" y1="59" x2="34" y2="99"/>
+        </g>
+        <!-- amber wall arc upper-right -->
+        <path d="M 80 59 m 52 0 a 52 52 0 0 0 -26 -45" stroke="#a9791a" stroke-width="1.3" stroke-opacity=".55" fill="none"/>
+        <!-- intent core -->
+        <circle cx="80" cy="59" r="6" fill="#dce7e2" stroke="#b7cec6"/>
+        <!-- other bets (faint) -->
+        <circle cx="55" cy="34" r="3.5" fill="#c6c1b6"/>
+        <circle cx="46" cy="86" r="3.5" fill="#c6c1b6"/>
+        <circle cx="70" cy="95" r="3.5" fill="#c6c1b6"/>
+        <!-- THIS bet — spruce, ringed -->
+        <circle cx="112" cy="46" r="5.5" fill="#2e6e5e"/>
+        <circle cx="112" cy="46" r="9" stroke="#2e6e5e" stroke-width="1.3" fill="none" opacity=".5"/>
+      </svg>
+      <p class="mini-cap"><b>Outbound</b> sector · drifting toward the wall · 1 of 6 bets</p>
+    </aside>
+
+    <!-- CREW on this bet -->
+    <aside class="rail">
+      <h3>On this bet</h3>
+      <button class="crew-row"><span class="av" style="background:#5b6e8c">Y</span><span><span class="crew-name">Yara</span><span class="crew-sub"><span class="live-dot"></span>drafting · stage 3</span></span></button>
+      <button class="crew-row"><span class="av" style="background:#7a5b8c">M</span><span><span class="crew-name">Mira</span><span class="crew-sub"><span class="live-dot"></span>enriching · stage 2</span></span></button>
+    </aside>
+
+    <!-- BET HEADER — the question, given the room -->
+    <div class="bethead">
+      <div class="kick"><span>Bet · drifting</span><span class="mtag">Outbound motion</span></div>
+      <h1>Founder-signed outreach to eng leaders converts warmer than templated sequences.</h1>
+      <div class="sub"><span class="dot" style="background:#5b6e8c">Y</span>Staked by <b>Yara</b> · opened Jul 11 · signal expected in <b class="tnum">6d</b></div>
+    </div>
+
+    <!-- WORKFLOW GRAPH — the agentic GTM chain -->
+    <div class="graph">
+      <!-- SOURCE -->
+      <div class="wf-col">
+        <div class="wf-node done">
+          <div class="wf-top">
+            <span class="wf-ic done"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>
+            <span><span class="wf-name">Source</span><span class="wf-stateline done">done · 4m ago</span></span>
+          </div>
+          <div class="wf-receipts">
+            <div class="rcpt"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--proven)" stroke-width="2.6"><path d="M4 13l5 5L20 6"/></svg><span class="rn">62</span> eng leaders sourced</div>
+            <div class="rcpt muted">from GitHub + Wellfound</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="wf-edge"><svg width="44" height="12" viewBox="0 0 44 12" fill="none"><path d="M0 6h34" stroke="#c6c1b6" stroke-width="1.5"/><path d="M32 2.5l6 3.5-6 3.5" stroke="#c6c1b6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="el">for each</span></div>
+
+      <!-- ENRICH -->
+      <div class="wf-col">
+        <div class="wf-node running">
+          <span class="wf-avatar" style="background:#7a5b8c">M</span>
+          <div class="wf-top">
+            <span class="wf-ic running"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg></span>
+            <span><span class="wf-name">Enrich</span><span class="wf-stateline running">Mira running</span></span>
+          </div>
+          <div class="wf-receipts">
+            <div class="rcpt"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--spruce-ink)" stroke-width="2.4"><path d="M4 13l5 5L20 6"/></svg><span class="rn">48</span> enriched with recent repos</div>
+            <div class="rcpt muted"><span class="rn">14</span> in progress · 3 no match</div>
+          </div>
+          <span class="wf-elapsed">running 2m 40s</span>
+        </div>
+      </div>
+
+      <div class="wf-edge"><svg width="44" height="12" viewBox="0 0 44 12" fill="none"><path d="M0 6h34" stroke="#c6c1b6" stroke-width="1.5"/><path d="M32 2.5l6 3.5-6 3.5" stroke="#c6c1b6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="el">hand to</span></div>
+
+      <!-- DRAFT -->
+      <div class="wf-col">
+        <div class="wf-node running">
+          <span class="wf-avatar" style="background:#5b6e8c">Y</span>
+          <div class="wf-top">
+            <span class="wf-ic running"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span>
+            <span><span class="wf-name">Draft</span><span class="wf-stateline running">Yara running</span></span>
+          </div>
+          <div class="wf-receipts">
+            <div class="rcpt"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--spruce-ink)" stroke-width="2.4"><path d="M4 13l5 5L20 6"/></svg><span class="rn">31</span> drafts written</div>
+            <div class="rcpt muted">taste consulted · <span class="rn">4</span> revised</div>
+          </div>
+          <span class="wf-elapsed">running 1m 08s</span>
+        </div>
+      </div>
+
+      <div class="wf-edge"><svg width="44" height="12" viewBox="0 0 44 12" fill="none"><path d="M0 6h34" stroke="#d8be7e" stroke-width="1.6"/><path d="M32 2.5l6 3.5-6 3.5" stroke="#d8be7e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="el hold">stops here</span></div>
+
+      <!-- GATE / SEND (the wall) -->
+      <div class="wf-col">
+        <div class="wf-node gate">
+          <div class="wf-top">
+            <span class="wf-ic gate"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg></span>
+            <span><span class="wf-name">Send</span><span class="wf-stateline gate">at the wall</span></span>
+          </div>
+          <div class="wf-receipts">
+            <div class="rcpt hold"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--gap-ink)" stroke-width="2.2"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg><span class="rn">12</span> ready to send — held</div>
+            <div class="rcpt hold">needs your hand</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="wf-edge"><svg width="44" height="12" viewBox="0 0 44 12" fill="none"><path d="M0 6h34" stroke="#c6c1b6" stroke-width="1.5" stroke-dasharray="2 3"/><path d="M32 2.5l6 3.5-6 3.5" stroke="#c6c1b6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="el">after send</span></div>
+
+      <!-- MEASURE -->
+      <div class="wf-col">
+        <div class="wf-node queued">
+          <div class="wf-top">
+            <span class="wf-ic queued"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg></span>
+            <span><span class="wf-name">Measure</span><span class="wf-stateline queued">queued</span></span>
+          </div>
+          <div class="wf-receipts">
+            <div class="rcpt muted">waits for replies to return</div>
+            <div class="rcpt muted">joins outcome to this bet</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="gate-caption">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg>
+      Everything left of the gate runs on its own. The send stops for your hand — nothing goes outward until you say so.
+    </div>
+
+    <!-- GATE INSPECTOR — the exact held act -->
+    <aside class="inspector" aria-label="Held outward act">
+      <div class="insp-head">
+        <div class="insp-kick"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg>At the wall · Send stage</div>
+        <div class="insp-title">12 founder-signed emails ready to send</div>
+      </div>
+      <div class="insp-body">
+        <p class="insp-lbl">One draft shown · 1 of 12</p>
+        <div class="draftcard">
+          <div class="draft-to"><span class="av-sm">D</span>To <b>Dana Okoye</b> · Staff Eng, Meridian</div>
+          <div class="draft-body">Saw you shipped <span class="hl">react-webgl-atlas</span> last week — the instanced-mesh trick is clean. We built Drover for builders like you who'd rather point at real work than a résumé. Worth 10 minutes?</div>
+        </div>
+        <p class="insp-lbl">What sending does</p>
+        <div class="insp-meta">
+          <div class="mrow"><span>Outward act</span><b>12 emails</b></div>
+          <div class="mrow"><span>From</span><b>you@drover.build</b></div>
+          <div class="mrow"><span>Cost to run</span><b class="tnum">$0.00</b></div>
+          <div class="mrow"><span>Reversible</span><b>no — external send</b></div>
+        </div>
+      </div>
+      <div class="insp-foot">
+        <button class="btn approve"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 13l5 5L20 6"/></svg>Approve &amp; send 12</button>
+        <button class="btn hold">Hold · review each</button>
+      </div>
+    </aside>
+
+    <!-- COMPOSER scoped to bet -->
+    <div class="composer">
+      <div class="comp-scope">
+        <span class="scope-pill"><span class="av-sm" style="background:#5b6e8c">Y</span>DIRECT Yara</span>
+        <span class="scope-help">Reshape this bet's workflow in plain words. Sends still wait at the wall.</span>
+      </div>
+      <div class="comp-input">
+        <input placeholder="e.g. add a LinkedIn-touch stage before send…" aria-label="Direct this bet">
+        <button class="send" aria-label="Send"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+      </div>
+    </div>
+  </main>
+</div>

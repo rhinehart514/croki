@@ -1,5 +1,6 @@
-> **SUPERSEDED.** This separate build-room direction predates the open canvas. See
-> **docs/OPEN-CANVAS-SPEC.md** and the current `ComposerDock` implementation.
+> **SUPERSEDED.** This separate build-room direction is design history. Current product and design
+> authority lives in [FIRM-SPEC.md](../FIRM-SPEC.md), [STATE.md](../STATE.md), and the root
+> [DESIGN.md](../../DESIGN.md).
 
 # The build room — composer expanded view
 

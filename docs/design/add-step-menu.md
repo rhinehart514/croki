@@ -1,5 +1,8 @@
 # Add-step menu — redesign
 
+> **ARCHIVED DESIGN RECEIPT.** This workflow-step surface is superseded and cannot direct current
+> work. Use [FIRM-SPEC.md](../FIRM-SPEC.md) and the root [DESIGN.md](../../DESIGN.md).
+
 The command dock's "+" menu (`ComposerDock.tsx` portal; `.composer-add-menu` in `index.css`;
 `STEP_OPTIONS` in `lib/step-options.tsx`; shared primitive in `styles/menu.css`).
 

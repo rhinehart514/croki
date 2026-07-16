@@ -1,5 +1,10 @@
 # Client Care — Product Spec
 
+> **Historical proposal, not current direction.** This customer-specific concept predates the Firm
+> contract. It may be used as research input only; it does not define Drover, add product nouns, or
+> authorize a build. Current direction is [FIRM-SPEC.md](FIRM-SPEC.md), current proof is
+> [STATE.md](STATE.md), and Drover remains product-agnostic.
+
 **Status:** proposed  
 **Product verdict:** build  
 **First proof customer:** Rohlax Wellness  

@@ -56,10 +56,15 @@ describe("buildLens", () => {
 
     assert.equal(lens.ventureId, venture.id);
     assert.equal(lens.crew.length, 3);
+    assert.equal(lens.configuration.agents.length, 3);
+    assert.deepEqual(lens.configuration.agents.map((agent) => agent.ref).sort(), lens.crew.map((member) => member.ref).sort());
     assert.ok(lens.crew.every((entry) => entry.soul));
 
     assert.equal(lens.bets.length, 7);
     assert.equal(lens.wall.count, 2);
+    assert.equal(lens.wallItems.length, 2);
+    assert.equal(lens.outcomes.length, 1);
+    assert.equal(lens.outcomes[0].body, "looks good, tell me more");
     assert.ok(lens.wall.oldestParkedAt);
 
     const forkedBet = lens.bets.find((b) => b.id === bets.fork1.id);

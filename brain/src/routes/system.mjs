@@ -1,30 +1,31 @@
 import { json, readBody } from "./util.mjs";
 import { reportFriction, listFrictionQueue } from "../friction.mjs";
 import { enqueueFeatureRequest } from "../feature-builder.mjs";
-import { claimFounderSession, requestHasSessionToken } from "./session-guard.mjs";
+import { runtimeStatuses } from "../runtimes/index.mjs";
+import crypto from "node:crypto";
+import { authorizeFounderWriteForRequest, founderAuthorityStatus } from "./founder-authority.mjs";
+
+const startedAt = new Date().toISOString();
+const instanceId = crypto.randomUUID();
+
+export function shellStatus() {
+  return {
+    ok: true,
+    instanceId,
+    startedAt,
+    now: new Date().toISOString(),
+    founderAuthority: founderAuthorityStatus(),
+  };
+}
 
 export default async function handle({ req, res, url }) {
-  if (url.pathname === "/api/founder-session" && req.method === "GET") {
-    json(res, 200, { authenticated: requestHasSessionToken(req) });
-    return true;
-  }
-
-  if (url.pathname === "/api/founder-session" && req.method === "POST") {
-    try {
-      const body = await readBody(req);
-      if (!claimFounderSession(req, res, body?.code)) {
-        json(res, 403, { error: "That founder action code was not accepted." });
-        return true;
-      }
-      json(res, 200, { authenticated: true });
-    } catch (error) {
-      json(res, 400, { error: error instanceof Error ? error.message : String(error) });
-    }
-    return true;
-  }
-
   if (url.pathname === "/api/health" && req.method === "GET") {
-    json(res, 200, { ok: true });
+    json(res, 200, shellStatus());
+    return true;
+  }
+
+  if (url.pathname === "/api/runtimes" && req.method === "GET") {
+    json(res, 200, { runtimes: runtimeStatuses() });
     return true;
   }
 
@@ -39,6 +40,8 @@ export default async function handle({ req, res, url }) {
 
   if (url.pathname === "/api/friction" && req.method === "POST") {
     try {
+      const initiatedByAgent = String(req.headers?.["x-gtm-actor"] ?? "").trim().toLowerCase() === "agent";
+      if (!initiatedByAgent) authorizeFounderWriteForRequest(req, "Recording founder friction");
       const body = await readBody(req);
       const report = String(body?.report ?? "").trim();
       if (!report) throw new Error("A friction report needs the words — what got in the way?");
@@ -47,18 +50,20 @@ export default async function handle({ req, res, url }) {
         kind: body?.kind,
         context: body?.context,
         snapshot: body?.snapshot && typeof body.snapshot === "object" ? { caller: body.snapshot } : {},
-        source: body?.source ?? "api",
+        source: initiatedByAgent ? "mcp" : body?.source ?? "api",
         ventureId: body?.ventureId ?? null,
       });
       json(res, 201, record);
     } catch (error) {
-      json(res, 400, { error: error instanceof Error ? error.message : String(error) });
+      json(res, Number.isInteger(error?.status) ? error.status : 400, { error: error instanceof Error ? error.message : String(error) });
     }
     return true;
   }
 
   if (url.pathname === "/api/feature-request" && req.method === "POST") {
     try {
+      const initiatedByAgent = String(req.headers?.["x-gtm-actor"] ?? "").trim().toLowerCase() === "agent";
+      if (!initiatedByAgent) authorizeFounderWriteForRequest(req, "Starting a product change request");
       const body = await readBody(req);
       const report = String(body?.report ?? "").trim();
       if (!report) throw new Error("A feature request needs the words — what should Drover be able to do?");
@@ -66,7 +71,7 @@ export default async function handle({ req, res, url }) {
         report,
         context: body?.context,
         snapshot: body?.snapshot && typeof body.snapshot === "object" ? { caller: body.snapshot } : {},
-        source: body?.source ?? "api",
+        source: initiatedByAgent ? "mcp" : body?.source ?? "api",
         provider: body?.provider,
         model: body?.model,
         ventureId: body?.ventureId ?? null,
@@ -78,7 +83,7 @@ export default async function handle({ req, res, url }) {
         note: "Build queued. Any result remains an uncommitted isolated worktree for founder review.",
       });
     } catch (error) {
-      json(res, 400, { error: error instanceof Error ? error.message : String(error) });
+      json(res, Number.isInteger(error?.status) ? error.status : 400, { error: error instanceof Error ? error.message : String(error) });
     }
     return true;
   }

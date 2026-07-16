@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { betAnchorKey, crewAnchorKey, fallbackPositions } from "./lensLayout";
+import { betAnchorKey, crewAnchorKey, fallbackPositions, focusNeighborhoodKeys } from "./lensLayout";
 import type { FirmBet, FirmCrewMember } from "@/types";
 
 function makeCrew(ref: string): FirmCrewMember {
@@ -45,8 +45,7 @@ describe("fallbackPositions", () => {
     const positions = fallbackPositions(crew, bets);
     // Crew columns are ordered left to right...
     expect(positions[crewAnchorKey("writer")].x).toBeLessThan(positions[crewAnchorKey("closer")].x);
-    // ...and each bet lands in the SAME relative column as its own teammate (bets use a wider gap than
-    // crew avatars, so the x values aren't equal — only their column ordering must agree).
+    // ...and each bet lands in the same relative column as its own teammate.
     expect(positions[betAnchorKey("b1")].x).toBeLessThan(positions[betAnchorKey("b2")].x);
     expect(positions[betAnchorKey("b1")].y).toBeGreaterThan(positions[crewAnchorKey("writer")].y);
   });
@@ -75,5 +74,24 @@ describe("fallbackPositions", () => {
 
   it("never throws on an empty venture", () => {
     expect(fallbackPositions([], [])).toEqual({});
+  });
+});
+
+describe("focusNeighborhoodKeys", () => {
+  it("frames only the focused bet's existing lineage and participant anchors", () => {
+    const bets = [
+      makeBet({ id: "root", intent: "root", teammateRef: "writer" }),
+      makeBet({ id: "focus", intent: "focus", teammateRef: "writer", forkedFrom: "root" }),
+      makeBet({ id: "child", intent: "child", teammateRef: "closer", forkedFrom: "focus" }),
+      makeBet({ id: "unrelated", intent: "unrelated", teammateRef: "closer" }),
+    ];
+
+    expect(focusNeighborhoodKeys(bets, "focus")).toEqual([
+      "bet:focus",
+      "crew:writer",
+      "bet:root",
+      "bet:child",
+    ]);
+    expect(focusNeighborhoodKeys(bets, "missing")).toEqual([]);
   });
 });

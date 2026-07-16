@@ -11,6 +11,7 @@ import {
   removeCredential,
   resolveCredentialToken,
   setCredential,
+  setOAuthCredential,
 } from "../src/credential-store.mjs";
 
 describe("credential store", () => {
@@ -94,6 +95,27 @@ describe("credential store", () => {
     setCredential({ provider: "clay", token: "durable" }, options);
     // a brand-new resolve call (no in-memory state shared) reads the same persisted token
     assert.equal(resolveCredentialToken("clay", options), "durable");
+  });
+
+  it("banks a provider-resolved OAuth account address while legacy credentials keep it absent", () => {
+    setOAuthCredential({
+      provider: "gmail",
+      clientId: "client",
+      clientSecret: "secret",
+      refreshToken: "refresh",
+      accountAddress: " Founder@Example.com ",
+    }, options);
+    assert.equal(getCredential("gmail", options).accountAddress, "founder@example.com");
+    assert.equal(listCredentials(options)[0].accountAddress, "founder@example.com");
+
+    setOAuthCredential({
+      provider: "google",
+      clientId: "legacy-client",
+      clientSecret: "legacy-secret",
+      refreshToken: "legacy-refresh",
+    }, options);
+    assert.equal("accountAddress" in getCredential("google", options), false);
+    assert.equal("accountAddress" in listCredentials(options).find((entry) => entry.provider === "google"), false);
   });
 
   it("requires a provider and a non-empty token", () => {

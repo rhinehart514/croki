@@ -1,5 +1,9 @@
 # Firm cutover receipt
 
+> **ARCHIVED CUTOVER RECEIPT.** This dated snapshot is not current implementation proof or product
+> authority. Use [FIRM-SPEC.md](../FIRM-SPEC.md) for the contract and [STATE.md](../STATE.md) for
+> current proof.
+
 **Captured:** 2026-07-14 against the uncommitted working tree.
 
 The Firm is now the only executable product ontology. The old canvas, project, graph, channel-flow,

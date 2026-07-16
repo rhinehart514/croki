@@ -1,6 +1,9 @@
 # 05 — Migration: what folds, what cuts, which bones get reused
 
-**Status:** spec, from `00-DOCTRINE.md` (doctrine wins on conflict) · **Date:** 2026-07-02
+> **SUPERSEDED PACKAGE FILE.** This migration plan is complete history, not a current task list. Use
+> [FIRM-SPEC.md](../FIRM-SPEC.md) and [STATE.md](../STATE.md).
+
+**Historical status:** superseded migration spec from 2026-07-02.
 
 ```
 Cold open:    prefilled graph, strongest current testable path highlighted

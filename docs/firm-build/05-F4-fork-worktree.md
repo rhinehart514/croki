@@ -1,5 +1,8 @@
 # F4 — Fork is a worktree
 
+> **HISTORICAL EXECUTION TASK.** This work package is not a current backlog. Current product-work
+> behavior and proof live in [FIRM-SPEC.md](../FIRM-SPEC.md) and [STATE.md](../STATE.md).
+
 **Goal:** a bet that touches the product runs through the surviving worktree contract: isolated
 change, retained diff, staged review at the wall, explicit apply. Same verb, same wall.
 

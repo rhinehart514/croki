@@ -9,13 +9,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { founderHeaders } from "../helpers/founder-capability.mjs";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "drover-wall-routes-"));
 process.env.GTM_IDE_HOME = root;
 process.env.GTM_IDE_PERSISTENCE = "json";
 
 const { default: firmRoutes } = await import("../../src/firm/routes.mjs");
-const { claimFounderSession, founderBootstrapCode } = await import("../../src/routes/session-guard.mjs");
 const { createVenture } = await import("../../src/firm/venture-store.mjs");
 const { park } = await import("../../src/firm/wall.mjs");
 const { __resetPresence, markPresent } = await import("../../src/presence.mjs");
@@ -24,16 +24,11 @@ const options = { root };
 const venture = createVenture({ name: "Route-guarded venture" }, options);
 const other = createVenture({ name: "Other venture" }, options);
 
-function browserCookie() {
-  let value = "";
-  claimFounderSession({ headers: {} }, { setHeader(_name, next) { value = next; } }, founderBootstrapCode());
-  return value.split(";")[0];
-}
-
 async function call(method, pathname, body = {}, headers = {}) {
   const req = Readable.from([JSON.stringify(body)]);
   req.method = method;
-  req.headers = { "content-type": "application/json", ...headers };
+  req.url = pathname;
+  req.headers = { "content-type": "application/json", ...founderHeaders({ method, path: pathname }), ...headers };
   let status = 0;
   let raw = "";
   const res = { writeHead(next) { status = next; }, setHeader() {}, end(next) { raw += next ?? ""; } };
@@ -51,19 +46,20 @@ test("GET the wall queue for a venture", async () => {
   assert.ok(res.body.queue.some((entry) => entry.id === item.id));
 });
 
-test("a tokenless decide POST is refused", async () => {
+test("a local page decide POST does not need an unlock session", async () => {
   const item = park({ ventureId: venture.id, effect: { kind: "send" } }, options);
-  const res = await call("POST", `/api/ventures/${venture.id}/wall/${item.id}/decide`, { decision: "kill" });
-  assert.equal(res.status, 403);
+  const res = await call("POST", `/api/ventures/${venture.id}/wall/${item.id}/decide`, { decision: "reject" });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.receipt.decision, "reject");
 });
 
-test("an agent-stamped decide POST is refused even with a founder cookie", async () => {
+test("an agent-stamped decide POST is refused", async () => {
   const item = park({ ventureId: venture.id, effect: { kind: "send" } }, options);
   const res = await call(
     "POST",
     `/api/ventures/${venture.id}/wall/${item.id}/decide`,
     { decision: "kill" },
-    { cookie: browserCookie(), "x-gtm-actor": "agent" },
+    { "x-gtm-actor": "agent" },
   );
   assert.equal(res.status, 403);
 });
@@ -74,12 +70,12 @@ test("cross-venture decide 404s — venture B's item cannot be decided under ven
     "POST",
     `/api/ventures/${venture.id}/wall/${item.id}/decide`,
     { decision: "kill" },
-    { cookie: browserCookie() },
+    {},
   );
   assert.equal(res.status, 404);
 });
 
-test("the authenticated founder browser can release an item through the route — the route wires a real executor", async () => {
+test("the local founder page can release an item through the route — the route wires a real executor", async () => {
   __resetPresence();
   markPresent("test");
   const item = park({ ventureId: venture.id, effect: { kind: "send", message: "shipped", to: "lead@example.com" } }, options);
@@ -87,7 +83,7 @@ test("the authenticated founder browser can release an item through the route �
     "POST",
     `/api/ventures/${venture.id}/wall/${item.id}/decide`,
     { decision: "release" },
-    { cookie: browserCookie() },
+    {},
   );
   // The route now wires decideWithExecution -> a real executor (effect-executors.mjs), so a release
   // actually reaches message-send.mjs instead of throwing "cannot release without an executeEffect
@@ -101,7 +97,7 @@ test("the authenticated founder browser can release an item through the route �
   assert.match(res.body.receipt.executionResult.executionError, /No connected Gmail account/i);
 });
 
-test("the authenticated founder browser can kill an item through the route", async () => {
+test("the local founder page can kill an item through the route", async () => {
   const { createBet } = await import("../../src/firm/bet.mjs");
   const { setVentureDoc, getVentureDoc } = await import("../../src/firm/venture-store.mjs");
   const bet = createBet({ ventureId: venture.id, intent: "cold outbound to fintech ops" });
@@ -112,7 +108,7 @@ test("the authenticated founder browser can kill an item through the route", asy
     "POST",
     `/api/ventures/${venture.id}/wall/${item.id}/decide`,
     { decision: "kill", note: "cold list, no signal" },
-    { cookie: browserCookie() },
+    {},
   );
   assert.equal(res.status, 200);
   assert.equal(res.body.receipt.decision, "kill");
@@ -133,7 +129,7 @@ test("away still holds a release through the real route — the executor is neve
     "POST",
     `/api/ventures/${venture.id}/wall/${item.id}/decide`,
     { decision: "release" },
-    { cookie: browserCookie() },
+    {},
   );
   assert.equal(res.status, 409);
   assert.match(res.body.error, /away/i);
@@ -150,7 +146,7 @@ test("deploy still needs its second explicit act through the real route — rele
     "POST",
     `/api/ventures/${venture.id}/wall/${item.id}/decide`,
     { decision: "release" },
-    { cookie: browserCookie() },
+    {},
   );
   assert.equal(res.status, 409);
   assert.match(res.body.error, /second explicit founder authorization/i);
@@ -162,30 +158,28 @@ test("deploy still needs its second explicit act through the real route — rele
     "POST",
     `/api/ventures/${venture.id}/wall/${item.id}/decide`,
     { decision: "authorize-deploy" },
-    { cookie: browserCookie() },
+    {},
   );
   const released = await call(
     "POST",
     `/api/ventures/${venture.id}/wall/${item.id}/decide`,
     { decision: "release" },
-    { cookie: browserCookie() },
+    {},
   );
   assert.equal(released.status, 400);
   assert.match(released.body.error, /No executor is wired for effect kind "deploy"/);
 });
 
-test("self-approval is still refused through the real route — tokenless and agent-stamped release both fail before the executor", async () => {
+test("self-approval is still refused through the real route — agent-stamped release fails before the executor", async () => {
   const item = park({ ventureId: venture.id, effect: { kind: "send", message: "hi" } }, options);
-  const tokenless = await call("POST", `/api/ventures/${venture.id}/wall/${item.id}/decide`, { decision: "release" });
-  assert.equal(tokenless.status, 403);
   const agentStamped = await call(
     "POST",
     `/api/ventures/${venture.id}/wall/${item.id}/decide`,
     { decision: "release" },
-    { cookie: browserCookie(), "x-gtm-actor": "agent" },
+    { "x-gtm-actor": "agent" },
   );
   assert.equal(agentStamped.status, 403);
-  // Still queued — neither caller reached the executor.
+  // Still queued — the agent caller never reached the executor.
   const stillQueued = (await call("GET", `/api/ventures/${venture.id}/wall`)).body.queue;
   assert.ok(stillQueued.some((entry) => entry.id === item.id));
 });

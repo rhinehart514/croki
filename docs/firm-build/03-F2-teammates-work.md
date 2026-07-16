@@ -1,5 +1,8 @@
 # F2 — Teammates work
 
+> **HISTORICAL EXECUTION TASK.** This work package is not a current backlog. Use
+> [FIRM-SPEC.md](../FIRM-SPEC.md) and [STATE.md](../STATE.md) before changing the live tree.
+
 **Goal:** a teammate drives real work through the existing runtime adapters directly — no operator
 session record, no compiled graph. Fork creates bets; staged artifacts attach to bets; anything
 outward parks at the wall.

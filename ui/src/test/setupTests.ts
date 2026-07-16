@@ -21,6 +21,13 @@ Object.defineProperty(window, "localStorage", { configurable: true, value: testS
 // scrollTo unimplemented, so provide the browser-shaped no-op the component tests need.
 Object.defineProperty(window, "scrollTo", { configurable: true, value: () => undefined });
 
+class TestResizeObserver implements ResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+Object.defineProperty(globalThis, "ResizeObserver", { configurable: true, value: TestResizeObserver });
+
 // Unmount anything a test rendered so state from one test never leaks into the next.
 afterEach(() => {
   cleanup();

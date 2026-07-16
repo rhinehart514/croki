@@ -2,7 +2,7 @@
 // "A venture is a file. Local-first, readable, exportable.").
 //
 // Every durable record a venture holds — crew, bets, outcomes, decisions, settings, product-change
-// history, and placement — is a JSON document
+// history, conversation, and placement — is a JSON document
 // addressed through persistence.mjs, scoped to that venture's own subdirectory under the product
 // home (~/.gtm-ide/ventures/<ventureId>/ in production; an injectable root in tests, same
 // convention as every other store in this tree). One venture never reads or writes another's
@@ -46,7 +46,10 @@ export const VENTURE_COLLECTIONS = Object.freeze([
   "decisions",
   "settings",
   "productChanges",
+  "conversation",
   "placement",
+  "configuration",
+  "architecture",
 ]);
 
 function ventureRoot(options, ventureId) {
@@ -203,7 +206,7 @@ export function exportVenture(ventureId, options = {}) {
 // placement never actually round-tripped despite being listed in VENTURE_COLLECTIONS. Fixed here by
 // resolving each document's real storage key: its own `.id` when it has one (bets, decisions), else the
 // known singleton key for that specific collection.
-const SINGLETON_KEYS = { crew: "roster", placement: "canvas" };
+const SINGLETON_KEYS = { crew: "roster", placement: "canvas", configuration: "firm", architecture: "atlas" };
 
 function storageKeyFor(collection, doc) {
   if (doc?.id) return safeId(doc.id);

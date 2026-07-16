@@ -10,31 +10,26 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
+import { founderRequest } from "../helpers/founder-capability.mjs";
 
 import { park, queue, queueAll, decide, hasWallRelease } from "../../src/firm/wall.mjs";
 import { createVenture, listVentures, setVentureDoc } from "../../src/firm/venture-store.mjs";
 import { createBet } from "../../src/firm/bet.mjs";
-import { claimFounderSession, founderBootstrapCode } from "../../src/routes/session-guard.mjs";
 import { __resetPresence, __setPresenceClock, markPresent } from "../../src/presence.mjs";
+import { setOAuthCredential } from "../../src/credential-store.mjs";
 
 function freshRoot() {
   return { root: fs.mkdtempSync(path.join(os.tmpdir(), "firm-wall-")) };
 }
 
 function browserReq() {
-  let cookie = null;
-  claimFounderSession({ headers: {} }, { setHeader(_name, next) { cookie = next.split(";")[0]; } }, founderBootstrapCode());
-  return { headers: { cookie } };
+  return founderRequest();
 }
 
 function agentReq() {
   const req = browserReq();
   req.headers["x-gtm-actor"] = "agent";
   return req;
-}
-
-function tokenlessReq() {
-  return { headers: {} };
 }
 
 function makeBet(ventureId, options) {
@@ -49,11 +44,78 @@ describe("wall — park/queue", () => {
     const venture = createVenture({ name: "Wall basics" }, options);
     const item = park({ ventureId: venture.id, effect: { kind: "send", message: "hi", recipients: ["a@x.com"] } }, options);
     assert.match(item.id, /^wall-/);
+    assert.equal(item.workRef, item.id, "an unlinked outward act is itself durable, addressable work");
     assert.equal(item.decision, null);
 
     const q = queue(venture.id, options);
     assert.equal(q.length, 1);
     assert.equal(q[0].id, item.id);
+  });
+
+  it("preserves an explicit originating work reference on the wall item", () => {
+    const options = freshRoot();
+    const venture = createVenture({ name: "Exact wall lineage" }, options);
+    const item = park({
+      ventureId: venture.id,
+      workRef: "staged-offer-1",
+      effect: { kind: "send", to: "buyer@acme.com" },
+    }, options);
+    assert.equal(item.workRef, "staged-offer-1");
+    assert.equal(queue(venture.id, options)[0].workRef, "staged-offer-1");
+  });
+
+  it("stamps only known message consequences from the connected Gmail profile", () => {
+    const options = freshRoot();
+    const venture = createVenture({ name: "Known send consequences" }, options);
+    setOAuthCredential({
+      provider: "gmail",
+      clientId: "client",
+      clientSecret: "secret",
+      refreshToken: "refresh",
+      accountAddress: "founder@example.com",
+    }, options);
+    const connected = park({
+      ventureId: venture.id,
+      effect: { kind: "message", to: "buyer@example.com", body: "Hello" },
+    }, options);
+    assert.equal(connected.effect.fromAddress, "founder@example.com");
+    assert.equal(connected.effect.reversible, false);
+    assert.equal(connected.effect.reversibility, "A sent message cannot be unsent.");
+    assert.equal("costUsd" in connected.effect, false, "no unmeasured per-send cost is invented");
+
+    const legacyOptions = freshRoot();
+    const legacyVenture = createVenture({ name: "Legacy Gmail" }, legacyOptions);
+    setOAuthCredential({
+      provider: "gmail",
+      clientId: "legacy-client",
+      clientSecret: "legacy-secret",
+      refreshToken: "legacy-refresh",
+    }, legacyOptions);
+    const legacy = park({
+      ventureId: legacyVenture.id,
+      effect: { kind: "send", fromAddress: "invented@example.com", to: "buyer@example.com" },
+    }, legacyOptions);
+    assert.equal("fromAddress" in legacy.effect, false, "an unverified staged claim does not become sender identity");
+    assert.equal(legacy.effect.reversible, false);
+    assert.equal("costUsd" in legacy.effect, false);
+  });
+
+  it("stamps product-change and deploy reversibility without inventing cost", () => {
+    const options = freshRoot();
+    const venture = createVenture({ name: "Known apply consequences" }, options);
+    const product = park({
+      ventureId: venture.id,
+      effect: { kind: "product-change", branch: "dogfood/example", baseCommit: "abc123" },
+    }, options);
+    assert.equal(product.effect.destination, "dogfood/example at abc123");
+    assert.equal(product.effect.reversible, true);
+    assert.match(product.effect.reversibility, /reviewable diff on dogfood\/example; revertable/);
+    assert.equal("costUsd" in product.effect, false);
+
+    const deploy = park({ ventureId: venture.id, effect: { kind: "deploy", environment: "production" } }, options);
+    assert.equal(deploy.effect.reversible, false);
+    assert.match(deploy.effect.reversibility, /live environment/);
+    assert.equal("costUsd" in deploy.effect, false);
   });
 
   it("requires a ventureId and an effect", () => {
@@ -78,18 +140,8 @@ describe("wall — park/queue", () => {
   });
 });
 
-describe("wall — self-approval is rejected from every door (browser/API/MCP/model)", () => {
-  it("a tokenless caller cannot release", () => {
-    const options = freshRoot();
-    const venture = createVenture({ name: "No self approve tokenless" }, options);
-    const item = park({ ventureId: venture.id, effect: { kind: "send" } }, options);
-    assert.throws(
-      () => decide({ ventureId: venture.id, itemId: item.id, decision: "release" }, { req: tokenlessReq() }, {}, options),
-      (err) => err.status === 403,
-    );
-  });
-
-  it("an agent/MCP/model-stamped caller cannot release, even carrying a valid founder cookie", () => {
+describe("wall — self-approval is rejected from the model and MCP door", () => {
+  it("an agent/MCP/model-stamped caller cannot release", () => {
     const options = freshRoot();
     const venture = createVenture({ name: "No self approve agent" }, options);
     const item = park({ ventureId: venture.id, effect: { kind: "send" } }, options);
@@ -99,7 +151,7 @@ describe("wall — self-approval is rejected from every door (browser/API/MCP/mo
     );
   });
 
-  it("an authenticated founder browser CAN release, and only through executeEffect", () => {
+  it("the local founder page CAN release, and only through executeEffect", () => {
     const options = freshRoot();
     __resetPresence();
     markPresent("test");
@@ -172,7 +224,7 @@ describe("wall — the outward capability is connector-level: an unreleased item
 });
 
 describe("wall — away holds standing outward effects; marking away needs nothing, marking present needs founder auth", () => {
-  it("a release while the founder is away is rejected, even from an authenticated founder browser", () => {
+  it("a release while the founder is away is rejected, even from the local founder page", () => {
     const options = freshRoot();
     __resetPresence(); // fresh boot -> away
     const venture = createVenture({ name: "Away holds" }, options);
@@ -238,15 +290,11 @@ describe("wall — kill writes the receipt + learning and is the only path to en
     assert.equal(endedBet.learning, "dead channel");
   });
 
-  it("a tokenless or agent-stamped caller cannot kill", () => {
+  it("an agent-stamped caller cannot kill", () => {
     const options = freshRoot();
     const venture = createVenture({ name: "No self-kill" }, options);
     const bet = makeBet(venture.id, options);
     const item = park({ ventureId: venture.id, betId: bet.id, effect: { kind: "kill-proposal" } }, options);
-    assert.throws(
-      () => decide({ ventureId: venture.id, itemId: item.id, decision: "kill" }, { req: tokenlessReq() }, {}, options),
-      (err) => err.status === 403,
-    );
     assert.throws(
       () => decide({ ventureId: venture.id, itemId: item.id, decision: "kill" }, { req: agentReq() }, {}, options),
       (err) => err.status === 403,
@@ -326,14 +374,10 @@ describe("wall — deploy keeps its second explicit authorization", () => {
     assert.equal(called, false);
   });
 
-  it("authorize-deploy is founder-only: a tokenless or agent-stamped caller cannot stamp it", () => {
+  it("authorize-deploy is founder-only: an agent-stamped caller cannot stamp it", () => {
     const options = freshRoot();
     const venture = createVenture({ name: "Authorize-deploy founder only" }, options);
     const item = park({ ventureId: venture.id, effect: { kind: "deploy", diff: "d1" } }, options);
-    assert.throws(
-      () => decide({ ventureId: venture.id, itemId: item.id, decision: "authorize-deploy" }, { req: tokenlessReq() }, {}, options),
-      (err) => err.status === 403,
-    );
     assert.throws(
       () => decide({ ventureId: venture.id, itemId: item.id, decision: "authorize-deploy" }, { req: agentReq() }, {}, options),
       (err) => err.status === 403,

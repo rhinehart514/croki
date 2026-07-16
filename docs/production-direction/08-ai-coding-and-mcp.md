@@ -1,5 +1,8 @@
 # AI Coding and MCP Surface
 
+> **SUPERSEDED PACKAGE FILE.** This MCP plan is historical input only. Current product direction and
+> proof live in [FIRM-SPEC.md](../FIRM-SPEC.md) and [STATE.md](../STATE.md).
+
 ## Product principle
 
 Drover should be available inside the AI coding experience, but the MCP layer must address the same stable

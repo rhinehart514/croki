@@ -1,7 +1,10 @@
 # North-star goal — complete the experiment machine (full stack)
 
+> **Archived goal.** This goal was superseded on 2026-07-14 by
+> [FIRM-SPEC.md](../FIRM-SPEC.md). Its unchecked work is not a current backlog.
+
 **Owner:** Sol (Codex threads). **Written:** 2026-07-12. **Stage:** alpha.
-**Spec of record:** [../EXPERIMENT-MACHINE-SPEC.md](../EXPERIMENT-MACHINE-SPEC.md).
+**Historical spec:** [../EXPERIMENT-MACHINE-SPEC.md](../EXPERIMENT-MACHINE-SPEC.md).
 **Alignment map:** [experiment-machine-alignment.md](experiment-machine-alignment.md).
 
 ## The goal

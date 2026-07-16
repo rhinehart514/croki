@@ -1,5 +1,9 @@
 # Connect a capability — design spec
 
+> **ARCHIVED DESIGN RECEIPT.** This MCP capability surface is not the current firm-configuration
+> experience. Use [FIRM-SPEC.md](../FIRM-SPEC.md), [STATE.md](../STATE.md), and the root
+> [DESIGN.md](../../DESIGN.md).
+
 Status: BUILT (Creation arc → shipped). Live in the React app behind the dock's
 capabilities (plug) button; backed by a real MCP client, classifier, store, and API.
 Original mock: `~/design-showcase/connect-capability/index.html` (`cc-hero.png` / `cc-states.png`).

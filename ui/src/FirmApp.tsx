@@ -1,294 +1,298 @@
 // Firm shell: pick or start a venture, then open the lens over crew, bets, outcomes, and the wall.
 // This is the sole render root. Deliberately small:
-// a venture picker, FirmLens, a minimal drive form (give a teammate a goal), and a per-bet event feed
-// read straight off bet.events.
+// a venture picker, a persistent teammate rail, and FirmLens.
 //
 // Desktop only, no mobile layout (AGENTS.md). CrewFace is the only teammate portrait door (DESIGN.md).
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { ArrowLeft, GitBranch, MessageCircle, PanelLeftClose, Settings2 } from "lucide-react";
 import {
-  createVenture,
-  driveTeammate,
-  getFounderSession,
-  getLens,
-  listVentures,
   markFounderAway,
   markFounderPresent,
-  type FirmVenture,
+  stopActiveDrive,
 } from "@/api";
-import type { FirmLens as FirmLensPayload } from "@/types";
-import { FirmLens } from "@/components/lens/FirmLens";
-import { FirmHeatControl } from "@/components/firm/FirmHeatControl";
-import { FounderSessionUnlock } from "@/components/FounderSessionUnlock";
-import { CrewFace } from "@/components/crew/CrewFace";
+import type { DriveTeammateResult, FirmVenture, PortfolioWallContext } from "@/api";
+import { FirmSettings } from "@/components/firm/FirmSettings";
+import { FirmFreshness } from "@/components/FirmFreshness";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import type { CanvasSelection } from "@/components/firm/GoalComposer";
+import { targetArchitecture, targetBet, targetTeammates } from "@/components/firm/directionTarget";
+import { VenturePicker } from "@/components/firm/VenturePicker";
+import { TeammateRail } from "@/components/firm/TeammateRail";
+import { FirmWorkbenchCanvas } from "@/components/firm/FirmWorkbenchCanvas";
 import "@/styles/firm-app.css";
+import { useFirmConnection } from "@/hooks/use-firm-connection";
+import { buildReturnBrief } from "@/lib/return-brief";
+import { advanceReturnCursor, readReturnCursor } from "@/lib/return-cursor";
+import { recordUxMetric, startReturnDecisionTimer } from "@/lib/ux-metrics";
+import type { FirmArchitectureProjection } from "@/types";
 
-function VenturePicker({ onOpen, requestFounderAction }: {
-  onOpen: (ventureId: string) => void;
-  requestFounderAction: (run: () => Promise<void>) => Promise<void>;
-}) {
-  const [ventures, setVentures] = useState<FirmVenture[] | null>(null);
-  const [name, setName] = useState("");
-  const [repository, setRepository] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+const CONVERSATION_MIN_WIDTH = 360;
+const CONVERSATION_MAX_WIDTH = 680;
+const CONVERSATION_DEFAULT_WIDTH = 440;
 
-  useEffect(() => {
-    let live = true;
-    listVentures().then((res) => { if (live) setVentures(res.ventures); }).catch(() => { if (live) setVentures([]); });
-    return () => { live = false; };
-  }, []);
-
-  const submit = async () => {
-    const trimmed = name.trim();
-    const trimmedRepository = repository.trim();
-    if (!trimmed || !trimmedRepository || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await requestFounderAction(async () => {
-        const { venture } = await createVenture(trimmed, trimmedRepository);
-        onOpen(venture.id);
-      });
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not start that venture.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="firm-app-picker">
-      <div className="firm-app-picker-head">
-        <h1>Drover</h1>
-        <span>A portfolio of isolated machines behind one wall.</span>
-      </div>
-
-      {ventures === null ? (
-        <p className="firm-app-picker-loading">Loading your ventures…</p>
-      ) : ventures.length === 0 ? (
-        <p className="firm-app-picker-empty">No ventures yet — start the first one below.</p>
-      ) : (
-        <ul className="firm-app-picker-list">
-          {ventures.map((venture) => (
-            <li key={venture.id}>
-              <button type="button" onClick={() => onOpen(venture.id)}>
-                <strong>{venture.name}</strong>
-                <span>Started {new Date(venture.createdAt).toLocaleDateString()}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <form className="firm-app-picker-create" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
-        <Input
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="Name a new venture"
-          aria-label="New venture name"
-        />
-        <Input
-          value={repository}
-          onChange={(event) => setRepository(event.target.value)}
-          placeholder="Product repository path"
-          aria-label="Product repository path"
-        />
-        <Button type="submit" disabled={busy || !name.trim() || !repository.trim()}>{busy ? "Starting…" : "Start venture"}</Button>
-      </form>
-      {error ? <p role="alert" className="firm-app-picker-error">{error}</p> : null}
-    </div>
-  );
+function conversationKey(ventureId: string, field: "open" | "width") {
+  return `drover:conversation:${ventureId}:${field}`;
 }
 
-// The minimum honest drive affordance: name a teammate, state a goal, POST it. driveTeammate() itself
-// ensures the teammate's soul exists (work-loop.mjs) — there is no separate "hire" step to build here.
-function DriveForm({ ventureId, onDriven }: { ventureId: string; onDriven: () => void }) {
-  const [teammateRef, setTeammateRef] = useState("");
-  const [goal, setGoal] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
-
-  const submit = async () => {
-    const ref = teammateRef.trim();
-    const trimmedGoal = goal.trim();
-    if (!ref || !trimmedGoal || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await driveTeammate(ventureId, { teammateRef: ref, goal: trimmedGoal });
-      setGoal("");
-      setOpen(false);
-      onDriven();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "That drive did not start.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (!open) {
-    return (
-      <button type="button" className="firm-app-drive-toggle" onClick={() => setOpen(true)}>
-        <CrewFace agentRef={teammateRef || "new-teammate"} size={20} />
-        Give the crew a goal
-      </button>
-    );
-  }
-
-  return (
-    <form className="firm-app-drive-form" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
-      <Input
-        value={teammateRef}
-        onChange={(event) => setTeammateRef(event.target.value)}
-        placeholder="Teammate (e.g. outreach-writer)"
-        aria-label="Teammate ref"
-        autoFocus
-      />
-      <Textarea
-        value={goal}
-        onChange={(event) => setGoal(event.target.value)}
-        placeholder="What should they try?"
-        aria-label="Goal"
-        rows={3}
-      />
-      <div className="firm-app-drive-actions">
-        <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
-        <Button type="submit" disabled={busy || !teammateRef.trim() || !goal.trim()}>{busy ? "Starting…" : "Drive"}</Button>
-      </div>
-      {error ? <p role="alert">{error}</p> : null}
-    </form>
-  );
+function readConversationWidth(ventureId: string) {
+  const stored = window.localStorage.getItem(conversationKey(ventureId, "width"));
+  if (stored == null) return CONVERSATION_DEFAULT_WIDTH;
+  const saved = Number(stored);
+  return Number.isFinite(saved)
+    ? Math.min(CONVERSATION_MAX_WIDTH, Math.max(CONVERSATION_MIN_WIDTH, saved))
+    : CONVERSATION_DEFAULT_WIDTH;
 }
 
-// A per-bet event feed, read straight from bet.events — the honest minimum conversation surface for
-// tonight (the full Firm input re-point onto the F2 event vocabulary is separate work). No speaker
-// segmentation, no crew beats: just the flat log, newest last, grouped by which bet it happened on.
-function EventFeed({ lens }: { lens: FirmLensPayload }) {
-  const withEvents = lens.bets.filter((bet) => (bet.events?.length ?? 0) > 0);
-  if (withEvents.length === 0) {
-    return <p className="firm-app-feed-empty">Nothing has happened yet — give the crew a goal to start the loop.</p>;
-  }
-  return (
-    <div className="firm-app-feed">
-      {withEvents.map((bet) => (
-        <div key={bet.id} className="firm-app-feed-bet">
-          <strong>{bet.intent}</strong>
-          <ul>
-            {(bet.events ?? []).slice(-8).map((event, index) => (
-              <li key={`${bet.id}-${index}`}>
-                <span className="firm-app-feed-type">{event.type}</span>
-                {event.detail ? <span>{event.detail}</span> : null}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
-    </div>
-  );
+function readConversationOpen(ventureId: string) {
+  return window.localStorage.getItem(conversationKey(ventureId, "open")) !== "false";
 }
 
 export default function FirmApp() {
-  const [ventureId, setVentureId] = useState<string | null>(null);
-  const [lens, setLens] = useState<FirmLensPayload | null>(null);
-  const [feedOpen, setFeedOpen] = useState(false);
-  const [founderAuthenticated, setFounderAuthenticated] = useState<boolean | null>(null);
-  const [unlockOpen, setUnlockOpen] = useState(false);
-  const [pendingAction, setPendingAction] = useState<(() => Promise<void>) | null>(null);
+  const [venture, setVenture] = useState<FirmVenture | null>(null);
+  const [canvasSelection, setCanvasSelection] = useState<CanvasSelection>(null);
+  const [wallOpen, setWallOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [conversationOpen, setConversationOpen] = useState(true);
+  const [conversationWidth, setConversationWidth] = useState(CONVERSATION_DEFAULT_WIDTH);
+  const [capabilityRefreshKey, setCapabilityRefreshKey] = useState(0);
+  const [architecture, setArchitecture] = useState<FirmArchitectureProjection | null>(null);
+  const { lens, messages, activeDrives, connection, refresh, setLens } = useFirmConnection(venture?.id ?? null);
+  const stale = connection.phase === "stale" || connection.phase === "offline";
+  const readOnly = connection.phase !== "fresh";
+  const [returnCursor, setReturnCursor] = useState<string | null>(null);
+  const returnAccount = useMemo(
+    () => lens ? buildReturnBrief(lens, messages, returnCursor, architecture) : null,
+    [architecture, lens, messages, returnCursor],
+  );
+  const returnReviewedThrough = returnAccount?.reviewedThrough ?? null;
 
   useEffect(() => {
-    let live = true;
-    getFounderSession().then((session) => { if (live) setFounderAuthenticated(session.authenticated); }).catch(() => { if (live) setFounderAuthenticated(false); });
-    return () => { live = false; };
-  }, []);
-
-  useEffect(() => {
-    if (founderAuthenticated !== true) return;
-    const heartbeat = () => { void markFounderPresent(); };
+    const heartbeat = () => { void markFounderPresent().catch(() => undefined); };
     heartbeat();
     const timer = window.setInterval(heartbeat, 15_000);
-    const markAway = () => { void markFounderAway(); };
+    const markAway = () => { void markFounderAway().catch(() => undefined); };
     window.addEventListener("pagehide", markAway);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("pagehide", markAway);
       markAway();
     };
-  }, [founderAuthenticated]);
+  }, []);
 
-  // A founder-controlled action (starting a venture) either runs immediately when already authenticated, or
-  // parks itself to re-run the moment the unlock prompt succeeds — mirrors Firm shell's own
-  // requestFounderAction pattern, trimmed to this shell's one use.
-  const requestFounderAction = useCallback((run: () => Promise<void>): Promise<void> => {
-    if (founderAuthenticated === true) return run();
-    setPendingAction(() => run);
-    setUnlockOpen(true);
-    return Promise.resolve();
-  }, [founderAuthenticated]);
-
-  const handleUnlocked = useCallback(() => {
-    setFounderAuthenticated(true);
-    setUnlockOpen(false);
-    const run = pendingAction;
-    setPendingAction(null);
-    if (run) void run();
-  }, [pendingAction]);
-
-  // Refresh the lens once, right after a drive starts — FirmLens's own poll otherwise carries it, this
-  // just avoids waiting out a full idle tick to see the first fork/event land.
-  const refreshLens = useCallback(() => {
-    if (!ventureId) return;
-    void getLens(ventureId).then((res) => setLens(res.lens));
-  }, [ventureId]);
+  const openVenture = useCallback((nextVenture: FirmVenture, context?: PortfolioWallContext) => {
+    setReturnCursor(readReturnCursor(nextVenture.id));
+    setCanvasSelection(context?.betId ? targetBet(context.betId) : null);
+    setWallOpen(Boolean(context));
+    setConversationOpen(readConversationOpen(nextVenture.id));
+    setConversationWidth(readConversationWidth(nextVenture.id));
+    setVenture(nextVenture);
+    setArchitecture(null);
+  }, []);
 
   useEffect(() => {
-    if (!ventureId) return;
-    void getLens(ventureId).then((res) => setLens(res.lens));
-  }, [ventureId]);
+    if (!venture) return;
+    window.localStorage.setItem(conversationKey(venture.id, "open"), String(conversationOpen));
+    window.localStorage.setItem(conversationKey(venture.id, "width"), String(conversationWidth));
+  }, [conversationOpen, conversationWidth, venture]);
 
-  if (!ventureId) {
+  useEffect(() => {
+    if (venture && returnAccount?.projection?.records.some((record) => (
+      record.group === "needs-you" || record.group === "held-safely"
+    ))) startReturnDecisionTimer(venture.id);
+  }, [returnAccount?.projection, venture]);
+
+  useEffect(() => {
+    if (!venture || !lens?.wall.count) return;
+    const recordPending = () => recordUxMetric("wall_left_pending", venture.id);
+    window.addEventListener("pagehide", recordPending);
+    return () => window.removeEventListener("pagehide", recordPending);
+  }, [lens?.wall.count, venture]);
+
+  // Refresh both founder surfaces once a drive settles. FirmLens and the conversation poll otherwise
+  // carry them independently; this avoids waiting out a full idle tick for the result.
+  const refreshVenture = useCallback(() => {
+    refresh();
+  }, [refresh]);
+
+  const handleDriven = useCallback((result: DriveTeammateResult) => {
+    refreshVenture();
+    const opened = result.handoff?.changes?.openedBetIds ?? [];
+    if (opened.length === 1) setCanvasSelection(targetBet(opened[0]));
+  }, [refreshVenture]);
+
+  const returnToConversation = useCallback(() => {
+    setWallOpen(false);
+    setConversationOpen(true);
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>(".firm-app-composer textarea")?.focus());
+    });
+  }, []);
+
+  const beginConversationResize = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const startX = event.clientX;
+    const startWidth = conversationWidth;
+    const move = (next: PointerEvent) => {
+      setConversationWidth(Math.min(
+        CONVERSATION_MAX_WIDTH,
+        Math.max(CONVERSATION_MIN_WIDTH, startWidth + next.clientX - startX),
+      ));
+    };
+    const stop = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+      document.body.style.removeProperty("cursor");
+      document.body.style.removeProperty("user-select");
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop, { once: true });
+  }, [conversationWidth]);
+
+  const reviewReturnBrief = useCallback(() => {
+    if (!venture || !returnReviewedThrough) return;
+    advanceReturnCursor(venture.id, returnReviewedThrough);
+    setReturnCursor(returnReviewedThrough);
+  }, [returnReviewedThrough, venture]);
+
+  const stopDrive = useCallback(async (driveId: string) => {
+    if (!venture) return;
+    await stopActiveDrive(venture.id, driveId);
+    refreshVenture();
+  }, [refreshVenture, venture]);
+
+  const viewReturnReceipt = useCallback((receiptId: string) => {
+    if (venture) recordUxMetric("proof_opened", venture.id);
+    window.requestAnimationFrame(() => {
+      const receipt = document.getElementById(`firm-message:${receiptId}`);
+      receipt?.scrollIntoView({ block: "center" });
+      receipt?.focus({ preventScroll: true });
+    });
+  }, [venture]);
+
+  const recordReturnProofOpen = useCallback(() => {
+    if (venture) recordUxMetric("proof_opened", venture.id);
+  }, [venture]);
+
+  if (!venture) {
     return (
       <div className="firm-app">
-        <VenturePicker onOpen={setVentureId} requestFounderAction={requestFounderAction} />
-        {unlockOpen ? (
-          <div className="firm-app-unlock-scrim">
-            <FounderSessionUnlock onUnlocked={handleUnlocked} />
-          </div>
-        ) : null}
+        <VenturePicker onOpen={openVenture} />
       </div>
     );
   }
 
   return (
     <div className="firm-app firm-app-open">
-      <header className="firm-app-header">
-        <button type="button" className="firm-app-back" onClick={() => { setVentureId(null); setLens(null); }}>
-          ← Ventures
-        </button>
-        <DriveForm ventureId={ventureId} onDriven={refreshLens} />
-        <FirmHeatControl ventureId={ventureId} requestFounderAction={requestFounderAction} />
-        <button type="button" className="firm-app-feed-toggle" onClick={() => setFeedOpen((value) => !value)} aria-expanded={feedOpen}>
-          {feedOpen ? "Hide activity" : "Show activity"}
-        </button>
-      </header>
-
-      <div className="firm-app-body">
-        <FirmLens ventureId={ventureId} />
-        {feedOpen && lens ? (
-          <aside className="firm-app-feed-panel" aria-label="Bet activity">
-            <EventFeed lens={lens} />
-          </aside>
-        ) : null}
-      </div>
-
-      {unlockOpen ? (
-        <div className="firm-app-unlock-scrim">
-          <FounderSessionUnlock onUnlocked={handleUnlocked} />
+      <header className="firm-app-workbench-bar">
+        <div className="firm-app-workbench-identity">
+          <span className="firm-app-rail-mark" aria-hidden="true"><GitBranch /></span>
+          <span><strong>Drover</strong><small>{venture.name}</small></span>
+          <Button type="button" variant="ghost" size="sm" onClick={() => { setVenture(null); setArchitecture(null); setReturnCursor(null); setCanvasSelection(null); setWallOpen(false); setSettingsOpen(false); }}>
+            <ArrowLeft aria-hidden="true" /> Ventures
+          </Button>
         </div>
+        <div className="firm-app-workbench-status" data-attention={lens?.wall.count ? "true" : "false"}>
+          <FirmFreshness connection={connection} onRetry={refresh} />
+          <strong>{lens && connection.phase !== "fresh"
+            ? `Last known: ${lens.bets.filter((bet) => bet.position === "live").length} ${lens.bets.filter((bet) => bet.position === "live").length === 1 ? "line" : "lines"} underway · pending decisions not current`
+            : lens
+            ? lens.wall.count
+              ? `${lens.wall.count} ${lens.wall.count === 1 ? "decision needs" : "decisions need"} you`
+              : lens.bets.some((bet) => bet.position === "live")
+                ? `${lens.bets.filter((bet) => bet.position === "live").length} ${lens.bets.filter((bet) => bet.position === "live").length === 1 ? "line" : "lines"} underway · nothing needs you`
+                : "Ready for the first direction"
+            : "Opening the venture…"}</strong>
+        </div>
+        <div className="firm-app-workbench-actions">
+          <Button type="button" variant="ghost" size="sm" aria-pressed={conversationOpen} onClick={() => setConversationOpen((open) => !open)}>
+            {conversationOpen ? <PanelLeftClose aria-hidden="true" /> : <MessageCircle aria-hidden="true" />}
+            {conversationOpen ? "Conversation" : "Open conversation"}
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => setSettingsOpen(true)}>
+            <Settings2 aria-hidden="true" /> Settings
+          </Button>
+        </div>
+      </header>
+      <div className="firm-app-body">
+        {(
+          <>
+            <TeammateRail
+              venture={venture}
+              lens={lens}
+              messages={messages}
+              selection={canvasSelection}
+              wallOpen={wallOpen}
+              width={conversationOpen ? conversationWidth : CONVERSATION_MIN_WIDTH}
+              onSelectCrew={(ref) => setCanvasSelection(targetTeammates([ref]))}
+              onSelectBet={(betId) => setCanvasSelection(targetBet(betId))}
+              onClearSelection={() => setCanvasSelection(null)}
+              onOpenWall={() => setWallOpen(true)}
+              onCloseWall={() => setWallOpen(false)}
+              onDriven={handleDriven}
+              onConfigurationChanged={refreshVenture}
+              activeWork={activeDrives}
+              onStopActiveWork={stopDrive}
+              returnBrief={returnAccount?.projection}
+              onOpenReturnProof={recordReturnProofOpen}
+              onReviewReturnBrief={reviewReturnBrief}
+              onViewReturnReceipt={viewReturnReceipt}
+              onSelectArchitecture={(architectureId, revision) => setCanvasSelection(targetArchitecture(architectureId, revision))}
+              onCollapse={conversationOpen ? () => setConversationOpen(false) : undefined}
+              transcriptOpen={conversationOpen}
+              readOnly={readOnly}
+              readOnlyReason={connection.message ?? "Reconnecting before changes can be sent…"}
+              architecture={architecture}
+            />
+            {conversationOpen ? <div
+              className="firm-app-conversation-resizer"
+              role="separator"
+              aria-label="Resize conversation"
+              aria-orientation="vertical"
+              aria-valuemin={CONVERSATION_MIN_WIDTH}
+              aria-valuemax={CONVERSATION_MAX_WIDTH}
+              aria-valuenow={conversationWidth}
+              tabIndex={0}
+              onPointerDown={beginConversationResize}
+              onKeyDown={(event) => {
+                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                event.preventDefault();
+                setConversationWidth((width) => Math.min(
+                  CONVERSATION_MAX_WIDTH,
+                  Math.max(CONVERSATION_MIN_WIDTH, width + (event.key === "ArrowRight" ? 24 : -24)),
+                ));
+              }}
+            /> : null}
+          </>
+        )}
+        <FirmWorkbenchCanvas
+          venture={venture}
+          lens={lens}
+          selection={canvasSelection}
+          wallOpen={wallOpen}
+          stale={stale}
+          readOnly={readOnly}
+          capabilityRefreshKey={capabilityRefreshKey}
+          connectionPhase={connection.phase}
+          showReturnBand={!conversationOpen || Boolean(canvasSelection)}
+          onSelectionChange={setCanvasSelection}
+          onWallOpenChange={setWallOpen}
+          onLensChange={setLens}
+          onArchitectureChange={setArchitecture}
+          onRefresh={refreshVenture}
+          onReturnToConversation={returnToConversation}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
+      </div>
+      {settingsOpen ? (
+        <FirmSettings
+          venture={venture}
+          readOnly={readOnly}
+          readOnlyReason={connection.message ?? "Reconnecting before settings can change…"}
+          onCapabilitiesChanged={() => setCapabilityRefreshKey((key) => key + 1)}
+          onClose={() => setSettingsOpen(false)}
+        />
       ) : null}
     </div>
   );

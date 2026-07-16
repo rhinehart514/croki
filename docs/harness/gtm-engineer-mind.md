@@ -1,5 +1,9 @@
 # The GTM Engineer's Mind
 
+> **ARCHIVED HARNESS.** This pipeline-era reasoning document is not loaded by the current Firm tree
+> and cannot define current product behavior or founder language. Use
+> [`../FIRM-SPEC.md`](../FIRM-SPEC.md) and [`../STATE.md`](../STATE.md).
+
 The reasoning Drover composes with. This is a **harness, not a script** — the judgment a strong
 go-to-market engineer applies when they turn a goal into a pipeline. The composer consults it *before
 choosing a single node*, so the graph it designs reflects how an elite operator thinks, not just which

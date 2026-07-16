@@ -36,6 +36,7 @@ export function redactCredential(credential) {
   return {
     provider: credential.provider,
     label: credential.label ?? null,
+    ...(credential.accountAddress ? { accountAddress: credential.accountAddress } : {}),
     savedAt: credential.savedAt,
     hasToken: Boolean(credential.token || credential.refreshToken),
     authType: credential.authType ?? "token",
@@ -69,6 +70,7 @@ export function setOAuthCredential(input = {}, options = {}) {
   if (!refreshToken) throw new Error("An OAuth refresh token is required.");
   const store = loadStore(options);
   const existing = store.credentials[provider];
+  const accountAddress = String(input.accountAddress ?? "").trim().toLowerCase();
   const credential = {
     provider,
     authType: "oauth",
@@ -76,6 +78,7 @@ export function setOAuthCredential(input = {}, options = {}) {
     clientSecret,
     refreshToken,
     label: input.label != null ? String(input.label).slice(0, 80) : (existing?.label ?? "Gmail (OAuth)"),
+    ...(accountAddress ? { accountAddress } : {}),
     savedAt: existing?.savedAt || now(),
   };
   const saved = saveStore({ ...store, credentials: { ...store.credentials, [provider]: credential } }, options);

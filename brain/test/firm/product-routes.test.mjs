@@ -17,13 +17,13 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { Readable } from "node:stream";
+import { founderHeaders } from "../helpers/founder-capability.mjs";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "drover-product-routes-"));
 process.env.GTM_IDE_HOME = root;
 process.env.GTM_IDE_PERSISTENCE = "json";
 
 const { default: productRoutes } = await import("../../src/firm/product-routes.mjs");
-const { claimFounderSession, founderBootstrapCode } = await import("../../src/routes/session-guard.mjs");
 const { createVenture, setVentureDoc } = await import("../../src/firm/venture-store.mjs");
 const { createBet } = await import("../../src/firm/bet.mjs");
 const { forkProductBet, stageProductBetForReview } = await import("../../src/firm/product-change.mjs");
@@ -68,16 +68,11 @@ async function stagedFixture() {
   return { bet, workspaceId, revisionId: revision.id, file: path.basename(built.file), repoRoot };
 }
 
-function browserCookie() {
-  let value = "";
-  claimFounderSession({ headers: {} }, { setHeader(_name, next) { value = next; } }, founderBootstrapCode());
-  return value.split(";")[0];
-}
-
 async function call(method, pathname, body = {}, headers = {}) {
   const req = Readable.from([JSON.stringify(body)]);
   req.method = method;
-  req.headers = { "content-type": "application/json", ...headers };
+  req.url = pathname;
+  req.headers = { "content-type": "application/json", ...founderHeaders({ method, path: pathname }), ...headers };
   let status = 0;
   let raw = "";
   const res = { writeHead(next) { status = next; }, setHeader() {}, end(next) { raw += next ?? ""; } };
@@ -95,43 +90,44 @@ test("GET the product-change list for a venture's bet is not founder-gated", asy
   assert.ok(res.body.changes.some((c) => c.status === "ready-for-review"));
 });
 
-test("a tokenless review POST is refused", async () => {
+test("a local page review POST does not need an unlock session", async () => {
   const { workspaceId, revisionId } = await stagedFixture();
   const res = await call("POST", `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/review`, { decision: "approve" });
-  assert.equal(res.status, 403);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.revision.status, "approved");
 });
 
-test("an agent-stamped review POST is refused even with a founder cookie", async () => {
+test("an agent-stamped review POST is refused", async () => {
   const { workspaceId, revisionId } = await stagedFixture();
   const res = await call(
     "POST",
     `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/review`,
     { decision: "approve" },
-    { cookie: browserCookie(), "x-gtm-actor": "agent" },
+    { "x-gtm-actor": "agent" },
   );
   assert.equal(res.status, 403);
 });
 
-test("a tokenless apply POST is refused", async () => {
+test("a local page apply POST reaches normal readiness validation", async () => {
   const { workspaceId, revisionId } = await stagedFixture();
   const res = await call("POST", `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/apply`, { confirm: true });
-  assert.equal(res.status, 403);
+  assert.equal(res.status, 400);
+  assert.match(res.body.error, /approved/i);
 });
 
-test("a tokenless discard POST is refused", async () => {
+test("a local page discard POST does not need an unlock session", async () => {
   const { bet, file } = await stagedFixture();
   const res = await call("POST", `/api/ventures/${venture.id}/bets/${bet.id}/product-changes/${file}/discard`, { confirm: true });
-  assert.equal(res.status, 403);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.result.status, "discarded");
 });
 
 test("cross-venture access to a workspace 404s — venture B cannot review/apply/readiness venture A's revision under its own route", async () => {
   const { workspaceId, revisionId } = await stagedFixture();
-  const cookie = browserCookie();
   const reviewRes = await call(
     "POST",
     `/api/ventures/${other.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/review`,
     { decision: "approve" },
-    { cookie },
   );
   assert.equal(reviewRes.status, 404);
 
@@ -139,31 +135,30 @@ test("cross-venture access to a workspace 404s — venture B cannot review/apply
   assert.equal(readinessRes.status, 404);
 });
 
-test("the authenticated founder browser can review, then apply through the route — the patch lands on the real source repo", async () => {
+test("the local founder page can review, then apply through the route — the patch lands on the real source repo", async () => {
   const { workspaceId, revisionId, repoRoot } = await stagedFixture();
-  const cookie = browserCookie();
 
   const readinessBefore = await call("GET", `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/readiness`);
   assert.equal(readinessBefore.status, 200);
   assert.equal(readinessBefore.body.readiness.ready, false, "not yet approved");
+  assert.equal(readinessBefore.body.readiness.status, "proposed");
 
   const reviewRes = await call(
     "POST",
     `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/review`,
     { decision: "approve" },
-    { cookie },
   );
   assert.equal(reviewRes.status, 200);
   assert.equal(reviewRes.body.revision.status, "approved");
 
   const readinessAfter = await call("GET", `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/readiness`);
   assert.equal(readinessAfter.body.readiness.ready, true, JSON.stringify(readinessAfter.body));
+  assert.equal(readinessAfter.body.readiness.status, "approved");
 
   const applyMissingConfirm = await call(
     "POST",
     `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/apply`,
     {},
-    { cookie },
   );
   assert.equal(applyMissingConfirm.status, 400);
   assert.match(applyMissingConfirm.body.error, /explicit confirmation/i);
@@ -172,35 +167,32 @@ test("the authenticated founder browser can review, then apply through the route
     "POST",
     `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/apply`,
     { confirm: true },
-    { cookie },
   );
   assert.equal(applyRes.status, 200);
   assert.equal(applyRes.body.revision.status, "applied");
   assert.equal(fs.readFileSync(path.join(repoRoot, "a.txt"), "utf8"), "after\n");
 });
 
-test("the authenticated founder browser can revert an applied change through the route", async () => {
+test("the local founder page can revert an applied change through the route", async () => {
   const { workspaceId, revisionId, repoRoot } = await stagedFixture();
-  const cookie = browserCookie();
-  await call("POST", `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/review`, { decision: "approve" }, { cookie });
-  await call("POST", `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/apply`, { confirm: true }, { cookie });
+  await call("POST", `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/review`, { decision: "approve" });
+  await call("POST", `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/apply`, { confirm: true });
 
-  const revertMissingConfirm = await call("POST", `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/revert`, {}, { cookie });
+  const revertMissingConfirm = await call("POST", `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/revert`, {});
   assert.equal(revertMissingConfirm.status, 400);
 
-  const revertRes = await call("POST", `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/revert`, { confirm: true }, { cookie });
+  const revertRes = await call("POST", `/api/ventures/${venture.id}/product-change-workspaces/${workspaceId}/revisions/${revisionId}/revert`, { confirm: true });
   assert.equal(revertRes.status, 200);
   assert.equal(revertRes.body.revision.status, "reverted");
   assert.equal(fs.readFileSync(path.join(repoRoot, "a.txt"), "utf8"), "before\n");
 });
 
-test("the authenticated founder browser can discard a staged product change through the route", async () => {
+test("the local founder page can discard a staged product change through the route", async () => {
   const { bet, file } = await stagedFixture();
-  const cookie = browserCookie();
-  const discardMissingConfirm = await call("POST", `/api/ventures/${venture.id}/bets/${bet.id}/product-changes/${file}/discard`, {}, { cookie });
+  const discardMissingConfirm = await call("POST", `/api/ventures/${venture.id}/bets/${bet.id}/product-changes/${file}/discard`, {});
   assert.equal(discardMissingConfirm.status, 400);
 
-  const discardRes = await call("POST", `/api/ventures/${venture.id}/bets/${bet.id}/product-changes/${file}/discard`, { confirm: true }, { cookie });
+  const discardRes = await call("POST", `/api/ventures/${venture.id}/bets/${bet.id}/product-changes/${file}/discard`, { confirm: true });
   assert.equal(discardRes.status, 200);
   assert.equal(discardRes.body.result.status, "discarded");
 });

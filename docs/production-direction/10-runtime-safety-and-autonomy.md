@@ -1,5 +1,8 @@
 # Runtime Safety and Autonomy
 
+> **SUPERSEDED PACKAGE FILE.** This analysis may be used as history only. Current wall and runtime
+> invariants are defined by [FIRM-SPEC.md](../FIRM-SPEC.md).
+
 ## Unchanged wall
 
 Every action that reaches the outside world or changes durable product state in an irreversible way must carry

@@ -48,26 +48,52 @@ export function MeasureGuard({ nodeIds }: { nodeIds: string[] }) {
 
 // One final post-layout invariant: a non-empty canvas may never settle with every object outside the
 // viewport. Runs once per topology + container size, after measurement has stabilized.
-export function CanvasVisibilityGuard({ topology, fitOptions }: { topology: string; fitOptions: FitOpts }) {
+export function CanvasVisibilityGuard({
+  topology,
+  fitOptions,
+  onFramed,
+}: {
+  topology: string;
+  fitOptions: FitOpts;
+  onFramed?: () => void;
+}) {
   const { fitView, getNodes, getViewport } = useReactFlow();
   const width = useStore((state) => state.width);
   const height = useStore((state) => state.height);
   const size = useMemo(() => ({ width, height }), [width, height]);
   const nodeCount = useStore((state) => state.nodes.length);
+  const initialized = useNodesInitialized();
   const checked = useRef<string | null>(null);
   useEffect(() => {
-    if (nodeCount === 0 || size.width <= 0 || size.height <= 0) return;
+    if (!initialized || nodeCount === 0 || size.width <= 0 || size.height <= 0) return;
     const signature = `${topology}:${Math.round(size.width)}x${Math.round(size.height)}`;
     if (checked.current === signature) return;
-    const timer = setTimeout(() => {
-      checked.current = signature;
-      const objects = measuredNodeBounds(getNodes());
-      if (objects.length > 0 && !viewportShowsAnyObject(getViewport(), size, objects)) {
-        void fitView({ ...fitOptions, duration: 0 });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let attempts = 0;
+    let cancelled = false;
+    const inspect = () => {
+      if (cancelled) return;
+      const objects = measuredNodeBounds(getNodes()).filter((object) => object.width > 0 && object.height > 0);
+      if (objects.length === 0) {
+        attempts += 1;
+        if (attempts < 12) timer = setTimeout(inspect, 32);
+        return;
       }
-    }, 240);
-    return () => clearTimeout(timer);
-  }, [fitOptions, fitView, getNodes, getViewport, nodeCount, size, topology]);
+      checked.current = signature;
+      if (!viewportShowsAnyObject(getViewport(), size, objects)) {
+        void Promise.resolve(fitView({ ...fitOptions, duration: 0 })).then(() => {
+          if (!cancelled) onFramed?.();
+        });
+      } else {
+        onFramed?.();
+      }
+    };
+    timer = setTimeout(inspect, 0);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [fitOptions, fitView, getNodes, getViewport, initialized, nodeCount, onFramed, size, topology]);
   return null;
 }
 

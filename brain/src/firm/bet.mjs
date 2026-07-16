@@ -10,7 +10,7 @@
 // fork() is the one verb: a teammate facing a goal forks genuinely divergent bets, a winning bet
 // forks again, a killed bet forks into a mutation carrying its learning. end() is the only terminal
 // write, and it is the founder's alone — mirroring the founder-only kill boundary already proven at
-// the routes layer (routes/session-guard.mjs, brain/test/experiment-verdict-auth.test.mjs). This
+// the routes layer (routes/founder-authority.mjs, brain/test/firm/security-matrix.test.mjs). This
 // module has no HTTP surface, so it takes an already-resolved actor rather than a request; the wall
 // (F3) is what stands between an HTTP caller and this function, exactly as measure.mjs's verdict
 // route stands between HTTP and stated-experiment.mjs today.
@@ -46,11 +46,15 @@ function normalizeList(list) {
   return Array.isArray(list) ? list.filter((item) => item != null) : [];
 }
 
+function configurationRevision(value) {
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
 // The founder-only boundary this store enforces. `actor` is whatever the caller (the wall, a test)
 // has already resolved a decision-maker to be — this module never reads a request itself. An actor
 // that stamps itself as an agent/model, or carries no founder marker at all, is refused. Mirrors the
-// two-factor shape of authorizeFounderWriteForRequest (routes/session-guard.mjs) one layer down: the
-// HTTP session check happens above this call, not here.
+// resolved-actor shape of the route boundary one layer down: the HTTP origin check happens above this
+// call, not here.
 function assertFounderActor(actor, action) {
   const kind = typeof actor === "string" ? actor : actor?.kind;
   if (String(kind ?? "").trim().toLowerCase() !== "founder") {
@@ -72,6 +76,7 @@ export function createBet(input = {}) {
     intent: trimOrNull(input.intent),
     forkedFrom: trimOrNull(input.forkedFrom),
     teammateRef: trimOrNull(input.teammateRef),
+    configurationRevision: configurationRevision(input.configurationRevision),
     refs: normalizeRefs(input.refs),
     evidence: normalizeList(input.evidence),
     staged: normalizeList(input.staged),
@@ -89,13 +94,14 @@ export function createBet(input = {}) {
 // only `intent` and, for a mutation, `learning` differ. The child always carries forkedFrom = the
 // parent's id and a fresh joinKey of its own (a fork is a new pointer into live work, not a
 // continuation of the parent's outcome join).
-export function fork(parentBet, intent, { teammateRef = null, learning = null } = {}) {
+export function fork(parentBet, intent, { teammateRef = null, learning = null, configurationRevision: revision = null } = {}) {
   if (!parentBet?.id) throw new Error("fork() needs a parent bet to fork from.");
   return createBet({
     ventureId: parentBet.ventureId,
     intent,
     forkedFrom: parentBet.id,
     teammateRef: teammateRef ?? parentBet.teammateRef,
+    configurationRevision: revision ?? parentBet.configurationRevision,
     refs: learning ? [{ type: "learning-source", id: parentBet.id }] : [],
   });
 }

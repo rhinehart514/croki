@@ -9,7 +9,7 @@
 import { json, readBody } from "../routes/util.mjs";
 import { queue, queueAll, decide } from "./wall.mjs";
 import { listVentures } from "./venture-store.mjs";
-import { authorizeFounderWriteForRequest } from "../routes/session-guard.mjs";
+import { authorizeFounderWriteForRequest } from "../routes/founder-authority.mjs";
 import { decideWithExecution } from "./effect-executors.mjs";
 
 export default async function handle({ req, res, url }) {
@@ -49,8 +49,8 @@ export default async function handle({ req, res, url }) {
       // decideWithExecution wires the real executor (product-change apply, message send) into
       // wall.decide()'s executeEffect — without it a founder release throws "cannot release without
       // an executeEffect executor" and nothing outward can ever actually happen through this route.
-      // The executor is built fresh per call from THIS request's own founder actor (decide() derives
-      // the actor from the session, never the body — decideWithExecution/createEffectExecutor read
+      // The executor is built fresh per call from THIS request's resolved founder actor (never the
+      // body — decideWithExecution/createEffectExecutor read
       // auth.actor the same way, so there is no second, weaker authority path here); it still checks
       // hasWallRelease exactly like the deploy/away/founder-only gates decide() already enforces —
       // this wiring adds a real destination for a release, never a second way to grant one.

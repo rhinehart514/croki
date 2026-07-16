@@ -35,8 +35,8 @@ export default async function handle({ req, res, url }) {
       );
       json(res, 200, settings);
     } catch (err) {
-      // setHeatSettings() throws the founder-authority guard's own 403 for anything not a real founder
-      // browser session, a 404 for an unknown venture (venture_not_found); a bad heat word or a
+      // setHeatSettings() throws the founder-authority guard's own 403 for agent-stamped or missing
+      // request authority, a 404 for an unknown venture (venture_not_found); a bad heat word or a
       // negative spend rail is a plain 400.
       json(res, statusFor(err), { error: err instanceof Error ? err.message : String(err) });
     }

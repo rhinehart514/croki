@@ -1,5 +1,8 @@
 # Implementation Prompt Pack
 
+> **ARCHIVED PROMPTS.** Do not execute these work orders. They target the superseded production
+> direction; current work starts from [FIRM-SPEC.md](../FIRM-SPEC.md) and [STATE.md](../STATE.md).
+
 These prompts are copy-pasteable work orders for future coding agents. Each agent must read the relevant
 production-direction files and the repository instructions before acting.
 

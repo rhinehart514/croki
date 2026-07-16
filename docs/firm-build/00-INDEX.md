@@ -1,5 +1,9 @@
 # Firm build — task pack index
 
+> **Historical execution pack.** These files preserve the cutover plan and receipts. They are not a
+> current backlog and cannot override [FIRM-SPEC.md](../FIRM-SPEC.md) or
+> [STATE.md](../STATE.md). Unchecked boxes describe the plan at capture time, not missing current work.
+
 Execution pack for the [FIRM-SPEC.md](../FIRM-SPEC.md) rebuild. Each numbered file is a
 self-contained work package: context, exact files, acceptance, and the invariants that must keep
 passing. Read FIRM-SPEC.md first; it is the contract. Where a task and the spec conflict, the spec

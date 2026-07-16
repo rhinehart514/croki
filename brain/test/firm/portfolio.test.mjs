@@ -13,6 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { describe, it } from "node:test";
+import { founderHeaders, founderRequest } from "../helpers/founder-capability.mjs";
 
 import { createVenture, exportVenture, importVenture, listVentures, getVentureDoc, setVentureDoc, listVentureDocs } from "../../src/firm/venture-store.mjs";
 import { createBet, fork } from "../../src/firm/bet.mjs";
@@ -22,7 +23,6 @@ import { putPlacement, buildLens } from "../../src/firm/lens.mjs";
 import { setOAuthCredential, listCredentials } from "../../src/credential-store.mjs";
 import { teammateSoulStore, LIBRARY_VENTURE } from "../../src/teammate-soul-store.mjs";
 import { driveTeammate } from "../../src/firm/work-loop.mjs";
-import { claimFounderSession, founderBootstrapCode } from "../../src/routes/session-guard.mjs";
 import routes from "../../src/firm/routes.mjs";
 
 function freshRoot() {
@@ -30,9 +30,7 @@ function freshRoot() {
 }
 
 function browserReq() {
-  let cookie = null;
-  claimFounderSession({ headers: {} }, { setHeader(_name, next) { cookie = next.split(";")[0]; } }, founderBootstrapCode());
-  return { headers: { cookie } };
+  return founderRequest();
 }
 
 // Build one venture with a live bet, a summoned teammate (a real soul instance), a parked wall item
@@ -86,7 +84,7 @@ describe("portfolio — the one wall surfaces every venture's pending decisions"
     assert.equal(queue(b.venture.id, options).length, 1);
   });
 
-  it("GET /api/wall (the portfolio route) is founder-gated and lists both ventures' items", async () => {
+  it("GET /api/wall lists both ventures' items for the local page and refuses agent traffic", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "firm-portfolio-route-"));
     process.env.GTM_IDE_HOME = root;
     process.env.GTM_IDE_PERSISTENCE = "json";
@@ -98,19 +96,20 @@ describe("portfolio — the one wall surfaces every venture's pending decisions"
       async function call(headers = {}) {
         const req = Readable.from([""]);
         req.method = "GET";
-        req.headers = headers;
+        req.url = "/api/wall";
+        req.headers = { ...founderHeaders({ method: "GET", path: "/api/wall" }), ...headers };
         let status = 0; let raw = "";
         const res = { writeHead(n) { status = n; }, setHeader() {}, end(n) { raw += n ?? ""; } };
         const handled = await routes({ req, res, url: new URL("/api/wall", "http://local") });
         return { handled, status, body: raw ? JSON.parse(raw) : null };
       }
 
-      const tokenless = await call();
-      assert.equal(tokenless.status, 403);
+      const local = await call();
+      assert.equal(local.status, 200);
+      assert.equal(local.body.queue.length, 2);
 
-      const authed = await call({ cookie: browserReq().headers.cookie });
-      assert.equal(authed.status, 200);
-      assert.equal(authed.body.queue.length, 2);
+      const agent = await call({ "x-gtm-actor": "agent" });
+      assert.equal(agent.status, 403);
     } finally {
       delete process.env.GTM_IDE_HOME;
       delete process.env.GTM_IDE_PERSISTENCE;

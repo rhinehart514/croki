@@ -32,7 +32,7 @@ import {
 } from "./venture-store.mjs";
 import { positionOf } from "./bet.mjs";
 import { queue as loadWallQueue } from "./wall.mjs";
-import { authorizeFounderWriteForRequest } from "../routes/session-guard.mjs";
+import { authorizeFounderWriteForRequest } from "../routes/founder-authority.mjs";
 
 export const HEAT_LEVELS = Object.freeze(["off", "steady", "full"]);
 const DEFAULT_HEAT = "off";
@@ -73,9 +73,8 @@ export function getHeatSettings(ventureId, options = {}) {
   };
 }
 
-// Founder-only write of the one dial + one rail — the same two-factor boundary every other founder
-// write in this tree stands on (browser-only session; an x-gtm-actor: agent stamp is refused), so a
-// model or MCP caller can never turn its own heat up. Fails closed on an unknown venture — matching
+// Founder-only write of the one dial + one rail. The loopback page can write directly; an agent stamp
+// or missing request is refused, so a model or MCP caller can never turn its own heat up. Fails closed on an unknown venture — matching
 // every other venture-scoped write in this tree (venture-store.mjs's own assertVentureExists,
 // product-routes.mjs's assertWorkspaceInVenture) — rather than silently writing heat for a venture
 // that doesn't exist.

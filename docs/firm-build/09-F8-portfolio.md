@@ -1,5 +1,8 @@
 # F8 — The portfolio proof
 
+> **HISTORICAL EXECUTION TASK.** This work package is not a current backlog. Current portfolio and
+> transfer proof lives in [STATE.md](../STATE.md).
+
 **Goal:** two ventures behind one wall, and a venture is a file: export/import a running venture
 and it resumes mid-bet. Rails 6 and 8 proven.
 

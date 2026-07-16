@@ -4,7 +4,7 @@
 // Anything a bet's next act would touch the world with — a send, a publish, a deploy, a spend — pauses
 // here as a queue item, alongside the two non-outward decisions that are still the founder's alone: a
 // question the crew needs answered, and a kill proposal. There is no separate schema per kind: an item
-// is `{ id, ventureId, betId, effect, parkedAt, decision, decidedAt, decidedBy, note, releasedAt,
+// is `{ id, ventureId, betId, workRef, effect, parkedAt, decision, decidedAt, decidedBy, note, releasedAt,
 // deployAuthorizedAt, deployAuthorizedBy }`, and `effect` is whatever the caller staged — open, exactly
 // like a bet (see firm-build/04-F3-wall-queue.md "Build" step 1) — EXCEPT any field that claims a
 // founder authorization (deployConfirmed and its kin), which park() strips on the way in: the parker is
@@ -16,18 +16,17 @@
 // Outward release uses a module-private Symbol rebuilt inside decide(), threaded only onto the effect
 // being executed, never persisted, and never reachable from a bet's own content.
 //
-// Founder authority is NOT reimplemented here: every write that could release, kill, or mark present
-// runs through routes/session-guard.mjs's authorizeFounderWriteForRequest, the same two-factor boundary
-// (browser-only session cookie, x-gtm-actor: agent stamp refused) already proven in
-// experiment-verdict-auth.test.mjs and founder-authority-route-guards.test.mjs. This module takes an
-// already-authorized `auth.req` and calls that guard directly, so an HTTP route, an MCP door, or a test
-// all stand on the identical boundary.
+// Founder authority is NOT reimplemented here. Every decision runs through the shared local-page
+// boundary: a real unstamped HTTP request is accepted, model/MCP traffic bearing the agent stamp is
+// refused, and a missing request fails closed. The wall then preserves its separate outward capability,
+// presence hold, venture isolation, and deploy confirmation.
 
 import crypto from "node:crypto";
 import { now, getVentureDoc, setVentureDoc, listVentureDocs } from "./venture-store.mjs";
 import { end as endBet } from "./bet.mjs";
-import { authorizeFounderWriteForRequest } from "../routes/session-guard.mjs";
+import { authorizeFounderWriteForRequest } from "../routes/founder-authority.mjs";
 import { isFounderPresent as defaultIsFounderPresent } from "../presence.mjs";
+import { stampKnownEffectConsequences } from "./effect-consequences.mjs";
 
 function genId(prefix) {
   const stamp = now().replace(/\D/g, "").slice(0, 14);
@@ -96,7 +95,7 @@ function inferPurpose(effect) {
 // parker is never the founder, so authorization state can never ride in on the effect it authored; the
 // founder's second deploy confirmation is its own act, stamped on the ITEM by decide() below, never
 // content the effect's author supplies.
-export function park({ ventureId, betId = null, purpose = null, blocksBet = null, effect }, options = {}) {
+export function park({ ventureId, betId = null, workRef = null, purpose = null, blocksBet = null, configurationRevision = null, architectureRevision = null, architectureTarget = null, effect }, options = {}) {
   if (!trimOrNull(ventureId)) throw new Error("park() needs a ventureId.");
   if (!effect || typeof effect !== "object") throw new Error("park() needs an effect to queue.");
   const parkedAt = now();
@@ -105,17 +104,28 @@ export function park({ ventureId, betId = null, purpose = null, blocksBet = null
   // Never overwrites an explicit joinKey the caller already set (e.g. a founder note keying to its own
   // one-off join). A betId with no such bet, or no betId at all (a question, a kill proposal), leaves
   // the effect untouched — nothing to stamp.
-  const clean = stripAuthorizationClaims(effect);
+  const clean = stampKnownEffectConsequences(stripAuthorizationClaims(effect), options);
   const resolvedPurpose = purpose ?? inferPurpose(clean);
   if (!PURPOSE_DECISIONS[resolvedPurpose]) {
     throw new Error(`Unknown founder-attention purpose: ${resolvedPurpose}`);
   }
   const bet = betId ? getVentureDoc(ventureId, "bets", betId, options) : null;
   const stampedEffect = bet?.joinKey && !clean.joinKey ? { ...clean, joinKey: bet.joinKey } : clean;
+  const itemId = genId("wall");
   const item = {
-    id: genId("wall"),
+    id: itemId,
     ventureId: trimOrNull(ventureId),
     betId: trimOrNull(betId),
+    workRef: trimOrNull(workRef) ?? itemId,
+    configurationRevision: Number.isInteger(configurationRevision) && configurationRevision > 0
+      ? configurationRevision
+      : (Number.isInteger(bet?.configurationRevision) ? bet.configurationRevision : null),
+    architectureRevision: Number.isInteger(architectureRevision) && architectureRevision >= 0
+      ? architectureRevision
+      : (Number.isInteger(bet?.architectureRevision) ? bet.architectureRevision : null),
+    architectureTarget: architectureTarget?.id
+      ? { id: trimOrNull(architectureTarget.id), stepId: trimOrNull(architectureTarget.stepId) }
+      : (bet?.architectureTarget ?? null),
     purpose: resolvedPurpose,
     blocksBet: blocksBet == null ? resolvedPurpose !== "review-outcome" : blocksBet === true,
     effect: stampedEffect,
@@ -177,10 +187,8 @@ export function decide(
   options = {},
 ) {
   // THE FOUNDER-AUTHORITY BOUNDARY. Every decide() call — release, kill, reject, or authorize-deploy — is
-  // a founder-only write. This is the SAME two-factor guard the rest of the harness stands on
-  // (browser-only session cookie; an x-gtm-actor: agent stamp is refused even carrying a valid cookie),
-  // so self-approval from a browser with no session, a raw API caller, an MCP door, or a model narrating
-  // "the founder decided" are all refused here, before any effect, bet, or receipt is touched.
+  // a founder-only write. The local Drover page needs no unlock ceremony; an agent-stamped request or a
+  // direct call with no real HTTP request is refused before any effect, bet, or receipt is touched.
   authorizeFounderWriteForRequest(auth?.req, "Deciding a wall item");
   if (!ALL_DECISIONS.has(decision)) {
     throw new Error("decide() needs a decision; use a recognized decision for this wall item.");
@@ -208,10 +216,10 @@ export function decide(
     throw new Error(`Wall item ${itemId} was already decided.`);
   }
 
-  // PRESENCE HOLD. Passing the founder-authority check proves the request is an authenticated founder
-  // browser call, but a release ALSO needs the founder to be actually present — the volatile lease that
+  // PRESENCE HOLD. Passing the founder-authority check proves the request came through the local page
+  // boundary, but a release ALSO needs the founder to be actually present — the volatile lease that
   // lapses to away the moment heartbeats stop. This is what makes "away holds all outward effects" real
-  // even for a call that otherwise carries valid credentials (a stale tab, a session left open on a
+  // even for a call from a stale tab left open on a
   // machine the founder walked away from): a release while away is refused; kill and reject touch nothing
   // outward and are never held by presence.
   if (decision === "release" && isFounderPresent() !== true) {

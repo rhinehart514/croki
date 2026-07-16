@@ -1,5 +1,8 @@
 # GTM Graph Phase 1 Handoff
 
+> **ARCHIVED HANDOFF.** This receipt describes the superseded GTM graph product. It is not current
+> state or a resume point; use [FIRM-SPEC.md](../FIRM-SPEC.md) and [STATE.md](../STATE.md).
+
 Date: 2026-07-03
 
 ## Complete

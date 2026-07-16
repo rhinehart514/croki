@@ -10,7 +10,7 @@
 //   3. wait for its health endpoint, then load that URL in a BrowserWindow.
 // No brain code changes — the desktop app talks to the same local API the dev server already serves.
 
-const { app, BrowserWindow, shell, utilityProcess, dialog } = require("electron");
+const { app, BrowserWindow, shell, utilityProcess, dialog, ipcMain } = require("electron");
 const path = require("node:path");
 const http = require("node:http");
 const net = require("node:net");
@@ -22,7 +22,33 @@ const HOST = "127.0.0.1";
 let brainProcess = null;
 let mainWindow = null;
 let brainPort = 0;
-let founderCookie = null;
+let founderCapability = null;
+
+function signFounderRequest(method, rawUrl) {
+  const url = new URL(rawUrl);
+  const requestPath = `${url.pathname}${url.search}`;
+  const issuedAt = Date.now();
+  const nonce = crypto.randomBytes(18).toString("base64url");
+  const signature = crypto
+    .createHmac("sha256", founderCapability)
+    .update(`${String(method).toUpperCase()}\n${requestPath}\n${issuedAt}\n${nonce}`)
+    .digest("base64url");
+  return `v1.${issuedAt}.${nonce}.${signature}`;
+}
+
+// Repository binding is a filesystem choice, so the desktop host owns it. The renderer receives
+// only the path the founder explicitly picked plus a human name for the onboarding form.
+ipcMain.handle("drover:select-repository", async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: "Choose a product repository",
+    buttonLabel: "Choose repository",
+    defaultPath: app.getPath("home"),
+    properties: ["openDirectory"],
+  });
+  if (result.canceled || !result.filePaths[0]) return null;
+  const repository = result.filePaths[0];
+  return { path: repository, name: path.basename(repository) };
+});
 
 // --- PATH repair ------------------------------------------------------------------------------
 // A macOS app launched from Finder gets a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin). The operator
@@ -73,16 +99,15 @@ function brainEntry() {
   return path.join(__dirname, "..", "brain", "src", "server.mjs");
 }
 
-function startBrain(port, founderCode) {
+function startBrain(port, capability) {
   const entry = brainEntry();
   const child = utilityProcess.fork(entry, [], {
     stdio: "pipe",
     env: {
       ...process.env,
       PORT: String(port),
-      HOST,
       GTM_IDE_DESKTOP: "1",
-      GTM_IDE_FOUNDER_CODE: founderCode,
+      GTM_IDE_FOUNDER_CAPABILITY: capability,
     },
   });
   child.stdout?.on("data", (d) => process.stdout.write(`[brain] ${d}`));
@@ -99,43 +124,6 @@ function startBrain(port, founderCode) {
     }
   });
   return child;
-}
-
-// A Finder-launched app has no terminal in which to reveal the one-time founder code. The desktop
-// host is already the trusted local boundary, so it claims the session itself and installs only the
-// returned HttpOnly cookie in the Drover window. The renderer never receives the bootstrap secret.
-function claimDesktopFounderSession(port, founderCode) {
-  const payload = JSON.stringify({ code: founderCode });
-  return new Promise((resolve, reject) => {
-    const req = http.request({
-      hostname: HOST,
-      port,
-      path: "/api/founder-session",
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "content-length": Buffer.byteLength(payload),
-      },
-    }, (res) => {
-      res.resume();
-      if (res.statusCode !== 200) {
-        reject(new Error(`founder session claim failed with status ${res.statusCode}`));
-        return;
-      }
-      const raw = Array.isArray(res.headers["set-cookie"])
-        ? res.headers["set-cookie"][0]
-        : res.headers["set-cookie"];
-      const pair = String(raw || "").split(";", 1)[0];
-      const separator = pair.indexOf("=");
-      if (separator < 1) {
-        reject(new Error("founder session claim returned no cookie"));
-        return;
-      }
-      resolve({ name: pair.slice(0, separator), value: pair.slice(separator + 1) });
-    });
-    req.on("error", reject);
-    req.end(payload);
-  });
 }
 
 function waitForHealth(port, { timeoutMs = 30000, intervalMs = 250 } = {}) {
@@ -159,7 +147,7 @@ function waitForHealth(port, { timeoutMs = 30000, intervalMs = 250 } = {}) {
   });
 }
 
-async function createWindow(port, cookie) {
+async function createWindow(port) {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -171,10 +159,23 @@ async function createWindow(port, cookie) {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(__dirname, "preload.cjs"),
     },
   });
 
   mainWindow.once("ready-to-show", () => mainWindow.show());
+
+  // Founder authority stays below the renderer. Electron signs a fresh method + path claim for each
+  // request returning to this exact brain process. The page cannot read, persist, or mint the root
+  // capability; a copied claim expires quickly and the brain accepts its nonce only once.
+  mainWindow.webContents.session.webRequest.onBeforeSendHeaders(
+    { urls: [`http://${HOST}:${port}/api/*`] },
+    (details, callback) => {
+      const requestHeaders = { ...details.requestHeaders };
+      requestHeaders["x-drover-founder-capability"] = signFounderRequest(details.method, details.url);
+      callback({ requestHeaders });
+    },
+  );
 
   // External links open in the real browser, not inside the app shell.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -188,15 +189,6 @@ async function createWindow(port, cookie) {
     return { action: "allow" };
   });
 
-  if (cookie) {
-    await mainWindow.webContents.session.cookies.set({
-      url: `http://${HOST}:${port}/`,
-      name: cookie.name,
-      value: cookie.value,
-      httpOnly: true,
-      sameSite: "strict",
-    });
-  }
   mainWindow.loadURL(`http://${HOST}:${port}/`);
   mainWindow.on("closed", () => { mainWindow = null; });
 }
@@ -205,11 +197,10 @@ async function boot() {
   repairPath();
   try {
     brainPort = await findFreePort();
-    const founderCode = crypto.randomBytes(18).toString("hex");
-    brainProcess = startBrain(brainPort, founderCode);
+    founderCapability = crypto.randomBytes(32).toString("base64url");
+    brainProcess = startBrain(brainPort, founderCapability);
     await waitForHealth(brainPort);
-    founderCookie = await claimDesktopFounderSession(brainPort, founderCode);
-    await createWindow(brainPort, founderCookie);
+    await createWindow(brainPort);
   } catch (err) {
     dialog.showErrorBox(
       "Drover failed to start",
@@ -234,7 +225,7 @@ if (!gotLock) {
   app.whenReady().then(boot);
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0 && brainPort) void createWindow(brainPort, founderCookie);
+    if (BrowserWindow.getAllWindows().length === 0 && brainPort) void createWindow(brainPort);
   });
 
   app.on("window-all-closed", () => {

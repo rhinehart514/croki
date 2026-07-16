@@ -1,5 +1,9 @@
 # F9 pre-audit — the deletion manifest
 
+> **ARCHIVED RECEIPT.** This manifest records a completed historical pass. It is not authorization
+> to delete current files; use [FIRM-SPEC.md](../FIRM-SPEC.md), [STATE.md](../STATE.md), and the live
+> dependency graph.
+
 **Status:** §1–§7 below are the original read-only pre-audit (2026-07-14, F1–F8 landed). §8 is the
 EXECUTION report from the F9 pass that actually ran against this manifest that same night: what was
 safely deleted, what was correctness-blocked and why, and the precise reviewed follow-up map for the

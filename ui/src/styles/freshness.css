@@ -1,0 +1,50 @@
+.firm-freshness {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--text-meta);
+}
+
+.firm-freshness-fresh {
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.firm-freshness-warning {
+  color: var(--danger);
+}
+
+.firm-freshness-warning > svg {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+}
+
+.firm-freshness-warning > span {
+  display: grid;
+  min-width: 0;
+}
+
+.firm-freshness-warning strong,
+.firm-freshness-warning small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.firm-freshness-warning small {
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+
+.firm-freshness-warning button {
+  min-width: 44px;
+  min-height: 28px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}

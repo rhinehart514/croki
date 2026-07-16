@@ -1,5 +1,9 @@
 # The Shape the Founder Feels
 
+> **ARCHIVED HARNESS.** This engine-era experience doctrine is not a current design or implementation
+> contract. Use [`../FIRM-SPEC.md`](../FIRM-SPEC.md), [`../STATE.md`](../STATE.md), and the root
+> [`DESIGN.md`](../../DESIGN.md).
+
 The spec for what Drover *is* from the founder's side of the screen. The engine is technically ahead of
 the product; this document is the standing instruction to make the engine **disappear behind one
 feeling**:

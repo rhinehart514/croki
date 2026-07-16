@@ -1,0 +1,303 @@
+/* The Workyard: bets are spatial territories and durable records are workpieces inside them. This
+   file styles a lens projection only; it introduces no card kind, stage, or executable graph. */
+
+.workyard-territory {
+  position: relative;
+  color: var(--ink);
+  transition: border-color var(--dur-fast) var(--ease);
+}
+
+.workyard-territory-near,
+.workyard-territory-middle {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--line-2);
+  border-radius: calc(var(--r-lg) * 2) var(--r-lg) calc(var(--r-lg) * 2) var(--r-lg);
+  background: color-mix(in srgb, var(--canvas) 70%, var(--surface));
+}
+
+.workyard-territory-near { width: 540px; min-height: 250px; }
+.workyard-territory-near[data-focus-role="focus"] { width: 720px; }
+.workyard-territory-middle { width: 390px; min-height: 150px; padding: var(--space-3); }
+.workyard-territory[data-position="at-wall"] { border-color: color-mix(in srgb, var(--gap) 48%, var(--line-2)); }
+.workyard-territory[data-position="ended"] {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--canvas) 86%, var(--surface));
+}
+.firm-lens .react-flow__node.selected .workyard-territory:not(.workyard-territory-far),
+.firm-lens [data-focus-role="focus"].workyard-territory:not(.workyard-territory-far) {
+  border-color: var(--link);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--link) 10%, transparent);
+}
+
+.workyard-territory-far {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px var(--space-2);
+  width: 142px;
+  min-height: 46px;
+  padding: var(--space-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+.workyard-territory-far > span {
+  grid-row: 1 / span 2;
+  width: 12px;
+  height: 12px;
+  margin-top: 2px;
+  border: 1px solid var(--ghost);
+  border-radius: 50%;
+  background: var(--canvas);
+}
+.workyard-territory-far[data-position="at-wall"] > span { border-color: var(--gap); }
+.workyard-territory-far strong,
+.workyard-territory-far small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workyard-territory-far strong { font-size: var(--text-meta); font-weight: 680; }
+.workyard-territory-far small { color: var(--muted); font-size: var(--text-meta); }
+
+.workyard-territory-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-4);
+  min-height: 58px;
+}
+.workyard-territory-title {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.workyard-territory-title > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-meta);
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.workyard-territory[data-position="at-wall"] .workyard-territory-title > span { color: var(--gap); }
+.workyard-territory-title svg { width: 12px; height: 12px; }
+.workyard-territory-title strong {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+}
+.workyard-territory-middle .workyard-territory-title strong { font-size: var(--text-base); }
+.workyard-territory-title:focus-visible { outline: 2px solid var(--link); outline-offset: 4px; border-radius: var(--r-sm); }
+
+.workyard-territory-work {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--space-3);
+}
+.workyard-territory-middle .workyard-territory-work { grid-template-columns: 1fr; gap: var(--space-2); }
+.workyard-territory-work > [data-at-wall="true"],
+.workyard-territory-work > [data-has-return="true"] { grid-column: 1 / -1; }
+
+.workyard-territory-empty {
+  display: grid;
+  gap: var(--space-1);
+  min-height: 92px;
+  align-content: center;
+  justify-items: start;
+  padding: var(--space-3);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-lg);
+  color: var(--muted);
+}
+.workyard-territory-empty strong { color: var(--ink-2); font-size: var(--text-sm); }
+.workyard-territory-empty span { max-width: 42ch; font-size: var(--text-meta); line-height: var(--leading-normal); }
+
+.workyard-territory-more {
+  justify-self: start;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--text-meta);
+  cursor: pointer;
+}
+.workyard-territory-more:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.workyard-territory-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+
+.workyard-card {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+.workyard-card[data-selected="true"] {
+  border-color: var(--link);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--link) 10%, transparent), var(--shadow-card);
+}
+.workyard-card-select {
+  display: grid;
+  width: 100%;
+  min-height: 112px;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.workyard-card[data-compact="true"] .workyard-card-select { min-height: 44px; padding: var(--space-2); }
+.workyard-card-select:hover { background: color-mix(in srgb, var(--canvas) 40%, transparent); }
+.workyard-card-select:focus-visible { outline: 2px solid var(--link); outline-offset: -3px; }
+.workyard-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-2); }
+.workyard-card-heading strong { font-size: var(--text-sm); line-height: var(--leading-tight); }
+.workyard-card-heading svg { flex: 0 0 auto; width: 14px; height: 14px; color: var(--gap); }
+.workyard-card-body {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+}
+.workyard-card[data-selected="true"] .workyard-card-body { display: block; max-height: 15rem; overflow: auto; }
+.workyard-card pre {
+  max-height: 14rem;
+  margin: 0;
+  padding: var(--space-2);
+  overflow: auto;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  line-height: var(--leading-normal);
+  white-space: pre-wrap;
+}
+.workyard-card-provenance { color: var(--muted); font-size: var(--text-meta); }
+.workyard-card-instrument {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  margin-top: auto;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--line);
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+  line-height: var(--leading-tight);
+}
+.workyard-card-instrument b { font-weight: 650; }
+.workyard-card-instrument > span { min-width: 0; overflow-wrap: anywhere; }
+.workyard-card-instrument em { color: var(--link); font-style: normal; font-weight: 650; }
+
+.workyard-attribution {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 34px;
+  padding: 0 var(--space-3) var(--space-2);
+  color: var(--ink-2);
+}
+.workyard-card[data-compact="true"] .workyard-attribution { position: absolute; top: var(--space-1); right: var(--space-1); padding: 0; }
+.workyard-attribution-faces { display: flex; align-items: center; gap: 2px; }
+.workyard-attribution-faces > button,
+.workyard-attribution-faces > span {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  padding: 3px;
+  border: 1px solid var(--surface);
+  border-radius: 50%;
+  background: var(--surface);
+}
+.workyard-attribution-faces > button { color: inherit; cursor: pointer; }
+.workyard-attribution-faces > button:hover { border-color: var(--link); }
+.workyard-attribution-faces > button[aria-pressed="true"] {
+  border-color: var(--link);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--link) 18%, transparent);
+}
+.workyard-attribution-faces > button:focus-visible { outline: 2px solid var(--link); outline-offset: 1px; }
+.workyard-attribution-faces > :not([data-owner="true"]) { opacity: 0.8; }
+.workyard-attribution-faces > em {
+  display: grid;
+  min-width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface-2);
+  font-size: var(--text-meta);
+  font-style: normal;
+}
+.workyard-attribution > span,
+.workyard-attribution > small { font-size: var(--text-meta); }
+.workyard-attribution > small { color: var(--muted); }
+.workyard-attribution-empty { padding: 0 var(--space-3) var(--space-2); color: var(--muted); font-size: var(--text-meta); }
+.workyard-territory-header > .workyard-attribution { padding: 0; }
+.workyard-territory-header > .workyard-attribution > span,
+.workyard-territory-header > .workyard-attribution > small { display: none; }
+
+.workyard-card-wall {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--gap) 36%, var(--line));
+  background: color-mix(in srgb, var(--gap) 7%, var(--surface));
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--text-meta);
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+.workyard-card-wall svg:first-child { color: var(--gap); }
+.workyard-card-wall svg:last-child { width: 12px; height: 12px; margin-left: auto; }
+.workyard-card-wall:focus-visible { outline: 2px solid var(--link); outline-offset: -3px; }
+.workyard-card-return {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-3);
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.workyard-card-return span { color: var(--muted); font-size: var(--text-meta); font-weight: 650; }
+.workyard-card-return p { margin: 0; color: var(--ink); font-size: var(--text-sm); line-height: var(--leading-normal); }
+
+@media (prefers-reduced-motion: reduce) {
+  .workyard-territory { transition: none; }
+}

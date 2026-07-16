@@ -1,6 +1,5 @@
-> **SUPERSEDED AS PRODUCT DIRECTION.** Its open-vocabulary and anti-cage lessons remain
-> useful history. The current product contract is **docs/OPEN-CANVAS-SPEC.md**, where
-> product development and go-to-market share one canvas.
+> **SUPERSEDED AS PRODUCT DIRECTION.** Its open-vocabulary and anti-cage lessons are useful history
+> only where [FIRM-SPEC.md](../FIRM-SPEC.md) retains them. It supplies no current ontology.
 
 # Emergent motion — the engine grades any go-to-market, not just outbound
 

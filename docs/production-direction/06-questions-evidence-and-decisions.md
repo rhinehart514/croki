@@ -1,5 +1,8 @@
 # Questions, Evidence, and Decisions
 
+> **SUPERSEDED PACKAGE FILE.** This question/decision model is historical and cannot add nouns to
+> the current product. Use [FIRM-SPEC.md](../FIRM-SPEC.md).
+
 ## Why this layer exists
 
 Drover needs a durable place where the GTM crew can work on product-market questions without forcing every

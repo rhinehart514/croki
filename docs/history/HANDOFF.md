@@ -1,5 +1,8 @@
 # GTM IDE handoff
 
+> **ARCHIVED HANDOFF.** This receipt describes the 2026-06-19 repository-change product. It is not
+> current state or a resume point; use [FIRM-SPEC.md](../FIRM-SPEC.md) and [STATE.md](../STATE.md).
+
 Date: 2026-06-19
 
 The local web product now implements the repository-backed Cursor-for-GTM loop:

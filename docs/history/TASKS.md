@@ -1,5 +1,8 @@
 # GTM IDE — Sprint Tasks
 
+> **ARCHIVED TASKS.** These boxes target the superseded channel/DAG product. They are not a current
+> backlog; use [FIRM-SPEC.md](../FIRM-SPEC.md) and [STATE.md](../STATE.md).
+
 **Vision**: Multi-channel GTM project view. Channels are founder-defined durable DAGs rather than product templates. The system can coordinate several simultaneous motions around shared product intelligence while each channel keeps its own graph, gates, runs, and outcomes.
 
 **Status legend**: `[ ]` todo · `[~]` in progress · `[x]` done

@@ -25,7 +25,7 @@
   box-shadow: var(--shadow-sm);
   color: var(--ink-2);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--text-meta);
   font-weight: 560;
   cursor: pointer;
 }
@@ -79,7 +79,7 @@
 
 .firm-lens-outline-group {
   padding: var(--space-3) var(--space-2) var(--space-1);
-  font-size: 9.5px;
+  font-size: var(--text-meta);
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -98,6 +98,13 @@
   color: var(--ink);
   text-align: left;
   cursor: pointer;
+}
+.firm-lens-outline-panel li > button[data-depth="1"] {
+  width: calc(100% - 18px);
+  margin-left: 18px;
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--line-2);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
 }
 .firm-lens-outline-panel li > button:hover,
 .firm-lens-outline-panel li > button[aria-current="true"] { background: var(--surface-2); }

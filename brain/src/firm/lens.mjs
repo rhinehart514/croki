@@ -20,6 +20,10 @@ import { listCrew } from "./crew.mjs";
 import { positionOf } from "./bet.mjs";
 import { queue } from "./wall.mjs";
 import { PersistenceConflictError } from "../persistence.mjs";
+import { getFirmConfiguration } from "./configuration.mjs";
+import { buildArchitectureProjection } from "./architecture-projection.mjs";
+import { listActiveDrives } from "./active-drives.mjs";
+import { projectBetWorkflow } from "./workflow-projection.mjs";
 
 const PLACEMENT_KEY = "canvas";
 
@@ -38,12 +42,16 @@ function latestOutcomeOf(bet, outcomes) {
 // derive — position (live/at-wall/ended) and the latest outcome, if the market has spoken. `wallQueue`
 // is this venture's own queue (already loaded once by buildLens), so positionOf never re-reads it per
 // bet.
-function projectBet(bet, wallQueue, outcomes) {
+function projectBet(bet, wallQueue, wallItems, outcomes, activeDrives, campaigns) {
+  const projectedWorkflow = projectBetWorkflow(bet, { wallItems, outcomes, activeDrives, campaigns });
   return {
     ...bet,
     position: positionOf(bet, wallQueue),
     stagedCount: Array.isArray(bet.staged) ? bet.staged.length : 0,
     latestOutcome: latestOutcomeOf(bet, outcomes),
+    workflow: projectedWorkflow.stages,
+    machineryCounts: projectedWorkflow.counts,
+    workflowMeasurementWindow: projectedWorkflow.measurementWindow,
   };
 }
 
@@ -73,11 +81,23 @@ export function buildLens(ventureId, options = {}) {
   const wallQueue = queue(ventureId, options);
   const crew = listCrew(ventureId, options);
   const outcomes = listVentureDocs(ventureId, "outcomes", options);
-  const bets = listVentureDocs(ventureId, "bets", options).map((bet) => projectBet(bet, wallQueue, outcomes));
+  const configuration = getFirmConfiguration(ventureId, options);
+  const architecture = buildArchitectureProjection(ventureId, options);
+  const wallItems = listVentureDocs(ventureId, "decisions", options);
+  const activeDrives = listActiveDrives(ventureId);
+  const campaigns = architecture.elements.filter((element) => element.role === "campaign");
+  const bets = listVentureDocs(ventureId, "bets", options)
+    .map((bet) => projectBet(bet, wallQueue, wallItems, outcomes, activeDrives, campaigns));
   return {
     ventureId,
+    configuration,
+    architecture,
     crew,
     bets,
+    outcomes: outcomes
+      .slice()
+      .sort((left, right) => String(right.observedAt).localeCompare(String(left.observedAt))),
+    wallItems: wallQueue,
     wall: wallSummary(wallQueue),
     placement: loadPlacement(ventureId, options),
   };

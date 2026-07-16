@@ -1,7 +1,10 @@
 # Verification and Acceptance
 
-This file remains the acceptance contract for the production-direction work already described in files
-01–16. The complete product-market-terrain, provider-parity, browser, and live-alpha eval stack is defined in
+> **ARCHIVED ACCEPTANCE CONTRACT.** Do not use these criteria for current completion claims. Current
+> acceptance is [EVALS.md](../EVALS.md), under [FIRM-SPEC.md](../FIRM-SPEC.md).
+
+Within this historical package, this file was the acceptance contract for the work described in files
+01–16. Its product-market-terrain, provider-parity, browser, and live-alpha eval stack was extended by
 `17-product-market-terrain-completion-spec.md` and is additive. Where the two differ, file 17 wins.
 
 ## Product acceptance

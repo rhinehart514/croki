@@ -5,7 +5,7 @@
   "description": "The local runtime for Drover's firm loop.",
   "scripts": {
     "start": "node src/server.mjs",
-    "test": "node --test --test-concurrency=1 --test-force-exit",
+    "test": "node ./scripts/run-tests.mjs",
     "test:live": "GTM_LIVE=1 node --test test/live.test.mjs"
   },
   "dependencies": {

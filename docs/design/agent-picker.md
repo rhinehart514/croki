@@ -1,5 +1,9 @@
 # Agent picker — the value of the pick lives at pick-time
 
+> **ARCHIVED DESIGN RECEIPT.** This picker belongs to the superseded workflow-builder interface.
+> Current participant and teammate UX is governed by [FIRM-SPEC.md](../FIRM-SPEC.md),
+> [STATE.md](../STATE.md), and the root [DESIGN.md](../../DESIGN.md).
+
 Status: BUILT (Refinement arc → shipped). The "+ Add step" picker, summoned from the command
 dock's `+` → **Browse the library**. Live render: `.design-shots/picker-05-clean.png`.
 Date: 2026-06-27.

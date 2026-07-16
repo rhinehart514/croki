@@ -1,5 +1,8 @@
 # 03 — Intelligence: how the machine populates and reasons over the graph
 
+> **SUPERSEDED PACKAGE FILE.** This intelligence model belongs to the historical GTM graph package
+> and cannot direct current work. Use [FIRM-SPEC.md](../FIRM-SPEC.md).
+
 **Status:** spec, from `00-DOCTRINE.md` (binding) · **Date:** 2026-07-02
 **Siblings:** `01-object-graph` (node/edge schema this spec writes into) · `02-canvas-interaction` (how any of this renders) · `04-runs-and-wall` (compile, gate, outcome ingestion) · `05-migration` (what folds into this).
 

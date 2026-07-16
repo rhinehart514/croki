@@ -12,63 +12,104 @@
 // (FIRM-SPEC.md "What stays open"): the system prompt tells the
 // teammate to fork genuinely divergent bets; the host never counts or shapes them.
 
-import { getVentureDoc, setVentureDoc, now } from "./venture-store.mjs";
+import { getVentureDoc } from "./venture-store.mjs";
 import { teammateSoulStore } from "../teammate-soul-store.mjs";
-import { selectRuntime } from "../runtimes/index.mjs";
+import { getRuntime, selectRuntime } from "../runtimes/index.mjs";
 import { appendEvent, buildToolSet } from "./work-loop-tools.mjs";
 import { summon } from "./crew.mjs";
+import { appendConversationMessage, listConversation, stampConversationRuntime } from "./conversation.mjs";
+import { CONFIGURATION_KEY, configuredAgent, ensureInitialFirmParticipant } from "./configuration.mjs";
+import { buildCoordinationSeam } from "./work-loop-coordination.mjs";
+import { beginActiveDrive } from "./active-drives.mjs";
+import { architectureContextPrompt, buildArchitectureContext, buildWorkingTheoryContext, workingTheoryContextPrompt } from "./architecture-context.mjs";
+import { createWorkLoopReceipts } from "./work-loop-receipts.mjs";
+import { buildWorkHandoff } from "./work-loop-handoff.mjs";
+import { captureWorkingTheoryBaseline, checkWorkingTheoryCompletion } from "./working-theory-completion.mjs";
+import { loadWork, saveWork } from "./work-loop-state.mjs";
+import { withParticipantDriveLease } from "./work-loop-drive-lease.mjs";
+import {
+  reserveAgentDailySpend,
+  settleAgentDailySpend,
+  UNMEASURED_DRIVE_ESTIMATE_USD,
+} from "./work-loop-budget.mjs";
+
+export { getAgentDailySpend } from "./work-loop-budget.mjs";
 
 const DEFAULT_MAX_STEPS = 24;
 
-function workKey(teammateRef) {
-  return `work:${teammateRef}`;
-}
-
-// The whole resume record: runtimeSessionId/stepCount/spentUsd/pausedFor, nothing else. Lives on the
-// bet once a bet exists (keyed by betId), otherwise on a tiny per-teammate doc under "crew" so a
-// goal-only drive (no fork yet) still has somewhere honest to resume from.
-function loadWork({ ventureId, teammateRef, betId, options }) {
-  if (betId) {
-    const bet = getVentureDoc(ventureId, "bets", betId, options);
-    if (!bet) throw new Error(`No such bet: ${betId}`);
-    return { bet, work: bet.work ?? blankWork() };
-  }
-  const doc = getVentureDoc(ventureId, "crew", workKey(teammateRef), options);
-  return { bet: null, work: doc?.work ?? blankWork() };
-}
-
-function blankWork() {
-  return { runtimeSessionId: null, stepCount: 0, spentUsd: 0, pausedFor: null };
-}
-
-// Writes the resume record back onto its home. Always re-reads the bet fresh — the drive itself may
-// have forked, staged, or logged events onto it since loadWork's snapshot, and this must layer `work`
-// on top of that CURRENT state, never overwrite it with the stale pre-drive copy.
-function saveWork({ ventureId, teammateRef, betId, bet, work, options }) {
-  const targetId = betId ?? bet?.id;
-  if (targetId) {
-    const target = getVentureDoc(ventureId, "bets", targetId, options);
-    setVentureDoc(ventureId, "bets", targetId, { ...target, work, updatedAt: now() }, options);
-    return;
-  }
-  setVentureDoc(ventureId, "crew", workKey(teammateRef), { work, updatedAt: now() }, options);
+function pendingWallItems(ventureStore, ventureId, options) {
+  return ventureStore.listVentureDocs(ventureId, "decisions", options)
+    .filter((item) => !item.decision);
 }
 
 // The system prompt: the teammate's soul/voice, plus the one standing instruction that carries
 // FIRM-SPEC.md's divergence doctrine — the host names the expectation, the crew judges the shape.
-function buildSystem({ ventureId, teammateRef, goal, options }) {
+function buildSystem({ ventureId, teammateRef, goal, options, configuration, agent, coordination, firstDirection, target, architectureContext, theoryContext, workingTheoryDrive }) {
   const soul = teammateSoulStore.ensure(ventureId, teammateRef, {}, options);
   const brief = teammateSoulStore.voiceBriefFor(ventureId, teammateRef, {}, options) ?? {};
-  const name = brief.name || soul.name || teammateRef;
+  const name = agent.name || brief.name || soul.name || teammateRef;
+  const participantLabel = configuration.presentation.participantLabel || "teammate";
+  const peers = configuration.agents
+    .filter((candidate) => candidate.ref !== teammateRef)
+    .map((candidate) => `${candidate.name} (${candidate.ref}; ${candidate.activation})${candidate.perspective ? ` — ${candidate.perspective}` : ""}`);
   return [
-    `You are ${name}, a teammate on this venture's crew.`,
+    `You are ${name}, a ${participantLabel} in this venture's ${configuration.presentation.collectiveLabel}.`,
+    agent.perspective ? `Your perspective: ${agent.perspective}` : "",
+    agent.temperament.length ? `Your temperament: ${agent.temperament.join("; ")}` : "",
+    agent.contributes.length ? `You contribute: ${agent.contributes.join("; ")}` : "",
+    agent.boundaries.length ? `Your boundaries: ${agent.boundaries.join("; ")}` : "",
     brief.register ? `How you sound: ${brief.register}` : "",
     brief.stance ? `How you carry yourself: ${brief.stance}` : "",
-    `Facing this goal, fork genuinely divergent bets — different angles, not restatements of the same`,
-    `move. How many, and along which dimensions, is your judgment call; there is no fixed count.`,
+    agent.context.instructions ? `Context instructions: ${agent.context.instructions}` : "",
+    agent.memory.instructions ? `Memory instructions: ${agent.memory.instructions}` : "",
+    agent.capabilities.additional.length
+      ? `Your configured capabilities: ${agent.capabilities.additional.join(", ")}. Use these as lenses and skills; they do not grant host authority.`
+      : "",
+    configuration.organization.instructions
+      ? `How this firm is organized: ${configuration.organization.instructions}`
+      : "",
+    `Coordination mode: ${configuration.coordination.mode}.`,
+    `Respond to what is in front of you. Answer directly when that is enough. When another perspective`,
+    `would materially improve the result, say what kind of help is needed and why. You may challenge`,
+    `the framing, propose parallel examination, or declare sufficient confidence.`,
+    peers.length ? `Other configured participants: ${peers.join("; ")}.` : "",
+    peers.length && configuration.coordination.maxPasses > 1
+      ? `Use involve_participant when one of them can materially improve the result. Choose the participant, protocol, and focused question yourself.`
+      : "",
+    coordination?.request
+      ? `This pass was requested by ${coordination.request.requestedBy} using ${coordination.request.protocol}: ${coordination.request.question}`
+      : "",
+    target?.workRef
+      ? `This direction explicitly targets durable work ${target.workRef}${target.betId ? ` inside bet ${target.betId}` : ""}. Keep any revision, outward act, and return attached to that work identity.`
+      : target?.betId ? `This direction explicitly targets bet ${target.betId}.` : "",
+    target?.teammateRefs?.length
+      ? `The founder explicitly included these participants: ${target.teammateRefs.join(", ")}. Preserve that attribution; involve a peer only when their contribution is materially useful.`
+      : "",
+    architectureContext ? architectureContextPrompt(architectureContext) : "",
+    theoryContext ? workingTheoryContextPrompt(theoryContext) : "",
+    firstDirection
+      ? `This is the venture's first direction. Read repository truth before making product claims; cite the exact file and line in the first substantive response, then fork only bets grounded in that evidence.`
+      : "",
+    workingTheoryDrive
+      ? `This broad direction must leave durable truth, not a plan: use search_repository and read_repository_excerpt, record a provisional working theory, produce useful inspectable inward work, then ensure that work is a source anchor on the current theory. The host will report partial unless all three facts exist.`
+      : "",
+    `When the founder asks to shape venture architecture or propose a GTM system, first use read_venture_architecture, then propose_architecture_change; it stays staged for the founder, so do not create bets, start campaigns, or invent workflow stages on its behalf. Otherwise, when useful, fork genuinely divergent bets — different angles, not restatements of the same move.`,
+    `How many, and along which dimensions, is your judgment call; there is no fixed count.`,
+    configuration.coordination.protocols.length
+      ? `Available interaction protocols: ${configuration.coordination.protocols.join(", ")}.`
+      : "",
+    configuration.coordination.stopWhen.length
+      ? `Stop seeking more perspectives when: ${configuration.coordination.stopWhen.join("; ")}.`
+      : "",
+    agent.evaluation.signals.length
+      ? `Evaluate the work against: ${agent.evaluation.signals.join("; ")}.`
+      : "",
+    agent.evaluation.instructions ? `Evaluation instructions: ${agent.evaluation.instructions}` : "",
     `Stage real drafts on each bet you fork. Consult taste (get_taste) before staging anything the`,
     `founder will see. Anything that would touch the world — a send, a publish, a spend — goes through`,
     `stage_outward, never executed directly. Ask the founder (ask_founder) when you are genuinely stuck.`,
+    `Use speak on a bet for concise progress or conclusions the founder should hear. Speak as yourself`,
+    `in the first person; the founder sees those lines in the venture chat.`,
     `Goal: ${goal}`,
   ].filter(Boolean).join("\n");
 }
@@ -78,38 +119,145 @@ function buildSystem({ ventureId, teammateRef, goal, options }) {
 // to the next pause. `deps` lets callers (and tests) inject `park`, `client`/`query`/`runtime`
 // (forwarded to selectRuntime), `taste`, `ventureStore`, and `cwd` without reaching into module
 // internals — the same injection convention brain/test/runtimes.test.mjs already uses.
-export async function driveTeammate({
+export async function driveTeammate(input = {}) {
+  const { ventureId, teammateRef, goal, betId = null, initiatedBy = null, options = {}, deps = {} } = input;
+  if (!ventureId) throw new Error("driveTeammate() needs a ventureId.");
+  if (!teammateRef) throw new Error("driveTeammate() needs a teammateRef.");
+  if (!goal) throw new Error("driveTeammate() needs a goal.");
+  return withParticipantDriveLease({
+    ventureId,
+    teammateRef,
+    betId,
+    explicitContinuation: initiatedBy === "founder" || initiatedBy === "agent",
+    options,
+    deps,
+  }, (lease) => driveTeammateLeased(input, lease));
+}
+
+async function driveTeammateLeased({
   ventureId,
   teammateRef,
   goal,
   betId = null,
+  runtime = null,
   model = null,
+  initiatedBy = null,
+  coordination = null,
+  target = null,
   options = {},
   deps = {},
-} = {}) {
-  if (!ventureId) throw new Error("driveTeammate() needs a ventureId.");
-  if (!teammateRef) throw new Error("driveTeammate() needs a teammateRef.");
-  if (!goal) throw new Error("driveTeammate() needs a goal.");
-
+} = {}, lease) {
+  const persistedConfiguration = getVentureDoc(ventureId, "configuration", CONFIGURATION_KEY, options);
+  const canFormFirstParticipant = !persistedConfiguration
+    || (persistedConfiguration.revision === 1 && persistedConfiguration.agents?.length === 0);
+  if (persistedConfiguration && !configuredAgent(persistedConfiguration, teammateRef) && !canFormFirstParticipant) {
+    const error = new Error(`Participant "${teammateRef}" is not in this venture's firm configuration.`);
+    error.code = "participant_not_configured";
+    throw error;
+  }
   summon(ventureId, teammateRef, { templateRef: teammateRef }, options);
-  const { bet, work } = loadWork({ ventureId, teammateRef, betId, options });
+  const configuration = ensureInitialFirmParticipant(ventureId, teammateRef, options);
+  const agent = configuredAgent(configuration, teammateRef);
+  if (!agent) {
+    const error = new Error(`Participant "${teammateRef}" is not in this venture's firm configuration.`);
+    error.code = "participant_not_configured";
+    throw error;
+  }
+  const loaded = loadWork({ ventureId, teammateRef, betId, options });
+  const bet = loaded.bet;
+  let work = loaded.work;
+  if (lease.recoveredLeaseIds.length) {
+    work = { ...work, pausedFor: "Previous provider work was interrupted. Durable progress was kept." };
+    saveWork({ ventureId, teammateRef, betId, bet, work, options });
+  }
 
   const taste = deps.taste ?? deps.memory ?? await import("./taste.mjs");
   const ventureStore = deps.ventureStore ?? await import("./venture-store.mjs");
   const venture = ventureStore.openVenture(ventureId, options);
   if (!venture) throw new Error(`No such venture: ${ventureId}`);
-  const { tools, consultedNames } = buildToolSet({
+  const beforeBets = ventureStore.listVentureDocs(ventureId, "bets", options);
+  const beforeWallItems = pendingWallItems(ventureStore, ventureId, options);
+  const workingTheoryDrive = !betId && !target?.architectureId && !coordination?.request;
+  const theoryBaseline = captureWorkingTheoryBaseline(ventureId, options);
+  const architectureContext = target?.architectureId
+    ? buildArchitectureContext(ventureId, {
+        id: target.architectureId,
+        stepId: target.architectureStepId,
+        revision: target.architectureRevision,
+      }, options)
+    : null;
+  const theoryContext = target?.theorySubjectId || target?.theoryRelationshipId
+    ? buildWorkingTheoryContext(ventureId, {
+        theoryId: target.theoryId,
+        subjectId: target.theorySubjectId,
+        relationshipId: target.theoryRelationshipId,
+      }, options)
+    : null;
+  if (initiatedBy === "founder" || initiatedBy === "agent") {
+    appendConversationMessage({
+      ventureId,
+      role: initiatedBy,
+      content: goal,
+      teammateRef,
+      betId,
+      target,
+    }, options);
+  }
+  const priorTeammateMessageIds = new Set(
+    listConversation(ventureId, options)
+      .filter((message) => message.role === "teammate")
+      .map((message) => message.id),
+  );
+  const coordinationSeam = buildCoordinationSeam({
     ventureId,
     teammateRef,
+    configuration,
+    agent,
+    coordination,
+    options,
+    deps,
+    drive: driveTeammate,
+  });
+  const built = buildToolSet({
+    ventureId,
+    teammateRef,
+    configurationRevision: configuration.revision,
     options,
     cwd: deps.cwd ?? venture.repository,
     taste,
     ventureStore,
     deps,
+    coordinationParticipants: coordinationSeam.participants,
+    coordinationProtocols: configuration.coordination.protocols,
+    involveParticipant: coordinationSeam.involveParticipant,
+    target,
+    architectureRevision: architectureContext?.architectureRevision ?? null,
   });
+  const outwardBlocked = configuration.authority.outwardEffects === "blocked"
+    || agent.authority.outwardEffects === "blocked";
+  const tools = agent.capabilities.firmTools
+    ? built.tools.filter((tool) => !(outwardBlocked && tool.name === "stage_outward"))
+    : [];
+  const consultedNames = built.consultedNames;
 
-  const selection = selectRuntime({
-    client: deps.client, runtime: deps.runtime, forced: deps.forced, model, env: deps.env,
+  const configuredRuntime = agent.runtime.provider ?? configuration.defaults.runtime;
+  const configuredModel = agent.runtime.model ?? configuration.defaults.model;
+  let effectiveRuntime = runtime ?? configuredRuntime;
+  let effectiveModel = model ?? configuredModel;
+  // Older composer builds put the adapter id in the `model` field. Treat a known adapter id as the
+  // adapter and leave its model on Auto; passing "claude-code" to Claude as a model name produces the
+  // exact selected-model error this compatibility seam exists to prevent.
+  if (!effectiveRuntime && effectiveModel && getRuntime(effectiveModel)) {
+    effectiveRuntime = effectiveModel;
+    effectiveModel = null;
+  }
+
+  const selection = (deps.selectRuntime ?? selectRuntime)({
+    client: deps.client,
+    runtime: deps.runtime,
+    forced: deps.forced ?? effectiveRuntime,
+    model: effectiveModel,
+    env: deps.env,
   });
   if (!selection.adapter) {
     const error = new Error(selection.reason || "No runtime available to drive this teammate.");
@@ -117,50 +265,230 @@ export async function driveTeammate({
     throw error;
   }
 
-  const resumePrompt = work.pausedFor ? `${work.pausedFor} Continue.` : null;
-  let currentWork = { ...work, pausedFor: null };
+  const driveStartedAt = deps.nowMs ?? Date.now();
+  const spendAvailability = reserveAgentDailySpend({
+    ventureId,
+    teammateRef,
+    cap: agent.budget.dailySpendUsd,
+    costReporting: selection.adapter.costReporting,
+    options,
+    nowMs: driveStartedAt,
+  });
+
+  // A resumed provider conversation already has its transcript, but it cannot infer why the
+  // founder started this new drive. Carry the explicit direction into every resume and retain the
+  // last pause as context rather than letting either one replace the other. Fresh drives still use
+  // the ordinary goal prompt below.
+  const resumePrompt = work.runtimeSessionId
+    ? [
+        work.pausedFor ? `Prior pause context: ${work.pausedFor}` : null,
+        `New founder direction: ${goal}`,
+      ].filter(Boolean).join("\n\n")
+    : null;
+  let currentWork = {
+    ...work,
+    pausedFor: null,
+    ...(architectureContext ? {
+      architectureRevision: architectureContext.architectureRevision,
+      architectureTarget: { id: architectureContext.selected.id, stepId: architectureContext.stepId },
+    } : {}),
+  };
+  const checkpointWork = () => saveWork({ ventureId, teammateRef, betId, bet, work: currentWork, options });
+  const narration = [];
   const toolByName = new Map(tools.map((tool) => [tool.name, tool]));
+
+  const storedSession = typeof currentWork.runtimeSessionId === "string" ? currentWork.runtimeSessionId : null;
+  const separator = storedSession?.indexOf(":") ?? -1;
+  const storedRuntime = separator > 0 ? storedSession.slice(0, separator) : null;
+  const runtimeSessionId = storedRuntime
+    ? (storedRuntime === selection.adapter.id ? storedSession.slice(separator + 1) : null)
+    : storedSession;
+
+  const activeDrive = beginActiveDrive({
+    ventureId,
+    teammateRef,
+    betId: betId ?? bet?.id ?? null,
+    runtime: selection.adapter.id,
+    abortSupported: selection.adapter.supportsAbort,
+    architectureRevision: architectureContext?.architectureRevision ?? null,
+  });
+  const targetBetId = betId ?? bet?.id ?? null;
+  const receipts = createWorkLoopReceipts({
+    ventureId, betId: targetBetId, activeDriveId: activeDrive.id, adapter: selection.adapter, options,
+    stepIndex: () => Number(currentWork.stepCount) || 0,
+    monotonicNow: deps.monotonicNow,
+  });
+  const externallyCancelled = deps.isCancelled ?? (() => false);
 
   const ctx = {
     goal,
-    model: model ?? selection.adapter.id,
-    system: buildSystem({ ventureId, teammateRef, goal, options }),
+    model: effectiveModel,
+    cwd: deps.cwd ?? venture.repository,
+    system: buildSystem({
+      ventureId,
+      teammateRef,
+      goal,
+      options,
+      configuration,
+      agent,
+      coordination,
+      firstDirection: beforeBets.length === 0 && !betId,
+      target,
+      architectureContext,
+      theoryContext,
+      workingTheoryDrive,
+    }),
     tools: tools.map(({ run: _run, ...definition }) => definition),
     client: selection.client ?? null,
     query: deps.query ?? null,
     options,
     env: deps.env ?? process.env,
     initialMessages: null,
-    runtimeSessionId: currentWork.runtimeSessionId,
+    runtimeSessionId,
     resumePrompt,
-    onRuntimeSession: (sid) => { currentWork = { ...currentWork, runtimeSessionId: sid }; },
+    onRuntimeSession: (sid) => {
+      currentWork = { ...currentWork, runtimeSessionId: sid ? `${selection.adapter.id}:${sid}` : null };
+      checkpointWork();
+    },
     spentUsd: Number(currentWork.spentUsd) || 0,
-    onCost: (usd) => { currentWork = { ...currentWork, spentUsd: (Number(currentWork.spentUsd) || 0) + (Number(usd) || 0) }; },
-    maxSteps: deps.maxSteps ?? DEFAULT_MAX_STEPS,
+    onCost: (usd) => {
+      receipts.noteCost(usd);
+      currentWork = { ...currentWork, spentUsd: (Number(currentWork.spentUsd) || 0) + (Number(usd) || 0) };
+      checkpointWork();
+    },
+    maxSteps: deps.maxSteps ?? agent.budget.maxSteps ?? configuration.defaults.maxSteps ?? DEFAULT_MAX_STEPS,
+    maxBudgetUsd: spendAvailability.remainingUsd,
     stepCount: Number(currentWork.stepCount) || 0,
-    isCancelled: deps.isCancelled ?? (() => false),
+    signal: activeDrive.signal,
+    isCancelled: () => activeDrive.signal.aborted || externallyCancelled(),
     currentStatus: () => (currentWork.pausedFor ? "paused" : "running"),
-    onTurn: () => { currentWork = { ...currentWork, stepCount: (Number(currentWork.stepCount) || 0) + 1 }; return currentWork.stepCount; },
-    onText: (text) => appendEvent(ventureId, betId ?? bet?.id, { type: "text", detail: text }, options),
-    onToolStart: (name) => appendEvent(ventureId, betId ?? bet?.id, { type: "tool_started", detail: name }, options),
-    onToolError: (name, message) => appendEvent(ventureId, betId ?? bet?.id, { type: "tool_failed", detail: `${name}: ${message}` }, options),
+    onTurn: () => {
+      currentWork = { ...currentWork, stepCount: (Number(currentWork.stepCount) || 0) + 1 };
+      checkpointWork();
+      return currentWork.stepCount;
+    },
+    onText: (text) => {
+      receipts.record({ type: "text", detail: text });
+      const line = String(text ?? "").trim();
+      if (line) narration.push(line);
+    },
+    onToolStart: (name) => receipts.startTool(name),
+    onToolError: (name, message) => receipts.record({ type: "tool_failed", detail: `${name}: ${message}` }),
     runTool: async ({ name, input }) => {
       const tool = toolByName.get(name);
       if (!tool) throw new Error(`Unknown firm tool "${name}".`);
-      const result = await tool.run(input ?? {});
-      const pause = name === "ask_founder" || (name === "stage_outward" && result?.parked === true);
-      if (pause) currentWork = { ...currentWork, pausedFor: name === "ask_founder" ? "Waiting for the founder's answer." : "Waiting at the founder wall." };
-      return { result, pause };
+      const receipt = receipts.takeTool(name);
+      try {
+        const result = await tool.run(input ?? {});
+        const pause = name === "ask_founder" || (name === "stage_outward" && result?.parked === true);
+        if (pause) {
+          currentWork = { ...currentWork, pausedFor: name === "ask_founder" ? "Waiting for the founder's answer." : "Waiting at the founder wall." };
+          checkpointWork();
+        }
+        return { result, pause };
+      } finally {
+        receipts.completeTool(receipt);
+      }
     },
     persistMessages: () => {},
   };
 
-  const outcome = await selection.adapter.drive(ctx);
+  const spentBeforeDrive = Number(currentWork.spentUsd) || 0;
+  let outcome;
+  try {
+    outcome = await selection.adapter.drive(ctx);
+  } finally {
+    try {
+      receipts.finishDrive();
+    } finally {
+      activeDrive.finish();
+      if (spendAvailability.cap != null) {
+        const measured = Math.max(0, (Number(currentWork.spentUsd) || 0) - spentBeforeDrive);
+        const fallback = selection.adapter.costReporting === "usd"
+          ? Math.min(UNMEASURED_DRIVE_ESTIMATE_USD, spendAvailability.remainingUsd)
+          : UNMEASURED_DRIVE_ESTIMATE_USD;
+        settleAgentDailySpend({
+          ventureId,
+          teammateRef,
+          reservation: spendAvailability.reservation,
+          usd: measured > 0 ? measured : fallback,
+          nowMs: driveStartedAt,
+          options,
+        });
+      }
+    }
+  }
+  if (outcome.kind === "cancelled") {
+    appendEvent(ventureId, betId ?? bet?.id, { type: "work_stopped", detail: "Stopped by the founder. Staged work was kept." }, options);
+  }
   currentWork = {
     ...currentWork,
     pausedFor: outcome.kind === "paused" ? (currentWork.pausedFor ?? outcome.summary ?? "Paused.") : null,
   };
   saveWork({ ventureId, teammateRef, betId, bet, work: currentWork, options });
 
-  return { outcome, work: currentWork, consultedTools: [...consultedNames] };
+  const runtimeReceipt = {
+    id: selection.adapter.id,
+    label: selection.adapter.label,
+    auth: selection.auth ?? null,
+    model: effectiveModel,
+    configurationRevision: configuration.revision,
+  };
+  let newTeammateMessages = listConversation(ventureId, options)
+    .filter((message) => (
+      message.role === "teammate"
+      && message.teammateRef === teammateRef
+      && !priorTeammateMessageIds.has(message.id)
+    ));
+  if (!newTeammateMessages.length) {
+    const directAnswer = narration.at(-1)
+      ?? (outcome.kind === "completed" ? String(outcome.summary ?? "").trim() : "");
+    if (directAnswer) {
+      newTeammateMessages = [appendConversationMessage({
+        ventureId,
+        role: "teammate",
+        content: directAnswer,
+        teammateRef,
+        betId,
+        runtime: runtimeReceipt,
+        coordination: coordination?.request ?? null,
+        target,
+      }, options)];
+    }
+  }
+  const stampedMessages = stampConversationRuntime(
+    ventureId,
+    newTeammateMessages.map((message) => message.id),
+    runtimeReceipt,
+    options,
+    coordination?.request ?? null,
+  );
+
+  const handoffDraft = buildWorkHandoff({
+    beforeBets,
+    afterBets: ventureStore.listVentureDocs(ventureId, "bets", options),
+    beforeWallItems,
+    afterWallItems: pendingWallItems(ventureStore, ventureId, options),
+  });
+  const handoff = handoffDraft ? appendConversationMessage({
+    ventureId,
+    role: "system",
+    kind: "handoff",
+    content: handoffDraft.content,
+    teammateRef,
+    betId,
+    target,
+    changes: handoffDraft.changes,
+  }, options) : null;
+  const completion = checkWorkingTheoryCompletion({ ventureId, baseline: theoryBaseline, outcome, target, required: workingTheoryDrive }, options);
+
+  return {
+    outcome,
+    work: currentWork,
+    consultedTools: [...consultedNames],
+    runtime: runtimeReceipt,
+    messages: stampedMessages,
+    handoff,
+    completion,
+  };
 }

@@ -1,5 +1,9 @@
 # Agent profile — meet the teammate, not the file
 
+> **ARCHIVED DESIGN RECEIPT.** This profile surface belongs to an earlier interface. Current
+> teammate UX is governed by [FIRM-SPEC.md](../FIRM-SPEC.md), [STATE.md](../STATE.md), and the root
+> [DESIGN.md](../../DESIGN.md).
+
 The surface you get when you open an agent. Replaces "open an agent = a raw markdown drawer titled
 `gtm-pco-buyer-research-agent`" with "open an agent = meet a personalized GTM teammate."
 

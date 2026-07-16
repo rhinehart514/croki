@@ -1,5 +1,8 @@
 # Editable workflow authoring and contract audit
 
+> **ARCHIVED DESIGN AUDIT.** This workflow-authoring model is explicitly outside the current Firm
+> ontology. Use [FIRM-SPEC.md](../FIRM-SPEC.md).
+
 ## UX Plan
 
 Entry begins on a built channel canvas, including a channel created from a model-composed ideation lane. The primary action is “Add step,” available directly on the canvas. The primary path is: add an input, agent, skill, gate, output, or measure step; connect it by dragging between handles; select the step; describe its required inputs and promised outputs in plain field names; save; then run. The moment of value is the canvas explaining a real operational constraint before or during execution, such as “Outreach draft needs personalFact” or “Measure is blind without source.”
@@ -57,4 +60,3 @@ Browser acceptance checks at desktop and a narrow breakpoint: open a blank chann
 - `ui/src/App.tsx`: route canvas edits through validated typed operations and refresh the audit.
 - `ui/src/index.css`: style the palette, audit, contract fields, badges, and responsive states using existing tokens.
 - `brain/test/`: add contract, recipe, and operation regression coverage.
-

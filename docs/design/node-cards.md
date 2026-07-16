@@ -1,5 +1,9 @@
 # Node cards — external MCP capabilities on the card + canvas dismiss
 
+> **ARCHIVED DESIGN RECEIPT.** These workflow node cards are not the current Firm lens. Use
+> [FIRM-SPEC.md](../FIRM-SPEC.md), [STATE.md](../STATE.md), and the root
+> [DESIGN.md](../../DESIGN.md).
+
 Status: BUILT + live-verified (2026-06-27). Refinement arc on the canvas step cards
 (`GraphCanvas.tsx` `WorkNodeComponent`, shared by `ProgramCanvas`). Live render:
 `.design-shots/mcp-cards.png`.

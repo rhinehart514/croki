@@ -279,6 +279,7 @@ export function recoverStaleBuilds(options = {}) {
   const queueDir = options.queueDir ?? DEFAULT_QUEUE_DIR;
   const recovered = [];
   const { reports } = listFrictionQueue({ queueDir });
+  const staleReports = reports.filter((report) => report.status === "building" || report.status === "queued");
 
   const wtRoot = path.join(repoRoot, ".dogfood-worktrees");
   let realWtRoot = null;
@@ -289,6 +290,14 @@ export function recoverStaleBuilds(options = {}) {
   } catch { /* none — nothing was interrupted */ }
   for (const dir of dirs) {
     const lexicalWt = path.join(realWtRoot, dir);
+    const candidates = staleReports.filter((report) => {
+      if (path.basename(report.file, path.extname(report.file)) === dir) return true;
+      const recorded = report.worktree ?? report.workspace;
+      if (!recorded) return false;
+      try { return fs.realpathSync(recorded) === fs.realpathSync(lexicalWt); }
+      catch { return path.resolve(recorded) === path.resolve(lexicalWt); }
+    });
+    if (!candidates.length) continue;
     try {
       const stat = fs.lstatSync(lexicalWt);
       if (stat.isSymbolicLink() || !stat.isDirectory()) {
@@ -296,14 +305,19 @@ export function recoverStaleBuilds(options = {}) {
       }
       const wt = fs.realpathSync(lexicalWt);
       if (!inside(realWtRoot, wt)) throw new Error("Refusing to recover a product-change worktree outside its isolated root.");
+      // A retained worktree is not itself evidence of a newly interrupted build. Ready-for-review
+      // changes intentionally survive restarts, and old receipt-less directories may still contain
+      // founder-reviewable work. Recover only a worktree owned by a receipt whose in-memory build
+      // actually died. Changing that receipt to `interrupted` below is the durable idempotence mark.
+      const receipt = candidates.find((report) => {
+        const recorded = report.worktree ?? report.workspace;
+        if (!recorded) return path.basename(report.file, path.extname(report.file)) === dir;
+        try { return fs.realpathSync(recorded) === wt; } catch { return path.resolve(recorded) === path.resolve(wt); }
+      });
+      if (!receipt) continue;
       for (const rel of ["node_modules", path.join("brain", "node_modules"), path.join("ui", "node_modules")]) {
         try { const p = path.join(wt, rel); if (fs.lstatSync(p).isSymbolicLink()) fs.unlinkSync(p); } catch { /* not ours */ }
       }
-      const receipt = reports.find((report) => {
-        const recorded = report.worktree ?? report.workspace;
-        if (!recorded) return false;
-        try { return fs.realpathSync(recorded) === wt; } catch { return path.resolve(recorded) === path.resolve(wt); }
-      });
       let commits = 0;
       if (receipt?.baseCommit) {
         commits = Number(git(["rev-list", "--count", `${receipt.baseCommit}..HEAD`], wt) || "0");
@@ -321,8 +335,7 @@ export function recoverStaleBuilds(options = {}) {
     }
   }
 
-  for (const report of reports) {
-    if (report.status !== "building" && report.status !== "queued") continue;
+  for (const report of staleReports) {
     updateFrictionItem(path.join(queueDir, report.file), {
       fields: { status: "interrupted" },
       appendSection: `## Build result\n\nThe brain restarted while this was ${report.status}; no build survives a restart. Any dirty worktree remains uncommitted for founder review. Re-run the request or inspect the recorded worktree.`,

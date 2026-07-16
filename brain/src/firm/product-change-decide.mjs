@@ -2,7 +2,7 @@
 //
 // Every write below takes an already-resolved founder actor (never an HTTP request) and rejects
 // anything not stamped "founder" — the same boundary shape as bet.mjs's end(). The real
-// browser-session check happens at the routes layer, above this call (F3's wall.mjs/routes.mjs);
+// local-page request check happens at the routes layer, above this call (F3's wall.mjs/routes.mjs);
 // this module only refuses to run without that resolved authority already in hand.
 
 import fs from "node:fs";

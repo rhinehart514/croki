@@ -4,7 +4,7 @@
 // stage local isolated work, never touch the source repo), while review/apply/revert/discard are
 // founder-only writes gated by authorizeFounderWriteForRequest BEFORE product-change-decide.mjs's own
 // store-layer actor check ever runs — the same two-layer shape wall.mjs's decide() already proves
-// (browser-session guard at the door, a resolved-actor check one layer down). Mirrors the
+// (local-page guard at the door, a resolved-actor check one layer down). Mirrors the
 // founder-wall + agent-stamp-rejection + cross-venture-404 tests from wall-routes.test.mjs.
 //
 // This file is new (not routes.mjs, which is builder-f3's F3 wall surface) and appended to
@@ -13,7 +13,7 @@
 
 import path from "node:path";
 import { json, readBody } from "../routes/util.mjs";
-import { authorizeFounderWriteForRequest } from "../routes/session-guard.mjs";
+import { authorizeFounderWriteForRequest } from "../routes/founder-authority.mjs";
 import { forkProductBet, listBetProductChanges, stageProductBetForReview, getWorkspace } from "./product-change.mjs";
 import {
   reviewProductBetChange,

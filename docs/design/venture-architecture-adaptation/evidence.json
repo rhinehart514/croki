@@ -1,0 +1,24 @@
+{
+  "fixtures": [
+    "Buffalo Projects",
+    "DenialShield"
+  ],
+  "viewports": [
+    "1440x900",
+    "1280x800"
+  ],
+  "interactions": [
+    "open concept",
+    "operational promotion",
+    "keyboard concept creation",
+    "shared system",
+    "campaign",
+    "bet/release",
+    "outcome",
+    "wall",
+    "machinery",
+    "keyboard outline",
+    "venture switch"
+  ],
+  "reducedMotion": true
+}

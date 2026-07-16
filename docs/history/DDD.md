@@ -1,9 +1,6 @@
-> **SUPERSEDED — 2026-07-01.** This describes the object model (the "program" and the
-> agents, rules, runs, and feedback that hang off it) of the earlier "IDE for GTM"
-> version of the product. The current plan of record is **docs/GTM-ENGINE-REBUILD.md**,
-> which defines a new record model (Evidence, ProductTruth, MarketObject, GTMPath,
-> MeasurementContract, Run, Result, RepeatableMotion, Learning). Where this doc
-> conflicts with that spec, the spec wins. Kept for history only.
+> **ARCHIVED.** This object model belongs to the earlier "IDE for GTM" product. It has no current
+> domain authority. Current product and build direction lives in [FIRM-SPEC.md](../FIRM-SPEC.md),
+> and current proof lives in [STATE.md](../STATE.md).
 
 ---
 

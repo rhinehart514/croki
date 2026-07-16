@@ -7,15 +7,12 @@
 // founder must remember to flip. The mechanism is swappable: a future manual toggle would POST the same
 // heartbeat/away endpoints; only the browser driver changes, not this surface or presence.mjs.
 //
-// AUTHENTICATED WRITE (EXPERIMENT-MACHINE-SPEC rail 1, FIX 2c). Marking "present" REMOVES a safety hold —
-// it lets an unattended standing-autonomy pattern auto-approve a possibly-outward item — so the write must
-// be founder-authenticated, exactly like a wall decision. A raw/tokenless or agent-stamped POST can no
-// longer mark the founder present and drop the away-hold. The GET (the indicator read) stays open — a read
-// removes no hold. Holding when uncertain (an unauthenticated caller cannot force "present") is always the
-// safe direction: the lease simply lapses to away on its own.
+// FOUNDER WRITE (EXPERIMENT-MACHINE-SPEC rail 1, FIX 2c). Marking "present" REMOVES a safety hold, so
+// agent-stamped traffic cannot do it. The loopback Drover page can heartbeat directly; a missing request
+// still fails closed. The GET stays open because a read removes no hold, and the lease lapses to away.
 import { json, readBody } from "./util.mjs";
 import { markPresent, markAway, getPresence } from "../presence.mjs";
-import { authorizeFounderWriteForRequest } from "./session-guard.mjs";
+import { authorizeFounderWriteForRequest } from "./founder-authority.mjs";
 
 export default async function handle({ req, res, url }) {
   if (url.pathname !== "/api/presence") return false;
@@ -30,8 +27,8 @@ export default async function handle({ req, res, url }) {
   // closed the app or flipped a future manual toggle); anything else is a keep-alive heartbeat.
   if (req.method === "POST") {
     const body = (await readBody(req)) ?? {};
-    // Marking PRESENT removes a safety hold, so it must come from the authenticated founder browser (same
-    // two-factor guard as a wall decision). Marking AWAY only ADDS a hold, so it is always allowed — a
+    // Marking PRESENT removes a safety hold, so it must come through the local founder page boundary.
+    // Marking AWAY only ADDS a hold, so it is always allowed — a
     // caller can freely make the system MORE conservative, never less.
     if (body.away !== true) {
       try {

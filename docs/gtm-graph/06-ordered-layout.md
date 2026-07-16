@@ -1,5 +1,8 @@
 # 06 — Ordered left-to-right layout
 
+> **ARCHIVED RECEIPT.** This browser receipt belongs to the superseded GTM graph UI and does not
+> describe the current Firm lens. Use [STATE.md](../STATE.md) for current proof.
+
 Status: BUILT & browser-verified (2026-07-03). Owner: canvas. Supersedes the d3-force physics scatter in `ui/src/lib/objectGraphLayout.ts`. `npm test` green (1091 pass / 0 fail).
 
 ## Why

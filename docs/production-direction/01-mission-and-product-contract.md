@@ -1,8 +1,5 @@
-> **HISTORICAL where it conflicts with the current direction.** This mission framing is
-> implementation history from the earlier production package. The current north star is the
-> experiment machine — see **docs/EXPERIMENT-MACHINE-SPEC.md** — sitting on the open-canvas
-> contract (**docs/OPEN-CANVAS-SPEC.md**). Where this document's mission or product claim
-> conflicts with that direction, the experiment-machine spec wins.
+> **SUPERSEDED.** This mission framing is implementation history. Current product authority is
+> [FIRM-SPEC.md](../FIRM-SPEC.md); current proof is [STATE.md](../STATE.md).
 
 # Mission and Product Contract
 

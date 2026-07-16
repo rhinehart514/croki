@@ -5,9 +5,9 @@
 // THE AGENT DOOR NEVER DECIDES. Every founder-only write in the firm (wall.decide's release/kill/
 // authorize-deploy, heat.setHeatSettings, product-change's review/apply/revert/discard) runs through
 // authorizeFounderWriteForRequest, which refuses any request carrying x-gtm-actor: agent — see
-// routes/session-guard.mjs:120-129. So there is no tool here for decide/release/kill/authorize-deploy/
+// routes/founder-authority.mjs. So there is no tool here for decide/release/kill/authorize-deploy/
 // set_heat by construction: even a hand-crafted brainPost straight at those routes is rejected by the
-// SAME guard every browser-only founder write already stands on. This file adds no new authority and
+// SAME guard every local-page founder write already stands on. This file adds no new authority and
 // no new bypass — it only reaches the reads and the two inward-only writes the wall already lets an
 // unattended caller touch (forking a product-change worktree stages local isolated work only; driving a
 // teammate stages bets/drafts and parks anything outward at the wall — it can never release it).
@@ -40,6 +40,31 @@ export function createFirmTools({ brainGet, brainPost }) {
     return brainGet(`/api/ventures/${encodeURIComponent(ventureId)}/wall`);
   }
 
+  async function readVentureArchitecture({ ventureId }) {
+    return brainGet(`/api/ventures/${encodeURIComponent(ventureId)}/architecture`);
+  }
+
+  async function readArchitectureContext({ ventureId, architectureId, stepId }) {
+    const query = new URLSearchParams({ id: architectureId });
+    if (stepId) query.set("stepId", stepId);
+    return brainGet(`/api/ventures/${encodeURIComponent(ventureId)}/architecture/context?${query}`);
+  }
+
+  async function proposeArchitectureChange({ ventureId, baseRevision, intent, operations, evidenceRefs, expectedExecutionEffect, unresolvedAssumptions }) {
+    return brainPost(`/api/ventures/${encodeURIComponent(ventureId)}/architecture/proposals`, {
+      baseRevision, intent, operations, evidenceRefs, expectedExecutionEffect, unresolvedAssumptions,
+    });
+  }
+
+  async function listArchitectureProposals({ ventureId }) {
+    return brainGet(`/api/ventures/${encodeURIComponent(ventureId)}/architecture/proposals`);
+  }
+
+  async function explainArchitecturePressure({ ventureId, architectureId }) {
+    const query = architectureId ? `?subjectId=${encodeURIComponent(architectureId)}` : "";
+    return brainGet(`/api/ventures/${encodeURIComponent(ventureId)}/architecture/pressure${query}`);
+  }
+
   // Stages an isolated local worktree diff only — never touches the source repo (that needs the
   // founder's own review + apply, product-routes.mjs's founder-gated routes). Safe for the agent door.
   async function forkProductBet({ ventureId, betId, intent }) {
@@ -49,8 +74,10 @@ export function createFirmTools({ brainGet, brainPost }) {
   // Starts/resumes one drive of a teammate — stages bets/drafts/evidence and parks anything outward at
   // the wall; it can never release what it parks. The one write this door has beyond staging, and it
   // stays inward by the wall's own construction (F3), not by anything this tool enforces itself.
-  async function driveTeammate({ ventureId, teammateRef, goal, betId, model }) {
-    return brainPost(`/api/ventures/${encodeURIComponent(ventureId)}/drive`, { teammateRef, goal, betId, model });
+  async function driveTeammate({ ventureId, teammateRef, teammateRefs, goal, betId, workRef, model }) {
+    return brainPost(`/api/ventures/${encodeURIComponent(ventureId)}/drive`, {
+      teammateRef, teammateRefs, goal, betId, workRef, model,
+    });
   }
 
   const VENTURE_ID = { type: "string", description: "The venture id." };
@@ -94,6 +121,52 @@ export function createFirmTools({ brainGet, brainPost }) {
       handler: readWall,
     },
     {
+      name: "read_venture_architecture",
+      description: "Read the founder-confirmed living venture architecture and its current revision. Read-only; open connections are not execution semantics.",
+      inputSchema: { type: "object", properties: { ventureId: VENTURE_ID }, required: ["ventureId"] },
+      handler: readVentureArchitecture,
+    },
+    {
+      name: "read_architecture_context",
+      description: "Read one bounded architecture context with its product/system/motion/campaign trace, evidence qualifications, pressure, live joins, and explicit omissions.",
+      inputSchema: {
+        type: "object",
+        properties: { ventureId: VENTURE_ID, architectureId: { type: "string" }, stepId: { type: "string" } },
+        required: ["ventureId", "architectureId"],
+      },
+      handler: readArchitectureContext,
+    },
+    {
+      name: "propose_architecture_change",
+      description: "Propose finite semantic architecture operations for founder review. This never changes current architecture and never grants tools or outward authority.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          ventureId: VENTURE_ID,
+          baseRevision: { type: "integer", minimum: 0 },
+          intent: { type: "string" },
+          operations: { type: "array", items: { type: "object" }, minItems: 1 },
+          evidenceRefs: { type: "array", items: { type: "string" } },
+          expectedExecutionEffect: { type: "string" },
+          unresolvedAssumptions: { type: "array", items: { type: "string" } },
+        },
+        required: ["ventureId", "baseRevision", "intent", "operations"],
+      },
+      handler: proposeArchitectureChange,
+    },
+    {
+      name: "list_architecture_proposals",
+      description: "List architecture suggestions and their founder-decision state. Read-only.",
+      inputSchema: { type: "object", properties: { ventureId: VENTURE_ID }, required: ["ventureId"] },
+      handler: listArchitectureProposals,
+    },
+    {
+      name: "explain_architecture_pressure",
+      description: "Explain concrete pressure reasons without a health score. Optionally scope to one architecture element.",
+      inputSchema: { type: "object", properties: { ventureId: VENTURE_ID, architectureId: { type: "string" } }, required: ["ventureId"] },
+      handler: explainArchitecturePressure,
+    },
+    {
       name: "fork_product_bet",
       description: "Fork an isolated local worktree for a bet's product change and stage a diff for founder review. Never touches the real source repository — that requires the founder's own separate review + apply. Safe to call unattended.",
       inputSchema: {
@@ -111,8 +184,10 @@ export function createFirmTools({ brainGet, brainPost }) {
         properties: {
           ventureId: VENTURE_ID,
           teammateRef: { type: "string", description: "The teammate to drive." },
+          teammateRefs: { type: "array", items: { type: "string" }, description: "Optional additional configured teammates explicitly targeted by this direction." },
           goal: { type: "string", description: "The goal this drive works toward." },
           betId: { type: "string", description: "Optional. Resume this bet's paused work instead of starting fresh." },
+          workRef: { type: "string", description: "Optional durable work id inside betId. Keeps revisions, wall acts, and returns attached to the exact work." },
           model: { type: "string", description: "Optional model override." },
         },
         required: ["ventureId", "teammateRef", "goal"],

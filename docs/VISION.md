@@ -1,6 +1,6 @@
 # VISION — Drover
 
-Revised 2026-07-14 for the firm direction.
+Revised 2026-07-15 for the Living Venture Atlas direction.
 
 [FIRM-SPEC.md](FIRM-SPEC.md) is the product and build contract. [STATE.md](STATE.md) records what the
 current tree proves. The open-canvas and experiment-machine documents are historical inputs, not
@@ -10,22 +10,29 @@ parallel directions.
 
 **Drover is the operating system for one-person holding companies.**
 
-A permanent AI staff runs any number of ventures around the clock. Product change and go-to-market
-motion are one loop. The founder's work compresses to conviction: direct the crew, answer what only
-they can answer, release exact outward acts, and end bets that no longer deserve life.
+A permanent set of AI teammates runs any number of ventures around the clock. Product change and
+go-to-market motion are one loop. The founder's work compresses to conviction: direct the firm,
+answer what only they can answer, release exact outward acts, and end bets that no longer deserve
+life.
 
 The wedge is **vibe code your go-to-market** for one venture. It proves the same primitives needed by
-the destination: persistent crew, open bets, isolated product worktrees, one wall, returned outcomes,
-learned taste, local venture files, and a portfolio surface.
+the destination: persistent teammates, open bets, isolated product worktrees, one wall, returned
+outcomes, learned taste, local venture files, and a portfolio surface.
 
 ## The experience
 
 The founder binds a venture to a product repository. Drover begins from cited truth rather than a
-blank prompt. Teammates fork genuinely different bets, stage real work, and keep the inward loop
-moving under one heat dial and spend rail. The canvas shows the living firm without owning it.
+blank prompt and opens on a Living Venture Atlas: venture intent, product value, reusable systems,
+active motions, campaign pressure, held releases, and returned reality before agent machinery.
+Founder-defined concepts may remain open; operational architecture changes execution only through
+explicit founder action or an accepted proposal.
+
+Teammates work through that architecture, fork genuinely different bets, stage real work, and keep
+the inward loop moving under one heat dial and spend rail. The canvas projects the venture without
+becoming a second source of truth.
 
 When work would touch the world, it reaches the wall. The wall distinguishes four kinds of founder
-attention: release outward work, answer the crew, review an outcome, or end a bet. These share one
+attention: release outward work, answer a teammate, review an outcome, or end a bet. These share one
 surface and one authority boundary, but never masquerade as the same decision.
 
 What the world says returns as a durable outcome. It joins to the bet that provoked it when evidence
@@ -50,10 +57,10 @@ founder-blessed pattern exchange, and more business functions expressed through 
 - Ventures never bleed.
 - Product claims are grounded in cited repository truth or labeled inference.
 - Founder decisions become taste, never ambient authorization.
-- Drover stays desktop-first and local-first.
+- Drover stays desktop-only and local-first.
 
 ## Proof standard
 
 Passing deterministic tests proves the harness and mechanics, not the company. Alpha is proven only
-when an outside founder can bind a real product, direct the crew, release a real act, receive an
+when an outside founder can bind a real product, direct the firm, release a real act, receive an
 attributable positive, negative, or zero outcome, and understand what to do next without intervention.

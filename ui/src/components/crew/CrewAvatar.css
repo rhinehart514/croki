@@ -1,5 +1,5 @@
-/* A crew face on a soft family chip. The character is hand-drawn line-art; the only motion is a gentle
-   "working" bob on the figure — transform only, and frozen under reduced-motion. */
+/* A crew face on a soft family chip. Working state settles into a static forest ring; work progress
+   belongs in the surrounding receipt, never in an ambient productivity loop. */
 
 .crew-avatar {
   display: inline-flex;
@@ -9,27 +9,13 @@
   flex: none;
   overflow: hidden;
   border-radius: 24%;
-  /* seat the pale chip against white cards without a hard border */
-  box-shadow: inset 0 0 0 1px rgba(24, 24, 27, 0.05);
+  box-shadow: var(--avatar-inset);
 }
 
 .crew-avatar svg {
   display: block;
 }
 
-.crew-avatar--working svg {
-  animation: crew-avatar-bob 1.6s ease-in-out infinite;
-  will-change: transform;
-}
-
-@keyframes crew-avatar-bob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-1px); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .crew-avatar--working svg {
-    animation: none;
-    transform: none;
-  }
+.crew-avatar--working {
+  box-shadow: var(--avatar-inset), 0 0 0 2px color-mix(in srgb, var(--link) 28%, transparent);
 }

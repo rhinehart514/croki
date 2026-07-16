@@ -13,13 +13,15 @@
   --serif: "Geist Variable", Geist, ui-sans-serif, system-ui, sans-serif;
   --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
   --mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-orbital-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --font-heading: var(--serif);
   --font-mono: var(--mono);
 
   --ink: #23211d;
   --ink-1: var(--ink);
   --ink-2: #4e4b44;
-  --ink-3: #847f75;
-  --muted: #847f75;
+  --ink-3: #615e56;
+  --muted: #615e56;
   --faint: #aba598;
   --ghost: #c6c1b6;
   --line: #d3cfc6;
@@ -28,23 +30,39 @@
   --surface-1: var(--surface);
   --surface-2: #dcd8d0;
   --canvas: #e9e6e0;
+  --canvas-dot: #d3cfc6;
+  --panel: #efede8;
   --room: #e3e0da;
 
   --primary: var(--ink);
   --on-primary: var(--canvas);
   --link: #1e5245;
+  --ember: #2e6e5e;
+  --ember-soft: #dce7e2;
+  --ember-ink: #1e5245;
+  --ember-line: #b7cec6;
   --gap: #a9791a;
+  --gap-soft: #f1e6cd;
+  --gap-ink: #72510f;
+  --proven: #5d7350;
+  --proven-soft: #e1e7db;
   --danger: #b4443a;
   --blind: #aba598;
 
   --text-xs: 0.6875rem;
+  --text-meta: 0.75rem;
   --text-sm: 0.8125rem;
   --text-base: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.0625rem;
+  --text-xl: 1.3125rem;
   --text-2xl: 1.625rem;
+  --text-display: 2.75rem;
   --leading-tight: 1.25;
   --leading-normal: 1.5;
   --tracking-tight: -0.011em;
 
+  --space-0-5: 0.125rem;
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -52,18 +70,26 @@
   --space-5: 1.25rem;
   --space-6: 1.5rem;
   --space-8: 2rem;
+  --space-12: 3rem;
 
   --r-sm: 6px;
   --r-md: 9px;
   --r-lg: 12px;
+  --r-xl: 16px;
+  --r-2xl: 24px;
   --shadow-sm: 0 1px 2px rgba(38, 33, 26, 0.05);
   --shadow-card: 0 1px 0 rgba(38, 33, 26, 0.03), 0 4px 12px -7px rgba(38, 33, 26, 0.16);
   --shadow-pop: 0 4px 12px rgba(38, 33, 26, 0.07), 0 12px 32px -10px rgba(38, 33, 26, 0.18);
   --shadow-modal: 0 8px 24px -12px rgba(38, 33, 26, 0.22), 0 24px 64px -20px rgba(38, 33, 26, 0.28);
+  --shadow-rail: 4px 0 18px -14px rgba(38, 33, 26, 0.22);
+  --avatar-inset: inset 0 0 0 1px rgba(38, 33, 26, 0.08);
   --elev-panel-shadow: var(--shadow-modal);
   --elev-panel-radius: 24px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --dur-fast: 120ms;
+  --ease-out: var(--ease);
+  --dur-fast: 180ms;
+  --dur-base: 220ms;
+  --dur-focus: 260ms;
 
   --background: var(--room);
   --foreground: var(--ink);
@@ -86,7 +112,7 @@
 }
 
 @theme inline {
-  --font-heading: "Geist Variable", Geist, ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--serif);
   --font-sans: var(--sans);
   --font-mono: var(--mono);
   --color-background: var(--background);
@@ -129,11 +155,19 @@ body {
   line-height: var(--leading-normal);
 }
 
+/* Browser-zoom accessibility fallback. Drover remains desktop-only; below the desktop CSS width,
+   the workbench overlays conversation instead of widening the page beyond the visible viewport. */
+@media (max-width: 959px) {
+  body { min-width: 0; }
+}
+
 button,
 input,
 textarea { font: inherit; }
 
-button { color: inherit; }
+@layer base {
+  button { color: inherit; }
+}
 
 :where(button, a, input, textarea, select, [tabindex]):focus-visible {
   outline: 2px solid var(--ink);
@@ -151,3 +185,11 @@ svg { width: 1em; height: 1em; }
 }
 
 .react-flow__edge-path { stroke-width: 1.5; }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="button"],
+  [data-slot="input"],
+  [data-slot="textarea"] { transition-duration: 0.01ms !important; }
+
+  [data-slot="button"]:active { transform: none; }
+}

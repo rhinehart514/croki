@@ -37,3 +37,4 @@ output/
 # Playwright MCP screenshot scratch
 .playwright-mcp/
 .tmp-canvas/
+.audit-shots/

@@ -1,0 +1,481 @@
+<style>
+  :root{
+    --ink:#23211d; --ink-2:#4e4b44; --muted:#615e56; --faint:#8f8a7e; --ghost:#c6c1b6;
+    --line:#d3cfc6; --line-2:#c6c1b6;
+    --surface:#f4f2ee; --surface-2:#dcd8d0; --canvas:#e9e6e0; --panel:#efede8; --room:#e3e0da;
+    --primary:#23211d; --on-primary:#e9e6e0;
+    --spruce:#2e6e5e; --spruce-ink:#1e5245; --spruce-soft:#dce7e2; --spruce-line:#b7cec6;
+    --proven:#5d7350; --proven-soft:#e1e7db;
+    --gap:#a9791a; --gap-soft:#f1e6cd; --gap-ink:#72510f; --gap-line:#d8be7e;
+    --queued:#b0aba0;
+    --danger:#b4443a;
+    --r-sm:6px; --r-md:9px; --r-lg:12px; --r-xl:16px; --r-2xl:24px;
+    --shadow-card:0 1px 0 rgba(38,33,26,.03), 0 4px 12px -7px rgba(38,33,26,.16);
+    --shadow-pop:0 4px 12px rgba(38,33,26,.07), 0 12px 32px -10px rgba(38,33,26,.18);
+    --shadow-float:0 22px 48px -30px rgba(38,33,26,.55);
+    --ease:cubic-bezier(.22,1,.36,1);
+    --sans:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
+    --serif:"Iowan Old Style","Palatino Linotype","Palatino","Book Antiqua",Georgia,"Times New Roman",serif;
+    --mono:"SF Mono",ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:var(--sans);color:var(--ink);background:var(--room);-webkit-font-smoothing:antialiased;overflow:hidden}
+  .tnum{font-variant-numeric:tabular-nums}
+  button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+  :focus-visible{outline:2px solid var(--spruce);outline-offset:2px;border-radius:4px}
+
+  .app{display:flex;flex-direction:column;height:100vh}
+
+  /* ── Top chrome — altitude gauge lives here ── */
+  .top{
+    display:flex;align-items:center;gap:16px;height:48px;padding:0 20px;
+    background:linear-gradient(var(--room),color-mix(in srgb,var(--room) 88%,transparent));
+    border-bottom:1px solid var(--line);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+    position:relative;z-index:20;
+  }
+  .brand{display:flex;align-items:center;gap:9px;font-weight:680;letter-spacing:-.01em;font-size:14px}
+  .brand .mark{display:grid;place-items:center;width:24px;height:24px;border-radius:7px;background:var(--primary);color:var(--on-primary)}
+  .brand .venture{color:var(--muted);font-weight:520}
+  .top-back{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;font-weight:520}
+
+  /* altitude gauge — the map-zoom device that this variant leans on */
+  .alt{
+    position:absolute;left:50%;transform:translateX(-50%);
+    display:flex;align-items:center;gap:2px;padding:3px;border-radius:999px;
+    background:color-mix(in srgb,var(--surface) 70%,transparent);border:1px solid var(--line-2);
+    -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+  }
+  .alt-step{
+    display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px;border-radius:999px;
+    font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.01em;
+  }
+  .alt-step.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-card)}
+  .alt-step .rings{width:13px;height:13px}
+  .top-right{margin-left:auto;display:flex;align-items:center;gap:6px}
+  .wall-flag{
+    display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;
+    background:var(--gap-soft);color:var(--gap-ink);font-size:12px;font-weight:660;border:1px solid var(--gap-line);
+  }
+  .chip{
+    display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border-radius:999px;
+    font-size:13px;font-weight:560;color:var(--ink-2);
+    background:color-mix(in srgb,var(--surface) 70%,transparent);border:1px solid var(--line-2);
+    -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+    transition:background 140ms var(--ease),transform 140ms var(--ease);
+  }
+  .chip:hover{background:var(--surface);transform:translateY(-1px)}
+
+  /* ── Canvas region ── */
+  .stage{position:relative;flex:1;overflow:hidden;background:var(--canvas)}
+  .stage::before{
+    content:"";position:absolute;inset:0;
+    background-image:radial-gradient(#d3cfc6 .9px,transparent .9px);background-size:22px 22px;opacity:.5;
+  }
+  .field{position:absolute;inset:0;width:100%;height:100%}
+
+  /* Crew rail */
+  .rail{
+    position:absolute;top:16px;left:16px;width:190px;z-index:12;
+    padding:12px;border-radius:var(--r-xl);
+    background:color-mix(in srgb,var(--surface) 76%,transparent);border:1px solid var(--line-2);
+    -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);box-shadow:var(--shadow-float);
+  }
+  .rail h3{margin:2px 2px 10px;font-size:10px;font-weight:760;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .crew-row{display:flex;align-items:center;gap:9px;padding:7px;border-radius:10px;transition:background 140ms var(--ease);width:100%;text-align:left}
+  .crew-row:hover{background:color-mix(in srgb,var(--surface-2) 60%,transparent)}
+  .av{flex:0 0 auto;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:680;color:var(--on-primary);box-shadow:inset 0 0 0 1px rgba(38,33,26,.08)}
+  .crew-name{font-size:13px;font-weight:620;color:var(--ink);line-height:1.15}
+  .crew-sub{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px}
+  .live-dot{width:6px;height:6px;border-radius:50%;background:var(--spruce);box-shadow:0 0 0 3px var(--spruce-soft)}
+
+  /* Toolbar */
+  .tools{
+    position:absolute;top:16px;right:16px;z-index:12;display:flex;gap:6px;padding:5px;border-radius:999px;
+    background:color-mix(in srgb,var(--surface) 74%,transparent);border:1px solid var(--line-2);
+    -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);box-shadow:var(--shadow-float);
+  }
+  .tool{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border-radius:999px;font-size:13px;font-weight:560;color:var(--ink-2);transition:background 140ms var(--ease),color 140ms var(--ease)}
+  .tool:hover{background:var(--surface);color:var(--ink)}
+  .kbd{display:inline-grid;place-items:center;min-width:17px;height:17px;padding:0 4px;font-size:10px;font-weight:640;font-family:var(--mono);color:var(--muted);background:var(--surface-2);border-radius:4px}
+
+  /* Legend key */
+  .keycard{
+    position:absolute;left:16px;bottom:16px;z-index:11;padding:11px 13px;border-radius:var(--r-lg);max-width:246px;
+    background:color-mix(in srgb,var(--surface) 74%,transparent);border:1px solid var(--line-2);
+    -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);box-shadow:var(--shadow-card);
+  }
+  .keycard h4{margin:0 0 8px;font-size:10px;font-weight:760;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+  .keyrow{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ink-2);line-height:1.5}
+  .keyrow + .keyrow{margin-top:5px}
+  .glyph-mini{flex:0 0 auto;display:flex;align-items:center;gap:2px}
+  .gm-dot{width:6px;height:6px;border-radius:50%}
+  .gm-run{background:var(--spruce)}.gm-done{background:var(--proven)}.gm-gate{background:var(--gap)}.gm-queue{background:var(--queued)}
+
+  /* HTML overlay nodes */
+  .node{position:absolute;transform:translate(-50%,-50%);z-index:8}
+
+  /* Center intent */
+  .intent{
+    z-index:9;width:236px;text-align:center;padding:20px 22px;border-radius:var(--r-2xl);
+    background:color-mix(in srgb,var(--surface) 90%,transparent);border:1px solid var(--line-2);
+    box-shadow:var(--shadow-float);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  }
+  .intent .kick{font-size:9.5px;font-weight:760;letter-spacing:.13em;text-transform:uppercase;color:var(--faint)}
+  .intent .make{margin:8px 0 0;font-family:var(--serif);font-size:19px;line-height:1.28;color:var(--ink);font-weight:500;letter-spacing:-.005em}
+  .intent .make em{font-style:italic;color:var(--spruce-ink)}
+  .intent-meta{margin-top:12px;display:flex;justify-content:center;gap:14px;font-size:11px;color:var(--muted)}
+  .intent-meta b{color:var(--ink);font-weight:640}
+
+  /* ── BET NODE with a MACHINERY GLYPH (the variant's signature) ── */
+  .bet{
+    width:212px;padding:11px 12px 10px;border-radius:var(--r-lg);
+    background:var(--surface);border:1px solid var(--line-2);box-shadow:var(--shadow-card);text-align:left;
+    transition:transform 150ms var(--ease),box-shadow 150ms var(--ease),border-color 150ms var(--ease);
+  }
+  .bet:hover{transform:translate(-50%,-50%) scale(1.02);box-shadow:var(--shadow-pop);border-color:var(--line);z-index:10}
+  .node:has(.bet:hover){z-index:11}
+  .bet.returned{border-left:2px solid var(--proven)}
+  .bet.atwall{border-left:2px solid var(--gap)}
+  .bet-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .bet-kick{font-size:9px;font-weight:740;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .bet-kick.wall{color:var(--gap-ink)}
+  .staker{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--muted);font-weight:560}
+  .staker .dot{width:15px;height:15px;border-radius:50%;display:grid;place-items:center;font-size:8px;font-weight:700;color:var(--on-primary)}
+  .bet-q{margin:7px 0 0;font-size:12.5px;line-height:1.33;color:var(--ink);font-weight:600}
+
+  /* the machinery glyph: a compact miniature of the bet's workflow chain + health */
+  .machine{
+    margin-top:10px;padding:8px 9px;border-radius:8px;
+    background:color-mix(in srgb,var(--canvas) 60%,var(--surface));border:1px solid var(--line);
+  }
+  .machine-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
+  .machine-label{font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+  .machine-live{display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:640;color:var(--spruce-ink)}
+  .machine-live .live-dot{width:5px;height:5px}
+  .chain{display:flex;align-items:center;gap:0}
+  .stagepip{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;flex:1}
+  .pip{width:11px;height:11px;border-radius:50%;border:1.5px solid transparent;position:relative;z-index:2}
+  .pip.done{background:var(--proven)}
+  .pip.run{background:var(--spruce);box-shadow:0 0 0 3px var(--spruce-soft)}
+  .pip.gate{background:var(--gap-soft);border-color:var(--gap)}
+  .pip.gate::after{content:"";position:absolute;inset:0;margin:auto;width:4px;height:4px;border-radius:50%;background:var(--gap)}
+  .pip.queue{background:transparent;border-color:var(--queued)}
+  .pip-cap{font-size:8px;font-weight:600;color:var(--faint);font-family:var(--mono);letter-spacing:-.02em}
+  .connector{position:absolute;top:5px;left:50%;width:100%;height:1.5px;background:var(--line-2);z-index:1}
+  .connector.flow{background:var(--proven)}
+  .connector.flow-gate{background:linear-gradient(90deg,var(--proven),var(--gap))}
+  .stagepip:last-child .connector{display:none}
+  .machine-foot{margin-top:8px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .counter{display:inline-flex;align-items:baseline;gap:3px;font-size:10px;color:var(--muted)}
+  .counter b{font-family:var(--mono);font-weight:700;color:var(--ink);font-size:11px}
+  .counter.held b{color:var(--gap-ink)}
+  .counter.win b{color:var(--proven)}
+
+  .bet-foot{margin-top:9px;display:flex;align-items:center;justify-content:space-between}
+  .settle{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--muted)}
+  .settle .arc{width:13px;height:13px}
+  .outcome{display:inline-flex;align-items:center;gap:5px;padding:3px 7px;border-radius:999px;font-size:10px;font-weight:680}
+  .outcome.up{color:var(--proven);background:var(--proven-soft)}
+  .outcome.flat{color:var(--muted);background:var(--surface-2)}
+  .outcome.wall{color:var(--gap-ink);background:var(--gap-soft);border:1px solid var(--gap-line)}
+  .dive-hint{
+    margin-top:8px;font-size:10px;font-weight:600;color:var(--spruce-ink);display:flex;align-items:center;gap:5px;
+    opacity:0;transition:opacity 150ms var(--ease);
+  }
+  .bet:hover .dive-hint{opacity:1}
+
+  /* Wall node */
+  .wall{
+    width:152px;padding:14px 15px;border-radius:var(--r-lg);text-align:left;
+    background:color-mix(in srgb,var(--gap-soft) 62%,var(--surface));border:1px solid var(--gap-line);box-shadow:var(--shadow-card);
+  }
+  .wall .wk{font-size:9px;font-weight:760;letter-spacing:.11em;text-transform:uppercase;color:var(--gap-ink);display:flex;align-items:center;gap:6px}
+  .wall .wt{margin:8px 0 3px;font-size:14px;font-weight:680;color:var(--ink)}
+  .wall .ws{font-size:11px;color:var(--gap-ink);line-height:1.4}
+  .wall-count{margin-top:9px;display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:640;color:var(--gap-ink)}
+  .wall-count .n{font-family:var(--mono);font-weight:700}
+
+  .ringlabel{
+    position:absolute;transform:translate(-50%,-50%);z-index:6;font-size:9.5px;font-weight:680;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--faint);background:color-mix(in srgb,var(--canvas) 82%,transparent);padding:2px 7px;border-radius:999px;
+  }
+
+  /* Composer */
+  .composer{
+    position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:14;width:min(720px,66vw);
+    padding:12px 14px;border-radius:var(--r-2xl);
+    background:color-mix(in srgb,var(--surface) 82%,transparent);border:1px solid var(--line-2);
+    -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);box-shadow:var(--shadow-float);
+  }
+  .comp-scope{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+  .scope-pill{display:inline-flex;align-items:center;gap:7px;padding:4px 11px 4px 5px;border-radius:999px;background:var(--spruce-soft);border:1px solid var(--spruce-line);font-size:12px;font-weight:640;color:var(--spruce-ink)}
+  .scope-pill .av-sm{width:19px;height:19px;border-radius:50%;display:grid;place-items:center;font-size:9px;font-weight:700;color:var(--on-primary)}
+  .scope-help{font-size:12px;color:var(--muted)}
+  .comp-input{display:flex;align-items:center;gap:10px}
+  .comp-input input{flex:1;height:36px;padding:0 6px;border:0;background:transparent;outline:none;font-size:15px;color:var(--ink)}
+  .comp-input input::placeholder{color:var(--faint)}
+  .model{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);padding:0 10px;height:30px;border-radius:999px;border:1px solid var(--line-2);background:var(--surface)}
+  .send{width:36px;height:36px;border-radius:50%;background:var(--primary);color:var(--on-primary);display:grid;place-items:center;transition:transform 120ms var(--ease)}
+  .send:hover{transform:translateY(-1px)}
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand"><span class="mark" aria-hidden="true">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.5 7M20 20 8.5 17"/></svg>
+    </span>Drover <span class="venture">drover</span></div>
+    <button class="top-back"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>Ventures</button>
+
+    <!-- ALTITUDE GAUGE — the map-zoom control for the whole variant -->
+    <nav class="alt" aria-label="Canvas altitude">
+      <span class="alt-step on">
+        <svg class="rings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="10.5"/></svg>
+        Venture
+      </span>
+      <span class="alt-step">
+        <svg class="rings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="5" cy="12" r="2.4"/><circle cx="12" cy="12" r="2.4"/><circle cx="19" cy="12" r="2.4"/><path d="M7.4 12h2.2M14.4 12h2.2"/></svg>
+        Inside a bet
+      </span>
+    </nav>
+
+    <div class="top-right">
+      <span class="wall-flag"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg>1 at the wall</span>
+      <button class="chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Conversation</button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <svg class="field" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <defs>
+        <radialGradient id="core" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#ecece7" stop-opacity=".9"/>
+          <stop offset="60%" stop-color="#e9e6e0" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <circle cx="640" cy="450" r="360" fill="url(#core)"/>
+      <g fill="none" stroke="#c6c1b6" stroke-dasharray="2 7" stroke-width="1">
+        <circle cx="640" cy="450" r="152"/><circle cx="640" cy="450" r="285"/><circle cx="640" cy="450" r="420"/>
+      </g>
+      <!-- wall arc, right side -->
+      <path d="M 640 450 m 420 0 a 420 420 0 0 1 -297 297" fill="none" stroke="#a9791a" stroke-width="1.4" stroke-opacity=".55"/>
+      <path d="M 640 450 m 420 0 a 420 420 0 0 0 -297 -297" fill="none" stroke="#a9791a" stroke-width="1.2" stroke-opacity=".32"/>
+      <!-- causality spokes -->
+      <g stroke="#b7b2a6" stroke-width="1.4" fill="none" opacity=".65">
+        <line x1="640" y1="450" x2="400" y2="250"/>
+        <line x1="640" y1="450" x2="330" y2="580"/>
+        <line x1="640" y1="450" x2="700" y2="690"/>
+      </g>
+      <!-- near-wall bet drift, amber animated -->
+      <line x1="640" y1="450" x2="1030" y2="322" stroke="#a9791a" stroke-width="1.8" stroke-opacity=".8" stroke-dasharray="4 6">
+        <animate attributeName="stroke-dashoffset" from="20" to="0" dur="1.6s" repeatCount="indefinite"/>
+      </line>
+      <line x1="1030" y1="322" x2="1230" y2="238" stroke="#a9791a" stroke-width="1.6" stroke-opacity=".5" stroke-dasharray="3 5"/>
+    </svg>
+
+    <div class="ringlabel" style="left:39.5%;top:33%">near intent</div>
+    <div class="ringlabel" style="left:76%;top:63%">drifting</div>
+    <div class="ringlabel" style="left:66%;top:14%;color:var(--gap-ink)">approaching the wall</div>
+
+    <!-- CREW RAIL -->
+    <aside class="rail">
+      <h3>Crew</h3>
+      <button class="crew-row">
+        <span class="av" style="background:#5b6e8c">Y</span>
+        <span><span class="crew-name">Yara</span><span class="crew-sub"><span class="live-dot"></span>drafting outreach · 12 done</span></span>
+      </button>
+      <button class="crew-row">
+        <span class="av" style="background:#7a5b8c">M</span>
+        <span><span class="crew-name">Mira</span><span class="crew-sub"><span class="live-dot"></span>enriching · 40 sourced</span></span>
+      </button>
+      <button class="crew-row">
+        <span class="av" style="background:#8c6b5b">S</span>
+        <span><span class="crew-name">Soren</span><span class="crew-sub">watching signal · idle</span></span>
+      </button>
+      <button class="crew-row">
+        <span class="av" style="background:#5b8c72">K</span>
+        <span><span class="crew-name">Kai</span><span class="crew-sub">idle · never run</span></span>
+      </button>
+    </aside>
+
+    <div class="tools">
+      <button class="tool"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/></svg>Whole venture</button>
+      <button class="tool">Outline <span class="kbd">O</span></button>
+      <button class="tool">+ Bet <span class="kbd">N</span></button>
+    </div>
+
+    <div class="keycard">
+      <h4>Reading a bet's machine</h4>
+      <div class="keyrow"><span class="glyph-mini"><span class="gm-dot gm-done"></span><span class="gm-dot gm-run"></span></span>Filled dots are stages done or running</div>
+      <div class="keyrow"><span class="glyph-mini"><span class="gm-dot gm-gate" style="background:var(--gap-soft);box-shadow:inset 0 0 0 1.5px var(--gap)"></span></span>Ringed amber dot is the gate at the wall</div>
+      <div class="keyrow"><span class="glyph-mini"><span class="gm-dot" style="background:transparent;box-shadow:inset 0 0 0 1.5px var(--queued)"></span></span>Hollow dots are stages still queued</div>
+    </div>
+
+    <!-- VENTURE INTENT (center) -->
+    <div class="node" style="left:40%;top:50%">
+      <div class="intent">
+        <div class="kick">Venture intent</div>
+        <p class="make">Make it obvious that <em>credible work</em> — not polished profiles — is how builders get hired.</p>
+        <div class="intent-meta"><span><b>3</b> bets running</span><span>config <b>v2</b></span></div>
+      </div>
+    </div>
+
+    <!-- BET 1 — near intent, healthy chain, running -->
+    <div class="node" style="left:25%;top:27.8%">
+      <div class="bet">
+        <div class="bet-head">
+          <span class="bet-kick">Bet · running</span>
+          <span class="staker"><span class="dot" style="background:#7a5b8c">M</span>Mira</span>
+        </div>
+        <p class="bet-q">Cold outreach to design-lead prospects on the strength of a public build-log.</p>
+        <div class="machine">
+          <div class="machine-head">
+            <span class="machine-label">Its machine</span>
+            <span class="machine-live"><span class="live-dot"></span>enriching</span>
+          </div>
+          <div class="chain">
+            <div class="stagepip"><span class="pip done"></span><span class="pip-cap">src</span><span class="connector flow"></span></div>
+            <div class="stagepip"><span class="pip run"></span><span class="pip-cap">enr</span><span class="connector"></span></div>
+            <div class="stagepip"><span class="pip queue"></span><span class="pip-cap">drft</span><span class="connector"></span></div>
+            <div class="stagepip"><span class="pip queue"></span><span class="pip-cap">gate</span><span class="connector"></span></div>
+            <div class="stagepip"><span class="pip queue"></span><span class="pip-cap">send</span><span class="connector"></span></div>
+            <div class="stagepip"><span class="pip queue"></span><span class="pip-cap">meas</span></div>
+          </div>
+          <div class="machine-foot">
+            <span class="counter"><b class="tnum">40</b> sourced</span>
+            <span class="counter"><b class="tnum">22</b> enriched</span>
+          </div>
+        </div>
+        <div class="bet-foot">
+          <span class="settle"><svg class="arc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9" stroke-opacity=".3"/><path d="M12 12V4" stroke-linecap="round"/></svg>signal in <b class="tnum">9d</b></span>
+          <span class="outcome flat">no signal yet</span>
+        </div>
+        <div class="dive-hint"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>Dive to open its full workflow</div>
+      </div>
+    </div>
+
+    <!-- BET 2 — drifting, returned outcome, full chain done -->
+    <div class="node" style="left:20.4%;top:64.4%">
+      <div class="bet returned">
+        <div class="bet-head">
+          <span class="bet-kick">Bet · drifting</span>
+          <span class="staker"><span class="dot" style="background:#8c6b5b">S</span>Soren</span>
+        </div>
+        <p class="bet-q">Warm intros from past collaborators outperform cold outreach for design roles.</p>
+        <div class="machine">
+          <div class="machine-head">
+            <span class="machine-label">Its machine</span>
+            <span class="machine-live" style="color:var(--proven)">measured · closed</span>
+          </div>
+          <div class="chain">
+            <div class="stagepip"><span class="pip done"></span><span class="pip-cap">src</span><span class="connector flow"></span></div>
+            <div class="stagepip"><span class="pip done"></span><span class="pip-cap">enr</span><span class="connector flow"></span></div>
+            <div class="stagepip"><span class="pip done"></span><span class="pip-cap">drft</span><span class="connector flow"></span></div>
+            <div class="stagepip"><span class="pip done"></span><span class="pip-cap">gate</span><span class="connector flow"></span></div>
+            <div class="stagepip"><span class="pip done"></span><span class="pip-cap">send</span><span class="connector flow"></span></div>
+            <div class="stagepip"><span class="pip done"></span><span class="pip-cap">meas</span></div>
+          </div>
+          <div class="machine-foot">
+            <span class="counter"><b class="tnum">18</b> sent</span>
+            <span class="counter win"><b class="tnum">7</b> replied</span>
+          </div>
+        </div>
+        <div class="bet-foot">
+          <span class="settle"><svg class="arc" viewBox="0 0 24 24" fill="none" stroke="var(--proven)" stroke-width="2"><circle cx="12" cy="12" r="9" stroke-opacity=".3"/><path d="M12 12 12 5A7 7 0 0 1 17 7" stroke-linecap="round"/></svg>settled <b class="tnum">Jul 12</b></span>
+          <span class="outcome up"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 14l6-6 4 4 6-8"/></svg>outcome returned</span>
+        </div>
+        <div class="dive-hint"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>Dive to open its full workflow</div>
+      </div>
+    </div>
+
+    <!-- BET 3 — mid, running, waiting on signal -->
+    <div class="node" style="left:50.5%;top:82%">
+      <div class="bet">
+        <div class="bet-head">
+          <span class="bet-kick">Bet · running</span>
+          <span class="staker"><span class="dot" style="background:#5b8c72">K</span>Kai</span>
+        </div>
+        <p class="bet-q">A weekly "shipped this week" digest keeps builders returning without paid retention.</p>
+        <div class="machine">
+          <div class="machine-head">
+            <span class="machine-label">Its machine</span>
+            <span class="machine-live" style="color:var(--muted)">early read</span>
+          </div>
+          <div class="chain">
+            <div class="stagepip"><span class="pip done"></span><span class="pip-cap">seg</span><span class="connector flow"></span></div>
+            <div class="stagepip"><span class="pip done"></span><span class="pip-cap">draft</span><span class="connector flow"></span></div>
+            <div class="stagepip"><span class="pip run"></span><span class="pip-cap">gate</span><span class="connector"></span></div>
+            <div class="stagepip"><span class="pip queue"></span><span class="pip-cap">send</span><span class="connector"></span></div>
+            <div class="stagepip"><span class="pip queue"></span><span class="pip-cap">meas</span></div>
+          </div>
+          <div class="machine-foot">
+            <span class="counter"><b class="tnum">1</b> digest drafted</span>
+            <span class="counter"><b class="tnum">312</b> in segment</span>
+          </div>
+        </div>
+        <div class="bet-foot">
+          <span class="settle"><svg class="arc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9" stroke-opacity=".3"/><path d="M12 12 12 5A7 7 0 0 1 18 10" stroke-linecap="round"/></svg>signal in <b class="tnum">4d</b></span>
+          <span class="outcome flat">early read</span>
+        </div>
+        <div class="dive-hint"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>Dive to open its full workflow</div>
+      </div>
+    </div>
+
+    <!-- BET 4 — at the wall, gate held (amber pip) -->
+    <div class="node" style="left:64.4%;top:35.7%">
+      <div class="bet atwall">
+        <div class="bet-head">
+          <span class="bet-kick wall">Bet · at the wall</span>
+          <span class="staker"><span class="dot" style="background:#5b6e8c">Y</span>Yara</span>
+        </div>
+        <p class="bet-q">Auto-publish each builder's repo README as their live public page.</p>
+        <div class="machine">
+          <div class="machine-head">
+            <span class="machine-label">Its machine</span>
+            <span class="machine-live" style="color:var(--gap-ink)"><span class="live-dot" style="background:var(--gap);box-shadow:0 0 0 3px var(--gap-soft)"></span>held at gate</span>
+          </div>
+          <div class="chain">
+            <div class="stagepip"><span class="pip done"></span><span class="pip-cap">src</span><span class="connector flow"></span></div>
+            <div class="stagepip"><span class="pip done"></span><span class="pip-cap">enr</span><span class="connector flow"></span></div>
+            <div class="stagepip"><span class="pip done"></span><span class="pip-cap">build</span><span class="connector flow-gate"></span></div>
+            <div class="stagepip"><span class="pip gate"></span><span class="pip-cap" style="color:var(--gap-ink)">gate</span><span class="connector"></span></div>
+            <div class="stagepip"><span class="pip queue"></span><span class="pip-cap">pub</span><span class="connector"></span></div>
+            <div class="stagepip"><span class="pip queue"></span><span class="pip-cap">meas</span></div>
+          </div>
+          <div class="machine-foot">
+            <span class="counter"><b class="tnum">41</b> pages built</span>
+            <span class="counter held"><b class="tnum">41</b> held at the gate</span>
+          </div>
+        </div>
+        <div class="bet-foot">
+          <span class="settle"><svg class="arc" viewBox="0 0 24 24" fill="none" stroke="var(--gap)" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>settled <b class="tnum">today</b></span>
+          <span class="outcome wall">decision waits</span>
+        </div>
+        <div class="dive-hint"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>Dive to open its full workflow</div>
+      </div>
+    </div>
+
+    <!-- THE WALL -->
+    <div class="node" style="left:78%;top:24%">
+      <div class="wall">
+        <div class="wk"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg>The wall</div>
+        <div class="wt">1 decision</div>
+        <div class="ws">Outward acts stop here for your hand.</div>
+        <div class="wall-count"><span class="n tnum">41</span> pages held · settled today</div>
+      </div>
+    </div>
+  </main>
+
+  <div class="composer">
+    <div class="comp-scope">
+      <span class="scope-pill"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/></svg>Whole venture</span>
+      <span class="scope-help">Ask in plain words — Drover opens or reshapes bets. Anything outward waits at the wall.</span>
+    </div>
+    <div class="comp-input">
+      <input placeholder="Open a new bet, or ask to reshape one…" aria-label="Direct the firm">
+      <span class="model"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="4"/></svg>Auto</span>
+      <button class="send" aria-label="Send"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+    </div>
+  </div>
+</div>

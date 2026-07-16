@@ -1,15 +1,14 @@
-> **SUPERSEDED — 2026-07-11.** This pipeline-centered GTM graph package is design
-> history. The current product contract is **docs/OPEN-CANVAS-SPEC.md**: one directly
-> editable canvas for many product-development and GTM goals, with pipelines only when
-> work needs execution or repeatability. Nothing in this package overrides that contract.
+> **SUPERSEDED.** This entire pipeline-centered GTM graph package is design history.
+> [`FIRM-SPEC.md`](../FIRM-SPEC.md) is the only product and build contract; nothing in this package
+> supplies current nouns, graph structure, acceptance criteria, or implementation tasks.
 
 # Drover — GTM Graph Doctrine (historical)
 
 **Historical status:** formerly locked direction, pre-spec · **Date:** 2026-07-02
 
-Former source of truth for the GTM-graph redesign. The five specs cite this document,
-but the open-canvas contract now wins wherever they disagree. Written in engineering
-register; translate to plain language before anything reaches the founder.
+Former source of truth for the GTM-graph redesign. The sibling specs cite this document only within
+that historical package. Written in engineering register; do not translate its ontology into the
+current product.
 
 ---
 

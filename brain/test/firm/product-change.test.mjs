@@ -165,7 +165,7 @@ describe("product-change — ready-for-review stages onto the bet and parks at t
     const queueDir = freshQueueDir();
     const options = { root: fs.mkdtempSync(path.join(os.tmpdir(), "firm-product-change-home-")), repoRoot: repo, queueDir };
     const venture = createVenture({ name: "Stage and park" }, options);
-    const bet = createBet({ ventureId: venture.id, intent: "stage me" });
+    const bet = createBet({ ventureId: venture.id, intent: "stage me", teammateRef: "mika", configurationRevision: 3 });
 
     const enqueued = forkProductBet({ ventureId: venture.id, betId: bet.id, intent: bet.intent }, {
       ...options, runQuery: async ({ cwd }) => { fs.writeFileSync(path.join(cwd, "a.txt"), "after\n"); return { text: "done", error: null }; },
@@ -179,11 +179,19 @@ describe("product-change — ready-for-review stages onto the bet and parks at t
     assert.equal(park.calls.length, 1);
     assert.equal(park.calls[0].effect.ventureId, venture.id);
     assert.equal(park.calls[0].effect.betId, bet.id);
+    assert.equal(park.calls[0].effect.workRef, staged.staged[0].id);
     assert.match(park.calls[0].effect.effect.diff, /\+after/);
     assert.ok(park.calls[0].effect.effect.patchHash);
+    assert.equal(park.calls[0].effect.effect.destination, `${built.branch} at ${revision.baseCommit}`);
+    assert.equal(park.calls[0].effect.effect.reversible, true);
+    assert.match(park.calls[0].effect.effect.reversibility, /reviewable diff/);
+    assert.equal("costUsd" in park.calls[0].effect.effect, false);
 
     assert.equal(staged.staged.length, 1);
     assert.equal(staged.staged[0].kind, "product-change");
+    assert.deepEqual(staged.staged[0].ownerRefs, ["mika"]);
+    assert.deepEqual(staged.staged[0].contributorRefs, []);
+    assert.equal(staged.staged[0].configurationRevision, 3);
     assert.match(staged.staged[0].diff, /\+after/);
     assert.ok(staged.staged[0].patchHash);
     assert.equal(revision.status, "proposed");

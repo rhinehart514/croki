@@ -7,6 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
+import { founderRequest } from "../helpers/founder-capability.mjs";
 
 import {
   HEAT_LEVELS,
@@ -18,19 +19,13 @@ import {
 import { createVenture, setVentureDoc, listVentureDocs, getVentureDoc } from "../../src/firm/venture-store.mjs";
 import { createBet } from "../../src/firm/bet.mjs";
 import { queue as wallQueue, park } from "../../src/firm/wall.mjs";
-import { claimFounderSession, founderBootstrapCode } from "../../src/routes/session-guard.mjs";
 
 function freshRoot() {
   return { root: fs.mkdtempSync(path.join(os.tmpdir(), "firm-heat-")) };
 }
 
-// Mints a real founder browser session cookie — the exact convention firm/wall.test.mjs uses for a
-// real founder call, so setHeatSettings' authorizeFounderWriteForRequest boundary is exercised for
-// real rather than doubled around.
 function browserReq() {
-  let cookie = null;
-  claimFounderSession({ headers: {} }, { setHeader(_name, next) { cookie = next.split(";")[0]; } }, founderBootstrapCode());
-  return { headers: { cookie } };
+  return founderRequest();
 }
 
 function agentReq() {
@@ -68,10 +63,9 @@ describe("heat — the one dial + one spend rail, founder-writable only", () => 
     assert.deepEqual(getHeatSettings(venture.id, options), { heat: "steady", dailySpendUsd: 5 });
   });
 
-  it("rejects a non-founder actor (no session token, or an agent stamp)", () => {
+  it("rejects an agent-stamped caller", () => {
     const options = freshRoot();
     const venture = createVenture({ name: "Guard" }, options);
-    assert.throws(() => setHeatSettings({ ventureId: venture.id, heat: "full", dailySpendUsd: 1 }, { req: { headers: {} } }, options), /founder browser session/i);
     assert.throws(() => setHeatSettings(
       { ventureId: venture.id, heat: "full", dailySpendUsd: 1 },
       { req: agentReq() },

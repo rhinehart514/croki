@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Conversation + live canvas · Drover</title><link rel="stylesheet" href="config-lab.css"></head>
+<body data-approach="synthesis">
+  <header class="integrated-topbar"><div class="integrated-brand"><a href="index.html">← Exploration</a><strong>Drover</strong><span class="direction-tag">configurable firm</span></div><div class="integrated-context"><div><small>Venture outcome</small><strong>Increase first-value activation</strong></div><div class="status"><i></i><span id="config-version">Configuration v7 · operating locally</span></div></div></header>
+  <main class="integrated-shell">
+    <section class="firm-chat" aria-label="Firm conversation">
+      <header class="chat-head"><strong>Firm conversation</strong><span class="chat-focus" id="chat-focus">Focused: whole firm</span></header>
+      <div class="chat-stream" id="chat-stream">
+        <div class="chat-message founder"><small>Founder</small>Make this a hands-on employee team. Have Codex build, Claude independently verify, and another employee own reactivation. Let them organize themselves. Remember within this venture. Ask only before contacting a customer.</div>
+        <div class="chat-message"><small>Drover</small>I can reconfigure the firm without fixing its workflow. Product work and verification will run automatically. Customer contact will remain the only approval boundary.</div>
+        <div class="config-proposal" id="initial-proposal"><div class="proposal-head"><strong>Proposed firm change</strong><span>v7 → v8</span></div><div class="proposal-lines"><div class="proposal-line"><span>Organization</span><strong>General Claude agent → three employee-style agents</strong></div><div class="proposal-line"><span>Runtimes</span><strong>Codex builds · Claude verifies and operates lifecycle</strong></div><div class="proposal-line"><span>Authority</span><strong>Product work allowed · customer contact asks</strong></div><div class="proposal-line"><span>Memory + coordination</span><strong>Venture-scoped · agents self-organize</strong></div></div><div class="proposal-actions"><button class="secondary">Edit</button><button class="primary" data-action="synthesis-apply">Apply configuration</button></div></div>
+        <div class="chat-message hidden" id="applied-message"><small>Drover · configuration applied</small>The canvas now reflects three employees, their real runtimes, shared venture context, capabilities, and authority. No workflow was created.<div style="margin-top:9px"><button class="primary" data-action="synthesis-run">Run this firm</button></div></div>
+        <div class="config-proposal hidden" id="canvas-proposal"><div class="proposal-head"><strong>Canvas change</strong><span>v8 → v9</span></div><div class="proposal-lines"><div class="proposal-line"><span>Capability attachment</span><strong>Give Evidence Lead read-only access to session replay</strong></div><div class="proposal-line"><span>Authority impact</span><strong>None · inward read capability</strong></div></div><div class="proposal-actions"><button class="secondary">Cancel</button><button class="primary" data-action="canvas-apply">Apply attachment</button></div></div>
+        <div class="chat-message hidden" id="work-message"><small>Drover · work landed</small>Codex built sample-first onboarding in a worktree. Claude verified the evidence. The Lifecycle Operator staged a reactivation message at the configured approval boundary.</div>
+        <div class="chat-message founder hidden" id="composer-message"><small>Founder · new direction</small><span id="composer-copy"></span></div>
+      </div>
+      <footer class="chat-composer"><textarea id="firm-composer" aria-label="Direct or configure the firm">Have the Evidence Lead challenge whether this hurts successful users.</textarea><button class="primary" data-action="composer-send">Send</button></footer>
+    </section>
+    <section class="firm-canvas" aria-label="Live firm canvas"><div class="canvas-toolbar"><div><strong>Live firm</strong><span> · configuration and work share one canvas</span></div><div class="canvas-legend"><i>solid · configured</i><i>dashed · available</i><i>green · output</i></div></div>
+      <div class="firm-map">
+        <svg viewBox="0 0 1000 700" preserveAspectRatio="none" aria-hidden="true"><path id="legacy-edge" d="M500 115 L500 245" class="live"/><path id="builder-edge" d="M500 110 C380 150 250 185 180 235" class="hidden"/><path id="evidence-edge" d="M500 110 L500 235" class="hidden"/><path id="lifecycle-edge" d="M500 110 C620 150 750 185 820 235" class="hidden"/><path id="builder-resource-edge" d="M180 330 L180 570" class="hidden"/><path id="replay-edge" d="M500 330 L500 570" class="pending hidden"/><path id="contact-edge-live" d="M820 330 L820 570" class="hidden"/></svg>
+        <button class="firm-node outcome" data-focus="Outcome"><small>Outcome</small><strong>Reach first value sooner</strong><span>Observable result: real-data connection</span></button>
+        <button class="firm-node general" id="general-agent" data-focus="General Claude agent"><small>Current configuration · Claude</small><strong>General agent</strong><span>Repository read only · no customer contact</span></button>
+        <button class="firm-node builder hidden" id="builder-node" data-focus="Product Builder"><small>Employee · Codex</small><strong>Product Builder</strong><span>Worktree · repository · tests</span></button>
+        <button class="firm-node evidence hidden" id="evidence-node" data-focus="Evidence Lead"><small>Employee · Claude</small><strong>Evidence Lead</strong><span>Repository truth · analytics</span></button>
+        <button class="firm-node lifecycle hidden" id="lifecycle-node" data-focus="Lifecycle Operator"><small>Employee · Claude</small><strong>Lifecycle Operator</strong><span>Email · customer outcomes · ask</span></button>
+        <button class="firm-node repo" id="repo-node" data-focus="Product repository"><small>Shared venture context</small><strong>Product repository</strong><span>Readable by configured agents</span></button>
+        <button class="firm-node replay available hidden" id="replay-node" data-focus="Session replay" data-action="canvas-propose"><small>Available capability</small><strong>Session replay</strong><span>Click to attach · read only</span></button>
+        <button class="firm-node contact hidden" id="contact-node" data-focus="Customer contact"><small>Configured capability</small><strong>Customer contact</strong><span>Lifecycle Operator · ask before use</span></button>
+        <button class="firm-node output builder-output hidden" id="product-output" data-focus="Product change"><small>Working artifact · Codex</small><strong>Sample-first onboarding</strong><span>Worktree ready · tests pass</span></button>
+        <button class="firm-node output evidence-output hidden" id="verification-output" data-focus="Verification receipt"><small>Verification · Claude</small><strong>Successful-user path preserved</strong><span>Evidence cited · risk retained</span></button>
+        <button class="firm-node output lifecycle-output hidden" id="reactivation-output" data-focus="Reactivation message"><small>Market action · Claude</small><strong>Reactivation staged</strong><span>Waiting at configured ask boundary</span></button>
+      </div>
+    </section>
+  </main><script src="config-lab.js"></script>
+</body></html>

@@ -1,5 +1,8 @@
 # F7 — The always-on firm
 
+> **HISTORICAL EXECUTION TASK.** This work package is not a current backlog. Current heat behavior
+> and proof live in [FIRM-SPEC.md](../FIRM-SPEC.md) and [STATE.md](../STATE.md).
+
 **Goal:** the crew runs around the clock under one heat dial and one spend rail. Away accumulates
 conviction at the wall; nothing outward ever moves unattended.
 

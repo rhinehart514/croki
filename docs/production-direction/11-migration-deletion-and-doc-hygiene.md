@@ -1,5 +1,8 @@
 # Migration, Deletion, and Documentation Hygiene
 
+> **ARCHIVED MIGRATION PLAN.** This plan is not current work. Use [FIRM-SPEC.md](../FIRM-SPEC.md) and
+> [STATE.md](../STATE.md).
+
 ## Migration principle
 
 This is a production enrichment, not a rewrite or replacement shell. Preserve the canvas, pipeline/run/gate

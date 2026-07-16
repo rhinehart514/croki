@@ -1,0 +1,85 @@
+import type { Edge, Node } from "@xyflow/react";
+import type {
+  ArchitectureRole,
+  FirmArchitectureElement,
+  FirmArchitectureJoin,
+  FirmArchitecturePressure,
+  FirmWorkingTheorySubject,
+  FirmBet,
+  FirmOutcome,
+  FirmWorkflowStage,
+} from "@/types";
+
+export type AtlasAltitude = "venture" | "architecture" | "detail";
+export type AtlasVisualKind = ArchitectureRole | "theory" | "intent" | "group" | "bet" | "work" | "outcome" | "wall" | "teammate" | "capability" | "orbit-field";
+
+export type AtlasDecisionBand = "near-intent" | "drifting" | "approaching-wall" | "settled";
+
+export type AtlasWorkflowStage = FirmWorkflowStage;
+
+export type AtlasOrbitSector = {
+  id: string;
+  label: string;
+  startAngle: number;
+  endAngle: number;
+};
+
+export type AtlasNodeData = Record<string, unknown> & {
+  kind: AtlasVisualKind;
+  title: string;
+  statement?: string | null;
+  element?: FirmArchitectureElement;
+  theorySubject?: FirmWorkingTheorySubject;
+  theoryId?: string;
+  theoryRevision?: number;
+  sourceRefs?: string[];
+  conversationRefs?: string[];
+  provisional?: boolean;
+  arrivalReceiptId?: string;
+  bet?: FirmBet;
+  outcome?: FirmOutcome;
+  join?: FirmArchitectureJoin;
+  active?: boolean;
+  atWall?: boolean;
+  stateLabel?: string;
+  outputLabel?: string;
+  verbLabel?: string;
+  teammates?: Array<{ ref: string; name: string }>;
+  continuation?: string | null;
+  agentRef?: string;
+  authority?: "read" | "wall";
+  decisionBand?: AtlasDecisionBand;
+  orbitSide?: "left" | "right";
+  motionLabel?: string;
+  workflow?: AtlasWorkflowStage[];
+  machineryCounts?: Array<{ label: string; count: number }>;
+  expanded?: boolean;
+  sectors?: AtlasOrbitSector[];
+  wallCount?: number;
+  betCount?: number;
+  revision?: number;
+  intentNamed?: boolean;
+  pressure: FirmArchitecturePressure[];
+  altitude: AtlasAltitude;
+  focusRole: "focus" | "related" | "context";
+  selected: boolean;
+  readOnly: boolean;
+  onSelect: (id: string) => void;
+  onFocus: (id: string) => void;
+  onPromote: (element: FirmArchitectureElement) => void;
+  onActivateMotion: (element: FirmArchitectureElement) => void;
+  onBeginConnection: (id: string) => void;
+  onOpenWall: (itemId?: string) => void;
+  onRevealMachinery: (id: string) => void;
+  onFold?: () => void;
+  onDive?: (id: string) => void;
+};
+
+export type AtlasNode = Node<AtlasNodeData>;
+export type AtlasEdge = Edge;
+
+export type AtlasScene = {
+  nodes: AtlasNode[];
+  edges: AtlasEdge[];
+  related: Map<string, Set<string>>;
+};

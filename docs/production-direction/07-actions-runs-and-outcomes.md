@@ -1,5 +1,8 @@
 # Actions, Runs, and Outcomes
 
+> **SUPERSEDED PACKAGE FILE.** This action/run model is historical. Current work uses bets, forks,
+> outcomes, and the wall as defined by [FIRM-SPEC.md](../FIRM-SPEC.md).
+
 ## Role of actions
 
 An action is any GTM or product-development move the crew proposes or executes.

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Causal canvas · Drover</title><link rel="stylesheet" href="exploration.css">
+</head>
+<body data-artifact="causal">
+  <header class="topbar">
+    <div class="brand"><a href="index.html">← Explorations</a><strong>Causal canvas</strong><span class="direction-tag">shared model</span></div>
+    <nav class="switcher" aria-label="Explorations"><a aria-current="page" href="01-causal-canvas.html">01</a><a href="02-artifact-studio.html">02</a><a href="03-venture-multiverse.html">03</a><a href="04-ambient-firm.html">04</a></nav>
+  </header>
+  <main class="shell">
+    <aside class="brief">
+      <div class="eyebrow">Mechanism</div><h1>The venture becomes a causal model.</h1>
+      <p>The founder and Drover manipulate the same diagram. Work is valuable when it changes the model or produces something real from it.</p>
+      <ul class="concepts">
+        <li><strong>Node</strong><span>Any material worth seeing or changing.</span></li>
+        <li><strong>Connection</strong><span>The explicit reason two things matter together.</span></li>
+        <li><strong>Region</strong><span>A coherent investigation or attempt.</span></li>
+      </ul>
+      <div class="test-note">Density test: can one diagram carry research, reasoning, product work, market action, and learning without separate modules?</div>
+    </aside>
+    <section class="stage">
+      <div class="stage-grid"></div>
+      <div class="stage-inner">
+        <div class="job"><div><span>Founder direction</span><strong>Make first value obvious to trial users without adding calls.</strong></div><button class="primary" data-action="reveal-outcome">Run the strongest move</button></div>
+        <div class="causal-map" aria-label="Causal model of the activation problem">
+          <svg viewBox="0 0 900 590" aria-hidden="true">
+            <path d="M 160 94 C 238 94, 228 172, 312 172"></path>
+            <path d="M 160 94 C 245 94, 232 292, 315 292"></path>
+            <path d="M 500 174 C 580 174, 580 128, 664 128"></path>
+            <path d="M 500 294 C 580 294, 580 360, 664 360"></path>
+            <path class="active" d="M 762 198 C 762 250, 762 264, 762 314"></path>
+            <path id="outcome-line" class="hidden active" d="M 664 422 C 575 422, 578 498, 485 498"></path>
+          </svg>
+          <button class="node quote" style="left:30px;top:44px" data-node="Evidence · customer voice|“I signed up, but I wasn’t sure what to do first.”|This is direct market evidence, not a summary score."><small>Customer voice</small><strong>“I wasn’t sure what to do first.”</strong><p>5 trial conversations · recurring language</p></button>
+          <span class="edge-label" style="left:217px;top:116px">supports</span>
+          <button class="node" style="left:312px;top:124px" data-node="Explanation A|The product asks for configuration before demonstrating value.|Drover can challenge, connect, or turn this explanation into a working move."><small>Explanation</small><strong>Setup hides the first useful result</strong><p>Repository journey · 7 required choices</p></button>
+          <button class="node" style="left:315px;top:244px" data-node="Explanation B|The result appears, but the language does not establish why it matters.|A competing explanation remains visible instead of being folded into one plan."><small>Competing explanation</small><strong>The result lacks a clear promise</strong><p>Contradicted by 2 successful sessions</p></button>
+          <span class="edge-label" style="left:543px;top:145px">produces</span>
+          <button class="node artifact" style="left:664px;top:80px" data-node="Working product change|A runnable onboarding path that begins with a useful sample result.|Open, edit, run, or fork the real artifact from this node."><small>Working product change</small><strong>Show a useful sample before setup</strong><p>4 files changed · preview running</p></button>
+          <button class="node artifact" style="left:664px;top:312px" data-node="Working message variant|A product promise rewritten around the first result.|This is a complete alternative, not supporting copy for the first move."><small>Alternative artifact</small><strong>“See the answer before you connect anything.”</strong><p>Landing page and onboarding copy</p></button>
+          <span class="edge-label" style="left:711px;top:250px">tested by</span>
+          <button id="optional-gate" class="node checkpoint hidden" style="left:610px;top:228px" data-node="Founder-added checkpoint|Pause before this version becomes the default onboarding path.|The checkpoint exists because the founder requested it, not because every diagram requires a gate."><small>Requested checkpoint</small><strong>Ask before making this the default</strong></button>
+          <button id="outcome-node" class="node outcome hidden" style="left:300px;top:450px" data-node="Outcome · market voice|“The sample made it click. I connected our workspace after seeing it.”|This returns to the explanation and changes what Drover should fork next."><small>Outcome · 18 minutes ago</small><strong>“The sample made it click.”</strong><p>Joined to the product change</p></button>
+          <div id="canvas-inspector" class="canvas-inspector">
+            <strong>Select any material</strong><p>Nodes expose their real content and available operations. Connections remain meaningful rather than decorative.</p>
+            <div class="canvas-inspector-actions"><button class="secondary" data-action="add-checkpoint">Add checkpoint</button><button class="quiet" data-action="fork-node">Fork selected</button></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script src="exploration.js"></script>
+</body>
+</html>

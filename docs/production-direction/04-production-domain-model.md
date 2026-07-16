@@ -1,5 +1,8 @@
 # Production Domain Model
 
+> **SUPERSEDED PACKAGE FILE.** This domain model has no current authority. Use
+> [FIRM-SPEC.md](../FIRM-SPEC.md).
+
 ## Design rule
 
 The domain model stays small, product-scoped, open, and subordinate to the existing canvas/pipeline grammar.

@@ -1,5 +1,8 @@
 # F5 — The market speaks
 
+> **HISTORICAL EXECUTION TASK.** This work package is not a current backlog. Current outcome
+> behavior and proof live in [FIRM-SPEC.md](../FIRM-SPEC.md) and [STATE.md](../STATE.md).
+
 **Goal:** replies and outcomes return as the market's voice, joined to the bet that provoked them.
 Kills mutate into next bets. No aggregate metric reaches a founder surface.
 

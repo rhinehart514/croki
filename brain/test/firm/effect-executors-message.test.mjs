@@ -13,6 +13,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
+import { founderRequest } from "../helpers/founder-capability.mjs";
 
 import { createEffectExecutor, decideWithExecution } from "../../src/firm/effect-executors.mjs";
 import { PROVENANCE_HEADER } from "../../src/firm/message-send.mjs";
@@ -20,16 +21,14 @@ import { park, decide, queue, hasWallRelease } from "../../src/firm/wall.mjs";
 import { createVenture, setVentureDoc, getVentureDoc, listVentureDocs } from "../../src/firm/venture-store.mjs";
 import { createBet } from "../../src/firm/bet.mjs";
 import { buildSentIndex, pollReplies } from "../../src/firm/market-poll.mjs";
-import { claimFounderSession, founderBootstrapCode } from "../../src/routes/session-guard.mjs";
+import { setOAuthCredential } from "../../src/credential-store.mjs";
 
 function freshRoot() {
   return { root: fs.mkdtempSync(path.join(os.tmpdir(), "firm-effexec-msg-")) };
 }
 
 function browserReq() {
-  let cookie = null;
-  claimFounderSession({ headers: {} }, { setHeader(_name, next) { cookie = next.split(";")[0]; } }, founderBootstrapCode());
-  return { headers: { cookie } };
+  return founderRequest();
 }
 
 function gmailMessage(headers = {}, id = null, snippet = null) {
@@ -93,6 +92,33 @@ describe("executeMessage — a released message effect sends exactly once, prove
     assert.ok(calls[0].provenance, "a provenance object was stamped");
     assert.match(JSON.stringify(calls[0].provenance), /gtm-ide-firm/);
     assert.equal(calls[0].token, "fake-token", "the injected token reached the transport, never re-derived");
+  });
+
+  it("uses the banked Gmail profile address as the actual From header", () => {
+    const options = freshRoot();
+    const venture = createVenture({ name: "Verified sender" }, options);
+    setOAuthCredential({
+      provider: "gmail",
+      clientId: "client",
+      clientSecret: "secret",
+      refreshToken: "refresh",
+      accountAddress: "founder@example.com",
+    }, options);
+    const queued = park({
+      ventureId: venture.id,
+      effect: { kind: "message", from: "claimed@example.net", to: "buyer@example.com", body: "Hello" },
+    }, options);
+    const { transport, calls } = fakeSendTransport();
+    const executeEffect = createEffectExecutor({ founderActor: "founder", options, messageDeps: { transport, token: "fake-token" } });
+    decide(
+      { ventureId: venture.id, itemId: queued.id, decision: "release" },
+      { req: browserReq() },
+      { executeEffect, isFounderPresent: () => true },
+      options,
+    );
+    assert.equal(calls[0].from, "founder@example.com");
+    assert.equal(queued.effect.fromAddress, "founder@example.com");
+    assert.equal("costUsd" in queued.effect, false);
   });
 
   it("reads recipient/body defensively across the open effect shapes already staged elsewhere in this tree", () => {

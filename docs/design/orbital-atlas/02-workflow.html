@@ -1,0 +1,392 @@
+<style>
+  :root{
+    --ink:#23211d; --ink-2:#4e4b44; --muted:#615e56; --faint:#8f8a7e; --ghost:#c6c1b6;
+    --line:#d3cfc6; --line-2:#c6c1b6;
+    --surface:#f4f2ee; --surface-2:#dcd8d0; --canvas:#e9e6e0; --panel:#efede8; --room:#e3e0da;
+    --primary:#23211d; --on-primary:#e9e6e0;
+    --spruce:#2e6e5e; --spruce-ink:#1e5245; --spruce-soft:#dce7e2; --spruce-line:#b7cec6;
+    --proven:#5d7350; --proven-soft:#e1e7db; --proven-line:#b7c9ac;
+    --gap:#a9791a; --gap-soft:#f1e6cd; --gap-ink:#72510f; --gap-line:#d8be7e;
+    --queued:#b0aba0;
+    --danger:#b4443a;
+    --r-sm:6px; --r-md:9px; --r-lg:12px; --r-xl:16px; --r-2xl:24px;
+    --shadow-card:0 1px 0 rgba(38,33,26,.03), 0 4px 12px -7px rgba(38,33,26,.16);
+    --shadow-pop:0 4px 12px rgba(38,33,26,.07), 0 12px 32px -10px rgba(38,33,26,.18);
+    --shadow-float:0 22px 48px -30px rgba(38,33,26,.55);
+    --ease:cubic-bezier(.22,1,.36,1);
+    --sans:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
+    --serif:"Iowan Old Style","Palatino Linotype","Palatino","Book Antiqua",Georgia,"Times New Roman",serif;
+    --mono:"SF Mono",ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:var(--sans);color:var(--ink);background:var(--room);-webkit-font-smoothing:antialiased;overflow:hidden}
+  .tnum{font-variant-numeric:tabular-nums}
+  button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+  :focus-visible{outline:2px solid var(--spruce);outline-offset:2px;border-radius:4px}
+
+  .app{display:flex;flex-direction:column;height:100vh}
+
+  /* ── Top chrome + breadcrumb (orientation device #1) ── */
+  .top{
+    display:flex;align-items:center;gap:14px;height:48px;padding:0 20px;
+    background:linear-gradient(var(--room),color-mix(in srgb,var(--room) 88%,transparent));
+    border-bottom:1px solid var(--line);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);position:relative;z-index:20;
+  }
+  .brand{display:flex;align-items:center;gap:9px;font-weight:680;letter-spacing:-.01em;font-size:14px}
+  .brand .mark{display:grid;place-items:center;width:24px;height:24px;border-radius:7px;background:var(--primary);color:var(--on-primary)}
+  .crumb{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+  .crumb .sep{color:var(--ghost)}
+  .crumb .up{display:inline-flex;align-items:center;gap:5px;color:var(--muted);font-weight:520}
+  .crumb .up:hover{color:var(--ink)}
+  .crumb .here{color:var(--ink);font-weight:640;display:inline-flex;align-items:center;gap:6px}
+  .crumb .staker-dot{width:16px;height:16px;border-radius:50%;display:grid;place-items:center;font-size:8px;font-weight:700;color:#fff;background:#5b6e8c}
+
+  .alt{
+    position:absolute;left:50%;transform:translateX(-50%);
+    display:flex;align-items:center;gap:2px;padding:3px;border-radius:999px;
+    background:color-mix(in srgb,var(--surface) 70%,transparent);border:1px solid var(--line-2);
+    -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+  }
+  .alt-step{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px;border-radius:999px;font-size:12px;font-weight:600;color:var(--muted)}
+  .alt-step.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-card)}
+  .alt-step .rings{width:13px;height:13px}
+
+  .top-right{margin-left:auto;display:flex;align-items:center;gap:6px}
+  .wall-flag{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:var(--gap-soft);color:var(--gap-ink);font-size:12px;font-weight:660;border:1px solid var(--gap-line)}
+  .chip{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border-radius:999px;font-size:13px;font-weight:560;color:var(--ink-2);background:color-mix(in srgb,var(--surface) 70%,transparent);border:1px solid var(--line-2)}
+  .chip:hover{background:var(--surface)}
+
+  /* ── The workflow field ── */
+  .stage{position:relative;flex:1;overflow:hidden;background:var(--canvas)}
+  .stage::before{content:"";position:absolute;inset:0;background-image:radial-gradient(#d3cfc6 .9px,transparent .9px);background-size:22px 22px;opacity:.5}
+  .wires{position:absolute;inset:0;width:100%;height:100%}
+
+  /* Bet banner — what this whole graph is testing */
+  .betbar{
+    position:absolute;top:18px;left:18px;z-index:12;width:296px;padding:15px 16px;border-radius:var(--r-xl);
+    background:color-mix(in srgb,var(--surface) 84%,transparent);border:1px solid var(--line-2);
+    -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);box-shadow:var(--shadow-float);
+  }
+  .betbar .bk{font-size:9.5px;font-weight:760;letter-spacing:.11em;text-transform:uppercase;color:var(--gap-ink);display:flex;align-items:center;gap:6px}
+  .betbar h1{margin:9px 0 0;font-family:var(--serif);font-size:18px;line-height:1.28;font-weight:500;letter-spacing:-.005em;color:var(--ink)}
+  .betbar .meta{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
+  .mp{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:999px;font-size:11px;font-weight:560;color:var(--ink-2);background:var(--surface);border:1px solid var(--line-2)}
+  .mp .stk{width:15px;height:15px;border-radius:50%;display:grid;place-items:center;font-size:8px;font-weight:700;color:#fff}
+  .mp b{font-family:var(--mono);font-weight:700;color:var(--ink)}
+  .mp.win b{color:var(--proven)}
+  .mp.held b{color:var(--gap-ink)}
+
+  /* ── MINI ORBIT (orientation device #2) — bottom-right corner ── */
+  .minimap{
+    position:absolute;bottom:18px;right:18px;z-index:12;width:168px;padding:11px 12px 12px;border-radius:var(--r-lg);
+    background:color-mix(in srgb,var(--surface) 80%,transparent);border:1px solid var(--line-2);
+    -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);box-shadow:var(--shadow-float);
+  }
+  .minimap h4{margin:0 0 8px;font-size:9.5px;font-weight:760;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;justify-content:space-between}
+  .minimap .back{font-size:10px;font-weight:640;color:var(--spruce-ink);text-transform:none;letter-spacing:0}
+  .minimap svg{width:100%;height:auto;display:block}
+  .minimap .cap{margin-top:6px;font-size:10px;color:var(--muted);line-height:1.35;text-align:center}
+  .minimap .cap b{color:var(--gap-ink);font-weight:640}
+
+  /* Toolbar */
+  .tools{
+    position:absolute;top:18px;right:18px;z-index:12;display:flex;gap:6px;padding:5px;border-radius:999px;
+    background:color-mix(in srgb,var(--surface) 74%,transparent);border:1px solid var(--line-2);
+    -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);box-shadow:var(--shadow-float);
+  }
+  .tool{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border-radius:999px;font-size:13px;font-weight:560;color:var(--ink-2)}
+  .tool:hover{background:var(--surface);color:var(--ink)}
+  .kbd{display:inline-grid;place-items:center;min-width:17px;height:17px;padding:0 4px;font-size:10px;font-weight:640;font-family:var(--mono);color:var(--muted);background:var(--surface-2);border-radius:4px}
+
+  /* ── STAGE NODES — the real workflow ── */
+  .snode{position:absolute;transform:translate(-50%,-50%);z-index:6;width:196px}
+  .card{
+    border-radius:var(--r-lg);background:var(--surface);border:1px solid var(--line-2);box-shadow:var(--shadow-card);
+    transition:transform 150ms var(--ease),box-shadow 150ms var(--ease);
+  }
+  .card:hover{transform:translateY(-2px);box-shadow:var(--shadow-pop)}
+  .snode.hero{width:224px;z-index:8}
+  .card-top{display:flex;align-items:center;gap:9px;padding:11px 12px 9px}
+  .stage-ic{
+    flex:0 0 auto;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
+    background:var(--surface-2);color:var(--ink-2);
+  }
+  .card.done .stage-ic{background:var(--proven-soft);color:var(--proven)}
+  .card.run .stage-ic{background:var(--spruce-soft);color:var(--spruce-ink)}
+  .card.gate .stage-ic{background:var(--gap-soft);color:var(--gap-ink)}
+  .card.queue .stage-ic{background:var(--surface-2);color:var(--faint)}
+  .card-top > span:not(.stage-ic):not(.status){min-width:0}
+  .stage-name{display:block;font-size:13.5px;font-weight:660;color:var(--ink);line-height:1.15}
+  .stage-kind{display:block;font-size:10px;font-weight:600;color:var(--faint);letter-spacing:.03em;text-transform:uppercase;margin-top:2px}
+  .status{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:640;padding:3px 8px;border-radius:999px}
+  .status.done{color:var(--proven);background:var(--proven-soft)}
+  .status.run{color:var(--spruce-ink);background:var(--spruce-soft)}
+  .status.gate{color:var(--gap-ink);background:var(--gap-soft);border:1px solid var(--gap-line)}
+  .status.queue{color:var(--muted);background:var(--surface-2)}
+  .status .live-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+  .status.run .live-dot{box-shadow:0 0 0 3px var(--spruce-soft)}
+
+  /* receipts — never a spinner: a small run ledger inside each node */
+  .receipts{padding:0 12px 11px;border-top:1px solid var(--line);margin:0 12px;padding-top:9px}
+  .snode .receipts{margin:0 0 0 0;padding:9px 12px 11px}
+  .rc-row{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);line-height:1.5}
+  .rc-row + .rc-row{margin-top:2px}
+  .rc-row .rc-ic{flex:0 0 auto;color:var(--faint)}
+  .rc-row b{color:var(--ink);font-family:var(--mono);font-weight:700}
+  .rc-row.win b{color:var(--proven)}
+  .rc-avatar{width:15px;height:15px;border-radius:50%;display:grid;place-items:center;font-size:8px;font-weight:700;color:#fff}
+  .rc-live{color:var(--spruce-ink);font-weight:600}
+
+  /* the gate node — amber, the wall, where outward acts stop */
+  .card.gate{background:color-mix(in srgb,var(--gap-soft) 46%,var(--surface));border-color:var(--gap-line);box-shadow:var(--shadow-pop),0 0 0 1px color-mix(in srgb,var(--gap) 14%,transparent)}
+  .gate-body{padding:2px 12px 12px}
+  .gate-what{
+    display:flex;gap:9px;padding:9px 10px;border-radius:8px;background:var(--gap-soft);border:1px solid var(--gap-line);
+    font-size:11.5px;line-height:1.45;color:var(--gap-ink);
+  }
+  .gate-what svg{flex:0 0 auto;margin-top:1px;color:var(--gap-ink)}
+  .gate-what b{font-weight:700}
+  .gate-actions{margin-top:10px;display:flex;gap:7px}
+  .gbtn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 12px;border-radius:999px;font-size:12px;font-weight:640;transition:transform 120ms var(--ease),background 120ms var(--ease)}
+  .gbtn:hover{transform:translateY(-1px)}
+  .gbtn.review{flex:1;background:var(--gap-ink);color:#f7efe0}
+  .gbtn.review:hover{background:#5c410c}
+  .gbtn.hold{color:var(--gap-ink);border:1px solid var(--gap-line);background:var(--surface)}
+
+  /* stage badges on the wire (causality labels) */
+  .edgelabel{
+    position:absolute;transform:translate(-50%,-50%);z-index:5;
+    font-size:10px;font-weight:600;color:var(--muted);
+    background:color-mix(in srgb,var(--canvas) 88%,transparent);padding:2px 8px;border-radius:999px;border:1px solid var(--line);
+    display:inline-flex;align-items:center;gap:5px;white-space:nowrap;
+  }
+  .edgelabel b{font-family:var(--mono);font-weight:700;color:var(--ink)}
+  .edgelabel.gate-edge{color:var(--gap-ink);border-color:var(--gap-line);background:color-mix(in srgb,var(--gap-soft) 60%,var(--canvas))}
+  .edgelabel.gate-edge b{color:var(--gap-ink)}
+
+  /* teammate chip floating on the working node */
+  .working-tag{
+    position:absolute;transform:translate(-50%,-50%);z-index:9;
+    display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 4px;border-radius:999px;
+    background:var(--spruce-ink);color:#eef4f1;font-size:11px;font-weight:620;box-shadow:var(--shadow-pop);
+  }
+  .working-tag .wt-av{width:19px;height:19px;border-radius:50%;display:grid;place-items:center;font-size:9px;font-weight:700;color:#fff;background:#7a5b8c}
+  .working-tag .live-dot{width:5px;height:5px;border-radius:50%;background:#a8d8c8;box-shadow:0 0 0 3px rgba(168,216,200,.28)}
+
+  /* Composer */
+  .composer{
+    position:absolute;left:calc(50% - 84px);bottom:18px;transform:translateX(-50%);z-index:14;width:min(640px,54vw);
+    padding:12px 14px;border-radius:var(--r-2xl);
+    background:color-mix(in srgb,var(--surface) 82%,transparent);border:1px solid var(--line-2);
+    -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);box-shadow:var(--shadow-float);
+  }
+  .comp-scope{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+  .scope-pill{display:inline-flex;align-items:center;gap:7px;padding:4px 11px 4px 5px;border-radius:999px;background:var(--spruce-soft);border:1px solid var(--spruce-line);font-size:12px;font-weight:640;color:var(--spruce-ink)}
+  .scope-pill .av-sm{width:19px;height:19px;border-radius:50%;display:grid;place-items:center;font-size:9px;font-weight:700;color:#fff;background:#7a5b8c}
+  .scope-help{font-size:12px;color:var(--muted)}
+  .comp-input{display:flex;align-items:center;gap:10px}
+  .comp-input input{flex:1;height:36px;padding:0 6px;border:0;background:transparent;outline:none;font-size:15px;color:var(--ink)}
+  .comp-input input::placeholder{color:var(--faint)}
+  .model{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);padding:0 10px;height:30px;border-radius:999px;border:1px solid var(--line-2);background:var(--surface)}
+  .send{width:36px;height:36px;border-radius:50%;background:var(--primary);color:var(--on-primary);display:grid;place-items:center;transition:transform 120ms var(--ease)}
+  .send:hover{transform:translateY(-1px)}
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand"><span class="mark" aria-hidden="true">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.5 7M20 20 8.5 17"/></svg>
+    </span>Drover</div>
+    <nav class="crumb" aria-label="Location">
+      <button class="up"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>drover</button>
+      <span class="sep">/</span>
+      <button class="up">the orbit</button>
+      <span class="sep">/</span>
+      <span class="here"><span class="staker-dot">Y</span>README-as-page bet</span>
+    </nav>
+
+    <nav class="alt" aria-label="Canvas altitude">
+      <span class="alt-step"><svg class="rings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="10.5"/></svg>Venture</span>
+      <span class="alt-step on"><svg class="rings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="5" cy="12" r="2.4"/><circle cx="12" cy="12" r="2.4"/><circle cx="19" cy="12" r="2.4"/><path d="M7.4 12h2.2M14.4 12h2.2"/></svg>Inside a bet</span>
+    </nav>
+
+    <div class="top-right">
+      <span class="wall-flag"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg>held at gate</span>
+      <button class="chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Conversation</button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <!-- WIRES between stage nodes: left-to-right causality flow -->
+    <svg class="wires" viewBox="0 0 1600 820" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <marker id="arw" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto"><path d="M0 0 L6 3.5 L0 7" fill="none" stroke="#8f8a7e" stroke-width="1.4"/></marker>
+        <marker id="arw-g" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto"><path d="M0 0 L6 3.5 L0 7" fill="none" stroke="#a9791a" stroke-width="1.6"/></marker>
+      </defs>
+      <!-- source -> enrich (proven flow) -->
+      <path d="M350 358 C 400 358, 420 260, 430 250" fill="none" stroke="#5d7350" stroke-width="2" marker-end="url(#arw)" opacity=".8"/>
+      <!-- enrich -> draft -->
+      <path d="M636 250 C 710 250, 745 250, 815 250" fill="none" stroke="#5d7350" stroke-width="2" marker-end="url(#arw)" opacity=".8"/>
+      <!-- draft -> gate (bends down to hero gate, amber) -->
+      <path d="M1022 250 C 1120 250, 1150 330, 1150 400" fill="none" stroke="#a9791a" stroke-width="2.2" marker-end="url(#arw-g)">
+        <animate attributeName="stroke-dashoffset" from="18" to="0" dur="1.6s" repeatCount="indefinite"/>
+      </path>
+      <!-- gate -> publish (queued, dashed grey) -->
+      <path d="M1150 560 C 1150 630, 940 660, 720 660" fill="none" stroke="#b0aba0" stroke-width="1.8" stroke-dasharray="5 6" marker-end="url(#arw)"/>
+      <!-- publish -> measure (queued) -->
+      <path d="M512 660 C 440 660, 410 660, 340 660" fill="none" stroke="#b0aba0" stroke-width="1.8" stroke-dasharray="5 6" marker-end="url(#arw)"/>
+      <!-- measure loops back to bet outcome (feed) -->
+      <path d="M232 618 C 210 520, 210 430, 232 350" fill="none" stroke="#b0aba0" stroke-width="1.6" stroke-dasharray="4 6"/>
+    </svg>
+
+    <!-- causality labels on the wires -->
+    <div class="edgelabel" style="left:26.5%;top:29.5%"><b>41</b> sourced</div>
+    <div class="edgelabel" style="left:42.8%;top:30.5%"><b>41</b> enriched</div>
+    <div class="edgelabel gate-edge" style="left:73.5%;top:39%"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg>outward — stops here</div>
+    <div class="edgelabel" style="left:48%;top:73.3%">then live to 41 pages</div>
+
+    <!-- BET BANNER -->
+    <div class="betbar">
+      <div class="bk"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg>Bet · at the wall</div>
+      <h1>Auto-publish each builder's repo README as their live public page.</h1>
+      <div class="meta">
+        <span class="mp"><span class="stk" style="background:#5b6e8c">Y</span>Staked by Yara</span>
+        <span class="mp">settled <b>today</b></span>
+        <span class="mp held"><b>41</b> held at gate</span>
+      </div>
+    </div>
+
+    <!-- STAGE NODE: SOURCE (done) -->
+    <div class="snode" style="left:15.5%;top:44%">
+      <div class="card done">
+        <div class="card-top">
+          <span class="stage-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>
+          <span><span class="stage-name">Source</span><span class="stage-kind">find builders</span></span>
+          <span class="status done"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 13l5 5L20 6"/></svg>done</span>
+        </div>
+        <div class="receipts">
+          <div class="rc-row win"><span class="rc-ic"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></span>Pulled <b>41</b> active-repo builders</div>
+          <div class="rc-row"><span class="rc-avatar" style="background:#7a5b8c">M</span>Mira · ran <b>3.4s</b> · Jul 15</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STAGE NODE: ENRICH (done) -->
+    <div class="snode" style="left:33.4%;top:30.5%">
+      <div class="card done">
+        <div class="card-top">
+          <span class="stage-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v6l4-2M12 2 8 4M4 12h6M4 12l2-4M4 12l2 4M20 12h-6M20 12l-2-4M20 12l-2 4M12 22v-6l4 2M12 22l-4-2"/></svg></span>
+          <span><span class="stage-name">Enrich</span><span class="stage-kind">read GitHub</span></span>
+          <span class="status done"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 13l5 5L20 6"/></svg>done</span>
+        </div>
+        <div class="receipts">
+          <div class="rc-row win"><span class="rc-ic"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></span>Read READMEs, langs, ship dates</div>
+          <div class="rc-row"><span class="rc-avatar" style="background:#7a5b8c">M</span>Mira · <b>41/41</b> · truth-cited</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STAGE NODE: BUILD/DRAFT (running, teammate working) -->
+    <div class="snode" style="left:52.4%;top:30.5%">
+      <div class="card run">
+        <div class="card-top">
+          <span class="stage-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16M4 20V8l8-5 8 5v12M9 20v-6h6v6"/></svg></span>
+          <span><span class="stage-name">Build page</span><span class="stage-kind">draft hero</span></span>
+          <span class="status run"><span class="live-dot"></span>running</span>
+        </div>
+        <div class="receipts">
+          <div class="rc-row"><span class="rc-ic"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></span>Rewrote <b>38</b> hero blocks from README</div>
+          <div class="rc-row rc-live"><span class="rc-avatar" style="background:#7a5b8c">M</span>Mira · building page <b>39</b> of <b>41</b>…</div>
+        </div>
+      </div>
+    </div>
+    <div class="working-tag" style="left:59%;top:19.5%"><span class="wt-av">M</span><span class="live-dot"></span>Mira here now</div>
+
+    <!-- STAGE NODE: GATE (the wall — hero, amber) -->
+    <div class="snode hero" style="left:71.9%;top:52.4%">
+      <div class="card gate">
+        <div class="card-top">
+          <span class="stage-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg></span>
+          <span><span class="stage-name">The gate</span><span class="stage-kind">outward act · the wall</span></span>
+          <span class="status gate"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>held</span>
+        </div>
+        <div class="gate-body">
+          <div class="gate-what">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>
+            <span>On approve, <b>41 live builder pages</b> get their new hero. Nothing emails out. Reversible <b>24h</b>.</span>
+          </div>
+          <div class="gate-actions">
+            <button class="gbtn review"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 13l5 5L20 6"/></svg>Review the 41 pages</button>
+            <button class="gbtn hold">Hold</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STAGE NODE: PUBLISH (queued) -->
+    <div class="snode" style="left:38.4%;top:80.5%">
+      <div class="card queue">
+        <div class="card-top">
+          <span class="stage-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg></span>
+          <span><span class="stage-name">Publish</span><span class="stage-kind">go live</span></span>
+          <span class="status queue">queued</span>
+        </div>
+        <div class="receipts">
+          <div class="rc-row"><span class="rc-ic"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg></span>Waits on the gate · then live to 41 pages</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STAGE NODE: MEASURE (queued) -->
+    <div class="snode" style="left:16.4%;top:80.5%">
+      <div class="card queue">
+        <div class="card-top">
+          <span class="stage-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 4-6"/></svg></span>
+          <span><span class="stage-name">Measure</span><span class="stage-kind">watch signal</span></span>
+          <span class="status queue">queued</span>
+        </div>
+        <div class="receipts">
+          <div class="rc-row"><span class="rc-ic"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg></span>Completion lift returns as the outcome</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MINI ORBIT — you are here -->
+    <div class="minimap" aria-label="Mini orbit — you are here">
+      <h4>The orbit <button class="back">← back out</button></h4>
+      <svg viewBox="0 0 168 118" fill="none">
+        <g fill="none" stroke="#c6c1b6" stroke-dasharray="1.5 4" stroke-width="1"><circle cx="70" cy="60" r="20"/><circle cx="70" cy="60" r="38"/><circle cx="70" cy="60" r="52"/></g>
+        <path d="M 70 60 m 52 0 a 52 52 0 0 1 -37 37" fill="none" stroke="#a9791a" stroke-width="1.2" stroke-opacity=".6"/>
+        <!-- intent -->
+        <circle cx="70" cy="60" r="6" fill="#e6e2db" stroke="#c6c1b6"/>
+        <!-- other bets, muted -->
+        <circle cx="45" cy="38" r="3.5" fill="#b0aba0"/>
+        <circle cx="42" cy="82" r="3.5" fill="#5d7350"/>
+        <circle cx="78" cy="92" r="3.5" fill="#b0aba0"/>
+        <!-- THIS bet, at the wall, highlighted with a halo -->
+        <circle cx="112" cy="40" r="8" fill="none" stroke="#a9791a" stroke-width="1.5" opacity=".5"><animate attributeName="r" from="8" to="11" dur="1.8s" repeatCount="indefinite"/><animate attributeName="opacity" from=".5" to="0" dur="1.8s" repeatCount="indefinite"/></circle>
+        <circle cx="112" cy="40" r="5" fill="#a9791a"/>
+      </svg>
+      <div class="cap">You're inside the <b>at-the-wall</b> bet.</div>
+    </div>
+
+    <div class="tools">
+      <button class="tool">Fit <span class="kbd">F</span></button>
+      <button class="tool">Receipts <span class="kbd">R</span></button>
+    </div>
+  </main>
+
+  <div class="composer">
+    <div class="comp-scope">
+      <span class="scope-pill"><span class="av-sm">M</span>Direct Mira, inside this bet</span>
+      <span class="scope-help">Reshape the machine in plain words — outward stages still wait at the gate.</span>
+    </div>
+    <div class="comp-input">
+      <input placeholder="Ask Mira to change a stage, or split the bet…" aria-label="Direct Mira inside this bet">
+      <span class="model"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="4"/></svg>Auto</span>
+      <button class="send" aria-label="Send"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+    </div>
+  </div>
+</div>

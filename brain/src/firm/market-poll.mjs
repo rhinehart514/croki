@@ -29,7 +29,7 @@ function trimOrNull(value) {
 // stages), so the recipient is read defensively across the aliases a teammate might have staged under —
 // mirrors joinSentItems' own `item.to ?? item.buyer ?? item.recipient ?? item.email` fallback.
 //
-// Returns a Map: gmailMessageId → { joinKey, betId, recipient }. joinKey comes from the BET the item
+// Returns a Map: gmailMessageId → { joinKey, betId, workRef, recipient }. joinKey comes from the BET the item
 // parked against (bet.mjs's own joinKey, minted once at createBet) — never a per-item key — because a
 // released item's own effect carries no join pointer of its own; the bet it parked against is the join.
 export function buildSentIndex(ventureId, options = {}) {
@@ -47,7 +47,15 @@ export function buildSentIndex(ventureId, options = {}) {
     if (!bet?.joinKey) continue; // no joinKey to attribute back through — never guessed
     const effect = item.effect ?? {};
     const recipient = extractEmail(effect.to ?? effect.recipient ?? effect.recipients ?? effect.email);
-    byMessageId.set(messageId, { joinKey: bet.joinKey, betId: bet.id, recipient });
+    byMessageId.set(messageId, {
+      joinKey: bet.joinKey,
+      betId: bet.id,
+      workRef: trimOrNull(item.workRef),
+      recipient,
+      configurationRevision: Number.isInteger(item.configurationRevision)
+        ? item.configurationRevision
+        : (bet.configurationRevision ?? null),
+    });
   }
   return byMessageId;
 }
@@ -149,6 +157,8 @@ export async function pollReplies(ventureId, options = {}) {
         messageId,
         providerEventId: classification.providerEventId,
         providerSourceId: threadId,
+        workRef: sent.workRef,
+        configurationRevision: sent.configurationRevision,
       },
       options,
     );

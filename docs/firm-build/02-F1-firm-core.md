@@ -1,5 +1,8 @@
 # F1 — The firm core
 
+> **HISTORICAL EXECUTION TASK.** This work package is not a current backlog. Use
+> [FIRM-SPEC.md](../FIRM-SPEC.md) and [STATE.md](../STATE.md) before changing the live tree.
+
 **Goal:** one venture = one readable local directory holding crew, bets, decisions, and placement,
 behind one persistence seam, with the harness available to the new core through the keep-list only.
 

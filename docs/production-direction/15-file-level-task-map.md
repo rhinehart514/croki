@@ -1,5 +1,8 @@
 # File-Level Task Map
 
+> **ARCHIVED TASK MAP.** These file targets are historical and do not authorize edits. Current work
+> starts from [FIRM-SPEC.md](../FIRM-SPEC.md), [STATE.md](../STATE.md), and the live tree.
+
 This map translates the production direction into likely repository work. It is guidance for ownership and
 discovery, not permission to edit every listed file. An implementation agent must inspect current code and
 tests before choosing the final patch boundary.

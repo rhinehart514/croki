@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Drover — bet regions</title>
+  <link rel="stylesheet" href="prototype.css">
+</head>
+<body>
+  <header class="prototype-head">
+    <div>
+      <span class="eyebrow">Drover · bet-region directions</span>
+      <strong id="direction-title">Bet Rooms</strong>
+      <span id="direction-read">The smallest structural correction: the bet becomes a room and its work becomes addressable.</span>
+    </div>
+    <nav aria-label="Design directions">
+      <button type="button" class="direction-tab is-active" data-direction="rooms" aria-pressed="true">1 · Bet Rooms</button>
+      <button type="button" class="direction-tab" data-direction="map" aria-pressed="false">2 · Command Map</button>
+      <button type="button" class="direction-tab" data-direction="yard" aria-pressed="false">3 · The Workyard</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="direction-screen is-active" data-screen="rooms" aria-label="Bet Rooms direction">
+      <div class="product-frame rooms-frame">
+        <aside class="conversation-rail">
+          <header class="rail-head">
+            <div class="drover-mark" aria-hidden="true">⌁</div>
+            <div><strong>Drover</strong><span>Buyer-signal venture</span></div>
+            <button type="button" class="quiet-button">Ventures</button>
+          </header>
+          <div class="crew-strip" aria-label="Teammates">
+            <button type="button" class="crew-chip is-selected" data-agent="Yara">
+              <span class="face face-yara">Y</span><span><b>Yara</b><small>2 active cards</small></span>
+            </button>
+            <button type="button" class="crew-chip" data-agent="Reed">
+              <span class="face face-reed">R</span><span><b>Reed</b><small>Contributing</small></span>
+            </button>
+            <button type="button" class="crew-chip" data-agent="Mika">
+              <span class="face face-mika">M</span><span><b>Mika</b><small>Ready</small></span>
+            </button>
+          </div>
+          <div class="thread-title">
+            <span class="eyebrow">Bet conversation</span>
+            <strong>Find the minimum version that earns a real buyer signal</strong>
+          </div>
+          <div class="conversation-body">
+            <article class="founder-message">
+              <small>You · to the whole firm</small>
+              <p>Sequence the build. What is the minimum version that produces a real buyer signal?</p>
+            </article>
+            <article class="agent-message">
+              <span class="face face-yara">Y</span>
+              <div>
+                <small>Yara · now</small>
+                <p>I’m treating a paid commitment as the signal. Reed is checking the buyer language while I shape the offer. I’ll stage outreach at the wall, not send it.</p>
+                <button type="button" class="text-button" data-focus-card="offer">Focus the offer card ↗</button>
+              </div>
+            </article>
+          </div>
+          <form class="composer" data-composer>
+            <div class="scope-line" aria-live="polite">
+              <span>Directing</span>
+              <b>Bet</b><i>›</i><b data-scope-card>whole bet</b>
+              <span class="scope-agents" data-scope-agents>Yara</span>
+            </div>
+            <textarea rows="2" aria-label="Direction" placeholder="Steer this work without leaving the bet…"></textarea>
+            <footer><span>Scope locks while you write</span><button type="submit" class="send-button" aria-label="Send direction">↑</button></footer>
+          </form>
+        </aside>
+
+        <section class="canvas-shell">
+          <header class="canvas-bar">
+            <span><b>Current</b> · 4 teammates · 4 live bets</span>
+            <span class="canvas-actions"><button type="button">−</button><button type="button">Fit</button><button type="button">+</button></span>
+          </header>
+          <div class="canvas dotted">
+            <section class="bet-room" aria-labelledby="room-title">
+              <header class="bet-room-head">
+                <div>
+                  <span class="eyebrow">Live bet · forked from define the buyer</span>
+                  <h1 id="room-title">Find the minimum version that earns a real buyer signal</h1>
+                  <p>One attempted change, with its work visible inside it.</p>
+                </div>
+                <div class="participant-stack" aria-label="Yara owns this bet; Reed and Mika contribute">
+                  <span class="face face-yara">Y</span><span class="face face-reed">R</span><span class="face face-mika">M</span>
+                  <small>3 teammates</small>
+                </div>
+              </header>
+
+              <div class="room-grid">
+                <article class="work-card evidence-card is-selected" data-card="signal" data-title="Name the buyer signal" tabindex="0">
+                  <header><span>Decision formed</span><div class="participant-stack small"><span class="face face-yara">Y</span><span class="face face-reed">R</span></div></header>
+                  <h2>Name the buyer signal</h2>
+                  <blockquote>“A buyer agrees to a paid pilot before code.”</blockquote>
+                  <footer><span>Repository + 4 interviews</span><button type="button">Inspect proof</button></footer>
+                </article>
+
+                <article class="work-card research-card" data-card="paths" data-title="Compare minimum paths" tabindex="0">
+                  <header><span>Working note</span><div class="participant-stack small"><span class="face face-reed">R</span></div></header>
+                  <h2>Compare minimum paths</h2>
+                  <ul><li>Concierge pilot</li><li>Guided prototype</li><li>Manual result service</li></ul>
+                  <footer><span>Reed · updated 6m ago</span><button type="button">Steer</button></footer>
+                </article>
+
+                <article class="work-card active-card" id="offer" data-card="offer" data-title="Draft the paid pilot offer" tabindex="0">
+                  <header><span class="live-dot">Working now · 08:14</span><div class="participant-stack small"><span class="face face-yara">Y</span><span class="face face-reed">R</span></div></header>
+                  <h2>Draft the paid pilot offer</h2>
+                  <p>One-week assisted setup. Buyer pays to receive the first verified result, not to access unfinished software.</p>
+                  <div class="inline-receipt">Yara drafting · Reed checking buyer language</div>
+                  <footer><span>2 contributors</span><button type="button">Redirect</button></footer>
+                </article>
+
+                <article class="work-card artifact-card" data-card="prototype" data-title="Prototype only the proof path" tabindex="0">
+                  <header><span>Product difference</span><div class="participant-stack small"><span class="face face-mika">M</span><span class="face face-yara">Y</span></div></header>
+                  <h2>Prototype only the proof path</h2>
+                  <pre>+ capture buyer input
++ produce one verified result
++ leave a reviewable receipt</pre>
+                  <footer><span>Mika · isolated worktree</span><button type="button">Open diff</button></footer>
+                </article>
+
+                <article class="work-card wall-card" data-card="outreach" data-title="Send the offer to five buyers" tabindex="0">
+                  <header><span>Held at the wall</span><div class="participant-stack small"><span class="face face-yara">Y</span></div></header>
+                  <h2>Send the offer to five buyers</h2>
+                  <p>Five named recipients · exact email and destination attached.</p>
+                  <footer><span>Nothing has left Drover</span><button type="button" data-open-wall>Review exact act</button></footer>
+                </article>
+
+                <article class="work-card outcome-card" data-card="return" data-title="A buyer answered" tabindex="0">
+                  <header><span>Market returned</span><div class="participant-stack small"><span class="face face-reed">R</span></div></header>
+                  <h2>A buyer answered</h2>
+                  <blockquote>“Show me the first result on our account and I’ll pay for the pilot.”</blockquote>
+                  <footer><span>Joined to prior manual outreach</span><button type="button">View receipt</button></footer>
+                </article>
+              </div>
+            </section>
+
+            <aside class="wall-drawer" data-wall aria-hidden="true">
+              <header><span class="eyebrow">The wall · exact outward act</span><button type="button" data-close-wall aria-label="Close wall">×</button></header>
+              <h2>Send the paid-pilot offer</h2>
+              <p><b>From:</b> Yara’s “Send the offer to five buyers” card</p>
+              <div class="payload"><b>To:</b> Five named buyers<br><b>Message:</b> Paid one-week pilot with a verified first result.</div>
+              <small>Release affects this act only. The rest of the bet keeps moving inward.</small>
+              <footer><button type="button" class="quiet-button" data-close-wall>Keep held</button><button type="button" class="primary-button">Release this act</button></footer>
+            </aside>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="direction-screen" data-screen="map" aria-label="Command Map direction" hidden>
+      <div class="product-frame command-frame">
+        <header class="command-topbar">
+          <div class="drover-mark" aria-hidden="true">⌁</div>
+          <strong>Drover</strong><span>Buyer-signal venture</span>
+          <div class="return-strip"><button type="button">4 changed</button><button type="button">1 needs you</button><button type="button">1 market return</button></div>
+          <button type="button" class="quiet-button">Conversation</button>
+        </header>
+        <div class="command-body">
+          <aside class="outline-rail">
+            <span class="eyebrow">Firm outline</span>
+            <button type="button" class="outline-agent"><span class="face face-yara">Y</span><span><b>Yara</b><small>3 cards</small></span></button>
+            <button type="button" class="outline-agent"><span class="face face-reed">R</span><span><b>Reed</b><small>2 cards</small></span></button>
+            <hr>
+            <button type="button" class="outline-bet is-active">Buyer signal <small>6 pieces</small></button>
+            <button type="button" class="outline-bet">Define buyer <small>3 pieces</small></button>
+          </aside>
+          <section class="command-canvas dotted">
+            <div class="command-hint">Click to target · Shift-click to combine · <kbd>/</kbd> direct selection</div>
+            <section class="map-region map-region-primary" aria-label="Buyer signal bet region">
+              <header><span class="eyebrow">Bet · live</span><h1>Find the minimum version that earns a real buyer signal</h1><span class="region-count">6 pieces · 3 teammates</span></header>
+              <div class="map-cards">
+                <button type="button" class="map-card is-selected" data-map-card="Signal definition" data-map-agents="Yara, Reed">
+                  <span class="map-kind">Decision</span><b>Paid pilot commitment is the signal</b><span class="participant-stack small"><span class="face face-yara">Y</span><span class="face face-reed">R</span></span>
+                </button>
+                <button type="button" class="map-card" data-map-card="Minimum paths" data-map-agents="Reed">
+                  <span class="map-kind">Working note</span><b>Compare three minimum paths</b><span class="participant-stack small"><span class="face face-reed">R</span></span>
+                </button>
+                <button type="button" class="map-card active-map-card" data-map-card="Paid pilot offer" data-map-agents="Yara, Reed">
+                  <span class="map-kind">Working now · 08:14</span><b>Draft the paid pilot offer</b><small>Yara drafting · Reed reviewing</small><span class="participant-stack small"><span class="face face-yara">Y</span><span class="face face-reed">R</span></span>
+                </button>
+                <button type="button" class="map-card" data-map-card="Proof prototype" data-map-agents="Mika, Yara">
+                  <span class="map-kind">Product difference</span><b>Prototype only the proof path</b><span class="participant-stack small"><span class="face face-mika">M</span><span class="face face-yara">Y</span></span>
+                </button>
+                <button type="button" class="map-card at-wall-map-card" data-map-card="Buyer outreach" data-map-agents="Yara">
+                  <span class="map-kind">At the wall</span><b>Send the offer to five buyers</b><span class="participant-stack small"><span class="face face-yara">Y</span></span>
+                </button>
+                <button type="button" class="map-card returned-map-card" data-map-card="Buyer return" data-map-agents="Reed">
+                  <span class="map-kind">Market returned</span><b>“Show me the result and I’ll pay.”</b><span class="participant-stack small"><span class="face face-reed">R</span></span>
+                </button>
+              </div>
+            </section>
+            <section class="map-region map-region-secondary" aria-label="Define buyer bet region">
+              <header><span class="eyebrow">Related bet</span><h2>Define the real buyer</h2></header>
+              <div class="mini-map-card">Founder interviews <span class="face face-reed">R</span></div>
+              <div class="mini-map-card">Repository evidence <span class="face face-yara">Y</span></div>
+            </section>
+          </section>
+        </div>
+        <form class="command-console" data-command-composer>
+          <div class="command-scope"><span>Directing</span><b>Buyer signal</b><i>›</i><b data-map-scope-card>Signal definition</b><span data-map-scope-agents>Yara, Reed</span></div>
+          <input aria-label="Command" placeholder="Tell this selection what should change…">
+          <button type="submit" class="send-button">↑</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="direction-screen" data-screen="yard" aria-label="The Workyard direction" hidden>
+      <div class="product-frame yard-frame">
+        <header class="yard-topbar">
+          <div class="drover-mark" aria-hidden="true">⌁</div><strong>Drover</strong><span>Buyer-signal venture</span>
+          <div class="yard-crew"><span class="face face-yara">Y</span><span class="face face-reed">R</span><span class="face face-mika">M</span><small>Firm working</small></div>
+          <button type="button" class="quiet-button">Show conversation</button>
+        </header>
+        <div class="yard dotted">
+          <aside class="floating-account">
+            <span class="face face-yara">Y</span>
+            <div><span class="eyebrow">Yara · firm account</span><p>I’m shaping the paid pilot while Reed checks buyer language. One exact outreach act waits at the wall.</p></div>
+          </aside>
+          <section class="territory" aria-labelledby="territory-title">
+            <header>
+              <span class="eyebrow">Live bet territory</span>
+              <h1 id="territory-title">Find the minimum version that earns a real buyer signal</h1>
+              <p>Everything inside serves the same attempted change.</p>
+            </header>
+            <button type="button" class="yard-card yard-card-signal is-selected" data-yard-card="Signal definition" data-yard-agents="Yara, Reed">
+              <span class="yard-kind">Decision formed</span><b>Paid pilot commitment is the signal</b>
+              <span class="participant-stack small"><span class="face face-yara">Y</span><span class="face face-reed">R</span></span>
+            </button>
+            <button type="button" class="yard-card yard-card-paths" data-yard-card="Minimum paths" data-yard-agents="Reed">
+              <span class="yard-kind">Working note</span><b>Compare three minimum paths</b>
+              <span class="participant-stack small"><span class="face face-reed">R</span></span>
+            </button>
+            <button type="button" class="yard-card yard-card-offer" data-yard-card="Paid pilot offer" data-yard-agents="Yara, Reed">
+              <span class="yard-kind live-dot">Working now · 08:14</span><b>Draft the paid pilot offer</b><small>Yara drafting · Reed reviewing</small>
+              <span class="participant-stack small"><span class="face face-yara">Y</span><span class="face face-reed">R</span></span>
+            </button>
+            <button type="button" class="yard-card yard-card-build" data-yard-card="Proof prototype" data-yard-agents="Mika, Yara">
+              <span class="yard-kind">Product difference</span><b>Prototype only the proof path</b>
+              <span class="participant-stack small"><span class="face face-mika">M</span><span class="face face-yara">Y</span></span>
+            </button>
+            <span class="agent-presence yara-presence"><span class="face face-yara">Y</span><small>Yara</small></span>
+            <span class="agent-presence reed-presence"><span class="face face-reed">R</span><small>Reed</small></span>
+            <span class="agent-presence mika-presence"><span class="face face-mika">M</span><small>Mika</small></span>
+          </section>
+          <div class="wall-perimeter" aria-hidden="true"><span>The wall</span><small>nothing crosses without you</small></div>
+          <button type="button" class="yard-card yard-card-wall" data-yard-card="Buyer outreach" data-yard-agents="Yara" data-open-yard-wall>
+            <span class="yard-kind">Held at the wall</span><b>Send the offer to five buyers</b><small>Exact recipients + message attached</small>
+            <span class="participant-stack small"><span class="face face-yara">Y</span></span>
+          </button>
+          <article class="market-return">
+            <span class="eyebrow">The market spoke · joined return</span>
+            <blockquote>“Show me the first result on our account and I’ll pay for the pilot.”</blockquote>
+            <small>Returned to an earlier outreach card · provider-backed join</small>
+          </article>
+          <svg class="yard-lines" viewBox="0 0 1000 620" preserveAspectRatio="none" aria-hidden="true">
+            <path d="M700 360 C770 360 760 360 830 360" />
+            <path class="return-line" d="M930 500 C840 500 850 430 735 410" />
+          </svg>
+          <form class="floating-composer" data-yard-composer>
+            <div class="scope-line"><span>Directing</span><b>Buyer signal</b><i>›</i><b data-yard-scope-card>Signal definition</b><span data-yard-scope-agents>Yara, Reed</span></div>
+            <input aria-label="Spatial direction" placeholder="Steer this exact work…"><button type="submit" class="send-button">↑</button>
+          </form>
+          <aside class="yard-wall-sheet" data-yard-wall aria-hidden="true">
+            <header><span class="eyebrow">Exact crossing</span><button type="button" data-close-yard-wall>×</button></header>
+            <h2>Send the paid-pilot offer</h2><p>Five recipients · one exact message · Yara’s card</p>
+            <footer><button type="button" data-close-yard-wall>Keep held</button><button type="button" class="primary-button">Release this act</button></footer>
+          </aside>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="prototype.js"></script>
+</body>
+</html>

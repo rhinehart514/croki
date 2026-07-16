@@ -175,7 +175,7 @@ export function sendReleasedMessage({ ventureId, effect, betId }, options = {}, 
 
   const provenance = { marker: "gtm-ide-firm", ventureId, betId: betId ?? null, stampedAt: new Date().toISOString() };
   const transport = deps.transport ?? createSyncGmailTransport();
-  const outcome = transport({ to, from: effect.from ?? null, subject, body, provenance, token: resolved.token });
+  const outcome = transport({ to, from: effect.fromAddress ?? effect.from ?? null, subject, body, provenance, token: resolved.token });
   if (!outcome.ok) return { ok: false, error: outcome.error, ...(outcome.needsReconnect ? { needsReconnect: true } : {}) };
   return { ok: true, messageId: outcome.messageId, provenance };
 }

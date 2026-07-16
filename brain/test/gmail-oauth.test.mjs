@@ -16,6 +16,8 @@ import {
   getFreshAccessToken,
   clearAccessTokenCache,
   createCallbackListener,
+  resolveGmailProfileAddress,
+  runLoopbackConnect,
   GMAIL_SEND_SCOPE,
   GMAIL_READ_SCOPE,
 } from "../src/connectors/execute/gmail-oauth.mjs";
@@ -137,4 +139,56 @@ test("exchangeCode returns the refresh token banked from the code grant", async 
   assert.equal(tokens.refreshToken, "rt-new");
   assert.match(tokenFetch.calls[0].init.body, /grant_type=authorization_code/);
   assert.match(tokenFetch.calls[0].init.body, /code_verifier=ver/);
+});
+
+test("Gmail profile lookup returns only the provider-backed mailbox address and fails to absence", async () => {
+  const calls = [];
+  const address = await resolveGmailProfileAddress({
+    accessToken: "ya29.profile",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return { ok: true, json: async () => ({ emailAddress: "Founder@Example.com" }) };
+    },
+  });
+  assert.equal(address, "founder@example.com");
+  assert.match(calls[0].url, /gmail\/v1\/users\/me\/profile$/);
+  assert.equal(calls[0].init.headers.Authorization, "Bearer ya29.profile");
+
+  assert.equal(await resolveGmailProfileAddress({
+    accessToken: "ya29.denied",
+    fetchImpl: async () => ({ ok: false, json: async () => ({ error: "denied" }) }),
+  }), null);
+  assert.equal(await resolveGmailProfileAddress({
+    accessToken: "ya29.malformed",
+    fetchImpl: async () => ({ ok: true, json: async () => ({ emailAddress: "not-an-address" }) }),
+  }), null);
+});
+
+test("the connect flow returns the verified Gmail profile address beside the durable refresh token", async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, init });
+    if (String(url).includes("/token")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: "ya29.connected", refresh_token: "rt-connected", expires_in: 3600 }),
+      };
+    }
+    return { ok: true, status: 200, json: async () => ({ emailAddress: "Founder@Example.com" }) };
+  };
+  const connected = await runLoopbackConnect({
+    clientId: "client",
+    clientSecret: "secret",
+    fetchImpl,
+    openBrowser: async (rawAuthUrl) => {
+      const authUrl = new URL(rawAuthUrl);
+      const redirectUri = authUrl.searchParams.get("redirect_uri");
+      const state = authUrl.searchParams.get("state");
+      const response = await fetch(`${redirectUri}/?code=profile-code&state=${encodeURIComponent(state)}`);
+      assert.equal(response.status, 200);
+    },
+  });
+  assert.deepEqual(connected, { refreshToken: "rt-connected", accountAddress: "founder@example.com" });
+  assert.equal(calls.some((call) => String(call.url).endsWith("/users/me/profile")), true);
 });

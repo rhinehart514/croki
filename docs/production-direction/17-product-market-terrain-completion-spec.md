@@ -1,10 +1,6 @@
-> **HISTORICAL where it conflicts with the current direction.** This completion target and
-> its "primary object is the living product-market terrain" framing are implementation
-> history. The current north star is the experiment machine — see
-> **docs/EXPERIMENT-MACHINE-SPEC.md** and **docs/production-direction/EXPERIMENT-MACHINE-GOAL.md** —
-> on top of the open-canvas contract (**docs/OPEN-CANVAS-SPEC.md**). The
-> deterministic-implementation and gate findings below remain useful; where this completion-spec
-> framing conflicts with the experiment-machine direction, that direction wins.
+> **SUPERSEDED.** This completion target is implementation history. Its terrain, graph, gate, and
+> acceptance models cannot direct current work. [FIRM-SPEC.md](../FIRM-SPEC.md) is the only product
+> and build contract; [STATE.md](../STATE.md) is the only current proof record.
 
 # Product-Market Terrain Completion Spec
 

@@ -1,5 +1,8 @@
 # IDE done right — re-derived information architecture
 
+> **ARCHIVED DESIGN DIRECTION.** This channel/explorer IA is superseded and cannot direct current
+> work. Use [FIRM-SPEC.md](../FIRM-SPEC.md) and the root [DESIGN.md](../../DESIGN.md).
+
 Decided 2026-06-24. Direction picked by the founder from three. This is the
 structural rework of the GTM IDE navigation, both front doors (human + MCP).
 
