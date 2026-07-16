@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { emitFirmEvent } from "./firm-events.mjs";
 
 // Process-local by design: a provider drive cannot survive a brain restart. Durable bets, events,
 // staged artifacts, and runtime session ids still live in the venture store; this registry owns only
@@ -19,6 +20,10 @@ function publicDrive(entry) {
     architectureContextStaleAt: entry.architectureContextStaleAt,
     currentStageId: entry.currentStageId,
     lastBeatAt: entry.lastBeatAt,
+    // A process-local presence pointer: true when a founder steer arrived for this effort while the
+    // drive is running. The durable queue (work-loop-steer.mjs, on the effort's work record) is the
+    // truth the resume reads; this only lets a live drive/UI honestly say "a steer will apply next step."
+    steerPending: entry.steerPending === true,
   };
 }
 
@@ -37,13 +42,15 @@ export function beginActiveDrive({ ventureId, teammateRef, betId = null, runtime
     architectureContextStaleAt: null,
     currentStageId: null,
     lastBeatAt: null,
+    steerPending: false,
     controller,
   };
   active.set(entry.id, entry);
+  emitFirmEvent(ventureId, "drive", { betId });
   return {
     ...publicDrive(entry),
     signal: controller.signal,
-    finish: () => active.delete(entry.id),
+    finish: () => { active.delete(entry.id); emitFirmEvent(ventureId, "drive", { betId }); },
   };
 }
 
@@ -73,6 +80,20 @@ export function listActiveDrives(ventureId) {
   return [...active.values()]
     .filter((entry) => entry.ventureId === ventureId)
     .map(publicDrive);
+}
+
+// Mark that a founder steer is waiting for a live drive on this effort — the process-local half of the
+// steer seam (work-loop-steer.mjs owns the durable queue). No-op when no drive on this effort is live;
+// the durable queue still carries the steer to the next run. Returns the marked drives (for a caller/UI
+// that wants to reflect it immediately).
+export function notePendingSteer({ ventureId, betId }) {
+  const marked = [];
+  for (const entry of active.values()) {
+    if (entry.ventureId !== ventureId || entry.betId !== betId) continue;
+    entry.steerPending = true;
+    marked.push(publicDrive(entry));
+  }
+  return marked;
 }
 
 export function abortActiveDrive({ ventureId, driveId, now = () => new Date().toISOString() }) {

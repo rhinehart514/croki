@@ -8,6 +8,7 @@
 import crypto from "node:crypto";
 import { getVentureDoc, listVentureDocs, now, setVentureDoc } from "./venture-store.mjs";
 import { diffFirmConfigurations } from "./configuration-diff.mjs";
+import { emitFirmEvent } from "./firm-events.mjs";
 
 const ROLES = new Set(["founder", "teammate", "agent", "system"]);
 const KINDS = new Set(["message", "handoff", "configuration-proposal", "configuration-receipt", "proposal-assembly", "working-theory"]);
@@ -150,6 +151,9 @@ export function appendConversationMessage({
     createdAt,
   };
   setVentureDoc(ventureId, "conversation", message.id, message, options);
+  // Push a live "the conversation changed" signal to any present SSE client (Phase 5). Best-effort and
+  // data-free: the client re-reads the transcript through the existing venture-scoped route.
+  emitFirmEvent(ventureId, "conversation", { betId: message.betId });
   return message;
 }
 

@@ -27,6 +27,7 @@ import { end as endBet } from "./bet.mjs";
 import { authorizeFounderWriteForRequest } from "../routes/founder-authority.mjs";
 import { isFounderPresent as defaultIsFounderPresent } from "../presence.mjs";
 import { stampKnownEffectConsequences } from "./effect-consequences.mjs";
+import { emitFirmEvent } from "./firm-events.mjs";
 
 function genId(prefix) {
   const stamp = now().replace(/\D/g, "").slice(0, 14);
@@ -138,7 +139,9 @@ export function park({ ventureId, betId = null, workRef = null, purpose = null, 
     deployAuthorizedAt: null,
     deployAuthorizedBy: null,
   };
-  return saveItem(ventureId, item, options);
+  const saved = saveItem(ventureId, item, options);
+  emitFirmEvent(trimOrNull(ventureId), "wall", { betId });
+  return saved;
 }
 
 // The one list the founder reviews — every item still awaiting a decision in this venture, oldest
@@ -293,5 +296,7 @@ export function decide(
     }
   }
 
-  return saveItem(ventureId, receipt, options);
+  const decided = saveItem(ventureId, receipt, options);
+  emitFirmEvent(trimOrNull(ventureId), "wall", { betId: item.betId });
+  return decided;
 }
