@@ -229,12 +229,18 @@
     </div>
 
     <div class="cap">
-      <div class="cap-head"><h4>The same crew follows you across ventures</h4><span class="tag infer">inferred · code green</span></div>
+      <div class="cap-head"><h4>The same crew follows you across ventures</h4><span class="tag test">validated · merged</span></div>
       <p class="cap-body">
-        A new venture opens with the same named teammates already present, carrying the lessons they graduated
-        elsewhere — one face, one accumulating lens. Each venture still holds only its own work; nothing bleeds
-        between ventures. Template graduation and the cross-venture isolation guard are present and green.
-        <b>Not yet watched:</b> creating a fresh venture and seeing the seeded crew appear.
+        A new venture opens with the same four named teammates — Yara, Mira, Soren, Kai — already present,
+        carrying the lessons they graduated elsewhere: one face, one accumulating lens. Each venture still holds
+        only its own work; nothing bleeds between ventures. The crew phase (lane P8, Reading A) is now merged
+        into <code>ade</code> and verified: an acceptance test drives the real venture-create route and finds all
+        four present carrying their template lens, a lesson blessed in one venture reaches the others through the
+        template, and two rail-6 isolation guards prove no venture's raw work or soul data appears in another —
+        all green on the integrated tree (<code>npm test</code> passing: brain 633, UI 263, lint and build clean).
+        <b>Still inferred, not watched:</b> a live render of a fresh venture opening in the running app with the
+        seeded crew visible on the canvas — the behavior is test-proven, the on-screen moment is not yet
+        screenshotted.
       </p>
     </div>
 
@@ -322,6 +328,7 @@
       branch, newest first.
     </p>
     <div class="trail trail-scroll">
+      <div class="trail-row"><span class="sha">976a21f</span><span class="ph">merge · P8</span><span class="msg">Merge <b>lane/p8</b> — firm-level crew: Yara/Mira/Soren/Kai seeded into every venture</span></div>
       <div class="trail-row"><span class="sha">4a0efb5</span><span class="ph">merge · P9</span><span class="msg">Merge <b>lane/p9</b> — Electron packaging &amp; shell hardening</span></div>
       <div class="trail-row"><span class="sha">90e8dfa</span><span class="ph">merge · P6</span><span class="msg">Merge <b>lane/p6</b> — evidence-to-cause (joined replies in the conversation)</span></div>
       <div class="trail-row"><span class="sha">190f0bd</span><span class="ph">merge · P4·P5</span><span class="msg">Merge <b>lane/p4p5</b> — routing, review-dialogue, trust grants, streaming, steer seam</span></div>
@@ -331,13 +338,16 @@
       <div class="trail-row"><span class="sha">d386803</span><span class="ph">P4·P5 lane</span><span class="msg">Direction routing, review-is-dialogue, trust grants, streaming, steer seam</span></div>
       <div class="trail-row"><span class="sha">5852ca4</span><span class="ph">P9 lane</span><span class="msg">Harden Electron shell — window-state restore + clean brain lifecycle</span></div>
       <div class="trail-row"><span class="sha">ca6755a</span><span class="ph">P6 lane</span><span class="msg">Surface joined market replies in the conversation</span></div>
+      <div class="trail-row"><span class="sha">d53f2c5</span><span class="ph">P8 lane</span><span class="msg">Seed the firm's four named teammates into every venture</span></div>
       <div class="trail-row"><span class="sha">c0400e1</span><span class="ph">P1</span><span class="msg">Docked shell and layout engine green (composition refined in P2)</span></div>
       <div class="trail-row"><span class="sha">a382f40</span><span class="ph">base</span><span class="msg">Land ADE direction, specs, and build contract</span></div>
     </div>
     <div class="note"><span class="k">Merge health</span>
-      <p>Three of the four lane merges applied with no conflict. One (P6) had a single import-block conflict in
-      <code>market.mjs</code>, resolved by keeping both imports. The full suite ran green after every merge and
-      on the final sweep.</p>
+      <p>Four of the five lane merges applied with no conflict, including P8 (firm-level crew), which auto-merged
+      cleanly — its <code>venture-store.mjs</code> edit sat in a different region than <code>ade</code>'s own
+      change to that file. One (P6) had a single import-block conflict in <code>market.mjs</code>, resolved by
+      keeping both imports. The full suite ran green after every merge and on the final sweep after P8:
+      <code>npm test</code> passing — brain 633 tests, UI 263 tests, lint and production build clean.</p>
     </div>
   </section>
 
@@ -399,8 +409,8 @@
     </div>
 
     <div class="unmet">
-      <h4>Dirty evidence PNGs in the tree <span class="k">housekeeping</span></h4>
-      <p>A handful of older evidence screenshots (orbital-atlas, venture-atlas, workyard) show as modified in <code>git status</code> and are untouched by this run. Lane P8's merge was held once because of them and only proceeded once it was clear they were safe. They're binary evidence, not code, and don't affect the build — but they're worth a deliberate commit-or-discard so the tree is clean.</p>
+      <h4>Evidence PNGs resolved; P8 merged on a clean tree <span class="k">housekeeping</span></h4>
+      <p>Earlier in the run a handful of older evidence screenshots (orbital-atlas, venture-atlas, workyard) showed as modified in <code>git status</code>, which held lane P8's merge once until it was clear they were safe. Those were settled before the P8 integration: the working tree was clean when P8 merged, and the merge left it clean. P8 is now on <code>ade</code> and the suite is green.</p>
     </div>
   </section>
 
